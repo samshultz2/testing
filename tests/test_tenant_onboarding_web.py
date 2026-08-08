@@ -84,6 +84,29 @@ def test_instant_provisioning_when_explicitly_enabled(tmp_path, monkeypatch):
     tenant_runtime.reset_engines(); tenancy._reset_engine()
 
 
+def test_signup_stamps_chosen_tier(tmp_path, monkeypatch):
+    """The capability tier picked at signup is set on the tenant so the school
+    trials — and later pays for — exactly the plan they chose."""
+    app = _mt(tmp_path, monkeypatch, REGISTRATION_AUTO_PROVISION=True)
+    from utils import tenancy, tenant_runtime
+    c = app.test_client()
+    tok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"',
+                    c.get('/register?tier=premium', headers=APEX).get_data(as_text=True)).group(1)
+    r = c.post('/register', headers=APEX,
+               data={'name': 'Tiered', 'subdomain': 'tiered', 'admin_email': 't@x.test',
+                     'tier': 'premium', 'cycle': 'annual', '_csrf_token': tok})
+    assert r.status_code == 200 and 'is ready' in r.get_data(as_text=True)
+    assert tenancy.get_tenant('tiered').tier == 'premium'
+    # a bogus tier is ignored (school left grandfathered, no tier)
+    tok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"',
+                    c.get('/register', headers=APEX).get_data(as_text=True)).group(1)
+    c.post('/register', headers=APEX,
+           data={'name': 'Notier', 'subdomain': 'notier', 'admin_email': 'n@x.test',
+                 'tier': 'bogus', '_csrf_token': tok})
+    assert not (tenancy.get_tenant('notier').tier or '')
+    tenant_runtime.reset_engines(); tenancy._reset_engine()
+
+
 def test_registration_is_ip_rate_limited(tmp_path, monkeypatch):
     app = _mt(tmp_path, monkeypatch, REGISTRATION_MAX_PER_HOUR=2, REGISTRATION_MAX_PER_DAY=2)
     from utils import tenancy

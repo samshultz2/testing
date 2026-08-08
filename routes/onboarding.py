@@ -64,20 +64,37 @@ def _require_mt():
 
 
 def _render_register(**kw):
-    """Render the signup form with the current subscription tiers available.
+    """Render the signup form with the full purchasable grid (capability tier ×
+    billing cycle). The school picks a tier (Basic/Premium/Enterprise) and a
+    cycle at signup.
 
-    The plan the visitor clicked on the homepage/pricing page arrives as a
-    ?plan=<id> query param (and is echoed back via a hidden field on POST so a
-    validation-error re-render keeps it). We surface that exact tier in the
-    "Your plan" card instead of always showing the Monthly tier."""
-    from utils.plans import tenant_plans
-    plans = tenant_plans()
-    plan_id = (request.values.get('plan') or '').strip().lower()
-    selected = next((p for p in plans if p['id'] == plan_id), None)
+    A preselection can arrive from the homepage/pricing page as ?tier= and/or
+    ?cycle= (or a combined ?plan=<tier>-<cycle>, or a bare cycle for back-compat);
+    it is echoed back so a validation-error re-render keeps the choice."""
+    from utils.plans import pricing_grid, PURCHASABLE_TIERS, CYCLE_IDS, DEFAULT_TIER
+    grid = pricing_grid()
+    vals = request.values
+    plan_id = (vals.get('plan') or '').strip().lower()
+    sel_tier = (vals.get('tier') or '').strip().lower()
+    sel_cycle = (vals.get('cycle') or '').strip().lower()
+    if '-' in plan_id:                                  # combined tier-cycle
+        pt, pc = plan_id.split('-', 1)
+        sel_tier = sel_tier or pt
+        sel_cycle = sel_cycle or pc
+    elif plan_id in CYCLE_IDS:                          # bare cycle (old links)
+        sel_cycle = sel_cycle or plan_id
+    if sel_tier not in PURCHASABLE_TIERS:
+        sel_tier = 'premium' if any(r['tier'] == 'premium' for r in grid) else \
+            (grid[0]['tier'] if grid else DEFAULT_TIER)
+    if sel_cycle not in CYCLE_IDS:
+        sel_cycle = 'annual'
+    price_json = {r['tier']: {c: {'naira': p['price_naira'], 'per': p['per'],
+                                  'savings': p['savings']}
+                              for c, p in r['plans'].items()} for r in grid}
     example_name, example_sub = _example_school()
-    return render_template('onboarding/register.html', plans=plans,
-                           selected_plan=selected, example_name=example_name,
-                           example_sub=example_sub, **kw)
+    return render_template('onboarding/register.html', grid=grid,
+                           sel_tier=sel_tier, sel_cycle=sel_cycle, price_json=price_json,
+                           example_name=example_name, example_sub=example_sub, **kw)
 
 
 def _registration_blocked(ip):
@@ -109,12 +126,16 @@ def register():
         name = (request.form.get('name') or '').strip()
         subdomain = (request.form.get('subdomain') or '').strip().lower()
         email = (request.form.get('admin_email') or '').strip()
+        from utils.plans import PURCHASABLE_TIERS
+        tier = (request.form.get('tier') or '').strip().lower()
+        tier = tier if tier in PURCHASABLE_TIERS else None
 
         # Default: create the school instantly (no email-verification step).
         if cfg.get('REGISTRATION_AUTO_PROVISION', True):
             try:
                 tenant, username, password = onboarding.register_and_provision(
-                    name, subdomain, email, base_domain=cfg.get('TENANT_BASE_DOMAIN'))
+                    name, subdomain, email, base_domain=cfg.get('TENANT_BASE_DOMAIN'),
+                    tier=tier)
             except ValueError as e:
                 flash(str(e), 'error')
                 return _render_register(name=name, subdomain=subdomain, admin_email=email)
@@ -132,7 +153,7 @@ def register():
 
         # Opt-in: require an email-verification link before creating the database.
         try:
-            tenant, token = onboarding.request_school(name, subdomain, email)
+            tenant, token = onboarding.request_school(name, subdomain, email, tier=tier)
         except ValueError as e:
             flash(str(e), 'error')
             return _render_register(name=name, subdomain=subdomain, admin_email=email)

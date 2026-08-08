@@ -152,7 +152,7 @@ def credit_payment(subdomain, plan, reference=None, base_domain=None):
     from utils import tenancy, billing_notify
     if not tenancy.claim_payment(reference, subdomain):
         return False                              # already processed elsewhere
-    record_payment(subdomain, days=plan['days'])
+    record_payment(subdomain, days=plan['days'], tier=plan.get('tier'))
     t = tenancy.get_tenant(subdomain)
     base = base_domain if base_domain is not None else Config.TENANT_BASE_DOMAIN
     link = f'https://{subdomain}.{base}/' if base else None

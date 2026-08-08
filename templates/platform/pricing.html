@@ -1,23 +1,15 @@
 {% extends "platform/_layout.html" %}
 {% block title %}Pricing{% endblock %}
 {% block heading %}Pricing{% endblock %}
-{% block subheading %}Set what schools pay. Saved changes are live everywhere — homepage, sign-up and each school's billing page — no deploy.{% endblock %}
+{% block subheading %}Set what schools pay per tier and billing cycle. Saved changes are live everywhere — homepage, sign-up and each school's billing page — no deploy.{% endblock %}
 
 {% block head %}
 <style>
   .note{background:var(--accent-soft);color:var(--accent-ink);border-radius:12px;padding:12px 15px;
-        font-size:13px;margin-bottom:18px;display:flex;gap:10px;align-items:flex-start;max-width:900px}
+        font-size:13px;margin-bottom:18px;display:flex;gap:10px;align-items:flex-start;max-width:1000px}
   .note i{margin-top:2px}
-  .tiers{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;max-width:1000px}
-  @media(max-width:820px){.tiers{grid-template-columns:1fr}}
-  .tier{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
-        box-shadow:var(--shadow);padding:18px;display:flex;flex-direction:column;gap:0}
-  .tier.off{opacity:.62}
-  .tier .head{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
-  .tier .nm{font-family:var(--font-display);font-weight:700;font-size:16px}
-  .tier .sav{font-size:11px;font-weight:700;padding:2px 9px;border-radius:99px;background:var(--ok-soft);color:var(--ok)}
-  .tier .sav.zero{visibility:hidden}
-  label{display:block;font-size:12px;font-weight:600;margin:12px 0 5px;color:var(--soft)}
+  h3.sec{font-family:var(--font-display);font-size:15px;margin:22px 0 12px;color:var(--ink)}
+  label{display:block;font-size:12px;font-weight:600;margin:10px 0 5px;color:var(--soft)}
   input[type=text],input[type=number]{width:100%;padding:9px 11px;border:1px solid var(--line);
     border-radius:9px;background:transparent;color:var(--ink);font-size:14px;font-family:inherit}
   input:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
@@ -27,9 +19,28 @@
   .toggle{display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600;color:var(--soft);cursor:pointer}
   .toggle input{width:auto;margin:0}
   .toggle.locked{color:var(--faint);cursor:default}
-  .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-  .hint{font-size:11.5px;color:var(--faint);margin-top:4px}
-  .save{display:flex;gap:14px;align-items:center;margin-top:20px;max-width:1000px}
+
+  .cyc-set{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;max-width:1000px}
+  @media(max-width:820px){.cyc-set{grid-template-columns:1fr}}
+  .cyc-box{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);
+           box-shadow:var(--shadow);padding:16px}
+  .cyc-box.off{opacity:.62}
+  .cyc-box .cyc-name{font-family:var(--font-display);font-weight:700;font-size:15px;margin-bottom:8px}
+
+  .gridwrap{overflow-x:auto;max-width:1000px}
+  table.grid{width:100%;border-collapse:collapse;background:var(--surface);border:1px solid var(--line);
+             border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+  table.grid th,table.grid td{padding:14px 14px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+  table.grid thead th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--soft);font-weight:700;
+                      background:var(--accent-soft)}
+  table.grid tbody tr:last-child th,table.grid tbody tr:last-child td{border-bottom:0}
+  table.grid tbody tr.off{opacity:.6}
+  table.grid tbody th{min-width:150px}
+  table.grid .tnm{font-family:var(--font-display);font-weight:700;font-size:15px;margin-bottom:6px}
+  table.grid td .sav{font-size:11px;font-weight:700;color:var(--ok);margin-top:5px;min-height:14px}
+  table.grid td{min-width:130px}
+
+  .save{display:flex;gap:14px;align-items:center;margin-top:22px;max-width:1000px}
   .save .meta{font-size:12px;color:var(--faint);margin-left:auto}
 </style>
 {% endblock %}
@@ -37,49 +48,59 @@
 {% block content %}
 <div class="note">
   <i class="fas fa-circle-info"></i>
-  <span>Prices are captured at checkout, so changing a price only affects <strong>future</strong> payments —
-  schools that already paid keep the time they bought. Termly and Annual show their saving versus paying
-  Monthly for the same length of time.</span>
+  <span>A plan is a <strong>tier × cycle</strong> pair. The tier (Basic/Premium/Enterprise) decides the school's
+  features &amp; limits — edit those under <strong>Features</strong>; here you set the price for each cycle.
+  Prices are captured at checkout, so a change only affects <strong>future</strong> payments. Termly/Annual
+  savings are shown versus paying Monthly for the same length.</span>
 </div>
 
 <form method="post" action="{{ url_for('platform.pricing') }}">
   <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-  <div class="tiers">
-    {% for p in tiers %}
-    <div class="tier {{ '' if p.enabled else 'off' }}">
-      <div class="head">
-        <span class="nm">{{ p.label }}</span>
-        <span class="sav {{ 'zero' if not p.savings }}">Save {{ p.savings }}%</span>
-      </div>
 
-      {% if p.id == 'monthly' %}
-        <div class="toggle locked"><i class="fas fa-lock"></i> Always on (anchor tier)</div>
-        <input type="hidden" name="monthly_enabled" value="on">
+  <h3 class="sec">Billing cycles</h3>
+  <div class="cyc-set">
+    {% for cid in cycle_ids %}
+    {% set c = cycles[cid] %}
+    <div class="cyc-box {{ '' if cyc_enabled[cid] else 'off' }}">
+      <div class="cyc-name">{{ c.label }}</div>
+      {% if cid == 'monthly' %}
+        <div class="toggle locked"><i class="fas fa-lock"></i> Always on (anchor cycle)</div>
+        <input type="hidden" name="cycle_monthly_enabled" value="on">
       {% else %}
-        <label class="toggle">
-          <input type="checkbox" name="{{ p.id }}_enabled" {{ 'checked' if p.enabled }}> Offer this plan
-        </label>
+        <label class="toggle"><input type="checkbox" name="cycle_{{ cid }}_enabled" {{ 'checked' if cyc_enabled[cid] }}> Offer this cycle</label>
       {% endif %}
-
       <label>Display name</label>
-      <input type="text" name="{{ p.id }}_label" value="{{ p.label }}">
-
-      <div class="row2">
-        <div>
-          <label>Price</label>
-          <div class="naira"><input type="number" name="{{ p.id }}_price" min="0" step="1" value="{{ p.price_naira }}"></div>
-        </div>
-        <div>
-          <label>Access granted</label>
-          <input type="number" name="{{ p.id }}_days" min="1" step="1" value="{{ p.days }}">
-          <div class="hint">days</div>
-        </div>
-      </div>
-
-      <label>Badge <span class="hint" style="display:inline">(optional)</span></label>
-      <input type="text" name="{{ p.id }}_badge" value="{{ p.badge or '' }}" placeholder="e.g. Best value">
+      <input type="text" name="cycle_{{ cid }}_label" value="{{ c.label }}">
+      <label>Access granted (days)</label>
+      <input type="number" name="cycle_{{ cid }}_days" min="1" step="1" value="{{ c.days }}">
     </div>
     {% endfor %}
+  </div>
+
+  <h3 class="sec">Prices per tier</h3>
+  <div class="gridwrap">
+    <table class="grid">
+      <thead>
+        <tr><th>Tier</th>{% for cid in cycle_ids %}<th>{{ cycles[cid].label }}</th>{% endfor %}</tr>
+      </thead>
+      <tbody>
+        {% for row in grid %}
+        <tr class="{{ '' if row.enabled else 'off' }}">
+          <th>
+            <div class="tnm">{{ row.label }}</div>
+            <label class="toggle"><input type="checkbox" name="tier_{{ row.tier }}_enabled" {{ 'checked' if row.enabled }}> Offer this tier</label>
+          </th>
+          {% for cid in cycle_ids %}
+          {% set p = row.plans[cid] %}
+          <td>
+            <div class="naira"><input type="number" name="price_{{ row.tier }}_{{ cid }}" min="0" step="1" value="{{ p.price_naira }}"></div>
+            <div class="sav">{% if p.savings > 0 %}save {{ p.savings }}% vs monthly{% endif %}</div>
+          </td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
   </div>
 
   <div class="save">

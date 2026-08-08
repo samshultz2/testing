@@ -360,42 +360,52 @@ def pricing():
     only affects future payments; existing subscribers keep what they paid for."""
     from utils import plans
     if request.method == 'POST':
-        tiers = {}
-        for pid in plans.TIER_IDS:
-            price = request.form.get(f'{pid}_price', type=int)      # naira
-            days = request.form.get(f'{pid}_days', type=int)
-            if price is not None and price < 0:
-                flash('Prices cannot be negative.', 'error')
-                return redirect(url_for('platform.pricing'))
+        grid, cycles = {}, {}
+        for cid in plans.CYCLE_IDS:
+            days = request.form.get(f'cycle_{cid}_days', type=int)
             if days is not None and days < 1:
-                flash('Duration must be at least 1 day.', 'error')
+                flash('Access duration must be at least 1 day.', 'error')
                 return redirect(url_for('platform.pricing'))
-            tiers[pid] = {
-                'enabled': request.form.get(f'{pid}_enabled') == 'on',
-                'label': (request.form.get(f'{pid}_label') or '').strip() or None,
-                'price_kobo': price * 100 if price is not None else None,
-                'days': days or None,
-                'badge': (request.form.get(f'{pid}_badge') or '').strip() or None,
+            # Monthly is the anchor cycle for every saving calc — never switched off.
+            enabled = (cid == 'monthly') or request.form.get(f'cycle_{cid}_enabled') == 'on'
+            cycles[cid] = {
+                'label': (request.form.get(f'cycle_{cid}_label') or '').strip() or None,
+                'days': days or None, 'enabled': enabled,
             }
-        # The Monthly tier is the anchor for every other tier's savings and the
-        # homepage headline price — it can never be switched off.
-        if not tiers['monthly']['enabled']:
-            tiers['monthly']['enabled'] = True
-            flash('The Monthly tier stays on — it anchors pricing everywhere. '
+        tier_enabled = {}
+        for tier in plans.PURCHASABLE_TIERS:
+            tier_enabled[tier] = request.form.get(f'tier_{tier}_enabled') == 'on'
+            row = {}
+            for cid in plans.CYCLE_IDS:
+                price = request.form.get(f'price_{tier}_{cid}', type=int)   # naira
+                if price is not None and price < 0:
+                    flash('Prices cannot be negative.', 'error')
+                    return redirect(url_for('platform.pricing'))
+                if price is not None:
+                    row[cid] = price * 100
+            grid[tier] = row
+        # At least one tier must stay purchasable, or checkout has nothing to sell.
+        if not any(tier_enabled.values()):
+            tier_enabled[plans.DEFAULT_TIER] = True
+            flash('At least one tier must stay on — kept the Basic tier available. '
                   'Other changes were saved.', 'info')
         plans.save_pricing({
-            'tiers': tiers,
+            'grid': grid, 'cycles': cycles, 'tier_enabled': tier_enabled,
             'updated_at': _dt.datetime.utcnow().isoformat() + 'Z',
             'updated_by': session.get('username') or 'admin',
         })
-        _audit('pricing', detail='subscription tiers updated')
+        _audit('pricing', detail='subscription pricing grid updated')
         flash('Pricing updated — changes are live.', 'success')
         return redirect(url_for('platform.pricing'))
 
     stored = plans.get_pricing()
+    stored_cycles = stored.get('cycles') or {}
+    cyc_enabled = {cid: (stored_cycles.get(cid, {}).get('enabled', True) is not False)
+                   for cid in plans.CYCLE_IDS}
     return render_template(
         'platform/pricing.html', active='pricing',
-        tiers=plans.tenant_plans(include_disabled=True),
+        grid=plans.pricing_grid(include_disabled=True),
+        cycles=plans.cycles(), cycle_ids=plans.CYCLE_IDS, cyc_enabled=cyc_enabled,
         updated_at=stored.get('updated_at'), updated_by=stored.get('updated_by'))
 
 
