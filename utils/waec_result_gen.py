@@ -326,7 +326,18 @@ def build_context(student, year):
     except Exception:
         branch = None
 
-    photo = _local_path(getattr(student, 'photo_url', None))
+    # Passport photos live as a BLOB in the tenant DB (StudentPhoto), served via
+    # a login-gated route — not a static file. Load the bytes straight from the DB
+    # as a ReportLab ImageReader (drawImage accepts it), falling back to a legacy
+    # /static/ photo_url if one was ever set that way.
+    photo = None
+    try:
+        from utils import student_photo
+        photo = student_photo.photo_reader(student)
+    except Exception:
+        photo = None
+    if photo is None:
+        photo = _local_path(getattr(student, 'photo_url', None))
     klass = getattr(student, 'stream', None) or getattr(student, 'current_class', None)
 
     return {
