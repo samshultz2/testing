@@ -356,7 +356,7 @@ function Graduates({ d }) {
 function GraduatePreview({ d, notify }) {
   const nav = useNav();
   const [busy, setBusy] = useState(false);
-  const confirm = async () => {
+  const doGraduate = async () => {
     if (!await confirm(`Mark these ${d.students.length} SSS3 student(s) as graduates?`)) return;
     setBusy(true);
     const r = await submitJson(d.confirm_url, {});
@@ -374,7 +374,7 @@ function GraduatePreview({ d, notify }) {
               <thead><tr><th>#</th><th>Student ID</th><th>Name</th><th>Gender</th></tr></thead>
               <tbody>{d.students.map((s, i) => <tr key={i}><td>{i + 1}</td><td>{s.student_id}</td><td>{s.full_name}</td><td>{s.gender}</td></tr>)}</tbody>
             </table></div>
-            <button type="button" className="btn btn-primary" style={{ marginTop: '1rem' }} disabled={busy} onClick={confirm}>
+            <button type="button" className="btn btn-primary" style={{ marginTop: '1rem' }} disabled={busy} onClick={doGraduate}>
               <i aria-hidden="true" className="fas fa-user-graduate" /> Confirm — graduate {d.students.length} student(s)</button>
           </>) : <Empty icon="fa-circle-check" title=""><p>No new SSS3 students to graduate — they're all already graduated, or no SSS3 class is set up for the active term.</p></Empty>}
           {d.already_count > 0 && <p className="text-muted text-sm" style={{ marginTop: '1rem' }}><i aria-hidden="true" className="fas fa-info-circle" /> {d.already_count} SSS3 student(s) are already graduates and will be skipped.</p>}
