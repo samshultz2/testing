@@ -443,16 +443,39 @@ def get_active_term():
     if has_request_context():
         if '_active_term' in g.__dict__:
             return g._active_term
-    from models import Term
+    from models import Term, AcademicSession
     ov = view_session_override()
     if ov is not None:
         val = (Term.query.filter_by(session_id=ov.id)
                .order_by(Term.term_number.desc()).first())
     else:
+        sess = AcademicSession.query.filter_by(is_active=True).first()
         val = Term.query.filter_by(is_active=True).first()
+        # Keep the active TERM consistent with the active SESSION. After a new
+        # session is activated, the flagged-active term can still belong to the
+        # OLD session (or none is flagged) — in that case fall back to the active
+        # session's current term. This is what makes every term-scoped page
+        # follow a session switch, not just the session-level ones.
+        if sess is not None and (val is None or val.session_id != sess.id):
+            val = _session_current_term(sess.id)
     if has_request_context():
         g._active_term = val
     return val
+
+
+def _session_current_term(session_id):
+    """The 'current' term of a session: the one whose date range covers today,
+    else the latest by term number. None if the session has no terms."""
+    from datetime import date
+    from models import Term
+    terms = Term.query.filter_by(session_id=session_id).all()
+    if not terms:
+        return None
+    today = date.today()
+    for t in terms:
+        if t.start_date and t.end_date and t.start_date <= today <= t.end_date:
+            return t
+    return max(terms, key=lambda t: (t.term_number or 0))
 
 
 def get_active_session():

@@ -58,3 +58,22 @@ def test_activation_clears_time_travel_override(app):
     c.post(f'/academics/sessions/{bid}/activate', data={'_csrf_token': tok}, follow_redirects=True)
     with c.session_transaction() as s:
         assert 'view_session_id' not in s
+
+
+def test_active_term_follows_active_session_even_if_flag_is_stale(app):
+    """Defensive: even if the is_active TERM flag still points at the old session
+    (e.g. it was never moved), get_active_term() returns a term of the active
+    session — so every term-scoped page follows the switch."""
+    from utils.helpers import get_active_term, get_active_session
+    with app.app_context():
+        AcademicSession.query.update({AcademicSession.is_active: False}, synchronize_session=False)
+        Term.query.update({Term.is_active: False}, synchronize_session=False)
+        old = AcademicSession(name='STALE OLD', is_active=False)
+        new = AcademicSession(name='STALE NEW', is_active=True)
+        db.session.add_all([old, new]); db.session.flush()
+        db.session.add(Term(session_id=old.id, term_number=3, name='old3', is_active=True))  # stale flag
+        db.session.add(Term(session_id=new.id, term_number=1, name='new1', is_active=False))
+        db.session.commit()
+        new_id = new.id
+        assert get_active_session().id == new_id
+        assert get_active_term().session_id == new_id      # followed the active session
