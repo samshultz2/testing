@@ -149,6 +149,22 @@ class ImpersonationGrant(_ControlBase):
     ended_at = Column(DateTime)                     # revoked / stopped
 
 
+class PlatformBroadcast(_ControlBase):
+    """A platform-wide announcement targeted at tenant admins by segment. Shown
+    as an in-portal banner on matching schools between starts_at and ends_at."""
+    __tablename__ = 'platform_broadcasts'
+
+    id = Column(Integer, primary_key=True)
+    message = Column(Text, nullable=False)
+    level = Column(String(20), default='info')      # info | warning | critical
+    segment = Column(String(40), default='all')     # all|paying|trial|unpaid|tier:<id>
+    created_by = Column(String(120))
+    created_at = Column(DateTime, default=_dt.datetime.utcnow, index=True)
+    starts_at = Column(DateTime)
+    ends_at = Column(DateTime)                       # None → until manually ended
+    ended_at = Column(DateTime)
+
+
 # --- control-plane engine (lazy, cached) ------------------------------------
 _engine = None
 _Session = None
@@ -488,6 +504,101 @@ def list_impersonations(*, limit=100, active_only=False):
             g_active = active
             out.append((g, g_active))
         return out
+
+
+_BROADCAST_SEGMENTS = ('all', 'paying', 'trial', 'unpaid',
+                       'tier:free', 'tier:basic', 'tier:premium', 'tier:enterprise')
+
+
+def create_broadcast(message, *, level='info', segment='all', created_by=None,
+                     ends_at=None):
+    init_control_plane()
+    seg = segment if segment in _BROADCAST_SEGMENTS else 'all'
+    lvl = level if level in ('info', 'warning', 'critical') else 'info'
+    now = _dt.datetime.utcnow()
+    b = PlatformBroadcast(message=message.strip(), level=lvl, segment=seg,
+                          created_by=created_by, created_at=now, starts_at=now,
+                          ends_at=ends_at)
+    with _session() as s:
+        s.add(b)
+        s.commit()
+        s.refresh(b)
+        s.expunge(b)
+        _LIVE_BC_CACHE['exp'] = 0.0            # invalidate the live cache
+        return b
+
+
+def end_broadcast(broadcast_id):
+    init_control_plane()
+    with _session() as s:
+        b = s.query(PlatformBroadcast).filter_by(id=broadcast_id).first()
+        if b is not None and b.ended_at is None:
+            b.ended_at = _dt.datetime.utcnow()
+            s.commit()
+        _LIVE_BC_CACHE['exp'] = 0.0            # invalidate the live cache
+        return b is not None
+
+
+def list_broadcasts(*, limit=100):
+    """All broadcasts newest-first as (broadcast, is_live) tuples."""
+    init_control_plane()
+    now = _dt.datetime.utcnow()
+    with _session() as s:
+        rows = (s.query(PlatformBroadcast)
+                .order_by(PlatformBroadcast.created_at.desc()).limit(limit).all())
+        out = []
+        for b in rows:
+            live = (b.ended_at is None and (b.ends_at is None or b.ends_at > now))
+            s.expunge(b)
+            out.append((b, live))
+        return out
+
+
+_LIVE_BC_CACHE = {'exp': 0.0, 'val': None}
+
+
+def _live_broadcasts():
+    import time as _time
+    tnow = _time.time()
+    if _LIVE_BC_CACHE['val'] is not None and _LIVE_BC_CACHE['exp'] > tnow:
+        return _LIVE_BC_CACHE['val']
+    now = _dt.datetime.utcnow()
+    with _session() as s:
+        rows = (s.query(PlatformBroadcast)
+                .filter(PlatformBroadcast.ended_at.is_(None))
+                .order_by(PlatformBroadcast.created_at.desc()).all())
+        live = []
+        for b in rows:
+            if b.starts_at and b.starts_at > now:
+                continue
+            if b.ends_at and b.ends_at <= now:
+                continue
+            s.expunge(b)
+            live.append(b)
+        _LIVE_BC_CACHE['val'] = live
+        _LIVE_BC_CACHE['exp'] = tnow + 60
+        return live
+
+
+def broadcasts_for(tenant):
+    """Live broadcasts whose segment matches this tenant. Never raises."""
+    try:
+        init_control_plane()
+        from utils import billing
+        st = billing.status(tenant)
+        tier = (getattr(tenant, 'tier', None) or 'basic').lower()
+        bucket = ('paying' if (st['active'] and not st['on_trial']
+                               and getattr(tenant, 'status', '') == 'active')
+                  else 'trial' if st['on_trial']
+                  else 'unpaid' if not st['active'] else None)
+        out = []
+        for b in _live_broadcasts():
+            seg = b.segment or 'all'
+            if seg == 'all' or seg == bucket or seg == f'tier:{tier}':
+                out.append(b)
+        return out
+    except Exception:
+        return []
 
 
 def log_platform(action, *, subdomain=None, detail=None, actor=None):

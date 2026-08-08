@@ -497,6 +497,54 @@ def impersonation_end(grant_id):
     return redirect(url_for('platform.impersonation_log'))
 
 
+@platform_bp.app_context_processor
+def _inject_broadcasts():
+    """Expose live platform broadcasts to tenant portal templates (base.html).
+    Only for a logged-in user on a real tenant host; no-op elsewhere."""
+    try:
+        if not session.get('logged_in'):
+            return {}
+        t = current_tenant()
+        if t is None:
+            return {}
+        bc = tenancy.broadcasts_for(t)
+        return {'platform_broadcasts': bc} if bc else {}
+    except Exception:
+        return {}
+
+
+@platform_bp.route('/broadcasts', methods=['GET', 'POST'])
+@platform_requires('manage_settings')
+def broadcasts():
+    """Compose and manage platform-wide announcements to tenant admins."""
+    if request.method == 'POST':
+        msg = (request.form.get('message') or '').strip()
+        if not msg:
+            flash('Enter a message to broadcast.', 'error')
+            return redirect(url_for('platform.broadcasts'))
+        days = request.form.get('days', type=int)
+        ends_at = (_dt.datetime.utcnow() + _dt.timedelta(days=days)) if days and days > 0 else None
+        b = tenancy.create_broadcast(
+            msg, level=(request.form.get('level') or 'info'),
+            segment=(request.form.get('segment') or 'all'),
+            created_by=session.get('username') or 'admin', ends_at=ends_at)
+        _audit('broadcast', detail=f'{b.segment} · {b.level} · {msg[:80]}')
+        flash('Broadcast published — live for matching schools.', 'success')
+        return redirect(url_for('platform.broadcasts'))
+    rows = tenancy.list_broadcasts()
+    return render_template('platform/broadcasts.html', active='broadcasts', rows=rows,
+                           segments=tenancy._BROADCAST_SEGMENTS)
+
+
+@platform_bp.route('/broadcasts/<int:bid>/end', methods=['POST'])
+@platform_requires('manage_settings')
+def broadcast_end(bid):
+    tenancy.end_broadcast(bid)
+    _audit('broadcast_end', detail=f'ended #{bid}')
+    flash('Broadcast ended.', 'success')
+    return redirect(url_for('platform.broadcasts'))
+
+
 @platform_bp.route('/tenant/<subdomain>')
 @platform_admin_required
 def tenant_profile(subdomain):

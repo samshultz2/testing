@@ -411,6 +411,30 @@ def test_tenant_profile_shows_customer_success(mt):
     assert 'Customer health' in body and 'Onboarding progress' in body
 
 
+def test_broadcast_targeting_and_lifecycle(mt):
+    app, tenancy = mt
+    c = _login_owner(app)
+    H = {'Host': 'edusyncra.test'}
+    r = c.get('/platform/broadcasts', headers=H)
+    assert r.status_code == 200
+    tok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"', r.get_data(as_text=True)).group(1)
+    # a trial-segment broadcast reaches a trialing school (alpha)
+    c.post('/platform/broadcasts', headers=H,
+           data={'message': 'Maintenance tonight', 'segment': 'trial',
+                 'level': 'warning', '_csrf_token': tok})
+    alpha = tenancy.get_tenant('alpha')
+    assert any('Maintenance tonight' in b.message for b in tenancy.broadcasts_for(alpha))
+    # a paying-only broadcast does NOT reach a trial school
+    c.post('/platform/broadcasts', headers=H,
+           data={'message': 'Paying perk', 'segment': 'paying', '_csrf_token': tok})
+    assert not any('Paying perk' in b.message for b in tenancy.broadcasts_for(alpha))
+    # end the trial broadcast → it disappears
+    rows = tenancy.list_broadcasts()
+    trial_b = next(b for b, _live in rows if b.segment == 'trial')
+    c.post('/platform/broadcasts/%d/end' % trial_b.id, headers=H, data={'_csrf_token': tok})
+    assert not any('Maintenance tonight' in b.message for b in tenancy.broadcasts_for(alpha))
+
+
 def test_tenant_profile_404_for_unknown(mt):
     app, _ = mt
     c = _login_owner(app)

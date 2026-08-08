@@ -42,6 +42,15 @@
          padding:4px 12px;border-radius:99px;font-weight:700;text-decoration:none">End session</a>
     </div>
     {% endif %}
+    {% if platform_broadcasts %}
+    {% for b in platform_broadcasts %}
+    <div style="padding:9px 16px;font-size:13.5px;font-weight:500;display:flex;align-items:center;gap:9px;
+      {% if b.level == 'critical' %}background:#b91c1c;color:#fff{% elif b.level == 'warning' %}background:#f6bf50;color:#3a2c00{% else %}background:#0d6a4e;color:#fff{% endif %}">
+      <i class="fas {{ 'fa-triangle-exclamation' if b.level != 'info' else 'fa-bullhorn' }}"></i>
+      <span>{{ b.message }}</span>
+    </div>
+    {% endfor %}
+    {% endif %}
     {% if session.get('logged_in') %}<a href="#mainContent" class="skip-link">Skip to content</a>{% endif %}
     <div id="navProgress" aria-hidden="true"></div>
     {% if session.get('logged_in') %}<nav class="bottom-nav" id="bottomNav" aria-label="Quick navigation"></nav>{% endif %}
