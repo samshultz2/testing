@@ -5,6 +5,14 @@
   <h1 style="margin:0 0 4px">Support</h1>
   <p class="text-muted" style="margin:0 0 20px">Raise a request with the EduSyncra team. Replies appear here.</p>
 
+  {% if support and (support.support_email or support.support_phone) %}
+  <div class="alert alert-info" style="margin-bottom:18px">
+    Prefer to reach us directly?
+    {% if support.support_email %} Email <a href="mailto:{{ support.support_email }}">{{ support.support_email }}</a>{% endif %}
+    {% if support.support_phone %} · Call <a href="tel:{{ support.support_phone|replace(' ','') }}">{{ support.support_phone }}</a>{% endif %}
+  </div>
+  {% endif %}
+
   <div class="card" style="margin-bottom:22px">
     <div class="card-body">
       <h5 style="margin-top:0">New request</h5>

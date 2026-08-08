@@ -29,7 +29,9 @@ def _school_admin_required(f):
 def index():
     sub = current_tenant().subdomain
     tickets = tenancy.list_tickets(subdomain=sub)
-    return render_template('support/index.html', tickets=tickets)
+    from utils import platform_settings
+    return render_template('support/index.html', tickets=tickets,
+                           support=platform_settings.get_settings())
 
 
 @support_bp.route('/new', methods=['POST'])

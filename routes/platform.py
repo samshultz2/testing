@@ -512,7 +512,14 @@ def _inject_broadcasts():
         t = current_tenant()
         if t is None:
             return {}
-        bc = tenancy.broadcasts_for(t)
+        bc = list(tenancy.broadcasts_for(t))
+        from utils import platform_settings
+        st = platform_settings.get_settings()
+        if st.get('maintenance_mode'):
+            import types
+            bc.insert(0, types.SimpleNamespace(
+                level='critical',
+                message=st.get('maintenance_message') or 'Scheduled maintenance is in progress — some features may be briefly unavailable.'))
         return {'platform_broadcasts': bc} if bc else {}
     except Exception:
         return {}
@@ -548,6 +555,27 @@ def broadcast_end(bid):
     _audit('broadcast_end', detail=f'ended #{bid}')
     flash('Broadcast ended.', 'success')
     return redirect(url_for('platform.broadcasts'))
+
+
+@platform_bp.route('/settings', methods=['GET', 'POST'])
+@platform_requires('manage_settings')
+def settings_page():
+    """Global platform settings: support contact + maintenance mode."""
+    from utils import platform_settings
+    if request.method == 'POST':
+        saved = platform_settings.save_settings({
+            'support_email': request.form.get('support_email'),
+            'support_phone': request.form.get('support_phone'),
+            'maintenance_mode': request.form.get('maintenance_mode') == 'on',
+            'maintenance_message': request.form.get('maintenance_message'),
+        })
+        _audit('settings', detail='maintenance=%s' % saved['maintenance_mode'])
+        flash('Platform settings saved.', 'success')
+        return redirect(url_for('platform.settings_page'))
+    from utils import platform_health
+    checks = platform_health.health_checks(current_app)
+    return render_template('platform/settings.html', active='settings',
+                           s=platform_settings.get_settings(), checks=checks)
 
 
 @platform_bp.route('/tickets')

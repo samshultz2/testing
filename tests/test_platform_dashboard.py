@@ -490,6 +490,27 @@ def test_support_ticket_flow(mt):
     assert t2.status == 'closed'
 
 
+def test_platform_settings_and_maintenance_banner(mt):
+    app, tenancy = mt
+    c = _login_owner(app)
+    H = {'Host': 'edusyncra.test'}
+    r = c.get('/platform/settings', headers=H)
+    assert r.status_code == 200
+    assert 'Maintenance mode' in r.get_data(as_text=True)
+    tok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"', r.get_data(as_text=True)).group(1)
+    c.post('/platform/settings', headers=H,
+           data={'support_email': 'help@edusyncra.site', 'maintenance_mode': 'on',
+                 'maintenance_message': 'Upgrading tonight', '_csrf_token': tok})
+    from utils import platform_settings
+    s = platform_settings.get_settings()
+    assert s['maintenance_mode'] is True and s['support_email'] == 'help@edusyncra.site'
+    # the maintenance banner shows on a tenant portal page (owner is a tenant too)
+    body = c.get('/', headers=H, follow_redirects=True).get_data(as_text=True)
+    assert 'Upgrading tonight' in body
+    # school support page surfaces the support email
+    assert 'help@edusyncra.site' in c.get('/support/', headers=H).get_data(as_text=True)
+
+
 def test_tenant_profile_404_for_unknown(mt):
     app, _ = mt
     c = _login_owner(app)
