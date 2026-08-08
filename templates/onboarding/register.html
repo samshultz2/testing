@@ -39,12 +39,15 @@
     .tier-card .tc-feats li.off i{color:var(--faint)}
     .plan-note{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:12.5px;color:var(--text-secondary)}
     .plan-note i{color:var(--primary)}
-    /* Narrow screens: let the billing-cycle segmented control fill the width and
-       share it three ways so 'Annual' isn't clipped off the right edge. */
+    /* Narrow screens: the billing-cycle segmented control fills the width and
+       splits three ways so 'Annual' isn't clipped. align-items:center keeps each
+       segment its natural height (no giant stretched pill), and the 'save more'
+       note sits on one compact line under 'Annual'. */
     @media(max-width:560px){
-      .plan-pick .cyc-toggle{display:flex;width:100%}
-      .plan-pick .cyc{flex:1}
-      .plan-pick .cyc span{display:block;text-align:center;padding:7px 6px;font-size:12.5px;white-space:normal}
+      .plan-pick .cyc-toggle{display:flex;width:100%;align-items:center}
+      .plan-pick .cyc{flex:1;text-align:center}
+      .plan-pick .cyc span{display:block;padding:8px 4px;font-size:13px;line-height:1.2;white-space:normal}
+      .plan-pick .cyc em{display:block;font-size:9.5px;margin:1px 0 0;white-space:nowrap}
     }
   </style>
 </head>
