@@ -18,7 +18,7 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
 from utils.access_control import login_required, is_admin
 from utils.tenant_runtime import current_tenant
 from utils import billing
-from utils.plans import tenant_plans, get_plan
+from utils.plans import tenant_plans, get_plan, pricing_grid, CYCLE_IDS
 
 billing_bp = Blueprint('billing', __name__, url_prefix='/billing')
 
@@ -76,14 +76,27 @@ def _grant_from_paystack(subdomain, d):
 def index():
     t = _tenant_or_404()
     st = billing.status(t)
-    plans = tenant_plans()
+    grid = pricing_grid()
     test_mode = current_app.config.get('BILLING_TEST_MODE')
+    # Pre-select the school's current tier (what they already trial/pay for), then
+    # the most popular, then the first available.
+    cur_tier = (getattr(t, 'tier', None) or '').strip().lower()
+    sel_tier = next((r['tier'] for r in grid if r['tier'] == cur_tier),
+                    next((r['tier'] for r in grid if r['popular']),
+                         grid[0]['tier'] if grid else 'basic'))
+    sel_cycle = (getattr(t, 'renew_plan', '') or '').split('-')[-1]
+    sel_cycle = sel_cycle if sel_cycle in CYCLE_IDS else 'annual'
+    price_json = {r['tier']: {c: {'naira': p['price_naira'], 'per': p['per'],
+                                  'savings': p['savings'], 'days': p['days']}
+                              for c, p in r['plans'].items()} for r in grid}
     # Can a payment actually be started? (Paystack key present AND a plan priced.)
+    any_priced = any(p['price_kobo'] for r in grid for p in r['plans'].values())
     payable = test_mode or (bool(current_app.config.get('PLATFORM_PAYSTACK_SECRET_KEY'))
-                            and any(p['price_kobo'] for p in plans))
+                            and any_priced)
     return render_template('billing/index.html', t=t, st=st,
                            is_admin=is_admin(),
-                           plans=plans, payable=payable,
+                           grid=grid, price_json=price_json,
+                           sel_tier=sel_tier, sel_cycle=sel_cycle, payable=payable,
                            lead_days=current_app.config.get('AUTO_RENEW_LEAD_DAYS'),
                            test_mode=test_mode)
 
@@ -96,7 +109,14 @@ def start_payment():
         flash('Only an administrator can manage the subscription.', 'error')
         return redirect(url_for('billing.index'))
 
-    plan = get_plan(request.form.get('plan'))     # defaults to Monthly if unknown
+    # A plan is a (tier, cycle) pair. Accept the combined "plan" id or the two
+    # fields separately; get_plan() resolves and safely defaults an unknown id.
+    plan_id = request.form.get('plan')
+    if not plan_id:
+        tier = (request.form.get('tier') or '').strip().lower()
+        cycle = (request.form.get('cycle') or '').strip().lower()
+        plan_id = f'{tier}-{cycle}' if tier and cycle else (tier or cycle)
+    plan = get_plan(plan_id)
     auto_renew = request.form.get('auto_renew') == 'on'
 
     # Dev/testing: apply a simulated payment so the flow can be tested.

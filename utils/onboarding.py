@@ -19,10 +19,26 @@ import secrets
 from utils import tenancy, provisioning
 
 
-def register_and_provision(name, subdomain, admin_email, base_domain=None):
+def _apply_chosen_tier(subdomain, tier):
+    """Stamp the capability tier the school picked at signup, so they trial (and
+    later pay for) exactly the plan they chose. Ignored for a blank/unknown tier
+    (leaves the tenant grandfathered)."""
+    tier = (tier or '').strip().lower()
+    try:
+        from utils import plans
+        if tier in plans.PURCHASABLE_TIERS:
+            tenancy.set_entitlement(subdomain, tier=tier)
+    except Exception:
+        pass
+
+
+def register_and_provision(name, subdomain, admin_email, base_domain=None, tier=None):
     """Instant onboarding: record the school, create its database + first admin,
     start the free trial, and email the login — all in one step (no email
     verification). Returns (tenant, admin_username, temp_password).
+
+    ``tier`` is the capability plan chosen at signup (basic/premium/enterprise);
+    it is stamped on the tenant so the trial reflects the chosen plan.
 
     Raises ValueError for a bad/duplicate subdomain; other exceptions mean the
     database couldn't be created (the tenant is left marked 'failed')."""
@@ -30,16 +46,19 @@ def register_and_provision(name, subdomain, admin_email, base_domain=None):
         raise ValueError('An admin email is required to register a school.')
     tenancy.register_tenant(name, subdomain, admin_email)     # validates + dedupes
     tenant, username, password = provisioning.provision(subdomain)
+    _apply_chosen_tier(subdomain, tier)
     _send_welcome_email(tenant, username, password, base_domain)
-    return tenant, username, password
+    return tenancy.get_tenant(subdomain) or tenant, username, password
 
 
-def request_school(name, subdomain, admin_email):
+def request_school(name, subdomain, admin_email, tier=None):
     """A school signs up. Records it as pending and returns a verification token
-    (which the caller emails). No database is created yet."""
+    (which the caller emails). No database is created yet. The chosen ``tier`` is
+    stamped now so it's already set when the school is provisioned on verify."""
     if not admin_email:
         raise ValueError('An admin email is required to register a school.')
     tenancy.register_tenant(name, subdomain, admin_email)
+    _apply_chosen_tier(subdomain, tier)
     token = secrets.token_urlsafe(32)
     tenancy.set_verification(subdomain, token)
     return tenancy.get_tenant(subdomain), token

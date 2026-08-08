@@ -31,8 +31,20 @@
     .plan-opt .amt{font-family:var(--font-display);font-weight:700;font-size:30px;letter-spacing:-.02em;margin:10px 0 2px}
     .plan-opt .amt small{font-size:14px;font-weight:500;color:var(--faint)}
     .plan-opt .save{font-size:12.5px;font-weight:700;color:var(--success);min-height:18px}
-    .plan-opt .days{font-size:13px;color:var(--text-secondary);margin:6px 0 16px}
+    .plan-opt .days{font-size:13px;color:var(--text-secondary);margin:6px 0 12px}
     .plan-opt form{margin-top:auto}
+    .plan-opt .pfeats{list-style:none;margin:0 0 16px;padding:12px 0 0;border-top:1px solid var(--line);
+                      display:grid;gap:6px;text-align:left}
+    .plan-opt .pfeats li{font-size:12.5px;color:var(--text-secondary);display:flex;align-items:center;gap:8px;line-height:1.3}
+    .plan-opt .pfeats li i{width:12px;font-size:10px;color:var(--primary);flex:0 0 auto}
+    .plan-opt .pfeats li.off{color:var(--faint)} .plan-opt .pfeats li.off i{color:var(--faint)}
+    .plan-opt .btn{margin-top:auto}
+    .cyc-toggle{display:inline-flex;gap:2px;background:var(--primary-light);border:1px solid var(--line);
+                border-radius:var(--radius-full);padding:4px;margin:0 0 18px}
+    .cyc-toggle .cyc{cursor:pointer;border:0;background:transparent;padding:8px 18px;font-size:13.5px;font-weight:600;
+                     color:var(--text-secondary);border-radius:var(--radius-full);font-family:inherit}
+    .cyc-toggle .cyc em{font-style:normal;font-size:10.5px;font-weight:700;color:var(--success);margin-left:2px}
+    .cyc-toggle .cyc.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow-sm)}
     .flash{width:100%;max-width:760px}
     .foot-links{max-width:760px;width:100%;text-align:center;margin-top:20px;font-size:13px;color:var(--text-secondary)}
     .foot-links a{color:var(--primary);font-weight:600}
@@ -128,16 +140,30 @@
 
           <form method="post" action="{{ url_for('billing.start_payment') }}">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="cycle" id="billCycle" value="{{ sel_cycle }}">
+            <div class="cyc-toggle">
+              {% for cid, clabel in [('monthly','Monthly'),('termly','Termly'),('annual','Annual')] %}
+              <button type="button" class="cyc {{ 'on' if cid == sel_cycle }}" data-cycle="{{ cid }}">{{ clabel }}{% if cid == 'annual' %} <em>save more</em>{% endif %}</button>
+              {% endfor %}
+            </div>
             <div class="plan-grid">
-              {% for p in plans %}
-              <div class="plan-opt {{ 'feat' if p.id == 'annual' }}">
-                {% if p.badge %}<span class="badge">{{ p.badge }}</span>{% endif %}
-                <div class="lab">{{ p.label }}</div>
-                <div class="amt">₦{{ '{:,.0f}'.format(p.price_naira) }}<small> / {{ p.per }}</small></div>
-                <div class="save">{% if p.savings > 0 %}Save {{ p.savings }}%{% endif %}</div>
-                <div class="days">{{ p.days }} days of access</div>
-                <button class="btn {{ 'btn-primary' if p.id == 'annual' else 'btn-ghost' }} btn-block" type="submit" name="plan" value="{{ p.id }}">
-                  {% if test_mode %}Apply test payment{% else %}Choose {{ p.label }}{% endif %}
+              {% for row in grid %}
+              {% set p = row.plans[sel_cycle] %}
+              <div class="plan-opt {{ 'feat' if row.popular }}" data-tier="{{ row.tier }}">
+                {% if row.popular %}<span class="badge">Popular</span>{% endif %}
+                <div class="lab">{{ row.label }}</div>
+                <div class="amt">₦<span class="pnum">{{ '{:,.0f}'.format(p.price_naira) }}</span><small> / <span class="pper">{{ p.per }}</span></small></div>
+                <div class="save"><span class="psave">{% if p.savings > 0 %}Save {{ p.savings }}%{% endif %}</span></div>
+                <div class="days"><span class="pdays">{{ p.days }}</span> days of access</div>
+                <ul class="pfeats">
+                  <li><i class="fas fa-user-group"></i> {{ 'Unlimited students' if row.limits.students == -1 else '{:,} students'.format(row.limits.students) }}</li>
+                  <li><i class="fas fa-code-branch"></i> {{ 'Unlimited branches' if row.limits.branches == -1 else (row.limits.branches ~ ' branches' if row.limits.branches > 1 else 'Single branch') }}</li>
+                  <li class="{{ '' if row.features.mock_exams else 'off' }}"><i class="fas {{ 'fa-check' if row.features.mock_exams else 'fa-xmark' }}"></i> Mock JAMB / WAEC &amp; CBT</li>
+                  <li class="{{ '' if row.features.predictive_analytics else 'off' }}"><i class="fas {{ 'fa-check' if row.features.predictive_analytics else 'fa-xmark' }}"></i> Predictive analytics</li>
+                  <li class="{{ '' if row.features.website_builder else 'off' }}"><i class="fas {{ 'fa-check' if row.features.website_builder else 'fa-xmark' }}"></i> Website builder</li>
+                </ul>
+                <button class="btn {{ 'btn-primary' if row.popular else 'btn-ghost' }} btn-block" type="submit" name="tier" value="{{ row.tier }}">
+                  {% if test_mode %}Apply test payment{% else %}Choose {{ row.label }}{% endif %}
                 </button>
               </div>
               {% endfor %}
@@ -149,6 +175,34 @@
             </label>
             {% endif %}
           </form>
+          <script type="application/json" id="billPrice">{{ price_json|tojson }}</script>
+          <script nonce="{{ csp_nonce }}">
+            (function () {
+              var node = document.getElementById('billPrice');
+              if (!node) return;
+              var prices; try { prices = JSON.parse(node.textContent || '{}'); } catch (e) { return; }
+              var hidden = document.getElementById('billCycle');
+              var fmt = function (n) { return Number(n || 0).toLocaleString('en-NG'); };
+              function paint(cyc) {
+                hidden.value = cyc;
+                document.querySelectorAll('.cyc-toggle .cyc').forEach(function (b) {
+                  b.classList.toggle('on', b.getAttribute('data-cycle') === cyc);
+                });
+                document.querySelectorAll('.plan-opt').forEach(function (card) {
+                  var p = (prices[card.getAttribute('data-tier')] || {})[cyc];
+                  if (!p) return;
+                  var q = function (s) { return card.querySelector(s); };
+                  if (q('.pnum')) q('.pnum').textContent = fmt(p.naira);
+                  if (q('.pper')) q('.pper').textContent = p.per;
+                  if (q('.psave')) q('.psave').textContent = p.savings > 0 ? ('Save ' + p.savings + '%') : '';
+                  if (q('.pdays')) q('.pdays').textContent = p.days;
+                });
+              }
+              document.querySelectorAll('.cyc-toggle .cyc').forEach(function (b) {
+                b.addEventListener('click', function () { paint(b.getAttribute('data-cycle')); });
+              });
+            })();
+          </script>
         {% else %}
           <div class="head"><p style="margin:0"><strong>Please ask your school administrator</strong> to renew the subscription.</p></div>
         {% endif %}

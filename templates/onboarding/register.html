@@ -10,6 +10,36 @@
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/marketing.css') }}">
+  <style nonce="{{ csp_nonce }}">
+    .plan-pick .cyc-toggle{display:inline-flex;gap:2px;background:var(--primary-light);border-radius:var(--radius-full);
+      padding:4px;margin-bottom:14px;border:1px solid var(--line)}
+    .plan-pick .cyc{position:relative;cursor:pointer;border-radius:var(--radius-full)}
+    .plan-pick .cyc input{position:absolute;opacity:0;pointer-events:none}
+    .plan-pick .cyc span{display:inline-block;padding:7px 16px;font-size:13.5px;font-weight:600;color:var(--text-secondary);
+      border-radius:var(--radius-full);white-space:nowrap}
+    .plan-pick .cyc em{font-style:normal;font-size:10.5px;font-weight:700;color:var(--success);margin-left:1px}
+    .plan-pick .cyc.on span{background:var(--surface);color:var(--ink);box-shadow:var(--shadow-sm)}
+    .tier-cards{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+    @media(max-width:560px){ .tier-cards{grid-template-columns:1fr} }
+    .tier-card{position:relative;display:block;cursor:pointer;background:var(--surface);border:1.5px solid var(--line);
+      border-radius:var(--radius-lg);padding:16px 15px;transition:border-color .15s,box-shadow .15s,transform .15s}
+    .tier-card:hover{border-color:var(--primary-light);transform:translateY(-2px)}
+    .tier-card.on{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-alpha)}
+    .tier-card input{position:absolute;opacity:0;pointer-events:none}
+    .tier-card .tag{position:absolute;top:-10px;right:12px;background:var(--primary);color:#fff;font-size:10px;
+      font-weight:700;letter-spacing:.03em;text-transform:uppercase;padding:3px 9px;border-radius:var(--radius-full)}
+    .tier-card .tc-name{font-family:var(--font-display);font-weight:600;font-size:16px;color:var(--ink)}
+    .tier-card .tc-amt{font-family:var(--font-display);font-weight:700;font-size:23px;letter-spacing:-.01em;color:var(--ink);margin:6px 0 1px}
+    .tier-card .tc-amt small{font-size:12.5px;font-weight:500;color:var(--faint)}
+    .tier-card .tc-save{font-size:11.5px;font-weight:700;color:var(--success);min-height:16px;margin-bottom:9px}
+    .tier-card .tc-feats{list-style:none;margin:0;padding:9px 0 0;border-top:1px solid var(--line);display:grid;gap:5px}
+    .tier-card .tc-feats li{font-size:12px;color:var(--text-secondary);display:flex;align-items:center;gap:7px;line-height:1.3}
+    .tier-card .tc-feats li i{width:12px;font-size:10px;color:var(--primary);flex:0 0 auto}
+    .tier-card .tc-feats li.off{color:var(--faint)}
+    .tier-card .tc-feats li.off i{color:var(--faint)}
+    .plan-note{display:flex;align-items:center;gap:8px;margin-top:12px;font-size:12.5px;color:var(--text-secondary)}
+    .plan-note i{color:var(--primary)}
+  </style>
 </head>
 <body>
   <div class="auth">
@@ -70,23 +100,37 @@
           <div class="hint">Your login and the confirmation link go here.</div>
         </div>
 
-        <div class="fg">
-          <label>Your plan</label>
-          {% set monthly = plans[0] if plans else None %}
-          {% set best = (plans|map(attribute='savings')|max) if plans else 0 %}
-          <input type="hidden" name="plan" value="{{ selected_plan.id if selected_plan else '' }}">
-          <div class="plan-card">
-            <div>
-              {% if selected_plan %}
-              <div class="p-amt">{{ selected_plan.label }}: ₦{{ '{:,.0f}'.format(selected_plan.price_naira) }}<span style="font-size:13px;font-weight:500;color:var(--text-secondary)"> / {{ selected_plan.per }}</span></div>
-              <div class="p-meta">Unlimited students &amp; staff{% if selected_plan.savings > 0 %} · save {{ selected_plan.savings }}% vs monthly{% endif %} · start free, billed after your trial</div>
-              {% else %}
-              <div class="p-amt">From ₦{{ '{:,.0f}'.format(monthly.price_naira if monthly else 0) }}<span style="font-size:13px;font-weight:500;color:var(--text-secondary)"> / month</span></div>
-              <div class="p-meta">Unlimited students &amp; staff{% if best > 0 %} · termly &amp; annual save up to {{ best }}%{% endif %} · choose after your trial</div>
-              {% endif %}
-            </div>
-            <span class="p-badge">{{ config.TENANT_TRIAL_DAYS or 3 }} days free</span>
+        <div class="fg plan-pick">
+          <label>Choose your plan</label>
+          <div class="cyc-toggle">
+            {% for cid, clabel in [('monthly','Monthly'),('termly','Termly'),('annual','Annual')] %}
+            <label class="cyc {{ 'on' if cid == sel_cycle }}" data-cycle="{{ cid }}">
+              <input type="radio" name="cycle" value="{{ cid }}" {{ 'checked' if cid == sel_cycle }}>
+              <span>{{ clabel }}{% if cid == 'annual' %} <em>save more</em>{% endif %}</span>
+            </label>
+            {% endfor %}
           </div>
+          <div class="tier-cards">
+            {% for row in grid %}
+            {% set p = row.plans[sel_cycle] %}
+            <label class="tier-card {{ 'on' if row.tier == sel_tier }}" data-tier="{{ row.tier }}">
+              <input type="radio" name="tier" value="{{ row.tier }}" {{ 'checked' if row.tier == sel_tier }} required>
+              {% if row.popular %}<span class="tag">Popular</span>{% endif %}
+              <div class="tc-name">{{ row.label }}</div>
+              <div class="tc-amt">₦<span class="tc-num">{{ '{:,.0f}'.format(p.price_naira) }}</span><small> / <span class="tc-per">{{ p.per }}</span></small></div>
+              <div class="tc-save">{% if p.savings > 0 %}Save {{ p.savings }}% vs monthly{% endif %}</div>
+              <ul class="tc-feats">
+                <li><i class="fas fa-user-group"></i> {{ 'Unlimited students' if row.limits.students == -1 else '{:,} students'.format(row.limits.students) }}</li>
+                <li><i class="fas fa-code-branch"></i> {{ 'Unlimited branches' if row.limits.branches == -1 else (row.limits.branches ~ ' branches' if row.limits.branches > 1 else 'Single branch') }}</li>
+                <li class="{{ '' if row.features.mock_exams else 'off' }}"><i class="fas {{ 'fa-check' if row.features.mock_exams else 'fa-xmark' }}"></i> Mock JAMB / WAEC &amp; CBT</li>
+                <li class="{{ '' if row.features.predictive_analytics else 'off' }}"><i class="fas {{ 'fa-check' if row.features.predictive_analytics else 'fa-xmark' }}"></i> Predictive analytics</li>
+                <li class="{{ '' if row.features.website_builder else 'off' }}"><i class="fas {{ 'fa-check' if row.features.website_builder else 'fa-xmark' }}"></i> Website builder</li>
+              </ul>
+            </label>
+            {% endfor %}
+          </div>
+          <div class="plan-note"><i class="fas fa-gift"></i> Start with {{ config.TENANT_TRIAL_DAYS or 3 }} days free — no card required. You’re billed only after your trial.</div>
+          <script type="application/json" id="priceData">{{ price_json|tojson }}</script>
         </div>
 
         <button class="btn btn-primary btn-block btn-lg" type="submit" id="submit" style="margin-top:22px">
@@ -136,6 +180,44 @@
         timer = setTimeout(render, 350);
       });
       if (sub.value) render();
+    })();
+  </script>
+
+  <script nonce="{{ csp_nonce }}">
+    (function () {
+      var node = document.getElementById('priceData');
+      if (!node) return;
+      var prices; try { prices = JSON.parse(node.textContent || '{}'); } catch (e) { return; }
+      var fmt = function (n) { return Number(n || 0).toLocaleString('en-NG'); };
+
+      function currentCycle() {
+        var c = document.querySelector('input[name="cycle"]:checked');
+        return c ? c.value : 'annual';
+      }
+      function repaint() {
+        var cyc = currentCycle();
+        document.querySelectorAll('.cyc').forEach(function (el) {
+          el.classList.toggle('on', el.getAttribute('data-cycle') === cyc);
+        });
+        document.querySelectorAll('.tier-card').forEach(function (card) {
+          var t = card.getAttribute('data-tier'), p = (prices[t] || {})[cyc];
+          if (!p) return;
+          var num = card.querySelector('.tc-num'), per = card.querySelector('.tc-per'),
+              save = card.querySelector('.tc-save'),
+              checked = card.querySelector('input[name="tier"]').checked;
+          if (num) num.textContent = fmt(p.naira);
+          if (per) per.textContent = p.per;
+          if (save) save.textContent = p.savings > 0 ? ('Save ' + p.savings + '% vs monthly') : '';
+          card.classList.toggle('on', checked);
+        });
+      }
+      document.querySelectorAll('input[name="cycle"]').forEach(function (r) {
+        r.addEventListener('change', repaint);
+      });
+      document.querySelectorAll('input[name="tier"]').forEach(function (r) {
+        r.addEventListener('change', repaint);
+      });
+      repaint();
     })();
   </script>
 </body>

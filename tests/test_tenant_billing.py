@@ -406,9 +406,10 @@ def test_autorenew_optin_and_toggle_through_the_app(mt):
     btok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"', bill).group(1)
 
     # pay (test mode) opting into auto-renew -> card saved + enabled
-    c.post('/billing/pay', headers=H, data={'_csrf_token': btok, 'plan': 'monthly', 'auto_renew': 'on'})
+    c.post('/billing/pay', headers=H,
+           data={'_csrf_token': btok, 'tier': 'basic', 'cycle': 'monthly', 'auto_renew': 'on'})
     t = tenancy.get_tenant('trial')
-    assert t.auto_renew == 1 and t.card_last4 == '4081' and t.renew_plan == 'monthly'
+    assert t.auto_renew == 1 and t.card_last4 == '4081' and t.renew_plan == 'basic-monthly'
 
     # the page now shows it's ON, and the toggle turns it off (card kept)
     bill = c.get('/billing/', headers=H).get_data(as_text=True)
@@ -420,42 +421,55 @@ def test_autorenew_optin_and_toggle_through_the_app(mt):
 
 
 def test_plan_tiers_are_discounted():
-    from utils.plans import tenant_plans, get_plan
+    from utils.plans import tenant_plans, get_plan, pricing_grid
     cfg = dict(TENANT_PRICE_KOBO=5000000, TENANT_PLAN_DAYS=30, TENANT_TERM_DAYS=120)
-    m, t, a = tenant_plans(cfg)
+    m, t, a = tenant_plans(cfg)                 # anchor (Basic) cycle plans, back-compat shape
     assert (m['days'], m['price_naira'], m['savings']) == (30, 50000, 0)
     assert t['days'] == 120 and t['savings'] == 10
     assert a['days'] == 365 and a['savings'] == 20
     assert a['price_naira'] < m['price_naira'] * 12          # annual is cheaper than 12x monthly
-    assert get_plan('nonsense', cfg)['id'] == 'monthly'      # safe fallback
+    # per-tier multipliers: Premium 2x, Enterprise 4x the Basic Monthly price
+    grid = {r['tier']: r for r in pricing_grid(cfg)}
+    assert grid['premium']['plans']['monthly']['price_naira'] == 100000
+    assert grid['enterprise']['plans']['monthly']['price_naira'] == 200000
+    # unknown ids fall back safely to the Basic Monthly plan
+    fb = get_plan('nonsense', cfg)
+    assert fb['tier'] == 'basic' and fb['cycle'] == 'monthly'
 
 
 def test_pricing_overrides_are_live(cp):
     """Admin edits at /platform/pricing (stored in the control plane) take
-    precedence over config, hide disabled tiers, and re-anchor savings on the
-    new Monthly price — with no redeploy."""
+    precedence over config per (tier, cycle), can hide a cycle or a whole tier,
+    and re-anchor savings on the new Monthly price — with no redeploy."""
     from utils import plans
     cfg = dict(TENANT_PRICE_KOBO=5000000, TENANT_PLAN_DAYS=30, TENANT_TERM_DAYS=120)
-    assert plans.get_plan('monthly', cfg)['price_naira'] == 50000     # config default
+    assert plans.get_plan('premium-monthly', cfg)['price_naira'] == 100000   # config default (2x)
 
-    plans.save_pricing({'tiers': {
-        'monthly': {'enabled': True, 'price_kobo': 4000000},                       # ₦40,000
-        'termly':  {'enabled': False},                                             # hidden
-        'annual':  {'enabled': True, 'label': 'Yearly', 'price_kobo': 36000000,    # ₦360,000
-                    'badge': 'Cheapest'},
-    }})
+    plans.save_pricing({
+        'grid': {
+            'basic':   {'monthly': 4000000, 'annual': 36000000},   # ₦40,000 / ₦360,000
+            'premium': {'monthly': 9000000},                       # ₦90,000
+        },
+        'cycles': {'termly': {'enabled': False}},                  # hide the Termly cycle
+        'tier_enabled': {'basic': True, 'premium': True, 'enterprise': False},
+    })
 
-    live = plans.tenant_plans(cfg)
-    assert [p['id'] for p in live] == ['monthly', 'annual']            # termly dropped
-    assert plans.get_plan('monthly', cfg)['price_naira'] == 40000      # override wins
-    a = plans.get_plan('annual', cfg)
-    assert a['label'] == 'Yearly' and a['badge'] == 'Cheapest'
-    assert a['savings'] == 25                                          # vs new ₦40k x12
+    # per-cell overrides win
+    assert plans.get_plan('basic-monthly', cfg)['price_naira'] == 40000
+    assert plans.get_plan('premium-monthly', cfg)['price_naira'] == 90000
+    # annual saving re-anchored on the new ₦40k Basic monthly (₦360k vs ₦480k = 25%)
+    assert plans.get_plan('basic-annual', cfg)['savings'] == 25
 
-    # the admin editor still sees every tier, with the enabled flag
-    allt = plans.tenant_plans(cfg, include_disabled=True)
-    assert len(allt) == 3
-    assert next(p for p in allt if p['id'] == 'termly')['enabled'] is False
+    # enterprise tier hidden; termly cycle hidden from every visible tier
+    grid = plans.pricing_grid(cfg)
+    assert [r['tier'] for r in grid] == ['basic', 'premium']
+    for r in grid:
+        assert [p['cycle'] for p in r['plan_list']] == ['monthly', 'annual']
+
+    # the admin editor still sees every tier + cycle via include_disabled
+    allg = plans.pricing_grid(cfg, include_disabled=True)
+    assert [r['tier'] for r in allg] == ['basic', 'premium', 'enterprise']
+    assert next(r for r in allg if r['tier'] == 'enterprise')['enabled'] is False
 
 
 # --- auto-renew (Approach B: stored authorization + scheduled charge) --------
