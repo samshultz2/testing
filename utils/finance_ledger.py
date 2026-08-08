@@ -400,7 +400,8 @@ def ensure_tables(bind=None):
                         StaffLoan, LoanGuarantor, LoanRepayment)
     from models import (TermAssessmentSetting, StaffInvite, StaffSignup, GraduateAudit,
                         GraduateDocument, AlumniProfile, DocumentRequest, DocTemplatePref,
-                        DocumentVerification, StudentPhoto)
+                        DocumentVerification, StudentPhoto,
+                        WAECCertTemplate, WAECCertPreset, WAECCertIssue)
     tables = [FinanceTransaction.__table__, AdditionalCharge.__table__,
               InstallmentPlan.__table__, RecipientGroup.__table__,
               AnnouncementAck.__table__, CommAttachment.__table__,
@@ -423,7 +424,8 @@ def ensure_tables(bind=None):
               StaffInvite.__table__, StaffSignup.__table__, GraduateAudit.__table__,
               GraduateDocument.__table__, AlumniProfile.__table__, DocumentRequest.__table__,
               DocTemplatePref.__table__, DocumentVerification.__table__,
-              StudentPhoto.__table__]
+              StudentPhoto.__table__, WAECCertTemplate.__table__,
+              WAECCertPreset.__table__, WAECCertIssue.__table__]
     engine = bind if bind is not None else db.engine
     # Never let a failure creating one newer TABLE stop the column/index self-heal
     # that follows — the added COLUMNS (e.g. students.graduate_status) sit on hot,

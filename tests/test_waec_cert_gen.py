@@ -128,3 +128,86 @@ def test_generate_downloads_and_audits(app):
                data={'_csrf_token': tok, 'student_id': sid, 'year': _YR, 'template': 'creative',
                      'format': 'png', 'preset': 'social'})
     assert r.status_code == 200 and r.mimetype == 'image/png'
+
+
+def _csrf(c):
+    with c.session_transaction() as s:
+        s['_csrf_token'] = 'a' * 64
+    return 'a' * 64
+
+
+def test_generate_records_issue_and_public_verify(app):
+    from models import WAECCertIssue
+    sid = _seed(app)
+    c = _admin(app)
+    tok = _csrf(c)
+    c.post('/results/waec/certificate/generate',
+           data={'_csrf_token': tok, 'student_id': sid, 'year': _YR, 'template': 'prestige',
+                 'format': 'pdf', 'c': 'school_name,student_name,subjects,grades,qr_code,verification_code'})
+    with app.app_context():
+        rec = WAECCertIssue.query.filter_by(student_id=sid).order_by(WAECCertIssue.id.desc()).first()
+        assert rec is not None and rec.code.startswith('WR-')
+        code = rec.code
+    # public verify page — no login required
+    pub = app.test_client()
+    r = pub.get(f'/results/waec/verify/{code}')
+    assert r.status_code == 200
+    body = r.get_data(as_text=True)
+    assert 'Authentic' in body and code in body
+    # unknown code → not found (still 200, shows message)
+    r = pub.get('/results/waec/verify/WR-NOPE9999')
+    assert r.status_code == 200 and 'No document found' in r.get_data(as_text=True)
+
+
+def test_template_management_and_recommendation(app):
+    from models import WAECCertTemplate, Student
+    sid = _seed(app)
+    c = _admin(app)
+    tok = _csrf(c)
+    # create a year-specific default template using the Creative design
+    r = c.post('/results/waec/certificate/templates',
+               data={'_csrf_token': tok, 'name': 'WAEC Sentinel Creative', 'base_layout': 'creative',
+                     'year': _YR, 'is_default': 'on', 'preset': 'official'})
+    assert r.status_code in (302, 200)
+    with app.app_context():
+        t = WAECCertTemplate.query.filter_by(name='WAEC Sentinel Creative').first()
+        assert t and t.base_layout == 'creative' and t.year == _YR and t.is_default
+    # the generator pre-selects the assigned design for that year
+    g = c.get(f'/results/waec/certificate?student_id={sid}&year={_YR}').get_data(as_text=True)
+    assert 'WAEC Sentinel Creative' in g            # recommended banner
+    assert 'value="creative"' in g and 'checked' in g
+
+
+def test_bulk_zip_generation(app):
+    import io, zipfile
+    _seed(app); _seed(app)                          # two students, same sentinel year
+    c = _admin(app)
+    tok = _csrf(c)
+    with app.app_context():
+        from models import Student, WAECResult
+        ids = [s.id for s in Student.query.join(WAECResult)
+               .filter(WAECResult.exam_year == _YR).distinct().all()]
+    r = c.post('/results/waec/certificate/bulk',
+               data={'_csrf_token': tok, 'year': _YR, 'template': 'classic', 'format': 'pdf',
+                     'student_ids': [str(i) for i in ids]})
+    assert r.status_code == 200 and r.mimetype == 'application/zip'
+    zf = zipfile.ZipFile(io.BytesIO(r.data))
+    names = zf.namelist()
+    assert len(names) >= 2 and all(n.endswith('.pdf') for n in names)
+
+
+def test_save_and_use_preset(app):
+    from models import WAECCertPreset
+    sid = _seed(app)
+    c = _admin(app)
+    tok = _csrf(c)
+    r = c.post('/results/waec/certificate/presets',
+               data={'_csrf_token': tok, 'name': 'My Preset',
+                     'c': 'school_name,student_name,subjects,grades'})
+    assert r.status_code in (302, 200)
+    with app.app_context():
+        p = WAECCertPreset.query.filter_by(name='My Preset').first()
+        assert p and set(p.components()) == {'school_name', 'student_name', 'subjects', 'grades'}
+    # it now appears in the generator's preset list
+    g = c.get(f'/results/waec/certificate?student_id={sid}&year={_YR}').get_data(as_text=True)
+    assert 'My Preset' in g

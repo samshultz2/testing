@@ -108,13 +108,24 @@
   <div class="wc-head">
     <h1><i class="fas fa-id-card" style="color:var(--primary)"></i> {{ student.full_name }}</h1>
     <span class="who">WAEC Result Generator</span>
-    <form method="get" action="{{ url_for('results.waec_cert_generator') }}">
-      <input type="hidden" name="student_id" value="{{ student.id }}">
-      <select name="year" onchange="this.form.submit()" aria-label="Exam year">
-        {% for y in years %}<option value="{{ y }}" {{ 'selected' if y == year }}>WAEC {{ y }}</option>{% endfor %}
-      </select>
-    </form>
+    <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <a class="btn" style="padding:8px 12px;font-size:.82rem" href="{{ manage_url }}"><i class="fas fa-layer-group"></i> Templates</a>
+      <a class="btn" style="padding:8px 12px;font-size:.82rem" href="{{ bulk_url }}"><i class="fas fa-file-zipper"></i> Bulk</a>
+      <form method="get" action="{{ url_for('results.waec_cert_generator') }}">
+        <input type="hidden" name="student_id" value="{{ student.id }}">
+        <select name="year" onchange="this.form.submit()" aria-label="Exam year" style="margin-left:0">
+          {% for y in years %}<option value="{{ y }}" {{ 'selected' if y == year }}>WAEC {{ y }}</option>{% endfor %}
+        </select>
+      </form>
+    </div>
   </div>
+  {% if recommended %}
+  <div style="background:var(--primary-light);border:1px solid color-mix(in srgb,var(--primary) 30%,transparent);
+       border-radius:var(--radius-md);padding:9px 14px;font-size:.85rem;color:var(--text-primary);margin-bottom:14px">
+    <i class="fas fa-wand-magic-sparkles" style="color:var(--primary)"></i>
+    Using the assigned template <strong>{{ recommended }}</strong> for this year/branch — you can change it below.
+  </div>
+  {% endif %}
 
   {% if not year %}
   <div class="wc-panel"><div class="wc-sec">This student has no WAEC results recorded.</div></div>
@@ -139,9 +150,16 @@
       <div class="wc-sec">
         <div class="gl" style="font-size:.72rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Quick presets</div>
         <div class="wc-presets">
-          {% for p in presets %}<button type="button" data-preset="{{ p.key }}">{{ p.label }}</button>{% endfor %}
-          <button type="button" data-preset="__all">Everything available</button>
+          {% for p in presets %}<button type="button" class="wc-preset" data-keys='{{ p["keys"]|tojson }}'>{{ p.label }}</button>{% endfor %}
+          <button type="button" class="wc-preset" data-all="1">Everything available</button>
         </div>
+        <form method="post" action="{{ save_preset_url }}" id="savePreset" style="display:flex;gap:6px;margin-top:9px">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="c" id="spC">
+          <input type="text" name="name" placeholder="Save current as preset…"
+                 style="flex:1;padding:6px 10px;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-body);color:var(--text-primary);font-size:.8rem">
+          <button type="submit" class="btn" style="padding:6px 12px;font-size:.8rem"><i class="fas fa-bookmark"></i> Save</button>
+        </form>
       </div>
       <div class="wc-sec" style="max-height:none">
         <div class="gl" style="font-size:.72rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Included information</div>
@@ -274,36 +292,26 @@
       debounced();
     });
   });
-  // presets
-  document.querySelectorAll('[data-preset]').forEach(function (b) {
+  // presets — apply client-side by ticking the matching components, then refresh
+  document.querySelectorAll('.wc-preset').forEach(function (b) {
     b.addEventListener('click', function () {
-      var qs = new URLSearchParams({ template: template(), preset: b.dataset.preset,
-        cfg: JSON.stringify(cfg()), _t: Date.now() });
-      // fetch preset selection from server-truth by asking which keys it enables:
-      // simplest: set checkboxes to match known preset via a request-less rule for __all
-      if (b.dataset.preset === '__all') {
+      var keys = null;
+      if (b.dataset.all) {
         document.querySelectorAll('.wc-c').forEach(function (c) { if (!c.disabled) c.checked = true; });
-        refresh(); return;
+      } else {
+        try { keys = JSON.parse(b.dataset.keys || '[]'); } catch (e) { keys = []; }
+        var set = {}; keys.forEach(function (k) { set[k] = true; });
+        document.querySelectorAll('.wc-c').forEach(function (c) {
+          c.checked = !c.disabled && !!set[c.dataset.key];
+        });
       }
-      // server preset: render directly with preset flag, then reflect nothing (keeps UX simple)
-      spin.style.display = 'block';
-      var probe = new Image();
-      probe.onload = function () { img.src = probe.src; img.style.display = 'block'; spin.style.display = 'none'; applyZoom(); };
-      probe.src = previewUrl + (previewUrl.indexOf('?') < 0 ? '?' : '&') + qs.toString();
-      // also reflect the preset into the generate form
-      document.getElementById('genC').value = '';
-      var pf = document.getElementById('wcGen');
-      var hid = pf.querySelector('input[name="preset"]');
-      if (!hid) { hid = document.createElement('input'); hid.type = 'hidden'; hid.name = 'preset'; pf.appendChild(hid); }
-      hid.value = b.dataset.preset;
+      refresh();
     });
   });
-  // manual toggle clears any active server-preset on the generate form
-  document.querySelectorAll('.wc-c, input[name="template"]').forEach(function (el) {
-    el.addEventListener('change', function () {
-      var hid = document.querySelector('#wcGen input[name="preset"]');
-      if (hid) hid.remove();
-    });
+  // keep the "save preset" hidden field in sync with the current selection
+  var sp = document.getElementById('savePreset');
+  if (sp) sp.addEventListener('submit', function () {
+    document.getElementById('spC').value = enabledKeys().join(',');
   });
   // format buttons set the hidden format then submit
   document.querySelectorAll('#wcGen [data-fmt]').forEach(function (b) {
