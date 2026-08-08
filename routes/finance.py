@@ -4,7 +4,7 @@ payments with printable receipts, discounts/waivers, defaulters and a finance
 dashboard.
 """
 from datetime import date, datetime
-from utils.helpers import get_active_term
+from utils.helpers import get_active_term, session_terms
 
 from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash, jsonify, Response, session)
@@ -121,7 +121,7 @@ def collections():
                       'method': p.method, 'amount': p.amount,
                       'receipt_url': url_for('finance.receipt', payment_id=p.id)} for p in payments],
         'terms': [{'id': t.id, 'full_name': t.full_name or t.name} for t in
-                  Term.query.order_by(Term.id.desc()).all()],
+                  session_terms()],
         'self_url': url_for('finance.collections'),
         'export_url': url_for('finance.collections_export', **{'from': from_date.isoformat(),
                               'to': to_date.isoformat(), 'term_id': term_id or ''}),
@@ -159,7 +159,7 @@ def collections_export():
 @login_required
 def dashboard():
     term_id = request.args.get('term_id', type=int) or _active_term_id()
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     selected_term = db.session.get(Term, term_id) if term_id else None
 
     fees = _term_fee_summary(term_id)
@@ -371,7 +371,7 @@ def structure():
     class_id = request.args.get('class_id', type=int)
     arm_id = request.args.get('arm_id', type=int)
 
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all()
     arms = ClassArm.query.filter_by(is_active=True, is_default=False).order_by(ClassArm.name).all()
     items = FeeItem.query.filter_by(is_active=True).order_by(FeeItem.name).all()
@@ -496,7 +496,7 @@ def payments_list():
     class_id = request.args.get('class_id', type=int)
     q = (request.args.get('q') or '').strip()
 
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all()
 
     from utils.branch_scope import scope_query
@@ -590,7 +590,7 @@ def record_payment():
         return _ok(f'Payment recorded — receipt {payment.receipt_no}.',
                    url_for('finance.receipt', payment_id=payment.id))
 
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     student = db.session.get(Student, student_id) if student_id else None
     bill = student_bill(student_id, term_id) if (student and term_id) else None
 
@@ -784,7 +784,7 @@ def statement(student_id):
     student = db.get_or_404(Student, student_id)
     require_branch_access(student.branch_id)        # block cross-branch IDOR
     term_id = request.args.get('term_id', type=int) or _active_term_id()
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     bill = student_bill(student_id, term_id) if term_id else None
     payments = (FeePayment.query.filter_by(student_id=student_id, term_id=term_id)
                 .order_by(FeePayment.payment_date).all()) if term_id else []
@@ -908,7 +908,7 @@ def delete_discount(discount_id):
 def defaulters():
     term_id = request.args.get('term_id', type=int) or _active_term_id()
     class_id = request.args.get('class_id', type=int)
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all()
 
     rows = []
@@ -982,7 +982,7 @@ def defaulters():
 def expenses_list():
     term_id = request.args.get('term_id', type=int) or _active_term_id()
     category_id = request.args.get('category_id', type=int)
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     categories = ExpenseCategory.query.filter_by(is_active=True).order_by(ExpenseCategory.name).all()
 
     from utils.branch_scope import scope_query
@@ -1127,7 +1127,7 @@ def delete_expense_category(category_id):
 @login_required
 def reports():
     term_id = request.args.get('term_id', type=int) or _active_term_id()
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     selected_term = db.session.get(Term, term_id) if term_id else None
 
     # Expected (per-class) and collected.
@@ -1537,7 +1537,7 @@ def billing_tools():
     """Bulk billing, late-payment penalties and credit notes — the advanced
     billing actions, kept off the everyday screens."""
     term_id = request.args.get('term_id', type=int) or _active_term_id()
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all()
     recent = (AdditionalCharge.query.filter_by(term_id=term_id)
               .order_by(AdditionalCharge.id.desc()).limit(50).all() if term_id else [])
@@ -1650,7 +1650,7 @@ def installments():
     from utils import finance_installments as I
     term_id = request.args.get('term_id', type=int) or _active_term_id()
     class_id = request.args.get('class_id', type=int)
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all()
 
     plan = I.get_plan(term_id, class_id) if term_id else []

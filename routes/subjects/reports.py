@@ -15,7 +15,7 @@ def broadsheet():
         flash('You do not have access to this class.', 'error')
         return redirect(url_for('subjects.broadsheet'))
     
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     
     if not term_id:
         active_term = get_active_term()
@@ -328,7 +328,7 @@ def broadsheet_explore():
         if active_term:
             term_id = active_term.id
     ds = _explore_dataset(term_id, _explore_scope_ids())
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     return _render({
         'page': 'explore', 'nav': _nav_urls(),
         'term_id': term_id or '', 'scopes': ds['selected_ids'],
@@ -416,7 +416,7 @@ def analytics_dashboard():
     if assignment_id and not can_access_class(assignment_id):
         flash('You do not have access to this class.', 'error')
         return redirect(url_for('subjects.analytics_dashboard'))
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     assignments = (filter_classes_for_user(
         ClassArmAssignment.query.filter_by(term_id=term_id).all()) if term_id else [])
     data = None
@@ -495,7 +495,7 @@ def institution_analytics():
     if scope == 'arm' and scope_id and not can_access_class(int(scope_id)):
         flash('You do not have access to this class.', 'error')
         scope, scope_id = 'school', None
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     data = None
     if term_id:
         from utils.results_analytics_org import org_analytics
@@ -618,7 +618,7 @@ def teacher_scorecard_view():
     data = None
     if term_id and name:
         data = teacher_scorecard(term_id, name, _org_allowed_ids(term_id))
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     staff_id = (data or {}).get('staff_id') if data else None
     return _render({
         'page': 'teacher', 'nav': _nav_urls(), 'is_admin': is_admin(),
@@ -677,7 +677,7 @@ def subject_scorecard_view():
     data = None
     if term_id and subject_id:
         data = subject_scorecard(term_id, subject_id, _org_allowed_ids(term_id))
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     return _render({
         'page': 'subject', 'nav': _nav_urls(),
         'term_id': term_id or '', 'subject_id': subject_id or '',
@@ -733,7 +733,7 @@ def affective():
     if not term_id:
         active = get_active_term()
         term_id = active.id if active else None
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     assignments = (filter_classes_for_user(
         ClassArmAssignment.query.filter_by(term_id=term_id).all()) if term_id else [])
     selected_assignment = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None
@@ -793,7 +793,7 @@ def comments():
     if not term_id:
         active = get_active_term()
         term_id = active.id if active else None
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     assignments = (filter_classes_for_user(
         ClassArmAssignment.query.filter_by(term_id=term_id).all()) if term_id else [])
     selected_assignment = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None
@@ -851,7 +851,7 @@ def student_report_card(student_id):
     assert_student_access(student)   # branch + form-teacher scope
     term_id = request.args.get('term_id', type=int)
 
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     
     if not term_id:
         active_term = get_active_term()
@@ -1162,7 +1162,7 @@ def print_all_report_cards():
     term_id = request.args.get('term_id', type=int)
     assignment_id = request.args.get('assignment_id', type=int)
     
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     
     if not term_id:
         active_term = get_active_term()

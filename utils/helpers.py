@@ -493,6 +493,22 @@ def get_active_session():
     return val
 
 
+def session_terms(session=None):
+    """Terms of the active (or admin-time-travelled) academic session, newest
+    term first — the correct population for any term-picker dropdown.
+
+    Switching the active session changes what every term dropdown offers, so a
+    user can only pick terms that belong to the session they're viewing. Falls
+    back to *all* terms only when there is genuinely no active session (a fresh
+    or misconfigured install), so dropdowns never come up empty there."""
+    from models import Term
+    s = session if session is not None else get_active_session()
+    if s is None:
+        return Term.query.order_by(Term.id.desc()).all()
+    return (Term.query.filter_by(session_id=s.id)
+            .order_by(Term.term_number.desc()).all())
+
+
 def session_exam_year(session=None):
     """The external-exam (calendar) year for an academic session — e.g. the
     session ``2025/2026`` sits its WAEC/JAMB in **2026** (the second year). Falls

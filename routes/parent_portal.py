@@ -5,7 +5,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, sessio
 from models import db, Student, Term, Week, Announcement, FeePayment
 from utils.finance import student_bill, next_receipt_no
 from utils.report_card import build_report_card, _attendance_pct
-from utils.helpers import get_active_term
+from utils.helpers import get_active_term, session_terms
 from utils import payments
 from utils.security import login_limiter
 
@@ -162,7 +162,7 @@ def home():
     if not term_id:
         active = get_active_term()
         term_id = active.id if active else None
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     term = db.session.get(Term, term_id) if term_id else None
 
     bill = student_bill(student.id, term_id) if term_id else None

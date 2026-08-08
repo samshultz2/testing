@@ -9,7 +9,7 @@ Two surfaces:
     exam is gated by its own access password; answers are auto-graded.
 """
 from datetime import datetime, timedelta
-from utils.helpers import get_active_term, safe_redirect
+from utils.helpers import get_active_term, safe_redirect, session_terms
 from functools import wraps
 import hmac
 import io
@@ -137,7 +137,7 @@ def _student_placement(student_id, term):
 @cbt_bp.route('/')
 @login_required
 def dashboard():
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     active = _active_term()
     # Term-scoped (default active term); 'all' shows history across terms.
     raw = request.args.get('term_id')
@@ -205,7 +205,7 @@ def _exam_choices():
         'subjects': Subject.query.filter_by(is_active=True).order_by(Subject.name).all(),
         'classes': SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all(),
         'arms': ClassArm.query.filter_by(is_active=True, is_default=False).order_by(ClassArm.name).all(),
-        'terms': Term.query.order_by(Term.id.desc()).all(),
+        'terms': session_terms(),
     }
 
 
@@ -888,7 +888,7 @@ def subject_topics():
         CBTExam.subject_id.isnot(None)).distinct().all()]
     subjects = (Subject.query.filter(Subject.id.in_(subj_ids)).order_by(Subject.name).all()
                 if subj_ids else [])
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     subject_id = request.args.get('subject_id', type=int) or (subjects[0].id if subjects else None)
     term_id = request.args.get('term_id', type=int)
     data = subject_topic_mastery(subject_id, term_id, viewing_branch_id()) if subject_id else None

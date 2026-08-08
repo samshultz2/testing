@@ -157,10 +157,7 @@ def termly_summary():
         return redirect(url_for('attendance.termly_summary'))
     
     # Get terms
-    terms = Term.query.join(AcademicSession).order_by(
-        AcademicSession.name.desc(),
-        Term.term_number
-    ).all()
+    terms = session_terms()
     
     if not term_id:
         active_term = get_active_term()
@@ -370,7 +367,7 @@ def attendance_alerts():
     term_id = request.args.get('term_id', type=int)
     threshold = request.args.get('threshold', type=float)
     
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     
     # Get active term if not specified
     if not term_id:
@@ -563,7 +560,7 @@ def print_register():
     assignment_id = request.args.get('assignment_id', type=int)
     week_id = request.args.get('week_id', type=int)
     
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     
     # Get active term if not specified
     if not term_id:

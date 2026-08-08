@@ -218,8 +218,7 @@ def api_context():
     req_term = request.args.get('term_id', type=int)
     term = (db.session.get(Term, req_term) if req_term else None) or get_active_term()
     terms = [{'id': t.id, 'name': t.full_name, 'active': bool(t.is_active)}
-             for t in Term.query.join(AcademicSession)
-             .order_by(AcademicSession.name.desc(), Term.term_number).all()]
+             for t in session_terms()]
     classes, weeks, holidays = [], [], []
     default_class, default_week = None, None
     if term:

@@ -2,7 +2,7 @@
 Attendance management routes
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, Response, abort
-from utils.helpers import get_active_term
+from utils.helpers import get_active_term, session_terms
 from utils.web_exports import xlsx_response
 from datetime import datetime, date, timedelta
 from models import (
