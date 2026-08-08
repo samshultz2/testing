@@ -26,8 +26,18 @@ def test_live_session_defaults_to_its_year(monkeypatch):
     assert H.resolve_exam_year(None, [2026, 2025, 2024]) == 2026
     # an explicit ?year still wins on the live session (deliberate exploration)
     assert H.resolve_exam_year(2024, [2026, 2025, 2024]) == 2024
-    # session year has no data yet → fall back to the most recent year with data
+    # session year has no data yet → still lock to the active session's year
+    # (show the fresh, empty session — never fall back to the old session's data)
+    assert H.resolve_exam_year(None, [2025, 2024]) == 2026
+
+
+def test_unnamed_live_session_falls_back_to_latest_year(monkeypatch):
+    # A session whose name yields no exam year can't be scoped, so we keep the
+    # page useful by showing the most recent year that has data.
+    monkeypatch.setattr(H, 'view_session_override', lambda: None)
+    monkeypatch.setattr(H, 'get_active_session', lambda: _S('Legacy'))
     assert H.resolve_exam_year(None, [2025, 2024]) == 2025
+    assert H.resolve_exam_year(None, []) is None
 
 
 def test_time_travel_locks_to_viewed_session(monkeypatch):

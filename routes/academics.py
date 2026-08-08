@@ -278,6 +278,12 @@ def activate_term(term_id):
         term.session.is_active = True
 
         db.session.commit()
+
+        # Drop the acting admin's read-only time-travel so their view follows the
+        # newly activated term (otherwise the override would mask the switch).
+        from flask import session as _flask_session
+        _flask_session.pop('view_session_id', None)
+
         return _ok(f'{term.full_name} is now the active term.', url_for('academics.terms_list'))
     except Exception as e:
         db.session.rollback()
