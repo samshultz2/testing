@@ -109,6 +109,12 @@ def establish(token):
     session['imp_token'] = g.token
     session['imp_id'] = g.id
     session['imp_exp'] = g.expires_at.timestamp()
+    # Bind the session to this school's subdomain, exactly like a normal login
+    # (utils.tenant_runtime.route_tenant clears a session whose 't' doesn't match
+    # the host). Without this the support session is unbound — inconsistent with
+    # every real login and a defence-in-depth gap.
+    from utils.tenant_runtime import bind_session_to_current_tenant
+    bind_session_to_current_tenant()
     session.permanent = False
     tenancy.log_platform('impersonate_start', subdomain=t.subdomain,
                          actor=g.actor, detail=(g.reason or 'support session'))
