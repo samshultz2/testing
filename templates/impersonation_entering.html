@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Entering support session…</title>
+<!-- The support-session cookie was just set on THIS host. Navigate to the portal
+     from this same-site page so the cookie is always sent on the next request —
+     independent of the session cookie's SameSite policy (a redirect straight
+     from the cross-subdomain hand-off could be withheld under SameSite=Strict). -->
+<meta http-equiv="refresh" content="0;url={{ target }}">
+<style>
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:#0f172a;color:#e2e8f0;display:grid;place-items:center;min-height:100vh;padding:24px}
+  .card{max-width:420px;text-align:center}
+  .spin{width:26px;height:26px;border:3px solid #475569;border-top-color:#f59e0b;border-radius:50%;
+    display:inline-block;animation:s .8s linear infinite;margin-bottom:14px}
+  @keyframes s{to{transform:rotate(360deg)}}
+  p{color:#94a3b8;margin:0} a{color:#f59e0b}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="spin"></div>
+    <p>Entering the school portal as read-only support…</p>
+    <p style="margin-top:10px"><a href="{{ target }}">Continue</a> if this doesn’t proceed automatically.</p>
+  </div>
+</body>
+</html>

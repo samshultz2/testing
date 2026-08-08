@@ -330,7 +330,10 @@ def test_impersonation_full_flow(mt):
     tc = app.test_client()
     TH = {'Host': 'alpha.edusyncra.test'}
     r2 = tc.get('/impersonate/' + token, headers=TH)
-    assert r2.status_code == 302                       # session established
+    # Session established, then a same-site landing page (not a bare redirect) so
+    # the just-set cookie is always sent on the follow-up navigation to the portal.
+    assert r2.status_code == 200
+    assert 'url=/' in r2.get_data(as_text=True)         # proceeds to the portal
     # the read-only support banner appears on the school's pages
     body = tc.get('/', headers=TH, follow_redirects=True).get_data(as_text=True)
     assert 'Support view' in body and 'read-only' in body
