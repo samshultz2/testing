@@ -220,7 +220,7 @@ footer .row{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;a
 .shell{width:100%;max-width:980px;background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-xl);
        overflow:hidden;box-shadow:var(--shadow-xl);display:grid;grid-template-columns:1fr 1.05fr}
 @media (max-width:840px){ .shell{grid-template-columns:1fr;max-width:480px} }
-.aside{background:linear-gradient(160deg,var(--primary),var(--primary-2));color:#fff;padding:44px 38px;display:flex;flex-direction:column;gap:24px;position:relative;overflow:hidden}
+.aside{background:linear-gradient(160deg,var(--primary),var(--primary-2));color:#fff;padding:44px 38px;display:flex;flex-direction:column;gap:24px;position:relative;overflow:hidden;min-width:0}
 .aside::after{content:"";position:absolute;right:-70px;bottom:-70px;width:230px;height:230px;border-radius:50%;background:rgba(255,255,255,.09)}
 .aside .brand{color:#fff}
 .aside .brand .mark{background:rgba(255,255,255,.18);box-shadow:none}
@@ -236,7 +236,7 @@ footer .row{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;a
 .aside .foot{margin-top:auto;font-size:12.5px;opacity:.85;position:relative;z-index:1}
 @media (max-width:840px){ .aside{padding:30px 26px;gap:18px} .aside h2{font-size:22px} .aside .mini{display:none} }
 
-.form-side{padding:44px 40px}
+.form-side{padding:44px 40px;min-width:0}
 @media (max-width:840px){ .form-side{padding:30px 26px} }
 .form-side h1{font-size:25px;margin:10px 0 6px}
 .form-side .lede{color:var(--text-secondary);font-size:14.5px;margin-bottom:22px}
