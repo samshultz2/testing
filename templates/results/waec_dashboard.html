@@ -646,7 +646,8 @@
             <tbody>
                 {% for subj in subjects_by_grade %}
                 <tr>
-                    <td>{{ subj.subject[:15] }}</td>
+                    <td><a href="{{ url_for('results.waec_subject', subject=subj.subject, year=selected_year) }}"
+                           style="color:#0d6a4e;font-weight:600" title="Full analysis for {{ subj.subject }}">{{ subj.subject[:15] }} <i class="fas fa-arrow-up-right-from-square" style="font-size:.7em;opacity:.6"></i></a></td>
                     {% for g in grades %}
                     <td><span class="grade-badge grade-{{ g|lower }}">{{ subj.grades[g] }}</span></td>
                     {% endfor %}
@@ -1112,7 +1113,7 @@ function generateStudentsExport() {
         }
         if (showCredits) bodyHtml += '<td style="' + tdStyle + 'text-align:center;font-weight:600;">' + s.credit_count + '</td>';
         if (showAvgPts) {
-            var color = s.avg_points <= 3 ? '#28a745' : s.avg_points <= 5 ? '#ffc107' : '#dc3545';
+            var color = s.avg_points >= 7 ? '#28a745' : s.avg_points >= 5 ? '#ffc107' : '#dc3545';
             bodyHtml += '<td style="' + tdStyle + 'text-align:center;color:' + color + ';font-weight:600;">' + s.avg_points + '</td>';
         }
         if (showSubjectGrades && s.results) {

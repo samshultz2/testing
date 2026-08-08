@@ -130,7 +130,8 @@ def waec_list():
             b2_count = grade_counts['B2']
             b3_count = grade_counts['B3']
             credit_count = sum(grade_counts[g] for g in ['A1', 'B2', 'B3', 'C4', 'C5', 'C6'])
-            total_points = sum(WAECResult.grade_to_points(r.grade) for r in results)
+            # Average grade points on the "higher is better" scale (A1=9 … F9=1).
+            total_points = sum(WAECResult.grade_to_average_points(r.grade) for r in results)
             
             if min_a1 and a1_count < min_a1:
                 continue
@@ -210,6 +211,32 @@ def waec_list():
         subjects_by_grade=subjects_by_grade,
         yoy_data=yoy_data
     )
+
+
+@results_bp.route('/waec/subject/<subject>')
+@login_required
+def waec_subject(subject):
+    """Full analysis of a single WAEC subject for a year — grade distribution
+    (A1…F9), credit/distinction/pass/fail rates, average grade points and the
+    candidate list per grade. Branch/arm scoped."""
+    exam_year = request.args.get('year', type=int)
+    years = [y[0] for y in db.session.query(WAECResult.exam_year)
+             .distinct().order_by(WAECResult.exam_year.desc()).all()]
+    if not exam_year and years:
+        exam_year = years[0]
+
+    from utils.access_control import exam_student_scope
+    from utils.branch_scope import viewing_branch_id
+    scope_ids = exam_student_scope()
+    data = None
+    if exam_year:
+        data = AcademicAnalytics.get_waec_subject_analysis(
+            subject, exam_year,
+            branch_id=(None if scope_ids is not None else viewing_branch_id()),
+            student_ids=scope_ids)
+    return render_template('results/waec_subject.html', subject=subject,
+                           data=data, years=years, selected_year=exam_year,
+                           grades=WAEC_GRADES)
 
 
 @results_bp.route('/waec/add', methods=['GET', 'POST'])
@@ -575,7 +602,7 @@ def export_waec():
             cell.border = border
             
             if grade != '-':
-                points = WAECResult.grade_to_points(grade)
+                points = WAECResult.grade_to_average_points(grade)   # A1=9 … F9=1
                 total_points += points
                 if grade in ['A1', 'B2', 'B3', 'C4', 'C5', 'C6']:
                     credit_count += 1

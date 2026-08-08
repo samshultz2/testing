@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}{{ subject }} — WAEC Analysis{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('results.index') }}">Results</a>
+  <a href="{{ url_for('results.waec_list', year=selected_year, view='subjects') }}">WAEC</a>
+  <span>{{ subject }}</span>{% endblock %}
+
+{% block head %}
+<style>
+  .ws-wrap{max-width:1100px;margin:0 auto}
+  .ws-head{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:16px}
+  .ws-head h1{margin:0;font-size:1.5rem}
+  .ws-head .yr{margin-left:auto}
+  .ws-head select{padding:8px 12px;border:1px solid #d9dee7;border-radius:8px;font-size:14px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px}
+  .kpi{background:#fff;border:1px solid #e9edf3;border-radius:12px;padding:14px 16px;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+  .kpi .l{font-size:12px;color:#697690;font-weight:600}
+  .kpi .v{font-size:24px;font-weight:800;margin-top:4px;color:#0f172a}
+  .kpi .v small{font-size:13px;color:#697690;font-weight:600}
+  .card{background:#fff;border:1px solid #e9edf3;border-radius:12px;box-shadow:0 1px 2px rgba(15,23,42,.04);margin-bottom:20px}
+  .card > h3{font-size:15px;margin:0;padding:14px 18px;border-bottom:1px solid #eef2f7}
+  .dist{padding:14px 18px}
+  .drow{display:flex;align-items:center;gap:12px;margin:8px 0}
+  .drow .g{width:34px;font-weight:800;text-align:center;border-radius:6px;padding:3px 0;font-size:13px}
+  .drow .bar{flex:1;height:14px;background:#eef2f7;border-radius:99px;overflow:hidden}
+  .drow .bar > span{display:block;height:100%;background:linear-gradient(90deg,#0d6a4e,#11998e)}
+  .drow .n{width:120px;text-align:right;font-size:13px;color:#38445c;font-variant-numeric:tabular-nums}
+  .grade-badge{display:inline-block;min-width:26px;text-align:center;padding:2px 6px;border-radius:6px;font-size:12px;font-weight:700}
+  .grade-a1{background:#d4edda;color:#155724}.grade-b2,.grade-b3{background:#cce5ff;color:#004085}
+  .grade-c4,.grade-c5,.grade-c6{background:#fff3cd;color:#856404}
+  .grade-d7,.grade-e8{background:#f8d7da;color:#721c24}.grade-f9{background:#f5c6cb;color:#721c24}
+  .gtable{width:100%;border-collapse:collapse;font-size:13.5px}
+  .gtable th,.gtable td{padding:9px 14px;border-bottom:1px solid #eef2f7;text-align:left;vertical-align:top}
+  .gtable th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#697690}
+  .names{color:#38445c;line-height:1.7}
+  .empty{padding:40px;text-align:center;color:#697690}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ws-wrap">
+  <div class="ws-head">
+    <h1><i class="fas fa-book"></i> {{ subject }}</h1>
+    <form class="yr" method="get">
+      <select name="year" onchange="this.form.submit()">
+        {% for y in years %}<option value="{{ y }}" {{ 'selected' if y == selected_year }}>{{ y }}</option>{% endfor %}
+      </select>
+    </form>
+  </div>
+
+  {% if data %}
+  <div class="kpis">
+    <div class="kpi"><div class="l">Candidates</div><div class="v">{{ data.total }}</div></div>
+    <div class="kpi"><div class="l">A1</div><div class="v">{{ data.a1_count }} <small>({{ (data.counts.A1 / data.total * 100)|round(1) }}%)</small></div></div>
+    <div class="kpi"><div class="l">Distinctions (A1–B3)</div><div class="v">{{ data.distinction_count }} <small>{{ data.distinction_rate }}%</small></div></div>
+    <div class="kpi"><div class="l">Credits (A1–C6)</div><div class="v">{{ data.credit_count }} <small>{{ data.credit_rate }}%</small></div></div>
+    <div class="kpi"><div class="l">Pass rate</div><div class="v">{{ data.pass_rate }}%</div></div>
+    <div class="kpi"><div class="l">Fails (E8–F9)</div><div class="v">{{ data.fail_count }} <small>{{ data.fail_rate }}%</small></div></div>
+    <div class="kpi"><div class="l">Avg. grade points</div><div class="v">{{ data.average_points }}<small>/{{ data.max_points }}</small></div></div>
+  </div>
+
+  <div class="card">
+    <h3>Grade distribution</h3>
+    <div class="dist">
+      {% set mx = data.total or 1 %}
+      {% for d in data.distribution %}
+      <div class="drow">
+        <span class="g grade-{{ d.grade|lower }}">{{ d.grade }}</span>
+        <span class="bar"><span style="width:{{ (d.count / mx * 100)|round(1) }}%"></span></span>
+        <span class="n"><strong>{{ d.count }}</strong> · {{ d.pct }}%</span>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Candidates by grade</h3>
+    <table class="gtable">
+      <thead><tr><th>Grade</th><th>Count</th><th>Students</th></tr></thead>
+      <tbody>
+        {% for g in grades %}
+        {% if data.by_grade[g] %}
+        <tr>
+          <td><span class="grade-badge grade-{{ g|lower }}">{{ g }}</span></td>
+          <td>{{ data.by_grade[g]|length }}</td>
+          <td class="names">
+            {% for s in data.by_grade[g] %}
+              <a href="{{ url_for('results.waec_list', year=selected_year, search=s.admission_no) }}">{{ s.name }}</a>{% if not loop.last %}, {% endif %}
+            {% endfor %}
+          </td>
+        </tr>
+        {% endif %}
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="card"><div class="empty"><i class="fas fa-inbox fa-2x"></i><p>No WAEC results recorded for {{ subject }} in {{ selected_year or 'this year' }}.</p></div></div>
+  {% endif %}
+
+  <a href="{{ url_for('results.waec_list', year=selected_year, view='subjects') }}" style="color:#0d6a4e"><i class="fas fa-arrow-left"></i> Back to WAEC subjects</a>
+</div>
+{% endblock %}

@@ -796,7 +796,7 @@ def export_waec_results_to_excel(results_data):
             
             if grade != '-':
                 from models import WAECResult
-                total_points += WAECResult.grade_to_points(grade)
+                total_points += WAECResult.grade_to_average_points(grade)   # A1=9 … F9=1
                 if WAECResult.is_pass(grade):
                     credit_passes += 1
             col += 1

@@ -19,6 +19,10 @@ class AcademicAnalytics:
     # Grade constants
     WAEC_GRADES = ['A1', 'B2', 'B3', 'C4', 'C5', 'C6', 'D7', 'E8', 'F9']
     GRADE_POINTS = {'A1': 1, 'B2': 2, 'B3': 3, 'C4': 4, 'C5': 5, 'C6': 6, 'D7': 7, 'E8': 8, 'F9': 9}
+    # Averages use a "higher is better" scale (A1 = 9 … F9 = 1) so a bigger
+    # average grade-point means stronger performance. GRADE_POINTS (A1 = 1) stays
+    # the WAEC ordinal used for ranking/prediction where lower = better.
+    GRADE_AVERAGE_POINTS = {'A1': 9, 'B2': 8, 'B3': 7, 'C4': 6, 'C5': 5, 'C6': 4, 'D7': 3, 'E8': 2, 'F9': 1}
     PASS_GRADES = ['A1', 'B2', 'B3', 'C4', 'C5', 'C6']
     DISTINCTION_GRADES = ['A1', 'B2', 'B3']
     
@@ -45,8 +49,9 @@ class AcademicAnalytics:
         summaries = {}
         for year, year_results in by_year.items():
             grades = [r.grade for r in year_results]
-            points = [AcademicAnalytics.GRADE_POINTS.get(g, 9) for g in grades]
-            
+            # Average on the "higher is better" scale (A1 = 9 … F9 = 1).
+            points = [AcademicAnalytics.GRADE_AVERAGE_POINTS.get(g, 0) for g in grades]
+
             summaries[year] = {
                 'total_subjects': len(year_results),
                 'results': [{'subject': r.subject, 'grade': r.grade} for r in year_results],
@@ -227,6 +232,57 @@ class AcademicAnalytics:
             sub = db.session.query(Student.id).filter(Student.branch_id == branch_id)
             return query.filter(model.student_id.in_(sub))
         return query
+
+    @staticmethod
+    def get_waec_subject_analysis(subject, exam_year, branch_id=None, student_ids=None):
+        """Full analysis of one WAEC subject in a year: grade distribution
+        (A1…F9 counts + %), credit/distinction/pass/fail rates, average grade
+        points (A1 = 9 … F9 = 1) and the candidate list per grade. Branch/arm
+        scoped. Returns None when there are no results."""
+        q = WAECResult.query.filter_by(exam_year=exam_year, subject=subject)
+        q = AcademicAnalytics._by_branch(q, WAECResult, branch_id)
+        if student_ids is not None:
+            q = q.filter(WAECResult.student_id.in_(student_ids or [-1]))
+        results = q.all()
+        if not results:
+            return None
+
+        total = len(results)
+        counts = {g: sum(1 for r in results if r.grade == g) for g in AcademicAnalytics.WAEC_GRADES}
+        dist = [{'grade': g, 'count': counts[g],
+                 'pct': round(counts[g] / total * 100, 1) if total else 0}
+                for g in AcademicAnalytics.WAEC_GRADES]
+        credit = sum(counts[g] for g in AcademicAnalytics.PASS_GRADES)
+        distinction = sum(counts[g] for g in AcademicAnalytics.DISTINCTION_GRADES)
+        fail = counts['E8'] + counts['F9']
+        avg_points = round(
+            sum(AcademicAnalytics.GRADE_AVERAGE_POINTS.get(r.grade, 0) for r in results) / total, 2)
+
+        # Candidates grouped by grade (best → worst), with names.
+        sids = list({r.student_id for r in results})
+        students = {s.id: s for s in Student.query.filter(Student.id.in_(sids or [-1])).all()}
+        by_grade = {g: [] for g in AcademicAnalytics.WAEC_GRADES}
+        for r in results:
+            st = students.get(r.student_id)
+            if st:
+                by_grade[r.grade].append({
+                    'student_id': st.id, 'name': f'{st.surname} {st.first_name}',
+                    'admission_no': st.student_id})
+        for g in by_grade:
+            by_grade[g].sort(key=lambda x: x['name'])
+
+        return {
+            'subject': subject, 'exam_year': exam_year, 'total': total,
+            'distribution': dist, 'counts': counts,
+            'credit_count': credit, 'credit_rate': round(credit / total * 100, 1) if total else 0,
+            'distinction_count': distinction,
+            'distinction_rate': round(distinction / total * 100, 1) if total else 0,
+            'pass_count': credit, 'pass_rate': round(credit / total * 100, 1) if total else 0,
+            'fail_count': fail, 'fail_rate': round(fail / total * 100, 1) if total else 0,
+            'a1_count': counts['A1'],
+            'average_points': avg_points, 'max_points': 9,
+            'by_grade': by_grade,
+        }
 
     @staticmethod
     def get_waec_school_statistics(exam_year: int, branch_id=None) -> Dict:

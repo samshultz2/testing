@@ -26,12 +26,22 @@ class WAECResult(db.Model):
     
     @staticmethod
     def grade_to_points(grade):
-        """Convert grade to points for calculations"""
+        """WAEC ordinal points (A1=1 … F9=9) — lower is better. Used where grade
+        position matters (ranking, prediction, validation)."""
         grade_points = {
-            'A1': 1, 'B2': 2, 'B3': 3, 'C4': 4, 'C5': 5, 
+            'A1': 1, 'B2': 2, 'B3': 3, 'C4': 4, 'C5': 5,
             'C6': 6, 'D7': 7, 'E8': 8, 'F9': 9
         }
         return grade_points.get(grade, 9)
+
+    @staticmethod
+    def grade_to_average_points(grade):
+        """Average/score points on a "higher is better" scale (A1=9 … F9=1), so a
+        bigger average grade-point means stronger performance."""
+        return {
+            'A1': 9, 'B2': 8, 'B3': 7, 'C4': 6, 'C5': 5,
+            'C6': 4, 'D7': 3, 'E8': 2, 'F9': 1,
+        }.get(grade, 0)
     
     @staticmethod
     def is_pass(grade):
