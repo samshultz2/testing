@@ -67,26 +67,31 @@ TEMPLATES = {
                              'dotted-leader rows with circular gold grade badges and an official seal.',
                      'landscape': False},
     'classic':      {'name': 'Classic Academic',
-                     'desc': 'Formal, centred certificate-style composition with a double rule border.',
+                     'desc': 'Formal navy-and-gold certificate: double border, centred serif '
+                             'masthead and a ruled results table with signature lines.',
                      'landscape': False},
     'editorial':    {'name': 'Modern Editorial',
-                     'desc': 'Asymmetric layout with a bold typographic masthead and a side rail.',
+                     'desc': 'Bold magazine layout: a solid indigo masthead, an overlapping photo, '
+                             'an oversized year and a minimal list with colour-coded grade chips.',
                      'landscape': False},
-    'premium':      {'name': 'Premium Certificate',
-                     'desc': 'Elegant certificate with an ornate gold-toned frame and seal area.',
+    'premium':      {'name': 'Premium Gold',
+                     'desc': 'Landscape luxury certificate with an ornate gold frame, script name, '
+                             'multi-column results and a central seal.',
                      'landscape': True},
     'contemporary': {'name': 'Contemporary Report',
-                     'desc': 'Structured card grid — student panel beside a clean results table.',
+                     'desc': 'App-style report: an emerald sidebar with photo and stat tiles beside '
+                             'a clean results table with rounded grade pills.',
                      'landscape': False},
     'creative':     {'name': 'Creative Academic',
-                     'desc': 'Expressive geometric header band with a two-tone accent block.',
+                     'desc': 'Expressive duo-tone geometry: diagonal colour blocks, a circular photo '
+                             'and a bold grid of circular grade badges.',
                      'landscape': False},
 }
 DEFAULT_TEMPLATE = 'prestige'
 
-# Templates drawn directly on the canvas (pixel-precise decoration) rather than
-# via flowables. They bypass the flowable pipeline in render_pdf().
-_CANVAS_TEMPLATES = {'prestige'}
+# Every template is drawn directly on the canvas (pixel-precise, professionally
+# designed layouts) — see _CANVAS_DRAW.
+_CANVAS_TEMPLATES = set(TEMPLATES)
 
 
 def list_templates():
@@ -1238,13 +1243,582 @@ def _draw_prestige(c, ctx, show, cfg, verify_url):
             c.drawCentredString(cx, m + 22, '  |  '.join(contacts))
 
 
-_CANVAS_DRAW = {'prestige': _draw_prestige}
+# ---- shared canvas helpers used by the other five designs -------------------
+def _grade_band(g):
+    if g in ('A1', 'B2', 'B3'):
+        return 'dist'
+    if g in ('C4', 'C5', 'C6'):
+        return 'credit'
+    if g in ('D7', 'E8'):
+        return 'pass'
+    return 'fail'
+
+
+def _band_color(g, palette):
+    return palette[_grade_band(g)]
+
+
+def _spaced(c, cx, y, text, font, size, space, color):
+    """Centred text with manual letter-spacing (Canvas has no char-space API)."""
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+    c.setFillColor(color); c.setFont(font, size)
+    total = sum(stringWidth(ch, font, size) + space for ch in text) - (space if text else 0)
+    x = cx - total / 2
+    for ch in text:
+        c.drawString(x, y, ch); x += stringWidth(ch, font, size) + space
+
+
+def _divider(c, cx, y, w, color):
+    c.setStrokeColor(color); c.setLineWidth(1)
+    c.line(cx - w / 2, y, cx - 12, y); c.line(cx + 12, y, cx + w / 2, y)
+    c.setFillColor(color)
+    p = c.beginPath(); p.moveTo(cx, y + 5); p.lineTo(cx + 6, y); p.lineTo(cx, y - 5); p.lineTo(cx - 6, y); p.close()
+    c.drawPath(p, fill=1, stroke=0)
+
+
+def _pill(c, x, y, w, h, text, fill, tc=colors.white, fs=10):
+    c.setFillColor(fill); c.roundRect(x, y, w, h, h / 2.0, stroke=0, fill=1)
+    c.setFillColor(tc); c.setFont('Helvetica-Bold', fs)
+    c.drawCentredString(x + w / 2, y + h / 2 - fs * 0.35, text)
+
+
+def _stat_tile(c, x, y, w, h, label, value, bg, labelc, valuec, alpha=None, rad=8):
+    if alpha is not None:
+        c.saveState(); c.setFillAlpha(alpha)
+    c.setFillColor(bg); c.roundRect(x, y, w, h, rad, stroke=0, fill=1)
+    if alpha is not None:
+        c.restoreState()
+    c.setFillColor(valuec); c.setFont('Helvetica-Bold', 17)
+    c.drawString(x + 11, y + h - 23, str(value))
+    c.setFillColor(labelc); c.setFont('Helvetica-Bold', 7)
+    c.drawString(x + 11, y + 8, label.upper())
+
+
+def _circle_photo(c, path, cx, cy, r, ring, ring_w=3):
+    try:
+        c.saveState()
+        p = c.beginPath(); p.circle(cx, cy, r); c.clipPath(p, stroke=0, fill=0)
+        c.drawImage(path, cx - r, cy - r, 2 * r, 2 * r, preserveAspectRatio=True, anchor='c', mask='auto')
+        c.restoreState()
+    except Exception:
+        c.restoreState()
+    c.setStrokeColor(ring); c.setLineWidth(ring_w); c.circle(cx, cy, r, stroke=1, fill=0)
+
+
+def _square_photo(c, path, x, y, w, h, border, bw=4):
+    c.setFillColor(border); c.rect(x - bw, y - bw, w + 2 * bw, h + 2 * bw, fill=1, stroke=0)
+    try:
+        c.drawImage(path, x, y, w, h, preserveAspectRatio=True, anchor='c', mask='auto')
+    except Exception:
+        c.setFillColor(colors.HexColor('#e5e7eb')); c.rect(x, y, w, h, fill=1, stroke=0)
+
+
+def _issue_date():
+    import datetime
+    return datetime.date.today()
+
+
+# ===========================================================================
+#  Design 2 — CLASSIC ACADEMIC (formal navy + gold certificate, portrait)
+# ===========================================================================
+def _draw_classic(c, ctx, show, cfg, verify_url):
+    W, H = A4
+    m = 40
+    NAVY = colors.HexColor('#16294d'); GOLD = colors.HexColor('#b0892e')
+    INK = colors.HexColor('#1f2937'); MUTE = colors.HexColor('#6b7280')
+    c.setFillColor(colors.white); c.rect(0, 0, W, H, fill=1, stroke=0)
+    c.setStrokeColor(NAVY); c.setLineWidth(3); c.rect(m - 16, m - 16, W - 2 * (m - 16), H - 2 * (m - 16))
+    c.setStrokeColor(GOLD); c.setLineWidth(1); c.rect(m - 10, m - 10, W - 2 * (m - 10), H - 2 * (m - 10))
+    for dx, dy in [(m - 16, m - 16), (W - (m - 16), m - 16), (m - 16, H - (m - 16)), (W - (m - 16), H - (m - 16))]:
+        c.setFillColor(GOLD)
+        p = c.beginPath(); p.moveTo(dx, dy + 6); p.lineTo(dx + 6, dy); p.lineTo(dx, dy - 6); p.lineTo(dx - 6, dy); p.close()
+        c.drawPath(p, fill=1, stroke=0)
+    cx = W / 2; y = H - m - 24
+    if show.get('school_logo') and ctx['school'].get('logo_path'):
+        try:
+            c.drawImage(ctx['school']['logo_path'], cx - 24, y - 40, 48, 48, preserveAspectRatio=True, anchor='c', mask='auto')
+        except Exception:
+            pass
+        y -= 48
+    if show.get('school_name') and ctx['school'].get('name'):
+        c.setFillColor(NAVY); c.setFont('Times-Bold', 24)
+        c.drawCentredString(cx, y, ctx['school']['name'].upper()); y -= 18
+    if show.get('branch') and ctx.get('branch'):
+        c.setFillColor(MUTE); c.setFont('Times-Italic', 11); c.drawCentredString(cx, y, ctx['branch']); y -= 14
+    y -= 4
+    _divider(c, cx, y, 200, GOLD); y -= 20
+    _spaced(c, cx, y, 'STATEMENT OF EXAMINATION RESULT', 'Helvetica-Bold', 11, 2, NAVY); y -= 16
+    if show.get('exam_name'):
+        c.setFillColor(INK); c.setFont('Helvetica', 8.5); c.drawCentredString(cx, y, ctx['exam']['name']); y -= 13
+    if show.get('exam_year'):
+        c.setFillColor(INK); c.setFont('Helvetica-Bold', 11); c.drawCentredString(cx, y, f"YEAR: {ctx['exam']['year']}"); y -= 6
+    y -= 16
+    if show.get('student_name'):
+        for ln in _wrap(c, ctx['student']['name'].upper(), 'Times-Bold', 22, W - 2 * m)[:2]:
+            c.setFillColor(INK); c.setFont('Times-Bold', 22); c.drawCentredString(cx, y, ln); y -= 24
+    pairs = _student_pairs(ctx, show)
+    if pairs:
+        c.setFillColor(MUTE); c.setFont('Helvetica', 9.5)
+        c.drawCentredString(cx, y, '   •   '.join(f'{l}: {v}' for l, v in pairs)); y -= 14
+    y -= 12
+    # results table
+    if show.get('subjects') and ctx['results']:
+        x0, x1 = m + 6, W - m - 6
+        has_desc = show.get('grade_desc')
+        grade_w = 70; desc_w = 120 if has_desc else 0
+        subj_w = (x1 - x0) - grade_w - desc_w
+        n = len(ctx['results'])
+        hh = 24; rh = 26 if n <= 9 else (23 if n <= 11 else 20)
+        c.setFillColor(NAVY); c.rect(x0, y - hh, x1 - x0, hh, fill=1, stroke=0)
+        c.setFillColor(colors.white); c.setFont('Helvetica-Bold', 9.5)
+        c.drawString(x0 + 12, y - hh + 8, 'SUBJECT')
+        c.drawCentredString(x0 + subj_w + grade_w / 2, y - hh + 8, 'GRADE')
+        if has_desc:
+            c.drawString(x0 + subj_w + grade_w + 12, y - hh + 8, 'REMARK')
+        ry = y - hh
+        for i, r in enumerate(ctx['results']):
+            if i % 2:
+                c.setFillColor(colors.HexColor('#f3f5f9')); c.rect(x0, ry - rh, x1 - x0, rh, fill=1, stroke=0)
+            c.setFillColor(INK); c.setFont('Helvetica', 10.5 if n <= 11 else 9.5)
+            c.drawString(x0 + 12, ry - rh + rh / 2 - 4, r['subject'])
+            c.setFillColor(NAVY); c.setFont('Helvetica-Bold', 11 if n <= 11 else 10)
+            c.drawCentredString(x0 + subj_w + grade_w / 2, ry - rh + rh / 2 - 4, r['grade'])
+            if has_desc:
+                c.setFillColor(MUTE); c.setFont('Helvetica', 9)
+                c.drawString(x0 + subj_w + grade_w + 12, ry - rh + rh / 2 - 4, r['desc'])
+            ry -= rh
+        c.setStrokeColor(colors.HexColor('#d7ddea')); c.setLineWidth(0.6); c.rect(x0, ry, x1 - x0, y - hh - ry + hh, fill=0, stroke=1)
+        c.line(x0 + subj_w, ry, x0 + subj_w, y - hh)
+        if has_desc:
+            c.line(x0 + subj_w + grade_w, ry, x0 + subj_w + grade_w, y - hh)
+        y = ry - 16
+    # summary line
+    stbits = []
+    st = ctx['stats']
+    if show.get('total_subjects'):
+        stbits.append(f"Subjects: {st['total']}")
+    if show.get('credits'):
+        stbits.append(f"Credits: {st['credits']}")
+    if show.get('a1_count'):
+        stbits.append(f"A1: {st['a1']}")
+    if show.get('average'):
+        stbits.append(f"Average: {st['average']}")
+    if show.get('classification'):
+        stbits.append(f"Classification: {st['classification']}")
+    if stbits:
+        c.setFillColor(NAVY); c.setFont('Helvetica-Bold', 10)
+        c.drawCentredString(cx, y, '     '.join(stbits)); y -= 8
+    # signatures
+    sy = max(m + 96, y - 24)
+    sigs = []
+    if show.get('principal_signature') or show.get('principal_name'):
+        sigs.append((ctx['official'].get('signature_path') if show.get('principal_signature') else None,
+                     ctx['official'].get('principal_name') if show.get('principal_name') else '', 'Principal'))
+    if show.get('exam_officer'):
+        sigs.append((None, ctx['official'].get('exam_officer_name', ''), 'Examination Officer'))
+    if sigs:
+        span = (W - 2 * m - 40) / len(sigs)
+        for i, (sig, name, role) in enumerate(sigs):
+            lx = m + 20 + i * span + span / 2
+            if sig:
+                try:
+                    c.drawImage(sig, lx - 45, sy + 2, 90, 24, preserveAspectRatio=True, anchor='s', mask='auto')
+                except Exception:
+                    pass
+            c.setStrokeColor(INK); c.setLineWidth(0.8); c.line(lx - 70, sy, lx + 70, sy)
+            if name:
+                c.setFillColor(INK); c.setFont('Helvetica-Bold', 10); c.drawCentredString(lx, sy - 13, name.upper())
+            c.setFillColor(MUTE); c.setFont('Helvetica', 8.5); c.drawCentredString(lx, sy - 24, role)
+    # seal + date
+    if show.get('school_stamp'):
+        _seal(c, W - m - 44, sy + 6, 26, ctx['school'].get('name'))
+    if show.get('date_issued'):
+        c.setFillColor(MUTE); c.setFont('Helvetica', 8.5)
+        c.drawCentredString(cx, m + 22, 'Issued ' + _issue_date().strftime('%d %B %Y'))
+
+
+# ===========================================================================
+#  Design 3 — MODERN EDITORIAL (bold indigo masthead, portrait)
+# ===========================================================================
+def _draw_editorial(c, ctx, show, cfg, verify_url):
+    W, H = A4
+    INDIGO = colors.HexColor('#312e81'); INK = colors.HexColor('#111827'); MUTE = colors.HexColor('#6b7280')
+    PAL = {'dist': colors.HexColor('#0d9488'), 'credit': colors.HexColor('#4f46e5'),
+           'pass': colors.HexColor('#d97706'), 'fail': colors.HexColor('#dc2626')}
+    c.setFillColor(colors.white); c.rect(0, 0, W, H, fill=1, stroke=0)
+    hh = 232
+    c.setFillColor(INDIGO); c.rect(0, H - hh, W, hh, fill=1, stroke=0)
+    # oversized year, faint
+    if show.get('exam_year'):
+        c.saveState(); c.setFillAlpha(0.16); c.setFillColor(colors.white); c.setFont('Helvetica-Bold', 96)
+        c.drawRightString(W - 40, H - 150, str(ctx['exam']['year'])); c.restoreState()
+    if show.get('school_logo') and ctx['school'].get('logo_path'):
+        try:
+            c.drawImage(ctx['school']['logo_path'], W - 92, H - 78, 48, 48, preserveAspectRatio=True, anchor='c', mask='auto')
+        except Exception:
+            pass
+    c.setFillColor(colors.HexColor('#c7d2fe')); c.setFont('Helvetica-Bold', 11)
+    c.drawString(48, H - 58, 'WAEC RESULT')
+    ny = H - 92
+    if show.get('school_name'):
+        for ln in _wrap(c, ctx['school']['name'], 'Helvetica-Bold', 30, W - 200)[:2]:
+            c.setFillColor(colors.white); c.setFont('Helvetica-Bold', 30); c.drawString(48, ny, ln); ny -= 32
+    if show.get('branch') and ctx.get('branch'):
+        c.setFillColor(colors.HexColor('#a5b4fc')); c.setFont('Helvetica', 11); c.drawString(48, ny, ctx['branch'])
+    # photo overlaps header
+    px, py = 48, H - hh - 46
+    text_x = 48
+    if show.get('student_photo') and ctx['student'].get('photo_path'):
+        _square_photo(c, ctx['student']['photo_path'], px, py, 92, 92, colors.white, 4)
+        text_x = px + 92 + 20
+    nY = H - hh - 6
+    c.setFillColor(MUTE); c.setFont('Helvetica', 9); c.drawString(text_x, nY, 'CANDIDATE')
+    if show.get('student_name'):
+        for ln in _wrap(c, ctx['student']['name'], 'Helvetica-Bold', 21, W - text_x - 40)[:2]:
+            c.setFillColor(INK); c.setFont('Helvetica-Bold', 21); c.drawString(text_x, nY - 22, ln); nY -= 22
+    iy = nY - 40
+    c.setFillColor(MUTE); c.setFont('Helvetica', 9.5)
+    idbits = _student_pairs(ctx, show)
+    if idbits:
+        c.drawString(text_x, nY - 40, '   '.join(f'{l}: {v}' for l, v in idbits[:3]))
+    # results list
+    y = py - 40
+    x0, x1 = 48, W - 48
+    n = len(ctx['results'])
+    rh = 34 if n <= 9 else (28 if n <= 11 else 24)
+    if show.get('subjects'):
+        for r in ctx['results']:
+            c.setFillColor(INK); c.setFont('Helvetica', 13 if n <= 11 else 11)
+            c.drawString(x0, y - 5, r['subject'])
+            if show.get('grade_desc') and r.get('desc'):
+                sw = _sw(r['subject'], 'Helvetica', 13 if n <= 11 else 11)
+                c.setFillColor(MUTE); c.setFont('Helvetica', 9); c.drawString(x0 + sw + 10, y - 5, r['desc'])
+            if show.get('grades'):
+                _pill(c, x1 - 40, y - 12, 40, 20, r['grade'], _band_color(r['grade'], PAL), fs=11)
+            c.setStrokeColor(colors.HexColor('#e5e7eb')); c.setLineWidth(0.8); c.line(x0, y - rh + 8, x1, y - rh + 8)
+            y -= rh
+    # stat trio
+    trio = []
+    st = ctx['stats']
+    if show.get('credits'):
+        trio.append(('CREDITS', st['credits']))
+    if show.get('a1_count'):
+        trio.append(('A1 GRADES', st['a1']))
+    if show.get('average'):
+        trio.append(('AVERAGE', st['average']))
+    if show.get('classification'):
+        trio.append(('CLASS', st['classification']))
+    if trio:
+        y -= 6
+        tw = (x1 - x0) / len(trio)
+        for i, (l, v) in enumerate(trio):
+            tx = x0 + i * tw
+            c.setFillColor(INDIGO); c.setFont('Helvetica-Bold', 26); c.drawString(tx, y - 24, str(v))
+            c.setFillColor(MUTE); c.setFont('Helvetica-Bold', 8); c.drawString(tx, y - 38, l)
+        y -= 52
+    # signature + date footer
+    fy = max(64, y - 10)
+    if show.get('principal_name') or show.get('principal_signature'):
+        sig = ctx['official'].get('signature_path') if show.get('principal_signature') else None
+        if sig:
+            try:
+                c.drawImage(sig, x0, fy + 2, 90, 24, preserveAspectRatio=True, anchor='sw', mask='auto')
+            except Exception:
+                pass
+        c.setStrokeColor(INK); c.setLineWidth(0.8); c.line(x0, fy, x0 + 150, fy)
+        c.setFillColor(INK); c.setFont('Helvetica-Bold', 10)
+        if show.get('principal_name'):
+            c.drawString(x0, fy - 13, (ctx['official'].get('principal_name') or '').upper())
+        c.setFillColor(MUTE); c.setFont('Helvetica', 8.5); c.drawString(x0, fy - 24, 'Principal')
+    if show.get('date_issued'):
+        c.setFillColor(MUTE); c.setFont('Helvetica', 9); c.drawRightString(x1, fy - 4, 'Issued ' + _issue_date().strftime('%d %b %Y'))
+
+
+# ===========================================================================
+#  Design 4 — PREMIUM GOLD (landscape luxury certificate)
+# ===========================================================================
+def _draw_premium(c, ctx, show, cfg, verify_url):
+    W, H = landscape(A4)
+    CREAM = colors.HexColor('#fbf8f0'); GOLD = colors.HexColor('#b0892e'); GOLD_LT = colors.HexColor('#c9a94e')
+    CHAR = colors.HexColor('#2b2b2b'); MUTE = colors.HexColor('#7c6f57')
+    c.setFillColor(CREAM); c.rect(0, 0, W, H, fill=1, stroke=0)
+    m = 26
+    c.setStrokeColor(GOLD); c.setLineWidth(3); c.rect(m, m, W - 2 * m, H - 2 * m)
+    c.setLineWidth(0.8); c.rect(m + 6, m + 6, W - 2 * (m + 6), H - 2 * (m + 6))
+    # corner flourishes
+    for (ox, oy, sx, sy) in [(m + 6, H - m - 6, 1, -1), (W - m - 6, H - m - 6, -1, -1),
+                             (m + 6, m + 6, 1, 1), (W - m - 6, m + 6, -1, 1)]:
+        c.setStrokeColor(GOLD_LT); c.setLineWidth(1)
+        c.line(ox, oy, ox + sx * 40, oy); c.line(ox, oy, ox, oy + sy * 40)
+        _star(c, ox + sx * 12, oy + sy * 12, 4, GOLD)
+    cx = W / 2; y = H - m - 46
+    if show.get('school_logo') and ctx['school'].get('logo_path'):
+        try:
+            c.drawImage(ctx['school']['logo_path'], cx - 26, y - 30, 52, 52, preserveAspectRatio=True, anchor='c', mask='auto')
+        except Exception:
+            pass
+        y -= 40
+    if show.get('school_name'):
+        c.setFillColor(CHAR); c.setFont('Times-Bold', 22); c.drawCentredString(cx, y, ctx['school']['name'].upper()); y -= 20
+    _spaced(c, cx, y, 'CERTIFICATE OF EXAMINATION RESULT', 'Helvetica-Bold', 12, 3, GOLD); y -= 16
+    _divider(c, cx, y, 260, GOLD); y -= 22
+    c.setFillColor(MUTE); c.setFont('Times-Italic', 12); c.drawCentredString(cx, y, 'This is to certify that'); y -= 30
+    if show.get('student_name'):
+        c.setFillColor(CHAR); c.setFont('Times-BoldItalic', 34); c.drawCentredString(cx, y, ctx['student']['name']); y -= 8
+        c.setStrokeColor(GOLD_LT); c.setLineWidth(0.8); c.line(cx - 180, y - 4, cx + 180, y - 4); y -= 20
+    line2 = 'sat the ' + (ctx['exam']['short'] if show.get('exam_name') else '') + (f" {ctx['exam']['year']}" if show.get('exam_year') else '') + ' examination with the following results:'
+    c.setFillColor(MUTE); c.setFont('Times-Italic', 11); c.drawCentredString(cx, y, line2.strip()); y -= 24
+    # multi-column results
+    if show.get('subjects') and ctx['results']:
+        res = ctx['results']; n = len(res)
+        ncol = 1 if n <= 5 else (2 if n <= 12 else 3)
+        per = -(-n // ncol)
+        area_x0, area_x1 = m + 40, W - m - 40
+        col_w = (area_x1 - area_x0) / ncol
+        rh = 26 if per <= 6 else 22
+        top = y
+        for i, r in enumerate(res):
+            col = i // per; row = i % per
+            bx = area_x0 + col * col_w + 8; by = top - row * rh
+            c.setFillColor(CHAR); c.setFont('Helvetica', 11.5 if per <= 6 else 10)
+            c.drawString(bx, by - 5, r['subject'])
+            if show.get('grades'):
+                _badge(c, bx + col_w - 40, by - 5, 11, r['grade'])
+            c.setStrokeColor(colors.HexColor('#9ca3af')); c.setLineWidth(0.6); c.setDash(1, 2.2)
+            c.line(bx + _sw(r['subject'], 'Helvetica', 11) + 8, by - 6, bx + col_w - 56, by - 6); c.setDash()
+        y = top - per * rh - 12
+    # bottom: signature / seal / date
+    by = m + 54
+    if show.get('principal_name') or show.get('principal_signature'):
+        lx = m + 90
+        sig = ctx['official'].get('signature_path') if show.get('principal_signature') else None
+        if sig:
+            try:
+                c.drawImage(sig, lx - 45, by + 4, 90, 24, preserveAspectRatio=True, anchor='s', mask='auto')
+            except Exception:
+                pass
+        c.setStrokeColor(CHAR); c.setLineWidth(0.8); c.line(lx - 70, by, lx + 70, by)
+        c.setFillColor(CHAR); c.setFont('Helvetica-Bold', 10)
+        if show.get('principal_name'):
+            c.drawCentredString(lx, by - 13, (ctx['official'].get('principal_name') or '').upper())
+        c.setFillColor(MUTE); c.setFont('Helvetica', 8.5); c.drawCentredString(lx, by - 24, 'Principal')
+    if show.get('school_stamp'):
+        _seal(c, cx, by + 6, 30, ctx['school'].get('name'))
+    if show.get('date_issued'):
+        rx = W - m - 90
+        c.setStrokeColor(CHAR); c.setLineWidth(0.8); c.line(rx - 70, by, rx + 70, by)
+        c.setFillColor(CHAR); c.setFont('Helvetica-Bold', 10); c.drawCentredString(rx, by - 13, _issue_date().strftime('%d %B %Y'))
+        c.setFillColor(MUTE); c.setFont('Helvetica', 8.5); c.drawCentredString(rx, by - 24, 'Date of Issue')
+
+
+# ===========================================================================
+#  Design 5 — CONTEMPORARY REPORT (emerald sidebar + stat tiles, portrait)
+# ===========================================================================
+def _draw_contemporary(c, ctx, show, cfg, verify_url):
+    W, H = A4
+    EMER = colors.HexColor('#065f46'); EMER_D = colors.HexColor('#064e3b')
+    INK = colors.HexColor('#0f172a'); MUTE = colors.HexColor('#64748b')
+    PAL = {'dist': colors.HexColor('#059669'), 'credit': colors.HexColor('#0284c7'),
+           'pass': colors.HexColor('#d97706'), 'fail': colors.HexColor('#dc2626')}
+    c.setFillColor(colors.white); c.rect(0, 0, W, H, fill=1, stroke=0)
+    # sidebar
+    sb_x, sb_w = 24, 196
+    c.setFillColor(EMER); c.roundRect(sb_x, 24, sb_w, H - 48, 14, stroke=0, fill=1)
+    scx = sb_x + sb_w / 2; sy = H - 48
+    if show.get('school_logo') and ctx['school'].get('logo_path'):
+        try:
+            c.drawImage(ctx['school']['logo_path'], scx - 22, sy - 34, 44, 44, preserveAspectRatio=True, anchor='c', mask='auto')
+        except Exception:
+            pass
+        sy -= 52
+    if show.get('student_photo') and ctx['student'].get('photo_path'):
+        _circle_photo(c, ctx['student']['photo_path'], scx, sy - 44, 44, colors.white, 3); sy -= 100
+    if show.get('student_name'):
+        for ln in _wrap(c, ctx['student']['name'], 'Helvetica-Bold', 15, sb_w - 24)[:3]:
+            c.setFillColor(colors.white); c.setFont('Helvetica-Bold', 15); c.drawCentredString(scx, sy, ln); sy -= 18
+    for l, v in _student_pairs(ctx, show)[:3]:
+        c.setFillColor(colors.HexColor('#a7f3d0')); c.setFont('Helvetica', 8.5)
+        c.drawCentredString(scx, sy, f'{l}: {v}'); sy -= 13
+    # stat tiles
+    sy -= 8
+    st = ctx['stats']
+    tiles = []
+    if show.get('total_subjects'):
+        tiles.append(('Subjects', st['total']))
+    if show.get('credits'):
+        tiles.append(('Credits', st['credits']))
+    if show.get('a1_count'):
+        tiles.append(('A1 grades', st['a1']))
+    if show.get('average'):
+        tiles.append(('Average', st['average']))
+    if show.get('classification'):
+        tiles.append(('Class', st['classification']))
+    for l, v in tiles:
+        _stat_tile(c, sb_x + 14, sy - 42, sb_w - 28, 40, l, v, EMER_D,
+                   colors.HexColor('#6ee7b7'), colors.white)
+        sy -= 48
+    # main area
+    mx0, mx1 = sb_x + sb_w + 22, W - 30
+    my = H - 54
+    if show.get('school_name'):
+        for ln in _wrap(c, ctx['school']['name'], 'Helvetica-Bold', 20, mx1 - mx0)[:2]:
+            c.setFillColor(INK); c.setFont('Helvetica-Bold', 20); c.drawString(mx0, my, ln); my -= 22
+    if show.get('branch') and ctx.get('branch'):
+        c.setFillColor(MUTE); c.setFont('Helvetica', 10); c.drawString(mx0, my, ctx['branch']); my -= 14
+    c.setFillColor(EMER); c.setFont('Helvetica-Bold', 12)
+    label = (ctx['exam']['short'] + ' ' if show.get('exam_name') else '') + (str(ctx['exam']['year']) if show.get('exam_year') else '') + ' Result'
+    c.drawString(mx0, my - 4, label.strip()); my -= 24
+    # results table with pills
+    if show.get('subjects') and ctx['results']:
+        n = len(ctx['results']); rh = 30 if n <= 9 else (26 if n <= 11 else 22)
+        for i, r in enumerate(ctx['results']):
+            if i % 2:
+                c.setFillColor(colors.HexColor('#f1f5f9')); c.roundRect(mx0, my - rh + 3, mx1 - mx0, rh - 3, 6, stroke=0, fill=1)
+            c.setFillColor(INK); c.setFont('Helvetica', 11.5 if n <= 11 else 10)
+            c.drawString(mx0 + 12, my - rh / 2 - 3, r['subject'])
+            if show.get('grade_desc') and r.get('desc'):
+                sw = _sw(r['subject'], 'Helvetica', 11.5 if n <= 11 else 10)
+                c.setFillColor(MUTE); c.setFont('Helvetica', 8.5); c.drawString(mx0 + 12 + sw + 8, my - rh / 2 - 3, r['desc'])
+            if show.get('grades'):
+                _pill(c, mx1 - 46, my - rh / 2 - 9, 40, 19, r['grade'], _band_color(r['grade'], PAL), fs=10.5)
+            my -= rh
+        my -= 14
+    # signature / date / seal
+    fy = max(56, my - 6)
+    if show.get('principal_name') or show.get('principal_signature'):
+        sig = ctx['official'].get('signature_path') if show.get('principal_signature') else None
+        if sig:
+            try:
+                c.drawImage(sig, mx0, fy + 2, 84, 22, preserveAspectRatio=True, anchor='sw', mask='auto')
+            except Exception:
+                pass
+        c.setStrokeColor(INK); c.setLineWidth(0.8); c.line(mx0, fy, mx0 + 140, fy)
+        c.setFillColor(INK); c.setFont('Helvetica-Bold', 10)
+        if show.get('principal_name'):
+            c.drawString(mx0, fy - 13, (ctx['official'].get('principal_name') or '').upper())
+        c.setFillColor(MUTE); c.setFont('Helvetica', 8.5); c.drawString(mx0, fy - 24, 'Principal')
+    if show.get('school_stamp'):
+        _seal(c, mx1 - 34, fy + 4, 24, ctx['school'].get('name'))
+    if show.get('date_issued'):
+        c.setFillColor(MUTE); c.setFont('Helvetica', 8.5); c.drawRightString(mx1, fy - 30, 'Issued ' + _issue_date().strftime('%d %b %Y'))
+
+
+# ===========================================================================
+#  Design 6 — CREATIVE ACADEMIC (duo-tone geometry, portrait)
+# ===========================================================================
+def _draw_creative(c, ctx, show, cfg, verify_url):
+    W, H = A4
+    PURP = colors.HexColor('#5b21b6'); ORANGE = colors.HexColor('#f97316')
+    INK = colors.HexColor('#111827'); MUTE = colors.HexColor('#6b7280')
+    PAL = {'dist': PURP, 'credit': colors.HexColor('#7c3aed'), 'pass': ORANGE, 'fail': colors.HexColor('#dc2626')}
+    c.setFillColor(colors.white); c.rect(0, 0, W, H, fill=1, stroke=0)
+    # geometric header
+    hh = 210
+    c.setFillColor(PURP)
+    p = c.beginPath(); p.moveTo(0, H); p.lineTo(W, H); p.lineTo(W, H - hh + 40); p.lineTo(0, H - hh); p.close()
+    c.drawPath(p, fill=1, stroke=0)
+    c.saveState(); c.setFillAlpha(0.35); c.setFillColor(ORANGE); c.circle(W - 70, H - 60, 60, stroke=0, fill=1); c.restoreState()
+    c.setFillColor(ORANGE); c.circle(W - 70, H - 60, 30, stroke=0, fill=1)
+    if show.get('exam_year'):
+        c.setFillColor(colors.white); c.setFont('Helvetica-Bold', 15); c.drawCentredString(W - 70, H - 66, str(ctx['exam']['year']))
+    if show.get('school_logo') and ctx['school'].get('logo_path'):
+        try:
+            c.drawImage(ctx['school']['logo_path'], 44, H - 76, 44, 44, preserveAspectRatio=True, anchor='c', mask='auto')
+        except Exception:
+            pass
+    tx = 100 if (show.get('school_logo') and ctx['school'].get('logo_path')) else 44
+    ny = H - 58
+    if show.get('school_name'):
+        for ln in _wrap(c, ctx['school']['name'], 'Helvetica-Bold', 24, W - tx - 150)[:2]:
+            c.setFillColor(colors.white); c.setFont('Helvetica-Bold', 24); c.drawString(tx, ny, ln); ny -= 26
+    if show.get('exam_name'):
+        c.setFillColor(colors.HexColor('#ddd6fe')); c.setFont('Helvetica', 9); c.drawString(tx, ny, ctx['exam']['name'])
+    # circular photo overlapping
+    cyp = H - hh - 4
+    text_x = 44
+    if show.get('student_photo') and ctx['student'].get('photo_path'):
+        _circle_photo(c, ctx['student']['photo_path'], 88, cyp - 6, 44, ORANGE, 4); text_x = 150
+    c.setFillColor(MUTE); c.setFont('Helvetica-Bold', 9); c.drawString(text_x, cyp + 24, 'CANDIDATE')
+    if show.get('student_name'):
+        for ln in _wrap(c, ctx['student']['name'], 'Helvetica-Bold', 20, W - text_x - 44)[:2]:
+            c.setFillColor(INK); c.setFont('Helvetica-Bold', 20); c.drawString(text_x, cyp + 2, ln); cyp -= 22
+    pairs = _student_pairs(ctx, show)
+    if pairs:
+        c.setFillColor(MUTE); c.setFont('Helvetica', 9); c.drawString(text_x, cyp - 6, '   '.join(f'{l}: {v}' for l, v in pairs[:3]))
+    # results as a bold grid of badge rows
+    y = min(cyp - 44, H - hh - 96)
+    x0, x1 = 44, W - 44
+    if show.get('subjects') and ctx['results']:
+        n = len(ctx['results']); rh = 34 if n <= 9 else (28 if n <= 11 else 24)
+        for r in ctx['results']:
+            c.setFillColor(_band_color(r['grade'], PAL)); c.circle(x0 + 5, y - 6, 3.2, stroke=0, fill=1)
+            c.setFillColor(INK); c.setFont('Helvetica-Bold', 13 if n <= 11 else 11); c.drawString(x0 + 18, y - 10, r['subject'])
+            if show.get('grade_desc') and r.get('desc'):
+                sw = _sw(r['subject'], 'Helvetica-Bold', 13 if n <= 11 else 11)
+                c.setFillColor(MUTE); c.setFont('Helvetica-Oblique', 9); c.drawString(x0 + 18 + sw + 8, y - 10, r['desc'])
+            if show.get('grades'):
+                col = _band_color(r['grade'], PAL)
+                c.setFillColor(col); c.circle(x1 - 14, y - 8, 13, stroke=0, fill=1)
+                c.setFillColor(colors.white); c.setFont('Helvetica-Bold', 11); c.drawCentredString(x1 - 14, y - 12, r['grade'])
+            c.setStrokeColor(colors.HexColor('#ececf3')); c.setLineWidth(1); c.line(x0 + 18, y - rh + 10, x1 - 34, y - rh + 10)
+            y -= rh
+        y -= 10
+    # stat chips
+    st = ctx['stats']; chips = []
+    if show.get('credits'):
+        chips.append(('Credits', st['credits']))
+    if show.get('a1_count'):
+        chips.append(('A1', st['a1']))
+    if show.get('average'):
+        chips.append(('Avg', st['average']))
+    if show.get('classification'):
+        chips.append(('Class', st['classification']))
+    if chips:
+        cxp = x0
+        for l, v in chips:
+            txt = f'{l}: {v}'; w = _sw(txt, 'Helvetica-Bold', 9) + 20
+            _pill(c, cxp, y - 18, w, 20, txt, colors.HexColor('#f3e8ff'), tc=PURP, fs=9)
+            cxp += w + 8
+        y -= 30
+    # footer
+    fy = max(54, y - 4)
+    if show.get('principal_name') or show.get('principal_signature'):
+        sig = ctx['official'].get('signature_path') if show.get('principal_signature') else None
+        if sig:
+            try:
+                c.drawImage(sig, x0, fy + 2, 84, 22, preserveAspectRatio=True, anchor='sw', mask='auto')
+            except Exception:
+                pass
+        c.setStrokeColor(INK); c.setLineWidth(0.8); c.line(x0, fy, x0 + 140, fy)
+        c.setFillColor(INK); c.setFont('Helvetica-Bold', 10)
+        if show.get('principal_name'):
+            c.drawString(x0, fy - 13, (ctx['official'].get('principal_name') or '').upper())
+        c.setFillColor(MUTE); c.setFont('Helvetica', 8.5); c.drawString(x0, fy - 24, 'Principal')
+    if show.get('school_stamp'):
+        _seal(c, x1 - 30, fy + 4, 24, ctx['school'].get('name'))
+    if show.get('date_issued'):
+        c.setFillColor(MUTE); c.setFont('Helvetica', 8.5); c.drawRightString(x1, fy - 30, 'Issued ' + _issue_date().strftime('%d %b %Y'))
+    # corner geometry accent
+    c.setFillColor(PURP)
+    p = c.beginPath(); p.moveTo(0, 0); p.lineTo(60, 0); p.lineTo(0, 60); p.close(); c.drawPath(p, fill=1, stroke=0)
+
+
+def _sw(text, font, size):
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+    return stringWidth(text, font, size)
+
+
+_CANVAS_DRAW = {
+    'prestige': _draw_prestige, 'classic': _draw_classic, 'editorial': _draw_editorial,
+    'premium': _draw_premium, 'contemporary': _draw_contemporary, 'creative': _draw_creative,
+}
 
 
 def _render_canvas(ctx, key, show, cfg, verify_url):
     from reportlab.pdfgen import canvas as _canvas
     buf = io.BytesIO()
-    c = _canvas.Canvas(buf, pagesize=A4)
+    pagesize = landscape(A4) if is_landscape(key) else A4
+    c = _canvas.Canvas(buf, pagesize=pagesize)
     c.setTitle(f"WAEC {ctx['exam']['year']} — {ctx['student']['name']}")
     _CANVAS_DRAW[key](c, ctx, show, cfg, verify_url)
     c.showPage(); c.save()
@@ -1253,30 +1827,11 @@ def _render_canvas(ctx, key, show, cfg, verify_url):
 
 
 def render_pdf(ctx, template_key, show, cfg=None, verify_url=None):
-    """Deterministically render the result to a PDF (BytesIO)."""
+    """Deterministically render the result to a PDF (BytesIO). Every template is
+    canvas-drawn (see _CANVAS_DRAW)."""
     cfg = cfg or {}
-    key = template_key if (template_key in _LAYOUTS or template_key in _CANVAS_TEMPLATES) else DEFAULT_TEMPLATE
-    if key in _CANVAS_TEMPLATES:
-        return _render_canvas(ctx, key, show, cfg, verify_url)
-    primary = ctx['brand']['primary']
-    accent = ctx['brand']['accent']
-    S = _styles(primary, accent)
-    land = is_landscape(key)
-    pagesize = landscape(A4) if land else A4
-    margins = (18, 18, 16, 16) if land else (16, 18, 16, 16)
-    mt, mb, ml, mr = margins
-    buf = io.BytesIO()
-    pdf = SimpleDocTemplate(buf, pagesize=pagesize, leftMargin=ml * mm, rightMargin=mr * mm,
-                            topMargin=mt * mm, bottomMargin=mb * mm,
-                            title=f"WAEC {ctx['exam']['year']} — {ctx['student']['name']}")
-    body = _LAYOUTS[key](ctx, show, cfg, S, verify_url)
-    frame_w = pagesize[0] - (ml + mr) * mm
-    frame_h = pagesize[1] - (mt + mb) * mm
-    story = [KeepInFrame(frame_w, frame_h, body, mode='shrink', hAlign='CENTER', vAlign='TOP')]
-    dec = _border_for(key, primary, accent)
-    pdf.build(story, onFirstPage=dec, onLaterPages=dec)
-    buf.seek(0)
-    return buf
+    key = template_key if template_key in _CANVAS_DRAW else DEFAULT_TEMPLATE
+    return _render_canvas(ctx, key, show, cfg, verify_url)
 
 
 def render_image(pdf_buf, fmt='png', scale=2.0):
