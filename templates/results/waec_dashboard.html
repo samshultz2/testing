@@ -21,8 +21,10 @@
 
 .page-actions {
     display: flex;
+    flex-wrap: wrap;          /* wrap on narrow screens instead of overflowing */
     gap: 0.25rem;
 }
+.page-actions .btn { flex: 0 1 auto; }
 
 /* Stats Grid */
 .stats-grid {
