@@ -4,7 +4,7 @@
   <a href="{{ url_for('mock_waec.analytics', exam_id=exam.id) }}">{{ exam.display_name }}</a>
   <span>{{ subject }}</span>{% endblock %}
 
-{% block head %}{% include "results/_subject_style.html" %}{% endblock %}
+{% block extra_css %}{% include "results/_subject_style.html" %}{% endblock %}
 
 {% block content %}
 <div class="sa-wrap">

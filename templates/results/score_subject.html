@@ -3,7 +3,7 @@
 {% block breadcrumb %}<a href="{{ url_for('results.index') }}">Results</a>
   <a href="{{ back_url }}">{{ exam_label }}</a> <span>{{ subject }}</span>{% endblock %}
 
-{% block head %}{% include "results/_subject_style.html" %}{% endblock %}
+{% block extra_css %}{% include "results/_subject_style.html" %}{% endblock %}
 
 {% block content %}
 <div class="sa-wrap">
