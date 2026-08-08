@@ -570,7 +570,8 @@
             <tbody>
                 {% for subj in subject_performance %}
                 <tr>
-                    <td>{{ subj.subject[:18] }}</td>
+                    <td><a href="{{ url_for('results.jamb_subject', subject=subj.subject, year=selected_year) }}"
+                           style="color:#0d6a4e;font-weight:600" title="Full analysis for {{ subj.subject }}">{{ subj.subject[:18] }} <i class="fas fa-arrow-up-right-from-square" style="font-size:.7em;opacity:.6"></i></a></td>
                     <td>{{ subj.count }}</td>
                     <td style="color: {% if subj.avg_score >= 70 %}#28a745{% elif subj.avg_score >= 50 %}#ffc107{% else %}#dc3545{% endif %}">
                         <strong>{{ subj.avg_score }}</strong>

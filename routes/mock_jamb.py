@@ -214,6 +214,26 @@ def create_exam():
     })
 
 
+@mock_jamb_bp.route('/exam/<int:exam_id>/subject/<subject>')
+@login_required
+def subject_analysis(exam_id, subject):
+    """Full per-subject analysis within a Mock JAMB exam — score-band
+    distribution, average, ≥50/≥70 rates and the ranked candidate list."""
+    from utils.analytics_service import AcademicAnalytics
+    exam = db.get_or_404(MockJAMBExam, exam_id)
+    require_branch_access(exam.branch_id)
+    pairs = []
+    for r in MockJAMBResult.query.filter_by(mock_exam_id=exam_id).all():
+        for i in (1, 2, 3, 4):
+            if getattr(r, f'subject{i}') == subject and getattr(r, f'subject{i}_score') is not None:
+                pairs.append((r.student_id, getattr(r, f'subject{i}_score')))
+    data = AcademicAnalytics._score_subject_payload(subject, pairs)
+    return render_template('results/score_subject.html', subject=subject, data=data,
+                           years=[], selected_year=None, exam_label='Mock JAMB',
+                           back_url=url_for('mock_jamb.view_exam', exam_id=exam_id),
+                           search_endpoint=None)
+
+
 @mock_jamb_bp.route('/exam/<int:exam_id>')
 @login_required
 def view_exam(exam_id):

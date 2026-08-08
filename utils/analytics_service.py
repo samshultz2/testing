@@ -284,6 +284,69 @@ class AcademicAnalytics:
             'by_grade': by_grade,
         }
 
+    # Score bands (out of 100) for per-subject JAMB / Mock-JAMB / Mock-WAEC score
+    # distributions — highest band first.
+    SCORE_BANDS = [(70, 100, 'Excellent (70–100)'), (50, 69, 'Good (50–69)'),
+                   (40, 49, 'Fair (40–49)'), (25, 39, 'Weak (25–39)'),
+                   (0, 24, 'Poor (0–24)')]
+
+    @staticmethod
+    def score_distribution(scores):
+        """Band a list of 0–100 scores into SCORE_BANDS with counts + percentages."""
+        n = len(scores) or 1
+        out = []
+        for lo, hi, label in AcademicAnalytics.SCORE_BANDS:
+            c = sum(1 for s in scores if lo <= s <= hi)
+            out.append({'label': label, 'lo': lo, 'hi': hi, 'count': c,
+                        'pct': round(c / n * 100, 1)})
+        return out
+
+    @staticmethod
+    def _score_subject_payload(subject, pairs):
+        """Shared per-subject score analysis from (student_id, score) pairs."""
+        if not pairs:
+            return None
+        scores = [s for _, s in pairs]
+        total = len(scores)
+        above_50 = sum(1 for s in scores if s >= 50)
+        above_70 = sum(1 for s in scores if s >= 70)
+        sids = list({sid for sid, _ in pairs})
+        students = {s.id: s for s in Student.query.filter(Student.id.in_(sids or [-1])).all()}
+        candidates = sorted(
+            [{'student_id': sid, 'score': sc,
+              'name': (f'{students[sid].surname} {students[sid].first_name}'
+                       if sid in students else '—'),
+              'admission_no': (students[sid].student_id if sid in students else '')}
+             for sid, sc in pairs],
+            key=lambda x: x['score'], reverse=True)
+        return {
+            'subject': subject, 'total': total,
+            'avg_score': round(sum(scores) / total, 1),
+            'max_score': max(scores), 'min_score': min(scores),
+            'above_50': above_50, 'above_50_pct': round(above_50 / total * 100, 1),
+            'above_70': above_70, 'above_70_pct': round(above_70 / total * 100, 1),
+            'distribution': AcademicAnalytics.score_distribution(scores),
+            'candidates': candidates,
+        }
+
+    @staticmethod
+    def get_jamb_subject_analysis(subject, exam_year, branch_id=None, student_ids=None):
+        """Per-subject JAMB score analysis for a year — score-band distribution,
+        average, ≥50/≥70 rates and the ranked candidate list. Branch/arm scoped."""
+        q = AcademicAnalytics._by_branch(
+            JAMBResult.query.filter_by(exam_year=exam_year), JAMBResult, branch_id)
+        if student_ids is not None:
+            q = q.filter(JAMBResult.student_id.in_(student_ids or [-1]))
+        pairs = []
+        for r in q.all():
+            for i in (1, 2, 3, 4):
+                if getattr(r, f'subject{i}') == subject and getattr(r, f'subject{i}_score') is not None:
+                    pairs.append((r.student_id, getattr(r, f'subject{i}_score')))
+        payload = AcademicAnalytics._score_subject_payload(subject, pairs)
+        if payload is not None:
+            payload['exam_year'] = exam_year
+        return payload
+
     @staticmethod
     def get_waec_school_statistics(exam_year: int, branch_id=None) -> Dict:
         """Get comprehensive school-wide WAEC statistics"""

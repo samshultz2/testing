@@ -323,6 +323,59 @@ def analytics(exam_id):
                            grade_classes=_GRADE_CLASS)
 
 
+@mock_waec_bp.route('/exam/<int:exam_id>/subject/<subject>')
+@login_required
+def subject_analysis(exam_id, subject):
+    """Full analysis of one subject within a Mock WAEC exam: grade distribution
+    (A1…F9 counts + %), score stats, credit/distinction/pass/fail and the
+    candidate list (with score) grouped by grade."""
+    from utils.analytics_service import AcademicAnalytics
+    from models.mock_waec import DISTINCTION_GRADES
+    exam = db.get_or_404(MockWAECExam, exam_id)
+    require_branch_access(exam.branch_id)
+    results = MockWAECResult.query.filter_by(mock_exam_id=exam_id, subject=subject).all()
+    data = None
+    if results:
+        counts = {g: 0 for g in WAEC_GRADES}
+        scores, by_grade = [], {g: [] for g in WAEC_GRADES}
+        sids = list({r.student_id for r in results})
+        studs = {s.id: s for s in Student.query.filter(Student.id.in_(sids or [-1])).all()}
+        for r in results:
+            g = r.grade if r.grade in counts else 'F9'
+            counts[g] += 1
+            if r.score is not None:
+                scores.append(r.score)
+            st = studs.get(r.student_id)
+            by_grade[g].append({'name': f'{st.surname} {st.first_name}' if st else '—',
+                                'admission_no': st.student_id if st else '',
+                                'student_id': r.student_id, 'score': r.score})
+        for g in by_grade:
+            by_grade[g].sort(key=lambda x: (x['score'] is None, -(x['score'] or 0)))
+        total = len(results)
+        credit = sum(counts[g] for g in PASS_GRADES)
+        distinction = sum(counts[g] for g in DISTINCTION_GRADES)
+        fail = counts['E8'] + counts['F9']
+        avg_pts = round(sum(AcademicAnalytics.GRADE_AVERAGE_POINTS.get(r.grade, 0)
+                            for r in results) / total, 2)
+        data = {
+            'subject': subject, 'total': total, 'counts': counts,
+            'distribution': [{'grade': g, 'count': counts[g],
+                              'pct': round(counts[g] / total * 100, 1)} for g in WAEC_GRADES],
+            'a1_count': counts['A1'],
+            'credit_count': credit, 'credit_rate': round(credit / total * 100, 1),
+            'distinction_count': distinction, 'distinction_rate': round(distinction / total * 100, 1),
+            'pass_rate': round(credit / total * 100, 1),
+            'fail_count': fail, 'fail_rate': round(fail / total * 100, 1),
+            'average_points': avg_pts, 'max_points': 9,
+            'avg_score': round(sum(scores) / len(scores), 1) if scores else None,
+            'max_score': max(scores) if scores else None,
+            'min_score': min(scores) if scores else None,
+            'by_grade': by_grade,
+        }
+    return render_template('mock_waec/subject_analysis.html', exam=exam, subject=subject,
+                           data=data, grades=WAEC_GRADES, grade_classes=_GRADE_CLASS)
+
+
 @mock_waec_bp.route('/exam/<int:exam_id>/deep')
 @login_required
 def deep(exam_id):

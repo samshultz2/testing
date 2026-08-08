@@ -3,6 +3,31 @@ from routes.results import *  # noqa: F401,F403
 from utils.search import like_term
 
 
+@results_bp.route('/jamb/subject/<subject>')
+@login_required
+def jamb_subject(subject):
+    """Full per-subject JAMB analysis: score-band distribution, average, ≥50/≥70
+    rates and the ranked candidate list. Branch/arm scoped."""
+    exam_year = request.args.get('year', type=int)
+    years = [y[0] for y in db.session.query(JAMBResult.exam_year)
+             .distinct().order_by(JAMBResult.exam_year.desc()).all()]
+    if not exam_year and years:
+        exam_year = years[0]
+    from utils.access_control import exam_student_scope
+    from utils.branch_scope import viewing_branch_id
+    scope_ids = exam_student_scope()
+    data = None
+    if exam_year:
+        data = AcademicAnalytics.get_jamb_subject_analysis(
+            subject, exam_year,
+            branch_id=(None if scope_ids is not None else viewing_branch_id()),
+            student_ids=scope_ids)
+    return render_template('results/score_subject.html', subject=subject, data=data,
+                           years=years, selected_year=exam_year, exam_label='JAMB',
+                           back_url=url_for('results.jamb_list', year=exam_year, view='subjects'),
+                           search_endpoint='results.jamb_list')
+
+
 @results_bp.route('/jamb')
 @login_required
 def jamb_list():

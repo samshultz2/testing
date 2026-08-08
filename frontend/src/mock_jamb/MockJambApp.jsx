@@ -483,7 +483,7 @@ function ViewExam({ d, notify }) {
               <table className="subject-table">
                 <thead><tr><th style={{ textAlign: 'left' }}>Subject</th><th>Count</th><th>Avg</th><th>Max</th><th>Min</th><th>≥70</th><th>≥50</th></tr></thead>
                 <tbody>{st.subject_analysis.map((s) => (
-                  <tr key={s.subject}><td>{s.subject}</td><td>{s.count}</td>
+                  <tr key={s.subject}><td><a href={`/mock-jamb/exam/${d.exam.id}/subject/${encodeURIComponent(s.subject)}`} style={{ color: 'var(--primary)', fontWeight: 600 }} title={`Full analysis for ${s.subject}`}>{s.subject}</a></td><td>{s.count}</td>
                     <td style={{ color: s.average >= 70 ? 'var(--success)' : s.average >= 50 ? 'var(--warning)' : 'var(--danger)' }}><strong>{r1(s.average)}</strong></td>
                     <td style={{ color: 'var(--success)' }}>{s.max}</td><td style={{ color: 'var(--danger)' }}>{s.min}</td><td>{s.above_70}</td><td>{s.above_50}</td></tr>))}
                 </tbody>
