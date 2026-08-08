@@ -12,6 +12,7 @@ from utils.access_control import login_required, result_card_required
 from utils.security import login_limiter
 from utils.audit import log_action
 from utils.report_card import build_report_card
+from utils.helpers import session_terms
 
 scratchcards_bp = Blueprint('scratchcards', __name__, url_prefix='/scratch-cards')
 result_portal_bp = Blueprint('result_portal', __name__, url_prefix='/check-result')
@@ -43,7 +44,7 @@ def index():
         'active': ScratchCard.query.filter_by(is_active=True).count(),
         'used': db.session.query(func.coalesce(func.sum(ScratchCard.used_count), 0)).scalar() or 0,
     }
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     return _render({
         'page': 'index',
         'stats': stats,

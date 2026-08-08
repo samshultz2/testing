@@ -154,7 +154,7 @@ def class_subjects_list():
     term_id = request.args.get('term_id', type=int)
     class_id = request.args.get('class_id', type=int)
     
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     classes = SchoolClass.query.order_by(SchoolClass.level).all()
     
     # Get active term if not specified
@@ -278,7 +278,7 @@ def assign_class_subjects():
             db.session.rollback()
             return _err(f'Error: {str(e)}', url_for('subjects.assign_class_subjects'))
 
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     classes = SchoolClass.query.order_by(SchoolClass.level).all()
     arms = ClassArm.query.filter_by(is_default=False).order_by(ClassArm.name).all()
     subjects = Subject.query.filter_by(is_active=True).order_by(Subject.name).all()

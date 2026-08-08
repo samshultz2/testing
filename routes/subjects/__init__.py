@@ -2,7 +2,7 @@
 Subjects and Score Management routes
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
-from utils.helpers import get_active_term
+from utils.helpers import get_active_term, session_terms
 from utils.web_exports import xlsx_response
 from utils.db_tx import safe_transaction
 from utils.branch_scope import require_branch_access
@@ -253,7 +253,7 @@ def _scan_selector_context():
         if active_term:
             term_id = active_term.id
 
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     assignments = []
     if term_id:
         all_assignments = ClassArmAssignment.query.filter_by(term_id=term_id).all()

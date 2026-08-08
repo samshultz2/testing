@@ -7,7 +7,7 @@ Automated notifications from other modules funnel through the same campaign
 engine (see utils.comms.build_campaign / create_draft_campaign).
 """
 from datetime import datetime
-from utils.helpers import get_active_term
+from utils.helpers import get_active_term, session_terms
 import csv
 from utils.web_exports import csv_response
 import io
@@ -264,7 +264,7 @@ def contacts():
     q = (request.args.get('q') or '').strip()
     missing = request.args.get('missing')  # only students without a contact
 
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all()
 
     if class_id and term:
@@ -612,7 +612,7 @@ def _attachment_dict(att_id):
 @login_required
 def compose():
     term = _term_from(request.values.get('term_id', type=int))
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all()
     arms = ClassArm.query.filter_by(is_active=True, is_default=False).order_by(ClassArm.name).all()
     templates = MessageTemplate.query.filter_by(is_active=True).order_by(MessageTemplate.name).all()

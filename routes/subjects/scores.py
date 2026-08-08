@@ -21,7 +21,7 @@ def scores_entry():
         flash('You do not have access to this class.', 'error')
         return redirect(url_for('subjects.scores_entry'))
     
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     
     # Get active term if not specified
     if not term_id:
@@ -203,7 +203,7 @@ def workflow():
     if not term_id:
         active = get_active_term()
         term_id = active.id if active else None
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     assignments = (filter_classes_for_user(
         ClassArmAssignment.query.filter_by(term_id=term_id).all()) if term_id else [])
     selected = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None
@@ -268,7 +268,7 @@ def bulk_entry():
     if not term_id:
         active = get_active_term()
         term_id = active.id if active else None
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     assignments = (filter_classes_for_user(
         ClassArmAssignment.query.filter_by(term_id=term_id).all()) if term_id else [])
     selected = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None
@@ -439,7 +439,7 @@ def import_scores():
     assignment_id = request.args.get('assignment_id', type=int)
     class_subject_id = request.args.get('class_subject_id', type=int)
     
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     assignments = filter_classes_for_user(
         ClassArmAssignment.query.filter_by(term_id=term_id).all()) if term_id else []
     class_subjects = []

@@ -6,6 +6,7 @@ from flask import (Blueprint, render_template, request, redirect, url_for, flash
 
 from models import db, SchoolEvent, Term
 from utils.access_control import login_required
+from utils.helpers import session_terms
 
 events_bp = Blueprint('events', __name__, url_prefix='/events')
 
@@ -182,7 +183,7 @@ def _form_payload(e, preset=''):
             'location': e.location or '', 'term_id': e.term_id or '', 'description': e.description or '',
         } if e else None),
         'preset': preset,
-        'terms': [{'id': t.id, 'label': t.full_name} for t in Term.query.order_by(Term.id.desc()).all()],
+        'terms': [{'id': t.id, 'label': t.full_name} for t in session_terms()],
         'categories': CATEGORIES, 'audiences': AUDIENCES,
         'submit_url': url_for('events.edit_event', event_id=e.id) if e else url_for('events.add_event'),
         'delete_url': url_for('events.delete_event', event_id=e.id) if e else None,
@@ -243,10 +244,10 @@ def import_calendar():
                  'title': r.get('title') or '', 'category': r.get('category') or 'General'} for r in parsed]
         if _wants_json():
             return jsonify({'ok': True, 'rows': rows, 'categories': CATEGORIES,
-                            'terms': [{'id': t.id, 'label': t.full_name} for t in Term.query.order_by(Term.id.desc()).all()],
+                            'terms': [{'id': t.id, 'label': t.full_name} for t in session_terms()],
                             'save_url': url_for('events.import_save')})
         return render_template('events/import_review.html', rows=parsed,
-            categories=CATEGORIES, terms=Term.query.order_by(Term.id.desc()).all())
+            categories=CATEGORIES, terms=session_terms())
     return _render({'page': 'import', 'upload_url': url_for('events.import_calendar'),
                     'urls': {'calendar': url_for('events.calendar')}})
 

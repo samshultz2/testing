@@ -45,10 +45,7 @@ def mark_attendance_page():
             term_id = active_term.id
     
     # Get data for dropdowns
-    terms = Term.query.join(AcademicSession).order_by(
-        AcademicSession.name.desc(),
-        Term.term_number
-    ).all()
+    terms = session_terms()
     
     assignments = []
     weeks = []
@@ -272,8 +269,7 @@ def week_grid():
         active = get_active_term()
         term_id = active.id if active else None
 
-    terms = Term.query.join(AcademicSession).order_by(
-        AcademicSession.name.desc(), Term.term_number).all()
+    terms = session_terms()
     selected_term = db.session.get(Term, term_id) if term_id else None
     assignments, weeks, holidays = [], [], []
     if term_id:

@@ -2,7 +2,7 @@
 Reports and data management routes
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, Response, jsonify
-from utils.helpers import get_active_term, get_active_session
+from utils.helpers import get_active_term, get_active_session, session_terms
 from models import db, Student, ParentContact, Term
 from utils.helpers import login_required
 from utils.excel_utils import (
@@ -67,7 +67,7 @@ def export_class_students():
     
     if not assignment_id:
         # Show selection form
-        terms = Term.query.order_by(Term.id.desc()).all()
+        terms = session_terms()
         
         if not term_id:
             active_term = get_active_term()

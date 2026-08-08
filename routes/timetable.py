@@ -2,7 +2,7 @@
 Timetable Management routes
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
-from utils.helpers import get_active_term
+from utils.helpers import get_active_term, session_terms
 from models import (
     db, TimetableSlot, ClassTimetable, ClassArmAssignment, Subject,
     Term, ClassSubject
@@ -166,7 +166,7 @@ def backups():
     if not term_id:
         active = get_active_term()
         term_id = active.id if active else None
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     q = TimetableBackup.query
     if term_id:
         q = q.filter_by(term_id=term_id)
@@ -239,7 +239,7 @@ def index():
     term_id = request.args.get('term_id', type=int)
     assignment_id = request.args.get('assignment_id', type=int)
     
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     
     # Get active term if not specified
     if not term_id:
@@ -365,7 +365,7 @@ def my_timetable():
         at = get_active_term()
         term_id = at.id if at else None
 
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     slots = TimetableSlot.query.filter_by(is_active=True).order_by(TimetableSlot.order).all()
 
     grid = {}                       # 'day_slot' -> {subject, klass}
