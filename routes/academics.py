@@ -65,12 +65,20 @@ def add_session():
 
             # If setting as active, deactivate others
             if is_active:
-                AcademicSession.query.update({AcademicSession.is_active: False})
+                AcademicSession.query.update({AcademicSession.is_active: False}, synchronize_session=False)
 
             session = AcademicSession(
                 name=name, start_date=start_date, end_date=end_date, is_active=is_active)
             db.session.add(session)
             db.session.commit()
+            if is_active:
+                # A brand-new session has no terms yet — clear the active term so
+                # term-scoped pages don't keep showing the old session, and drop the
+                # admin's time-travel override.
+                Term.query.update({Term.is_active: False}, synchronize_session=False)
+                db.session.commit()
+                from flask import session as _flask_session
+                _flask_session.pop('view_session_id', None)
             return _ok('Academic session created successfully!', url_for('academics.sessions_list'))
 
         except Exception as e:
@@ -84,16 +92,41 @@ def add_session():
 @academics_bp.route('/sessions/<int:session_id>/activate', methods=['POST'])
 @login_required
 def activate_session(session_id):
-    """Set a session as active"""
+    """Set a session as active — and move the active TERM into it.
+
+    Almost every page scopes by ``get_active_term()`` (results, finance,
+    attendance, report cards, …), which on the live path returns the ``is_active``
+    Term. Flipping only the session's ``is_active`` would leave the active term in
+    the *old* session, so those pages wouldn't switch. So we also activate a term
+    of the chosen session (the one covering today, else its latest term), and clear
+    the acting admin's personal time-travel override so they see the new live
+    session immediately."""
+    from datetime import date as _date
     try:
-        # Deactivate all sessions
-        AcademicSession.query.update({AcademicSession.is_active: False})
-        
-        # Activate selected session
-        session = db.get_or_404(AcademicSession, session_id)
-        session.is_active = True
+        session_obj = db.get_or_404(AcademicSession, session_id)
+        AcademicSession.query.update({AcademicSession.is_active: False}, synchronize_session=False)
+        session_obj.is_active = True
+
+        terms = Term.query.filter_by(session_id=session_obj.id).all()
+        Term.query.update({Term.is_active: False}, synchronize_session=False)
+        if terms:
+            today = _date.today()
+            pick = next((t for t in terms
+                         if t.start_date and t.end_date and t.start_date <= today <= t.end_date), None)
+            if pick is None:
+                pick = max(terms, key=lambda t: (t.term_number or 0))
+            pick.is_active = True
         db.session.commit()
-        return _ok(f'{session.name} is now the active session.', url_for('academics.sessions_list'))
+
+        # Drop the acting admin's read-only time-travel so their view follows the
+        # new live session (otherwise the override would mask the switch).
+        from flask import session as _flask_session
+        _flask_session.pop('view_session_id', None)
+
+        msg = f'{session_obj.name} is now the active session.'
+        if not terms:
+            msg += ' Add a term to this session so term-based pages have data.'
+        return _ok(msg, url_for('academics.sessions_list'))
     except Exception as e:
         db.session.rollback()
         return _err(f'Error: {str(e)}', url_for('academics.sessions_list'))
