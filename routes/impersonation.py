@@ -119,7 +119,13 @@ def establish(token):
     tenancy.log_platform('impersonate_start', subdomain=t.subdomain,
                          actor=g.actor, detail=(g.reason or 'support session'))
     flash('You are now viewing this school as support (read-only).', 'info')
-    return redirect('/')
+    # Land on a page on THIS host that then navigates to the portal, rather than
+    # redirecting straight to '/'. The support-session cookie was just set here;
+    # a redirect's follow-up request is initiated by the cross-subdomain hand-off
+    # chain and can be withheld under a strict SameSite policy, bouncing the
+    # operator to a login page. A same-site navigation from this page always
+    # carries the cookie.
+    return render_template('impersonation_entering.html', target='/')
 
 
 @impersonation_bp.route('/impersonate/stop', methods=['GET', 'POST'])
