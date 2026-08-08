@@ -470,6 +470,47 @@ def get_active_session():
     return val
 
 
+def session_exam_year(session=None):
+    """The external-exam (calendar) year for an academic session — e.g. the
+    session ``2025/2026`` sits its WAEC/JAMB in **2026** (the second year). Falls
+    back to the session's end/start-date year. Returns None if it can't be told.
+
+    Used to scope external-exam pages to the active (or time-travelled) session."""
+    import re
+    s = session if session is not None else get_active_session()
+    if s is None:
+        return None
+    nums = re.findall(r'\d{4}', (s.name or ''))
+    if len(nums) >= 2:
+        return int(nums[1])
+    if len(nums) == 1:
+        return int(nums[0])
+    if getattr(s, 'end_date', None):
+        return s.end_date.year
+    if getattr(s, 'start_date', None):
+        return s.start_date.year
+    return None
+
+
+def resolve_exam_year(requested, years):
+    """Pick the external-exam year to show, honouring the active/viewed session.
+
+    * Time-travelling (admin viewing a past session): locked to that session's
+      exam year, so external-exam pages show only that session.
+    * Live session: an explicit ?year wins; otherwise default to the live
+      session's exam year (falling back to the most recent year that has data).
+    ``years`` is the list of years present in the data (newest first)."""
+    ov = view_session_override()
+    sy = session_exam_year(get_active_session())
+    if ov is not None:
+        return sy if sy is not None else (requested or (years[0] if years else None))
+    if requested:
+        return requested
+    if sy is not None and (not years or sy in years):
+        return sy
+    return years[0] if years else sy
+
+
 def safe_redirect(fallback):
     """Redirect to the page the user came from, but only if it is same-origin.
 

@@ -19,9 +19,9 @@ def waec_list():
     
     years = db.session.query(WAECResult.exam_year).distinct().order_by(WAECResult.exam_year.desc()).all()
     years = [y[0] for y in years]
-    
-    if not exam_year and years:
-        exam_year = years[0]
+
+    # Scope to the active (or time-travelled) academic session by default.
+    exam_year = resolve_exam_year(exam_year, years)
     
     students_data = []
     subject_stats = []
@@ -222,8 +222,7 @@ def waec_subject(subject):
     exam_year = request.args.get('year', type=int)
     years = [y[0] for y in db.session.query(WAECResult.exam_year)
              .distinct().order_by(WAECResult.exam_year.desc()).all()]
-    if not exam_year and years:
-        exam_year = years[0]
+    exam_year = resolve_exam_year(exam_year, years)
 
     from utils.access_control import exam_student_scope
     from utils.branch_scope import viewing_branch_id
@@ -628,13 +627,12 @@ def waec_analytics():
     from utils.exam_analytics import WAECAnalytics
     
     year = request.args.get('year', type=int)
-    
+
     years = db.session.query(WAECResult.exam_year).distinct().order_by(WAECResult.exam_year.desc()).all()
     years = [y[0] for y in years]
-    
-    if not year and years:
-        year = years[0]
-    
+
+    year = resolve_exam_year(year, years)
+
     stats = None
     year_comparison = None
     

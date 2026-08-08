@@ -15,7 +15,7 @@ from utils.branch_scope import require_branch_access, scope_query, scope_by_stud
 from utils.audit import log_action
 from utils.helpers import (
     WAEC_SUBJECTS, WAEC_GRADES, WAEC_DEFAULT_SUBJECTS, STREAM_WAEC_SUBJECTS, get_sss3_students,
-    student_subject_map,
+    student_subject_map, resolve_exam_year, session_exam_year,
 )
 from datetime import date as _date
 from sqlalchemy import func

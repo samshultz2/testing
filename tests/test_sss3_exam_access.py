@@ -77,7 +77,7 @@ def _login(app, tag):
 def test_sss3_class_teacher_gets_scoped_access(app):
     ids = _seed(app, 'CLS', assign='class')
     c = _login(app, 'CLS')
-    r = c.get('/results/waec')
+    r = c.get('/results/waec?year=2025')     # this test seeds 2025 results
     assert r.status_code == 200
     body = r.get_data(as_text=True)
     assert 'MineCLS' in body                 # their own arm's student
