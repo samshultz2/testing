@@ -420,4 +420,4 @@ def _scope_focus_to_classes(report, labels):
 
 __all__ = [_n for _n in dir() if not _n.startswith('__')]
 
-from . import waec, jamb, analytics, predictions, cutoffs, imports  # noqa: E402,F401  (registers routes)
+from . import waec, jamb, analytics, predictions, cutoffs, imports, waec_cert  # noqa: E402,F401  (registers routes)
