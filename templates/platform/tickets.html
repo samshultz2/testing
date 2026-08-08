@@ -1,0 +1,46 @@
+{% extends "platform/_layout.html" %}
+{% block title %}Support tickets{% endblock %}
+{% block heading %}Support tickets{% endblock %}
+{% block subheading %}Conversations raised by schools — bound to each tenant.{% endblock %}
+
+{% block head %}
+<style>
+  .tabs{display:flex;gap:6px;margin-bottom:14px}
+  .tabs a{border:1px solid var(--line);background:var(--surface);color:var(--soft);border-radius:99px;
+    padding:7px 14px;font-size:13px;font-weight:600}
+  .tabs a.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+  .pr{font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px;text-transform:capitalize}
+  .pr.urgent,.pr.high{background:var(--bad-soft);color:var(--bad)}
+  .pr.normal{background:var(--accent-soft);color:var(--accent-ink)}
+  .pr.low{background:var(--line);color:var(--faint)}
+  .stt.open{color:var(--ok);font-weight:700} .stt.closed{color:var(--faint)}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="tabs">
+  <a href="{{ url_for('platform.tickets', status='open') }}" class="{{ 'on' if status=='open' }}">Open</a>
+  <a href="{{ url_for('platform.tickets', status='closed') }}" class="{{ 'on' if status=='closed' }}">Closed</a>
+  <a href="{{ url_for('platform.tickets') }}" class="{{ 'on' if status=='all' }}">All</a>
+</div>
+<div class="panel">
+  {% if rows %}
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Updated</th><th>School</th><th>Subject</th><th>Priority</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for t in rows %}
+        <tr style="cursor:pointer" onclick="window.location='{{ url_for('platform.ticket_detail', ticket_id=t.id) }}'">
+          <td class="muted" style="white-space:nowrap">{{ t.updated_at.strftime('%d %b %H:%M') if t.updated_at else '—' }}</td>
+          <td><a href="{{ url_for('platform.tenant_profile', subdomain=t.subdomain) }}">{{ t.subdomain }}</a></td>
+          <td><a href="{{ url_for('platform.ticket_detail', ticket_id=t.id) }}">{{ t.subject }}</a></td>
+          <td><span class="pr {{ t.priority }}">{{ t.priority }}</span></td>
+          <td><span class="stt {{ t.status }}">{{ t.status|capitalize }}</span></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<div class="empty"><i class="fas fa-life-ring"></i>No {{ status if status != 'all' else '' }} tickets.</div>{% endif %}
+</div>
+{% endblock %}

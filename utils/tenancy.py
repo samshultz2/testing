@@ -165,6 +165,32 @@ class PlatformBroadcast(_ControlBase):
     ended_at = Column(DateTime)
 
 
+class SupportTicket(_ControlBase):
+    """A support conversation bound to one school. Opened by the school's admin
+    (via their portal) or by the operator; visible to both sides."""
+    __tablename__ = 'support_tickets'
+
+    id = Column(Integer, primary_key=True)
+    subdomain = Column(String(63), nullable=False, index=True)
+    subject = Column(String(200), nullable=False)
+    status = Column(String(20), default='open')      # open | closed
+    priority = Column(String(20), default='normal')  # low | normal | high | urgent
+    created_by = Column(String(120))                 # opener (username)
+    created_at = Column(DateTime, default=_dt.datetime.utcnow, index=True)
+    updated_at = Column(DateTime, default=_dt.datetime.utcnow, index=True)
+
+
+class TicketMessage(_ControlBase):
+    __tablename__ = 'ticket_messages'
+
+    id = Column(Integer, primary_key=True)
+    ticket_id = Column(Integer, nullable=False, index=True)
+    author = Column(String(120))
+    is_staff = Column(Integer, default=0)            # 1 = platform operator, 0 = school
+    body = Column(Text, nullable=False)
+    at = Column(DateTime, default=_dt.datetime.utcnow)
+
+
 # --- control-plane engine (lazy, cached) ------------------------------------
 _engine = None
 _Session = None
@@ -599,6 +625,88 @@ def broadcasts_for(tenant):
         return out
     except Exception:
         return []
+
+
+def create_ticket(subdomain, subject, body, *, created_by=None, priority='normal',
+                  is_staff=False):
+    """Open a support ticket with its first message. Returns the ticket id."""
+    init_control_plane()
+    now = _dt.datetime.utcnow()
+    pr = priority if priority in ('low', 'normal', 'high', 'urgent') else 'normal'
+    with _session() as s:
+        t = SupportTicket(subdomain=subdomain, subject=subject.strip()[:200],
+                          status='open', priority=pr, created_by=created_by,
+                          created_at=now, updated_at=now)
+        s.add(t)
+        s.flush()
+        s.add(TicketMessage(ticket_id=t.id, author=created_by,
+                            is_staff=1 if is_staff else 0, body=body.strip(), at=now))
+        s.commit()
+        return t.id
+
+
+def add_ticket_message(ticket_id, body, *, author=None, is_staff=False):
+    init_control_plane()
+    now = _dt.datetime.utcnow()
+    with _session() as s:
+        t = s.query(SupportTicket).filter_by(id=ticket_id).first()
+        if t is None:
+            return False
+        s.add(TicketMessage(ticket_id=ticket_id, author=author,
+                            is_staff=1 if is_staff else 0, body=body.strip(), at=now))
+        t.updated_at = now
+        if t.status == 'closed':
+            t.status = 'open'                       # a reply reopens
+        s.commit()
+        return True
+
+
+def set_ticket_status(ticket_id, status):
+    init_control_plane()
+    with _session() as s:
+        t = s.query(SupportTicket).filter_by(id=ticket_id).first()
+        if t is None:
+            return False
+        t.status = 'closed' if status == 'closed' else 'open'
+        t.updated_at = _dt.datetime.utcnow()
+        s.commit()
+        return True
+
+
+def get_ticket(ticket_id, *, subdomain=None):
+    """A ticket with its messages: (ticket, [messages]) or (None, [])."""
+    init_control_plane()
+    with _session() as s:
+        t = s.query(SupportTicket).filter_by(id=ticket_id).first()
+        if t is None or (subdomain and t.subdomain != subdomain):
+            return None, []
+        msgs = (s.query(TicketMessage).filter_by(ticket_id=ticket_id)
+                .order_by(TicketMessage.at.asc()).all())
+        for m in msgs:
+            s.expunge(m)
+        s.expunge(t)
+        return t, msgs
+
+
+def list_tickets(*, subdomain=None, status=None, limit=200):
+    """Tickets newest-updated first, optionally scoped to one school / status."""
+    init_control_plane()
+    with _session() as s:
+        q = s.query(SupportTicket)
+        if subdomain:
+            q = q.filter_by(subdomain=subdomain)
+        if status in ('open', 'closed'):
+            q = q.filter_by(status=status)
+        rows = q.order_by(SupportTicket.updated_at.desc()).limit(limit).all()
+        for t in rows:
+            s.expunge(t)
+        return rows
+
+
+def count_open_tickets():
+    init_control_plane()
+    with _session() as s:
+        return s.query(SupportTicket).filter_by(status='open').count()
 
 
 def log_platform(action, *, subdomain=None, detail=None, actor=None):

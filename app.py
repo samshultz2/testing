@@ -243,6 +243,9 @@ def create_app(config_class=None):
 
     from routes.impersonation import impersonation_bp
     app.register_blueprint(impersonation_bp)
+
+    from routes.support import support_bp
+    app.register_blueprint(support_bp)
     from routes.marketing import marketing_bp
     app.register_blueprint(marketing_bp)
     from routes.website_public import website_bp
@@ -327,6 +330,11 @@ def create_app(config_class=None):
     app.before_request(enforce_read_only)
     app.before_request(enforce_write_level)
     app.before_request(enforce_subsection_access)
+
+    # Plan entitlements: block paid-only modules for schools whose tier excludes
+    # them (grandfathered when no tier is assigned; owner exempt).
+    from utils.entitlements import enforce_entitlements
+    app.before_request(enforce_entitlements)
 
     # Friendly error pages
     from utils.errors import register_error_handlers

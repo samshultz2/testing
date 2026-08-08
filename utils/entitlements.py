@@ -148,6 +148,47 @@ def resolve(tenant):
             'features': features, 'limits': limits, 'overridden': overridden}
 
 
+# Which tenant-portal blueprints each feature gates. Only admin-facing modules
+# are gated; student/parent portals are left open.
+FEATURE_BLUEPRINTS = {
+    'mock_exams': ('mock_jamb', 'mock_waec', 'cbt'),
+    'website_builder': ('website_admin',),
+    'library': ('library',),
+}
+
+
+def enforce_entitlements():
+    """before_request gate: block a tenant portal blueprint whose feature the
+    school's plan doesn't include, showing an upsell page instead.
+
+    Safe by design: only schools with an explicitly-assigned tier are enforced —
+    a tenant with no tier set is grandfathered (full access), so turning this on
+    never breaks existing customers. The owner school is never gated."""
+    from flask import session, request, render_template
+    if not session.get('logged_in'):
+        return None
+    try:
+        from utils.tenant_runtime import current_tenant
+        from utils import billing
+        t = current_tenant()
+        if t is None or billing.is_owner(t):
+            return None
+        tier = (getattr(t, 'tier', None) or '').strip()
+        if not tier:
+            return None                                  # grandfathered
+        bp = (request.endpoint or '').split('.')[0]
+        feat = next((f for f, bps in FEATURE_BLUEPRINTS.items() if bp in bps), None)
+        if not feat:
+            return None
+        if not resolve(t)['features'].get(feat, True):
+            label = dict(FEATURES).get(feat, feat)
+            return render_template('upsell.html', feature=label,
+                                   tier_label=resolve(t)['tier_label']), 402
+    except Exception:
+        return None                                      # never break the app on gate errors
+    return None
+
+
 def entitled(tenant, feature_key):
     """True if the tenant's plan grants ``feature_key`` (with overlay)."""
     return bool(resolve(tenant)['features'].get(feature_key, False))

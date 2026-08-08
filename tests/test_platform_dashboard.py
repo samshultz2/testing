@@ -435,6 +435,61 @@ def test_broadcast_targeting_and_lifecycle(mt):
     assert not any('Maintenance tonight' in b.message for b in tenancy.broadcasts_for(alpha))
 
 
+def test_entitlement_paywall_blocks_and_grandfathers(mt):
+    app, tenancy = mt
+
+    def _alpha_session():
+        g = tenancy.create_impersonation('boss', 'alpha', 'entitlement test', ttl_minutes=30)
+        tc = app.test_client()
+        tc.get('/impersonate/' + g.token, headers={'Host': 'alpha.edusyncra.test'})
+        return tc
+
+    TH = {'Host': 'alpha.edusyncra.test'}
+    # No tier assigned → grandfathered: library is NOT blocked
+    tenancy.set_entitlement('alpha', tier='', overrides={})
+    tc = _alpha_session()
+    assert tc.get('/library/', headers=TH).status_code != 402
+    # Assign Free tier (excludes library) → paywalled with 402 upsell
+    tenancy.set_entitlement('alpha', tier='free', overrides={})
+    tc = _alpha_session()
+    r = tc.get('/library/', headers=TH)
+    assert r.status_code == 402
+    assert 'plan' in r.get_data(as_text=True).lower()
+    # A per-tenant override re-enables it even on Free
+    tenancy.set_entitlement('alpha', tier='free', overrides={'features': {'library': True}})
+    tc = _alpha_session()
+    assert tc.get('/library/', headers=TH).status_code != 402
+
+
+def test_support_ticket_flow(mt):
+    app, tenancy = mt
+    c = _login_owner(app)
+    H = {'Host': 'edusyncra.test'}
+    # tenant side: a school admin opens a ticket
+    r = c.get('/support/', headers=H)
+    assert r.status_code == 200
+    tok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"', r.get_data(as_text=True)).group(1)
+    c.post('/support/new', headers=H,
+           data={'subject': 'Cannot print report cards', 'body': 'Please help',
+                 'priority': 'high', '_csrf_token': tok})
+    tickets = tenancy.list_tickets(subdomain='owner')
+    assert tickets and tickets[0].subject == 'Cannot print report cards'
+    tid = tickets[0].id
+    assert tenancy.count_open_tickets() >= 1
+    # operator side: it shows in the queue
+    assert 'Cannot print report cards' in c.get('/platform/tickets', headers=H).get_data(as_text=True)
+    dr = c.get('/platform/tickets/%d' % tid, headers=H)
+    tok2 = re.search(r'name="_csrf_token" value="([0-9a-f]+)"', dr.get_data(as_text=True)).group(1)
+    # operator replies (staff message) then closes
+    c.post('/platform/tickets/%d' % tid, headers=H,
+           data={'action': 'reply', 'body': 'Looking into it now', '_csrf_token': tok2})
+    _t, msgs = tenancy.get_ticket(tid)
+    assert any(m.is_staff and 'Looking into it' in m.body for m in msgs)
+    c.post('/platform/tickets/%d' % tid, headers=H, data={'action': 'close', '_csrf_token': tok2})
+    t2, _ = tenancy.get_ticket(tid)
+    assert t2.status == 'closed'
+
+
 def test_tenant_profile_404_for_unknown(mt):
     app, _ = mt
     c = _login_owner(app)

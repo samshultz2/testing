@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ feature }} — upgrade required</title>
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
+<style>
+  body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:#f4f7fb;color:#0f172a;display:grid;place-items:center;min-height:100vh;padding:24px}
+  .card{max-width:460px;text-align:center;background:#fff;border:1px solid #e6ebf2;border-radius:18px;
+    padding:40px 34px;box-shadow:0 20px 50px -30px rgba(15,23,42,.4)}
+  .ic{width:64px;height:64px;border-radius:16px;background:linear-gradient(135deg,#0d6a4e,#11998e);color:#fff;
+    display:grid;place-items:center;font-size:26px;margin:0 auto 18px}
+  h1{font-size:21px;margin:0 0 10px} p{color:#5b6675;line-height:1.65;margin:0 0 8px}
+  .plan{display:inline-block;margin:6px 0 20px;font-size:12px;font-weight:700;color:#0a5640;
+    background:#e8f5f1;border-radius:99px;padding:4px 12px}
+  .btn{display:inline-flex;align-items:center;gap:8px;background:#0d6a4e;color:#fff;text-decoration:none;
+    padding:11px 20px;border-radius:10px;font-weight:600;font-size:14px}
+  .back{display:block;margin-top:16px;color:#5b6675;font-size:13px;text-decoration:none}
+</style>
+</head>
+<body>
+  <div class="card">
+    <div class="ic"><i class="fas fa-lock"></i></div>
+    <h1>{{ feature }} isn’t on your plan</h1>
+    <div class="plan">Current plan: {{ tier_label }}</div>
+    <p><strong>{{ feature }}</strong> is available on a higher plan. Upgrade to unlock it for your school.</p>
+    <a class="btn" href="/billing"><i class="fas fa-arrow-up"></i> View upgrade options</a>
+    <a class="back" href="/"><i class="fas fa-arrow-left"></i> Back to dashboard</a>
+  </div>
+</body>
+</html>

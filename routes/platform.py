@@ -72,7 +72,12 @@ def _inject_platform_caps():
     """Expose platform_can() to platform templates so the nav hides what a
     limited admin can't reach."""
     from utils import platform_roles
-    return {'platform_can': platform_roles.can}
+    open_tickets = 0
+    try:
+        open_tickets = tenancy.count_open_tickets()
+    except Exception:
+        pass
+    return {'platform_can': platform_roles.can, 'open_tickets': open_tickets}
 
 
 def _audit(action, *, subdomain=None, detail=None):
@@ -543,6 +548,41 @@ def broadcast_end(bid):
     _audit('broadcast_end', detail=f'ended #{bid}')
     flash('Broadcast ended.', 'success')
     return redirect(url_for('platform.broadcasts'))
+
+
+@platform_bp.route('/tickets')
+@platform_admin_required
+def tickets():
+    """The support queue across all schools."""
+    status = (request.args.get('status') or 'open').strip()
+    status = status if status in ('open', 'closed') else None
+    rows = tenancy.list_tickets(status=status)
+    return render_template('platform/tickets.html', active='tickets', rows=rows,
+                           status=(status or 'all'), open_count=tenancy.count_open_tickets())
+
+
+@platform_bp.route('/tickets/<int:ticket_id>', methods=['GET', 'POST'])
+@platform_admin_required
+def ticket_detail(ticket_id):
+    ticket, messages = tenancy.get_ticket(ticket_id)
+    if ticket is None:
+        abort(404)
+    if request.method == 'POST':
+        action = request.form.get('action')
+        if action == 'close':
+            tenancy.set_ticket_status(ticket_id, 'closed')
+            _audit('ticket_close', subdomain=ticket.subdomain, detail=f'#{ticket_id}')
+            flash('Ticket closed.', 'success')
+        else:
+            body = (request.form.get('body') or '').strip()
+            if body:
+                tenancy.add_ticket_message(ticket_id, body,
+                                           author=session.get('username') or 'admin', is_staff=True)
+                _audit('ticket_reply', subdomain=ticket.subdomain, detail=f'#{ticket_id}')
+                flash('Reply sent.', 'success')
+        return redirect(url_for('platform.ticket_detail', ticket_id=ticket_id))
+    return render_template('platform/ticket.html', active='tickets',
+                           ticket=ticket, messages=messages)
 
 
 @platform_bp.route('/tenant/<subdomain>')
