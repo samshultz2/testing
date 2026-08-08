@@ -120,6 +120,7 @@ export default function ViewApp({ initial }) {
               {d.identity && d.identity.jamb_reg_number && <Info label="JAMB Reg. Number">{d.identity.jamb_reg_number}</Info>}
               {d.identity && d.identity.waec_reg_number && <Info label="WAEC Reg. Number">{d.identity.waec_reg_number}</Info>}
               {d.identity && d.identity.serial_number && <Info label="Serial Number">{d.identity.serial_number}</Info>}
+              {d.identity && d.identity.waec_epin && <Info label="WAEC e-PIN">{d.identity.waec_epin}</Info>}
               {d.identity && d.identity.jamb_profile_code && <Info label="JAMB Profile Code">{d.identity.jamb_profile_code}</Info>}
               {s.house && <Info label="House">{s.house}</Info>}
               {s.boarding_status && <Info label="Boarding">{s.boarding_status}</Info>}

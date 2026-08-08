@@ -1878,7 +1878,8 @@ def _student_view_payload(student):
         'identity': ({'nin': student.nin, 'jamb_reg_number': student.jamb_reg_number,
                       'jamb_profile_code': student.jamb_profile_code,
                       'waec_reg_number': student.waec_reg_number,
-                      'serial_number': student.serial_number}
+                      'serial_number': student.serial_number,
+                      'waec_epin': student.waec_epin}
                      if student.has_identity else None),
         'medical': ({'blood_group': student.blood_group, 'genotype': student.genotype,
                      'allergies': student.allergies, 'medical_conditions': student.medical_conditions,
@@ -1943,7 +1944,7 @@ def _student_view_payload(student):
 # stay searchable; medical free-text lands in encrypted columns.
 _OPTIONAL_STUDENT_FIELDS = (
     'house', 'boarding_status', 'nin', 'jamb_reg_number', 'jamb_profile_code',
-    'waec_reg_number', 'serial_number',
+    'waec_reg_number', 'serial_number', 'waec_epin',
     'blood_group', 'genotype', 'allergies', 'medical_conditions', 'disabilities',
     'medications', 'medical_notes', 'emergency_medical',
 )

@@ -514,10 +514,14 @@ def test_platform_settings_and_maintenance_banner(mt):
 def test_auto_tier_on_payment(mt):
     app, tenancy = mt
     from utils import billing
-    assert not (tenancy.get_tenant('alpha').tier or '')      # untiered to start
-    billing.record_payment('alpha', days=30)
-    # paying schools are auto-tiered (default 'premium' — all features on)
-    assert tenancy.get_tenant('alpha').tier == 'premium'
+    # paying for a specific plan sets that tier
+    assert not (tenancy.get_tenant('alpha').tier or '')
+    billing.record_payment('alpha', days=30, tier='basic')
+    assert tenancy.get_tenant('alpha').tier == 'basic'
+    # a payment with no tier on an untiered school falls back to the platform default
+    assert not (tenancy.get_tenant('beta').tier or '')
+    billing.record_payment('beta', days=30)
+    assert tenancy.get_tenant('beta').tier == 'premium'
 
 
 def test_predictive_analytics_paywall(mt):

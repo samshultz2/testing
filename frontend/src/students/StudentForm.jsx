@@ -52,6 +52,7 @@ export default function StudentForm({ data }) {
     house: stu.house || '', boarding_status: stu.boarding_status || '',
     nin: stu.nin || '', jamb_reg_number: stu.jamb_reg_number || '', jamb_profile_code: stu.jamb_profile_code || '',
     waec_reg_number: stu.waec_reg_number || '', serial_number: stu.serial_number || '',
+    waec_epin: stu.waec_epin || '',
     photo: stu.photo_url || '',
     blood_group: stu.blood_group || '', genotype: stu.genotype || '', allergies: stu.allergies || '',
     medical_conditions: stu.medical_conditions || '', disabilities: stu.disabilities || '',
@@ -135,7 +136,7 @@ export default function StudentForm({ data }) {
       jamb_target: f.jamb_target, home_address: f.home_address, hobbies: f.hobbies,
       house: f.house, boarding_status: f.boarding_status,
       nin: f.nin, jamb_reg_number: f.jamb_reg_number, jamb_profile_code: f.jamb_profile_code,
-      waec_reg_number: f.waec_reg_number, serial_number: f.serial_number, photo: f.photo,
+      waec_reg_number: f.waec_reg_number, serial_number: f.serial_number, waec_epin: f.waec_epin, photo: f.photo,
       blood_group: f.blood_group, genotype: f.genotype, allergies: f.allergies,
       medical_conditions: f.medical_conditions, disabilities: f.disabilities,
       medications: f.medications, medical_notes: f.medical_notes, emergency_medical: f.emergency_medical,
@@ -295,6 +296,7 @@ export default function StudentForm({ data }) {
         <div className="sf-row">
           <TextField label="WAEC Reg. Number" value={f.waec_reg_number} onChange={(v) => set('waec_reg_number', v)} placeholder="WAEC/NECO examination number" autoComplete="off" />
           <TextField label="Serial Number" value={f.serial_number} onChange={(v) => set('serial_number', v)} placeholder="Candidate serial number" autoComplete="off" />
+          <TextField label="WAEC e-PIN" value={f.waec_epin} onChange={(v) => set('waec_epin', v)} placeholder="WAEC e-PIN" autoComplete="off" />
         </div>
         <TextField label="House" value={f.house} onChange={(v) => set('house', v)} placeholder="e.g. Red House / Zik House" autoComplete="off" />
       </FormCard>

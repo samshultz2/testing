@@ -273,7 +273,11 @@
         <form method="post" action="{{ url_for('platform.grant', subdomain=t.subdomain) }}">
           <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
           <input class="field" style="width:60px" name="days" type="number" value="{{ plan_days }}" min="1" title="days to grant">
-          <button class="btn sm"><i class="fas fa-plus"></i> Grant days</button>
+          <select class="field" name="tier" title="plan they paid for">
+            <option value="">Keep plan</option>
+            {% for tid in tier_ids %}<option value="{{ tid }}" {{ 'selected' if ent.tier == tid }}>{{ tier_labels[tid] }}</option>{% endfor %}
+          </select>
+          <button class="btn sm"><i class="fas fa-plus"></i> Record payment</button>
         </form>
         <form method="post" action="{{ url_for('platform.suspend', subdomain=t.subdomain) }}">
           <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">

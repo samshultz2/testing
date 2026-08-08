@@ -35,6 +35,7 @@ class Student(db.Model):
     # shown on statements of result, transcripts and testimonials.
     waec_reg_number = db.Column(db.String(30), index=True)
     serial_number = db.Column(db.String(30))
+    waec_epin = db.Column(db.String(30))                # WAEC e-PIN (registration/result PIN)
 
     # Optional medical record. Structured fields stay plain (shown on ID cards /
     # needed fast in an emergency); the free-text notes are encrypted at rest.
@@ -109,7 +110,7 @@ class Student(db.Model):
     @property
     def has_identity(self):
         return any([self.nin, self.jamb_reg_number, self.jamb_profile_code,
-                    self.waec_reg_number, self.serial_number])
+                    self.waec_reg_number, self.serial_number, self.waec_epin])
 
     @property
     def age(self):

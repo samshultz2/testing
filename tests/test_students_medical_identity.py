@@ -30,7 +30,7 @@ def test_add_student_stores_medical_and_identity(app):
         'first_name': 'Mi', 'surname': 'ZzMedIdent', 'gender': 'Male',
         'house': 'Blue', 'boarding_status': 'Boarding',
         'nin': '12345678901', 'jamb_reg_number': '2024JMB999',
-        'jamb_profile_code': 'PC-42',
+        'jamb_profile_code': 'PC-42', 'waec_epin': 'WAEC-EPIN-7788',
         'blood_group': 'O+', 'genotype': 'AS',
         'allergies': 'Peanuts', 'medical_conditions': 'Asthma',
         'disabilities': 'None', 'medications': 'Inhaler',
@@ -45,6 +45,7 @@ def test_add_student_stores_medical_and_identity(app):
         assert s.nin == '12345678901'
         assert s.jamb_reg_number == '2024JMB999'
         assert s.jamb_profile_code == 'PC-42'
+        assert s.waec_epin == 'WAEC-EPIN-7788'
         assert s.blood_group == 'O+' and s.genotype == 'AS'
         assert s.allergies == 'Peanuts'
         assert s.medical_conditions == 'Asthma'

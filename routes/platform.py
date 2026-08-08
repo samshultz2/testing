@@ -775,8 +775,9 @@ def grant(subdomain):
         flash('The owner school is already free forever.', 'info')
         return _back()
     days = request.form.get('days', type=int) or current_app.config.get('TENANT_PLAN_DAYS')
-    billing.record_payment(subdomain, days=days)
-    _audit('grant', subdomain=subdomain, detail=f'{days} day(s)')
+    tier = (request.form.get('tier') or '').strip().lower() or None
+    billing.record_payment(subdomain, days=days, tier=tier)
+    _audit('grant', subdomain=subdomain, detail=f'{days} day(s)' + (f' · {tier}' if tier else ''))
     flash(f'Granted {days} day(s) to {t.name}.', 'success')
     return _back()
 

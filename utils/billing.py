@@ -108,9 +108,14 @@ def start_trial(subdomain, days=None):
                                trial_ends_at=_now() + _dt.timedelta(days=days))
 
 
-def record_payment(subdomain, days=None):
+def record_payment(subdomain, days=None, tier=None):
     """Apply a successful payment: extend paid access by ``days`` (default one
-    plan period), from whichever is later — now or the current paid_until."""
+    plan period), from whichever is later — now or the current paid_until.
+
+    ``tier`` is the entitlement plan the school paid for; when given it is set as
+    the tenant's plan. When omitted and the school has no plan yet, it falls back
+    to the platform default (Settings → default paid plan). The owner is exempt.
+    """
     from utils import tenancy
     days = Config.TENANT_PLAN_DAYS if days is None else days
     t = tenancy.get_tenant(subdomain)
@@ -120,17 +125,20 @@ def record_payment(subdomain, days=None):
     res = tenancy.set_billing(subdomain, plan='standard',
                               paid_until=base + _dt.timedelta(days=days))
     tenancy.clear_notice(subdomain)      # new paid cycle -> reminders reset
-    # Auto-assign an entitlement tier the first time a school pays, so paying
-    # customers are always on a plan. The default (Settings → default paid plan)
-    # ships as 'premium' — every feature on — so this never removes access; the
-    # operator can downgrade a specific school from its profile.
+    # Set the school's entitlement plan to the tier they paid for (or the
+    # platform default the first time they pay). Never applied to the owner.
     try:
-        if not (getattr(t, 'tier', None) or '').strip() and not is_owner(t):
-            from utils import platform_settings, entitlements
-            tier = (platform_settings.get_settings().get('default_paid_tier')
-                    or 'premium')
-            if tier in entitlements.TIER_IDS:
-                tenancy.set_entitlement(subdomain, tier=tier)
+        if not is_owner(t):
+            from utils import entitlements
+            want = (tier or '').strip().lower()
+            if want in entitlements.TIER_IDS:
+                tenancy.set_entitlement(subdomain, tier=want)
+            elif not (getattr(t, 'tier', None) or '').strip():
+                from utils import platform_settings
+                default = (platform_settings.get_settings().get('default_paid_tier')
+                           or 'premium')
+                if default in entitlements.TIER_IDS:
+                    tenancy.set_entitlement(subdomain, tier=default)
     except Exception:
         pass
     return res
