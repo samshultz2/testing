@@ -175,8 +175,17 @@ section{padding:76px 0}
 .tier-save{font-size:13px;font-weight:700;color:var(--success);min-height:20px;margin-bottom:6px}
 .tier ul{list-style:none;margin:18px 0 24px;padding:0;display:grid;gap:11px}
 .tier li{display:flex;gap:10px;align-items:center;color:var(--text-secondary);font-size:14.5px}
-.tier li i{color:var(--primary);font-size:13px}
+.tier li i{color:var(--primary);font-size:13px;width:14px;flex:0 0 auto;text-align:center}
+.tier li.muted{color:var(--faint)}
+.tier li.muted i{color:var(--faint)}
 .tier .btn{margin-top:auto}
+.cyc-toggle{display:inline-flex;gap:3px;margin:0 auto 26px;background:var(--primary-light);border:1px solid var(--line);
+  border-radius:var(--radius-full);padding:5px;justify-self:center}
+#pricing .cyc-toggle{display:flex;width:max-content;margin-left:auto;margin-right:auto}
+.cyc-toggle .cyc{cursor:pointer;border:0;background:transparent;padding:9px 20px;font-size:14px;font-weight:600;
+  color:var(--text-secondary);border-radius:var(--radius-full);font-family:inherit;transition:background .15s,color .15s}
+.cyc-toggle .cyc em{font-style:normal;font-size:11px;font-weight:700;color:var(--success);margin-left:3px}
+.cyc-toggle .cyc.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow-sm)}
 
 /* faq */
 details{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-md);padding:2px 20px;margin-bottom:12px;transition:border-color .15s}
