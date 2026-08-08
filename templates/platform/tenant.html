@@ -301,7 +301,7 @@
       <h3 style="font-size:15px;margin:0 0 4px"><i class="fas fa-user-secret" style="color:var(--warn)"></i> Support access</h3>
       {% if t.status == 'active' %}
       <p class="muted" style="font-size:12.5px;margin:0 0 10px">Open a <b>read-only</b>, time-boxed session that views this school's portal as its admin. Every session is audited and shows a banner to the school.</p>
-      <form method="post" action="{{ url_for('platform.impersonate', subdomain=t.subdomain) }}" target="_blank">
+      <form method="post" action="{{ url_for('platform.impersonate', subdomain=t.subdomain) }}">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <input class="field" name="reason" placeholder="Reason / ticket ref (required)" style="width:100%;margin-bottom:8px" required>
         <div style="display:flex;gap:8px;align-items:center">
