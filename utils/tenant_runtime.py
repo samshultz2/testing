@@ -116,10 +116,12 @@ def current_tenant():
 
 
 # Endpoints still reachable while a school is locked out for non-payment: the
-# billing pages themselves, logout, and static assets.
+# billing pages themselves, logout, static assets, and the support-impersonation
+# token exchange (so a platform operator can open a read-only support session on a
+# school precisely when it is behind on payment).
 _BILLING_ALLOWED = {'billing.index', 'billing.start_payment', 'billing.autorenew_toggle',
                     'billing.callback', 'billing.webhook', 'auth.logout', 'auth.login',
-                    'static'}
+                    'static', 'impersonation.establish', 'impersonation.stop'}
 
 
 def enforce_billing():
@@ -130,6 +132,11 @@ def enforce_billing():
         return None
     t = current_tenant()
     if t is None:
+        return None
+    # A read-only support (impersonation) session may view a school even while it
+    # is locked out for non-payment — that is often exactly when support is needed.
+    # The session is read-only, so nothing can be changed during the lockout.
+    if session.get('impersonator'):
         return None
     from utils import billing
     if not billing.is_locked_out(t):
