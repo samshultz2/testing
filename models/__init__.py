@@ -51,6 +51,7 @@ from .models_graduate import (GraduateAudit, GRADUATE_STATUSES, RESTRICTED_STATU
                               GraduateDocument, GRADUATE_DOC_TYPES,
                               AlumniProfile, DocumentRequest, DOC_REQUEST_STATUSES,
                               DocTemplatePref, DocumentVerification)
+from .models_waec_cert import WAECCertTemplate, WAECCertPreset, WAECCertIssue
 
 __all__ = [
     'db', 'local_now', 'init_db',
