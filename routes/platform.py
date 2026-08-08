@@ -486,9 +486,18 @@ def impersonate(subdomain):
                                      ttl_minutes=ttl)
     _audit('impersonate_grant', subdomain=subdomain, detail=f'{ttl}m · {reason[:120]}')
     base = current_app.config.get('TENANT_BASE_DOMAIN', '')
-    link = f'https://{t.subdomain}.{base}/impersonate/{g.token}' if base \
-        else url_for('impersonation.establish', token=g.token)
-    return redirect(link)
+    if base:
+        # Cross to the school's OWN host to exchange the token — the support
+        # session cookie must be set there, not on the console's host. Hand off
+        # via a rendered page (a top-level GET the browser starts from a fully
+        # loaded page) rather than a blind 302: if the tenant host is slow or
+        # unreachable the operator still sees the page and the target URL,
+        # instead of a silent blank after the redirect fails to commit.
+        link = f'https://{t.subdomain}.{base}/impersonate/{g.token}'
+        return render_template('platform/impersonate_handoff.html',
+                               link=link, subdomain=t.subdomain)
+    # Single-host (dev / no base domain): same origin, a plain redirect works.
+    return redirect(url_for('impersonation.establish', token=g.token))
 
 
 @platform_bp.route('/impersonation')
