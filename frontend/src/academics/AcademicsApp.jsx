@@ -9,7 +9,11 @@ function Sessions({ d, notify }) {
   const nav = useNav();
   const activate = async (url) => {
     const r = await submitJson(url, {});
-    if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Failed.');
+    // Activating a session switches the whole platform's active session/term, so
+    // force a full reload (like the "view session" dropdown does) — every cached
+    // SPA section and the time-travel bar re-render against the new session.
+    if (r.ok) window.location.href = r.redirect || window.location.href;
+    else notify('error', r.error || 'Failed.');
   };
   return (
     <>
@@ -76,7 +80,10 @@ function Terms({ d, notify }) {
   const nav = useNav();
   const activate = async (url) => {
     const r = await submitJson(url, {});
-    if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Failed.');
+    // Full reload so the new active term propagates across the whole platform
+    // (mirrors the "view session" dropdown), not just this section.
+    if (r.ok) window.location.href = r.redirect || window.location.href;
+    else notify('error', r.error || 'Failed.');
   };
   return (
     <>

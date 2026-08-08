@@ -520,8 +520,13 @@ def resolve_exam_year(requested, years):
 
     * Time-travelling (admin viewing a past session): locked to that session's
       exam year, so external-exam pages show only that session.
-    * Live session: an explicit ?year wins; otherwise default to the live
-      session's exam year (falling back to the most recent year that has data).
+    * Live session: an explicit ?year wins (deliberate exploration); otherwise
+      lock to the live session's own exam year — *even when that year has no data
+      yet*. Switching to a fresh session must show that session (empty), not
+      silently fall back to the previous session's results.
+
+    Only when the session's exam year can't be determined at all (an unnamed
+    session, or none active) do we fall back to the most recent year with data.
     ``years`` is the list of years present in the data (newest first)."""
     ov = view_session_override()
     sy = session_exam_year(get_active_session())
@@ -529,9 +534,9 @@ def resolve_exam_year(requested, years):
         return sy if sy is not None else (requested or (years[0] if years else None))
     if requested:
         return requested
-    if sy is not None and (not years or sy in years):
+    if sy is not None:
         return sy
-    return years[0] if years else sy
+    return years[0] if years else None
 
 
 def safe_redirect(fallback):
