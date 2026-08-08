@@ -97,4 +97,19 @@ def set_view_session():
             session['view_session_id'] = sid
             flash(f'Now viewing {s.name} (read-only time-travel). Your view only — '
                   'others are unaffected.', 'info')
-    return redirect(request.referrer or url_for('main.dashboard'))
+    # Drop any explicit ?year (and paging) from the page we came back to, so
+    # session-scoped pages (external exams) re-default to the chosen session.
+    return redirect(_strip_params(request.referrer, ('year', 'page')) or url_for('main.dashboard'))
+
+
+def _strip_params(url, names):
+    """Return ``url`` with the given query params removed (same-origin only)."""
+    if not url:
+        return None
+    try:
+        from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
+        parts = urlsplit(url)
+        q = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True) if k not in names]
+        return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(q), parts.fragment))
+    except Exception:
+        return url

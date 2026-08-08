@@ -243,9 +243,7 @@ def analytics_hub():
     jamb_years = [y[0] for y in db.session.query(JAMBResult.exam_year).distinct().all()]
     years = sorted(set(waec_years + jamb_years), reverse=True)
 
-    year = request.args.get('year', type=int)
-    if not year and years:
-        year = years[0]
+    year = resolve_exam_year(request.args.get('year', type=int), years)
     compare_year = request.args.get('compare', type=int)
 
     from utils.branch_scope import viewing_branch_id
@@ -477,7 +475,7 @@ def analytics_by_class():
     waec_years = [y[0] for y in db.session.query(WAECResult.exam_year).distinct().all()]
     jamb_years = [y[0] for y in db.session.query(JAMBResult.exam_year).distinct().all()]
     years = sorted(set(waec_years + jamb_years), reverse=True)
-    year = request.args.get('year', type=int) or (years[0] if years else None)
+    year = resolve_exam_year(request.args.get('year', type=int), years)
     data = exam_class_league(year, viewing_branch_id()) if year else None
     return render_template('results/analytics_by_class.html',
                            data=data, years=years, selected_year=year)
