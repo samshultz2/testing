@@ -368,11 +368,17 @@ class ProductionConfig(Config):
     # otherwise not sent over HTTP and login would appear to "not work").
     SESSION_COOKIE_SECURE = _as_bool(os.environ.get('SESSION_COOKIE_SECURE'), default=True)
     ENABLE_HSTS = _as_bool(os.environ.get('ENABLE_HSTS'), default=True)
-    # Strict in production (base/dev stays 'Lax'): the session cookie is not sent
-    # on cross-site top-level navigations, removing the residual CSRF surface.
-    # The password-reset link carries its own token (not the session), so it is
-    # unaffected; an inbound deep link just shows the login page on first hit.
-    SESSION_COOKIE_SAMESITE = os.environ.get('SESSION_COOKIE_SAMESITE', 'Strict')
+    # 'Lax' (the browser default): the session cookie IS sent on top-level GET
+    # navigations but never on cross-site POSTs or subresource loads. 'Strict' was
+    # too aggressive for this app's legitimate cross-subdomain, top-level flows —
+    # support impersonation hands the operator from the console host to the
+    # school's own host, and under 'Strict' the freshly-set support-session cookie
+    # was withheld on the landing redirect, bouncing the operator to a login page
+    # (the same reason a target=_blank impersonate POST used to 400 on CSRF).
+    # CSRF is still fully covered: every state-changing request carries an
+    # app-level CSRF token (utils/csrf.py) and 'Lax' blocks cross-site POST too.
+    # Override to 'Strict' via the environment if a deployment has no such flows.
+    SESSION_COOKIE_SAMESITE = os.environ.get('SESSION_COOKIE_SAMESITE', 'Lax')
     # In production the app is served over HTTPS at the edge, so make that the
     # canonical scheme for external links and send HTTP visitors to HTTPS. (For a
     # plain-HTTP LAN/Termux box, set PREFERRED_URL_SCHEME=http and FORCE_HTTPS=0.)
