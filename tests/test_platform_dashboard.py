@@ -316,10 +316,15 @@ def test_impersonation_full_flow(mt):
                     c.get('/platform/tenant/alpha', headers=H).get_data(as_text=True)).group(1)
     r = c.post('/platform/tenant/alpha/impersonate', headers=H,
                data={'reason': 'ticket #42', 'minutes': '30', '_csrf_token': tok})
-    assert r.status_code == 302
-    loc = r.headers['Location']
-    assert 'alpha.edusyncra.test/impersonate/' in loc
-    token = loc.rstrip('/').rsplit('/', 1)[1]
+    # Cross-subdomain hand-off is a rendered page (a top-level GET the browser
+    # starts from a loaded page), not a blind 302 — so a slow/unreachable tenant
+    # host shows the page and its URL instead of a silent blank.
+    assert r.status_code == 200
+    body = r.get_data(as_text=True)
+    m = re.search(r'https?://alpha\.edusyncra\.test/impersonate/([A-Za-z0-9_-]+)', body)
+    assert m, 'hand-off page should link to the school host token URL'
+    assert 'http-equiv="refresh"' in body               # auto-proceeds
+    token = m.group(1)
 
     # exchange the token on the school's own host (fresh client)
     tc = app.test_client()
