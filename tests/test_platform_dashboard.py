@@ -348,6 +348,31 @@ def test_impersonation_full_flow(mt):
     assert 'Support view' not in body2                 # banner gone
 
 
+def test_impersonation_works_on_a_locked_out_school(mt):
+    """Support can open a read-only session on a school that is locked out for
+    non-payment — that's often exactly when support is needed. The school's own
+    traffic still hits the pay-to-unlock wall."""
+    app, tenancy = mt
+    from utils import billing
+    past = dt.datetime.utcnow() - dt.timedelta(days=30)
+    tenancy.set_billing('alpha', trial_ends_at=past, paid_until=None)
+    assert billing.is_locked_out(tenancy.get_tenant('alpha'))
+
+    TH = {'Host': 'alpha.edusyncra.test'}
+    # Ordinary (non-support) traffic to the locked-out school is sent to billing.
+    anon = app.test_client()
+    r = anon.get('/', headers=TH, follow_redirects=False)
+    assert r.status_code == 302 and 'billing' in r.headers['Location']
+
+    # Support impersonation is NOT blocked by the lockout.
+    g = tenancy.create_impersonation('boss', 'alpha', 'help an unpaid school', ttl_minutes=30)
+    tc = app.test_client()
+    r2 = tc.get('/impersonate/' + g.token, headers=TH)
+    assert r2.status_code == 200                          # establish reached, not billing
+    body = tc.get('/', headers=TH, follow_redirects=True).get_data(as_text=True)
+    assert 'Support view' in body and 'read-only' in body  # portal, not the paywall
+
+
 def test_impersonation_kill_switch(mt):
     app, tenancy = mt
     c = _login_owner(app)
