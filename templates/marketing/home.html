@@ -592,26 +592,39 @@
   <!-- PRICING -->
   <section id="pricing"><div class="wrap">
     <div class="sec-head reveal"><span class="eyebrow">Simple pricing</span>
-      <h2>Start free, then pick a plan</h2>
-      <p>One flat price per school — never per student. Longer plans save more.</p></div>
+      <h2>Start free, then pick your plan</h2>
+      <p>Choose the tier that fits — one flat price per school, never per student. Longer cycles save more.</p></div>
+
+    {% set defcyc = 'monthly' %}
+    <div class="cyc-toggle reveal" role="tablist" aria-label="Billing cycle">
+      {% for cid, clabel in [('monthly','Monthly'),('termly','Termly'),('annual','Annual')] %}
+      <button type="button" class="cyc {{ 'on' if cid == defcyc }}" data-cycle="{{ cid }}">{{ clabel }}{% if cid == 'annual' %} <em>save more</em>{% endif %}</button>
+      {% endfor %}
+    </div>
+
     <div class="tiers reveal">
-      {% for p in plans %}
-      <div class="tier{{ ' feat' if p.id == 'annual' }}">
-        {% if p.badge %}<span class="tier-badge">★ {{ p.badge }}</span>{% endif %}
-        <div class="tier-name">{{ p.label }}</div>
-        <div class="tier-amt tnum">₦{{ '{:,.0f}'.format(p.price_naira) }}<small>/{{ p.per }}</small></div>
-        <div class="tier-save">{% if p.savings > 0 %}Save {{ p.savings }}% vs monthly{% else %}Pay as you go{% endif %}</div>
+      {% for row in grid %}
+      {% set p = row.plans[defcyc] %}
+      <div class="tier{{ ' feat' if row.popular }}" data-tier="{{ row.tier }}">
+        {% if row.popular %}<span class="tier-badge">★ Most popular</span>{% endif %}
+        <div class="tier-name">{{ row.label }}</div>
+        <div class="tier-amt tnum">₦<span class="t-num">{{ '{:,.0f}'.format(p.price_naira) }}</span><small>/<span class="t-per">{{ p.per }}</span></small></div>
+        <div class="tier-save"><span class="t-save">{% if p.savings > 0 %}Save {{ p.savings }}% vs monthly{% endif %}</span></div>
         <ul>
-          <li><i class="fas fa-check"></i> Every feature included</li>
-          <li><i class="fas fa-check"></i> Unlimited students &amp; staff</li>
-          <li><i class="fas fa-check"></i> {{ p.days }} days of access</li>
+          <li><i class="fas fa-user-group"></i> {{ 'Unlimited students' if row.limits.students == -1 else '{:,} students'.format(row.limits.students) }}</li>
+          <li><i class="fas fa-user-tie"></i> {{ 'Unlimited staff' if row.limits.staff == -1 else '{:,} staff'.format(row.limits.staff) }}</li>
+          <li><i class="fas fa-code-branch"></i> {{ 'Unlimited branches' if row.limits.branches == -1 else (row.limits.branches ~ ' branches' if row.limits.branches > 1 else 'Single branch') }}</li>
+          <li class="{{ '' if row.features.mock_exams else 'muted' }}"><i class="fas {{ 'fa-check' if row.features.mock_exams else 'fa-minus' }}"></i> Mock JAMB / WAEC &amp; CBT</li>
+          <li class="{{ '' if row.features.predictive_analytics else 'muted' }}"><i class="fas {{ 'fa-check' if row.features.predictive_analytics else 'fa-minus' }}"></i> Predictive analytics</li>
+          <li class="{{ '' if row.features.website_builder else 'muted' }}"><i class="fas {{ 'fa-check' if row.features.website_builder else 'fa-minus' }}"></i> Website builder</li>
           <li><i class="fas fa-check"></i> Daily backups &amp; encryption</li>
         </ul>
-        <a class="btn btn-block {{ 'btn-primary' if p.id == 'annual' else 'btn-ghost' }}" href="{{ register_url }}?plan={{ p.id }}">{{ content.hero_cta }}</a>
+        <a class="btn btn-block {{ 'btn-primary' if row.popular else 'btn-ghost' }} t-cta" data-tier="{{ row.tier }}" href="{{ register_url }}?tier={{ row.tier }}&amp;cycle={{ defcyc }}">{{ content.hero_cta }}</a>
       </div>
       {% endfor %}
     </div>
     <p class="price-note"><i class="fas fa-gift"></i> {{ content.trial_note }} · cancel anytime</p>
+    <script type="application/json" id="pricingData">{{ price_json|tojson }}</script>
   </div></section>
 
   <!-- FAQ -->
@@ -742,6 +755,31 @@
         el.textContent = Math.round(p*to) + suf; if(p<1) requestAnimationFrame(step); }
       requestAnimationFrame(step); }
   }
+  // pricing: billing-cycle toggle updates each tier's price + CTA link
+  (function(){
+    var node = document.getElementById('pricingData');
+    if (!node) return;
+    var prices; try { prices = JSON.parse(node.textContent || '{}'); } catch(e){ return; }
+    var fmt = function(n){ return Number(n||0).toLocaleString('en-NG'); };
+    function paint(cyc){
+      document.querySelectorAll('#pricing .cyc').forEach(function(b){
+        b.classList.toggle('on', b.getAttribute('data-cycle') === cyc);
+      });
+      document.querySelectorAll('#pricing .tier').forEach(function(card){
+        var p = (prices[card.getAttribute('data-tier')] || {})[cyc];
+        if (!p) return;
+        var num = card.querySelector('.t-num'), per = card.querySelector('.t-per'),
+            save = card.querySelector('.t-save'), cta = card.querySelector('.t-cta');
+        if (num) num.textContent = fmt(p.naira);
+        if (per) per.textContent = p.per;
+        if (save) save.textContent = p.savings > 0 ? ('Save ' + p.savings + '% vs monthly') : '';
+        if (cta) cta.href = cta.href.replace(/cycle=[^&]*/, 'cycle=' + cyc);
+      });
+    }
+    document.querySelectorAll('#pricing .cyc').forEach(function(b){
+      b.addEventListener('click', function(){ paint(b.getAttribute('data-cycle')); });
+    });
+  })();
 </script>
 </body>
 </html>

@@ -23,10 +23,14 @@ def render_home():
     """Render the marketing homepage from the (editable) stored content."""
     import datetime as _dt
     from utils.site_content import get_homepage
-    from utils.plans import tenant_plans
+    from utils.plans import tenant_plans, pricing_grid
+    grid = pricing_grid()
+    price_json = {r['tier']: {c: {'naira': p['price_naira'], 'per': p['per'],
+                                  'savings': p['savings']} for c, p in r['plans'].items()}
+                  for r in grid}
     return render_template('marketing/home.html',
                            content=get_homepage(),
-                           plans=tenant_plans(),
+                           plans=tenant_plans(), grid=grid, price_json=price_json,
                            base_domain=_base_domain(),
                            now_year=_dt.date.today().year,
                            register_url=url_for('onboarding.register'))
