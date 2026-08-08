@@ -25,10 +25,6 @@ import json
 from reportlab.lib.pagesizes import A4, landscape
 from reportlab.lib.units import mm
 from reportlab.lib import colors
-from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.lib.enums import TA_CENTER, TA_LEFT, TA_RIGHT
-from reportlab.platypus import (SimpleDocTemplate, Paragraph, Spacer, Table,
-                                TableStyle, Image, HRFlowable, KeepInFrame)
 
 from models import SchoolSettings, WAECResult
 from utils.analytics_service import AcademicAnalytics
@@ -362,100 +358,8 @@ def build_context(student, year):
     }
 
 
-# --------------------------------------------------------------------------- #
-#  RENDERER — shared building blocks (component-flag aware)                    #
-# --------------------------------------------------------------------------- #
-def _styles(primary, accent):
-    ss = getSampleStyleSheet()
-    P = colors.HexColor(primary)
-    A = colors.HexColor(accent)
-    MUT = colors.HexColor('#64748b')
-    return {
-        'P': P, 'A': A, 'MUT': MUT,
-        'school': ParagraphStyle('school', parent=ss['Title'], fontSize=19, leading=22,
-                                 textColor=P, alignment=TA_CENTER, spaceAfter=0),
-        'school_l': ParagraphStyle('school_l', parent=ss['Title'], fontSize=22, leading=24,
-                                   textColor=P, alignment=TA_LEFT, spaceAfter=0),
-        'motto': ParagraphStyle('motto', parent=ss['Italic'], fontSize=9.5, textColor=MUT, alignment=TA_CENTER),
-        'muted': ParagraphStyle('muted', parent=ss['Normal'], fontSize=8.5, textColor=MUT, alignment=TA_CENTER),
-        'muted_l': ParagraphStyle('muted_l', parent=ss['Normal'], fontSize=8.5, textColor=MUT, alignment=TA_LEFT),
-        'title': ParagraphStyle('title', parent=ss['Heading2'], fontSize=13, textColor=A,
-                                alignment=TA_CENTER, spaceBefore=6, spaceAfter=2, tracking=1),
-        'label': ParagraphStyle('label', parent=ss['Normal'], fontSize=9, textColor=MUT),
-        'val': ParagraphStyle('val', parent=ss['Normal'], fontSize=10.5, textColor=colors.HexColor('#0f172a')),
-        'name': ParagraphStyle('name', parent=ss['Heading1'], fontSize=17, textColor=colors.HexColor('#0f172a')),
-        'th': ParagraphStyle('th', parent=ss['Normal'], fontSize=9, textColor=colors.white, alignment=TA_LEFT),
-        'td': ParagraphStyle('td', parent=ss['Normal'], fontSize=10, textColor=colors.HexColor('#0f172a')),
-        'small': ParagraphStyle('small', parent=ss['Normal'], fontSize=8, textColor=MUT),
-        'ss': ss,
-    }
 
-
-def _esc(v):
-    from xml.sax.saxutils import escape
-    return escape(str(v)) if v is not None else ''
-
-
-def _logo_img(path, max_h=18 * mm, max_w=40 * mm):
-    if not path:
-        return None
-    try:
-        from PIL import Image as PILImage
-        with PILImage.open(path) as im:
-            iw, ih = im.size
-        ratio = (iw / ih) if ih else 1.0
-        h, w = max_h, max_h * ratio
-        if w > max_w:
-            w, h = max_w, max_w / ratio if ratio else max_h
-        return Image(path, width=w, height=h)
-    except Exception:
-        return None
-
-
-def _photo_img(ctx, cfg):
-    p = ctx['student'].get('photo_path')
-    if not p:
-        return None
-    sizes = {'small': 22 * mm, 'medium': 28 * mm, 'large': 36 * mm}
-    side = sizes.get((cfg.get('student_photo') or {}).get('size', 'medium'), 28 * mm)
-    try:
-        return Image(p, width=side, height=side)
-    except Exception:
-        return None
-
-
-def _qr_img(data, side=24 * mm):
-    try:
-        import qrcode
-        img = qrcode.make(data)
-        buf = io.BytesIO()
-        img.save(buf, format='PNG')
-        buf.seek(0)
-        return Image(buf, width=side, height=side)
-    except Exception:
-        return None
-
-
-def _header_lines(ctx, show):
-    """Contact/address/motto lines for the letterhead (respecting flags)."""
-    s = ctx['school']
-    lines = []
-    if show.get('branch') and ctx.get('branch'):
-        lines.append(('branch', ctx['branch']))
-    if show.get('school_motto') and s.get('motto'):
-        lines.append(('motto', s['motto']))
-    contacts = []
-    if show.get('school_address') and s.get('address'):
-        contacts.append(s['address'])
-    if show.get('school_phone') and s.get('phone'):
-        contacts.append('Tel: ' + s['phone'])
-    if show.get('school_email') and s.get('email'):
-        contacts.append(s['email'])
-    if show.get('school_website') and s.get('website'):
-        contacts.append(s['website'])
-    return lines, contacts
-
-
+# --- shared student/exam field pairs (used by all canvas layouts) ---
 def _student_pairs(ctx, show):
     st = ctx['student']
     pairs = []
@@ -478,464 +382,6 @@ def _student_pairs(ctx, show):
     if show.get('exam_centre') and ctx['exam'].get('centre'):
         pairs.append(('Centre', ctx['exam']['centre']))
     return pairs
-
-
-def _result_table(ctx, show, S, accent, compact=False):
-    """The subjects/grades table — columns depend on flags; compact for density."""
-    if not show.get('subjects'):
-        return None
-    cols = ['#', 'Subject']
-    keys = []
-    if show.get('grades'):
-        cols.append('Grade'); keys.append('grade')
-    if show.get('grade_desc'):
-        cols.append('Remark'); keys.append('desc')
-    if show.get('grade_points'):
-        cols.append('Points'); keys.append('points')
-    head = [Paragraph(f'<b>{_esc(c)}</b>', S['th']) for c in cols]
-    data = [head]
-    for i, r in enumerate(ctx['results'], 1):
-        row = [Paragraph(str(i), S['td']), Paragraph(_esc(r['subject']), S['td'])]
-        for k in keys:
-            row.append(Paragraph(f'<b>{_esc(r[k])}</b>' if k == 'grade' else _esc(r[k]), S['td']))
-        data.append(row)
-    ncol = len(cols)
-    widths = [10 * mm, None] + [22 * mm] * (ncol - 2)
-    # distribute remaining width
-    total_w = 165 * mm
-    fixed = 10 * mm + 22 * mm * (ncol - 2)
-    widths[1] = total_w - fixed
-    pad = 3 if compact else 5
-    t = Table(data, colWidths=widths, repeatRows=1)
-    t.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), accent),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-        ('FONTSIZE', (0, 1), (-1, -1), 9 if compact else 10),
-        ('TOPPADDING', (0, 0), (-1, -1), pad), ('BOTTOMPADDING', (0, 0), (-1, -1), pad),
-        ('LEFTPADDING', (0, 0), (-1, -1), 6), ('RIGHTPADDING', (0, 0), (-1, -1), 6),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f6f8fb')]),
-        ('LINEBELOW', (0, 0), (-1, -1), 0.4, colors.HexColor('#e2e8f0')),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-    ]))
-    return t
-
-
-def _stats_strip(ctx, show, S, accent, width=165 * mm):
-    st = ctx['stats']
-    cells = []
-    if show.get('total_subjects'):
-        cells.append(('Subjects', st['total']))
-    if show.get('a1_count'):
-        cells.append(('A1 grades', st['a1']))
-    if show.get('credits'):
-        cells.append(('Credits', st['credits']))
-    if show.get('average'):
-        cells.append(('Average', st['average']))
-    if show.get('classification'):
-        cells.append(('Classification', st['classification']))
-    if not cells:
-        return None
-    row = [[Paragraph(f'<font color="#ffffff" size=8>{_esc(l)}</font><br/>'
-                      f'<font color="#ffffff" size=13><b>{_esc(v)}</b></font>', S['td'])
-            for l, v in cells]]
-    t = Table(row, colWidths=[width / len(cells)] * len(cells))
-    t.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, -1), accent),
-        ('TOPPADDING', (0, 0), (-1, -1), 7), ('BOTTOMPADDING', (0, 0), (-1, -1), 7),
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('LINEAFTER', (0, 0), (-2, -1), 0.5, colors.white),
-    ]))
-    return t
-
-
-def _signatures(ctx, show, cfg, S):
-    """Signature / stamp / date / verification row."""
-    cols = []
-    if show.get('principal_signature') or show.get('principal_name'):
-        name = ctx['official'].get('principal_name') if show.get('principal_name') else ''
-        cols.append(_sig_col(ctx['official'].get('signature_path') if show.get('principal_signature') else None,
-                             'Principal', name, S))
-    if show.get('exam_officer'):
-        cols.append(_sig_col(None, 'Examination Officer', ctx['official'].get('exam_officer_name', ''), S))
-    if show.get('school_stamp') and ctx['official'].get('stamp_path'):
-        img = _logo_img(ctx['official']['stamp_path'], max_h=24 * mm, max_w=24 * mm)
-        cols.append([img or Spacer(1, 24 * mm), Paragraph('School Stamp', S['small'])])
-    if not cols:
-        return None
-    t = Table([[c for c in cols]], colWidths=[(165 * mm) / len(cols)] * len(cols))
-    t.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'BOTTOM'),
-                           ('ALIGN', (0, 0), (-1, -1), 'CENTER')]))
-    return t
-
-
-def _sig_col(sig_path, role, name, S):
-    top = _logo_img(sig_path, max_h=14 * mm, max_w=40 * mm) if sig_path else HRFlowable(
-        width='70%', thickness=0.8, color=colors.HexColor('#94a3b8'), spaceBefore=14, spaceAfter=2)
-    parts = [top]
-    if not sig_path:
-        parts = [Spacer(1, 12 * mm), HRFlowable(width='70%', thickness=0.8,
-                 color=colors.HexColor('#94a3b8'), spaceAfter=2)]
-    if name:
-        parts.append(Paragraph(f'<b>{_esc(name)}</b>', ParagraphStyle('c', parent=S['td'], alignment=TA_CENTER)))
-    parts.append(Paragraph(_esc(role), ParagraphStyle('r', parent=S['small'], alignment=TA_CENTER)))
-    return parts
-
-
-def _official_extras(ctx, show, S, verify_url):
-    """Date issued / verification code / QR — returned as a list of small flowables."""
-    import datetime
-    out = []
-    bits = []
-    if show.get('date_issued'):
-        bits.append('Issued: ' + datetime.date.today().strftime('%d %B %Y'))
-    if show.get('verification_code') and ctx.get('verify_code'):
-        bits.append('Verify code: ' + ctx['verify_code'])
-    if bits:
-        out.append(Paragraph(' &nbsp;•&nbsp; '.join(_esc(b) for b in bits),
-                             ParagraphStyle('v', parent=S['small'], alignment=TA_CENTER)))
-    if show.get('qr_code') and verify_url:
-        qr = _qr_img(verify_url)
-        if qr:
-            out.append(Spacer(1, 3))
-            out.append(qr)
-    return out
-
-
-def _footer(ctx, show, cfg, S):
-    lines = []
-    if show.get('footer_contact'):
-        c = [x for x in [ctx['school'].get('phone'), ctx['school'].get('email')] if x]
-        if c:
-            lines.append(' | '.join(c))
-    if show.get('footer_website') and ctx['school'].get('website'):
-        lines.append(ctx['school']['website'])
-    if show.get('footer_custom'):
-        txt = (cfg.get('footer_custom') or {}).get('text')
-        if txt:
-            lines.append(txt)
-    if show.get('footer_disclaimer'):
-        lines.append('This document is a school-issued representation of results and is not a '
-                     'substitute for the official WAEC statement of result.')
-    if not lines:
-        return None
-    return Paragraph('<br/>'.join(_esc(l) for l in lines),
-                     ParagraphStyle('f', parent=S['small'], alignment=TA_CENTER))
-
-
-# --------------------------------------------------------------------------- #
-#  TEMPLATE layouts — five distinct arrangements of the blocks above.         #
-# --------------------------------------------------------------------------- #
-def _centered_header(ctx, show, cfg, S):
-    el = []
-    if show.get('school_logo') and ctx['school'].get('logo_path'):
-        lg = _logo_img(ctx['school']['logo_path'])
-        if lg:
-            lg.hAlign = 'CENTER'; el.append(lg); el.append(Spacer(1, 4))
-    if show.get('school_name') and ctx['school'].get('name'):
-        el.append(Paragraph(_esc(ctx['school']['name']), S['school']))
-    lines, contacts = _header_lines(ctx, show)
-    for kind, txt in lines:
-        el.append(Paragraph(_esc(txt), S['motto'] if kind == 'motto' else S['muted']))
-    if contacts:
-        el.append(Paragraph(_esc(' | '.join(contacts)), S['muted']))
-    return el
-
-
-def _t_classic(ctx, show, cfg, S, verify_url):
-    el = _centered_header(ctx, show, cfg, S)
-    el.append(Spacer(1, 6))
-    el.append(HRFlowable(width='100%', thickness=1.4, color=S['P']))
-    el.append(HRFlowable(width='100%', thickness=0.5, color=S['P'], spaceBefore=2))
-    el.append(Paragraph('STATEMENT OF EXAMINATION RESULT', S['title']))
-    el.append(Spacer(1, 8))
-    if show.get('student_name'):
-        el.append(Paragraph(_esc(ctx['student']['name']),
-                            ParagraphStyle('n', parent=S['name'], alignment=TA_CENTER)))
-    pairs = _student_pairs(ctx, show)
-    if pairs:
-        line = '&nbsp;&nbsp;•&nbsp;&nbsp;'.join(f'<b>{_esc(l)}:</b> {_esc(v)}' for l, v in pairs)
-        el.append(Paragraph(line, ParagraphStyle('p', parent=S['val'], alignment=TA_CENTER)))
-    if show.get('student_photo'):
-        ph = _photo_img(ctx, cfg)
-        if ph:
-            ph.hAlign = 'CENTER'; el.append(Spacer(1, 6)); el.append(ph)
-    el.append(Spacer(1, 10))
-    rt = _result_table(ctx, show, S, S['A'], compact=len(ctx['results']) >= 10)
-    if rt:
-        el.append(rt)
-    ss = _stats_strip(ctx, show, S, S['P'])
-    if ss:
-        el.append(Spacer(1, 8)); el.append(ss)
-    el.append(Spacer(1, 16))
-    sig = _signatures(ctx, show, cfg, S)
-    if sig:
-        el.append(sig)
-    for x in _official_extras(ctx, show, S, verify_url):
-        el.append(x)
-    ft = _footer(ctx, show, cfg, S)
-    if ft:
-        el.append(Spacer(1, 8)); el.append(ft)
-    return el
-
-
-def _t_editorial(ctx, show, cfg, S, verify_url):
-    """Asymmetric: bold left masthead over a full-width rule, side-by-side identity."""
-    el = []
-    masthead = []
-    if show.get('school_name'):
-        masthead.append(Paragraph(_esc(ctx['school'].get('name', '')), S['school_l']))
-    lines, contacts = _header_lines(ctx, show)
-    for kind, txt in lines:
-        masthead.append(Paragraph(_esc(txt), S['muted_l']))
-    if contacts:
-        masthead.append(Paragraph(_esc(' | '.join(contacts)), S['muted_l']))
-    logo = _logo_img(ctx['school'].get('logo_path'), max_h=22 * mm, max_w=34 * mm) if show.get('school_logo') else None
-    if logo:
-        row = Table([[masthead, logo]], colWidths=[130 * mm, 35 * mm])
-        row.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                                 ('ALIGN', (1, 0), (1, 0), 'RIGHT')]))
-        el.append(row)
-    else:
-        el.extend(masthead)
-    el.append(HRFlowable(width='100%', thickness=3, color=S['A'], spaceBefore=6))
-    el.append(Paragraph('<b>WAEC RESULT</b> &nbsp; <font color="#64748b" size=10>· '
-                        f"{_esc(ctx['exam']['year'])}</font>",
-                        ParagraphStyle('h', parent=S['title'], alignment=TA_LEFT, fontSize=15, textColor=S['P'])))
-    el.append(Spacer(1, 6))
-    # identity rail (photo left, name+pairs right)
-    ident = []
-    if show.get('student_name'):
-        ident.append(Paragraph(_esc(ctx['student']['name']), S['name']))
-    pairs = _student_pairs(ctx, show)
-    for l, v in pairs:
-        ident.append(Paragraph(f'<font color="#64748b" size=8>{_esc(l)}</font> &nbsp; <b>{_esc(v)}</b>', S['val']))
-    ph = _photo_img(ctx, cfg) if show.get('student_photo') else None
-    if ph:
-        r = Table([[ph, ident]], colWidths=[32 * mm, 133 * mm])
-        r.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP')]))
-        el.append(r)
-    else:
-        el.extend(ident)
-    el.append(Spacer(1, 10))
-    rt = _result_table(ctx, show, S, S['P'], compact=len(ctx['results']) >= 10)
-    if rt:
-        el.append(rt)
-    ss = _stats_strip(ctx, show, S, S['A'])
-    if ss:
-        el.append(Spacer(1, 8)); el.append(ss)
-    el.append(Spacer(1, 16))
-    sig = _signatures(ctx, show, cfg, S)
-    if sig:
-        el.append(sig)
-    for x in _official_extras(ctx, show, S, verify_url):
-        el.append(x)
-    ft = _footer(ctx, show, cfg, S)
-    if ft:
-        el.append(Spacer(1, 8)); el.append(ft)
-    return el
-
-
-def _t_premium(ctx, show, cfg, S, verify_url):
-    """Landscape certificate: centred, generous spacing, seal area on the right."""
-    el = _centered_header(ctx, show, cfg, S)
-    el.append(Spacer(1, 4))
-    el.append(HRFlowable(width='60%', thickness=1.2, color=S['A']))
-    el.append(Paragraph('CERTIFICATE OF EXAMINATION RESULT', S['title']))
-    el.append(Spacer(1, 6))
-    if show.get('student_name'):
-        el.append(Paragraph(_esc(ctx['student']['name']),
-                            ParagraphStyle('n', parent=S['name'], alignment=TA_CENTER, fontSize=20)))
-    pairs = _student_pairs(ctx, show)
-    if pairs:
-        line = '&nbsp;&nbsp;•&nbsp;&nbsp;'.join(f'<b>{_esc(l)}:</b> {_esc(v)}' for l, v in pairs)
-        el.append(Paragraph(line, ParagraphStyle('p', parent=S['val'], alignment=TA_CENTER)))
-    el.append(Spacer(1, 8))
-    rt = _result_table(ctx, show, S, S['A'], compact=len(ctx['results']) >= 8)
-    if rt:
-        el.append(rt)
-    ss = _stats_strip(ctx, show, S, S['P'])
-    if ss:
-        el.append(Spacer(1, 6)); el.append(ss)
-    el.append(Spacer(1, 14))
-    sig = _signatures(ctx, show, cfg, S)
-    if sig:
-        el.append(sig)
-    for x in _official_extras(ctx, show, S, verify_url):
-        el.append(x)
-    ft = _footer(ctx, show, cfg, S)
-    if ft:
-        el.append(Spacer(1, 6)); el.append(ft)
-    return el
-
-
-def _t_contemporary(ctx, show, cfg, S, verify_url):
-    """Two-panel card: left student panel, right results — modern report card."""
-    el = _centered_header(ctx, show, cfg, S)
-    el.append(HRFlowable(width='100%', thickness=1, color=S['P'], spaceBefore=6, spaceAfter=8))
-    # left panel content
-    left = []
-    if show.get('student_photo'):
-        ph = _photo_img(ctx, cfg)
-        if ph:
-            ph.hAlign = 'CENTER'; left.append(ph); left.append(Spacer(1, 6))
-    if show.get('student_name'):
-        left.append(Paragraph(_esc(ctx['student']['name']),
-                              ParagraphStyle('n', parent=S['name'], fontSize=13, alignment=TA_CENTER)))
-    for l, v in _student_pairs(ctx, show):
-        left.append(Paragraph(f'<font color="#64748b" size=8>{_esc(l)}</font><br/><b>{_esc(v)}</b>',
-                              ParagraphStyle('lp', parent=S['val'], alignment=TA_CENTER, spaceAfter=3)))
-    right = []
-    rt = _result_table_narrow(ctx, show, S)
-    if rt:
-        right.append(rt)
-    ss = _stats_strip(ctx, show, S, S['A'], width=113 * mm)
-    if ss:
-        right.append(Spacer(1, 6)); right.append(ss)
-    panel = Table([[left or [Spacer(1, 1)], right or [Spacer(1, 1)]]], colWidths=[52 * mm, 113 * mm])
-    panel.setStyle(TableStyle([
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('BACKGROUND', (0, 0), (0, 0), colors.HexColor('#f6f8fb')),
-        ('BOX', (0, 0), (0, 0), 0.6, colors.HexColor('#e2e8f0')),
-        ('LEFTPADDING', (0, 0), (0, 0), 10), ('RIGHTPADDING', (0, 0), (0, 0), 10),
-        ('TOPPADDING', (0, 0), (0, 0), 12), ('BOTTOMPADDING', (0, 0), (0, 0), 12),
-        ('LEFTPADDING', (1, 0), (1, 0), 12),
-    ]))
-    el.append(panel)
-    el.append(Spacer(1, 16))
-    sig = _signatures(ctx, show, cfg, S)
-    if sig:
-        el.append(sig)
-    for x in _official_extras(ctx, show, S, verify_url):
-        el.append(x)
-    ft = _footer(ctx, show, cfg, S)
-    if ft:
-        el.append(Spacer(1, 8)); el.append(ft)
-    return el
-
-
-def _result_table_narrow(ctx, show, S):
-    if not show.get('subjects'):
-        return None
-    cols = ['Subject']
-    keys = []
-    if show.get('grades'):
-        cols.append('Grade'); keys.append('grade')
-    if show.get('grade_desc'):
-        cols.append('Remark'); keys.append('desc')
-    data = [[Paragraph(f'<b>{_esc(c)}</b>', S['th']) for c in cols]]
-    for r in ctx['results']:
-        row = [Paragraph(_esc(r['subject']), S['td'])]
-        for k in keys:
-            row.append(Paragraph(f'<b>{_esc(r[k])}</b>' if k == 'grade' else _esc(r[k]), S['td']))
-        data.append(row)
-    w0 = 113 * mm - 22 * mm * (len(cols) - 1)
-    t = Table(data, colWidths=[w0] + [22 * mm] * (len(cols) - 1), repeatRows=1)
-    t.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), S['P']),
-        ('TOPPADDING', (0, 0), (-1, -1), 4), ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-        ('LEFTPADDING', (0, 0), (-1, -1), 8),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f6f8fb')]),
-        ('LINEBELOW', (0, 0), (-1, -1), 0.3, colors.HexColor('#e2e8f0')),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-    ]))
-    return t
-
-
-def _t_creative(ctx, show, cfg, S, verify_url):
-    """Expressive: a solid accent header band with reversed-out school name."""
-    el = []
-    band = []
-    inner = []
-    if show.get('school_name'):
-        inner.append(Paragraph(f'<font color="#ffffff">{_esc(ctx["school"].get("name",""))}</font>',
-                               ParagraphStyle('sn', parent=S['school'], textColor=colors.white, alignment=TA_LEFT)))
-    if show.get('school_motto') and ctx['school'].get('motto'):
-        inner.append(Paragraph(f'<font color="#e2f5ee">{_esc(ctx["school"]["motto"])}</font>',
-                               ParagraphStyle('sm', parent=S['muted_l'], textColor=colors.white)))
-    logo = _logo_img(ctx['school'].get('logo_path'), max_h=18 * mm, max_w=28 * mm) if show.get('school_logo') else None
-    cells = [[inner, logo or Spacer(1, 1)]]
-    band_t = Table(cells, colWidths=[137 * mm, 28 * mm])
-    band_t.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, -1), S['P']),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('ALIGN', (1, 0), (1, 0), 'RIGHT'),
-        ('LEFTPADDING', (0, 0), (-1, -1), 14), ('RIGHTPADDING', (0, 0), (-1, -1), 14),
-        ('TOPPADDING', (0, 0), (-1, -1), 12), ('BOTTOMPADDING', (0, 0), (-1, -1), 12),
-    ]))
-    el.append(band_t)
-    # accent sub-band with exam title
-    sub = Table([[Paragraph(f'<font color="#ffffff"><b>WAEC RESULT · {_esc(ctx["exam"]["year"])}</b></font>',
-                            ParagraphStyle('x', parent=S['td'], textColor=colors.white))]], colWidths=[165 * mm])
-    sub.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, -1), S['A']),
-                             ('LEFTPADDING', (0, 0), (-1, -1), 14),
-                             ('TOPPADDING', (0, 0), (-1, -1), 5), ('BOTTOMPADDING', (0, 0), (-1, -1), 5)]))
-    el.append(sub)
-    el.append(Spacer(1, 10))
-    ident = []
-    if show.get('student_name'):
-        ident.append(Paragraph(_esc(ctx['student']['name']), S['name']))
-    pairs = _student_pairs(ctx, show)
-    if pairs:
-        ident.append(Paragraph('&nbsp;&nbsp;•&nbsp;&nbsp;'.join(
-            f'<font color="#64748b" size=8>{_esc(l)}</font> <b>{_esc(v)}</b>' for l, v in pairs), S['val']))
-    ph = _photo_img(ctx, cfg) if show.get('student_photo') else None
-    if ph:
-        r = Table([[ident, ph]], colWidths=[133 * mm, 32 * mm])
-        r.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'), ('ALIGN', (1, 0), (1, 0), 'RIGHT')]))
-        el.append(r)
-    else:
-        el.extend(ident)
-    el.append(Spacer(1, 10))
-    rt = _result_table(ctx, show, S, S['P'], compact=len(ctx['results']) >= 10)
-    if rt:
-        el.append(rt)
-    ss = _stats_strip(ctx, show, S, S['A'])
-    if ss:
-        el.append(Spacer(1, 8)); el.append(ss)
-    el.append(Spacer(1, 16))
-    sig = _signatures(ctx, show, cfg, S)
-    if sig:
-        el.append(sig)
-    for x in _official_extras(ctx, show, S, verify_url):
-        el.append(x)
-    ft = _footer(ctx, show, cfg, S)
-    if ft:
-        el.append(Spacer(1, 8)); el.append(ft)
-    return el
-
-
-_LAYOUTS = {
-    'classic': _t_classic, 'editorial': _t_editorial, 'premium': _t_premium,
-    'contemporary': _t_contemporary, 'creative': _t_creative,
-}
-
-
-def _border_for(key, primary, accent):
-    """A page decorator (drawn border) matching the template's character."""
-    P = colors.HexColor(primary)
-    A = colors.HexColor(accent)
-
-    def paint(canvas, doc):
-        w, h = doc.pagesize
-        canvas.saveState()
-        if key == 'classic':
-            canvas.setStrokeColor(P); canvas.setLineWidth(2)
-            canvas.rect(12 * mm, 12 * mm, w - 24 * mm, h - 24 * mm)
-            canvas.setLineWidth(0.6)
-            canvas.rect(15 * mm, 15 * mm, w - 30 * mm, h - 30 * mm)
-        elif key == 'premium':
-            canvas.setStrokeColor(A); canvas.setLineWidth(3)
-            canvas.rect(10 * mm, 10 * mm, w - 20 * mm, h - 20 * mm)
-            canvas.setStrokeColor(P); canvas.setLineWidth(0.8)
-            canvas.rect(14 * mm, 14 * mm, w - 28 * mm, h - 28 * mm)
-        elif key == 'creative':
-            canvas.setFillColor(A)
-            canvas.rect(0, 0, 6 * mm, h, fill=1, stroke=0)
-        elif key == 'editorial':
-            canvas.setFillColor(P)
-            canvas.rect(0, h - 6 * mm, w, 6 * mm, fill=1, stroke=0)
-        canvas.restoreState()
-    return paint
-
 
 # --------------------------------------------------------------------------- #
 #  CANVAS templates — pixel-precise, ornate designs drawn directly.            #
@@ -1031,15 +477,17 @@ def _faded(path, alpha=0.06):
 
 
 def _seal(c, cx, cy, r, name):
-    """A drawn official seal (concentric gold rings + centred initials)."""
+    """A drawn official seal: concentric gold rings, centred initials and two
+    small star accents (no micro-text, so nothing overlaps at small sizes)."""
     c.setStrokeColor(_GOLD); c.setLineWidth(1.4); c.circle(cx, cy, r, stroke=1, fill=0)
-    c.setLineWidth(0.7); c.circle(cx, cy, r - 4, stroke=1, fill=0)
-    c.setDash(1, 2); c.circle(cx, cy, r - 8, stroke=1, fill=0); c.setDash()
+    c.setLineWidth(0.6); c.circle(cx, cy, r - 4, stroke=1, fill=0)
+    c.setDash(1, 2); c.circle(cx, cy, r - 7.5, stroke=1, fill=0); c.setDash()
     initials = ''.join(w[0] for w in (name or 'S').split()[:3]).upper() or 'S'
-    c.setFillColor(_GOLD); c.setFont('Times-Bold', 13)
-    c.drawCentredString(cx, cy - 4, initials)
-    c.setFont('Helvetica', 5); c.setFillColor(_GOLD_LT)
-    c.drawCentredString(cx, cy + r - 10, 'OFFICIAL SEAL')
+    fs = max(9, min(15, int(r * 0.5)))
+    c.setFillColor(_GOLD); c.setFont('Times-Bold', fs)
+    c.drawCentredString(cx, cy - fs * 0.36, initials)
+    _star(c, cx - r + 6, cy, 2, _GOLD_LT)
+    _star(c, cx + r - 6, cy, 2, _GOLD_LT)
 
 
 def _wrap(c, text, font, size, max_w):
@@ -1682,9 +1130,18 @@ def _draw_contemporary(c, ctx, show, cfg, verify_url):
             if show.get('grades'):
                 _pill(c, mx1 - 46, my - rh / 2 - 9, 40, 19, r['grade'], _band_color(r['grade'], PAL), fs=10.5)
             my -= rh
-        my -= 14
-    # signature / date / seal
-    fy = max(56, my - 6)
+        my -= 30
+    # signature / date / seal — kept clear of the table
+    fy = max(70, my)
+    # seal on the right, fully below the table
+    if show.get('school_stamp'):
+        _seal(c, mx1 - 30, fy - 12, 20, ctx['school'].get('name'))
+        if show.get('date_issued'):
+            c.setFillColor(MUTE); c.setFont('Helvetica', 8.5)
+            c.drawRightString(mx1, fy - 48, 'Issued ' + _issue_date().strftime('%d %b %Y'))
+    elif show.get('date_issued'):
+        c.setFillColor(MUTE); c.setFont('Helvetica', 8.5)
+        c.drawRightString(mx1, fy - 4, 'Issued ' + _issue_date().strftime('%d %b %Y'))
     if show.get('principal_name') or show.get('principal_signature'):
         sig = ctx['official'].get('signature_path') if show.get('principal_signature') else None
         if sig:
@@ -1697,10 +1154,6 @@ def _draw_contemporary(c, ctx, show, cfg, verify_url):
         if show.get('principal_name'):
             c.drawString(mx0, fy - 13, (ctx['official'].get('principal_name') or '').upper())
         c.setFillColor(MUTE); c.setFont('Helvetica', 8.5); c.drawString(mx0, fy - 24, 'Principal')
-    if show.get('school_stamp'):
-        _seal(c, mx1 - 34, fy + 4, 24, ctx['school'].get('name'))
-    if show.get('date_issued'):
-        c.setFillColor(MUTE); c.setFont('Helvetica', 8.5); c.drawRightString(mx1, fy - 30, 'Issued ' + _issue_date().strftime('%d %b %Y'))
 
 
 # ===========================================================================
