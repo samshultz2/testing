@@ -457,6 +457,19 @@ def get_active_term():
         # session's current term. This is what makes every term-scoped page
         # follow a session switch, not just the session-level ones.
         if sess is not None and (val is None or val.session_id != sess.id):
+            # The flagged-active term belongs to a different (or no) session than
+            # the active one — an inconsistent state that can arise after a botched
+            # session switch. We follow the active session (below), but surface the
+            # mismatch so it can be spotted rather than silently masked.
+            if val is not None and val.session_id != sess.id:
+                try:
+                    from flask import current_app
+                    current_app.logger.debug(
+                        'active-term/session mismatch: term %s (session %s) but active '
+                        'session is %s — using the active session\'s current term',
+                        val.id, val.session_id, sess.id)
+                except Exception:
+                    pass
             val = _session_current_term(sess.id)
     if has_request_context():
         g._active_term = val

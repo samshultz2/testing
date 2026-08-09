@@ -8,6 +8,11 @@ Flask==3.1.3            # 3.0.3 -> CVE-2026-27205
 Flask-SQLAlchemy==3.1.1
 Flask-Login==0.6.3
 Werkzeug==3.1.6         # CVE-2025-66221 / 2026-21860 / 2026-27199 (also req. by Flask 3.1)
+# Pulled in transitively by Flask/Werkzeug, but imported directly by app code
+# (utils/hr.py signs tokens with itsdangerous; utils/barcode_svg.py escapes with
+# markupsafe), so declared explicitly — versions match the resolved lock.
+itsdangerous==2.2.0
+MarkupSafe==3.0.3
 SQLAlchemy==2.0.23
 # PostgreSQL driver (psycopg 3). Needed when DATABASE_URL points at Postgres
 # (postgresql+psycopg://...). Not required for the default SQLite backend.
@@ -76,3 +81,8 @@ pytest==9.0.3          # 8.3.3 -> CVE-2025-71176
 # setting SENTRY_DSN (see utils/monitoring.py). The app runs fine without it —
 # the always-on in-app Error Log + email alerts need no extra packages.
 # sentry-sdk[flask]>=2.0
+
+# Optional: browser Web Push (utils/webpush.py). Install this and set the VAPID
+# keys (WEBPUSH_VAPID_PUBLIC_KEY / _PRIVATE_KEY / _CLAIMS_EMAIL) to enable push;
+# without it, push sends are a safe no-op and subscriptions are simply stored.
+# pywebpush>=2.0.0

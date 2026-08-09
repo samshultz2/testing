@@ -19,6 +19,13 @@ function Index({ d }) {
       <div className="data-card-row">{sub}</div>
     </a>
   );
+  // Classic (non-SPA) pages — full navigation, no nav.go interception.
+  const cardExt = (url, icon, title, sub) => (
+    <a key={title} href={url} className="data-card" style={{ textDecoration: 'none', color: 'inherit' }}>
+      <div className="data-card-header"><div className="data-card-title"><i aria-hidden="true" className={`fas ${icon}`} /> {title}</div></div>
+      <div className="data-card-row">{sub}</div>
+    </a>
+  );
   const u = d.urls;
   return (
     <>
@@ -35,6 +42,8 @@ function Index({ d }) {
         {card(u.backup, 'fa-database', 'Backup & Restore', 'Download backup, restore data')}
         {d.is_central && card(u.audit, 'fa-clipboard-list', 'Audit Log', 'Who changed what, and when')}
         {card(u.ocr, 'fa-robot', 'AI Vision OCR', 'Optional Claude key for reading result images')}
+        {u.notifications && cardExt(u.notifications, 'fa-bell', 'Notifications', 'Choose which channels you receive alerts on')}
+        {d.is_central && u.performance && cardExt(u.performance, 'fa-gauge-high', 'Performance', 'Recent slow requests and SQL queries')}
       </div>
     </>
   );
