@@ -139,3 +139,26 @@ def test_at_risk_register_lists_only_elevated(app):
     data = c.get('/results/api/at-risk').get_json()
     assert any(s['student_id'] == sid for s in data['students'])
     assert all(s['risk_level'] in ('RED', 'AMBER') for s in data['students'])
+
+
+def test_most_failed_subjects_excludes_zero_fail_and_counts_only_f9(app):
+    # Only F9 is a WAEC fail; D7/E8 are Pass grades. Subjects without an F9 must
+    # never appear in "Most Failed Subjects". Uses a dedicated exam year so the
+    # shared test DB from other cases doesn't skew the counts.
+    from utils.analytics_service import AcademicAnalytics
+    yr = 2099
+    s1 = _make_student(app, 'Fail Physics')
+    s2 = _make_student(app, 'Weak Economics')
+    with app.app_context():
+        for sid, subj, g in [(s1, 'PHYSICS', 'F9'), (s1, 'ECONOMICS', 'E8'),
+                             (s2, 'PHYSICS', 'C4'), (s2, 'ECONOMICS', 'D7')]:
+            db.session.add(WAECResult(student_id=sid, exam_year=yr, subject=subj, grade=g))
+        db.session.commit()
+        stats = AcademicAnalytics.get_waec_school_statistics(yr)
+        by_subject = {s['subject']: s for s in stats['subject_analysis']}
+        assert by_subject['ECONOMICS']['fail_count'] == 0        # E8 + D7 are passes
+        assert by_subject['ECONOMICS']['fail_rate'] == 0.0
+        assert by_subject['PHYSICS']['fail_count'] == 1          # the single F9
+        assert by_subject['PHYSICS']['fail_rate'] == 50.0
+        failed = [s['subject'] for s in stats['most_failed_subjects']]
+        assert 'PHYSICS' in failed and 'ECONOMICS' not in failed
