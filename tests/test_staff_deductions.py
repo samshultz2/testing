@@ -5,12 +5,18 @@ different amounts. A per-staff assignment overrides the type's default on that
 person's payslip, and their running contribution is tracked from finalized pay.
 """
 from datetime import date
+from contextlib import contextmanager
 
 from config import Config
 from models import (db, User, StaffMember, Branch, PayrollRun, Payslip,
                     PayslipDeduction, PayrollDeductionType, StaffDeduction)
 from tests.conftest import login_token, auth_csrf
-from contextlib import contextmanager
+
+# Dedicated payroll year owned solely by this file. PayrollRun has a
+# UNIQUE(year, month, branch_id); the shared session-scoped DB fixture means a
+# year reused by another test (test_crud_delete, test_hr_self_service both seed
+# 2025) collides on insert, so this file books its runs in a private year.
+_YEAR = 2401
 
 
 @contextmanager
@@ -55,7 +61,7 @@ def test_override_replaces_default_on_payslip(app):
     with app.app_context():
         # This staff pays ₦12,000 Welfare, not the ₦2,000 default.
         db.session.add(StaffDeduction(staff_id=sid, deduction_type_id=tid, amount=12000))
-        run = PayrollRun(year=2025, month=5, branch_id=bid, status='Draft')
+        run = PayrollRun(year=_YEAR, month=5, branch_id=bid, status='Draft')
         db.session.add(run); db.session.commit()
         hr_utils.generate_payslips(run)
         db.session.commit()
@@ -70,7 +76,7 @@ def test_default_applies_without_override(app):
     sid, bid = _staff(app, 'Def')
     _welfare_type(app, 'Union', 1500, branch_id=bid)
     with app.app_context():
-        run = PayrollRun(year=2025, month=6, branch_id=bid, status='Draft')
+        run = PayrollRun(year=_YEAR, month=6, branch_id=bid, status='Draft')
         db.session.add(run); db.session.commit()
         hr_utils.generate_payslips(run)
         db.session.commit()
@@ -84,8 +90,8 @@ def test_contributions_only_count_finalized(app):
     sid, bid = _staff(app, 'Con')
     with app.app_context():
         # Two payslips with the same Welfare line: one Paid, one Draft.
-        paid = PayrollRun(year=2025, month=1, branch_id=bid, status='Paid')
-        draft = PayrollRun(year=2025, month=2, branch_id=bid, status='Draft')
+        paid = PayrollRun(year=_YEAR, month=1, branch_id=bid, status='Paid')
+        draft = PayrollRun(year=_YEAR, month=2, branch_id=bid, status='Draft')
         db.session.add_all([paid, draft]); db.session.flush()
         for run in (paid, draft):
             ps = Payslip(run_id=run.id, staff_id=sid, staff_name='x', basic=100000, net=90000)
@@ -104,7 +110,7 @@ def test_overview_merges_monthly_and_contributed(app):
     tid = _welfare_type(app, 'Cooperative', 2000, branch_id=bid)
     with app.app_context():
         db.session.add(StaffDeduction(staff_id=sid, deduction_type_id=tid, amount=10000))
-        run = PayrollRun(year=2025, month=3, branch_id=bid, status='Finalized')
+        run = PayrollRun(year=_YEAR, month=3, branch_id=bid, status='Finalized')
         db.session.add(run); db.session.flush()
         ps = Payslip(run_id=run.id, staff_id=sid, staff_name='x', basic=100000, net=90000)
         db.session.add(ps); db.session.flush()
@@ -178,7 +184,7 @@ def test_self_service_exposes_contributions(app):
         s = StaffMember(first_name='Welf', surname='Self', is_active=True, status='Active',
                         staff_type='Teaching', branch_id=bid, user_id=u.id, salary=100000)
         db.session.add(s); db.session.flush()
-        run = PayrollRun(year=2025, month=4, branch_id=bid, status='Finalized')
+        run = PayrollRun(year=_YEAR, month=4, branch_id=bid, status='Finalized')
         db.session.add(run); db.session.flush()
         ps = Payslip(run_id=run.id, staff_id=s.id, staff_name=s.full_name, basic=100000, net=90000)
         db.session.add(ps); db.session.flush()

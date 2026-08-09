@@ -16,10 +16,17 @@ def _seed(app, tag):
     """A product sold to two students in the same class + a walk-in. `tag` keeps
     names unique across tests sharing the session-scoped DB."""
     with app.app_context():
+        # Establish a *consistent* active session+term. get_active_term() falls
+        # back to the active session's current term when the flagged term belongs
+        # to a different session, so a stray active session left by another test
+        # (shared session-scoped DB) would otherwise hijack attribution.
         for t in Term.query.filter_by(is_active=True).all():
             t.is_active = False
+        for s in AcademicSession.query.filter_by(is_active=True).all():
+            s.is_active = False
         bid = Branch.get_default().id
-        sess = AcademicSession(name=f'AN-Session-{tag}'); db.session.add(sess); db.session.flush()
+        sess = AcademicSession(name=f'AN-Session-{tag}', is_active=True)
+        db.session.add(sess); db.session.flush()
         term = Term(session_id=sess.id, term_number=1, name=f'AN-Term-{tag}', is_active=True)
         db.session.add(term); db.session.flush()
         cls = SchoolClass.query.order_by(SchoolClass.level).first()
@@ -59,6 +66,9 @@ def _teardown(app, ids):
         t = db.session.get(Term, ids['term_id'])
         if t:
             t.is_active = False
+            s = db.session.get(AcademicSession, t.session_id)
+            if s:
+                s.is_active = False
             db.session.commit()
 
 
