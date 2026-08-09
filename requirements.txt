@@ -50,6 +50,10 @@ qrcode==8.2
 requests==2.32.3
 urllib3==2.2.3
 
+# HTML parsing for the MySchool past-question harvester (utils/myschool.py).
+# Uses the built-in html.parser backend, so no lxml is required.
+beautifulsoup4==4.15.0
+
 # Database migrations (Alembic via Flask-Migrate). `flask db ...` commands;
 # schema is tracked in db_migrations/. See docs/MIGRATIONS.md.
 Flask-Migrate==4.1.0
