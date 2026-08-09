@@ -41,6 +41,34 @@ def test_save_and_delete_subscription(app):
         assert PushSubscription.query.filter_by(endpoint=_SUB['endpoint']).first() is None
 
 
+def test_notify_also_pushes_when_configured(app, monkeypatch):
+    """Every bell notification fans out to web push for the addressed user, once
+    web push is configured (best-effort, off by default when unconfigured)."""
+    from utils import notify as notify_mod
+    from utils import webpush
+    uid, _tv = _make_user(app, 'push_notify')
+    calls = []
+    monkeypatch.setattr(webpush, 'is_configured', lambda app=None: True)
+    monkeypatch.setattr(webpush, 'push_to_users',
+                        lambda user_ids, title, body='', url=None, app=None: calls.append((list(user_ids), title)))
+    with app.app_context():
+        notify_mod.notify('Hello', 'body', user_id=uid)
+    assert calls and calls[0][0] == [uid] and calls[0][1] == 'Hello'
+
+
+def test_notify_no_push_when_unconfigured(app, monkeypatch):
+    from utils import notify as notify_mod
+    from utils import webpush
+    uid, _tv = _make_user(app, 'push_notify_off')
+    calls = []
+    monkeypatch.setattr(webpush, 'is_configured', lambda app=None: False)
+    monkeypatch.setattr(webpush, 'push_to_users',
+                        lambda *a, **k: calls.append(a))
+    with app.app_context():
+        notify_mod.notify('Hello', 'body', user_id=uid)
+    assert calls == []          # no push work when unconfigured
+
+
 def test_public_key_endpoint_reports_disabled(app):
     from config import Config
     c = app.test_client()

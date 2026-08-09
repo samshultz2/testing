@@ -9,11 +9,11 @@ import os
 CHANNELS = ('inapp', 'email', 'sms', 'push')
 CHANNEL_LABELS = {'inapp': 'In-app (bell)', 'email': 'Email', 'sms': 'SMS', 'push': 'Web push'}
 
-# Per-channel default when the user has no explicit row. The in-app bell is
-# opt-out (on unless turned off) — it's free and non-intrusive. Email, SMS and
-# push are opt-in (off unless turned on): SMS costs money and email/push are
-# easy to over-send, so a user must ask for them.
-CHANNEL_DEFAULTS = {'inapp': True, 'email': False, 'sms': False, 'push': False}
+# Per-channel default when the user has no explicit row. The in-app bell and web
+# push are opt-out (on unless turned off) — both are free, so every bell
+# notification also reaches the browser by default. Email and SMS stay opt-in
+# (off unless turned on): SMS costs money and email is easy to over-send.
+CHANNEL_DEFAULTS = {'inapp': True, 'email': False, 'sms': False, 'push': True}
 
 
 def default_for(channel):
