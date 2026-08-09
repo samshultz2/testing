@@ -340,6 +340,11 @@ def create_app(config_class=None):
     from utils.errors import register_error_handlers
     register_error_handlers(app)
 
+    # Observability: warn-log slow requests and slow SQL queries (thresholds via
+    # SLOW_REQUEST_MS / SLOW_QUERY_MS). Cheap and purely observational.
+    from utils.perf_logging import init_perf_logging
+    init_perf_logging(app)
+
     # Keep a rolling daily backup of the database
     from utils.backup import auto_backup
     auto_backup(app)
