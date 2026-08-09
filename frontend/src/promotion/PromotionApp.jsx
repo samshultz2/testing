@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { submitJson } from '../lib/forms';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, Banner, PageHeader, Empty, SectionShell, SuccessBanner } from '../components/ui';
@@ -303,8 +303,17 @@ function Graduates({ d }) {
   const nav = useNav();
   const docTypes = d.doc_types || [];
   const [bulkType, setBulkType] = useState(docTypes.length ? docTypes[0].type : '');
+  const [q, setQ] = useState('');
   const males = d.graduates.filter((g) => g.gender === 'Male').length;
   const females = d.graduates.filter((g) => g.gender === 'Female').length;
+  // Live search over the loaded graduates — matches name, student ID or session.
+  const shown = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    if (!t) return d.graduates;
+    return d.graduates.filter((s) => (
+      `${s.full_name} ${s.student_id} ${s.graduation_session || ''} ${s.status || ''}`
+    ).toLowerCase().includes(t));
+  }, [q, d.graduates]);
   const bulkHref = d.bulk_url && bulkType
     ? `${d.bulk_url}?doc_type=${encodeURIComponent(bulkType)}${d.session_id ? `&session_id=${d.session_id}` : ''}${d.status ? `&status=${encodeURIComponent(d.status)}` : ''}`
     : null;
@@ -318,6 +327,10 @@ function Graduates({ d }) {
         {canWrite(d) && <a href={d.preview_url} className="btn btn-success"><i aria-hidden="true" className="fas fa-user-graduate" /> Graduate current SSS3</a>}
       </>} />
       <div className="card mb-3"><div className="card-body"><div className="filter-form">
+        <div className="form-group" style={{ flex: '1 1 240px' }}><label className="form-label">Search graduates</label>
+          <div className="enroll-search"><i aria-hidden="true" className="fas fa-search" />
+            <input type="search" className="form-control" placeholder="Name or student ID…" autoComplete="off"
+              value={q} onChange={(e) => setQ(e.target.value)} /></div></div>
         <div className="form-group"><label className="form-label">Graduation Session</label>
           <select className="form-control" value={d.session_id} onChange={(e) => navParams(nav.go, window.location.pathname, { session_id: e.target.value, status: d.status || '' })}>
             <option value="">All Sessions</option>{d.sessions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
@@ -331,9 +344,10 @@ function Graduates({ d }) {
           <div className="stat-card"><div className="stat-icon info"><i aria-hidden="true" className="fas fa-male" /></div><div className="stat-content"><h3>{males}</h3><p>Male</p></div></div>
           <div className="stat-card"><div className="stat-icon secondary"><i aria-hidden="true" className="fas fa-female" /></div><div className="stat-content"><h3>{females}</h3><p>Female</p></div></div>
         </div>
-        <div className="card"><div className="card-header"><h3>Graduates ({d.graduates.length})</h3></div>
+        <div className="card"><div className="card-header"><h3>Graduates ({shown.length}{shown.length !== d.graduates.length ? ` of ${d.graduates.length}` : ''})</h3></div>
           <div className="card-body" style={{ padding: 0 }}><div className="data-cards" style={{ padding: '1rem' }}>
-            {d.graduates.map((s) => (
+            {shown.length === 0 && <p className="text-muted text-center" style={{ padding: '1rem', gridColumn: '1 / -1' }}>No graduates match “{q}”.</p>}
+            {shown.map((s) => (
               <div className="data-card" key={s.id}>
                 <div className="data-card-header"><div className="data-card-title">{s.full_name}</div><span className="badge badge-info">{s.status || 'Graduated'}</span></div>
                 <div className="data-card-row"><span className="data-card-label">ID</span><span>{s.student_id}</span></div>
