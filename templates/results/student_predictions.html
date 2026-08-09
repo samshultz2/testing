@@ -77,6 +77,7 @@
         <p>{{ student.student_id }} | {{ mock_count }} Mock Exam(s) taken</p>
     </div>
     <div style="margin-left:auto">
+        <a href="{{ url_for('results.student_action_plan', student_id=student.id) }}" class="btn btn-primary btn-sm"><i class="fas fa-list-check"></i> Action plan</a>
         <a href="{{ url_for('main.view_student', student_id=student.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-user"></i> Profile</a>
         {% if has_mock_results %}
         <a href="{{ url_for('mock_jamb.student_progress', student_id=student.id) }}" class="btn btn-info btn-sm"><i class="fas fa-chart-line"></i> Progress</a>
