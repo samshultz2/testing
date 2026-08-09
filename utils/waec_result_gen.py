@@ -1621,7 +1621,7 @@ def _draw_profile(c, ctx, show, cfg, verify_url):
     if show.get('school_name') and ctx['school'].get('name'):
         c.setFillColor(INK); c.setFont('Times-Bold', 22); c.drawString(mx0, y, ctx['school']['name'].upper()); y -= 17
     if show.get('exam_name'):
-        _track('WEST AFRICAN SENIOR SCHOOL CERTIFICATE EXAMINATION', 'Helvetica-Bold', 8, mx0, y, 0.6, MUTE); y -= 24
+        _track('WEST AFRICAN SENIOR SCHOOL CERTIFICATE EXAMINATION', 'Helvetica-Bold', 10.5, mx0, y, 0.4, MUTE); y -= 27
     if show.get('exam_year'):
         c.setFillColor(GREEN); c.setFont('Times-Bold', 23); c.drawString(mx0, y, str(ctx['exam']['year'])); y -= 14
 
