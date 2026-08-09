@@ -1474,17 +1474,21 @@ def _draw_executive(c, ctx, show, cfg, verify_url):
     az = auth_top - 4
     if show.get('principal_signature') or show.get('principal_name'):
         line_y = az - 40
+        # Only stamp an *uploaded* signature image. With none, the space above the
+        # line stays blank so the principal can sign the printed document by hand.
         sig = ctx['official'].get('signature_path') if show.get('principal_signature') else None
         if sig:
             try:
                 c.drawImage(sig, M, line_y + 4, 108, 28, preserveAspectRatio=True, anchor='sw', mask='auto')
             except Exception:
-                sig = None
-        if not sig:
-            c.setFillColor(NAVY); c.setFont('Times-Italic', 22)
-            c.drawString(M, line_y + 6, (ctx['official'].get('principal_name') or 'Principal'))
+                pass
         c.setStrokeColor(NAVY); c.setLineWidth(1.0); c.line(M, line_y, M + 165, line_y)
-        c.setFillColor(CHAR); c.setFont('Helvetica-Bold', 11); c.drawString(M, line_y - 15, 'Principal')
+        pname = ctx['official'].get('principal_name') if show.get('principal_name') else None
+        if pname:
+            c.setFillColor(CHAR); c.setFont('Helvetica-Bold', 11); c.drawString(M, line_y - 15, pname.upper())
+            c.setFillColor(MUTE); c.setFont('Helvetica', 9.5); c.drawString(M, line_y - 28, 'Principal')
+        else:
+            c.setFillColor(CHAR); c.setFont('Helvetica-Bold', 11); c.drawString(M, line_y - 15, 'Principal')
     if show.get('school_stamp'):
         _seal(c, cx, az - 34, 36, ctx['school'].get('name'))
     if show.get('verification_code') or show.get('qr_code') or show.get('date_issued'):
