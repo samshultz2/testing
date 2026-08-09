@@ -5,7 +5,14 @@
 {% block extra_css %}
 <style>
 .cl-kpis { display:flex; gap:.75rem; flex-wrap:wrap; margin-bottom:1rem; }
-.cl-kpis .kpi { flex:1 1 140px; }
+/* Give the stat cards real padding + surface — the global `body .kpi` rule adds
+   rounded corners and overflow:hidden, so without padding the values were
+   clipped against the corner. */
+.cl-kpis .kpi { flex:1 1 140px; background:var(--bg-card); border:1px solid var(--border-color);
+                border-radius:var(--radius-md); padding:.85rem 1rem; text-align:left; }
+.cl-kpis .kpi-value { font-size:1.5rem; font-weight:700; line-height:1.1; color:var(--text-primary); }
+.cl-kpis .kpi-label { font-size:.72rem; color:var(--text-muted); margin-top:.2rem;
+                      text-transform:uppercase; letter-spacing:.03em; }
 .cl-rec { border-left:4px solid var(--primary); background:var(--bg-secondary); border-radius:6px; padding:.6rem .8rem; margin-bottom:.5rem; }
 .cl-rec.negative { border-color:#b43a2e; } .cl-rec.watch { border-color:#c9a227; }
 .cl-rec.positive { border-color:var(--success); } .cl-rec.insight { border-color:var(--primary); }
