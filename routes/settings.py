@@ -72,6 +72,8 @@ def index():
             'backup': url_for('settings.backup_page'),
             'audit': url_for('settings.audit_log'),
             'ocr': url_for('settings.ocr_settings'),
+            'notifications': url_for('settings.notification_prefs'),
+            'performance': url_for('settings.performance'),
         },
     })
 
@@ -147,6 +149,27 @@ def audit_log():
         'base_url': url_for('settings.audit_log'),
         'back_url': url_for('settings.index'),
     })
+
+
+@settings_bp.route('/performance', methods=['GET', 'POST'])
+@central_admin_required
+def performance():
+    """Observability: the most-recent slow requests and slow SQL queries this
+    worker has seen, plus the active thresholds. Backed by the in-process ring
+    buffers in utils.perf_logging (no DB, no shell access to logs needed)."""
+    from utils.perf_logging import (recent_slow_requests, recent_slow_queries,
+                                     clear_perf_buffers)
+    if request.method == 'POST':
+        clear_perf_buffers()
+        flash('Cleared the captured performance samples.', 'success')
+        return redirect(url_for('settings.performance'))
+    return render_template(
+        'settings/performance.html',
+        slow_requests=recent_slow_requests(50),
+        slow_queries=recent_slow_queries(50),
+        req_ms=current_app.config.get('SLOW_REQUEST_MS', 1500),
+        query_ms=current_app.config.get('SLOW_QUERY_MS', 500),
+    )
 
 
 @settings_bp.route('/ocr', methods=['GET', 'POST'])
