@@ -217,3 +217,28 @@ class NotificationPreference(db.Model):
 
     def __repr__(self):
         return f'<NotificationPreference u{self.user_id} {self.channel}={self.enabled}>'
+
+
+class PushSubscription(db.Model):
+    """A browser Web Push subscription for a user (one row per device/browser).
+
+    Stores the endpoint plus the p256dh/auth keys the push service needs. Sending
+    is gated by VAPID configuration (utils.webpush); rows are pruned when the push
+    service reports the endpoint gone (404/410)."""
+    __tablename__ = 'push_subscriptions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    endpoint = db.Column(db.String(500), nullable=False, unique=True)
+    p256dh = db.Column(db.String(255), nullable=False)
+    auth = db.Column(db.String(255), nullable=False)
+    user_agent = db.Column(db.String(255))
+    created_at = db.Column(db.DateTime, default=local_now)
+
+    def as_subscription_info(self):
+        """The dict shape pywebpush expects."""
+        return {'endpoint': self.endpoint,
+                'keys': {'p256dh': self.p256dh, 'auth': self.auth}}
+
+    def __repr__(self):
+        return f'<PushSubscription u{self.user_id} {self.endpoint[:30]}…>'

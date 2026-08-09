@@ -9,6 +9,16 @@ import os
 CHANNELS = ('inapp', 'email', 'sms', 'push')
 CHANNEL_LABELS = {'inapp': 'In-app (bell)', 'email': 'Email', 'sms': 'SMS', 'push': 'Web push'}
 
+# Per-channel default when the user has no explicit row. The in-app bell is
+# opt-out (on unless turned off) — it's free and non-intrusive. Email, SMS and
+# push are opt-in (off unless turned on): SMS costs money and email/push are
+# easy to over-send, so a user must ask for them.
+CHANNEL_DEFAULTS = {'inapp': True, 'email': False, 'sms': False, 'push': False}
+
+
+def default_for(channel):
+    return CHANNEL_DEFAULTS.get(channel, True)
+
 
 def flag_enabled(app=None):
     try:
@@ -30,8 +40,12 @@ def _ensure_table():
         db.session.rollback()
 
 
-def wants(user_id, channel, default=True):
-    """Whether a user wants notifications on a channel (default when no row)."""
+def wants(user_id, channel, default=None):
+    """Whether a user wants notifications on a channel. With no stored row the
+    per-channel default applies (in-app opt-out, email/SMS/push opt-in), unless
+    an explicit ``default`` is passed."""
+    if default is None:
+        default = default_for(channel)
     if not user_id:
         return default
     from models import db, NotificationPreference

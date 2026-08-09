@@ -215,6 +215,37 @@ def api_notifications_read_all():
     return jsonify({'cleared': _n.mark_all_read(uid, role)})
 
 
+@main_bp.route('/api/push/public-key')
+@login_required
+def api_push_public_key():
+    """The VAPID application server key for the browser, plus whether web push is
+    enabled at all (so the client can skip the whole flow when it isn't)."""
+    from utils import webpush
+    return jsonify({'enabled': webpush.is_configured(), 'key': webpush.public_key()})
+
+
+@main_bp.route('/api/push/subscribe', methods=['POST'])
+@login_required
+def api_push_subscribe():
+    """Store the browser's push subscription for the current user."""
+    from utils import webpush, notify as _n
+    uid, _role = _n.current_recipient()
+    if not uid:                          # legacy password admin has no user row
+        return jsonify({'ok': False, 'error': 'no-user'}), 400
+    sub = request.get_json(silent=True) or {}
+    row = webpush.save_subscription(uid, sub, request.headers.get('User-Agent'))
+    return jsonify({'ok': bool(row)})
+
+
+@main_bp.route('/api/push/unsubscribe', methods=['POST'])
+@login_required
+def api_push_unsubscribe():
+    """Forget a push subscription (called when the browser unsubscribes)."""
+    from utils import webpush
+    data = request.get_json(silent=True) or {}
+    return jsonify({'ok': webpush.delete_subscription(data.get('endpoint'))})
+
+
 @main_bp.route('/error-log')
 @central_admin_required
 def error_log():

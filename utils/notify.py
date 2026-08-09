@@ -37,6 +37,50 @@ def notify(title, body='', url=None, *, user_id=None, role=None, category='info'
         return None
 
 
+def deliver_to_user(user_id, title, body='', url=None, *, category='info',
+                    email_subject=None):
+    """Fan a notification out to a user across the channels they've enabled.
+
+    In-app (the bell) is always attempted and honours the user's opt-out. Email
+    and SMS are opt-in and only fire when the NOTIFY_PREFS flag is on, the user
+    enabled that channel, the channel is configured, and the user has an
+    address/number. Best-effort — a failure on one channel never blocks another,
+    and nothing raises. Returns a dict of which channels were used.
+    """
+    used = {'inapp': False, 'email': False, 'sms': False, 'push': False}
+    n = notify(title, body, url, user_id=user_id, category=category)
+    used['inapp'] = n is not None
+    if not user_id:
+        return used
+    try:
+        from utils.notify_prefs import flag_enabled, wants
+        if not flag_enabled():
+            return used
+        from models import User
+        user = db.session.get(User, user_id)
+        if user is None:
+            return used
+        if wants(user_id, 'email') and getattr(user, 'email', None):
+            from utils import mailer
+            if mailer.is_configured():
+                mailer.send_email_async(user.email, email_subject or title,
+                                        body or title)
+                used['email'] = True
+        if wants(user_id, 'sms') and getattr(user, 'phone', None):
+            from utils import sms_gateway
+            if sms_gateway.is_configured():
+                text = f'{title}\n{body}'.strip() if body else title
+                ok, _info = sms_gateway.send_sms(user.phone, text)
+                used['sms'] = bool(ok)
+        if wants(user_id, 'push'):
+            from utils import webpush
+            if webpush.is_configured():
+                used['push'] = webpush.send_to_user(user_id, title, body, url) > 0
+    except Exception:
+        db.session.rollback()
+    return used
+
+
 def notify_admins(title, body='', url=None, category='info'):
     """Broadcast to every admin (one row, matched by role at read time)."""
     return notify(title, body, url, role='admin', category=category)

@@ -61,6 +61,10 @@ BLUEPRINT_MODULE = {
 _ALWAYS_ALLOWED_ENDPOINTS = {
     'main.dashboard', 'main.global_search', 'main.set_view_branch', 'main.set_theme',
     'main.dashboard_customize', 'auth.logout', 'auth.change_password',
+    # Per-user self-service: the header bell and this device's web-push
+    # subscription belong to the signed-in user, not to any module.
+    'main.api_notifications', 'main.api_notification_read', 'main.api_notifications_read_all',
+    'main.api_push_public_key', 'main.api_push_subscribe', 'main.api_push_unsubscribe',
     # Self-service staff attendance: any staff member may check themselves in,
     # even without HR-module access (they only touch their own record).
     'hr.checkin', 'hr.checkin_self',

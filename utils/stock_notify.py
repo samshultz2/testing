@@ -48,11 +48,15 @@ def _sales_user_ids():
 
 
 def _fan_out(title, body, url, category):
-    """Alert admins (role broadcast) and each sales-capable user individually."""
-    from utils.notify import notify, notify_admins
+    """Alert admins (role broadcast) and each sales-capable user individually.
+
+    Storekeepers are reached with :func:`deliver_to_user`, so a user who has
+    opted into email/SMS (and the NOTIFY_PREFS flag is on) is pinged on those
+    channels too — otherwise it's the in-app bell as before."""
+    from utils.notify import notify_admins, deliver_to_user
     notify_admins(title, body, url=url, category=category)
     for uid in _sales_user_ids():
-        notify(title, body, url=url, user_id=uid, category=category)
+        deliver_to_user(uid, title, body, url=url, category=category)
 
 
 def run_stock_alerts(app, *, force=False, dry_run=False):
