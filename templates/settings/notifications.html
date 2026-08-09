@@ -30,7 +30,7 @@
                 <input type="checkbox" name="ch_{{ ch }}" {% if prefs.get(ch) %}checked{% endif %}>
                 <span>{{ labels.get(ch, ch) }}</span>
                 {% if ch == 'inapp' %}<span class="text-muted text-sm">(on by default)</span>
-                {% elif ch == 'push' %}<span class="text-muted text-sm">(off by default; needs web push / VAPID configured)</span>
+                {% elif ch == 'push' %}<span class="text-muted text-sm">(on by default once enabled on a device)</span>
                 {% else %}<span class="text-muted text-sm">(off by default; needs the {{ ch|upper }} gateway configured)</span>{% endif %}
             </label>
             {% endfor %}

@@ -90,6 +90,49 @@ def delete_subscription(endpoint):
     return False
 
 
+def _send_batch(sub_infos, payload, private, claims_sub, timeout=10):
+    """Blocking send to pre-resolved subscription dicts (no DB / app needed) —
+    run in a background thread by push_to_users."""
+    try:
+        from pywebpush import webpush, WebPushException  # noqa: F401
+    except Exception:
+        return
+    for info in sub_infos:
+        try:
+            webpush(subscription_info=info, data=payload, vapid_private_key=private,
+                    vapid_claims={'sub': claims_sub}, timeout=timeout)
+        except Exception:
+            # Dead endpoints are pruned by the synchronous send_to_user path; a
+            # transient failure here must never surface into the request.
+            pass
+
+
+def push_to_users(user_ids, title, body='', url=None, app=None):
+    """Fan web push out to every subscription of the given users, in a background
+    thread so the request never blocks on the push service. No-op when push is
+    unconfigured or nobody is subscribed. Best-effort — never raises."""
+    import threading
+    if not user_ids or not is_configured(app):
+        return 0
+    from models import db, PushSubscription
+    try:
+        _ensure_table()
+        rows = PushSubscription.query.filter(
+            PushSubscription.user_id.in_(list({u for u in user_ids if u}))).all()
+        infos = [r.as_subscription_info() for r in rows]
+    except Exception:
+        db.session.rollback()
+        return 0
+    if not infos:
+        return 0
+    payload = json.dumps({'title': title, 'body': body or '', 'url': url or '/'})
+    private = _cfg(app, 'WEBPUSH_VAPID_PRIVATE_KEY')
+    claims_sub = f"mailto:{_cfg(app, 'WEBPUSH_VAPID_CLAIMS_EMAIL')}"
+    threading.Thread(target=_send_batch, args=(infos, payload, private, claims_sub),
+                     daemon=True, name='webpush-send').start()
+    return len(infos)
+
+
 def send_to_user(user_id, title, body='', url=None, app=None):
     """Push a notification to every subscription a user has. No-op (returns 0)
     when web push is unconfigured or ``pywebpush`` isn't installed. Prunes

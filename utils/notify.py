@@ -31,25 +31,74 @@ def notify(title, body='', url=None, *, user_id=None, role=None, category='info'
                          user_id=user_id, role=role, category=category)
         db.session.add(n)
         db.session.commit()
-        return n
     except Exception:
         db.session.rollback()
         return None
+    # Also fire a web push for the addressed user(s) so every bell notification
+    # reaches the browser too. Best-effort, off the request thread, and a no-op
+    # unless web push is configured — so it costs nothing when push is off.
+    try:
+        _push_fanout(title, body, url, user_id, role)
+    except Exception:
+        pass
+    return n
+
+
+def _push_targets(user_id, role):
+    """The user ids a notification should web-push to: the addressed user, or
+    every active user carrying the broadcast role."""
+    if user_id:
+        return [user_id]
+    if role:
+        try:
+            from models import User
+            return [u.id for u in User.query.filter_by(role=role, is_active=True).all()]
+        except Exception:
+            from models import db
+            db.session.rollback()
+    return []
+
+
+def _push_allowed(user_id):
+    """Push is on by default; an explicit opt-out is honoured only when the
+    NOTIFY_PREFS flag is on (matching how the other channels are gated)."""
+    try:
+        from utils.notify_prefs import flag_enabled, wants
+        if flag_enabled():
+            return wants(user_id, 'push', default=True)
+    except Exception:
+        pass
+    return True
+
+
+def _push_fanout(title, body, url, user_id, role):
+    from utils import webpush
+    if not webpush.is_configured():
+        return
+    targets = [uid for uid in _push_targets(user_id, role) if _push_allowed(uid)]
+    if targets:
+        webpush.push_to_users(targets, title or '', body or '', url)
 
 
 def deliver_to_user(user_id, title, body='', url=None, *, category='info',
                     email_subject=None):
     """Fan a notification out to a user across the channels they've enabled.
 
-    In-app (the bell) is always attempted and honours the user's opt-out. Email
-    and SMS are opt-in and only fire when the NOTIFY_PREFS flag is on, the user
-    enabled that channel, the channel is configured, and the user has an
-    address/number. Best-effort — a failure on one channel never blocks another,
-    and nothing raises. Returns a dict of which channels were used.
+    In-app (the bell) is always attempted and honours the user's opt-out, and web
+    push rides along with it (handled inside notify()). Email and SMS are opt-in
+    and only fire when the NOTIFY_PREFS flag is on, the user enabled that channel,
+    the channel is configured, and the user has an address/number. Best-effort — a
+    failure on one channel never blocks another, and nothing raises. Returns a
+    dict of which channels were used.
     """
     used = {'inapp': False, 'email': False, 'sms': False, 'push': False}
     n = notify(title, body, url, user_id=user_id, category=category)
     used['inapp'] = n is not None
+    try:                               # push is fired by notify() alongside the bell
+        from utils import webpush
+        used['push'] = bool(n is not None and webpush.is_configured())
+    except Exception:
+        pass
     if not user_id:
         return used
     try:
@@ -72,10 +121,6 @@ def deliver_to_user(user_id, title, body='', url=None, *, category='info',
                 text = f'{title}\n{body}'.strip() if body else title
                 ok, _info = sms_gateway.send_sms(user.phone, text)
                 used['sms'] = bool(ok)
-        if wants(user_id, 'push'):
-            from utils import webpush
-            if webpush.is_configured():
-                used['push'] = webpush.send_to_user(user_id, title, body, url) > 0
     except Exception:
         db.session.rollback()
     return used
