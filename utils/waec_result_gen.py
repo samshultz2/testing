@@ -3140,26 +3140,28 @@ def _draw_terrain(c, ctx, show, cfg, verify_url):
     elif show.get('school_motto') and ctx['school'].get('motto'):
         c.setFillColor(MUTE); c.setFont('Helvetica-Oblique', 8.5); c.drawString(nx, ny - 1, ctx['school']['motto'])
 
-    # soft-cream identity field — sets the name/photo/motif zone apart from the
-    # sand page (drawn before the label + name + portrait so they sit on top)
-    id_top, id_bot = H - 178, H - 392
+    # soft-cream identity field — the name/photo/motif zone sits on a lighter
+    # surface than the sand page. Its top edge meets the header (the plum block
+    # bottom) so the page reads as clean horizontal bands, exactly as the
+    # reference. Drawn before the label + name + portrait so they sit on top.
+    id_top, id_bot = H - 160, H - 396
     c.setFillColor(CREAM); c.rect(0, id_bot, W, id_top - id_bot, fill=1, stroke=0)
 
     # ---- 2 · examination label --------------------------------------------
-    c.setStrokeColor(SAGE); c.setLineWidth(0.8); c.line(FM, H - 178, 340, H - 178)
+    c.setStrokeColor(SAGE); c.setLineWidth(0.8); c.line(FM, id_top, 340, id_top)
     if show.get('exam_name'):
-        track('WEST AFRICAN SENIOR SCHOOL', 'Helvetica-Bold', 9, FM, H - 198, 1.2, ESP)
-        track('CERTIFICATE EXAMINATION', 'Helvetica-Bold', 9, FM, H - 210, 1.2, ESP)
-        c.setFillColor(ESP); c.setFont('Helvetica-Bold', 15); c.drawString(FM, H - 232, 'WASSCE')
+        track('WEST AFRICAN SENIOR SCHOOL', 'Helvetica-Bold', 9, FM, H - 188, 1.2, ESP)
+        track('CERTIFICATE EXAMINATION', 'Helvetica-Bold', 9, FM, H - 200, 1.2, ESP)
+        c.setFillColor(ESP); c.setFont('Helvetica-Bold', 15); c.drawString(FM, H - 222, 'WASSCE')
 
     # ---- 3 · student identity + cropped portrait --------------------------
     photo_on = bool(show.get('student_photo') and ctx['student'].get('photo_path'))
-    pw, ph = 96, 120; px = R - pw; py = H - 246 - ph      # top at H-246 ≈ 596
+    pw, ph = 96, 120; px = R - pw; py = H - 238 - ph      # top at H-238 ≈ 604
     # faint architectural year motif behind the name
     if show.get('exam_year') and len(yr) >= 2:
-        c.setFillColor(GHOST); c.setFont('Times-Bold', 205); c.drawString(212, H - 358, yr[-2:])
+        c.setFillColor(GHOST); c.setFont('Times-Bold', 205); c.drawString(212, H - 364, yr[-2:])
     name_w = (px - 26 - FM) if photo_on else (R - FM)
-    sy = H - 272
+    sy = H - 264
     if show.get('student_name'):
         words = ctx['student']['name'].upper().split() or ['']
         if len(words) > 4:                       # fold overflow words into the last line
