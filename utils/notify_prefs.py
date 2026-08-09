@@ -20,6 +20,40 @@ def default_for(channel):
     return CHANNEL_DEFAULTS.get(channel, True)
 
 
+# Push topics: raw notification categories are bucketed into this short list so a
+# user gets a meaningful set of per-category push toggles rather than one per
+# freeform category string. Each topic is opt-out (pushes unless turned off).
+PUSH_TOPICS = ('attendance', 'student', 'finance', 'admissions', 'alerts', 'general')
+PUSH_TOPIC_LABELS = {
+    'attendance': 'Attendance', 'student': 'Student records',
+    'finance': 'Finance & fees', 'admissions': 'Admissions',
+    'alerts': 'Alerts & warnings', 'general': 'General',
+}
+_CATEGORY_TO_TOPIC = {
+    'attendance': 'attendance', 'student': 'student', 'finance': 'finance',
+    'admissions': 'admissions', 'warning': 'alerts', 'error': 'alerts',
+}
+
+
+def topic_for_category(category):
+    """Map a raw notification category onto a push topic (default 'general')."""
+    return _CATEGORY_TO_TOPIC.get((category or '').strip().lower(), 'general')
+
+
+def push_topic_enabled(user_id, topic):
+    """Whether a user wants push for a topic (opt-out — on unless turned off)."""
+    return wants(user_id, 'push:' + topic, default=True)
+
+
+def set_push_topic(user_id, topic, enabled):
+    if topic in PUSH_TOPICS:
+        set_pref(user_id, 'push:' + topic, enabled)
+
+
+def get_push_topics(user_id):
+    return {t: wants(user_id, 'push:' + t, default=True) for t in PUSH_TOPICS}
+
+
 def flag_enabled(app=None):
     try:
         from flask import current_app
@@ -59,7 +93,7 @@ def wants(user_id, channel, default=None):
 
 
 def set_pref(user_id, channel, enabled):
-    if not user_id or channel not in CHANNELS:
+    if not user_id or (channel not in CHANNELS and not channel.startswith('push:')):
         return
     from models import db, NotificationPreference
     try:

@@ -34,6 +34,26 @@
                 {% else %}<span class="text-muted text-sm">(off by default; needs the {{ ch|upper }} gateway configured)</span>{% endif %}
             </label>
             {% endfor %}
+
+            {% if push_topics %}
+            <div class="mt-3" style="padding-top:.75rem;">
+                <div class="text-sm" style="font-weight:600;">Web push categories</div>
+                <p class="text-muted text-sm" style="margin:.15rem 0 .5rem;">
+                    Choose which kinds of alerts push to your devices. Unchecked categories still show in the bell.
+                </p>
+                {% for t in push_topics %}
+                <label class="d-flex align-center gap-2" style="padding:.35rem 0 .35rem 1rem;">
+                    <input type="checkbox" name="pushcat_{{ t }}" {% if push_topic_prefs.get(t) %}checked{% endif %}
+                           {% if not prefs.get('push') %}disabled{% endif %}>
+                    <span>{{ push_topic_labels.get(t, t) }}</span>
+                </label>
+                {% endfor %}
+                {% if not prefs.get('push') %}
+                <p class="text-muted text-sm" style="padding-left:1rem;">Turn on <strong>Web push</strong> above to use category filters.</p>
+                {% endif %}
+            </div>
+            {% endif %}
+
             <div class="mt-3"><button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save preferences</button></div>
         </form>
         <div id="push-setup" class="mt-3" style="display:none;border-top:1px solid var(--border-light);padding-top:1rem;">
