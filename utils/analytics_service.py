@@ -377,7 +377,9 @@ class AcademicAnalytics:
             total = stats['total']
             a1_count = stats['grades'].get('A1', 0)
             pass_count_subj = sum(stats['grades'].get(g, 0) for g in AcademicAnalytics.PASS_GRADES)
-            fail_count_subj = sum(stats['grades'].get(g, 0) for g in ['E8', 'F9'])
+            # WAEC: only F9 is a fail (D7 and E8 are Pass grades), matching the
+            # statement-of-result grade key used elsewhere in the system.
+            fail_count_subj = stats['grades'].get('F9', 0)
             
             subject_analysis.append({
                 'subject': subject,
@@ -421,7 +423,9 @@ class AcademicAnalytics:
             'subject_analysis': subject_analysis,
             'top_subjects_by_a1': subjects_by_a1_rate[:5],
             'bottom_subjects_by_pass': subjects_by_pass_rate[-5:],
-            'most_failed_subjects': subjects_by_fail_rate[:5],
+            # only subjects that actually have failures — never pad the list with
+            # 0%-fail subjects
+            'most_failed_subjects': [s for s in subjects_by_fail_rate if s['fail_count'] > 0][:5],
             'top_performers': [{'student_id': s[0], **s[1]} for s in top_by_a1]
         }
     

@@ -371,6 +371,8 @@ a.exec:hover .go{opacity:1}
                 <tbody>
                 {% for s in waec_stats.most_failed_subjects %}
                 <tr><td>{{ s.subject }}</td><td class="num" style="color:#dc3545">{{ s.fail_rate }}%</td><td class="num">{{ s.total_entries }}</td></tr>
+                {% else %}
+                <tr><td colspan="3" class="text-muted" style="padding:16px;">No failures (F9) recorded for {{ selected_year }}.</td></tr>
                 {% endfor %}
                 </tbody>
             </table>
