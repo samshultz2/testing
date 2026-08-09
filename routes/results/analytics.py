@@ -481,6 +481,31 @@ def analytics_by_class():
                            data=data, years=years, selected_year=year)
 
 
+@results_bp.route('/analytics/trends')
+@login_required
+def analytics_trends():
+    """Cross-year external-exam trends: how the WAEC 5-credits-incl-core / credit
+    / F9 rates and the JAMB average & ≥200 rate move across every year on record.
+    Branch-scoped to the branch being viewed."""
+    from utils.branch_scope import viewing_branch_id
+    bid = viewing_branch_id()
+    waec = AcademicAnalytics.get_waec_multiyear_trends(bid)
+    jamb = AcademicAnalytics.get_jamb_multiyear_trends(bid)
+    return render_template('results/analytics_trends.html', waec=waec, jamb=jamb)
+
+
+@results_bp.route('/analytics/watchlist')
+@login_required
+def at_risk_watchlist():
+    """Live at-risk watchlist: SSS3 candidates projected off track for admission
+    (from mock signals), grouped by class arm. Works before the risk engine runs."""
+    from utils.at_risk_live import live_at_risk
+    from utils.branch_scope import viewing_branch_id
+    data = live_at_risk(branch_id=viewing_branch_id())
+    return render_template('results/at_risk_watchlist.html', data=data,
+                           action_plan_url='results.student_action_plan')
+
+
 @results_bp.route('/analytics/by-class/export')
 @login_required
 def analytics_by_class_export():
@@ -918,6 +943,17 @@ def _waec_broadsheet_cached(year, branch_id):
         lambda: AcademicAnalytics.get_waec_broadsheet(year, branch_id))
 
 
+def _broadsheet_etag(bs, year, branch_id, *extra):
+    """A strong ETag derived from the broadsheet's actual grade matrix (every
+    student's cells), so any grade edit changes it while an unchanged re-request
+    is a cheap 304. ``extra`` carries output-shaping args (orientation, columns)."""
+    import json
+    from utils.http_cache import strong_etag
+    fp = json.dumps([[r['student']['id'], r['cells']] for r in bs['rows']],
+                    sort_keys=True, separators=(',', ':'))
+    return strong_etag('waec_bs', year, branch_id, *extra, fp)
+
+
 @results_bp.route('/waec/broadsheet')
 @login_required
 def waec_broadsheet():
@@ -942,16 +978,23 @@ def waec_broadsheet_pdf():
     if not bs or not bs['rows']:
         flash('No WAEC results recorded for that year.', 'warning')
         return redirect(url_for('results.waec_broadsheet', year=year))
+    per = request.args.get('cols', default=0, type=int)
+    orient = request.args.get('orient', 'landscape')
+    # Cheap 304 when the browser already holds this exact broadsheet frame.
+    from utils.http_cache import if_none_match, stamp
+    etag = _broadsheet_etag(bs, year, viewing_branch_id(), 'pdf', per, orient)
+    not_modified = if_none_match(etag)
+    if not_modified is not None:
+        return not_modified
     from utils.waec_broadsheet_pdf import waec_broadsheet_pdf as _mk
     school = dict(school_profile() or {})
     school.setdefault('logo_path', logo_path())
-    per = request.args.get('cols', default=0, type=int)
     buf = _mk(bs, year, school, opts={'title': False},
-              per=(per if per and per > 0 else 0),
-              orient=request.args.get('orient', 'landscape'))
+              per=(per if per and per > 0 else 0), orient=orient)
     name = f'waec_broadsheet_{year}.pdf'
-    return send_file(buf, mimetype='application/pdf',
+    resp = send_file(buf, mimetype='application/pdf',
                      as_attachment=request.args.get('download') == '1', download_name=name)
+    return stamp(resp, etag)
 
 
 @results_bp.route('/waec/broadsheet/export')
@@ -967,6 +1010,11 @@ def waec_broadsheet_export():
     if not bs or not bs['rows']:
         flash('No WAEC results recorded for that year.', 'warning')
         return redirect(url_for('results.waec_broadsheet', year=year))
+    from utils.http_cache import if_none_match
+    etag = _broadsheet_etag(bs, year, viewing_branch_id(), 'xlsx')
+    not_modified = if_none_match(etag)
+    if not_modified is not None:
+        return not_modified
     subjects = bs['subjects']
 
     wb = Workbook()
@@ -988,4 +1036,5 @@ def waec_broadsheet_export():
     _summary_row('No. failed', lambda d: d['failed'])
     _summary_row('Average grade', lambda d: d['avg_grade'])
 
-    return xlsx_response(wb, f'waec_broadsheet_{year}.xlsx')
+    from utils.http_cache import stamp
+    return stamp(xlsx_response(wb, f'waec_broadsheet_{year}.xlsx'), etag)

@@ -78,6 +78,48 @@ def test_broadsheet_page_pdf_and_excel(app):
     assert 'spreadsheet' in x.headers.get('Content-Type', '')
 
 
+def test_broadsheet_pdf_and_excel_support_etag_304(app):
+    """The broadsheet PDF and Excel export send a strong ETag and honour
+    If-None-Match with a 304 (roadmap #9), so an unchanged re-request skips
+    regeneration."""
+    _seed(app)
+    c = _admin(app)
+    for path in (f'/results/waec/broadsheet.pdf?year={_YR}',
+                 f'/results/waec/broadsheet/export?year={_YR}'):
+        first = c.get(path)
+        assert first.status_code == 200
+        etag = first.headers.get('ETag')
+        assert etag and 'must-revalidate' in first.headers.get('Cache-Control', '')
+        again = c.get(path, headers={'If-None-Match': etag})
+        assert again.status_code == 304
+        assert again.headers.get('ETag') == etag
+
+
+def test_warm_prewarms_broadsheet_cache(app):
+    """The analytics cache-warm step pre-generates the broadsheet (roadmap #5), so
+    the next lookup is served from AnalyticsCache without recomputing."""
+    from routes.results.analytics import _waec_broadsheet_cached
+    from utils.analytics_service import AcademicAnalytics
+    from utils import exam_refresh
+    _seed(app)
+    with app.test_request_context():
+        from flask import session
+        session['role'] = 'super_admin'
+        session['scope'] = 'central'
+        exam_refresh._warm_hub_caches(_YR, [None])
+        orig = AcademicAnalytics.get_waec_broadsheet
+
+        def _boom(*a, **k):
+            raise AssertionError('broadsheet recomputed — warm step did not cache it')
+
+        AcademicAnalytics.get_waec_broadsheet = staticmethod(_boom)
+        try:
+            bs = _waec_broadsheet_cached(_YR, None)
+        finally:
+            AcademicAnalytics.get_waec_broadsheet = orig
+        assert bs and bs['school']['students'] >= 2
+
+
 def test_broadsheet_is_cached_and_json_safe(app):
     from routes.results.analytics import _waec_broadsheet_cached
     from utils.analytics_service import AcademicAnalytics
