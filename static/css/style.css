@@ -3902,6 +3902,16 @@ body .widget:hover { box-shadow: var(--shadow-sm); }
 body .widget .wh { border-bottom: 1px solid var(--border-light); }
 body .widget .wh h3 i { color: var(--primary); }
 
+/* Safety net for the .kpi + .kpi-value/.kpi-label card pattern. The refresh
+   above rounds every .kpi and clips its overflow, so a card whose host template
+   set no padding clipped its value/label against the corner. Provide a default
+   surface, padding and value/label type. Kept at (0,1,0) specificity — below
+   `body .kpi` (which sets only shape) and below any template's own .kpi rule —
+   so it never overrides a screen that already styles its cards. */
+.kpi { padding: 0.85rem 1rem; background: var(--bg-card); border: 1px solid var(--border-color); }
+.kpi-value { font-size: 1.5rem; font-weight: 700; line-height: 1.1; color: var(--text-primary); }
+.kpi-label { font-size: 0.72rem; color: var(--text-muted); margin-top: 0.2rem; text-transform: uppercase; letter-spacing: 0.03em; }
+
 /* Dark mode: swap the light-tuned drop shadows for the deeper dark ramp so the
    panels still separate from the near-black canvas. */
 [data-theme="dark"] body .kpi { box-shadow: var(--shadow-md); }
