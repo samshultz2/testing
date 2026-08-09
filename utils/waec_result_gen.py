@@ -2586,12 +2586,12 @@ def _draw_terrain(c, ctx, show, cfg, verify_url):
             lw = lh = 0
     nx = FM + (lw + 14 if lw else 0); ny = H - 58
     if show.get('school_name') and ctx['school'].get('name'):
-        for ln in _wrap(c, ctx['school']['name'].upper(), 'Helvetica-Bold', 17, 240)[:2]:
-            c.setFillColor(PLUM); c.setFont('Helvetica-Bold', 17); c.drawString(nx, ny, ln); ny -= 18
-    if show.get('branch') and ctx.get('branch'):
-        track(ctx['branch'].upper(), 'Helvetica', 8, nx, ny - 1, 1.0, MUTE); ny -= 11
-    elif show.get('school_motto') and ctx['school'].get('motto'):
-        c.setFillColor(MUTE); c.setFont('Helvetica-Oblique', 8.5); c.drawString(nx, ny - 1, ctx['school']['motto'])
+        for ln in _wrap(c, ctx['school']['name'].upper(), 'Helvetica-Bold', 20, 236)[:2]:
+            c.setFillColor(PLUM); c.setFont('Helvetica-Bold', 20); c.drawString(nx, ny, ln); ny -= 21
+    # campus line: the student's branch when the school has branches, otherwise
+    # the default "MAIN CAMPUS" label
+    campus = (ctx.get('branch') if (show.get('branch') and ctx.get('branch')) else None) or 'MAIN CAMPUS'
+    track(campus.upper(), 'Helvetica', 10, nx, ny - 1, 1.0, MUTE)
 
     # sand identity field — the name/photo/motif zone sits on the warmer sand
     # tone while the rest of the page is the lighter cream. Its top edge meets
