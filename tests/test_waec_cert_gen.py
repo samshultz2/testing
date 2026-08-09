@@ -156,6 +156,29 @@ def test_meridian_template_registered_and_renders(app):
         assert W.render_pdf(ctx, 'meridian', minimal).getvalue()[:4] == b'%PDF'
 
 
+def test_aurelis_template_registered_and_renders(app):
+    assert 'aurelis' in W.TEMPLATES and 'aurelis' in W._CANVAS_DRAW
+    assert W.TEMPLATES['aurelis']['name'] == 'Aurelis — 2026'
+    assert W.TEMPLATES['aurelis']['landscape'] is False
+    assert 'aurelis' in W.PRESETS
+    sid = _seed(app)
+    with app.app_context():
+        ctx = W.build_context(db.session.get(Student, sid), _YR)
+        show = W.preset_show(ctx, 'aurelis')
+        assert show['subjects'] and show['grades'] and show['total_subjects']
+        assert ctx['stats']['a1'] == 5 and ctx['stats']['credits'] == 9
+        pdf = W.render_pdf(ctx, 'aurelis', show, verify_url='https://example.test/verify/ABC')
+        assert pdf.getvalue()[:4] == b'%PDF'
+        import fitz
+        doc = fitz.open(stream=pdf.getvalue(), filetype='pdf')
+        assert round(doc[0].rect.width) == 595 and round(doc[0].rect.height) == 842
+        # rebalances with the photo / summary / seal removed
+        minimal = W.resolve_show(ctx, {k: (k in {'school_name', 'student_name',
+                                 'exam_name', 'exam_year', 'subjects', 'grades'})
+                                 for k in W._ALL_COMPONENTS})
+        assert W.render_pdf(ctx, 'aurelis', minimal).getvalue()[:4] == b'%PDF'
+
+
 def test_render_handles_many_subjects(app):
     grades = {f'Subject {i}': 'C4' for i in range(1, 14)}   # 13 subjects -> compact table
     sid = _seed(app, grades)
