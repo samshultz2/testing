@@ -1583,8 +1583,8 @@ def _draw_profile(c, ctx, show, cfg, verify_url):
     pw, ph = 116, 132
     ph_x, ph_y = rcx - pw / 2.0, 440          # photo sits high in the rail
     c.setStrokeColor(colors.HexColor('#c3bca9')); c.setLineWidth(0.5)
-    for i in range(11):
-        xx = FM + 10 + i * 6
+    for i in range(12):
+        xx = rcx - 33 + i * 6                 # centred in the rail
         c.line(xx, FM + 46, xx, H - 46)
     c.setStrokeColor(GREEN); c.setLineWidth(1.6); c.line(RAIL_R, FM + 30, RAIL_R, H - 30)
     if logo:
@@ -1595,6 +1595,7 @@ def _draw_profile(c, ctx, show, cfg, verify_url):
             pass
     if show.get('exam_name') or show.get('exam_year'):
         vy = 600
+        c.setFillColor(IVORY); c.rect(rcx - 20, vy - 8, 60, 122, fill=1, stroke=0)   # break rails behind the label
         c.saveState(); c.translate(rcx - 10, vy); c.rotate(90)
         c.setFillColor(INK); c.setFont('Times-Bold', 23); c.drawString(0, 0, 'WASSCE'); c.restoreState()
         if show.get('exam_year'):
@@ -1652,9 +1653,9 @@ def _draw_profile(c, ctx, show, cfg, verify_url):
     if show.get('credits'):        stats.append((st['credits'], 'CREDITS'))
     if show.get('average'):        stats.append((st['average'], 'AVERAGE'))
     if show.get('classification'): stats.append((st['classification'], 'CLASS'))
-    off_top = foot_rule_y + 156
-    sum_num_y = (off_top + 30) if stats else off_top
-    results_bottom = (sum_num_y + 34) if stats else (off_top + 16)
+    off_top = foot_rule_y + 168
+    sum_num_y = (off_top + 40) if stats else off_top
+    results_bottom = (sum_num_y + 40) if stats else (off_top + 16)
 
     # ---- MAIN · academic record (numbered list) ---------------------------
     results = ctx['results']
@@ -1685,53 +1686,58 @@ def _draw_profile(c, ctx, show, cfg, verify_url):
             c.setStrokeColor(HAIR); c.setLineWidth(0.7); c.line(mx0, yy - rh, mx1, yy - rh)
             yy -= rh
 
-    # ---- MAIN · minimalist summary ----------------------------------------
+    # ---- MAIN · minimalist summary (evenly justified: left · centre · right) --
     if stats:
-        colw = (mx1 - mx0) / len(stats)
+        ns = len(stats)
         for i, (v, l) in enumerate(stats):
-            x = mx0 + colw * i
-            if i == len(stats) - 1:
-                c.setFillColor(INK); c.setFont('Times-Bold', 30); c.drawRightString(mx1, sum_num_y, str(v))
-                c.setFillColor(MUTE); c.setFont('Helvetica-Bold', 8.5); c.drawRightString(mx1, sum_num_y - 16, l)
+            if i == 0:
+                x, draw = mx0, c.drawString
+            elif i == ns - 1:
+                x, draw = mx1, c.drawRightString
             else:
-                c.setFillColor(INK); c.setFont('Times-Bold', 30); c.drawString(x, sum_num_y, str(v))
-                c.setFillColor(MUTE); c.setFont('Helvetica-Bold', 8.5); c.drawString(x, sum_num_y - 16, l)
+                x, draw = mx0 + (mx1 - mx0) * i / (ns - 1), c.drawCentredString
+            txt = f'{v:02d}' if isinstance(v, int) else str(v)
+            c.setFillColor(INK); c.setFont('Times-Bold', 38); draw(x, sum_num_y, txt)
+            c.setFillColor(MUTE); c.setFont('Helvetica-Bold', 10.5); draw(x, sum_num_y - 19, l)
 
     # ---- MAIN · official authentication -----------------------------------
-    oy = off_top - 8
+    #  A single balanced row: signature (left) · seal (centre) · QR + code (right),
+    #  their tops aligned so they read as one band, as in the reference.
+    oy = off_top - 6
     if show.get('principal_signature') or show.get('principal_name'):
-        line_y = oy - 34
-        c.setFillColor(MUTE); c.setFont('Helvetica-Bold', 8); c.drawString(mx0, oy, 'PRINCIPAL SIGNATURE')
+        line_y = oy - 44
+        c.setFillColor(MUTE); c.setFont('Helvetica-Bold', 8.5); c.drawString(mx0, oy, 'PRINCIPAL SIGNATURE')
         sig = ctx['official'].get('signature_path') if show.get('principal_signature') else None
         if sig:
             try:
-                c.drawImage(sig, mx0, line_y + 3, 110, 26, preserveAspectRatio=True, anchor='sw', mask='auto')
+                c.drawImage(sig, mx0, line_y + 4, 120, 30, preserveAspectRatio=True, anchor='sw', mask='auto')
             except Exception:
                 pass
-        c.setStrokeColor(INK); c.setLineWidth(0.8); c.line(mx0, line_y, mx0 + 150, line_y)
+        c.setStrokeColor(INK); c.setLineWidth(0.9); c.line(mx0, line_y, mx0 + 140, line_y)
         pname = ctx['official'].get('principal_name') if show.get('principal_name') else None
         if pname:
-            c.setFillColor(INK); c.setFont('Times-Bold', 11); c.drawString(mx0, line_y - 15, pname)
-        c.setFillColor(MUTE); c.setFont('Helvetica', 8); c.drawString(mx0, line_y - 26, 'Principal Name')
+            c.setFillColor(INK); c.setFont('Times-Bold', 12.5); c.drawString(mx0, line_y - 17, pname)
+        c.setFillColor(MUTE); c.setFont('Helvetica', 8.5); c.drawString(mx0, line_y - 29, 'Principal Name')
         if show.get('date_issued'):
-            c.setFillColor(MUTE); c.setFont('Helvetica-Bold', 7.5)
-            c.drawString(mx0, line_y - 42, 'DATE ISSUED: ' + _issue_date().strftime('%B %Y').upper())
+            c.setFillColor(MUTE); c.setFont('Helvetica-Bold', 8)
+            c.drawString(mx0, line_y - 46, 'DATE ISSUED: ' + _issue_date().strftime('%B %Y').upper())
     if show.get('school_stamp'):
-        _seal(c, (mx0 + mx1) / 2.0 + 6, oy - 42, 34, ctx['school'].get('name'))
+        _seal(c, (mx0 + mx1) / 2.0, oy - 42, 40, ctx['school'].get('name'))
     if show.get('qr_code') or show.get('verification_code'):
+        qr = 62
         if show.get('qr_code') and verify_url:
             try:
                 import qrcode
                 qb = io.BytesIO(); qrcode.make(verify_url).save(qb, format='PNG'); qb.seek(0)
-                c.drawImage(ImageReader(qb), mx1 - 54, oy - 54, 54, 54, mask='auto')
+                c.drawImage(ImageReader(qb), mx1 - qr, oy - qr + 4, qr, qr, mask='auto')
             except Exception:
                 pass
         if show.get('verification_code') and ctx.get('verify_code'):
-            code = str(ctx['verify_code']); fs = 9.0
+            code = str(ctx['verify_code']); fs = 10.0
             while _sw(code, 'Helvetica-Bold', fs) > (mx1 - mx0) and fs > 6:
                 fs -= 0.5
-            c.setFillColor(INK); c.setFont('Helvetica-Bold', fs); c.drawRightString(mx1, oy - 70, code)
-            c.setFillColor(MUTE); c.setFont('Helvetica', 8); c.drawRightString(mx1, oy - 81, 'Verification Code')
+            c.setFillColor(INK); c.setFont('Helvetica-Bold', fs); c.drawRightString(mx1, oy - qr - 12, code)
+            c.setFillColor(MUTE); c.setFont('Helvetica', 8.5); c.drawRightString(mx1, oy - qr - 24, 'Verification Code')
 
     # ---- FOOTER (spans the full width) ------------------------------------
     c.setStrokeColor(HAIR); c.setLineWidth(0.8); c.line(FM, foot_rule_y, W - FM, foot_rule_y)
