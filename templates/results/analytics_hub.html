@@ -94,6 +94,7 @@ a.exec:hover .go{opacity:1}
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-secondary btn-sm"><i class="fas fa-sync"></i> Recompute</button>
         </form>
+        <a href="{{ url_for('results.tasks') }}" class="btn btn-secondary btn-sm" title="Background task status"><i class="fas fa-list-check"></i> Tasks</a>
         {% if analytics_refreshed_at %}
         <span class="text-muted text-sm" title="Analytics auto-refresh once a day in the background"><i class="fas fa-clock"></i> Refreshed {{ analytics_refreshed_at[:16]|replace('T', ' ') }}</span>
         {% endif %}
