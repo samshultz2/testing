@@ -103,8 +103,9 @@ def test_push_topic_mapping_and_defaults(app):
         assert topics['attendance'] is False and topics['finance'] is True
 
 
-def test_notify_push_respects_category_toggle(app, monkeypatch):
-    """With the flag on, a muted push category is skipped while others still push."""
+def test_notify_push_respects_category_toggle_without_flag(app, monkeypatch):
+    """A muted push category is skipped while others still push — and this applies
+    even with the NOTIFY_PREFS flag OFF (push opt-outs are always honoured)."""
     from utils import notify as notify_mod
     from utils import notify_prefs, webpush
     from models import db, User
@@ -118,14 +119,21 @@ def test_notify_push_respects_category_toggle(app, monkeypatch):
         monkeypatch.setattr(webpush, 'is_configured', lambda app=None: True)
         monkeypatch.setattr(webpush, 'push_to_users',
                             lambda user_ids, title, body='', url=None, app=None: pushed.append((list(user_ids), title)))
-        monkeypatch.setattr(notify_prefs, 'flag_enabled', lambda app=None: True)
+        # Flag OFF (the default) — push preferences must still apply.
+        monkeypatch.setattr(notify_prefs, 'flag_enabled', lambda app=None: False)
 
         notify_prefs.set_push_topic(uid, 'attendance', False)   # mute attendance push
         notify_mod.notify('Register marked', user_id=uid, category='attendance')
-        assert pushed == []                                     # muted → no push
+        assert pushed == []                                     # muted → no push, no flag needed
 
         notify_mod.notify('Fee paid', user_id=uid, category='finance')
         assert pushed and pushed[0][0] == [uid]                 # other category still pushes
+
+        # Master push opt-out is honoured without the flag too.
+        pushed.clear()
+        notify_prefs.set_pref(uid, 'push', False)
+        notify_mod.notify('Anything', user_id=uid, category='general')
+        assert pushed == []
 
 
 def test_notification_prefs_page_loads(app):
