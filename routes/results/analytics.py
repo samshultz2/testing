@@ -854,3 +854,94 @@ def api_top_performers(year):
         'waec_top': waec_stats['top_performers'] if waec_stats else [],
         'jamb_top': jamb_top
     })
+
+
+# =============================================================================
+# WAEC BROADSHEET — the full grade matrix for an exam year (mirrors mock WAEC),
+# viewable, printable (server PDF) and downloadable (PDF / Excel).
+# =============================================================================
+
+# Grade -> CSS badge tone, shared with the template.
+_WAEC_GRADE_CLASS = {
+    'A1': 'a1', 'B2': 'b', 'B3': 'b', 'C4': 'c', 'C5': 'c', 'C6': 'c',
+    'D7': 'd', 'E8': 'e', 'F9': 'f',
+}
+
+
+def _waec_broadsheet_years():
+    years = [y[0] for y in db.session.query(WAECResult.exam_year).distinct()
+             .order_by(WAECResult.exam_year.desc()).all()]
+    return years
+
+
+@results_bp.route('/waec/broadsheet')
+@login_required
+def waec_broadsheet():
+    """On-screen WAEC broadsheet: grade matrix + per-subject and cohort summary."""
+    years = _waec_broadsheet_years()
+    year = resolve_exam_year(request.args.get('year', type=int), years)
+    bs = AcademicAnalytics.get_waec_broadsheet(year, viewing_branch_id()) if year else None
+    return render_template('results/waec_broadsheet.html', bs=bs, selected_year=year,
+                           years=years, grade_classes=_WAEC_GRADE_CLASS)
+
+
+@results_bp.route('/waec/broadsheet.pdf')
+@login_required
+@rate_limited('export', max_requests=40, window_minutes=10)
+def waec_broadsheet_pdf():
+    """Server-side WAEC broadsheet PDF. Previews inline; ?download=1 to save."""
+    from flask import send_file
+    from utils.school import school_profile, logo_path
+    years = _waec_broadsheet_years()
+    year = resolve_exam_year(request.args.get('year', type=int), years)
+    bs = AcademicAnalytics.get_waec_broadsheet(year, viewing_branch_id()) if year else None
+    if not bs or not bs['rows']:
+        flash('No WAEC results recorded for that year.', 'warning')
+        return redirect(url_for('results.waec_broadsheet', year=year))
+    from utils.waec_broadsheet_pdf import waec_broadsheet_pdf as _mk
+    school = dict(school_profile() or {})
+    school.setdefault('logo_path', logo_path())
+    per = request.args.get('cols', default=0, type=int)
+    buf = _mk(bs, year, school, opts={'title': False},
+              per=(per if per and per > 0 else 0),
+              orient=request.args.get('orient', 'landscape'))
+    name = f'waec_broadsheet_{year}.pdf'
+    return send_file(buf, mimetype='application/pdf',
+                     as_attachment=request.args.get('download') == '1', download_name=name)
+
+
+@results_bp.route('/waec/broadsheet/export')
+@login_required
+@rate_limited('export', max_requests=40, window_minutes=10)
+def waec_broadsheet_export():
+    """Wide WAEC broadsheet workbook: a column per subject (grade), with the
+    per-subject offered/passed/failed/average-grade rows beneath."""
+    from openpyxl import Workbook
+    years = _waec_broadsheet_years()
+    year = resolve_exam_year(request.args.get('year', type=int), years)
+    bs = AcademicAnalytics.get_waec_broadsheet(year, viewing_branch_id()) if year else None
+    if not bs or not bs['rows']:
+        flash('No WAEC results recorded for that year.', 'warning')
+        return redirect(url_for('results.waec_broadsheet', year=year))
+    subjects = bs['subjects']
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = f'WAEC {year}'
+    ws.append(['S/N', 'Student'] + subjects + ['Credits', 'Avg grade'])
+    for i, row in enumerate(bs['rows'], 1):
+        line = [i, row['student'].full_name]
+        line += [row['cells'].get(subj, '') for subj in subjects]
+        line += [row['credits'], row['avg_grade']]
+        ws.append(line)
+
+    ws.append([])
+    ss = bs['subject_summary']
+    def _summary_row(label, fn):
+        ws.append(['', label] + [fn(ss[s]) for s in subjects] + ['', ''])
+    _summary_row('No. offered', lambda d: d['offered'])
+    _summary_row('No. passed (C6+)', lambda d: d['passed'])
+    _summary_row('No. failed', lambda d: d['failed'])
+    _summary_row('Average grade', lambda d: d['avg_grade'])
+
+    return xlsx_response(wb, f'waec_broadsheet_{year}.xlsx')

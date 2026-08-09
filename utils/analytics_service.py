@@ -434,7 +434,115 @@ class AcademicAnalytics:
             'most_failed_subjects': [s for s in subjects_by_fail_rate if s['below_credit_count'] > 0][:5],
             'top_performers': [{'student_id': s[0], **s[1]} for s in top_by_a1]
         }
-    
+
+    @staticmethod
+    def _ordered_waec_subjects(present):
+        """WAEC subjects in canonical order (core first), extras appended A–Z."""
+        try:
+            from utils.helpers import WAEC_SUBJECTS
+            order = {name: i for i, name in enumerate(WAEC_SUBJECTS)}
+        except Exception:
+            order = {}
+        return sorted(present, key=lambda s: (order.get(s, len(order)), s))
+
+    @staticmethod
+    def get_waec_broadsheet(exam_year, branch_id=None):
+        """The full grade matrix for a WAEC exam year — one row per student, one
+        column per subject (grade only; WAEC reports no scores) — plus the
+        per-subject and whole-cohort summaries, mirroring the mock-WAEC
+        broadsheet. Scoped to a branch when given. Returns ``None`` when there
+        are no results for the year."""
+        from models import Student, WAECResult
+        q = WAECResult.query.filter_by(exam_year=exam_year).join(Student)
+        if branch_id is not None:
+            q = q.filter(Student.branch_id == branch_id)
+        results = q.all()
+        if not results:
+            return None
+
+        grade_order = AcademicAnalytics.WAEC_GRADES
+        pts = AcademicAnalytics.GRADE_POINTS               # A1=1 … F9=9 (lower = better)
+        pt_to_grade = {v: k for k, v in pts.items()}
+        credit = lambda g: g in AcademicAnalytics.PASS_GRADES
+
+        cells, students, present = {}, {}, set()
+        for r in results:
+            present.add(r.subject)
+            cells.setdefault(r.student_id, {})[r.subject] = r.grade
+            students[r.student_id] = r.student
+        subjects = AcademicAnalytics._ordered_waec_subjects(present)
+
+        rows = []
+        for sid, student in students.items():
+            gmap = cells[sid]
+            grades = list(gmap.values())
+            credits = sum(1 for g in grades if credit(g))
+            credited = {s.lower() for s, g in gmap.items() if credit(g)}
+            has_core = any('english' in s for s in credited) and any('math' in s for s in credited)
+            avg_pt = sum(pts.get(g, 9) for g in grades) / len(grades) if grades else None
+            rows.append({
+                'student': student,
+                'cells': gmap,                                 # {subject: grade}
+                'credits': credits,
+                'distinctions': sum(1 for g in grades if g in AcademicAnalytics.DISTINCTION_GRADES),
+                'has_5_incl_core': credits >= 5 and has_core,
+                'has_5_credits': credits >= 5,
+                'avg_grade': pt_to_grade.get(round(avg_pt), '—') if avg_pt is not None else '—',
+                'subject_count': len(grades),
+            })
+        rows.sort(key=lambda x: ((x['student'].surname or '').lower(),
+                                 (x['student'].first_name or '').lower()))
+
+        subject_summary = {}
+        for subj in subjects:
+            sgrades = [cells[sid][subj] for sid in cells if subj in cells[sid]]
+            offered = len(sgrades)
+            passed = sum(1 for g in sgrades if credit(g))
+            avg_pt = sum(pts.get(g, 9) for g in sgrades) / offered if offered else None
+            dist = {g: 0 for g in grade_order}
+            for g in sgrades:
+                if g in dist:
+                    dist[g] += 1
+            subject_summary[subj] = {
+                'offered': offered,
+                'passed': passed,
+                'failed': offered - passed,                    # short of a credit (D7–F9)
+                'f9': dist['F9'],
+                'avg_grade': pt_to_grade.get(round(avg_pt), '—') if avg_pt is not None else '—',
+                'pass_rate': round(passed / offered * 100, 1) if offered else 0,
+                'distribution': dist,
+            }
+
+        total_entries = len(results)
+        overall_dist = {g: 0 for g in grade_order}
+        for r in results:
+            if r.grade in overall_dist:
+                overall_dist[r.grade] += 1
+        overall_pct = {g: (round(overall_dist[g] / total_entries * 100, 1) if total_entries else 0)
+                       for g in grade_order}
+
+        n = len(rows)
+        with_core = sum(1 for r in rows if r['has_5_incl_core'])
+        school = {
+            'students': n,
+            'subject_entries': total_entries,
+            'with_5_credits': sum(1 for r in rows if r['has_5_credits']),
+            'with_5_incl_core': with_core,
+            'with_5_incl_core_pct': round(with_core / n * 100, 1) if n else 0,
+            'avg_credits': round(sum(r['credits'] for r in rows) / n, 1) if n else 0,
+        }
+
+        return {
+            'exam_year': exam_year,
+            'subjects': subjects,
+            'rows': rows,
+            'subject_summary': subject_summary,
+            'grade_order': grade_order,
+            'grade_distribution': overall_dist,
+            'grade_distribution_pct': overall_pct,
+            'school': school,
+        }
+
     @staticmethod
     def get_jamb_school_statistics(exam_year: int, branch_id=None) -> Dict:
         """Get comprehensive school-wide JAMB statistics"""
