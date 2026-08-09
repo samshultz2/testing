@@ -60,17 +60,17 @@ def _push_targets(user_id, role):
 
 
 def _push_allowed(user_id, category='info'):
-    """Push is on by default; the master push opt-out and the per-category (topic)
-    toggle are honoured only when the NOTIFY_PREFS flag is on (matching how the
-    other channels are gated)."""
+    """Push is on by default, but a user's master push opt-out and per-category
+    (topic) toggle are ALWAYS honoured — independent of the NOTIFY_PREFS flag.
+    They're pure opt-outs (defaults push everything), so respecting them can never
+    suppress a notification the user didn't ask to mute."""
     try:
-        from utils.notify_prefs import flag_enabled, wants, topic_for_category
-        if flag_enabled():
-            if not wants(user_id, 'push', default=True):
-                return False
-            topic = topic_for_category(category)
-            if not wants(user_id, 'push:' + topic, default=True):
-                return False
+        from utils.notify_prefs import wants, topic_for_category
+        if not wants(user_id, 'push', default=True):
+            return False
+        topic = topic_for_category(category)
+        if not wants(user_id, 'push:' + topic, default=True):
+            return False
     except Exception:
         pass
     return True
