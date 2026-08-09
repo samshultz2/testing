@@ -192,7 +192,7 @@ a.exec:hover .go{opacity:1}
 <div id="sec-compare-year" class="card scroll-mt" style="margin-bottom:1rem;">
     <div class="card-header"><h3><i class="fas fa-code-compare"></i> Cohort comparison &mdash; {{ year_compare.year }} vs {{ year_compare.compare_year }}</h3></div>
     <div class="card-body" style="padding:0;overflow-x:auto;">
-        <table class="cmp-table">
+        <table class="cmp-table no-mobile-scroll">
             <thead><tr><th>Metric</th><th>{{ year_compare.year }}</th><th>{{ year_compare.compare_year }}</th><th>Change</th></tr></thead>
             <tbody>
             {% for m in year_compare.metrics %}
@@ -217,7 +217,7 @@ a.exec:hover .go{opacity:1}
     <div class="card-header"><h3><i class="fas fa-code-branch"></i> Branch comparison &mdash; {{ selected_year }}</h3>
         <span class="text-muted text-sm">Ranked by JAMB mean · switch branch from the header to drill in</span></div>
     <div class="card-body" style="padding:0;overflow-x:auto;">
-        <table class="cmp-table">
+        <table class="cmp-table no-mobile-scroll">
             <thead><tr><th>Branch</th><th>JAMB candidates</th><th>JAMB mean</th><th>≥200</th><th>WAEC students</th><th>WAEC pass</th><th>Distinction</th></tr></thead>
             <tbody>
             {% for r in branch_compare %}
@@ -298,7 +298,7 @@ a.exec:hover .go{opacity:1}
     <div class="card">
         <div class="card-header"><h3><i class="fas fa-trophy"></i> Top 10 Candidates</h3></div>
         <div class="card-body" style="padding:0;">
-            <table class="mini-table">
+            <table class="mini-table no-mobile-scroll">
                 <thead><tr><th>#</th><th>Student</th><th class="num">Score</th></tr></thead>
                 <tbody>
                 {% for r in jamb_stats.top_10 %}
@@ -353,7 +353,7 @@ a.exec:hover .go{opacity:1}
     <div class="card">
         <div class="card-header"><h3 class="text-success"><i class="fas fa-arrow-up"></i> Strongest Subjects (A1 rate)</h3></div>
         <div class="card-body" style="padding:0;">
-            <table class="mini-table">
+            <table class="mini-table no-mobile-scroll">
                 <thead><tr><th>Subject</th><th class="num">A1 %</th><th class="num">Pass %</th></tr></thead>
                 <tbody>
                 {% for s in waec_stats.top_subjects_by_a1 %}
@@ -366,7 +366,7 @@ a.exec:hover .go{opacity:1}
     <div class="card">
         <div class="card-header"><h3 class="text-danger"><i class="fas fa-arrow-down"></i> Most Failed Subjects</h3></div>
         <div class="card-body" style="padding:0;">
-            <table class="mini-table">
+            <table class="mini-table no-mobile-scroll">
                 <thead><tr><th>Subject</th><th class="num">Below credit % (D7–F9)</th><th class="num">Fail % (F9)</th><th class="num">Entries</th></tr></thead>
                 <tbody>
                 {% for s in waec_stats.most_failed_subjects %}
@@ -393,7 +393,7 @@ a.exec:hover .go{opacity:1}
         <div class="card-header"><h3><span class="tag jamb">JAMB</span> Mean Score &amp; ≥200 by Gender</h3></div>
         <div class="chart-wrap"><canvas id="jambGenderCmp"></canvas></div>
         <div class="card-body" style="padding:0;">
-            <table class="mini-table">
+            <table class="mini-table no-mobile-scroll">
                 <thead><tr><th>Gender</th><th class="num">Candidates</th><th class="num">Mean</th><th class="num">≥200</th><th class="num">≥200 %</th><th class="num">Top</th></tr></thead>
                 <tbody>
                 {% for g in jamb_gender_stats %}
@@ -409,7 +409,7 @@ a.exec:hover .go{opacity:1}
         <div class="card-header"><h3><span class="tag waec">WAEC</span> Pass &amp; Distinction by Gender</h3></div>
         <div class="chart-wrap"><canvas id="waecGenderCmp"></canvas></div>
         <div class="card-body" style="padding:0;">
-            <table class="mini-table">
+            <table class="mini-table no-mobile-scroll">
                 <thead><tr><th>Gender</th><th class="num">Entries</th><th class="num">Pass %</th><th class="num">Distinction %</th><th class="num">Mean Pts</th></tr></thead>
                 <tbody>
                 {% for g in waec_gender_stats %}
@@ -448,7 +448,7 @@ a.exec:hover .go{opacity:1}
         <div class="card-header"><h3><i class="fas fa-layer-group"></i> Performance by Arm</h3>
             <a href="{{ url_for('results.analytics_by_class', year=selected_year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-up-right-from-square"></i> Full class league</a></div>
         <div class="card-body" style="padding:0;">
-            <table class="mini-table">
+            <table class="mini-table no-mobile-scroll">
                 <thead><tr><th>Arm</th><th class="num">JAMB n</th><th class="num">JAMB mean</th><th class="num">WAEC pass %</th></tr></thead>
                 <tbody>
                 {% for c in class_compare %}
@@ -554,7 +554,7 @@ a.exec:hover .go{opacity:1}
     {% if scorecard_summary.strong %}<span class="pill" style="background:rgba(22,163,74,.14);color:#16a34a;">{{ scorecard_summary.strong }} strong</span>{% endif %}
 </p>
 <div class="card" style="padding:0;overflow-x:auto;">
-<table class="cmp-table">
+<table class="cmp-table no-mobile-scroll">
     <thead><tr><th>Subject</th><th>Status</th><th>WAEC pass</th><th>WAEC A1</th><th>JAMB mean</th><th>JAMB ≥50</th><th>Teacher(s)</th></tr></thead>
     <tbody>
     {% for r in subject_scorecard %}
@@ -584,7 +584,7 @@ a.exec:hover .go{opacity:1}
 {% if jamb_subjects %}
 <div class="section-title"><i class="fas fa-list-ol"></i> JAMB subject performance <span class="tag jamb">JAMB</span></div>
 <div class="card" style="padding:0;overflow-x:auto;">
-<table class="table" style="font-size:.85rem;margin:0;">
+<table class="table no-mobile-scroll" style="font-size:.85rem;margin:0;">
     <thead><tr><th>Subject</th><th>Sat</th><th>Average</th><th>Best</th><th>Lowest</th></tr></thead>
     <tbody>
     {% for r in jamb_subjects %}
@@ -600,7 +600,7 @@ a.exec:hover .go{opacity:1}
 <div class="section-title"><i class="fas fa-arrow-trend-up"></i> Mock WAEC subject value-added <span class="tag waec">WAEC</span></div>
 <p class="text-muted text-sm" style="margin:0 0 .5rem;">Average score change from {{ waec_subject_gains.first_exam }} to {{ waec_subject_gains.latest_exam }} (weakest movers first).</p>
 <div class="card" style="padding:0;overflow-x:auto;">
-<table class="table" style="font-size:.85rem;margin:0;">
+<table class="table no-mobile-scroll" style="font-size:.85rem;margin:0;">
     <thead><tr><th>Subject</th><th>First</th><th>Latest</th><th>Gain</th></tr></thead>
     <tbody>
     {% for r in waec_subject_gains.subjects %}
