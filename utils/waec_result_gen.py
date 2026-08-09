@@ -1897,29 +1897,30 @@ def _draw_meridian(c, ctx, show, cfg, verify_url):
     if show.get('credits'):        stats.append((st['credits'], 'CREDITS'))
     if show.get('average'):        stats.append((st['average'], 'AVERAGE'))
     if show.get('classification'): stats.append((st['classification'], 'CLASS'))
-    ver_h = 148; ver_y = foot_y + 26
-    sum_h = 50 if stats else 0
-    sum_y = ver_y + ver_h + 14
-    panel_bottom = sum_y + sum_h + 14
+    ver_h = 122; ver_y = foot_y + 22
+    sum_h = 48 if stats else 0
+    sum_y = ver_y + ver_h + 12
+    panel_bottom = sum_y + sum_h + 12
 
     # ---- result panel (centre-piece) --------------------------------------
-    panel_top = H - 322
+    panel_top = H - 306
     frame(FM + 7, panel_bottom, (R - FM) - 14, panel_top - panel_bottom, 22)
     ip_x0, ip_x1 = FM + 26, R - 26
     rows_top = panel_top - 26
     rows_bot = panel_bottom + 18
     results = ctx['results']; n = len(results)
     if show.get('subjects') and n:
-        rh = min(30, max(16, (rows_top - rows_bot) / n))
-        subj_fs = 15 if rh >= 22 else 13
+        rh = min(34, max(16, (rows_top - rows_bot) / n))
+        subj_fs = 16 if rh >= 24 else (14 if rh >= 20 else 12)
+        grade_fs = subj_fs + 9 if rh >= 26 else subj_fs + 6
         yy = rows_top
         for i, r in enumerate(results, 1):
             base = yy - rh * 0.60
-            c.setFillColor(MUTE); c.setFont('Helvetica-Bold', subj_fs - 4); c.drawString(ip_x0, base, f'{i:02d}')
+            c.setFillColor(MUTE); c.setFont('Helvetica-Bold', subj_fs - 5); c.drawString(ip_x0, base, f'{i:02d}')
             c.setFillColor(INK); c.setFont('Helvetica-Bold', subj_fs)
             c.drawString(ip_x0 + 34, base, r['subject'].upper())
             if show.get('grades'):
-                c.setFillColor(INK); c.setFont('Helvetica-Bold', subj_fs + 9); c.drawRightString(ip_x1, base, r['grade'])
+                c.setFillColor(INK); c.setFont('Helvetica-Bold', grade_fs); c.drawRightString(ip_x1, base, r['grade'])
             if i < n:
                 c.setStrokeColor(HAIR); c.setLineWidth(0.7); c.line(ip_x0, yy - rh, ip_x1, yy - rh)
             yy -= rh
