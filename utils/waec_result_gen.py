@@ -1281,9 +1281,7 @@ def _draw_prestige(c, ctx, show, cfg, verify_url):
                 c.drawImage(sig, lx, sy - 4, 90, 26, preserveAspectRatio=True, anchor='sw', mask='auto')
             except Exception:
                 sig = None
-        if not sig:
-            c.setFillColor(_INK); c.setFont('Times-Italic', 18)
-            c.drawString(lx, sy, 'Signature')
+        # signing space left blank for the principal to sign by hand
         c.setStrokeColor(_INK); c.setLineWidth(0.8); c.line(lx, sy - 8, lx + 150, sy - 8)
         if show.get('principal_name') and ctx['official'].get('principal_name'):
             c.setFillColor(_INK); c.setFont('Helvetica-Bold', 10)
@@ -2592,8 +2590,7 @@ def _draw_meridian(c, ctx, show, cfg, verify_url):
                 c.drawImage(sig, vx0, line_y + 4, 110, 26, preserveAspectRatio=True, anchor='sw', mask='auto')
             except Exception:
                 pass
-        else:
-            c.setFillColor(INK); c.setFont('Times-Italic', 20); c.drawString(vx0, line_y + 6, 'Principal')
+        # signing space left blank for the principal to sign by hand
         c.setStrokeColor(INK); c.setLineWidth(0.8); c.line(vx0, line_y, vx0 + 150, line_y)
         c.setFillColor(MUTE); c.setFont('Helvetica-Bold', 8); c.drawString(vx0, line_y - 13, 'PRINCIPAL NAME')
         pname = ctx['official'].get('principal_name') if show.get('principal_name') else None
@@ -2765,8 +2762,7 @@ def _draw_aurelis(c, ctx, show, cfg, verify_url):
                 c.drawImage(sig, FM, rowA - 4, 130, 30, preserveAspectRatio=True, anchor='sw', mask='auto')
             except Exception:
                 sig = None
-        if not sig:
-            c.setFillColor(INK); c.setFont('Times-Italic', 19); c.drawString(FM, rowA, 'Signature')
+        # signing space left blank for the principal to sign by hand
         c.setStrokeColor(HAIR); c.setLineWidth(0.8); c.line(FM, rowA - 8, FM + 165, rowA - 8)
         track('PRINCIPAL SIGNATURE', 'Helvetica-Bold', 8, FM, rowA - 22, 0.5, GRAY)
     if show.get('school_stamp'):
@@ -3015,11 +3011,10 @@ def _draw_monument(c, ctx, show, cfg, verify_url):
                 c.drawImage(sig, LM, sig_line_y + 2, 120, 30, preserveAspectRatio=True, anchor='sw', mask='auto')
             except Exception:
                 sig = None
-        if not sig:
-            c.setFillColor(CHAR); c.setFont('Times-Italic', 17); c.drawString(LM, sig_line_y + 6, 'Principal Signature')
+        # signing space left blank for the principal to sign by hand
         c.setStrokeColor(HAIR); c.setLineWidth(0.8); c.line(LM, sig_line_y, LM + 168, sig_line_y)
         pn = ctx['official'].get('principal_name') if show.get('principal_name') else None
-        c.setFillColor(CHAR); c.setFont('Helvetica-Bold', 9.5); c.drawString(LM, sig_line_y - 14, pn or 'Principal Signature')
+        c.setFillColor(CHAR); c.setFont('Helvetica-Bold', 9.5); c.drawString(LM, sig_line_y - 14, pn or 'Principal name')
         c.setFillColor(GRAY); c.setFont('Helvetica', 8); c.drawString(LM, sig_line_y - 25, 'Principal')
     if show.get('school_stamp'):
         seal_teal(300, 106, 33, ctx['school'].get('name'), ctx.get('branch'))
@@ -3255,8 +3250,7 @@ def _draw_terrain(c, ctx, show, cfg, verify_url):
                 c.drawImage(sig, FM, sig_y + 2, 120, 30, preserveAspectRatio=True, anchor='sw', mask='auto')
             except Exception:
                 sig = None
-        if not sig:
-            c.setFillColor(ESP); c.setFont('Times-Italic', 15); c.drawString(FM, sig_y + 6, 'Principal signature')
+        # signing space left blank for the principal to sign by hand
         c.setStrokeColor(SAGE); c.setLineWidth(0.8); c.line(FM, sig_y, FM + 168, sig_y)
         pn = ctx['official'].get('principal_name') if show.get('principal_name') else None
         c.setFillColor(ESP); c.setFont('Helvetica-Bold', 9); c.drawString(FM, sig_y - 13, pn or 'Principal name')
