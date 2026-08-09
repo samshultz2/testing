@@ -9,7 +9,7 @@
 // hash of the built bundles + CSS (format 'b-<hash>'), so it changes on every
 // deploy that changes an asset — no manual bump needed. Static assets also use
 // stale-while-revalidate below, so they self-heal on the next load regardless.
-const CACHE_VERSION = 'b-b1a9ca523f66';
+const CACHE_VERSION = 'b-c061ea868e54';
 // Cap the runtime cache (visited pages + section JSON) so it can't grow without
 // bound on a long-lived install; oldest entries are evicted first.
 const RUNTIME_MAX_ENTRIES = 80;
@@ -228,4 +228,36 @@ self.addEventListener('fetch', (e) => {
     );
     return;
   }
+});
+
+// --- Web Push (roadmap #8) --------------------------------------------------
+// Show a notification when the server pushes one. Payload is JSON:
+// {title, body, url}. Falls back gracefully if the payload isn't JSON.
+self.addEventListener('push', (e) => {
+  let data = {};
+  try { data = e.data ? e.data.json() : {}; } catch (_err) {
+    data = { body: (e.data && e.data.text()) || '' };
+  }
+  const title = data.title || 'EduSyncra';
+  const options = {
+    body: data.body || '',
+    icon: '/static/icons/icon-192.png',
+    badge: '/static/icons/icon-192.png',
+    data: { url: data.url || '/' },
+  };
+  e.waitUntil(self.registration.showNotification(title, options));
+});
+
+// Focus an existing tab (or open one) at the notification's URL when clicked.
+self.addEventListener('notificationclick', (e) => {
+  e.notification.close();
+  const url = (e.notification.data && e.notification.data.url) || '/';
+  e.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((wins) => {
+      for (const w of wins) {
+        if ('focus' in w) { w.navigate(url); return w.focus(); }
+      }
+      return self.clients.openWindow ? self.clients.openWindow(url) : null;
+    })
+  );
 });
