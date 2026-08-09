@@ -38,7 +38,7 @@ def notify(title, body='', url=None, *, user_id=None, role=None, category='info'
     # reaches the browser too. Best-effort, off the request thread, and a no-op
     # unless web push is configured — so it costs nothing when push is off.
     try:
-        _push_fanout(title, body, url, user_id, role)
+        _push_fanout(title, body, url, user_id, role, category)
     except Exception:
         pass
     return n
@@ -59,23 +59,29 @@ def _push_targets(user_id, role):
     return []
 
 
-def _push_allowed(user_id):
-    """Push is on by default; an explicit opt-out is honoured only when the
-    NOTIFY_PREFS flag is on (matching how the other channels are gated)."""
+def _push_allowed(user_id, category='info'):
+    """Push is on by default; the master push opt-out and the per-category (topic)
+    toggle are honoured only when the NOTIFY_PREFS flag is on (matching how the
+    other channels are gated)."""
     try:
-        from utils.notify_prefs import flag_enabled, wants
+        from utils.notify_prefs import flag_enabled, wants, topic_for_category
         if flag_enabled():
-            return wants(user_id, 'push', default=True)
+            if not wants(user_id, 'push', default=True):
+                return False
+            topic = topic_for_category(category)
+            if not wants(user_id, 'push:' + topic, default=True):
+                return False
     except Exception:
         pass
     return True
 
 
-def _push_fanout(title, body, url, user_id, role):
+def _push_fanout(title, body, url, user_id, role, category='info'):
     from utils import webpush
     if not webpush.is_configured():
         return
-    targets = [uid for uid in _push_targets(user_id, role) if _push_allowed(uid)]
+    targets = [uid for uid in _push_targets(user_id, role)
+               if _push_allowed(uid, category)]
     if targets:
         webpush.push_to_users(targets, title or '', body or '', url)
 

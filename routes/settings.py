@@ -1172,16 +1172,23 @@ def delete_user(user_id):
 def notification_prefs():
     """Per-user notification-channel preferences (opt-out). Enforcement is gated
     by the NOTIFY_PREFS flag; today the in-app bell honours it."""
-    from utils.notify_prefs import CHANNELS, CHANNEL_LABELS, get_prefs, set_pref, flag_enabled
+    from utils.notify_prefs import (CHANNELS, CHANNEL_LABELS, get_prefs, set_pref,
+                                    flag_enabled, PUSH_TOPICS, PUSH_TOPIC_LABELS,
+                                    set_push_topic, get_push_topics)
     uid = session.get('user_id')
     if request.method == 'POST':
         if uid:
             for ch in CHANNELS:
                 set_pref(uid, ch, request.form.get('ch_' + ch) == 'on')
+            # Per-category push toggles (only meaningful while the push channel is on).
+            for topic in PUSH_TOPICS:
+                set_push_topic(uid, topic, request.form.get('pushcat_' + topic) == 'on')
             flash('Notification preferences saved.', 'success')
         else:
             flash('Sign in with a staff account to set notification preferences.', 'warning')
         return redirect(url_for('settings.notification_prefs'))
     return render_template('settings/notifications.html',
                            prefs=get_prefs(uid) if uid else {}, channels=CHANNELS,
-                           labels=CHANNEL_LABELS, has_user=bool(uid), flag_on=flag_enabled())
+                           labels=CHANNEL_LABELS, has_user=bool(uid), flag_on=flag_enabled(),
+                           push_topics=PUSH_TOPICS, push_topic_labels=PUSH_TOPIC_LABELS,
+                           push_topic_prefs=get_push_topics(uid) if uid else {})

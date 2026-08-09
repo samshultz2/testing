@@ -89,6 +89,45 @@ def test_deliver_to_user_fans_out_by_preference(app, monkeypatch):
         assert sent['email'] == ['deliver@example.com'] and sent['sms'] == ['08030000000']
 
 
+def test_push_topic_mapping_and_defaults(app):
+    from utils import notify_prefs as np
+    assert np.topic_for_category('attendance') == 'attendance'
+    assert np.topic_for_category('warning') == 'alerts'
+    assert np.topic_for_category('info') == 'general'      # unknown → general
+    uid = 987010
+    with app.app_context():
+        assert np.push_topic_enabled(uid, 'attendance') is True   # opt-out default
+        np.set_push_topic(uid, 'attendance', False)
+        assert np.push_topic_enabled(uid, 'attendance') is False
+        topics = np.get_push_topics(uid)
+        assert topics['attendance'] is False and topics['finance'] is True
+
+
+def test_notify_push_respects_category_toggle(app, monkeypatch):
+    """With the flag on, a muted push category is skipped while others still push."""
+    from utils import notify as notify_mod
+    from utils import notify_prefs, webpush
+    from models import db, User
+    with app.app_context():
+        u = User(username='pushcat_user', full_name='Cat User', role='staff', scope='branch')
+        u.set_password('CorrectHorse9'); u.is_active = True
+        db.session.add(u); db.session.commit()
+        uid = u.id
+
+        pushed = []
+        monkeypatch.setattr(webpush, 'is_configured', lambda app=None: True)
+        monkeypatch.setattr(webpush, 'push_to_users',
+                            lambda user_ids, title, body='', url=None, app=None: pushed.append((list(user_ids), title)))
+        monkeypatch.setattr(notify_prefs, 'flag_enabled', lambda app=None: True)
+
+        notify_prefs.set_push_topic(uid, 'attendance', False)   # mute attendance push
+        notify_mod.notify('Register marked', user_id=uid, category='attendance')
+        assert pushed == []                                     # muted → no push
+
+        notify_mod.notify('Fee paid', user_id=uid, category='finance')
+        assert pushed and pushed[0][0] == [uid]                 # other category still pushes
+
+
 def test_notification_prefs_page_loads(app):
     c = _admin(app)
     r = c.get('/settings/notifications')
