@@ -88,19 +88,51 @@
   <div class="card">
     <h1><i class="fas fa-id-card" style="color:var(--primary)"></i> WAEC Result Generator</h1>
     <div class="sub">Choose a student who has WAEC results to design and download their result.</div>
-    <form method="get" action="{{ url_for('results.waec_cert_generator') }}">
-      <input type="search" name="q" value="{{ q or '' }}" placeholder="Search students by name or ID…" autofocus>
+    <form method="get" action="{{ url_for('results.waec_cert_generator') }}" id="wcPickForm">
+      <input type="search" name="q" id="wcQ" value="{{ q or '' }}" placeholder="Search students by name or ID…" autofocus autocomplete="off">
     </form>
-    {% if students %}
-    <ul class="wc-slist">
+    <ul class="wc-slist" id="wcList">
       {% for s in students %}
       <li><a href="{{ url_for('results.waec_cert_generator', student_id=s.id) }}">
         <span>{{ s.full_name }}</span><span class="id">{{ s.student_id }}</span></a></li>
       {% endfor %}
     </ul>
-    {% elif q %}<p class="sub" style="margin-top:14px">No students with WAEC results match “{{ q }}”.</p>{% endif %}
+    <p class="sub" id="wcEmpty" style="margin-top:14px;{% if students or not q %}display:none{% endif %}">No students with WAEC results match “<span id="wcEmptyQ">{{ q }}</span>”.</p>
   </div>
 </div>
+<script nonce="{{ csp_nonce }}">
+  (function () {
+    var input = document.getElementById('wcQ'),
+        list = document.getElementById('wcList'),
+        empty = document.getElementById('wcEmpty'),
+        emptyQ = document.getElementById('wcEmptyQ'),
+        form = document.getElementById('wcPickForm'),
+        base = {{ url_for('results.waec_cert_generator') | tojson }},
+        timer = null, seq = 0;
+    if (!input) return;
+    form.addEventListener('submit', function (e) { e.preventDefault(); });   // live — no reload
+    function render(students, q) {
+      list.innerHTML = '';
+      students.forEach(function (s) {
+        var li = document.createElement('li'), a = document.createElement('a');
+        a.href = s.url;
+        var n = document.createElement('span'); n.textContent = s.full_name;
+        var id = document.createElement('span'); id.className = 'id'; id.textContent = s.student_id;
+        a.appendChild(n); a.appendChild(id); li.appendChild(a); list.appendChild(li);
+      });
+      if (students.length === 0 && q) { emptyQ.textContent = q; empty.style.display = ''; }
+      else { empty.style.display = 'none'; }
+    }
+    function run() {
+      var q = input.value.trim(), mine = ++seq;
+      fetch(base + '?q=' + encodeURIComponent(q), { headers: { 'X-Requested-With': 'fetch', Accept: 'application/json' } })
+        .then(function (r) { return r.json(); })
+        .then(function (d) { if (mine === seq) render(d.students || [], q); })
+        .catch(function () {});
+    }
+    input.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(run, 200); });
+  })();
+</script>
 {% else %}
 <div class="wc-wrap" id="wcApp"
      data-preview="{{ preview_url }}" data-generate="{{ generate_url }}"
