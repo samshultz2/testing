@@ -80,6 +80,34 @@ def test_render_all_templates_pdf_png_jpeg(app):
             assert jpg[:2] == b'\xff\xd8' and len(jpg) > 2000
 
 
+def test_executive_template_registered_and_renders(app):
+    # the new Executive Academic 2026 layout is part of the collection…
+    assert 'executive' in W.TEMPLATES and 'executive' in W._CANVAS_DRAW
+    assert W.TEMPLATES['executive']['name'] == 'Executive Academic — 2026'
+    assert W.TEMPLATES['executive']['landscape'] is False
+    assert any(t['key'] == 'executive' for t in W.list_templates())
+    assert 'executive' in W.PRESETS
+    sid = _seed(app)   # the 9 sample subjects (5 of them A1)
+    with app.app_context():
+        ctx = W.build_context(db.session.get(Student, sid), _YR)
+        # …its full preset turns on the summary + seal + verification the design shows
+        show = W.preset_show(ctx, 'executive')
+        assert show['subjects'] and show['grades'] and show['total_subjects']
+        assert show['a1_count'] and show['credits'] and show['school_stamp']
+        # the drawn seal needs no uploaded stamp file to be offered
+        assert show['school_stamp'] is True
+        # counts come from the real data, not hard-coded (5 A1s, 9 credits)
+        assert ctx['stats']['a1'] == 5 and ctx['stats']['credits'] == 9
+        pdf = W.render_pdf(ctx, 'executive', show,
+                           verify_url='https://example.test/verify/ABC')
+        assert pdf.getvalue()[:4] == b'%PDF'
+        # minimal selection still renders (rebalances without photo/summary/seal)
+        minimal = W.resolve_show(ctx, {k: (k in {'school_name', 'student_name',
+                                 'exam_name', 'exam_year', 'subjects', 'grades'})
+                                 for k in W._ALL_COMPONENTS})
+        assert W.render_pdf(ctx, 'executive', minimal).getvalue()[:4] == b'%PDF'
+
+
 def test_render_handles_many_subjects(app):
     grades = {f'Subject {i}': 'C4' for i in range(1, 14)}   # 13 subjects -> compact table
     sid = _seed(app, grades)
