@@ -2358,6 +2358,19 @@ def _draw_meridian(c, ctx, show, cfg, verify_url):
         bev(x - 7, y + 7, w, h, cut, fill=GREEN)
         bev(x, y, w, h, cut, fill=IVORY, stroke=INK, sw=0.8)
 
+    def tlbr_path(x, y, w, h, cut):                  # cut top-left + bottom-right corners
+        p = c.beginPath()
+        p.moveTo(x, y); p.lineTo(x, y + h - cut); p.lineTo(x + cut, y + h)
+        p.lineTo(x + w, y + h); p.lineTo(x + w, y + cut); p.lineTo(x + w - cut, y); p.close()
+        return p
+
+    def arrow_path(x, y, w, h, pt, bl=0):            # right-pointing arrow, optional bottom-left cut
+        p = c.beginPath()
+        p.moveTo(x + bl, y); p.lineTo(x, y + bl); p.lineTo(x, y + h)
+        p.lineTo(x + w - pt, y + h); p.lineTo(x + w, y + h / 2.0)
+        p.lineTo(x + w - pt, y); p.close()
+        return p
+
     c.setFillColor(IVORY); c.rect(0, 0, W, H, fill=1, stroke=0)
     # faint architectural diagonals (top-right)
     c.setStrokeColor(HAIR); c.setLineWidth(0.6)
@@ -2386,25 +2399,26 @@ def _draw_meridian(c, ctx, show, cfg, verify_url):
     if show.get('school_motto') and ctx['school'].get('motto'):
         c.setFillColor(MUTE); c.setFont('Helvetica-Oblique', 9); c.drawRightString(R, ry, ctx['school']['motto'])
 
-    # ---- top-left · WASSCE·year angular badge -----------------------------
-    bx, by, bw, bh = FM + 8, H - 178, 268, 98
-    c.setFillColor(RUST); c.rect(bx - 8, by + 8, bw, bh, fill=1, stroke=0)          # rust layer (up-left)
-    c.setFillColor(NAVY); c.rect(bx + 8, by - 8, bw, bh, fill=1, stroke=0)          # navy layer (down-right)
-    bev(bx, by, bw, bh, 16, fill=IVORY, stroke=INK, sw=0.9)                          # cream face
+    # ---- top-left · WASSCE·year ARROW badge -------------------------------
+    #  One layered right-pointing arrow: rust accent (back-left) + navy shadow +
+    #  green arrow, with a cream card (right-pointed, bottom-left cut) carrying
+    #  the exam title + WASSCE on the left, and 2026 sitting on the green head.
+    bx, by, bh = FM + 6, H - 176, 96
+    cw, gw, tip = 250, 96, 32
+    total = cw + gw
+    c.setFillColor(RUST); c.rect(bx - 8, by + 8, 96, bh, fill=1, stroke=0)              # rust accent (top-left peek)
+    c.setFillColor(NAVY); c.drawPath(arrow_path(bx + 8, by - 8, total, bh, tip), fill=1, stroke=0)   # navy shadow
+    c.setFillColor(GREEN); c.drawPath(arrow_path(bx, by, total, bh, tip), fill=1, stroke=0)          # green arrow
+    c.setFillColor(IVORY); c.setStrokeColor(INK); c.setLineWidth(0.9)                    # cream card (right-pointed)
+    c.drawPath(arrow_path(bx + 4, by + 5, cw, bh - 10, 24, bl=14), fill=1, stroke=1)
     if show.get('exam_name'):
-        tx = bx + 16
         for i, ln in enumerate(_wrap(c, 'WEST AFRICAN SENIOR SCHOOL CERTIFICATE EXAMINATION',
-                                     'Helvetica-Bold', 9, bw - 30)[:2]):
-            c.setFillColor(INK); c.setFont('Helvetica-Bold', 9); c.drawString(tx, by + bh - 20 - i * 11, ln)
+                                     'Helvetica-Bold', 9, cw - 60)[:2]):
+            c.setFillColor(INK); c.setFont('Helvetica-Bold', 9); c.drawString(bx + 16, by + bh - 22 - i * 11, ln)
     c.setFillColor(INK); c.setFont('Helvetica-Bold', 42); c.drawString(bx + 14, by + 16, 'WASSCE')
-    if show.get('exam_year'):                                                        # green chevron with year
-        cy0, cyh = by + 12, bh - 24; ax = bx + bw + 4; aw = 78
-        p = c.beginPath()
-        p.moveTo(ax, cy0); p.lineTo(ax + aw - 20, cy0); p.lineTo(ax + aw, cy0 + cyh / 2)
-        p.lineTo(ax + aw - 20, cy0 + cyh); p.lineTo(ax, cy0 + cyh); p.close()
-        c.setFillColor(GREEN); c.drawPath(p, fill=1, stroke=0)
-        c.setFillColor(WHITE); c.setFont('Helvetica-Bold', 21)
-        c.drawCentredString(ax + (aw - 12) / 2, cy0 + cyh / 2 - 7, str(ctx['exam']['year']))
+    if show.get('exam_year'):
+        c.setFillColor(WHITE); c.setFont('Helvetica-Bold', 22)
+        c.drawCentredString(bx + cw + (gw - tip) / 2.0, by + bh / 2 - 8, str(ctx['exam']['year']))
 
     # ---- student identity (left) ------------------------------------------
     ny = H - 224
@@ -2423,13 +2437,18 @@ def _draw_meridian(c, ctx, show, cfg, verify_url):
     if meta:
         c.setFillColor(INK); c.setFont('Helvetica-Bold', 11); c.drawString(FM, ny - 4, '   ·   '.join(meta))
 
-    # ---- portrait in a bevelled green frame (right) -----------------------
+    # ---- portrait in an angular green frame (right) -----------------------
+    #  Cut top-left + bottom-right corners (parallelogram feel), green frame on a
+    #  navy shadow, with fine diagonal accents above-left.
     if show.get('student_photo') and ctx['student'].get('photo_path'):
-        fw, fh = 138, 152; fx = R - fw; fy = H - 300
-        bev(fx + 6, fy - 6, fw, fh, 20, fill=NAVY)
-        bev(fx, fy, fw, fh, 20, fill=GREEN)
+        fw, fh = 138, 156; fx = R - fw; fy = H - 304
+        c.setStrokeColor(HAIR); c.setLineWidth(0.6)
+        for i in range(4):
+            c.line(fx - 40 + i * 10, fy + fh, fx - 6 + i * 10, fy + fh - 34)
+        c.setFillColor(NAVY); c.drawPath(tlbr_path(fx + 6, fy - 6, fw, fh, 22), fill=1, stroke=0)
+        c.setFillColor(GREEN); c.drawPath(tlbr_path(fx, fy, fw, fh, 22), fill=1, stroke=0)
         ix, iy, iw, ih = fx + 9, fy + 9, fw - 18, fh - 18
-        c.saveState(); c.clipPath(bpath(ix, iy, iw, ih, 15), stroke=0, fill=0)
+        c.saveState(); c.clipPath(tlbr_path(ix, iy, iw, ih, 17), stroke=0, fill=0)
         try:
             c.drawImage(ctx['student']['photo_path'], ix, iy, iw, ih, preserveAspectRatio=True, anchor='c', mask='auto')
         except Exception:
@@ -2444,17 +2463,23 @@ def _draw_meridian(c, ctx, show, cfg, verify_url):
     if show.get('credits'):        stats.append((st['credits'], 'CREDITS'))
     if show.get('average'):        stats.append((st['average'], 'AVERAGE'))
     if show.get('classification'): stats.append((st['classification'], 'CLASS'))
-    ver_h = 122; ver_y = foot_y + 22
+    ver_h = 122; ver_y = foot_y + 24
     sum_h = 48 if stats else 0
-    sum_y = ver_y + ver_h + 12
-    panel_bottom = sum_y + sum_h + 12
-
-    # ---- result panel (centre-piece) --------------------------------------
+    sum_y = ver_y + ver_h + 16            # green summary strip base = combined-panel base
     panel_top = H - 306
-    frame(FM + 7, panel_bottom, (R - FM) - 14, panel_top - panel_bottom, 22)
+
+    # ---- result panel + summary (ONE blended unit) ------------------------
+    in_x, in_w = FM + 7, (R - FM) - 14
+    frame(in_x, sum_y, in_w, panel_top - sum_y, 22)
+    if stats:                              # green summary strip flush at the panel's base
+        c.saveState(); c.clipPath(bpath(in_x, sum_y, in_w, panel_top - sum_y, 22), stroke=0, fill=0)
+        c.setFillColor(GREEN); c.rect(in_x, sum_y, in_w, sum_h, fill=1, stroke=0)
+        c.restoreState()
+        c.setStrokeColor(colors.HexColor('#c8c2b1')); c.setLineWidth(0.8)
+        c.line(in_x + 16, sum_y + sum_h, in_x + in_w - 16, sum_y + sum_h)
     ip_x0, ip_x1 = FM + 26, R - 26
     rows_top = panel_top - 26
-    rows_bot = panel_bottom + 18
+    rows_bot = sum_y + sum_h + 16
     results = ctx['results']; n = len(results)
     if show.get('subjects') and n:
         rh = min(34, max(16, (rows_top - rows_bot) / n))
@@ -2471,25 +2496,43 @@ def _draw_meridian(c, ctx, show, cfg, verify_url):
             if i < n:
                 c.setStrokeColor(HAIR); c.setLineWidth(0.7); c.line(ip_x0, yy - rh, ip_x1, yy - rh)
             yy -= rh
-
-    # ---- green stat bar (cut corner) --------------------------------------
-    if stats:
-        bev(FM + 7, sum_y, (R - FM) - 14, sum_h, 16, fill=GREEN)
-        ns = len(stats); seg = ((R - FM) - 14) / ns
+    if stats:                              # summary values over the green strip
+        ns = len(stats); seg = in_w / ns
         for i, (v, l) in enumerate(stats):
-            sxc = (FM + 7) + seg * i + seg / 2
+            sxc = in_x + seg * i + seg / 2
             txt = f'{v:02d}' if isinstance(v, int) else str(v)
-            c.setFillColor(WHITE); c.setFont('Helvetica-Bold', 26); c.drawCentredString(sxc, sum_y + 20, txt)
-            c.setFillColor(colors.HexColor('#c9d6cd')); c.setFont('Helvetica-Bold', 8.5)
-            c.drawCentredString(sxc, sum_y + 8, l)
+            c.setFillColor(WHITE); c.setFont('Helvetica-Bold', 25); c.drawCentredString(sxc, sum_y + 18, txt)
+            c.setFillColor(colors.HexColor('#c9d6cd')); c.setFont('Helvetica-Bold', 8.5); c.drawCentredString(sxc, sum_y + 7, l)
             if i:
                 c.setStrokeColor(colors.HexColor('#4a6a55')); c.setLineWidth(0.8)
-                c.line((FM + 7) + seg * i, sum_y + 8, (FM + 7) + seg * i, sum_y + sum_h - 8)
+                c.line(in_x + seg * i, sum_y + 8, in_x + seg * i, sum_y + sum_h - 8)
 
     # ---- verification / signature row -------------------------------------
-    frame(FM + 7, ver_y, (R - FM) - 14, ver_h, 18)
+    frame(in_x, ver_y, in_w, ver_h, 18)
     vx0, vx1 = FM + 26, R - 26
     vtop = ver_y + ver_h
+    # QR (right, larger)
+    qs = 76; qx = vx1 - qs; qy = vtop - 16 - qs
+    if show.get('qr_code') and verify_url:
+        try:
+            import qrcode
+            qb = io.BytesIO(); qrcode.make(verify_url).save(qb, format='PNG'); qb.seek(0)
+            c.drawImage(ImageReader(qb), qx, qy, qs, qs, mask='auto')
+        except Exception:
+            pass
+    # verification code — in the space BEFORE the QR
+    vc_r = qx - 18
+    if show.get('verification_code') and ctx.get('verify_code'):
+        code = str(ctx['verify_code']); fs = 11.0
+        while _sw(code, 'Helvetica-Bold', fs) > 158 and fs > 7:
+            fs -= 0.5
+        c.setFillColor(MUTE); c.setFont('Helvetica-Bold', 8); c.drawRightString(vc_r, vtop - 40, 'VERIFICATION CODE')
+        c.setFillColor(INK); c.setFont('Helvetica-Bold', fs); c.drawRightString(vc_r, vtop - 56, code)
+    if show.get('date_issued'):
+        c.setFillColor(MUTE); c.setFont('Helvetica', 8); c.drawRightString(vx1, qy - 12, 'Issued ' + _issue_date().strftime('%d %b %Y'))
+    # seal (centre-left)
+    if show.get('school_stamp'):
+        _seal(c, vx0 + 205, ver_y + ver_h / 2, 34, ctx['school'].get('name'))
     # signature (left)
     if show.get('principal_signature') or show.get('principal_name'):
         line_y = ver_y + 46
@@ -2506,26 +2549,6 @@ def _draw_meridian(c, ctx, show, cfg, verify_url):
         pname = ctx['official'].get('principal_name') if show.get('principal_name') else None
         if pname:
             c.setFillColor(INK); c.setFont('Helvetica-Bold', 10); c.drawString(vx0, line_y - 26, pname)
-    # seal (centre)
-    if show.get('school_stamp'):
-        _seal(c, (FM + R) / 2 - 10, ver_y + ver_h / 2, 34, ctx['school'].get('name'))
-    # QR + verification (right)
-    if show.get('qr_code') and verify_url:
-        try:
-            import qrcode
-            qb = io.BytesIO(); qrcode.make(verify_url).save(qb, format='PNG'); qb.seek(0)
-            c.drawImage(ImageReader(qb), vx1 - 58, vtop - 66, 58, 58, mask='auto')
-        except Exception:
-            pass
-    if show.get('verification_code') and ctx.get('verify_code'):
-        code = str(ctx['verify_code']); fs = 9.5
-        while _sw(code, 'Helvetica-Bold', fs) > 150 and fs > 6:
-            fs -= 0.5
-        c.setFillColor(MUTE); c.setFont('Helvetica-Bold', 8); c.drawRightString(vx1, ver_y + 30, 'VERIFICATION CODE')
-        c.setFillColor(INK); c.setFont('Helvetica-Bold', fs); c.drawRightString(vx1, ver_y + 16, code)
-    if show.get('date_issued'):
-        c.setFillColor(MUTE); c.setFont('Helvetica', 8)
-        c.drawRightString(vx1, ver_y + 4, 'Issued ' + _issue_date().strftime('%d %b %Y'))
 
     # ---- footer -----------------------------------------------------------
     parts = []
