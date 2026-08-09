@@ -9,12 +9,19 @@ from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle, Paragraph,
                                 Spacer, PageBreak)
 from utils.web_exports import pdf_escape
 from utils.mock_waec_pdf import (
-    _styles, _S, _opt, _short_name, _school_header, _groups, _pagesize,
+    _styles, _S, _opt, _school_header, _groups, _pagesize,
     _grade_key_table, _fit_per, _VHead, _EXTRA_ROWS, _BLACK,
 )
 
 # Grade-only summary (no "Average score %" — WAEC carries no scores).
 _WAEC_SUMMARY = ['No. offered', 'No. passed (C6+)', 'No. failed', 'Average grade']
+
+
+def _bs_name(st):
+    """Surname + first name for the name column. ``st`` is the plain dict the
+    broadsheet builder emits (surname/first_name/full_name)."""
+    parts = [st.get('surname') or '', st.get('first_name') or '']
+    return ' '.join(p for p in parts if p).strip() or st.get('full_name') or ''
 
 
 def waec_broadsheet_pdf(bs, year, school, opts=None, per=8, orient='landscape'):
@@ -53,7 +60,7 @@ def waec_broadsheet_pdf(bs, year, school, opts=None, per=8, orient='landscape'):
             header += [_VHead('Credits'), _VHead('Avg grade')]
         data = [header]
         for i, row in enumerate(bs['rows'], 1):
-            line = [str(i), Paragraph(pdf_escape(_short_name(row['student'])), _S['name'])]
+            line = [str(i), Paragraph(pdf_escape(_bs_name(row['student'])), _S['name'])]
             for s in group:
                 line.append(row['cells'].get(s, ''))
             if last:

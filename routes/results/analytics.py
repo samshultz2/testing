@@ -874,13 +874,22 @@ def _waec_broadsheet_years():
     return years
 
 
+def _waec_broadsheet_cached(year, branch_id):
+    """The broadsheet, memoised in AnalyticsCache under the shared exam_hub
+    namespace (so the existing bust/refresh invalidation covers it too)."""
+    from routes.results import _cached_school_stats
+    return _cached_school_stats(
+        'waec_bs', year, branch_id,
+        lambda: AcademicAnalytics.get_waec_broadsheet(year, branch_id))
+
+
 @results_bp.route('/waec/broadsheet')
 @login_required
 def waec_broadsheet():
     """On-screen WAEC broadsheet: grade matrix + per-subject and cohort summary."""
     years = _waec_broadsheet_years()
     year = resolve_exam_year(request.args.get('year', type=int), years)
-    bs = AcademicAnalytics.get_waec_broadsheet(year, viewing_branch_id()) if year else None
+    bs = _waec_broadsheet_cached(year, viewing_branch_id()) if year else None
     return render_template('results/waec_broadsheet.html', bs=bs, selected_year=year,
                            years=years, grade_classes=_WAEC_GRADE_CLASS)
 
@@ -894,7 +903,7 @@ def waec_broadsheet_pdf():
     from utils.school import school_profile, logo_path
     years = _waec_broadsheet_years()
     year = resolve_exam_year(request.args.get('year', type=int), years)
-    bs = AcademicAnalytics.get_waec_broadsheet(year, viewing_branch_id()) if year else None
+    bs = _waec_broadsheet_cached(year, viewing_branch_id()) if year else None
     if not bs or not bs['rows']:
         flash('No WAEC results recorded for that year.', 'warning')
         return redirect(url_for('results.waec_broadsheet', year=year))
@@ -919,7 +928,7 @@ def waec_broadsheet_export():
     from openpyxl import Workbook
     years = _waec_broadsheet_years()
     year = resolve_exam_year(request.args.get('year', type=int), years)
-    bs = AcademicAnalytics.get_waec_broadsheet(year, viewing_branch_id()) if year else None
+    bs = _waec_broadsheet_cached(year, viewing_branch_id()) if year else None
     if not bs or not bs['rows']:
         flash('No WAEC results recorded for that year.', 'warning')
         return redirect(url_for('results.waec_broadsheet', year=year))
@@ -930,7 +939,7 @@ def waec_broadsheet_export():
     ws.title = f'WAEC {year}'
     ws.append(['S/N', 'Student'] + subjects + ['Credits', 'Avg grade'])
     for i, row in enumerate(bs['rows'], 1):
-        line = [i, row['student'].full_name]
+        line = [i, row['student']['full_name']]
         line += [row['cells'].get(subj, '') for subj in subjects]
         line += [row['credits'], row['avg_grade']]
         ws.append(line)

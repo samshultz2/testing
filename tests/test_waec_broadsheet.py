@@ -76,3 +76,25 @@ def test_broadsheet_page_pdf_and_excel(app):
     x = c.get(f'/results/waec/broadsheet/export?year={_YR}')
     assert x.status_code == 200
     assert 'spreadsheet' in x.headers.get('Content-Type', '')
+
+
+def test_broadsheet_is_cached_and_json_safe(app):
+    from routes.results.analytics import _waec_broadsheet_cached
+    from utils.analytics_service import AcademicAnalytics
+    _seed(app)
+    with app.app_context():
+        first = _waec_broadsheet_cached(_YR, None)
+        assert first and first['rows']
+        assert isinstance(first['rows'][0]['student'], dict)     # serialisable shape
+        # a second call must be served from AnalyticsCache, not recomputed
+        orig = AcademicAnalytics.get_waec_broadsheet
+
+        def _boom(*a, **k):
+            raise AssertionError('broadsheet recomputed instead of using cache')
+
+        AcademicAnalytics.get_waec_broadsheet = staticmethod(_boom)
+        try:
+            second = _waec_broadsheet_cached(_YR, None)
+        finally:
+            AcademicAnalytics.get_waec_broadsheet = orig
+        assert second['school']['students'] == first['school']['students']
