@@ -813,12 +813,47 @@ def recompute_analytics():
     import, since per-student rows are otherwise only written on results changes."""
     from utils.exam_refresh import run_exam_analytics_refresh
     bid = viewing_branch_id()
+    # When the async-jobs flag is on, enqueue the (potentially slow) recompute so
+    # the request returns immediately; the scheduler tick runs it in the
+    # background. Otherwise run it synchronously exactly as before.
+    from utils.jobs import async_enabled, enqueue
+    if async_enabled():
+        job = enqueue('analytics_recompute', {'branch_id': bid}, branch_id=bid)
+        log_action('analytics.recompute', detail=f'queued job #{job.id}, branch={bid or "all"}')
+        return _ok('Recompute queued — it will run in the background.',
+                   url_for('results.tasks'))
     # Shared with the daily background job: recompute the SSS3 cohort, backfill
     # correlation, warm the hub caches, and stamp the refresh time.
     summary = run_exam_analytics_refresh(current_app, warm=True, branch_id=bid)
     log_action('analytics.recompute', detail=f'{summary["students"]} student(s), branch={bid or "all"}')
     return _ok(f'Recomputed analytics for {summary["students"]} student(s).',
                url_for('results.analytics_hub'))
+
+
+@results_bp.route('/tasks')
+@login_required
+def tasks():
+    """Background task list (async jobs). Empty/graceful when the feature is off
+    or the table hasn't been created yet."""
+    jobs = []
+    try:
+        from models import BackgroundJob
+        jobs = (BackgroundJob.query.order_by(BackgroundJob.id.desc()).limit(50).all())
+    except Exception:
+        db.session.rollback()
+    from utils.jobs import async_enabled
+    return render_template('results/tasks.html', jobs=jobs, async_on=async_enabled())
+
+
+@results_bp.route('/tasks/<int:job_id>.json')
+@login_required
+def task_status(job_id):
+    """Poll a single job's status (for the Tasks page)."""
+    from models import BackgroundJob
+    job = db.session.get(BackgroundJob, job_id)
+    if not job:
+        abort(404)
+    return jsonify(job.as_dict())
 
 
 @results_bp.route('/api/waec-jamb-correlation/<int:year>')

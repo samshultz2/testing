@@ -52,9 +52,10 @@ from .models_graduate import (GraduateAudit, GRADUATE_STATUSES, RESTRICTED_STATU
                               AlumniProfile, DocumentRequest, DOC_REQUEST_STATUSES,
                               DocTemplatePref, DocumentVerification)
 from .models_waec_cert import WAECCertTemplate, WAECCertPreset, WAECCertIssue
+from .models_jobs import BackgroundJob
 
 __all__ = [
-    'db', 'local_now', 'init_db',
+    'db', 'local_now', 'init_db', 'BackgroundJob',
     'Branch', 'Product', 'Sale', 'SaleItem', 'StockMovement',
     'Supplier', 'PurchaseOrder', 'PurchaseOrderItem', 'SupplierPayment', 'PromoCode',
     'StockAudit', 'StockAuditItem', 'FixedAsset', 'StockBatch',

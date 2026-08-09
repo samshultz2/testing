@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Background Tasks — {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('results.analytics_hub') }}">Exam Analytics</a> / <span>Tasks</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.tk-badge { padding:.15rem .55rem; border-radius:var(--radius-full); font-size:.72rem; font-weight:700; }
+.tk-queued { background:var(--gray-100); color:var(--text-muted); }
+.tk-running { background:#dbeafe; color:#1e40af; }
+.tk-done { background:#dcfce7; color:#166534; }
+.tk-failed { background:#fee2e2; color:#991b1b; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Background Tasks</h1>
+        <p class="text-muted text-sm">Long-running jobs (e.g. analytics recompute) run in the background.</p>
+    </div>
+    <div class="page-header-actions">
+        <a href="{{ url_for('results.tasks') }}" class="btn btn-secondary btn-sm"><i class="fas fa-rotate"></i> Refresh</a>
+        <a href="{{ url_for('results.analytics_hub') }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Analytics</a>
+    </div>
+</div>
+
+{% if not async_on %}
+<div class="card mb-3"><div class="card-body text-muted">
+    Background jobs are currently <strong>disabled</strong> (the <code>ASYNC_JOBS</code> flag is off), so
+    actions like Recompute run immediately in the request. Enable the flag to run them here instead.
+</div></div>
+{% endif %}
+
+<div class="card">
+    <div class="card-body" style="padding:0;overflow-x:auto;">
+        <table class="table no-mobile-scroll">
+            <thead><tr><th>#</th><th>Task</th><th>Status</th><th>By</th><th>Queued</th><th>Finished</th><th>Result</th></tr></thead>
+            <tbody>
+            {% for j in jobs %}
+            <tr data-job="{{ j.id }}">
+                <td>{{ j.id }}</td>
+                <td>{{ j.kind.replace('_', ' ').title() }}</td>
+                <td><span class="tk-badge tk-{{ j.status }}">{{ j.status }}</span></td>
+                <td>{{ j.created_by or '—' }}</td>
+                <td>{{ j.created_at.strftime('%d %b %H:%M') if j.created_at else '' }}</td>
+                <td>{{ j.finished_at.strftime('%d %b %H:%M') if j.finished_at else '' }}</td>
+                <td class="text-muted">{{ j.message or (j.result if j.result else '') }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="7" class="text-muted" style="padding:16px;">No background tasks yet.</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script nonce="{{ csp_nonce }}">
+// Auto-poll rows that are still queued/running so the page updates without a full reload.
+(function () {
+  const live = [...document.querySelectorAll('tr[data-job]')].filter(r => {
+    const s = r.querySelector('.tk-badge')?.textContent.trim();
+    return s === 'queued' || s === 'running';
+  });
+  if (!live.length) return;
+  const tick = async () => {
+    let anyLive = false;
+    for (const row of live) {
+      try {
+        const r = await fetch(`{{ url_for('results.tasks') }}/${row.dataset.job}.json`, {headers: {'X-Requested-With': 'fetch'}});
+        if (!r.ok) continue;
+        const j = await r.json();
+        const b = row.querySelector('.tk-badge');
+        b.textContent = j.status; b.className = 'tk-badge tk-' + j.status;
+        if (j.status === 'queued' || j.status === 'running') anyLive = true;
+        else if (j.result || j.message) row.lastElementChild.textContent = j.message || JSON.stringify(j.result);
+      } catch (e) {}
+    }
+    if (anyLive) setTimeout(tick, 3000);
+  };
+  setTimeout(tick, 3000);
+})();
+</script>
+{% endblock %}

@@ -116,6 +116,14 @@ def _tick_one(app):
             run_board_pack_delivery_if_due(app)
         except Exception:
             app.logger.exception('board pack delivery job failed')
+        # Async job queue (opt-in): drain queued background jobs on the bound DB.
+        # No-op unless ASYNC_JOBS is enabled, so prod behaviour is unchanged.
+        try:
+            from utils.jobs import async_enabled, drain
+            if async_enabled(app):
+                drain(app)
+        except Exception:
+            app.logger.exception('background job drain failed')
     finally:
         if is_pg:
             db.session.execute(text('SELECT pg_advisory_unlock(:k)'), {'k': _SCHED_LOCK_KEY})
