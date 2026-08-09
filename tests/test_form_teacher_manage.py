@@ -19,11 +19,20 @@ def test_form_teacher_can_manage_and_add(app):
 
 def test_form_teacher_added_student_is_auto_enrolled(app):
     ids = _seed_teacher_and_students(app)
-    from models import Term
-    with app.app_context():   # make the teacher's term the sole active one
+    from models import Term, AcademicSession
+    with app.app_context():   # make the teacher's term+session the sole active pair
         prior = {t.id: t.is_active for t in Term.query.all()}
+        prior_sess = {s.id: s.is_active for s in AcademicSession.query.all()}
         Term.query.update({Term.is_active: False})
         Term.query.filter_by(name='TVS-Term').update({Term.is_active: True})
+        # Auto-enrolment resolves the target term via get_active_term(), which
+        # follows the active *session*; without activating TVS-Session too, a
+        # stray active session from another test (shared DB) would send the new
+        # student into the wrong term and out of the teacher's form-scoped list.
+        AcademicSession.query.update({AcademicSession.is_active: False})
+        tvs = Term.query.filter_by(name='TVS-Term').first()
+        AcademicSession.query.filter_by(id=tvs.session_id).update(
+            {AcademicSession.is_active: True})
         db.session.commit()
     c = _login_teacher(app)
     try:
@@ -45,6 +54,8 @@ def test_form_teacher_added_student_is_auto_enrolled(app):
                 db.session.delete(s)
             for t in Term.query.all():     # restore prior active-term state
                 t.is_active = prior.get(t.id, False)
+            for s in AcademicSession.query.all():   # and prior active-session state
+                s.is_active = prior_sess.get(s.id, False)
             db.session.commit()
         _deactivate(app)
 
