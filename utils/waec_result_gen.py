@@ -156,8 +156,8 @@ COMPONENT_GROUPS = [
          'avail': lambda c: _has(c, 'school', 'name')},
         {'key': 'school_logo', 'label': 'School logo', 'default': True,
          'avail': lambda c: _has(c, 'school', 'logo_path')},
-        {'key': 'branch', 'label': 'Branch', 'default': False,
-         'avail': lambda c: _has(c, 'branch')},
+        {'key': 'branch', 'label': 'Branch / Campus', 'default': False,
+         'avail': lambda c: True},   # shows the branch name, or "Main Campus" when the school has none
         {'key': 'school_motto', 'label': 'School motto', 'default': True,
          'avail': lambda c: _has(c, 'school', 'motto')},
         {'key': 'school_address', 'label': 'School address', 'default': False,
@@ -628,9 +628,9 @@ def _draw_prestige(c, ctx, show, cfg, verify_url):
     if show.get('school_name') and ctx['school'].get('name'):
         c.setFillColor(_GREEN); c.setFont('Times-Bold', 25)
         c.drawCentredString(cx, y, (ctx['school']['name'] or '').upper()); y -= 18
-    if show.get('branch') and ctx.get('branch'):
+    if show.get('branch'):
         c.setFillColor(_MUTE); c.setFont('Times-Bold', 11)
-        c.drawCentredString(cx, y, ctx['branch'].upper()); y -= 16
+        c.drawCentredString(cx, y, (ctx.get('branch') or 'Main Campus').upper()); y -= 16
     else:
         y -= 4
     # ribbon
@@ -889,8 +889,8 @@ def _draw_classic(c, ctx, show, cfg, verify_url):
     if show.get('school_name') and ctx['school'].get('name'):
         c.setFillColor(NAVY); c.setFont('Times-Bold', 24)
         c.drawCentredString(cx, y, ctx['school']['name'].upper()); y -= 18
-    if show.get('branch') and ctx.get('branch'):
-        c.setFillColor(MUTE); c.setFont('Times-Italic', 11); c.drawCentredString(cx, y, ctx['branch']); y -= 14
+    if show.get('branch'):
+        c.setFillColor(MUTE); c.setFont('Times-Italic', 11); c.drawCentredString(cx, y, ctx.get('branch') or 'Main Campus'); y -= 14
     y -= 4
     _divider(c, cx, y, 200, GOLD); y -= 20
     _spaced(c, cx, y, 'STATEMENT OF EXAMINATION RESULT', 'Helvetica-Bold', 11, 2, NAVY); y -= 16
@@ -1009,8 +1009,8 @@ def _draw_editorial(c, ctx, show, cfg, verify_url):
     if show.get('school_name'):
         for ln in _wrap(c, ctx['school']['name'], 'Helvetica-Bold', 30, W - 200)[:2]:
             c.setFillColor(colors.white); c.setFont('Helvetica-Bold', 30); c.drawString(48, ny, ln); ny -= 32
-    if show.get('branch') and ctx.get('branch'):
-        c.setFillColor(colors.HexColor('#a5b4fc')); c.setFont('Helvetica', 11); c.drawString(48, ny, ctx['branch'])
+    if show.get('branch'):
+        c.setFillColor(colors.HexColor('#a5b4fc')); c.setFont('Helvetica', 11); c.drawString(48, ny, ctx.get('branch') or 'Main Campus')
     # photo overlaps header
     px, py = 48, H - hh - 46
     text_x = 48
@@ -1209,8 +1209,8 @@ def _draw_contemporary(c, ctx, show, cfg, verify_url):
     if show.get('school_name'):
         for ln in _wrap(c, ctx['school']['name'], 'Helvetica-Bold', 20, mx1 - mx0)[:2]:
             c.setFillColor(INK); c.setFont('Helvetica-Bold', 20); c.drawString(mx0, my, ln); my -= 22
-    if show.get('branch') and ctx.get('branch'):
-        c.setFillColor(MUTE); c.setFont('Helvetica', 10); c.drawString(mx0, my, ctx['branch']); my -= 14
+    if show.get('branch'):
+        c.setFillColor(MUTE); c.setFont('Helvetica', 10); c.drawString(mx0, my, ctx.get('branch') or 'Main Campus'); my -= 14
     c.setFillColor(EMER); c.setFont('Helvetica-Bold', 12)
     label = (ctx['exam']['short'] + ' ' if show.get('exam_name') else '') + (str(ctx['exam']['year']) if show.get('exam_year') else '') + ' Result'
     c.drawString(mx0, my - 4, label.strip()); my -= 24
@@ -1412,8 +1412,8 @@ def _draw_executive(c, ctx, show, cfg, verify_url):
         for ln in _wrap(c, ctx['school']['name'].upper(), 'Times-Bold', 33, R - name_x - right_w)[:2]:
             c.setFillColor(NAVY); c.setFont('Times-Bold', 33); c.drawString(name_x, ny, ln); ny -= 36
     ry = H - 58
-    if show.get('branch') and ctx.get('branch'):
-        c.setFillColor(NAVY); c.setFont('Helvetica-Bold', 12.5); c.drawRightString(R, ry, ctx['branch']); ry -= 18
+    if show.get('branch'):
+        c.setFillColor(NAVY); c.setFont('Helvetica-Bold', 12.5); c.drawRightString(R, ry, ctx.get('branch') or 'Main Campus'); ry -= 18
     if show.get('school_motto') and ctx['school'].get('motto'):
         c.setFillColor(MUTE); c.setFont('Helvetica-Oblique', 9); c.drawRightString(R, ry, 'School Motto'); ry -= 13
         for ln in _wrap(c, ctx['school']['motto'], 'Helvetica-Bold', 10.5, right_w)[:2]:
@@ -1897,8 +1897,8 @@ def _draw_meridian(c, ctx, show, cfg, verify_url):
         except Exception:
             pass
     ry = (H - 50) - 22 * max(len(name_lines), 1) - 12
-    if show.get('branch') and ctx.get('branch'):
-        c.setFillColor(INK); c.setFont('Helvetica-Bold', 10); c.drawRightString(R, ry, ctx['branch'].upper()); ry -= 13
+    if show.get('branch'):
+        c.setFillColor(INK); c.setFont('Helvetica-Bold', 10); c.drawRightString(R, ry, (ctx.get('branch') or 'Main Campus').upper()); ry -= 13
     if show.get('school_motto') and ctx['school'].get('motto'):
         c.setFillColor(MUTE); c.setFont('Helvetica-Oblique', 9); c.drawRightString(R, ry, ctx['school']['motto'])
 
@@ -2115,8 +2115,8 @@ def _draw_aurelis(c, ctx, show, cfg, verify_url):
         track('WEST AFRICAN SENIOR SCHOOL', 'Helvetica-Bold', 9, FM, H - 100, 0.4, GRAY)
         track('CERTIFICATE EXAMINATION', 'Helvetica-Bold', 9, FM, H - 112, 0.4, GRAY)
     ry = H - 98
-    if show.get('branch') and ctx.get('branch'):
-        c.setFillColor(INK); c.setFont('Helvetica', 12); c.drawRightString(R, ry, ctx['branch']); ry -= 15
+    if show.get('branch'):
+        c.setFillColor(INK); c.setFont('Helvetica', 12); c.drawRightString(R, ry, ctx.get('branch') or 'Main Campus'); ry -= 15
     if show.get('school_motto') and ctx['school'].get('motto'):
         c.setFillColor(GRAY); c.setFont('Helvetica-Oblique', 9.5); c.drawRightString(R, ry, ctx['school']['motto'])
     c.setStrokeColor(HAIR); c.setLineWidth(0.9); c.line(FM, H - 128, R, H - 128)
@@ -2336,8 +2336,8 @@ def _draw_monument(c, ctx, show, cfg, verify_url):
     if show.get('school_name') and ctx['school'].get('name'):
         for ln in _wrap(c, ctx['school']['name'].upper(), 'Times-Bold', 19, 250)[:2]:
             c.setFillColor(NAVY); c.setFont('Times-Bold', 19); c.drawString(name_x, ny, ln); ny -= 21
-    if show.get('branch') and ctx.get('branch'):
-        track(ctx['branch'].upper(), 'Helvetica', 8, name_x, ny - 1, 1.2, GRAY); ny -= 12
+    if show.get('branch'):
+        track((ctx.get('branch') or 'Main Campus').upper(), 'Helvetica', 8, name_x, ny - 1, 1.2, GRAY); ny -= 12
     elif show.get('school_motto') and ctx['school'].get('motto'):
         c.setFillColor(GRAY); c.setFont('Helvetica-Oblique', 8.5); c.drawString(name_x, ny - 1, ctx['school']['motto'])
     # right — WASSCE / year
