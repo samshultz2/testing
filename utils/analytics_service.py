@@ -481,7 +481,10 @@ class AcademicAnalytics:
             has_core = any('english' in s for s in credited) and any('math' in s for s in credited)
             avg_pt = sum(pts.get(g, 9) for g in grades) / len(grades) if grades else None
             rows.append({
-                'student': student,
+                # plain dict (not the ORM object) so the whole broadsheet is
+                # JSON-serialisable and can be memoised in AnalyticsCache
+                'student': {'id': student.id, 'full_name': student.full_name,
+                            'surname': student.surname or '', 'first_name': student.first_name or ''},
                 'cells': gmap,                                 # {subject: grade}
                 'credits': credits,
                 'distinctions': sum(1 for g in grades if g in AcademicAnalytics.DISTINCTION_GRADES),
@@ -490,8 +493,8 @@ class AcademicAnalytics:
                 'avg_grade': pt_to_grade.get(round(avg_pt), '—') if avg_pt is not None else '—',
                 'subject_count': len(grades),
             })
-        rows.sort(key=lambda x: ((x['student'].surname or '').lower(),
-                                 (x['student'].first_name or '').lower()))
+        rows.sort(key=lambda x: (x['student']['surname'].lower(),
+                                 x['student']['first_name'].lower()))
 
         subject_summary = {}
         for subj in subjects:
