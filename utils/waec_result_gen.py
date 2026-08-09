@@ -2884,14 +2884,20 @@ def _draw_monument(c, ctx, show, cfg, verify_url):
         c.setFillColor(GOLD)
         c.rect(gx0 - 4, cyc - 2, 4, 4, fill=1, stroke=0); c.rect(gx1, cyc - 2, 4, 4, fill=1, stroke=0)
 
-    # ---- 2 · vertical WASSCE marker (left margin) --------------------------
-    mk_x = 30; mk_top = H - 158; mk_bot = 250
-    c.setStrokeColor(NAVY); c.setLineWidth(1.0); c.line(mk_x, mk_bot, mk_x, mk_top)
+    # ---- 2 · vertical WASSCE marker ---------------------------------------
+    #  One continuous rule, broken only where the rotated label sits; the two
+    #  segment ends adjacent to the label are picked out in antique gold. The
+    #  rule runs close to the results column, not out in the far margin.
+    mk_x = 68; mk_top = H - 152; mk_bot = 232
     mid = (mk_top + mk_bot) / 2.0
-    c.setStrokeColor(GOLD); c.setLineWidth(1.4)
-    c.line(mk_x - 3, mid + 74, mk_x + 3, mid + 74); c.line(mk_x - 3, mid - 74, mk_x + 3, mid - 74)
+    half = (sum(_sw(ch, 'Helvetica-Bold', 8.5) + 3 for ch in 'WASSCE') - 3) / 2.0
+    gap_t = mid + half + 6; gap_b = mid - half - 6
+    c.setStrokeColor(GOLD); c.setLineWidth(1.3)
+    c.line(mk_x, gap_t, mk_x, gap_t + 15); c.line(mk_x, gap_b, mk_x, gap_b - 15)
+    c.setStrokeColor(NAVY); c.setLineWidth(1.0)
+    c.line(mk_x, gap_t + 15, mk_x, mk_top); c.line(mk_x, gap_b - 15, mk_x, mk_bot)
     c.saveState(); c.translate(mk_x, mid); c.rotate(90)
-    track('WASSCE', 'Helvetica-Bold', 8.5, 0, 3, 3, NAVY, center=True)
+    track('WASSCE', 'Helvetica-Bold', 8.5, 0, -3, 3, NAVY, center=True)
     c.restoreState()
 
     LM = 92
