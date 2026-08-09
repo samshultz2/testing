@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Chart, { chartTheme } from './charts';
-import { Kpi, Widget, Empty, ChartBox, naira, nairaShort } from './components';
+import { Kpi, KpiCard, Widget, Empty, ChartBox, naira, nairaShort } from './components';
 import Customize from './Customize';
 import { apiGet, apiPost, csrfToken } from '../lib/api';
 import { chartPalette } from '../lib/hooks';
@@ -89,6 +89,20 @@ export default function App({ data: initialData }) {
   const [blockBusy, setBlockBusy] = useState({});
   const [dragId, setDragId] = useState(null);
   const [overId, setOverId] = useState(null);
+
+  // Keep the dashboard "alive": quietly re-fetch the numbers on an interval so
+  // the headline KPIs and widgets stay current without a manual refresh. Paused
+  // while arranging/customising (don't clobber in-progress edits) and while the
+  // tab is hidden (no background polling). The animated counters/sparklines make
+  // the update read as live movement, not a jarring jump.
+  useEffect(() => {
+    const timer = setInterval(async () => {
+      if (document.hidden || arranging || customizing) return;
+      try { setData(await apiGet('/api/dashboard/data')); setUpdatedAt(new Date()); }
+      catch (_e) { /* keep the last data silently on a transient failure */ }
+    }, 60000);
+    return () => clearInterval(timer);
+  }, [arranging, customizing]);
 
   // Persist a layout patch (order and/or favourites). Best-effort — a failed
   // save surfaces a toast but the optimistic UI state stays.
@@ -185,16 +199,29 @@ export default function App({ data: initialData }) {
     exec_summary: <ExecSummary tiles={d.exec_summary || []} />,
     insights: <Insights items={d.insights || []} />,
     branches: <BranchComparison rows={d.branch_comparison || []} />,
-    kpi: (
-      <div className="kpi-row">
-        <Kpi tone="blue" icon="fa-users" value={d.total_students} label="Students"
-             delta={d.new_students_month > 0 ? { dir: 'up', text: `+${d.new_students_month} this month` } : undefined} />
-        <Kpi tone="green" icon="fa-user-check" value={d.active_enrollments} label="Enrolled" />
-        <Kpi tone="teal" icon="fa-percent" value={(d.attendance_stats || {}).today_percentage + '%'} label="Attendance today"
-             delta={attendanceDelta(d.attendance_stats)} />
-        <Kpi tone="purple" icon="fa-user-graduate" value={d.graduates_count} label="Graduates" />
-      </div>
-    ),
+    kpi: (() => {
+      const hk = d.headline_kpis || {};
+      return (
+        <div className="kpi-row">
+          <KpiCard tone="blue" icon="fa-users" value={d.total_students} label="Students"
+                   sub="Total registered students"
+                   delta={(hk.students || {}).delta} deltaLabel={(hk.students || {}).delta_label}
+                   series={(hk.students || {}).series} />
+          <KpiCard tone="green" icon="fa-user-check" value={d.active_enrollments} label="Enrolled"
+                   sub="Active students"
+                   delta={(hk.enrolled || {}).delta} deltaLabel={(hk.enrolled || {}).delta_label}
+                   series={(hk.enrolled || {}).series} />
+          <KpiCard tone="orange" icon="fa-percent" value={(d.attendance_stats || {}).today_percentage + '%'}
+                   label="Attendance Today" sub="Average attendance"
+                   delta={(hk.attendance || {}).delta} deltaLabel={(hk.attendance || {}).delta_label}
+                   series={(hk.attendance || {}).series} />
+          <KpiCard tone="purple" icon="fa-user-graduate" value={d.graduates_count} label="Graduates"
+                   sub="This session"
+                   delta={(hk.graduates || {}).delta} deltaLabel={(hk.graduates || {}).delta_label}
+                   series={(hk.graduates || {}).series} />
+        </div>
+      );
+    })(),
     academic: <AcademicPerformance a={d.academic} urls={urls} t={t} />,
     timetable: <TodaySchedule data={d.timetable_today} urls={urls} teacher={!!d.teacher_classes} />,
     finance_health: <FinanceHealth f={d.finance_health} urls={urls} t={t} />,
@@ -357,23 +384,28 @@ export default function App({ data: initialData }) {
       {toast && <Toast tone={toast.tone} onClose={() => setToast(null)}>{toast.text}</Toast>}
       {/* Hero */}
       <div className="dash-hero">
-        <div>
-          <h1>Welcome back{d.user_name ? ', ' + d.user_name : ''} 👋</h1>
+        <div className="dash-hero-main">
+          <div className="dash-hero-eyebrow"><span aria-hidden="true">✦</span> Good to see you again,</div>
+          <h1>{d.user_name || 'there'} <span className="dash-wave" aria-hidden="true">👋</span></h1>
           <p>{dateLabel}{d.active_session ? ' · ' + d.active_session.name : ''}</p>
+          <div className="dash-hero-actions">
+            {d.active_term && <span className="term-pill"><i aria-hidden="true" className="fas fa-calendar-day" /> {d.active_term.name}</span>}
+            <button type="button" onClick={refresh} disabled={refreshing} className="hero-btn"
+                    title={'Refresh dashboard — last updated ' + updatedLabel} aria-label={'Refresh dashboard, last updated ' + updatedLabel}>
+              <i aria-hidden="true" className={'fas fa-rotate' + (refreshing ? ' fa-spin' : '')} /> {refreshing ? 'Refreshing…' : 'Refresh'}
+            </button>
+            {!emptySchool && <button type="button" onClick={() => setArranging((v) => !v)}
+                    className={'hero-btn' + (arranging ? ' active' : '')}
+                    aria-pressed={arranging} title="Drag to reorder & pin favourite widgets">
+              <i aria-hidden="true" className="fas fa-up-down-left-right" /> {arranging ? 'Done' : 'Arrange'}
+            </button>}
+            <button type="button" onClick={() => setCustomizing(true)} className="hero-btn" title="Choose widgets">
+              <i aria-hidden="true" className="fas fa-sliders" /> Customize
+            </button>
+          </div>
         </div>
-        <div className="dash-hero-actions">
-          {d.active_term && <div className="term-chip"><i aria-hidden="true" className="fas fa-calendar-day" /> {d.active_term.name}</div>}
-          <button type="button" onClick={refresh} disabled={refreshing} className="btn btn-secondary btn-sm"
-                  title={'Refresh dashboard — last updated ' + updatedLabel} aria-label={'Refresh dashboard, last updated ' + updatedLabel}>
-            <i aria-hidden="true" className={'fas fa-rotate' + (refreshing ? ' fa-spin' : '')} /> {refreshing ? 'Refreshing…' : 'Refresh'}
-          </button>
-          {!emptySchool && <button type="button" onClick={() => setArranging((v) => !v)}
-                  className={'btn btn-sm ' + (arranging ? 'btn-primary' : 'btn-secondary')}
-                  aria-pressed={arranging} title="Drag to reorder & pin favourite widgets">
-            <i aria-hidden="true" className="fas fa-up-down-left-right" /> {arranging ? 'Done' : 'Arrange'}
-          </button>}
-          <button type="button" onClick={() => setCustomizing(true)} className="btn btn-secondary btn-sm" title="Choose widgets"><i aria-hidden="true" className="fas fa-sliders" /> Customize</button>
-        </div>
+        <SchoolArt />
+        <span className="dash-hero-dots" aria-hidden="true" />
       </div>
       <div aria-live="polite" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' }}>
         {refreshing ? 'Refreshing dashboard' : 'Dashboard updated ' + updatedLabel}
@@ -1024,6 +1056,48 @@ function ExamCard({ kind, snap, url }) {
           {stats.map((s) => <ExamStatPill key={s.k} k={s.k} v={s.v} />)}
         </div>
       )}
+    </div>
+  );
+}
+
+// Decorative school-building illustration for the hero (echoes the reference
+// design). Purely ornamental, so it's aria-hidden and colour-tuned to sit on the
+// dark-green hero without competing with the text.
+function SchoolArt() {
+  return (
+    <div className="dash-hero-art" aria-hidden="true">
+      <svg viewBox="0 0 240 180" width="100%" height="100%" preserveAspectRatio="xMidYMax meet">
+        {/* soft ground + bushes */}
+        <ellipse cx="120" cy="168" rx="120" ry="16" fill="rgba(255,255,255,.06)" />
+        <circle cx="40" cy="150" r="26" fill="rgba(198,236,214,.35)" />
+        <circle cx="205" cy="150" r="30" fill="rgba(198,236,214,.3)" />
+        {/* main building */}
+        <rect x="58" y="86" width="124" height="72" rx="6" fill="#eef7f1" />
+        <rect x="58" y="150" width="124" height="8" rx="2" fill="#cfe6d8" />
+        {/* roof */}
+        <polygon points="120,44 190,90 50,90" fill="#7cc7a0" />
+        <polygon points="120,44 190,90 120,90" fill="#63b389" />
+        {/* flag */}
+        <rect x="118" y="26" width="3" height="20" rx="1.5" fill="#eef7f1" />
+        <polygon points="121,27 137,32 121,37" fill="#f4b740" />
+        {/* clock on the gable */}
+        <circle cx="120" cy="74" r="9" fill="#eef7f1" />
+        <circle cx="120" cy="74" r="9" fill="none" stroke="#63b389" strokeWidth="1.5" />
+        <line x1="120" y1="74" x2="120" y2="69" stroke="#2f7d54" strokeWidth="1.4" strokeLinecap="round" />
+        <line x1="120" y1="74" x2="124" y2="76" stroke="#2f7d54" strokeWidth="1.4" strokeLinecap="round" />
+        {/* door */}
+        <rect x="106" y="120" width="28" height="38" rx="14" fill="#8fd0ab" />
+        <rect x="106" y="120" width="28" height="38" rx="14" fill="none" stroke="#cfe6d8" strokeWidth="1.2" />
+        <circle cx="128" cy="140" r="1.6" fill="#2f7d54" />
+        {/* windows */}
+        {[72, 150].map((x) => (
+          <g key={x}>
+            <rect x={x} y="104" width="20" height="20" rx="3" fill="#bfe3cf" />
+            <line x1={x + 10} y1="104" x2={x + 10} y2="124" stroke="#eef7f1" strokeWidth="1.4" />
+            <line x1={x} y1="114" x2={x + 20} y2="114" stroke="#eef7f1" strokeWidth="1.4" />
+          </g>
+        ))}
+      </svg>
     </div>
   );
 }

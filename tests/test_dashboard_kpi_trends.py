@@ -58,6 +58,56 @@ def test_hr_widget_reports_todays_absences(app):
         assert hr['att']['absent'] >= 1
 
 
+def test_headline_kpis_build_real_series(app):
+    """The headline KPI cards get real sparkline series + trend deltas: cumulative
+    students by term, enrolments per term, and cumulative graduates by session."""
+    from datetime import date, datetime
+    from flask import session
+    from routes.main import _dash_headline_kpis
+    from models import (AcademicSession, Term, SchoolClass, ClassArm,
+                        ClassArmAssignment, StudentEnrollment)
+    with app.app_context():
+        bid = Branch.get_default().id
+        # Sentinel far-future session/term so this test owns the newest points.
+        sess = AcademicSession(name='HK-Session', is_active=False,
+                               start_date=date(2099, 9, 1), end_date=date(2100, 7, 31))
+        db.session.add(sess); db.session.flush()
+        term = Term(session_id=sess.id, term_number=1, name='HK-Term',
+                    start_date=date(2099, 9, 1), end_date=date(2099, 12, 20))
+        db.session.add(term); db.session.flush()
+        s1 = Student(student_id='ZZ_HK1', first_name='A', surname='ZzHk1',
+                     gender='Male', is_active=True, branch_id=bid)
+        s2 = Student(student_id='ZZ_HK2', first_name='B', surname='ZzHk2',
+                     gender='Female', is_active=True, branch_id=bid)
+        db.session.add_all([s1, s2]); db.session.flush()
+        s1.created_at = datetime(2099, 10, 1); s2.created_at = datetime(2099, 11, 1)
+        g = Student(student_id='ZZ_HKG', first_name='G', surname='ZzHkG', gender='Male',
+                    is_active=True, is_graduated=True, graduation_date=date(2099, 12, 1),
+                    branch_id=bid)
+        db.session.add(g)
+        cls = SchoolClass.query.first() or SchoolClass(name='HKClass', level=1, is_active=True)
+        arm = ClassArm.query.first() or ClassArm(name='HK', is_active=True)
+        db.session.add_all([cls, arm]); db.session.flush()
+        caa = ClassArmAssignment(class_id=cls.id, arm_id=arm.id, term_id=term.id, branch_id=bid)
+        db.session.add(caa); db.session.flush()
+        db.session.add(StudentEnrollment(student_id=s1.id, class_arm_assignment_id=caa.id, is_active=True))
+        db.session.commit()
+        tid, sid = term.id, sess.id
+
+    with app.test_request_context('/'):
+        session['logged_in'] = True; session['role'] = 'super_admin'; session['scope'] = 'central'
+        hk = _dash_headline_kpis(db.session.get(Term, tid), db.session.get(AcademicSession, sid), None)
+
+    for key in ('students', 'enrolled', 'attendance', 'graduates'):
+        assert key in hk
+        assert isinstance(hk[key]['series'], list)
+        assert isinstance(hk[key]['delta_label'], str)
+        assert hk[key]['delta'] is None or set(hk[key]['delta']) == {'pct', 'dir'}
+    assert hk['students']['series'] and hk['students']['series'][-1] >= 2   # both students, cumulative
+    assert hk['enrolled']['series'] and hk['enrolled']['series'][-1] >= 1   # the one enrolment
+    assert hk['graduates']['series'] and hk['graduates']['series'][-1] >= 1  # the graduate
+
+
 def test_finance_stat_exposes_collected_today(app):
     """When finance is enabled, the term stat carries today's collection so the
     KPI can show a 'x today' chip."""
