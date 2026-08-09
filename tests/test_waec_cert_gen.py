@@ -153,6 +153,12 @@ def test_generator_page_and_picker(app):
     assert 'Live preview' in body and 'Classic Academic' in body and 'Included information' in body
     # picker lists students with WAEC results
     assert c.get('/results/waec/certificate').status_code == 200
+    # live search: a fetch request returns JSON matches (no full page)
+    r = c.get('/results/waec/certificate?q=Okafor', headers={'X-Requested-With': 'fetch'})
+    assert r.status_code == 200 and r.is_json
+    data = r.get_json()
+    assert 'students' in data and any('Okafor' in s['full_name'] for s in data['students'])
+    assert all('url' in s and 'student_id' in s for s in data['students'])
 
 
 def test_preview_returns_png(app):

@@ -10,7 +10,7 @@ import io
 import json
 import zipfile
 
-from flask import send_file, abort, session
+from flask import send_file, abort, session, jsonify
 
 from routes.results import *  # noqa: F401,F403  (results_bp, db, Student, request, …)
 from utils import waec_result_gen as W
@@ -130,6 +130,12 @@ def waec_cert_generator():
                                       Student.surname.ilike(term, escape='\\'),
                                       Student.student_id.ilike(term, escape='\\')))
         students = base.order_by(Student.surname).limit(50).all()
+        # Live search: the picker fetches this endpoint as-you-type and renders the
+        # matches client-side (no full page reload).
+        if request.headers.get('X-Requested-With') == 'fetch':
+            return jsonify({'students': [
+                {'id': s.id, 'full_name': s.full_name, 'student_id': s.student_id,
+                 'url': url_for('results.waec_cert_generator', student_id=s.id)} for s in students]})
         return render_template('results/waec_cert.html', student=None, students=students, q=q)
 
     student = _load_student(student_id)
