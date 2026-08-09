@@ -371,3 +371,23 @@ def test_save_and_use_preset(app):
     # it now appears in the generator's preset list
     g = c.get(f'/results/waec/certificate?student_id={sid}&year={_YR}').get_data(as_text=True)
     assert 'My Preset' in g
+
+
+def test_preview_etag_304_and_busts_on_edit(app):
+    # The live preview should skip re-rendering when the browser holds the exact
+    # frame (ETag 304), but any grade edit must invalidate that ETag.
+    sid = _seed(app)
+    c = _admin(app)
+    url = f'/results/waec/certificate/preview?student_id={sid}&year={_YR}&template=classic'
+    r1 = c.get(url)
+    assert r1.status_code == 200
+    etag = r1.headers.get('ETag')
+    assert etag
+    r2 = c.get(url, headers={'If-None-Match': etag})
+    assert r2.status_code == 304
+    with app.app_context():
+        row = WAECResult.query.filter_by(student_id=sid, exam_year=_YR, subject='Mathematics').first()
+        row.grade = 'C6'
+        db.session.commit()
+    r3 = c.get(url, headers={'If-None-Match': etag})
+    assert r3.status_code == 200 and r3.headers.get('ETag') != etag

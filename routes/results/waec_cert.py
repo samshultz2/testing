@@ -159,6 +159,20 @@ def waec_cert_generator():
         bulk_url=url_for('results.waec_cert_bulk'))
 
 
+def _preview_etag(student, year):
+    """A strong ETag for the live preview: the full request query (which encodes
+    the template + every component toggle + scale) plus a fingerprint of the
+    student's results for the year, so an identical request is a cheap 304 but any
+    grade edit invalidates it. Rendering is deterministic, so this is exact."""
+    import hashlib
+    rows = (WAECResult.query.filter_by(student_id=student.id, exam_year=year)
+            .with_entities(WAECResult.subject, WAECResult.grade,
+                           WAECResult.updated_at).all())
+    fp = '|'.join(f'{s}:{g}:{u}' for s, g, u in sorted((str(a), str(b), str(c)) for a, b, c in rows))
+    raw = (request.query_string or b'').decode('utf-8', 'ignore') + '||' + fp
+    return '"' + hashlib.sha1(raw.encode('utf-8')).hexdigest() + '"'
+
+
 @results_bp.route('/waec/certificate/preview')
 @login_required
 def waec_cert_preview():
@@ -166,6 +180,15 @@ def waec_cert_preview():
     year = request.args.get('year', type=int)
     if not year:
         abort(400)
+    # Skip the (expensive) render when the browser already holds this exact frame.
+    etag = _preview_etag(student, year)
+    _inm = [t.strip() for t in (request.headers.get('If-None-Match') or '').split(',')]
+    if etag in _inm:
+        from flask import Response
+        r304 = Response(status=304)
+        r304.headers['ETag'] = etag
+        r304.headers['Cache-Control'] = 'private, max-age=0, must-revalidate'
+        return r304
     ctx = W.build_context(student, year)
     ctx['verify_code'] = 'PREVIEW'
     template = request.args.get('template') or W.DEFAULT_TEMPLATE
@@ -175,7 +198,10 @@ def waec_cert_preview():
                                       _verify_url_for('PREVIEW')),
                          'png', scale=float(request.args.get('scale', 2.0)))
     resp = send_file(io.BytesIO(png), mimetype='image/png')
-    resp.headers['Cache-Control'] = 'no-store'
+    # Always revalidate (data may change) but let the ETag turn an unchanged
+    # re-request into a cheap 304 instead of a re-render.
+    resp.headers['ETag'] = etag
+    resp.headers['Cache-Control'] = 'private, max-age=0, must-revalidate'
     return resp
 
 
