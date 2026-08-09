@@ -229,3 +229,21 @@ def api_student_predictions(student_id):
         'waec_prediction': waec_from_mock,
         'jamb_prediction': jamb_prediction
     })
+
+
+@results_bp.route('/student/<int:student_id>/action-plan')
+@login_required
+def student_action_plan(student_id):
+    """Consolidated action plan for one student: a plain-English readiness
+    narrative plus prioritised recommendations, synthesised from the existing
+    readiness / projection / risk signals. ?format=json for the raw plan."""
+    student = db.get_or_404(Student, student_id)
+    require_branch_access(student.branch_id)
+    from utils.student_action_plan import build_action_plan
+    sess = get_active_session()
+    plan = build_action_plan(student, sess.id if sess else None)
+    if request.args.get('format') == 'json':
+        # ORM objects in `readiness` aren't JSON-safe; return the actionable core.
+        return jsonify({k: plan[k] for k in ('status', 'headline', 'narrative',
+                                             'actions', 'risk_level')})
+    return render_template('results/student_action_plan.html', student=student, plan=plan)

@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Action Plan — {{ student.full_name }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('results.index') }}">Results</a> / <a href="{{ url_for('results.student_predictions', student_id=student.id) }}">{{ student.full_name }}</a> / <span>Action Plan</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.ap-status { display:inline-block; padding:.25rem .7rem; border-radius:var(--radius-full); font-weight:700; font-size:.8rem; }
+.ap-READY { background:#dcfce7; color:#166534; } .ap-CONDITIONAL { background:#fef9c3; color:#854d0e; }
+.ap-AT_RISK { background:#ffedd5; color:#9a3412; } .ap-NOT_READY { background:#fee2e2; color:#991b1b; }
+.ap-NO_DATA { background:var(--gray-100); color:var(--text-muted); }
+.ap-narr { font-size:1rem; line-height:1.6; }
+.ap-action { display:flex; gap:.75rem; align-items:flex-start; border:1px solid var(--border-color);
+             border-left-width:4px; border-radius:var(--radius-md); padding:.7rem .9rem; margin-bottom:.55rem; background:var(--bg-card); }
+.ap-action.HIGH { border-left-color:#dc2626; } .ap-action.MEDIUM { border-left-color:#d97706; } .ap-action.LOW { border-left-color:#16a34a; }
+.ap-pri { font-size:.65rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; padding:.1rem .45rem; border-radius:var(--radius-full); flex:0 0 auto; }
+.ap-pri.HIGH { background:#fee2e2; color:#991b1b; } .ap-pri.MEDIUM { background:#ffedd5; color:#9a3412; } .ap-pri.LOW { background:#dcfce7; color:#166534; }
+.ap-area { font-weight:600; font-size:.9rem; } .ap-rec { font-size:.88rem; color:var(--text-secondary); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Action Plan — {{ student.full_name }}</h1>
+        <p class="text-muted text-sm">{{ student.student_id }}{% if plan.risk_level %} · Risk: {{ plan.risk_level }}{% endif %}</p>
+    </div>
+    <div class="page-header-actions">
+        <a href="{{ url_for('results.student_predictions', student_id=student.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Predictions</a>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-body">
+        <span class="ap-status ap-{{ plan.status }}">{{ plan.status.replace('_', ' ').title() }}</span>
+        <p class="ap-narr mt-2 mb-0">{{ plan.narrative or 'Not enough data yet to build an action plan for this student.' }}</p>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h3><i class="fas fa-list-check"></i> Recommended actions</h3></div>
+    <div class="card-body">
+        {% if plan.actions %}
+        {% for a in plan.actions %}
+        <div class="ap-action {{ a.priority }}">
+            <span class="ap-pri {{ a.priority }}">{{ a.priority }}</span>
+            <div>
+                <div class="ap-area">{{ a.area }}</div>
+                <div class="ap-rec">{{ a.recommendation }}</div>
+            </div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <div class="empty-state"><i class="fas fa-check-circle"></i><h3>No actions needed</h3>
+            <p>No blockers or risk factors were found for this student.</p></div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
