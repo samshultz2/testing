@@ -199,3 +199,21 @@ class MessageRecipient(db.Model):
 
     def __repr__(self):
         return f'<MessageRecipient {self.phone} {self.status}>'
+
+
+class NotificationPreference(db.Model):
+    """Per-user opt-in/out for a notification channel (in-app / email / sms /
+    push). Absence of a row means the channel is on (opt-out model). Enforcement
+    is gated by the NOTIFY_PREFS feature flag; today only the in-app channel is
+    enforced (in utils.notify)."""
+    __tablename__ = 'notification_preferences'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    channel = db.Column(db.String(16), nullable=False)      # inapp/email/sms/push
+    enabled = db.Column(db.Boolean, default=True, nullable=False)
+
+    __table_args__ = (db.UniqueConstraint('user_id', 'channel', name='uq_notif_pref'),)
+
+    def __repr__(self):
+        return f'<NotificationPreference u{self.user_id} {self.channel}={self.enabled}>'

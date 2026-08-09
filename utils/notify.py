@@ -17,6 +17,15 @@ from models import db, Notification
 def notify(title, body='', url=None, *, user_id=None, role=None, category='info'):
     """Create a notification for one user or a role broadcast. Returns it (or
     None on failure)."""
+    # Honour a user's channel preference for the in-app bell (opt-out), but only
+    # when the NOTIFY_PREFS flag is on — otherwise delivery is unchanged.
+    try:
+        if user_id:
+            from utils.notify_prefs import flag_enabled, wants
+            if flag_enabled() and not wants(user_id, 'inapp'):
+                return None
+    except Exception:
+        pass
     try:
         n = Notification(title=(title or '')[:150], body=body or '', url=url,
                          user_id=user_id, role=role, category=category)

@@ -1142,3 +1142,23 @@ def delete_user(user_id):
         db.session.rollback()
         return _err(f'Error: {str(e)}', url_for('settings.users_list'))
     return _ok('User deleted!', url_for('settings.users_list'))
+
+
+@settings_bp.route('/notifications', methods=['GET', 'POST'])
+@login_required
+def notification_prefs():
+    """Per-user notification-channel preferences (opt-out). Enforcement is gated
+    by the NOTIFY_PREFS flag; today the in-app bell honours it."""
+    from utils.notify_prefs import CHANNELS, CHANNEL_LABELS, get_prefs, set_pref, flag_enabled
+    uid = session.get('user_id')
+    if request.method == 'POST':
+        if uid:
+            for ch in CHANNELS:
+                set_pref(uid, ch, request.form.get('ch_' + ch) == 'on')
+            flash('Notification preferences saved.', 'success')
+        else:
+            flash('Sign in with a staff account to set notification preferences.', 'warning')
+        return redirect(url_for('settings.notification_prefs'))
+    return render_template('settings/notifications.html',
+                           prefs=get_prefs(uid) if uid else {}, channels=CHANNELS,
+                           labels=CHANNEL_LABELS, has_user=bool(uid), flag_on=flag_enabled())
