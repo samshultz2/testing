@@ -402,10 +402,17 @@ def build_context(student, year):
     else:
         classification = 'Fail'
 
+    # Resolve the student's branch/campus name. Student carries a ``branch_id``
+    # column but no ORM relationship, so look the Branch up by id when needed.
     branch = None
     try:
-        if getattr(student, 'branch', None) is not None:
-            branch = student.branch.name
+        b = getattr(student, 'branch', None)
+        if b is not None:
+            branch = b.name
+        elif getattr(student, 'branch_id', None):
+            from models import Branch, db
+            bobj = db.session.get(Branch, student.branch_id)
+            branch = bobj.name if bobj else None
     except Exception:
         branch = None
 

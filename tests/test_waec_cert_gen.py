@@ -225,6 +225,15 @@ def test_terrain_template_registered_and_renders(app):
         assert W.render_pdf(ctx, 'terrain', minimal).getvalue()[:4] == b'%PDF'
 
 
+def test_branch_resolved_from_branch_id(app):
+    # a student carries branch_id but no ORM relationship — build_context must
+    # still resolve the campus name (else every result reads "Main Campus")
+    sid = _seed(app)
+    with app.app_context():
+        ctx = W.build_context(db.session.get(Student, sid), _YR)
+        assert ctx['branch'] == Branch.get_default().name
+
+
 def test_render_handles_many_subjects(app):
     grades = {f'Subject {i}': 'C4' for i in range(1, 14)}   # 13 subjects -> compact table
     sid = _seed(app, grades)
