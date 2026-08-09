@@ -738,11 +738,8 @@ def _draw_prestige(c, ctx, show, cfg, verify_url):
                 sig = None
         # signing space left blank for the principal to sign by hand
         c.setStrokeColor(_INK); c.setLineWidth(0.8); c.line(lx, sy - 8, lx + 150, sy - 8)
-        if show.get('principal_name') and ctx['official'].get('principal_name'):
-            c.setFillColor(_INK); c.setFont('Helvetica-Bold', 10)
-            c.drawString(lx, sy - 22, ctx['official']['principal_name'].upper())
         c.setFillColor(_MUTE); c.setFont('Helvetica', 8.5)
-        c.drawString(lx, sy - 34, 'Principal')
+        c.drawString(lx, sy - 22, "Principal's Signature")
     # right: seal + certified box
     if show.get('school_stamp') or show.get('date_issued'):
         rx = W - m - 200
@@ -977,9 +974,7 @@ def _draw_classic(c, ctx, show, cfg, verify_url):
                 except Exception:
                     pass
             c.setStrokeColor(INK); c.setLineWidth(0.8); c.line(lx - 70, sy, lx + 70, sy)
-            if name:
-                c.setFillColor(INK); c.setFont('Helvetica-Bold', 10); c.drawCentredString(lx, sy - 13, name.upper())
-            c.setFillColor(MUTE); c.setFont('Helvetica', 8.5); c.drawCentredString(lx, sy - 24, role)
+            c.setFillColor(MUTE); c.setFont('Helvetica', 8.5); c.drawCentredString(lx, sy - 14, role + "'s Signature")
     # seal + date
     if show.get('school_stamp'):
         _seal(c, W - m - 44, sy + 6, 26, ctx['school'].get('name'))
@@ -1077,10 +1072,7 @@ def _draw_editorial(c, ctx, show, cfg, verify_url):
             except Exception:
                 pass
         c.setStrokeColor(INK); c.setLineWidth(0.8); c.line(x0, fy, x0 + 150, fy)
-        c.setFillColor(INK); c.setFont('Helvetica-Bold', 10)
-        if show.get('principal_name'):
-            c.drawString(x0, fy - 13, (ctx['official'].get('principal_name') or '').upper())
-        c.setFillColor(MUTE); c.setFont('Helvetica', 8.5); c.drawString(x0, fy - 24, 'Principal')
+        c.setFillColor(MUTE); c.setFont('Helvetica', 8.5); c.drawString(x0, fy - 14, "Principal's Signature")
     if show.get('date_issued'):
         c.setFillColor(MUTE); c.setFont('Helvetica', 9); c.drawRightString(x1, fy - 4, 'Issued ' + _issue_date().strftime('%d %b %Y'))
 
@@ -1149,10 +1141,7 @@ def _draw_premium(c, ctx, show, cfg, verify_url):
             except Exception:
                 pass
         c.setStrokeColor(CHAR); c.setLineWidth(0.8); c.line(lx - 70, by, lx + 70, by)
-        c.setFillColor(CHAR); c.setFont('Helvetica-Bold', 10)
-        if show.get('principal_name'):
-            c.drawCentredString(lx, by - 13, (ctx['official'].get('principal_name') or '').upper())
-        c.setFillColor(MUTE); c.setFont('Helvetica', 8.5); c.drawCentredString(lx, by - 24, 'Principal')
+        c.setFillColor(MUTE); c.setFont('Helvetica', 8.5); c.drawCentredString(lx, by - 14, "Principal's Signature")
     if show.get('school_stamp'):
         _seal(c, cx, by + 6, 30, ctx['school'].get('name'))
     if show.get('date_issued'):
@@ -1253,10 +1242,7 @@ def _draw_contemporary(c, ctx, show, cfg, verify_url):
             except Exception:
                 pass
         c.setStrokeColor(INK); c.setLineWidth(0.8); c.line(mx0, fy, mx0 + 140, fy)
-        c.setFillColor(INK); c.setFont('Helvetica-Bold', 10)
-        if show.get('principal_name'):
-            c.drawString(mx0, fy - 13, (ctx['official'].get('principal_name') or '').upper())
-        c.setFillColor(MUTE); c.setFont('Helvetica', 8.5); c.drawString(mx0, fy - 24, 'Principal')
+        c.setFillColor(MUTE); c.setFont('Helvetica', 8.5); c.drawString(mx0, fy - 14, "Principal's Signature")
 
 
 # ===========================================================================
@@ -1346,10 +1332,7 @@ def _draw_creative(c, ctx, show, cfg, verify_url):
             except Exception:
                 pass
         c.setStrokeColor(INK); c.setLineWidth(0.8); c.line(x0, fy, x0 + 140, fy)
-        c.setFillColor(INK); c.setFont('Helvetica-Bold', 10)
-        if show.get('principal_name'):
-            c.drawString(x0, fy - 13, (ctx['official'].get('principal_name') or '').upper())
-        c.setFillColor(MUTE); c.setFont('Helvetica', 8.5); c.drawString(x0, fy - 24, 'Principal')
+        c.setFillColor(MUTE); c.setFont('Helvetica', 8.5); c.drawString(x0, fy - 14, "Principal's Signature")
     if show.get('school_stamp'):
         _seal(c, x1 - 30, fy + 4, 24, ctx['school'].get('name'))
     if show.get('date_issued'):
@@ -1562,12 +1545,7 @@ def _draw_executive(c, ctx, show, cfg, verify_url):
             except Exception:
                 pass
         c.setStrokeColor(NAVY); c.setLineWidth(1.0); c.line(M, line_y, M + 165, line_y)
-        pname = ctx['official'].get('principal_name') if show.get('principal_name') else None
-        if pname:
-            c.setFillColor(CHAR); c.setFont('Helvetica-Bold', 11); c.drawString(M, line_y - 15, pname.upper())
-            c.setFillColor(MUTE); c.setFont('Helvetica', 9.5); c.drawString(M, line_y - 28, 'Principal')
-        else:
-            c.setFillColor(CHAR); c.setFont('Helvetica-Bold', 11); c.drawString(M, line_y - 15, 'Principal')
+        c.setFillColor(MUTE); c.setFont('Helvetica', 9.5); c.drawString(M, line_y - 15, "Principal's Signature")
     if show.get('school_stamp'):
         _seal(c, cx, az - 34, 36, ctx['school'].get('name'))
     if show.get('verification_code') or show.get('qr_code') or show.get('date_issued'):
@@ -1772,7 +1750,7 @@ def _draw_profile(c, ctx, show, cfg, verify_url):
     oy = off_top - 6
     if show.get('principal_signature') or show.get('principal_name'):
         line_y = oy - 44
-        c.setFillColor(MUTE); c.setFont('Helvetica-Bold', 8.5); c.drawString(mx0, oy, 'PRINCIPAL SIGNATURE')
+        c.setFillColor(MUTE); c.setFont('Helvetica-Bold', 8.5); c.drawString(mx0, oy, "PRINCIPAL'S SIGNATURE")
         sig = ctx['official'].get('signature_path') if show.get('principal_signature') else None
         if sig:
             try:
@@ -1780,10 +1758,6 @@ def _draw_profile(c, ctx, show, cfg, verify_url):
             except Exception:
                 pass
         c.setStrokeColor(INK); c.setLineWidth(0.9); c.line(mx0, line_y, mx0 + 140, line_y)
-        pname = ctx['official'].get('principal_name') if show.get('principal_name') else None
-        if pname:
-            c.setFillColor(INK); c.setFont('Times-Bold', 12.5); c.drawString(mx0, line_y - 17, pname)
-        c.setFillColor(MUTE); c.setFont('Helvetica', 8.5); c.drawString(mx0, line_y - 29, 'Principal Name')
         if show.get('date_issued'):
             c.setFillColor(MUTE); c.setFont('Helvetica-Bold', 8)
             c.drawString(mx0, line_y - 46, 'DATE ISSUED: ' + _issue_date().strftime('%B %Y').upper())
@@ -2052,10 +2026,7 @@ def _draw_meridian(c, ctx, show, cfg, verify_url):
                 pass
         # signing space left blank for the principal to sign by hand
         c.setStrokeColor(INK); c.setLineWidth(0.8); c.line(vx0, line_y, vx0 + 150, line_y)
-        c.setFillColor(MUTE); c.setFont('Helvetica-Bold', 8); c.drawString(vx0, line_y - 13, 'PRINCIPAL NAME')
-        pname = ctx['official'].get('principal_name') if show.get('principal_name') else None
-        if pname:
-            c.setFillColor(INK); c.setFont('Helvetica-Bold', 10); c.drawString(vx0, line_y - 26, pname)
+        c.setFillColor(MUTE); c.setFont('Helvetica-Bold', 8); c.drawString(vx0, line_y - 13, "PRINCIPAL'S SIGNATURE")
 
     # ---- footer -----------------------------------------------------------
     parts = []
@@ -2224,7 +2195,7 @@ def _draw_aurelis(c, ctx, show, cfg, verify_url):
                 sig = None
         # signing space left blank for the principal to sign by hand
         c.setStrokeColor(HAIR); c.setLineWidth(0.8); c.line(FM, rowA - 8, FM + 165, rowA - 8)
-        track('PRINCIPAL SIGNATURE', 'Helvetica-Bold', 8, FM, rowA - 22, 0.5, GRAY)
+        track("PRINCIPAL'S SIGNATURE", 'Helvetica-Bold', 8, FM, rowA - 22, 0.5, GRAY)
     if show.get('school_stamp'):
         _seal(c, W / 2, rowA + 2, 31, ctx['school'].get('name'))
     if show.get('qr_code') and verify_url:
@@ -2473,9 +2444,7 @@ def _draw_monument(c, ctx, show, cfg, verify_url):
                 sig = None
         # signing space left blank for the principal to sign by hand
         c.setStrokeColor(HAIR); c.setLineWidth(0.8); c.line(LM, sig_line_y, LM + 168, sig_line_y)
-        pn = ctx['official'].get('principal_name') if show.get('principal_name') else None
-        c.setFillColor(CHAR); c.setFont('Helvetica-Bold', 9.5); c.drawString(LM, sig_line_y - 14, pn or 'Principal name')
-        c.setFillColor(GRAY); c.setFont('Helvetica', 8); c.drawString(LM, sig_line_y - 25, 'Principal')
+        c.setFillColor(GRAY); c.setFont('Helvetica', 8.5); c.drawString(LM, sig_line_y - 14, "Principal's Signature")
     if show.get('school_stamp'):
         seal_teal(300, 106, 33, ctx['school'].get('name'), ctx.get('branch'))
     vx = 352; vy = 130
@@ -2712,8 +2681,7 @@ def _draw_terrain(c, ctx, show, cfg, verify_url):
                 sig = None
         # signing space left blank for the principal to sign by hand
         c.setStrokeColor(SAGE); c.setLineWidth(0.8); c.line(FM, sig_y, FM + 168, sig_y)
-        pn = ctx['official'].get('principal_name') if show.get('principal_name') else None
-        c.setFillColor(ESP); c.setFont('Helvetica-Bold', 9); c.drawString(FM, sig_y - 13, pn or 'Principal name')
+        c.setFillColor(MUTE); c.setFont('Helvetica', 8.5); c.drawString(FM, sig_y - 13, "Principal's Signature")
     if show.get('school_stamp'):
         seal_ring(285, 106, 30, ctx['school'].get('name'), ctx.get('branch'))
     if show.get('verification_code') and ctx.get('verify_code'):
