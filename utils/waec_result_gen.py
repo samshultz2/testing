@@ -3079,7 +3079,7 @@ def _draw_terrain(c, ctx, show, cfg, verify_url):
     MUTE = colors.HexColor('#776D68'); LINE = colors.HexColor('#d5c9b1')
     GHOST = colors.HexColor('#d8c3a0')
     FM = 40; R = W - FM
-    c.setFillColor(SAND); c.rect(0, 0, W, H, fill=1, stroke=0)
+    c.setFillColor(CREAM); c.rect(0, 0, W, H, fill=1, stroke=0)
 
     def track(text, font, size, x, y, sp, color, right=False, center=False):
         c.setFillColor(color); c.setFont(font, size)
@@ -3140,12 +3140,13 @@ def _draw_terrain(c, ctx, show, cfg, verify_url):
     elif show.get('school_motto') and ctx['school'].get('motto'):
         c.setFillColor(MUTE); c.setFont('Helvetica-Oblique', 8.5); c.drawString(nx, ny - 1, ctx['school']['motto'])
 
-    # soft-cream identity field — the name/photo/motif zone sits on a lighter
-    # surface than the sand page. Its top edge meets the header (the plum block
-    # bottom) so the page reads as clean horizontal bands, exactly as the
-    # reference. Drawn before the label + name + portrait so they sit on top.
+    # sand identity field — the name/photo/motif zone sits on the warmer sand
+    # tone while the rest of the page is the lighter cream. Its top edge meets
+    # the header (plum block bottom) and it stops short of the right edge (a
+    # cream margin remains), exactly as the reference.
     id_top, id_bot = H - 160, H - 396
-    c.setFillColor(CREAM); c.rect(0, id_bot, W, id_top - id_bot, fill=1, stroke=0)
+    band_right = W - 49
+    c.setFillColor(SAND); c.rect(0, id_bot, band_right, id_top - id_bot, fill=1, stroke=0)
 
     # ---- 2 · examination label --------------------------------------------
     c.setStrokeColor(SAGE); c.setLineWidth(0.8); c.line(FM, id_top, 340, id_top)
@@ -3156,7 +3157,7 @@ def _draw_terrain(c, ctx, show, cfg, verify_url):
 
     # ---- 3 · student identity + cropped portrait --------------------------
     photo_on = bool(show.get('student_photo') and ctx['student'].get('photo_path'))
-    pw, ph = 96, 120; px = R - pw; py = H - 238 - ph      # top at H-238 ≈ 604
+    pw, ph = 100, 126; px = band_right - pw - 22; py = H - 238 - ph   # inside the sand band
     # faint architectural year motif behind the name
     if show.get('exam_year') and len(yr) >= 2:
         c.setFillColor(GHOST); c.setFont('Times-Bold', 205); c.drawString(212, H - 364, yr[-2:])
@@ -3190,9 +3191,9 @@ def _draw_terrain(c, ctx, show, cfg, verify_url):
         except Exception:
             c.setFillColor(colors.HexColor('#cbb9a6')); c.rect(px, py, pw, ph, fill=1, stroke=0)
         c.setStrokeColor(TERRA); c.setLineWidth(3); c.rect(px - 6, py - 6, pw + 12, ph + 12, stroke=1, fill=0)
-        c.setFillColor(SAGE)                                   # sage alignment tabs
-        c.rect(px + pw - 2, py + ph + 4, 16, 9, fill=1, stroke=0)
-        c.rect(px - 14, py - 4, 16, 9, fill=1, stroke=0)
+        c.setFillColor(SAGE)                                   # sage alignment tabs — right side
+        c.rect(px + pw - 2, py + ph - 22, 16, 12, fill=1, stroke=0)   # upper right
+        c.rect(px + pw - 2, py + 10, 16, 12, fill=1, stroke=0)        # lower right
 
     # ---- 4 · academic results ---------------------------------------------
     head_y = H - 424
