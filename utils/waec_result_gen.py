@@ -1831,22 +1831,25 @@ def _draw_meridian(c, ctx, show, cfg, verify_url):
         c.line(R - 150 + i * 12, H - 30, R - 30 + i * 12, H - 150)
 
     # ---- top-right · school identity --------------------------------------
+    #  School name is right-aligned; the logo is placed to the LEFT of the actual
+    #  (widest) name line with a gap, so it never overlaps the text, and the
+    #  branch/motto reflow beneath whatever the name occupies.
     nm_r = R
-    if show.get('school_name') and ctx['school'].get('name'):
-        c.setFillColor(INK)
-        lines = _wrap(c, ctx['school']['name'].upper(), 'Times-Bold', 20, 190)[:2]
-        yy = H - 50
-        for ln in lines:
-            c.setFont('Times-Bold', 20); c.drawRightString(nm_r, yy, ln); yy -= 22
-        low = yy + 22 - 22 * len(lines)
+    name_lines = _wrap(c, ctx['school']['name'].upper(), 'Times-Bold', 20, 188)[:2] \
+        if (show.get('school_name') and ctx['school'].get('name')) else []
+    name_w = max((_sw(ln, 'Times-Bold', 20) for ln in name_lines), default=0)
+    yy = H - 50
+    for ln in name_lines:
+        c.setFillColor(INK); c.setFont('Times-Bold', 20); c.drawRightString(nm_r, yy, ln); yy -= 22
     if logo:
         try:
-            lw = _sw((ctx['school'].get('name') or 'K').split()[0].upper(), 'Times-Bold', 20)
-            c.drawImage(logo, nm_r - min(lw, 190) - 52, H - 84, 44, 44,
-                        preserveAspectRatio=True, anchor='c', mask='auto')
+            block_h = 22 * max(len(name_lines), 1)
+            ly = (H - 44) - block_h / 2 - 22          # centred on the name block
+            lx = nm_r - name_w - 14 - 46              # 14px gap before the name
+            c.drawImage(logo, lx, ly, 46, 46, preserveAspectRatio=True, anchor='c', mask='auto')
         except Exception:
             pass
-    ry = H - 104
+    ry = (H - 50) - 22 * max(len(name_lines), 1) - 12
     if show.get('branch') and ctx.get('branch'):
         c.setFillColor(INK); c.setFont('Helvetica-Bold', 10); c.drawRightString(R, ry, ctx['branch'].upper()); ry -= 13
     if show.get('school_motto') and ctx['school'].get('motto'):
