@@ -2646,9 +2646,9 @@ def _draw_terrain(c, ctx, show, cfg, verify_url):
         c.setStrokeColor(TERRA); c.setLineWidth(3); c.rect(px - 6, py - 6, pw + 12, ph + 12, stroke=1, fill=0)
         c.setFillColor(SAGE)                                   # sage alignment tabs
         cxp = px + pw / 2.0; cyp = py + ph / 2.0
-        c.rect(cxp - 6, py + ph - 3, 12, 18, fill=1, stroke=0)        # top edge — vertical, centred
-        c.rect(cxp - 6, py - 15, 12, 18, fill=1, stroke=0)           # bottom edge — vertical, centred
-        c.rect(px + pw - 3, cyp - 6, 18, 12, fill=1, stroke=0)        # right edge — horizontal, centred
+        c.rect(cxp - 4, py + ph - 3, 8, 18, fill=1, stroke=0)         # top edge — vertical, centred
+        c.rect(cxp - 4, py - 15, 8, 18, fill=1, stroke=0)            # bottom edge — vertical, centred
+        c.rect(px + pw - 3, cyp - 4, 18, 8, fill=1, stroke=0)         # right edge — horizontal, centred
 
     # ---- 4 · academic results ---------------------------------------------
     head_y = H - 424
