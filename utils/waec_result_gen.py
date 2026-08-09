@@ -107,6 +107,14 @@ TEMPLATES = {
                              'faint watermark, a centred achievement line and a signature/seal/QR '
                              'verification block over a three-column label row.',
                      'landscape': False},
+    'monument':     {'name': 'Monument — 2026',
+                     'desc': 'Premium institutional annual-report: an asymmetric crest-and-name '
+                             'masthead with a right-aligned WASSCE·year identity joined by a fine '
+                             'gold rule, a vertical WASSCE margin marker, a compact examination '
+                             'label, an oversized serif student name beside a framed portrait, a '
+                             'three-column NUMBER/SUBJECT/GRADE record with banded rows, an '
+                             'editorial stat line and a signature / teal seal / verification+QR row.',
+                     'landscape': False},
 }
 DEFAULT_TEMPLATE = 'prestige'
 
@@ -265,6 +273,14 @@ PRESETS = {
                            'principal_name', 'principal_signature', 'school_stamp',
                            'verification_code', 'qr_code', 'date_issued',
                            'footer_contact', 'footer_website']},
+    'monument':  {'label': 'Monument (Full)',
+                  'keys': ['school_name', 'school_logo', 'branch',
+                           'student_name', 'student_photo', 'candidate_no',
+                           'exam_name', 'exam_year', 'subjects', 'grades',
+                           'total_subjects', 'a1_count', 'credits',
+                           'principal_name', 'principal_signature', 'school_stamp',
+                           'verification_code', 'qr_code', 'date_issued',
+                           'school_address', 'footer_contact', 'footer_website']},
 }
 
 
@@ -2236,6 +2252,246 @@ def _draw_aurelis(c, ctx, show, cfg, verify_url):
         c.setFillColor(GRAY); c.setFont('Helvetica', 8.5); c.drawCentredString(W / 2, foot_y, '   ·   '.join(parts))
 
 
+# ===========================================================================
+#  Design 11 — MONUMENT 2026 (premium institutional annual-report, portrait)
+#  An asymmetric editorial masthead (crest + school name left, WASSCE·year
+#  right, joined by a fine gold rule), a vertical WASSCE marker down the left
+#  margin, a compact examination label, an oversized serif student name beside
+#  a rectangular portrait, a three-column NUMBER/SUBJECT/GRADE record with
+#  banded rows and strong grade typography, an editorial stat line, and a
+#  restrained signature / teal seal / verification+QR authentication row.
+# ===========================================================================
+def _draw_monument(c, ctx, show, cfg, verify_url):
+    import math
+    from reportlab.lib.utils import ImageReader
+    W, H = A4
+    NAVY = colors.HexColor('#14213D'); TEAL = colors.HexColor('#1F5C5B')
+    GOLD = colors.HexColor('#C5A46D'); IVORY = colors.HexColor('#F7F4ED')
+    CHAR = colors.HexColor('#252525'); GRAY = colors.HexColor('#6B6B6B')
+    HAIR = colors.HexColor('#dcd6c7'); BAND = colors.HexColor('#efeadd')
+    FM = 44; R = W - FM
+    c.setFillColor(IVORY); c.rect(0, 0, W, H, fill=1, stroke=0)
+
+    def track(text, font, size, x, y, sp, color, right=False, center=False):
+        c.setFillColor(color); c.setFont(font, size)
+        total = sum(_sw(ch, font, size) + sp for ch in text) - (sp if text else 0)
+        xx = (x - total) if right else ((x - total / 2.0) if center else x)
+        for ch in text:
+            c.drawString(xx, y, ch); xx += _sw(ch, font, size) + sp
+
+    def seal_teal(cx, cy, r, name, branch):
+        c.setStrokeColor(TEAL); c.setLineWidth(1.6); c.circle(cx, cy, r, stroke=1, fill=0)
+        c.setLineWidth(0.7); c.circle(cx, cy, r - 5, stroke=1, fill=0)
+        c.setStrokeColor(GOLD); c.setLineWidth(0.6); c.setDash(1, 2)
+        c.circle(cx, cy, r - 9, stroke=1, fill=0); c.setDash()
+        initials = ''.join(w[0] for w in (name or 'S').split()[:2]).upper() or 'S'
+        c.setFillColor(TEAL); c.setFont('Times-Bold', max(9, int(r * 0.5)))
+        c.drawCentredString(cx, cy - r * 0.18, initials)
+
+        def arc(text, radius, start_deg, end_deg, size):
+            text = (text or '').upper()
+            if not text:
+                return
+            n = len(text); span = end_deg - start_deg
+            c.setFont('Helvetica-Bold', size); c.setFillColor(TEAL)
+            for i, ch in enumerate(text):
+                a = start_deg + span * (i + 0.5) / n
+                rad = math.radians(a)
+                x = cx + radius * math.cos(rad); y = cy + radius * math.sin(rad)
+                c.saveState(); c.translate(x, y); c.rotate(a - 90)
+                c.drawCentredString(0, 0, ch); c.restoreState()
+
+        fs = max(4.4, r * 0.135)
+        arc((name or '')[:24], r - 2.6, 158, 22, fs)                 # top arc (upright)
+        arc(branch or 'MAIN CAMPUS', r - 2.6, 292, 248, fs)          # bottom arc (upright)
+
+    # ---- 1 · masthead ------------------------------------------------------
+    logo = ctx['school'].get('logo_path') if show.get('school_logo') else None
+    top = H - 42
+    lw = lh = 0
+    if logo:
+        lw, lh = 66, 74
+        try:
+            c.drawImage(logo, FM, top - lh, lw, lh, preserveAspectRatio=True, anchor='nw', mask='auto')
+        except Exception:
+            lw = lh = 0
+    name_x = FM + (lw + 16 if lw else 0)
+    ny = top - 20
+    if show.get('school_name') and ctx['school'].get('name'):
+        for ln in _wrap(c, ctx['school']['name'].upper(), 'Times-Bold', 19, 250)[:2]:
+            c.setFillColor(NAVY); c.setFont('Times-Bold', 19); c.drawString(name_x, ny, ln); ny -= 21
+    if show.get('branch') and ctx.get('branch'):
+        track(ctx['branch'].upper(), 'Helvetica', 8, name_x, ny - 1, 1.2, GRAY); ny -= 12
+    elif show.get('school_motto') and ctx['school'].get('motto'):
+        c.setFillColor(GRAY); c.setFont('Helvetica-Oblique', 8.5); c.drawString(name_x, ny - 1, ctx['school']['motto'])
+    # right — WASSCE / year
+    track('WASSCE', 'Helvetica-Bold', 14, R, top - 14, 1.5, NAVY, right=True)
+    if show.get('exam_year'):
+        c.setFillColor(NAVY); c.setFont('Times-Bold', 34); c.drawRightString(R, top - 50, str(ctx['exam']['year']))
+    # fine gold connector between the branding and the examination identity
+    cyc = top - 20
+    gx1 = R - _sw('WASSCE', 'Helvetica-Bold', 14) - 5 * 1.5 - 14
+    gx0 = name_x + 250
+    if gx0 < gx1 - 20:
+        c.setStrokeColor(GOLD); c.setLineWidth(1.2); c.line(gx0, cyc, gx1, cyc)
+        c.setFillColor(GOLD)
+        c.rect(gx0 - 4, cyc - 2, 4, 4, fill=1, stroke=0); c.rect(gx1, cyc - 2, 4, 4, fill=1, stroke=0)
+
+    # ---- 2 · vertical WASSCE marker (left margin) --------------------------
+    mk_x = 30; mk_top = H - 158; mk_bot = 250
+    c.setStrokeColor(NAVY); c.setLineWidth(1.0); c.line(mk_x, mk_bot, mk_x, mk_top)
+    mid = (mk_top + mk_bot) / 2.0
+    c.setStrokeColor(GOLD); c.setLineWidth(1.4)
+    c.line(mk_x - 3, mid + 74, mk_x + 3, mid + 74); c.line(mk_x - 3, mid - 74, mk_x + 3, mid - 74)
+    c.saveState(); c.translate(mk_x, mid); c.rotate(90)
+    track('WASSCE', 'Helvetica-Bold', 8.5, 0, 3, 3, NAVY, center=True)
+    c.restoreState()
+
+    LM = 92
+    # ---- 3 · examination label --------------------------------------------
+    if show.get('exam_name'):
+        track('WEST AFRICAN SENIOR SCHOOL', 'Helvetica-Bold', 9.5, LM, H - 150, 1.4, GRAY)
+        track('CERTIFICATE EXAMINATION', 'Helvetica-Bold', 9.5, LM, H - 163, 1.4, GRAY)
+        seg = ['WASSCE'] + ([str(ctx['exam']['year'])] if show.get('exam_year') else [])
+        c.setFillColor(CHAR); c.setFont('Helvetica-Bold', 11); c.drawString(LM, H - 182, '  ·  '.join(seg))
+
+    # ---- 4 · portrait ------------------------------------------------------
+    photo_on = bool(show.get('student_photo') and ctx['student'].get('photo_path'))
+    pw, ph = 100, 126; px = R - pw; py = H - 158 - ph
+    if photo_on:
+        c.setFillColor(colors.white); c.rect(px - 5, py - 5, pw + 10, ph + 10, fill=1, stroke=0)
+        c.setStrokeColor(HAIR); c.setLineWidth(1.0); c.rect(px - 5, py - 5, pw + 10, ph + 10, stroke=1, fill=0)
+        try:
+            c.drawImage(ctx['student']['photo_path'], px, py, pw, ph, preserveAspectRatio=True, anchor='c', mask='auto')
+        except Exception:
+            c.setFillColor(colors.HexColor('#dfe3e8')); c.rect(px, py, pw, ph, fill=1, stroke=0)
+
+    # ---- 5 · student identity ---------------------------------------------
+    name_w = (px - 18 - LM) if photo_on else (R - LM)
+    sy = H - 226
+    if show.get('student_name'):
+        nm = ctx['student']['name'].upper()
+        nfs = 27
+        while nfs > 19 and _sw(nm, 'Times-Bold', nfs) > name_w:
+            nfs -= 1
+        for ln in _wrap(c, nm, 'Times-Bold', nfs, name_w)[:2]:
+            c.setFillColor(CHAR); c.setFont('Times-Bold', nfs); c.drawString(LM, sy, ln); sy -= nfs + 2
+    meta = []
+    if show.get('candidate_no') and ctx['student'].get('candidate_no'):
+        meta.append((cfg.get('candidate_label') or 'CANDIDATE NO.') + ' ' + str(ctx['student']['candidate_no']))
+    if show.get('admission_no') and ctx['student'].get('admission_no'):
+        meta.append('ADMISSION NO. ' + str(ctx['student']['admission_no']))
+    if show.get('exam_number') and ctx['student'].get('exam_number'):
+        meta.append('EXAM NO. ' + str(ctx['student']['exam_number']))
+    if show.get('student_class') and ctx['student'].get('klass'):
+        meta.append('CLASS ' + str(ctx['student']['klass']))
+    for m in meta:
+        c.setFillColor(CHAR); c.setFont('Helvetica', 10.5); c.drawString(LM, sy, m); sy -= 14
+
+    # ---- 6 · academic results ---------------------------------------------
+    head_y = H - 322
+    track('ACADEMIC RESULTS', 'Helvetica-Bold', 12.5, LM, head_y, 2.0, CHAR)
+    c.setStrokeColor(NAVY); c.setLineWidth(1.2); c.line(LM, head_y - 11, R, head_y - 11)
+    ch_y = head_y - 30
+    track('NUMBER', 'Helvetica-Bold', 8.5, LM, ch_y, 1.2, GRAY)
+    track('SUBJECT', 'Helvetica-Bold', 8.5, LM + 56, ch_y, 1.2, GRAY)
+    track('GRADE', 'Helvetica-Bold', 8.5, R, ch_y, 1.2, GRAY, right=True)
+    c.setStrokeColor(NAVY); c.setLineWidth(1.0); c.line(LM, ch_y - 8, R, ch_y - 8)
+
+    results = ctx['results']; n = len(results)
+    rows_top = ch_y - 8; table_bottom = 226
+    rh = min(34, max(19, (rows_top - table_bottom) / max(n, 1)))
+    subj_fs = 11 if rh >= 24 else 10
+    if show.get('subjects') and n:
+        for i, r in enumerate(results):
+            ytop = rows_top - i * rh; ybot = ytop - rh
+            if i % 2 == 1:
+                c.setFillColor(BAND); c.rect(LM, ybot, R - LM, rh, fill=1, stroke=0)
+            base = ybot + rh * 0.34
+            c.setFillColor(GRAY); c.setFont('Helvetica', 8.5); c.drawString(LM, base + 1, f'{i + 1:02d}')
+            subj = r['subject']
+            if show.get('grade_desc') and r.get('desc'):
+                subj = f"{subj}  ·  {r['desc']}"
+            c.setFillColor(CHAR); c.setFont('Helvetica', subj_fs); c.drawString(LM + 56, base, subj + '  —')
+            if show.get('grades'):
+                c.setFillColor(NAVY); c.setFont('Helvetica-Bold', subj_fs + 4); c.drawRightString(R, base, r['grade'])
+            c.setStrokeColor(HAIR); c.setLineWidth(0.6); c.line(LM, ybot, R, ybot)
+
+    # ---- 7 · editorial stat line ------------------------------------------
+    st = ctx['stats']; stats = []
+    if show.get('total_subjects'): stats.append((f"{st['total']:02d}", 'SUBJECTS'))
+    if show.get('a1_count'):       stats.append((f"{st['a1']:02d}", 'A1 GRADES'))
+    if show.get('credits'):        stats.append((f"{st['credits']:02d}", 'CREDITS'))
+    if show.get('average'):        stats.append((str(st['average']), 'AVERAGE'))
+    if show.get('classification'): stats.append((st['classification'].upper(), 'CLASS'))
+    if stats:
+        sum_top, sum_y, sum_bot = 214, 190, 166
+        c.setStrokeColor(HAIR); c.setLineWidth(0.8)
+        c.line(LM, sum_top, R, sum_top); c.line(LM, sum_bot, R, sum_bot)
+        colw = (R - LM) / len(stats)
+        for i, (v, l) in enumerate(stats):
+            cx = LM + colw * i + 20
+            c.setFillColor(NAVY); c.setFont('Times-Bold', 21); c.drawString(cx, sum_y, v)
+            track(l, 'Helvetica-Bold', 7.5, cx + _sw(v, 'Times-Bold', 21) + 8, sum_y + 5, 0.8, GRAY)
+            if i:
+                sepx = LM + colw * i
+                c.setStrokeColor(HAIR); c.setLineWidth(0.8); c.line(sepx, sum_bot + 6, sepx, sum_top - 6)
+
+    # ---- 8 · authentication row -------------------------------------------
+    sig_line_y = 118
+    if show.get('principal_signature') or show.get('principal_name'):
+        sig = ctx['official'].get('signature_path') if show.get('principal_signature') else None
+        if sig:
+            try:
+                c.drawImage(sig, LM, sig_line_y + 2, 120, 30, preserveAspectRatio=True, anchor='sw', mask='auto')
+            except Exception:
+                sig = None
+        if not sig:
+            c.setFillColor(CHAR); c.setFont('Times-Italic', 17); c.drawString(LM, sig_line_y + 6, 'Principal Signature')
+        c.setStrokeColor(HAIR); c.setLineWidth(0.8); c.line(LM, sig_line_y, LM + 168, sig_line_y)
+        pn = ctx['official'].get('principal_name') if show.get('principal_name') else None
+        c.setFillColor(CHAR); c.setFont('Helvetica-Bold', 9.5); c.drawString(LM, sig_line_y - 14, pn or 'Principal Signature')
+        c.setFillColor(GRAY); c.setFont('Helvetica', 8); c.drawString(LM, sig_line_y - 25, 'Principal')
+    if show.get('school_stamp'):
+        seal_teal(300, 106, 33, ctx['school'].get('name'), ctx.get('branch'))
+    vx = 352; vy = 130
+    if show.get('verification_code') or show.get('date_issued') or (show.get('qr_code') and verify_url):
+        c.setFillColor(NAVY); c.setFont('Helvetica-Bold', 10.5); c.drawString(vx, vy, 'Verification')
+        row = vy - 15
+        if show.get('verification_code') and ctx.get('verify_code'):
+            c.setFillColor(GRAY); c.setFont('Helvetica', 7.5); c.drawString(vx, row, 'Verification No.')
+            c.setFillColor(CHAR); c.setFont('Helvetica-Bold', 8.5); c.drawString(vx, row - 11, str(ctx['verify_code'])); row -= 26
+        if show.get('date_issued'):
+            c.setFillColor(CHAR); c.setFont('Helvetica', 8)
+            c.drawString(vx, row, 'Date Issued: ' + _issue_date().strftime('%d %B %Y'))
+        if show.get('qr_code') and verify_url:
+            try:
+                import qrcode
+                qb = io.BytesIO(); qrcode.make(verify_url).save(qb, format='PNG'); qb.seek(0)
+                c.drawImage(ImageReader(qb), R - 56, 82, 56, 56, mask='auto')
+            except Exception:
+                pass
+
+    # ---- 9 · footer -------------------------------------------------------
+    fparts = []
+    seg1 = ctx['school'].get('name', '') or ''
+    if show.get('school_address') and ctx['school'].get('address'):
+        seg1 = (seg1 + ' · ' + ctx['school']['address']).strip(' ·')
+    if seg1:
+        fparts.append(seg1)
+    if show.get('footer_contact') and ctx['school'].get('phone'):
+        fparts.append(ctx['school']['phone'])
+    if show.get('footer_contact') and ctx['school'].get('email'):
+        fparts.append(ctx['school']['email'])
+    if show.get('footer_website') and ctx['school'].get('website'):
+        fparts.append(ctx['school']['website'])
+    if show.get('footer_custom') and cfg.get('footer_text'):
+        fparts = [cfg['footer_text']]
+    if fparts:
+        c.setStrokeColor(HAIR); c.setLineWidth(0.8); c.line(FM, 52, R, 52)
+        c.setFillColor(GRAY); c.setFont('Helvetica', 7.5); c.drawCentredString(W / 2, 36, '   ·   '.join(fparts))
+
+
 def _sw(text, font, size):
     from reportlab.pdfbase.pdfmetrics import stringWidth
     return stringWidth(text, font, size)
@@ -2245,7 +2501,7 @@ _CANVAS_DRAW = {
     'prestige': _draw_prestige, 'classic': _draw_classic, 'editorial': _draw_editorial,
     'premium': _draw_premium, 'contemporary': _draw_contemporary, 'creative': _draw_creative,
     'executive': _draw_executive, 'profile': _draw_profile, 'meridian': _draw_meridian,
-    'aurelis': _draw_aurelis,
+    'aurelis': _draw_aurelis, 'monument': _draw_monument,
 }
 
 
