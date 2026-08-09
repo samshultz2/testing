@@ -88,6 +88,8 @@ a.exec:hover .go{opacity:1}
             {% endif %}
         </form>
         <a href="{{ url_for('results.waec_broadsheet', year=selected_year) }}" class="btn btn-secondary btn-sm" title="Full WAEC grade matrix — print / download"><i class="fas fa-table-cells"></i> WAEC broadsheet</a>
+        <a href="{{ url_for('results.analytics_trends') }}" class="btn btn-secondary btn-sm" title="Cross-year WAEC & JAMB trends"><i class="fas fa-chart-line"></i> Trends</a>
+        <a href="{{ url_for('results.at_risk_watchlist') }}" class="btn btn-secondary btn-sm" title="Live at-risk SSS3 watchlist, by class"><i class="fas fa-triangle-exclamation"></i> Watchlist</a>
         <a href="{{ url_for('results.readiness_funnel') }}" class="btn btn-secondary btn-sm" title="Cohort admission-readiness funnel"><i class="fas fa-graduation-cap"></i> Readiness</a>
         <a href="{{ url_for('results.cutoffs_list') }}" class="btn btn-secondary btn-sm" title="Manage admission cut-offs"><i class="fas fa-sliders"></i> Cut-offs</a>
         <form method="POST" action="{{ recompute_url }}" class="d-inline" title="Recompute risk &amp; JAMB predictions for all students in view">

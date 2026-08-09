@@ -436,6 +436,85 @@ class AcademicAnalytics:
         }
 
     @staticmethod
+    def get_waec_multiyear_trends(branch_id=None, limit_years=8):
+        """Per-year WAEC cohort trend: how the 5-credits-incl-core rate, the
+        credit rate and the F9 (fail) rate move across years. One point per year
+        that has results, oldest→newest, capped to the most recent ``limit_years``.
+        Branch-scoped when a branch is given."""
+        from collections import defaultdict
+        q = WAECResult.query.with_entities(
+            WAECResult.exam_year, WAECResult.student_id, WAECResult.subject, WAECResult.grade)
+        if branch_id is not None:
+            q = q.join(Student, WAECResult.student_id == Student.id).filter(
+                Student.branch_id == branch_id)
+        rows = q.all()
+        if not rows:
+            return {'years': [], 'points': []}
+        credit = lambda g: g in AcademicAnalytics.PASS_GRADES
+        per_year = defaultdict(lambda: defaultdict(dict))     # year -> student -> {subject: grade}
+        for yr, sid, subj, g in rows:
+            per_year[yr][sid][subj] = g
+
+        points = []
+        for yr in sorted(per_year):
+            students = per_year[yr]
+            n = len(students)
+            with_core = total_credits = entries = credit_entries = f9 = 0
+            for gmap in students.values():
+                credited = {s.lower() for s, g in gmap.items() if credit(g)}
+                has_core = (any('english' in s for s in credited)
+                            and any('math' in s for s in credited))
+                creds = len(credited)
+                if creds >= 5 and has_core:
+                    with_core += 1
+                total_credits += creds
+                for g in gmap.values():
+                    entries += 1
+                    credit_entries += 1 if credit(g) else 0
+                    f9 += 1 if g == 'F9' else 0
+            points.append({
+                'year': yr, 'students': n,
+                'with_5_incl_core': with_core,
+                'with_5_incl_core_pct': round(with_core / n * 100, 1) if n else 0,
+                'credit_rate': round(credit_entries / entries * 100, 1) if entries else 0,
+                'f9_rate': round(f9 / entries * 100, 1) if entries else 0,
+                'avg_credits': round(total_credits / n, 1) if n else 0,
+            })
+        points = points[-limit_years:]
+        return {'years': [p['year'] for p in points], 'points': points}
+
+    @staticmethod
+    def get_jamb_multiyear_trends(branch_id=None, limit_years=8):
+        """Per-year JAMB trend: average total score and the ≥200 rate across
+        years. One point per year with candidates, oldest→newest, capped to the
+        most recent ``limit_years``. Branch-scoped when a branch is given."""
+        from collections import defaultdict
+        q = JAMBResult.query.with_entities(JAMBResult.exam_year, JAMBResult.total_score)
+        if branch_id is not None:
+            q = q.join(Student, JAMBResult.student_id == Student.id).filter(
+                Student.branch_id == branch_id)
+        per = defaultdict(list)
+        for yr, sc in q.all():
+            if sc is not None:
+                per[yr].append(sc)
+        if not per:
+            return {'years': [], 'points': []}
+        points = []
+        for yr in sorted(per):
+            scores = per[yr]
+            n = len(scores)
+            above = sum(1 for s in scores if s >= 200)
+            points.append({
+                'year': yr, 'candidates': n,
+                'avg_score': round(sum(scores) / n, 1) if n else 0,
+                'above_200': above,
+                'above_200_pct': round(above / n * 100, 1) if n else 0,
+                'max_score': max(scores) if scores else 0,
+            })
+        points = points[-limit_years:]
+        return {'years': [p['year'] for p in points], 'points': points}
+
+    @staticmethod
     def _ordered_waec_subjects(present):
         """WAEC subjects in canonical order (core first), extras appended A–Z."""
         try:

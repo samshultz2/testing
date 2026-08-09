@@ -27,12 +27,16 @@ def _warm_hub_caches(year, branch_ids):
     """
     from routes.results import (waec_school_stats, jamb_school_stats,
                                  waec_jamb_correlation, bust_school_stats)
+    from routes.results.analytics import _waec_broadsheet_cached
     bust_school_stats()                       # drop stale rows before repriming
     for bid in [None, *branch_ids]:
         try:
             waec_school_stats(year, bid)
             jamb_school_stats(year, bid)
             waec_jamb_correlation(year, bid)
+            # Pre-generate the broadsheet too, so its first view (and the PDF /
+            # Excel export off it) is served warm from AnalyticsCache.
+            _waec_broadsheet_cached(year, bid)
         except Exception:
             from models import db
             db.session.rollback()

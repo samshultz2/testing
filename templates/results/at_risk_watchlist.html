@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}At-Risk Watchlist — {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('results.analytics_hub') }}">Analytics</a> / <span>Watchlist</span>{% endblock %}
+
+{% set badge = {'NOT_READY': 'badge-danger', 'AT_RISK': 'badge-warning', 'CONDITIONAL': 'badge-info'} %}
+{% set label = {'NOT_READY': 'Not ready', 'AT_RISK': 'At risk', 'CONDITIONAL': 'Conditional'} %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>At-Risk Watchlist</h1>
+        <p class="text-muted text-sm">SSS3 candidates projected off track for admission from their mock signals — before the real exam. Grouped by class arm.</p>
+    </div>
+    <a href="{{ url_for('results.analytics_hub') }}" class="btn btn-secondary" style="margin-left:auto;">Back to Analytics</a>
+</div>
+
+{% if data.total_flagged %}
+<div class="card mb-3"><div class="card-body" style="display:flex;gap:1.5rem;flex-wrap:wrap;">
+    <div><strong style="font-size:1.5rem;">{{ data.total_flagged }}</strong><div class="text-muted text-sm">flagged</div></div>
+    {% for st, n in data.counts.items() %}
+    <div><strong style="font-size:1.5rem;">{{ n }}</strong><div class="text-muted text-sm">{{ label.get(st, st) }}</div></div>
+    {% endfor %}
+</div></div>
+
+{% for grp in data.by_class %}
+<div class="card mb-3">
+    <div class="card-header"><h3>{{ grp.class }} <span class="text-muted text-sm">({{ grp.count }})</span></h3></div>
+    <div class="card-body" style="overflow-x:auto;">
+        <table class="table" style="width:100%;">
+            <thead><tr><th>Student</th><th>Status</th><th>WAEC credits (proj.)</th><th>JAMB (proj.)</th><th>What's blocking</th><th></th></tr></thead>
+            <tbody>
+            {% for s in grp.students %}
+                <tr>
+                    <td>{{ s.name }}</td>
+                    <td><span class="badge {{ badge.get(s.status, '') }}">{{ label.get(s.status, s.status) }}</span></td>
+                    <td>{{ s.waec_credits if s.waec_credits is not none else '—' }}</td>
+                    <td>{{ s.jamb_score if s.jamb_score is not none else '—' }}</td>
+                    <td class="text-sm">
+                        {% if s.blockers %}<ul style="margin:0;padding-left:1.1rem;">{% for b in s.blockers %}<li>{{ b }}</li>{% endfor %}</ul>
+                        {% else %}—{% endif %}
+                    </td>
+                    <td><a class="btn btn-secondary btn-sm" href="{{ url_for(action_plan_url, student_id=s.student_id) }}">Action plan</a></td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endfor %}
+
+{% else %}
+<div class="card"><div class="card-body text-muted">
+    No SSS3 candidates are currently flagged — either everyone's on track, or there are no mock signals to project from yet.
+</div></div>
+{% endif %}
+{% endblock %}
