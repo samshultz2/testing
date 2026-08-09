@@ -4,7 +4,7 @@ from models import db, Branch, Student, WAECResult
 from config import Config
 from utils.analytics_service import AcademicAnalytics
 
-_YR = 2266   # sentinel year owned solely by this test
+_YR = 2461   # sentinel year owned solely by this test
 _SEQ = [0]
 
 
