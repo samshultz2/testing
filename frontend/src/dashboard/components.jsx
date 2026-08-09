@@ -1,5 +1,45 @@
 import React from 'react';
 import { Counter } from '../components/ui';
+import Sparkline from './Sparkline';
+
+// Sparkline/accent colour per tone — matches the icon-tile gradients below.
+export const TONE_HEX = {
+  blue: '#4f7cf7', green: '#16a34a', teal: '#0d9488', purple: '#8b5cf6',
+  orange: '#f59e0b', amber: '#f59e0b', red: '#ef4444', indigo: '#6366f1',
+  rose: '#f43f5e', slate: '#64748b',
+};
+
+// Redesigned headline KPI card: icon tile + trend badge on top, a big animated
+// number, a label and sub-label, and a sparkline of the recent trend along the
+// bottom. `delta` is { dir:'up'|'down'|'flat', pct }.
+export function KpiCard({ tone = 'blue', icon, value, label, sub, title, delta, deltaLabel, series }) {
+  return (
+    <div className={'kpicard ' + tone}>
+      <div className="kc-top">
+        <div className={'kc-ic ' + tone}><i className={'fas ' + icon} aria-hidden="true" /></div>
+        {(delta || deltaLabel) && (
+          <div className="kc-trend">
+            {delta && <TrendBadge dir={delta.dir} pct={delta.pct} />}
+            {deltaLabel && <div className="kc-trendlabel">{deltaLabel}</div>}
+          </div>
+        )}
+      </div>
+      <div className="kc-value" title={title}><Counter value={value} /></div>
+      <div className="kc-label">{label}</div>
+      {sub && <div className="kc-sub">{sub}</div>}
+      <div className="kc-spark"><Sparkline series={series} color={TONE_HEX[tone] || TONE_HEX.blue} /></div>
+    </div>
+  );
+}
+
+function TrendBadge({ dir = 'flat', pct }) {
+  const arrow = dir === 'up' ? 'fa-arrow-up' : dir === 'down' ? 'fa-arrow-down' : 'fa-minus';
+  return (
+    <span className={'kc-badge ' + dir}>
+      <i className={'fas ' + arrow} aria-hidden="true" /> {pct}%
+    </span>
+  );
+}
 
 // ── currency formatting (mirrors the server's naira / naira_short filters) ──
 export function naira(v) {

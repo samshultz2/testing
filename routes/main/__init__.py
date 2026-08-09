@@ -334,6 +334,7 @@ def dashboard_payload():
         total_classes=total_classes,
         class_stats=class_stats,
         attendance_stats=_dash_attendance_stats(active_term, tscope),
+        headline_kpis=_dash_headline_kpis(active_term, active_session, tscope),
         birthdays_today=[{'full_name': s.full_name, 'age': s.age} for s in birthdays_today],
         birthdays_week=[{'full_name': s.full_name,
                          'date_label': s.date_of_birth.strftime('%d %b')} for s in birthdays_week],
@@ -1133,6 +1134,126 @@ def _dash_student_counts(tscope=None):
         # Students KPI (a trend, not an isolated headcount).
         'new_students_month': sq(current.filter(Student.created_at >= month_ago)).count(),
     }
+
+
+def _dash_headline_kpis(active_term, active_session, tscope):
+    """Sparkline series + trend deltas for the four headline KPI cards
+    (Students / Enrolled / Attendance / Graduates).
+
+    Everything is best-effort and branch/teacher-scoped like the rest of the
+    payload: any failure yields an empty series and no delta, so the card still
+    renders its number. Series run oldest→newest; deltas compare the last two
+    points (percentage change, except attendance which uses points)."""
+    from datetime import datetime as _dt, time as _time
+    from models import Term, AcademicSession, Student, StudentEnrollment, ClassArmAssignment
+    from utils.branch_scope import scope_query, viewing_branch_id
+
+    def _sq_students(query):
+        if tscope is not None:
+            return query.filter(Student.id.in_(tscope[1] or [-1]))
+        return scope_query(query, Student)
+
+    def _pct_delta(cur, prev):
+        if prev is None or prev == 0 or cur is None:
+            return None
+        pct = round((cur - prev) / prev * 100)
+        return {'pct': abs(pct), 'dir': 'up' if pct > 0 else ('down' if pct < 0 else 'flat')}
+
+    def _pt_delta(cur, prev):        # percentage-point difference (attendance)
+        if prev is None or cur is None:
+            return None
+        d = round(cur - prev)
+        return {'pct': abs(d), 'dir': 'up' if d > 0 else ('down' if d < 0 else 'flat')}
+
+    out = {
+        'students':   {'series': [], 'delta': None, 'delta_label': 'vs last term'},
+        'enrolled':   {'series': [], 'delta': None, 'delta_label': 'vs last term'},
+        'attendance': {'series': [], 'delta': None, 'delta_label': 'vs last week'},
+        'graduates':  {'series': [], 'delta': None, 'delta_label': 'vs last session'},
+    }
+
+    # Recent terms up to and including the active one (chronological, last 6).
+    terms = []
+    try:
+        terms = (Term.query.join(AcademicSession, Term.session_id == AcademicSession.id)
+                 .order_by(AcademicSession.start_date, AcademicSession.id, Term.term_number).all())
+        if active_term is not None:
+            ids = [t.id for t in terms]
+            if active_term.id in ids:
+                terms = terms[:ids.index(active_term.id) + 1]
+        terms = terms[-6:]
+    except Exception:
+        db.session.rollback()
+
+    def _eod(d):
+        return _dt.combine(d, _time.max)
+
+    # Students: cumulative active (non-graduate) registrations by each term's end.
+    try:
+        base = Student.query.filter_by(is_active=True).filter(
+            db.or_(Student.is_graduated.is_(False), Student.is_graduated.is_(None)))
+        series = [_sq_students(base.filter(Student.created_at <= _eod(t.end_date or t.start_date))).count()
+                  for t in terms if (t.end_date or t.start_date)]
+        if series:
+            out['students']['series'] = series
+            out['students']['delta'] = _pct_delta(series[-1], series[-2]) if len(series) >= 2 else None
+    except Exception:
+        db.session.rollback()
+
+    # Enrolled: active enrolments booked into each term.
+    try:
+        series = []
+        for t in terms:
+            q = (db.session.query(StudentEnrollment.id)
+                 .join(ClassArmAssignment,
+                       StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+                 .filter(ClassArmAssignment.term_id == t.id))
+            if tscope is not None:
+                q = q.filter(ClassArmAssignment.id.in_(tscope[0] or [-1]))
+            else:
+                bid = viewing_branch_id()
+                if bid is not None:
+                    q = q.filter(ClassArmAssignment.branch_id == bid)
+            series.append(q.count())
+        if any(series):
+            out['enrolled']['series'] = series
+            out['enrolled']['delta'] = _pct_delta(series[-1], series[-2]) if len(series) >= 2 else None
+    except Exception:
+        db.session.rollback()
+
+    # Attendance: weekly average % across the active term (reuses the trend).
+    try:
+        pcts = [p['pct'] for p in _dash_attendance_trend(active_term, tscope)]
+        if pcts:
+            out['attendance']['series'] = pcts
+            out['attendance']['delta'] = _pt_delta(pcts[-1], pcts[-2]) if len(pcts) >= 2 else None
+    except Exception:
+        db.session.rollback()
+
+    # Graduates: cumulative graduates by each recent session's end date.
+    try:
+        sessions = (AcademicSession.query
+                    .order_by(AcademicSession.start_date, AcademicSession.id).all())
+        if active_session is not None:
+            sids = [s.id for s in sessions]
+            if active_session.id in sids:
+                sessions = sessions[:sids.index(active_session.id) + 1]
+        sessions = sessions[-6:]
+        gbase = Student.query.filter_by(is_active=True, is_graduated=True)
+        series = []
+        for s in sessions:
+            cutoff = s.end_date or s.start_date
+            if cutoff is None:
+                continue
+            series.append(_sq_students(
+                gbase.filter(Student.graduation_date <= cutoff)).count())
+        if any(series):
+            out['graduates']['series'] = series
+            out['graduates']['delta'] = _pct_delta(series[-1], series[-2]) if len(series) >= 2 else None
+    except Exception:
+        db.session.rollback()
+
+    return out
 
 
 def _dash_class_stats(active_term, tscope=None):
