@@ -1574,24 +1574,25 @@ def _draw_profile(c, ctx, show, cfg, verify_url):
         return xx - sp
 
     # ---- IDENTITY RAIL -----------------------------------------------------
-    c.setStrokeColor(FAINT); c.setLineWidth(0.6)                  # subtle pinstripes
-    for i in range(7):
-        xx = FM + 12 + i * 8
-        c.line(xx, H - 150, xx, H - 372)
+    # the rail's signature texture: a run of fine vertical lines down the rail
+    c.setStrokeColor(colors.HexColor('#c3bca9')); c.setLineWidth(0.5)
+    for i in range(11):
+        xx = FM + 6 + i * 6
+        c.line(xx, H - 150, xx, 320)
     c.setStrokeColor(GREEN); c.setLineWidth(1.6); c.line(RAIL_R, FM + 30, RAIL_R, H - 30)
     if logo:
         try:
-            c.drawImage(logo, rcx - 27, H - 100, 54, 54, preserveAspectRatio=True, anchor='c', mask='auto')
+            c.drawImage(logo, rcx - 27, H - 104, 54, 54, preserveAspectRatio=True, anchor='c', mask='auto')
         except Exception:
             pass
     if show.get('exam_name') or show.get('exam_year'):
-        c.saveState(); c.translate(rcx - 9, 548); c.rotate(90)
-        c.setFillColor(INK); c.setFont('Times-Bold', 21); c.drawString(0, 0, 'WASSCE'); c.restoreState()
+        c.saveState(); c.translate(rcx - 9, 500); c.rotate(90)
+        c.setFillColor(INK); c.setFont('Times-Bold', 22); c.drawString(0, 0, 'WASSCE'); c.restoreState()
         if show.get('exam_year'):
-            c.saveState(); c.translate(rcx + 16, 548); c.rotate(90)
-            c.setFillColor(GREEN); c.setFont('Times-Bold', 21); c.drawString(0, 0, str(ctx['exam']['year'])); c.restoreState()
+            c.saveState(); c.translate(rcx + 17, 500); c.rotate(90)
+            c.setFillColor(GREEN); c.setFont('Times-Bold', 22); c.drawString(0, 0, str(ctx['exam']['year'])); c.restoreState()
     if show.get('student_photo') and ctx['student'].get('photo_path'):
-        pw, ph = 106, 130; px = rcx - pw / 2.0; py = 372
+        pw, ph = 108, 132; px = rcx - pw / 2.0; py = 330
         try:
             c.drawImage(ctx['student']['photo_path'], px, py, pw, ph, preserveAspectRatio=True, anchor='c', mask='auto')
         except Exception:
