@@ -2121,30 +2121,39 @@ def _draw_profile(c, ctx, show, cfg, verify_url):
         return xx - sp
 
     # ---- IDENTITY RAIL -----------------------------------------------------
-    # the rail's signature texture: a run of fine vertical lines down the rail
+    # Signature texture: fine vertical lines running the FULL rail height. The
+    # monogram, photo and crest overprint them (each masked with the ivory ground
+    # first), so the lines break cleanly around every element and continue below —
+    # exactly as in the reference.
+    photo_on = bool(show.get('student_photo') and ctx['student'].get('photo_path'))
+    mono_y = H - 104
+    pw, ph = 116, 132
+    ph_x, ph_y = rcx - pw / 2.0, 440          # photo sits high in the rail
     c.setStrokeColor(colors.HexColor('#c3bca9')); c.setLineWidth(0.5)
     for i in range(11):
-        xx = FM + 6 + i * 6
-        c.line(xx, H - 150, xx, 320)
+        xx = FM + 10 + i * 6
+        c.line(xx, FM + 46, xx, H - 46)
     c.setStrokeColor(GREEN); c.setLineWidth(1.6); c.line(RAIL_R, FM + 30, RAIL_R, H - 30)
     if logo:
+        c.setFillColor(IVORY); c.rect(rcx - 33, mono_y - 5, 66, 64, fill=1, stroke=0)   # break lines around monogram
         try:
-            c.drawImage(logo, rcx - 27, H - 104, 54, 54, preserveAspectRatio=True, anchor='c', mask='auto')
+            c.drawImage(logo, rcx - 27, mono_y, 54, 54, preserveAspectRatio=True, anchor='c', mask='auto')
         except Exception:
             pass
     if show.get('exam_name') or show.get('exam_year'):
-        c.saveState(); c.translate(rcx - 9, 500); c.rotate(90)
-        c.setFillColor(INK); c.setFont('Times-Bold', 22); c.drawString(0, 0, 'WASSCE'); c.restoreState()
+        vy = 600
+        c.saveState(); c.translate(rcx - 10, vy); c.rotate(90)
+        c.setFillColor(INK); c.setFont('Times-Bold', 23); c.drawString(0, 0, 'WASSCE'); c.restoreState()
         if show.get('exam_year'):
-            c.saveState(); c.translate(rcx + 17, 500); c.rotate(90)
-            c.setFillColor(GREEN); c.setFont('Times-Bold', 22); c.drawString(0, 0, str(ctx['exam']['year'])); c.restoreState()
-    if show.get('student_photo') and ctx['student'].get('photo_path'):
-        pw, ph = 108, 132; px = rcx - pw / 2.0; py = 330
+            c.saveState(); c.translate(rcx + 18, vy); c.rotate(90)
+            c.setFillColor(GREEN); c.setFont('Times-Bold', 23); c.drawString(0, 0, str(ctx['exam']['year'])); c.restoreState()
+    if photo_on:
+        c.setFillColor(IVORY); c.rect(ph_x - 4, ph_y - 4, pw + 8, ph + 8, fill=1, stroke=0)   # clean break
         try:
-            c.drawImage(ctx['student']['photo_path'], px, py, pw, ph, preserveAspectRatio=True, anchor='c', mask='auto')
+            c.drawImage(ctx['student']['photo_path'], ph_x, ph_y, pw, ph, preserveAspectRatio=True, anchor='c', mask='auto')
         except Exception:
-            c.setFillColor(colors.HexColor('#e5e7eb')); c.rect(px, py, pw, ph, fill=1, stroke=0)
-        c.setStrokeColor(HAIR); c.setLineWidth(0.8); c.rect(px, py, pw, ph, stroke=1, fill=0)
+            c.setFillColor(colors.HexColor('#e5e7eb')); c.rect(ph_x, ph_y, pw, ph, fill=1, stroke=0)
+        c.setStrokeColor(HAIR); c.setLineWidth(0.8); c.rect(ph_x, ph_y, pw, ph, stroke=1, fill=0)
     if logo:
         wm = _faded(logo, 0.06)
         if wm:
@@ -2156,17 +2165,18 @@ def _draw_profile(c, ctx, show, cfg, verify_url):
     # ---- MAIN · header -----------------------------------------------------
     y = H - 58
     if show.get('school_name') and ctx['school'].get('name'):
-        c.setFillColor(INK); c.setFont('Times-Bold', 22); c.drawString(mx0, y, ctx['school']['name'].upper()); y -= 16
+        c.setFillColor(INK); c.setFont('Times-Bold', 22); c.drawString(mx0, y, ctx['school']['name'].upper()); y -= 17
     if show.get('exam_name'):
-        _track('WEST AFRICAN SENIOR SCHOOL CERTIFICATE EXAMINATION', 'Helvetica-Bold', 8, mx0, y, 0.6, MUTE); y -= 20
+        _track('WEST AFRICAN SENIOR SCHOOL CERTIFICATE EXAMINATION', 'Helvetica-Bold', 8, mx0, y, 0.6, MUTE); y -= 24
     if show.get('exam_year'):
-        c.setFillColor(GREEN); c.setFont('Times-Bold', 16); c.drawString(mx0, y, str(ctx['exam']['year'])); y -= 8
+        c.setFillColor(GREEN); c.setFont('Times-Bold', 23); c.drawString(mx0, y, str(ctx['exam']['year'])); y -= 14
 
     # ---- MAIN · student identity ------------------------------------------
-    y -= 30
+    y -= 22
+    last = y
     if show.get('student_name'):
         for ln in _wrap(c, ctx['student']['name'].upper(), 'Times-Bold', 34, mx1 - mx0)[:2]:
-            c.setFillColor(INK); c.setFont('Times-Bold', 34); c.drawString(mx0, y, ln); y -= 37
+            c.setFillColor(INK); c.setFont('Times-Bold', 34); c.drawString(mx0, y, ln); last = y; y -= 37
     meta = []
     if show.get('candidate_no') and ctx['student'].get('candidate_no'):
         meta.append((cfg.get('candidate_label') or 'CANDIDATE NO.') + ' ' + str(ctx['student']['candidate_no']))
@@ -2177,8 +2187,8 @@ def _draw_profile(c, ctx, show, cfg, verify_url):
     if show.get('student_class') and ctx['student'].get('klass'):
         meta.append('CLASS ' + str(ctx['student']['klass']))
     if meta:
-        y -= 6
-        _track('     '.join(meta), 'Helvetica-Bold', 8.5, mx0, y, 0.5, MUTE)
+        y = last - 24                       # candidate sits close under the name
+        _track('     '.join(meta), 'Helvetica-Bold', 11.5, mx0, y, 0.5, MUTE)
     rows_top = y - 30
 
     # ---- bottom-anchored zones --------------------------------------------
