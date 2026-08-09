@@ -599,10 +599,11 @@ def analytics_export():
     # --- WAEC subjects ---
     if waec_stats and waec_stats['subject_analysis']:
         ws = wb.create_sheet('WAEC Subjects')
-        ws.append(['Subject', 'Entries', 'A1 %', 'Pass %', 'Fail %'])
+        ws.append(['Subject', 'Entries', 'A1 %', 'Pass %', 'Below credit % (D7–F9)', 'Fail % (F9)'])
         style_header(ws)
         for s in sorted(waec_stats['subject_analysis'], key=lambda x: x['pass_rate'], reverse=True):
-            ws.append([s['subject'], s['total_entries'], s['a1_rate'], s['pass_rate'], s['fail_rate']])
+            ws.append([s['subject'], s['total_entries'], s['a1_rate'], s['pass_rate'],
+                       s.get('below_credit_rate', 0), s['fail_rate']])
         ws.column_dimensions['A'].width = 24
 
     return xlsx_response(wb, f'exam_analytics_{year}.xlsx')

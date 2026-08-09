@@ -156,9 +156,14 @@ def test_most_failed_subjects_excludes_zero_fail_and_counts_only_f9(app):
         db.session.commit()
         stats = AcademicAnalytics.get_waec_school_statistics(yr)
         by_subject = {s['subject']: s for s in stats['subject_analysis']}
+        # strict F9 fail: Economics has none, Physics has one (of two entries)
         assert by_subject['ECONOMICS']['fail_count'] == 0        # E8 + D7 are passes
         assert by_subject['ECONOMICS']['fail_rate'] == 0.0
-        assert by_subject['PHYSICS']['fail_count'] == 1          # the single F9
+        assert by_subject['PHYSICS']['fail_count'] == 1
         assert by_subject['PHYSICS']['fail_rate'] == 50.0
+        # below-credit (D7/E8/F9): Economics is 100% (E8 + D7), Physics 50% (F9 + C4)
+        assert by_subject['ECONOMICS']['below_credit_rate'] == 100.0
+        assert by_subject['PHYSICS']['below_credit_rate'] == 50.0
+        # both subjects have sub-credit grades, so both appear in the list
         failed = [s['subject'] for s in stats['most_failed_subjects']]
-        assert 'PHYSICS' in failed and 'ECONOMICS' not in failed
+        assert 'PHYSICS' in failed and 'ECONOMICS' in failed

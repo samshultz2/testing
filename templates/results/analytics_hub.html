@@ -367,12 +367,12 @@ a.exec:hover .go{opacity:1}
         <div class="card-header"><h3 class="text-danger"><i class="fas fa-arrow-down"></i> Most Failed Subjects</h3></div>
         <div class="card-body" style="padding:0;">
             <table class="mini-table">
-                <thead><tr><th>Subject</th><th class="num">Fail %</th><th class="num">Entries</th></tr></thead>
+                <thead><tr><th>Subject</th><th class="num">Below credit % (D7–F9)</th><th class="num">Fail % (F9)</th><th class="num">Entries</th></tr></thead>
                 <tbody>
                 {% for s in waec_stats.most_failed_subjects %}
-                <tr><td>{{ s.subject }}</td><td class="num" style="color:#dc3545">{{ s.fail_rate }}%</td><td class="num">{{ s.total_entries }}</td></tr>
+                <tr><td>{{ s.subject }}</td><td class="num" style="color:#dc3545">{{ s.below_credit_rate }}%</td><td class="num" style="color:#dc3545">{{ s.fail_rate }}%</td><td class="num">{{ s.total_entries }}</td></tr>
                 {% else %}
-                <tr><td colspan="3" class="text-muted" style="padding:16px;">No failures (F9) recorded for {{ selected_year }}.</td></tr>
+                <tr><td colspan="4" class="text-muted" style="padding:16px;">No sub-credit grades (D7–F9) recorded for {{ selected_year }}.</td></tr>
                 {% endfor %}
                 </tbody>
             </table>

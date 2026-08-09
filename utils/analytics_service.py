@@ -377,10 +377,12 @@ class AcademicAnalytics:
             total = stats['total']
             a1_count = stats['grades'].get('A1', 0)
             pass_count_subj = sum(stats['grades'].get(g, 0) for g in AcademicAnalytics.PASS_GRADES)
-            # WAEC: only F9 is a fail (D7 and E8 are Pass grades), matching the
-            # statement-of-result grade key used elsewhere in the system.
+            # Two fail measures are reported side by side:
+            #   fail (F9)          — the strict WAEC fail (D7 and E8 are Pass grades)
+            #   below-credit       — anything short of a credit (D7 + E8 + F9)
             fail_count_subj = stats['grades'].get('F9', 0)
-            
+            below_credit_subj = sum(stats['grades'].get(g, 0) for g in ['D7', 'E8', 'F9'])
+
             subject_analysis.append({
                 'subject': subject,
                 'total_entries': total,
@@ -390,13 +392,17 @@ class AcademicAnalytics:
                 'pass_rate': round(pass_count_subj / total * 100, 1) if total > 0 else 0,
                 'fail_count': fail_count_subj,
                 'fail_rate': round(fail_count_subj / total * 100, 1) if total > 0 else 0,
+                'below_credit_count': below_credit_subj,
+                'below_credit_rate': round(below_credit_subj / total * 100, 1) if total > 0 else 0,
                 'grade_distribution': dict(stats['grades'])
             })
-        
+
         # Sort subjects by various metrics
         subjects_by_a1_rate = sorted(subject_analysis, key=lambda x: x['a1_rate'], reverse=True)
         subjects_by_pass_rate = sorted(subject_analysis, key=lambda x: x['pass_rate'], reverse=True)
-        subjects_by_fail_rate = sorted(subject_analysis, key=lambda x: x['fail_rate'], reverse=True)
+        # rank "most failed" by the broader below-credit rate, then by strict F9
+        subjects_by_fail_rate = sorted(
+            subject_analysis, key=lambda x: (x['below_credit_rate'], x['fail_rate']), reverse=True)
         
         # Student rankings
         student_aggregates = defaultdict(lambda: {'a1_count': 0, 'credit_count': 0, 'total_points': 0, 'subjects': 0})
@@ -423,9 +429,9 @@ class AcademicAnalytics:
             'subject_analysis': subject_analysis,
             'top_subjects_by_a1': subjects_by_a1_rate[:5],
             'bottom_subjects_by_pass': subjects_by_pass_rate[-5:],
-            # only subjects that actually have failures — never pad the list with
-            # 0%-fail subjects
-            'most_failed_subjects': [s for s in subjects_by_fail_rate if s['fail_count'] > 0][:5],
+            # only subjects short of a credit in at least one entry — never pad
+            # the list with 0%-fail subjects
+            'most_failed_subjects': [s for s in subjects_by_fail_rate if s['below_credit_count'] > 0][:5],
             'top_performers': [{'student_id': s[0], **s[1]} for s in top_by_a1]
         }
     
