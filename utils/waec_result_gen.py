@@ -91,11 +91,7 @@ TEMPLATES = {
                              'WASSCE|year headline, a deep-navy candidate band with an integrated '
                              'photo, a ruled subject/grade ledger with a column rule and crest '
                              'watermark, a stat summary band, and a formal seal + QR authentication row.',
-                     'landscape': False,
-                     # A taller portrait than A4 (same 1:1.78 aspect as a social/story card)
-                     # so the large display typography and full-width headline read exactly like
-                     # the reference and share cleanly on WhatsApp.
-                     'pagesize': (595.28, 1058.0)},
+                     'landscape': False},
 }
 DEFAULT_TEMPLATE = 'prestige'
 
@@ -1869,7 +1865,7 @@ def _draw_executive(c, ctx, show, cfg, verify_url):
     FM = 22
     c.setStrokeColor(NAVY); c.setLineWidth(1.3); c.rect(FM, FM, W - 2 * FM, H - 2 * FM, stroke=1, fill=0)
     c.setStrokeColor(GOLD); c.setLineWidth(0.6); c.rect(FM + 5, FM + 5, W - 2 * FM - 10, H - 2 * FM - 10, stroke=1, fill=0)
-    tri = 60
+    tri = 48
     c.setFillColor(GOLD)
     p = c.beginPath(); p.moveTo(W - FM, H - FM); p.lineTo(W - FM - tri, H - FM); p.lineTo(W - FM, H - FM - tri); p.close()
     c.drawPath(p, fill=1, stroke=0)
@@ -1879,66 +1875,66 @@ def _draw_executive(c, ctx, show, cfg, verify_url):
     name_x = M
     if logo:
         try:
-            c.drawImage(logo, M, H - FM - 16 - 78, 78, 78, preserveAspectRatio=True, anchor='nw', mask='auto')
-            name_x = M + 78 + 20
+            c.drawImage(logo, M, H - FM - 12 - 70, 70, 70, preserveAspectRatio=True, anchor='nw', mask='auto')
+            name_x = M + 70 + 18
         except Exception:
             name_x = M
-    right_w = 156
+    right_w = 154
     if show.get('school_name') and ctx['school'].get('name'):
-        ny = H - 74
-        for ln in _wrap(c, ctx['school']['name'].upper(), 'Times-Bold', 35, R - name_x - right_w)[:2]:
-            c.setFillColor(NAVY); c.setFont('Times-Bold', 35); c.drawString(name_x, ny, ln); ny -= 40
-    ry = H - 70
+        ny = H - 62
+        for ln in _wrap(c, ctx['school']['name'].upper(), 'Times-Bold', 33, R - name_x - right_w)[:2]:
+            c.setFillColor(NAVY); c.setFont('Times-Bold', 33); c.drawString(name_x, ny, ln); ny -= 36
+    ry = H - 58
     if show.get('branch') and ctx.get('branch'):
-        c.setFillColor(NAVY); c.setFont('Helvetica-Bold', 14); c.drawRightString(R, ry, ctx['branch']); ry -= 20
+        c.setFillColor(NAVY); c.setFont('Helvetica-Bold', 12.5); c.drawRightString(R, ry, ctx['branch']); ry -= 18
     if show.get('school_motto') and ctx['school'].get('motto'):
-        c.setFillColor(MUTE); c.setFont('Helvetica-Oblique', 10); c.drawRightString(R, ry, 'School Motto'); ry -= 15
-        for ln in _wrap(c, ctx['school']['motto'], 'Helvetica-Bold', 11.5, right_w)[:2]:
-            c.setFillColor(NAVY); c.setFont('Helvetica-Bold', 11.5); c.drawRightString(R, ry, ln); ry -= 15
-    hy = H - 168
+        c.setFillColor(MUTE); c.setFont('Helvetica-Oblique', 9); c.drawRightString(R, ry, 'School Motto'); ry -= 13
+        for ln in _wrap(c, ctx['school']['motto'], 'Helvetica-Bold', 10.5, right_w)[:2]:
+            c.setFillColor(NAVY); c.setFont('Helvetica-Bold', 10.5); c.drawRightString(R, ry, ln); ry -= 13
+    hy = H - 144
     c.setStrokeColor(NAVY); c.setLineWidth(1.1); c.line(M, hy, R, hy)
     c.setStrokeColor(GOLD); c.setLineWidth(0.6); c.line(M, hy - 4, R, hy - 4)
 
     # ---- ZONE 2 · examination identity ----
     if show.get('exam_name'):
         c.setFillColor(NAVY)
-        _spaced_fit('WEST AFRICAN SENIOR SCHOOL CERTIFICATE EXAMINATION', 'Helvetica-Bold', 13.5, M, R, hy - 40)
-        big_y = hy - 116
-        c.setFillColor(NAVY); c.setFont('Helvetica-Bold', 62); c.drawString(M, big_y, 'WASSCE')
-        ww = _sw('WASSCE', 'Helvetica-Bold', 62)
+        _spaced_fit('WEST AFRICAN SENIOR SCHOOL CERTIFICATE EXAMINATION', 'Helvetica-Bold', 12.5, M, R, hy - 30)
+        big_y = hy - 82
+        c.setFillColor(NAVY); c.setFont('Helvetica-Bold', 55); c.drawString(M, big_y, 'WASSCE')
+        ww = _sw('WASSCE', 'Helvetica-Bold', 55)
         if show.get('exam_year'):
             yr = str(ctx['exam']['year'])
-            wyr = _sw(yr, 'Helvetica-Bold', 62)
-            c.setFillColor(GOLD); c.setFont('Helvetica-Bold', 62); c.drawString(R - wyr, big_y, yr)  # right-aligned → full width
+            wyr = _sw(yr, 'Helvetica-Bold', 55)
+            c.setFillColor(GOLD); c.setFont('Helvetica-Bold', 55); c.drawString(R - wyr, big_y, yr)  # right-aligned → full width
             divx = M + ww + (R - wyr - (M + ww)) / 2.0                                                 # divider centred in the gap
-            c.setStrokeColor(GOLD); c.setLineWidth(2.0); c.line(divx, big_y - 8, divx, big_y + 52)
-    edy = hy - 138
+            c.setStrokeColor(GOLD); c.setLineWidth(1.8); c.line(divx, big_y - 6, divx, big_y + 44)
+    edy = hy - 100
     c.setStrokeColor(NAVY); c.setLineWidth(1.1); c.line(M, edy, R, edy)
 
     # ---- ZONE 3 · student identity (navy candidate band) ----
-    band_top = edy - 16; band_h = 142; band_bot = band_top - band_h
+    band_top = edy - 14; band_h = 118; band_bot = band_top - band_h
     c.setFillColor(NAVY_BAND); c.rect(M, band_bot, R - M, band_h, fill=1, stroke=0)
     c.setStrokeColor(GOLD); c.setLineWidth(1.4); c.line(M, band_bot, R, band_bot)
-    txt_x = M + 26
-    name_w = R - 26 - txt_x
+    txt_x = M + 24
+    name_w = R - 24 - txt_x
     if show.get('student_photo') and ctx['student'].get('photo_path'):
-        pw, ph = 104, 126
-        px = R - pw - 18; py = band_bot + (band_h - ph) / 2.0
+        pw, ph = 90, 108
+        px = R - pw - 16; py = band_bot + (band_h - ph) / 2.0
         c.setFillColor(GOLD); c.rect(px - 3, py - 3, pw + 6, ph + 6, fill=1, stroke=0)
         try:
             c.drawImage(ctx['student']['photo_path'], px, py, pw, ph, preserveAspectRatio=True, anchor='c', mask='auto')
         except Exception:
             c.setFillColor(colors.HexColor('#e5e7eb')); c.rect(px, py, pw, ph, fill=1, stroke=0)
-        name_w = px - 24 - txt_x
+        name_w = px - 22 - txt_x
     if show.get('student_name'):
-        nY = band_top - 48
-        for ln in _wrap(c, ctx['student']['name'].upper(), 'Helvetica-Bold', 36, name_w)[:2]:
-            c.setFillColor(colors.white); c.setFont('Helvetica-Bold', 36); c.drawString(txt_x, nY, ln); nY -= 40
+        nY = band_top - 40
+        for ln in _wrap(c, ctx['student']['name'].upper(), 'Helvetica-Bold', 32, name_w)[:2]:
+            c.setFillColor(colors.white); c.setFont('Helvetica-Bold', 32); c.drawString(txt_x, nY, ln); nY -= 35
     cand = ctx['student'].get('candidate_no')
     if show.get('candidate_no') and cand:
-        c.setFillColor(GOLD_LT); c.setFont('Helvetica-Bold', 12)
-        c.drawString(txt_x, band_bot + 36, (cfg.get('candidate_label') or 'Candidate No.'))
-        c.setFillColor(colors.white); c.setFont('Helvetica-Bold', 17); c.drawString(txt_x, band_bot + 14, str(cand))
+        c.setFillColor(GOLD_LT); c.setFont('Helvetica-Bold', 11)
+        c.drawString(txt_x, band_bot + 26, (cfg.get('candidate_label') or 'Candidate No.'))
+        c.setFillColor(colors.white); c.setFont('Helvetica-Bold', 15); c.drawString(txt_x, band_bot + 10, str(cand))
 
     # ---- bottom-anchored zones (compute anchors, draw ledger between) ----
     stats = []
@@ -1947,20 +1943,20 @@ def _draw_executive(c, ctx, show, cfg, verify_url):
     if show.get('credits'):        stats.append((st['credits'], 'CREDITS'))
     if show.get('average'):        stats.append((st['average'], 'AVERAGE'))
     if show.get('classification'): stats.append((st['classification'], 'CLASS'))
-    foot_div_y = FM + 66
-    auth_top = foot_div_y + 130
-    summary_h = 82 if stats else 0
-    band_y0 = auth_top + 22
-    results_bottom = (band_y0 + summary_h + 18) if stats else (auth_top + 16)
+    foot_div_y = FM + 48
+    auth_top = foot_div_y + 84
+    summary_h = 56 if stats else 0
+    band_y0 = auth_top + 16
+    results_bottom = (band_y0 + summary_h + 14) if stats else (auth_top + 14)
 
     # ---- ZONE 4 · academic results (ruled ledger) ----
-    ry2 = band_bot - 40
+    ry2 = band_bot - 26
     if show.get('subjects'):
-        c.setFillColor(MUTE); c.setFont('Helvetica-Bold', 12); c.drawString(M, ry2, 'SUBJECTS')
+        c.setFillColor(MUTE); c.setFont('Helvetica-Bold', 11); c.drawString(M, ry2, 'SUBJECTS')
         if show.get('grades'):
             c.drawRightString(R, ry2, 'GRADES')
-        c.setStrokeColor(NAVY); c.setLineWidth(1.0); c.line(M, ry2 - 12, R, ry2 - 12)
-    rows_top = ry2 - 12
+        c.setStrokeColor(NAVY); c.setLineWidth(1.0); c.line(M, ry2 - 10, R, ry2 - 10)
+    rows_top = ry2 - 10
     results = ctx['results']
     n = len(results)
 
@@ -1968,7 +1964,7 @@ def _draw_executive(c, ctx, show, cfg, verify_url):
     if logo and show.get('subjects'):
         wm = _faded(logo, 0.05)
         if wm:
-            sz = 380
+            sz = 300
             try:
                 c.drawImage(wm, cx - sz / 2, (rows_top + results_bottom) / 2 - sz / 2, sz, sz,
                             preserveAspectRatio=True, anchor='c', mask='auto')
@@ -1976,8 +1972,8 @@ def _draw_executive(c, ctx, show, cfg, verify_url):
                 pass
 
     def _col(items, x0, x1, y0, rh):
-        subj_fs = 17 if rh >= 24 else 14
-        gx = x1 - 66
+        subj_fs = 15 if rh >= 20 else 13
+        gx = x1 - 56
         if show.get('grades') and items:
             c.setStrokeColor(HAIR); c.setLineWidth(0.9)
             c.line(gx, y0 - len(items) * rh + rh * 0.30, gx, y0 - rh * 0.10)
@@ -1999,14 +1995,14 @@ def _draw_executive(c, ctx, show, cfg, verify_url):
 
     if show.get('subjects') and n:
         avail = rows_top - results_bottom
-        if avail / n < 22 and n > 9:                     # dense → two legible columns
+        if avail / n < 19 and n > 9:                     # dense → two legible columns
             per = (n + 1) // 2
-            rh = min(34, max(18, avail / per))
-            gap = 30; colw = (R - M - gap) / 2.0
+            rh = min(30, max(16, avail / per))
+            gap = 26; colw = (R - M - gap) / 2.0
             _col(results[:per], M, M + colw, rows_top, rh)
             _col(results[per:], M + colw + gap, R, rows_top, rh)
         else:
-            rh = min(40, max(22, avail / n))
+            rh = min(36, max(18, avail / n))
             _col(results, M, R, rows_top, rh)
 
     # ---- ZONE 6 · result summary band ----
@@ -2015,49 +2011,49 @@ def _draw_executive(c, ctx, show, cfg, verify_url):
         colw = (R - M) / len(stats)
         for i, (v, l) in enumerate(stats):
             sxc = M + colw * i + colw / 2.0
-            c.setFillColor(NAVY); c.setFont('Times-Bold', 34); c.drawCentredString(sxc, band_y0 + summary_h - 44, str(v))
-            c.setFillColor(NAVY); c.setFont('Helvetica-Bold', 12); c.drawCentredString(sxc, band_y0 + 16, l)
+            c.setFillColor(NAVY); c.setFont('Times-Bold', 28); c.drawCentredString(sxc, band_y0 + summary_h - 34, str(v))
+            c.setFillColor(NAVY); c.setFont('Helvetica-Bold', 10.5); c.drawCentredString(sxc, band_y0 + 12, l)
             if i:
                 c.setStrokeColor(DIVL); c.setLineWidth(1.0)
-                c.line(M + colw * i, band_y0 + 14, M + colw * i, band_y0 + summary_h - 14)
+                c.line(M + colw * i, band_y0 + 11, M + colw * i, band_y0 + summary_h - 11)
 
     # ---- ZONE 7 · official authentication ----
-    az = auth_top - 6
+    az = auth_top - 4
     if show.get('principal_signature') or show.get('principal_name'):
-        line_y = az - 50
+        line_y = az - 40
         sig = ctx['official'].get('signature_path') if show.get('principal_signature') else None
         if sig:
             try:
-                c.drawImage(sig, M, line_y + 4, 120, 32, preserveAspectRatio=True, anchor='sw', mask='auto')
+                c.drawImage(sig, M, line_y + 4, 108, 28, preserveAspectRatio=True, anchor='sw', mask='auto')
             except Exception:
                 sig = None
         if not sig:
-            c.setFillColor(NAVY); c.setFont('Times-Italic', 26)
-            c.drawString(M, line_y + 8, (ctx['official'].get('principal_name') or 'Principal'))
-        c.setStrokeColor(NAVY); c.setLineWidth(1.0); c.line(M, line_y, M + 190, line_y)
-        c.setFillColor(CHAR); c.setFont('Helvetica-Bold', 12); c.drawString(M, line_y - 18, 'Principal')
+            c.setFillColor(NAVY); c.setFont('Times-Italic', 22)
+            c.drawString(M, line_y + 6, (ctx['official'].get('principal_name') or 'Principal'))
+        c.setStrokeColor(NAVY); c.setLineWidth(1.0); c.line(M, line_y, M + 165, line_y)
+        c.setFillColor(CHAR); c.setFont('Helvetica-Bold', 11); c.drawString(M, line_y - 15, 'Principal')
     if show.get('school_stamp'):
-        _seal(c, cx, az - 44, 44, ctx['school'].get('name'))
+        _seal(c, cx, az - 34, 36, ctx['school'].get('name'))
     if show.get('verification_code') or show.get('qr_code') or show.get('date_issued'):
         qr_ok = False
         if show.get('qr_code') and verify_url:
             try:
                 import qrcode
                 qb = io.BytesIO(); qrcode.make(verify_url).save(qb, format='PNG'); qb.seek(0)
-                c.drawImage(ImageReader(qb), R - 68, az - 74, 66, 66, mask='auto'); qr_ok = True
+                c.drawImage(ImageReader(qb), R - 56, az - 58, 54, 54, mask='auto'); qr_ok = True
             except Exception:
                 qr_ok = False
-        vxr = (R - 68 - 16) if qr_ok else R
+        vxr = (R - 56 - 14) if qr_ok else R
         if show.get('verification_code') and ctx.get('verify_code'):
-            c.setFillColor(MUTE); c.setFont('Helvetica-Bold', 10.5); c.drawRightString(vxr, az - 22, 'Verification code')
-            c.setFillColor(NAVY); c.setFont('Helvetica-Bold', 15); c.drawRightString(vxr, az - 40, str(ctx['verify_code']))
+            c.setFillColor(MUTE); c.setFont('Helvetica-Bold', 10); c.drawRightString(vxr, az - 20, 'Verification code')
+            c.setFillColor(NAVY); c.setFont('Helvetica-Bold', 14); c.drawRightString(vxr, az - 36, str(ctx['verify_code']))
         if show.get('date_issued'):
-            c.setFillColor(MUTE); c.setFont('Helvetica', 10)
-            c.drawRightString(vxr, az - 58, 'Issued ' + _issue_date().strftime('%d %b %Y'))
+            c.setFillColor(MUTE); c.setFont('Helvetica', 9.5)
+            c.drawRightString(vxr, az - 52, 'Issued ' + _issue_date().strftime('%d %b %Y'))
 
     # ---- ZONE 8 · footer + bottom accent bars ----
-    c.setFillColor(NAVY); c.rect(M, FM + 26, (R - M) * 0.62, 10, fill=1, stroke=0)
-    c.setFillColor(GOLD); c.rect(M + (R - M) * 0.62, FM + 26, (R - M) * 0.38, 10, fill=1, stroke=0)
+    c.setFillColor(NAVY); c.rect(M, FM + 22, (R - M) * 0.62, 8, fill=1, stroke=0)
+    c.setFillColor(GOLD); c.rect(M + (R - M) * 0.62, FM + 22, (R - M) * 0.38, 8, fill=1, stroke=0)
     c.setStrokeColor(HAIR); c.setLineWidth(1.0); c.line(M, foot_div_y, R, foot_div_y)
     name_addr = ctx['school'].get('name', '') or ''
     if show.get('school_address') and ctx['school'].get('address'):
@@ -2068,7 +2064,7 @@ def _draw_executive(c, ctx, show, cfg, verify_url):
         name_addr = cfg['footer_text']
     segs = [s for s in [name_addr or None, phone, web] if s]
     if segs:
-        c.setFont('Helvetica', 10.5); c.setFillColor(NAVY); fy = FM + 48
+        c.setFont('Helvetica', 9.5); c.setFillColor(NAVY); fy = FM + 44
         if len(segs) >= 3:
             c.drawString(M, fy, segs[0]); c.drawCentredString(cx, fy, segs[1]); c.drawRightString(R, fy, segs[2])
         elif len(segs) == 2:
