@@ -108,6 +108,31 @@ def test_executive_template_registered_and_renders(app):
         assert W.render_pdf(ctx, 'executive', minimal).getvalue()[:4] == b'%PDF'
 
 
+def test_academic_profile_template_registered_and_renders(app):
+    assert 'profile' in W.TEMPLATES and 'profile' in W._CANVAS_DRAW
+    assert W.TEMPLATES['profile']['name'] == 'Academic Profile — 2026'
+    assert W.TEMPLATES['profile']['landscape'] is False
+    assert 'profile' in W.PRESETS
+    sid = _seed(app)                       # the 9 sample subjects (5 A1s)
+    with app.app_context():
+        ctx = W.build_context(db.session.get(Student, sid), _YR)
+        show = W.preset_show(ctx, 'profile')
+        assert show['subjects'] and show['grades'] and show['total_subjects']
+        assert show['a1_count'] and show['credits']
+        assert ctx['stats']['a1'] == 5 and ctx['stats']['credits'] == 9
+        pdf = W.render_pdf(ctx, 'profile', show, verify_url='https://example.test/verify/ABC')
+        assert pdf.getvalue()[:4] == b'%PDF'
+        # renders on standard A4 (like every portrait template)
+        import fitz
+        doc = fitz.open(stream=pdf.getvalue(), filetype='pdf')
+        assert round(doc[0].rect.width) == 595 and round(doc[0].rect.height) == 842
+        # minimal selection still renders (rail rebalances without photo/summary)
+        minimal = W.resolve_show(ctx, {k: (k in {'school_name', 'student_name',
+                                 'exam_name', 'exam_year', 'subjects', 'grades'})
+                                 for k in W._ALL_COMPONENTS})
+        assert W.render_pdf(ctx, 'profile', minimal).getvalue()[:4] == b'%PDF'
+
+
 def test_render_handles_many_subjects(app):
     grades = {f'Subject {i}': 'C4' for i in range(1, 14)}   # 13 subjects -> compact table
     sid = _seed(app, grades)
