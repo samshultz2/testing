@@ -3140,6 +3140,11 @@ def _draw_terrain(c, ctx, show, cfg, verify_url):
     elif show.get('school_motto') and ctx['school'].get('motto'):
         c.setFillColor(MUTE); c.setFont('Helvetica-Oblique', 8.5); c.drawString(nx, ny - 1, ctx['school']['motto'])
 
+    # soft-cream identity field — sets the name/photo/motif zone apart from the
+    # sand page (drawn before the label + name + portrait so they sit on top)
+    id_top, id_bot = H - 178, H - 392
+    c.setFillColor(CREAM); c.rect(0, id_bot, W, id_top - id_bot, fill=1, stroke=0)
+
     # ---- 2 · examination label --------------------------------------------
     c.setStrokeColor(SAGE); c.setLineWidth(0.8); c.line(FM, H - 178, 340, H - 178)
     if show.get('exam_name'):
