@@ -842,13 +842,16 @@ function TodaySchedule({ data, urls, teacher }) {
                   {det && det.rows && det.rows.length === 0 &&
                     <div className="text-muted" style={{ fontSize: '.8rem' }}>No classes in this period.</div>}
                   {det && det.rows && det.rows.map((r, i) => (
-                    <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: '.6rem', fontSize: '.8rem',
-                                 padding: '.28rem 0', borderBottom: i < det.rows.length - 1 ? '1px solid var(--border-light)' : 'none' }}>
-                      <span style={{ fontWeight: 600, minWidth: 88, flexShrink: 0 }}>{r.class_arm}</span>
-                      <span style={{ flex: 1, minWidth: 0 }}>{r.subject}</span>
-                      <span className="text-muted" style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
-                        <i className="fas fa-chalkboard-user" aria-hidden="true" style={{ marginRight: 4, opacity: .7 }} />{r.teacher}{r.room ? ' · ' + r.room : ''}
-                      </span>
+                    <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '.6rem', fontSize: '.8rem',
+                                 padding: '.32rem 0', borderBottom: i < det.rows.length - 1 ? '1px solid var(--border-light)' : 'none' }}>
+                      <span style={{ fontWeight: 600, width: 84, flexShrink: 0 }}>{r.class_arm}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div>{r.subject}</div>
+                        <div className="text-muted" style={{ fontSize: '.75rem', marginTop: 1 }}>
+                          <i className="fas fa-user" aria-hidden="true" style={{ marginRight: 5, opacity: .6 }} />
+                          {r.teacher}{r.room ? ' · ' + r.room : ''}
+                        </div>
+                      </div>
                     </div>
                   ))}
                 </div>
