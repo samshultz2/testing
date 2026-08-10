@@ -514,10 +514,29 @@ _OVERRIDES = [(abbr, cname, cutoff)
               for cname, cutoff in courses.items()]
 
 
+def _load_bulk_institutions():
+    """The long tail of Nigerian tertiary institutions (universities,
+    polytechnics, colleges of education/health/nursing/agriculture, monotechnics)
+    sourced from myschool.ng — [{name, ownership}]. Bundled as JSON so the curated
+    set above (which carries states + competitive cut-offs) stays readable.
+    Returns [] if the data file is missing."""
+    import json
+    import os
+    path = os.path.join(os.path.dirname(__file__), 'data', 'ng_institutions.json')
+    try:
+        with open(path, encoding='utf-8') as fh:
+            return json.load(fh)
+    except (OSError, ValueError):
+        return []
+
+
 def seed_university_data():
     """Fill any missing universities/courses/overrides. Returns a small summary."""
     from models import db, University, Course, UniversityCourse
     added = {'universities': 0, 'courses': 0, 'overrides': 0}
+
+    # Names already present in the DB (any source) so we never double-add.
+    existing_names = {n for (n,) in db.session.query(University.name).all()}
 
     by_abbr = {}
     for name, abbr, state, ownership, bump in _UNIVERSITIES:
@@ -527,6 +546,19 @@ def seed_university_data():
                            ownership=ownership, cutoff_bump=bump, is_active=True)
             db.session.add(u); added['universities'] += 1
         by_abbr[abbr] = u
+        existing_names.add(name)
+    db.session.flush()
+
+    # The bulk long-tail set (no per-course cut-offs; ownership inferred, states
+    # left blank for the admin to fill). Deduped against everything already added.
+    for rec in _load_bulk_institutions():
+        name = (rec.get('name') or '').strip()
+        if not name or name in existing_names:
+            continue
+        db.session.add(University(name=name, abbreviation=(rec.get('abbreviation') or '').strip() or None,
+                                  ownership=(rec.get('ownership') or None), is_active=True))
+        existing_names.add(name)
+        added['universities'] += 1
     db.session.flush()
 
     by_course = {}
