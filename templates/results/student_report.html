@@ -233,5 +233,52 @@
         </table>
         {% endif %}
     </div>
+
+    {# The student's OWN university target: eligibility verdict, gap-to-target and
+       the courses they're projected competitive for (from the aspiration engine). #}
+    {% if aspiration and aspiration.status not in ('NO_TARGET', None) %}
+    <div class="rsection">
+        <h2><i class="fas fa-bullseye"></i> University Aspiration <span class="muted" style="font-size:.75rem;font-weight:400;">(their chosen course)</span></h2>
+        {% set _es = {'ON_TRACK':('#137333','#e6f4ea','On track'),
+                      'CLOSE':('#946200','#fef7e0','Close'),
+                      'OFF_TRACK':('#b3261e','#fce8e6','Off track'),
+                      'NO_DATA':('#5f6368','#f1f3f4','No exam signal yet')} %}
+        {% set _e = _es.get(aspiration.status, _es['NO_DATA']) %}
+        <div style="border:1px solid {{ _e[0] }}33;background:{{ _e[1] }};border-radius:8px;padding:.6rem .75rem;">
+            <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:.4rem;align-items:center;">
+                <span style="font-weight:700;color:{{ _e[0] }};">{{ aspiration.status_label or _e[2] }}</span>
+                <span class="muted" style="font-size:.8rem;">
+                    {{ aspiration.course }}{% if aspiration.university %} · {{ aspiration.university }}{% endif %}{% if aspiration.department %} · {{ aspiration.department }}{% endif %}
+                </span>
+            </div>
+            {% if aspiration.get('target') and aspiration.get('projected') is not none %}
+            {% set _pct = (aspiration.get('projected') / aspiration.get('target') * 100)|round|int %}
+            <div style="margin-top:.5rem;">
+                <div class="muted" style="display:flex;justify-content:space-between;font-size:.78rem;">
+                    <span>Projected JAMB {{ aspiration.get('projected') }} of target {{ aspiration.get('target') }}</span>
+                    <span>{% if aspiration.get('gap') and aspiration.get('gap') > 0 %}{{ aspiration.get('gap') }} to go{% else %}Target met{% endif %}</span>
+                </div>
+                <div style="height:8px;border-radius:5px;background:#00000012;overflow:hidden;margin-top:.25rem;">
+                    <div style="height:100%;width:{{ [_pct, 100]|min }}%;background:{{ _e[0] }};"></div>
+                </div>
+            </div>
+            {% endif %}
+            {% if aspiration.get('missing_jamb') %}
+            <div style="margin-top:.45rem;font-size:.82rem;color:{{ _e[0] }};">Missing required JAMB subject(s): <strong>{{ aspiration.get('missing_jamb')|join(', ') }}</strong></div>
+            {% endif %}
+            {% if aspiration.get('missing_waec') %}
+            <div style="margin-top:.25rem;font-size:.82rem;color:{{ _e[0] }};">O'level not yet projected to credit: <strong>{{ aspiration.get('missing_waec')|join(', ') }}</strong></div>
+            {% endif %}
+        </div>
+        {% if recommendations %}
+        <p class="muted" style="font-size:.8rem;margin:.55rem 0 .3rem;">Also projected competitive for (at their target institution):</p>
+        <div>
+            {% for r in recommendations %}
+            <span class="pill g-dist" style="margin:2px;display:inline-block;" title="Cut-off {{ r.cutoff }} · +{{ r.margin }} projected margin">{{ r.course }}{% if r.subject_fit %} <i class="fas fa-check" style="font-size:.7rem;"></i>{% endif %}</span>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
 </div>
 {% endblock %}
