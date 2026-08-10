@@ -115,7 +115,7 @@
                 <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-search"></i> Search</button>
                 {% if filters.cq %}<a class="btn btn-secondary btn-sm" href="{{ url_for('settings.admissions_data', tab='courses') }}">Clear</a>{% endif %}
             </form>
-            <p class="text-muted text-sm"><strong>Base cut-off</strong> is the competitive JAMB score nationally; subjects are comma-separated (JAMB is English + 3 others).</p>
+            <p class="text-muted text-sm"><strong>Base cut-off</strong> is the competitive JAMB score nationally; subjects are comma-separated (JAMB is English + 3 others). Use <code>|</code> for interchangeable options in one slot — e.g. <code>Commerce|Financial Accounting</code> is satisfied by either.</p>
             <table class="table" style="width:100%;min-width:820px;">
                 <thead><tr><th>Course</th><th>Department</th><th>Base</th><th>JAMB subjects</th><th>WAEC subjects</th><th></th></tr></thead>
                 <tbody>

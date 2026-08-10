@@ -264,8 +264,10 @@ def admissions_data():
             if action == 'seed':
                 from utils.university_seed import seed_university_data
                 res = seed_university_data()
-                flash(f"Seeded {res['universities']} universities, {res['courses']} courses, "
-                      f"{res['overrides']} cut-off overrides.", 'success')
+                flash(f"Seeded {res['universities']} institutions, {res['courses']} courses, "
+                      f"{res['overrides']} cut-off overrides"
+                      + (f", upgraded {res['updated']} course requirement(s)." if res.get('updated') else "."),
+                      'success')
             elif action == 'save_university':
                 uid = request.form.get('id', type=int)
                 u = db.session.get(University, uid) if uid else University()

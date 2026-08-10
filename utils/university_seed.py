@@ -251,8 +251,11 @@ _SCI_WAEC = [_ENG, _MTH, _BIO, _CHM, _PHY]             # WAEC science
 _ENGR_JAMB = [_ENG, _MTH, _PHY, _CHM]                  # JAMB engineering/phys-sci
 _ENGR_WAEC = [_ENG, _MTH, _PHY, _CHM, _FMT]            # WAEC engineering
 _MED = [_ENG, _BIO, _CHM, _PHY]                        # medical/health JAMB
+# Commerce and Financial Accounting are interchangeable for management courses at
+# most universities (incl. UNIBEN) — a single slot satisfied by either.
+_COM_FA = 'Commerce|Financial Accounting'
 _MGMT_JAMB = [_ENG, _MTH, _ECO, _COM]
-_MGMT_WAEC = [_ENG, _MTH, _ECO, _COM, 'Financial Accounting']
+_MGMT_WAEC = [_ENG, _MTH, _ECO, _COM_FA, _GOV]
 _SOC_JAMB = [_ENG, _ECO, _GOV, _MTH]
 _SOC_WAEC = [_ENG, _MTH, _ECO, _GOV, _COM]
 _ARTS_JAMB = [_ENG, _LIT, _GOV, _CRS]
@@ -533,7 +536,7 @@ def _load_bulk_institutions():
 def seed_university_data():
     """Fill any missing universities/courses/overrides. Returns a small summary."""
     from models import db, University, Course, UniversityCourse
-    added = {'universities': 0, 'courses': 0, 'overrides': 0}
+    added = {'universities': 0, 'courses': 0, 'overrides': 0, 'updated': 0}
 
     # Names already present in the DB (any source) so we never double-add.
     existing_names = {n for (n,) in db.session.query(University.name).all()}
@@ -570,6 +573,24 @@ def seed_university_data():
                        is_active=True)
             db.session.add(c); added['courses'] += 1
         by_course[name] = c
+    db.session.flush()
+
+    # Upgrade legacy O'level requirements: where Commerce and Financial Accounting
+    # sit as two separate required slots, merge them into one interchangeable slot
+    # (either credits) — the rule at UNIBEN and most universities. Idempotent: the
+    # merged "Commerce|Financial Accounting" slot no longer matches on re-run.
+    for c in Course.query.all():
+        slots = [s.strip() for s in (c.waec_subjects or '').split(',') if s.strip()]
+        if 'Commerce' in slots and 'Financial Accounting' in slots:
+            merged, done = [], False
+            for s in slots:
+                if s in ('Commerce', 'Financial Accounting'):
+                    if not done:
+                        merged.append(_COM_FA); done = True
+                else:
+                    merged.append(s)
+            c.waec_subjects = ', '.join(merged)
+            added['updated'] += 1
     db.session.flush()
 
     for abbr, cname, cutoff in _OVERRIDES:

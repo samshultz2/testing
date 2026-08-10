@@ -50,13 +50,39 @@ class Course(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=local_now)
 
+    @staticmethod
+    def _parse_groups(raw):
+        """Parse a requirement string into alternative-groups. Slots are separated
+        by commas; within a slot, ``|`` lists interchangeable subjects, any one of
+        which satisfies it — e.g. ``Commerce|Financial Accounting`` means either
+        Commerce OR Financial Accounting counts (as most universities allow)."""
+        groups = []
+        for item in (raw or '').split(','):
+            alts = [a.strip() for a in item.split('|') if a.strip()]
+            if alts:
+                groups.append(alts)
+        return groups
+
+    @property
+    def jamb_requirement_groups(self):
+        """JAMB requirements as alternative-groups (list of lists)."""
+        return self._parse_groups(self.jamb_subjects)
+
+    @property
+    def waec_requirement_groups(self):
+        """O'level requirements as alternative-groups (list of lists)."""
+        return self._parse_groups(self.waec_subjects)
+
     @property
     def jamb_subject_list(self):
-        return [s.strip() for s in (self.jamb_subjects or '').split(',') if s.strip()]
+        """Canonical JAMB combo — the primary (first) option of each slot. Identical
+        to the raw list when no ``|`` alternatives are used."""
+        return [g[0] for g in self.jamb_requirement_groups]
 
     @property
     def waec_subject_list(self):
-        return [s.strip() for s in (self.waec_subjects or '').split(',') if s.strip()]
+        """Canonical O'level combo — the primary option of each slot."""
+        return [g[0] for g in self.waec_requirement_groups]
 
     def as_dict(self):
         return {'id': self.id, 'name': self.name, 'department': self.department or '',
