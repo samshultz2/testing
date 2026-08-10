@@ -177,3 +177,28 @@ def test_override_management(app):
     with app.app_context():
         u = db.session.get(University, uid); cs = db.session.get(Course, cid)
         assert effective_cutoff(u, cs) == 240
+
+
+def test_bulk_import_cutoffs(app):
+    """Pasting 'University, Course, Cut-off' rows upserts overrides; unmatched
+    rows are skipped, and missing courses can be created on demand."""
+    _seed(app)
+    c = _admin(app)
+    text = ('University, Course, Cutoff\n'          # header ignored
+            'UNILAG, Law, 285\n'                     # match by abbreviation → update
+            'University of Ibadan, Pharmacy, 288\n'  # match by full name
+            'UNILAG | Basket Weaving | 210\n'        # unknown course, created
+            'Nowhere Uni, Law, 250\n')               # unknown university → skipped
+    r = c.post('/settings/admissions', data={'action': 'import_overrides', 'import_text': text,
+                                            'create_missing': '1', '_csrf_token': c._csrf})
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        lag = University.query.filter_by(abbreviation='UNILAG').first()
+        ui = University.query.filter_by(abbreviation='UI').first()
+        law = Course.query.filter_by(name='Law').first()
+        pharm = Course.query.filter_by(name='Pharmacy').first()
+        assert effective_cutoff(lag, law) == 285          # updated by import
+        assert effective_cutoff(ui, pharm) == 288
+        weaving = Course.query.filter_by(name='Basket Weaving').first()
+        assert weaving is not None                        # created on demand
+        assert effective_cutoff(lag, weaving) == 210

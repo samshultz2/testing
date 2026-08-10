@@ -173,6 +173,65 @@ def performance():
     )
 
 
+def _import_cutoffs(text, create_missing=False):
+    """Bulk-load per-university course cut-offs from pasted rows. Each row is
+    ``University, Course, Cut-off`` (comma, tab or pipe separated). Universities
+    and courses are matched by name or abbreviation (case-insensitive); unmatched
+    rows are skipped and reported. Returns a summary string."""
+    from models import University, Course, UniversityCourse
+    uni_by, courses = {}, {}
+    for u in University.query.all():
+        uni_by[u.name.strip().lower()] = u
+        if u.abbreviation:
+            uni_by[u.abbreviation.strip().lower()] = u
+    for c in Course.query.all():
+        courses[c.name.strip().lower()] = c
+    added = updated = made = 0
+    skipped = []
+    for n, raw in enumerate(text.splitlines(), 1):
+        line = raw.strip()
+        if not line:
+            continue
+        sep = '\t' if '\t' in line else ('|' if '|' in line else ',')
+        parts = [p.strip() for p in line.split(sep)]
+        if len(parts) < 3:
+            skipped.append(str(n)); continue
+        # A header row ("University, Course, Cut-off") — the first cell is literally
+        # a header word and the last cell has no number. Skipped silently.
+        if parts[0].lower() in ('university', 'institution', 'school') \
+                and not any(ch.isdigit() for ch in parts[-1]):
+            continue
+        uname, cname, cval = parts[0], parts[1], parts[2]
+        digits = ''.join(ch for ch in cval if ch.isdigit())
+        if not digits:
+            skipped.append(str(n)); continue
+        cutoff = max(0, min(int(digits), 400))
+        u = uni_by.get(uname.lower())
+        if not u:
+            skipped.append(f'{n}(uni)'); continue
+        c = courses.get(cname.lower())
+        if not c:
+            if not create_missing:
+                skipped.append(f'{n}(course)'); continue
+            c = Course(name=cname, base_cutoff=cutoff, is_active=True)
+            db.session.add(c); db.session.flush()
+            courses[cname.lower()] = c; made += 1
+        row = UniversityCourse.query.filter_by(university_id=u.id, course_id=c.id).first()
+        if row:
+            row.jamb_cutoff = cutoff; row.is_active = True; updated += 1
+        else:
+            db.session.add(UniversityCourse(university_id=u.id, course_id=c.id,
+                                            jamb_cutoff=cutoff, is_active=True))
+            added += 1
+    db.session.commit()
+    msg = f'Imported {added} new, updated {updated}'
+    if made:
+        msg += f', created {made} course(s)'
+    if skipped:
+        msg += f'. Skipped {len(skipped)} row(s): ' + ', '.join(skipped[:10])
+    return msg
+
+
 @settings_bp.route('/admissions', methods=['GET', 'POST'])
 @central_admin_required
 def admissions_data():
@@ -249,6 +308,9 @@ def admissions_data():
                 row = db.session.get(UniversityCourse, request.form.get('id', type=int))
                 if row:
                     db.session.delete(row); db.session.commit(); flash('Cut-off removed.', 'success')
+            elif action == 'import_overrides':
+                flash(_import_cutoffs(request.form.get('import_text') or '',
+                                     request.form.get('create_missing') == '1'), 'success')
         except Exception as e:
             db.session.rollback()
             flash(f'Could not save: {e}', 'error')
