@@ -173,6 +173,25 @@ def performance():
     )
 
 
+def _resolve_named(model, text, extra=None):
+    """Find a row by exact (case-insensitive) name, then an exact ``extra`` column
+    (e.g. abbreviation), then a single fuzzy name match. Returns None if nothing
+    matches or a fuzzy search is ambiguous."""
+    from sqlalchemy import func
+    text = (text or '').strip()
+    if not text:
+        return None
+    row = model.query.filter(func.lower(model.name) == text.lower()).first()
+    if row:
+        return row
+    if extra is not None:
+        row = model.query.filter(func.lower(extra) == text.lower()).first()
+        if row:
+            return row
+    hits = model.query.filter(model.name.ilike(f'%{text}%')).limit(2).all()
+    return hits[0] if len(hits) == 1 else None
+
+
 def _import_cutoffs(text, create_missing=False):
     """Bulk-load per-university course cut-offs from pasted rows. Each row is
     ``University, Course, Cut-off`` (comma, tab or pipe separated). Universities
@@ -292,8 +311,17 @@ def admissions_data():
                 uid = request.form.get('university_id', type=int)
                 cid = request.form.get('course_id', type=int)
                 cutoff = request.form.get('jamb_cutoff', type=int)
+                # Add form passes typed names (too many institutions for a dropdown);
+                # resolve them to ids by exact name/abbr, else a single fuzzy match.
+                if not uid:
+                    u = _resolve_named(University, request.form.get('university') or '',
+                                       extra=University.abbreviation)
+                    uid = u.id if u else None
+                if not cid:
+                    c = _resolve_named(Course, request.form.get('course') or '')
+                    cid = c.id if c else None
                 if not (uid and cid and cutoff):
-                    flash('Pick a university, a course and a cut-off.', 'error')
+                    flash('Enter a matching university, a course and a cut-off (0–400).', 'error')
                 else:
                     row = UniversityCourse.query.filter_by(university_id=uid, course_id=cid).first()
                     if not row:
@@ -317,13 +345,78 @@ def admissions_data():
         return redirect(url_for('settings.admissions_data'))
 
     from models import UniversityCourse
-    universities = University.query.order_by(University.name).all()
-    courses = Course.query.order_by(Course.name).all()
-    overrides = (UniversityCourse.query.join(University, UniversityCourse.university_id == University.id)
-                 .join(Course, UniversityCourse.course_id == Course.id)
-                 .order_by(University.name, Course.name).all())
+    from sqlalchemy import or_, not_
+    PER = 25
+
+    # ---- Institutions: grouped by type (from the name), searchable, paged ----
+    def _type_filter(query, itype):
+        poly = University.name.ilike('%polytechnic%')
+        uni = University.name.ilike('%universit%')
+        coll = or_(University.name.ilike('%college%'), University.name.ilike('%school of%'),
+                   University.name.ilike('%institute%'), University.name.ilike('%monotechnic%'))
+        if itype == 'University':
+            return query.filter(uni, not_(poly))
+        if itype == 'Polytechnic':
+            return query.filter(poly)
+        if itype == 'College':
+            return query.filter(coll, not_(poly), not_(uni))
+        if itype == 'Other':
+            return query.filter(not_(poly), not_(uni), not_(coll))
+        return query
+
+    q = (request.args.get('q') or '').strip()
+    itype = request.args.get('itype') or ''
+    ownership = request.args.get('ownership') or ''
+    upage = max(1, request.args.get('page', 1, type=int))
+
+    uq = University.query
+    if q:
+        like = f'%{q}%'
+        uq = uq.filter(or_(University.name.ilike(like), University.abbreviation.ilike(like),
+                           University.state.ilike(like)))
+    if ownership:
+        uq = uq.filter(University.ownership == ownership)
+    uq = _type_filter(uq, itype)
+    uni_total = uq.count()
+    universities = uq.order_by(University.name).limit(PER).offset((upage - 1) * PER).all()
+
+    type_counts = {'All': University.query.count(),
+                   'University': _type_filter(University.query, 'University').count(),
+                   'Polytechnic': _type_filter(University.query, 'Polytechnic').count(),
+                   'College': _type_filter(University.query, 'College').count(),
+                   'Other': _type_filter(University.query, 'Other').count()}
+
+    # ---- Courses: searchable, paged ----
+    cq_text = (request.args.get('cq') or '').strip()
+    cpage = max(1, request.args.get('cpage', 1, type=int))
+    cq = Course.query
+    if cq_text:
+        cq = cq.filter(or_(Course.name.ilike(f'%{cq_text}%'), Course.department.ilike(f'%{cq_text}%')))
+    course_total = cq.count()
+    courses = cq.order_by(Course.name).limit(PER).offset((cpage - 1) * PER).all()
+
+    # ---- Cut-off overrides: paged ----
+    opage = max(1, request.args.get('opage', 1, type=int))
+    oq = (UniversityCourse.query.join(University, UniversityCourse.university_id == University.id)
+          .join(Course, UniversityCourse.course_id == Course.id))
+    override_total = oq.count()
+    overrides = oq.order_by(University.name, Course.name).limit(PER).offset((opage - 1) * PER).all()
+
+    # Course names (169) power a datalist for the cut-off add form; universities
+    # are matched from a typed name/abbr server-side (too many for a datalist).
+    course_names = [c.name for c in Course.query.order_by(Course.name).all()]
+
+    def _pages(total):
+        return (total + PER - 1) // PER
+
     return render_template('settings/admissions.html',
-                           universities=universities, courses=courses, overrides=overrides)
+                           universities=universities, courses=courses, overrides=overrides,
+                           course_names=course_names, type_counts=type_counts,
+                           per_page=PER, active_tab=request.args.get('tab', 'institutions'),
+                           filters={'q': q, 'itype': itype, 'ownership': ownership, 'cq': cq_text},
+                           uni_total=uni_total, upage=upage, uni_pages=_pages(uni_total),
+                           course_total=course_total, cpage=cpage, course_pages=_pages(course_total),
+                           override_total=override_total, opage=opage, override_pages=_pages(override_total))
 
 
 @settings_bp.route('/ocr', methods=['GET', 'POST'])

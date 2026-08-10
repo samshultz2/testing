@@ -312,6 +312,44 @@ def test_aspiration_hub_page(app):
     assert r.status_code == 200 and 'University Aspirations' in r.get_data(as_text=True)
 
 
+def test_override_add_by_typed_name(app):
+    """The cut-off add form now takes typed institution/course names (too many
+    institutions for a dropdown); they resolve to ids server-side."""
+    _seed(app)
+    with app.app_context():
+        u = University.query.filter_by(abbreviation='UNILORIN').first()
+        uid = u.id
+    c = _admin(app)
+    # By full course name + institution abbreviation, no ids supplied.
+    r = c.post('/settings/admissions', data={'action': 'save_override',
+               'university': 'UNILORIN', 'course': 'Pharmacy', 'jamb_cutoff': '256',
+               '_csrf_token': c._csrf})
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        from models import UniversityCourse, Course
+        pharm = Course.query.filter_by(name='Pharmacy').first()
+        row = UniversityCourse.query.filter_by(university_id=uid, course_id=pharm.id).first()
+        assert row is not None and row.jamb_cutoff == 256
+
+
+def test_admissions_grouping_and_pagination(app):
+    """The admissions page groups by type, searches and paginates so the huge
+    institution list never renders all at once."""
+    _seed(app)
+    c = _admin(app)
+    # Type-grouped + paginated institutions view.
+    page = c.get('/settings/admissions?tab=institutions&itype=Polytechnic')
+    assert page.status_code == 200
+    body = page.get_data(as_text=True)
+    assert 'Polytechnic' in body
+    # A search narrows to a specific institution.
+    hit = c.get('/settings/admissions?tab=institutions&q=Ilorin').get_data(as_text=True)
+    assert 'Ilorin' in hit
+    # Page size is bounded: the first page renders at most PER (25) editable rows
+    # (each institution row carries a delete_university form).
+    assert hit.count('value="delete_university"') <= 25
+
+
 def test_bulk_import_cutoffs(app):
     """Pasting 'University, Course, Cut-off' rows upserts overrides; unmatched
     rows are skipped, and missing courses can be created on demand."""
