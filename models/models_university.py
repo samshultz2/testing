@@ -88,6 +88,27 @@ class UniversityCourse(db.Model):
         return f'<UniversityCourse u{self.university_id} c{self.course_id} {self.jamb_cutoff}>'
 
 
+class StudentScholarship(db.Model):
+    """A scholarship / financial-aid record a student is pursuing or holds."""
+    __tablename__ = 'student_scholarships'
+
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False, index=True)
+    name = db.Column(db.String(160), nullable=False)
+    provider = db.Column(db.String(160))
+    amount = db.Column(db.Float)
+    status = db.Column(db.String(20))            # Prospective / Applied / Awarded / Declined
+    notes = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=local_now)
+
+    def as_dict(self):
+        return {'id': self.id, 'name': self.name, 'provider': self.provider or '',
+                'amount': self.amount, 'status': self.status or '', 'notes': self.notes or ''}
+
+    def __repr__(self):
+        return f'<StudentScholarship {self.name} s{self.student_id}>'
+
+
 def effective_cutoff(university, course):
     """The competitive JAMB target for a university+course: an explicit
     UniversityCourse override if present, else the course base + the university's

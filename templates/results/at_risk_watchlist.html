@@ -4,6 +4,8 @@
 
 {% set badge = {'NOT_READY': 'badge-danger', 'AT_RISK': 'badge-warning', 'CONDITIONAL': 'badge-info'} %}
 {% set label = {'NOT_READY': 'Not ready', 'AT_RISK': 'At risk', 'CONDITIONAL': 'Conditional'} %}
+{% set elig_badge = {'ON_TRACK': 'badge-success', 'CLOSE': 'badge-warning', 'OFF_TRACK': 'badge-danger', 'NO_DATA': 'badge-secondary', 'NO_TARGET': 'badge-secondary'} %}
+{% set elig_label = {'ON_TRACK': 'On track', 'CLOSE': 'Close', 'OFF_TRACK': 'Off track', 'NO_DATA': 'No signal', 'NO_TARGET': 'No target'} %}
 
 {% block content %}
 <div class="page-header">
@@ -27,12 +29,17 @@
     <div class="card-header"><h3>{{ grp.class }} <span class="text-muted text-sm">({{ grp.count }})</span></h3></div>
     <div class="card-body" style="overflow-x:auto;">
         <table class="table" style="width:100%;">
-            <thead><tr><th>Student</th><th>Status</th><th>WAEC credits (proj.)</th><th>JAMB (proj.)</th><th>What's blocking</th><th></th></tr></thead>
+            <thead><tr><th>Student</th><th>Status</th><th>Chosen course</th><th>WAEC credits (proj.)</th><th>JAMB (proj.)</th><th>What's blocking</th><th></th></tr></thead>
             <tbody>
             {% for s in grp.students %}
                 <tr>
                     <td>{{ s.name }}</td>
                     <td><span class="badge {{ badge.get(s.status, '') }}">{{ label.get(s.status, s.status) }}</span></td>
+                    <td class="text-sm">
+                        {% if s.eligibility %}<span class="badge {{ elig_badge.get(s.eligibility.status, '') }}">{{ elig_label.get(s.eligibility.status, s.eligibility.status) }}</span>
+                            {% if s.eligibility.course %}<div class="text-muted">{{ s.eligibility.course }}</div>{% endif %}
+                        {% else %}—{% endif %}
+                    </td>
                     <td>{{ s.waec_credits if s.waec_credits is not none else '—' }}</td>
                     <td>{{ s.jamb_score if s.jamb_score is not none else '—' }}</td>
                     <td class="text-sm">

@@ -97,6 +97,12 @@ export default function StudentForm({ data }) {
     target_university_id: stu.target_university_id ? String(stu.target_university_id) : '',
     target_course_id: stu.target_course_id ? String(stu.target_course_id) : '',
     target_department: stu.target_department || '',
+    target2_university_id: stu.target2_university_id ? String(stu.target2_university_id) : '',
+    target2_course_id: stu.target2_course_id ? String(stu.target2_course_id) : '',
+    career_goal: stu.career_goal || '',
+    admission_status: stu.admission_status || '',
+    admitted_university_id: stu.admitted_university_id ? String(stu.admitted_university_id) : '',
+    admitted_course_id: stu.admitted_course_id ? String(stu.admitted_course_id) : '',
     home_address: stu.home_address || '', hobbies: stu.hobbies || '',
     house: stu.house || '', boarding_status: stu.boarding_status || '',
     nin: stu.nin || '', jamb_reg_number: stu.jamb_reg_number || '', jamb_profile_code: stu.jamb_profile_code || '',
@@ -113,6 +119,10 @@ export default function StudentForm({ data }) {
       .map((c) => ({ name: c.name || '', phone_number: c.phone_number || '', email: c.email || '', relationship: c.relationship || 'Father' })));
   const [waec, setWaec] = useState(() => new Set(stu.waec_subjects || []));
   const [jamb, setJamb] = useState(() => new Set(stu.jamb_subjects || []));
+  const [scholarships, setScholarships] = useState(() =>
+    (stu.scholarships || []).map((s) => ({ name: s.name || '', provider: s.provider || '',
+      amount: s.amount != null ? String(s.amount) : '', status: s.status || '' })));
+  const [recs, setRecs] = useState([]);
   const [enrolId, setEnrolId] = useState(enrolment && enrolment.default_id ? String(enrolment.default_id) : '');
   const [errors, setErrors] = useState({});
   const [contactErrors, setContactErrors] = useState({});
@@ -172,6 +182,7 @@ export default function StudentForm({ data }) {
     const id = item ? String(item.id) : '';
     set('target_university_id', id);
     if (id && f.target_course_id) fetchRequirements(id, f.target_course_id, { fillSubjects: false });
+    if (recUrl) loadRecs(id);
   };
   const pickCourse = (item) => {
     const id = item ? String(item.id) : '';
@@ -179,6 +190,30 @@ export default function StudentForm({ data }) {
     if (id) fetchRequirements(f.target_university_id, id, { fillSubjects: true });
     else setAspirationNote('');
   };
+
+  // Course recommender (edit only): courses the student is projected to be
+  // competitive for, refreshed when their target university changes.
+  const recUrl = data.urls && data.urls.recommend;
+  const loadRecs = async (universityId) => {
+    if (!recUrl) return;
+    try {
+      const res = await fetch(recUrl + (universityId ? '?university_id=' + universityId : ''),
+        { credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } });
+      if (res.ok) { const j = await res.json(); setRecs(j.recommendations || []); }
+    } catch (_e) { /* ignore */ }
+  };
+  useEffect(() => { if (recUrl) loadRecs(f.target_university_id); }, []); // eslint-disable-line
+  const pickUniversity2 = (item) => set('target2_university_id', item ? String(item.id) : '');
+  const pickCourse2 = (item) => set('target2_course_id', item ? String(item.id) : '');
+  const pickAdmittedUni = (item) => set('admitted_university_id', item ? String(item.id) : '');
+  const pickAdmittedCourse = (item) => set('admitted_course_id', item ? String(item.id) : '');
+  const applyRec = (rec) => {
+    setF((x) => ({ ...x, target_course_id: String(rec.course_id), target_department: rec.department || x.target_department }));
+    fetchRequirements(f.target_university_id, rec.course_id, { fillSubjects: true });
+  };
+  const setSch = (i, k, v) => setScholarships((cs) => cs.map((c, j) => (j === i ? { ...c, [k]: v } : c)));
+  const addSch = () => setScholarships((cs) => [...cs, { name: '', provider: '', amount: '', status: '' }]);
+  const removeSch = (i) => setScholarships((cs) => cs.filter((_, j) => j !== i));
 
   const setContact = (i, k, v) => setContacts((cs) => cs.map((c, j) => (j === i ? { ...c, [k]: v } : c)));
   // Smarter default: 1st contact = Father, 2nd = Mother, then Guardian.
@@ -217,6 +252,13 @@ export default function StudentForm({ data }) {
       jamb_target: f.jamb_target, home_address: f.home_address, hobbies: f.hobbies,
       target_university_id: f.target_university_id, target_course_id: f.target_course_id,
       target_department: f.target_department,
+      target2_university_id: f.target2_university_id, target2_course_id: f.target2_course_id,
+      career_goal: f.career_goal, admission_status: f.admission_status,
+      admitted_university_id: f.admitted_university_id, admitted_course_id: f.admitted_course_id,
+      'scholarship_name[]': scholarships.map((s) => (s.name || '').trim()),
+      'scholarship_provider[]': scholarships.map((s) => (s.provider || '').trim()),
+      'scholarship_amount[]': scholarships.map((s) => (s.amount || '').trim()),
+      'scholarship_status[]': scholarships.map((s) => (s.status || '').trim()),
       house: f.house, boarding_status: f.boarding_status,
       nin: f.nin, jamb_reg_number: f.jamb_reg_number, jamb_profile_code: f.jamb_profile_code,
       waec_reg_number: f.waec_reg_number, serial_number: f.serial_number, waec_epin: f.waec_epin, photo: f.photo,
@@ -337,6 +379,79 @@ export default function StudentForm({ data }) {
             <i className="fas fa-circle-info" aria-hidden="true" /> {aspirationNote}
           </p>
         )}
+        {recs.length > 0 && (
+          <div style={{ marginTop: '.75rem' }}>
+            <label className="form-label" style={{ marginBottom: '.35rem' }}>
+              <i className="fas fa-wand-magic-sparkles" aria-hidden="true" /> Suggested courses
+              <span className="text-muted" style={{ fontWeight: 400 }}> — projected competitive at this university</span>
+            </label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '.4rem' }}>
+              {recs.map((rec) => (
+                <button type="button" key={rec.course_id} className="btn btn-secondary btn-sm"
+                        onClick={() => applyRec(rec)} title={'Cut-off ' + rec.cutoff + ' · +' + rec.margin + ' projected margin'}>
+                  {rec.subject_fit && <i className="fas fa-check" aria-hidden="true" style={{ color: 'var(--success)' }} />} {rec.course}
+                  <span className="text-muted" style={{ fontSize: '.75rem' }}> +{rec.margin}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+        <div className="sf-row" style={{ marginTop: '1rem' }}>
+          <div className="form-group">
+            <label className="form-label">Second-choice University <span className="text-muted">(optional)</span></label>
+            <Combo items={opt.universities || []} initialLabel={stu.target2_university_label || ''}
+                   placeholder="Search universities…" onPick={pickUniversity2} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Second-choice Course <span className="text-muted">(optional)</span></label>
+            <Combo items={opt.courses || []} initialLabel={stu.target2_course_label || ''}
+                   placeholder="Search courses…" onPick={pickCourse2} />
+          </div>
+        </div>
+        <TextField label="Career goal" value={f.career_goal} onChange={(v) => set('career_goal', v)}
+                   placeholder="e.g. Medical doctor, Software engineer"
+                   hint="What the student ultimately wants to become — helps align course choice" />
+      </FormCard>
+
+      <FormCard icon="fa-award" title="Admission & Scholarships" note="(optional)" collapsible
+                defaultOpen={isEdit && !!(stu.admission_status || (stu.scholarships && stu.scholarships.length))}>
+        <div className="sf-row">
+          <SelectField label="Admission status" value={f.admission_status} onChange={(v) => set('admission_status', v)}
+                       placeholder="—" options={opt.admission_statuses || []}
+                       hint="Where the student is in the admission cycle" />
+        </div>
+        <div className="sf-row">
+          <div className="form-group">
+            <label className="form-label">Admitted University <span className="text-muted">(if offered)</span></label>
+            <Combo items={opt.universities || []} initialLabel={stu.admitted_university_label || ''}
+                   placeholder="Search universities…" onPick={pickAdmittedUni} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Admitted Course <span className="text-muted">(if offered)</span></label>
+            <Combo items={opt.courses || []} initialLabel={stu.admitted_course_label || ''}
+                   placeholder="Search courses…" onPick={pickAdmittedCourse} />
+          </div>
+        </div>
+        <label className="form-label" style={{ marginTop: '.5rem' }}>Scholarships</label>
+        {scholarships.length === 0 && (
+          <p className="text-muted" style={{ fontSize: '.85rem', marginTop: 0 }}>No scholarships recorded.</p>
+        )}
+        {scholarships.map((s, i) => (
+          <div className="sf-contact" key={i}>
+            <TextField label="Name" value={s.name} onChange={(v) => setSch(i, 'name', v)} placeholder="e.g. NNPC/SNEPCo" autoComplete="off" />
+            <TextField label="Provider" value={s.provider} onChange={(v) => setSch(i, 'provider', v)} placeholder="Sponsor" autoComplete="off" />
+            <TextField label="Amount (₦)" value={s.amount} onChange={(v) => setSch(i, 'amount', v)} type="number" placeholder="0" autoComplete="off" />
+            <SelectField label="Status" value={s.status} onChange={(v) => setSch(i, 'status', v)}
+                         placeholder="—" options={opt.scholarship_statuses || []} />
+            <button type="button" className="btn btn-danger btn-sm sf-remove" aria-label={`Remove scholarship ${i + 1}`}
+                    onClick={() => removeSch(i)}>
+              <i aria-hidden="true" className="fas fa-times" />
+            </button>
+          </div>
+        ))}
+        <button type="button" className="btn btn-secondary btn-sm" onClick={addSch}>
+          <i aria-hidden="true" className="fas fa-plus" /> Add Scholarship
+        </button>
       </FormCard>
 
       <FormCard icon="fa-phone" title="Parent/Guardian Contacts" collapsible defaultOpen={isEdit}>

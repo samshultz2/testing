@@ -23,9 +23,9 @@ def ensure_university_schema(seed=True):
         return
 
     from sqlalchemy import inspect, text
-    from models.models_university import University, Course, UniversityCourse
+    from models.models_university import University, Course, UniversityCourse, StudentScholarship
     try:
-        for model in (University, Course, UniversityCourse):
+        for model in (University, Course, UniversityCourse, StudentScholarship):
             model.__table__.create(bind=engine, checkfirst=True)
     except Exception:
         db.session.rollback()
@@ -38,6 +38,12 @@ def ensure_university_schema(seed=True):
             'target_university_id': 'INTEGER',
             'target_course_id': 'INTEGER',
             'target_department': 'VARCHAR(120)',
+            'target2_university_id': 'INTEGER',
+            'target2_course_id': 'INTEGER',
+            'career_goal': 'VARCHAR(120)',
+            'admission_status': 'VARCHAR(20)',
+            'admitted_university_id': 'INTEGER',
+            'admitted_course_id': 'INTEGER',
         }
         missing = [(n, d) for n, d in adds.items() if n not in existing]
         if missing:

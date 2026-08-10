@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}University Aspirations — {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('results.analytics_hub') }}">Analytics</a> / <span>Aspirations</span>{% endblock %}
+
+{% set elig_badge = {'ON_TRACK': 'badge-success', 'CLOSE': 'badge-warning', 'OFF_TRACK': 'badge-danger', 'NO_DATA': 'badge-secondary'} %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>University Aspirations</h1>
+        <p class="text-muted text-sm">Where SSS3 candidates want to study, whether they're on track for their chosen course (projected from mock signals), and the admission funnel.</p>
+    </div>
+    <a href="{{ url_for('results.analytics_hub') }}" class="btn btn-secondary" style="margin-left:auto;">Back to Analytics</a>
+</div>
+
+<div class="card mb-3"><div class="card-body" style="display:flex;gap:1.5rem;flex-wrap:wrap;">
+    <div><strong style="font-size:1.5rem;">{{ data.totals.sss3 }}</strong><div class="text-muted text-sm">SSS3 candidates</div></div>
+    <div><strong style="font-size:1.5rem;">{{ data.totals.with_target }}</strong><div class="text-muted text-sm">with a target</div></div>
+    <div><strong style="font-size:1.5rem;">{{ data.totals.coverage }}%</strong><div class="text-muted text-sm">coverage</div></div>
+    {% for e in data.eligibility %}
+    <div><strong style="font-size:1.5rem;">{{ e.count }}</strong><div class="text-muted text-sm">{{ e.label }}</div></div>
+    {% endfor %}
+</div></div>
+
+{% if not data.totals.with_target %}
+<div class="card"><div class="card-body text-muted">
+    No SSS3 candidate has a target university or course set yet. Set targets on the student edit page to see aspiration analytics here.
+</div></div>
+{% else %}
+
+<div class="analytics-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem;">
+    <div class="card">
+        <div class="card-header"><h3>Course eligibility</h3></div>
+        <div class="card-body">
+            <table class="table" style="width:100%;">
+                <tbody>
+                {% for e in data.eligibility %}
+                    <tr><td><span class="badge {{ elig_badge.get(e.status, '') }}">{{ e.label }}</span></td>
+                        <td style="text-align:right;"><strong>{{ e.count }}</strong></td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header"><h3>Admission funnel</h3></div>
+        <div class="card-body">
+            <table class="table" style="width:100%;">
+                <tbody>
+                    <tr><td>Applied</td><td style="text-align:right;"><strong>{{ data.funnel.applied }}</strong></td></tr>
+                    <tr><td>Offered</td><td style="text-align:right;"><strong>{{ data.funnel.offered }}</strong></td></tr>
+                    <tr><td>Admitted</td><td style="text-align:right;"><strong>{{ data.funnel.admitted }}</strong></td></tr>
+                    <tr><td>Declined</td><td style="text-align:right;"><strong>{{ data.funnel.declined }}</strong></td></tr>
+                    <tr><td>Deferred</td><td style="text-align:right;"><strong>{{ data.funnel.deferred }}</strong></td></tr>
+                    <tr><td class="text-muted">Conversion (admitted / with target)</td><td style="text-align:right;"><strong>{{ data.funnel.conversion }}%</strong></td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header"><h3>Most-wanted universities</h3></div>
+        <div class="card-body">
+            {% if data.top_universities %}
+            <table class="table" style="width:100%;">
+                <tbody>
+                {% for u in data.top_universities %}
+                    <tr><td>{{ u.name }}</td><td style="text-align:right;"><strong>{{ u.count }}</strong></td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}<p class="text-muted">No universities chosen yet.</p>{% endif %}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header"><h3>Most-wanted courses</h3></div>
+        <div class="card-body">
+            {% if data.top_courses %}
+            <table class="table" style="width:100%;">
+                <tbody>
+                {% for c in data.top_courses %}
+                    <tr><td>{{ c.name }}</td><td style="text-align:right;"><strong>{{ c.count }}</strong></td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}<p class="text-muted">No courses chosen yet.</p>{% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="card mb-3" style="margin-top:1rem;">
+    <div class="card-header"><h3>JAMB subject-mismatch fix list <span class="text-muted text-sm">({{ data.mismatches|length }})</span></h3></div>
+    <div class="card-body" style="overflow-x:auto;">
+        {% if data.mismatches %}
+        <p class="text-muted text-sm">Candidates whose registered JAMB subjects don't cover their target course's requirements — fix the registration before the exam.</p>
+        <table class="table" style="width:100%;">
+            <thead><tr><th>Student</th><th>Target course</th><th>University</th><th>Missing JAMB subject(s)</th><th></th></tr></thead>
+            <tbody>
+            {% for m in data.mismatches %}
+                <tr>
+                    <td>{{ m.name }}</td>
+                    <td>{{ m.course or '—' }}</td>
+                    <td>{{ m.university or '—' }}</td>
+                    <td>{% for s in m.missing_jamb %}<span class="badge badge-danger" style="margin:1px;">{{ s }}</span>{% endfor %}</td>
+                    <td><a class="btn btn-secondary btn-sm" href="{{ url_for('main.edit_student', student_id=m.student_id) }}">Edit</a></td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted">No subject mismatches — every candidate with a target is registered for the required JAMB subjects.</p>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}
