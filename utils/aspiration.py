@@ -36,10 +36,14 @@ def course_eligibility(student, session_id=None, readiness=None):
     proj = jamb['score'] if jamb else None
     gap = (target - proj) if (target and proj is not None) else None
     have_jamb = set(student.jamb_subject_list)
-    missing_jamb = [s for s in course.jamb_subject_list if s not in have_jamb]
+    # Each requirement slot may list interchangeable subjects (e.g. Commerce or
+    # Financial Accounting); a slot is satisfied when ANY of its options is held.
+    missing_jamb = [' or '.join(g) for g in course.jamb_requirement_groups
+                    if not any(s in have_jamb for s in g)]
     credited = set(waec['credited_subjects']) if waec else set()
     meets_ssc = bool(waec and waec.get('meets_ssc'))
-    missing_waec = [s for s in course.waec_subject_list if s not in credited]
+    missing_waec = [' or '.join(g) for g in course.waec_requirement_groups
+                    if not any(s in credited for s in g)]
 
     subject_ok = not missing_jamb
     credits_ok = meets_ssc and not missing_waec
@@ -91,7 +95,8 @@ def recommend_courses(student, session_id=None, university=None, limit=8):
         cutoff = effective_cutoff(uni, c) or (c.base_cutoff or 180)
         if proj < cutoff:
             continue
-        subj_fit = bool(have_jamb) and all(s in have_jamb for s in c.jamb_subject_list)
+        subj_fit = bool(have_jamb) and all(
+            any(s in have_jamb for s in g) for g in c.jamb_requirement_groups)
         out.append({'course_id': c.id, 'course': c.name, 'department': c.department or '',
                     'cutoff': cutoff, 'margin': proj - cutoff, 'subject_fit': subj_fit})
     out.sort(key=lambda x: (x['subject_fit'], x['margin']), reverse=True)

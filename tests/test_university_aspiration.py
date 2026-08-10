@@ -312,6 +312,28 @@ def test_aspiration_hub_page(app):
     assert r.status_code == 200 and 'University Aspirations' in r.get_data(as_text=True)
 
 
+def test_alternative_waec_subjects(app):
+    """A requirement slot with '|' options (Commerce|Financial Accounting) is
+    satisfied by either — so a candidate crediting Commerce isn't flagged."""
+    _seed(app)
+    from utils.aspiration import course_eligibility
+    with app.app_context():
+        acct = Course.query.filter_by(name='Accounting').first()
+        # Flat list exposes the primary option; the group carries both.
+        assert 'Commerce' in acct.waec_subject_list
+        assert 'Financial Accounting' not in acct.waec_subject_list
+        assert ['Commerce', 'Financial Accounting'] in acct.waec_requirement_groups
+        bid = Branch.get_default().id
+        s = Student(student_id='ALT-1', first_name='Alt', surname='One', gender='Male',
+                    is_active=True, branch_id=bid, target_course_id=acct.id,
+                    jamb_subjects=', '.join(acct.jamb_subject_list))
+        db.session.add(s); db.session.commit()
+        credited = ['English Language', 'Mathematics', 'Economics', 'Commerce', 'Government']
+        e = course_eligibility(s, readiness=_mock_readiness(250, credited, 230))
+        assert not e['missing_waec']          # Commerce covers the Financial Accounting slot
+        assert e['status'] in ('ON_TRACK', 'CLOSE')
+
+
 def test_student_report_shows_aspiration(app):
     """The consolidated exam report surfaces the student's own chosen-course
     verdict from the aspiration engine."""
