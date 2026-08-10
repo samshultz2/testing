@@ -78,15 +78,48 @@ _COURSES = [
      [_ENG, _MTH, 'Literature in English', 'Government', 'Christian Religious Studies']),
 ]
 
-# Explicit competitive overrides: (university abbr, course name, cut-off)
-_OVERRIDES = [
-    ('UNILAG', 'Medicine and Surgery', 300),
-    ('UI', 'Medicine and Surgery', 298),
-    ('UNIBEN', 'Medicine and Surgery', 290),
-    ('UNILAG', 'Law', 280),
-    ('UI', 'Law', 278),
-    ('UNILAG', 'Pharmacy', 285),
-]
+# Representative per-university, per-department competitive cut-offs. A university
+# doesn't use one flat number for every course — competitive departments (e.g.
+# Engineering, Medicine, Law) sit well above the school's general line — so these
+# pin the real departmental target for the popular combos. Anything not listed
+# falls back to course base + the university's bump. Illustrative starting
+# values; correct them on Settings → Admissions data.
+_MATRIX = {
+    'UNILAG': {'Medicine and Surgery': 300, 'Pharmacy': 285, 'Nursing Science': 275, 'Law': 280,
+               'Computer Science': 265, 'Mechanical Engineering': 260, 'Electrical/Electronic Engineering': 262,
+               'Civil Engineering': 255, 'Accounting': 255, 'Economics': 250, 'Mass Communication': 250,
+               'Architecture': 255, 'Business Administration': 245},
+    'UI': {'Medicine and Surgery': 298, 'Pharmacy': 282, 'Nursing Science': 270, 'Law': 278,
+           'Computer Science': 255, 'Mechanical Engineering': 250, 'Electrical/Electronic Engineering': 252,
+           'Civil Engineering': 248, 'Accounting': 248, 'Economics': 245, 'Mass Communication': 245,
+           'Architecture': 248},
+    'UNIBEN': {'Medicine and Surgery': 290, 'Pharmacy': 275, 'Nursing Science': 265, 'Law': 262,
+               'Computer Science': 250, 'Mechanical Engineering': 252, 'Electrical/Electronic Engineering': 252,
+               'Civil Engineering': 248, 'Accounting': 245, 'Economics': 240, 'Architecture': 245},
+    'UNN': {'Medicine and Surgery': 290, 'Pharmacy': 272, 'Nursing Science': 262, 'Law': 258,
+            'Computer Science': 248, 'Mechanical Engineering': 245, 'Electrical/Electronic Engineering': 246,
+            'Civil Engineering': 242, 'Accounting': 242, 'Architecture': 244},
+    'OAU': {'Medicine and Surgery': 292, 'Pharmacy': 278, 'Nursing Science': 266, 'Law': 265,
+            'Computer Science': 252, 'Mechanical Engineering': 250, 'Electrical/Electronic Engineering': 252,
+            'Civil Engineering': 246, 'Accounting': 246, 'Architecture': 248},
+    'ABU': {'Medicine and Surgery': 275, 'Pharmacy': 255, 'Nursing Science': 245, 'Law': 245,
+            'Computer Science': 235, 'Mechanical Engineering': 235, 'Civil Engineering': 232, 'Accounting': 230},
+    'UNILORIN': {'Medicine and Surgery': 270, 'Pharmacy': 255, 'Nursing Science': 248, 'Law': 248,
+                 'Computer Science': 238, 'Mechanical Engineering': 235, 'Accounting': 235},
+    'FUTA': {'Computer Science': 250, 'Mechanical Engineering': 248, 'Electrical/Electronic Engineering': 250,
+             'Civil Engineering': 245, 'Architecture': 245, 'Microbiology': 220, 'Biochemistry': 228},
+    'UNIPORT': {'Medicine and Surgery': 270, 'Pharmacy': 255, 'Nursing Science': 248, 'Law': 248,
+                'Computer Science': 235, 'Accounting': 232},
+    'UNIZIK': {'Medicine and Surgery': 270, 'Pharmacy': 252, 'Nursing Science': 245, 'Law': 245,
+               'Computer Science': 235, 'Accounting': 230},
+    'LASU': {'Medicine and Surgery': 260, 'Nursing Science': 240, 'Law': 245, 'Computer Science': 230,
+             'Accounting': 228, 'Mass Communication': 235},
+    'CU': {'Computer Science': 250, 'Mechanical Engineering': 245, 'Electrical/Electronic Engineering': 245,
+           'Accounting': 240, 'Mass Communication': 240, 'Business Administration': 235},
+}
+_OVERRIDES = [(abbr, cname, cutoff)
+              for abbr, courses in _MATRIX.items()
+              for cname, cutoff in courses.items()]
 
 
 def seed_university_data():
