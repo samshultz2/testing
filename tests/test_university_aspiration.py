@@ -312,6 +312,24 @@ def test_aspiration_hub_page(app):
     assert r.status_code == 200 and 'University Aspirations' in r.get_data(as_text=True)
 
 
+def test_student_report_shows_aspiration(app):
+    """The consolidated exam report surfaces the student's own chosen-course
+    verdict from the aspiration engine."""
+    _seed(app)
+    with app.app_context():
+        bid = Branch.get_default().id
+        u = University.query.filter_by(abbreviation='UNILAG').first()
+        med = Course.query.filter_by(name='Medicine and Surgery').first()
+        s = Student(student_id='RPT-1', first_name='Rep', surname='Ort', gender='Male',
+                    is_active=True, branch_id=bid, target_university_id=u.id,
+                    target_course_id=med.id, target_department='Medical Sciences', jamb_target=300)
+        db.session.add(s); db.session.commit(); sid = s.id
+    c = _admin(app)
+    r = c.get(f'/results/student/{sid}/report')
+    assert r.status_code == 200
+    assert 'University Aspiration' in r.get_data(as_text=True)
+
+
 def test_override_add_by_typed_name(app):
     """The cut-off add form now takes typed institution/course names (too many
     institutions for a dropdown); they resolve to ids server-side."""
