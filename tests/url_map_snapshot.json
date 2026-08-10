@@ -3401,6 +3401,13 @@
 ]
 ],
 [
+"main.api_dashboard_timetable_slot",
+"/api/dashboard/timetable/slot/<int:slot_id>",
+[
+"GET"
+]
+],
+[
 "main.api_dashboard_widget",
 "/api/dashboard/widget/<block_id>",
 [

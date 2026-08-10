@@ -750,6 +750,21 @@ function Sparkline({ values }) {
 // classes are running), what's up next, and the full day's period ladder with
 // the live period highlighted. Teacher-scoped users see their own lessons.
 function TodaySchedule({ data, urls, teacher }) {
+  const [openSlot, setOpenSlot] = useState(null);   // expanded period id
+  const [detail, setDetail] = useState({});         // slotId -> {loading|rows|error}
+  const toggleSlot = async (s) => {
+    if (s.is_break || !s.classes) return;           // breaks / empty periods aren't drillable
+    const id = s.id;
+    setOpenSlot((cur) => (cur === id ? null : id));
+    if (detail[id]) return;                          // already fetched
+    setDetail((m) => ({ ...m, [id]: { loading: true } }));
+    try {
+      const res = await apiGet('/api/dashboard/timetable/slot/' + id);
+      setDetail((m) => ({ ...m, [id]: { rows: res.rows || [] } }));
+    } catch (_e) {
+      setDetail((m) => ({ ...m, [id]: { error: true } }));
+    }
+  };
   if (!data) return null;
   const slots = data.slots || [];
   const cur = data.current_slot;
@@ -794,19 +809,49 @@ function TodaySchedule({ data, urls, teacher }) {
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         {slots.map((s) => {
           const isNow = s.state === 'now';
+          const drillable = !s.is_break && !!s.classes;
+          const isOpen = openSlot === s.id;
+          const det = detail[s.id];
           return (
-            <div key={s.id} style={{ display: 'flex', alignItems: 'center', gap: '.6rem', padding: '.4rem .5rem',
+            <div key={s.id}>
+              <div role={drillable ? 'button' : undefined} tabIndex={drillable ? 0 : undefined}
+                   aria-expanded={drillable ? isOpen : undefined}
+                   onClick={drillable ? () => toggleSlot(s) : undefined}
+                   onKeyDown={drillable ? (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSlot(s); } } : undefined}
+                   style={{ display: 'flex', alignItems: 'center', gap: '.6rem', padding: '.4rem .5rem',
                         borderLeft: '3px solid ' + (isNow ? 'var(--success)' : 'transparent'),
-                        background: isNow ? 'rgba(28,200,138,.07)' : 'transparent',
-                        opacity: s.state === 'past' ? .5 : 1, borderRadius: 6 }}>
-              <span className="text-muted" style={{ width: 92, fontSize: '.75rem', fontVariantNumeric: 'tabular-nums' }}>{s.start}–{s.end}</span>
-              <span style={{ flex: 1, fontSize: '.83rem', fontWeight: s.is_break ? 400 : 600, fontStyle: s.is_break ? 'italic' : 'normal' }}>
-                {s.name}{isNow && <span className="badge badge-success" style={{ marginLeft: 6 }}>Now</span>}
-              </span>
-              {!s.is_break && (
-                <span className="badge" style={{ background: 'var(--border-color)', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
-                  {s.classes} {plural(s.classes)}
+                        background: isOpen ? 'var(--gray-50)' : (isNow ? 'rgba(28,200,138,.07)' : 'transparent'),
+                        opacity: s.state === 'past' ? .55 : 1, borderRadius: 6,
+                        cursor: drillable ? 'pointer' : 'default' }}>
+                <span className="text-muted" style={{ width: 92, fontSize: '.75rem', fontVariantNumeric: 'tabular-nums' }}>{s.start}–{s.end}</span>
+                <span style={{ flex: 1, fontSize: '.83rem', fontWeight: s.is_break ? 400 : 600, fontStyle: s.is_break ? 'italic' : 'normal' }}>
+                  {s.name}{isNow && <span className="badge badge-success" style={{ marginLeft: 6 }}>Now</span>}
                 </span>
+                {drillable && (
+                  <span className="badge" style={{ background: 'var(--border-color)', color: 'var(--text-secondary)', whiteSpace: 'nowrap' }}>
+                    {s.classes} {plural(s.classes)}
+                  </span>
+                )}
+                {drillable && <i className={'fas fa-chevron-' + (isOpen ? 'up' : 'down')} aria-hidden="true"
+                                 style={{ fontSize: '.7rem', color: 'var(--text-muted)', width: 12, textAlign: 'center' }} />}
+              </div>
+              {isOpen && (
+                <div style={{ padding: '.35rem .5rem .6rem 95px' }}>
+                  {det && det.loading && <div className="text-muted" style={{ fontSize: '.8rem' }}>Loading…</div>}
+                  {det && det.error && <div className="text-muted" style={{ fontSize: '.8rem' }}>Couldn’t load this period.</div>}
+                  {det && det.rows && det.rows.length === 0 &&
+                    <div className="text-muted" style={{ fontSize: '.8rem' }}>No classes in this period.</div>}
+                  {det && det.rows && det.rows.map((r, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'baseline', gap: '.6rem', fontSize: '.8rem',
+                                 padding: '.28rem 0', borderBottom: i < det.rows.length - 1 ? '1px solid var(--border-light)' : 'none' }}>
+                      <span style={{ fontWeight: 600, minWidth: 88, flexShrink: 0 }}>{r.class_arm}</span>
+                      <span style={{ flex: 1, minWidth: 0 }}>{r.subject}</span>
+                      <span className="text-muted" style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>
+                        <i className="fas fa-chalkboard-user" aria-hidden="true" style={{ marginRight: 4, opacity: .7 }} />{r.teacher}{r.room ? ' · ' + r.room : ''}
+                      </span>
+                    </div>
+                  ))}
+                </div>
               )}
             </div>
           );
