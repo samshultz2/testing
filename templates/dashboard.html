@@ -7,7 +7,12 @@
 <style>
 /* ===== Modern dashboard ===== */
 .dash-hero{position:relative;overflow:hidden;display:flex;justify-content:space-between;align-items:stretch;gap:1rem;
-    background:linear-gradient(135deg,#0f5132 0%,#0a3d27 55%,#08301f 100%);color:#fff;border-radius:22px;
+    /* Theme-aware: derived from the active theme's --primary so the hero recolours
+       when the theme changes (green by default, blue/plum/etc. in other themes).
+       Flat fallback first for browsers without color-mix(). */
+    background:var(--primary);
+    background:linear-gradient(135deg,var(--primary) 0%,color-mix(in srgb,var(--primary) 74%,#000) 60%,color-mix(in srgb,var(--primary) 58%,#000) 100%);
+    color:#fff;border-radius:22px;
     padding:1.6rem 1.75rem;margin-bottom:1.25rem;box-shadow:0 20px 45px -22px rgba(6,54,35,.75)}
 .dash-hero-main{position:relative;z-index:2;display:flex;flex-direction:column;gap:.1rem;min-width:0}
 .dash-hero-eyebrow{display:flex;align-items:center;gap:.5rem;font-size:.95rem;opacity:.92;font-weight:500}
@@ -16,14 +21,14 @@
 .dash-wave{display:inline-block;transform-origin:70% 70%;animation:dash-wave 2.6s ease-in-out infinite}
 .dash-hero p{margin:.55rem 0 0;opacity:.85;font-size:1rem}
 .dash-hero-actions{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-top:1.2rem}
-.term-pill{display:inline-flex;align-items:center;gap:.5rem;background:#fff;color:#0f5132;font-weight:700;
+.term-pill{display:inline-flex;align-items:center;gap:.5rem;background:#fff;color:var(--primary);font-weight:700;
     padding:.62rem 1.1rem;border-radius:14px;font-size:.95rem;box-shadow:0 8px 18px -10px rgba(0,0,0,.5)}
 .hero-btn{display:inline-flex;align-items:center;gap:.5rem;background:rgba(255,255,255,.12);color:#fff;border:0;
     padding:.62rem 1.05rem;border-radius:14px;font-size:.95rem;font-weight:600;cursor:pointer;
     -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);transition:background .15s ease,transform .1s ease}
 .hero-btn:hover{background:rgba(255,255,255,.22)}
 .hero-btn:active{transform:translateY(1px)}
-.hero-btn.active{background:#fff;color:#0f5132}
+.hero-btn.active{background:#fff;color:var(--primary)}
 .hero-btn:disabled{opacity:.7;cursor:default}
 .dash-hero-art{position:relative;z-index:1;width:230px;max-width:40%;align-self:flex-end;flex-shrink:0}
 .dash-hero-dots{position:absolute;top:20px;right:24px;width:66px;height:44px;z-index:1;opacity:.5;pointer-events:none;
