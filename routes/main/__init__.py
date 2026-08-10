@@ -1911,6 +1911,8 @@ def _student_form_options(with_enrolment=False):
                                 University.query.filter_by(is_active=True).order_by(University.name).all()]
         opts['courses'] = [c.as_dict() for c in
                            Course.query.filter_by(is_active=True).order_by(Course.name).all()]
+        opts['admission_statuses'] = list(_ADMISSION_STATUSES)
+        opts['scholarship_statuses'] = ['Prospective', 'Applied', 'Awarded', 'Declined']
         opts['aspiration_urls'] = {'requirements': url_for('main.api_course_requirements')}
     except Exception:
         opts['universities'] = []
@@ -2089,8 +2091,16 @@ def _student_view_payload(student):
             'target_university': student.target_university_name,
             'target_course': student.target_course_name,
             'target_department': student.target_department,
+            'target2_university': student.target2_university_name,
+            'target2_course': student.target2_course_name,
+            'career_goal': student.career_goal,
+            'admission_status': student.admission_status,
+            'admitted_university': (student.admitted_university.name if student.admitted_university else None),
+            'admitted_course': (student.admitted_course.name if student.admitted_course else None),
             'is_graduated': bool(student.is_graduated),
         },
+        'aspiration': _view_aspiration(student),
+        'scholarships': [sc.as_dict() for sc in student.scholarships.all()],
         'identity': ({'nin': student.nin, 'jamb_reg_number': student.jamb_reg_number,
                       'jamb_profile_code': student.jamb_profile_code,
                       'waec_reg_number': student.waec_reg_number,
@@ -2179,6 +2189,20 @@ def _apply_optional_student_fields(student, form, has=None):
             setattr(student, f, strip_tags(val) or None)
 
 
+def _view_aspiration(student):
+    """The chosen-course eligibility verdict + gap for the student profile.
+    Best-effort — returns None if it can't be computed."""
+    if not getattr(student, 'target_course_id', None):
+        return None
+    try:
+        from utils.aspiration import course_eligibility, ELIGIBILITY_LABELS
+        e = course_eligibility(student)
+        e['status_label'] = ELIGIBILITY_LABELS.get(e.get('status'), e.get('status'))
+        return e
+    except Exception:
+        return None
+
+
 def _apply_aspiration_fields(student, form, has=None):
     """Copy the university-aspiration fields (target university/course/department)
     onto a student. ``has(key)`` gates presence so a partial edit never blanks
@@ -2192,6 +2216,50 @@ def _apply_aspiration_fields(student, form, has=None):
         student.target_course_id = form.get('target_course_id', type=int) or None
     if has('target_department'):
         student.target_department = strip_tags((form.get('target_department') or '').strip()) or None
+    if has('target2_university_id'):
+        student.target2_university_id = form.get('target2_university_id', type=int) or None
+    if has('target2_course_id'):
+        student.target2_course_id = form.get('target2_course_id', type=int) or None
+    if has('career_goal'):
+        student.career_goal = strip_tags((form.get('career_goal') or '').strip()) or None
+    if has('admission_status'):
+        val = (form.get('admission_status') or '').strip()
+        student.admission_status = val if val in _ADMISSION_STATUSES else None
+    if has('admitted_university_id'):
+        student.admitted_university_id = form.get('admitted_university_id', type=int) or None
+    if has('admitted_course_id'):
+        student.admitted_course_id = form.get('admitted_course_id', type=int) or None
+
+
+_ADMISSION_STATUSES = ('Applied', 'Offered', 'Admitted', 'Declined', 'Deferred')
+
+
+def _apply_scholarships(student, form):
+    """Replace a student's scholarships from repeatable form fields
+    (scholarship_name[], scholarship_provider[], scholarship_amount[],
+    scholarship_status[]). Only touched when the section is submitted."""
+    if 'scholarship_name[]' not in form:
+        return
+    from models import StudentScholarship
+    from utils.security import strip_tags
+    names = form.getlist('scholarship_name[]')
+    providers = form.getlist('scholarship_provider[]')
+    amounts = form.getlist('scholarship_amount[]')
+    statuses = form.getlist('scholarship_status[]')
+    student.scholarships.delete()
+    for i, nm in enumerate(names):
+        nm = strip_tags((nm or '').strip())
+        if not nm:
+            continue
+        try:
+            amt = float(amounts[i]) if i < len(amounts) and str(amounts[i]).strip() else None
+        except (TypeError, ValueError):
+            amt = None
+        db.session.add(StudentScholarship(
+            student_id=student.id, name=nm,
+            provider=strip_tags((providers[i] if i < len(providers) else '').strip()) or None,
+            amount=amt,
+            status=(statuses[i].strip() if i < len(statuses) and statuses[i].strip() else None)))
 
 
 def _manageable_student_ids(ids):

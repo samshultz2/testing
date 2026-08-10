@@ -40,6 +40,15 @@ def live_at_risk(session_id=None, branch_id=None, calibration=None):
         waec = r.get('waec') or {}
         jamb = r.get('jamb') or {}
         label = labels.get(st.id) or 'Unassigned'
+        # Chosen-course verdict (reuses this row's readiness — no recompute).
+        elig = None
+        if getattr(st, 'target_course_id', None):
+            try:
+                from utils.aspiration import course_eligibility
+                ce = course_eligibility(st, session_id, readiness=r)
+                elig = {'status': ce.get('status'), 'course': ce.get('course')}
+            except Exception:
+                elig = None
         groups.setdefault(label, []).append({
             'student_id': st.id,
             'name': st.full_name,
@@ -47,6 +56,7 @@ def live_at_risk(session_id=None, branch_id=None, calibration=None):
             'blockers': r.get('blockers', []),
             'waec_credits': waec.get('credits'),
             'jamb_score': jamb.get('score'),
+            'eligibility': elig,
         })
 
     by_class = []

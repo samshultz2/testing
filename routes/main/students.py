@@ -119,6 +119,21 @@ def api_course_requirements():
     })
 
 
+@main_bp.route('/api/students/<int:student_id>/recommend-courses')
+@login_required
+def api_recommend_courses(student_id):
+    """Courses the student is projected to be competitive for (at their target
+    university, or a given ?university_id). Scoped like viewing the student."""
+    from models import University
+    from utils.aspiration import recommend_courses
+    student, err = _student_or_redirect(student_id)
+    if err:
+        return jsonify({'error': 'forbidden'}), 403
+    uid = request.args.get('university_id', type=int)
+    uni = db.session.get(University, uid) if uid else None
+    return jsonify({'recommendations': recommend_courses(student, university=uni)})
+
+
 @main_bp.route('/api/students')
 @login_required
 def api_students():
@@ -157,6 +172,7 @@ def add_student():
 
             db.session.add(student)
             db.session.flush()
+            _apply_scholarships(student, request.form)
 
             # Optional passport photo (data: URL from the form). A bad image must
             # never block saving the student, so failures are swallowed.
@@ -583,6 +599,7 @@ def edit_student(student_id):
                 student.jamb_subjects = ', '.join(form.getlist('jamb_subjects[]')) or None
             _apply_optional_student_fields(student, form, has)
             _apply_aspiration_fields(student, form, has)
+            _apply_scholarships(student, form)
 
             # Passport photo: data: URL replaces it, '' removes it; absent leaves
             # it untouched (so a partial POST never wipes it). Never blocks a save.
@@ -679,13 +696,27 @@ def edit_student(student_id):
             'target_university_label': (student.target_university.as_dict()['label']
                                         if student.target_university else ''),
             'target_course_label': (student.target_course.name if student.target_course else ''),
+            'target2_university_id': student.target2_university_id or '',
+            'target2_course_id': student.target2_course_id or '',
+            'target2_university_label': (student.target2_university.as_dict()['label']
+                                         if student.target2_university else ''),
+            'target2_course_label': (student.target2_course.name if student.target2_course else ''),
+            'career_goal': student.career_goal or '',
+            'admission_status': student.admission_status or '',
+            'admitted_university_id': student.admitted_university_id or '',
+            'admitted_course_id': student.admitted_course_id or '',
+            'admitted_university_label': (student.admitted_university.as_dict()['label']
+                                          if student.admitted_university else ''),
+            'admitted_course_label': (student.admitted_course.name if student.admitted_course else ''),
+            'scholarships': [sc.as_dict() for sc in student.scholarships.all()],
         },
         'contacts': contacts or [_blank_contact()],
         'options': _student_form_options(),
         'return_to': return_to,
         'urls': {'submit': url_for('main.edit_student', student_id=student.id),
                  'cancel': return_to or view_url, 'back': view_url,
-                 'list': url_for('main.students_list')},
+                 'list': url_for('main.students_list'),
+                 'recommend': url_for('main.api_recommend_courses', student_id=student.id)},
     }
     return render_template('students/edit.html', form_json=payload,
                            student_name=student.full_name, student_sid=student.student_id)

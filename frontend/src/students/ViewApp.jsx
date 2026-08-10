@@ -13,6 +13,94 @@ function Info({ label, children }) {
   );
 }
 
+// Colour + icon for the chosen-course eligibility verdict.
+const ELIG_STYLE = {
+  ON_TRACK: { badge: 'badge-success', bar: 'var(--success)', icon: 'fa-circle-check' },
+  CLOSE: { badge: 'badge-warning', bar: 'var(--warning)', icon: 'fa-circle-half-stroke' },
+  OFF_TRACK: { badge: 'badge-danger', bar: 'var(--danger)', icon: 'fa-triangle-exclamation' },
+  NO_DATA: { badge: 'badge-secondary', bar: 'var(--gray-300)', icon: 'fa-hourglass-half' },
+  NO_TARGET: { badge: 'badge-secondary', bar: 'var(--gray-300)', icon: 'fa-circle-question' },
+};
+
+// The university-aspiration section of the profile: chosen-course verdict with a
+// gap-to-target progress bar, second choice, career goal, admission outcome and
+// any scholarships. Rendered whenever the student has any aspiration data.
+function AspirationCard({ s, asp, scholarships }) {
+  const hasAny = s.target_university || s.target_course || s.jamb_target || s.career_goal ||
+    s.admission_status || (scholarships && scholarships.length);
+  if (!hasAny) return null;
+  const st = (asp && ELIG_STYLE[asp.status]) || ELIG_STYLE.NO_TARGET;
+  const target = (asp && asp.target) || s.jamb_target;
+  const proj = asp && asp.projected;
+  const pct = (target && proj != null) ? Math.max(0, Math.min(100, Math.round((proj / target) * 100))) : null;
+  return (
+    <div className="card mb-3">
+      <div className="card-header"><h3><i aria-hidden="true" className="fas fa-graduation-cap" /> University Aspiration</h3>
+        {asp && asp.status && <span className={'badge ' + st.badge}><i aria-hidden="true" className={'fas ' + st.icon} /> {asp.status_label}</span>}
+      </div>
+      <div className="card-body">
+        <div className="info-grid">
+          <Info label="Target University">{s.target_university || 'Not set'}</Info>
+          <Info label="Target Course">{s.target_course ? `${s.target_course}${s.target_department ? ' · ' + s.target_department : ''}` : 'Not set'}</Info>
+          <Info label="JAMB Target">{target ? `${target} / 400` : 'Not set'}</Info>
+          {(s.target2_university || s.target2_course) &&
+            <Info label="Second Choice">{[s.target2_university, s.target2_course].filter(Boolean).join(' · ') || 'Not set'}</Info>}
+          {s.career_goal && <Info label="Career Goal">{s.career_goal}</Info>}
+          {s.admission_status && <Info label="Admission Status"><span className="badge badge-info">{s.admission_status}</span></Info>}
+          {(s.admitted_university || s.admitted_course) &&
+            <Info label="Admitted To">{[s.admitted_university, s.admitted_course].filter(Boolean).join(' · ')}</Info>}
+        </div>
+
+        {pct != null && (
+          <div style={{ marginTop: '1rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.85rem', marginBottom: '.3rem' }}>
+              <span className="text-muted">Projected JAMB {proj} of target {target}</span>
+              <strong>{asp.gap != null && asp.gap > 0 ? `${asp.gap} to go` : 'Target met'}</strong>
+            </div>
+            <div style={{ height: 10, borderRadius: 6, background: 'var(--gray-200, #e5e7eb)', overflow: 'hidden' }}>
+              <div style={{ width: pct + '%', height: '100%', background: st.bar, transition: 'width .4s' }} />
+            </div>
+          </div>
+        )}
+
+        {asp && (asp.missing_jamb || []).length > 0 && (
+          <p className="text-muted" style={{ marginTop: '.75rem', marginBottom: 0, fontSize: '.85rem' }}>
+            <i aria-hidden="true" className="fas fa-triangle-exclamation" style={{ color: 'var(--danger)' }} /> Missing required JAMB subject(s): <strong>{asp.missing_jamb.join(', ')}</strong>
+          </p>
+        )}
+        {asp && (asp.missing_waec || []).length > 0 && (
+          <p className="text-muted" style={{ marginTop: '.35rem', marginBottom: 0, fontSize: '.85rem' }}>
+            <i aria-hidden="true" className="fas fa-triangle-exclamation" style={{ color: 'var(--warning)' }} /> O'level subject(s) not yet projected to credit: <strong>{asp.missing_waec.join(', ')}</strong>
+          </p>
+        )}
+        {asp && (asp.reasons || []).length > 0 && asp.status === 'ON_TRACK' && (
+          <p className="text-muted" style={{ marginTop: '.75rem', marginBottom: 0, fontSize: '.85rem' }}>
+            <i aria-hidden="true" className="fas fa-circle-check" style={{ color: 'var(--success)' }} /> Projected to meet subject, credit and score requirements for this course.
+          </p>
+        )}
+
+        {(scholarships && scholarships.length > 0) && (
+          <div style={{ marginTop: '1rem' }}>
+            <strong style={{ display: 'block', marginBottom: '.5rem' }}><i aria-hidden="true" className="fas fa-award" /> Scholarships</strong>
+            <div className="data-cards">
+              {scholarships.map((sc, i) => (
+                <div className="data-card" key={i}>
+                  <div className="data-card-header">
+                    <div className="data-card-title">{sc.name}</div>
+                    {sc.status && <span className="badge badge-info">{sc.status}</span>}
+                  </div>
+                  {sc.provider && <div className="data-card-row"><span className="data-card-label">Provider</span><span>{sc.provider}</span></div>}
+                  {sc.amount != null && <div className="data-card-row"><span className="data-card-label">Amount</span><span>₦{Number(sc.amount).toLocaleString()}</span></div>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function ViewApp({ initial }) {
   const [data, setData] = useState(initial || {});
   const [msg, setMsg] = useState(null);
@@ -105,14 +193,14 @@ export default function ViewApp({ initial }) {
             <Info label="Address">{s.home_address || 'Not set'}</Info>
             <Info label="Hobbies">{s.hobbies || 'Not set'}</Info>
             <Info label="Stream">{s.stream ? <span className="badge badge-info">{s.stream}</span> : 'Not set'}</Info>
-            <Info label="Target University">{s.target_university || 'Not set'}</Info>
-            <Info label="Target Course">{s.target_course ? `${s.target_course}${s.target_department ? ' · ' + s.target_department : ''}` : 'Not set'}</Info>
-            <Info label="JAMB Target">{s.jamb_target ? `${s.jamb_target} / 400` : 'Not set'}</Info>
             <Info label="WAEC Subjects">{(s.waec_subjects || []).join(', ') || 'Not set'}</Info>
             <Info label="JAMB Subjects">{(s.jamb_subjects || []).join(', ') || 'Not set'}</Info>
           </div>
         </div>
       </div>
+
+      <AspirationCard s={s} asp={d.aspiration} scholarships={d.scholarships || []} />
+
 
       {(d.identity || s.house || s.boarding_status) && (
         <div className="card mb-3">

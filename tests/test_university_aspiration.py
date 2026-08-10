@@ -179,6 +179,138 @@ def test_override_management(app):
         assert effective_cutoff(u, cs) == 240
 
 
+def _mock_readiness(jamb_score, credited, threshold, meets_ssc=True):
+    """A fabricated readiness dict shaped like exam_insights.admission_readiness,
+    so eligibility logic can be tested without seeding mock results."""
+    return {
+        'jamb_threshold': threshold,
+        'jamb': {'score': jamb_score, 'source': 'mock'},
+        'waec': {'credits': len(credited), 'meets_ssc': meets_ssc,
+                 'credited_subjects': list(credited), 'source': 'mock'},
+    }
+
+
+def test_course_eligibility_verdicts(app):
+    _seed(app)
+    from utils.aspiration import course_eligibility
+    with app.app_context():
+        bid = Branch.get_default().id
+        med = Course.query.filter_by(name='Medicine and Surgery').first()
+        req_jamb = ', '.join(med.jamb_subject_list)
+        credited = med.waec_subject_list + ['English Language', 'Mathematics']
+        s = Student(student_id='ELIG-1', first_name='E', surname='Lig', gender='Male',
+                    is_active=True, branch_id=bid, target_course_id=med.id,
+                    jamb_subjects=req_jamb, jamb_target=300)
+        db.session.add(s); db.session.commit()
+        # Meets subjects + credits + score → ON_TRACK.
+        e = course_eligibility(s, readiness=_mock_readiness(310, credited, 300))
+        assert e['status'] == 'ON_TRACK' and e['gap'] <= 0 and not e['missing_jamb']
+        # Same combo, score just short but within the close margin → CLOSE.
+        e = course_eligibility(s, readiness=_mock_readiness(285, credited, 300))
+        assert e['status'] == 'CLOSE'
+        # Missing a required JAMB subject → OFF_TRACK, and it is reported.
+        s.jamb_subjects = 'English Language'
+        e = course_eligibility(s, readiness=_mock_readiness(310, credited, 300))
+        assert e['status'] == 'OFF_TRACK' and e['missing_jamb']
+        # No target course at all.
+        s2 = Student(student_id='ELIG-2', first_name='N', surname='One', gender='Male',
+                     is_active=True, branch_id=bid)
+        db.session.add(s2); db.session.commit()
+        assert course_eligibility(s2)['status'] == 'NO_TARGET'
+
+
+def test_recommend_courses(app):
+    _seed(app)
+    from utils import exam_insights as ei
+    from utils.aspiration import recommend_courses
+    with app.app_context():
+        bid = Branch.get_default().id
+        s = Student(student_id='REC-1', first_name='R', surname='Ec', gender='Male',
+                    is_active=True, branch_id=bid,
+                    jamb_subjects='English Language, Mathematics, Physics, Chemistry')
+        db.session.add(s); db.session.commit()
+        # No JAMB signal → no recommendations.
+        assert recommend_courses(s) == []
+        # With a strong projection, courses at/under the projection are suggested,
+        # ranked with subject-fit first.
+        real = ei.admission_readiness
+        ei.admission_readiness = lambda stu, sess=None, **k: {'jamb': {'score': 320, 'source': 'mock'}}
+        try:
+            recs = recommend_courses(s, limit=5)
+        finally:
+            ei.admission_readiness = real
+        assert recs and all(r['margin'] >= 0 for r in recs)
+        assert recs == sorted(recs, key=lambda x: (x['subject_fit'], x['margin']), reverse=True)
+
+
+def test_recommend_endpoint(app):
+    _seed(app)
+    with app.app_context():
+        bid = Branch.get_default().id
+        s = Student(student_id='REC-EP1', first_name='R', surname='Ep', gender='Male',
+                    is_active=True, branch_id=bid)
+        db.session.add(s); db.session.commit()
+        sid = s.id
+    c = _admin(app)
+    r = c.get(f'/api/students/{sid}/recommend-courses')
+    assert r.status_code == 200 and 'recommendations' in r.get_json()
+
+
+def test_edit_saves_second_choice_career_admission_scholarships(app):
+    _seed(app)
+    with app.app_context():
+        bid = Branch.get_default().id
+        s = Student(student_id='ASP-2', first_name='Asp', surname='Two', gender='Female',
+                    is_active=True, branch_id=bid)
+        db.session.add(s); db.session.commit()
+        sid = s.id
+        u = University.query.filter_by(abbreviation='UNILAG').first()
+        u2 = University.query.filter_by(abbreviation='UI').first()
+        cs = Course.query.filter_by(name='Computer Science').first()
+        law = Course.query.filter_by(name='Law').first()
+        uid, u2id, cid, lid = u.id, u2.id, cs.id, law.id
+    c = _admin(app)
+    r = c.post(f'/students/{sid}/edit', data={
+        'form_complete': '1', 'first_name': 'Asp', 'surname': 'Two', 'gender': 'Female',
+        'target_university_id': uid, 'target_course_id': cid,
+        'target2_university_id': u2id, 'target2_course_id': lid,
+        'career_goal': 'Software Engineer', 'admission_status': 'Offered',
+        'admitted_university_id': uid, 'admitted_course_id': cid,
+        'scholarship_name[]': ['NNPC Scholarship', ''],
+        'scholarship_provider[]': ['NNPC', ''],
+        'scholarship_amount[]': ['500000', ''],
+        'scholarship_status[]': ['Awarded', ''],
+        '_csrf_token': c._csrf,
+    }, headers={'X-Requested-With': 'fetch'})
+    assert r.status_code == 200 and r.get_json()['ok']
+    with app.app_context():
+        s = db.session.get(Student, sid)
+        assert s.target2_university_id == u2id and s.target2_course_id == lid
+        assert s.career_goal == 'Software Engineer' and s.admission_status == 'Offered'
+        assert s.admitted_university_id == uid and s.admitted_course_id == cid
+        schs = s.scholarships.all()
+        assert len(schs) == 1                       # the blank second row is dropped
+        assert schs[0].name == 'NNPC Scholarship' and schs[0].amount == 500000.0
+
+
+def test_aspiration_overview(app):
+    _seed(app)
+    from utils.aspiration_analytics import aspiration_overview
+    with app.test_request_context('/'):
+        data = aspiration_overview()
+        assert set(data) == {'totals', 'eligibility', 'top_universities',
+                             'top_courses', 'mismatches', 'funnel'}
+        assert isinstance(data['eligibility'], list) and len(data['eligibility']) == 4
+        assert 'conversion' in data['funnel']
+
+
+def test_aspiration_hub_page(app):
+    _seed(app)
+    c = _admin(app)
+    r = c.get('/results/analytics/aspirations')
+    assert r.status_code == 200 and 'University Aspirations' in r.get_data(as_text=True)
+
+
 def test_bulk_import_cutoffs(app):
     """Pasting 'University, Course, Cut-off' rows upserts overrides; unmatched
     rows are skipped, and missing courses can be created on demand."""

@@ -78,6 +78,32 @@ function Home({ d, go }) {
           )}
         </div>
 
+        {d.aspiration && (
+          <div className="sec">
+            <h2>University aspiration</h2>
+            <div className="card">
+              <h3>{d.aspiration.course || 'Target course'}{d.aspiration.university ? ' — ' + d.aspiration.university : ''}</h3>
+              {d.aspiration.department && <p className="muted">{d.aspiration.department}</p>}
+              {d.aspiration.status_label && (
+                <p style={{ margin: '.4rem 0' }}>
+                  <span className={'badge ' + ({ ON_TRACK: 'badge-success', CLOSE: 'badge-warning', OFF_TRACK: 'badge-danger' }[d.aspiration.status] || '')}>
+                    {d.aspiration.status_label}
+                  </span>
+                </p>
+              )}
+              {d.aspiration.target != null && d.aspiration.projected != null && (
+                <p className="muted">Projected JAMB {d.aspiration.projected} of target {d.aspiration.target}
+                  {d.aspiration.gap != null && d.aspiration.gap > 0 ? ` · ${d.aspiration.gap} to go` : ' · target met'}</p>
+              )}
+              {d.aspiration.admission_status && (
+                <p className="muted">Admission: <strong>{d.aspiration.admission_status}</strong>
+                  {d.aspiration.admitted_university ? ` — ${d.aspiration.admitted_university}` : ''}
+                  {d.aspiration.admitted_course ? ` (${d.aspiration.admitted_course})` : ''}</p>
+              )}
+            </div>
+          </div>
+        )}
+
         {(d.urls.cbt_portal || d.urls.result_checker) && (
           <div className="sec">
             <h2>More for {(d.student.full_name || '').split(' ')[0] || 'this student'}</h2>

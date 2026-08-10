@@ -3478,6 +3478,13 @@
 ]
 ],
 [
+"main.api_recommend_courses",
+"/api/students/<int:student_id>/recommend-courses",
+[
+"GET"
+]
+],
+[
 "main.api_search_students",
 "/api/students/search",
 [
@@ -5169,6 +5176,13 @@
 [
 "results.api_yoy_trends",
 "/results/api/yoy-trends",
+[
+"GET"
+]
+],
+[
+"results.aspiration_hub",
+"/results/analytics/aspirations",
 [
 "GET"
 ]

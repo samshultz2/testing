@@ -80,6 +80,32 @@ def _current_student():
     return db.session.get(Student, sid) if sid else None
 
 
+def _parent_aspiration(student):
+    """Read-only university-aspiration summary for the parent portal: the chosen
+    university/course, the projected eligibility verdict and any admission
+    outcome. None when nothing is set. Best-effort."""
+    if not (getattr(student, 'target_university_id', None) or getattr(student, 'target_course_id', None)):
+        return None
+    try:
+        from utils.aspiration import course_eligibility, ELIGIBILITY_LABELS
+        e = course_eligibility(student)
+        return {
+            'university': student.target_university_name,
+            'course': student.target_course_name,
+            'department': student.target_department,
+            'status': e.get('status'),
+            'status_label': ELIGIBILITY_LABELS.get(e.get('status'), e.get('status')),
+            'target': e.get('target'),
+            'projected': e.get('projected'),
+            'gap': e.get('gap'),
+            'admission_status': student.admission_status,
+            'admitted_university': (student.admitted_university.name if student.admitted_university else None),
+            'admitted_course': (student.admitted_course.name if student.admitted_course else None),
+        }
+    except Exception:
+        return None
+
+
 def _siblings(student):
     """Active students who share a parent phone number with this child."""
     phones = {c.phone_number for c in student.parent_contacts.all() if c.phone_number}
@@ -198,6 +224,7 @@ def home():
         'attendance': attendance,
         'report': _report_payload(report if results_ready else None, aff_traits, RATING_LABELS),
         'results_ready': results_ready,
+        'aspiration': _parent_aspiration(student),
         'announcements': [{'title': a.title, 'body': a.body, 'is_pinned': bool(a.is_pinned)}
                           for a in announcements],
         'siblings': [{'id': s.id, 'full_name': s.full_name,

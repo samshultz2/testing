@@ -62,6 +62,16 @@ class Student(db.Model):
     target_university_id = db.Column(db.Integer, db.ForeignKey('universities.id'))
     target_course_id = db.Column(db.Integer, db.ForeignKey('courses.id'))
     target_department = db.Column(db.String(120))
+    # Backup (2nd choice) aspiration — mirrors JAMB's 1st/2nd choice.
+    target2_university_id = db.Column(db.Integer, db.ForeignKey('universities.id'))
+    target2_course_id = db.Column(db.Integer, db.ForeignKey('courses.id'))
+    # Intended career (informs course alignment).
+    career_goal = db.Column(db.String(120))
+    # Admission outcome tracking (applied → offered → admitted → declined), and
+    # where the student was actually admitted (may differ from the target).
+    admission_status = db.Column(db.String(20))
+    admitted_university_id = db.Column(db.Integer, db.ForeignKey('universities.id'))
+    admitted_course_id = db.Column(db.Integer, db.ForeignKey('courses.id'))
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=local_now)
     updated_at = db.Column(db.DateTime, default=local_now, onupdate=local_now)
@@ -90,6 +100,12 @@ class Student(db.Model):
     graduation_session = db.relationship('AcademicSession', foreign_keys=[graduation_session_id])
     target_university = db.relationship('University', foreign_keys=[target_university_id])
     target_course = db.relationship('Course', foreign_keys=[target_course_id])
+    target2_university = db.relationship('University', foreign_keys=[target2_university_id])
+    target2_course = db.relationship('Course', foreign_keys=[target2_course_id])
+    admitted_university = db.relationship('University', foreign_keys=[admitted_university_id])
+    admitted_course = db.relationship('Course', foreign_keys=[admitted_course_id])
+    scholarships = db.relationship('StudentScholarship', backref='student',
+                                   lazy='dynamic', cascade='all, delete-orphan')
 
     @property
     def target_university_name(self):
@@ -100,6 +116,14 @@ class Student(db.Model):
     def target_course_name(self):
         c = self.target_course
         return c.name if c else None
+
+    @property
+    def target2_university_name(self):
+        return self.target2_university.name if self.target2_university else None
+
+    @property
+    def target2_course_name(self):
+        return self.target2_course.name if self.target2_course else None
 
     @property
     def full_name(self):

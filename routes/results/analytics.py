@@ -506,6 +506,18 @@ def at_risk_watchlist():
                            action_plan_url='results.student_action_plan')
 
 
+@results_bp.route('/analytics/aspirations')
+@login_required
+def aspiration_hub():
+    """University-aspiration hub: target coverage, course-eligibility mix,
+    most-wanted universities/courses, a JAMB subject-mismatch fix list, and the
+    admission funnel with conversion. Projected live from mock signals."""
+    from utils.aspiration_analytics import aspiration_overview
+    from utils.branch_scope import viewing_branch_id
+    data = aspiration_overview(branch_id=viewing_branch_id())
+    return render_template('results/aspiration_hub.html', data=data)
+
+
 @results_bp.route('/analytics/by-class/export')
 @login_required
 def analytics_by_class_export():
