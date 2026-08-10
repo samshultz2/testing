@@ -50,6 +50,37 @@
     </div>
 </div>
 
+<div class="card mb-4">
+    <div class="card-header"><h3>Course cut-offs by university <span class="text-muted text-sm">({{ overrides|length }})</span></h3></div>
+    <div class="card-body" style="overflow-x:auto;">
+        <p class="text-muted text-sm">The real competitive score a university uses for a specific department — overrides the course base + the university's bump. Set these where a department runs hotter than the school's general line (e.g. Engineering at a competitive federal).</p>
+        <table class="table" style="width:100%;min-width:560px;">
+            <thead><tr><th>University</th><th>Course</th><th>Cut-off</th><th></th></tr></thead>
+            <tbody>
+            {% for o in overrides %}
+            <tr>
+                <form method="post">{{ csrf() }}<input type="hidden" name="action" value="save_override">
+                <input type="hidden" name="university_id" value="{{ o.university_id }}"><input type="hidden" name="course_id" value="{{ o.course_id }}">
+                <td>{{ o.university.name }}{% if o.university.abbreviation %} <span class="text-muted text-sm">({{ o.university.abbreviation }})</span>{% endif %}</td>
+                <td>{{ o.course.name }}{% if o.course.department %} <span class="text-muted text-sm">· {{ o.course.department }}</span>{% endif %}</td>
+                <td><input name="jamb_cutoff" type="number" min="0" max="400" value="{{ o.jamb_cutoff }}" style="width:74px;"></td>
+                <td style="white-space:nowrap;"><button class="btn btn-primary btn-sm">Save</button></form>
+                    <form method="post" style="display:inline;" onsubmit="return confirm('Remove this cut-off?');">{{ csrf() }}<input type="hidden" name="action" value="delete_override"><input type="hidden" name="id" value="{{ o.id }}"><button class="btn btn-secondary btn-sm" title="Remove"><i class="fas fa-trash"></i></button></form>
+                </td>
+            </tr>
+            {% endfor %}
+            <tr>
+                <form method="post">{{ csrf() }}<input type="hidden" name="action" value="save_override">
+                <td><select name="university_id" required style="max-width:200px;"><option value="">Select university…</option>{% for u in universities %}<option value="{{ u.id }}">{{ u.name }}</option>{% endfor %}</select></td>
+                <td><select name="course_id" required style="max-width:200px;"><option value="">Select course…</option>{% for c in courses %}<option value="{{ c.id }}">{{ c.name }}</option>{% endfor %}</select></td>
+                <td><input name="jamb_cutoff" type="number" min="0" max="400" placeholder="e.g. 250" style="width:74px;"></td>
+                <td><button class="btn btn-success btn-sm"><i class="fas fa-plus"></i> Add</button></form></td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+
 <div class="card">
     <div class="card-header"><h3>Courses <span class="text-muted text-sm">({{ courses|length }})</span></h3></div>
     <div class="card-body" style="overflow-x:auto;">

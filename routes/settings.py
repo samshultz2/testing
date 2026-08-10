@@ -228,15 +228,40 @@ def admissions_data():
                 c = db.session.get(Course, request.form.get('id', type=int))
                 if c:
                     db.session.delete(c); db.session.commit(); flash('Course deleted.', 'success')
+            elif action == 'save_override':
+                from models import UniversityCourse
+                uid = request.form.get('university_id', type=int)
+                cid = request.form.get('course_id', type=int)
+                cutoff = request.form.get('jamb_cutoff', type=int)
+                if not (uid and cid and cutoff):
+                    flash('Pick a university, a course and a cut-off.', 'error')
+                else:
+                    row = UniversityCourse.query.filter_by(university_id=uid, course_id=cid).first()
+                    if not row:
+                        row = UniversityCourse(university_id=uid, course_id=cid)
+                        db.session.add(row)
+                    row.jamb_cutoff = max(0, min(cutoff, 400))
+                    row.is_active = True
+                    db.session.commit()
+                    flash('Course cut-off saved.', 'success')
+            elif action == 'delete_override':
+                from models import UniversityCourse
+                row = db.session.get(UniversityCourse, request.form.get('id', type=int))
+                if row:
+                    db.session.delete(row); db.session.commit(); flash('Cut-off removed.', 'success')
         except Exception as e:
             db.session.rollback()
             flash(f'Could not save: {e}', 'error')
         return redirect(url_for('settings.admissions_data'))
 
+    from models import UniversityCourse
     universities = University.query.order_by(University.name).all()
     courses = Course.query.order_by(Course.name).all()
+    overrides = (UniversityCourse.query.join(University, UniversityCourse.university_id == University.id)
+                 .join(Course, UniversityCourse.course_id == Course.id)
+                 .order_by(University.name, Course.name).all())
     return render_template('settings/admissions.html',
-                           universities=universities, courses=courses)
+                           universities=universities, courses=courses, overrides=overrides)
 
 
 @settings_bp.route('/ocr', methods=['GET', 'POST'])

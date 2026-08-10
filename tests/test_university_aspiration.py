@@ -27,14 +27,22 @@ def test_seed_and_effective_cutoff(app):
         u = University.query.filter_by(abbreviation='UNILAG').first()
         med = Course.query.filter_by(name='Medicine and Surgery').first()
         cs = Course.query.filter_by(name='Computer Science').first()
-        assert u and med and cs
-        # explicit override (UNILAG Medicine = 300)
+        micro = Course.query.filter_by(name='Microbiology').first()
+        assert u and med and cs and micro
+        # explicit departmental override (UNILAG Medicine = 300, Computer Science = 265)
         assert effective_cutoff(u, med) == 300
-        # base (240) + UNILAG bump (20) = 260, no explicit override
-        assert effective_cutoff(u, cs) == 260
+        assert effective_cutoff(u, cs) == 265
+        # no UNILAG override for Microbiology → base (210) + UNILAG bump (20) = 230
+        assert effective_cutoff(u, micro) == 230
         # course base alone when no university chosen
         assert effective_cutoff(None, cs) == 240
         assert 'English Language' in med.jamb_subject_list
+
+        # A competitive department bumps well above the school's general line:
+        # UNIBEN Engineering sits at 252, not the ~200 base line.
+        uniben = University.query.filter_by(abbreviation='UNIBEN').first()
+        eng = Course.query.filter_by(name='Mechanical Engineering').first()
+        assert effective_cutoff(uniben, eng) == 252
 
 
 def test_lookup_and_requirements_apis(app):
@@ -135,3 +143,37 @@ def test_admissions_admin_screen(app):
     assert r.status_code in (302, 303)
     with app.app_context():
         assert University.query.filter_by(name='Test Uni ASP').first() is not None
+
+
+def test_override_management(app):
+    """Admin can add/upsert and remove a per-university course cut-off, and it
+    drives effective_cutoff."""
+    _seed(app)
+    with app.app_context():
+        u = University.query.filter_by(abbreviation='EKSU').first()   # no seeded overrides
+        cs = Course.query.filter_by(name='Computer Science').first()
+        uid, cid = u.id, cs.id
+        base_plus_bump = effective_cutoff(u, cs)      # base 240 + EKSU bump 0 = 240
+    assert base_plus_bump == 240
+    c = _admin(app)
+    r = c.post('/settings/admissions', data={'action': 'save_override', 'university_id': uid,
+               'course_id': cid, 'jamb_cutoff': '255', '_csrf_token': c._csrf})
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        u = db.session.get(University, uid); cs = db.session.get(Course, cid)
+        assert effective_cutoff(u, cs) == 255        # override now applies
+        from models import UniversityCourse
+        row = UniversityCourse.query.filter_by(university_id=uid, course_id=cid).first()
+        oid = row.id
+    # Upsert (same pair) updates in place, not duplicates.
+    c.post('/settings/admissions', data={'action': 'save_override', 'university_id': uid,
+           'course_id': cid, 'jamb_cutoff': '260', '_csrf_token': c._csrf})
+    with app.app_context():
+        from models import UniversityCourse
+        rows = UniversityCourse.query.filter_by(university_id=uid, course_id=cid).all()
+        assert len(rows) == 1 and rows[0].jamb_cutoff == 260
+    # Delete removes it (falls back to base+bump).
+    c.post('/settings/admissions', data={'action': 'delete_override', 'id': oid, '_csrf_token': c._csrf})
+    with app.app_context():
+        u = db.session.get(University, uid); cs = db.session.get(Course, cid)
+        assert effective_cutoff(u, cs) == 240
