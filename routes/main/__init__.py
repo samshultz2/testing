@@ -748,6 +748,57 @@ def _dash_timetable_today(active_term, tscope):
         return None
 
 
+def _dash_timetable_slot(active_term, tscope, slot_id):
+    """Per-period drill-down for the day glance: for one slot on today's weekday,
+    the subject and teacher each class arm has. Branch/teacher-scoped exactly like
+    _dash_timetable_today. Returns None on a bad slot / error."""
+    try:
+        from models.models.timetable import TimetableSlot, ClassTimetable
+        from models import ClassArmAssignment, Subject
+        from utils.branch_scope import scope_query
+        slot = TimetableSlot.query.filter_by(id=slot_id, is_active=True).first()
+        if not slot:
+            return None
+        dow = date.today().weekday()
+        q = (ClassTimetable.query
+             .join(ClassArmAssignment,
+                   ClassTimetable.class_arm_assignment_id == ClassArmAssignment.id)
+             .filter(ClassTimetable.is_active.is_(True),
+                     ClassTimetable.day_of_week == dow,
+                     ClassTimetable.slot_id == slot_id,
+                     ClassTimetable.subject_id.isnot(None)))
+        if active_term:
+            q = q.filter(ClassArmAssignment.term_id == active_term.id)
+        q = scope_query(q, ClassArmAssignment)
+        if tscope is not None:
+            aidset = set(tscope[0])
+            entries = (q.filter(ClassTimetable.class_arm_assignment_id.in_(aidset)).all()
+                       if aidset else [])
+        else:
+            entries = q.all()
+        subj_ids = {e.subject_id for e in entries if e.subject_id}
+        subjects = {s.id: s.name for s in
+                    Subject.query.filter(Subject.id.in_(subj_ids or [-1])).all()}
+        aa_ids = {e.class_arm_assignment_id for e in entries}
+        arms = {a.id: a.display_name for a in
+                ClassArmAssignment.query.filter(ClassArmAssignment.id.in_(aa_ids or [-1])).all()}
+        rows = [{
+            'class_arm': arms.get(e.class_arm_assignment_id, '—'),
+            'subject': subjects.get(e.subject_id, '—'),
+            'teacher': (e.teacher_name or '').strip() or 'Unassigned',
+            'room': (e.room or '').strip(),
+        } for e in entries]
+        rows.sort(key=lambda r: r['class_arm'])
+        return {
+            'slot': {'id': slot.id, 'name': slot.name or f'Period {slot.slot_number}',
+                     'start': slot.start_time.strftime('%H:%M'),
+                     'end': slot.end_time.strftime('%H:%M')},
+            'rows': rows,
+        }
+    except Exception:
+        return None
+
+
 def _dash_cbt():
     """CBT exam + attempt counts (branch-scoped on the attempt's student)."""
     try:

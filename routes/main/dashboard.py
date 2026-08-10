@@ -87,6 +87,18 @@ def api_dashboard_widget(block_id):
     return jsonify(_dash_widget_slice(block_id))
 
 
+@main_bp.route('/api/dashboard/timetable/slot/<int:slot_id>')
+@login_required
+def api_dashboard_timetable_slot(slot_id):
+    """Drill-down for a period on the Today's-schedule widget: each class arm's
+    subject and teacher in that slot today. Branch/teacher-scoped like the glance."""
+    from routes.main import _dash_timetable_slot, _teacher_scope
+    data = _dash_timetable_slot(get_active_term(), _teacher_scope(), slot_id)
+    if data is None:
+        return jsonify({'error': 'not found'}), 404
+    return jsonify(data)
+
+
 @main_bp.route('/react-spike')
 @login_required
 def react_spike():
