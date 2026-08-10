@@ -162,11 +162,10 @@ export default function StudentForm({ data }) {
       const r = await res.json();
       setF((x) => ({ ...x, jamb_target: r.jamb_target != null ? String(r.jamb_target) : x.jamb_target,
                      target_department: r.department || x.target_department }));
-      if (fillSubjects) {
-        if (Array.isArray(r.jamb_subjects)) setJamb(new Set(r.jamb_subjects));
-        if (Array.isArray(r.waec_subjects)) setWaec(new Set(r.waec_subjects));
-      }
-      setAspirationNote('JAMB target set to ' + r.jamb_target + ' from the course requirements.');
+      // Only the JAMB subjects + target are auto-filled from the course; WAEC
+      // subjects are left exactly as the user set them.
+      if (fillSubjects && Array.isArray(r.jamb_subjects)) setJamb(new Set(r.jamb_subjects));
+      setAspirationNote('JAMB target set to ' + r.jamb_target + ' and JAMB subjects filled from the course.');
     } catch (_e) { /* leave fields as-is on a network hiccup */ }
   };
   const pickUniversity = (item) => {
@@ -316,8 +315,8 @@ export default function StudentForm({ data }) {
       <FormCard icon="fa-graduation-cap" title="University Aspiration" collapsible defaultOpen={isEdit}>
         <p className="text-muted" style={{ fontSize: '.85rem', marginTop: 0 }}>
           Where the student wants to study. Picking a course auto-fills the department, the JAMB
-          target (the course's competitive cut-off for the chosen university) and the JAMB/WAEC
-          subject requirements below — all editable.
+          target (the course's competitive cut-off for the chosen university) and the JAMB subject
+          requirements below — all editable. WAEC subjects are left as you set them.
         </p>
         <div className="sf-row">
           <div className="form-group">
