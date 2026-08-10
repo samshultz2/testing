@@ -34,6 +34,11 @@ def aspiration_overview(session_id=None, branch_id=None):
     elig_counts = {k: 0 for k in ('ON_TRACK', 'CLOSE', 'OFF_TRACK', 'NO_DATA', 'NO_TARGET')}
     uni_counts, course_counts, status_counts = {}, {}, {}
     mismatches = []
+    # Calibration contingency: predicted eligibility bucket → actual outcome, over
+    # students whose admission has RESOLVED (Admitted or Declined). Lets a school
+    # see whether "On track" really converted and "Off track" really didn't.
+    _RESOLVED = ('Admitted', 'Declined')
+    calib = {k: {'admitted': 0, 'not_admitted': 0} for k in ('ON_TRACK', 'CLOSE', 'OFF_TRACK', 'NO_DATA')}
 
     for s in students:
         # Eligibility mix.
@@ -43,6 +48,11 @@ def aspiration_overview(session_id=None, branch_id=None):
             e = {'status': 'NO_DATA'}
         status = e.get('status') or 'NO_DATA'
         elig_counts[status] = elig_counts.get(status, 0) + 1
+
+        # Calibration: only students with a resolved admission outcome contribute.
+        adm = getattr(s, 'admission_status', None)
+        if adm in _RESOLVED and status in calib:
+            calib[status]['admitted' if adm == 'Admitted' else 'not_admitted'] += 1
 
         # Popularity.
         uni = s.target_university_name
@@ -76,6 +86,28 @@ def aspiration_overview(session_id=None, branch_id=None):
         return [{'name': k, 'count': v}
                 for k, v in sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))[:n]]
 
+    # Build the calibration rows + a headline "hit rate" (predicted-admit that
+    # actually got admitted + predicted-no that actually didn't, over all resolved).
+    _ELIG_LABELS = ELIGIBILITY_LABELS
+    calib_rows, correct, resolved_total = [], 0, 0
+    for k in ('ON_TRACK', 'CLOSE', 'OFF_TRACK', 'NO_DATA'):
+        adm = calib[k]['admitted']
+        not_adm = calib[k]['not_admitted']
+        n = adm + not_adm
+        resolved_total += n
+        # "Predicted admit" = ON_TRACK/CLOSE; treat those admits + OFF_TRACK/NO_DATA
+        # rejections as correct calls.
+        if k in ('ON_TRACK', 'CLOSE'):
+            correct += adm
+        else:
+            correct += not_adm
+        calib_rows.append({
+            'status': k, 'label': _ELIG_LABELS.get(k, k),
+            'admitted': adm, 'not_admitted': not_adm, 'total': n,
+            'admit_rate': round(100.0 * adm / n, 1) if n else None,
+        })
+    hit_rate = round(100.0 * correct / resolved_total, 1) if resolved_total else None
+
     return {
         'totals': {
             'sss3': len(all_sss3),
@@ -94,5 +126,8 @@ def aspiration_overview(session_id=None, branch_id=None):
             'deferred': status_counts.get('Deferred', 0),
             'none': status_counts.get('None', 0),
             'with_target': with_target, 'conversion': conversion,
+        },
+        'calibration': {
+            'rows': calib_rows, 'resolved_total': resolved_total, 'hit_rate': hit_rate,
         },
     }
