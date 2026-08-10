@@ -429,7 +429,7 @@
         <a href="{{ url_for('results.paste_waec') }}" class="btn btn-secondary btn-sm" title="Paste result text (from an AI) — no OCR"><i class="fas fa-clipboard"></i> Paste</a>
         {% if selected_year %}
         <a href="{{ url_for('results.export_waec', year=selected_year) }}" class="btn btn-secondary btn-sm" title="Export Excel"><i class="fas fa-file-excel"></i></a>
-        <button type="button" data-call="openExportModal" class="btn btn-secondary btn-sm" title="Export HD Image"><i class="fas fa-image"></i></button>
+        <button type="button" data-call="openExportModal" class="btn btn-secondary btn-sm" title="Export image or PDF"><i class="fas fa-file-export"></i></button>
         {% endif %}
     </div>
 </div>
@@ -475,7 +475,10 @@
         <input type="hidden" name="view" value="{{ view_mode }}">
         <div class="filter-group filter-search">
             <label>Search by name or ID</label>
-            <input type="text" name="search" value="{{ search or '' }}" placeholder="Type a student name or ID...">
+            <input type="text" name="search" id="waecLiveSearch" value="{{ search or '' }}"
+                   placeholder="Type a student name or ID..." autocomplete="off"
+                   data-live-search="waecStudentList" data-live-count="waecSearchCount">
+            <span id="waecSearchCount" class="text-muted" style="font-size:.75rem;"></span>
         </div>
         <div class="filters-grid">
             <div class="filter-group">
@@ -682,7 +685,7 @@
     </div>
 </div>
 
-<div class="card">
+<div class="card" id="waecStudentList">
     <div class="card-header">
         <span class="card-title">Students ({{ students|length }})</span>
         <div class="sort-btns">
@@ -699,7 +702,7 @@
     <!-- Mobile: Card View -->
     <div class="students-list" style="padding: 0.5rem;">
         {% for s in students %}
-        <div class="student-card">
+        <div class="student-card" data-search="{{ (s.name ~ ' ' ~ s.student_id)|lower }}">
             <div class="student-card-header">
                 <div>
                     <div class="student-name">{{ s.name }}</div>
@@ -756,7 +759,7 @@
             </thead>
             <tbody>
                 {% for s in students %}
-                <tr>
+                <tr data-search="{{ (s.name ~ ' ' ~ s.student_id)|lower }}">
                     <td>{{ loop.index }}</td>
                     <td><strong>{{ s.name }}</strong><br><small style="color:#666;">{{ s.student_id }}</small></td>
                     <td><span class="grade-badge grade-a1">{{ s.a1_count }}</span></td>
@@ -814,10 +817,25 @@
 <div id="exportModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999; padding: 0.5rem; overflow-y: auto;">
     <div style="background: white; border-radius: 12px; max-width: 500px; margin: 1rem auto; max-height: calc(100vh - 2rem); overflow-y: auto;">
         <div style="padding: 1rem; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; background: white; z-index: 1;">
-            <h3 style="margin: 0; font-size: 1rem;"><i class="fas fa-image"></i> Export WAEC as Image</h3>
+            <h3 style="margin: 0; font-size: 1rem;"><i class="fas fa-file-export"></i> Export WAEC Results</h3>
             <button data-call="closeExportModal" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #666;">&times;</button>
         </div>
         <div style="padding: 1rem;">
+            <!-- Format -->
+            <div style="margin-bottom: 1rem;">
+                <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.5rem;">Format:</label>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem; background: #e3f2fd; border: 2px solid #2196f3; border-radius: 8px; cursor: pointer;">
+                        <input type="radio" name="exportFormat" value="image" checked>
+                        <span style="font-size: 0.85rem; font-weight: 500;"><i class="fas fa-image"></i> Image (PNG)</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem; background: #f8f9fa; border: 2px solid #ddd; border-radius: 8px; cursor: pointer;">
+                        <input type="radio" name="exportFormat" value="pdf">
+                        <span style="font-size: 0.85rem; font-weight: 500;"><i class="fas fa-file-pdf"></i> PDF</span>
+                    </label>
+                </div>
+            </div>
+
             <!-- Export Type -->
             <div style="margin-bottom: 1rem;">
                 <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.5rem;">Export Type:</label>
@@ -912,6 +930,7 @@
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='vendor/html2canvas.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/jspdf.umd.min.js') }}"></script>
 <script nonce="{{ csp_nonce }}">
 // Data for export
 var studentsData = [];
@@ -961,8 +980,32 @@ document.getElementById('exportModal').onclick = function(e) {
     if (e.target === this) closeExportModal();
 };
 
+// Slice a tall canvas across A4 pages and download as a PDF.
+function saveCanvasAsPdf(canvas, filename) {
+    var jsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+    var pdf = new jsPDF('p', 'mm', 'a4');
+    var pageW = pdf.internal.pageSize.getWidth();
+    var pageH = pdf.internal.pageSize.getHeight();
+    var imgW = pageW;
+    var imgH = canvas.height * imgW / canvas.width;
+    if (imgH <= pageH) {
+        pdf.addImage(canvas.toDataURL('image/png', 1.0), 'PNG', 0, 0, imgW, imgH);
+    } else {
+        // Paginate: draw the full image shifted up each page.
+        var remaining = imgH, pos = 0;
+        while (remaining > 0) {
+            pdf.addImage(canvas.toDataURL('image/png', 1.0), 'PNG', 0, pos, imgW, imgH);
+            remaining -= pageH;
+            pos -= pageH;
+            if (remaining > 0) pdf.addPage();
+        }
+    }
+    pdf.save(filename);
+}
+
 function generateWAECExport() {
     var exportType = document.querySelector('input[name="exportType"]:checked').value;
+    var exportFormat = document.querySelector('input[name="exportFormat"]:checked').value;
     var quality = parseInt(document.getElementById('expQuality').value);
     var showSummary = document.getElementById('expSummary').checked;
     var showGradeCount = document.getElementById('expGradeCount').checked;
@@ -1015,7 +1058,7 @@ function generateWAECExport() {
     var loadingDiv = document.createElement('div');
     loadingDiv.id = 'exportLoading';
     loadingDiv.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;color:white;';
-    loadingDiv.innerHTML = '<div style="font-size:18px;margin-bottom:10px;">Generating image...</div><div style="font-size:14px;">Please wait</div>';
+    loadingDiv.innerHTML = '<div style="font-size:18px;margin-bottom:10px;">Generating ' + (exportFormat === 'pdf' ? 'PDF' : 'image') + '...</div><div style="font-size:14px;">Please wait</div>';
     document.body.appendChild(loadingDiv);
     
     // Generate image - compact width for mobile viewing
@@ -1037,10 +1080,20 @@ function generateWAECExport() {
         }).then(function(canvas) {
             container.style.position = 'absolute';
             container.style.left = '-9999px';
-            
+
             // Remove loading
             document.getElementById('exportLoading').remove();
-            
+
+            // PDF: build and download directly.
+            if (exportFormat === 'pdf') {
+                try {
+                    saveCanvasAsPdf(canvas, 'WAEC_Results_' + selectedYear + '.pdf');
+                } catch (e) {
+                    alert('Error generating PDF: ' + e.message);
+                }
+                return;
+            }
+
             // Create modal to show image for manual save (mobile-friendly)
             var imgData = canvas.toDataURL('image/png', 1.0);
             var saveModal = document.createElement('div');

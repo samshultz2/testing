@@ -299,9 +299,10 @@ def test_aspiration_overview(app):
     with app.test_request_context('/'):
         data = aspiration_overview()
         assert set(data) == {'totals', 'eligibility', 'top_universities',
-                             'top_courses', 'mismatches', 'funnel'}
+                             'top_courses', 'mismatches', 'funnel', 'calibration'}
         assert isinstance(data['eligibility'], list) and len(data['eligibility']) == 4
         assert 'conversion' in data['funnel']
+        assert 'hit_rate' in data['calibration'] and len(data['calibration']['rows']) == 4
 
 
 def test_aspiration_hub_page(app):

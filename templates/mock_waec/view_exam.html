@@ -39,13 +39,21 @@
 {% endif %}
 
 {% if students %}
-<div class="card">
-    <div class="card-header"><h3>Results ({{ students|length }} students)</h3></div>
+<div class="card" id="mockWaecStudentList">
+    <div class="card-header" style="flex-wrap:wrap;gap:.5rem;">
+        <h3>Results ({{ students|length }} students)</h3>
+        <div class="filter-group filter-search" style="margin:0;min-width:220px;">
+            <input type="text" id="mockWaecSearch" placeholder="Search by name or ID..." autocomplete="off"
+                   data-live-search="mockWaecStudentList" data-live-count="mockWaecSearchCount"
+                   style="width:100%;padding:.5rem .75rem;border:1px solid var(--border-color);border-radius:var(--radius-md,8px);background:var(--bg-input,var(--bg-card));color:inherit;">
+            <span id="mockWaecSearchCount" class="text-muted" style="font-size:.75rem;"></span>
+        </div>
+    </div>
     <div class="table-responsive"><table class="data-table">
         <thead><tr><th>Student</th><th>Subjects</th><th>Credits</th><th>Distinctions</th><th>Avg</th><th>Grades</th><th></th></tr></thead>
         <tbody>
             {% for s in students %}
-            <tr>
+            <tr data-search="{{ (s.student.full_name ~ ' ' ~ s.student.student_id)|lower }}">
                 <td><strong>{{ s.student.full_name }}</strong><div class="text-muted text-sm">{{ s.student.student_id }}</div></td>
                 <td>{{ s.subjects }}</td>
                 <td><span class="badge badge-{{ 'success' if s.has_5_credits else 'warning' }}">{{ s.credits }}</span></td>

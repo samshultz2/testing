@@ -110,6 +110,45 @@ function initSelectLabels() {
     }
 }
 
+// Live client-side search over a rendered list. Binds every
+// input[data-live-search="containerId"]; filters that container's [data-search]
+// descendants (their data-search holds the lowercase haystack). Multi-word
+// queries match when every token is present (AND). Expands .cap-list while a
+// query is active so hidden matches surface, and restores it when cleared.
+function initLiveSearch() {
+    var inputs = document.querySelectorAll('input[data-live-search]');
+    for (var i = 0; i < inputs.length; i++) bindLiveSearch(inputs[i]);
+}
+
+function bindLiveSearch(input) {
+    var container = document.getElementById(input.getAttribute('data-live-search'));
+    if (!container) return;
+    var countEl = input.getAttribute('data-live-count')
+        ? document.getElementById(input.getAttribute('data-live-count')) : null;
+    var caps = container.querySelectorAll('.cap-list');
+
+    function apply() {
+        var q = (input.value || '').trim().toLowerCase();
+        var tokens = q ? q.split(/\s+/) : [];
+        var items = container.querySelectorAll('[data-search]');
+        var shown = 0, total = items.length;
+        for (var k = 0; k < items.length; k++) {
+            var hay = items[k].getAttribute('data-search') || '';
+            var ok = true;
+            for (var t = 0; t < tokens.length; t++) {
+                if (hay.indexOf(tokens[t]) === -1) { ok = false; break; }
+            }
+            items[k].style.display = ok ? '' : 'none';
+            if (ok) shown++;
+        }
+        // Reveal capped lists while searching so matches past the fold appear.
+        for (var c = 0; c < caps.length; c++) caps[c].classList.toggle('expanded', !!q);
+        if (countEl) countEl.textContent = q ? (shown + ' of ' + total) : '';
+    }
+    input.addEventListener('input', apply);
+    if ((input.value || '').trim()) apply();   // honour a prefilled query
+}
+
 // Account dropdown (consolidates install / clear-cache / logout / identity).
 function initProfileMenu() {
     var btn = document.getElementById('profileBtn');
@@ -616,6 +655,12 @@ document.addEventListener('DOMContentLoaded', function() {
         if (lbl) lbl.textContent = expanded ? (btn.getAttribute('data-less') || 'Show less')
                                             : (btn.getAttribute('data-more') || 'Show all');
     });
+
+    // Live client-side search: an <input data-live-search="containerId"> instantly
+    // filters that container's [data-search] elements (cards + rows) as the user
+    // types — no round-trip. Any .cap-list inside is expanded while filtering so
+    // matches beyond the fold show. data-live-count names a element to hold "N of M".
+    initLiveSearch();
 
     // Close the sidebar (mobile) when any real navigation link is clicked.
     // Delegated so it also covers links inside an expanded submenu — those are

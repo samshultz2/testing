@@ -27,7 +27,8 @@ const ELIG_STYLE = {
 // any scholarships. Rendered whenever the student has any aspiration data.
 function AspirationCard({ s, asp, scholarships }) {
   const hasAny = s.target_university || s.target_course || s.jamb_target || s.career_goal ||
-    s.admission_status || (scholarships && scholarships.length);
+    s.admission_status || (scholarships && scholarships.length) ||
+    (s.waec_subjects && s.waec_subjects.length) || (s.jamb_subjects && s.jamb_subjects.length);
   if (!hasAny) return null;
   const st = (asp && ELIG_STYLE[asp.status]) || ELIG_STYLE.NO_TARGET;
   const target = (asp && asp.target) || s.jamb_target;
@@ -41,14 +42,17 @@ function AspirationCard({ s, asp, scholarships }) {
       <div className="card-body">
         <div className="info-grid">
           <Info label="Target University">{s.target_university || 'Not set'}</Info>
-          <Info label="Target Course">{s.target_course ? `${s.target_course}${s.target_department ? ' · ' + s.target_department : ''}` : 'Not set'}</Info>
-          <Info label="JAMB Target">{target ? `${target} / 400` : 'Not set'}</Info>
+          <Info label="Target Course">{s.target_course || 'Not set'}</Info>
+          <Info label="Department / Faculty">{s.target_department || 'Not set'}</Info>
+          <Info label="JAMB Target Score">{target ? `${target} / 400` : 'Not set'}</Info>
           {(s.target2_university || s.target2_course) &&
             <Info label="Second Choice">{[s.target2_university, s.target2_course].filter(Boolean).join(' · ') || 'Not set'}</Info>}
           {s.career_goal && <Info label="Career Goal">{s.career_goal}</Info>}
           {s.admission_status && <Info label="Admission Status"><span className="badge badge-info">{s.admission_status}</span></Info>}
           {(s.admitted_university || s.admitted_course) &&
             <Info label="Admitted To">{[s.admitted_university, s.admitted_course].filter(Boolean).join(' · ')}</Info>}
+          <Info label="WAEC Subjects">{(s.waec_subjects || []).join(', ') || 'Not set'}</Info>
+          <Info label="JAMB Subjects">{(s.jamb_subjects || []).join(', ') || 'Not set'}</Info>
         </div>
 
         {pct != null && (
@@ -193,8 +197,6 @@ export default function ViewApp({ initial }) {
             <Info label="Address">{s.home_address || 'Not set'}</Info>
             <Info label="Hobbies">{s.hobbies || 'Not set'}</Info>
             <Info label="Stream">{s.stream ? <span className="badge badge-info">{s.stream}</span> : 'Not set'}</Info>
-            <Info label="WAEC Subjects">{(s.waec_subjects || []).join(', ') || 'Not set'}</Info>
-            <Info label="JAMB Subjects">{(s.jamb_subjects || []).join(', ') || 'Not set'}</Info>
           </div>
         </div>
       </div>

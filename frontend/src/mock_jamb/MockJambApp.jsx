@@ -378,6 +378,13 @@ function ViewExam({ d, notify }) {
   const [filters, setFilters] = useState(d.filters);
   const [exporting, setExporting] = useState(false);
 
+  // Live search: the name/ID box filters the already-loaded results instantly
+  // (no round-trip). Min/max score still submit to the server.
+  const q = (filters.search || '').trim().toLowerCase();
+  const shown = q
+    ? d.results.filter((it) => (it.student.full_name + ' ' + it.student.student_id).toLowerCase().includes(q))
+    : d.results;
+
   useEffect(() => {
     if (!st || !distRef.current || !window.Chart) return;
     const dist = st.distribution;
@@ -429,9 +436,13 @@ function ViewExam({ d, notify }) {
     document.body.appendChild(node);
     try {
       const canvas = await window.html2canvas(node.firstChild, { scale: opts.quality, backgroundColor: '#ffffff' });
-      setSaveImg(canvas.toDataURL('image/png'));
+      if (opts.format === 'pdf') {
+        canvasToPdf(canvas, (d.exam.display_name || 'mock-jamb').replace(/[^\w-]+/g, '_') + '.pdf');
+      } else {
+        setSaveImg(canvas.toDataURL('image/png'));
+      }
     } catch (err) {
-      notify('error', 'Could not generate image.');
+      notify('error', 'Could not generate ' + (opts.format === 'pdf' ? 'PDF' : 'image') + '.');
     } finally {
       document.body.removeChild(node);
     }
@@ -494,9 +505,9 @@ function ViewExam({ d, notify }) {
 
       <div className="card">
         <div className="card-header">
-          <h3><i aria-hidden="true" className="fas fa-list-ol" /> Results ({d.results.length})</h3>
+          <h3><i aria-hidden="true" className="fas fa-list-ol" /> Results ({shown.length}{q && shown.length !== d.results.length ? ` of ${d.results.length}` : ''})</h3>
           <form onSubmit={applyFilters} className="filter-form">
-            <input type="text" className="form-control" placeholder="Search name..." style={{ width: 140 }}
+            <input type="text" className="form-control" placeholder="Search name or ID..." style={{ width: 160 }}
                    value={filters.search} onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))} />
             <input type="number" className="form-control" placeholder="Min" style={{ width: 70 }}
                    value={filters.min_score} onChange={(e) => setFilters((f) => ({ ...f, min_score: e.target.value }))} />
@@ -507,9 +518,9 @@ function ViewExam({ d, notify }) {
           </form>
         </div>
 
-        {d.results.length ? (<>
+        {shown.length ? (<>
           <div className="students-list">
-            {d.results.map((it) => (
+            {shown.map((it) => (
               <div className="student-card" key={it.rank}>
                 <div className="student-card-header">
                   <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -539,7 +550,7 @@ function ViewExam({ d, notify }) {
           <div className="desktop-table">
             <table>
               <thead><tr><th>Rank</th><th>Student</th><th>Score</th><th>S1</th><th>S2</th><th>S3</th><th>S4</th><th>Level</th><th>Actions</th></tr></thead>
-              <tbody>{d.results.map((it) => (
+              <tbody>{shown.map((it) => (
                 <tr key={it.rank}>
                   <td><span className={'student-rank' + rankClass(it.rank)} style={{ width: 24, height: 24, fontSize: 'var(--text-xs)' }}>{it.rank}</span></td>
                   <td><strong>{it.student.full_name}</strong><br /><small style={{ color: 'var(--text-muted)' }}>{it.student.student_id}</small><br />
@@ -570,31 +581,62 @@ function ViewExam({ d, notify }) {
           <button type="button" className="btn btn-danger" onClick={delExam}><i aria-hidden="true" className="fas fa-trash" /> Delete Exam</button></div>
       </div>
 
-      {exporting && <ExportModal d={d} st={st} onClose={() => setExporting(false)} onGenerate={doExport} />}
+      {exporting && <ExportModal onClose={() => setExporting(false)} onGenerate={doExport}
+                                 hasSubjects={!!(st && st.subject_analysis && st.subject_analysis.length)} />}
       {saveImg && <SaveModal src={saveImg} onClose={() => setSaveImg(null)} />}
     </>
   );
 }
 
-function ExportModal({ onClose, onGenerate }) {
-  const [opts, setOpts] = useState({ rank: true, studentId: true, subjects: true, level: false,
-    summary: true, distribution: true, timestamp: true, quality: 3 });
+function ExportModal({ onClose, onGenerate, hasSubjects }) {
+  const [opts, setOpts] = useState({ format: 'image', type: 'students',
+    rank: true, studentId: true, subjects: true, level: false,
+    summary: true, distribution: true, timestamp: true,
+    subjCount: true, subjAvg: true, subjMax: true, subjMin: true, subjThresholds: true,
+    quality: 3 });
   const set = (k, v) => setOpts((o) => ({ ...o, [k]: v }));
   const Check = ({ k, label }) => (
     <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', background: 'var(--gray-50)', borderRadius: 6, marginBottom: '0.5rem', cursor: 'pointer' }}>
       <input type="checkbox" checked={opts[k]} onChange={(e) => set(k, e.target.checked)} /><span style={{ fontSize: 'var(--text-sm)' }}>{label}</span></label>
   );
+  const Radio = ({ group, val, label, icon }) => (
+    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem',
+      background: opts[group] === val ? 'var(--primary-050, #e3f2fd)' : 'var(--gray-50)',
+      border: '2px solid ' + (opts[group] === val ? 'var(--primary)' : 'var(--border-color)'),
+      borderRadius: 8, cursor: 'pointer', flex: 1 }}>
+      <input type="radio" checked={opts[group] === val} onChange={() => set(group, val)} />
+      <span style={{ fontSize: 'var(--text-sm)', fontWeight: 500 }}>{icon && <i aria-hidden="true" className={'fas ' + icon} />} {label}</span></label>
+  );
+  const isPdf = opts.format === 'pdf';
   return (
     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, padding: '1rem', overflowY: 'auto' }}>
       <div style={{ background: 'var(--bg-card)', borderRadius: 12, maxWidth: 400, margin: '2rem auto', maxHeight: '90vh', overflowY: 'auto' }}>
         <div style={{ padding: '1rem', borderBottom: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ margin: 0, fontSize: 'var(--text-lg)' }}><i aria-hidden="true" className="fas fa-image" /> Export HD Image</h3>
+          <h3 style={{ margin: 0, fontSize: 'var(--text-lg)' }}><i aria-hidden="true" className="fas fa-file-export" /> Export Results</h3>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 'var(--text-2xl)', cursor: 'pointer', color: 'var(--text-muted)' }}>&times;</button>
         </div>
         <div style={{ padding: '1rem' }}>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginBottom: '1rem' }}>Select columns:</p>
-          <div style={{ marginBottom: '1rem' }}>
-            <Check k="rank" label="Rank" /><Check k="studentId" label="Student ID" /><Check k="subjects" label="Subject Scores" /><Check k="level" label="Performance Level" /></div>
+          <p style={{ fontSize: 'var(--text-sm)', fontWeight: 600, marginBottom: '0.5rem' }}>Format:</p>
+          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+            <Radio group="format" val="image" label="Image" icon="fa-image" />
+            <Radio group="format" val="pdf" label="PDF" icon="fa-file-pdf" />
+          </div>
+          {hasSubjects && (<>
+            <p style={{ fontSize: 'var(--text-sm)', fontWeight: 600, marginBottom: '0.5rem' }}>Export type:</p>
+            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
+              <Radio group="type" val="students" label="Students" />
+              <Radio group="type" val="subjects" label="Subjects" />
+            </div>
+          </>)}
+          {opts.type === 'students' ? (<>
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Columns:</p>
+            <div style={{ marginBottom: '1rem' }}>
+              <Check k="rank" label="Rank" /><Check k="studentId" label="Student ID" /><Check k="subjects" label="Subject Scores" /><Check k="level" label="Performance Level" /></div>
+          </>) : (<>
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Subject columns:</p>
+            <div style={{ marginBottom: '1rem' }}>
+              <Check k="subjCount" label="Candidates" /><Check k="subjAvg" label="Average" /><Check k="subjMax" label="Highest" /><Check k="subjMin" label="Lowest" /><Check k="subjThresholds" label="≥70 / ≥50 counts" /></div>
+          </>)}
           <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Stats to include:</p>
           <div style={{ marginBottom: '1rem' }}>
             <Check k="summary" label="Summary Stats" /><Check k="distribution" label="Score Distribution" /><Check k="timestamp" label="Timestamp" /></div>
@@ -603,7 +645,7 @@ function ExportModal({ onClose, onGenerate }) {
                   style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--border-color)', borderRadius: 6, marginBottom: '1rem' }}>
             <option value="2">Standard (2x)</option><option value="3">HD (3x)</option><option value="4">Ultra HD (4x)</option>
           </select>
-          <button onClick={() => onGenerate(opts)} className="btn btn-primary" style={{ width: '100%' }}><i aria-hidden="true" className="fas fa-download" /> Generate Image</button>
+          <button onClick={() => onGenerate(opts)} className="btn btn-primary" style={{ width: '100%' }}><i aria-hidden="true" className="fas fa-download" /> {isPdf ? 'Generate PDF' : 'Generate Image'}</button>
         </div>
       </div>
     </div>
@@ -622,6 +664,28 @@ function SaveModal({ src, onClose }) {
   );
 }
 
+// Slice a tall canvas across A4 pages and download it as a PDF (jsPDF UMD).
+function canvasToPdf(canvas, filename) {
+  const JsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+  const pdf = new JsPDF('p', 'mm', 'a4');
+  const pageW = pdf.internal.pageSize.getWidth();
+  const pageH = pdf.internal.pageSize.getHeight();
+  const imgW = pageW;
+  const imgH = canvas.height * imgW / canvas.width;
+  const img = canvas.toDataURL('image/png', 1.0);
+  if (imgH <= pageH) {
+    pdf.addImage(img, 'PNG', 0, 0, imgW, imgH);
+  } else {
+    let remaining = imgH, pos = 0;
+    while (remaining > 0) {
+      pdf.addImage(img, 'PNG', 0, pos, imgW, imgH);
+      remaining -= pageH; pos -= pageH;
+      if (remaining > 0) pdf.addPage();
+    }
+  }
+  pdf.save(filename);
+}
+
 // Build an off-screen node for html2canvas to snapshot (ported from the Jinja version).
 function buildExportNode(d, st, o) {
   const wrap = document.createElement('div');
@@ -629,6 +693,38 @@ function buildExportNode(d, st, o) {
   const dist = (st && st.distribution) || {};
   const stats = (st && st.statistics) || {};
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  // Subjects-analysis export: one row per JAMB subject.
+  if (o.type === 'subjects') {
+    const rows = (st && st.subject_analysis) || [];
+    let sh = '<tr style="background:#11998e;color:white;"><th style="padding:6px;text-align:left;">Subject</th>';
+    if (o.subjCount) sh += '<th style="padding:6px;">N</th>';
+    if (o.subjAvg) sh += '<th style="padding:6px;">Avg</th>';
+    if (o.subjMax) sh += '<th style="padding:6px;">Max</th>';
+    if (o.subjMin) sh += '<th style="padding:6px;">Min</th>';
+    if (o.subjThresholds) sh += '<th style="padding:6px;">&ge;70</th><th style="padding:6px;">&ge;50</th>';
+    sh += '</tr>';
+    let sb = '';
+    rows.forEach((r, i) => {
+      const bg = i % 2 === 0 ? '#fff' : '#f8f9fa';
+      const ac = r.average >= 70 ? '#28a745' : r.average >= 50 ? '#856404' : '#dc3545';
+      sb += `<tr style="background:${bg};"><td style="padding:5px;font-size:10px;font-weight:500;">${esc(r.subject)}</td>`;
+      if (o.subjCount) sb += `<td style="padding:5px;text-align:center;">${r.count}</td>`;
+      if (o.subjAvg) sb += `<td style="padding:5px;text-align:center;font-weight:bold;color:${ac};">${r1(r.average)}</td>`;
+      if (o.subjMax) sb += `<td style="padding:5px;text-align:center;color:#28a745;">${r.max}</td>`;
+      if (o.subjMin) sb += `<td style="padding:5px;text-align:center;color:#dc3545;">${r.min}</td>`;
+      if (o.subjThresholds) sb += `<td style="padding:5px;text-align:center;">${r.above_70}</td><td style="padding:5px;text-align:center;">${r.above_50}</td>`;
+      sb += '</tr>';
+    });
+    const sfoot = o.timestamp ? `Generated: ${new Date().toLocaleString()}` : '';
+    wrap.innerHTML = `<div style="padding:12px;background:white;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+      <h2 style="color:#11998e;text-align:center;margin:0 0 8px 0;font-size:18px;">${esc(d.exam.display_name)} — Subject Analysis</h2>
+      <p style="text-align:center;color:#666;margin:0 0 10px 0;font-size:11px;">${esc(d.exam.exam_date)}${o.summary && st ? ` | ${st.student_count} students` : ''}</p>
+      <table style="width:100%;border-collapse:collapse;font-size:11px;"><thead>${sh}</thead><tbody>${sb}</tbody></table>
+      <p style="text-align:center;margin:8px 0 0 0;color:#999;font-size:9px;">${sfoot}</p>
+    </div>`;
+    return wrap;
+  }
 
   let thead = '<tr style="background:#11998e;color:white;">';
   if (o.rank) thead += '<th style="padding:6px;text-align:center;">#</th>';
