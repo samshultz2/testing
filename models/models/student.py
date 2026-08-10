@@ -53,8 +53,15 @@ class Student(db.Model):
     jamb_subjects = db.Column(db.Text)
     # Academic stream / track: 'Science', 'Arts' or 'Commercial'.
     stream = db.Column(db.String(20))
-    # Target JAMB score the student is aiming for (0-400).
+    # Target JAMB score the student is aiming for (0-400). Auto-filled from the
+    # chosen university+course's competitive cut-off, but editable.
     jamb_target = db.Column(db.Integer)
+    # University aspiration: where the student wants to study, what course and in
+    # which department. Drives the JAMB target + subject requirements auto-fill
+    # and feeds admission-readiness/predictions (see utils.exam_insights).
+    target_university_id = db.Column(db.Integer, db.ForeignKey('universities.id'))
+    target_course_id = db.Column(db.Integer, db.ForeignKey('courses.id'))
+    target_department = db.Column(db.String(120))
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=local_now)
     updated_at = db.Column(db.DateTime, default=local_now, onupdate=local_now)
@@ -81,7 +88,19 @@ class Student(db.Model):
     waec_results = db.relationship('WAECResult', backref='student', lazy='dynamic', cascade='all, delete-orphan')
     jamb_results = db.relationship('JAMBResult', backref='student', lazy='dynamic', cascade='all, delete-orphan')
     graduation_session = db.relationship('AcademicSession', foreign_keys=[graduation_session_id])
-    
+    target_university = db.relationship('University', foreign_keys=[target_university_id])
+    target_course = db.relationship('Course', foreign_keys=[target_course_id])
+
+    @property
+    def target_university_name(self):
+        u = self.target_university
+        return u.name if u else None
+
+    @property
+    def target_course_name(self):
+        c = self.target_course
+        return c.name if c else None
+
     @property
     def full_name(self):
         """Return full name of student"""

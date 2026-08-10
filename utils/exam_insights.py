@@ -178,6 +178,11 @@ def admission_readiness(student, session_id=None, waec=_UNSET, jamb=_UNSET, cali
     credited = set(waec['credited_subjects']) if waec else set()
     jamb_score = jamb['score'] if jamb else 0
 
+    # Judge JAMB against the student's own target (their chosen course's
+    # competitive cut-off) when set, else the national baseline.
+    target = getattr(student, 'jamb_target', None)
+    threshold = target if (isinstance(target, int) and target > 0) else JAMB_BASELINE
+
     blockers = []
     if waec:
         if credits < 5:
@@ -187,8 +192,11 @@ def admission_readiness(student, session_id=None, waec=_UNSET, jamb=_UNSET, cali
     else:
         blockers.append('No WAEC signal yet (no results or mocks)')
     if jamb:
-        if jamb_score < JAMB_BASELINE:
-            blockers.append(f'Projected JAMB {jamb_score} below {JAMB_BASELINE}')
+        if jamb_score < threshold:
+            if threshold != JAMB_BASELINE:
+                blockers.append(f'Projected JAMB {jamb_score} below target {threshold}')
+            else:
+                blockers.append(f'Projected JAMB {jamb_score} below {threshold}')
     else:
         blockers.append('No JAMB signal yet (no results or mocks)')
 
@@ -198,10 +206,10 @@ def admission_readiness(student, session_id=None, waec=_UNSET, jamb=_UNSET, cali
         if meets_ssc and subjects_ok and jamb_score >= c['jamb']:
             eligible.append(c['name'])
 
-    if meets_ssc and jamb_score >= JAMB_BASELINE:
+    if meets_ssc and jamb_score >= threshold:
         status = 'READY'
     elif (meets_ssc and jamb_score >= 150) or \
-         (credits >= 5 and len(missing_core) <= 1 and jamb_score >= JAMB_BASELINE):
+         (credits >= 5 and len(missing_core) <= 1 and jamb_score >= threshold):
         status = 'CONDITIONAL'
     elif credits >= 4 or jamb_score >= 150:
         status = 'AT_RISK'
@@ -212,7 +220,10 @@ def admission_readiness(student, session_id=None, waec=_UNSET, jamb=_UNSET, cali
 
     return {'status': status, 'blockers': blockers, 'waec': waec, 'jamb': jamb,
             'eligible_categories': eligible, 'aggregate': aggregate,
-            'source': (waec or jamb)['source']}
+            'source': (waec or jamb)['source'],
+            'jamb_threshold': threshold,
+            'target_university': getattr(student, 'target_university_name', None),
+            'target_course': getattr(student, 'target_course_name', None)}
 
 
 # UTME subject combinations differ from O'level requirements (English is the

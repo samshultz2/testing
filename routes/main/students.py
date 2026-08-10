@@ -70,6 +70,55 @@ def students_list():
     return render_template('students/list.html', students_json=_students_payload())
 
 
+# --- University-aspiration reference lookups (searchable dropdowns + auto-fill) --
+@main_bp.route('/api/universities')
+@login_required
+def api_universities():
+    """Searchable university list for the aspiration dropdown."""
+    from models import University
+    q = (request.args.get('q') or '').strip()
+    query = University.query.filter_by(is_active=True)
+    if q:
+        like = like_term(q)
+        query = query.filter(db.or_(University.name.ilike(like, escape='\\'),
+                                    University.abbreviation.ilike(like, escape='\\')))
+    rows = query.order_by(University.name).limit(50).all()
+    return jsonify({'universities': [u.as_dict() for u in rows]})
+
+
+@main_bp.route('/api/courses')
+@login_required
+def api_courses():
+    """Searchable course list for the aspiration dropdown."""
+    from models import Course
+    q = (request.args.get('q') or '').strip()
+    query = Course.query.filter_by(is_active=True)
+    if q:
+        like = like_term(q)
+        query = query.filter(db.or_(Course.name.ilike(like, escape='\\'),
+                                    Course.department.ilike(like, escape='\\')))
+    rows = query.order_by(Course.name).limit(50).all()
+    return jsonify({'courses': [c.as_dict() for c in rows]})
+
+
+@main_bp.route('/api/course-requirements')
+@login_required
+def api_course_requirements():
+    """For a chosen course (+ optional university), the department, competitive
+    JAMB target and the JAMB/WAEC subject requirements — drives the form auto-fill."""
+    from models import Course, University, effective_cutoff
+    course = db.session.get(Course, request.args.get('course_id', type=int))
+    if not course:
+        return jsonify({'error': 'unknown course'}), 404
+    university = db.session.get(University, request.args.get('university_id', type=int))
+    return jsonify({
+        'department': course.department or '',
+        'jamb_target': effective_cutoff(university, course),
+        'jamb_subjects': course.jamb_subject_list,
+        'waec_subjects': course.waec_subject_list,
+    })
+
+
 @main_bp.route('/api/students')
 @login_required
 def api_students():
@@ -104,6 +153,7 @@ def add_student():
             from utils.branch_scope import branch_for_new
             student.branch_id = branch_for_new(request.form.get('branch_id', type=int))
             _apply_optional_student_fields(student, request.form)
+            _apply_aspiration_fields(student, request.form)
 
             db.session.add(student)
             db.session.flush()
@@ -532,6 +582,7 @@ def edit_student(student_id):
             if complete or 'jamb_subjects[]' in form:
                 student.jamb_subjects = ', '.join(form.getlist('jamb_subjects[]')) or None
             _apply_optional_student_fields(student, form, has)
+            _apply_aspiration_fields(student, form, has)
 
             # Passport photo: data: URL replaces it, '' removes it; absent leaves
             # it untouched (so a partial POST never wipes it). Never blocks a save.
@@ -622,6 +673,12 @@ def edit_student(student_id):
             'allergies': student.allergies or '', 'medical_conditions': student.medical_conditions or '',
             'disabilities': student.disabilities or '', 'medications': student.medications or '',
             'medical_notes': student.medical_notes or '', 'emergency_medical': student.emergency_medical or '',
+            'target_university_id': student.target_university_id or '',
+            'target_course_id': student.target_course_id or '',
+            'target_department': student.target_department or '',
+            'target_university_label': (student.target_university.as_dict()['label']
+                                        if student.target_university else ''),
+            'target_course_label': (student.target_course.name if student.target_course else ''),
         },
         'contacts': contacts or [_blank_contact()],
         'options': _student_form_options(),
@@ -655,6 +712,53 @@ def delete_student(student_id):
         db.session.rollback()
         flash(f'Error deleting student: {str(e)}', 'error')
 
+    return redirect(url_for('main.students_list'))
+
+
+@main_bp.route('/students/bulk-aspiration', methods=['POST'])
+@login_required
+def bulk_set_aspiration():
+    """Assign the same university and/or course aspiration to several students at
+    once (scoped to the caller's students). Setting a course auto-fills each
+    student's JAMB target (the course's competitive cut-off for the chosen
+    university) and fills their JAMB/WAEC subject requirements where empty."""
+    from models import University, Course, effective_cutoff
+    ids = _manageable_student_ids(_int_ids(request.form.getlist('student_ids')))
+    if not ids:
+        return jsonify({'error': 'No students you can edit were selected'}), 403
+    university = db.session.get(University, request.form.get('target_university_id', type=int))
+    course = db.session.get(Course, request.form.get('target_course_id', type=int))
+    if not (university or course):
+        return jsonify({'error': 'Choose a university and/or a course to assign'}), 400
+
+    students = Student.query.filter(Student.id.in_(ids)).all()
+    for s in students:
+        if university is not None:
+            s.target_university_id = university.id
+        if course is not None:
+            s.target_course_id = course.id
+            s.target_department = course.department or s.target_department
+        eff_course = course or s.target_course
+        eff_uni = university or s.target_university
+        if eff_course is not None:
+            s.jamb_target = effective_cutoff(eff_uni, eff_course)
+            if course is not None:      # only fill subjects when a course was chosen
+                if not s.jamb_subject_list and eff_course.jamb_subjects:
+                    s.jamb_subjects = eff_course.jamb_subjects
+                if not s.waec_subject_list and eff_course.waec_subjects:
+                    s.waec_subjects = eff_course.waec_subjects
+    db.session.commit()
+
+    bits = []
+    if university is not None:
+        bits.append(university.name)
+    if course is not None:
+        bits.append(course.name)
+    log_action('bulk_set_aspiration', f'{len(students)} students -> {" · ".join(bits)}')
+    msg = f'Aspiration set for {len(students)} student(s): {" · ".join(bits)}.'
+    if _wants_json():
+        return jsonify({'ok': True, 'message': msg, 'updated': len(students)})
+    flash(msg, 'success')
     return redirect(url_for('main.students_list'))
 
 

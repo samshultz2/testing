@@ -44,6 +44,7 @@ function Index({ d }) {
         {card(u.ocr, 'fa-robot', 'AI Vision OCR', 'Optional Claude key for reading result images')}
         {u.notifications && cardExt(u.notifications, 'fa-bell', 'Notifications', 'Choose which channels you receive alerts on')}
         {d.is_central && u.performance && cardExt(u.performance, 'fa-gauge-high', 'Performance', 'Recent slow requests and SQL queries')}
+        {d.is_central && u.admissions && cardExt(u.admissions, 'fa-graduation-cap', 'Admissions data', 'Universities, courses & JAMB cut-offs')}
       </div>
     </>
   );

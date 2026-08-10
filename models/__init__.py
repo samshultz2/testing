@@ -25,6 +25,7 @@ from .models_contributions import ContributionSettings, ContributionPayment, Con
 from .models_finance import (FeeItem, FeeStructure, FeePayment, FeeDiscount,
                              ExpenseCategory, Expense, FinanceTransaction, AdditionalCharge, InstallmentPlan)
 from .models_comms import MessageTemplate, Message, MessageRecipient, Announcement, Notification, RecipientGroup, AnnouncementAck, CommAttachment, NotificationPreference, PushSubscription
+from .models_university import University, Course, UniversityCourse, effective_cutoff
 from .models_chat import Conversation, ConversationMember, ChatMessage
 from .models_hr import (Department, StaffMember, StaffEvent, LeaveRecord, PayrollRun, Payslip,
                         SalaryHistory, StaffAttendance, PayrollDeductionType,
@@ -56,6 +57,7 @@ from .models_jobs import BackgroundJob
 
 __all__ = [
     'db', 'local_now', 'init_db', 'BackgroundJob', 'NotificationPreference', 'PushSubscription',
+    'University', 'Course', 'UniversityCourse', 'effective_cutoff',
     'Branch', 'Product', 'Sale', 'SaleItem', 'StockMovement',
     'Supplier', 'PurchaseOrder', 'PurchaseOrderItem', 'SupplierPayment', 'PromoCode',
     'StockAudit', 'StockAuditItem', 'FixedAsset', 'StockBatch',

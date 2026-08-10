@@ -74,6 +74,7 @@ def index():
             'ocr': url_for('settings.ocr_settings'),
             'notifications': url_for('settings.notification_prefs'),
             'performance': url_for('settings.performance'),
+            'admissions': url_for('settings.admissions_data'),
         },
     })
 
@@ -170,6 +171,72 @@ def performance():
         req_ms=current_app.config.get('SLOW_REQUEST_MS', 1500),
         query_ms=current_app.config.get('SLOW_QUERY_MS', 500),
     )
+
+
+@settings_bp.route('/admissions', methods=['GET', 'POST'])
+@central_admin_required
+def admissions_data():
+    """Manage the university-aspiration reference data: universities (with their
+    competitive cut-off bump), courses (department, base competitive JAMB cut-off,
+    JAMB/WAEC subject requirements), and a one-click seed of the starter set."""
+    from models import University, Course
+    if request.method == 'POST':
+        action = request.form.get('action')
+        try:
+            if action == 'seed':
+                from utils.university_seed import seed_university_data
+                res = seed_university_data()
+                flash(f"Seeded {res['universities']} universities, {res['courses']} courses, "
+                      f"{res['overrides']} cut-off overrides.", 'success')
+            elif action == 'save_university':
+                uid = request.form.get('id', type=int)
+                u = db.session.get(University, uid) if uid else University()
+                u.name = (request.form.get('name') or '').strip()
+                u.abbreviation = (request.form.get('abbreviation') or '').strip() or None
+                u.state = (request.form.get('state') or '').strip() or None
+                u.ownership = (request.form.get('ownership') or '').strip() or None
+                u.cutoff_bump = request.form.get('cutoff_bump', type=int) or 0
+                u.is_active = request.form.get('is_active') != '0'
+                if not u.name:
+                    flash('University name is required.', 'error')
+                else:
+                    if not uid:
+                        db.session.add(u)
+                    db.session.commit()
+                    flash('University saved.', 'success')
+            elif action == 'delete_university':
+                u = db.session.get(University, request.form.get('id', type=int))
+                if u:
+                    db.session.delete(u); db.session.commit(); flash('University deleted.', 'success')
+            elif action == 'save_course':
+                cid = request.form.get('id', type=int)
+                c = db.session.get(Course, cid) if cid else Course()
+                c.name = (request.form.get('name') or '').strip()
+                c.department = (request.form.get('department') or '').strip() or None
+                c.base_cutoff = request.form.get('base_cutoff', type=int) or 180
+                c.jamb_subjects = (request.form.get('jamb_subjects') or '').strip() or None
+                c.waec_subjects = (request.form.get('waec_subjects') or '').strip() or None
+                c.is_active = request.form.get('is_active') != '0'
+                if not c.name:
+                    flash('Course name is required.', 'error')
+                else:
+                    if not cid:
+                        db.session.add(c)
+                    db.session.commit()
+                    flash('Course saved.', 'success')
+            elif action == 'delete_course':
+                c = db.session.get(Course, request.form.get('id', type=int))
+                if c:
+                    db.session.delete(c); db.session.commit(); flash('Course deleted.', 'success')
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Could not save: {e}', 'error')
+        return redirect(url_for('settings.admissions_data'))
+
+    universities = University.query.order_by(University.name).all()
+    courses = Course.query.order_by(Course.name).all()
+    return render_template('settings/admissions.html',
+                           universities=universities, courses=courses)
 
 
 @settings_bp.route('/ocr', methods=['GET', 'POST'])
