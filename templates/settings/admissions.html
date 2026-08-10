@@ -51,6 +51,25 @@
 </div>
 
 <div class="card mb-4">
+    <div class="card-header"><h3>Import cut-offs</h3></div>
+    <div class="card-body">
+        <p class="text-muted text-sm">Paste real figures from a source you trust — one row per line as
+            <code>University, Course, Cut-off</code> (comma, tab or pipe separated). Universities and courses
+            are matched by name or abbreviation. This is the reliable way to load actual values: authoritative
+            <em>departmental</em> cut-offs aren't published as structured data, so scraping the blogs mostly
+            returns the school's flat institutional number.</p>
+        <form method="post">{{ csrf() }}<input type="hidden" name="action" value="import_overrides">
+            <textarea name="import_text" rows="5" style="width:100%;font-family:monospace;font-size:.85rem;"
+                placeholder="UNIBEN, Medicine and Surgery, 220&#10;UNILAG, Law, 280&#10;UI, Pharmacy, 282"></textarea>
+            <label class="d-flex align-center gap-2 text-sm" style="margin:.5rem 0;">
+                <input type="checkbox" name="create_missing" value="1"> Create courses that don't exist yet
+            </label>
+            <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-file-import"></i> Import</button>
+        </form>
+    </div>
+</div>
+
+<div class="card mb-4">
     <div class="card-header"><h3>Course cut-offs by university <span class="text-muted text-sm">({{ overrides|length }})</span></h3></div>
     <div class="card-body" style="overflow-x:auto;">
         <p class="text-muted text-sm">The real competitive score a university uses for a specific department — overrides the course base + the university's bump. Set these where a department runs hotter than the school's general line (e.g. Engineering at a competitive federal).</p>
