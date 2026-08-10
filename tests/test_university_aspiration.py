@@ -106,8 +106,8 @@ def test_bulk_assign_fills_target_and_subjects(app):
             s = db.session.get(Student, i)
             assert s.target_university_id == uid and s.target_course_id == cid
             assert s.jamb_target == 300                      # UNILAG Medicine override
-            assert 'Biology' in s.jamb_subject_list          # filled from course
-            assert 'Mathematics' in s.waec_subject_list
+            assert 'Biology' in s.jamb_subject_list          # JAMB subjects filled from course
+            assert s.waec_subject_list == []                 # WAEC left untouched
 
 
 def test_prediction_uses_student_target(app):

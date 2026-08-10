@@ -721,7 +721,8 @@ def bulk_set_aspiration():
     """Assign the same university and/or course aspiration to several students at
     once (scoped to the caller's students). Setting a course auto-fills each
     student's JAMB target (the course's competitive cut-off for the chosen
-    university) and fills their JAMB/WAEC subject requirements where empty."""
+    university) and their JAMB subject requirements where empty. WAEC subjects are
+    left untouched."""
     from models import University, Course, effective_cutoff
     ids = _manageable_student_ids(_int_ids(request.form.getlist('student_ids')))
     if not ids:
@@ -742,11 +743,10 @@ def bulk_set_aspiration():
         eff_uni = university or s.target_university
         if eff_course is not None:
             s.jamb_target = effective_cutoff(eff_uni, eff_course)
-            if course is not None:      # only fill subjects when a course was chosen
+            if course is not None:      # only fill JAMB subjects when a course was chosen
                 if not s.jamb_subject_list and eff_course.jamb_subjects:
                     s.jamb_subjects = eff_course.jamb_subjects
-                if not s.waec_subject_list and eff_course.waec_subjects:
-                    s.waec_subjects = eff_course.waec_subjects
+                # WAEC subjects are intentionally left as-is.
     db.session.commit()
 
     bits = []
