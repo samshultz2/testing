@@ -33,6 +33,16 @@ def _safe_next(target, fallback):
 main_bp = Blueprint('main', __name__)
 
 
+@main_bp.before_request
+def _ensure_university_schema_bound():
+    """Self-heal the university-aspiration tables/columns on the bound tenant DB
+    (cached per engine, so a no-op after the first request). Keeps the student
+    form, aspiration APIs and bulk assign working on DBs that predate the feature."""
+    try:
+        from utils.university_schema import ensure_university_schema
+        ensure_university_schema()
+    except Exception:
+        pass
 
 
 
@@ -1853,8 +1863,24 @@ def _students_payload():
         'bulk_boarding_url': url_for('main.bulk_set_boarding'),
         'bulk_message_url': url_for('main.bulk_message_students'),
         'bulk_id_cards_url': url_for('main.bulk_id_cards'),
+        'bulk_aspiration_url': url_for('main.bulk_set_aspiration'),
         'import_photos_url': url_for('main.import_photos') if can_add else None,
+        **_aspiration_lists(),
     }
+
+
+def _aspiration_lists():
+    """University/course lists for the bulk-assign dropdowns (best-effort)."""
+    try:
+        from models import University, Course
+        return {
+            'universities': [u.as_dict() for u in
+                             University.query.filter_by(is_active=True).order_by(University.name).all()],
+            'courses': [c.as_dict() for c in
+                        Course.query.filter_by(is_active=True).order_by(Course.name).all()],
+        }
+    except Exception:
+        return {'universities': [], 'courses': []}
 
 
 
@@ -1876,6 +1902,20 @@ def _student_form_options(with_enrolment=False):
         'stream_waec': STREAM_WAEC_SUBJECTS, 'relationships': RELATIONSHIPS,
         'genders': ['Male', 'Female'],
     }
+    # University-aspiration reference lists for the searchable dropdowns + the
+    # course-requirements auto-fill endpoint. Best-effort (empty on a DB where the
+    # tables aren't ready yet) so the form always renders.
+    try:
+        from models import University, Course
+        opts['universities'] = [u.as_dict() for u in
+                                University.query.filter_by(is_active=True).order_by(University.name).all()]
+        opts['courses'] = [c.as_dict() for c in
+                           Course.query.filter_by(is_active=True).order_by(Course.name).all()]
+        opts['aspiration_urls'] = {'requirements': url_for('main.api_course_requirements')}
+    except Exception:
+        opts['universities'] = []
+        opts['courses'] = []
+        opts['aspiration_urls'] = {}
     if with_enrolment:
         from utils.access_control import get_teacher_profile, filter_classes_for_user
         active_term = get_active_term()
@@ -2045,6 +2085,10 @@ def _student_view_payload(student):
             'house': student.house, 'boarding_status': student.boarding_status,
             'waec_subjects': student.waec_subject_list or [],
             'jamb_subjects': student.jamb_subject_list or [],
+            'jamb_target': student.jamb_target,
+            'target_university': student.target_university_name,
+            'target_course': student.target_course_name,
+            'target_department': student.target_department,
             'is_graduated': bool(student.is_graduated),
         },
         'identity': ({'nin': student.nin, 'jamb_reg_number': student.jamb_reg_number,
@@ -2133,6 +2177,21 @@ def _apply_optional_student_fields(student, form, has=None):
         if has(f):
             val = (form.get(f) or '').strip()
             setattr(student, f, strip_tags(val) or None)
+
+
+def _apply_aspiration_fields(student, form, has=None):
+    """Copy the university-aspiration fields (target university/course/department)
+    onto a student. ``has(key)`` gates presence so a partial edit never blanks
+    what it didn't submit. FK ids are coerced to int-or-None."""
+    from utils.security import strip_tags
+    if has is None:
+        has = lambda k: True   # noqa: E731
+    if has('target_university_id'):
+        student.target_university_id = form.get('target_university_id', type=int) or None
+    if has('target_course_id'):
+        student.target_course_id = form.get('target_course_id', type=int) or None
+    if has('target_department'):
+        student.target_department = strip_tags((form.get('target_department') or '').strip()) or None
 
 
 def _manageable_student_ids(ids):

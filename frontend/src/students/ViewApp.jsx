@@ -105,6 +105,9 @@ export default function ViewApp({ initial }) {
             <Info label="Address">{s.home_address || 'Not set'}</Info>
             <Info label="Hobbies">{s.hobbies || 'Not set'}</Info>
             <Info label="Stream">{s.stream ? <span className="badge badge-info">{s.stream}</span> : 'Not set'}</Info>
+            <Info label="Target University">{s.target_university || 'Not set'}</Info>
+            <Info label="Target Course">{s.target_course ? `${s.target_course}${s.target_department ? ' · ' + s.target_department : ''}` : 'Not set'}</Info>
+            <Info label="JAMB Target">{s.jamb_target ? `${s.jamb_target} / 400` : 'Not set'}</Info>
             <Info label="WAEC Subjects">{(s.waec_subjects || []).join(', ') || 'Not set'}</Info>
             <Info label="JAMB Subjects">{(s.jamb_subjects || []).join(', ') || 'Not set'}</Info>
           </div>

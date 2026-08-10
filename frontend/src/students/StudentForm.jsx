@@ -32,6 +32,52 @@ function SubjectChecks({ legendIcon, legend, all, selected, onToggle, onClear, n
   );
 }
 
+// A lightweight searchable dropdown (combobox) over a provided list of
+// { id, label } items. Filters client-side; picks by mouse or clears with ×.
+function Combo({ items, initialLabel, placeholder, onPick }) {
+  const [q, setQ] = useState(initialLabel || '');
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    const onDoc = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, []);
+  const ql = q.trim().toLowerCase();
+  const list = (!ql ? items : items.filter((it) => (it.label || '').toLowerCase().includes(ql))).slice(0, 40);
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <div style={{ position: 'relative' }}>
+        <input type="text" value={q} placeholder={placeholder} autoComplete="off"
+               onChange={(e) => { setQ(e.target.value); setOpen(true); if (!e.target.value.trim()) onPick(null); }}
+               onFocus={() => setOpen(true)}
+               style={{ width: '100%', padding: '.55rem .75rem', paddingRight: '1.8rem',
+                        border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md, 8px)',
+                        background: 'var(--bg-input, var(--bg-card))', color: 'inherit' }} />
+        {q && <button type="button" aria-label="Clear" onClick={() => { setQ(''); onPick(null); }}
+                      style={{ position: 'absolute', right: 6, top: '50%', transform: 'translateY(-50%)',
+                               background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', fontSize: '1.1rem' }}>×</button>}
+      </div>
+      {open && list.length > 0 && (
+        <ul role="listbox" style={{ position: 'absolute', zIndex: 30, left: 0, right: 0, top: '100%', margin: '.2rem 0 0',
+                     listStyle: 'none', padding: '.25rem', maxHeight: 240, overflowY: 'auto',
+                     background: 'var(--bg-card)', border: '1px solid var(--border-color)',
+                     borderRadius: 'var(--radius-md, 8px)', boxShadow: 'var(--shadow-md, 0 10px 30px -12px rgba(0,0,0,.3))' }}>
+          {list.map((it) => (
+            <li key={it.id} role="option"
+                onMouseDown={() => { setQ(it.label); setOpen(false); onPick(it); }}
+                style={{ padding: '.45rem .6rem', cursor: 'pointer', borderRadius: 6, fontSize: '.9rem' }}
+                onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--gray-100)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}>
+              {it.label}{it.department ? <span style={{ color: 'var(--text-muted)', fontSize: '.8rem' }}> · {it.department}</span> : null}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 export default function StudentForm({ data }) {
   const isEdit = data.mode === 'edit';
   const opt = data.options || {};
@@ -48,6 +94,9 @@ export default function StudentForm({ data }) {
     surname: stu.surname || '', first_name: stu.first_name || '', middle_name: stu.middle_name || '',
     gender: stu.gender || '', date_of_birth: stu.date_of_birth || '', religion: stu.religion || '',
     stream: stu.stream || '', jamb_target: stu.jamb_target === 0 ? '0' : (stu.jamb_target || ''),
+    target_university_id: stu.target_university_id ? String(stu.target_university_id) : '',
+    target_course_id: stu.target_course_id ? String(stu.target_course_id) : '',
+    target_department: stu.target_department || '',
     home_address: stu.home_address || '', hobbies: stu.hobbies || '',
     house: stu.house || '', boarding_status: stu.boarding_status || '',
     nin: stu.nin || '', jamb_reg_number: stu.jamb_reg_number || '', jamb_profile_code: stu.jamb_profile_code || '',
@@ -99,6 +148,39 @@ export default function StudentForm({ data }) {
     const next = new Set(prev); next.has(subj) ? next.delete(subj) : next.add(subj); return next;
   });
 
+  // University aspiration: picking a course auto-fills the department, the JAMB
+  // target (the course's competitive cut-off at the chosen university) and the
+  // JAMB/WAEC subject requirements. Picking a university refreshes the target.
+  const [aspirationNote, setAspirationNote] = useState('');
+  const reqUrl = (opt.aspiration_urls || {}).requirements;
+  const fetchRequirements = async (universityId, courseId, { fillSubjects }) => {
+    if (!reqUrl || !courseId) return;
+    try {
+      const url = reqUrl + '?course_id=' + courseId + (universityId ? '&university_id=' + universityId : '');
+      const res = await fetch(url, { credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } });
+      if (!res.ok) return;
+      const r = await res.json();
+      setF((x) => ({ ...x, jamb_target: r.jamb_target != null ? String(r.jamb_target) : x.jamb_target,
+                     target_department: r.department || x.target_department }));
+      if (fillSubjects) {
+        if (Array.isArray(r.jamb_subjects)) setJamb(new Set(r.jamb_subjects));
+        if (Array.isArray(r.waec_subjects)) setWaec(new Set(r.waec_subjects));
+      }
+      setAspirationNote('JAMB target set to ' + r.jamb_target + ' from the course requirements.');
+    } catch (_e) { /* leave fields as-is on a network hiccup */ }
+  };
+  const pickUniversity = (item) => {
+    const id = item ? String(item.id) : '';
+    set('target_university_id', id);
+    if (id && f.target_course_id) fetchRequirements(id, f.target_course_id, { fillSubjects: false });
+  };
+  const pickCourse = (item) => {
+    const id = item ? String(item.id) : '';
+    setF((x) => ({ ...x, target_course_id: id, target_department: item ? (item.department || x.target_department) : x.target_department }));
+    if (id) fetchRequirements(f.target_university_id, id, { fillSubjects: true });
+    else setAspirationNote('');
+  };
+
   const setContact = (i, k, v) => setContacts((cs) => cs.map((c, j) => (j === i ? { ...c, [k]: v } : c)));
   // Smarter default: 1st contact = Father, 2nd = Mother, then Guardian.
   const addContact = () => setContacts((cs) =>
@@ -134,6 +216,8 @@ export default function StudentForm({ data }) {
       surname: f.surname.trim(), first_name: f.first_name.trim(), middle_name: f.middle_name.trim(),
       gender: f.gender, date_of_birth: f.date_of_birth, religion: f.religion, stream: f.stream,
       jamb_target: f.jamb_target, home_address: f.home_address, hobbies: f.hobbies,
+      target_university_id: f.target_university_id, target_course_id: f.target_course_id,
+      target_department: f.target_department,
       house: f.house, boarding_status: f.boarding_status,
       nin: f.nin, jamb_reg_number: f.jamb_reg_number, jamb_profile_code: f.jamb_profile_code,
       waec_reg_number: f.waec_reg_number, serial_number: f.serial_number, waec_epin: f.waec_epin, photo: f.photo,
@@ -227,6 +311,33 @@ export default function StudentForm({ data }) {
         <TextAreaField label="Home Address" value={f.home_address} onChange={(v) => set('home_address', v)} placeholder="Full address" />
         <TextField label="Hobbies" value={f.hobbies} onChange={(v) => set('hobbies', v)}
                    placeholder="e.g., Football, Reading" hint="Separate with commas" />
+      </FormCard>
+
+      <FormCard icon="fa-graduation-cap" title="University Aspiration" collapsible defaultOpen={isEdit}>
+        <p className="text-muted" style={{ fontSize: '.85rem', marginTop: 0 }}>
+          Where the student wants to study. Picking a course auto-fills the department, the JAMB
+          target (the course's competitive cut-off for the chosen university) and the JAMB/WAEC
+          subject requirements below — all editable.
+        </p>
+        <div className="sf-row">
+          <div className="form-group">
+            <label className="form-label">University</label>
+            <Combo items={opt.universities || []} initialLabel={stu.target_university_label || ''}
+                   placeholder="Search universities…" onPick={pickUniversity} />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Course</label>
+            <Combo items={opt.courses || []} initialLabel={stu.target_course_label || ''}
+                   placeholder="Search courses…" onPick={pickCourse} />
+          </div>
+        </div>
+        <TextField label="Department / Faculty" value={f.target_department}
+                   onChange={(v) => set('target_department', v)} placeholder="Auto-filled from the course" />
+        {aspirationNote && (
+          <p className="text-muted" style={{ fontSize: '.8rem', marginTop: '.35rem' }}>
+            <i className="fas fa-circle-info" aria-hidden="true" /> {aspirationNote}
+          </p>
+        )}
       </FormCard>
 
       <FormCard icon="fa-phone" title="Parent/Guardian Contacts" collapsible defaultOpen={isEdit}>

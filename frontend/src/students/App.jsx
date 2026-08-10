@@ -76,6 +76,8 @@ export default function App({ initial }) {
   const [bulkSubject, setBulkSubject] = useState('');
   const [bulkHouse, setBulkHouse] = useState('');
   const [bulkBoarding, setBulkBoarding] = useState('');
+  const [bulkUni, setBulkUni] = useState('');
+  const [bulkCourse, setBulkCourse] = useState('');
   const [showMessage, setShowMessage] = useState(false);
   const [menuFor, setMenuFor] = useState(null);   // which student card's ⋯ menu is open
   const [saved, setSaved] = useState(() => savedFilters());
@@ -378,6 +380,23 @@ export default function App({ initial }) {
             </select>
             <button type="button" className="btn btn-primary btn-sm" disabled={!bulkBoarding}
                     onClick={() => needSel() && runAction(d.bulk_boarding_url, { boarding: bulkBoarding, student_ids: selectedIds }, 'Boarding status updated.')}>Apply</button>
+            {d.bulk_aspiration_url && (d.universities || []).length > 0 && <>
+              <select className="form-control" style={{ width: 'auto', maxWidth: 170 }} value={bulkUni}
+                      onChange={(e) => setBulkUni(e.target.value)} aria-label="Bulk university" title="Assign target university">
+                <option value="">University…</option>
+                {(d.universities || []).map((u) => <option key={u.id} value={u.id}>{u.label}</option>)}
+              </select>
+              <select className="form-control" style={{ width: 'auto', maxWidth: 170 }} value={bulkCourse}
+                      onChange={(e) => setBulkCourse(e.target.value)} aria-label="Bulk course" title="Assign target course (fills JAMB target + subjects)">
+                <option value="">Course…</option>
+                {(d.courses || []).map((cc) => <option key={cc.id} value={cc.id}>{cc.label}</option>)}
+              </select>
+              <button type="button" className="btn btn-primary btn-sm" disabled={!bulkUni && !bulkCourse}
+                      title="Set the target university and/or course for the selected students (a course also fills their JAMB target + subject requirements)"
+                      onClick={() => needSel() && runAction(d.bulk_aspiration_url,
+                        { student_ids: selectedIds, target_university_id: bulkUni, target_course_id: bulkCourse },
+                        'Aspiration assigned.')}>Assign aspiration</button>
+            </>}
             {d.bulk_message_url && <button type="button" className="btn btn-info btn-sm" title="Draft a message to the selected students' parents"
                     onClick={() => needSel() && setShowMessage(true)}><i aria-hidden="true" className="fas fa-comment-dots" /> Message parents</button>}
             {d.bulk_id_cards_url && <button type="button" className="btn btn-secondary btn-sm" title="Download printable ID cards for the selected students (6 per A4 sheet)"

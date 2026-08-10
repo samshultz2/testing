@@ -291,6 +291,14 @@ def create_app(config_class=None):
             ensure_hr_schema()
     except Exception:
         app.logger.exception('Could not ensure HR columns on the main database')
+    # University-aspiration tables + student target_* columns on the bound DB.
+    # Tenant DBs also self-heal per-request via the main blueprint hook.
+    try:
+        from utils.university_schema import ensure_university_schema
+        with app.app_context():
+            ensure_university_schema()
+    except Exception:
+        app.logger.exception('Could not ensure university tables on the main database')
 
     # Enable CSRF protection for all state-changing requests
     from utils.csrf import init_csrf
