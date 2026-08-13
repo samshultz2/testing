@@ -10,31 +10,113 @@
 <style>
 /* ---- students list (React, scoped .stu-*) ---- */
 .stu-toolbar { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; }
-.stu-filters { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.5rem; margin:.75rem 0; }
+
+/* Two-pane shell: main list + a right rail on wide screens. */
+.stu-shell { display:grid; grid-template-columns:minmax(0,1fr); gap:1rem; align-items:start; }
+.stu-main { min-width:0; }
+.stu-rail { display:none; }
+@media(min-width:1200px){
+  .stu-shell { grid-template-columns:minmax(0,1fr) 316px; }
+  .stu-rail { display:flex; flex-direction:column; gap:1rem; position:sticky; top:calc(var(--header-height) + .75rem); }
+}
+
+/* Filters card */
+.stu-filters-head { display:flex; align-items:center; justify-content:space-between; gap:.5rem; }
+.stu-filters-title { font-weight:600; font-size:var(--text-sm); display:inline-flex; align-items:center; gap:.45rem; }
+.stu-filters-title i { color:var(--primary); }
+.stu-clear-link { background:none; border:0; cursor:pointer; color:var(--primary); font-weight:600;
+  font-size:var(--text-sm); display:inline-flex; align-items:center; gap:.35rem; padding:.2rem .3rem; border-radius:var(--radius-sm); }
+.stu-clear-link:hover { background:var(--primary-light); }
+.stu-filters { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.5rem; margin:.75rem 0 0; }
 @media(min-width:768px){ .stu-filters{ grid-template-columns:repeat(4,minmax(0,1fr)); } }
 .stu-filters .full { grid-column:1/-1; }
 .stu-field-wrap { display:flex; flex-direction:column; gap:4px; margin:0; min-width:0; }
 .stu-field-wrap .form-control { width:100%; max-width:100%; }
 .stu-field-wrap.full { grid-column:1/-1; }
-.stu-field-label { font-size:12px; font-weight:600; color:var(--text-secondary,var(--text-secondary)); }
+.stu-field-label { font-size:12px; font-weight:600; color:var(--text-secondary); }
 .stu-count { color:var(--text-muted); font-size:.85rem; }
 .stu-bulkbar { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; padding:.5rem .7rem;
-  background:var(--gray-50,#f8fafc); border:1px solid var(--border-color); border-radius:8px; margin-bottom:.75rem; }
+  background:var(--gray-50); border:1px solid var(--border-color); border-radius:var(--radius-md); margin-bottom:.75rem; }
 .stu-bulkbar .form-control { max-width:100%; }
-.stu-grid { display:grid; grid-template-columns:minmax(0,1fr); gap:.6rem; }
-@media(min-width:640px){ .stu-grid{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
-@media(min-width:1100px){ .stu-grid{ grid-template-columns:repeat(3,minmax(0,1fr)); } }
-.stu-card { display:flex; gap:.6rem; padding:.7rem .8rem; background:var(--bg-card);
-  border:1px solid var(--border-color); border-radius:10px; }
+
+/* Avatar (photo or initials) */
+.stu-av { border-radius:var(--radius-full); object-fit:cover; flex-shrink:0; display:block;
+  background:var(--gray-100); border:1px solid var(--border-color); }
+.stu-av-ph { display:inline-flex; align-items:center; justify-content:center; font-weight:700;
+  font-size:.78rem; color:var(--primary); background:color-mix(in srgb,var(--primary) 14%,var(--bg-card));
+  border-color:transparent; letter-spacing:.02em; }
+
+/* Graduate marker badge next to a name */
+.stu-grad { margin-left:.4rem; padding:.05rem .35rem; }
+
+/* Desktop table */
+.stu-tablecard { padding:0; overflow:hidden; }
+.stu-table-wrap { overflow-x:auto; }
+.stu-table { margin:0; }
+.stu-table td { vertical-align:middle; }
+.stu-check-col { width:36px; text-align:center; }
+.stu-act-col { width:1%; white-space:nowrap; text-align:right; }
+.stu-row-student { display:inline-flex; align-items:center; gap:.6rem; text-decoration:none; color:inherit; min-width:0; }
+.stu-row-name { font-weight:600; color:var(--text-primary); display:inline-flex; align-items:center; }
+.stu-row-student:hover .stu-row-name { color:var(--primary); }
+.stu-row-actions { display:inline-flex; gap:.3rem; justify-content:flex-end; }
+tr.is-sel td { background:var(--primary-light); }
+@media(max-width:991px){ .stu-tablecard { display:none; } }
+
+/* Mobile cards */
+.stu-cards { display:grid; grid-template-columns:minmax(0,1fr); gap:.6rem; }
+@media(min-width:640px){ .stu-cards{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(min-width:992px){ .stu-cards{ display:none; } }
+.stu-card { display:flex; gap:.7rem; padding:.8rem; background:var(--bg-card);
+  border:1px solid var(--border-color); border-radius:var(--radius-lg); box-shadow:var(--shadow-xs); }
 .stu-card.is-sel { outline:2px solid var(--primary); outline-offset:-1px; }
+.stu-card > .stu-av { width:44px; height:44px; }
 .stu-card-main { flex:1; min-width:0; }
 .stu-card-head { display:flex; justify-content:space-between; gap:.5rem; align-items:baseline; }
-.stu-name { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+a.stu-name { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-decoration:none; color:var(--text-primary); display:inline-flex; align-items:center; }
+a.stu-name:hover { color:var(--primary); }
 .stu-sid { font-size:.72rem; color:var(--text-muted); white-space:nowrap; }
-.stu-meta { display:flex; flex-wrap:wrap; gap:.35rem .7rem; margin:.4rem 0; font-size:.8rem; color:var(--text-secondary); }
+.stu-meta { display:flex; flex-wrap:wrap; gap:.35rem .5rem; margin:.5rem 0; font-size:.8rem; align-items:center; }
+.stu-meta-dim { color:var(--text-muted); }
 .stu-actions { display:flex; gap:.35rem; flex-wrap:wrap; margin-top:.3rem; }
 .stu-actions .btn { flex:1; }
-.badge-male{ background:#e7efff; color:#224abe; } .badge-female{ background:#fde7ee; color:#be2660; }
+.stu-actions .stu-menu-wrap { flex:0 0 auto; }
+
+/* Gender badges — tinted, theme-aware (categorical accents) */
+.badge-male{ background:color-mix(in srgb,#3b82f6 14%,var(--bg-card)); color:#2563eb; }
+.badge-female{ background:color-mix(in srgb,#f43f5e 14%,var(--bg-card)); color:#e11d64; }
+
+/* Recently-viewed strip (shown until the rail takes over ≥1200px) */
+.stu-recent-mobile { margin-bottom:1rem; }
+@media(min-width:1200px){ .stu-recent-mobile { display:none; } }
+.stu-recent-head { font-size:var(--text-xs); font-weight:600; color:var(--text-muted); text-transform:uppercase;
+  letter-spacing:.03em; margin-bottom:.5rem; display:flex; align-items:center; gap:.4rem; }
+.stu-recent-strip { display:flex; gap:.75rem; overflow-x:auto; padding-bottom:.25rem; }
+.stu-recent-chip { flex:0 0 auto; width:76px; display:flex; flex-direction:column; align-items:center; gap:.25rem;
+  text-decoration:none; color:inherit; text-align:center; }
+.stu-recent-chip .stu-av-ph { width:48px; height:48px; font-size:.95rem; }
+.stu-recent-name { font-size:.72rem; font-weight:600; max-width:76px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.stu-recent-id { font-size:.66rem; color:var(--text-muted); }
+
+/* Right rail cards */
+.stu-rail-card .card-header h3 { font-size:var(--text-sm); }
+.stu-rail-recent { display:flex; flex-direction:column; gap:.1rem; padding:.4rem .6rem; }
+.stu-rr-item { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:.55rem;
+  padding:.4rem .3rem; border-radius:var(--radius-md); text-decoration:none; color:inherit; }
+.stu-rr-item:hover { background:var(--gray-50); }
+.stu-rr-item .stu-av-ph { width:30px; height:30px; font-size:.68rem; }
+.stu-rr-name { font-size:.82rem; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.stu-rr-id { font-size:.7rem; color:var(--text-muted); }
+.stu-sum-grid { display:grid; grid-template-columns:1fr 1fr; gap:.6rem; }
+.stu-sum { border:1px solid var(--border-color); border-radius:var(--radius-md); padding:.6rem .7rem; background:var(--gray-50); }
+.stu-sum-v { display:block; font-size:1.5rem; font-weight:800; font-family:var(--font-display); line-height:1; font-variant-numeric:tabular-nums; }
+.stu-sum-l { display:block; font-size:.72rem; color:var(--text-muted); margin-top:.2rem; }
+.stu-sum-male { color:#2563eb; } .stu-sum-female { color:#e11d64; }
+.stu-quick-export { display:flex; flex-direction:column; gap:.45rem; }
+.stu-quick-export .btn { width:100%; justify-content:center; }
+.stu-tips .card-body { background:color-mix(in srgb,var(--accent) 8%,var(--bg-card)); border-radius:var(--radius-lg); }
+.stu-tips-head { font-weight:600; font-size:var(--text-sm); display:flex; align-items:center; gap:.45rem; margin-bottom:.35rem; }
+.stu-tips-head i { color:var(--accent); }
 .stu-modal-bg { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1000; display:flex;
   align-items:flex-start; justify-content:center; padding:5vh 1rem; overflow-y:auto; }
 .stu-modal { background:var(--bg-card,#fff); border-radius:12px; width:100%; max-width:560px; box-shadow:0 20px 60px rgba(0,0,0,.3); }

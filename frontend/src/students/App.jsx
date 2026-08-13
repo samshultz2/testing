@@ -49,6 +49,21 @@ function startState(applied, page) {
   return { query: base, restored: false };
 }
 
+// Initials for an avatar fallback (first + last word of a name).
+function initials(name) {
+  const parts = (name || '').split(' ').filter(Boolean);
+  if (!parts.length) return '—';
+  return ((parts[0][0] || '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
+}
+
+// Student avatar: passport photo when present, else initials on a tinted tile.
+function StudentAvatar({ name, photo, size = 40 }) {
+  const dim = { width: size, height: size, minWidth: size };
+  return photo
+    ? <img className="stu-av" src={photo} alt="" loading="lazy" style={dim} />
+    : <span className="stu-av stu-av-ph" aria-hidden="true" style={dim}>{initials(name)}</span>;
+}
+
 // Reusable labelled filter field (label above the control).
 function Field({ label, full, children }) {
   return (
@@ -171,6 +186,20 @@ export default function App({ initial }) {
     return n;
   });
   const selectedIds = [...selected];
+  const summary = d.summary || {};
+
+  // One-click export in a given format using the default field set (mirrors the
+  // Export modal's defaults) — powers the rail's Quick export buttons. Respects
+  // the current selection, else the active filters.
+  const quickExport = (format) => {
+    if (!d.export_url) return;
+    const p = new URLSearchParams();
+    p.set('format', format);
+    p.set('fields', JSON.stringify(['student_id', 'surname', 'first_name', 'gender', 'current_class']));
+    if (selectedIds.length) p.set('student_ids', JSON.stringify(selectedIds));
+    else Object.entries({ ...query, page: undefined }).forEach(([k, v]) => { if (v) p.set(k, v); });
+    window.location.href = `${d.export_url}?${p.toString()}`;
+  };
 
   const refresh = async () => { setSelected(new Set()); await load(query); };
   const runAction = async (url, fields, okMsg) => {
@@ -210,6 +239,30 @@ export default function App({ initial }) {
     } catch (e) { setMsg({ tone: 'error', text: e.message || 'Download failed.' }); }
   };
 
+  // Row-level ⋯ menu (graduate / delete) — shared by the table and the cards.
+  const renderRowMenu = (s) => canManage && (
+    <div className="stu-menu-wrap" style={{ position: 'relative' }}>
+      <button type="button" className="btn btn-secondary btn-sm" aria-haspopup="true" aria-expanded={menuFor === s.id}
+              aria-label="More actions" onClick={(e) => { e.stopPropagation(); setMenuFor(menuFor === s.id ? null : s.id); }}>
+        <i aria-hidden="true" className="fas fa-ellipsis-vertical" /></button>
+      {menuFor === s.id && (
+        <div className="row-menu" role="menu">
+          <button type="button" role="menuitem" onClick={async () => { setMenuFor(null); if (await confirm(`${s.is_graduated ? 'Undo graduation for' : 'Mark as graduate:'} ${s.name}?`)) runAction(s.graduate_url, {}, 'Updated graduation status.'); }}>
+            <i aria-hidden="true" className={'fas ' + (s.is_graduated ? 'fa-rotate-left' : 'fa-user-graduate')} /> {s.is_graduated ? 'Undo graduate' : 'Mark as graduate'}</button>
+          <button type="button" role="menuitem" className="danger" onClick={async () => { setMenuFor(null); if (await confirm({ title: 'Delete student', message: `Delete ${s.name}?`, confirmText: 'Delete', tone: 'danger' })) runAction(s.delete_url, {}, 'Student deleted.'); }}>
+            <i aria-hidden="true" className="fas fa-trash" /> Delete</button>
+        </div>
+      )}
+    </div>
+  );
+  const renderActions = (s) => (
+    <>
+      <a href={s.url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-eye" /> View</a>
+      {canManage && <a href={s.edit_url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-edit" /> Edit</a>}
+      {renderRowMenu(s)}
+    </>
+  );
+
   return (
     <div>
       <div className="page-header">
@@ -240,7 +293,17 @@ export default function App({ initial }) {
         </div>
       )}
 
+      <div className="stu-shell">
+      <div className="stu-main">
       <div className="card"><div className="card-body">
+        <div className="stu-filters-head">
+          <span className="stu-filters-title"><i aria-hidden="true" className="fas fa-sliders" /> Search &amp; Filters</span>
+          {hasFilters && (
+            <button type="button" className="stu-clear-link" onClick={resetFilters}>
+              <i aria-hidden="true" className="fas fa-rotate-left" /> Clear filters
+            </button>
+          )}
+        </div>
         <div className="stu-filters">
           <Field label="Search" full>
             <input className="form-control" type="search" list="stu-recent-searches"
@@ -336,12 +399,14 @@ export default function App({ initial }) {
       </div></div>
 
       {viewed.length > 0 && (
-        <div className="card mb-2"><div className="card-body" style={{ paddingTop: '.6rem', paddingBottom: '.6rem' }}>
-          <div style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
-            <span className="text-muted" style={{ fontSize: '.85rem' }}><i aria-hidden="true" className="fas fa-clock-rotate-left" /> Recently viewed:</span>
-            {viewed.slice(0, 8).map((v) => (
-              <a key={v.id} href={v.url} className="badge badge-secondary" style={{ textDecoration: 'none' }}>
-                {v.name} <span className="text-muted">· {v.student_id}</span>
+        <div className="stu-recent-mobile card"><div className="card-body">
+          <div className="stu-recent-head"><i aria-hidden="true" className="fas fa-clock-rotate-left" /> Recently viewed</div>
+          <div className="stu-recent-strip">
+            {viewed.slice(0, 10).map((v) => (
+              <a key={v.id} href={v.url} className="stu-recent-chip" title={v.name}>
+                <span className="stu-av stu-av-ph" aria-hidden="true">{initials(v.name)}</span>
+                <span className="stu-recent-name">{v.name}</span>
+                <span className="stu-recent-id">{v.student_id}</span>
               </a>
             ))}
           </div>
@@ -417,15 +482,17 @@ export default function App({ initial }) {
       </div>
 
       {loading && students.length === 0 ? (
-        <div className="stu-grid" aria-busy="true" aria-label="Loading students">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="stu-card" style={{ display: 'block' }}>
-              <div className="skeleton skeleton-title" style={{ width: '65%' }} />
-              <div className="skeleton skeleton-text" />
-              <div className="skeleton skeleton-text short" />
-            </div>
-          ))}
-        </div>
+        <div className="card stu-tablecard"><div className="card-body">
+          <div className="stu-cards" aria-busy="true" aria-label="Loading students">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="stu-card" style={{ display: 'block' }}>
+                <div className="skeleton skeleton-title" style={{ width: '65%' }} />
+                <div className="skeleton skeleton-text" />
+                <div className="skeleton skeleton-text short" />
+              </div>
+            ))}
+          </div>
+        </div></div>
       ) : students.length === 0 ? (
         <Empty icon="fa-users" title="No students found">
           <p>No students match your filters yet.</p>
@@ -437,48 +504,114 @@ export default function App({ initial }) {
           )}
         </Empty>
       ) : (
-        <div className="stu-grid">
-          {students.map((s) => (
-            <div key={s.id} className={'stu-card' + (selected.has(s.id) ? ' is-sel' : '')}>
-              <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggleSel(s.id)} aria-label={'Select ' + s.name} />
-              <div className="stu-card-main">
-                <div className="stu-card-head">
-                  <span className="stu-name">{s.name} {s.is_graduated && <span className="badge badge-success" title="Graduate"><i aria-hidden="true" className="fas fa-user-graduate" /></span>}</span>
-                  <span className="stu-sid">{s.student_id}</span>
-                </div>
-                <div className="stu-meta">
-                  <span>{s.current_class || '—'}</span>
-                  <span className={'badge ' + (s.gender === 'Male' ? 'badge-male' : 'badge-female')}>{s.gender}</span>
-                  {s.stream && <span className="badge badge-info">{s.stream}</span>}
-                  <span>Age {s.age || '—'}</span>
-                  {s.religion && <span>{s.religion}</span>}
-                </div>
-                <div className="stu-actions">
-                  <a href={s.url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-eye" /> View</a>
-                  {canManage && <a href={s.edit_url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-edit" /> Edit</a>}
-                  {canManage && (
-                    <div className="stu-menu-wrap" style={{ position: 'relative' }}>
-                      <button type="button" className="btn btn-secondary btn-sm" aria-haspopup="true" aria-expanded={menuFor === s.id}
-                              aria-label="More actions" onClick={(e) => { e.stopPropagation(); setMenuFor(menuFor === s.id ? null : s.id); }}>
-                        <i aria-hidden="true" className="fas fa-ellipsis-vertical" /></button>
-                      {menuFor === s.id && (
-                        <div className="row-menu" role="menu">
-                          <button type="button" role="menuitem" onClick={async () => { setMenuFor(null); if (await confirm(`${s.is_graduated ? 'Undo graduation for' : 'Mark as graduate:'} ${s.name}?`)) runAction(s.graduate_url, {}, 'Updated graduation status.'); }}>
-                            <i aria-hidden="true" className={'fas ' + (s.is_graduated ? 'fa-rotate-left' : 'fa-user-graduate')} /> {s.is_graduated ? 'Undo graduate' : 'Mark as graduate'}</button>
-                          <button type="button" role="menuitem" className="danger" onClick={async () => { setMenuFor(null); if (await confirm({ title: 'Delete student', message: `Delete ${s.name}?`, confirmText: 'Delete', tone: 'danger' })) runAction(s.delete_url, {}, 'Student deleted.'); }}>
-                            <i aria-hidden="true" className="fas fa-trash" /> Delete</button>
-                        </div>
-                      )}
-                    </div>
-                  )}
+        <>
+          {/* Desktop: dense table */}
+          <div className="card stu-tablecard">
+            <div className="stu-table-wrap">
+              <table className="data-table stu-table">
+                <thead>
+                  <tr>
+                    <th className="stu-check-col"><input type="checkbox" checked={!!allOnPage} onChange={toggleAll} aria-label="Select page" /></th>
+                    <th>Student</th><th>ID</th><th>Class / Arm</th><th>Stream</th>
+                    <th>Gender</th><th>Age</th><th>Religion</th>
+                    <th className="stu-act-col">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {students.map((s) => (
+                    <tr key={s.id} className={selected.has(s.id) ? 'is-sel' : ''}>
+                      <td className="stu-check-col"><input type="checkbox" checked={selected.has(s.id)} onChange={() => toggleSel(s.id)} aria-label={'Select ' + s.name} /></td>
+                      <td>
+                        <a href={s.url} className="stu-row-student">
+                          <StudentAvatar name={s.name} photo={s.photo_url} />
+                          <span className="stu-row-name">{s.name}{s.is_graduated && <span className="badge badge-success stu-grad" title="Graduate"><i aria-hidden="true" className="fas fa-user-graduate" /></span>}</span>
+                        </a>
+                      </td>
+                      <td className="text-muted">{s.student_id}</td>
+                      <td>{s.current_class || '—'}</td>
+                      <td>{s.stream ? <span className="badge badge-info">{s.stream}</span> : <span className="text-muted">—</span>}</td>
+                      <td><span className={'badge ' + (s.gender === 'Male' ? 'badge-male' : 'badge-female')}>{s.gender}</span></td>
+                      <td>{s.age || '—'}</td>
+                      <td>{s.religion || <span className="text-muted">—</span>}</td>
+                      <td className="stu-act-col"><div className="stu-row-actions">{renderActions(s)}</div></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          {/* Mobile: cards */}
+          <div className="stu-cards">
+            {students.map((s) => (
+              <div key={s.id} className={'stu-card' + (selected.has(s.id) ? ' is-sel' : '')}>
+                <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggleSel(s.id)} aria-label={'Select ' + s.name} />
+                <StudentAvatar name={s.name} photo={s.photo_url} />
+                <div className="stu-card-main">
+                  <div className="stu-card-head">
+                    <a href={s.url} className="stu-name">{s.name}{s.is_graduated && <span className="badge badge-success stu-grad" title="Graduate"><i aria-hidden="true" className="fas fa-user-graduate" /></span>}</a>
+                    <span className="stu-sid">{s.student_id}</span>
+                  </div>
+                  <div className="stu-meta">
+                    <span className="badge badge-secondary">{s.current_class || '—'}</span>
+                    <span className={'badge ' + (s.gender === 'Male' ? 'badge-male' : 'badge-female')}>{s.gender}</span>
+                    {s.stream && <span className="badge badge-info">{s.stream}</span>}
+                    <span className="stu-meta-dim">Age {s.age || '—'}</span>
+                    {s.religion && <span className="stu-meta-dim">{s.religion}</span>}
+                  </div>
+                  <div className="stu-actions">{renderActions(s)}</div>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        </>
       )}
 
       <Pagination page={d.page || 1} pages={d.pages || 1} onPage={goPage} />
+      </div>{/* .stu-main */}
+
+      <aside className="stu-rail">
+        {viewed.length > 0 && (
+          <div className="card stu-rail-card">
+            <div className="card-header"><h3><i aria-hidden="true" className="fas fa-clock-rotate-left" /> Recently viewed</h3></div>
+            <div className="card-body stu-rail-recent">
+              {viewed.slice(0, 8).map((v) => (
+                <a key={v.id} href={v.url} className="stu-rr-item">
+                  <span className="stu-av stu-av-ph" aria-hidden="true">{initials(v.name)}</span>
+                  <span className="stu-rr-name">{v.name}</span>
+                  <span className="stu-rr-id">{v.student_id}</span>
+                </a>
+              ))}
+            </div>
+          </div>
+        )}
+        <div className="card stu-rail-card">
+          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-chart-simple" /> Students summary</h3></div>
+          <div className="card-body">
+            <div className="stu-sum-grid">
+              <div className="stu-sum"><span className="stu-sum-v">{summary.total != null ? summary.total : (d.total || 0)}</span><span className="stu-sum-l">Total students</span></div>
+              <div className="stu-sum"><span className="stu-sum-v stu-sum-male">{summary.male || 0}</span><span className="stu-sum-l">Male</span></div>
+              <div className="stu-sum"><span className="stu-sum-v stu-sum-female">{summary.female || 0}</span><span className="stu-sum-l">Female</span></div>
+              <div className="stu-sum"><span className="stu-sum-v">{summary.streams || 0}</span><span className="stu-sum-l">Streams</span></div>
+            </div>
+          </div>
+        </div>
+        <div className="card stu-rail-card">
+          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-download" /> Quick export</h3></div>
+          <div className="card-body stu-quick-export">
+            <p className="text-muted text-sm" style={{ marginTop: 0 }}>Export {selectedIds.length ? `${selectedIds.length} selected` : 'the current list'}</p>
+            <button type="button" className="btn btn-outline" onClick={() => quickExport('excel')}><i aria-hidden="true" className="fas fa-file-excel" /> Excel (.xlsx)</button>
+            <button type="button" className="btn btn-outline" onClick={() => quickExport('pdf')}><i aria-hidden="true" className="fas fa-file-pdf" /> PDF (.pdf)</button>
+            <button type="button" className="btn btn-light btn-sm" onClick={() => setShowExport(true)}><i aria-hidden="true" className="fas fa-sliders" /> More formats &amp; fields…</button>
+          </div>
+        </div>
+        <div className="card stu-rail-card stu-tips">
+          <div className="card-body">
+            <div className="stu-tips-head"><i aria-hidden="true" className="fas fa-lightbulb" /> Tips</div>
+            <p className="text-muted text-sm">Use the filters to find students fast, then export the list for offline use. Select rows to message parents or print ID cards.</p>
+          </div>
+        </div>
+      </aside>
+      </div>{/* .stu-shell */}
 
       {showExport && (
         <ExportModal total={d.total || 0} selectedIds={selectedIds} exportUrl={d.export_url}
