@@ -43,6 +43,7 @@ def ensure_university_schema(seed=True):
         'admitted_course_id': 'INTEGER',
     }
     columns_ok = False
+    errors = {}
     try:
         existing = {c['name'] for c in inspect(engine).get_columns('students')}
         # Each ALTER in its OWN transaction: on Postgres one failed statement
@@ -53,9 +54,14 @@ def ensure_university_schema(seed=True):
                 continue
             try:
                 with engine.begin() as conn:
-                    conn.execute(text(f'ALTER TABLE students ADD COLUMN {name} {ddl}'))
-            except Exception:
-                pass   # concurrent add / already exists
+                    conn.execute(text(f'ALTER TABLE students ADD COLUMN IF NOT EXISTS {name} {ddl}'))
+            except Exception as exc:
+                # Fall back to plain ADD COLUMN for engines without IF NOT EXISTS.
+                try:
+                    with engine.begin() as conn:
+                        conn.execute(text(f'ALTER TABLE students ADD COLUMN {name} {ddl}'))
+                except Exception as exc2:
+                    errors[name] = str(exc2 or exc)
         # Verify before caching: only mark this engine "done" when every column is
         # really present, so a transient failure retries on the next call instead
         # of being permanently skipped.
@@ -63,6 +69,19 @@ def ensure_university_schema(seed=True):
         columns_ok = all(n in present for n in adds)
     except Exception:
         db.session.rollback()
+
+    # Surface WHY a heal failed instead of swallowing it — a persistent failure
+    # here (e.g. the app's DB role does not own the students table, so it cannot
+    # ALTER it) needs a human to run the migration as the table owner.
+    if not columns_ok and errors:
+        try:
+            from flask import current_app
+            current_app.logger.error(
+                'university aspiration self-heal could NOT add student columns %s — '
+                'run the ALTER TABLE statements manually as the DB owner. First error: %s',
+                sorted(errors), next(iter(errors.values())))
+        except Exception:
+            pass
 
     if seed:
         try:
