@@ -177,6 +177,53 @@ def staff_list():
     })
 
 
+_AUDIT_STAFF_FIELDS = {
+    'first_name': 'First name', 'middle_name': 'Middle name', 'surname': 'Surname',
+    'gender': 'Gender', 'date_of_birth': 'Date of birth', 'phone': 'Phone',
+    'email': 'Email', 'address': 'Address', 'department_id': 'Department',
+    'designation': 'Designation', 'staff_type': 'Staff type',
+    'employment_type': 'Employment type', 'date_employed': 'Date employed',
+    'confirmation_date': 'Confirmation date', 'contract_start': 'Contract start',
+    'contract_end': 'Contract end', 'status': 'Status', 'qualification': 'Qualification',
+    'certifications': 'Certifications', 'prior_experience_years': 'Prior experience',
+    'salary': 'Salary', 'nok_name': 'Next of kin', 'nok_phone': 'Next-of-kin phone',
+    'nok_relationship': 'Next-of-kin relationship', 'emergency_name': 'Emergency contact',
+    'emergency_phone': 'Emergency phone', 'tax_id': 'Tax ID', 'pension_pin': 'Pension PIN',
+    'pension_provider': 'Pension provider', 'blood_group': 'Blood group',
+    'bank_name': 'Bank', 'account_number': 'Account number', 'account_name': 'Account name',
+}
+# Salary and bank details are shown as "changed" without their values.
+_AUDIT_STAFF_SENSITIVE = {'salary', 'account_number', 'medical_notes'}
+
+
+def _snapshot_staff(s):
+    """Capture the audited fields' values before an edit so the notification can
+    show previous → new."""
+    return {f: getattr(s, f, None) for f in _AUDIT_STAFF_FIELDS}
+
+
+def _staff_change_detail(before, s):
+    """Human 'Label: "old" → "new"' summary of what an edit changed. Sensitive
+    fields (salary, account number) are reported as changed without their values;
+    returns '' when nothing tracked changed."""
+    def norm(v):
+        return None if (v is None or v == '') else v
+
+    def fmt(v):
+        return f'"{v}"' if norm(v) is not None else '(empty)'
+
+    parts = []
+    for f, label in _AUDIT_STAFF_FIELDS.items():
+        old, new = norm(before.get(f)), norm(getattr(s, f, None))
+        if old == new:
+            continue
+        if f in _AUDIT_STAFF_SENSITIVE:
+            parts.append(f'{label}: changed')
+        else:
+            parts.append(f'{label}: {fmt(old)} → {fmt(new)}')
+    return '; '.join(parts)
+
+
 def _read_staff_form(s):
     s.first_name = (request.form.get('first_name') or '').strip()
     s.surname = (request.form.get('surname') or '').strip()
@@ -275,6 +322,10 @@ def add_staff():
         db.session.commit()
         from utils.audit import log_action
         log_action('hr.staff_add', target=s, detail='+user' if user_note else None)
+        from utils.notify import notify_staff_change, actor_label
+        notify_staff_change('create', staff=s, actor=actor_label(),
+                            branch_id=s.branch_id,
+                            url=url_for('hr.staff_detail', staff_id=s.id))
         return _ok(f'Staff member {s.full_name} added ({s.staff_id}).{user_note}',
                    url_for('hr.staff_detail', staff_id=s.id))
     return _render(_staff_form_payload(None, url_for('hr.add_staff'), url_for('hr.staff_list')))
@@ -380,10 +431,16 @@ def edit_staff(staff_id):
     from utils.branch_scope import require_branch_access
     require_branch_access(s.branch_id)
     if request.method == 'POST':
+        before = _snapshot_staff(s)      # capture for the change summary
         _read_staff_form(s)
         db.session.commit()
         from utils.audit import log_action
-        log_action('hr.staff_edit', target=s)
+        _changes = _staff_change_detail(before, s)
+        log_action('hr.staff_edit', target=s, detail=_changes or None)
+        from utils.notify import notify_staff_change, actor_label
+        notify_staff_change('update', staff=s, changes=_changes, actor=actor_label(),
+                            branch_id=s.branch_id,
+                            url=url_for('hr.staff_detail', staff_id=s.id))
         return _ok('Staff record updated.', url_for('hr.staff_detail', staff_id=s.id))
     return _render(_staff_form_payload(s, url_for('hr.edit_staff', staff_id=s.id),
                                        url_for('hr.staff_detail', staff_id=s.id)))
@@ -703,16 +760,24 @@ def delete_staff(staff_id):
         or db.session.query(StaffDocument.id).filter_by(staff_id=s.id).first()
         or db.session.query(StaffLoan.id).filter_by(staff_id=s.id).first()
         or (s.user_id and db.session.get(User, s.user_id)))
+    from utils.notify import notify_staff_change, actor_label
+    branch_id = s.branch_id
     if has_history:
         s.is_active = False
         db.session.commit()
         log_action('hr.staff_deactivate', target=s)
+        notify_staff_change('delete', staff=s, detail=f'{s.full_name} ({s.staff_id}) deactivated',
+                            actor=actor_label(), branch_id=branch_id,
+                            url=url_for('hr.staff_detail', staff_id=s.id))
         return _ok(f'{s.full_name} has records or a linked login — deactivated instead of '
                    f'deleted (their history is kept).', url_for('hr.staff_list'))
     name = s.full_name
+    sid = s.staff_id
     log_action('hr.staff_delete', detail=f'{name} (id={s.id})')
     db.session.delete(s)
     db.session.commit()
+    notify_staff_change('delete', detail=f'{name} ({sid})', actor=actor_label(),
+                        branch_id=branch_id)
     return _ok(f'{name} deleted.', url_for('hr.staff_list'))
 
 
