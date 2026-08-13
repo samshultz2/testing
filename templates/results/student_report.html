@@ -270,6 +270,23 @@
             <div style="margin-top:.25rem;font-size:.82rem;color:{{ _e[0] }};">O'level not yet projected to credit: <strong>{{ aspiration.get('missing_waec')|join(', ') }}</strong></div>
             {% endif %}
         </div>
+
+        {# Where the JAMB gap comes from: the target course's subjects, banded by
+           the student's mock average (worst first) so intervention is targeted. #}
+        {% if subject_diag %}
+        {% set _lv = {'strong':('#137333','Strong'),'moderate':('#946200','Moderate'),
+                      'weak':('#b06000','Weak'),'critical':('#b3261e','Critical'),
+                      'no_data':('#5f6368','Not sat yet')} %}
+        <p class="muted" style="font-size:.8rem;margin:.55rem 0 .3rem;">Where the gap is — target-course subjects by mock average:</p>
+        <div style="display:flex;flex-wrap:wrap;gap:.4rem;">
+            {% for s in subject_diag %}
+            {% set _l = _lv.get(s.level, _lv['no_data']) %}
+            <span class="pill" style="display:inline-flex;gap:.3rem;align-items:center;margin:1px;border:1px solid {{ _l[0] }}44;color:{{ _l[0] }};">
+                {{ s.subject }} · {{ _l[1] }}{% if s.avg is not none %} ({{ s.avg }}){% endif %}
+            </span>
+            {% endfor %}
+        </div>
+        {% endif %}
         {% if recommendations %}
         <p class="muted" style="font-size:.8rem;margin:.55rem 0 .3rem;">Also projected competitive for (at their target institution):</p>
         <div>

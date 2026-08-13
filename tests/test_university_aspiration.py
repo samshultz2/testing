@@ -1,6 +1,7 @@
 """University-aspiration feature: reference data + cut-off logic, the searchable
 lookup / requirements APIs, saving on the student form, bulk assign, the admin
 screen, and per-student JAMB target in predictions."""
+from datetime import date
 from config import Config
 from models import (db, Branch, Student, University, Course, UniversityCourse,
                     effective_cutoff)
@@ -298,18 +299,93 @@ def test_aspiration_overview(app):
     from utils.aspiration_analytics import aspiration_overview
     with app.test_request_context('/'):
         data = aspiration_overview()
-        assert set(data) == {'totals', 'eligibility', 'top_universities',
-                             'top_courses', 'mismatches', 'funnel', 'calibration'}
+        assert set(data) == {'totals', 'eligibility', 'top_universities', 'top_courses',
+                             'score_distribution', 'mismatches', 'funnel', 'calibration',
+                             'scholarships'}
         assert isinstance(data['eligibility'], list) and len(data['eligibility']) == 4
-        assert 'conversion' in data['funnel']
+        assert 'conversion' in data['funnel'] and 'target_university_rate' in data['funnel']
         assert 'hit_rate' in data['calibration'] and len(data['calibration']['rows']) == 4
+        assert len(data['score_distribution']['bands']) == 6
+        assert 'recipients' in data['scholarships']
+
+
+def test_course_subject_diagnosis(app):
+    """Per-subject gap attribution from Mock JAMB sittings, banded and worst-first."""
+    _seed(app)
+    from utils.aspiration import course_subject_diagnosis
+    from models import AcademicSession
+    from models.mock_jamb import MockJAMBExam, MockJAMBResult
+    with app.app_context():
+        bid = Branch.get_default().id
+        med = Course.query.filter_by(name='Medicine and Surgery').first()
+        sess = AcademicSession.query.first() or AcademicSession(name='2029/2030 DIAG')
+        if sess.id is None:
+            db.session.add(sess); db.session.commit()
+        s = Student(student_id='DIAG-1', first_name='D', surname='Iag', gender='Male',
+                    is_active=True, branch_id=bid, target_course_id=med.id)
+        db.session.add(s); db.session.commit()
+        ex = MockJAMBExam(session_id=sess.id, exam_number=1, exam_date=date.today(),
+                          branch_id=bid, name='Mock 1 DIAG')
+        db.session.add(ex); db.session.commit()
+        # English strong (80), Biology critical (30), Chemistry moderate (55), Physics weak (45)
+        db.session.add(MockJAMBResult(student_id=s.id, mock_exam_id=ex.id, total_score=210,
+                       subject1='English Language', subject1_score=80,
+                       subject2='Biology', subject2_score=30,
+                       subject3='Chemistry', subject3_score=55,
+                       subject4='Physics', subject4_score=45))
+        db.session.commit()
+        diag = course_subject_diagnosis(s, sess.id)
+        levels = {d['subject']: d['level'] for d in diag}
+        assert levels['Biology'] == 'critical' and levels['English Language'] == 'strong'
+        assert levels['Physics'] == 'weak' and levels['Chemistry'] == 'moderate'
+        assert diag[0]['level'] == 'critical'          # worst first
+
+
+def test_outcome_achievement_rates(app):
+    """The funnel's target-vs-admitted achievement rates, computed directly over a
+    small explicit cohort (independent of SSS3-enrolment setup)."""
+    _seed(app)
+    from utils import aspiration_analytics as aa
+    with app.app_context():
+        u = University.query.filter_by(abbreviation='UNILAG').first()
+        u2 = University.query.filter_by(abbreviation='UI').first()
+        med = Course.query.filter_by(name='Medicine and Surgery').first()
+
+        class S:  # stand-in exposing every field the overview reads
+            def __init__(self, tu, au, tc, ac, status):
+                self.id = id(self) % 1_000_000
+                self.full_name = 'Cohort Student'
+                self.admission_status = status
+                self.jamb_target = 300
+                self.target_university_id, self.admitted_university_id = tu, au
+                self.target_course_id, self.admitted_course_id = tc, ac
+                self.target_university_name = 'University of Lagos'
+                self.target_course_name = 'Medicine and Surgery'
+                self.target_course = None          # → NO_TARGET verdict, no crash
+                self.admitted_university = None
+                self.admitted_course = None
+        cohort = [
+            S(u.id, u.id, med.id, med.id, 'Admitted'),    # target uni + course
+            S(u.id, u2.id, med.id, med.id, 'Admitted'),   # alt uni, target course
+            S(u.id, None, med.id, None, 'Declined'),       # no admission
+        ]
+        import unittest.mock as mock
+        with mock.patch('utils.helpers.get_sss3_students', return_value=cohort):
+            with app.test_request_context('/'):
+                f = aa.aspiration_overview()['funnel']
+    assert f['admitted'] == 2 and f['declined'] == 1
+    assert f['target_university_rate'] == 50.0        # 1 of 2 admitted hit target uni
+    assert f['target_course_rate'] == 100.0           # both kept the target course
+    assert f['no_admission_rate'] == round(100/3, 1)  # 1 declined of 3 resolved
 
 
 def test_aspiration_hub_page(app):
     _seed(app)
     c = _admin(app)
     r = c.get('/results/analytics/aspirations')
-    assert r.status_code == 200 and 'University Aspirations' in r.get_data(as_text=True)
+    body = r.get_data(as_text=True)
+    assert r.status_code == 200 and 'University Aspirations' in body
+    assert 'Scholarships' in body and 'Target vs projected' in body
 
 
 def test_alternative_waec_subjects(app):

@@ -76,6 +76,54 @@ ELIGIBILITY_LABELS = {
     'NO_DATA': 'No exam signal yet', 'NO_TARGET': 'No target set',
 }
 
+# Per-subject bands (JAMB is scored out of 100 per subject). Aligned with the
+# focus_areas concern lines (50 = concern, 40 = just below).
+SUBJECT_LEVELS = ('strong', 'moderate', 'weak', 'critical', 'no_data')
+_SUBJECT_ORDER = {'critical': 0, 'weak': 1, 'no_data': 2, 'moderate': 3, 'strong': 4}
+
+
+def course_subject_diagnosis(student, session_id=None):
+    """Attribute the JAMB target gap to specific subjects: for each subject the
+    target course requires, the student's Mock JAMB average (0–100) and a
+    strong / moderate / weak / critical band — worst first, so the intervention
+    priorities lead. Reuses the recorded Mock JAMB sittings (no new modelling);
+    returns ``[]`` when there's no target course. A required subject the student
+    hasn't sat shows as ``no_data`` — itself a signal."""
+    course = getattr(student, 'target_course', None)
+    if course is None:
+        return []
+    from models.mock_jamb import MockJAMBExam, MockJAMBResult
+    q = MockJAMBResult.query.filter_by(student_id=student.id)
+    if session_id:
+        q = q.join(MockJAMBExam).filter(MockJAMBExam.session_id == session_id)
+    sums, counts = {}, {}
+    for r in q.all():
+        for i in (1, 2, 3, 4):
+            name = getattr(r, f'subject{i}', None)
+            score = getattr(r, f'subject{i}_score', None)
+            if name and score is not None:
+                sums[name] = sums.get(name, 0) + score
+                counts[name] = counts.get(name, 0) + 1
+
+    def _band(avg):
+        if avg >= 70:
+            return 'strong'
+        if avg >= 50:
+            return 'moderate'
+        if avg >= 40:
+            return 'weak'
+        return 'critical'
+
+    out = []
+    for subj in course.jamb_subject_list:
+        if counts.get(subj):
+            avg = sums[subj] / counts[subj]
+            out.append({'subject': subj, 'avg': round(avg, 1), 'level': _band(avg)})
+        else:
+            out.append({'subject': subj, 'avg': None, 'level': 'no_data'})
+    out.sort(key=lambda x: _SUBJECT_ORDER.get(x['level'], 9))
+    return out
+
 
 def recommend_courses(student, session_id=None, university=None, limit=8):
     """Courses the student is projected to be competitive for at a given (or their
