@@ -1787,6 +1787,17 @@ def _students_payload():
     per_page = min(request.args.get('per_page', 20, type=int) or 20, 100)
     pg = _students_query().paginate(page=page, per_page=per_page, error_out=False)
     class_map = _page_class_map(pg.items)
+    # Batch the passport-photo lookup for this page (one query, not an N+1 of
+    # has_photo() per row) so the list can show avatars.
+    photo_ids = set()
+    try:
+        from models import StudentPhoto
+        pids = [s.id for s in pg.items]
+        if pids:
+            photo_ids = {pid for (pid,) in db.session.query(StudentPhoto.student_id)
+                         .filter(StudentPhoto.student_id.in_(pids)).all()}
+    except Exception:
+        photo_ids = set()
     # Edit/delete follow the user's WRITE permission on the students module. A
     # form teacher with write access can manage their own class's students (the
     # routes enforce form-class scope); a view-only user gets a read-only list.
@@ -1806,6 +1817,7 @@ def _students_payload():
         'age': s.age,
         'is_graduated': bool(s.is_graduated),
         'current_class': class_map.get(s.id),
+        'photo_url': url_for('main.student_photo', student_id=s.id) if s.id in photo_ids else '',
         'url': url_for('main.view_student', student_id=s.id),
         'edit_url': url_for('main.edit_student', student_id=s.id),
         'delete_url': url_for('main.delete_student', student_id=s.id),
@@ -1820,8 +1832,20 @@ def _students_payload():
     houses = sorted({h for (h,) in _scope_q(
         db.session.query(Student.house).filter(Student.house.isnot(None),
                                                Student.house != ''), Student).distinct().all() if h})
+    # At-a-glance summary over the *filtered* set (not just this page) for the
+    # list's side rail. Best-effort — a count failure must never break the list.
+    try:
+        base = _students_query()
+        male = base.filter(Student.gender == 'Male').count()
+        female = base.filter(Student.gender == 'Female').count()
+        streams = (base.filter(Student.stream.isnot(None), Student.stream != '')
+                   .with_entities(Student.stream).distinct().count())
+        summary = {'total': pg.total, 'male': male, 'female': female, 'streams': streams}
+    except Exception:
+        summary = {'total': pg.total, 'male': 0, 'female': 0, 'streams': 0}
     return {
         'students': students,
+        'summary': summary,
         'page': pg.page, 'pages': pg.pages or 1, 'total': pg.total,
         'per_page': per_page, 'has_next': pg.has_next, 'has_prev': pg.has_prev,
         'applied': {
