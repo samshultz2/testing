@@ -13,6 +13,23 @@ function Info({ label, children }) {
   );
 }
 
+// Lightweight attendance donut (conic-gradient ring, no chart library) — the
+// headline percentage lives in the hole, the ring fills to that share and turns
+// danger-red when below the school's warning threshold.
+function AttendanceDonut({ pct, warning }) {
+  const p = Math.max(0, Math.min(100, Math.round(Number(pct) || 0)));
+  const color = warning ? 'var(--danger)' : 'var(--success)';
+  return (
+    <div className="att-donut" style={{ '--p': p, '--c': color }} role="img"
+         aria-label={`Overall attendance ${p}%`}>
+      <div className="att-donut-hole">
+        <span className="att-donut-pct">{p}%</span>
+        <span className="att-donut-cap">Overall</span>
+      </div>
+    </div>
+  );
+}
+
 // Colour + icon for the chosen-course eligibility verdict.
 const ELIG_STYLE = {
   ON_TRACK: { badge: 'badge-success', bar: 'var(--success)', icon: 'fa-circle-check' },
@@ -143,7 +160,7 @@ export default function ViewApp({ initial }) {
   };
 
   return (
-    <div>
+    <div className="student-profile">
       <div className="profile-hero">
         <div className="ph-cover" />
         <div className="ph-body">
@@ -185,6 +202,7 @@ export default function ViewApp({ initial }) {
         </div>
       )}
 
+      <div className="profile-grid">
       <div className="card mb-3">
         <div className="card-header"><h3><i aria-hidden="true" className="fas fa-user" /> Personal Info</h3></div>
         <div className="card-body">
@@ -281,17 +299,19 @@ export default function ViewApp({ initial }) {
           <div className="card-header"><h3><i aria-hidden="true" className="fas fa-calendar-check" /> Attendance Summary</h3>
             {d.attendance.url && <a href={d.attendance.url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-chart-line" /> Full profile</a>}</div>
           <div className="card-body">
-            <div className="info-grid">
-              <Info label="Overall">
-                <span className={'badge ' + (d.attendance.warning ? 'badge-danger' : 'badge-success')}>{d.attendance.percentage}%</span>
+            <div className="att-summary">
+              <div className="att-donut-wrap">
+                <AttendanceDonut pct={d.attendance.percentage} warning={d.attendance.warning} />
                 {d.attendance.warning && d.attendance.threshold != null &&
-                  <span className="text-muted" style={{ marginLeft: 6, fontSize: '.8rem' }}>below {d.attendance.threshold}%</span>}
-              </Info>
-              {d.attendance.latest_term && <Info label={d.attendance.latest_term}>{d.attendance.latest_percentage}%</Info>}
-              <Info label="Present days">{d.attendance.present_days}</Info>
-              <Info label="Late days">{d.attendance.late_days}</Info>
-              <Info label="Absent days">{d.attendance.absent_days}</Info>
-              <Info label="Terms tracked">{d.attendance.terms}</Info>
+                  <span className="text-muted att-donut-warn">below {d.attendance.threshold}% threshold</span>}
+              </div>
+              <div className="info-grid att-legend">
+                {d.attendance.latest_term && <Info label={d.attendance.latest_term}>{d.attendance.latest_percentage}%</Info>}
+                <Info label="Present days">{d.attendance.present_days}</Info>
+                <Info label="Late days">{d.attendance.late_days}</Info>
+                <Info label="Absent days">{d.attendance.absent_days}</Info>
+                <Info label="Terms tracked">{d.attendance.terms}</Info>
+              </div>
             </div>
           </div>
         </div>
@@ -322,7 +342,7 @@ export default function ViewApp({ initial }) {
       </div>
 
       {d.communications && d.communications.count > 0 && (
-        <div className="card mb-3">
+        <div className="card mb-3 profile-wide">
           <div className="card-header"><h3><i aria-hidden="true" className="fas fa-comments" /> Communication History ({d.communications.count})</h3></div>
           <div className="card-body" style={{ padding: 0 }}>
             <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
@@ -382,6 +402,7 @@ export default function ViewApp({ initial }) {
           </table></div>
         ) : <p className="text-muted">No clinic visits.</p>}
       </Welfare>
+      </div>{/* .profile-grid */}
     </div>
   );
 }
@@ -400,7 +421,7 @@ function ChangeHistory({ rows }) {
     ? rows.filter((r) => `${ACTION_LABELS[r.action] || r.action} ${r.user} ${r.detail} ${r.when}`.toLowerCase().includes(term))
     : rows;
   return (
-    <div className="card mb-3">
+    <div className="card mb-3 profile-wide">
       <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
         <h3><i aria-hidden="true" className="fas fa-clock-rotate-left" /> Change History ({rows.length})</h3>
         <input type="search" className="form-control" style={{ maxWidth: 240 }} placeholder="Search history…"
@@ -429,7 +450,7 @@ function ChangeHistory({ rows }) {
 
 function Welfare({ title, icon, count, children }) {
   return (
-    <div className="card mb-3">
+    <div className="card mb-3 profile-wide">
       <div className="card-header"><h3><i aria-hidden="true" className={'fas ' + icon} /> {title} ({count})</h3></div>
       <div className="card-body">{children}</div>
     </div>
