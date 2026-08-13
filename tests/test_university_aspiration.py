@@ -385,7 +385,28 @@ def test_aspiration_hub_page(app):
     r = c.get('/results/analytics/aspirations')
     body = r.get_data(as_text=True)
     assert r.status_code == 200 and 'University Aspirations' in body
-    assert 'Scholarships' in body and 'Target vs projected' in body
+
+
+def test_aspiration_hub_renders_new_cards(app):
+    """With a target cohort present, the enriched hub renders the new sections."""
+    _seed(app)
+    import unittest.mock as mock
+    with app.app_context():
+        bid = Branch.get_default().id
+        u = University.query.filter_by(abbreviation='UNILAG').first()
+        med = Course.query.filter_by(name='Medicine and Surgery').first()
+        db.session.add(Student(student_id='HUB-1', first_name='H', surname='Ub', gender='Male',
+                       is_active=True, branch_id=bid, target_university_id=u.id,
+                       target_course_id=med.id, jamb_target=300))
+        db.session.commit()
+    c = _admin(app)
+    # Re-query inside the request so the instances are attached to that session.
+    with mock.patch('utils.helpers.get_sss3_students',
+                    side_effect=lambda: Student.query.filter_by(student_id='HUB-1').all()):
+        body = c.get('/results/analytics/aspirations').get_data(as_text=True)
+    assert 'Target vs projected JAMB spread' in body
+    assert 'Scholarships' in body
+    assert 'Avg target' in body                       # enriched most-wanted tables
 
 
 def test_alternative_waec_subjects(app):
