@@ -2,6 +2,16 @@ import React, { useState } from 'react';
 import { postForm } from '../lib/forms';
 import { Banner, EmptyState, confirm } from '../components/ui';
 
+function initials(name) {
+  const parts = (name || '').split(' ').filter(Boolean);
+  if (!parts.length) return '—';
+  return ((parts[0][0] || '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
+}
+// Muted initials avatar (deleted students — greyed, not brand-tinted).
+const AV = { width: 32, height: 32, borderRadius: '50%', display: 'inline-flex',
+  alignItems: 'center', justifyContent: 'center', fontWeight: 700, fontSize: '.72rem',
+  color: 'var(--text-secondary)', background: 'var(--gray-100)', flexShrink: 0 };
+
 export default function TrashApp({ initial }) {
   const [students, setStudents] = useState(initial.students || []);
   const [selected, setSelected] = useState(() => new Set());
@@ -98,6 +108,7 @@ export default function TrashApp({ initial }) {
                     <div className="data-card-header">
                       <label style={{ display: 'flex', alignItems: 'center', gap: '.5rem', margin: 0 }}>
                         {canManage && <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggle(s.id)} aria-label={`Select ${s.full_name}`} />}
+                        <span aria-hidden="true" style={AV}>{initials(s.full_name)}</span>
                         <span className="data-card-title">{s.full_name}</span>
                       </label>
                       <span className={'badge ' + (s.gender === 'Male' ? 'badge-male' : 'badge-female')}>{s.gender}</span>
