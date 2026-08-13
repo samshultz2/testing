@@ -53,6 +53,16 @@ def run_exam_analytics_refresh(app=None, *, warm=True, branch_id=None):
     from models.models import SchoolSettings
     from utils.analytics_engine import AnalyticsEngine
 
+    # Self-heal the aspiration student-columns before any Student query. The web
+    # app heals these at startup, but this job can run in a process that never hit
+    # that path — without it, selecting Student (which now maps target_*/admission_*
+    # columns) fails with UndefinedColumn on a DB that hasn't been migrated yet.
+    try:
+        from utils.university_schema import ensure_university_schema
+        ensure_university_schema(seed=False)
+    except Exception:
+        db.session.rollback()
+
     # In a request (the manual Recompute button) scope to the SSS3 cohort in
     # view; in the background tick there is no session, so recompute everyone —
     # the at-risk register filters to SSS3 regardless.
