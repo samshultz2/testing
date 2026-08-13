@@ -5,7 +5,7 @@ import { useCtx } from '../App';
 import { Toolbar, Spinner, EmptyState, ErrorState, OfflineRequired,
          StatCards, SectionTitle, Pill, PerfBands } from '../../components/ui';
 
-const pctTone = (p) => (p >= 75 ? '#1cc88a' : p >= 50 ? '#f6c23e' : '#e74a3b');
+const pctTone = (p) => (p >= 75 ? '#16a34a' : p >= 50 ? '#d97706' : '#dc2626');
 
 // Horizontal % bars (class/branch ranking, trend as a column chart reused below).
 function Bars({ rows, labelKey, valueKey }) {
@@ -138,7 +138,7 @@ export default function Analytics() {
                   <tbody>{d.most_improved.map((s) => (
                     <tr key={s.id}><td className="att-grid-name"><a href={`/attendance/app?student_id=${s.id}#/student`}>{s.name}</a></td>
                       <td>{s.class}</td><td>{s.from}%</td><td>{s.to}%</td>
-                      <td><b style={{ color: '#1cc88a' }}>+{s.delta}</b></td></tr>))}
+                      <td><b style={{ color: '#16a34a' }}>+{s.delta}</b></td></tr>))}
                   </tbody>
                 </table>
               </div>

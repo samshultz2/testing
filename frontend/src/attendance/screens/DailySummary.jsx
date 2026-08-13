@@ -102,7 +102,7 @@ export default function DailySummary() {
                     {week.data.days.map((wd) => (
                       <tr key={wd.date} className={wd.date === date ? 'is-active' : ''}>
                         <td><button type="button" onClick={() => setDate(wd.date)}
-                          style={{ background: 'none', border: 'none', padding: 0, color: '#0d6a4e', fontWeight: 600, cursor: 'pointer' }}>
+                          style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary)', fontWeight: 600, cursor: 'pointer' }}>
                           {new Date(wd.date).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}
                         </button></td>
                         <td>{wd.am_present}</td><td>{wd.am_absent}</td>

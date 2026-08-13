@@ -13,12 +13,13 @@
 .att-x:hover { opacity: 1; }
 
 .att-tabs { display: flex; gap: 4px; flex-wrap: wrap; align-items: center;
-  border-bottom: 1px solid var(--gray-200, #e5e7eb); padding-bottom: 0; }
+  border-bottom: 1px solid var(--border-color); padding-bottom: 0; }
 .att-tab { display: inline-flex; align-items: center; gap: 6px; padding: .55rem .9rem;
-  text-decoration: none; color: var(--text-secondary, #475569); border-bottom: 2px solid transparent;
-  border-radius: 6px 6px 0 0; font-weight: 600; font-size: 14px; }
-.att-tab:hover { background: var(--gray-50, #f8fafc); }
-.att-tab.is-active { color: var(--primary, #2563eb); border-bottom-color: var(--primary, #2563eb); }
+  text-decoration: none; color: var(--text-secondary); border-bottom: 2px solid transparent;
+  border-radius: var(--radius-md) var(--radius-md) 0 0; font-weight: 600; font-size: 14px; }
+.att-tab:hover { background: var(--gray-50); }
+.att-tab.is-active { color: var(--primary); border-bottom-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 8%, var(--bg-card)); }
 .att-tabs-status { margin-left: auto; display: flex; gap: 8px; align-items: center; }
 
 .att-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
@@ -26,19 +27,29 @@
   transition: border-color .15s, box-shadow .15s, background .15s; }
 .att-list li:hover { border-color: var(--gray-300, #cbd5e1); box-shadow: 0 1px 4px rgba(0,0,0,.06); }
 .att-list label { display: flex; align-items: center; gap: 12px; padding: 10px 14px; cursor: pointer; margin: 0; }
-.att-list li.is-present { border-color: rgba(22,163,74,.4); background: rgba(22,163,74,.06); }
-.att-list input[type=checkbox] { width: 20px; height: 20px; flex: none; accent-color: #16a34a; cursor: pointer; }
+.att-list li.is-present { border-color: color-mix(in srgb, var(--success) 45%, var(--border-color));
+  background: color-mix(in srgb, var(--success) 7%, var(--bg-card)); }
+.att-list li.is-absent { border-color: color-mix(in srgb, var(--danger) 38%, var(--border-color));
+  background: color-mix(in srgb, var(--danger) 6%, var(--bg-card)); }
+.att-list input[type=checkbox] { width: 22px; height: 22px; flex: none; accent-color: var(--success); cursor: pointer; }
 .att-av { flex: none; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
-  font-weight: 700; font-size: 13px; color: #fff; background: #94a3b8; letter-spacing: .5px; }
+  font-weight: 700; font-size: 13px; color: #fff; background: var(--gray-400); letter-spacing: .5px; }
 .att-av[data-g="Male"] { background: #3b82f6; }
-.att-av[data-g="Female"] { background: #ec4899; }
+.att-av[data-g="Female"] { background: #f43f5e; }
 .att-name { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; font-weight: 600; }
 .att-sub { font-size: 12px; color: var(--text-muted, #6b7280); font-weight: 400; }
 .att-flag { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
-.att-list li.is-present .att-flag { color: #166534; background: rgba(22,163,74,.15); }
-.att-list li.is-absent .att-flag { color: #b91c1c; background: rgba(220,38,38,.1); }
+.att-list li.is-present .att-flag { color: var(--success); background: color-mix(in srgb, var(--success) 15%, var(--bg-card)); }
+.att-list li.is-absent .att-flag { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, var(--bg-card)); }
 
 .att-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+/* On phones the register can be long — float the actions (incl. Save) as a
+   sticky bar so marking never requires scrolling to the bottom to save. */
+@media (max-width: 640px) {
+  .att-actions { position: sticky; bottom: 8px; z-index: 5; background: var(--bg-card);
+    border: 1px solid var(--border-color); border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md); padding: 10px; }
+}
 
 .att-grid-wrap { overflow-x: auto; border: 1px solid var(--gray-200, #e5e7eb); border-radius: 8px; }
 .att-grid { border-collapse: collapse; width: 100%; min-width: 100%; font-size: 14px; }
@@ -81,8 +92,8 @@
 .att-perf-card .r { font-size: 12px; color: var(--text-muted, #6b7280); }
 
 .att-mark { display: inline-flex; gap: 3px; font-size: 13px; }
-.att-mark .ok { color: #16a34a; }
-.att-mark .no { color: #dc2626; }
+.att-mark .ok { color: var(--success); }
+.att-mark .no { color: var(--danger); }
 .att-grid tfoot td { font-weight: 700; background: var(--gray-50, #f8fafc); }
 .att-sub { color: var(--text-muted, #6b7280); font-size: 11px; font-weight: 400; }
 .att-legend { font-size: 12px; color: var(--text-muted, #6b7280); margin-top: 10px; }
@@ -99,12 +110,12 @@
 /* ---- student attendance profile ---- */
 .att-profile-head { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 8px 0 4px; }
 .att-avatar { width: 60px; height: 60px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
-  background: linear-gradient(135deg, var(--primary, #2563eb), #11998e); color: #fff;
+  background: color-mix(in srgb, var(--primary) 16%, var(--bg-card)); color: var(--primary);
   display: flex; align-items: center; justify-content: center; font-size: 1.3rem; font-weight: 700; }
 .att-sub { font-size: 12px; color: var(--text-muted, #6b7280); }
-.att-warn { background: rgba(231,74,59,.1); border: 1px solid rgba(231,74,59,.35); color: var(--text-primary, #111827);
-  border-radius: 8px; padding: 10px 12px; margin: 10px 0; font-size: 14px; }
-.att-warn i { color: #e74a3b; margin-right: 6px; }
+.att-warn { background: color-mix(in srgb, var(--danger) 9%, var(--bg-card)); border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--bg-card)); color: var(--text-primary);
+  border-radius: var(--radius-md); padding: 10px 12px; margin: 10px 0; font-size: 14px; }
+.att-warn i { color: var(--danger); margin-right: 6px; }
 .att-trend { display: flex; align-items: flex-end; gap: 8px; height: 120px; padding: 8px 4px 0;
   border-bottom: 1px solid var(--gray-200, #e5e7eb); }
 .att-trend-col { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; }
