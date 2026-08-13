@@ -6,7 +6,7 @@ import { Toolbar, Autocomplete, Spinner, EmptyState, ErrorState,
          StatCards, SectionTitle, Pill } from '../../components/ui';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const STATUS_TONE = { present: '#1cc88a', late: '#f6c23e', absent: '#e74a3b', unmarked: 'var(--border-color)' };
+const STATUS_TONE = { present: '#16a34a', late: '#d97706', absent: '#dc2626', unmarked: 'var(--border-color)' };
 const STATUS_LABEL = { present: 'Present', late: 'Late / partial', absent: 'Absent', unmarked: 'Not marked' };
 
 // A compact month-grouped calendar of a term's school days, colour-coded.
@@ -53,7 +53,7 @@ function TrendBars({ trend }) {
       {trend.map((t, i) => (
         <div key={i} className="att-trend-col" title={`${t.label}: ${t.percentage}%`}>
           <div className="att-trend-bar" style={{ height: Math.max(4, t.percentage) + '%',
-            background: t.percentage >= 75 ? '#1cc88a' : t.percentage >= 50 ? '#f6c23e' : '#e74a3b' }} />
+            background: t.percentage >= 75 ? '#16a34a' : t.percentage >= 50 ? '#d97706' : '#dc2626' }} />
           <div className="att-trend-lbl">{t.label}</div>
         </div>))}
     </div>
@@ -134,7 +134,7 @@ export default function StudentProfile() {
                     <tr key={t.enrollment_id}>
                       <td className="att-grid-name">{t.term}<div className="att-sub">{t.session}</div></td>
                       <td>{t.class}</td><td>{t.full_days}</td><td>{t.late_days}</td><td>{t.absent_days}</td>
-                      <td><b style={{ color: t.percentage >= 75 ? '#1cc88a' : t.percentage >= 50 ? '#dda20a' : '#e74a3b' }}>{t.percentage}%</b></td>
+                      <td><b style={{ color: t.percentage >= 75 ? '#16a34a' : t.percentage >= 50 ? '#d97706' : '#dc2626' }}>{t.percentage}%</b></td>
                     </tr>))}
                   {d.terms.length === 0 && <tr><td colSpan={6} className="att-sub">No attendance recorded yet.</td></tr>}
                 </tbody>

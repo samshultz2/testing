@@ -163,7 +163,7 @@ export default function MarkDaily() {
     : d.weekend ? `${d.date} is a weekend.` : `${d.date} is not a school day.`);
   const canSave = d && d.week_id && d.students.length && !notSchoolDay && !busy;
 
-  const boxStyle = { width: 22, height: 22, accentColor: 'var(--success, var(--success))', cursor: 'pointer' };
+  const boxStyle = { width: 24, height: 24, accentColor: 'var(--success)', cursor: 'pointer' };
   const colStyle = { width: 52, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 };
 
   return (
@@ -252,7 +252,7 @@ export default function MarkDaily() {
                     title={online ? 'Copy the previous school day’s marks' : 'Copy previous needs an internet connection'}>
               Copy previous day
             </Button>
-            {!online && <span style={{ fontSize: 'var(--text-xs)', color: '#92400e' }}>“Copy previous” needs you to be online.</span>}
+            {!online && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--warning)' }}>“Copy previous” needs you to be online.</span>}
           </div>
         </>
       )}
