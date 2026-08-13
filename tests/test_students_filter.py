@@ -71,6 +71,25 @@ def test_class_filter_narrows_list(app):
         _teardown(app)
 
 
+def test_summary_survives_sorted_query(app):
+    """The list payload's side-rail summary (male/female/stream counts) is
+    computed off the *sorted* list query. It must strip the ORDER BY before the
+    DISTINCT stream count, or Postgres 500s the whole /students page ("ORDER BY
+    expressions must appear in select list" for SELECT DISTINCT)."""
+    ids = _setup(app)
+    try:
+        c = _admin(app)
+        # A sort param is what triggers the ORDER BY that broke the DISTINCT count.
+        r = c.get('/api/students?sort=surname&order=asc')
+        assert r.status_code == 200
+        summary = r.get_json()['summary']
+        assert summary['total'] >= 2
+        assert summary['male'] >= 2          # SF_A + SF_B are both Male
+        assert 'female' in summary and 'streams' in summary
+    finally:
+        _teardown(app)
+
+
 def test_filter_works_for_non_admin(app):
     """A non-admin (staff with students access) can also use the filter."""
     ids = _setup(app)

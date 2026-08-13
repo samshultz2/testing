@@ -1797,6 +1797,9 @@ def _students_payload():
             photo_ids = {pid for (pid,) in db.session.query(StudentPhoto.student_id)
                          .filter(StudentPhoto.student_id.in_(pids)).all()}
     except Exception:
+        # Roll back so a failed lookup can't leave the (Postgres) transaction
+        # aborted for the rest of the request — the list just shows no avatars.
+        db.session.rollback()
         photo_ids = set()
     # Edit/delete follow the user's WRITE permission on the students module. A
     # form teacher with write access can manage their own class's students (the
@@ -1834,14 +1837,19 @@ def _students_payload():
                                                Student.house != ''), Student).distinct().all() if h})
     # At-a-glance summary over the *filtered* set (not just this page) for the
     # list's side rail. Best-effort — a count failure must never break the list.
+    # NB: drop the list's ORDER BY before aggregating — Postgres rejects
+    # `SELECT DISTINCT stream ... ORDER BY surname` (order columns must be in the
+    # select list), which SQLite tolerates.
     try:
-        base = _students_query()
+        base = _students_query().order_by(None)
         male = base.filter(Student.gender == 'Male').count()
         female = base.filter(Student.gender == 'Female').count()
         streams = (base.filter(Student.stream.isnot(None), Student.stream != '')
                    .with_entities(Student.stream).distinct().count())
         summary = {'total': pg.total, 'male': male, 'female': female, 'streams': streams}
     except Exception:
+        # Clear any aborted transaction so the rest of the payload still builds.
+        db.session.rollback()
         summary = {'total': pg.total, 'male': 0, 'female': 0, 'streams': 0}
     return {
         'students': students,
