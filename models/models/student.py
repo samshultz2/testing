@@ -178,16 +178,40 @@ class Student(db.Model):
         return bool(self.portal_password_hash) and check_password_hash(self.portal_password_hash, password)
 
     @staticmethod
+    def student_id_format():
+        """The school's configured (prefix, min-digits) for student ids — default
+        ('STU', 5). Digits is the MINIMUM zero-pad width; the running number grows
+        past it when needed. Best-effort read (settings table may be absent)."""
+        prefix, digits = 'STU', 5
+        try:
+            from models.models import SchoolSettings
+            p = (SchoolSettings.get('student_id_prefix') or '').strip()
+            if p:
+                prefix = p
+            d = SchoolSettings.get('student_id_digits')
+            if d:
+                digits = max(1, min(int(d), 12))
+        except Exception:
+            pass
+        return prefix, digits
+
+    @staticmethod
     def generate_student_id():
-        """Generate a unique STU##### id (robust to legacy/non-conforming ids)."""
+        """Generate the next unique id using the school's configured prefix +
+        minimum digit width (defaults STU#####). Robust to legacy/non-conforming
+        ids: the running number is taken from existing ids that match the prefix."""
+        prefix, digits = Student.student_id_format()
+        plen = len(prefix)
         nums = []
         for (sid,) in db.session.query(Student.student_id).all():
-            if sid and sid.startswith('STU'):
-                try:
-                    nums.append(int(sid[3:]))
-                except (ValueError, TypeError):
-                    continue
-        return f"STU{(max(nums) if nums else 0) + 1:05d}"
+            if sid and sid.startswith(prefix):
+                tail = sid[plen:]
+                if tail.isdigit():
+                    try:
+                        nums.append(int(tail))
+                    except (ValueError, TypeError):
+                        continue
+        return f"{prefix}{(max(nums) if nums else 0) + 1:0{digits}d}"
     
     def __repr__(self):
         return f'<Student {self.full_name}>'

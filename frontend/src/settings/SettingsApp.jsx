@@ -143,6 +143,8 @@ function Academic({ d, notify }) {
     period_duration: s.period_duration || '40', break_duration: s.break_duration || '30',
     periods_per_day: s.periods_per_day || '8', pass_mark: s.pass_mark || '50',
     promotion_threshold: s.promotion_threshold || '50',
+    student_id_prefix: s.student_id_prefix || 'STU',
+    student_id_digits: s.student_id_digits || '5',
     uses_class_arms: (s.uses_class_arms ?? 'true') !== 'false' ? '1' : '0',
   });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
@@ -177,6 +179,21 @@ function Academic({ d, notify }) {
               <input type="number" className="form-control" value={f.promotion_threshold} onChange={set('promotion_threshold')} min="30" max="70" step="0.1" />
               <small className="text-muted">Minimum average to be promoted</small></div>
           </div>
+          <h4 style={{ margin: '1.5rem 0 1rem', color: 'var(--text-secondary)' }}>Student ID Format</h4>
+          <div className="form-row">
+            <div className="form-group"><label className="form-label">ID Prefix</label>
+              <input type="text" className="form-control" value={f.student_id_prefix}
+                     onChange={(e) => setF({ ...f, student_id_prefix: e.target.value.toUpperCase() })}
+                     maxLength={10} placeholder="e.g. PIO" />
+              <small className="text-muted">Letters/digits, up to 10 (e.g. PIO). Blank = STU.</small></div>
+            <div className="form-group"><label className="form-label">Minimum Digits</label>
+              <input type="number" className="form-control" value={f.student_id_digits} onChange={set('student_id_digits')} min="3" max="12" />
+              <small className="text-muted">Zero-padded width — e.g. 6 → {(f.student_id_prefix || 'STU')}{'000001'}. Numbers grow past this if needed.</small></div>
+          </div>
+          <p className="text-muted" style={{ fontSize: '.82rem', marginTop: '-.4rem' }}>
+            Next new ID will look like <strong>{(f.student_id_prefix || 'STU')}{'1'.padStart(Math.max(3, Math.min(parseInt(f.student_id_digits, 10) || 5, 12)), '0')}</strong>. Existing IDs are never changed.
+          </p>
+
           <h4 style={{ margin: '1.5rem 0 1rem', color: 'var(--text-secondary)' }}>Class Structure</h4>
           <div className="form-group">
             <label className="form-check" style={{ display: 'flex', alignItems: 'center', gap: '.5rem' }}>

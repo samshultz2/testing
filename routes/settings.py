@@ -693,6 +693,18 @@ def academic_settings():
             SchoolSettings.set('periods_per_day', request.form.get('periods_per_day', '8'), 'int')
             SchoolSettings.set('promotion_threshold', request.form.get('promotion_threshold', '50'), 'float')
             SchoolSettings.set('pass_mark', request.form.get('pass_mark', '50'), 'int')
+            # Student-ID format: a prefix (letters/digits only) + a minimum digit
+            # width. Blank prefix keeps the default 'STU'. Only new ids are affected.
+            import re as _re
+            sid_prefix = (request.form.get('student_id_prefix') or '').strip().upper()
+            if sid_prefix and not _re.fullmatch(r'[A-Z0-9]{1,10}', sid_prefix):
+                return _err('Student ID prefix must be 1–10 letters/digits.',
+                            url_for('settings.academic_settings'))
+            SchoolSettings.set('student_id_prefix', sid_prefix or 'STU', 'string',
+                               'Prefix for auto-generated student IDs')
+            sid_digits = request.form.get('student_id_digits', type=int) or 5
+            SchoolSettings.set('student_id_digits', max(3, min(sid_digits, 12)), 'int',
+                               'Minimum digit width for auto-generated student IDs')
             uses_arms = (request.form.get('uses_class_arms') or '').strip().lower() in ('1', 'true', 'on', 'yes')
             SchoolSettings.set('uses_class_arms', uses_arms, 'bool', 'School streams classes into arms')
             if not uses_arms:
