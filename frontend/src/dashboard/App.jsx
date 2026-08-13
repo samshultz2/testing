@@ -385,7 +385,7 @@ export default function App({ data: initialData }) {
       {/* Hero */}
       <div className="dash-hero">
         <div className="dash-hero-main">
-          <div className="dash-hero-eyebrow"><span aria-hidden="true">✦</span> Good to see you again,</div>
+          <div className="dash-hero-eyebrow">Good to see you again,</div>
           <h1>{d.user_name || 'there'} <span className="dash-wave" aria-hidden="true">👋</span></h1>
           <p>{dateLabel}{d.active_session ? ' · ' + d.active_session.name : ''}</p>
           <div className="dash-hero-actions">
@@ -464,7 +464,7 @@ export default function App({ data: initialData }) {
       {(d.announcements || []).length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: '.5rem', marginBottom: '1.1rem' }}>
           {d.announcements.map((a, i) => {
-            const color = a.category === 'Important' ? '#e74a3b' : a.category === 'Event' ? '#f6c23e' : 'var(--primary)';
+            const color = a.category === 'Important' ? 'var(--danger)' : a.category === 'Event' ? 'var(--warning)' : 'var(--primary)';
             const icon = a.category === 'Important' ? 'fa-triangle-exclamation' : a.category === 'Event' ? 'fa-calendar-day' : 'fa-bullhorn';
             return (
               <div key={i} style={{ display: 'flex', gap: '.6rem', alignItems: 'flex-start', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderLeft: '4px solid ' + color, borderRadius: 'var(--radius-md)', padding: '.7rem .9rem' }}>
@@ -552,7 +552,7 @@ function DashBlock({ id, meta, arranging, favorite, busy, hovered, onHover, onTo
         <button type="button" style={TOOL_BTN} onClick={onToggleFav} aria-pressed={favorite}
                 title={favorite ? 'Unpin favourite' : 'Pin as favourite'}
                 aria-label={(favorite ? 'Unpin ' : 'Pin ') + (meta ? meta.label : 'widget') + ' as favourite'}>
-          <i className={'fa-star ' + (favorite ? 'fas' : 'far')} style={{ color: favorite ? '#f6c23e' : 'var(--text-muted)' }} aria-hidden="true" />
+          <i className={'fa-star ' + (favorite ? 'fas' : 'far')} style={{ color: favorite ? 'var(--accent)' : 'var(--text-muted)' }} aria-hidden="true" />
         </button>
         <button type="button" style={TOOL_BTN} onClick={onRefresh} disabled={busy}
                 title={'Refresh ' + (meta ? meta.label : 'widget')} aria-label={'Refresh ' + (meta ? meta.label : 'widget')}>
@@ -565,9 +565,9 @@ function DashBlock({ id, meta, arranging, favorite, busy, hovered, onHover, onTo
 }
 
 const SEV = {
-  high: { color: '#e74a3b', label: 'Urgent' },
-  medium: { color: '#f6c23e', label: 'Soon' },
-  low: { color: '#4e73df', label: 'FYI' },
+  high: { color: 'var(--danger)', label: 'Urgent' },
+  medium: { color: 'var(--warning)', label: 'Soon' },
+  low: { color: 'var(--info)', label: 'FYI' },
 };
 
 // The Needs-Attention panel: a prioritized, deep-linked action list. Items are
@@ -608,7 +608,7 @@ function Insights({ items }) {
                   <strong>{it.title}</strong>
                   {it.detail && <div className="text-muted text-sm">{it.detail}</div>}
                 </span>
-                <span className="badge" style={{ background: sev.color + '22', color: sev.color, fontWeight: 600 }}>{sev.label}</span>
+                <span className="badge" style={{ background: `color-mix(in srgb, ${sev.color} 15%, transparent)`, color: sev.color, fontWeight: 600 }}>{sev.label}</span>
               </a>
               {it.action ? (
                 <a href={it.action.url} className="btn btn-sm btn-outline"
@@ -656,7 +656,7 @@ function BranchComparison({ rows }) {
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <span style={{ minWidth: 34 }}>{r.students}</span>
                     <span aria-hidden="true" style={{ flex: 1, minWidth: 40, height: 6, background: 'var(--border-color)', borderRadius: 3, overflow: 'hidden' }}>
-                      <span style={{ display: 'block', height: '100%', width: (r.students / maxStudents * 100) + '%', background: '#4e73df' }} />
+                      <span style={{ display: 'block', height: '100%', width: (r.students / maxStudents * 100) + '%', background: 'var(--info)' }} />
                     </span>
                   </div>
                 </td>
@@ -664,7 +664,7 @@ function BranchComparison({ rows }) {
                 <td style={{ textAlign: 'right' }} title={naira(r.fees)}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
                     <span aria-hidden="true" style={{ width: 48, height: 6, background: 'var(--border-color)', borderRadius: 3, overflow: 'hidden' }}>
-                      <span style={{ display: 'block', height: '100%', width: (r.fees / maxFees * 100) + '%', background: '#11998e', float: 'right' }} />
+                      <span style={{ display: 'block', height: '100%', width: (r.fees / maxFees * 100) + '%', background: 'var(--primary)', float: 'right' }} />
                     </span>
                     <span>{nairaShort(r.fees)}</span>
                   </div>
@@ -680,8 +680,8 @@ function BranchComparison({ rows }) {
 
 // Shared performance-colour helpers: green ≥70, amber ≥50, red below — the
 // traffic-light an educator/bursar reads at a glance.
-const RECO_TONE = { positive: '#1cc88a', negative: '#e74a3b', warning: '#f6c23e', insight: '#4e73df' };
-const rateColor = (v) => (v >= 70 ? '#1cc88a' : v >= 50 ? '#f6c23e' : '#e74a3b');
+const RECO_TONE = { positive: 'var(--success)', negative: 'var(--danger)', warning: 'var(--warning)', insight: 'var(--info)' };
+const rateColor = (v) => (v >= 70 ? '#16a34a' : v >= 50 ? '#d97706' : '#dc2626');
 const rateTone = (v) => (v >= 70 ? 'green' : v >= 50 ? 'amber' : 'red');
 
 function RecoList({ items }) {
@@ -689,7 +689,7 @@ function RecoList({ items }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: '.4rem', marginTop: '.7rem' }}>
       {items.map((r, i) => (
-        <div key={i} style={{ borderLeft: '3px solid ' + (RECO_TONE[r.tone] || '#4e73df'), padding: '.25rem 0 .3rem .6rem' }}>
+        <div key={i} style={{ borderLeft: '3px solid ' + (RECO_TONE[r.tone] || 'var(--info)'), padding: '.25rem 0 .3rem .6rem' }}>
           <div style={{ fontWeight: 700, fontSize: '.82rem' }}>{r.title}</div>
           <div className="text-muted" style={{ fontSize: '.78rem', lineHeight: 1.4 }}>{r.text}</div>
         </div>
@@ -1010,36 +1010,38 @@ function FinanceHealth({ f, urls, t }) {
   );
 }
 
-// Exam snapshot card — a more premium redesign of the flat gradient blocks:
-// a frosted icon tile + title, a large headline metric with unit, an optional
-// progress meter (share ≥200 for JAMB, credit pass rate for WAEC), and a clean
-// footer of stat pills. Styles are inline so the refreshed look ships with the
-// hash-busted JS bundle rather than the (possibly SW-cached) page shell.
-const EXAM_GRADIENT = {
-  jamb: 'linear-gradient(135deg,#667eea,#764ba2)',
-  waec: 'linear-gradient(135deg,#0891b2,#0e7490)',
-  mock: 'linear-gradient(135deg,#0f9b7d,#22c55e)',
+// Exam snapshot card — a restrained, theme-aware surface card (no gradients):
+// the exam's accent shows only as a top hairline + a tinted icon tile, the metric
+// sits in the app's own text colours, and the meter/pills use design tokens so the
+// card recolours with the active theme and reads the same in light and dark. Styles
+// are inline so the refreshed look ships with the hash-busted JS bundle rather than
+// the (possibly SW-cached) page shell.
+const EXAM_ACCENT = {
+  jamb: '#3b82f6',   // blue
+  waec: '#0d9488',   // teal
+  mock: '#8b5cf6',   // violet
 };
 
 function ExamStatPill({ k, v }) {
   return (
     <span style={{ display: 'inline-flex', flexDirection: 'column', lineHeight: 1.15,
-                   background: 'rgba(255,255,255,.16)', borderRadius: 10, padding: '.3rem .55rem' }}>
-      <span style={{ fontSize: '.62rem', textTransform: 'uppercase', letterSpacing: '.04em', opacity: .8 }}>{k}</span>
+                   background: 'var(--gray-50)', border: '1px solid var(--border-color)',
+                   borderRadius: 'var(--radius-sm)', padding: '.3rem .55rem' }}>
+      <span style={{ fontSize: '.62rem', textTransform: 'uppercase', letterSpacing: '.04em', color: 'var(--text-muted)' }}>{k}</span>
       <span style={{ fontSize: '.9rem', fontWeight: 700 }}>{v}</span>
     </span>
   );
 }
 
-function ExamMeter({ pct, label }) {
+function ExamMeter({ pct, label, accent }) {
   const p = Math.max(0, Math.min(100, Number(pct) || 0));
   return (
     <div style={{ marginTop: '.15rem' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.68rem', opacity: .9, marginBottom: 3 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.68rem', color: 'var(--text-muted)', marginBottom: 3 }}>
         <span>{label}</span><span>{p}%</span>
       </div>
-      <div style={{ height: 6, borderRadius: 4, background: 'rgba(255,255,255,.22)', overflow: 'hidden' }}>
-        <div style={{ width: p + '%', height: '100%', borderRadius: 4, background: 'rgba(255,255,255,.92)' }} />
+      <div style={{ height: 6, borderRadius: 'var(--radius-full)', background: 'var(--gray-100)', overflow: 'hidden' }}>
+        <div style={{ width: p + '%', height: '100%', borderRadius: 'var(--radius-full)', background: accent }} />
       </div>
     </div>
   );
@@ -1065,42 +1067,42 @@ function ExamCard({ kind, snap, url }) {
     stats = [{ k: 'Top score', v: snap.max }];
   }
 
+  const accent = EXAM_ACCENT[kind] || 'var(--primary)';
   return (
-    <div style={{ position: 'relative', overflow: 'hidden', color: '#fff', borderRadius: 16,
-                  padding: '1.15rem', minHeight: 172, display: 'flex', flexDirection: 'column',
-                  gap: '.7rem', background: EXAM_GRADIENT[kind],
-                  boxShadow: '0 6px 18px -8px rgba(0,0,0,.45)' }}>
-      {/* soft decorative highlight */}
-      <span aria-hidden="true" style={{ position: 'absolute', top: -60, right: -40, width: 160, height: 160,
-              borderRadius: '50%', background: 'rgba(255,255,255,.12)', pointerEvents: 'none' }} />
-      <div style={{ display: 'flex', alignItems: 'center', gap: '.55rem', position: 'relative' }}>
-        <span style={{ width: 34, height: 34, borderRadius: 10, background: 'rgba(255,255,255,.2)',
-                       display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+    <div style={{ position: 'relative', overflow: 'hidden', color: 'var(--text-primary)',
+                  background: 'var(--bg-card)', border: '1px solid var(--border-color)',
+                  borderTop: '3px solid ' + accent, borderRadius: 'var(--radius-lg)',
+                  boxShadow: 'var(--shadow-xs)', padding: '1.15rem', minHeight: 172,
+                  display: 'flex', flexDirection: 'column', gap: '.7rem' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: '.55rem' }}>
+        <span style={{ width: 36, height: 36, borderRadius: 'var(--radius-md)', flexShrink: 0,
+                       background: `color-mix(in srgb, ${accent} 16%, var(--bg-card))`, color: accent,
+                       display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}>
           <i aria-hidden="true" className={'fas ' + ICON[kind]} />
         </span>
         <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1 }}>
           <strong style={{ fontSize: '.9rem' }}>{title}</strong>
-          {year && <span style={{ fontSize: '.68rem', opacity: .82 }}>{year}</span>}
+          {year && <span style={{ fontSize: '.68rem', color: 'var(--text-muted)' }}>{year}</span>}
         </div>
         {(snap || kind === 'mock') && (
-          <a href={url} aria-label={'Open ' + title} style={{ marginLeft: 'auto', color: '#fff', opacity: .9 }}>
+          <a href={url} aria-label={'Open ' + title} style={{ marginLeft: 'auto', color: accent }}>
             <i aria-hidden="true" className="fas fa-arrow-right" />
           </a>
         )}
       </div>
 
-      <div style={{ position: 'relative' }}>
+      <div>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: '.3rem' }}>
           <span style={{ fontSize: '2.4rem', fontWeight: 800, lineHeight: 1, fontFamily: 'var(--font-display)' }}>{big}</span>
-          {unit && <span style={{ fontSize: '.8rem', opacity: .85 }}>{unit}</span>}
+          {unit && <span style={{ fontSize: '.8rem', color: 'var(--text-muted)' }}>{unit}</span>}
         </div>
-        <div style={{ fontSize: '.76rem', opacity: .88, marginTop: 2 }}>{caption}</div>
+        <div style={{ fontSize: '.76rem', color: 'var(--text-muted)', marginTop: 2 }}>{caption}</div>
       </div>
 
-      {meter && <ExamMeter pct={meter.pct} label={meter.label} />}
+      {meter && <ExamMeter pct={meter.pct} label={meter.label} accent={accent} />}
 
       {stats.length > 0 && (
-        <div style={{ display: 'flex', gap: '.45rem', marginTop: 'auto', flexWrap: 'wrap', position: 'relative' }}>
+        <div style={{ display: 'flex', gap: '.45rem', marginTop: 'auto', flexWrap: 'wrap' }}>
           {stats.map((s) => <ExamStatPill key={s.k} k={s.k} v={s.v} />)}
         </div>
       )}
@@ -1108,41 +1110,41 @@ function ExamCard({ kind, snap, url }) {
   );
 }
 
-// Decorative school-building illustration for the hero (echoes the reference
-// design). Purely ornamental, so it's aria-hidden and colour-tuned to sit on the
-// dark-green hero without competing with the text.
+// Decorative school-building illustration for the hero. Purely ornamental, so
+// it's aria-hidden. Painted in white-opacity monochrome (no fixed hue) so it sits
+// correctly on ANY theme's hero gradient — green, blue, plum, slate, etc.
 function SchoolArt() {
   return (
     <div className="dash-hero-art" aria-hidden="true">
       <svg viewBox="0 0 240 180" width="100%" height="100%" preserveAspectRatio="xMidYMax meet">
         {/* soft ground + bushes */}
         <ellipse cx="120" cy="168" rx="120" ry="16" fill="rgba(255,255,255,.06)" />
-        <circle cx="40" cy="150" r="26" fill="rgba(198,236,214,.35)" />
-        <circle cx="205" cy="150" r="30" fill="rgba(198,236,214,.3)" />
+        <circle cx="40" cy="150" r="26" fill="rgba(255,255,255,.10)" />
+        <circle cx="205" cy="150" r="30" fill="rgba(255,255,255,.09)" />
         {/* main building */}
-        <rect x="58" y="86" width="124" height="72" rx="6" fill="#eef7f1" />
-        <rect x="58" y="150" width="124" height="8" rx="2" fill="#cfe6d8" />
+        <rect x="58" y="86" width="124" height="72" rx="6" fill="rgba(255,255,255,.92)" />
+        <rect x="58" y="150" width="124" height="8" rx="2" fill="rgba(255,255,255,.5)" />
         {/* roof */}
-        <polygon points="120,44 190,90 50,90" fill="#7cc7a0" />
-        <polygon points="120,44 190,90 120,90" fill="#63b389" />
+        <polygon points="120,44 190,90 50,90" fill="rgba(255,255,255,.68)" />
+        <polygon points="120,44 190,90 120,90" fill="rgba(255,255,255,.82)" />
         {/* flag */}
-        <rect x="118" y="26" width="3" height="20" rx="1.5" fill="#eef7f1" />
-        <polygon points="121,27 137,32 121,37" fill="#f4b740" />
+        <rect x="118" y="26" width="3" height="20" rx="1.5" fill="rgba(255,255,255,.9)" />
+        <polygon points="121,27 137,32 121,37" fill="rgba(255,255,255,.7)" />
         {/* clock on the gable */}
-        <circle cx="120" cy="74" r="9" fill="#eef7f1" />
-        <circle cx="120" cy="74" r="9" fill="none" stroke="#63b389" strokeWidth="1.5" />
-        <line x1="120" y1="74" x2="120" y2="69" stroke="#2f7d54" strokeWidth="1.4" strokeLinecap="round" />
-        <line x1="120" y1="74" x2="124" y2="76" stroke="#2f7d54" strokeWidth="1.4" strokeLinecap="round" />
+        <circle cx="120" cy="74" r="9" fill="rgba(255,255,255,.95)" />
+        <circle cx="120" cy="74" r="9" fill="none" stroke="rgba(255,255,255,.55)" strokeWidth="1.5" />
+        <line x1="120" y1="74" x2="120" y2="69" stroke="rgba(15,23,42,.4)" strokeWidth="1.4" strokeLinecap="round" />
+        <line x1="120" y1="74" x2="124" y2="76" stroke="rgba(15,23,42,.4)" strokeWidth="1.4" strokeLinecap="round" />
         {/* door */}
-        <rect x="106" y="120" width="28" height="38" rx="14" fill="#8fd0ab" />
-        <rect x="106" y="120" width="28" height="38" rx="14" fill="none" stroke="#cfe6d8" strokeWidth="1.2" />
-        <circle cx="128" cy="140" r="1.6" fill="#2f7d54" />
+        <rect x="106" y="120" width="28" height="38" rx="14" fill="rgba(255,255,255,.62)" />
+        <rect x="106" y="120" width="28" height="38" rx="14" fill="none" stroke="rgba(255,255,255,.5)" strokeWidth="1.2" />
+        <circle cx="128" cy="140" r="1.6" fill="rgba(15,23,42,.35)" />
         {/* windows */}
         {[72, 150].map((x) => (
           <g key={x}>
-            <rect x={x} y="104" width="20" height="20" rx="3" fill="#bfe3cf" />
-            <line x1={x + 10} y1="104" x2={x + 10} y2="124" stroke="#eef7f1" strokeWidth="1.4" />
-            <line x1={x} y1="114" x2={x + 20} y2="114" stroke="#eef7f1" strokeWidth="1.4" />
+            <rect x={x} y="104" width="20" height="20" rx="3" fill="rgba(255,255,255,.55)" />
+            <line x1={x + 10} y1="104" x2={x + 10} y2="124" stroke="rgba(255,255,255,.85)" strokeWidth="1.4" />
+            <line x1={x} y1="114" x2={x + 20} y2="114" stroke="rgba(255,255,255,.85)" strokeWidth="1.4" />
           </g>
         ))}
       </svg>
