@@ -148,15 +148,18 @@ def student_report(student_id):
     # target + missing subjects) and the courses they're projected competitive
     # for. Reuses the readiness we already computed above — no recompute.
     sid = active_session.id if active_session else None
-    aspiration = recommendations = None
+    aspiration = recommendations = subject_diag = None
     try:
-        from utils.aspiration import course_eligibility, recommend_courses, ELIGIBILITY_LABELS
+        from utils.aspiration import (course_eligibility, recommend_courses,
+                                       course_subject_diagnosis, ELIGIBILITY_LABELS)
         aspiration = course_eligibility(student, sid, readiness=readiness)
         if aspiration:
             aspiration['status_label'] = ELIGIBILITY_LABELS.get(aspiration.get('status'), aspiration.get('status'))
         recommendations = recommend_courses(student, sid, limit=8)
+        # Attribute the target gap to specific course-relevant subjects.
+        subject_diag = course_subject_diagnosis(student, sid)
     except Exception:
-        aspiration = recommendations = None
+        aspiration = recommendations = subject_diag = None
 
     return render_template('results/student_report.html',
         student=student,
@@ -170,6 +173,7 @@ def student_report(student_id):
         standing=standing,
         aspiration=aspiration,
         recommendations=recommendations,
+        subject_diag=subject_diag,
         generated=_date.today()
     )
 
