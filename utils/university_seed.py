@@ -517,20 +517,32 @@ _OVERRIDES = [(abbr, cname, cutoff)
               for cname, cutoff in courses.items()]
 
 
-def _load_bulk_institutions():
-    """The long tail of Nigerian tertiary institutions (universities,
-    polytechnics, colleges of education/health/nursing/agriculture, monotechnics)
-    sourced from myschool.ng — [{name, ownership}]. Bundled as JSON so the curated
-    set above (which carries states + competitive cut-offs) stays readable.
-    Returns [] if the data file is missing."""
+def _load_bulk_data(filename):
+    """Load a bundled JSON reference list from utils/data. Returns [] if missing."""
     import json
     import os
-    path = os.path.join(os.path.dirname(__file__), 'data', 'ng_institutions.json')
+    path = os.path.join(os.path.dirname(__file__), 'data', filename)
     try:
         with open(path, encoding='utf-8') as fh:
             return json.load(fh)
     except (OSError, ValueError):
         return []
+
+
+def _load_bulk_institutions():
+    """The long tail of Nigerian tertiary institutions (universities,
+    polytechnics, colleges of education/health/nursing/agriculture, monotechnics)
+    sourced from myschool.ng — [{name, ownership}]. Bundled as JSON so the curated
+    set above (which carries states + competitive cut-offs) stays readable."""
+    return _load_bulk_data('ng_institutions.json')
+
+
+def _load_bulk_courses():
+    """The full JAMB-brochure course catalogue (per-faculty) sourced from
+    myschool.ng — [{name, department, base_cutoff, jamb_subjects, waec_subjects}].
+    Cut-offs are our competitiveness estimates by faculty; the university bump and
+    any override still apply on top."""
+    return _load_bulk_data('ng_courses.json')
 
 
 def seed_university_data():
@@ -573,6 +585,23 @@ def seed_university_data():
                        is_active=True)
             db.session.add(c); added['courses'] += 1
         by_course[name] = c
+    db.session.flush()
+
+    # The full JAMB-brochure catalogue (long tail) — faculty-estimated cut-offs and
+    # subject requirements. Deduped by name against the curated courses above.
+    existing_courses = {n for (n,) in db.session.query(Course.name).all()}
+    for rec in _load_bulk_courses():
+        name = (rec.get('name') or '').strip()
+        if not name or name in existing_courses:
+            continue
+        c = Course(name=name, department=(rec.get('department') or None),
+                   base_cutoff=rec.get('base_cutoff') or 180,
+                   jamb_subjects=(rec.get('jamb_subjects') or None),
+                   waec_subjects=(rec.get('waec_subjects') or None), is_active=True)
+        db.session.add(c)
+        by_course[name] = c
+        existing_courses.add(name)
+        added['courses'] += 1
     db.session.flush()
 
     # Upgrade legacy O'level requirements: where Commerce and Financial Accounting
