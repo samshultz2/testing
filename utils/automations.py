@@ -41,6 +41,10 @@ REGISTRY = [
     ('student_change', 'Student record changes',
      "Post an in-app notification when a student is added, updated or removed.",
      'Students', True),
+    ('staff_change', 'Staff record changes',
+     "Post an in-app notification when a staff member is added, updated or removed "
+     "— naming whose record, what field changed and who did it.",
+     'HR', True),
     ('library_overdue', 'Library overdue reminders',
      "Once a day, alert admins about overdue library books and draft a reminder to "
      "the borrowers' parents for review.",

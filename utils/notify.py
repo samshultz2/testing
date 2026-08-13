@@ -132,9 +132,38 @@ def deliver_to_user(user_id, title, body='', url=None, *, category='info',
     return used
 
 
+def current_actor():
+    """Display name of the acting user, or None when there is no user in context
+    (a background job / scheduled tick). Used to stamp "who did it" on admin
+    notifications automatically."""
+    try:
+        from utils.access_control import get_current_user, is_admin
+        u = get_current_user()
+        if u:
+            return getattr(u, 'full_name', None) or getattr(u, 'username', None)
+        if session.get('logged_in') and is_admin():
+            return 'Administrator'
+    except Exception:
+        pass
+    return None
+
+
+def _with_actor(body):
+    """Append '· by {actor}' to an admin-notification body when a real user is
+    acting and it isn't already stamped — so every module's "someone did X"
+    notification says WHO, without each call site passing it. No-op for background
+    jobs (no actor) and for bodies already carrying a 'by' attribution."""
+    body = body or ''
+    if '· by ' in body or body.endswith(' by system'):
+        return body
+    a = current_actor()
+    return f'{body} · by {a}' if a else body
+
+
 def notify_admins(title, body='', url=None, category='info'):
-    """Broadcast to every admin (one row, matched by role at read time)."""
-    return notify(title, body, url, role='admin', category=category)
+    """Broadcast to every admin (one row, matched by role at read time). The acting
+    user is stamped on automatically (see _with_actor)."""
+    return notify(title, _with_actor(body), url, role='admin', category=category)
 
 
 def notify_branch_admins(title, body='', url=None, *, branch_id=None, category='info'):
@@ -144,6 +173,7 @@ def notify_branch_admins(title, body='', url=None, *, branch_id=None, category='
     (so it can be branch-targeted, unlike the role broadcast). Best-effort."""
     if not branch_id:
         return notify_admins(title, body, url, category=category)
+    body = _with_actor(body)
     try:
         from models import User
         admins = User.query.filter(
@@ -193,6 +223,41 @@ def notify_student_change(action, *, student=None, detail='', changes='', actor=
     if actor:
         body = f'{body} · by {actor}' if body else f'by {actor}'
     return notify_admins(title, body=body, url=url, category='student')
+
+
+_STAFF_CHANGE_TITLES = {
+    'create': 'Staff added',
+    'update': 'Staff updated',
+    'delete': 'Staff removed',
+}
+
+
+def notify_staff_change(action, *, staff=None, detail='', changes='', actor='', url=None,
+                        branch_id=None):
+    """Bell admins when a staff record changes — with detail, mirroring
+    ``notify_student_change``.
+
+    ``action`` is create/update/delete. When ``staff`` is given the body names
+    WHO ("Name (ID)"); ``changes`` adds WHAT changed and ``actor`` adds WHO did
+    it, so an update reads e.g. *"Bello Musa (STF007) — Designation: "Teacher" →
+    "HOD" · by Mrs Bello"*. Branch-scoped when a ``branch_id`` is given.
+    Best-effort — never breaks the triggering action."""
+    from utils import automations
+    if not automations.is_enabled('staff_change'):
+        return None
+    title = _STAFF_CHANGE_TITLES.get(action, 'Staff change')
+    who = ''
+    if staff is not None:
+        name = getattr(staff, 'full_name', '') or ''
+        sid = getattr(staff, 'staff_id', '') or ''
+        who = f'{name} ({sid})'.strip()
+    body = detail or who
+    if changes:
+        body = f'{who} — {changes}' if who else changes
+    if actor:
+        body = f'{body} · by {actor}' if body else f'by {actor}'
+    return notify_branch_admins(title, body=body, url=url, branch_id=branch_id,
+                                category='staff')
 
 
 def actor_label(default='an administrator'):
