@@ -70,6 +70,24 @@
                         {% for g in groups %}<option value="{{ g.id }}">{{ g.name }}{% if g.branch_id %} (branch){% endif %}</option>{% endfor %}
                     </select></div>
             </div>
+            <div class="form-row">
+                <div class="form-group" style="flex:1;min-width:220px;"><label class="form-label">Preset position / title <span class="text-muted text-sm">(optional)</span></label>
+                    <input type="text" name="position" class="form-control" placeholder="e.g. SSS3 Form Teacher">
+                    <small class="text-muted">Pre-fills the joiner's job title — e.g. a link just for SSS3 form teachers.</small></div>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Sign-up form fields <span class="text-muted text-sm">(what joiners fill, besides name / username / password / branch)</span></label>
+                <input type="hidden" name="fields_picker" value="1">
+                <div style="display:flex;flex-wrap:wrap;gap:.4rem 1.1rem;">
+                    {% set field_labels = {'email':'Email','phone':'Phone','position':'Position/title','gender':'Gender','staff_type':'Staff type','department':'Department','qualification':'Qualification'} %}
+                    {% for key, lbl in field_labels.items() %}
+                    <label style="display:flex;align-items:center;gap:.35rem;font-size:.85rem;">
+                        <input type="checkbox" name="fields" value="{{ key }}" checked> {{ lbl }}
+                    </label>
+                    {% endfor %}
+                </div>
+                <small class="text-muted">Unchecked fields won't appear on the sign-up page. A preset position is still recorded even if "Position" is unchecked.</small>
+            </div>
             <div class="form-row" style="align-items:flex-end;">
                 {% if is_central %}
                 <div class="form-group"><label class="form-label">Branch</label>

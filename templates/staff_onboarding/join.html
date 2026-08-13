@@ -23,31 +23,42 @@
 <body style="background:#f6f7fb;">
   <div class="join-wrap">
     <div class="join-card">
-      <span class="role-chip"><i class="fas fa-id-badge"></i> {{ invite.role|replace('_',' ')|title }}{% if invite.branch %} · {{ invite.branch.name }}{% endif %}</span>
+      <span class="role-chip"><i class="fas fa-id-badge"></i> {{ invite.role|replace('_',' ')|title }}{% if invite.position %} · {{ invite.position }}{% endif %}{% if invite.branch %} · {{ invite.branch.name }}{% endif %}</span>
       <h1>Join {{ school }}</h1>
-      <p class="muted" style="margin-top:.1rem;">Fill in your details and choose a password. Your access is granted once an administrator approves you.</p>
+      <p class="muted" style="margin-top:.1rem;">Your role{% if invite.branch %} and branch{% endif %} {{ 'are' if invite.branch else 'is' }} already set by this invite. Fill in your details and choose a password — access is granted once an administrator approves you.</p>
       {% with msgs = get_flashed_messages() %}{% for m in msgs %}<div class="flash">{{ m }}</div>{% endfor %}{% endwith %}
       <form method="post" action="{{ url_for('staff_onboarding.join', token=invite.token) }}">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <div class="fg"><label>Full name</label><input name="full_name" required value="{{ (form.full_name if form else '') or '' }}"></div>
-        <div class="fg"><label>Position / title <span class="muted">(optional)</span></label><input name="position" placeholder="e.g. Principal" value="{{ (form.position if form else '') or '' }}"></div>
+        {% if invite.shows('position') %}
+        <div class="fg"><label>Position / title{% if not invite.position %} <span class="muted">(optional)</span>{% endif %}</label>
+          <input name="position" placeholder="e.g. Principal" value="{{ (form.position if form else '') or invite.position or '' }}"></div>
+        {% elif invite.position %}
+        <input type="hidden" name="position" value="{{ invite.position }}">
+        {% endif %}
+        {% if invite.shows('gender') %}
         <div class="fg"><label>Gender <span class="muted">(optional)</span></label>
           <select name="gender">
             <option value="">— Select —</option>
             {% for g in ['Male', 'Female'] %}<option value="{{ g }}" {{ 'selected' if form and form.gender == g else '' }}>{{ g }}</option>{% endfor %}
           </select></div>
+        {% endif %}
+        {% if invite.shows('staff_type') %}
         <div class="fg"><label>Staff type</label>
           <select name="staff_type">
             {% for t in ['Teaching', 'Non-teaching'] %}<option value="{{ t }}" {{ 'selected' if form and form.staff_type == t else '' }}>{{ t }}</option>{% endfor %}
           </select></div>
-        {% if departments %}
+        {% endif %}
+        {% if invite.shows('department') and departments %}
         <div class="fg"><label>Department <span class="muted">(optional)</span></label>
           <select name="department_id">
             <option value="">— Select —</option>
             {% for d in departments %}<option value="{{ d.id }}" {{ 'selected' if form and form.department_id == d.id|string else '' }}>{{ d.name }}</option>{% endfor %}
           </select></div>
         {% endif %}
+        {% if invite.shows('qualification') %}
         <div class="fg"><label>Highest qualification <span class="muted">(optional)</span></label><input name="qualification" placeholder="e.g. B.Sc, B.Ed, M.Sc" value="{{ (form.qualification if form else '') or '' }}"></div>
+        {% endif %}
         {% if not invite.branch %}
         <div class="fg"><label>Your branch</label>
           <select name="branch_id" {{ 'required' if invite.scope != 'central' else '' }}>
@@ -56,8 +67,12 @@
           </select></div>
         {% endif %}
         <div class="fg"><label>Username <span class="muted">(you'll log in with this)</span></label><input name="username" required value="{{ (form.username if form else '') or '' }}"></div>
+        {% if invite.shows('email') %}
         <div class="fg"><label>Email <span class="muted">(optional)</span></label><input type="email" name="email" value="{{ (form.email if form else '') or '' }}"></div>
+        {% endif %}
+        {% if invite.shows('phone') %}
         <div class="fg"><label>Phone <span class="muted">(optional)</span></label><input name="phone" value="{{ (form.phone if form else '') or '' }}"></div>
+        {% endif %}
         <div class="fg"><label>Password <span class="muted">(min 8 characters)</span></label><input type="password" name="password" required minlength="8"></div>
         <button type="submit" class="btn-go">Submit for approval</button>
       </form>

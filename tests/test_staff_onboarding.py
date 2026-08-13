@@ -163,3 +163,45 @@ def test_invites_page_renders_for_admin(auth_client, app):
     r = auth_client.get('/staff-invites')
     assert r.status_code == 200
     assert 'invite link' in r.get_data(as_text=True).lower()
+
+
+def test_invite_field_selection_and_preset_position(app):
+    """An invite can preset the position and choose which optional fields the
+    sign-up form exposes."""
+    from models import StaffInvite
+    from utils import staff_invite as svc
+    with app.app_context():
+        bid, _gid = _branch_and_group(app)
+        inv = svc.create_invite(label='SSS3 Form Teachers', role='teacher',
+                                permission_group_id=None, branch_id=bid, scope='branch',
+                                max_uses=None, expires_days=None, created_by='root',
+                                position='SSS3 Form Teacher', fields=['email', 'phone'])
+        assert inv.field_set == {'email', 'phone'}
+        assert inv.shows('email') and not inv.shows('gender')
+        assert inv.position == 'SSS3 Form Teacher'
+        # A signup that omits position still records the invite's preset.
+        s, err = svc.submit_signup(inv, full_name='Kay Bee', username='kaybee',
+                                   email='kb@x.com', phone='080', password='secret12',
+                                   branch_id=None, position=None)
+        assert err is None and s.position == 'SSS3 Form Teacher'
+        # Legacy invite (no field list) exposes them all.
+        legacy = svc.create_invite(label='L', role='staff', permission_group_id=None,
+                                   branch_id=bid, scope='branch', max_uses=None,
+                                   expires_days=None, created_by='root')
+        assert legacy.field_set == set(StaffInvite.OPTIONAL_FIELDS)
+
+
+def test_join_page_respects_field_selection(app):
+    from utils import staff_invite as svc
+    with app.app_context():
+        bid, _gid = _branch_and_group(app)
+        inv = svc.create_invite(label='X', role='teacher', permission_group_id=None,
+                                branch_id=bid, scope='branch', max_uses=None,
+                                expires_days=None, created_by='root',
+                                position='SSS3 Form Teacher', fields=['email'])
+        token = inv.token
+    html = app.test_client().get(f'/join/{token}').get_data(as_text=True)
+    assert 'name="email"' in html
+    assert 'name="phone"' not in html          # not selected → hidden
+    assert 'name="gender"' not in html
+    assert 'SSS3 Form Teacher' in html         # preset position surfaced

@@ -18,6 +18,17 @@ from utils.security import rate_limited
 
 staff_onb_bp = Blueprint('staff_onboarding', __name__)
 
+
+@staff_onb_bp.before_request
+def _ensure_invite_schema():
+    """Self-heal the preset-position / field-selection columns on the bound tenant
+    DB before any invite route runs (best-effort)."""
+    try:
+        from utils.staff_invite_schema import ensure_staff_invite_schema
+        ensure_staff_invite_schema()
+    except Exception:
+        pass
+
 # Roles a BRANCH-level manager may hand out (never admin/super_admin). Central
 # managers may grant any role.
 _BRANCH_GRANTABLE_ROLES = {'teacher', 'staff', 'readonly'}
@@ -99,12 +110,19 @@ def create_invite():
         flash('That permission group is not available to you.', 'error')
         return redirect(url_for('staff_onboarding.invites'))
     me = get_current_user()
+    # Which optional join-form fields to expose. If the form submitted the field
+    # picker at all (marker present), honour the selection; otherwise leave None
+    # (= show all, backward compatible).
+    fields = None
+    if request.form.get('fields_picker') == '1':
+        fields = request.form.getlist('fields')
     inv = svc.create_invite(
         label=request.form.get('label'), role=role, permission_group_id=gid,
         branch_id=branch_id, scope=scope,
         max_uses=request.form.get('max_uses', type=int),
         expires_days=request.form.get('expires_days', type=int),
-        created_by=(me.username if me else session.get('username')))
+        created_by=(me.username if me else session.get('username')),
+        position=request.form.get('position'), fields=fields)
     log_action('staff_invite.create', f'invite {inv.id} role={role} group={gid} branch={branch_id}')
     flash('Invite link created — copy it and send it to your staff.', 'success')
     return redirect(url_for('staff_onboarding.invites', new=inv.id))

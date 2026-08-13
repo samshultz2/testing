@@ -37,16 +37,23 @@ def email_available(email):
 
 
 def create_invite(*, label, role, permission_group_id, branch_id, scope,
-                  max_uses, expires_days, created_by):
-    """Mint a reusable invite link. Returns the StaffInvite."""
+                  max_uses, expires_days, created_by, position=None, fields=None):
+    """Mint a reusable invite link. ``position`` presets the joiner's job title;
+    ``fields`` is the list of optional join-form fields to expose (None = all).
+    Returns the StaffInvite."""
+    import json
     from models import db, StaffInvite
+    valid = None
+    if fields is not None:
+        valid = json.dumps([f for f in fields if f in StaffInvite.OPTIONAL_FIELDS])
     inv = StaffInvite(
         token=StaffInvite.new_token(), label=(label or None),
         role=(role or 'staff'), permission_group_id=permission_group_id,
         branch_id=branch_id, scope=(scope or 'branch'),
         max_uses=(int(max_uses) if max_uses else None),
         expires_at=(datetime.now() + timedelta(days=int(expires_days))) if expires_days else None,
-        created_by=created_by)
+        created_by=created_by,
+        position=((position or '').strip() or None), fields=valid)
     db.session.add(inv)
     db.session.commit()
     return inv
@@ -75,11 +82,13 @@ def submit_signup(invite, *, full_name, username, email, phone, password, branch
     chosen_branch = pinned if pinned else (int(branch_id) if branch_id else None)
     if not chosen_branch and invite.scope != 'central':
         return None, 'Please select your branch.'
+    # Fall back to the invite's preset job title when the field was hidden/blank.
+    position = (position or '').strip() or getattr(invite, 'position', None)
     s = StaffSignup(
         invite_id=invite.id, full_name=full_name, username=username, email=email,
         phone=(phone or '').strip() or None,
         password_hash=generate_password_hash(password),
-        branch_id=chosen_branch, position=(position or '').strip() or None,
+        branch_id=chosen_branch, position=(position or None),
         gender=(gender or '').strip() or None,
         staff_type=(staff_type or '').strip() or None,
         department_id=(int(department_id) if department_id else None),

@@ -33,9 +33,34 @@ class StaffInvite(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     created_by = db.Column(db.String(80))             # username of the generator
     created_at = db.Column(db.DateTime, default=local_now)
+    # Optional preset job title (e.g. "SSS3 Form Teacher"), pre-filled/locked on
+    # the join form; and the set of optional fields the join form exposes (JSON
+    # list). NULL fields = show them all (legacy behaviour).
+    position = db.Column(db.String(80))
+    fields = db.Column(db.Text)
 
     permission_group = db.relationship('PermissionGroup', foreign_keys=[permission_group_id])
     branch = db.relationship('Branch', foreign_keys=[branch_id])
+
+    # Optional join-form fields an invite may switch on/off (the core name /
+    # username / password / branch are always present).
+    OPTIONAL_FIELDS = ('email', 'phone', 'position', 'gender', 'staff_type',
+                       'department', 'qualification')
+
+    @property
+    def field_set(self):
+        """The optional fields this invite's join form should show. A legacy invite
+        (``fields`` NULL) exposes them all."""
+        import json
+        if not self.fields:
+            return set(self.OPTIONAL_FIELDS)
+        try:
+            return {v for v in json.loads(self.fields) if v in self.OPTIONAL_FIELDS}
+        except Exception:
+            return set(self.OPTIONAL_FIELDS)
+
+    def shows(self, field):
+        return field in self.field_set
 
     @staticmethod
     def new_token():
