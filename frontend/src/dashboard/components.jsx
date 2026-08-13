@@ -2,9 +2,10 @@ import React from 'react';
 import { Counter } from '../components/ui';
 import Sparkline from './Sparkline';
 
-// Sparkline/accent colour per tone — matches the icon-tile gradients below.
+// Sparkline/accent colour per tone — matches the flat icon-tile tints (the tone
+// glyph colour) so a card's sparkline reads as the same accent as its icon.
 export const TONE_HEX = {
-  blue: '#4f7cf7', green: '#16a34a', teal: '#0d9488', purple: '#8b5cf6',
+  blue: '#3b82f6', green: '#16a34a', teal: '#0d9488', purple: '#8b5cf6',
   orange: '#f59e0b', amber: '#f59e0b', red: '#ef4444', indigo: '#6366f1',
   rose: '#f43f5e', slate: '#64748b',
 };

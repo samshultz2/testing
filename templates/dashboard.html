@@ -12,12 +12,13 @@
        Flat fallback first for browsers without color-mix(). */
     background:var(--primary);
     background:linear-gradient(135deg,var(--primary) 0%,color-mix(in srgb,var(--primary) 74%,#000) 60%,color-mix(in srgb,var(--primary) 58%,#000) 100%);
-    color:#fff;border-radius:22px;
-    padding:1.6rem 1.75rem;margin-bottom:1.25rem;box-shadow:0 20px 45px -22px rgba(6,54,35,.75)}
+    color:#fff;border-radius:var(--radius-xl);
+    padding:1.6rem 1.75rem;margin-bottom:1.25rem;
+    box-shadow:0 14px 34px -20px rgba(15,23,42,.5);
+    box-shadow:0 14px 34px -20px color-mix(in srgb,var(--primary) 60%,#000)}
 .dash-hero-main{position:relative;z-index:2;display:flex;flex-direction:column;gap:.1rem;min-width:0}
-.dash-hero-eyebrow{display:flex;align-items:center;gap:.5rem;font-size:.95rem;opacity:.92;font-weight:500}
-.dash-hero-eyebrow span{color:#a7f3d0;font-size:1.05rem}
-.dash-hero h1{margin:.15rem 0 0;font-size:2.6rem;line-height:1.04;font-weight:800;letter-spacing:-.02em;font-family:var(--font-display)}
+.dash-hero-eyebrow{display:flex;align-items:center;gap:.5rem;font-size:.95rem;opacity:.9;font-weight:500}
+.dash-hero h1{margin:.15rem 0 0;font-size:2.1rem;line-height:1.08;font-weight:800;letter-spacing:-.02em;font-family:var(--font-display)}
 .dash-wave{display:inline-block;transform-origin:70% 70%;animation:dash-wave 2.6s ease-in-out infinite}
 .dash-hero p{margin:.55rem 0 0;opacity:.85;font-size:1rem}
 .dash-hero-actions{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-top:1.2rem}
@@ -39,21 +40,23 @@
 
 .kpi-row{display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;margin-bottom:1.25rem}
 @media(min-width:1100px){.kpi-row{grid-template-columns:repeat(4,1fr)}}
-.kpi{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-xl);
+.kpi{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);
     padding:1.1rem;display:flex;align-items:center;gap:.85rem;overflow:hidden;
-    box-shadow:0 1px 2px rgba(15,23,42,.04),0 10px 28px -14px rgba(15,23,42,.16);
+    box-shadow:var(--shadow-xs);
     transition:transform var(--transition),box-shadow var(--transition),border-color var(--transition)}
 .kpi>div:last-child{min-width:0}
-.kpi:hover{transform:translateY(-3px);box-shadow:0 2px 4px rgba(15,23,42,.05),0 18px 40px -16px rgba(15,23,42,.22);border-color:var(--gray-300)}
-.kpi .ic{width:46px;height:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;
-    font-size:1.2rem;color:#fff;flex-shrink:0;
-    box-shadow:0 6px 14px -6px rgba(15,23,42,.35),inset 0 1px 0 rgba(255,255,255,.25)}
-.kpi .ic.blue{background:linear-gradient(135deg,#4e73df,#224abe)}
-.kpi .ic.green{background:linear-gradient(135deg,#1cc88a,#13855c)}
-.kpi .ic.amber{background:linear-gradient(135deg,#f6c23e,#dda20a)}
-.kpi .ic.red{background:linear-gradient(135deg,#e74a3b,#be2617)}
-.kpi .ic.purple{background:linear-gradient(135deg,#7e6cf0,#5a48c9)}
-.kpi .ic.teal{background:linear-gradient(135deg,#11998e,#38ef7d)}
+.kpi:hover{transform:translateY(-2px);box-shadow:var(--shadow-sm);border-color:var(--gray-300)}
+/* Icon tiles — flat, tinted, theme-aware (no gradients/glow), per the design system.
+   A soft tint of the tone colour over the card surface + the tone as the glyph. */
+.kpi .ic,.kc-ic{--tone-c:var(--primary);flex-shrink:0;display:flex;align-items:center;justify-content:center;
+    color:var(--tone-c);background:color-mix(in srgb,var(--tone-c) 16%,var(--bg-card));box-shadow:none}
+.kpi .ic{width:46px;height:46px;border-radius:12px;font-size:1.15rem}
+.kpi .ic.blue,.kc-ic.blue{--tone-c:#3b82f6}
+.kpi .ic.green,.kc-ic.green{--tone-c:#16a34a}
+.kpi .ic.amber,.kpi .ic.orange,.kc-ic.orange{--tone-c:#c2760a}
+.kpi .ic.red,.kc-ic.red{--tone-c:#ef4444}
+.kpi .ic.purple,.kc-ic.purple{--tone-c:#8b5cf6}
+.kpi .ic.teal,.kc-ic.teal{--tone-c:#0d9488}
 .kpi .v{font-size:1.55rem;font-weight:700;line-height:1.05;letter-spacing:-.01em;font-family:var(--font-display);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .kpi .l{font-size:.72rem;color:var(--text-muted);margin-top:.25rem;text-transform:uppercase;letter-spacing:.03em}
 /* Delta reads as a subtle chip (bg/padding aren't set inline, so this applies). */
@@ -61,23 +64,17 @@
 
 /* ── Redesigned headline KPI cards (icon tile + trend badge + big number +
    sub-label + sparkline). Used by the `kpi` block via <KpiCard>. ── */
-.kpicard{position:relative;background:var(--bg-card);border:1px solid var(--border-color);border-radius:20px;
+.kpicard{position:relative;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);
     padding:1.15rem 1.15rem .35rem;display:flex;flex-direction:column;overflow:hidden;
-    box-shadow:0 1px 2px rgba(15,23,42,.04),0 14px 34px -20px rgba(15,23,42,.28);
+    box-shadow:var(--shadow-xs);
     transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
-.kpicard:hover{transform:translateY(-3px);box-shadow:0 2px 4px rgba(15,23,42,.05),0 22px 46px -20px rgba(15,23,42,.35);border-color:var(--gray-300)}
+.kpicard:hover{transform:translateY(-2px);box-shadow:var(--shadow-sm);border-color:var(--gray-300)}
 .kc-top{display:flex;align-items:flex-start;justify-content:space-between;gap:.5rem}
-.kc-ic{width:52px;height:52px;border-radius:16px;display:flex;align-items:center;justify-content:center;
-    font-size:1.35rem;color:#fff;flex-shrink:0;box-shadow:0 10px 20px -10px rgba(15,23,42,.5),inset 0 1px 0 rgba(255,255,255,.25)}
-.kc-ic.blue{background:linear-gradient(140deg,#5b8def,#3b5fe0)}
-.kc-ic.green{background:linear-gradient(140deg,#34d399,#10b981)}
-.kc-ic.orange{background:linear-gradient(140deg,#fbbf5c,#f59331)}
-.kc-ic.purple{background:linear-gradient(140deg,#a78bfa,#8b5cf6)}
-.kc-ic.teal{background:linear-gradient(140deg,#2dd4bf,#0d9488)}
+.kc-ic{width:50px;height:50px;border-radius:14px;font-size:1.3rem}
 .kc-trend{display:flex;flex-direction:column;align-items:flex-end;gap:.2rem;text-align:right}
 .kc-badge{display:inline-flex;align-items:center;gap:.28rem;font-size:.82rem;font-weight:700;padding:.2rem .55rem;border-radius:999px;line-height:1.2}
-.kc-badge.up{color:#0f9d58;background:rgba(16,185,129,.15)}
-.kc-badge.down{color:#e5484d;background:rgba(229,72,77,.15)}
+.kc-badge.up{color:var(--success);background:color-mix(in srgb,var(--success) 14%,var(--bg-card))}
+.kc-badge.down{color:var(--danger);background:color-mix(in srgb,var(--danger) 14%,var(--bg-card))}
 .kc-badge.flat{color:var(--text-secondary);background:var(--gray-100)}
 .kc-trendlabel{font-size:.75rem;color:var(--text-muted)}
 .kc-value{font-size:2.4rem;font-weight:800;line-height:1.05;letter-spacing:-.02em;margin-top:.95rem;
@@ -100,17 +97,6 @@
 .widget .wb{padding:1rem;flex:1}
 .chart-box{position:relative;height:210px}
 
-/* exam snapshot cards */
-.exam-card{padding:1.1rem;border-radius:var(--radius-lg);color:#fff;display:flex;flex-direction:column;justify-content:space-between;min-height:150px}
-.exam-card.jamb{background:linear-gradient(135deg,#667eea,#764ba2)}
-.exam-card.waec{background:linear-gradient(135deg,#0891b2,#0e7490)}
-.exam-card.mock{background:linear-gradient(135deg,#11998e,#38ef7d)}
-.exam-card .top{display:flex;justify-content:space-between;align-items:center;font-size:.8rem;opacity:.9}
-.exam-card .big{font-size:2.5rem;font-weight:700;line-height:1;font-family:var(--font-display)}
-.exam-card .sub{font-size:.8rem;opacity:.9}
-.exam-card .chips{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.5rem}
-.exam-card .chip{background:rgba(255,255,255,.2);border-radius:var(--radius-full);padding:.12rem .55rem;font-size:.72rem}
-
 .lead-list{display:flex;flex-direction:column}
 .lead-item{display:flex;align-items:center;gap:.7rem;padding:.55rem .15rem;border-bottom:1px solid var(--border-light)}
 .lead-item:last-child{border-bottom:none}
@@ -126,7 +112,7 @@
 .recent-item{border-bottom:1px solid var(--border-light)}
 .recent-item:hover{background:var(--gray-50)}
 .recent-avatar{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0}
-.recent-avatar.male{background:#4e73df}.recent-avatar.female{background:#e74a3b}
+.recent-avatar.male{background:#3b82f6}.recent-avatar.female{background:#f43f5e}
 .recent-name,.birthday-name{font-weight:600;font-size:.85rem}
 .recent-id,.birthday-date{font-size:.72rem;color:var(--text-muted)}
 .birthday-item.highlight{background:var(--warning-light)}
@@ -137,7 +123,7 @@
 .relig-bar{display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem}
 .relig-bar .lab{width:78px;font-size:.8rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .relig-bar .track{flex:1;height:8px;background:var(--gray-100);border-radius:var(--radius-full);overflow:hidden}
-.relig-bar .fill{height:100%;border-radius:var(--radius-full);background:linear-gradient(90deg,var(--primary),#38ef7d)}
+.relig-bar .fill{height:100%;border-radius:var(--radius-full);background:var(--primary)}
 .relig-bar .num{width:28px;text-align:right;font-weight:700;font-size:.8rem}
 </style>
 {% endblock %}
