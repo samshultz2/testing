@@ -232,8 +232,8 @@ def add_student():
             db.session.commit()
             log_action('student.create', target=student)
             view_url = url_for('main.view_student', student_id=student.id)
-            from utils.notify import notify_student_change
-            notify_student_change('create', student=student, url=view_url)
+            from utils.notify import notify_student_change, actor_label
+            notify_student_change('create', student=student, actor=actor_label(), url=view_url)
             if enrolled_label:
                 flash(f'{FlashMessages.STUDENT_CREATED} Enrolled in {enrolled_label}.', 'success')
             else:
@@ -613,8 +613,12 @@ def edit_student(student_id):
             # Update contacts only when the contacts section was submitted
             if not (complete or 'phone_number[]' in form):
                 db.session.commit()
-                log_action('student.update', detail=(_student_change_detail(before, student) or None),
-                           target=student)
+                _changes = _student_change_detail(before, student)
+                log_action('student.update', detail=(_changes or None), target=student)
+                from utils.notify import notify_student_change, actor_label
+                notify_student_change('update', student=student, changes=_changes,
+                                      actor=actor_label(),
+                                      url=url_for('main.view_student', student_id=student.id))
                 flash(FlashMessages.STUDENT_UPDATED, 'success')
                 dest = _safe_next(form.get('return_to'),
                                   url_for('main.view_student', student_id=student.id))
@@ -642,10 +646,11 @@ def edit_student(student_id):
                     db.session.add(contact)
 
             db.session.commit()
-            log_action('student.update', detail=(_student_change_detail(before, student) or None),
-                       target=student)
-            from utils.notify import notify_student_change
-            notify_student_change('update', student=student,
+            _changes = _student_change_detail(before, student)
+            log_action('student.update', detail=(_changes or None), target=student)
+            from utils.notify import notify_student_change, actor_label
+            notify_student_change('update', student=student, changes=_changes,
+                                  actor=actor_label(),
                                   url=url_for('main.view_student', student_id=student.id))
             flash(FlashMessages.STUDENT_UPDATED, 'success')
             dest = _safe_next(request.form.get('return_to'),
@@ -736,8 +741,9 @@ def delete_student(student_id):
         student.is_active = False
         db.session.commit()
         log_action('delete_student', f'{student.full_name} ({student.student_id})')
-        from utils.notify import notify_student_change
-        notify_student_change('delete', detail=f'{student.full_name} ({student.student_id})')
+        from utils.notify import notify_student_change, actor_label
+        notify_student_change('delete', detail=f'{student.full_name} ({student.student_id})',
+                              actor=actor_label())
         flash(FlashMessages.STUDENT_DELETED, 'success')
     except Exception as e:
         db.session.rollback()

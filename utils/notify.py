@@ -168,22 +168,44 @@ _STUDENT_CHANGE_TITLES = {
 }
 
 
-def notify_student_change(action, *, student=None, detail='', url=None):
-    """Bell admins when a student record changes.
+def notify_student_change(action, *, student=None, detail='', changes='', actor='', url=None):
+    """Bell admins when a student record changes — with detail.
 
     ``action`` is one of create/update/delete/import/bulk_delete. When a
-    ``student`` instance is given, a "Name (ID)" label is derived for the body.
-    Best-effort like all notifications — never breaks the triggering action.
+    ``student`` is given, the body names WHO ("Name (ID)"); ``changes`` adds WHAT
+    changed (a "Field: old → new" summary) and ``actor`` adds WHO did it, so an
+    update reads e.g. *"John Doe (STU00007) — JAMB target: (empty) → 250 · by
+    Mrs Bello"*. Best-effort — never breaks the triggering action.
     """
     from utils import automations
     if not automations.is_enabled('student_change'):
         return None
     title = _STUDENT_CHANGE_TITLES.get(action, 'Student change')
-    if student is not None and not detail:
+    who = ''
+    if student is not None:
         name = getattr(student, 'full_name', '') or ''
         sid = getattr(student, 'student_id', '') or ''
-        detail = f'{name} ({sid})'.strip()
-    return notify_admins(title, body=detail, url=url, category='student')
+        who = f'{name} ({sid})'.strip()
+    # Assemble the body: whose record — what changed · by whom.
+    body = detail or who
+    if changes:
+        body = f'{who} — {changes}' if who else changes
+    if actor:
+        body = f'{body} · by {actor}' if body else f'by {actor}'
+    return notify_admins(title, body=body, url=url, category='student')
+
+
+def actor_label(default='an administrator'):
+    """Display name of the acting user for a notification body (falls back for the
+    legacy password admin). Best-effort."""
+    try:
+        from utils.access_control import get_current_user
+        u = get_current_user()
+        if u:
+            return (getattr(u, 'full_name', None) or getattr(u, 'username', None) or default)
+    except Exception:
+        pass
+    return default
 
 
 def notify_attendance_marked(*, class_label, date_label='', session_label='',
