@@ -1,0 +1,55 @@
+; EduSyncra — PgBouncer for the database-per-tenant model.
+;
+; WHY: each gunicorn worker keeps its own SQLAlchemy pool PER active tenant DB
+; (up to DB_POOL_SIZE+DB_MAX_OVERFLOW connections each). With many tenants sitting
+; exams at once that multiplies fast. PgBouncer in TRANSACTION mode fronts Postgres
+; so the database sees a small, bounded number of real connections regardless of
+; how many logical app connections exist.
+;
+; For a SINGLE school's 1,800-candidate JAMB Mock (one tenant DB), PgBouncer is
+; optional — raising Postgres max_connections to ~200 is enough. PgBouncer earns
+; its keep when MULTIPLE large tenants run exams concurrently (the 3,000-5,000
+; path). Validate on staging before an exam either way.
+;
+; IMPORTANT app-side setting: transaction pooling is incompatible with psycopg 3's
+; automatic prepared statements. Set PGBOUNCER=1 in the app's .env so it disables
+; them (config.py wires connect_args={'prepare_threshold': None}). Then point the
+; app at PgBouncer's port (6432), e.g. in .env:
+;   DATABASE_URL=postgresql+psycopg://posyhub:PW@127.0.0.1:6432/posyhub
+;   TENANT_DATABASE_URL_TEMPLATE=postgresql+psycopg://posyhub:PW@127.0.0.1:6432/{name}
+;
+; Install: sudo apt install pgbouncer
+;   sudo cp deploy/pgbouncer.ini.example /etc/pgbouncer/pgbouncer.ini   # then edit
+;   # add the app role to /etc/pgbouncer/userlist.txt: "posyhub" "md5<hash>"
+;   sudo systemctl enable --now pgbouncer
+
+[databases]
+; Wildcard: any database name the app asks for is forwarded to local Postgres.
+; This is what makes database-per-tenant work without listing every school here.
+* = host=127.0.0.1 port=5432
+
+[pgbouncer]
+listen_addr = 127.0.0.1
+listen_port = 6432
+auth_type = md5
+auth_file = /etc/pgbouncer/userlist.txt
+
+; Transaction pooling: a server connection is returned to the pool at the end of
+; each transaction — the right mode for many short web transactions.
+pool_mode = transaction
+
+; Bound the REAL Postgres connections. Keep (default_pool_size × distinct active
+; DBs) comfortably under Postgres max_connections. Start conservative and raise
+; while watching /platform's PostgreSQL tile under load.
+max_client_conn = 2000
+default_pool_size = 25
+reserve_pool_size = 10
+reserve_pool_timeout = 3
+server_idle_timeout = 120
+
+; Transaction mode requires clients not to rely on session state; disabling
+; server-side prepared statements on the app side (PGBOUNCER=1) satisfies this.
+ignore_startup_parameters = extra_float_digits,options
+
+log_connections = 0
+log_disconnections = 0

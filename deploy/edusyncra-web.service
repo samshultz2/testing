@@ -1,0 +1,41 @@
+# EduSyncra web tier — gunicorn behind nginx (dedicated VPS, direct-nginx path).
+#
+# Use THIS unit on a Contabo/Ubuntu VPS with nginx + TLS. It runs multi-worker
+# gunicorn bound to localhost; nginx (deploy/nginx-vps.conf) proxies to it. This
+# is different from the shipped edusyncra.service.example, which runs
+# app_production.py (waitress + Cloudflare tunnel) for the phone/pilot topology.
+#
+# Install:
+#   sudo cp deploy/edusyncra-web.service /etc/systemd/system/edusyncra-web.service
+#   sudo nano /etc/systemd/system/edusyncra-web.service   # set User + paths
+#   sudo systemctl daemon-reload && sudo systemctl enable --now edusyncra-web
+#
+# Pair it with edusyncra-jobs.service (the background worker), so this web unit
+# runs with RUN_INPROCESS_JOBS=0 and jobs fire exactly once off the web tier.
+
+[Unit]
+Description=EduSyncra web (gunicorn)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=edusyncra
+WorkingDirectory=/opt/edusyncra
+EnvironmentFile=/opt/edusyncra/.env
+# 4 workers × 4 threads ≈ 16 concurrent slots on a 4-vCPU box; jobs run in the
+# dedicated worker, not here. Bind to localhost only — nginx is the public edge.
+Environment=WEB_CONCURRENCY=4
+Environment=GUNICORN_THREADS=4
+Environment=RUN_INPROCESS_JOBS=0
+Environment=GUNICORN_BIND=127.0.0.1:5000
+Environment=TRUST_PROXY=1
+ExecStart=/opt/edusyncra/.venv/bin/gunicorn -c gunicorn.conf.py wsgi:app
+Restart=always
+RestartSec=3
+# Bound memory growth from long report/PDF ops (workers recycle via max_requests
+# in gunicorn.conf.py). Give the box a moment on stop for in-flight requests.
+TimeoutStopSec=35
+
+[Install]
+WantedBy=multi-user.target
