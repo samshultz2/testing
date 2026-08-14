@@ -54,41 +54,84 @@ nano deploy/setup.env      # set TENANT_BASE_DOMAIN, APEX_TENANT, DB_APP_PASSWOR
                            # OWNER_* , SMTP_*, and OWNER_DB_DUMP (Phase 3), SETUP_TUNNEL=no
 ```
 
-Don't run `setup_vps.sh` yet if you're migrating data — set `OWNER_DB_DUMP` first
-(Phase 3). It generates `SECRET_KEY` + `FIELD_ENCRYPTION_KEY`, creates the Postgres
-role + databases, restores your dump, brings the schema to head, and writes `.env`.
+Don't run `setup_vps.sh` for a **populated multi-tenant** migration — it is built
+for a fresh/owner-only install and would generate NEW secrets + create only the
+owner+control DBs. For an existing multi-school install, use the `pg_dumpall` path
+below (restores every school DB + the DB role) and write `.env` by hand from your
+carried-over keys. `setup_vps.sh` remains the right tool for a fresh single-school
+start.
 
 ## Phase 3 — Migrate your existing production data
 
-On the **current** environment (where the app runs now), dump the live DB + media:
+### 3a. Single-school / fresh owner (simple case)
 
 ```bash
-# database → a plain SQL dump
+# on the current box:
 bash deploy/migrate_db.sh export "postgresql://posyhub:PW@localhost:5432/posyhub" edusyncra_dump.sql
-# media (logos, question images, scans, comm attachments)
 tar czf uploads.tar.gz uploads/
+scp edusyncra_dump.sql uploads.tar.gz edusyncra@<VPS_IP>:/opt/edusyncra/
+# on the VPS: set OWNER_DB_DUMP=/opt/edusyncra/edusyncra_dump.sql in deploy/setup.env,
+tar xzf uploads.tar.gz && bash deploy/setup_vps.sh
 ```
 
-Copy both to the VPS:
+### 3b. Multi-tenant (control plane + many school DBs) — RECOMMENDED for existing installs
+
+Every school is its own database and each stored `tenants.database_url` embeds the
+DB user+password, so the move must preserve the **role and its password** and
+restore **all** databases. `pg_dumpall` does both in one file.
+
+> **Carry over `FIELD_ENCRYPTION_KEY` unchanged.** Encrypted fields (portal
+> passwords) are unreadable under a different key. Copy it (and `SECRET_KEY`, to
+> avoid logging everyone out) from the old `.env` into the new one. Never let the
+> new box generate fresh keys during a migration.
+
+On the **current** box (read-only; leave the app running):
 
 ```bash
-scp edusyncra_dump.sql uploads.tar.gz edusyncra@<VPS_IP>:/opt/edusyncra/
+cd <app folder>
+# keys + DB/tenancy settings to reuse verbatim on the VPS
+grep -E 'FIELD_ENCRYPTION_KEY|SECRET_KEY|DATABASE_URL|CONTROL_PLANE_DATABASE_URL|TENANT_DATABASE_URL_TEMPLATE|MULTI_TENANT|TENANT_BASE_DOMAIN|APEX_TENANT|DB_' .env > ~/edusyncra_env_carryover.txt
+chmod 600 ~/edusyncra_env_carryover.txt
+# ALL databases + roles (control plane + every school) in one dump
+sudo -u postgres pg_dumpall | gzip > ~/edusyncra_all.sql.gz
+tar czf ~/edusyncra_uploads.tar.gz uploads/
+# note your schools, to verify each after the move
+sudo -u postgres psql -d edusyncra_control -c "SELECT subdomain, status FROM tenants ORDER BY subdomain;"
 ```
 
-On the VPS, point the installer at the dump and unpack media:
+Copy to the VPS:
+
+```bash
+scp ~/edusyncra_all.sql.gz ~/edusyncra_uploads.tar.gz ~/edusyncra_env_carryover.txt edusyncra@<VPS_IP>:/opt/edusyncra/
+```
+
+On the **VPS** (Postgres installed, fresh cluster — do NOT pre-create the role/DBs):
 
 ```bash
 cd /opt/edusyncra
-# in deploy/setup.env:  OWNER_DB_DUMP=/opt/edusyncra/edusyncra_dump.sql
-tar xzf uploads.tar.gz        # restores uploads/
-bash deploy/setup_vps.sh      # creates DBs, restores the dump, writes .env, schema→head
+# 1. restore every database + the app role (with its ORIGINAL password) in one shot
+gunzip -c edusyncra_all.sql.gz | sudo -u postgres psql
+# 2. restore media
+tar xzf edusyncra_uploads.tar.gz
+# 3. write .env by hand: paste the FIELD_ENCRYPTION_KEY/SECRET_KEY/DB_* /CONTROL_PLANE_*
+#    /TENANT_* /MULTI_TENANT/TENANT_BASE_DOMAIN/APEX_TENANT lines from
+#    edusyncra_env_carryover.txt, plus APP_ENV=production, TRUST_PROXY=1, FORCE_HTTPS=1.
+#    Keep DB host/user/password identical so the stored tenant URLs still resolve.
+nano .env
+chmod 600 .env
 ```
 
-Verify the data landed before going further:
+Verify **before** going further — the control plane lists your schools and each
+school DB has data:
 
 ```bash
-sudo -u postgres psql -d posyhub -c "SELECT count(*) FROM students;"
+sudo -u postgres psql -d edusyncra_control -c "SELECT subdomain, status FROM tenants ORDER BY subdomain;"
+sudo -u postgres psql -d <a school's db name> -c "SELECT count(*) FROM students;"
 ```
+
+> Introduce **PgBouncer + Redis (Phases 5–6) only AFTER data is restored and the
+> site serves each school on :5432 directly.** Keeps the migration itself simple;
+> the scale tier is then a deliberate switch, not part of the risky move.
 
 ## Phase 4 — PostgreSQL tuning for 8 GB
 
