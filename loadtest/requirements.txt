@@ -1,0 +1,3 @@
+# Load-test tooling only — NOT an app runtime dependency. Install into a separate
+# venv on the machine that generates load (not the server under test).
+locust>=2.20

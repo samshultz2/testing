@@ -1,0 +1,17 @@
+{% extends "cbt/portal_base.html" %}
+{% block title %}Submitting…{% endblock %}
+{% block content %}
+<div class="portal-card" style="max-width:480px;margin:10vh auto 0;text-align:center;">
+    <i class="fas fa-spinner fa-spin" style="font-size:2.6rem;color:var(--primary);"></i>
+    <h1 style="margin-top:.8rem;">Submitting your test…</h1>
+    <p class="text-muted">{{ exam.title }}{% if exam.subject %} · {{ exam.subject.name }}{% endif %}</p>
+    <p class="text-muted text-sm" style="margin-top:1rem;">
+        Your answers are saved. We're grading now — this page will update automatically.
+    </p>
+</div>
+<script nonce="{{ csp_nonce }}">
+  // Poll the result page until grading completes (server redirects/renders the
+  // score once the worker finalises, or self-heals after a short grace).
+  setTimeout(function () { window.location.reload(); }, 2500);
+</script>
+{% endblock %}

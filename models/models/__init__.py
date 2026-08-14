@@ -559,9 +559,13 @@ _INDEXES = [
     ('ix_cbt_attempt_exam', 'cbt_attempts', 'exam_id'),
     ('ix_cbt_attempt_student', 'cbt_attempts', 'student_id'),
     ('ix_cbt_answer_attempt', 'cbt_answers', 'attempt_id'),      # autosave lookup
+    # The exam runtime loads a whole exam's questions on every take/answer/submit;
+    # a mass sitting must index-scan this FK, not full-scan the questions table.
+    ('ix_cbt_question_exam', 'cbt_questions', 'exam_id'),
     ('ix_cbt_violation_attempt', 'cbt_violations', 'attempt_id'),
     ('ix_cbt_login_exam', 'cbt_login_events', 'exam_id'),
     ('ix_cbt_login_exam_created', 'cbt_login_events', 'exam_id, created_at'),
+    ('ix_cbt_login_student', 'cbt_login_events', 'student_id'),  # latest-event/fingerprint lookup
     ('ix_cbt_device_exam', 'cbt_device_sessions', 'exam_id'),
     ('ix_audit_created', 'audit_logs', 'created_at'),
     ('ix_audit_action', 'audit_logs', 'action'),

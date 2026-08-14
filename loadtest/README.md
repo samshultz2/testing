@@ -23,17 +23,59 @@ EXAM_ID=<id> ACCESS_PASSWORD=<pw> locust -f loadtest/locustfile.py --host https:
 
 Open http://localhost:8089, set the user count (e.g. 800) and a spawn rate
 (e.g. 40/s), and start. Each simulated student logs in, starts the exam, then
-loops: batched answer autosave, heartbeat, and occasional submit.
+loops: batched answer autosave, heartbeat, reconnect (a re-fetch of the take page,
+as after a network blip), and occasional submit.
+
+### A full cohort (5,000 candidates)
+
+```bash
+N=5000 M=40 python loadtest/seed_loadtest.py            # prints EXAM_ID
+mkdir -p loadtest/results
+EXAM_ID=<id> ACCESS_PASSWORD=<pw> locust -f loadtest/locustfile.py \
+    --host https://<staging> --users 5000 --spawn-rate 100 --run-time 45m \
+    --headless --csv=loadtest/results/cbt --html=loadtest/results/cbt.html
+```
+
+The target should run with `TRUST_PROXY=1` (so each virtual user's unique
+`X-Forwarded-For` sidesteps the per-IP login throttle) and on Postgres with a real
+multi-worker web tier (`WEB_CONCURRENCY`, `RUN_INPROCESS_JOBS=0` + the jobs
+worker). To exercise the Redis/queue tier, set `REDIS_URL` (and optionally
+`CBT_ASYNC_GRADING=1`); see `docs/CBT_SCALE.md`. Past one load box's CPU, run
+Locust [distributed](https://docs.locust.io/en/stable/running-distributed.html).
 
 ## 3. What to watch
 
-- **Failure %** — should stay ~0. 5xx/timeout spikes mean you've hit a limit.
-- **Response times (p95)** — answer/ping should stay well under ~1s.
-- **On the server**: Postgres connections vs `max_connections`, CPU, and gunicorn
-  worker saturation. If connections max out, raise `DB_POOL_SIZE`/`DB_MAX_OVERFLOW`
-  and Postgres `max_connections` (see `docs/SCALING.md`).
+Locust reports client-side latency/throughput/errors (UI, `--csv` files, and the
+end-of-run summary the harness prints). The server's own `/platform` page reports
+host + datastore metrics live (JSON at `/platform/health.json`).
 
-Ramp up (200 → 400 → 800) and find where it breaks; that's your real headroom.
+| Metric | Where |
+|---|---|
+| requests / sec | Locust total RPS (UI, `*_stats.csv`, summary) |
+| p95 / p99 response time | Locust percentiles (`*_stats.csv`, summary) |
+| submission latency | Locust `/exam/[id]/submit` row (p95/p99 printed in the summary) |
+| error rate | Locust failure % (`*_failures.csv`) |
+| dropped requests | Locust failures (timeouts/5xx) + gunicorn/nginx logs (worker timeouts, 502/504) |
+| CPU / RAM / swap | `/platform` System tiles |
+| disk usage / disk I/O | `/platform` Disk + Disk I/O tiles |
+| PostgreSQL connections | `/platform` PostgreSQL tile (`pg_stat_activity`) |
+| Redis memory / queue depth | `/platform` Redis tiles (when `REDIS_URL` set) |
+| concurrent users | `/platform` Concurrent-users tile |
+| background-job duration | `/platform` Background jobs panel |
+| PostgreSQL CPU | host tool on the DB box (`top`/`pg_top`) or managed-DB dashboard |
+| network throughput | host tool (`nload`/`iftop`) or cloud NIC metrics; Locust also reports bytes |
+
+Capture a peak snapshot: `curl -s "$HOST/platform/health.json" > loadtest/results/platform-peak.json`.
+
+- **Failure %** should stay ~0; 5xx/timeout spikes mean you've hit a limit.
+- **Response/submit p95** should stay well under ~1–2 s.
+- **Levers:** raise `WEB_CONCURRENCY` (until CPU-bound); raise `DB_POOL_SIZE`/
+  `DB_MAX_OVERFLOW` and Postgres `max_connections` together; set `REDIS_URL`
+  (offloads answer-key reads + heartbeat writes); set `CBT_ASYNC_GRADING=1` so the
+  deadline submit spike drains through the worker (see `docs/SCALING.md`,
+  `docs/CBT_SCALE.md`).
+
+Ramp up (e.g. 800 → 2,000 → 5,000) and find where it breaks; that's your real headroom.
 
 ---
 

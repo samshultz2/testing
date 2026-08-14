@@ -89,3 +89,8 @@ pywebpush==2.4.0
 
 # System metrics for the platform health/monitoring page
 psutil>=5.9
+
+# Optional cache + job-queue backend for running exams at scale (utils/cache.py,
+# utils/jobqueue.py). Only needed when REDIS_URL is set — the app falls back to an
+# in-process cache and inline jobs without it. See docs/CBT_SCALE.md.
+# redis>=5

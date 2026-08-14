@@ -204,11 +204,41 @@ def pg_metrics():
         return {'available': False, 'reason': 'unreadable'}
 
 
+# ── Redis (cache/queue) ───────────────────────────────────────────────────────
+def redis_metrics():
+    """Redis memory + queue depth when the optional cache/queue backend is live."""
+    try:
+        from utils import cache, jobqueue
+    except Exception:
+        return {'available': False}
+    client = cache._client()
+    if client is None:
+        return {'available': False}
+    out = {'available': True}
+    try:
+        info = client.info('memory')
+        out['used_memory'] = int(info.get('used_memory', 0))
+        peak = info.get('used_memory_peak')
+        if peak is not None:
+            out['used_memory_peak'] = int(peak)
+        maxmem = info.get('maxmemory')
+        if maxmem:
+            out['maxmemory'] = int(maxmem)
+    except Exception:
+        pass
+    try:
+        out['queue_length'] = jobqueue.queue_length()
+    except Exception:
+        pass
+    return out
+
+
 def all_metrics():
     """Assemble the full snapshot for the monitoring page / JSON endpoint."""
     return {
         'system': system_metrics(),
         'postgres': pg_metrics(),
+        'redis': redis_metrics(),
         'requests': request_metrics(),
         'at': int(time.time()),
     }

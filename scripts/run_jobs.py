@@ -24,29 +24,39 @@ os.environ['RUN_INPROCESS_JOBS'] = '0'
 
 from app import create_app, _tick_dispatch  # noqa: E402
 from utils.backup import auto_backup  # noqa: E402
+from utils import jobqueue  # noqa: E402
 
 POLL_SECONDS = int(os.environ.get('JOBS_POLL_SECONDS', '60'))
+# When a Redis queue backs the app, drain it on a short cadence so queued exam
+# submissions (async grading) and analytics refreshes are processed within
+# seconds, while the once-a-minute scheduler tick still runs on its own cadence.
+DRAIN_SECONDS = int(os.environ.get('JOBS_DRAIN_SECONDS', '2'))
 
 
 def main():
     app = create_app()
-    app.logger.info('Background jobs worker started (poll=%ss).', POLL_SECONDS)
+    has_queue = jobqueue.backend_enabled()
+    step = DRAIN_SECONDS if has_queue else POLL_SECONDS
+    app.logger.info('Background jobs worker started (tick=%ss, queue=%s, drain=%ss).',
+                    POLL_SECONDS, 'redis' if has_queue else 'off', step)
     last_backup = None
+    last_tick = 0.0
     while True:
         try:
-            with app.app_context():
-                # Shared with the in-process worker: dispatch due campaigns + the
-                # daily fee reminder (idempotent via the DB-shared marker, guarded
-                # by the advisory lock — a no-op for this single process).
-                _tick_dispatch(app)
-                # Daily DB backup is owned by this out-of-process runner.
-                today = time.strftime('%Y%m%d')
-                if today != last_backup:
-                    auto_backup(app)
-                    last_backup = today
+            # Fast path: drain any queued jobs (no-op when there's no backend).
+            jobqueue.drain(app)
+            # Slow path: run the scheduler tick + daily backup at most once/minute.
+            if time.monotonic() - last_tick >= POLL_SECONDS:
+                last_tick = time.monotonic()
+                with app.app_context():
+                    _tick_dispatch(app)
+                    today = time.strftime('%Y%m%d')
+                    if today != last_backup:
+                        auto_backup(app)
+                        last_backup = today
         except Exception as exc:
             app.logger.error('jobs worker error: %s', exc)
-        time.sleep(POLL_SECONDS)
+        time.sleep(step)
 
 
 if __name__ == '__main__':
