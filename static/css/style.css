@@ -2438,6 +2438,25 @@ summary:focus-visible {
 .av-row:hover .av-row-name { color: var(--primary); }
 .av-row-name { font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; }
 
+/* ── KPI tiles (.kpi + .kpi .ic tone) — flat, theme-aware; shared across module
+   dashboards (Finance, HR, …). The glyph sits in a soft tint of its tone colour
+   (no gradients/glow), matching the main dashboard. A page can still supply its
+   own .kpi-row grid. ── */
+.kpi { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg);
+  padding: 1rem; display: flex; align-items: center; gap: .85rem; box-shadow: var(--shadow-xs); }
+.kpi .ic { --tone-c: var(--primary); width: 46px; height: 46px; border-radius: 12px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center; font-size: 1.15rem;
+  color: var(--tone-c); background: color-mix(in srgb, var(--tone-c) 16%, var(--bg-card)); }
+.kpi .ic.blue { --tone-c: #3b82f6; }
+.kpi .ic.green { --tone-c: #16a34a; }
+.kpi .ic.amber, .kpi .ic.orange { --tone-c: #c2760a; }
+.kpi .ic.red { --tone-c: #ef4444; }
+.kpi .ic.purple { --tone-c: #8b5cf6; }
+.kpi .ic.teal { --tone-c: #0d9488; }
+.kpi .v { font-size: 1.35rem; font-weight: 700; line-height: 1.1; font-family: var(--font-display);
+  font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.kpi .l { font-size: .72rem; color: var(--text-muted); margin-top: .25rem; text-transform: uppercase; letter-spacing: .03em; }
+
 /* Inputs: clearer focus, comfortable sizing */
 .form-control,
 input[type="text"], input[type="number"], input[type="date"],

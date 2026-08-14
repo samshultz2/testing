@@ -16,16 +16,7 @@
 .kpi-row{display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem;margin-bottom:1.1rem}
 @media(min-width:768px){.kpi-row{grid-template-columns:repeat(4,1fr)}.kpi-row.kpi-6{grid-template-columns:repeat(3,1fr)}}
 @media(min-width:1100px){.kpi-row.kpi-6{grid-template-columns:repeat(6,1fr)}}
-.kpi{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);padding:1rem;display:flex;align-items:center;gap:.85rem}
-.kpi .ic{width:46px;height:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:#fff;flex-shrink:0}
-.kpi .ic.blue{background:linear-gradient(135deg,#4e73df,#224abe)}
-.kpi .ic.green{background:linear-gradient(135deg,#1cc88a,#13855c)}
-.kpi .ic.amber{background:linear-gradient(135deg,#f6c23e,#dda20a)}
-.kpi .ic.red{background:linear-gradient(135deg,#e74a3b,#be2617)}
-.kpi .ic.teal{background:linear-gradient(135deg,#11998e,#0b6b63)}
-.kpi .ic.orange{background:linear-gradient(135deg,#fd7e14,#c75e00)}
-.kpi .v{font-size:1.35rem;font-weight:700;line-height:1.1;font-family:var(--font-display)}
-.kpi .l{font-size:.72rem;color:var(--text-muted);margin-top:.25rem;text-transform:uppercase;letter-spacing:.03em}
+/* .kpi + .kpi .ic tone tiles now live in style.css (shared, theme-aware). */
 .fin-grid{display:grid;grid-template-columns:1fr;gap:1rem;margin-bottom:1rem}
 @media(min-width:992px){.fin-grid.split{grid-template-columns:1.4fr 1fr}.fin-grid.c2{grid-template-columns:1fr 1fr}.fin-grid.c3{grid-template-columns:repeat(3,1fr)}}
 .widget{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);overflow:hidden}
@@ -35,7 +26,7 @@
 .widget .wb{padding:1rem}
 .chart-box{position:relative;height:240px}
 .progress-wrap{height:10px;background:var(--gray-100);border-radius:var(--radius-full);overflow:hidden;margin-top:.5rem}
-.progress-wrap .bar{height:100%;background:linear-gradient(90deg,var(--primary),#38ef7d);border-radius:var(--radius-full)}
+.progress-wrap .bar{height:100%;background:var(--primary);border-radius:var(--radius-full)}
 .fin-steps .card-header{display:flex;justify-content:space-between;align-items:center}
 .fin-steps .card-header .fa-chevron-down{transition:transform .2s;color:var(--text-muted)}
 .fin-steps.is-collapsed .fin-steps-body{display:none}
