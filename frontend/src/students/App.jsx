@@ -57,10 +57,13 @@ function initials(name) {
 }
 
 // Student avatar: passport photo when present, else initials on a tinted tile.
+// Falls back to initials if the photo URL fails to load (deleted/again-404),
+// so a broken image never shows the browser's broken-image glyph.
 function StudentAvatar({ name, photo, size = 40 }) {
+  const [broken, setBroken] = useState(false);
   const dim = { width: size, height: size, minWidth: size };
-  return photo
-    ? <img className="stu-av" src={photo} alt="" loading="lazy" style={dim} />
+  return (photo && !broken)
+    ? <img className="stu-av" src={photo} alt="" loading="lazy" style={dim} onError={() => setBroken(true)} />
     : <span className="stu-av stu-av-ph" aria-hidden="true" style={dim}>{initials(name)}</span>;
 }
 
@@ -404,7 +407,7 @@ export default function App({ initial }) {
           <div className="stu-recent-strip">
             {viewed.slice(0, 10).map((v) => (
               <a key={v.id} href={v.url} className="stu-recent-chip" title={v.name}>
-                <span className="stu-av stu-av-ph" aria-hidden="true">{initials(v.name)}</span>
+                <StudentAvatar name={v.name} photo={v.photo} size={48} />
                 <span className="stu-recent-name">{v.name}</span>
                 <span className="stu-recent-id">{v.student_id}</span>
               </a>
@@ -530,7 +533,7 @@ export default function App({ initial }) {
                       <td className="text-muted">{s.student_id}</td>
                       <td>{s.current_class || '—'}</td>
                       <td>{s.stream ? <span className="badge badge-info">{s.stream}</span> : <span className="text-muted">—</span>}</td>
-                      <td><span className={'badge ' + (s.gender === 'Male' ? 'badge-male' : 'badge-female')}>{s.gender}</span></td>
+                      <td>{s.gender ? <span className={'stu-gender ' + (s.gender === 'Male' ? 'is-m' : 'is-f')}><i className={'fas ' + (s.gender === 'Male' ? 'fa-mars' : 'fa-venus')} aria-hidden="true" /> {s.gender}</span> : <span className="text-muted">—</span>}</td>
                       <td>{s.age || '—'}</td>
                       <td>{s.religion || <span className="text-muted">—</span>}</td>
                       <td className="stu-act-col"><div className="stu-row-actions">{renderActions(s)}</div></td>
@@ -576,7 +579,6 @@ export default function App({ initial }) {
             <div className="card-body stu-rail-recent">
               {viewed.slice(0, 8).map((v) => (
                 <a key={v.id} href={v.url} className="stu-rr-item">
-                  <span className="stu-av stu-av-ph" aria-hidden="true">{initials(v.name)}</span>
                   <span className="stu-rr-name">{v.name}</span>
                   <span className="stu-rr-id">{v.student_id}</span>
                 </a>
@@ -588,9 +590,9 @@ export default function App({ initial }) {
           <div className="card-header"><h3><i aria-hidden="true" className="fas fa-chart-simple" /> Students summary</h3></div>
           <div className="card-body">
             <div className="stu-sum-grid">
-              <div className="stu-sum"><span className="stu-sum-v">{summary.total != null ? summary.total : (d.total || 0)}</span><span className="stu-sum-l">Total students</span></div>
-              <div className="stu-sum"><span className="stu-sum-v stu-sum-male">{summary.male || 0}</span><span className="stu-sum-l">Male</span></div>
-              <div className="stu-sum"><span className="stu-sum-v stu-sum-female">{summary.female || 0}</span><span className="stu-sum-l">Female</span></div>
+              <div className="stu-sum stu-sum-total"><span className="stu-sum-v">{summary.total != null ? summary.total : (d.total || 0)}</span><span className="stu-sum-l">Total students</span></div>
+              <div className="stu-sum"><span className="stu-sum-v">{summary.male || 0}</span><span className="stu-sum-l">Male</span></div>
+              <div className="stu-sum"><span className="stu-sum-v">{summary.female || 0}</span><span className="stu-sum-l">Female</span></div>
               <div className="stu-sum"><span className="stu-sum-v">{summary.streams || 0}</span><span className="stu-sum-l">Streams</span></div>
             </div>
           </div>
@@ -599,8 +601,9 @@ export default function App({ initial }) {
           <div className="card-header"><h3><i aria-hidden="true" className="fas fa-download" /> Quick export</h3></div>
           <div className="card-body stu-quick-export">
             <p className="text-muted text-sm" style={{ marginTop: 0 }}>Export {selectedIds.length ? `${selectedIds.length} selected` : 'the current list'}</p>
-            <button type="button" className="btn btn-outline" onClick={() => quickExport('excel')}><i aria-hidden="true" className="fas fa-file-excel" /> Excel (.xlsx)</button>
-            <button type="button" className="btn btn-outline" onClick={() => quickExport('pdf')}><i aria-hidden="true" className="fas fa-file-pdf" /> PDF (.pdf)</button>
+            <button type="button" className="btn btn-outline" onClick={() => quickExport('excel')}><i aria-hidden="true" className="fas fa-file-excel stu-x-excel" /> Excel (.xlsx)</button>
+            <button type="button" className="btn btn-outline" onClick={() => quickExport('csv')}><i aria-hidden="true" className="fas fa-file-csv" /> CSV (.csv)</button>
+            <button type="button" className="btn btn-outline" onClick={() => quickExport('pdf')}><i aria-hidden="true" className="fas fa-file-pdf stu-x-pdf" /> PDF (.pdf)</button>
             <button type="button" className="btn btn-light btn-sm" onClick={() => setShowExport(true)}><i aria-hidden="true" className="fas fa-sliders" /> More formats &amp; fields…</button>
           </div>
         </div>

@@ -44,6 +44,18 @@
 .att-donut-cap { font-size: .68rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; margin-top: 2px; }
 .att-donut-warn { font-size: .72rem; color: var(--danger); text-align: center; max-width: 132px; }
 .att-legend { flex: 1; min-width: 190px; }
+
+/* ── Collapsible profile sections (accordion rows on mobile, open on desktop) ── */
+.stu-sec-head { display: flex; align-items: center; gap: .5rem; padding: .8rem 1rem; }
+.stu-sec.is-open .stu-sec-head { border-bottom: 1px solid var(--border-light); }
+.stu-sec-toggle { flex: 1; min-width: 0; display: flex; align-items: center; gap: .55rem;
+  background: none; border: 0; cursor: pointer; font: inherit; text-align: left; color: inherit; padding: 0; }
+.stu-sec-icon { color: var(--primary); width: 18px; text-align: center; flex-shrink: 0; }
+.stu-sec-title { font-weight: 600; font-size: .95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stu-sec-right { display: flex; align-items: center; gap: .5rem; flex-shrink: 0; }
+.stu-sec-chevbtn { background: none; border: 0; cursor: pointer; color: var(--text-muted);
+  padding: .25rem .4rem; border-radius: var(--radius-sm); line-height: 1; }
+.stu-sec-chevbtn:hover { background: var(--gray-100); color: var(--text-secondary); }
 </style>
 {% endblock %}
 

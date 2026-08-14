@@ -1311,7 +1311,19 @@ def export_students_data():
                    'Hobbies', 'Parent Phone']
     export_fields = [f for f in field_order if f in student_data[0]] if student_data else []
     
-    if format_type == 'excel':
+    if format_type == 'csv':
+        import csv as _csv
+        from io import StringIO
+        from flask import Response
+        buf = StringIO()
+        writer = _csv.writer(buf)
+        writer.writerow(export_fields)
+        for row in student_data:
+            writer.writerow([row.get(f, '') for f in export_fields])
+        resp = Response(buf.getvalue(), mimetype='text/csv')
+        resp.headers['Content-Disposition'] = 'attachment; filename=students.csv'
+        return resp
+    elif format_type == 'excel':
         return export_students_excel(student_data, export_fields)
     elif format_type == 'word':
         return export_students_word(student_data, export_fields)

@@ -30,6 +30,37 @@ function AttendanceDonut({ pct, warning }) {
   );
 }
 
+// Sections default open on desktop (bento cards expanded) and collapsed on
+// phones (accordion rows), mirroring the reference exactly.
+const IS_DESKTOP = typeof window !== 'undefined'
+  && window.matchMedia && window.matchMedia('(min-width: 992px)').matches;
+
+// A collapsible profile section: a clickable header (icon + title + optional
+// status badge + chevron) toggles its body. An optional `action` (Edit / Add /
+// View) sits in the header and doesn't toggle.
+function Section({ icon, title, badge, action, defaultOpen = IS_DESKTOP, wide, children }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const toggle = () => setOpen((o) => !o);
+  return (
+    <div className={'card mb-3 stu-sec' + (wide ? ' profile-wide' : '') + (open ? ' is-open' : ' is-closed')}>
+      <div className="stu-sec-head">
+        <button type="button" className="stu-sec-toggle" aria-expanded={open} onClick={toggle}>
+          <i aria-hidden="true" className={'fas ' + icon + ' stu-sec-icon'} />
+          <span className="stu-sec-title">{title}</span>
+          {badge}
+        </button>
+        <span className="stu-sec-right">
+          {action}
+          <button type="button" className="stu-sec-chevbtn" aria-label={open ? 'Collapse' : 'Expand'} aria-expanded={open} onClick={toggle}>
+            <i aria-hidden="true" className={'fas fa-chevron-' + (open ? 'up' : 'down')} />
+          </button>
+        </span>
+      </div>
+      {open && <div className="card-body">{children}</div>}
+    </div>
+  );
+}
+
 // Colour + icon for the chosen-course eligibility verdict.
 const ELIG_STYLE = {
   ON_TRACK: { badge: 'badge-success', bar: 'var(--success)', icon: 'fa-circle-check' },
@@ -52,11 +83,8 @@ function AspirationCard({ s, asp, scholarships }) {
   const proj = asp && asp.projected;
   const pct = (target && proj != null) ? Math.max(0, Math.min(100, Math.round((proj / target) * 100))) : null;
   return (
-    <div className="card mb-3">
-      <div className="card-header"><h3><i aria-hidden="true" className="fas fa-graduation-cap" /> University Aspiration</h3>
-        {asp && asp.status && <span className={'badge ' + st.badge}><i aria-hidden="true" className={'fas ' + st.icon} /> {asp.status_label}</span>}
-      </div>
-      <div className="card-body">
+    <Section icon="fa-graduation-cap" title="University Aspiration"
+             badge={asp && asp.status ? <span className={'badge ' + st.badge}><i aria-hidden="true" className={'fas ' + st.icon} /> {asp.status_label}</span> : null}>
         <div className="info-grid">
           <Info label="Target University">{s.target_university || 'Not set'}</Info>
           <Info label="Target Course">{s.target_course || 'Not set'}</Info>
@@ -117,8 +145,7 @@ function AspirationCard({ s, asp, scholarships }) {
             </div>
           </div>
         )}
-      </div>
-    </div>
+    </Section>
   );
 }
 
@@ -137,6 +164,7 @@ export default function ViewApp({ initial }) {
   // as quick links. Keyed by id so re-opening just bumps it to the top.
   useEffect(() => {
     if (s.id) rememberViewed({ id: s.id, name: s.full_name, student_id: s.student_id,
+                               photo: s.photo_url || '',
                                url: (urls.self || window.location.pathname) });
   }, [s.id]);
 
@@ -203,9 +231,8 @@ export default function ViewApp({ initial }) {
       )}
 
       <div className="profile-grid">
-      <div className="card mb-3">
-        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-user" /> Personal Info</h3></div>
-        <div className="card-body">
+      <Section icon="fa-user" title="Personal Information"
+               action={canManage ? <a href={urls.edit} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-edit" /> Edit</a> : null}>
           <div className="info-grid">
             <Info label="Full Name">{s.full_name}</Info>
             <Info label="Gender"><span className={'badge ' + (s.gender === 'Male' ? 'badge-info' : 'badge-warning')}>{s.gender}</span></Info>
@@ -216,8 +243,7 @@ export default function ViewApp({ initial }) {
             <Info label="Hobbies">{s.hobbies || 'Not set'}</Info>
             <Info label="Stream">{s.stream ? <span className="badge badge-info">{s.stream}</span> : 'Not set'}</Info>
           </div>
-        </div>
-      </div>
+      </Section>
 
       <AspirationCard s={s} asp={d.aspiration} scholarships={d.scholarships || []} />
 
@@ -258,9 +284,8 @@ export default function ViewApp({ initial }) {
         </div>
       )}
 
-      <div className="card mb-3">
-        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-phone" /> Contacts</h3></div>
-        <div className="card-body">
+      <Section icon="fa-phone" title="Contacts"
+               badge={(d.contacts || []).length ? <span className="badge badge-secondary">{d.contacts.length}</span> : null}>
           {(d.contacts || []).length ? (
             <div className="data-cards">
               {d.contacts.map((c, i) => (
@@ -275,8 +300,7 @@ export default function ViewApp({ initial }) {
               ))}
             </div>
           ) : <p className="text-muted">No contacts added</p>}
-        </div>
-      </div>
+      </Section>
 
       <div className="card mb-3">
         <div className="card-header"><h3><i aria-hidden="true" className="fas fa-school" /> Class History</h3></div>
@@ -295,10 +319,9 @@ export default function ViewApp({ initial }) {
       </div>
 
       {d.attendance && (
-        <div className="card mb-3">
-          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-calendar-check" /> Attendance Summary</h3>
-            {d.attendance.url && <a href={d.attendance.url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-chart-line" /> Full profile</a>}</div>
-          <div className="card-body">
+        <Section icon="fa-calendar-check" title="Attendance Summary"
+                 badge={<span className={'badge ' + (d.attendance.warning ? 'badge-danger' : 'badge-success')}>{d.attendance.percentage}%</span>}
+                 action={d.attendance.url ? <a href={d.attendance.url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-chart-line" /> Full profile</a> : null}>
             <div className="att-summary">
               <div className="att-donut-wrap">
                 <AttendanceDonut pct={d.attendance.percentage} warning={d.attendance.warning} />
@@ -313,8 +336,7 @@ export default function ViewApp({ initial }) {
                 <Info label="Terms tracked">{d.attendance.terms}</Info>
               </div>
             </div>
-          </div>
-        </div>
+        </Section>
       )}
 
       <div className="card mb-3">
@@ -342,9 +364,8 @@ export default function ViewApp({ initial }) {
       </div>
 
       {d.communications && d.communications.count > 0 && (
-        <div className="card mb-3 profile-wide">
-          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-comments" /> Communication History ({d.communications.count})</h3></div>
-          <div className="card-body" style={{ padding: 0 }}>
+        <Section icon="fa-comments" title="Communication History" wide
+                 badge={<span className="badge badge-secondary">{d.communications.count}</span>}>
             <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
               <table className="data-table table-stack no-mobile-scroll">
                 <thead><tr><th>Date</th><th>Message</th><th>Channel</th><th>Status</th></tr></thead>
@@ -359,8 +380,7 @@ export default function ViewApp({ initial }) {
                 ))}</tbody>
               </table>
             </div>
-          </div>
-        </div>
+        </Section>
       )}
 
       {d.history && d.history.length > 0 && <ChangeHistory rows={d.history} />}
@@ -421,13 +441,10 @@ function ChangeHistory({ rows }) {
     ? rows.filter((r) => `${ACTION_LABELS[r.action] || r.action} ${r.user} ${r.detail} ${r.when}`.toLowerCase().includes(term))
     : rows;
   return (
-    <div className="card mb-3 profile-wide">
-      <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-        <h3><i aria-hidden="true" className="fas fa-clock-rotate-left" /> Change History ({rows.length})</h3>
-        <input type="search" className="form-control" style={{ maxWidth: 240 }} placeholder="Search history…"
+    <Section icon="fa-clock-rotate-left" title="Change History" wide
+             badge={<span className="badge badge-secondary">{rows.length}</span>}>
+        <input type="search" className="form-control" style={{ maxWidth: 240, marginBottom: '.7rem' }} placeholder="Search history…"
                value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search change history" />
-      </div>
-      <div className="card-body" style={{ padding: 0 }}>
         {shown.length ? (
           <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
             <table className="data-table table-stack no-mobile-scroll">
@@ -442,9 +459,8 @@ function ChangeHistory({ rows }) {
               ))}</tbody>
             </table>
           </div>
-        ) : <p className="text-muted" style={{ padding: '.75rem 1rem' }}>No matching history.</p>}
-      </div>
-    </div>
+        ) : <p className="text-muted">No matching history.</p>}
+    </Section>
   );
 }
 

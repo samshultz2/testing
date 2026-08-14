@@ -100,18 +100,26 @@ a.stu-name:hover { color:var(--primary); }
 
 /* Right rail cards */
 .stu-rail-card .card-header h3 { font-size:var(--text-sm); }
-.stu-rail-recent { display:flex; flex-direction:column; gap:.1rem; padding:.4rem .6rem; }
-.stu-rr-item { display:grid; grid-template-columns:auto 1fr auto; align-items:center; gap:.55rem;
-  padding:.4rem .3rem; border-radius:var(--radius-md); text-decoration:none; color:inherit; }
+.stu-rail-recent { display:flex; flex-direction:column; gap:.05rem; padding:.4rem .5rem; }
+.stu-rr-item { display:flex; align-items:baseline; justify-content:space-between; gap:.6rem;
+  padding:.45rem .5rem; border-radius:var(--radius-md); text-decoration:none; color:inherit; }
 .stu-rr-item:hover { background:var(--gray-50); }
-.stu-rr-item .stu-av-ph { width:30px; height:30px; font-size:.68rem; }
 .stu-rr-name { font-size:.82rem; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.stu-rr-id { font-size:.7rem; color:var(--text-muted); }
+.stu-rr-item:hover .stu-rr-name { color:var(--primary); }
+.stu-rr-id { font-size:.7rem; color:var(--text-muted); white-space:nowrap; flex-shrink:0; }
 .stu-sum-grid { display:grid; grid-template-columns:1fr 1fr; gap:.6rem; }
-.stu-sum { border:1px solid var(--border-color); border-radius:var(--radius-md); padding:.6rem .7rem; background:var(--gray-50); }
-.stu-sum-v { display:block; font-size:1.5rem; font-weight:800; font-family:var(--font-display); line-height:1; font-variant-numeric:tabular-nums; }
-.stu-sum-l { display:block; font-size:.72rem; color:var(--text-muted); margin-top:.2rem; }
-.stu-sum-male { color:#2563eb; } .stu-sum-female { color:#e11d64; }
+.stu-sum { border:1px solid var(--border-color); border-radius:var(--radius-md); padding:.65rem .7rem; background:var(--gray-50); }
+.stu-sum-v { display:block; font-size:1.55rem; font-weight:800; font-family:var(--font-display); line-height:1; font-variant-numeric:tabular-nums; color:var(--text-primary); }
+.stu-sum-l { display:block; font-size:.72rem; color:var(--text-muted); margin-top:.25rem; }
+.stu-sum-total { background:color-mix(in srgb,var(--primary) 8%,var(--bg-card)); border-color:color-mix(in srgb,var(--primary) 30%,var(--border-color)); }
+.stu-sum-total .stu-sum-v { color:var(--primary); }
+
+/* Gender cell — coloured mars/venus glyph + label (matches the reference) */
+.stu-gender { display:inline-flex; align-items:center; gap:.35rem; font-weight:600; white-space:nowrap; }
+.stu-gender.is-m { color:#2563eb; } .stu-gender.is-f { color:#e11d64; }
+
+/* File-type accents on the quick-export buttons (universally recognised) */
+.stu-x-excel { color:#16a34a; } .stu-x-pdf { color:#dc2626; }
 .stu-quick-export { display:flex; flex-direction:column; gap:.45rem; }
 .stu-quick-export .btn { width:100%; justify-content:center; }
 .stu-tips .card-body { background:color-mix(in srgb,var(--accent) 8%,var(--bg-card)); border-radius:var(--radius-lg); }
