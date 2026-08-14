@@ -1,7 +1,7 @@
 {% extends "platform/_layout.html" %}
 {% block title %}Platform health{% endblock %}
 {% block heading %}Platform health{% endblock %}
-{% block subheading %}Live reachability and configuration checks for the platform.{% endblock %}
+{% block subheading %}Live system, database and request metrics for this server.{% endblock %}
 
 {% block head %}
 <style>
@@ -17,15 +17,110 @@
   .hbadge{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;padding:2px 9px;border-radius:99px}
   .hbadge.ok{background:var(--ok-soft);color:var(--ok)} .hbadge.warn{background:var(--warn-soft);color:var(--warn)}
   .hbadge.bad{background:var(--bad-soft);color:var(--bad)}
+
+  .msec{display:flex;align-items:baseline;gap:10px;margin:24px 0 10px}
+  .msec h3{font-size:15px;font-weight:700;margin:0}
+  .msec .msub{color:var(--faint);font-size:12.5px}
+  .mgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:14px}
+  @media(min-width:760px){.mgrid{grid-template-columns:repeat(4,1fr)}}
+  .mtile{background:var(--surface);border:1px solid var(--line-2);border-radius:var(--radius,14px);padding:15px 16px}
+  .mtile .mv{font-size:25px;font-weight:800;font-family:var(--font-display);line-height:1.05;letter-spacing:-.01em;font-variant-numeric:tabular-nums}
+  .mtile .mv small{font-size:14px;color:var(--faint);font-weight:600}
+  .mtile .ml{font-size:11.5px;color:var(--faint);margin-top:5px;text-transform:uppercase;letter-spacing:.04em}
+  .mtile .msub2{font-size:12px;color:var(--faint);margin-top:3px}
+  .mbar{height:7px;background:var(--line-2);border-radius:99px;overflow:hidden;margin-top:11px}
+  .mbar>span{display:block;height:100%;width:0;background:var(--accent);border-radius:99px;transition:width .4s ease}
+  .mbar.warn>span{background:var(--warn)} .mbar.bad>span{background:var(--bad)}
+  .mlive{margin-left:auto;color:var(--faint);font-size:12px;display:inline-flex;align-items:center;gap:6px}
+  .mlive .pulse{width:8px;height:8px;border-radius:50%;background:var(--ok);animation:mpulse 2s infinite}
+  @keyframes mpulse{0%,100%{opacity:1}50%{opacity:.3}}
 </style>
 {% endblock %}
 
 {% block content %}
+  {% set sys = metrics.system %}
+  {% set pg = metrics.postgres %}
+  {% set rq = metrics.requests %}
+
   <div class="hstatus {{ overall }}">
     <i class="fas {{ 'fa-circle-check' if overall=='ok' else 'fa-triangle-exclamation' if overall=='warn' else 'fa-circle-xmark' }}"></i>
     {{ 'All systems operational' if overall=='ok' else 'Attention needed' if overall=='warn' else 'Critical issue' }}
+    <span class="mlive"><span class="pulse"></span> live · refreshes every 5s</span>
   </div>
 
+  {% if not sys.available %}
+    <div class="panel" style="padding:16px 18px;color:var(--faint)">
+      <i class="fas fa-circle-info"></i> System metrics need <code>psutil</code> installed on the server
+      (<code>pip install psutil</code>). Database and request metrics are shown below.
+    </div>
+  {% else %}
+  <div class="msec"><h3>System</h3><span class="msub" id="m-uptime"></span></div>
+  <div class="mgrid">
+    <div class="mtile">
+      <div class="mv"><span id="m-cpu">{{ sys.cpu_percent|round(0)|int if sys.cpu_percent is not none else '—' }}</span>%</div>
+      <div class="ml">CPU</div>
+      <div class="msub2" id="m-load">{% if sys.load_avg %}load {{ sys.load_avg|join(', ') }}{% endif %}</div>
+      <div class="mbar" id="bar-cpu"><span></span></div>
+    </div>
+    <div class="mtile">
+      <div class="mv"><span id="m-mem">{{ sys.mem.percent|round(0)|int if sys.mem else '—' }}</span>%</div>
+      <div class="ml">Memory</div>
+      <div class="msub2" id="m-mem-sub">{% if sys.mem %}{{ sys.mem.used|filesizeformat }} / {{ sys.mem.total|filesizeformat }}{% endif %}</div>
+      <div class="mbar" id="bar-mem"><span></span></div>
+    </div>
+    <div class="mtile">
+      <div class="mv"><span id="m-swap">{{ sys.swap.percent|round(0)|int if sys.swap else '—' }}</span>%</div>
+      <div class="ml">Swap</div>
+      <div class="msub2" id="m-swap-sub">{% if sys.swap %}{{ sys.swap.used|filesizeformat }} / {{ sys.swap.total|filesizeformat }}{% endif %}</div>
+      <div class="mbar" id="bar-swap"><span></span></div>
+    </div>
+    <div class="mtile">
+      <div class="mv"><span id="m-disk">{{ sys.disk.percent|round(0)|int if sys.disk else '—' }}</span>%</div>
+      <div class="ml">Disk</div>
+      <div class="msub2" id="m-disk-sub">{% if sys.disk %}{{ sys.disk.used|filesizeformat }} / {{ sys.disk.total|filesizeformat }}{% endif %}</div>
+      <div class="mbar" id="bar-disk"><span></span></div>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="msec"><h3>Database &amp; requests</h3></div>
+  <div class="mgrid">
+    <div class="mtile">
+      <div class="mv"><span id="m-pg">{{ pg.total if pg.available else '—' }}</span>{% if pg.available and pg.max %}<small> / {{ pg.max }}</small>{% endif %}</div>
+      <div class="ml">PostgreSQL connections</div>
+      <div class="msub2" id="m-pg-sub">{% if pg.available %}{{ pg.active }} active{% else %}{{ pg.reason or 'n/a' }}{% endif %}</div>
+      <div class="mbar" id="bar-pg"><span></span></div>
+    </div>
+    <div class="mtile">
+      <div class="mv" id="m-users">{{ rq.concurrent_users }}</div>
+      <div class="ml">Concurrent users</div>
+      <div class="msub2">active in last {{ (rq.window_seconds/60)|int }} min</div>
+    </div>
+    <div class="mtile">
+      <div class="mv"><span id="m-p95">{{ rq.p95_ms|round(0)|int if rq.p95_ms is not none else '—' }}</span><small> ms</small></div>
+      <div class="ml">Request latency (p95)</div>
+      <div class="msub2" id="m-lat-sub">{% if rq.avg_ms is not none %}avg {{ rq.avg_ms|round(0)|int }} ms · {{ rq.count }} reqs{% else %}no traffic yet{% endif %}</div>
+    </div>
+    <div class="mtile">
+      <div class="mv"><span id="m-io-w">0</span><small> <span id="m-io-unit">KB/s</span> write</small></div>
+      <div class="ml">Disk I/O</div>
+      <div class="msub2" id="m-io-sub">read <span id="m-io-r">0</span> KB/s</div>
+    </div>
+  </div>
+
+  <div class="msec"><h3>Background jobs</h3></div>
+  <div class="panel" id="m-jobs" style="padding:6px 0">
+    {% if rq.jobs %}
+      {% for name, j in rq.jobs.items() %}
+      <div class="hcheck"><span class="nm">{{ name.replace('_',' ')|title }}</span>
+        <span class="dt">{{ j.ms }} ms · last run just tracked</span></div>
+      {% endfor %}
+    {% else %}
+      <div class="hcheck"><span class="dt" style="margin-left:0">No background tick has been timed yet this process — it records on the next scheduler run.</span></div>
+    {% endif %}
+  </div>
+
+  <div class="msec"><h3>Reachability &amp; configuration</h3></div>
   <div class="panel">
     {% for c in checks %}
     <div class="hcheck">
@@ -36,8 +131,49 @@
     </div>
     {% endfor %}
   </div>
-  <p class="muted" style="font-size:12.5px;margin-top:12px">
-    <i class="fas fa-circle-info"></i> Gateway and email show configuration status — no external calls are made from this page.
-    <a href="{{ url_for('platform.health') }}">Re-run checks</a>.
-  </p>
+
+  <script>
+    (function(){
+      var URL = "{{ url_for('platform.health_json') }}";
+      function fmtBytesRate(bps){
+        if(bps == null) return '0';
+        if(bps >= 1048576) return (bps/1048576).toFixed(1);
+        return Math.round(bps/1024);
+      }
+      function setBar(id, pct){
+        var el = document.querySelector('#'+id+' > span'); if(!el) return;
+        var p = Math.max(0, Math.min(100, pct||0));
+        el.style.width = p + '%';
+        var bar = document.getElementById(id);
+        bar.classList.remove('warn','bad');
+        if(p >= 90) bar.classList.add('bad'); else if(p >= 75) bar.classList.add('warn');
+      }
+      function txt(id, v){ var el = document.getElementById(id); if(el) el.textContent = v; }
+      function tick(){
+        fetch(URL, {credentials:'same-origin', headers:{'X-Requested-With':'fetch'}})
+          .then(function(r){ return r.ok ? r.json() : null; })
+          .then(function(d){
+            if(!d) return;
+            var s = d.system||{}, pg = d.postgres||{}, rq = d.requests||{};
+            if(s.available){
+              if(s.cpu_percent!=null){ txt('m-cpu', Math.round(s.cpu_percent)); setBar('bar-cpu', s.cpu_percent); }
+              if(s.mem){ txt('m-mem', Math.round(s.mem.percent)); setBar('bar-mem', s.mem.percent); }
+              if(s.swap){ txt('m-swap', Math.round(s.swap.percent)); setBar('bar-swap', s.swap.percent); }
+              if(s.disk){ txt('m-disk', Math.round(s.disk.percent)); setBar('bar-disk', s.disk.percent); }
+              if(s.uptime_seconds!=null){ var h=Math.floor(s.uptime_seconds/3600), m=Math.floor((s.uptime_seconds%3600)/60); txt('m-uptime','process up '+h+'h '+m+'m'); }
+              if(s.disk_io){
+                var w=s.disk_io.write_bps, rd=s.disk_io.read_bps;
+                txt('m-io-w', fmtBytesRate(w)); txt('m-io-r', fmtBytesRate(rd));
+                txt('m-io-unit', (w>=1048576||rd>=1048576)?'MB/s':'KB/s');
+              }
+            }
+            if(pg.available){ txt('m-pg', pg.total); setBar('bar-pg', pg.max? (pg.total/pg.max*100):0); txt('m-pg-sub', pg.active+' active'); }
+            txt('m-users', rq.concurrent_users!=null?rq.concurrent_users:0);
+            txt('m-p95', rq.p95_ms!=null?Math.round(rq.p95_ms):'—');
+            txt('m-lat-sub', rq.avg_ms!=null? ('avg '+Math.round(rq.avg_ms)+' ms · '+rq.count+' reqs') : 'no traffic yet');
+          }).catch(function(){});
+      }
+      setInterval(tick, 5000); tick();
+    })();
+  </script>
 {% endblock %}

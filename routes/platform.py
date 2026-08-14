@@ -752,10 +752,19 @@ def analytics():
 def health():
     """Operational health: control-plane + tenant DB reachability, scheduler,
     and gateway/email configuration (no external calls)."""
-    from utils import platform_health
+    from utils import platform_health, sys_metrics
     rows = platform_health.health_checks(current_app)
     return render_template('platform/health.html', active='health',
-                           checks=rows, overall=platform_health.overall(rows))
+                           checks=rows, overall=platform_health.overall(rows),
+                           metrics=sys_metrics.all_metrics())
+
+
+@platform_bp.route('/health.json')
+@platform_admin_required
+def health_json():
+    """Live metrics for the monitoring page's auto-refresh (no full reload)."""
+    from utils import sys_metrics
+    return jsonify(sys_metrics.all_metrics())
 
 
 @platform_bp.route('/audit')

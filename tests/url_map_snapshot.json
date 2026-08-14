@@ -4590,6 +4590,13 @@
 ]
 ],
 [
+"platform.health_json",
+"/platform/health.json",
+[
+"GET"
+]
+],
+[
 "platform.homepage",
 "/platform/homepage",
 [
