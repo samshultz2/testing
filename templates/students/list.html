@@ -34,6 +34,26 @@
 .stu-field-wrap .form-control { width:100%; max-width:100%; }
 .stu-field-wrap.full { grid-column:1/-1; }
 .stu-field-label { font-size:12px; font-weight:600; color:var(--text-secondary); }
+
+/* Search field with an inset magnifier (matches the reference) */
+.stu-search { position:relative; display:block; }
+.stu-search-ic { position:absolute; left:.85rem; top:50%; transform:translateY(-50%);
+  color:var(--text-muted); pointer-events:none; font-size:.9rem; }
+.stu-search-input { padding-left:2.3rem; }
+
+/* Row actions — subtle outlined buttons; View carries the theme accent, the
+   overflow is a dropdown caret. */
+.stu-act { display:inline-flex; align-items:center; gap:.4rem; border:1px solid var(--border-color);
+  background:var(--bg-card); color:var(--text-secondary); border-radius:var(--radius-md);
+  padding:.34rem .65rem; font-size:.8rem; font-weight:600; line-height:1.2; cursor:pointer;
+  text-decoration:none; white-space:nowrap;
+  transition:border-color var(--transition),color var(--transition),background var(--transition); }
+.stu-act:hover { border-color:var(--gray-300); background:var(--gray-50); color:var(--text-primary); }
+.stu-act i { font-size:.85em; }
+.stu-act-view { color:var(--primary); border-color:color-mix(in srgb,var(--primary) 32%,var(--border-color)); }
+.stu-act-view:hover { color:var(--primary); background:var(--primary-light); border-color:var(--primary); }
+.stu-act-caret { padding:.34rem .5rem; }
+.stu-act-caret[aria-expanded="true"] { color:var(--primary); border-color:var(--primary); background:var(--primary-light); }
 .stu-count { color:var(--text-muted); font-size:.85rem; }
 .stu-bulkbar { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; padding:.5rem .7rem;
   background:var(--gray-50); border:1px solid var(--border-color); border-radius:var(--radius-md); margin-bottom:.75rem; }
@@ -78,8 +98,8 @@ a.stu-name:hover { color:var(--primary); }
 .stu-sid { font-size:.72rem; color:var(--text-muted); white-space:nowrap; }
 .stu-meta { display:flex; flex-wrap:wrap; gap:.35rem .5rem; margin:.5rem 0; font-size:.8rem; align-items:center; }
 .stu-meta-dim { color:var(--text-muted); }
-.stu-actions { display:flex; gap:.35rem; flex-wrap:wrap; margin-top:.3rem; }
-.stu-actions .btn { flex:1; }
+.stu-actions { display:flex; gap:.4rem; align-items:center; margin-top:.55rem; }
+.stu-actions .stu-act { flex:1; justify-content:center; }
 .stu-actions .stu-menu-wrap { flex:0 0 auto; }
 
 /* Gender badges — tinted, theme-aware (categorical accents) */
