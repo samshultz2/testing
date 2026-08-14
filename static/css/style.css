@@ -2428,6 +2428,16 @@ summary:focus-visible {
 .sp-btn-fill { background: var(--primary); border-color: var(--primary); color: #fff; }
 .sp-btn-fill:hover:not(:disabled) { background: var(--primary-hover); border-color: var(--primary-hover); color: #fff; }
 
+/* ── Reusable avatar (photo or initials) — shared across modules. Size via
+   width/height inline or a wrapper; defaults to 38px. ── */
+.av { width: 38px; height: 38px; border-radius: var(--radius-full); object-fit: cover; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center; background: var(--gray-100);
+  border: 1px solid var(--border-color); font-weight: 700; font-size: .8rem; letter-spacing: .02em; }
+.av-ph { color: var(--primary); background: color-mix(in srgb, var(--primary) 14%, var(--bg-card)); border-color: transparent; }
+.av-row { display: inline-flex; align-items: center; gap: .6rem; min-width: 0; text-decoration: none; color: inherit; }
+.av-row:hover .av-row-name { color: var(--primary); }
+.av-row-name { font-weight: 600; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; }
+
 /* Inputs: clearer focus, comfortable sizing */
 .form-control,
 input[type="text"], input[type="number"], input[type="date"],
