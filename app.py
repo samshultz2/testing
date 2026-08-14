@@ -116,6 +116,20 @@ def _tick_one(app):
             run_board_pack_delivery_if_due(app)
         except Exception:
             app.logger.exception('board pack delivery job failed')
+        # Daily stale-media cleanup: remove orphaned communication attachment
+        # files (no CommAttachment row) from the tenant's upload folder. Own
+        # DB-shared marker so it runs once per day per school.
+        if SchoolSettings.get('last_media_cleanup_date') != today:
+            try:
+                from utils.media_cleanup import sweep_current_tenant
+                res = sweep_current_tenant()
+                if res.get('comm_deleted'):
+                    app.logger.info('media cleanup: removed %d orphaned comm file(s) (%d bytes)',
+                                    res['comm_deleted'], res['comm_freed'])
+            except Exception:
+                app.logger.exception('media cleanup job failed')
+            SchoolSettings.set('last_media_cleanup_date', today, 'string',
+                               'Last date the stale-media cleanup ran')
         # Async job queue (opt-in): drain queued background jobs on the bound DB.
         # No-op unless ASYNC_JOBS is enabled, so prod behaviour is unchanged.
         try:
