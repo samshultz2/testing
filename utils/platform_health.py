@@ -46,13 +46,32 @@ def _check_tenant_dbs():
 
 
 def _check_scheduler():
+    # Two valid topologies: jobs in-process (the web worker owns the scheduler), or
+    # the web/jobs split (RUN_INPROCESS_JOBS=0) where a dedicated worker owns it.
+    # In the split, the web worker serving this page never sets the in-process flag,
+    # so we fall back to the shared job-timing sidecar: a recent tick proves the
+    # dedicated worker is alive.
+    import os
+    import time
     try:
         import app as _appmod
-        running = bool(getattr(_appmod, '_scheduler_started', False))
-        return ('Background scheduler', 'ok' if running else 'warn',
-                'running' if running else 'not started')
+        if bool(getattr(_appmod, '_scheduler_started', False)):
+            return ('Background scheduler', 'ok', 'running (in-process)')
     except Exception:
-        return ('Background scheduler', 'warn', 'status unknown')
+        pass
+    inproc = os.environ.get('RUN_INPROCESS_JOBS', '1').strip().lower() \
+        not in ('0', 'false', 'no', 'off')
+    if not inproc:
+        try:
+            from utils import sys_metrics
+            tick = sys_metrics.request_metrics().get('jobs', {}).get('scheduled_tick')
+            if tick and (time.time() - tick.get('at', 0)) < 180:
+                return ('Background scheduler', 'ok', 'running (dedicated worker)')
+            # The worker records a tick within ~60s of starting; give it a moment.
+            return ('Background scheduler', 'warn', 'dedicated worker: awaiting first tick')
+        except Exception:
+            return ('Background scheduler', 'warn', 'status unknown')
+    return ('Background scheduler', 'warn', 'not started')
 
 
 def _check_config(current_app):
