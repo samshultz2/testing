@@ -56,3 +56,65 @@ def open_image(source):
     im = Image.open(stream)
     im.load()                     # force full decode now (catches truncated/bomb files)
     return im
+
+
+# Default budget for stored images: keep them small enough to be cheap to store
+# and fast to serve, without visibly hurting quality.
+TARGET_BYTES = 600 * 1024
+MAX_STORE_DIM = 1600
+
+
+def encode_to_target(im, target_bytes=TARGET_BYTES, max_dim=MAX_STORE_DIM, min_quality=45):
+    """Re-encode a PIL image to at most ``target_bytes`` while keeping quality as
+    high as possible. Returns ``(bytes, mime)``.
+
+    - Auto-orients (EXIF) and downscales the longest side to ``max_dim``.
+    - Opaque images → progressive JPEG, stepping quality down (then downscaling
+      if the floor quality is still too big) until the budget is met.
+    - Images with transparency → PNG, downscaled until they fit (never flattened,
+      so a logo/graphic keeps its alpha). A tiny PNG that can't be shrunk further
+      is returned as-is even if slightly over budget.
+    """
+    from io import BytesIO
+    from PIL import Image, ImageOps
+    try:
+        im = ImageOps.exif_transpose(im)
+    except Exception:
+        pass
+    has_alpha = im.mode in ('RGBA', 'LA') or (im.mode == 'P' and 'transparency' in im.info)
+    if max(im.size) > max_dim:
+        im.thumbnail((max_dim, max_dim), Image.LANCZOS)
+
+    if has_alpha:
+        im = im.convert('RGBA')
+        data = b''
+        for _ in range(8):
+            out = BytesIO()
+            im.save(out, 'PNG', optimize=True)
+            data = out.getvalue()
+            if len(data) <= target_bytes or max(im.size) <= 480:
+                return data, 'image/png'
+            w, h = im.size
+            im = im.resize((max(1, int(w * 0.85)), max(1, int(h * 0.85))), Image.LANCZOS)
+        return data, 'image/png'
+
+    im = im.convert('RGB')
+
+    def _jpeg(image, q):
+        out = BytesIO()
+        image.save(out, 'JPEG', quality=q, optimize=True, progressive=True)
+        return out.getvalue()
+
+    for _ in range(6):
+        data = None
+        for q in (88, 82, 76, 70, 62, 54, min_quality):
+            data = _jpeg(im, q)
+            if len(data) <= target_bytes:
+                return data, 'image/jpeg'
+            if q == min_quality:
+                break
+        if max(im.size) <= 400:        # don't shrink into oblivion
+            return data, 'image/jpeg'
+        w, h = im.size
+        im = im.resize((int(w * 0.85), int(h * 0.85)), Image.LANCZOS)
+    return _jpeg(im, min_quality), 'image/jpeg'
