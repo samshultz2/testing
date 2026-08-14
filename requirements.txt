@@ -86,3 +86,6 @@ pytest==9.0.3          # 8.3.3 -> CVE-2025-71176
 # keys (WEBPUSH_VAPID_PUBLIC_KEY / _PRIVATE_KEY / _CLAIMS_EMAIL) to enable. Without
 # those keys configured, push sends are a safe no-op and subscriptions are stored.
 pywebpush==2.4.0
+
+# System metrics for the platform health/monitoring page
+psutil>=5.9

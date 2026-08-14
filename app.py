@@ -38,6 +38,19 @@ _SCHED_LOCK_KEY = 0x5C8ED01
 def _tick_dispatch(app):
     """Run one scheduling tick. In multi-tenant mode this runs once per active
     school (bound to that school's database); otherwise once for the single DB."""
+    import time as _t
+    _t0 = _t.perf_counter()
+    try:
+        _tick_dispatch_inner(app)
+    finally:
+        try:
+            from utils import sys_metrics
+            sys_metrics.record_job('scheduled_tick', (_t.perf_counter() - _t0) * 1000.0)
+        except Exception:
+            pass
+
+
+def _tick_dispatch_inner(app):
     if app.config.get('MULTI_TENANT'):
         from flask import g
         from utils import tenancy
@@ -374,6 +387,38 @@ def create_app(config_class=None):
     # SLOW_REQUEST_MS / SLOW_QUERY_MS). Cheap and purely observational.
     from utils.perf_logging import init_perf_logging
     init_perf_logging(app)
+
+    # Live request metrics for the platform monitoring page: per-request latency
+    # and a rolling set of active users (for the "concurrent users" figure).
+    # Per-worker and best-effort — it never affects the response. Static assets
+    # are skipped so they don't drown out real request timings.
+    from utils import sys_metrics as _sysm
+    import time as _time_mod
+
+    @app.before_request
+    def _metrics_before():
+        from flask import g, request, session
+        if request.endpoint == 'static':
+            return
+        g._metrics_t0 = _time_mod.perf_counter()
+        try:
+            if session.get('user_id'):
+                _sysm.touch_user('u:%s' % session['user_id'])
+            elif session.get('logged_in'):
+                _sysm.touch_user('a:%s' % (request.remote_addr or '?'))
+        except Exception:
+            pass
+
+    @app.after_request
+    def _metrics_after(resp):
+        from flask import g
+        t0 = getattr(g, '_metrics_t0', None)
+        if t0 is not None:
+            try:
+                _sysm.record_request((_time_mod.perf_counter() - t0) * 1000.0)
+            except Exception:
+                pass
+        return resp
 
     # Keep a rolling daily backup of the database
     from utils.backup import auto_backup
