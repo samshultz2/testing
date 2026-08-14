@@ -171,11 +171,16 @@ def _start_scheduled_messages_worker(app):
     import time
 
     def _loop():
+        from utils import jobqueue
         while True:
             time.sleep(60)
             try:
                 with app.app_context():
                     _tick_dispatch(app)
+                # Drain best-effort queued jobs (analytics refreshes). No-op unless
+                # Redis backs the queue. For responsive async grading, run the
+                # dedicated worker (scripts/run_jobs.py), which drains every ~2s.
+                jobqueue.drain(app)
             except Exception:
                 app.logger.exception('scheduled-jobs tick failed')
 
@@ -418,6 +423,22 @@ def create_app(config_class=None):
                 _sysm.record_request((_time_mod.perf_counter() - t0) * 1000.0)
             except Exception:
                 pass
+        return resp
+
+    @app.after_request
+    def _static_cache_headers(resp):
+        """Make static bundles CDN/browser cacheable. Assets referenced with a
+        version query (``?v=<mtime>`` via bundle_url) are content-addressed, so
+        they're safe to cache for a year and marked immutable — a rebuild changes
+        the query and busts every cache. Unversioned static gets a short public
+        TTL. Dynamic pages (the exam runtime itself) are untouched: they stay
+        per-request and uncacheable, which is what a CDN should pass through."""
+        from flask import request
+        if request.endpoint == 'static' and resp.status_code == 200:
+            if request.args.get('v'):
+                resp.headers['Cache-Control'] = 'public, max-age=31536000, immutable'
+            else:
+                resp.headers.setdefault('Cache-Control', 'public, max-age=3600')
         return resp
 
     # Background jobs (scheduled-message dispatch + daily backup) run in-process

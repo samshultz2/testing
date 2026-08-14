@@ -47,6 +47,88 @@ def _gen_portal_pin(n=8):
     return ''.join(secrets.choice(_PIN_ALPHABET) for _ in range(n))
 
 
+# ── answer-key cache ──────────────────────────────────────────────────────────
+# The correct-option map for an exam is read on every autosave batch by the whole
+# cohort and never changes during a sitting, so cache it (Redis when available,
+# in-process otherwise). Invalidated automatically whenever an exam's questions
+# change via the SQLAlchemy event listener below — it can't be bypassed by a
+# route that forgets to clear it.
+def _exam_answer_key(exam_id):
+    """{question_id: correct_option} for an exam, cached."""
+    from utils import cache
+    ck = f'cbt:key:{exam_id}'
+    cached = cache.get_json(ck)
+    if cached is not None:
+        return {int(k): v for k, v in cached.items()}
+    rows = (CBTQuestion.query.filter_by(exam_id=exam_id)
+            .with_entities(CBTQuestion.id, CBTQuestion.correct_option).all())
+    key = {qid: opt for qid, opt in rows}
+    cache.set_json(ck, {str(k): v for k, v in key.items()}, ttl=6 * 3600)
+    return key
+
+
+def _invalidate_answer_key(exam_id):
+    from utils import cache
+    cache.delete(f'cbt:key:{exam_id}')
+
+
+from sqlalchemy import event as _sa_event   # noqa: E402
+
+
+@_sa_event.listens_for(CBTQuestion, 'after_insert')
+@_sa_event.listens_for(CBTQuestion, 'after_update')
+@_sa_event.listens_for(CBTQuestion, 'after_delete')
+def _drop_answer_key_cache(mapper, connection, target):
+    try:
+        _invalidate_answer_key(target.exam_id)
+    except Exception:
+        pass
+
+
+# ── async analytics + grading (see utils.jobqueue) ────────────────────────────
+def _async_grading_enabled():
+    """Queued grading only when explicitly enabled AND a real queue backs it —
+    otherwise submit() grades inline (the correct, immediate default)."""
+    from utils import jobqueue
+    flag = os.environ.get('CBT_ASYNC_GRADING', '').strip().lower()
+    return flag in ('1', 'true', 'yes', 'on') and jobqueue.backend_enabled()
+
+
+def _refresh_exam_analytics(exam_id):
+    """Recompute the psychometric item analysis and cache it. Called only from the
+    background worker (never on a user request), so analytics stay asynchronous."""
+    from utils import cache
+    from utils.psychometrics import item_analysis as _analyse
+    try:
+        data = _analyse(exam_id)
+    except Exception:
+        return
+    cache.set_json(f'cbt:ia:{exam_id}', data, ttl=6 * 3600)
+
+
+def _cbt_grade_job(app, payload):
+    attempt_id = payload.get('attempt_id')
+    a = db.session.get(CBTAttempt, attempt_id) if attempt_id else None
+    if not a or a.status == 'Submitted':
+        return
+    exam = db.session.get(CBTExam, a.exam_id)
+    if not exam:
+        return
+    # _finalize itself enqueues the best-effort analytics refresh on commit.
+    _finalize(a, exam)
+
+
+def _cbt_analytics_job(app, payload):
+    exam_id = payload.get('exam_id')
+    if exam_id:
+        _refresh_exam_analytics(exam_id)
+
+
+from utils import jobqueue as _jobqueue   # noqa: E402
+_jobqueue.register('cbt_grade', _cbt_grade_job)
+_jobqueue.register('cbt_analytics', _cbt_analytics_job)
+
+
 # --- SPA helpers (no-reload React shell + JSON-aware action responses) ---
 from utils.spa import section_responders
 _wants_json, _render, _ok, _err = section_responders(
@@ -648,8 +730,15 @@ def item_analysis(exam_id):
     """Psychometric item analysis for a CBT exam — difficulty, discrimination,
     point-biserial, distractor analysis and KR-20 reliability."""
     e = _exam_403(exam_id)
-    from utils.psychometrics import item_analysis as _analyse
-    data = _analyse(e.id)
+    # Prefer the analytics snapshot refreshed asynchronously by the background
+    # worker after each submission; only compute inline when the cache is cold
+    # (e.g. no worker configured) so the heavy psychometrics never block a sitting.
+    from utils import cache
+    data = cache.get_json(f'cbt:ia:{e.id}')
+    if data is None:
+        from utils.psychometrics import item_analysis as _analyse
+        data = _analyse(e.id)
+        cache.set_json(f'cbt:ia:{e.id}', data, ttl=6 * 3600)
     return _render({
         'page': 'item_analysis', 'nav': _nav_urls(),
         'exam': {'id': e.id, 'title': e.title},
@@ -1585,6 +1674,12 @@ def _finalize(attempt, exam):
             'CBT grading failed to commit for attempt %s (exam %s)',
             getattr(attempt, 'id', '?'), getattr(exam, 'id', '?'))
         raise   # surface the failure instead of leaving a half-graded attempt
+    # Keep the exam's cached analytics fresh — best-effort, worker-side only, so
+    # it never runs on a student request.
+    try:
+        _jobqueue.enqueue('cbt_analytics', {'exam_id': exam.id}, inline_fallback=False)
+    except Exception:
+        pass
 
 
 @cbt_portal_bp.route('/<int:exam_id>/take')
@@ -1598,7 +1693,7 @@ def take(exam_id):
     attempt = CBTAttempt.query.filter_by(exam_id=exam.id, student_id=student.id).first()
     if not attempt:
         return redirect(url_for('cbt_portal.start', exam_id=exam.id))
-    if attempt.status == 'Submitted':
+    if attempt.status in ('Submitted', 'Submitting'):
         return redirect(url_for('cbt_portal.result', exam_id=exam.id))
     # Timer already expired while away. Give a grace window first: if the
     # student went offline mid-exam, their latest answers may exist only on
@@ -1699,12 +1794,13 @@ def ping(exam_id):
     student = _current_student()
     attempt = CBTAttempt.query.filter_by(exam_id=exam_id, student_id=student.id).first()
     if attempt and attempt.status == 'In progress':
-        # Coalesce: only persist last_seen if it's gone stale. Clients ping
+        # Coalesce: only persist last_seen at most once per ~25s. Clients ping
         # often (~every 30s); writing on every ping is the main heartbeat write
-        # load at scale. A <25s-old last_seen is fresh enough for monitoring.
-        now = timeutil.now()
-        if not attempt.last_seen or (now - attempt.last_seen).total_seconds() >= 25:
-            attempt.last_seen = now
+        # load at scale. The gate lives in Redis when available (so the coalescing
+        # holds across all web workers), falling back to a per-process gate.
+        from utils import cache
+        if cache.should_run(f'cbt:hb:{attempt.id}', 25):
+            attempt.last_seen = timeutil.now()
             db.session.commit()
             _touch_device_session(student, exam_id)
     return jsonify({'ok': True})
@@ -1791,8 +1887,7 @@ def answers_batch(exam_id):
     attempt = CBTAttempt.query.filter_by(exam_id=exam_id, student_id=student.id).first()
     if not attempt or attempt.status == 'Submitted':
         return jsonify({'ok': False}), 400
-    correct = {q.id: q.correct_option
-               for q in CBTQuestion.query.filter_by(exam_id=exam_id).all()}
+    correct = _exam_answer_key(exam_id)
     existing = {a.question_id: a for a in attempt.answers}
     changed = 0
     for key, val in request.form.items():
@@ -1826,7 +1921,7 @@ def submit(exam_id):
     attempt = CBTAttempt.query.filter_by(exam_id=exam.id, student_id=student.id).first()
     if not attempt:
         return redirect(url_for('cbt_portal.home'))
-    if attempt.status == 'Submitted':
+    if attempt.status in ('Submitted', 'Submitting'):
         return redirect(url_for('cbt_portal.result', exam_id=exam.id))
     # Persist any answers posted with the final submit (covers JS-off / last picks).
     for q in exam.questions.all():
@@ -1839,7 +1934,17 @@ def submit(exam_id):
             db.session.add(ans)
         ans.selected_option = sel
     db.session.flush()
-    _finalize(attempt, exam)
+    if _async_grading_enabled():
+        # Queue grading so a whole cohort submitting at the deadline doesn't grade
+        # synchronously on the web workers. The result page shows a brief
+        # "grading…" state and the worker finalises within seconds; if the worker
+        # is unreachable, result() self-heals by grading inline after a short grace.
+        attempt.status = 'Submitting'
+        attempt.submitted_at = timeutil.now()
+        db.session.commit()
+        _jobqueue.enqueue('cbt_grade', {'attempt_id': attempt.id})
+    else:
+        _finalize(attempt, exam)
     return redirect(url_for('cbt_portal.result', exam_id=exam.id))
 
 
@@ -1849,7 +1954,18 @@ def result(exam_id):
     student = _current_student()
     exam = db.get_or_404(CBTExam, exam_id)
     attempt = CBTAttempt.query.filter_by(exam_id=exam.id, student_id=student.id).first()
-    if not attempt or attempt.status != 'Submitted':
+    if not attempt:
+        return redirect(url_for('cbt_portal.home'))
+    if attempt.status == 'Submitting':
+        # Queued grading in flight. Self-heal: if the worker hasn't finalised
+        # within a short grace, grade inline now so a student is never stuck.
+        grace = attempt.submitted_at and \
+            (timeutil.now() - attempt.submitted_at).total_seconds() > 60
+        if grace:
+            _finalize(attempt, exam)
+        else:
+            return render_template('cbt/portal_grading.html', exam=exam, student=student)
+    if attempt.status != 'Submitted':
         return redirect(url_for('cbt_portal.home'))
     rows = _review_rows(exam, attempt)
     return render_template('cbt/portal_result.html', exam=exam, student=student,

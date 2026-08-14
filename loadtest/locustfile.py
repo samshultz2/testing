@@ -1,13 +1,25 @@
 """
 CBT load test — simulates the full exam flow for many concurrent students:
-login -> start -> take -> batched answer autosave -> heartbeat -> submit.
+login -> start -> take -> batched answer autosave -> heartbeat ->
+reconnect (after a network blip) -> submit.
 
 Setup once (against staging):  python loadtest/seed_loadtest.py
 Then:                          EXAM_ID=<id> ACCESS_PASSWORD=<pw> \
                                locust -f loadtest/locustfile.py --host https://your-url
 
-Open http://localhost:8089, set users (e.g. 800) and spawn rate, and watch
+For a full cohort (e.g. 5,000):
+    N=5000 M=40 python loadtest/seed_loadtest.py
+    EXAM_ID=<id> locust -f loadtest/locustfile.py --host https://<staging> \
+        --users 5000 --spawn-rate 100 --run-time 45m --headless \
+        --csv=loadtest/results/cbt --html=loadtest/results/cbt.html
+
+Open http://localhost:8089 (or use --headless), set users + spawn rate, and watch
 failure rate / response times. Validate on the actual VPS, not your laptop.
+
+The portal throttles logins per client IP (15 / 15 min); each virtual user sends
+a unique X-Forwarded-For so a whole cohort driven from one load box isn't blocked
+— the target must run with TRUST_PROXY=1 (a staging setting) for that to apply.
+See loadtest/README.md for the metric-mapping table and the /platform tie-in.
 """
 import csv
 import itertools
@@ -55,6 +67,12 @@ class Student(HttpUser):
         self.qids = []
         self.started = False
         sid, pw = _next_cred()
+        # Unique client IP per candidate (needs TRUST_PROXY=1 on the target) so the
+        # per-IP login throttle doesn't block a cohort coming from one load box.
+        h = abs(hash(sid))
+        self.client.headers['X-Forwarded-For'] = '10.%d.%d.%d' % (
+            (h >> 16) & 0xFF, (h >> 8) & 0xFF, h & 0xFF)
+        self.client_token = 'lt-%s' % sid
         # login
         page = self.client.get('/exam/login')
         m = _CSRF_INPUT_RE.search(page.text) or _CSRF_RE.search(page.text)
@@ -94,7 +112,19 @@ class Student(HttpUser):
     def heartbeat(self):
         if not self.started:
             return
-        self._post(f'/exam/{EXAM_ID}/ping', {}, '/exam/[id]/ping')
+        self._post(f'/exam/{EXAM_ID}/ping', {'client_token': self.client_token},
+                   '/exam/[id]/ping')
+
+    @task(1)
+    def reconnect(self):
+        # Simulate a transient network drop: re-fetch the take page (the real
+        # reconnect path — the client restores answers and resyncs).
+        if not self.started:
+            return
+        take = self.client.get(f'/exam/{EXAM_ID}/take', name='/exam/[id]/take (reconnect)')
+        m = _CSRF_RE.search(take.text)
+        if m:
+            self.csrf = m.group(1)
 
     @task(1)
     def submit(self):
@@ -105,3 +135,25 @@ class Student(HttpUser):
         self.started = False
         # re-enter for continued load
         self.on_start()
+
+
+@events.quitting.add_listener
+def _summary(environment, **kw):
+    st = environment.stats.total
+    print('\n=== CBT load-test summary ===')
+    print('requests: %d   failures: %d (%.2f%%)   rps(avg): %.1f' % (
+        st.num_requests, st.num_failures,
+        (st.num_failures / st.num_requests * 100) if st.num_requests else 0,
+        st.total_rps))
+    try:
+        print('response ms  p50/p95/p99: %d / %d / %d' % (
+            st.get_response_time_percentile(0.50),
+            st.get_response_time_percentile(0.95),
+            st.get_response_time_percentile(0.99)))
+    except Exception:
+        pass
+    sub = environment.stats.get('/exam/[id]/submit', 'POST')
+    if sub and sub.num_requests:
+        print('submit latency  p95/p99 ms: %d / %d   (n=%d)' % (
+            sub.get_response_time_percentile(0.95),
+            sub.get_response_time_percentile(0.99), sub.num_requests))

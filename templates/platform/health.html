@@ -106,6 +106,16 @@
       <div class="ml">Disk I/O</div>
       <div class="msub2" id="m-io-sub">read <span id="m-io-r">0</span> KB/s</div>
     </div>
+    <div class="mtile">
+      <div class="mv"><span id="m-redis">{% if metrics.redis.available %}{{ (metrics.redis.used_memory or 0)|filesizeformat }}{% else %}—{% endif %}</span></div>
+      <div class="ml">Redis memory</div>
+      <div class="msub2" id="m-redis-sub">{% if metrics.redis.available %}cache + queue{% else %}not configured{% endif %}</div>
+    </div>
+    <div class="mtile">
+      <div class="mv" id="m-qlen">{% if metrics.redis.available %}{{ metrics.redis.queue_length or 0 }}{% else %}—{% endif %}</div>
+      <div class="ml">Job queue depth</div>
+      <div class="msub2">pending background jobs</div>
+    </div>
   </div>
 
   <div class="msec"><h3>Background jobs</h3></div>
@@ -174,6 +184,11 @@
               }
             }
             if(pg.available){ txt('m-pg', pg.total); setBar('bar-pg', pg.max? (pg.total/pg.max*100):0); txt('m-pg-sub', pg.active+' active'); }
+            var rd = d.redis||{};
+            if(rd.available){
+              var mb = rd.used_memory!=null ? (rd.used_memory>=1048576 ? (rd.used_memory/1048576).toFixed(1)+' MB' : Math.round(rd.used_memory/1024)+' KB') : '—';
+              txt('m-redis', mb); txt('m-qlen', rd.queue_length!=null?rd.queue_length:0);
+            }
             txt('m-users', rq.concurrent_users!=null?rq.concurrent_users:0);
             txt('m-p95', rq.p95_ms!=null?Math.round(rq.p95_ms):'—');
             txt('m-lat-sub', rq.avg_ms!=null? ('avg '+Math.round(rq.avg_ms)+' ms · '+rq.count+' reqs') : 'no traffic yet');

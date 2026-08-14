@@ -228,6 +228,15 @@ body{margin:0;font-family:'Inter',system-ui,sans-serif;background:#eef2f7;color:
     })();
     // Retry syncing whenever the connection comes back.
     window.addEventListener('online', function(){ Object.keys(localAns).forEach(function(qid){ pendingAns['q_'+qid]=localAns[qid]; }); flushAnswers(); });
+    // Periodic autosave safety net (~45s): re-push the full on-device answer set so
+    // a batch lost to a flaky connection is reconciled even without a new change.
+    // Idempotent server-side; skipped when the tab is hidden (beacon covers that).
+    setInterval(function(){
+        if(submitted || document.hidden) return;
+        var qids=Object.keys(localAns); if(!qids.length) return;
+        qids.forEach(function(qid){ pendingAns['q_'+qid]=localAns[qid]; });
+        flushAnswers();
+    }, 45000);
     refresh();
     // Start the timer only after answers are restored, so a page that loads at
     // 00:00 (e.g. reconnecting after an outage) submits WITH the device answers.

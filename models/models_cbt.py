@@ -133,6 +133,10 @@ class CBTQuestion(db.Model):
     marks = db.Column(db.Float, default=1)
     order = db.Column(db.Integer, default=0)
 
+    # exam_id is indexed via the central perf-index registry in models/__init__
+    # (ix_cbt_question_exam) — the exam runtime loads a whole exam's questions on
+    # every take/answer/submit, so a mass sitting must not full-table scan.
+
     @property
     def options(self):
         return [('A', self.option_a), ('B', self.option_b),
