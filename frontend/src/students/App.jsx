@@ -245,9 +245,9 @@ export default function App({ initial }) {
   // Row-level ⋯ menu (graduate / delete) — shared by the table and the cards.
   const renderRowMenu = (s) => canManage && (
     <div className="stu-menu-wrap" style={{ position: 'relative' }}>
-      <button type="button" className="btn btn-secondary btn-sm" aria-haspopup="true" aria-expanded={menuFor === s.id}
+      <button type="button" className="stu-act stu-act-caret" aria-haspopup="true" aria-expanded={menuFor === s.id}
               aria-label="More actions" onClick={(e) => { e.stopPropagation(); setMenuFor(menuFor === s.id ? null : s.id); }}>
-        <i aria-hidden="true" className="fas fa-ellipsis-vertical" /></button>
+        <i aria-hidden="true" className="fas fa-chevron-down" /></button>
       {menuFor === s.id && (
         <div className="row-menu" role="menu">
           <button type="button" role="menuitem" onClick={async () => { setMenuFor(null); if (await confirm(`${s.is_graduated ? 'Undo graduation for' : 'Mark as graduate:'} ${s.name}?`)) runAction(s.graduate_url, {}, 'Updated graduation status.'); }}>
@@ -260,8 +260,8 @@ export default function App({ initial }) {
   );
   const renderActions = (s) => (
     <>
-      <a href={s.url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-eye" /> View</a>
-      {canManage && <a href={s.edit_url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-edit" /> Edit</a>}
+      <a href={s.url} className="stu-act stu-act-view"><i aria-hidden="true" className="fas fa-eye" /> View</a>
+      {canManage && <a href={s.edit_url} className="stu-act"><i aria-hidden="true" className="fas fa-pen" /> Edit</a>}
       {renderRowMenu(s)}
     </>
   );
@@ -309,9 +309,12 @@ export default function App({ initial }) {
         </div>
         <div className="stu-filters">
           <Field label="Search" full>
-            <input className="form-control" type="search" list="stu-recent-searches"
-                   placeholder="Name, ID, parent phone/name, NIN or JAMB reg…"
-                   value={search} onChange={(e) => setSearch(e.target.value)} />
+            <span className="stu-search">
+              <i className="fas fa-magnifying-glass stu-search-ic" aria-hidden="true" />
+              <input className="form-control stu-search-input" type="search" list="stu-recent-searches"
+                     placeholder="Search by name, ID, parent phone/name, NIN or JAMB reg…"
+                     value={search} onChange={(e) => setSearch(e.target.value)} />
+            </span>
             <datalist id="stu-recent-searches">
               {recentQ.map((t) => <option key={t} value={t} />)}
             </datalist>
