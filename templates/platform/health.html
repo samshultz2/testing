@@ -112,11 +112,17 @@
   <div class="panel" id="m-jobs" style="padding:6px 0">
     {% if rq.jobs %}
       {% for name, j in rq.jobs.items() %}
+      {% set ago = (metrics.at - (j.at|int)) if j.at else None %}
       <div class="hcheck"><span class="nm">{{ name.replace('_',' ')|title }}</span>
-        <span class="dt">{{ j.ms }} ms · last run just tracked</span></div>
+        <span class="dt">{{ j.ms }} ms
+          {%- if ago is not none and ago >= 0 %} · last run
+            {%- if ago < 60 %} {{ ago }}s ago
+            {%- elif ago < 3600 %} {{ (ago/60)|int }}m ago
+            {%- else %} {{ (ago/3600)|int }}h ago{% endif -%}
+          {% endif %}</span></div>
       {% endfor %}
     {% else %}
-      <div class="hcheck"><span class="dt" style="margin-left:0">No background tick has been timed yet this process — it records on the next scheduler run.</span></div>
+      <div class="hcheck"><span class="dt" style="margin-left:0">No background tick has been timed yet — it records on the next scheduler run (every minute).</span></div>
     {% endif %}
   </div>
 

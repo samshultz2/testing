@@ -185,29 +185,48 @@ sudo certbot --nginx -d posyhub.example.com
 
 Once TLS is live, `SESSION_COOKIE_SECURE=1` and `ENABLE_HSTS=1` take effect.
 
-### 4. Scaling beyond one process
+### 4. Scaling beyond one process — split web workers from background jobs
 
-The web app runs scheduled messages + daily backup in an in-process thread,
-which is correct for a single worker. To run multiple workers, move those jobs
-to one separate process:
+At a single worker the app runs scheduled-message dispatch and the daily backup
+in an in-process thread, which is correct. Once you scale to multiple gunicorn
+workers you must move those jobs to **one** separate process, or they fire once
+per worker. The split is driven by a single flag:
 
 ```ini
 # .env
 WEB_CONCURRENCY=4
-RUN_INPROCESS_JOBS=0
+RUN_INPROCESS_JOBS=0        # web workers stop running jobs entirely
 ```
 
-Run the web app and the jobs worker side by side:
+With `RUN_INPROCESS_JOBS=0`, the web workers serve requests only — they no
+longer start the scheduler thread or take backups. A dedicated worker
+(`scripts/run_jobs.py`) owns campaign dispatch and the daily DB + media backup,
+and forces `RUN_INPROCESS_JOBS=0` on itself so it can never double up. Run the
+two side by side:
 
 ```bash
-gunicorn -c gunicorn.conf.py wsgi:app     # web, 4 workers
-python scripts/run_jobs.py                # jobs, exactly one process
+RUN_INPROCESS_JOBS=0 gunicorn -c gunicorn.conf.py wsgi:app   # web, 4 workers
+python scripts/run_jobs.py                                   # jobs, 1 process
 ```
 
-As a systemd unit (`posyhub-jobs.service`), mirror `posyhub.service` but with
-`ExecStart=.../python scripts/run_jobs.py`. The worker forces
-`RUN_INPROCESS_JOBS=0` itself, so the jobs fire exactly once regardless of how
-many web workers are running.
+Under systemd, the jobs process ships as its own unit — install it alongside
+the web unit:
+
+```bash
+sudo cp deploy/edusyncra-jobs.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable --now edusyncra-jobs
+```
+
+`deploy/edusyncra-jobs.service` already sets `Environment=RUN_INPROCESS_JOBS=0`
+and `ExecStart=.../python scripts/run_jobs.py`; adjust `User`,
+`WorkingDirectory`, `EnvironmentFile`, and the venv path to your install. Even
+if the jobs process is briefly down, `auto_backup` stays idempotent (one file
+per day), so a restart never produces duplicate backups.
+
+> **One jobs process only.** Never enable `edusyncra-jobs` on more than one
+> host, and never leave `RUN_INPROCESS_JOBS` unset (default `1`) on the web
+> workers once this unit is running — either would run the jobs twice.
 
 ---
 

@@ -24,6 +24,18 @@ def test_record_job_shows_in_snapshot():
     assert m['jobs']['scheduled_tick']['ms'] == 12
 
 
+def test_job_metrics_cross_process_via_sidecar(app):
+    """A job timed in another process (the dedicated worker) is visible on the
+    web-served page through the JSON sidecar, even with an empty in-memory dict."""
+    with app.app_context():
+        # Simulate the dedicated jobs worker having recorded a run, then a fresh
+        # web worker whose own in-memory job dict is empty.
+        sys_metrics._write_jobs_file({'scheduled_tick': {'ms': 42, 'at': 9e9}})
+        sys_metrics._JOBS.clear()
+        m = sys_metrics.request_metrics()
+        assert m['jobs'].get('scheduled_tick', {}).get('ms') == 42
+
+
 def test_all_metrics_structure(app):
     with app.app_context():
         snap = sys_metrics.all_metrics()

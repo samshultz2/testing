@@ -15,6 +15,8 @@ is omitted) rather than raising, so the monitoring page never errors.
 """
 from __future__ import annotations
 
+import json
+import os
 import threading
 import time
 from collections import deque
@@ -44,9 +46,60 @@ def touch_user(key: str):
                 _ACTIVE.pop(k, None)
 
 
+# ── cross-process job metrics ─────────────────────────────────────────────────
+# Background jobs run in the web process (in-process mode) OR in a dedicated
+# worker (RUN_INPROCESS_JOBS=0). The /platform page is served by a web worker,
+# so job durations recorded elsewhere are mirrored through a tiny JSON sidecar
+# that any process on the host can read. Best-effort throughout: a missing app
+# context or unwritable disk simply falls back to the in-memory dict.
+def _jobs_file():
+    try:
+        from flask import current_app
+        base = current_app.config.get('BASE_DIR')
+        if not base:
+            return None
+        d = os.path.join(base, 'instance', 'metrics')
+        os.makedirs(d, exist_ok=True)
+        return os.path.join(d, 'jobs.json')
+    except Exception:
+        return None
+
+
+def _write_jobs_file(jobs: dict):
+    path = _jobs_file()
+    if not path:
+        return
+    try:
+        tmp = path + '.tmp'
+        with open(tmp, 'w') as fh:
+            json.dump(jobs, fh)
+        os.replace(tmp, path)
+    except Exception:
+        pass
+
+
+def _read_jobs_file() -> dict:
+    path = _jobs_file()
+    if not path or not os.path.exists(path):
+        return {}
+    try:
+        with open(path) as fh:
+            data = json.load(fh)
+        return data if isinstance(data, dict) else {}
+    except Exception:
+        return {}
+
+
 def record_job(name: str, duration_ms: float):
+    entry = {'ms': round(duration_ms), 'at': time.time()}
     with _LOCK:
-        _JOBS[name] = {'ms': round(duration_ms), 'at': time.time()}
+        _JOBS[name] = entry
+        snapshot = dict(_JOBS)
+    # Merge onto whatever the sidecar already holds so a job recorded in another
+    # process (e.g. the dedicated worker) isn't clobbered, then persist.
+    merged = _read_jobs_file()
+    merged.update(snapshot)
+    _write_jobs_file(merged)
 
 
 def _percentile(values, pct):
@@ -64,6 +117,14 @@ def request_metrics(window_seconds: int = 300):
         active_cut = time.time() - window_seconds
         concurrent = sum(1 for v in _ACTIVE.values() if v >= active_cut)
         jobs = {k: dict(v) for k, v in _JOBS.items()}
+    # Fold in job timings recorded by other processes (the dedicated jobs worker
+    # under RUN_INPROCESS_JOBS=0), preferring whichever run is more recent.
+    for name, entry in _read_jobs_file().items():
+        if not isinstance(entry, dict):
+            continue
+        cur = jobs.get(name)
+        if cur is None or entry.get('at', 0) > cur.get('at', 0):
+            jobs[name] = dict(entry)
     return {
         'window_seconds': window_seconds,
         'count': len(recent),
