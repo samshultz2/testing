@@ -2453,9 +2453,13 @@ summary:focus-visible {
 .kpi .ic.red { --tone-c: #ef4444; }
 .kpi .ic.purple { --tone-c: #8b5cf6; }
 .kpi .ic.teal { --tone-c: #0d9488; }
+/* The value must never break mid-number. .kpi is a horizontal flex row, so when
+   the label (.l) is long it steals the row's width; `overflow-wrap: anywhere`
+   used to then split the digits ("37" → "3"/"7"). Keep the number on one line
+   and let the label be the flexible sibling that wraps instead. */
 .kpi .v { font-size: 1.35rem; font-weight: 700; line-height: 1.1; font-family: var(--font-display);
-  font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
-.kpi .l { font-size: .72rem; color: var(--text-muted); margin-top: .25rem; text-transform: uppercase; letter-spacing: .03em; }
+  font-variant-numeric: tabular-nums; white-space: nowrap; flex-shrink: 0; }
+.kpi .l { font-size: .72rem; color: var(--text-muted); margin-top: .25rem; text-transform: uppercase; letter-spacing: .03em; min-width: 0; }
 
 /* Inputs: clearer focus, comfortable sizing */
 .form-control,
