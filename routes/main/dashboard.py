@@ -119,6 +119,8 @@ def dashboard_customize():
             db.session.commit()
         else:
             session['dashboard_prefs'] = chosen
+        from utils import query_cache
+        query_cache.bump('dash')          # widget layout changed
         flash('Dashboard updated.', 'success')
         return redirect(url_for('main.dashboard'))
     return render_template('dashboard_customize.html',

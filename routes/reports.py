@@ -187,6 +187,14 @@ def import_students():
             return _fail('No file selected.')
         if not file.filename.lower().endswith(('.xlsx', '.xls', '.csv')):
             return _fail('Please upload a .xlsx or .csv file.')
+        # Soft plan cap: block an upload import when a tiered tenant is already
+        # over its student limit (payments and existing students are unaffected).
+        from utils.entitlements import creation_cap_check
+        _cap = creation_cap_check('students')
+        if _cap and _cap['over']:
+            return _fail(f"You've reached your {_cap['tier_label']} plan limit of "
+                         f"{_cap['cap']} students. Existing students and payments "
+                         f"are unaffected — upgrade your subscription to import more.")
 
         try:
             from utils.branch_scope import branch_for_new
@@ -224,6 +232,9 @@ def import_students():
                 branch_id=branch_for_new(),
                 class_arm_assignment_id=assignment_id,
             )
+            if success_count:
+                from utils import query_cache
+                query_cache.bump('dash')      # student count changed
 
             if _wants_json():
                 msg = f'Successfully imported {success_count} student(s).' if success_count else 'No students imported.'

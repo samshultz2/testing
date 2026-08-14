@@ -721,11 +721,26 @@ def create_app(config_class=None):
             except Exception:
                 return {}
 
+        def _plan_cap_notice():
+            """At/near-cap resources for a soft (non-blocking) shell nudge. Empty
+            unless a tiered, non-owner tenant is at >=90% of a capped resource."""
+            try:
+                if not session.get('logged_in'):
+                    return {}
+                from utils.entitlements import plan_cap_summary
+                rows = plan_cap_summary()
+                if not rows:
+                    return {}
+                return {'rows': rows, 'url': url_for('billing.index')}
+            except Exception:
+                return {}
+
         return {
             'get_active_session': get_active_session,
             'get_active_term': get_active_term,
             'time_travel': time_travel,
             'subscription': subscription_banner(),
+            'plan_caps': _plan_cap_notice(),
             'today': date.today(),
             'app_name': Config.APP_NAME,
             'csrf_token': csrf_token,

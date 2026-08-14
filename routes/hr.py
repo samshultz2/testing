@@ -304,6 +304,15 @@ def _staff_form_payload(s, submit_url, cancel_url):
 @login_required
 def add_staff():
     if request.method == 'POST':
+        # Soft plan cap: block only the create when a tiered tenant is over its
+        # staff limit (payments and existing staff are never affected).
+        from utils.entitlements import creation_cap_check
+        _cap = creation_cap_check('staff')
+        if _cap and _cap['over']:
+            return _err(f"You've reached your {_cap['tier_label']} plan limit of "
+                        f"{_cap['cap']} staff. Existing staff and payments are "
+                        f"unaffected — upgrade your subscription to add more.",
+                        url_for('hr.staff_list'))
         if not (request.form.get('first_name') and request.form.get('surname')):
             return _err('First name and surname are required.', url_for('hr.add_staff'))
         s = StaffMember(staff_id=StaffMember.generate_staff_id())

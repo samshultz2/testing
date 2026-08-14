@@ -147,6 +147,15 @@ def api_students():
 def add_student():
     """Add a new student"""
     if request.method == 'POST':
+        # Soft plan cap: block only the create when a tiered tenant is over its
+        # student limit (never affects payments, existing students or reads).
+        from utils.entitlements import cap_block
+        capped = cap_block('students', 'main.students_list', 'students')
+        if capped is not None:
+            if _wants_json():
+                return jsonify({'ok': False, 'error': "You've reached your plan's "
+                                "student limit. Upgrade your subscription to add more."}), 402
+            return capped
         try:
             # Create student
             student = Student(
@@ -230,6 +239,8 @@ def add_student():
                     enrolled_label = caa.display_name
 
             db.session.commit()
+            from utils import query_cache
+            query_cache.bump('dash')          # student count/recent changed
             log_action('student.create', target=student)
             view_url = url_for('main.view_student', student_id=student.id)
             from utils.notify import notify_student_change, actor_label
@@ -295,6 +306,22 @@ def import_students():
         })
 
     # ---- commit ----------------------------------------------------------
+    # Soft plan cap: bulk import is the easiest way past a limit, so block a
+    # commit that would push a tiered tenant over its student cap. Headroom-aware
+    # (not just "already over") since one paste can add many rows. Payments and
+    # existing students are never affected.
+    from utils.entitlements import creation_cap_check
+    _cap = creation_cap_check('students')
+    if _cap:
+        incoming = prev.get('valid') or 0
+        remaining = max(0, _cap['cap'] - _cap['used'])
+        if _cap['over'] or incoming > remaining:
+            return jsonify({'ok': False, 'error':
+                f"This import would exceed your {_cap['tier_label']} plan limit of "
+                f"{_cap['cap']} students — you have {_cap['used']} and {remaining} "
+                f"slot(s) left. Existing students and payments are unaffected; "
+                f"upgrade your subscription to import more, or trim the list."}), 402
+
     from utils.branch_scope import branch_for_new
     from utils.access_control import can_access_class
     new_branch_id = branch_for_new(request.form.get('branch_id', type=int))
@@ -310,6 +337,8 @@ def import_students():
         rows, db, Student, ParentContact, branch_id=new_branch_id,
         class_arm_assignment_id=caa.id if caa else None)
     if created:
+        from utils import query_cache
+        query_cache.bump('dash')          # student count changed
         log_action('student.import', detail=f'Imported {created} students')
         from utils.notify import notify_student_change
         notify_student_change('import', detail=f'{created} student(s) imported',
@@ -740,6 +769,8 @@ def delete_student(student_id):
     try:
         student.is_active = False
         db.session.commit()
+        from utils import query_cache
+        query_cache.bump('dash')          # active student count changed
         log_action('delete_student', f'{student.full_name} ({student.student_id})')
         from utils.notify import notify_student_change, actor_label
         notify_student_change('delete', detail=f'{student.full_name} ({student.student_id})',
@@ -1046,6 +1077,8 @@ def bulk_delete_students():
         Student.id.in_(ids), Student.is_active == True
     ).update({Student.is_active: False}, synchronize_session=False)
     db.session.commit()
+    from utils import query_cache
+    query_cache.bump('dash')              # active student count changed
     log_action('bulk_delete_students', f'{deleted} students soft-deleted')
     return jsonify({'deleted': deleted})
 
@@ -1065,6 +1098,8 @@ def restore_student(student_id):
     assert_student_access(student)   # branch + form-teacher scope
     student.is_active = True
     db.session.commit()
+    from utils import query_cache
+    query_cache.bump('dash')              # active student count changed
     log_action('restore_student', f'{student.full_name} ({student.student_id})')
     if _wants_json():
         return jsonify({'ok': True})

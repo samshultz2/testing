@@ -929,6 +929,23 @@
                 <span class="sub-cta">Manage subscription →</span>
             </a>
             {% endif %}
+            {% if plan_caps and plan_caps.rows %}
+            {# Soft, non-blocking nudge: a plan resource is at/over its cap.
+               Existing records and payments keep working; this only invites an
+               upgrade. Over-cap shows warn styling, merely-near shows ok. #}
+            {% set _any_over = plan_caps.rows | selectattr('over') | list | length > 0 %}
+            <a href="{{ plan_caps.url }}" class="sub-banner {{ 'sub-warn' if _any_over else 'sub-ok' }}">
+                <i class="fas fa-{{ 'triangle-exclamation' if _any_over else 'gauge-high' }}"></i>
+                <span>
+                {%- for r in plan_caps.rows -%}
+                    {{ r.label }} {{ r.used }}/{{ r.cap }}{{ '' if loop.last else ' · ' }}
+                {%- endfor %} —
+                {% if _any_over %}you're at your plan limit; existing records and payments are unaffected.
+                {% else %}approaching your plan limit.{% endif %}
+                </span>
+                <span class="sub-cta">Upgrade plan →</span>
+            </a>
+            {% endif %}
             <div class="page-content" id="mainContent" tabindex="-1"{% if not page_can_write %} data-readonly="1"{% endif %}>
                 {% block content %}{% endblock %}
             </div>

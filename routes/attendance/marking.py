@@ -190,6 +190,8 @@ def save_attendance():
                 att.afternoon_present = en.id in pm_ids
                 att.marked_by = marked_by
             db.session.commit()
+            from utils import query_cache
+            query_cache.bump('dash')          # attendance stats changed
             flash(f'Attendance saved for {len(enrollments)} students (Morning & Afternoon).', 'success')
             assignment = db.session.get(ClassArmAssignment, assignment_id)
             if assignment:

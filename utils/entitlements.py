@@ -234,3 +234,117 @@ def usage_vs_limits(tenant, usage):
         rows.append({'key': key, 'label': label, 'unit': unit, 'used': used,
                      'cap': cap, 'unlimited': unlimited, 'pct': pct, 'over': over})
     return rows
+
+
+# =============================================================================
+# SOFT PLAN-LIMIT ("CAP") ENFORCEMENT
+# =============================================================================
+# The numeric LIMITS above are enforced *softly*. A tenant that is over its plan
+# cap is blocked ONLY from creating new records of the capped resource, and
+# always with an upgrade nudge. Everything else is deliberately left untouched —
+# payments, billing, login, existing data, reads and edits all keep working — so
+# a school can never be locked out of the very flow (paying to upgrade) that
+# lifts the cap. The owner school and grandfathered tenants (no tier assigned)
+# are never capped. Every helper FAILS OPEN: any error, unknown usage or
+# unreachable DB allows the action rather than blocking it.
+
+# Capped limit key -> the matching count key in platform_stats.tenant_usage.
+# Only "creatable" resources are here; storage/SMS are consumption, not creation,
+# so they surface as warnings (usage_vs_limits) but are never hard-capped.
+CAP_USAGE_KEYS = {
+    'students': 'students',
+    'staff': 'staff',
+    'branches': 'branches',
+}
+
+_LIMIT_LABELS = {k: l for k, l, _ in LIMITS}
+
+
+def _current_capped_tenant():
+    """The current tenant IF plan caps apply to it: multi-tenant mode, logged in,
+    non-owner, and with a tier assigned. Otherwise None. Never raises."""
+    try:
+        from flask import current_app, session
+        if not current_app.config.get('MULTI_TENANT') or not session.get('logged_in'):
+            return None
+        from utils.tenant_runtime import current_tenant
+        from utils import billing
+        t = current_tenant()
+        if t is None or billing.is_owner(t):
+            return None
+        if not (getattr(t, 'tier', None) or '').strip():
+            return None                          # grandfathered — no tier set
+        return t
+    except Exception:
+        return None
+
+
+def creation_cap_check(limit_key):
+    """For the CURRENT tenant, is it at/over its cap for ``limit_key``? Returns
+    None when caps don't apply (grandfathered / owner / single-school / unlimited
+    / usage unknown), else {over, cap, used, tier_label}. Fails open."""
+    usage_key = CAP_USAGE_KEYS.get(limit_key)
+    if not usage_key:
+        return None
+    t = _current_capped_tenant()
+    if t is None:
+        return None
+    try:
+        r = resolve(t)
+        cap = r['limits'].get(limit_key)
+        if cap is None or cap < 0:
+            return None                          # unlimited plan
+        from utils.platform_stats import tenant_usage
+        used = tenant_usage(getattr(t, 'database_url', None)).get(usage_key)
+        if used is None:
+            return None                          # usage unknown -> allow
+        return {'over': used >= cap, 'cap': cap, 'used': used,
+                'tier_label': r['tier_label']}
+    except Exception:
+        return None
+
+
+def cap_block(limit_key, redirect_endpoint, noun=None):
+    """Create-endpoint guard. If the current tenant is over its cap for
+    ``limit_key``, flash an upgrade nudge and return a redirect Response that
+    stops the create. Returns None when the create is allowed (the usual path).
+
+    NON-BLOCKING by design: only new records of the capped resource are stopped.
+    Payments, existing data and every other flow are untouched."""
+    info = creation_cap_check(limit_key)
+    if not info or not info['over']:
+        return None
+    from flask import flash, redirect, url_for
+    label = noun or limit_key
+    flash(f"You've reached your {info['tier_label']} plan limit of {info['cap']} "
+          f"{label}. Your existing {label} and payments are unaffected — upgrade "
+          f"your subscription to add more.", 'warning')
+    try:
+        return redirect(url_for(redirect_endpoint))
+    except Exception:
+        return redirect(url_for('main.dashboard'))
+
+
+def plan_cap_summary():
+    """Compact list of at/near-cap resources for the shell banner (a soft,
+    non-blocking nudge). Returns [] unless the current tenant is at >=90% of a
+    capped resource. Each row: {key, label, used, cap, over}."""
+    t = _current_capped_tenant()
+    if t is None:
+        return []
+    try:
+        r = resolve(t)
+        from utils.platform_stats import tenant_usage
+        usage = tenant_usage(getattr(t, 'database_url', None))
+        rows = []
+        for lk, uk in CAP_USAGE_KEYS.items():
+            cap = r['limits'].get(lk)
+            used = usage.get(uk)
+            if cap is None or cap <= 0 or used is None:
+                continue
+            if used / cap >= 0.9:
+                rows.append({'key': lk, 'label': _LIMIT_LABELS.get(lk, lk),
+                             'used': used, 'cap': cap, 'over': used >= cap})
+        return rows
+    except Exception:
+        return []

@@ -284,7 +284,9 @@ def dashboard_payload():
 
     Cross-module widgets are computed only when enabled (preference ∩ module
     permission), so a user never receives data for a module they can't access.
-    Student/attendance helpers are branch- or teacher-scoped internally."""
+    Student/attendance helpers are branch- or teacher-scoped internally. The
+    genuinely expensive metrics are memoised via ``_dash_cached`` (see below),
+    which is invalidated on data changes by ``query_cache.bump('dash')``."""
     active_session = get_active_session()
     active_term = get_active_term()
     enabled_set = enabled_widgets()
@@ -833,12 +835,25 @@ def _dash_library():
 
 
 def _dash_cached(key, ttl, fn):
-    """Memoize an expensive dashboard metric per-tenant via AnalyticsCache. The
-    key is namespaced by branch context so a branch view never reads another
-    branch's numbers. Any cache failure degrades to computing directly."""
-    from models import AnalyticsCache
+    """Memoize an expensive dashboard metric. The key is namespaced by branch
+    context (so a branch view never reads another branch's numbers) AND by a
+    per-tenant version token that ``query_cache.bump('dash')`` advances on data
+    changes — so a write invalidates these numbers immediately instead of waiting
+    out the TTL. Prefers Redis when available (fast, shared across workers, and
+    self-expiring so the versioned keys don't accumulate); falls back to the
+    AnalyticsCache DB table (also shared across workers) when there's no Redis.
+    Any cache failure degrades to computing directly."""
+    from utils import query_cache, cache as _cache
     scope = session.get('view_branch_id') or session.get('branch_id') or 'all'
-    ck = f'dash:{key}:b{scope}'
+    name = f'{key}:b{scope}'
+    # Redis path: query_cache.cached adds the tenant namespace + version + TTL.
+    # (AnalyticsCache is per-tenant DB, but Redis is shared by every school, so
+    #  the tenant namespace is essential there to avoid cross-tenant collisions.)
+    if _cache.enabled():
+        return query_cache.cached('dash', name, ttl, fn)
+    # DB fallback — embed the version so a bump invalidates here too.
+    from models import AnalyticsCache
+    ck = f'dash:{name}:v{query_cache.version("dash")}'
     try:
         hit = AnalyticsCache.get(ck)
         if hit is not None:

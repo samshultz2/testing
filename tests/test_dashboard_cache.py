@@ -44,4 +44,28 @@ def test_dash_cached_is_branch_namespaced(app):
     with app.app_context():
         keys = {c.cache_key for c in AnalyticsCache.query.filter(
             AnalyticsCache.cache_key.like('dash:unittest:ns%')).all()}
-        assert 'dash:unittest:ns:b1' in keys and 'dash:unittest:ns:b2' in keys
+        # Keys are branch-namespaced (b1 vs b2) and version-stamped (:v<token>).
+        assert any(k.startswith('dash:unittest:ns:b1:v') for k in keys)
+        assert any(k.startswith('dash:unittest:ns:b2:v') for k in keys)
+
+
+def test_dash_cached_invalidates_on_bump(app):
+    """query_cache.bump('dash') advances the version token, so the next read
+    misses the old entry and recomputes — write-time invalidation, not just TTL."""
+    from routes.main import _dash_cached
+    from utils import query_cache
+    calls = {'n': 0}
+
+    def compute():
+        calls['n'] += 1
+        return {'n': calls['n']}
+
+    with app.test_request_context('/'):
+        session['logged_in'] = True
+        session['role'] = 'admin'
+        first = _dash_cached('unittest:inv', 300, compute)
+        assert _dash_cached('unittest:inv', 300, compute) == first   # cached
+        assert calls['n'] == 1
+        query_cache.bump('dash')                                     # data changed
+        second = _dash_cached('unittest:inv', 300, compute)
+        assert calls['n'] == 2 and second != first                  # recomputed

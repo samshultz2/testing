@@ -58,25 +58,70 @@
     return '(function(){\n' + text + '\n})();';
   }
 
-  function reexec(container) {
-    // Scripts inserted via innerHTML don't execute; recreate executable ones so
-    // the section's bundle runs and mounts. Non-JS scripts (the JSON data block)
-    // are left in place.
-    var nonce = activeNonce();
-    var scripts = container.querySelectorAll('script');
-    for (var i = 0; i < scripts.length; i++) {
-      var old = scripts[i];
-      var type = (old.getAttribute('type') || '').toLowerCase();
-      if (type && type !== 'text/javascript' && type !== 'application/javascript' && type !== 'module') continue;
-      var s = document.createElement('script');
-      if (old.src) s.src = old.src;
-      else if (type === 'module') s.textContent = old.textContent;   // module = own scope
-      else s.textContent = inlineBody(old.textContent);
-      if (old.type) s.type = old.type;
-      // Inline scripts need this document's nonce or the CSP blocks them.
-      if (!old.src && nonce) s.setAttribute('nonce', nonce);
-      old.parentNode.replaceChild(s, old);
+  function buildScript(old, nonce) {
+    // Recreate one <script> so it actually executes (scripts inserted via
+    // innerHTML/DOMParser never run). Returns the fresh element, or null for a
+    // non-JS block (e.g. the inline JSON data island) that must be left as-is.
+    var type = (old.getAttribute('type') || '').toLowerCase();
+    if (type && type !== 'text/javascript' && type !== 'application/javascript' && type !== 'module') return null;
+    var s = document.createElement('script');
+    if (old.src) s.src = old.src;
+    else if (type === 'module') s.textContent = old.textContent;   // module = own scope
+    else s.textContent = inlineBody(old.textContent);              // scope per re-run
+    if (old.type) s.type = old.type;
+    // Inline scripts need this document's nonce or the CSP blocks them.
+    if (!old.src && nonce) s.setAttribute('nonce', nonce);
+    // Ordered execution: a dynamically-inserted external script is async by
+    // default, so it would run whenever it happens to finish loading. async=false
+    // (plus the awaited onload in runInOrder) makes externals run in insertion
+    // order — exactly like the HTML parser does on a hard load.
+    s.async = false;
+    return s;
+  }
+
+  function insertAndSettle(s, insert) {
+    // insert() places the node, which triggers its execution. An inline script
+    // runs synchronously on insertion, so it's already done. An external one
+    // executes when it finishes loading, so we resolve on load/error — the NEXT
+    // script (which may depend on this one, e.g. a Chart.js init after chart.js)
+    // waits for it. THIS is the fix for charts/buttons that were blank or dead
+    // after a soft navigation until a hard refresh: on a hard load the parser
+    // guarantees a dependency runs before the code that uses it, but naive
+    // re-insertion made the dependency async, so the dependent inline code ran
+    // first, threw, and aborted — killing that page's charts and click handlers.
+    if (s.src) {
+      return new Promise(function (resolve) {
+        s.onload = s.onerror = function () { resolve(); };
+        insert(s);
+      });
     }
+    insert(s);
+    return Promise.resolve();
+  }
+
+  function runInOrder(olds, nonce, insertFor, tokenAtStart) {
+    // Execute a list of parsed <script> nodes strictly in order, awaiting each
+    // external script before running the next. Returns a Promise. Bails if a
+    // newer navigation superseded this one (tokenAtStart !== navToken), so
+    // in-flight scripts from an abandoned page can't mount into the live one.
+    return olds.reduce(function (p, old) {
+      return p.then(function () {
+        if (tokenAtStart !== navToken) return;         // superseded — stop
+        var s = buildScript(old, nonce);
+        if (!s) return;                                 // leave JSON/data blocks
+        return insertAndSettle(s, function (el) { insertFor(old, el); });
+      });
+    }, Promise.resolve());
+  }
+
+  function reexec(container, token) {
+    // Re-run the section bundle + any inline scripts inside .page-content, in
+    // order. Non-JS scripts (the JSON data block) are left in place by buildScript.
+    var nonce = activeNonce();
+    var scripts = Array.prototype.slice.call(container.querySelectorAll('script'));
+    return runInOrder(scripts, nonce, function (old, el) {
+      old.parentNode.replaceChild(el, old);
+    }, token);
   }
 
   function syncActive(doc, selector) {
@@ -109,9 +154,11 @@
     });
   }
 
-  function syncBodyScripts(doc) {
+  function syncBodyScripts(doc, token) {
     // Page-specific scripts from {% block extra_js %} live in <body> outside
     // .page-content; re-run the destination's so per-page JS works after a swap.
+    // Ordered + dependency-aware (runInOrder), so a lib like chart.umd.min.js is
+    // fully loaded before the inline `new Chart(...)` init that follows it.
     // NOTE: these scripts re-execute in the global scope on every navigation, so
     // page-level extra_js must NOT use top-level `const`/`let` (their lexical
     // bindings persist across swaps and throw "already declared" on re-run) —
@@ -121,20 +168,16 @@
     var live = {};
     Array.prototype.forEach.call(document.body.querySelectorAll('script'),
       function (s) { if (!s.closest('.page-content')) live[s.outerHTML] = 1; });
+    var pending = [];
     doc.body.querySelectorAll('script').forEach(function (node) {
       if (node.closest('.page-content')) return;   // section bundle — handled by reexec()
       if (live[node.outerHTML]) return;            // a base script, already running
-      var type = (node.getAttribute('type') || '').toLowerCase();
-      var s = document.createElement('script');
-      if (node.src) s.src = node.src;
-      else if (type === 'module') s.textContent = node.textContent;   // module = own scope
-      else s.textContent = inlineBody(node.textContent);              // scope per re-run
-      if (node.type) s.type = node.type;
-      // Inline scripts need this document's nonce or the CSP blocks them.
-      if (!node.src && nonce) s.setAttribute('nonce', nonce);
-      s.setAttribute('data-spa-extra', '1');
-      document.body.appendChild(s);
+      pending.push(node);
     });
+    return runInOrder(pending, nonce, function (old, el) {
+      el.setAttribute('data-spa-extra', '1');
+      document.body.appendChild(el);
+    }, token);
   }
 
   function swap(html) {
@@ -149,8 +192,12 @@
     var cur = document.querySelector('.page-content');
     var imported = document.importNode(fresh, true);
     cur.parentNode.replaceChild(imported, cur);
-    reexec(imported);
-    syncBodyScripts(doc);                           // page-specific extra_js
+    // Run the section's scripts, then the page's extra_js — in order, awaiting
+    // external deps at each step (see runInOrder). Content scripts run before
+    // extra_js, matching document order on a hard load. Fire-and-forget: the DOM
+    // is already live, so breadcrumb/title updates below need not wait on JS.
+    var tok = navToken;
+    reexec(imported, tok).then(function () { return syncBodyScripts(doc, tok); });
 
     // Breadcrumb, title, flashes, and sidebar/bottom-nav active state.
     var nb = doc.querySelector('.breadcrumb'), cb = document.querySelector('.breadcrumb');

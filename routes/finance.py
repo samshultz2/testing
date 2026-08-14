@@ -583,6 +583,8 @@ def record_payment():
         payment.branch_id = stu.branch_id if stu else None
         db.session.add(payment)
         db.session.commit()
+        from utils import query_cache
+        query_cache.bump('dash')              # finance KPIs changed
         from utils.audit import log_action
         log_action('finance.payment',
                    detail=f'{payment.amount:g} from {stu.full_name if stu else "—"}',

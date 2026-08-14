@@ -495,6 +495,15 @@ def add_branch():
         return _err('Branch name is required.', url_for('settings.branches'))
     if Branch.query.filter_by(name=name).first():
         return _err('A branch with that name already exists.', url_for('settings.branches'))
+    # Soft plan cap: block only the create when over the branch limit. Payments
+    # and existing branches are never affected.
+    from utils.entitlements import creation_cap_check
+    _cap = creation_cap_check('branches')
+    if _cap and _cap['over']:
+        return _err(f"You've reached your {_cap['tier_label']} plan limit of "
+                    f"{_cap['cap']} branches. Existing branches and payments are "
+                    f"unaffected — upgrade your subscription to add more.",
+                    url_for('settings.branches'))
     first = Branch.query.count() == 0
     db.session.add(Branch(
         name=name,
