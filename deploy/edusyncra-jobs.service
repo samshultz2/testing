@@ -18,7 +18,9 @@ Wants=network-online.target
 Type=simple
 User=edusyncra
 WorkingDirectory=/opt/edusyncra
-EnvironmentFile=/opt/edusyncra/.env
+# The app loads .env itself via python-dotenv (config.py), so no EnvironmentFile
+# is needed here — that keeps systemd from having to parse values with special
+# characters (base64 keys, DB URLs with {name}). Only true process env goes here.
 Environment=RUN_INPROCESS_JOBS=0
 ExecStart=/opt/edusyncra/.venv/bin/python scripts/run_jobs.py
 Restart=on-failure

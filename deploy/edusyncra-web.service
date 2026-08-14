@@ -22,7 +22,9 @@ Wants=network-online.target
 Type=simple
 User=edusyncra
 WorkingDirectory=/opt/edusyncra
-EnvironmentFile=/opt/edusyncra/.env
+# The app loads .env itself via python-dotenv (config.py) — no EnvironmentFile,
+# so systemd never has to parse values with special characters. Only the gunicorn
+# knobs (true process env) are set here.
 # 4 workers × 4 threads ≈ 16 concurrent slots on a 4-vCPU box; jobs run in the
 # dedicated worker, not here. Bind to localhost only — nginx is the public edge.
 Environment=WEB_CONCURRENCY=4
