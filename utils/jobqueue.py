@@ -21,11 +21,17 @@ caller.
 """
 from __future__ import annotations
 
+import collections
 import json
 import os
 
 _QUEUE_KEY = 'edusyncra:jobq'
 _HANDLERS: dict = {}
+
+# Minimal stand-in for a Tenant, carrying just what a worker needs to bind the
+# right database + cache namespace when running a queued job (the real Tenant
+# lives in the control-plane DB, which the worker shouldn't have to re-query).
+_LightTenant = collections.namedtuple('_LightTenant', 'subdomain database_url')
 
 
 def register(kind: str, fn):
@@ -50,18 +56,47 @@ def enqueue(kind: str, payload: dict | None = None, *, inline_fallback: bool = T
     Returns 'queued' | 'inline' | 'dropped' so callers/tests can assert behaviour.
     """
     payload = payload or {}
+    job = {'kind': kind, 'payload': payload}
+    # Capture the current school so the worker can bind its database + cache
+    # namespace. Without this, a queued grade job would run against whatever DB
+    # the worker happens to have bound — a cross-tenant data hazard.
+    try:
+        from flask import current_app
+        if current_app.config.get('MULTI_TENANT'):
+            from utils.tenant_runtime import current_tenant
+            t = current_tenant()
+            if t is not None:
+                job['tenant'] = {'sub': t.subdomain, 'url': t.database_url}
+    except Exception:
+        pass
     client = _redis()
     if client is not None:
         try:
-            client.rpush(_QUEUE_KEY, json.dumps({'kind': kind, 'payload': payload}))
+            client.rpush(_QUEUE_KEY, json.dumps(job))
             return 'queued'
         except Exception:
             pass
-    # No backend (or push failed): run now, or drop for best-effort jobs.
+    # No backend (or push failed): run now (inline runs in the caller's context,
+    # which is already bound to the right tenant), or drop for best-effort jobs.
     if inline_fallback:
         _run(None, kind, payload)
         return 'inline'
     return 'dropped'
+
+
+def _bind_tenant(tinfo):
+    """Bind this app-context's DB session + cache namespace to the job's school,
+    mirroring how the scheduled tick binds tenants in the worker. No-op without
+    tenant info (single-school mode)."""
+    if not tinfo:
+        return
+    try:
+        from flask import g
+        from utils.tenant_runtime import _engine_for
+        g.tenant_engine = _engine_for(tinfo['url'])
+        g.tenant = _LightTenant(tinfo.get('sub'), tinfo.get('url'))
+    except Exception:
+        pass
 
 
 def _run(app, kind: str, payload: dict):
@@ -100,8 +135,10 @@ def drain(app, max_items: int = 1000) -> int:
         except Exception:
             continue
         kind, payload = job.get('kind'), job.get('payload') or {}
+        tinfo = job.get('tenant')
         if app is not None:
             with app.app_context():
+                _bind_tenant(tinfo)
                 _run(app, kind, payload)
         else:
             _run(app, kind, payload)
