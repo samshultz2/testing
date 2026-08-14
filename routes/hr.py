@@ -165,6 +165,7 @@ def staff_list():
                    'phone': s.phone or '', 'designation': s.designation or '—',
                    'department': s.department.name if s.department else '—',
                    'staff_type': s.staff_type, 'status': s.status,
+                   'photo_url': s.photo_url or '',
                    'url': url_for('hr.staff_detail', staff_id=s.id)} for s in staff],
         'departments': [{'id': d.id, 'name': d.name} for d in departments],
         'applied': {'department_id': dept_id or '', 'staff_type': staff_type or '',

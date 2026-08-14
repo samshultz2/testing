@@ -11,6 +11,12 @@ const lsGet = (key, fallback) => {
   try { return JSON.parse(window.localStorage.getItem(key)) || fallback; } catch (_) { return fallback; }
 };
 const lsSet = (key, val) => { try { window.localStorage.setItem(key, JSON.stringify(val)); } catch (_) { /* ignore */ } };
+// Initials for an avatar fallback (first + last word of a name).
+const initials = (name) => {
+  const parts = (name || '').split(' ').filter(Boolean);
+  if (!parts.length) return '—';
+  return ((parts[0][0] || '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
+};
 const pushRecent = (staff) => {
   if (!staff || !staff.id) return;
   const list = lsGet('hr_recent', []).filter((x) => x.id !== staff.id);
@@ -202,10 +208,10 @@ function Staff({ d, notify }) {
       <div className="page-header"><h1>Staff Directory</h1>
         <div className="page-header-actions">
           <input type="file" ref={fileRef} accept=".csv,text/csv" style={{ display: 'none' }} onChange={onImport} />
-          {canWrite(d) && d.is_admin !== false && <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => fileRef.current && fileRef.current.click()}><i aria-hidden="true" className="fas fa-file-import" /> Import</button>}
-          <button type="button" className="btn btn-secondary" onClick={() => setNotifyOpen(true)}><i aria-hidden="true" className="fas fa-bullhorn" /> Notify</button>
-          <a href={d.urls.export} className="btn btn-secondary" data-native download><i aria-hidden="true" className="fas fa-file-csv" /> Export</a>
-          {canWrite(d) && <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-user-plus" /> Add Staff</a>}
+          {canWrite(d) && d.is_admin !== false && <button type="button" className="sp-btn" disabled={busy} onClick={() => fileRef.current && fileRef.current.click()}><i aria-hidden="true" className="fas fa-file-import" /> Import</button>}
+          <button type="button" className="sp-btn" onClick={() => setNotifyOpen(true)}><i aria-hidden="true" className="fas fa-bullhorn" /> Notify</button>
+          <a href={d.urls.export} className="sp-btn" data-native download><i aria-hidden="true" className="fas fa-file-csv" /> Export</a>
+          {canWrite(d) && <a href={d.urls.add} className="sp-btn sp-btn-fill"><i aria-hidden="true" className="fas fa-user-plus" /> Add Staff</a>}
         </div>
       </div>
       <Tabs d={d} />
@@ -252,13 +258,19 @@ function Staff({ d, notify }) {
               <thead><tr><th>Staff ID</th><th>Name</th><th>Designation</th><th>Department</th><th>Type</th><th>Status</th><th /></tr></thead>
               <tbody>{d.staff.map((s) => (
                 <tr key={s.id}>
-                  <td data-label="Staff ID">{s.staff_id}</td>
-                  <td data-label="Name"><a href={s.url}><strong>{s.full_name}</strong></a>{s.phone && <div className="text-muted text-sm">{s.phone}</div>}</td>
+                  <td data-label="Staff ID" className="text-muted">{s.staff_id}</td>
+                  <td data-label="Name">
+                    <a href={s.url} className="av-row">
+                      {s.photo_url ? <img className="av" src={s.photo_url} alt="" loading="lazy" />
+                        : <span className="av av-ph" aria-hidden="true">{initials(s.full_name)}</span>}
+                      <span style={{ minWidth: 0 }}><span className="av-row-name">{s.full_name}</span>{s.phone && <div className="text-muted text-sm">{s.phone}</div>}</span>
+                    </a>
+                  </td>
                   <td data-label="Designation">{s.designation}</td>
                   <td data-label="Department">{s.department}</td>
                   <td data-label="Type"><span className={typeBadge(s.staff_type)}>{s.staff_type}</span></td>
                   <td data-label="Status"><span className={statusBadge(s.status)}>{s.status}</span></td>
-                  <td className="actions"><a href={s.url} className="btn btn-secondary btn-sm" aria-label="Open"><i aria-hidden="true" className="fas fa-arrow-right" /></a></td>
+                  <td className="actions"><a href={s.url} className="sp-btn sp-btn-sm"><i aria-hidden="true" className="fas fa-eye" /> View</a></td>
                 </tr>))}</tbody>
             </table></div>
           ) : <Empty icon="fa-users" title="No staff found"><p>Add your first staff member or adjust filters.</p>{canWrite(d) && <a href={d.urls.add} className="btn btn-primary mt-2">Add Staff</a>}</Empty>}
@@ -451,10 +463,10 @@ function StaffDetail({ d, notify }) {
           </div>
         </div>
         <div className="ph-actions">
-          {s.phone && <><a href={'tel:' + s.phone} className="btn btn-secondary" aria-label="Call"><i aria-hidden="true" className="fas fa-phone" /> Call</a>
-            <a href={'https://wa.me/' + s.wa_intl} target="_blank" rel="noopener" className="btn btn-secondary" aria-label="WhatsApp"><i aria-hidden="true" className="fab fa-whatsapp" /> WhatsApp</a></>}
-          {canWrite(d) && <a href={d.urls.edit} className="btn btn-primary"><i aria-hidden="true" className="fas fa-edit" /> Edit</a>}
-          {d.is_admin && <button className="btn btn-danger" onClick={() => act(d.urls.delete, {}, `Delete ${s.full_name}? If they have payroll/attendance/leave history or a login, they'll be deactivated (hidden everywhere) instead of removed.`, true)}><i aria-hidden="true" className="fas fa-trash" /> Delete</button>}
+          {s.phone && <><a href={'tel:' + s.phone} className="sp-btn sp-btn-success" aria-label="Call"><i aria-hidden="true" className="fas fa-phone" /> Call</a>
+            <a href={'https://wa.me/' + s.wa_intl} target="_blank" rel="noopener" className="sp-btn sp-btn-success" aria-label="WhatsApp"><i aria-hidden="true" className="fab fa-whatsapp" /> WhatsApp</a></>}
+          {canWrite(d) && <a href={d.urls.edit} className="sp-btn sp-btn-primary"><i aria-hidden="true" className="fas fa-pen" /> Edit</a>}
+          {d.is_admin && <button className="sp-btn sp-btn-danger" onClick={() => act(d.urls.delete, {}, `Delete ${s.full_name}? If they have payroll/attendance/leave history or a login, they'll be deactivated (hidden everywhere) instead of removed.`, true)}><i aria-hidden="true" className="fas fa-trash" /> Delete</button>}
         </div>
       </div>
 
