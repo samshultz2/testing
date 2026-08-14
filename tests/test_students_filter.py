@@ -90,6 +90,22 @@ def test_summary_survives_sorted_query(app):
         _teardown(app)
 
 
+def test_csv_export(app):
+    """The rail's Quick export CSV button hits /students/export?format=csv and
+    gets a text/csv download (added alongside excel/word/pdf/image)."""
+    _setup(app)
+    try:
+        c = _admin(app)
+        import json as _json
+        r = c.get('/students/export?format=csv&fields=' + _json.dumps(['student_id', 'surname', 'first_name']))
+        assert r.status_code == 200
+        assert 'text/csv' in r.headers.get('Content-Type', '')
+        body = r.get_data(as_text=True)
+        assert 'Student ID' in body and 'Surname' in body   # header row
+    finally:
+        _teardown(app)
+
+
 def test_filter_works_for_non_admin(app):
     """A non-admin (staff with students access) can also use the filter."""
     ids = _setup(app)
