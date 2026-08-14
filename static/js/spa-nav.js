@@ -20,6 +20,26 @@
  */
 (function () {
   'use strict';
+  // Cross-section soft navigation is DISABLED on purpose.
+  //
+  // This layer used to swap a clicked page's body in place and re-execute its
+  // scripts to avoid a full reload. Booting Chart.js/React pages that way proved
+  // unreliable: their charts and click handlers intermittently failed to
+  // initialise until a hard refresh, because re-inserted scripts don't run with
+  // the same ordering guarantees the HTML parser gives on a real load.
+  //
+  // With soft-nav off, clicking a menu/page link is a normal browser navigation,
+  // so the destination's scripts run in parser order EVERY time — identical to a
+  // hard refresh — and charts/buttons always work. The cost is that a cross-page
+  // click reloads the shell instead of swapping it; with gzip + immutable static
+  // caching that's fast, and it trades a little snappiness for correctness.
+  //
+  // NOTE: in-section interactivity is unaffected. Filtering, pagination, tab
+  // switches etc. run through each section's OWN React router (lib/section.js),
+  // not this file, so those stay instant. This only governs link navigation
+  // BETWEEN pages. Set SOFT_NAV_ENABLED = true to restore the old behaviour.
+  var SOFT_NAV_ENABLED = false;
+  if (!SOFT_NAV_ENABLED) return;
   // Only run inside the authenticated app layout (it has a sidebar + page body).
   if (!document.getElementById('sidebar') || !document.querySelector('.page-content')) return;
   if (window.__spaNavReady) return;
