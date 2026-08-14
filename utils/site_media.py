@@ -43,24 +43,14 @@ def store_upload(file):
     except Exception:
         raise ValueError('That file is not a valid image.')
 
-    # Respect camera orientation, then downscale the longest side.
-    try:
-        from PIL import ImageOps
-        im = ImageOps.exif_transpose(im)
-    except Exception:
-        pass
-    if max(im.size) > MAX_DIM:
-        im.thumbnail((MAX_DIM, MAX_DIM), Image.LANCZOS)
-
-    has_alpha = im.mode in ('RGBA', 'LA') or (im.mode == 'P' and 'transparency' in im.info)
-    out = BytesIO()
-    if has_alpha:
-        im.convert('RGBA').save(out, 'PNG', optimize=True)
-        mime = 'image/png'
-    else:
-        im.convert('RGB').save(out, 'JPEG', quality=82, optimize=True, progressive=True)
-        mime = 'image/jpeg'
-    raw = out.getvalue()
+    # Orient, downscale and compress to a ≤600 KB budget (keeps transparency as
+    # PNG, photos as progressive JPEG) — one shared helper across all upload paths.
+    from utils.uploads import encode_to_target
+    raw, mime = encode_to_target(im, max_dim=MAX_DIM)
+    # The helper downscales an internal copy, so read the final dimensions back
+    # from the encoded bytes (not the original `im`).
+    with Image.open(BytesIO(raw)) as _probe:
+        out_w, out_h = _probe.size
 
     # Route the bytes to the configured backend (DB / filesystem / object store).
     from utils import media_storage
@@ -68,7 +58,7 @@ def store_upload(file):
     row = SiteMedia(filename=(file.filename or 'image')[:160], mime=mime,
                     storage=storage, storage_key=key,
                     data=(raw if storage == 'db' else None),
-                    width=im.width, height=im.height, bytes=len(raw))
+                    width=out_w, height=out_h, bytes=len(raw))
     db.session.add(row)
     db.session.commit()
     return row

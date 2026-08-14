@@ -92,22 +92,25 @@ _IMG_EXTS = {'.png', '.jpg', '.jpeg', '.gif', '.webp'}
 def _save_question_image(file):
     """Save an uploaded question figure under static/uploads/cbt; return its URL.
 
-    The bytes are decoded and re-encoded to PNG via Pillow (with a decompression
-    -bomb cap), so only a genuine raster image is ever written, always as .png."""
+    The bytes are decoded and re-encoded via Pillow (with a decompression-bomb
+    cap), so only a genuine raster image is ever written, and compressed to a
+    ≤600 KB budget (JPEG for photos, PNG when the figure has transparency)."""
     if not file or not file.filename:
         return None
-    from utils.uploads import ext_ok, open_image
+    from utils.uploads import ext_ok, open_image, encode_to_target
     if not ext_ok(file.filename, _IMG_EXTS):
         return None
     try:
         im = open_image(file)                     # raises on non-image / bomb / SVG
-        im = im.convert('RGB')
     except Exception:
         return None
-    name = secrets.token_hex(8) + '.png'
+    raw, mime = encode_to_target(im)              # ≤600 KB, keeps alpha as PNG
+    ext = 'png' if mime == 'image/png' else 'jpg'
+    name = secrets.token_hex(8) + '.' + ext
     folder = os.path.join(current_app.root_path, 'static', 'uploads', 'cbt')
     os.makedirs(folder, exist_ok=True)
-    im.save(os.path.join(folder, name), 'PNG')
+    with open(os.path.join(folder, name), 'wb') as fh:
+        fh.write(raw)
     return url_for('static', filename='uploads/cbt/' + name)
 
 

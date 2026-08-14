@@ -72,7 +72,9 @@ def test_cbt_question_image_reencodes_real_image_to_png(app):
     from routes.cbt import _save_question_image
     with app.test_request_context():           # _save_question_image calls url_for
         url = _save_question_image(_fs(_png_bytes(), 'diagram.jpeg'))
-        assert url and url.endswith('.png')                # always stored as .png
+        # Re-encoded to a safe raster within the size budget — JPEG for an opaque
+        # figure, PNG when it carries transparency.
+        assert url and (url.endswith('.jpg') or url.endswith('.png'))
         fs_path = os.path.join(app.root_path, 'static', 'uploads', 'cbt',
                                os.path.basename(url))
         try:
