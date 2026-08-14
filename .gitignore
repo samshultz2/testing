@@ -19,6 +19,7 @@ instance/*.db
 instance/*.db.backup
 instance/*.sqlite
 instance/backups/
+instance/metrics/
 instance/.secret_key
 instance/*.jsonl
 # Multi-tenancy: local control-plane + per-tenant SQLite databases (dev only).

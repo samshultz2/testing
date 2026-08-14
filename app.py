@@ -420,17 +420,18 @@ def create_app(config_class=None):
                 pass
         return resp
 
-    # Keep a rolling daily backup of the database
-    from utils.backup import auto_backup
-    auto_backup(app)
-
-    # Background worker: dispatch due scheduled parent-communication campaigns.
-    # Runs in-process by default (fine for a single worker). When scaling to
-    # multiple gunicorn workers, set RUN_INPROCESS_JOBS=0 and run the jobs in a
-    # separate process (scripts/run_jobs.py) so they fire exactly once.
+    # Background jobs (scheduled-message dispatch + daily backup) run in-process
+    # by default — correct for a single worker. When scaling to multiple gunicorn
+    # workers, set RUN_INPROCESS_JOBS=0 and run them in one separate process
+    # (scripts/run_jobs.py) so they fire exactly once instead of once per worker.
     _run_jobs = os.environ.get('RUN_INPROCESS_JOBS', '1').strip().lower() \
         not in ('0', 'false', 'no', 'off')
     if os.environ.get('POSYHUB_TESTING') != '1' and _run_jobs:
+        # Take today's backup on boot, then dispatch due campaigns every minute.
+        # Skipped on the web workers when the split is active — the dedicated
+        # jobs process owns both (auto_backup stays idempotent either way).
+        from utils.backup import auto_backup
+        auto_backup(app)
         _start_scheduled_messages_worker(app)
 
     # Serve the service worker from the root so its scope covers the whole app
