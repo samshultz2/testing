@@ -231,7 +231,7 @@ export default function ViewApp({ initial }) {
 
       <div className="profile-grid">
       <Section icon="fa-user" title="Personal Information"
-               action={canManage ? <a href={urls.edit} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-edit" /> Edit</a> : null}>
+               action={canManage ? <a href={urls.edit} className="sp-btn sp-btn-sm"><i aria-hidden="true" className="fas fa-pen" /> Edit</a> : null}>
           <div className="info-grid">
             <Info label="Full Name">{s.full_name}</Info>
             <Info label="Gender"><span className={'badge ' + (s.gender === 'Male' ? 'badge-info' : 'badge-warning')}>{s.gender}</span></Info>
@@ -247,11 +247,8 @@ export default function ViewApp({ initial }) {
       <AspirationCard s={s} asp={d.aspiration} scholarships={d.scholarships || []} />
 
 
-      <div className="sp-pair">
       {(d.identity || s.house || s.boarding_status) && (
-        <div className="card sp-card">
-          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-id-card" /> Identity &amp; Pastoral</h3></div>
-          <div className="card-body">
+        <Section icon="fa-id-card" title="Identity & Pastoral">
             <div className="info-grid">
               {d.identity && d.identity.nin && <Info label="NIN">{d.identity.nin}</Info>}
               {d.identity && d.identity.jamb_reg_number && <Info label="JAMB Reg. Number">{d.identity.jamb_reg_number}</Info>}
@@ -262,28 +259,23 @@ export default function ViewApp({ initial }) {
               {s.house && <Info label="House">{s.house}</Info>}
               {s.boarding_status && <Info label="Boarding">{s.boarding_status}</Info>}
             </div>
-          </div>
-        </div>
+        </Section>
       )}
-        <div className="card sp-card">
-          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-school" /> Class History</h3></div>
-          <div className="card-body" style={{ padding: 0 }}>
-            {(d.enrollments || []).length ? (
-              <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
-                <table className="data-table no-mobile-scroll">
-                  <thead><tr><th>Term</th><th>Class</th><th>Arm</th></tr></thead>
-                  <tbody>{d.enrollments.map((e, i) => <tr key={i}><td>{e.term}</td><td>{e.class}</td><td>{e.arm || '—'}</td></tr>)}</tbody>
-                </table>
-              </div>
-            ) : <div className="empty-state"><p>Not enrolled yet</p></div>}
-          </div>
-        </div>
-      </div>{/* .sp-pair Identity + Class History */}
+
+      <Section icon="fa-school" title="Class History"
+               badge={(d.enrollments || []).length ? <span className="badge badge-secondary">{d.enrollments.length}</span> : null}>
+          {(d.enrollments || []).length ? (
+            <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
+              <table className="data-table no-mobile-scroll">
+                <thead><tr><th>Term</th><th>Class</th><th>Arm</th></tr></thead>
+                <tbody>{d.enrollments.map((e, i) => <tr key={i}><td>{e.term}</td><td>{e.class}</td><td>{e.arm || '—'}</td></tr>)}</tbody>
+              </table>
+            </div>
+          ) : <div className="empty-state"><p>Not enrolled yet</p></div>}
+      </Section>
 
       {d.medical && (
-        <div className="card mb-3">
-          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-notes-medical" /> Medical Information</h3></div>
-          <div className="card-body">
+        <Section icon="fa-notes-medical" title="Medical Information">
             <div className="info-grid">
               {d.medical.blood_group && <Info label="Blood Group"><span className="badge badge-danger">{d.medical.blood_group}</span></Info>}
               {d.medical.genotype && <Info label="Genotype"><span className="badge badge-warning">{d.medical.genotype}</span></Info>}
@@ -294,8 +286,7 @@ export default function ViewApp({ initial }) {
               {d.medical.medical_notes && <Info label="Notes">{d.medical.medical_notes}</Info>}
               {d.medical.emergency_medical && <Info label="Emergency Instructions">{d.medical.emergency_medical}</Info>}
             </div>
-          </div>
-        </div>
+        </Section>
       )}
 
       <Section icon="fa-phone" title="Contacts"
@@ -319,7 +310,7 @@ export default function ViewApp({ initial }) {
       {d.attendance && (
         <Section icon="fa-calendar-check" title="Attendance Summary"
                  badge={<span className={'badge ' + (d.attendance.warning ? 'badge-danger' : 'badge-success')}>{d.attendance.percentage}%</span>}
-                 action={d.attendance.url ? <a href={d.attendance.url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-chart-line" /> Full profile</a> : null}>
+                 action={d.attendance.url ? <a href={d.attendance.url} className="sp-btn sp-btn-sm"><i aria-hidden="true" className="fas fa-chart-line" /> Full profile</a> : null}>
             <div className="att-summary">
               <div className="att-donut-wrap">
                 <AttendanceDonut pct={d.attendance.percentage} warning={d.attendance.warning} />
@@ -337,31 +328,27 @@ export default function ViewApp({ initial }) {
         </Section>
       )}
 
-      <div className="sp-pair">
-      <div className="card sp-card">
-        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-file-alt" /> WAEC</h3>
-          <a href={(d.waec || {}).add_url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add</a></div>
-        <div className="card-body">
-          {(d.waec || {}).count ? (<>
-            <p>{d.waec.count} subjects recorded</p>
-            <a href={d.waec.view_url} className="btn btn-primary btn-sm">View Details</a>
-          </>) : <p className="text-muted">No WAEC results</p>}
-        </div>
-      </div>
+      <Section icon="fa-file-alt" title="WAEC"
+               badge={(d.waec || {}).count ? <span className="badge badge-secondary">{d.waec.count}</span> : null}
+               action={<a href={(d.waec || {}).add_url} className="sp-btn sp-btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add</a>}>
+          {(d.waec || {}).count ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '.75rem', flexWrap: 'wrap' }}>
+              <span>{d.waec.count} subject{d.waec.count === 1 ? '' : 's'} recorded</span>
+              <a href={d.waec.view_url} className="sp-btn sp-btn-sm sp-btn-primary"><i aria-hidden="true" className="fas fa-eye" /> View details</a>
+            </div>
+          ) : <p className="text-muted">No WAEC results yet.</p>}
+      </Section>
 
-      <div className="card sp-card">
-        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-file-contract" /> JAMB</h3>
-          <a href={(d.jamb || {}).add_url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add</a></div>
-        <div className="card-body">
+      <Section icon="fa-file-contract" title="JAMB"
+               badge={(d.jamb || {}).latest ? <span className="badge badge-secondary">{d.jamb.latest.score}/400</span> : null}
+               action={<a href={(d.jamb || {}).add_url} className="sp-btn sp-btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add</a>}>
           {(d.jamb || {}).latest ? (
             <div className="info-grid">
               <Info label="Year">{d.jamb.latest.year}</Info>
-              <Info label="Score"><span style={{ fontSize: 'var(--text-lg)' }}>{d.jamb.latest.score}/400</span></Info>
+              <Info label="Score"><strong style={{ fontSize: 'var(--text-lg)' }}>{d.jamb.latest.score}/400</strong></Info>
             </div>
-          ) : <p className="text-muted">No JAMB results</p>}
-        </div>
-      </div>
-      </div>{/* .sp-pair */}
+          ) : <p className="text-muted">No JAMB results yet.</p>}
+      </Section>
 
       {d.communications && d.communications.count > 0 && (
         <Section icon="fa-comments" title="Communication History" wide
@@ -396,7 +383,7 @@ export default function ViewApp({ initial }) {
                 <td data-label="Date">{r.date}</td><td data-label="Category">{r.category || '—'}</td>
                 <td data-label="Severity">{r.severity && <span className={'badge ' + (r.severity === 'Major' ? 'badge-danger' : 'badge-warning')}>{r.severity}</span>}</td>
                 <td data-label="Incident">{r.description}</td><td data-label="Action">{r.action_taken || '—'}</td><td data-label="By" className="text-muted">{r.reported_by || ''}</td>
-                <td className="actions"><button type="button" className="btn btn-danger btn-sm" disabled={busy}
+                <td className="actions"><button type="button" className="sp-btn sp-btn-sm sp-btn-danger" disabled={busy}
                             onClick={async () => { if (await confirm('Remove this record?')) run(r.delete_url, {}, 'Record removed.'); }}><i aria-hidden="true" className="fas fa-times" /></button></td>
               </tr>
             ))}</tbody>
@@ -415,7 +402,7 @@ export default function ViewApp({ initial }) {
                 <td data-label="Date">{v.date}</td><td data-label="Complaint">{v.complaint}</td><td data-label="Treatment">{v.treatment || '—'}</td>
                 <td data-label="Parent told"><span className={'badge ' + (v.parent_notified ? 'badge-success' : 'badge-warning')}>{v.parent_notified ? 'Yes' : 'No'}</span></td>
                 <td data-label="By" className="text-muted">{v.attended_by || ''}</td>
-                <td className="actions"><button type="button" className="btn btn-danger btn-sm" disabled={busy}
+                <td className="actions"><button type="button" className="sp-btn sp-btn-sm sp-btn-danger" disabled={busy}
                             onClick={async () => { if (await confirm('Remove this visit?')) run(v.delete_url, {}, 'Visit removed.'); }}><i aria-hidden="true" className="fas fa-times" /></button></td>
               </tr>
             ))}</tbody>
@@ -494,7 +481,7 @@ function DisciplineForm({ categories, today, disabled, onAdd }) {
         <input type="text" className="form-control" placeholder="Describe the incident" required value={f.description} onChange={(e) => set('description', e.target.value)} /></div>
       <div className="form-group" style={{ flex: 2, minWidth: 200 }}><label className="form-label">Action taken</label>
         <input type="text" className="form-control" placeholder="e.g., Warning, parent called" value={f.action_taken} onChange={(e) => set('action_taken', e.target.value)} /></div>
-      <div className="filter-actions"><button type="submit" className="btn btn-primary btn-sm" disabled={disabled}><i aria-hidden="true" className="fas fa-plus" /> Add</button></div>
+      <div className="filter-actions"><button type="submit" className="sp-btn sp-btn-sm sp-btn-primary" disabled={disabled}><i aria-hidden="true" className="fas fa-plus" /> Add</button></div>
     </form>
   );
 }
@@ -517,7 +504,7 @@ function ClinicForm({ today, disabled, onAdd }) {
         <input type="text" className="form-control" placeholder="e.g., Paracetamol, rest" value={f.treatment} onChange={(e) => set('treatment', e.target.value)} /></div>
       <div className="form-group"><label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '.4rem' }}>
         <input type="checkbox" checked={f.parent_notified} onChange={(e) => set('parent_notified', e.target.checked)} /> Parent notified</label></div>
-      <div className="filter-actions"><button type="submit" className="btn btn-primary btn-sm" disabled={disabled}><i aria-hidden="true" className="fas fa-plus" /> Add</button></div>
+      <div className="filter-actions"><button type="submit" className="sp-btn sp-btn-sm sp-btn-primary" disabled={disabled}><i aria-hidden="true" className="fas fa-plus" /> Add</button></div>
     </form>
   );
 }
