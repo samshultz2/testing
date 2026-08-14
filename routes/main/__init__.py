@@ -2130,6 +2130,7 @@ def _student_view_payload(student):
             'admitted_university': (student.admitted_university.name if student.admitted_university else None),
             'admitted_course': (student.admitted_course.name if student.admitted_course else None),
             'is_graduated': bool(student.is_graduated),
+            'graduated_on': (student.graduation_date.strftime('%d %b %Y') if student.graduation_date else ''),
         },
         'aspiration': _view_aspiration(student),
         'scholarships': [sc.as_dict() for sc in student.scholarships.all()],
