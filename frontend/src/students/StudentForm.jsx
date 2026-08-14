@@ -314,8 +314,8 @@ export default function StudentForm({ data }) {
         </div>
         {isEdit && (
           <div className="page-header-actions">
-            <a href={urls.back} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back to Profile</a>
-            <a href={urls.list} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-users" /> All Students</a>
+            <a href={urls.back} className="sp-btn sp-btn-sm"><i aria-hidden="true" className="fas fa-arrow-left" /> Back to Profile</a>
+            <a href={urls.list} className="sp-btn sp-btn-sm"><i aria-hidden="true" className="fas fa-users" /> All Students</a>
           </div>
         )}
       </div>
@@ -387,7 +387,7 @@ export default function StudentForm({ data }) {
             </label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '.4rem' }}>
               {recs.map((rec) => (
-                <button type="button" key={rec.course_id} className="btn btn-secondary btn-sm"
+                <button type="button" key={rec.course_id} className="sp-btn sp-btn-sm"
                         onClick={() => applyRec(rec)} title={'Cut-off ' + rec.cutoff + ' · +' + rec.margin + ' projected margin'}>
                   {rec.subject_fit && <i className="fas fa-check" aria-hidden="true" style={{ color: 'var(--success)' }} />} {rec.course}
                   <span className="text-muted" style={{ fontSize: '.75rem' }}> +{rec.margin}</span>
@@ -443,13 +443,13 @@ export default function StudentForm({ data }) {
             <TextField label="Amount (₦)" value={s.amount} onChange={(v) => setSch(i, 'amount', v)} type="number" placeholder="0" autoComplete="off" />
             <SelectField label="Status" value={s.status} onChange={(v) => setSch(i, 'status', v)}
                          placeholder="—" options={opt.scholarship_statuses || []} />
-            <button type="button" className="btn btn-danger btn-sm sf-remove" aria-label={`Remove scholarship ${i + 1}`}
+            <button type="button" className="sp-btn sp-btn-sm sp-btn-danger sf-remove" aria-label={`Remove scholarship ${i + 1}`}
                     onClick={() => removeSch(i)}>
               <i aria-hidden="true" className="fas fa-times" />
             </button>
           </div>
         ))}
-        <button type="button" className="btn btn-secondary btn-sm" onClick={addSch}>
+        <button type="button" className="sp-btn sp-btn-sm" onClick={addSch}>
           <i aria-hidden="true" className="fas fa-plus" /> Add Scholarship
         </button>
       </FormCard>
@@ -463,13 +463,13 @@ export default function StudentForm({ data }) {
             <TextField label="Email (optional)" value={c.email} onChange={(v) => setContact(i, 'email', v)}
                        type="email" placeholder="parent@example.com" autoComplete="off" />
             <SelectField label="Relationship" value={c.relationship} onChange={(v) => setContact(i, 'relationship', v)} options={relationships} />
-            <button type="button" className="btn btn-danger btn-sm sf-remove" aria-label={`Remove contact ${i + 1}`}
+            <button type="button" className="sp-btn sp-btn-sm sp-btn-danger sf-remove" aria-label={`Remove contact ${i + 1}`}
                     disabled={contacts.length === 1} onClick={() => removeContact(i)}>
               <i aria-hidden="true" className="fas fa-times" />
             </button>
           </div>
         ))}
-        <button type="button" className="btn btn-secondary btn-sm" onClick={addContact}>
+        <button type="button" className="sp-btn sp-btn-sm" onClick={addContact}>
           <i aria-hidden="true" className="fas fa-plus" /> Add Contact
         </button>
       </FormCard>
@@ -499,11 +499,11 @@ export default function StudentForm({ data }) {
                 ? <img src={f.photo} alt="Student" style={{ width: 64, height: 80, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border-color,#cbd5e1)' }} />
                 : <div style={{ width: 64, height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--gray-50,#f1f5f9)', border: '1px dashed #cbd5e1', borderRadius: 6, fontSize: '.6rem', color: '#94a3b8', textAlign: 'center' }}>No photo</div>}
               <div>
-                <label className="btn btn-secondary btn-sm" style={{ cursor: 'pointer', margin: 0 }}>
+                <label className="sp-btn sp-btn-sm" style={{ cursor: 'pointer', margin: 0 }}>
                   <i aria-hidden="true" className="fas fa-camera" /> {f.photo ? 'Change' : 'Upload'}
                   <input type="file" accept="image/png,image/jpeg,image/webp" onChange={onPhotoFile} style={{ display: 'none' }} />
                 </label>
-                {f.photo && <button type="button" className="btn btn-light btn-sm" style={{ marginLeft: '.4rem' }} onClick={() => set('photo', '')}><i aria-hidden="true" className="fas fa-times" /> Remove</button>}
+                {f.photo && <button type="button" className="sp-btn sp-btn-sm" style={{ marginLeft: '.4rem' }} onClick={() => set('photo', '')}><i aria-hidden="true" className="fas fa-times" /> Remove</button>}
                 <div className="text-muted" style={{ fontSize: '.75rem', marginTop: '.35rem' }}>JPG/PNG, up to 8 MB — auto-cropped to a passport photo and shown on the ID card.</div>
               </div>
             </div>
@@ -554,10 +554,10 @@ export default function StudentForm({ data }) {
       </FormCard>
 
       <div className="page-header-actions">
-        <button type="submit" className="btn btn-primary btn-lg" disabled={saving}>
+        <button type="submit" className="sp-btn sp-btn-fill sp-btn-lg" disabled={saving}>
           <i aria-hidden="true" className={'fas ' + (saving ? 'fa-spinner fa-spin' : 'fa-save')} /> {saving ? 'Saving…' : (isEdit ? 'Save Changes' : 'Save Student')}
         </button>
-        <a href={urls.cancel} className={'btn btn-secondary btn-lg' + (saving ? ' disabled' : '')}
+        <a href={urls.cancel} className={'sp-btn sp-btn-lg' + (saving ? ' disabled' : '')}
            onClick={(e) => saving && e.preventDefault()}>Cancel</a>
         {draftSaved && !saving && (
           <span className="draft-saved" role="status">

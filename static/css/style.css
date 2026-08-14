@@ -2401,6 +2401,33 @@ summary:focus-visible {
     background: var(--primary-light);
 }
 
+/* ── Soft outlined button (.sp-btn) — a reusable, theme-driven action button
+   used across the redesigned modules: subtle by default, tinted per intent on
+   hover, with the colour carried in the text/border. Pairs with .sp-btn-sm. ── */
+.sp-btn { display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+  border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-secondary);
+  border-radius: var(--radius-md); padding: .68rem .85rem; font-size: .88rem; font-weight: 600;
+  line-height: 1.2; text-decoration: none; cursor: pointer; white-space: nowrap;
+  transition: border-color var(--transition), background var(--transition), color var(--transition); }
+.sp-btn:hover:not(:disabled) { background: var(--gray-50); color: var(--text-primary); }
+.sp-btn:disabled { opacity: .55; cursor: not-allowed; }
+.sp-btn i { font-size: .9em; }
+.sp-btn-sm { padding: .38rem .68rem; font-size: .8rem; }
+.sp-btn-lg { padding: .7rem 1.3rem; font-size: .95rem; }
+.sp-btn-primary { color: var(--primary); border-color: color-mix(in srgb, var(--primary) 32%, var(--border-color)); }
+.sp-btn-primary:hover:not(:disabled) { background: var(--primary-light); border-color: var(--primary); color: var(--primary); }
+.sp-btn-info { color: var(--info); border-color: color-mix(in srgb, var(--info) 32%, var(--border-color)); }
+.sp-btn-info:hover:not(:disabled) { background: color-mix(in srgb, var(--info) 10%, var(--bg-card)); border-color: var(--info); color: var(--info); }
+.sp-btn-success { color: var(--success); border-color: color-mix(in srgb, var(--success) 32%, var(--border-color)); }
+.sp-btn-success:hover:not(:disabled) { background: color-mix(in srgb, var(--success) 10%, var(--bg-card)); border-color: var(--success); color: var(--success); }
+.sp-btn-warning { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 38%, var(--border-color)); }
+.sp-btn-warning:hover:not(:disabled) { background: color-mix(in srgb, var(--warning) 12%, var(--bg-card)); border-color: var(--warning); color: var(--warning); }
+.sp-btn-danger { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 32%, var(--border-color)); }
+.sp-btn-danger:hover:not(:disabled) { background: color-mix(in srgb, var(--danger) 10%, var(--bg-card)); border-color: var(--danger); color: var(--danger); }
+/* Filled primary — for a page's single prominent CTA (e.g. a form's Save). */
+.sp-btn-fill { background: var(--primary); border-color: var(--primary); color: #fff; }
+.sp-btn-fill:hover:not(:disabled) { background: var(--primary-hover); border-color: var(--primary-hover); color: #fff; }
+
 /* Inputs: clearer focus, comfortable sizing */
 .form-control,
 input[type="text"], input[type="number"], input[type="date"],

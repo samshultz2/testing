@@ -70,22 +70,9 @@
 .sp-chip-primary { color: var(--primary); background: color-mix(in srgb, var(--primary) 12%, var(--bg-card)); }
 .sp-chip-blue { color: #2563eb; background: color-mix(in srgb, #3b82f6 12%, var(--bg-card)); }
 .sp-chip-rose { color: #e11d64; background: color-mix(in srgb, #f43f5e 12%, var(--bg-card)); }
+/* .sp-btn* live in style.css (shared across modules); the grid + mobile Back
+   hide are profile-specific. */
 .sp-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: .6rem; margin-top: 1.1rem; }
-.sp-btn { display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
-  border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-secondary);
-  border-radius: var(--radius-md); padding: .68rem .8rem; font-size: .88rem; font-weight: 600;
-  text-decoration: none; cursor: pointer; white-space: nowrap;
-  transition: border-color var(--transition), background var(--transition), color var(--transition); }
-.sp-btn:hover { background: var(--gray-50); }
-.sp-btn i { font-size: .9em; }
-.sp-btn-primary { color: var(--primary); border-color: color-mix(in srgb, var(--primary) 32%, var(--border-color)); }
-.sp-btn-primary:hover { background: var(--primary-light); border-color: var(--primary); }
-.sp-btn-info { color: var(--info); border-color: color-mix(in srgb, var(--info) 32%, var(--border-color)); }
-.sp-btn-info:hover { background: color-mix(in srgb, var(--info) 10%, var(--bg-card)); border-color: var(--info); }
-.sp-btn-success { color: var(--success); border-color: color-mix(in srgb, var(--success) 32%, var(--border-color)); }
-.sp-btn-success:hover { background: color-mix(in srgb, var(--success) 10%, var(--bg-card)); border-color: var(--success); }
-.sp-btn-warning { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 38%, var(--border-color)); }
-.sp-btn-warning:hover { background: color-mix(in srgb, var(--warning) 12%, var(--bg-card)); border-color: var(--warning); }
 @media (max-width: 640px) { .sp-btn-back { display: none; } }   /* the mobile shell provides Back */
 @media (min-width: 768px) { .sp-avatar { width: 104px; height: 104px; } .sp-name { font-size: 1.7rem; } }
 
