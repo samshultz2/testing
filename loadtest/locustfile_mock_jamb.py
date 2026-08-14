@@ -33,6 +33,13 @@ _QID = re.compile(r'data-qid="(\d+)"')
 
 _lock = threading.Lock()
 _creds = None
+_ident = itertools.count(1)          # unique id per virtual student
+# Set TENANT_HOST to drive a capacity test straight at gunicorn (bypassing nginx):
+# each student then sends a unique X-Forwarded-For (so per-IP rate limiters treat
+# them as distinct), an https marker (satisfies FORCE_HTTPS), and the tenant Host
+# (so routing still resolves the right school). Unset => default through-the-edge
+# behaviour, unchanged.
+TENANT_HOST = os.environ.get('TENANT_HOST')
 
 
 def _load_creds():
@@ -62,6 +69,14 @@ class MockJambStudent(HttpUser):
         self.qids = []
         self.started = False
         sid, pw = _next()
+        if TENANT_HOST:
+            n = next(_ident)
+            self.client.headers.update({
+                'X-Forwarded-For': '10.%d.%d.%d' % (
+                    (n >> 16) & 0xFF, (n >> 8) & 0xFF, n & 0xFF),
+                'X-Forwarded-Proto': 'https',
+                'Host': TENANT_HOST,
+            })
         page = self.client.get('/exam/login')
         m = _CSRF_INPUT.search(page.text) or _CSRF_META.search(page.text)
         tok = m.group(1) if m else ''
