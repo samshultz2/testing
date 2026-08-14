@@ -53,10 +53,23 @@ def _gen_portal_pin(n=8):
 # in-process otherwise). Invalidated automatically whenever an exam's questions
 # change via the SQLAlchemy event listener below — it can't be bypassed by a
 # route that forgets to clear it.
+def _tns():
+    """Cache-key namespace for the active school. In multi-tenant mode a single
+    Redis is shared by every school, so keys MUST be namespaced per tenant or
+    school A's exam 42 would collide with school B's exam 42 (wrong answer key →
+    cross-tenant mis-grading). 'single' in single-school mode."""
+    try:
+        from utils.tenant_runtime import current_tenant
+        t = current_tenant()
+        return t.subdomain if t is not None else 'single'
+    except Exception:
+        return 'single'
+
+
 def _exam_answer_key(exam_id):
-    """{question_id: correct_option} for an exam, cached."""
+    """{question_id: correct_option} for an exam, cached (tenant-namespaced)."""
     from utils import cache
-    ck = f'cbt:key:{exam_id}'
+    ck = f'cbt:{_tns()}:key:{exam_id}'
     cached = cache.get_json(ck)
     if cached is not None:
         return {int(k): v for k, v in cached.items()}
@@ -69,7 +82,7 @@ def _exam_answer_key(exam_id):
 
 def _invalidate_answer_key(exam_id):
     from utils import cache
-    cache.delete(f'cbt:key:{exam_id}')
+    cache.delete(f'cbt:{_tns()}:key:{exam_id}')
 
 
 from sqlalchemy import event as _sa_event   # noqa: E402
@@ -103,7 +116,7 @@ def _refresh_exam_analytics(exam_id):
         data = _analyse(exam_id)
     except Exception:
         return
-    cache.set_json(f'cbt:ia:{exam_id}', data, ttl=6 * 3600)
+    cache.set_json(f'cbt:{_tns()}:ia:{exam_id}', data, ttl=6 * 3600)
 
 
 def _cbt_grade_job(app, payload):
@@ -734,11 +747,12 @@ def item_analysis(exam_id):
     # worker after each submission; only compute inline when the cache is cold
     # (e.g. no worker configured) so the heavy psychometrics never block a sitting.
     from utils import cache
-    data = cache.get_json(f'cbt:ia:{e.id}')
+    _iak = f'cbt:{_tns()}:ia:{e.id}'
+    data = cache.get_json(_iak)
     if data is None:
         from utils.psychometrics import item_analysis as _analyse
         data = _analyse(e.id)
-        cache.set_json(f'cbt:ia:{e.id}', data, ttl=6 * 3600)
+        cache.set_json(_iak, data, ttl=6 * 3600)
     return _render({
         'page': 'item_analysis', 'nav': _nav_urls(),
         'exam': {'id': e.id, 'title': e.title},
@@ -1799,7 +1813,7 @@ def ping(exam_id):
         # load at scale. The gate lives in Redis when available (so the coalescing
         # holds across all web workers), falling back to a per-process gate.
         from utils import cache
-        if cache.should_run(f'cbt:hb:{attempt.id}', 25):
+        if cache.should_run(f'cbt:{_tns()}:hb:{attempt.id}', 25):
             attempt.last_seen = timeutil.now()
             db.session.commit()
             _touch_device_session(student, exam_id)
