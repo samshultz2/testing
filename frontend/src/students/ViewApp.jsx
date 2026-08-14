@@ -52,7 +52,7 @@ function Section({ icon, title, badge, action, defaultOpen = IS_DESKTOP, wide, c
         <span className="stu-sec-right">
           {action}
           <button type="button" className="stu-sec-chevbtn" aria-label={open ? 'Collapse' : 'Expand'} aria-expanded={open} onClick={toggle}>
-            <i aria-hidden="true" className={'fas fa-chevron-' + (open ? 'up' : 'down')} />
+            <i aria-hidden="true" className={'fas fa-chevron-' + (open ? 'down' : 'right')} />
           </button>
         </span>
       </div>
@@ -189,36 +189,35 @@ export default function ViewApp({ initial }) {
 
   return (
     <div className="student-profile">
-      <div className="profile-hero">
-        <div className="ph-cover" />
-        <div className="ph-body">
+      <div className="sp-hero">
+        <div className="sp-hero-top">
           {s.photo_url
-            ? <img className="ph-avatar" src={s.photo_url} alt={s.full_name} />
-            : <div className="ph-avatar" style={{ background: 'linear-gradient(135deg,var(--primary),var(--primary-hover))' }} aria-hidden="true">{initials}</div>}
-          <div className="ph-id">
-            <h1 className="ph-name">{s.full_name}</h1>
-            <div className="ph-meta">
-              <span className="badge badge-primary">{s.student_id}</span>
-              {s.current_class && <span className="badge badge-secondary">{s.current_class}</span>}
-              {s.gender && <span className={'badge ' + (s.gender === 'Male' ? 'badge-info' : 'badge-warning')}>{s.gender}</span>}
-              {s.age != null && <span className="badge badge-secondary">Age {s.age}</span>}
-              {s.stream && <span className="badge badge-info">{s.stream}</span>}
-              {s.is_graduated && <span className="badge badge-success"><i aria-hidden="true" className="fas fa-user-graduate" /> Graduate</span>}
+            ? <img className="sp-avatar" src={s.photo_url} alt={s.full_name} />
+            : <div className="sp-avatar sp-avatar-ph" aria-hidden="true">{initials}</div>}
+          <div className="sp-id">
+            <h1 className="sp-name">{s.full_name}</h1>
+            {s.is_graduated && <span className="sp-grad"><i aria-hidden="true" className="fas fa-user-graduate" /> Graduate</span>}
+            <div className="sp-chips">
+              <span className="sp-chip sp-chip-primary"><i aria-hidden="true" className="fas fa-id-badge" /> {s.student_id}</span>
+              {s.gender && <span className={'sp-chip ' + (s.gender === 'Male' ? 'sp-chip-blue' : 'sp-chip-rose')}><i aria-hidden="true" className={'fas ' + (s.gender === 'Male' ? 'fa-mars' : 'fa-venus')} /> {s.gender}</span>}
+              {s.age != null && <span className="sp-chip"><i aria-hidden="true" className="fas fa-cake-candles" /> {s.age} years</span>}
+              {s.stream && <span className="sp-chip"><i aria-hidden="true" className="fas fa-cube" /> {s.stream}</span>}
+              {s.is_graduated && s.graduated_on && <span className="sp-chip"><i aria-hidden="true" className="fas fa-calendar-check" /> Graduated on {s.graduated_on}</span>}
             </div>
           </div>
         </div>
-        <div className="ph-actions">
-          {canManage && <button type="button" className={'btn ' + (s.is_graduated ? 'btn-warning' : 'btn-success')} disabled={busy}
+        <div className="sp-actions">
+          {canManage && <button type="button" className={'sp-btn ' + (s.is_graduated ? 'sp-btn-warning' : 'sp-btn-success')} disabled={busy}
             onClick={async () => { if (await confirm(`${s.is_graduated ? 'Undo graduation for' : 'Mark as graduate:'} ${s.full_name}?`))
               run(urls.graduate, {}, 'Updated graduation status.'); }}>
-            <i aria-hidden="true" className={'fas ' + (s.is_graduated ? 'fa-rotate-left' : 'fa-user-graduate')} /> {s.is_graduated ? 'Undo Graduate' : 'Mark as Graduate'}
+            <i aria-hidden="true" className={'fas ' + (s.is_graduated ? 'fa-rotate-left' : 'fa-user-graduate')} /> {s.is_graduated ? 'Undo' : 'Graduate'}
           </button>}
-          <a href={urls.exam_report} className="btn btn-info"><i aria-hidden="true" className="fas fa-file-pdf" /> Exam Report</a>
-          <a href={urls.predictions} className="btn btn-info"><i aria-hidden="true" className="fas fa-chart-line" /> Predictions</a>
-          <a href={urls.report_card} className="btn btn-success"><i aria-hidden="true" className="fas fa-file-invoice" /> Report Card</a>
-          {urls.id_card && <a href={urls.id_card} className="btn btn-info"><i aria-hidden="true" className="fas fa-id-card" /> ID Card</a>}
-          {canManage && <a href={urls.edit} className="btn btn-primary"><i aria-hidden="true" className="fas fa-edit" /> Edit</a>}
-          <a href={urls.list} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</a>
+          <a href={urls.exam_report} className="sp-btn sp-btn-primary"><i aria-hidden="true" className="fas fa-file-lines" /> Exam Report</a>
+          <a href={urls.predictions} className="sp-btn sp-btn-info"><i aria-hidden="true" className="fas fa-chart-line" /> Predictions</a>
+          <a href={urls.report_card} className="sp-btn sp-btn-success"><i aria-hidden="true" className="fas fa-file-invoice" /> Report Card</a>
+          {urls.id_card && <a href={urls.id_card} className="sp-btn sp-btn-info"><i aria-hidden="true" className="fas fa-id-card" /> ID Card</a>}
+          {canManage && <a href={urls.edit} className="sp-btn sp-btn-primary"><i aria-hidden="true" className="fas fa-pen" /> Edit Profile</a>}
+          <a href={urls.list} className="sp-btn sp-btn-back"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</a>
         </div>
       </div>
 
@@ -248,8 +247,9 @@ export default function ViewApp({ initial }) {
       <AspirationCard s={s} asp={d.aspiration} scholarships={d.scholarships || []} />
 
 
+      <div className="sp-pair">
       {(d.identity || s.house || s.boarding_status) && (
-        <div className="card mb-3">
+        <div className="card sp-card">
           <div className="card-header"><h3><i aria-hidden="true" className="fas fa-id-card" /> Identity &amp; Pastoral</h3></div>
           <div className="card-body">
             <div className="info-grid">
@@ -265,6 +265,20 @@ export default function ViewApp({ initial }) {
           </div>
         </div>
       )}
+        <div className="card sp-card">
+          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-school" /> Class History</h3></div>
+          <div className="card-body" style={{ padding: 0 }}>
+            {(d.enrollments || []).length ? (
+              <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
+                <table className="data-table no-mobile-scroll">
+                  <thead><tr><th>Term</th><th>Class</th><th>Arm</th></tr></thead>
+                  <tbody>{d.enrollments.map((e, i) => <tr key={i}><td>{e.term}</td><td>{e.class}</td><td>{e.arm || '—'}</td></tr>)}</tbody>
+                </table>
+              </div>
+            ) : <div className="empty-state"><p>Not enrolled yet</p></div>}
+          </div>
+        </div>
+      </div>{/* .sp-pair Identity + Class History */}
 
       {d.medical && (
         <div className="card mb-3">
@@ -302,22 +316,6 @@ export default function ViewApp({ initial }) {
           ) : <p className="text-muted">No contacts added</p>}
       </Section>
 
-      <div className="card mb-3">
-        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-school" /> Class History</h3></div>
-        <div className="card-body" style={{ padding: 0 }}>
-          {(d.enrollments || []).length ? (
-            <div className="table-container" style={{ border: 'none', borderRadius: 0 }}>
-              {/* no-mobile-scroll: this short 3-column table fills the card on
-                  phones instead of collapsing to content width (display:block). */}
-              <table className="data-table no-mobile-scroll">
-                <thead><tr><th>Term</th><th>Class</th><th>Arm</th></tr></thead>
-                <tbody>{d.enrollments.map((e, i) => <tr key={i}><td>{e.term}</td><td>{e.class}</td><td>{e.arm || '—'}</td></tr>)}</tbody>
-              </table>
-            </div>
-          ) : <div className="empty-state"><p>Not enrolled yet</p></div>}
-        </div>
-      </div>
-
       {d.attendance && (
         <Section icon="fa-calendar-check" title="Attendance Summary"
                  badge={<span className={'badge ' + (d.attendance.warning ? 'badge-danger' : 'badge-success')}>{d.attendance.percentage}%</span>}
@@ -339,7 +337,8 @@ export default function ViewApp({ initial }) {
         </Section>
       )}
 
-      <div className="card mb-3">
+      <div className="sp-pair">
+      <div className="card sp-card">
         <div className="card-header"><h3><i aria-hidden="true" className="fas fa-file-alt" /> WAEC</h3>
           <a href={(d.waec || {}).add_url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add</a></div>
         <div className="card-body">
@@ -350,7 +349,7 @@ export default function ViewApp({ initial }) {
         </div>
       </div>
 
-      <div className="card mb-3">
+      <div className="card sp-card">
         <div className="card-header"><h3><i aria-hidden="true" className="fas fa-file-contract" /> JAMB</h3>
           <a href={(d.jamb || {}).add_url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add</a></div>
         <div className="card-body">
@@ -362,6 +361,7 @@ export default function ViewApp({ initial }) {
           ) : <p className="text-muted">No JAMB results</p>}
         </div>
       </div>
+      </div>{/* .sp-pair */}
 
       {d.communications && d.communications.count > 0 && (
         <Section icon="fa-comments" title="Communication History" wide

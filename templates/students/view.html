@@ -27,6 +27,11 @@
 @media (min-width: 1650px) { .profile-grid { column-count: 3; } }
 .profile-grid > .card { break-inside: avoid; }
 .profile-grid > .profile-wide { column-span: all; }
+/* Two compact cards side by side (WAEC|JAMB, Identity|Class History) — 2-up on
+   phones too, matching the reference. */
+.profile-grid > .sp-pair { column-span: all; display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .8rem; margin-bottom: .9rem; }
+.sp-pair > .sp-card { margin-bottom: 0; }
 
 /* ── Attendance donut (conic-gradient ring, no chart library) ── */
 .att-summary { display: flex; gap: 1.25rem; align-items: center; flex-wrap: wrap; }
@@ -44,6 +49,45 @@
 .att-donut-cap { font-size: .68rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; margin-top: 2px; }
 .att-donut-warn { font-size: .72rem; color: var(--danger); text-align: center; max-width: 132px; }
 .att-legend { flex: 1; min-width: 190px; }
+
+/* ── Student profile hero (mobile-first, theme-driven — matches the reference) ── */
+.sp-hero { background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--radius-lg);
+  padding: 1.25rem; margin-bottom: 1rem; box-shadow: var(--shadow-xs); }
+.sp-hero-top { display: flex; gap: 1.1rem; align-items: flex-start; }
+.sp-avatar { width: 84px; height: 84px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
+  border: 1px solid var(--border-color); background: var(--gray-100); }
+.sp-avatar-ph { display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.6rem;
+  color: var(--primary); background: color-mix(in srgb, var(--primary) 14%, var(--bg-card)); border-color: transparent; }
+.sp-id { min-width: 0; flex: 1; }
+.sp-name { font-size: 1.4rem; font-weight: 800; line-height: 1.15; margin: 0 0 .55rem; color: var(--text-primary); letter-spacing: -.01em; }
+.sp-grad { display: inline-flex; align-items: center; gap: .35rem; font-size: .82rem; font-weight: 700;
+  color: var(--success); background: color-mix(in srgb, var(--success) 14%, var(--bg-card));
+  padding: .28rem .7rem; border-radius: var(--radius-full); margin-bottom: .6rem; }
+.sp-chips { display: flex; flex-wrap: wrap; gap: .45rem; }
+.sp-chip { display: inline-flex; align-items: center; gap: .4rem; font-size: .8rem; font-weight: 600;
+  color: var(--text-secondary); background: var(--gray-100); border-radius: var(--radius-md); padding: .32rem .65rem; white-space: nowrap; }
+.sp-chip i { font-size: .85em; opacity: .9; }
+.sp-chip-primary { color: var(--primary); background: color-mix(in srgb, var(--primary) 12%, var(--bg-card)); }
+.sp-chip-blue { color: #2563eb; background: color-mix(in srgb, #3b82f6 12%, var(--bg-card)); }
+.sp-chip-rose { color: #e11d64; background: color-mix(in srgb, #f43f5e 12%, var(--bg-card)); }
+.sp-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: .6rem; margin-top: 1.1rem; }
+.sp-btn { display: inline-flex; align-items: center; justify-content: center; gap: .5rem;
+  border: 1px solid var(--border-color); background: var(--bg-card); color: var(--text-secondary);
+  border-radius: var(--radius-md); padding: .68rem .8rem; font-size: .88rem; font-weight: 600;
+  text-decoration: none; cursor: pointer; white-space: nowrap;
+  transition: border-color var(--transition), background var(--transition), color var(--transition); }
+.sp-btn:hover { background: var(--gray-50); }
+.sp-btn i { font-size: .9em; }
+.sp-btn-primary { color: var(--primary); border-color: color-mix(in srgb, var(--primary) 32%, var(--border-color)); }
+.sp-btn-primary:hover { background: var(--primary-light); border-color: var(--primary); }
+.sp-btn-info { color: var(--info); border-color: color-mix(in srgb, var(--info) 32%, var(--border-color)); }
+.sp-btn-info:hover { background: color-mix(in srgb, var(--info) 10%, var(--bg-card)); border-color: var(--info); }
+.sp-btn-success { color: var(--success); border-color: color-mix(in srgb, var(--success) 32%, var(--border-color)); }
+.sp-btn-success:hover { background: color-mix(in srgb, var(--success) 10%, var(--bg-card)); border-color: var(--success); }
+.sp-btn-warning { color: var(--warning); border-color: color-mix(in srgb, var(--warning) 38%, var(--border-color)); }
+.sp-btn-warning:hover { background: color-mix(in srgb, var(--warning) 12%, var(--bg-card)); border-color: var(--warning); }
+@media (max-width: 640px) { .sp-btn-back { display: none; } }   /* the mobile shell provides Back */
+@media (min-width: 768px) { .sp-avatar { width: 104px; height: 104px; } .sp-name { font-size: 1.7rem; } }
 
 /* ── Collapsible profile sections (accordion rows on mobile, open on desktop) ── */
 .stu-sec-head { display: flex; align-items: center; gap: .5rem; padding: .8rem 1rem; }

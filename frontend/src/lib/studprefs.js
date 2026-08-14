@@ -26,11 +26,11 @@ export function clearSearches() { write(RECENT_SEARCHES, []); }
 
 // --- recently viewed students -------------------------------------------
 export function recentViewed() { return read(RECENT_VIEWED, []); }
-// Record a student the user opened. `s` = {id, name, student_id, url}.
+// Record a student the user opened. `s` = {id, name, student_id, url, photo}.
 export function rememberViewed(s) {
   if (!s || !s.id) return;
   const list = recentViewed().filter((x) => String(x.id) !== String(s.id));
-  list.unshift({ id: s.id, name: s.name, student_id: s.student_id, url: s.url });
+  list.unshift({ id: s.id, name: s.name, student_id: s.student_id, url: s.url, photo: s.photo || '' });
   write(RECENT_VIEWED, list.slice(0, 10));
 }
 
