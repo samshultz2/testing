@@ -88,6 +88,15 @@ class Config:
             'max_overflow': int(os.environ.get('DB_MAX_OVERFLOW', '20')),
             'pool_timeout': int(os.environ.get('DB_POOL_TIMEOUT', '30')),
         })
+        # PgBouncer in *transaction* pooling mode rotates the server connection
+        # per transaction, which is incompatible with psycopg 3's automatic
+        # per-session prepared statements (you'd get "prepared statement already
+        # exists" errors). Set PGBOUNCER=1 (or DB_DISABLE_PREPARED=1) when the app
+        # connects THROUGH PgBouncer to disable client-side prepared statements.
+        # Harmless when not behind PgBouncer; only a small re-parse cost. This
+        # propagates to every tenant engine (they copy SQLALCHEMY_ENGINE_OPTIONS).
+        if _as_bool(os.environ.get('PGBOUNCER')) or _as_bool(os.environ.get('DB_DISABLE_PREPARED')):
+            SQLALCHEMY_ENGINE_OPTIONS['connect_args'] = {'prepare_threshold': None}
 
     # Reverse-proxy awareness. Set TRUST_PROXY=1 when running behind nginx so
     # the app honours X-Forwarded-For/-Proto (correct client IPs + https).
