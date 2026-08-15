@@ -231,21 +231,27 @@
   .ng-list li i{color:var(--green);flex:0 0 auto}
   .ng-photo{margin-top:16px;min-height:150px;flex:1;border-radius:12px;overflow:hidden;position:relative;
     background:linear-gradient(to top, rgba(14,27,61,.55), rgba(14,27,61,.05)),
-    url('{{ url_for('static', filename='img/classroom.jpg') }}') center/cover no-repeat,
+    url('{{ url_for('static', filename='img/classroom.svg') }}') center/cover no-repeat,
     linear-gradient(135deg,#123069,#2f6bff);
     display:flex;align-items:flex-end;padding:14px}
   .ng-photo .cap{color:#fff;font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:8px;text-shadow:0 1px 4px rgba(0,0,0,.3)}
-  /* Testimonial */
-  .cc.quote .qmark{font-size:34px;color:var(--blue);line-height:.5;font-family:Georgia,serif}
-  .cc.quote p{margin-top:10px;font-size:14px;color:var(--ink);line-height:1.6}
+  /* Testimonial carousel */
+  .cc.quote{overflow:hidden}
+  .q-title{text-align:center;font-weight:800;color:var(--navy);font-size:14px}
+  .q-track{position:relative;flex:1;min-height:216px;margin-top:12px}
+  .q-slide{position:absolute;inset:0;margin:0;display:flex;flex-direction:column;justify-content:center;
+    opacity:0;visibility:hidden;transition:opacity .5s ease;pointer-events:none;text-align:left}
+  .q-slide.on{opacity:1;visibility:visible;pointer-events:auto}
+  .q-slide .stars{color:var(--gold);font-size:14px;letter-spacing:3px;margin-bottom:10px}
+  .q-slide blockquote{margin:0;font-size:14.5px;color:var(--ink);line-height:1.6}
   .who{display:flex;align-items:center;gap:11px;margin-top:16px}
   .who .av{width:44px;height:44px;border-radius:50%;flex:0 0 auto;background:linear-gradient(150deg,#5b76b7,#33436f);
     display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700}
   .who .n{font-weight:700;color:var(--navy);font-size:14px}
   .who .role{font-size:12px;color:var(--ink-2)}
   .dots{display:flex;gap:6px;margin-top:auto;padding-top:16px;justify-content:center}
-  .dots i{width:7px;height:7px;border-radius:50%;background:var(--line-2)}
-  .dots i.on{background:var(--blue);width:18px;border-radius:4px}
+  .dots button{width:7px;height:7px;padding:0;border:none;border-radius:50%;background:var(--line-2);cursor:pointer;transition:width .2s,background .2s}
+  .dots button.on{background:var(--blue);width:18px;border-radius:4px}
   /* Pricing — its own row of tier cards */
   .price-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px}
   .price-head h2{font-size:clamp(22px,5.5vw,32px)}
@@ -558,17 +564,31 @@
         <div class="ng-photo"><span class="cap"><i class="fas fa-graduation-cap"></i> Trusted by schools across Nigeria</span></div>
       </div>
 
-      <!-- Testimonial -->
+      <!-- Testimonial carousel -->
+      {% set _fallback = [
+        {'quote':'EduSyncra has transformed the way we manage our school. From results to fees to communication, everything is now seamless — and our results have improved tremendously.','name':'Mr. Adeyemi Samuel','role':'Principal, Greensprings College, Lagos'},
+        {'quote':'Result processing that took us a week now takes an afternoon. Report cards are ready the same day and parents get them instantly.','name':'Mrs. Okafor Ngozi','role':'Vice Principal, Crescent Academy, Enugu'},
+        {'quote':'Parents love the portal — fees, attendance and results all in one place. Our fee collection improved within a single term.','name':'Mr. Bello Ahmed','role':'Proprietor, Al-Noor Schools, Abuja'},
+        {'quote':'Running three campuses from one dashboard used to be a nightmare. Now every branch reports in automatically. It just works.','name':'Dr. Funke Adeyinka','role':'Director, Bright Stars Group, Ibadan'}
+      ] %}
+      {% set testimonials = content.testimonials if (content.testimonials and content.testimonials|length >= 2) else _fallback %}
       <div class="cc quote">
-        <div style="text-align:center;font-weight:700;color:var(--navy);font-size:14px;margin-bottom:6px">Trusted by School Leaders</div>
-        <div class="qmark">“</div>
-        {% set _t = (content.testimonials[0] if content.testimonials else none) %}
-        <p>{{ _t.quote if _t else 'EduSyncra has transformed the way we manage our school. From results to fees to communication, everything is now seamless. Our parents are happier and our results have improved tremendously.' }}</p>
-        <div class="who">
-          <span class="av">{{ (_t.name[0]|upper) if _t else 'A' }}</span>
-          <span><span class="n">{{ _t.name if _t else 'Mr. Adeyemi Samuel' }}</span><br><span class="role">{{ _t.role if _t and _t.role else 'Principal, Greensprings College, Lagos' }}</span></span>
+        <div class="q-title">Trusted by School Leaders</div>
+        <div class="q-track" id="qTrack">
+          {% for t in testimonials %}
+          <figure class="q-slide{{ ' on' if loop.first }}">
+            <div class="stars">★★★★★</div>
+            <blockquote>“{{ t.quote }}”</blockquote>
+            <figcaption class="who">
+              <span class="av">{{ (t.name[0]|upper) if t.name else 'S' }}</span>
+              <span><span class="n">{{ t.name }}</span><br><span class="role">{{ t.role or '' }}</span></span>
+            </figcaption>
+          </figure>
+          {% endfor %}
         </div>
-        <div class="dots"><i class="on"></i><i></i><i></i><i></i></div>
+        <div class="dots" id="qDots">
+          {% for t in testimonials %}<button type="button" class="{{ 'on' if loop.first }}" data-i="{{ loop.index0 }}" aria-label="Testimonial {{ loop.index }}"></button>{% endfor %}
+        </div>
       </div>
 
       <!-- Pricing mini -->
@@ -697,6 +717,27 @@
   document.querySelectorAll('#drawer .ml').forEach(function(a){ a.addEventListener('click', closeMenu); });
   document.addEventListener('keydown', function(e){ if(e.key === 'Escape') closeMenu(); });
   addEventListener('resize', function(){ if (innerWidth > 980) closeMenu(); });
+  // testimonial carousel: auto-rotate, dot navigation, pause on hover
+  (function(){
+    var track = document.getElementById('qTrack');
+    if (!track) return;
+    var slides = track.querySelectorAll('.q-slide');
+    var dots = document.querySelectorAll('#qDots button');
+    if (slides.length < 2) return;
+    var i = 0, timer = null;
+    function show(n){
+      i = (n + slides.length) % slides.length;
+      slides.forEach(function(s, k){ s.classList.toggle('on', k === i); });
+      dots.forEach(function(d, k){ d.classList.toggle('on', k === i); });
+    }
+    function start(){ stop(); timer = setInterval(function(){ show(i + 1); }, 5000); }
+    function stop(){ if (timer) { clearInterval(timer); timer = null; } }
+    dots.forEach(function(d){ d.addEventListener('click', function(){ show(+d.getAttribute('data-i')); start(); }); });
+    var card = track.closest('.cc');
+    if (card){ card.addEventListener('mouseenter', stop); card.addEventListener('mouseleave', start); }
+    if (!matchMedia('(prefers-reduced-motion: reduce)').matches) start();
+  })();
+
   var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   var els = document.querySelectorAll('.reveal');
   if (reduce || !('IntersectionObserver' in window)) {
