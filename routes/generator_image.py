@@ -5,6 +5,7 @@ V3: JPG format, correct abbreviations, school watermark
 """
 from flask import Response
 from models import GenTimetableResult, GenTimetableRule, GenTeacher, GenSubject, GenSettings
+from routes.generator import gen_bid
 from PIL import Image, ImageDraw, ImageFont
 from io import BytesIO
 
@@ -132,14 +133,14 @@ def generate_timetable_image(batch_id, layout='by_day', quality='ultra'):
     Format: PNG for lossless quality
     Includes: School name, address, period times, BREAK column
     """
-    results = GenTimetableResult.query.filter_by(batch_id=batch_id).all()
+    results = GenTimetableResult.query.filter_by(batch_id=batch_id, branch_id=gen_bid()).all()
     if not results:
         return None
     
     # Determine school level from results
     school_level = results[0].school_level if results else 'sss'
     
-    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, school_level=school_level).all()}
+    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, school_level=school_level, branch_id=gen_bid()).all()}
     periods_per_day = int(rules.get('periods_per_day', 8))
     
     class_arms = sorted(set((r.class_name, r.arm_name) for r in results))
@@ -452,13 +453,13 @@ def generate_timetable_image(batch_id, layout='by_day', quality='ultra'):
 
 def generate_teacher_timetable_image(batch_id, teacher_id):
     """Generate high-quality timetable image for a single teacher"""
-    results = GenTimetableResult.query.filter_by(batch_id=batch_id, teacher_id=teacher_id).all()
+    results = GenTimetableResult.query.filter_by(batch_id=batch_id, teacher_id=teacher_id, branch_id=gen_bid()).all()
     teacher = GenTeacher.query.get(teacher_id)
     
     if not results or not teacher:
         return None
     
-    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True).all()}
+    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, branch_id=gen_bid()).all()}
     periods_per_day = int(rules.get('periods_per_day', 8))
     
     days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']

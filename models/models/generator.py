@@ -7,8 +7,9 @@ from models.models import *  # noqa: F401,F403
 class GenTeacher(db.Model):
     """Teachers for timetable generation"""
     __tablename__ = 'gen_teachers'
-    
+
     id = db.Column(db.Integer, primary_key=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'), index=True)  # owning branch (per-branch generator)
     name = db.Column(db.String(100), nullable=False)
     staff_id = db.Column(db.String(20))
     phone = db.Column(db.String(20))
@@ -71,8 +72,9 @@ class GenTeacherSubject(db.Model):
 class GenSubjectConfig(db.Model):
     """Subject configuration for timetable generation - GLOBAL defaults"""
     __tablename__ = 'gen_subject_configs'
-    
+
     id = db.Column(db.Integer, primary_key=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'), index=True)  # owning branch (per-branch generator)
     subject_id = db.Column(db.Integer, db.ForeignKey('gen_subjects.id'), nullable=False)  # Changed to gen_subjects
     school_level = db.Column(db.String(10), default='sss')  # 'jss' or 'sss'
     periods_per_week = db.Column(db.Integer, default=4)  # Default periods
@@ -97,16 +99,17 @@ class GenSubjectConfig(db.Model):
 class GenSubject(db.Model):
     """Subjects for timetable generation - separate from academic subjects"""
     __tablename__ = 'gen_subjects'
-    
+
     id = db.Column(db.Integer, primary_key=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'), index=True)  # owning branch (per-branch generator)
     name = db.Column(db.String(100), nullable=False)
     short_name = db.Column(db.String(20))
     school_level = db.Column(db.String(10), default='sss')  # 'jss' or 'sss'
     category = db.Column(db.String(50))  # Science, Arts, Commercial, General, Vocational
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=local_now)
-    
-    __table_args__ = (db.UniqueConstraint('name', 'school_level'),)
+
+    __table_args__ = (db.UniqueConstraint('branch_id', 'name', 'school_level'),)
     
     def __repr__(self):
         return f'<GenSubject {self.name} ({self.school_level})>'
@@ -135,8 +138,9 @@ class GenClassSubjectConfig(db.Model):
 class GenRoom(db.Model):
     """Rooms/Venues for timetable generation"""
     __tablename__ = 'gen_rooms'
-    
+
     id = db.Column(db.Integer, primary_key=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'), index=True)  # owning branch (per-branch generator)
     name = db.Column(db.String(50), nullable=False)
     short_name = db.Column(db.String(10))
     room_type = db.Column(db.String(20), default='classroom')  # classroom, lab, hall, field
@@ -151,17 +155,20 @@ class GenRoom(db.Model):
 class GenStream(db.Model):
     """Stream definitions (Science, Arts, Commercial)"""
     __tablename__ = 'gen_streams'
-    
+
     id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(50), nullable=False, unique=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'), index=True)  # owning branch (per-branch generator)
+    name = db.Column(db.String(50), nullable=False)
     short_name = db.Column(db.String(10))
     description = db.Column(db.String(200))
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=local_now)
-    
+
+    __table_args__ = (db.UniqueConstraint('branch_id', 'name', name='uq_gen_stream_branch_name'),)
+
     # Relationships
     subjects = db.relationship('GenStreamSubject', backref='stream', lazy='dynamic', cascade='all, delete-orphan')
-    
+
     def __repr__(self):
         return f'<GenStream {self.name}>'
 
@@ -189,8 +196,9 @@ class GenStreamSubject(db.Model):
 class GenClassConfig(db.Model):
     """Class configuration for generation"""
     __tablename__ = 'gen_class_configs'
-    
+
     id = db.Column(db.Integer, primary_key=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'), index=True)  # owning branch (per-branch generator)
     class_name = db.Column(db.String(20), nullable=False)  # SSS1, SSS2, SSS3, JSS1, JSS2, JSS3
     school_level = db.Column(db.String(10), default='sss')  # 'jss' or 'sss'
     num_arms = db.Column(db.Integer, default=1)
@@ -256,8 +264,9 @@ class GenClassStreamSubject(db.Model):
 class GenTeacherAssignment(db.Model):
     """Which teacher teaches which subject to which class-arm"""
     __tablename__ = 'gen_teacher_assignments'
-    
+
     id = db.Column(db.Integer, primary_key=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'), index=True)  # owning branch (per-branch generator)
     teacher_id = db.Column(db.Integer, db.ForeignKey('gen_teachers.id'), nullable=False)
     subject_id = db.Column(db.Integer, db.ForeignKey('gen_subjects.id'), nullable=False)
     class_config_id = db.Column(db.Integer, db.ForeignKey('gen_class_configs.id'), nullable=False)
@@ -275,8 +284,9 @@ class GenTeacherAssignment(db.Model):
 class GenTimetableRule(db.Model):
     """Timetable generation rules"""
     __tablename__ = 'gen_timetable_rules'
-    
+
     id = db.Column(db.Integer, primary_key=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'), index=True)  # owning branch (per-branch generator)
     rule_type = db.Column(db.String(50), nullable=False)
     # Types: 'no_repeat_same_day', 'max_consecutive', 'break_after_period', etc.
     value = db.Column(db.String(100))
@@ -292,8 +302,9 @@ class GenTimetableRule(db.Model):
 class GenTimetableResult(db.Model):
     """Generated timetable results"""
     __tablename__ = 'gen_timetable_results'
-    
+
     id = db.Column(db.Integer, primary_key=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'), index=True)  # owning branch (per-branch generator)
     batch_id = db.Column(db.String(50), nullable=False)  # Groups results from same generation
     school_level = db.Column(db.String(10), default='sss')  # 'jss' or 'sss'
     class_name = db.Column(db.String(20), nullable=False)
@@ -367,24 +378,41 @@ class ActiveTimetableBatch(db.Model):
 class GenSettings(db.Model):
     """Generator settings including school info for printing"""
     __tablename__ = 'gen_settings'
-    
+
     id = db.Column(db.Integer, primary_key=True)
-    setting_key = db.Column(db.String(50), nullable=False, unique=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'), index=True)  # owning branch (per-branch generator)
+    setting_key = db.Column(db.String(50), nullable=False)
     setting_value = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=local_now)
-    
+
+    __table_args__ = (db.UniqueConstraint('branch_id', 'setting_key', name='uq_gen_setting_branch_key'),)
+
     @staticmethod
-    def get(key, default=None):
-        setting = GenSettings.query.filter_by(setting_key=key).first()
+    def _bid(branch_id):
+        """Resolve the branch to read/write settings for. Defaults to the caller's
+        current viewing branch so per-branch generator settings never leak."""
+        if branch_id is not None:
+            return branch_id
+        try:
+            from utils.branch_scope import viewing_branch_id, default_branch_id
+            return viewing_branch_id() or default_branch_id()
+        except Exception:
+            return None
+
+    @staticmethod
+    def get(key, default=None, branch_id=None):
+        bid = GenSettings._bid(branch_id)
+        setting = GenSettings.query.filter_by(setting_key=key, branch_id=bid).first()
         return setting.setting_value if setting else default
-    
+
     @staticmethod
-    def set(key, value):
-        setting = GenSettings.query.filter_by(setting_key=key).first()
+    def set(key, value, branch_id=None):
+        bid = GenSettings._bid(branch_id)
+        setting = GenSettings.query.filter_by(setting_key=key, branch_id=bid).first()
         if setting:
             setting.setting_value = value
         else:
-            setting = GenSettings(setting_key=key, setting_value=value)
+            setting = GenSettings(setting_key=key, setting_value=value, branch_id=bid)
             db.session.add(setting)
         db.session.commit()
 
@@ -396,8 +424,9 @@ class GenSubjectClashRule(db.Model):
     Example: Geography for SSS3 Iris should not clash with Literature (because Arts students do Lit while Commercial do Geo)
     """
     __tablename__ = 'gen_subject_clash_rules'
-    
+
     id = db.Column(db.Integer, primary_key=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'), index=True)  # owning branch (per-branch generator)
     name = db.Column(db.String(100), nullable=False)  # Descriptive name for the rule
     description = db.Column(db.Text)  # Explanation of why this rule exists
     
@@ -430,11 +459,12 @@ class GenCombinedClassRule(db.Model):
     Example: Literature teacher shadows Geography for SSS3 Iris (same time slot)
     """
     __tablename__ = 'gen_combined_class_rules'
-    
+
     id = db.Column(db.Integer, primary_key=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'), index=True)  # owning branch (per-branch generator)
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text)
-    
+
     # The subject being shadowed (e.g., Geography)
     shadow_subject_id = db.Column(db.Integer, db.ForeignKey('gen_subjects.id'), nullable=False)
     shadow_class_name = db.Column(db.String(20), nullable=False)  # e.g., "SSS3"

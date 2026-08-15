@@ -17,9 +17,10 @@ def generate_global_timetable(class_ids, periods_per_day, break_after, db_sessio
         GenClassSubjectConfig, GenClassStreamSubject, GenTeacher, GenTeacherAssignment,
         GenTeacherAvailability, GenTimetableRule, GenTimetableResult, Subject
     )
+    from routes.generator import gen_bid
     
     # Get rules
-    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True).all()}
+    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, branch_id=gen_bid()).all()}
     max_consecutive = int(rules.get('max_consecutive', 3))
     
     # Collect ALL teaching events (subject-class-arm-teacher combinations)
@@ -72,7 +73,7 @@ def generate_global_timetable(class_ids, periods_per_day, break_after, db_sessio
                         # Pass all configs for priority resolution
                         subjects.append((ss.subject_id, ss.subject.name, cfg, class_cfg, ss, class_stream_cfg))
             else:
-                for cfg in GenSubjectConfig.query.filter_by(is_active=True).all():
+                for cfg in GenSubjectConfig.query.filter_by(is_active=True, branch_id=gen_bid()).all():
                     class_cfg = class_configs.get(cfg.subject_id)
                     if class_cfg and not class_cfg.is_enabled:
                         continue
@@ -123,7 +124,7 @@ def generate_global_timetable(class_ids, periods_per_day, break_after, db_sessio
     # Load teacher constraints
     teacher_unavailable = defaultdict(set)  # {teacher_id: {(day, period)}}
     teachers = {}  # {id: Teacher object}
-    for t in GenTeacher.query.filter_by(is_active=True).all():
+    for t in GenTeacher.query.filter_by(is_active=True, branch_id=gen_bid()).all():
         teachers[t.id] = t
         for ua in GenTeacherAvailability.query.filter_by(teacher_id=t.id, is_available=False).all():
             teacher_unavailable[t.id].add((ua.day_of_week, ua.period_number))

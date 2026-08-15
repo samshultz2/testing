@@ -17,6 +17,34 @@ import uuid
 
 generator_bp = Blueprint('generator', __name__, url_prefix='/generator')
 
+
+@generator_bp.before_request
+def _heal_generator_schema():
+    """Ensure the current tenant DB has the per-branch generator columns before
+    any generator query runs (idempotent, cached per engine)."""
+    from utils.generator_schema import ensure_generator_schema
+    ensure_generator_schema()
+
+
+def gen_bid():
+    """Branch whose generator data this request reads/writes. Branch users are
+    pinned to their own branch; a central user operates on the branch they are
+    currently viewing (falling back to the default/HQ branch). The whole
+    generator (config + generation + results) is scoped to this branch."""
+    from utils.branch_scope import viewing_branch_id, default_branch_id
+    return viewing_branch_id() or default_branch_id()
+
+
+def gen_owned_or_404(model, obj_id):
+    """Load a generator row by id, enforcing branch access — a branch user can
+    only reach their own branch's row (central users reach any). 404 if missing,
+    403 if it belongs to another branch."""
+    obj = model.query.get_or_404(obj_id)
+    from utils.branch_scope import require_branch_access
+    require_branch_access(getattr(obj, 'branch_id', None))
+    return obj
+
+
 DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
 SUBJECT_COLORS = [
     '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',
@@ -206,7 +234,7 @@ def generate_for_class(batch_id, cc, arm, periods_per_day, break_after, no_repea
                 subjects.append({'id': ss.subject_id, 'name': subj_name, 'category': 'general'})
     else:
         # Class doesn't have streams (e.g., JSS) - include all enabled subjects
-        for cfg in GenSubjectConfig.query.filter_by(is_active=True).all():
+        for cfg in GenSubjectConfig.query.filter_by(is_active=True, branch_id=cc.branch_id).all():
             # Check per-class "Takes" checkbox
             class_cfg = class_configs.get(cfg.subject_id)
             if class_cfg and not class_cfg.is_enabled:
@@ -223,7 +251,7 @@ def generate_for_class(batch_id, cc, arm, periods_per_day, break_after, no_repea
         assignments[ta.subject_id] = ta.teacher_id
     
     # Get max consecutive periods from rules
-    max_consecutive_rule = GenTimetableRule.query.filter_by(rule_type='max_consecutive').first()
+    max_consecutive_rule = GenTimetableRule.query.filter_by(rule_type='max_consecutive', branch_id=cc.branch_id).first()
     max_consecutive = int(max_consecutive_rule.value) if max_consecutive_rule else 3
     
     # Initialize timetable - 8 periods (5 morning + 3 afternoon), break is between period 5 and 6
@@ -593,7 +621,7 @@ def _apply_batch(batch_id):
     from utils.audit import log_action
 
     level = get_current_level()
-    results = GenTimetableResult.query.filter_by(batch_id=batch_id, school_level=level).all()
+    results = GenTimetableResult.query.filter_by(batch_id=batch_id, school_level=level, branch_id=gen_bid()).all()
     if not results:
         return None, 'No results found for this batch.', 'error'
 

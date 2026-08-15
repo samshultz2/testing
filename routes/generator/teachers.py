@@ -6,7 +6,7 @@ from routes.generator import *  # noqa: F401,F403
 @login_required
 def teachers_list():
     level = get_current_level()
-    teachers = GenTeacher.query.filter_by(is_active=True, school_level=level).order_by(GenTeacher.name).all()
+    teachers = GenTeacher.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).order_by(GenTeacher.name).all()
     return render_template('generator/teachers.html', teachers=teachers, level=level)
 
 
@@ -24,6 +24,7 @@ def add_teacher():
             teacher = GenTeacher(
                 name=name,
                 school_level=level,
+                branch_id=gen_bid(),
                 staff_id=request.form.get('staff_id', '').strip() or None,
                 phone=request.form.get('phone', '').strip() or None,
                 email=request.form.get('email', '').strip() or None,
@@ -47,11 +48,11 @@ def add_teacher():
 @generator_bp.route('/teachers/<int:teacher_id>')
 @login_required
 def edit_teacher(teacher_id):
-    teacher = GenTeacher.query.get_or_404(teacher_id)
+    teacher = gen_owned_or_404(GenTeacher, teacher_id)
     level = teacher.school_level
-    all_subjects = GenSubject.query.filter_by(is_active=True, school_level=level).order_by(GenSubject.name).all()
+    all_subjects = GenSubject.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).order_by(GenSubject.name).all()
     assigned_ids = [ts.subject_id for ts in teacher.subjects]
-    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, school_level=level).all()}
+    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).all()}
     periods_per_day = int(rules.get('periods_per_day', 8))
     
     # Get unavailable slots
@@ -84,7 +85,7 @@ def edit_teacher(teacher_id):
 @generator_bp.route('/teachers/<int:teacher_id>/update', methods=['POST'])
 @login_required
 def update_teacher(teacher_id):
-    teacher = GenTeacher.query.get_or_404(teacher_id)
+    teacher = gen_owned_or_404(GenTeacher, teacher_id)
     try:
         teacher.name = request.form.get('name', '').strip()
         teacher.staff_id = request.form.get('staff_id', '').strip() or None
@@ -114,7 +115,7 @@ def update_teacher(teacher_id):
 @generator_bp.route('/teachers/<int:teacher_id>/subjects', methods=['POST'])
 @login_required
 def update_teacher_subjects(teacher_id):
-    teacher = GenTeacher.query.get_or_404(teacher_id)
+    teacher = gen_owned_or_404(GenTeacher, teacher_id)
     try:
         subject_ids = [int(x) for x in request.form.getlist('subject_ids[]') if x]
         GenTeacherSubject.query.filter_by(teacher_id=teacher_id).delete()
@@ -131,7 +132,7 @@ def update_teacher_subjects(teacher_id):
 @generator_bp.route('/teachers/<int:teacher_id>/availability', methods=['POST'])
 @login_required
 def update_teacher_availability(teacher_id):
-    teacher = GenTeacher.query.get_or_404(teacher_id)
+    teacher = gen_owned_or_404(GenTeacher, teacher_id)
     try:
         GenTeacherAvailability.query.filter_by(teacher_id=teacher_id).delete()
         for slot in request.form.getlist('unavailable[]'):
@@ -151,7 +152,7 @@ def update_teacher_availability(teacher_id):
 @generator_bp.route('/teachers/<int:teacher_id>/delete', methods=['POST'])
 @login_required
 def delete_teacher(teacher_id):
-    teacher = GenTeacher.query.get_or_404(teacher_id)
+    teacher = gen_owned_or_404(GenTeacher, teacher_id)
     try:
         teacher.is_active = False
         db.session.commit()
@@ -183,10 +184,12 @@ def import_teachers():
             count = 0
             for row in reader:
                 name = row.get('name', '').strip()
-                if not name or GenTeacher.query.filter_by(name=name, is_active=True).first():
+                if not name or GenTeacher.query.filter_by(name=name, is_active=True, branch_id=gen_bid()).first():
                     continue
                 db.session.add(GenTeacher(
                     name=name,
+                    branch_id=gen_bid(),
+                    school_level=get_current_level(),
                     staff_id=row.get('staff_id', '').strip() or None,
                     phone=row.get('phone', '').strip() or None,
                     email=row.get('email', '').strip() or None,

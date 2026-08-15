@@ -6,7 +6,7 @@ from routes.generator import *  # noqa: F401,F403
 @login_required
 def print_results(batch_id):
     level = get_current_level()
-    results = GenTimetableResult.query.filter_by(batch_id=batch_id, school_level=level).all()
+    results = GenTimetableResult.query.filter_by(batch_id=batch_id, school_level=level, branch_id=gen_bid()).all()
     if not results:
         flash('No results.', 'error')
         return redirect(url_for('generator.results_list'))
@@ -18,7 +18,7 @@ def print_results(batch_id):
             timetables[key] = {'class_name': r.class_name, 'arm_name': r.arm_name, 'grid': {d: {} for d in range(5)}}
         timetables[key]['grid'][r.day_of_week][r.period_number] = r
     
-    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True).all()}
+    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, branch_id=gen_bid()).all()}
     
     return render_template('generator/print_results.html',
         batch_id=batch_id, timetables=dict(sorted(timetables.items())),
@@ -34,7 +34,7 @@ def print_results(batch_id):
 @generator_bp.route('/results/<batch_id>/print/<class_name>/<arm_name>')
 @login_required
 def print_single_timetable(batch_id, class_name, arm_name):
-    results = GenTimetableResult.query.filter_by(batch_id=batch_id, class_name=class_name, arm_name=arm_name).all()
+    results = GenTimetableResult.query.filter_by(batch_id=batch_id, class_name=class_name, arm_name=arm_name, branch_id=gen_bid()).all()
     if not results:
         flash('Not found.', 'error')
         return redirect(url_for('generator.view_results', batch_id=batch_id))
@@ -43,7 +43,7 @@ def print_single_timetable(batch_id, class_name, arm_name):
     for r in results:
         grid[r.day_of_week][r.period_number] = r
     
-    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True).all()}
+    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, branch_id=gen_bid()).all()}
     
     return render_template('generator/print_single.html',
         batch_id=batch_id, class_name=class_name, arm_name=arm_name, grid=grid,
@@ -64,7 +64,7 @@ def export_results(batch_id):
     from openpyxl.styles import Font, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
     
-    results = GenTimetableResult.query.filter_by(batch_id=batch_id).all()
+    results = GenTimetableResult.query.filter_by(batch_id=batch_id, branch_id=gen_bid()).all()
     if not results:
         flash('No results.', 'error')
         return redirect(url_for('generator.results_list'))
@@ -80,7 +80,7 @@ def export_results(batch_id):
             timetables[key] = {'class_name': r.class_name, 'arm_name': r.arm_name, 'grid': {d: {} for d in range(5)}}
         timetables[key]['grid'][r.day_of_week][r.period_number] = r
     
-    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True).all()}
+    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, branch_id=gen_bid()).all()}
     periods_per_day = int(rules.get('periods_per_day', 8))
     
     # Period time slots (8:20 AM start, 40 min each, 30 min break after period 5)
@@ -307,7 +307,7 @@ def export_results_by_day(batch_id):
     from openpyxl.styles import Font, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
     
-    results = GenTimetableResult.query.filter_by(batch_id=batch_id).all()
+    results = GenTimetableResult.query.filter_by(batch_id=batch_id, branch_id=gen_bid()).all()
     if not results:
         flash('No results.', 'error')
         return redirect(url_for('generator.results_list'))
@@ -315,7 +315,7 @@ def export_results_by_day(batch_id):
     # Determine school level from results
     school_level = results[0].school_level if results else 'sss'
     
-    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, school_level=school_level).all()}
+    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, school_level=school_level, branch_id=gen_bid()).all()}
     periods_per_day = int(rules.get('periods_per_day', 8))
     
     # Get school info
@@ -408,7 +408,7 @@ def export_results_by_day(batch_id):
     }
     
     # Build a lookup dict for subjects
-    subject_lookup = {s.id: s for s in GenSubject.query.filter_by(is_active=True, school_level=school_level).all()}
+    subject_lookup = {s.id: s for s in GenSubject.query.filter_by(is_active=True, school_level=school_level, branch_id=gen_bid()).all()}
     
     # NO COLORS - Pure black text on white for B&W printing
     school_font = Font(bold=True, size=24, color='000000')
@@ -620,12 +620,12 @@ def export_results_by_day_pdf(batch_id):
     from reportlab.lib.units import mm
     from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, PageBreak
     
-    results = GenTimetableResult.query.filter_by(batch_id=batch_id).all()
+    results = GenTimetableResult.query.filter_by(batch_id=batch_id, branch_id=gen_bid()).all()
     if not results:
         flash('No results.', 'error')
         return redirect(url_for('generator.results_list'))
     
-    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True).all()}
+    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, branch_id=gen_bid()).all()}
     periods_per_day = int(rules.get('periods_per_day', 8))
     
     # Get school info
@@ -938,14 +938,14 @@ def export_teacher_image(batch_id, teacher_id):
 @login_required
 def print_teacher_timetable(batch_id, teacher_id):
     """Printable view for individual teacher timetable"""
-    teacher = GenTeacher.query.get_or_404(teacher_id)
-    results = GenTimetableResult.query.filter_by(batch_id=batch_id, teacher_id=teacher_id).all()
+    teacher = gen_owned_or_404(GenTeacher, teacher_id)
+    results = GenTimetableResult.query.filter_by(batch_id=batch_id, teacher_id=teacher_id, branch_id=gen_bid()).all()
     
     if not results:
         flash('No timetable found for this teacher.', 'error')
         return redirect(url_for('generator.teacher_timetable', batch_id=batch_id))
     
-    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True).all()}
+    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, branch_id=gen_bid()).all()}
     periods_per_day = int(rules.get('periods_per_day', 8))
     
     # Build timetable grid

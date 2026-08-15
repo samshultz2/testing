@@ -7,8 +7,8 @@ from routes.generator import *  # noqa: F401,F403
 def subjects_config():
     level = get_current_level()
     # Get subjects for this level only
-    all_subjects = GenSubject.query.filter_by(is_active=True, school_level=level).order_by(GenSubject.name).all()
-    configs = {c.subject_id: c for c in GenSubjectConfig.query.filter_by(school_level=level).all()}
+    all_subjects = GenSubject.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).order_by(GenSubject.name).all()
+    configs = {c.subject_id: c for c in GenSubjectConfig.query.filter_by(school_level=level, branch_id=gen_bid()).all()}
     subjects_data = []
     for i, subject in enumerate(all_subjects):
         subjects_data.append({
@@ -16,7 +16,7 @@ def subjects_config():
             'config': configs.get(subject.id),
             'color': SUBJECT_COLORS[i % len(SUBJECT_COLORS)]
         })
-    rooms = GenRoom.query.filter_by(is_active=True).all()
+    rooms = GenRoom.query.filter_by(is_active=True, branch_id=gen_bid()).all()
     return render_template('generator/subjects_config.html',
         subjects_data=subjects_data,
         categories=['core', 'science', 'arts', 'commercial', 'vocational'],
@@ -38,12 +38,13 @@ def add_gen_subject():
                 return redirect(url_for('generator.add_gen_subject'))
             
             # Check if already exists for this level
-            if GenSubject.query.filter_by(name=name, school_level=level, is_active=True).first():
+            if GenSubject.query.filter_by(name=name, school_level=level, is_active=True, branch_id=gen_bid()).first():
                 flash(f'Subject "{name}" already exists for {level.upper()}.', 'error')
                 return redirect(url_for('generator.add_gen_subject'))
             
             subject = GenSubject(
                 name=name,
+                branch_id=gen_bid(),
                 short_name=request.form.get('short_name', '').strip() or None,
                 school_level=level,
                 category=request.form.get('category', 'core')
@@ -74,7 +75,7 @@ def sync_gen_subjects():
         academic = Subject.query.filter_by(is_active=True).order_by(Subject.name).all()
         # Existing gen subject names for this level (case-insensitive).
         existing = {s.name.strip().lower() for s in GenSubject.query.filter_by(
-            school_level=level, is_active=True).all()}
+            school_level=level, is_active=True, branch_id=gen_bid()).all()}
         created = 0
         for subj in academic:
             name = (subj.name or '').strip()
@@ -82,6 +83,7 @@ def sync_gen_subjects():
                 continue
             db.session.add(GenSubject(
                 name=name,
+                branch_id=gen_bid(),
                 short_name=(subj.short_name or '').strip() or None,
                 school_level=level,
                 category=cat_map.get((subj.category or '').strip().lower(), 'core')
@@ -105,7 +107,7 @@ def sync_gen_subjects():
 @login_required
 def delete_gen_subject(subject_id):
     """Delete a subject"""
-    subject = GenSubject.query.get_or_404(subject_id)
+    subject = gen_owned_or_404(GenSubject, subject_id)
     try:
         subject.is_active = False
         # Also deactivate related configs
@@ -122,7 +124,7 @@ def delete_gen_subject(subject_id):
 @login_required
 def edit_gen_subject(subject_id):
     """Edit a subject"""
-    subject = GenSubject.query.get_or_404(subject_id)
+    subject = gen_owned_or_404(GenSubject, subject_id)
     level = subject.school_level
     
     if request.method == 'POST':
@@ -136,6 +138,7 @@ def edit_gen_subject(subject_id):
             existing = GenSubject.query.filter(
                 GenSubject.name == name,
                 GenSubject.school_level == level,
+                GenSubject.branch_id == gen_bid(),
                 GenSubject.id != subject_id,
                 GenSubject.is_active == True
             ).first()
@@ -167,7 +170,7 @@ def save_subjects_config():
             needs_double = request.form.get(f'double_{subject_id}') == 'on'
             double_count = request.form.get(f'double_count_{subject_id}', type=int) or 0
             
-            config = GenSubjectConfig.query.filter_by(subject_id=subject_id, school_level=level).first()
+            config = GenSubjectConfig.query.filter_by(subject_id=subject_id, school_level=level, branch_id=gen_bid()).first()
             data = {
                 'periods_per_week': periods,
                 'needs_double_period': needs_double,
@@ -182,7 +185,7 @@ def save_subjects_config():
                 for k, v in data.items():
                     setattr(config, k, v)
             else:
-                db.session.add(GenSubjectConfig(subject_id=subject_id, school_level=level, **data))
+                db.session.add(GenSubjectConfig(subject_id=subject_id, school_level=level, branch_id=gen_bid(), **data))
         db.session.commit()
         flash('Subject configurations saved!', 'success')
     except Exception as e:
@@ -196,7 +199,7 @@ def save_subjects_config():
 def class_subjects_list():
     """List classes for per-class subject configuration"""
     level = get_current_level()
-    classes = GenClassConfig.query.filter_by(is_active=True, school_level=level).order_by(GenClassConfig.class_name).all()
+    classes = GenClassConfig.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).order_by(GenClassConfig.class_name).all()
     return render_template('generator/class_subjects_list.html', classes=classes, level=level)
 
 
@@ -204,12 +207,12 @@ def class_subjects_list():
 @login_required
 def class_subjects_config(class_id):
     """Configure subject periods for a specific class"""
-    class_config = GenClassConfig.query.get_or_404(class_id)
+    class_config = gen_owned_or_404(GenClassConfig, class_id)
     level = class_config.school_level
     
     # Get all subjects for this level with global defaults
-    all_subjects = GenSubject.query.filter_by(is_active=True, school_level=level).order_by(GenSubject.name).all()
-    global_configs = {c.subject_id: c for c in GenSubjectConfig.query.filter_by(is_active=True, school_level=level).all()}
+    all_subjects = GenSubject.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).order_by(GenSubject.name).all()
+    global_configs = {c.subject_id: c for c in GenSubjectConfig.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).all()}
     
     # Get class-specific overrides
     class_configs = {c.subject_id: c for c in GenClassSubjectConfig.query.filter_by(
@@ -265,7 +268,7 @@ def class_subjects_config(class_id):
 @login_required
 def save_class_subjects_config(class_id):
     """Save per-class subject configuration"""
-    class_config = GenClassConfig.query.get_or_404(class_id)
+    class_config = gen_owned_or_404(GenClassConfig, class_id)
     
     try:
         for subject_id in request.form.getlist('subject_id[]'):
@@ -308,7 +311,7 @@ def save_class_subjects_config(class_id):
 @login_required
 def class_stream_subjects(class_id):
     """Configure subject periods for each stream in this class"""
-    class_config = GenClassConfig.query.get_or_404(class_id)
+    class_config = gen_owned_or_404(GenClassConfig, class_id)
     
     if not class_config.has_streams:
         flash('This class does not use streams.', 'warning')
@@ -390,7 +393,7 @@ def class_stream_subjects(class_id):
 @login_required
 def save_class_stream_subjects(class_id):
     """Save class-stream subject configuration"""
-    class_config = GenClassConfig.query.get_or_404(class_id)
+    class_config = gen_owned_or_404(GenClassConfig, class_id)
     
     try:
         stream_id = int(request.form.get('stream_id'))

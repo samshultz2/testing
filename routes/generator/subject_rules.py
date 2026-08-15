@@ -11,17 +11,18 @@ from routes.generator import *  # noqa: F401,F403
 
 
 def _max_consecutive(level):
-    r = GenTimetableRule.query.filter_by(rule_type='max_consecutive', school_level=level).first()
+    r = GenTimetableRule.query.filter_by(rule_type='max_consecutive', school_level=level, branch_id=gen_bid()).first()
     return int(r.value) if r and str(r.value).isdigit() else 3
 
 
 @generator_bp.route('/subject/<int:subject_id>/rules')
 @login_required
 def subject_rules(subject_id):
-    subject = GenSubject.query.get_or_404(subject_id)
+    subject = gen_owned_or_404(GenSubject, subject_id)
     level = subject.school_level
     cfg = GenSubjectConfig.query.filter_by(subject_id=subject_id, school_level=level).first()
-    classes = (GenClassConfig.query.filter_by(is_active=True, school_level=level)
+    classes = (GenClassConfig.query.filter_by(is_active=True, school_level=level,
+                                              branch_id=subject.branch_id)
                .order_by(GenClassConfig.class_name).all())
     overrides = {c.class_config_id: c for c in GenClassSubjectConfig.query.filter_by(
         subject_id=subject_id, is_active=True).all()}
@@ -46,7 +47,7 @@ def subject_rules(subject_id):
 @generator_bp.route('/subject/<int:subject_id>/rules/save', methods=['POST'])
 @login_required
 def save_subject_rules(subject_id):
-    subject = GenSubject.query.get_or_404(subject_id)
+    subject = gen_owned_or_404(GenSubject, subject_id)
     level = subject.school_level
     f = request.form
     try:
@@ -68,7 +69,7 @@ def save_subject_rules(subject_id):
             for k, v in data.items():
                 setattr(cfg, k, v)
         else:
-            db.session.add(GenSubjectConfig(subject_id=subject_id, school_level=level, **data))
+            db.session.add(GenSubjectConfig(subject_id=subject_id, school_level=level, branch_id=subject.branch_id, **data))
 
         # 2) Per-class rows: "use default" removes the override; else upsert it.
         for cid in f.getlist('class_id[]'):
@@ -100,12 +101,12 @@ def save_subject_rules(subject_id):
         mc = f.get('max_consecutive', type=int)
         if mc:
             rule = GenTimetableRule.query.filter_by(
-                rule_type='max_consecutive', school_level=level).first()
+                rule_type='max_consecutive', school_level=level, branch_id=gen_bid()).first()
             if rule:
                 rule.value = str(mc); rule.is_active = True
             else:
                 db.session.add(GenTimetableRule(rule_type='max_consecutive',
-                                                value=str(mc), school_level=level, is_active=True))
+                                                value=str(mc), school_level=level, is_active=True, branch_id=gen_bid()))
 
         db.session.commit()
         flash(f'Saved all rules for {subject.name}.', 'success')

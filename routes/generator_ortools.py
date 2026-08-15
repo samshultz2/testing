@@ -10,6 +10,7 @@ from models import (
     GenTeacherAvailability, GenTimetableRule, GenTimetableResult, GenSubject,
     GenSubjectClashRule, GenCombinedClassRule
 )
+from routes.generator import gen_bid
 from collections import defaultdict
 import uuid
 import random
@@ -66,7 +67,7 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
     logger.debug(f"Break after period: {break_after}")
     
     global_subject_configs = {
-        sc.subject_id: sc for sc in GenSubjectConfig.query.filter_by(is_active=True).all()
+        sc.subject_id: sc for sc in GenSubjectConfig.query.filter_by(is_active=True, branch_id=gen_bid()).all()
     }
     
     # ========== LOAD DATA ==========
@@ -244,7 +245,7 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
     
     logger.debug(f"Loaded {len(requirements)} requirements for {len(class_arms)} class-arms")
     
-    teachers = {t.id: t for t in GenTeacher.query.filter_by(is_active=True).all()}
+    teachers = {t.id: t for t in GenTeacher.query.filter_by(is_active=True, branch_id=gen_bid()).all()}
     
     teacher_unavailable = defaultdict(set)
     for t in teachers.values():
@@ -436,7 +437,7 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
     logger.debug("Adding subject clash constraints (from database)...")
     clash_count = 0
     
-    clash_rules = GenSubjectClashRule.query.filter_by(is_active=True).all()
+    clash_rules = GenSubjectClashRule.query.filter_by(is_active=True, branch_id=gen_bid()).all()
     
     if not clash_rules:
         logger.debug("  No subject clash rules configured")
@@ -496,7 +497,7 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
     logger.debug("Adding combined class teacher consecutive constraints (from database)...")
     combined_consecutive_count = 0
     
-    combined_rules = GenCombinedClassRule.query.filter_by(is_active=True).all()
+    combined_rules = GenCombinedClassRule.query.filter_by(is_active=True, branch_id=gen_bid()).all()
     
     if not combined_rules:
         logger.debug("  No combined class rules configured")
@@ -731,7 +732,7 @@ def save_ortools_result(result):
             for period, entry in periods.items():
                 if entry:
                     db.session.add(GenTimetableResult(
-                        batch_id=batch_id, class_name=class_name, arm_name=arm,
+                        batch_id=batch_id, branch_id=gen_bid(), class_name=class_name, arm_name=arm,
                         day_of_week=day, period_number=period,
                         subject_id=entry['subject_id'], teacher_id=entry['teacher_id'],
                         is_double_period=entry.get('is_double', False)

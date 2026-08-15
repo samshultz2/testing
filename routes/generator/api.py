@@ -9,32 +9,34 @@ def index():
     from flask import session
     
     # Get counts for each level
-    jss_teachers = GenTeacher.query.filter_by(is_active=True, school_level='jss').count()
-    sss_teachers = GenTeacher.query.filter_by(is_active=True, school_level='sss').count()
+    jss_teachers = GenTeacher.query.filter_by(is_active=True, school_level='jss', branch_id=gen_bid()).count()
+    sss_teachers = GenTeacher.query.filter_by(is_active=True, school_level='sss', branch_id=gen_bid()).count()
     
     # Count actual subjects (GenSubject table)
-    jss_subjects = GenSubject.query.filter_by(is_active=True, school_level='jss').count()
-    sss_subjects = GenSubject.query.filter_by(is_active=True, school_level='sss').count()
+    jss_subjects = GenSubject.query.filter_by(is_active=True, school_level='jss', branch_id=gen_bid()).count()
+    sss_subjects = GenSubject.query.filter_by(is_active=True, school_level='sss', branch_id=gen_bid()).count()
     
     # Class counts
-    jss_class_ids = [c.id for c in GenClassConfig.query.filter_by(is_active=True, school_level='jss').all()]
-    sss_class_ids = [c.id for c in GenClassConfig.query.filter_by(is_active=True, school_level='sss').all()]
+    jss_class_ids = [c.id for c in GenClassConfig.query.filter_by(is_active=True, school_level='jss', branch_id=gen_bid()).all()]
+    sss_class_ids = [c.id for c in GenClassConfig.query.filter_by(is_active=True, school_level='sss', branch_id=gen_bid()).all()]
     
     jss_classes = len(jss_class_ids)
     sss_classes = len(sss_class_ids)
     
     jss_assignments = GenTeacherAssignment.query.join(GenClassConfig).filter(
         GenTeacherAssignment.is_active == True,
+        GenTeacherAssignment.branch_id == gen_bid(),
         GenClassConfig.school_level == 'jss'
     ).count()
     sss_assignments = GenTeacherAssignment.query.join(GenClassConfig).filter(
         GenTeacherAssignment.is_active == True,
+        GenTeacherAssignment.branch_id == gen_bid(),
         GenClassConfig.school_level == 'sss'
     ).count()
     
     # Get latest timetables for each level
-    jss_latest = GenTimetableResult.query.filter_by(school_level='jss').order_by(GenTimetableResult.generated_at.desc()).first()
-    sss_latest = GenTimetableResult.query.filter_by(school_level='sss').order_by(GenTimetableResult.generated_at.desc()).first()
+    jss_latest = GenTimetableResult.query.filter_by(school_level='jss', branch_id=gen_bid()).order_by(GenTimetableResult.generated_at.desc()).first()
+    sss_latest = GenTimetableResult.query.filter_by(school_level='sss', branch_id=gen_bid()).order_by(GenTimetableResult.generated_at.desc()).first()
     
     return render_template('generator/index.html',
         jss_stats={
@@ -64,19 +66,20 @@ def setup_guide():
     from models import TimetableSlot
     level = get_current_level()
 
-    teachers = GenTeacher.query.filter_by(is_active=True, school_level=level).count()
-    subjects = GenSubject.query.filter_by(is_active=True, school_level=level).count()
-    classes = GenClassConfig.query.filter_by(is_active=True, school_level=level).count()
+    teachers = GenTeacher.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).count()
+    subjects = GenSubject.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).count()
+    classes = GenClassConfig.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).count()
     try:
-        streams = GenStream.query.filter_by(school_level=level).count()
+        streams = GenStream.query.filter_by(school_level=level, branch_id=gen_bid()).count()
     except Exception:
-        streams = GenStream.query.count()
+        streams = GenStream.query.filter_by(branch_id=gen_bid()).count()
     assignments = GenTeacherAssignment.query.join(GenClassConfig).filter(
         GenTeacherAssignment.is_active == True,
+        GenTeacherAssignment.branch_id == gen_bid(),
         GenClassConfig.school_level == level).count()
-    rules = GenTimetableRule.query.filter_by(is_active=True, school_level=level).count()
+    rules = GenTimetableRule.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).count()
     periods = TimetableSlot.query.filter_by(is_active=True, is_break=False).count()
-    latest = (GenTimetableResult.query.filter_by(school_level=level)
+    latest = (GenTimetableResult.query.filter_by(school_level=level, branch_id=gen_bid())
               .order_by(GenTimetableResult.generated_at.desc()).first())
 
     steps = [
@@ -129,24 +132,25 @@ def level_dashboard(level):
     from flask import session
     session['generator_level'] = level
     
-    teachers_count = GenTeacher.query.filter_by(is_active=True, school_level=level).count()
+    teachers_count = GenTeacher.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).count()
     
     # Count actual subjects from GenSubject table
-    subjects_count = GenSubject.query.filter_by(is_active=True, school_level=level).count()
+    subjects_count = GenSubject.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).count()
     
     # Count configured subjects (for "ready to generate" check)
-    configured_subjects = GenSubjectConfig.query.filter_by(is_active=True, school_level=level).count()
+    configured_subjects = GenSubjectConfig.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).count()
     
-    classes_count = GenClassConfig.query.filter_by(is_active=True, school_level=level).count()
-    streams_count = GenStream.query.filter_by(is_active=True).count() if level == 'sss' else 0
-    rooms_count = GenRoom.query.filter_by(is_active=True).count()
+    classes_count = GenClassConfig.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).count()
+    streams_count = GenStream.query.filter_by(is_active=True, branch_id=gen_bid()).count() if level == 'sss' else 0
+    rooms_count = GenRoom.query.filter_by(is_active=True, branch_id=gen_bid()).count()
     
     assignments_count = GenTeacherAssignment.query.join(GenClassConfig).filter(
         GenTeacherAssignment.is_active == True,
+        GenTeacherAssignment.branch_id == gen_bid(),
         GenClassConfig.school_level == level
     ).count()
     
-    latest_batch = GenTimetableResult.query.filter_by(school_level=level).order_by(
+    latest_batch = GenTimetableResult.query.filter_by(school_level=level, branch_id=gen_bid()).order_by(
         GenTimetableResult.generated_at.desc()
     ).first()
     
@@ -171,21 +175,21 @@ def level_dashboard(level):
 @generator_bp.route('/api/teacher/<int:teacher_id>/subjects')
 @login_required
 def api_teacher_subjects(teacher_id):
-    teacher = GenTeacher.query.get_or_404(teacher_id)
+    teacher = gen_owned_or_404(GenTeacher, teacher_id)
     return jsonify([{'id': ts.subject_id, 'name': ts.subject.name} for ts in teacher.subjects])
 
 
 @generator_bp.route('/api/class/<int:class_id>/arms')
 @login_required
 def api_class_arms(class_id):
-    cc = GenClassConfig.query.get_or_404(class_id)
+    cc = gen_owned_or_404(GenClassConfig, class_id)
     return jsonify(cc.arm_list)
 
 
 @generator_bp.route('/api/stream/<int:stream_id>/subjects')
 @login_required
 def api_stream_subjects(stream_id):
-    stream = GenStream.query.get_or_404(stream_id)
+    stream = gen_owned_or_404(GenStream, stream_id)
     return jsonify([{'id': ss.subject_id, 'name': ss.subject.name, 'compulsory': ss.is_compulsory} for ss in stream.subjects])
 
 
@@ -201,11 +205,11 @@ def api_swap_slots():
         
         e1 = GenTimetableResult.query.filter_by(
             batch_id=batch_id, class_name=class_name, arm_name=arm_name,
-            day_of_week=slot1['day'], period_number=slot1['period']
+            day_of_week=slot1['day'], period_number=slot1['period'], branch_id=gen_bid()
         ).first()
         e2 = GenTimetableResult.query.filter_by(
             batch_id=batch_id, class_name=class_name, arm_name=arm_name,
-            day_of_week=slot2['day'], period_number=slot2['period']
+            day_of_week=slot2['day'], period_number=slot2['period'], branch_id=gen_bid()
         ).first()
         
         if e1 and e2:
@@ -231,7 +235,7 @@ def setup_jss():
             created = []
             for class_name in ['JSS1', 'JSS2', 'JSS3']:
                 # Check if already exists for JSS level
-                existing = GenClassConfig.query.filter_by(class_name=class_name, school_level='jss', is_active=True).first()
+                existing = GenClassConfig.query.filter_by(class_name=class_name, school_level='jss', is_active=True, branch_id=gen_bid()).first()
                 if existing:
                     # Update existing
                     existing.num_arms = num_arms
@@ -242,6 +246,7 @@ def setup_jss():
                     class_config = GenClassConfig(
                         class_name=class_name,
                         school_level='jss',
+                        branch_id=gen_bid(),
                         num_arms=num_arms,
                         arm_names=arm_names or None,
                         has_streams=False
@@ -266,7 +271,8 @@ def setup_jss():
     sss_class = GenClassConfig.query.filter(
         GenClassConfig.class_name.like('SSS%'),
         GenClassConfig.school_level == 'sss',
-        GenClassConfig.is_active == True
+        GenClassConfig.is_active == True,
+        GenClassConfig.branch_id == gen_bid()
     ).first()
     
     suggested_arms = sss_class.arm_names if sss_class else 'Iris,Rose,Lily,Tulip'
@@ -296,13 +302,15 @@ def copy_subject_config():
         # Get source classes
         source_classes = GenClassConfig.query.filter(
             GenClassConfig.class_name.like(f'{source_level}%'),
-            GenClassConfig.is_active == True
+            GenClassConfig.is_active == True,
+            GenClassConfig.branch_id == gen_bid()
         ).all()
         
         # Get target classes
         target_classes = GenClassConfig.query.filter(
             GenClassConfig.class_name.like(f'{target_level}%'),
-            GenClassConfig.is_active == True
+            GenClassConfig.is_active == True,
+            GenClassConfig.branch_id == gen_bid()
         ).all()
         
         if not source_classes or not target_classes:

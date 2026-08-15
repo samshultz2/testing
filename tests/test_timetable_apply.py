@@ -4,7 +4,7 @@ from datetime import time
 
 from config import Config
 from models import (db, SchoolClass, ClassArm, ClassArmAssignment, ClassTimetable,
-                    TimetableSlot, Subject, AcademicSession, Term,
+                    TimetableSlot, Subject, AcademicSession, Term, Branch,
                     GenSubject, GenTeacher, GenTimetableResult)
 from tests.conftest import login_token
 
@@ -56,6 +56,7 @@ def _setup(app):
             for period in (1, 2):
                 db.session.add(GenTimetableResult(
                     batch_id=batch, school_level='sss',
+                    branch_id=Branch.get_default().id,
                     class_name=sc.name, arm_name=arm.name,
                     day_of_week=0, period_number=period,
                     subject_id=gsub.id, teacher_id=gteach.id))
@@ -101,7 +102,8 @@ def test_apply_autocreates_subject_on_name_mismatch(app):
         batch = 'TTAB2'
         if not GenTimetableResult.query.filter_by(batch_id=batch).first():
             db.session.add(GenTimetableResult(
-                batch_id=batch, school_level='sss', class_name=sc.name, arm_name=arm.name,
+                batch_id=batch, school_level='sss', branch_id=Branch.get_default().id,
+                class_name=sc.name, arm_name=arm.name,
                 day_of_week=1, period_number=1, subject_id=gsub.id,
                 teacher_id=gteach.id if gteach else None))
         db.session.commit()

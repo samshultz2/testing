@@ -6,7 +6,7 @@ from routes.generator import *  # noqa: F401,F403
 @login_required
 def rules_config():
     level = get_current_level()
-    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, school_level=level).all()}
+    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).all()}
     return render_template('generator/rules_config.html', rules=rules, level=level)
 
 
@@ -25,12 +25,12 @@ def save_rules():
         
         for rule_type, value in rules_to_save:
             # Find existing rule for this level or create new
-            existing = GenTimetableRule.query.filter_by(rule_type=rule_type, school_level=level).first()
+            existing = GenTimetableRule.query.filter_by(rule_type=rule_type, school_level=level, branch_id=gen_bid()).first()
             if existing:
                 existing.value = value
                 existing.is_active = True
             else:
-                db.session.add(GenTimetableRule(rule_type=rule_type, value=value, school_level=level, is_active=True))
+                db.session.add(GenTimetableRule(rule_type=rule_type, value=value, school_level=level, is_active=True, branch_id=gen_bid()))
         
         db.session.commit()
         flash('Rules saved!', 'success')
@@ -90,8 +90,8 @@ def clash_rules_list():
     """List all subject clash rules"""
     from models import GenSubjectClashRule, GenCombinedClassRule
     
-    clash_rules = GenSubjectClashRule.query.order_by(GenSubjectClashRule.id).all()
-    combined_rules = GenCombinedClassRule.query.order_by(GenCombinedClassRule.id).all()
+    clash_rules = GenSubjectClashRule.query.filter_by(branch_id=gen_bid()).order_by(GenSubjectClashRule.id).all()
+    combined_rules = GenCombinedClassRule.query.filter_by(branch_id=gen_bid()).order_by(GenCombinedClassRule.id).all()
     
     return render_template('generator/clash_rules.html',
         clash_rules=clash_rules,
@@ -108,6 +108,7 @@ def add_clash_rule():
     if request.method == 'POST':
         try:
             rule = GenSubjectClashRule(
+                branch_id=gen_bid(),
                 name=request.form.get('name', '').strip(),
                 description=request.form.get('description', '').strip() or None,
                 source_subject_id=int(request.form.get('source_subject_id')),
@@ -127,8 +128,8 @@ def add_clash_rule():
             flash(f'Error adding rule: {str(e)}', 'error')
     
     level = get_current_level()
-    subjects = GenSubject.query.filter_by(is_active=True, school_level=level).order_by(GenSubject.name).all()
-    classes = GenClassConfig.query.filter_by(is_active=True, school_level=level).order_by(GenClassConfig.class_name).all()
+    subjects = GenSubject.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).order_by(GenSubject.name).all()
+    classes = GenClassConfig.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).order_by(GenClassConfig.class_name).all()
     
     return render_template('generator/add_clash_rule.html',
         subjects=subjects,
@@ -142,7 +143,7 @@ def toggle_clash_rule(rule_id):
     """Toggle a clash rule active/inactive"""
     from models import GenSubjectClashRule
     
-    rule = GenSubjectClashRule.query.get_or_404(rule_id)
+    rule = gen_owned_or_404(GenSubjectClashRule, rule_id)
     rule.is_active = not rule.is_active
     db.session.commit()
     
@@ -157,7 +158,7 @@ def delete_clash_rule(rule_id):
     """Delete a clash rule"""
     from models import GenSubjectClashRule
     
-    rule = GenSubjectClashRule.query.get_or_404(rule_id)
+    rule = gen_owned_or_404(GenSubjectClashRule, rule_id)
     db.session.delete(rule)
     db.session.commit()
     
@@ -174,6 +175,7 @@ def add_combined_rule():
     if request.method == 'POST':
         try:
             rule = GenCombinedClassRule(
+                branch_id=gen_bid(),
                 name=request.form.get('name', '').strip(),
                 description=request.form.get('description', '').strip() or None,
                 shadow_subject_id=int(request.form.get('shadow_subject_id')),
@@ -193,8 +195,8 @@ def add_combined_rule():
             flash(f'Error adding rule: {str(e)}', 'error')
     
     level = get_current_level()
-    subjects = GenSubject.query.filter_by(is_active=True, school_level=level).order_by(GenSubject.name).all()
-    classes = GenClassConfig.query.filter_by(is_active=True, school_level=level).order_by(GenClassConfig.class_name).all()
+    subjects = GenSubject.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).order_by(GenSubject.name).all()
+    classes = GenClassConfig.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).order_by(GenClassConfig.class_name).all()
     
     return render_template('generator/add_combined_rule.html',
         subjects=subjects,
@@ -208,7 +210,7 @@ def toggle_combined_rule(rule_id):
     """Toggle a combined rule active/inactive"""
     from models import GenCombinedClassRule
     
-    rule = GenCombinedClassRule.query.get_or_404(rule_id)
+    rule = gen_owned_or_404(GenCombinedClassRule, rule_id)
     rule.is_active = not rule.is_active
     db.session.commit()
     
@@ -223,7 +225,7 @@ def delete_combined_rule(rule_id):
     """Delete a combined rule"""
     from models import GenCombinedClassRule
     
-    rule = GenCombinedClassRule.query.get_or_404(rule_id)
+    rule = gen_owned_or_404(GenCombinedClassRule, rule_id)
     db.session.delete(rule)
     db.session.commit()
     
