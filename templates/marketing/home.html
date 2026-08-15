@@ -373,6 +373,16 @@
   "operatingSystem":"Web", "url":{{ _home | tojson }},
   "offers":{"@type":"Offer","price":"0","priceCurrency":"NGN"} }
 </script>
+{% if content.faqs %}
+<script type="application/ld+json" nonce="{{ csp_nonce }}">
+{ "@context": "https://schema.org", "@type": "FAQPage", "mainEntity": [
+  {%- for q in content.faqs %}
+  {"@type": "Question", "name": {{ q.q | tojson }},
+   "acceptedAnswer": {"@type": "Answer", "text": {{ q.a | tojson }}}}{{ "," if not loop.last }}
+  {%- endfor %}
+]}
+</script>
+{% endif %}
 </head>
 <body>
 <a class="skip-link" href="#top">Skip to content</a>
@@ -419,10 +429,8 @@
   <section class="hero"><div class="wrap hero-grid">
     <div>
       <span class="badge"><i class="fas fa-trophy"></i> Nigeria's Preferred School Management System</span>
-      <h1 class="only-desktop">Run Your School.<br><span class="accent">Elevate Every Student.</span></h1>
-      <h1 class="only-mobile">Run Your School Smarter.<br><span class="accent">All-in-One Management System.</span></h1>
-      <p class="lede only-desktop">The all-in-one management system for Nigerian schools. Manage academics, exams, attendance, finance, communication and more — in one secure, connected platform.</p>
-      <p class="lede only-mobile">Student records. Attendance. Fees. Results. Communication. Everything in one place.</p>
+      <h1>{{ content.hero_title }}{% if content.hero_accent %}<br><span class="accent">{{ content.hero_accent }}</span>{% endif %}</h1>
+      <p class="lede">{{ content.hero_subtitle }}</p>
       <div class="hero-cta">
         <a class="btn btn-primary btn-lg" href="{{ register_url }}">Get Started Free <i class="fas fa-arrow-right"></i></a>
         <a class="btn btn-outline btn-lg" href="#preview"><span class="play"><i class="fas fa-play"></i></span> Watch Demo</a>
@@ -649,7 +657,7 @@
 <section class="join only-mobile"><div class="wrap reveal">
   <a class="btn btn-gold btn-lg btn-block" href="{{ register_url }}" style="padding:18px 22px;font-size:17px;border-radius:14px">Join 500+ Schools on {{ content.brand }} <i class="fas fa-arrow-right"></i></a>
 </div></section>
-<section class="cta-band only-desktop"><div class="wrap cta-in reveal">
+<section class="cta-band only-desktop" id="contact"><div class="wrap cta-in reveal">
   <div>
     <div class="cta-head">
       <span class="cta-cap"><i class="fas fa-graduation-cap"></i></span>
@@ -663,7 +671,7 @@
       <a class="btn btn-ghost-d btn-lg" href="{% if ct.email %}mailto:{{ ct.email }}{% else %}{{ register_url }}{% endif %}">Book a Demo</a>
     </div>
   </div>
-  <div class="cta-trust">
+  <div class="cta-trust" id="security">
     <div class="ct"><i class="fas fa-wand-magic-sparkles"></i><div><b>Easy to Use</b><span>Intuitive &amp; simple for everyone</span></div></div>
     <div class="ct"><i class="fas fa-lock"></i><div><b>Secure &amp; Compliant</b><span>Your data is always protected</span></div></div>
     <div class="ct"><i class="fas fa-headset"></i><div><b>Local Support</b><span>We're here to help you succeed</span></div></div>

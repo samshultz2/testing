@@ -44,7 +44,7 @@ def test_platform_host_serves_marketing_home(mt):
     r = c.get('/', headers={'Host': 'www.posyhub.test'})
     assert r.status_code == 200
     body = r.get_data(as_text=True)
-    assert 'Run your whole school' in body          # default hero
+    assert 'Run Your School' in body          # default hero
     assert '/register' in body                       # CTA points at signup
     assert '50,000' in body                          # price derived from config
 
@@ -56,7 +56,7 @@ def test_bare_apex_serves_marketing_when_no_apex_tenant(mt):
     assert not app.config.get('APEX_TENANT')
     r = app.test_client().get('/', headers={'Host': 'posyhub.test'})
     assert r.status_code == 200
-    assert 'Run your whole school' in r.get_data(as_text=True)
+    assert 'Run Your School' in r.get_data(as_text=True)
 
 
 def test_real_school_host_is_not_marketing(mt):
@@ -86,7 +86,7 @@ def test_flag_off_has_no_marketing_interception(client):
     # which for an anonymous user redirects to login — not the marketing page.
     r = client.get('/')
     assert r.status_code in (301, 302)
-    assert 'Run your whole school' not in r.get_data(as_text=True)
+    assert 'Run Your School' not in r.get_data(as_text=True)
 
 
 def test_subdomain_availability_check(mt):

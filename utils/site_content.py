@@ -17,11 +17,12 @@ HOMEPAGE_KEY = 'homepage'
 # an override document; get_homepage() merges the override over these.
 DEFAULTS = {
     'brand': 'EduSyncra',
-    'hero_title': 'Run your whole school from one private portal.',
-    'hero_subtitle': 'Students, staff, results, exams, fees and payroll — one '
-                     'secure place. Your own subdomain, your own isolated '
-                     'database, set up automatically.',
-    'hero_cta': 'Start free trial',
+    'hero_title': 'Run Your School.',
+    'hero_accent': 'Elevate Every Student.',   # second, coloured headline line
+    'hero_subtitle': 'The all-in-one management system for Nigerian schools. '
+                     'Manage academics, exams, attendance, finance, communication '
+                     'and more — in one secure, connected platform.',
+    'hero_cta': 'Get Started Free',
     'trial_note': '3 days free — no card required',
     'price_naira': None,          # None → derive from TENANT_PRICE_KOBO at render
     'price_period': 'month',
