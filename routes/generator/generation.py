@@ -76,15 +76,22 @@ def generate_page():
     classes = GenClassConfig.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).order_by(GenClassConfig.class_name).all()
     rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).all()}
     
-    # Validation
+    # Validation. Each issue carries a fix action (url + button label) so the
+    # generate page can guide the user straight to what's missing.
     issues = []
     if GenTeacher.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).count() == 0:
-        issues.append({'type': 'error', 'msg': 'No teachers configured'})
+        issues.append({'type': 'error', 'msg': 'No teachers added yet',
+                       'hint': 'Add the teachers who will be timetabled for this branch.',
+                       'url': url_for('generator.teachers_list'), 'cta': 'Add teachers'})
     if GenSubjectConfig.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).count() == 0:
-        issues.append({'type': 'error', 'msg': 'No subjects configured'})
+        issues.append({'type': 'error', 'msg': 'No subjects configured',
+                       'hint': 'Set up the subjects and their weekly periods.',
+                       'url': url_for('generator.subjects_config'), 'cta': 'Configure subjects'})
     if not classes:
-        issues.append({'type': 'error', 'msg': 'No classes configured'})
-    
+        issues.append({'type': 'error', 'msg': 'No classes configured',
+                       'hint': 'Define the classes and arms to generate timetables for.',
+                       'url': url_for('generator.classes_config'), 'cta': 'Add classes'})
+
     # Check for assignments
     assignment_count = GenTeacherAssignment.query.join(GenClassConfig).filter(
         GenTeacherAssignment.is_active == True,
@@ -92,8 +99,10 @@ def generate_page():
         GenClassConfig.school_level == level
     ).count()
     if assignment_count == 0:
-        issues.append({'type': 'error', 'msg': 'No teacher assignments'})
-    
+        issues.append({'type': 'error', 'msg': 'No teacher assignments',
+                       'hint': 'Assign teachers to the subjects they teach in each class.',
+                       'url': url_for('generator.teacher_assignments'), 'cta': 'Assign teachers'})
+
     # Check subjects without teachers
     for config in GenSubjectConfig.query.filter_by(is_active=True, school_level=level, category='core', branch_id=gen_bid()).all():
         if not GenTeacherAssignment.query.join(GenClassConfig).filter(
@@ -103,7 +112,9 @@ def generate_page():
             GenClassConfig.school_level == level
         ).first():
             subj_name = config.subject.name if config.subject else f'Subject {config.subject_id}'
-            issues.append({'type': 'warning', 'msg': f'{subj_name} has no teacher'})
+            issues.append({'type': 'warning', 'msg': f'{subj_name} has no teacher',
+                           'hint': 'A core subject with no one assigned to teach it.',
+                           'url': url_for('generator.teacher_assignments'), 'cta': 'Assign'})
     
     return render_template('generator/generate.html',
         classes=classes, rules=rules, issues=issues[:15], level=level,

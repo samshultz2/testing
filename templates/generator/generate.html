@@ -47,24 +47,72 @@
 </div>
 
 {% if issues %}
-<div class="card mb-3">
-    <div class="card-header" style="background: #fff3cd;"><h3><i class="fas fa-exclamation-triangle"></i> Issues Found</h3></div>
-    <div class="card-body">
-        <ul class="mb-0" style="list-style:none; padding-left:0;">
-            {% for issue in issues %}
-            {% set is_err = issue.type == 'error' %}
-            <li style="display:flex; align-items:flex-start; gap:.5rem; padding:.25rem 0;
-                       color:{{ '#b42318' if is_err else '#b25e09' }};">
-                <i class="fas {{ 'fa-circle-xmark' if is_err else 'fa-triangle-exclamation' }}"
-                   style="margin-top:.15rem;"></i>
-                <span>{{ issue.msg }}</span>
-            </li>
-            {% endfor %}
-        </ul>
-        {% if issues|length == 10 %}
-        <p class="text-muted mt-2">... and possibly more. Fix these before generating.</p>
+{% set error_count = issues | selectattr('type', 'equalto', 'error') | list | length %}
+<style>
+  .setup-card{border:1px solid #ececf1;border-radius:16px;overflow:hidden;background:#fff;
+              box-shadow:0 1px 2px rgba(16,24,40,.04),0 1px 3px rgba(16,24,40,.06);margin-bottom:1.25rem;}
+  .setup-card__head{display:flex;align-items:center;gap:.85rem;padding:1.05rem 1.25rem;
+                    background:linear-gradient(180deg,#fffaf0,#fff6e6);border-bottom:1px solid #f3ead6;}
+  .setup-card__badge{flex:0 0 auto;width:2.5rem;height:2.5rem;border-radius:12px;display:flex;
+                     align-items:center;justify-content:center;background:#fdecc8;color:#b25e09;font-size:1.05rem;}
+  .setup-card__title{margin:0;font-size:1.05rem;font-weight:700;color:#1f2937;line-height:1.2;}
+  .setup-card__sub{margin:.1rem 0 0;font-size:.85rem;color:#6b7280;}
+  .setup-row{display:flex;align-items:center;gap:1rem;padding:.95rem 1.25rem;border-top:1px solid #f3f4f6;
+             transition:background .15s ease;}
+  .setup-row:hover{background:#fafafa;}
+  .setup-row__ic{flex:0 0 auto;width:2.35rem;height:2.35rem;border-radius:50%;display:flex;
+                 align-items:center;justify-content:center;font-size:.95rem;}
+  .setup-row__ic--error{background:#fee2e2;color:#b42318;}
+  .setup-row__ic--warning{background:#fef3c7;color:#b25e09;}
+  .setup-row__body{flex:1 1 auto;min-width:0;}
+  .setup-row__msg{font-weight:600;color:#111827;line-height:1.25;}
+  .setup-row__hint{font-size:.85rem;color:#6b7280;margin-top:.1rem;}
+  .setup-row__btn{flex:0 0 auto;display:inline-flex;align-items:center;gap:.4rem;white-space:nowrap;
+                  padding:.5rem .95rem;border-radius:9px;font-size:.85rem;font-weight:600;
+                  text-decoration:none;transition:transform .1s ease,filter .15s ease;}
+  .setup-row__btn:hover{filter:brightness(.96);transform:translateY(-1px);}
+  .setup-row__btn--error{background:#dc2626;color:#fff;}
+  .setup-row__btn--warning{background:#fff;color:#b25e09;border:1px solid #f1d599;}
+  @media (max-width:560px){
+    .setup-row{flex-wrap:wrap;}
+    .setup-row__body{flex:1 1 100%;order:2;}
+    .setup-row__btn{order:3;margin-left:3.35rem;}
+  }
+</style>
+<div class="setup-card">
+    <div class="setup-card__head">
+        <span class="setup-card__badge"><i class="fas fa-clipboard-list"></i></span>
+        <div>
+            <h3 class="setup-card__title">Finish setting up this branch</h3>
+            <p class="setup-card__sub">
+                {{ issues|length }} item{{ 's' if issues|length != 1 }} to resolve
+                {%- if error_count %} · {{ error_count }} required before you can generate{% endif %}.
+            </p>
+        </div>
+    </div>
+    {% for issue in issues %}
+    {% set is_err = issue.type == 'error' %}
+    <div class="setup-row">
+        <span class="setup-row__ic setup-row__ic--{{ issue.type }}">
+            <i class="fas {{ 'fa-xmark' if is_err else 'fa-triangle-exclamation' }}"></i>
+        </span>
+        <div class="setup-row__body">
+            <div class="setup-row__msg">{{ issue.msg }}</div>
+            {% if issue.hint %}<div class="setup-row__hint">{{ issue.hint }}</div>{% endif %}
+        </div>
+        {% if issue.url %}
+        <a href="{{ issue.url }}" class="setup-row__btn setup-row__btn--{{ issue.type }}">
+            {{ issue.cta or 'Fix' }} <i class="fas fa-arrow-right" style="font-size:.75rem;"></i>
+        </a>
         {% endif %}
     </div>
+    {% endfor %}
+    {% if issues|length >= 15 %}
+    <div class="setup-row" style="color:#6b7280;font-size:.85rem;">
+        <span class="setup-row__ic" style="background:#f3f4f6;color:#6b7280;"><i class="fas fa-ellipsis"></i></span>
+        <div class="setup-row__body">… and possibly more. Resolve these first, then re-check.</div>
+    </div>
+    {% endif %}
 </div>
 {% endif %}
 
