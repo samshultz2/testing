@@ -577,6 +577,7 @@ def fill_from_jamb_bank(exam_id):
 @login_required
 def delete_question(question_id):
     q = db.get_or_404(CBTQuestion, question_id)
+    _exam_403(q.exam_id)                 # branch-scope via the parent exam (IDOR guard)
     exam_id = q.exam_id
     from utils.audit import log_action
     log_action('cbt.question_delete', detail=f'exam={exam_id} question={question_id}',
@@ -1060,9 +1061,9 @@ def force_submit(attempt_id):
     answers already saved on the server. The recovery tool for a student whose
     device died / went offline and never came back to submit."""
     attempt = db.get_or_404(CBTAttempt, attempt_id)
+    exam = _exam_403(attempt.exam_id)    # branch-scope via the parent exam (IDOR guard)
     if attempt.status == 'Submitted':
         return jsonify({'ok': True, 'already': True})
-    exam = db.session.get(CBTExam, attempt.exam_id)
     _finalize(attempt, exam)
     from utils.audit import log_action
     log_action('cbt.force_submit',

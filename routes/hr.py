@@ -2017,7 +2017,9 @@ def deduction_amounts(type_id):
     A blank amount means 'use the item's default'."""
     from models import PayrollDeductionType, StaffDeduction
     from utils.audit import log_action
+    from utils.branch_scope import require_branch_access
     t = db.get_or_404(PayrollDeductionType, type_id)
+    require_branch_access(t.branch_id)   # no cross-branch deduction edits (IDOR guard)
     staff = _loan_staff()   # active staff in the current branch scope
     if request.method == 'POST':
         existing = {sd.staff_id: sd for sd in
@@ -2065,7 +2067,9 @@ def deduction_amounts(type_id):
 @admin_required
 def toggle_deduction_type(type_id):
     from models import PayrollDeductionType
+    from utils.branch_scope import require_branch_access
     t = db.get_or_404(PayrollDeductionType, type_id)
+    require_branch_access(t.branch_id)   # no cross-branch deduction edits (IDOR guard)
     t.is_active = not t.is_active
     db.session.commit()
     return _ok(f'"{t.name}" is now {"active" if t.is_active else "inactive"}.', url_for('hr.settings'))
@@ -2075,7 +2079,9 @@ def toggle_deduction_type(type_id):
 @admin_required
 def delete_deduction_type(type_id):
     from models import PayrollDeductionType
+    from utils.branch_scope import require_branch_access
     t = db.get_or_404(PayrollDeductionType, type_id)
+    require_branch_access(t.branch_id)   # no cross-branch deduction deletes (IDOR guard)
     db.session.delete(t); db.session.commit()
     return _ok('Deduction removed (existing payslips keep their recorded lines).', url_for('hr.settings'))
 

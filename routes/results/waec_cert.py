@@ -328,6 +328,7 @@ def _clear_other_defaults(t):
 @admin_required
 def waec_cert_edit_template(tpl_id):
     t = db.session.get(WAECCertTemplate, tpl_id) or abort(404)
+    require_branch_access(t.branch_id)   # no cross-branch template edits (IDOR guard)
     t.name = (request.form.get('name') or t.name).strip()
     t.description = (request.form.get('description') or '').strip() or None
     if request.form.get('base_layout') in W.TEMPLATES:
@@ -351,6 +352,7 @@ def waec_cert_edit_template(tpl_id):
 @admin_required
 def waec_cert_duplicate_template(tpl_id):
     t = db.session.get(WAECCertTemplate, tpl_id) or abort(404)
+    require_branch_access(t.branch_id)   # no cross-branch template access (IDOR guard)
     d = WAECCertTemplate(name=f'{t.name} (copy)', description=t.description,
                          base_layout=t.base_layout, exam_type=t.exam_type, year=t.year,
                          branch_id=t.branch_id, is_default=False, status='active', version=1,
@@ -364,6 +366,7 @@ def waec_cert_duplicate_template(tpl_id):
 @admin_required
 def waec_cert_template_status(tpl_id):
     t = db.session.get(WAECCertTemplate, tpl_id) or abort(404)
+    require_branch_access(t.branch_id)   # no cross-branch status changes (IDOR guard)
     t.status = 'archived' if t.status == 'active' else 'active'
     if t.status == 'archived':
         t.is_default = False
@@ -376,6 +379,7 @@ def waec_cert_template_status(tpl_id):
 @admin_required
 def waec_cert_template_default(tpl_id):
     t = db.session.get(WAECCertTemplate, tpl_id) or abort(404)
+    require_branch_access(t.branch_id)   # no cross-branch default changes (IDOR guard)
     t.is_default = True; t.status = 'active'
     _clear_other_defaults(t)
     db.session.commit()
@@ -387,6 +391,7 @@ def waec_cert_template_default(tpl_id):
 @admin_required
 def waec_cert_delete_template(tpl_id):
     t = db.session.get(WAECCertTemplate, tpl_id) or abort(404)
+    require_branch_access(t.branch_id)   # no cross-branch template deletes (IDOR guard)
     db.session.delete(t); db.session.commit()
     flash('Template deleted.', 'success')
     return redirect(url_for('results.waec_cert_templates'))
