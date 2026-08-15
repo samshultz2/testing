@@ -88,8 +88,17 @@ def ensure_generator_schema():
     first call per engine; never raises."""
     from models import db
     try:
-        engine = db.engine
+        # The tenant DB engine (database-per-tenant): db.session routes to
+        # g.tenant_engine, so get_bind() returns the CURRENT tenant's engine.
+        # db.engine would return the default/control-plane engine and add the
+        # columns to the wrong database, leaving the tenant DB unmigrated.
+        engine = db.session.get_bind()
     except Exception:
+        try:
+            engine = db.engine
+        except Exception:
+            return
+    if engine is None:
         return
     key = str(getattr(engine, 'url', 'default'))
     if key in _ensured:
