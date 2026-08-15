@@ -246,22 +246,23 @@
   .dots{display:flex;gap:6px;margin-top:auto;padding-top:16px;justify-content:center}
   .dots i{width:7px;height:7px;border-radius:50%;background:var(--line-2)}
   .dots i.on{background:var(--blue);width:18px;border-radius:4px}
-  /* Pricing mini */
-  .cc.price .price-top{display:flex;align-items:center;justify-content:space-between}
-  .cc.price .vf{font-size:12.5px;font-weight:700;color:var(--blue-ink)}
-  .mini-tiers{display:grid;gap:11px;margin-top:14px}
-  .mtier{border:1px solid var(--line);border-radius:12px;padding:13px 14px;position:relative}
-  .mtier.pop{border-color:var(--blue);box-shadow:0 14px 30px -20px rgba(47,107,255,.6)}
-  .mtier .mpop{position:absolute;top:-10px;left:14px;background:var(--green);color:#fff;font-size:10px;font-weight:700;padding:3px 9px;border-radius:999px}
-  .mtier .mn{font-weight:800;color:var(--navy);font-size:14px}
-  .mtier .md{font-size:11px;color:var(--ink-2);margin-top:1px}
-  .mtier .mamt{font-size:22px;font-weight:800;color:var(--navy);margin:7px 0 1px;letter-spacing:-.02em}
-  .mtier .mamt small{font-size:12px;color:var(--ink-2);font-weight:600}
-  .mtier .mper{font-size:10.5px;color:var(--ink-3)}
-  .mtier .btn{margin-top:10px;padding:9px;font-size:13px}
-  .mtier ul{list-style:none;padding:0;margin:11px 0 0;display:grid;gap:6px}
-  .mtier li{display:flex;gap:7px;font-size:12px;color:var(--ink)}
-  .mtier li i{color:var(--green);margin-top:2px}
+  /* Pricing — its own row of tier cards */
+  .price-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:20px}
+  .price-head h2{font-size:clamp(22px,5.5vw,32px)}
+  .price-head .vf{font-size:13px;font-weight:700;color:var(--blue-ink);white-space:nowrap}
+  .price-row{display:grid;grid-template-columns:1fr;gap:14px;align-items:stretch}
+  .mtier{display:flex;flex-direction:column;border:1px solid var(--line);border-radius:14px;padding:20px 18px;position:relative;background:#fff;box-shadow:var(--shadow-sm)}
+  .mtier.pop{border-color:var(--blue);box-shadow:0 20px 40px -22px rgba(47,107,255,.55)}
+  .mtier .mpop{position:absolute;top:-11px;left:18px;background:var(--green);color:#fff;font-size:11px;font-weight:700;padding:4px 11px;border-radius:999px}
+  .mtier .mn{font-weight:800;color:var(--navy);font-size:17px}
+  .mtier .md{font-size:12.5px;color:var(--ink-2);margin-top:2px}
+  .mtier .mamt{font-size:28px;font-weight:800;color:var(--navy);margin:10px 0 1px;letter-spacing:-.02em}
+  .mtier .mamt small{font-size:13px;color:var(--ink-2);font-weight:600}
+  .mtier .mper{font-size:11.5px;color:var(--ink-3)}
+  .mtier .btn{margin-top:14px;padding:11px;font-size:14px}
+  .mtier ul{list-style:none;padding:14px 0 0;margin:14px 0 0;border-top:1px solid var(--line);display:grid;gap:9px}
+  .mtier li{display:flex;gap:8px;font-size:13px;color:var(--ink)}
+  .mtier li i{color:var(--green);margin-top:3px}
   /* Identity card */
   .cc.identity{background:var(--blue-tint);border-color:#cfe0ff;justify-content:center}
   .cc.identity .shield{width:52px;height:52px;border-radius:14px;background:linear-gradient(150deg,var(--blue),#1e46c8);
@@ -348,7 +349,8 @@
     .feat-grid{grid-template-columns:repeat(4,1fr);gap:16px}
     .feat{box-shadow:none;border:none;background:transparent;padding:6px 10px}
     .feat p{display:block}
-    .composite{grid-template-columns:1.1fr .95fr 1.05fr .95fr;align-items:stretch}
+    .composite{grid-template-columns:1.1fr 1fr .95fr;align-items:stretch}
+    .price-row{grid-template-columns:repeat(3,1fr)}
     .cta-in{grid-template-columns:1.3fr .7fr;padding:40px 0}
     .cta-actions{margin-top:22px}
     .cta-trust{grid-template-columns:1fr}
@@ -570,28 +572,6 @@
       </div>
 
       <!-- Pricing mini -->
-      <div class="cc price" id="pricing">
-        <div class="price-top"><h5 style="font-size:15px">Simple, Transparent Pricing</h5><a class="vf" href="{{ register_url }}">View full pricing →</a></div>
-        <div class="mini-tiers">
-          {% for row in grid[:3] %}
-          {% set p = row.plans[defcyc] %}
-          <div class="mtier{{ ' pop' if row.popular }}">
-            {% if row.popular %}<span class="mpop">Most Popular</span>{% endif %}
-            <div class="mn">{{ row.label }}</div>
-            <div class="md">{{ 'For growing schools with more needs' if row.popular else ('For large schools & groups' if loop.last else 'For small schools getting started') }}</div>
-            <div class="mamt">₦{{ '{:,.0f}'.format(p.price_naira) }}<small>/{{ p.per }}</small></div>
-            <div class="mper">{{ 'Free Forever' if p.price_naira == 0 else 'Billed ' ~ p.per + 'ly' }}</div>
-            <a class="btn {{ 'btn-primary' if row.popular else 'btn-outline' }} btn-block" href="{{ register_url }}?tier={{ row.tier }}">{{ 'Contact Sales' if row.limits.students == -1 else 'Get Started' }}</a>
-            <ul>
-              <li><i class="fas fa-check"></i> {{ 'Unlimited students' if row.limits.students == -1 else 'Up to {:,} students'.format(row.limits.students) }}</li>
-              <li><i class="fas fa-check"></i> {{ 'All Features' if row.features.mock_exams else 'Basic Features' }}</li>
-              <li><i class="fas fa-check"></i> {{ 'Priority Support' if row.popular else ('Dedicated Support' if row.limits.students == -1 else 'Email Support') }}</li>
-            </ul>
-          </div>
-          {% endfor %}
-        </div>
-      </div>
-
       <!-- Identity -->
       <div class="cc identity">
         <div class="shield"><i class="fas fa-shield-halved"></i></div>
@@ -603,6 +583,32 @@
         </form>
         <a class="btn btn-navy btn-block" href="{{ register_url }}">Claim Your School <i class="fas fa-arrow-right"></i></a>
       </div>
+    </div>
+  </div></section>
+
+  <!-- PRICING (own row) -->
+  <section class="sec" id="pricing" style="padding-top:8px"><div class="wrap">
+    <div class="price-head reveal">
+      <h2>Simple, <span class="accent">Transparent Pricing</span></h2>
+      <a class="vf" href="{{ register_url }}">View full pricing →</a>
+    </div>
+    <div class="price-row reveal">
+      {% for row in grid[:3] %}
+      {% set p = row.plans[defcyc] %}
+      <div class="mtier{{ ' pop' if row.popular }}">
+        {% if row.popular %}<span class="mpop">Most Popular</span>{% endif %}
+        <div class="mn">{{ row.label }}</div>
+        <div class="md">{{ 'For growing schools with more needs' if row.popular else ('For large schools & groups' if loop.last else 'For small schools getting started') }}</div>
+        <div class="mamt">₦{{ '{:,.0f}'.format(p.price_naira) }}<small>/{{ p.per }}</small></div>
+        <div class="mper">{{ 'Free Forever' if p.price_naira == 0 else 'Billed ' ~ p.per + 'ly' }}</div>
+        <a class="btn {{ 'btn-primary' if row.popular else 'btn-outline' }} btn-block" href="{{ register_url }}?tier={{ row.tier }}">{{ 'Contact Sales' if row.limits.students == -1 else 'Get Started' }}</a>
+        <ul>
+          <li><i class="fas fa-check"></i> {{ 'Unlimited students' if row.limits.students == -1 else 'Up to {:,} students'.format(row.limits.students) }}</li>
+          <li><i class="fas fa-check"></i> {{ 'All Features' if row.features.mock_exams else 'Basic Features' }}</li>
+          <li><i class="fas fa-check"></i> {{ 'Priority Support' if row.popular else ('Dedicated Support' if row.limits.students == -1 else 'Email Support') }}</li>
+        </ul>
+      </div>
+      {% endfor %}
     </div>
   </div></section>
 
