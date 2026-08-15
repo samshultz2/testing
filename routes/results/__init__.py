@@ -26,6 +26,20 @@ from utils.analytics_service import AcademicAnalytics
 results_bp = Blueprint('results', __name__, url_prefix='/results')
 
 
+def students_needing_result(students, result_model, exam_year):
+    """Filter the eligible cohort down to students who do NOT yet have a
+    ``result_model`` (WAECResult/JAMBResult) entered for ``exam_year`` — so the
+    add-result dropdowns only offer students still awaiting entry. ``students``
+    is the already-branch-scoped list from get_sss3_students()."""
+    if not students or not exam_year:
+        return students
+    ids = [s.id for s in students]
+    entered = {sid for (sid,) in db.session.query(result_model.student_id)
+               .filter(result_model.student_id.in_(ids),
+                       result_model.exam_year == exam_year).distinct().all()}
+    return [s for s in students if s.id not in entered]
+
+
 # --- SPA helpers (no-reload React shell + JSON-aware action responses) ---
 from utils.spa import section_responders
 _wants_json, _render, _ok, _err = section_responders(

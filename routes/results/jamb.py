@@ -184,8 +184,10 @@ def jamb_list():
 @login_required
 def add_jamb():
     """Add JAMB results for a student"""
-    students = get_sss3_students()
-    
+    # Only offer students who don't already have this year's JAMB result.
+    exam_year = request.args.get('year', type=int) or _date.today().year
+    students = students_needing_result(get_sss3_students(), JAMBResult, exam_year)
+
     if request.method == 'POST':
         try:
             student_id = request.form.get('student_id', type=int)
@@ -244,7 +246,7 @@ def add_jamb():
         students=students,
         subjects=WAEC_SUBJECTS,
         subject_map=student_subject_map(students),
-        current_year=_date.today().year
+        current_year=exam_year
     )
 
 
