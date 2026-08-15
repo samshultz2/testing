@@ -465,8 +465,12 @@ function GraduateProfile({ d, notify }) {
       <div className="profile-hero">
         <div className="ph-cover" />
         <div className="ph-body">
-          <div className="ph-avatar" style={{ background: 'linear-gradient(135deg,var(--primary),var(--primary-hover))' }} aria-hidden="true">
-            {(s.full_name || '?').split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?'}
+          <div className="ph-avatar" style={bio.photo_url
+              ? { padding: 0, overflow: 'hidden' }
+              : { background: 'linear-gradient(135deg,var(--primary),var(--primary-hover))' }} aria-hidden="true">
+            {bio.photo_url
+              ? <img src={bio.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : ((s.full_name || '?').split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?')}
           </div>
           <div className="ph-id">
             <h1 className="ph-name">{s.full_name}</h1>
