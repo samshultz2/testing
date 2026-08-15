@@ -32,7 +32,7 @@
 <style>
   :root{
     --bg:#ffffff; --soft:#f4f7fc; --soft-2:#eef3fb;
-    --navy:#0e1b3d; --navy-2:#16233f;
+    --navy:#0e1b3d; --navy-2:#0b1730; --navy-3:#16233f;
     --blue:#2f6bff; --blue-ink:#1f5cf5; --blue-tint:#eaf1ff;
     --ink:#1f2a44; --ink-2:#5b6b8c; --ink-3:#8a97b4;
     --line:#e6ecf5; --line-2:#dbe3f0;
@@ -41,59 +41,65 @@
     --radius:18px; --radius-sm:13px;
     --shadow:0 18px 40px -20px rgba(20,40,90,.28);
     --shadow-sm:0 8px 22px -14px rgba(20,40,90,.25);
-    --maxw:1120px;
+    --maxw:1240px;
   }
   *{box-sizing:border-box}
-  html{-webkit-text-size-adjust:100%}
+  html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
   body{margin:0;background:var(--bg);color:var(--ink);
     font-family:'Plus Jakarta Sans',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
     line-height:1.5;-webkit-font-smoothing:antialiased;overflow-x:hidden}
   a{color:inherit;text-decoration:none}
   img,svg{max-width:100%;display:block}
-  h1,h2,h3,h4{margin:0;line-height:1.15;font-weight:800;letter-spacing:-.02em;color:var(--navy)}
+  h1,h2,h3,h4,h5{margin:0;line-height:1.15;font-weight:800;letter-spacing:-.02em;color:var(--navy)}
   p{margin:0}
+  ul{margin:0}
   .wrap{width:100%;max-width:var(--maxw);margin:0 auto;padding:0 20px}
   .skip-link{position:absolute;left:-999px}
   .skip-link:focus{left:12px;top:12px;background:#fff;padding:8px 14px;border-radius:8px;z-index:200}
+  .only-desktop{display:none}
+  .accent{color:var(--blue)}
 
-  /* ── Buttons ─────────────────────────────────────────────── */
+  /* Buttons */
   .btn{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;
-    font-weight:700;font-size:15px;border-radius:12px;padding:14px 20px;border:1.5px solid transparent;
-    cursor:pointer;transition:transform .15s ease,box-shadow .15s ease,background .15s ease;white-space:nowrap}
+    font-weight:700;font-size:15px;border-radius:12px;padding:13px 20px;border:1.5px solid transparent;
+    cursor:pointer;transition:transform .15s,box-shadow .15s,background .15s;white-space:nowrap}
   .btn:active{transform:translateY(1px)}
-  .btn-primary{background:var(--navy);color:#fff}
-  .btn-primary:hover{box-shadow:0 12px 24px -12px rgba(14,27,61,.7)}
+  .btn-primary{background:var(--blue);color:#fff}
+  .btn-primary:hover{box-shadow:0 12px 24px -12px rgba(47,107,255,.7)}
+  .btn-navy{background:var(--navy);color:#fff}
   .btn-outline{background:#fff;color:var(--navy);border-color:var(--line-2)}
   .btn-outline:hover{border-color:var(--blue);color:var(--blue-ink)}
   .btn-gold{background:linear-gradient(180deg,var(--gold),var(--gold-2));color:#3a2a05;
     box-shadow:0 14px 26px -14px rgba(240,160,20,.9)}
+  .btn-ghost-d{background:transparent;color:#fff;border-color:rgba(255,255,255,.35)}
   .btn-block{width:100%}
-  .btn-lg{padding:16px 24px;font-size:16px}
+  .btn-lg{padding:15px 24px;font-size:16px}
 
-  /* ── Header ──────────────────────────────────────────────── */
-  .site-head{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.9);
+  /* Header */
+  .site-head{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.92);
     backdrop-filter:saturate(180%) blur(10px);border-bottom:1px solid transparent;transition:border-color .2s,box-shadow .2s}
   .site-head.scrolled{border-bottom-color:var(--line);box-shadow:0 6px 20px -18px rgba(20,40,90,.5)}
-  .head-in{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 0}
+  .head-in{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:13px 0}
   .brand{display:flex;align-items:center;gap:11px}
-  .brand .logo{width:40px;height:40px;flex:0 0 auto}
+  .brand .logo{width:38px;height:38px;flex:0 0 auto}
   .brand .bt{display:flex;flex-direction:column;line-height:1.05}
-  .brand .bn{font-size:21px;font-weight:800;color:var(--navy);letter-spacing:-.02em}
-  .brand .bs{font-size:11.5px;color:var(--ink-2);font-weight:500}
+  .brand .bn{font-size:20px;font-weight:800;color:var(--navy);letter-spacing:-.02em}
+  .brand .bs{font-size:11px;color:var(--ink-2);font-weight:500}
   .head-nav{display:none;align-items:center;gap:26px}
-  .head-nav a{font-weight:600;font-size:14.5px;color:var(--ink-2)}
-  .head-nav a:hover{color:var(--navy)}
-  .head-right{display:flex;align-items:center;gap:10px}
+  .head-nav a{display:inline-flex;align-items:center;gap:5px;font-weight:600;font-size:14.5px;color:var(--ink)}
+  .head-nav a:hover{color:var(--blue-ink)}
+  .head-nav a i{font-size:10px;color:var(--ink-3)}
+  .head-right{display:flex;align-items:center;gap:14px}
+  .head-signin{display:none;font-weight:700;font-size:14.5px;color:var(--navy)}
   .head-cta{display:none}
-  .menu-btn{width:46px;height:46px;flex:0 0 auto;border:none;border-radius:12px;background:var(--navy);color:#fff;
-    font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+  .menu-btn{width:44px;height:44px;flex:0 0 auto;border:none;border-radius:11px;background:var(--navy);color:#fff;
+    font-size:17px;display:flex;align-items:center;justify-content:center;cursor:pointer}
   .menu-btn .fa-xmark{display:none}
   .menu-open .menu-btn .fa-bars{display:none}
   .menu-open .menu-btn .fa-xmark{display:block}
-  /* mobile drawer */
   .drawer{display:none;border-top:1px solid var(--line);background:#fff}
   .menu-open .drawer{display:block}
-  .drawer-in{display:flex;flex-direction:column;gap:4px;padding:12px 0 18px}
+  .drawer-in{display:flex;flex-direction:column;gap:2px;padding:12px 0 18px}
   .drawer a.ml{padding:12px 6px;font-weight:600;color:var(--ink);border-radius:10px}
   .drawer a.ml:hover{background:var(--soft)}
   .signin{display:flex;align-items:center;gap:6px;background:var(--soft);border:1px solid var(--line);
@@ -102,30 +108,29 @@
   .signin .sfx{font-size:12.5px;color:var(--ink-3);white-space:nowrap}
   .signin button{border:none;background:var(--navy);color:#fff;font-weight:700;font-size:13px;padding:9px 13px;border-radius:8px;cursor:pointer}
 
-  /* ── Hero ────────────────────────────────────────────────── */
-  .hero{padding:26px 0 8px;background:
+  /* Hero */
+  .hero{padding:26px 0 10px;background:
      radial-gradient(120% 90% at 100% -10%, #eaf0ff 0%, rgba(234,240,255,0) 55%),
      radial-gradient(90% 70% at -10% 8%, #fff5e3 0%, rgba(255,245,227,0) 45%)}
+  .hero-grid{display:grid;grid-template-columns:1fr;gap:24px;align-items:center}
   .badge{display:inline-flex;align-items:center;gap:8px;background:var(--gold-tint);color:#7a5406;
     font-weight:700;font-size:13px;padding:8px 14px;border-radius:999px;border:1px solid #f3dfae}
   .badge i{color:var(--gold-2)}
-  .hero h1{font-size:clamp(34px,10vw,52px);margin:18px 0 0}
-  .hero h1 .accent{color:var(--blue)}
-  .hero .lede{margin-top:16px;font-size:17px;color:var(--ink-2);max-width:34ch}
+  .hero h1{font-size:clamp(34px,9vw,54px);margin:18px 0 0}
+  .hero .lede{margin-top:16px;font-size:17px;color:var(--ink-2);max-width:46ch}
   .hero-cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:24px}
   .hero-cta .btn{flex:1 1 auto;min-width:150px}
   .play{width:26px;height:26px;border-radius:50%;background:var(--blue-tint);color:var(--blue);
     display:inline-flex;align-items:center;justify-content:center;font-size:11px}
-  .trust{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;margin-top:26px;
-    padding-top:20px;border-top:1px solid var(--line)}
-  .trust span{display:inline-flex;align-items:center;gap:9px;font-size:13.5px;font-weight:600;color:var(--ink)}
-  .trust i{color:var(--blue)}
-  .trust .sep{width:1px;height:16px;background:var(--line-2)}
+  .trust{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px;margin-top:26px;padding-top:20px;border-top:1px solid var(--line)}
+  .trust span.t{display:inline-flex;align-items:center;gap:9px;font-size:13.5px;font-weight:600;color:var(--ink)}
+  .trust span.t i{color:var(--blue)}
+  .trust .flag-i{width:15px;height:11px;border-radius:2px;overflow:hidden;display:inline-flex}
+  .trust .flag-i i{flex:1}.trust .flag-i .g{background:#0b8a3c}.trust .flag-i .w{background:#fff}
+  .trust .sep{width:1px;height:15px;background:var(--line-2)}
 
-  /* ── Dashboard preview ───────────────────────────────────── */
-  .preview{padding:22px 0 6px}
-  .device{background:#fff;border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);
-    overflow:hidden;display:flex;min-height:0}
+  /* Dashboard preview */
+  .device{background:#fff;border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow);overflow:hidden;display:flex}
   .dv-side{width:92px;flex:0 0 auto;background:var(--navy);color:#c7d2ea;padding:11px 7px}
   .dv-brand{display:flex;align-items:center;gap:6px;font-weight:800;color:#fff;font-size:11.5px;margin-bottom:11px}
   .dv-brand .d{width:18px;height:18px;flex:0 0 auto;border-radius:5px;background:linear-gradient(150deg,var(--blue),#7aa2ff)}
@@ -133,165 +138,224 @@
   .dv-nav a{display:flex;align-items:center;gap:7px;font-size:10.5px;padding:6px 7px;border-radius:8px;color:#aeb9d6}
   .dv-nav a i{width:13px;text-align:center;font-size:10.5px}
   .dv-nav a.on{background:var(--blue);color:#fff;font-weight:700}
-  .dv-main{flex:1 1 auto;min-width:0;padding:16px 15px 18px;background:#fbfcfe}
-  .dv-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
-  .dv-hi{font-size:16px;font-weight:800;color:var(--navy)}
-  .dv-sub{font-size:12px;color:var(--ink-2);margin-top:2px}
-  .dv-av{width:38px;height:38px;border-radius:50%;flex:0 0 auto;
-    background:linear-gradient(150deg,#5b76b7,#33436f);display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px}
-  .dv-kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
-  .dv-kpi{border-radius:13px;padding:11px 12px}
-  .dv-kpi .l{font-size:11.5px;font-weight:700}
-  .dv-kpi .v{font-size:21px;font-weight:800;color:var(--navy);line-height:1.1;margin-top:3px;letter-spacing:-.02em}
-  .dv-kpi .t{font-size:10.5px;font-weight:700;color:var(--green);margin-top:3px}
+  .dv-nav a.x{display:none}
+  .dv-main{flex:1 1 auto;min-width:0;padding:15px 14px 17px;background:#fbfcfe}
+  .dv-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:13px}
+  .dv-hi{font-size:15px;font-weight:800;color:var(--navy)}
+  .dv-sub{font-size:11.5px;color:var(--ink-2);margin-top:2px}
+  .dv-top-r{display:flex;align-items:center;gap:9px}
+  .dv-pill{display:none;align-items:center;gap:7px;font-size:11px;font-weight:600;color:var(--ink-2);
+    background:#fff;border:1px solid var(--line);border-radius:8px;padding:6px 10px}
+  .dv-ic{display:none;width:30px;height:30px;border-radius:8px;background:#fff;border:1px solid var(--line);
+    align-items:center;justify-content:center;color:var(--ink-2);font-size:12px}
+  .dv-av{width:34px;height:34px;border-radius:50%;flex:0 0 auto;
+    background:linear-gradient(150deg,#5b76b7,#33436f);display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px}
+  .dv-kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}
+  .dv-kpi{border-radius:12px;padding:10px 11px;border:1px solid transparent}
+  .dv-kpi .l{font-size:10.5px;font-weight:700}
+  .dv-kpi .v{font-size:19px;font-weight:800;color:var(--navy);line-height:1.1;margin-top:2px;letter-spacing:-.02em}
+  .dv-kpi .t{font-size:10px;font-weight:700;color:var(--green);margin-top:2px}
   .dv-kpi.b{background:var(--blue-tint)} .dv-kpi.b .l{color:var(--blue-ink)}
   .dv-kpi.g{background:var(--green-tint)} .dv-kpi.g .l{color:var(--green)}
   .dv-kpi.p{background:#f2edfc} .dv-kpi.p .l{color:#7c4ddb}
   .dv-kpi.y{background:var(--gold-tint)} .dv-kpi.y .l{color:#b3760a}
-  .dv-charts{display:grid;grid-template-columns:1fr;gap:10px;margin-top:11px}
-  .dv-card{border:1px solid var(--line);border-radius:13px;padding:11px 12px;background:#fff}
-  .dv-card h5{font-size:12.5px;font-weight:700;color:var(--navy);margin-bottom:8px}
-  .dv-axis{display:flex;justify-content:space-between;font-size:9.5px;color:var(--ink-3);margin-top:5px}
+  .dv-charts{display:grid;grid-template-columns:1fr;gap:9px;margin-top:10px}
+  .dv-card{border:1px solid var(--line);border-radius:12px;padding:11px 12px;background:#fff}
+  .dv-card h5{font-size:12px;font-weight:700;color:var(--navy);margin-bottom:8px}
+  .dv-ch-head{display:flex;align-items:center;justify-content:space-between}
+  .dv-ch-head .mini-pill{font-size:9.5px;color:var(--ink-2);border:1px solid var(--line);border-radius:6px;padding:3px 7px}
+  .dv-axis{display:flex;justify-content:space-between;font-size:9px;color:var(--ink-3);margin-top:5px}
+  .dv-legend{display:flex;gap:12px;margin-top:7px;font-size:9.5px;color:var(--ink-2)}
+  .dv-legend span{display:inline-flex;align-items:center;gap:5px}
   .donut-wrap{display:flex;align-items:center;gap:14px}
-  .donut{width:92px;height:92px;flex:0 0 auto;border-radius:50%;position:relative;
-    background:conic-gradient(var(--green) 0 92%, #ef5a5a 92% 96%, var(--gold) 96% 100%)}
-  .donut::after{content:"92%";position:absolute;inset:15px;background:#fff;border-radius:50%;
-    display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--navy);font-size:16px}
-  .leg{display:flex;flex-direction:column;gap:7px;font-size:12px;color:var(--ink)}
+  .donut{width:86px;height:86px;flex:0 0 auto;border-radius:50%;position:relative;
+    background:conic-gradient(var(--green) 0 92%, #ef5a5a 92% 98%, var(--gold) 98% 100%)}
+  .donut::after{content:"92%";position:absolute;inset:14px;background:#fff;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--navy);font-size:15px}
+  .leg{display:flex;flex-direction:column;gap:6px;font-size:11.5px;color:var(--ink)}
   .leg span{display:flex;align-items:center;gap:8px}
-  .dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto}
+  .leg b{margin-left:auto;color:var(--navy)}
+  .dot{width:9px;height:9px;border-radius:50%;flex:0 0 auto}
   .dot.pr{background:var(--green)} .dot.ab{background:#ef5a5a} .dot.la{background:var(--gold)}
+  .dot.ca{background:var(--blue)} .dot.tp{background:var(--gold)}
+  .dv-lists{display:none;grid-template-columns:1fr 1fr;gap:9px;margin-top:10px}
+  .dv-list h5{font-size:11.5px;margin-bottom:8px}
+  .dv-li{display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid var(--soft-2);font-size:11px;color:var(--ink)}
+  .dv-li:first-of-type{border-top:none}
+  .dv-li .li-ic{width:22px;height:22px;flex:0 0 auto;border-radius:6px;background:var(--soft);color:var(--blue);display:flex;align-items:center;justify-content:center;font-size:10px}
+  .dv-li .li-when{margin-left:auto;color:var(--ink-3);font-size:9.5px;white-space:nowrap}
+  .dv-more{font-size:10px;color:var(--blue-ink);font-weight:700;margin-top:7px;display:inline-block}
 
-  /* ── Stats band ──────────────────────────────────────────── */
+  /* Stats band — light card on mobile (mockup-1), dark full-width on desktop */
   .stats{padding:22px 0}
-  .stats-in{background:var(--soft);border:1px solid var(--line);border-radius:var(--radius);
-    padding:22px 12px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center}
-  .stat i{color:var(--blue);font-size:22px}
-  .stat .n{font-size:clamp(18px,5.4vw,26px);font-weight:800;color:var(--navy);margin-top:8px;letter-spacing:-.02em}
-  .stat .l{font-size:11.5px;color:var(--ink-2);font-weight:600;margin-top:2px;line-height:1.25}
+  .stats-in{background:var(--soft);border:1px solid var(--line);border-radius:18px;
+    padding:22px 8px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+  .stat{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;position:relative;padding:2px 4px}
+  .stat + .stat::before{content:"";position:absolute;left:0;top:15%;height:70%;width:1px;background:var(--line-2)}
+  .stat i{color:var(--blue);font-size:20px}
+  .stat .n{font-size:clamp(18px,5vw,26px);font-weight:800;letter-spacing:-.02em;color:var(--navy)}
+  .stat .l{font-size:11px;color:var(--ink-2);font-weight:600;line-height:1.2}
+  .stat.x5{display:none}
 
-  /* ── Section heading ─────────────────────────────────────── */
-  .sec{padding:30px 0}
-  .sec-head{text-align:center;max-width:34ch;margin:0 auto 22px}
-  .sec-head h2{font-size:clamp(24px,7vw,34px)}
-  .sec-head h2 .accent{color:var(--blue)}
+  /* Section */
+  .sec{padding:34px 0}
+  .sec-head{text-align:center;max-width:40ch;margin:0 auto 26px}
+  .sec-head h2{font-size:clamp(23px,6vw,34px)}
   .sec-head p{margin-top:10px;color:var(--ink-2);font-size:15px}
 
-  /* ── Feature grid ────────────────────────────────────────── */
+  /* Features */
   .feat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
-  .feat{background:#fff;border:1px solid var(--line);border-radius:var(--radius-sm);padding:16px 14px;
-    box-shadow:var(--shadow-sm);transition:transform .15s ease,box-shadow .15s ease}
-  .feat:hover{transform:translateY(-3px);box-shadow:0 16px 30px -18px rgba(20,40,90,.4)}
-  .feat .fic{width:46px;height:46px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:19px;margin-bottom:12px}
-  .feat h3{font-size:15px;font-weight:700;color:var(--navy)}
+  .feat{background:#fff;border:1px solid var(--line);border-radius:var(--radius-sm);padding:16px 14px;box-shadow:var(--shadow-sm)}
+  .feat .fic{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;margin-bottom:11px}
+  .feat h3{font-size:14.5px;font-weight:700;color:var(--navy)}
+  .feat p{display:none;margin-top:6px;font-size:12.5px;color:var(--ink-2);line-height:1.45}
   .fic.c1{background:var(--blue-tint);color:var(--blue)}
   .fic.c2{background:var(--green-tint);color:var(--green)}
   .fic.c3{background:var(--gold-tint);color:#c07f08}
   .fic.c4{background:#eceafd;color:#5b46d6}
   .fic.c5{background:#f6ecfb;color:#a855c7}
   .fic.c6{background:#ffeede;color:#e07219}
-  .fic.c7{background:#ffe9e9;color:#e04747}
-  .fic.c8{background:#e7f7ef;color:#12a150}
+  .fic.c7{background:#e7f7ef;color:#12a150}
+  .feat-more{text-align:center;margin-top:20px}
+  .feat-more a{color:var(--blue-ink);font-weight:700;font-size:14px}
 
-  /* ── Nigeria card ────────────────────────────────────────── */
-  .ng{background:var(--green-tint);border:1px solid #cdecd8;border-radius:var(--radius);padding:22px 18px}
-  .ng-head{display:flex;align-items:center;gap:12px}
-  .ng-flag{width:34px;height:24px;border-radius:4px;overflow:hidden;flex:0 0 auto;display:flex;box-shadow:0 1px 3px rgba(0,0,0,.15)}
-  .ng-flag i{flex:1}.ng-flag .gr{background:#0b8a3c}.ng-flag .wh{background:#fff}
-  .ng h3{font-size:19px;color:var(--navy)}
-  .ng .exam{font-size:13.5px;color:var(--ink-2);font-weight:600;margin-top:2px}
-  .ng-list{display:grid;grid-template-columns:1fr 1fr;gap:12px 14px;margin-top:18px}
-  .ng-list li{display:flex;align-items:flex-start;gap:9px;list-style:none;font-size:13.5px;font-weight:600;color:var(--navy)}
+  /* Composite band */
+  .composite{display:grid;grid-template-columns:1fr;gap:16px}
+  .cc{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:20px 18px;box-shadow:var(--shadow-sm)}
+  /* Nigerian card */
+  .cc.ng{background:var(--green-tint);border-color:#cdecd8}
+  .cc .eyebrow{font-size:11px;font-weight:800;letter-spacing:.08em;color:var(--green);text-transform:uppercase}
+  .cc.ng h3{font-size:20px;margin-top:8px}
+  .ng-list{list-style:none;padding:0;margin:16px 0 0;display:grid;gap:11px}
+  .ng-list li{display:flex;align-items:flex-start;gap:9px;font-size:13.5px;font-weight:600;color:var(--navy)}
   .ng-list li i{color:var(--green);margin-top:2px}
-  .ng-list{padding:0}
+  .ng-photo{margin-top:16px;height:150px;border-radius:12px;background:
+    linear-gradient(120deg,rgba(14,27,61,.06),rgba(47,107,255,.10)),
+    url('{{ url_for('static', filename='img/classroom.jpg') }}') center/cover no-repeat, #dbe6f5;
+    display:flex;align-items:flex-end;padding:12px}
+  /* Testimonial */
+  .cc.quote .qmark{font-size:34px;color:var(--blue);line-height:.5;font-family:Georgia,serif}
+  .cc.quote p{margin-top:10px;font-size:14px;color:var(--ink);line-height:1.6}
+  .who{display:flex;align-items:center;gap:11px;margin-top:16px}
+  .who .av{width:44px;height:44px;border-radius:50%;flex:0 0 auto;background:linear-gradient(150deg,#5b76b7,#33436f);
+    display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700}
+  .who .n{font-weight:700;color:var(--navy);font-size:14px}
+  .who .role{font-size:12px;color:var(--ink-2)}
+  .dots{display:flex;gap:6px;margin-top:14px;justify-content:center}
+  .dots i{width:7px;height:7px;border-radius:50%;background:var(--line-2)}
+  .dots i.on{background:var(--blue);width:18px;border-radius:4px}
+  /* Pricing mini */
+  .cc.price .price-top{display:flex;align-items:center;justify-content:space-between}
+  .cc.price .vf{font-size:12.5px;font-weight:700;color:var(--blue-ink)}
+  .mini-tiers{display:grid;gap:11px;margin-top:14px}
+  .mtier{border:1px solid var(--line);border-radius:12px;padding:13px 14px;position:relative}
+  .mtier.pop{border-color:var(--blue);box-shadow:0 14px 30px -20px rgba(47,107,255,.6)}
+  .mtier .mpop{position:absolute;top:-10px;left:14px;background:var(--green);color:#fff;font-size:10px;font-weight:700;padding:3px 9px;border-radius:999px}
+  .mtier .mn{font-weight:800;color:var(--navy);font-size:14px}
+  .mtier .md{font-size:11px;color:var(--ink-2);margin-top:1px}
+  .mtier .mamt{font-size:22px;font-weight:800;color:var(--navy);margin:7px 0 1px;letter-spacing:-.02em}
+  .mtier .mamt small{font-size:12px;color:var(--ink-2);font-weight:600}
+  .mtier .mper{font-size:10.5px;color:var(--ink-3)}
+  .mtier .btn{margin-top:10px;padding:9px;font-size:13px}
+  .mtier ul{list-style:none;padding:0;margin:11px 0 0;display:grid;gap:6px}
+  .mtier li{display:flex;gap:7px;font-size:12px;color:var(--ink)}
+  .mtier li i{color:var(--green);margin-top:2px}
+  /* Identity card */
+  .cc.identity{background:var(--blue-tint);border-color:#cfe0ff}
+  .cc.identity .shield{width:52px;height:52px;border-radius:14px;background:linear-gradient(150deg,var(--blue),#1e46c8);
+    color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:14px}
+  .cc.identity h3{font-size:20px;line-height:1.2}
+  .cc.identity p{margin-top:10px;font-size:13.5px;color:var(--ink-2)}
+  .cc.identity .signin{margin:16px 0 0}
+  .cc.identity .btn{margin-top:10px}
 
-  /* ── Gold CTA band ───────────────────────────────────────── */
-  .join{padding:6px 0 30px}
-  .join a{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;
-    background:linear-gradient(180deg,var(--gold),var(--gold-2));color:#3a2a05;font-weight:800;font-size:17px;
-    padding:18px 22px;border-radius:14px;box-shadow:0 16px 30px -14px rgba(240,160,20,.9)}
-
-  /* ── Pricing ─────────────────────────────────────────────── */
-  .cyc-toggle{display:inline-flex;background:var(--soft);border:1px solid var(--line);border-radius:999px;padding:4px;gap:2px;margin:0 auto 20px}
-  .cyc{border:none;background:transparent;color:var(--ink-2);font-weight:700;font-size:13px;padding:9px 15px;border-radius:999px;cursor:pointer;font-family:inherit}
-  .cyc.on{background:#fff;color:var(--navy);box-shadow:var(--shadow-sm)}
-  .cyc em{font-style:normal;color:var(--green);font-size:11px}
-  .tiers{display:grid;grid-template-columns:1fr;gap:14px}
-  .tier{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:20px 18px;position:relative;box-shadow:var(--shadow-sm)}
-  .tier.feat{border-color:var(--blue);box-shadow:0 20px 40px -22px rgba(47,107,255,.55)}
-  .tier-badge{position:absolute;top:-11px;left:18px;background:var(--blue);color:#fff;font-size:11px;font-weight:700;padding:4px 11px;border-radius:999px}
-  .tier-name{font-weight:800;color:var(--navy);font-size:17px}
-  .tier-amt{font-size:30px;font-weight:800;color:var(--navy);margin:8px 0 2px;letter-spacing:-.02em}
-  .tier-amt small{font-size:13px;color:var(--ink-2);font-weight:600}
-  .tier-save{min-height:18px;font-size:12px;color:var(--green);font-weight:700}
-  .tier ul{list-style:none;padding:0;margin:14px 0;display:flex;flex-direction:column;gap:9px}
-  .tier li{display:flex;gap:9px;font-size:13.5px;color:var(--ink)}
-  .tier li i{color:var(--green);margin-top:3px}
-  .tier li.muted{color:var(--ink-3)} .tier li.muted i{color:var(--ink-3)}
-  .price-note{text-align:center;color:var(--ink-2);font-size:13px;margin-top:16px}
-  .price-note i{color:var(--gold-2)}
-
-  /* ── FAQ ─────────────────────────────────────────────────── */
-  .faq{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:10px}
+  /* FAQ */
+  .faq{max-width:780px;margin:0 auto;display:flex;flex-direction:column;gap:10px}
   .faq details{background:#fff;border:1px solid var(--line);border-radius:13px;padding:2px 16px}
-  .faq summary{list-style:none;cursor:pointer;font-weight:700;color:var(--navy);font-size:15px;
-    padding:15px 0;display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .faq summary{list-style:none;cursor:pointer;font-weight:700;color:var(--navy);font-size:15px;padding:15px 0;display:flex;align-items:center;justify-content:space-between;gap:12px}
   .faq summary::-webkit-details-marker{display:none}
-  .faq summary .ico{width:26px;height:26px;flex:0 0 auto;border-radius:8px;background:var(--soft);
-    display:flex;align-items:center;justify-content:center;color:var(--blue);font-size:12px}
+  .faq summary .ico{width:26px;height:26px;flex:0 0 auto;border-radius:8px;background:var(--soft);display:flex;align-items:center;justify-content:center;color:var(--blue);font-size:12px}
   .faq details[open] summary .ico i{transform:rotate(45deg)}
   .faq p{padding:0 0 15px;color:var(--ink-2);font-size:14px}
 
-  /* ── Contact ─────────────────────────────────────────────── */
-  .contact-row{display:grid;grid-template-columns:1fr;gap:12px;max-width:820px;margin:0 auto}
-  .contact-card{display:flex;align-items:center;gap:13px;background:#fff;border:1px solid var(--line);
-    border-radius:14px;padding:15px 16px;box-shadow:var(--shadow-sm)}
-  .contact-card .ic{width:42px;height:42px;flex:0 0 auto;border-radius:11px;background:var(--blue-tint);color:var(--blue);
-    display:flex;align-items:center;justify-content:center;font-size:16px}
-  .contact-card.primary{background:var(--navy);border-color:var(--navy)}
-  .contact-card.primary,.contact-card.primary .cval{color:#fff}
-  .contact-card.primary .ic{background:rgba(255,255,255,.14);color:#fff}
-  .contact-card strong{display:block;font-size:14.5px;color:inherit}
-  .contact-card .cval{font-size:13px;color:var(--ink-2)}
+  /* Bottom CTA */
+  .join{padding:8px 0 30px}
+  .cta-band{background:var(--navy);color:#fff;position:relative;overflow:hidden}
+  .cta-in{display:grid;grid-template-columns:1fr;gap:20px;padding:32px 0;align-items:center}
+  .cta-head{display:flex;align-items:center;gap:16px}
+  .cta-cap{width:56px;height:56px;flex:0 0 auto;border-radius:14px;background:rgba(255,255,255,.08);color:var(--gold);display:flex;align-items:center;justify-content:center;font-size:24px}
+  .cta-head h2{color:#fff;font-size:clamp(22px,6vw,30px)}
+  .cta-head p{margin-top:8px;color:#aab6d6;font-size:14.5px;max-width:46ch}
+  .cta-actions{display:flex;flex-wrap:wrap;gap:12px}
+  .cta-trust{display:grid;grid-template-columns:1fr;gap:14px;margin-top:4px}
+  .cta-trust .ct{display:flex;align-items:center;gap:11px}
+  .cta-trust .ct i{width:34px;height:34px;flex:0 0 auto;border-radius:9px;background:rgba(255,255,255,.09);color:#9db6ff;display:flex;align-items:center;justify-content:center;font-size:14px}
+  .cta-trust .ct b{color:#fff;font-size:13.5px;display:block}
+  .cta-trust .ct span{color:#9aa7c8;font-size:12px}
 
-  /* ── Footer ──────────────────────────────────────────────── */
-  footer{background:var(--navy);color:#c3cee6;margin-top:14px}
+  /* Footer */
+  footer{background:var(--navy-2);color:#c3cee6}
   .foot-grid{display:grid;grid-template-columns:1fr;gap:24px;padding:34px 0 20px}
   .foot-brand .fb{display:flex;align-items:center;gap:10px;color:#fff;font-weight:800;font-size:18px}
   .foot-brand .fb img{width:32px;height:32px}
   .foot-tag{margin-top:10px;font-size:13.5px;color:#93a1c4;max-width:40ch}
   .foot-social{display:flex;gap:10px;margin-top:14px}
-  .foot-social a{width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.08);color:#cfd9ef;
-    display:flex;align-items:center;justify-content:center}
+  .foot-social a{width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.08);color:#cfd9ef;display:flex;align-items:center;justify-content:center}
   .foot-col h4{color:#fff;font-size:13px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
   .foot-col a{display:block;color:#a7b4d4;font-size:14px;padding:5px 0}
   .foot-col a:hover{color:#fff}
-  .foot-bottom{border-top:1px solid rgba(255,255,255,.1);padding:16px 0;display:flex;flex-direction:column;gap:6px;
-    font-size:12.5px;color:#8b99bd;text-align:center}
+  .foot-bottom{border-top:1px solid rgba(255,255,255,.1);padding:16px 0;display:flex;flex-direction:column;gap:6px;font-size:12.5px;color:#8b99bd;text-align:center}
 
   .reveal{opacity:0;transform:translateY(16px)}
   .reveal.in{opacity:1;transform:none;transition:opacity .6s ease,transform .6s cubic-bezier(.2,.7,.2,1)}
   @media(prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none}}
 
-  /* ── Desktop ─────────────────────────────────────────────── */
-  @media(min-width:720px){
-    .dv-side{width:132px;padding:14px 10px}
-    .dv-brand{font-size:14px;gap:7px}.dv-brand .d{width:22px;height:22px}
-    .dv-nav a{font-size:12.5px;padding:8px 9px;gap:9px}.dv-nav a i{width:15px;font-size:12px}
-    .dv-kpis{grid-template-columns:repeat(4,1fr)}
-    .dv-charts{grid-template-columns:1.35fr 1fr}
+  /* ── Desktop ─────────────────────────────────────── */
+  @media(min-width:600px){
     .feat-grid{grid-template-columns:repeat(4,1fr)}
-    .ng-list{grid-template-columns:repeat(2,1fr);max-width:640px}
-    .contact-row{grid-template-columns:repeat(2,1fr)}
-    .tiers{grid-template-columns:repeat(3,1fr);align-items:start}
+    .ng-list{grid-template-columns:1fr 1fr}
+    .stats-in{grid-template-columns:repeat(5,1fr)}
+    .stat.x5{display:flex}
   }
-  @media(min-width:960px){
+  @media(min-width:980px){
+    .only-desktop{display:block}
+    .only-mobile{display:none}
+    .stats{background:var(--navy);padding:0}
+    .stats-in{background:transparent;border:none;border-radius:0;padding:24px 8px}
+    .stats .stat + .stat::before{background:rgba(255,255,255,.13)}
+    .stats .stat i{color:#9db6ff}
+    .stats .stat .n{color:#fff}
+    .stats .stat .l{color:#a9b6d6}
     .head-nav{display:flex}
-    .head-cta{display:inline-flex}
-    .hero{padding:52px 0 20px}
-    .hero .lede{font-size:19px}
+    .head-signin,.head-cta{display:inline-flex}
+    .menu-btn{display:none}
+    .hero{padding:44px 0 30px}
+    .hero-grid{grid-template-columns:0.92fr 1.28fr;gap:34px}
+    .hero h1{margin-top:16px}
+    .device{border-radius:16px}
+    .dv-side{width:150px;padding:14px 11px}
+    .dv-brand{font-size:14px;gap:8px}.dv-brand .d{width:22px;height:22px}
+    .dv-nav a{font-size:12.5px;padding:8px 10px;gap:10px}.dv-nav a i{width:15px;font-size:12px}
+    .dv-nav a.x{display:flex}
+    .dv-main{padding:18px 18px 20px}
+    .dv-hi{font-size:17px}.dv-sub{font-size:12.5px}
+    .dv-pill,.dv-ic{display:flex}
+    .dv-kpis{grid-template-columns:repeat(4,1fr);gap:11px}
+    .dv-kpi .v{font-size:21px}
+    .dv-charts{grid-template-columns:1.5fr 1fr}
+    .dv-lists{display:grid}
+    .feat-grid{grid-template-columns:repeat(4,1fr);gap:16px}
+    .feat{box-shadow:none;border:none;background:transparent;padding:6px 10px}
+    .feat p{display:block}
+    .composite{grid-template-columns:1.15fr .95fr 1fr .9fr;align-items:start}
+    .cta-in{grid-template-columns:1.3fr .7fr;padding:40px 0}
+    .cta-actions{margin-top:22px}
+    .cta-trust{grid-template-columns:1fr}
     .foot-grid{grid-template-columns:2fr 1fr 1fr 1fr}
     .foot-bottom{flex-direction:row;justify-content:space-between;text-align:left}
+  }
+  @media(min-width:1140px){
+    .feat-grid{grid-template-columns:repeat(7,1fr);gap:14px}
   }
 </style>
 <script type="application/ld+json" nonce="{{ csp_nonce }}">
@@ -311,11 +375,15 @@
       <span class="bt"><span class="bn">{{ content.brand }}</span><span class="bs">School Management, Simplified.</span></span>
     </a>
     <nav class="head-nav" aria-label="Primary">
-      <a href="#features">Features</a><a href="#pricing">Pricing</a>
-      <a href="#faq">FAQ</a><a href="#contact">Contact</a>
+      <a href="#features">Product</a>
+      <a href="#features">Solutions</a>
+      <a href="#nigeria">Why {{ content.brand }}</a>
+      <a href="#faq">Resources</a>
+      <a href="#pricing">Pricing</a>
     </nav>
     <div class="head-right">
-      <a class="btn btn-primary head-cta" href="{{ register_url }}">Get Started Free</a>
+      <a class="head-signin" href="{{ register_url }}">Sign In</a>
+      <a class="btn btn-navy head-cta" href="{{ register_url }}">Get Started Free <i class="fas fa-arrow-right"></i></a>
       <button class="menu-btn" id="menuBtn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="drawer">
         <i class="fas fa-bars"></i><i class="fas fa-xmark"></i>
       </button>
@@ -324,89 +392,116 @@
   <div class="drawer" id="drawer">
     <div class="wrap drawer-in">
       <a class="ml" href="#features">Features</a>
+      <a class="ml" href="#nigeria">Why {{ content.brand }}</a>
       <a class="ml" href="#pricing">Pricing</a>
       <a class="ml" href="#faq">FAQ</a>
-      <a class="ml" href="#contact">Contact</a>
       <form class="signin js-school" title="Go to your school">
         <input class="js-sub" placeholder="your-school" aria-label="Your school subdomain" autocomplete="off">
         <span class="sfx">.{{ base_domain }}</span>
         <button type="submit">Sign in</button>
       </form>
-      <a class="btn btn-primary btn-block" href="{{ register_url }}">Get Started Free <i class="fas fa-arrow-right"></i></a>
+      <a class="btn btn-navy btn-block" href="{{ register_url }}">Get Started Free <i class="fas fa-arrow-right"></i></a>
     </div>
   </div>
 </header>
 
 <main id="top">
   <!-- HERO -->
-  <section class="hero"><div class="wrap">
-    <span class="badge"><i class="fas fa-trophy"></i> Nigeria's Preferred School Management System</span>
-    <h1>Run Your School Smarter.<br><span class="accent">All-in-One Management System.</span></h1>
-    <p class="lede">Student records. Attendance. Fees. Results. Communication. Everything in one place.</p>
-    <div class="hero-cta">
-      <a class="btn btn-primary btn-lg" href="{{ register_url }}">Get Started Free <i class="fas fa-arrow-right"></i></a>
-      <a class="btn btn-outline btn-lg" href="#preview"><span class="play"><i class="fas fa-play"></i></span> Watch Demo</a>
+  <section class="hero"><div class="wrap hero-grid">
+    <div>
+      <span class="badge"><i class="fas fa-trophy"></i> Nigeria's Preferred School Management System</span>
+      <h1 class="only-desktop">Run Your School.<br><span class="accent">Elevate Every Student.</span></h1>
+      <h1 class="only-mobile">Run Your School Smarter.<br><span class="accent">All-in-One Management System.</span></h1>
+      <p class="lede only-desktop">The all-in-one management system for Nigerian schools. Manage academics, exams, attendance, finance, communication and more — in one secure, connected platform.</p>
+      <p class="lede only-mobile">Student records. Attendance. Fees. Results. Communication. Everything in one place.</p>
+      <div class="hero-cta">
+        <a class="btn btn-primary btn-lg" href="{{ register_url }}">Get Started Free <i class="fas fa-arrow-right"></i></a>
+        <a class="btn btn-outline btn-lg" href="#preview"><span class="play"><i class="fas fa-play"></i></span> Watch Demo</a>
+      </div>
+      <div class="trust">
+        <span class="t"><i class="fas fa-shield-halved"></i> Secure &amp; Reliable</span><span class="sep"></span>
+        <span class="t"><i class="fas fa-sitemap"></i> Multi-Branch Support</span><span class="sep"></span>
+        <span class="t"><i class="fas fa-mobile-screen-button"></i> Works on Mobile</span>
+        <span class="sep only-desktop"></span>
+        <span class="t only-desktop"><span class="flag-i"><i class="g"></i><i class="w"></i><i class="g"></i></span> Made for Nigerian Schools</span>
+      </div>
     </div>
-    <div class="trust">
-      <span><i class="fas fa-shield-halved"></i> Secure &amp; Reliable</span><span class="sep"></span>
-      <span><i class="fas fa-sitemap"></i> Multi-Branch Support</span><span class="sep"></span>
-      <span><i class="fas fa-mobile-screen-button"></i> Works on Mobile</span>
-    </div>
-  </div></section>
 
-  <!-- DASHBOARD PREVIEW -->
-  <section class="preview" id="preview"><div class="wrap reveal">
-    <div class="device">
-      <aside class="dv-side">
-        <div class="dv-brand"><span class="d"></span> {{ content.brand }}</div>
-        <nav class="dv-nav">
-          <a class="on"><i class="fas fa-table-columns"></i> Dashboard</a>
-          <a><i class="fas fa-user-graduate"></i> Students</a>
-          <a><i class="fas fa-clipboard-user"></i> Attendance</a>
-          <a><i class="fas fa-file-lines"></i> Results</a>
-          <a><i class="fas fa-wallet"></i> Fees</a>
-          <a><i class="fas fa-book"></i> Library</a>
-          <a><i class="fas fa-chart-line"></i> Reports</a>
-          <a><i class="fas fa-gear"></i> More</a>
-        </nav>
-      </aside>
-      <div class="dv-main">
-        <div class="dv-top">
-          <div>
-            <div class="dv-hi">Good morning, Admin 👋</div>
-            <div class="dv-sub">St. James' College – Main Campus</div>
+    <!-- Dashboard preview -->
+    <div id="preview">
+      <div class="device reveal">
+        <aside class="dv-side">
+          <div class="dv-brand"><span class="d"></span> {{ content.brand }}</div>
+          <nav class="dv-nav">
+            <a class="on"><i class="fas fa-table-columns"></i> Dashboard</a>
+            <a><i class="fas fa-user-graduate"></i> Students</a>
+            <a><i class="fas fa-clipboard-user"></i> Attendance</a>
+            <a class="x"><i class="fas fa-book-open"></i> Academics</a>
+            <a class="x"><i class="fas fa-file-pen"></i> Examinations</a>
+            <a><i class="fas fa-wallet"></i> Finance</a>
+            <a class="x"><i class="fas fa-comments"></i> Communication</a>
+            <a><i class="fas fa-book"></i> Library</a>
+            <a class="x"><i class="fas fa-user-tie"></i> Staff</a>
+            <a><i class="fas fa-chart-line"></i> Reports</a>
+            <a class="x"><i class="fas fa-gear"></i> Settings</a>
+          </nav>
+        </aside>
+        <div class="dv-main">
+          <div class="dv-top">
+            <div>
+              <div class="dv-hi">Good morning, Admin 👋</div>
+              <div class="dv-sub">Greensprings College – Main Campus</div>
+            </div>
+            <div class="dv-top-r">
+              <span class="dv-pill">2024/2025 Session <i class="fas fa-chevron-down" style="font-size:9px"></i></span>
+              <span class="dv-ic"><i class="fas fa-bell"></i></span>
+              <div class="dv-av"><i class="fas fa-user"></i></div>
+            </div>
           </div>
-          <div class="dv-av"><i class="fas fa-user"></i></div>
-        </div>
-        <div class="dv-kpis">
-          <div class="dv-kpi b"><div class="l">Students</div><div class="v">1,248</div><div class="t">↑ 12% vs last term</div></div>
-          <div class="dv-kpi g"><div class="l">Attendance</div><div class="v">92%</div><div class="t">↑ 6% vs last week</div></div>
-          <div class="dv-kpi p"><div class="l">Fees Collected</div><div class="v">₦8.45M</div><div class="t">↑ 18% vs last month</div></div>
-          <div class="dv-kpi y"><div class="l">Results</div><div class="v">87%</div><div class="t">↑ 4% vs last term</div></div>
-        </div>
-        <div class="dv-charts">
-          <div class="dv-card">
-            <h5>Academic Performance</h5>
-            <svg viewBox="0 0 300 96" preserveAspectRatio="none" style="width:100%;height:84px" aria-hidden="true">
-              <defs><linearGradient id="perf" x1="0" x2="0" y1="0" y2="1">
-                <stop offset="0" stop-color="#2f6bff" stop-opacity=".22"/><stop offset="1" stop-color="#2f6bff" stop-opacity="0"/></linearGradient></defs>
-              <path d="M4,78 L46,58 L88,64 L130,40 L172,48 L214,26 L256,30 L296,16 L296,96 L4,96 Z" fill="url(#perf)"/>
-              <polyline fill="none" stroke="#2f6bff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"
-                points="4,78 46,58 88,64 130,40 172,48 214,26 256,30 296,16"/>
-              <polyline fill="none" stroke="#c7d6f7" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
-                points="4,86 46,80 88,82 130,72 172,76 214,66 256,70 296,60"/>
-            </svg>
-            <div class="dv-axis"><span>Term 1</span><span>Term 2</span><span>Term 3</span></div>
+          <div class="dv-kpis">
+            <div class="dv-kpi b"><div class="l">Total Students</div><div class="v">1,248</div><div class="t">↑ 12% vs last term</div></div>
+            <div class="dv-kpi g"><div class="l">Attendance Rate</div><div class="v">92%</div><div class="t">↑ 6% vs last week</div></div>
+            <div class="dv-kpi p"><div class="l">Fees Collected</div><div class="v">₦8.45M</div><div class="t">↑ 18% vs last month</div></div>
+            <div class="dv-kpi y"><div class="l">Exam Pass Rate</div><div class="v">87%</div><div class="t">↑ 4% vs last term</div></div>
           </div>
-          <div class="dv-card">
-            <h5>Attendance Overview</h5>
-            <div class="donut-wrap">
-              <div class="donut"></div>
-              <div class="leg">
-                <span><span class="dot pr"></span> Present</span>
-                <span><span class="dot ab"></span> Absent</span>
-                <span><span class="dot la"></span> Late</span>
+          <div class="dv-charts">
+            <div class="dv-card">
+              <div class="dv-ch-head"><h5>Performance Overview</h5><span class="mini-pill">This Term ▾</span></div>
+              <svg viewBox="0 0 320 96" preserveAspectRatio="none" style="width:100%;height:84px" aria-hidden="true">
+                <polyline fill="none" stroke="#2f6bff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+                  points="6,60 55,44 104,50 153,30 202,40 251,22 314,16"/>
+                <polyline fill="none" stroke="#f4a825" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+                  points="6,78 55,72 104,74 153,64 202,70 251,58 314,60"/>
+              </svg>
+              <div class="dv-axis"><span>Jan</span><span>Feb</span><span>Mar</span><span>Apr</span><span>May</span><span>Jun</span></div>
+              <div class="dv-legend"><span><span class="dot ca"></span> Class Average</span><span><span class="dot tp"></span> Top Performer</span></div>
+            </div>
+            <div class="dv-card">
+              <h5>Attendance Overview</h5>
+              <div class="donut-wrap">
+                <div class="donut"></div>
+                <div class="leg">
+                  <span><span class="dot pr"></span> Present <b>92%</b></span>
+                  <span><span class="dot ab"></span> Absent <b>6%</b></span>
+                  <span><span class="dot la"></span> Late <b>2%</b></span>
+                </div>
               </div>
+            </div>
+          </div>
+          <div class="dv-lists">
+            <div class="dv-list">
+              <h5>Recent Activities</h5>
+              <div class="dv-li"><span class="li-ic"><i class="fas fa-money-bill"></i></span> Fee payment of ₦25,000 by John Doe <span class="li-when">2h ago</span></div>
+              <div class="dv-li"><span class="li-ic"><i class="fas fa-user-plus"></i></span> New student admission – Mary Akan <span class="li-when">4h ago</span></div>
+              <div class="dv-li"><span class="li-ic"><i class="fas fa-file-lines"></i></span> Results published for JSS 3 <span class="li-when">1d ago</span></div>
+              <a class="dv-more">View all activities →</a>
+            </div>
+            <div class="dv-list">
+              <h5>Upcoming Events</h5>
+              <div class="dv-li"><span class="li-ic"><i class="fas fa-users"></i></span> Parent-Teacher Meeting <span class="li-when">May 24</span></div>
+              <div class="dv-li"><span class="li-ic"><i class="fas fa-file-pen"></i></span> Mock JAMB Examination <span class="li-when">May 30</span></div>
+              <div class="dv-li"><span class="li-ic"><i class="fas fa-mug-hot"></i></span> End of Term Break <span class="li-when">Jun 28</span></div>
+              <a class="dv-more">View all events →</a>
             </div>
           </div>
         </div>
@@ -415,93 +510,99 @@
   </div></section>
 
   <!-- STATS BAND -->
-  <section class="stats"><div class="wrap reveal">
-    <div class="stats-in">
-      <div class="stat"><i class="fas fa-building-columns"></i><div class="n">500+</div><div class="l">Schools</div></div>
-      <div class="stat"><i class="fas fa-users"></i><div class="n">120K+</div><div class="l">Students</div></div>
-      <div class="stat"><i class="fas fa-layer-group"></i><div class="n">2M+</div><div class="l">Results Processed</div></div>
-      <div class="stat"><i class="fas fa-clock"></i><div class="n">98.7%</div><div class="l">System Uptime</div></div>
-    </div>
+  <section class="stats"><div class="wrap stats-in reveal">
+    <div class="stat"><i class="fas fa-building-columns"></i><div class="n">500+</div><div class="l">Schools</div></div>
+    <div class="stat"><i class="fas fa-users"></i><div class="n">120K+</div><div class="l">Students</div></div>
+    <div class="stat"><i class="fas fa-chart-simple"></i><div class="n">2M+</div><div class="l">Results Processed</div></div>
+    <div class="stat"><i class="fas fa-shield-halved"></i><div class="n">98.7%</div><div class="l">System Uptime</div></div>
+    <div class="stat x5"><i class="fas fa-code-branch"></i><div class="n">150+</div><div class="l">Branches Managed</div></div>
   </div></section>
 
   <!-- FEATURES -->
   <section class="sec" id="features"><div class="wrap">
     <div class="sec-head reveal">
-      <h2>Built for the way<br><span class="accent">Nigerian schools actually work</span></h2>
+      <h2 class="only-desktop">Everything your school needs. <span class="accent">Connected</span> seamlessly.</h2>
+      <h2 class="only-mobile">Built for the way<br><span class="accent">Nigerian schools actually work</span></h2>
     </div>
     <div class="feat-grid reveal">
-      <div class="feat"><div class="fic c1"><i class="fas fa-graduation-cap"></i></div><h3>Academic Management</h3></div>
-      <div class="feat"><div class="fic c2"><i class="fas fa-user-check"></i></div><h3>Attendance Management</h3></div>
-      <div class="feat"><div class="fic c3"><i class="fas fa-wallet"></i></div><h3>Finance Management</h3></div>
-      <div class="feat"><div class="fic c4"><i class="fas fa-clipboard-check"></i></div><h3>Examination Intelligence</h3></div>
-      <div class="feat"><div class="fic c5"><i class="fas fa-bullhorn"></i></div><h3>Communication</h3></div>
-      <div class="feat"><div class="fic c6"><i class="fas fa-building"></i></div><h3>Multi-Branch Management</h3></div>
-      <div class="feat"><div class="fic c7"><i class="fas fa-user-group"></i></div><h3>Parents &amp; Students</h3></div>
-      <div class="feat"><div class="fic c8"><i class="fas fa-chart-column"></i></div><h3>Reports &amp; Analytics</h3></div>
+      <div class="feat"><div class="fic c1"><i class="fas fa-graduation-cap"></i></div><h3>Academic Management</h3><p>Results, broadsheets, report cards &amp; performance tracking.</p></div>
+      <div class="feat"><div class="fic c2"><i class="fas fa-user-check"></i></div><h3>Attendance Management</h3><p>Real-time tracking, intervention &amp; detailed reports.</p></div>
+      <div class="feat"><div class="fic c3"><i class="fas fa-wallet"></i></div><h3>Finance Management</h3><p>Fees, payments, invoices, expenses &amp; financial reports.</p></div>
+      <div class="feat"><div class="fic c4"><i class="fas fa-clipboard-check"></i></div><h3>Examination Intelligence</h3><p>Mock WAEC, Mock JAMB, analytics, predictions &amp; readiness reports.</p></div>
+      <div class="feat"><div class="fic c5"><i class="fas fa-bullhorn"></i></div><h3>Communication</h3><p>Announcements, SMS, notifications &amp; parent engagement.</p></div>
+      <div class="feat"><div class="fic c6"><i class="fas fa-building"></i></div><h3>Multi-Branch Management</h3><p>Centralized control with branch autonomy &amp; data isolation.</p></div>
+      <div class="feat"><div class="fic c7"><i class="fas fa-chart-column"></i></div><h3>Reports &amp; Analytics</h3><p>Powerful insights for smarter decisions &amp; better outcomes.</p></div>
     </div>
+    <div class="feat-more only-desktop"><a href="#pricing">Explore all features →</a></div>
   </div></section>
 
-  <!-- NIGERIA CARD -->
-  <section class="sec" style="padding-top:6px"><div class="wrap reveal">
-    <div class="ng">
-      <div class="ng-head">
-        <span class="ng-flag"><i class="gr"></i><i class="wh"></i><i class="gr"></i></span>
-        <div>
-          <h3>Perfect for Nigerian Schools</h3>
-          <div class="exam">WAEC • NECO • JAMB • Post-UME Ready</div>
+  <!-- COMPOSITE BAND -->
+  {% set ct = content.contact or {} %}
+  {% set defcyc = 'monthly' %}
+  <section class="sec" id="nigeria" style="padding-top:6px"><div class="wrap">
+    <div class="composite reveal">
+      <!-- Nigerian schools -->
+      <div class="cc ng">
+        <span class="eyebrow">Built for Nigerian Schools</span>
+        <h3>We understand how Nigerian schools work</h3>
+        <ul class="ng-list">
+          <li><i class="fas fa-circle-check"></i> WAEC, NECO, JAMB &amp; Post-UME Ready</li>
+          <li><i class="fas fa-circle-check"></i> Nigerian Grading System</li>
+          <li><i class="fas fa-circle-check"></i> Parent &amp; Student Portals</li>
+          <li><i class="fas fa-circle-check"></i> Multiple Branches &amp; Campuses</li>
+          <li><i class="fas fa-circle-check"></i> Secure, Reliable &amp; Always Available</li>
+        </ul>
+        <div class="ng-photo"></div>
+      </div>
+
+      <!-- Testimonial -->
+      <div class="cc quote">
+        <div style="text-align:center;font-weight:700;color:var(--navy);font-size:14px;margin-bottom:6px">Trusted by School Leaders</div>
+        <div class="qmark">“</div>
+        {% set _t = (content.testimonials[0] if content.testimonials else none) %}
+        <p>{{ _t.quote if _t else 'EduSyncra has transformed the way we manage our school. From results to fees to communication, everything is now seamless. Our parents are happier and our results have improved tremendously.' }}</p>
+        <div class="who">
+          <span class="av">{{ (_t.name[0]|upper) if _t else 'A' }}</span>
+          <span><span class="n">{{ _t.name if _t else 'Mr. Adeyemi Samuel' }}</span><br><span class="role">{{ _t.role if _t and _t.role else 'Principal, Greensprings College, Lagos' }}</span></span>
+        </div>
+        <div class="dots"><i class="on"></i><i></i><i></i><i></i></div>
+      </div>
+
+      <!-- Pricing mini -->
+      <div class="cc price" id="pricing">
+        <div class="price-top"><h5 style="font-size:15px">Simple, Transparent Pricing</h5><a class="vf" href="{{ register_url }}">View full pricing →</a></div>
+        <div class="mini-tiers">
+          {% for row in grid[:3] %}
+          {% set p = row.plans[defcyc] %}
+          <div class="mtier{{ ' pop' if row.popular }}">
+            {% if row.popular %}<span class="mpop">Most Popular</span>{% endif %}
+            <div class="mn">{{ row.label }}</div>
+            <div class="md">{{ 'For growing schools with more needs' if row.popular else ('For large schools & groups' if loop.last else 'For small schools getting started') }}</div>
+            <div class="mamt">₦{{ '{:,.0f}'.format(p.price_naira) }}<small>/{{ p.per }}</small></div>
+            <div class="mper">{{ 'Free Forever' if p.price_naira == 0 else 'Billed ' ~ p.per + 'ly' }}</div>
+            <a class="btn {{ 'btn-primary' if row.popular else 'btn-outline' }} btn-block" href="{{ register_url }}?tier={{ row.tier }}">{{ 'Contact Sales' if row.limits.students == -1 else 'Get Started' }}</a>
+            <ul>
+              <li><i class="fas fa-check"></i> {{ 'Unlimited students' if row.limits.students == -1 else 'Up to {:,} students'.format(row.limits.students) }}</li>
+              <li><i class="fas fa-check"></i> {{ 'All Features' if row.features.mock_exams else 'Basic Features' }}</li>
+              <li><i class="fas fa-check"></i> {{ 'Priority Support' if row.popular else ('Dedicated Support' if row.limits.students == -1 else 'Email Support') }}</li>
+            </ul>
+          </div>
+          {% endfor %}
         </div>
       </div>
-      <ul class="ng-list">
-        <li><i class="fas fa-check"></i> Local grading system</li>
-        <li><i class="fas fa-check"></i> Nigerian curriculum support</li>
-        <li><i class="fas fa-check"></i> School fee management</li>
-        <li><i class="fas fa-check"></i> Parents &amp; student portals</li>
-      </ul>
-    </div>
-  </div></section>
 
-  <!-- JOIN CTA -->
-  <section class="join"><div class="wrap reveal">
-    <a href="{{ register_url }}">Join 500+ Schools on {{ content.brand }} <i class="fas fa-arrow-right"></i></a>
-  </div></section>
-
-  <!-- PRICING -->
-  <section class="sec" id="pricing" style="background:var(--soft)"><div class="wrap">
-    <div class="sec-head reveal">
-      <h2>Start free, then <span class="accent">pick your plan</span></h2>
-      <p>One flat price per school — never per student. Longer cycles save more.</p>
-    </div>
-    {% set defcyc = 'monthly' %}
-    <div style="text-align:center" class="reveal">
-      <div class="cyc-toggle" role="tablist" aria-label="Billing cycle">
-        {% for cid, clabel in [('monthly','Monthly'),('termly','Termly'),('annual','Annual')] %}
-        <button type="button" class="cyc {{ 'on' if cid == defcyc }}" data-cycle="{{ cid }}">{{ clabel }}{% if cid == 'annual' %} <em>save more</em>{% endif %}</button>
-        {% endfor %}
+      <!-- Identity -->
+      <div class="cc identity">
+        <div class="shield"><i class="fas fa-shield-halved"></i></div>
+        <h3>Your School.<br>Your Identity.<br>Your Data.</h3>
+        <p>Get your own branded school portal and manage everything in your space.</p>
+        <form class="signin js-school" title="Go to your school">
+          <input class="js-sub" placeholder="yourschool" aria-label="Your school subdomain" autocomplete="off">
+          <span class="sfx">.{{ base_domain }}</span>
+        </form>
+        <a class="btn btn-navy btn-block" href="{{ register_url }}">Claim Your School <i class="fas fa-arrow-right"></i></a>
       </div>
     </div>
-    <div class="tiers reveal">
-      {% for row in grid %}
-      {% set p = row.plans[defcyc] %}
-      <div class="tier{{ ' feat' if row.popular }}" data-tier="{{ row.tier }}">
-        {% if row.popular %}<span class="tier-badge">★ Most popular</span>{% endif %}
-        <div class="tier-name">{{ row.label }}</div>
-        <div class="tier-amt">₦<span class="t-num">{{ '{:,.0f}'.format(p.price_naira) }}</span><small>/<span class="t-per">{{ p.per }}</span></small></div>
-        <div class="tier-save"><span class="t-save">{% if p.savings > 0 %}Save {{ p.savings }}% vs monthly{% endif %}</span></div>
-        <ul>
-          <li><i class="fas fa-user-group"></i> {{ 'Unlimited students' if row.limits.students == -1 else '{:,} students'.format(row.limits.students) }}</li>
-          <li><i class="fas fa-user-tie"></i> {{ 'Unlimited staff' if row.limits.staff == -1 else '{:,} staff'.format(row.limits.staff) }}</li>
-          <li><i class="fas fa-code-branch"></i> {{ 'Unlimited branches' if row.limits.branches == -1 else (row.limits.branches ~ ' branches' if row.limits.branches > 1 else 'Single branch') }}</li>
-          <li class="{{ '' if row.features.mock_exams else 'muted' }}"><i class="fas {{ 'fa-check' if row.features.mock_exams else 'fa-minus' }}"></i> Mock JAMB / WAEC &amp; CBT</li>
-          <li class="{{ '' if row.features.predictive_analytics else 'muted' }}"><i class="fas {{ 'fa-check' if row.features.predictive_analytics else 'fa-minus' }}"></i> Predictive analytics</li>
-          <li class="{{ '' if row.features.website_builder else 'muted' }}"><i class="fas {{ 'fa-check' if row.features.website_builder else 'fa-minus' }}"></i> Website builder</li>
-          <li><i class="fas fa-check"></i> Daily backups &amp; encryption</li>
-        </ul>
-        <a class="btn btn-block {{ 'btn-primary' if row.popular else 'btn-outline' }} t-cta" data-tier="{{ row.tier }}" href="{{ register_url }}?tier={{ row.tier }}&amp;cycle={{ defcyc }}">Get Started Free</a>
-      </div>
-      {% endfor %}
-    </div>
-    <p class="price-note"><i class="fas fa-gift"></i> {{ content.trial_note }} · cancel anytime</p>
-    <script type="application/json" id="pricingData">{{ price_json|tojson }}</script>
   </div></section>
 
   <!-- FAQ -->
@@ -515,20 +616,32 @@
     </div>
   </div></section>
   {% endif %}
-
-  <!-- CONTACT -->
-  {% set ct = content.contact or {} %}
-  <section class="sec" id="contact" style="background:var(--soft)"><div class="wrap">
-    <div class="sec-head reveal"><h2>Questions? <span class="accent">We're here to help</span></h2>
-      <p>Book a demo or reach out — we'll help you get your school set up.</p></div>
-    <div class="contact-row reveal">
-      {% if ct.email %}<a class="contact-card" href="mailto:{{ ct.email }}"><span class="ic"><i class="fas fa-envelope"></i></span><span><strong>Email</strong><span class="cval">{{ ct.email }}</span></span></a>{% endif %}
-      {% if ct.phone %}<a class="contact-card" href="tel:{{ ct.phone | replace(' ', '') }}"><span class="ic"><i class="fas fa-phone"></i></span><span><strong>Call</strong><span class="cval">{{ ct.phone }}</span></span></a>{% endif %}
-      {% if ct.whatsapp %}<a class="contact-card" href="https://wa.me/{{ ct.whatsapp }}" rel="noopener" target="_blank"><span class="ic"><i class="fab fa-whatsapp"></i></span><span><strong>WhatsApp</strong><span class="cval">Chat with us</span></span></a>{% endif %}
-      <a class="contact-card primary" href="{{ register_url }}"><span class="ic"><i class="fas fa-rocket"></i></span><span><strong>Start free trial</strong><span class="cval">Set up in minutes</span></span></a>
-    </div>
-  </div></section>
 </main>
+
+<!-- BOTTOM CTA — gold button on mobile (mockup-1), dark band on desktop (mockup-2) -->
+<section class="join only-mobile"><div class="wrap reveal">
+  <a class="btn btn-gold btn-lg btn-block" href="{{ register_url }}" style="padding:18px 22px;font-size:17px;border-radius:14px">Join 500+ Schools on {{ content.brand }} <i class="fas fa-arrow-right"></i></a>
+</div></section>
+<section class="cta-band only-desktop"><div class="wrap cta-in reveal">
+  <div>
+    <div class="cta-head">
+      <span class="cta-cap"><i class="fas fa-graduation-cap"></i></span>
+      <div>
+        <h2>Ready to transform your school?</h2>
+        <p>Join hundreds of schools already using {{ content.brand }} to work smarter, engage better and achieve more.</p>
+      </div>
+    </div>
+    <div class="cta-actions">
+      <a class="btn btn-gold btn-lg" href="{{ register_url }}">Get Started Free <i class="fas fa-arrow-right"></i></a>
+      <a class="btn btn-ghost-d btn-lg" href="{% if ct.email %}mailto:{{ ct.email }}{% else %}{{ register_url }}{% endif %}">Book a Demo</a>
+    </div>
+  </div>
+  <div class="cta-trust">
+    <div class="ct"><i class="fas fa-wand-magic-sparkles"></i><div><b>Easy to Use</b><span>Intuitive &amp; simple for everyone</span></div></div>
+    <div class="ct"><i class="fas fa-lock"></i><div><b>Secure &amp; Compliant</b><span>Your data is always protected</span></div></div>
+    <div class="ct"><i class="fas fa-headset"></i><div><b>Local Support</b><span>We're here to help you succeed</span></div></div>
+  </div>
+</div></section>
 
 <footer><div class="wrap">
   <div class="foot-grid">
@@ -544,7 +657,7 @@
     <nav class="foot-col" aria-label="Product"><h4>Product</h4>
       <a href="#features">Features</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a></nav>
     <nav class="foot-col" aria-label="Company"><h4>Company</h4>
-      <a href="#contact">Contact</a><a href="{{ register_url }}">Start free trial</a></nav>
+      {% if ct.email %}<a href="mailto:{{ ct.email }}">Contact</a>{% endif %}<a href="{{ register_url }}">Start free trial</a></nav>
     <nav class="foot-col" aria-label="Legal"><h4>Legal</h4>
       <a href="{{ url_for('marketing.legal', slug='privacy') }}">Privacy Policy</a>
       <a href="{{ url_for('marketing.legal', slug='terms') }}">Terms of Service</a>
@@ -560,7 +673,6 @@
   var BASE_DOMAIN = {{ base_domain | tojson }};
   var head = document.getElementById('head');
   addEventListener('scroll', function(){ head.classList.toggle('scrolled', scrollY > 8); }, {passive:true});
-  // sign-in -> school subdomain
   document.querySelectorAll('.js-school').forEach(function(form){
     form.addEventListener('submit', function(e){
       e.preventDefault();
@@ -569,7 +681,6 @@
       if (s) location.href = 'https://' + s + '.' + BASE_DOMAIN + '/';
     });
   });
-  // mobile drawer
   var menuBtn = document.getElementById('menuBtn');
   function closeMenu(){ head.classList.remove('menu-open'); menuBtn.setAttribute('aria-expanded','false'); }
   menuBtn.addEventListener('click', function(){
@@ -578,8 +689,7 @@
   });
   document.querySelectorAll('#drawer .ml').forEach(function(a){ a.addEventListener('click', closeMenu); });
   document.addEventListener('keydown', function(e){ if(e.key === 'Escape') closeMenu(); });
-  addEventListener('resize', function(){ if (innerWidth > 960) closeMenu(); });
-  // scroll reveal
+  addEventListener('resize', function(){ if (innerWidth > 980) closeMenu(); });
   var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   var els = document.querySelectorAll('.reveal');
   if (reduce || !('IntersectionObserver' in window)) {
@@ -587,34 +697,9 @@
   } else {
     var io = new IntersectionObserver(function(es){
       es.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); } });
-    }, {threshold:.12});
+    }, {threshold:.1});
     els.forEach(function(el){ io.observe(el); });
   }
-  // pricing billing-cycle toggle
-  (function(){
-    var node = document.getElementById('pricingData');
-    if (!node) return;
-    var prices; try { prices = JSON.parse(node.textContent || '{}'); } catch(e){ return; }
-    var fmt = function(n){ return Number(n||0).toLocaleString('en-NG'); };
-    function paint(cyc){
-      document.querySelectorAll('#pricing .cyc').forEach(function(b){
-        b.classList.toggle('on', b.getAttribute('data-cycle') === cyc);
-      });
-      document.querySelectorAll('#pricing .tier').forEach(function(card){
-        var p = (prices[card.getAttribute('data-tier')] || {})[cyc];
-        if (!p) return;
-        var num = card.querySelector('.t-num'), per = card.querySelector('.t-per'),
-            save = card.querySelector('.t-save'), cta = card.querySelector('.t-cta');
-        if (num) num.textContent = fmt(p.naira);
-        if (per) per.textContent = p.per;
-        if (save) save.textContent = p.savings > 0 ? ('Save ' + p.savings + '% vs monthly') : '';
-        if (cta) cta.href = cta.href.replace(/cycle=[^&]*/, 'cycle=' + cyc);
-      });
-    }
-    document.querySelectorAll('#pricing .cyc').forEach(function(b){
-      b.addEventListener('click', function(){ paint(b.getAttribute('data-cycle')); });
-    });
-  })();
 </script>
 </body>
 </html>

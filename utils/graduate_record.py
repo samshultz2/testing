@@ -164,9 +164,15 @@ def build_record(student):
     """The full read-only permanent record for a graduate. Every section is
     best-effort; a section that errors comes back empty rather than 500-ing."""
     from models import ClinicVisit
+    from utils import student_photo as _sp
     sid = student.id
+    # Photos live in the StudentPhoto blob table and are served via the
+    # /students/<id>/photo route; the student.photo_url column is unreliable
+    # (often empty even when a photo exists), so build the served URL from a
+    # real has_photo() check — matching how the students serializer does it.
+    _photo = _sp.served_url(student) if _sp.has_photo(student) else (student.photo_url or '')
     bio = {
-        'photo_url': student.photo_url or '',
+        'photo_url': _photo,
         'date_of_birth': student.date_of_birth.strftime('%d %b %Y') if student.date_of_birth else '',
         'religion': student.religion or '', 'home_address': student.home_address or '',
         'house': student.house or '', 'boarding_status': student.boarding_status or '',
