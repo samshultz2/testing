@@ -114,8 +114,14 @@ def ensure_generator_schema():
 
     default_bid = _default_branch_id()
 
+    # AUTOCOMMIT so each statement stands alone: on Postgres a single failing
+    # DDL (e.g. a unique-constraint swap) aborts the whole surrounding
+    # transaction and rolls back the ADD COLUMNs with it. Independent commits
+    # guarantee the columns persist even if a later, secondary step fails.
+    added_ok = True
     try:
-        with engine.begin() as conn:
+        with engine.connect() as base:
+            conn = base.execution_options(isolation_level='AUTOCOMMIT')
             for table in _TABLES:
                 cols = _cols(insp, table)
                 if cols is None:
@@ -124,7 +130,7 @@ def ensure_generator_schema():
                     try:
                         conn.execute(text(f'ALTER TABLE {table} ADD COLUMN branch_id INTEGER'))
                     except Exception:
-                        pass
+                        added_ok = False
                 # Backfill existing (pre-split) rows to the default/HQ branch.
                 if default_bid is not None:
                     try:
@@ -134,7 +140,17 @@ def ensure_generator_schema():
                     except Exception:
                         pass
             if is_pg:
-                _swap_uniques_postgres(conn)
+                _swap_uniques_postgres(conn)     # best-effort; each stmt autocommits
+    except Exception:
+        added_ok = False
+
+    # Only remember success once the critical column is actually present, so a
+    # transient failure retries on the next request instead of sticking.
+    try:
+        after = _cols(inspect(engine), 'gen_timetable_results')
+        if after is not None and 'branch_id' not in after:
+            added_ok = False
     except Exception:
         pass
-    _ensured.add(key)
+    if added_ok:
+        _ensured.add(key)
