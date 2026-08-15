@@ -2,20 +2,23 @@
    Reuses the app's brand tokens (green primary, DM Sans / Space Grotesk) so the
    public pages feel like part of EduSyncra — light theme, no OS dark-mode flip. */
 :root{
-  --primary:#0d6a4e; --primary-hover:#0a5640; --primary-2:#11998e;
-  --primary-light:#e8f5f1; --primary-alpha:rgba(13,106,78,.12);
-  --accent:#d4a419;
-  --ink:#0f172a; --text-secondary:#475569; --text-muted:#5b6675; --faint:#7c879a;
-  --bg:#f7f8fa; --surface:#ffffff; --surface-2:#f8fafc;
-  --line:#e9edf3; --line-2:#eef2f7;
-  --success:#198754; --danger:#dc2626; --danger-light:#fee2e2;
+  /* Re-skinned to match the /home landing page (light, navy + blue). Token and
+     class names are unchanged so every page that uses marketing.css — register,
+     legal, done, sent, billing, staff-join — picks up the new look at once. */
+  --primary:#2f6bff; --primary-hover:#1f5cf5; --primary-2:#1e46c8;
+  --primary-light:#eaf1ff; --primary-alpha:rgba(47,107,255,.14);
+  --accent:#f4a825;
+  --ink:#0e1b3d; --text-secondary:#5b6b8c; --text-muted:#5b6b8c; --faint:#8a97b4;
+  --bg:#ffffff; --surface:#ffffff; --surface-2:#f4f7fc;
+  --line:#e6ecf5; --line-2:#dbe3f0;
+  --success:#16a34a; --danger:#dc2626; --danger-light:#fee2e2;
   --radius-sm:8px; --radius-md:12px; --radius-lg:16px; --radius-xl:22px; --radius-full:9999px;
-  --shadow-sm:0 1px 2px rgba(15,23,42,.06), 0 1px 3px rgba(15,23,42,.04);
+  --shadow-sm:0 8px 22px -14px rgba(20,40,90,.25);
   --shadow-md:0 2px 4px -1px rgba(15,23,42,.06), 0 8px 20px -6px rgba(15,23,42,.10);
   --shadow-lg:0 4px 8px -2px rgba(15,23,42,.08), 0 20px 40px -12px rgba(15,23,42,.16);
   --shadow-xl:0 30px 70px -30px rgba(15,23,42,.30);
-  --font-sans:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-  --font-display:'Space Grotesk',var(--font-sans);
+  --font-sans:'Plus Jakarta Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+  --font-display:'Plus Jakarta Sans',var(--font-sans);
   --maxw:1120px;
 }
 *{box-sizing:border-box}
@@ -41,13 +44,18 @@ p{margin:0}
 .btn-block{width:100%}
 
 /* sticky nav */
-.nav{position:sticky;top:0;z-index:40;background:rgba(247,248,250,.82);backdrop-filter:saturate(180%) blur(12px);
+.nav{position:sticky;top:0;z-index:40;background:rgba(255,255,255,.92);backdrop-filter:saturate(180%) blur(10px);
      border-bottom:1px solid transparent;transition:border-color .2s, background .2s}
-.nav.scrolled{border-bottom-color:var(--line);background:rgba(255,255,255,.9)}
-.nav-in{display:flex;align-items:center;gap:24px;height:68px}
-.brand{display:flex;align-items:center;gap:10px;font-family:var(--font-display);font-weight:700;font-size:19px;letter-spacing:-.02em}
+.nav.scrolled{border-bottom-color:var(--line);box-shadow:0 6px 20px -18px rgba(20,40,90,.5)}
+.nav-in{display:flex;align-items:center;gap:24px;height:66px}
+.brand{display:flex;align-items:center;gap:11px;font-family:var(--font-display);font-weight:800;font-size:20px;letter-spacing:-.02em;color:var(--ink)}
 .brand .mark{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;color:#fff;font-size:16px;
-             background:linear-gradient(135deg,var(--primary),var(--primary-2));box-shadow:0 6px 16px -6px rgba(13,106,78,.6)}
+             background:linear-gradient(135deg,var(--primary),var(--primary-2));box-shadow:0 6px 16px -6px rgba(47,107,255,.6)}
+/* /home-style brand: logo image + name + tagline stacked */
+.brand .logo{width:38px;height:38px;flex:0 0 auto}
+.brand .bt{display:flex;flex-direction:column;line-height:1.05}
+.brand .bn{font-size:20px;font-weight:800;color:var(--ink);letter-spacing:-.02em}
+.brand .bs{font-size:11px;color:var(--text-secondary);font-weight:500}
 .nav-links{display:flex;gap:26px;margin-left:10px;font-size:15px;color:var(--text-secondary)}
 .nav-links a{position:relative;padding:4px 0}
 .nav-links a:hover{color:var(--ink)}

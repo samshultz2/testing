@@ -6,7 +6,7 @@
   <meta name="csrf-token" content="{{ csrf_token() }}">
   <title>Join {{ school }} — Staff sign-up</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/marketing.css') }}">
+  <link rel="stylesheet" href="{{ bundle_url('css/marketing.css') }}">
   <style>
     .join-wrap{max-width:520px;margin:2.2rem auto;padding:0 1rem}
     .join-card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:1.4rem 1.5rem;box-shadow:0 8px 30px rgba(0,0,0,.06)}

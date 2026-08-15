@@ -221,18 +221,20 @@
 
   /* Composite band */
   .composite{display:grid;grid-template-columns:1fr;gap:16px}
-  .cc{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:20px 18px;box-shadow:var(--shadow-sm)}
+  .cc{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:20px 18px;box-shadow:var(--shadow-sm);display:flex;flex-direction:column}
   /* Nigerian card */
   .cc.ng{background:var(--green-tint);border-color:#cdecd8}
   .cc .eyebrow{font-size:11px;font-weight:800;letter-spacing:.08em;color:var(--green);text-transform:uppercase}
   .cc.ng h3{font-size:20px;margin-top:8px}
-  .ng-list{list-style:none;padding:0;margin:16px 0 0;display:grid;gap:11px}
-  .ng-list li{display:flex;align-items:flex-start;gap:9px;font-size:13.5px;font-weight:600;color:var(--navy)}
-  .ng-list li i{color:var(--green);margin-top:2px}
-  .ng-photo{margin-top:16px;height:150px;border-radius:12px;background:
-    linear-gradient(120deg,rgba(14,27,61,.06),rgba(47,107,255,.10)),
-    url('{{ url_for('static', filename='img/classroom.jpg') }}') center/cover no-repeat, #dbe6f5;
-    display:flex;align-items:flex-end;padding:12px}
+  .ng-list{list-style:none;padding:0;margin:16px 0 0;display:grid;grid-template-columns:1fr;gap:11px}
+  .ng-list li{display:flex;align-items:center;gap:9px;font-size:13.5px;font-weight:600;color:var(--navy)}
+  .ng-list li i{color:var(--green);flex:0 0 auto}
+  .ng-photo{margin-top:16px;min-height:150px;flex:1;border-radius:12px;overflow:hidden;position:relative;
+    background:linear-gradient(to top, rgba(14,27,61,.55), rgba(14,27,61,.05)),
+    url('{{ url_for('static', filename='img/classroom.jpg') }}') center/cover no-repeat,
+    linear-gradient(135deg,#123069,#2f6bff);
+    display:flex;align-items:flex-end;padding:14px}
+  .ng-photo .cap{color:#fff;font-size:12.5px;font-weight:700;display:flex;align-items:center;gap:8px;text-shadow:0 1px 4px rgba(0,0,0,.3)}
   /* Testimonial */
   .cc.quote .qmark{font-size:34px;color:var(--blue);line-height:.5;font-family:Georgia,serif}
   .cc.quote p{margin-top:10px;font-size:14px;color:var(--ink);line-height:1.6}
@@ -241,7 +243,7 @@
     display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700}
   .who .n{font-weight:700;color:var(--navy);font-size:14px}
   .who .role{font-size:12px;color:var(--ink-2)}
-  .dots{display:flex;gap:6px;margin-top:14px;justify-content:center}
+  .dots{display:flex;gap:6px;margin-top:auto;padding-top:16px;justify-content:center}
   .dots i{width:7px;height:7px;border-radius:50%;background:var(--line-2)}
   .dots i.on{background:var(--blue);width:18px;border-radius:4px}
   /* Pricing mini */
@@ -261,7 +263,7 @@
   .mtier li{display:flex;gap:7px;font-size:12px;color:var(--ink)}
   .mtier li i{color:var(--green);margin-top:2px}
   /* Identity card */
-  .cc.identity{background:var(--blue-tint);border-color:#cfe0ff}
+  .cc.identity{background:var(--blue-tint);border-color:#cfe0ff;justify-content:center}
   .cc.identity .shield{width:52px;height:52px;border-radius:14px;background:linear-gradient(150deg,var(--blue),#1e46c8);
     color:#fff;display:flex;align-items:center;justify-content:center;font-size:22px;margin-bottom:14px}
   .cc.identity h3{font-size:20px;line-height:1.2}
@@ -313,7 +315,6 @@
   /* ── Desktop ─────────────────────────────────────── */
   @media(min-width:600px){
     .feat-grid{grid-template-columns:repeat(4,1fr)}
-    .ng-list{grid-template-columns:1fr 1fr}
     .stats-in{grid-template-columns:repeat(5,1fr)}
     .stat.x5{display:flex}
   }
@@ -347,7 +348,7 @@
     .feat-grid{grid-template-columns:repeat(4,1fr);gap:16px}
     .feat{box-shadow:none;border:none;background:transparent;padding:6px 10px}
     .feat p{display:block}
-    .composite{grid-template-columns:1.15fr .95fr 1fr .9fr;align-items:start}
+    .composite{grid-template-columns:1.1fr .95fr 1.05fr .95fr;align-items:stretch}
     .cta-in{grid-template-columns:1.3fr .7fr;padding:40px 0}
     .cta-actions{margin-top:22px}
     .cta-trust{grid-template-columns:1fr}
@@ -552,7 +553,7 @@
           <li><i class="fas fa-circle-check"></i> Multiple Branches &amp; Campuses</li>
           <li><i class="fas fa-circle-check"></i> Secure, Reliable &amp; Always Available</li>
         </ul>
-        <div class="ng-photo"></div>
+        <div class="ng-photo"><span class="cap"><i class="fas fa-graduation-cap"></i> Trusted by schools across Nigeria</span></div>
       </div>
 
       <!-- Testimonial -->

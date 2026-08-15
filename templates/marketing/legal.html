@@ -7,12 +7,12 @@
 <meta name="description" content="{{ title }} for {{ content.brand }} — a plain-language summary.">
 <meta name="robots" content="index, follow">
 <link rel="canonical" href="https://{{ base_domain }}{{ request.path }}">
-<meta name="theme-color" content="#0d6a4e">
+<meta name="theme-color" content="#0e1b3d">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
-<link rel="stylesheet" href="{{ url_for('static', filename='css/marketing.css') }}">
+<link rel="stylesheet" href="{{ bundle_url('css/marketing.css') }}">
 <style>
   .legal{max-width:820px}
   .legal-intro{font-size:16.5px;line-height:1.7;margin:18px 0 8px}
@@ -27,9 +27,12 @@
 <body>
 <a class="skip-link" href="#main">Skip to content</a>
 <header class="nav" id="nav"><div class="wrap nav-in">
-  <a class="brand" href="{{ url_for('marketing.home') }}"><span class="mark">✦</span> {{ content.brand }}</a>
+  <a class="brand" href="{{ url_for('marketing.home') }}">
+    <img class="logo" src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="{{ content.brand }} logo">
+    <span class="bt"><span class="bn">{{ content.brand }}</span><span class="bs">School Management, Simplified.</span></span>
+  </a>
   <div class="nav-right">
-    <a class="btn btn-primary" href="{{ register_url }}">{{ content.hero_cta }}</a>
+    <a class="btn btn-primary" href="{{ register_url }}">Get Started Free</a>
   </div>
 </div></header>
 
