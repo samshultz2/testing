@@ -1661,6 +1661,16 @@ def _deadline(attempt, exam):
     return attempt.started_at + timedelta(minutes=exam.duration_minutes or 30)
 
 
+def _past_deadline(attempt, exam):
+    """True once the SERVER-authoritative exam time (plus the offline grace) has
+    elapsed. Answer/submit writes must stop here: the browser timer is only a
+    display — a candidate scripting requests must not be able to keep saving or
+    submitting answers after their time is genuinely up."""
+    if not attempt.started_at:
+        return False                                   # not actually started — don't block
+    return timeutil.now() > _deadline(attempt, exam) + timedelta(seconds=OFFLINE_GRACE_SECONDS)
+
+
 def _finalize(attempt, exam):
     """Grade from saved answers, apply the exam's scaling, mark Submitted."""
     raw_score = 0.0
@@ -1873,6 +1883,10 @@ def answer(exam_id):
     attempt = CBTAttempt.query.filter_by(exam_id=exam_id, student_id=student.id).first()
     if not attempt or attempt.status == 'Submitted':
         return jsonify({'ok': False}), 400
+    exam = db.session.get(CBTExam, exam_id)
+    if exam and _past_deadline(attempt, exam):
+        _finalize(attempt, exam)                       # time is up — grade & stop accepting
+        return jsonify({'ok': False, 'expired': True}), 409
     qid = request.form.get('question_id', type=int)
     sel = (request.form.get('option') or '').strip().upper() or None
     q = CBTQuestion.query.filter_by(id=qid, exam_id=exam_id).first()
@@ -1901,6 +1915,10 @@ def answers_batch(exam_id):
     attempt = CBTAttempt.query.filter_by(exam_id=exam_id, student_id=student.id).first()
     if not attempt or attempt.status == 'Submitted':
         return jsonify({'ok': False}), 400
+    exam = db.session.get(CBTExam, exam_id)
+    if exam and _past_deadline(attempt, exam):
+        _finalize(attempt, exam)                       # time is up — grade & stop accepting
+        return jsonify({'ok': False, 'expired': True}), 409
     correct = _exam_answer_key(exam_id)
     existing = {a.question_id: a for a in attempt.answers}
     changed = 0
@@ -1937,17 +1955,21 @@ def submit(exam_id):
         return redirect(url_for('cbt_portal.home'))
     if attempt.status in ('Submitted', 'Submitting'):
         return redirect(url_for('cbt_portal.result', exam_id=exam.id))
-    # Persist any answers posted with the final submit (covers JS-off / last picks).
-    for q in exam.questions.all():
-        if f'q_{q.id}' not in request.form:
-            continue
-        sel = (request.form.get(f'q_{q.id}') or '').strip().upper() or None
-        ans = CBTAnswer.query.filter_by(attempt_id=attempt.id, question_id=q.id).first()
-        if not ans:
-            ans = CBTAnswer(attempt_id=attempt.id, question_id=q.id)
-            db.session.add(ans)
-        ans.selected_option = sel
-    db.session.flush()
+    # Persist any answers posted with the final submit (covers JS-off / last picks)
+    # — but ONLY while within the server deadline (+ offline grace). Once time is
+    # genuinely up, grade what was saved by the deadline and ignore late picks, so
+    # a candidate can't gain extra time by submitting after expiry.
+    if not _past_deadline(attempt, exam):
+        for q in exam.questions.all():
+            if f'q_{q.id}' not in request.form:
+                continue
+            sel = (request.form.get(f'q_{q.id}') or '').strip().upper() or None
+            ans = CBTAnswer.query.filter_by(attempt_id=attempt.id, question_id=q.id).first()
+            if not ans:
+                ans = CBTAnswer(attempt_id=attempt.id, question_id=q.id)
+                db.session.add(ans)
+            ans.selected_option = sel
+        db.session.flush()
     if _async_grading_enabled():
         # Queue grading so a whole cohort submitting at the deadline doesn't grade
         # synchronously on the web workers. The result page shows a brief
