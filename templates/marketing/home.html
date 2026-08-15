@@ -7,11 +7,10 @@
 {% set _desc = content.get('meta_description') or content.hero_subtitle %}
 <title>{{ content.brand }} — All-in-one school management for Nigerian schools</title>
 <meta name="description" content="{{ _desc }}">
-<meta name="keywords" content="school management system, Nigeria, students, results, WAEC, JAMB, school fees, payroll, attendance, report cards, multi-branch, parent portal">
-<meta name="theme-color" content="#080d1c">
+<meta name="keywords" content="school management system, Nigeria, students, results, WAEC, NECO, JAMB, school fees, payroll, attendance, report cards, multi-branch, parent portal">
+<meta name="theme-color" content="#0e1b3d">
 <meta name="robots" content="index, follow, max-image-preview:large">
 <link rel="canonical" href="{{ _home }}">
-<!-- Open Graph -->
 <meta property="og:type" content="website">
 <meta property="og:site_name" content="{{ content.brand }}">
 <meta property="og:title" content="{{ content.brand }} — All-in-one school management">
@@ -19,7 +18,6 @@
 <meta property="og:url" content="{{ _home }}">
 <meta property="og:locale" content="en_NG">
 <meta property="og:image" content="{{ url_for('static', filename='icons/icon-512.png', _external=True) }}">
-<!-- Twitter -->
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="{{ content.brand }} — All-in-one school management">
 <meta name="twitter:description" content="{{ _desc }}">
@@ -33,605 +31,461 @@
 <noscript><style>.reveal{opacity:1 !important;transform:none !important}</style></noscript>
 <style>
   :root{
-    --bg:#080d1c; --bg-1:#0a1122; --surface:#101a33; --surface-2:#16233f; --surface-3:#1c2b4c;
-    --line:#22314f; --line-2:#2c3d61;
-    --ink:#eef2fb; --ink-1:#b3c0dd; --ink-2:#8492b4; --ink-3:#5f6d90;
-    --accent:#4f8cff; --accent-1:#78a6ff; --accent-2:#a9c6ff;
-    --violet:#7c6cff; --emerald:#16cc93; --emerald-1:#3ee0ad; --gold:#f6bf50;
-    --r:20px; --r-sm:13px;
-    --sh-1:0 1px 0 rgba(255,255,255,.04) inset, 0 18px 40px -24px rgba(0,0,0,.7);
-    --sh-2:0 40px 90px -40px rgba(2,6,20,.9);
-    --glow:0 0 0 1px rgba(79,140,255,.25), 0 30px 80px -30px rgba(79,140,255,.45);
-    --maxw:1200px;
-    --display:"Plus Jakarta Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
-    --body:"Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
+    --bg:#ffffff; --soft:#f4f7fc; --soft-2:#eef3fb;
+    --navy:#0e1b3d; --navy-2:#16233f;
+    --blue:#2f6bff; --blue-ink:#1f5cf5; --blue-tint:#eaf1ff;
+    --ink:#1f2a44; --ink-2:#5b6b8c; --ink-3:#8a97b4;
+    --line:#e6ecf5; --line-2:#dbe3f0;
+    --gold:#f4a825; --gold-2:#ef9a10; --gold-tint:#fdf1d6;
+    --green:#16a34a; --green-tint:#e8f7ee;
+    --radius:18px; --radius-sm:13px;
+    --shadow:0 18px 40px -20px rgba(20,40,90,.28);
+    --shadow-sm:0 8px 22px -14px rgba(20,40,90,.25);
+    --maxw:1120px;
   }
-  :root[data-theme="light"]{
-    --bg:#f4f7fe; --bg-1:#eef3fc; --surface:#ffffff; --surface-2:#f6f9ff; --surface-3:#eef3fd;
-    --line:#e3eaf6; --line-2:#d3ddf0;
-    --ink:#0c1630; --ink-1:#3a496a; --ink-2:#5d6b8c; --ink-3:#8290b0;
-    --sh-1:0 1px 0 rgba(255,255,255,.7) inset, 0 16px 34px -22px rgba(30,50,100,.28);
-    --sh-2:0 40px 80px -44px rgba(30,55,120,.4);
-    --glow:0 0 0 1px rgba(79,140,255,.2), 0 30px 70px -34px rgba(79,140,255,.35);
-  }
-  @media (prefers-color-scheme:light){:root:not([data-theme="dark"]){
-    --bg:#f4f7fe; --bg-1:#eef3fc; --surface:#ffffff; --surface-2:#f6f9ff; --surface-3:#eef3fd;
-    --line:#e3eaf6; --line-2:#d3ddf0;
-    --ink:#0c1630; --ink-1:#3a496a; --ink-2:#5d6b8c; --ink-3:#8290b0;
-    --sh-1:0 1px 0 rgba(255,255,255,.7) inset, 0 16px 34px -22px rgba(30,50,100,.28);
-    --sh-2:0 40px 80px -44px rgba(30,55,120,.4);
-    --glow:0 0 0 1px rgba(79,140,255,.2), 0 30px 70px -34px rgba(79,140,255,.35);
-  }}
-
   *{box-sizing:border-box}
-  html,body{max-width:100%;overflow-x:hidden}
-  html{scroll-behavior:smooth}
-  body{margin:0;color:var(--ink);font-family:var(--body);line-height:1.55;
-    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
-    background:
-      radial-gradient(1200px 640px at 84% -6%, rgba(79,140,255,.18), transparent 58%),
-      radial-gradient(820px 560px at 2% 4%, rgba(124,108,255,.13), transparent 55%),
-      radial-gradient(700px 500px at 60% 108%, rgba(22,204,147,.10), transparent 60%),
-      var(--bg);}
-  body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:1;opacity:.5;mix-blend-mode:overlay;
-    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='0.05'/></svg>");}
-  h1,h2,h3,h4{margin:0;font-family:var(--display);letter-spacing:-.025em;text-wrap:balance;line-height:1.06}
-  p{margin:0}
+  html{-webkit-text-size-adjust:100%}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:'Plus Jakarta Sans',system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+    line-height:1.5;-webkit-font-smoothing:antialiased;overflow-x:hidden}
   a{color:inherit;text-decoration:none}
-  img{max-width:100%;display:block}
-  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 24px;position:relative;z-index:2}
-  .tnum{font-variant-numeric:tabular-nums}
-  .skip-link{position:absolute;left:-999px;top:8px;z-index:100;background:var(--accent);color:#fff;padding:10px 16px;border-radius:10px}
-  .skip-link:focus{left:12px}
-  .eyebrow{display:inline-flex;align-items:center;gap:9px;font-family:var(--display);font-size:12px;font-weight:700;
-    letter-spacing:.16em;text-transform:uppercase;color:var(--accent-1)}
-  .eyebrow::before{content:"";width:22px;height:1.5px;background:linear-gradient(90deg,var(--accent),transparent)}
-  .eyebrow.center{justify-content:center}
-  .muted{color:var(--ink-1)}
-  .kbd-dot{width:5px;height:5px;border-radius:50%;background:var(--line-2)}
+  img,svg{max-width:100%;display:block}
+  h1,h2,h3,h4{margin:0;line-height:1.15;font-weight:800;letter-spacing:-.02em;color:var(--navy)}
+  p{margin:0}
+  .wrap{width:100%;max-width:var(--maxw);margin:0 auto;padding:0 20px}
+  .skip-link{position:absolute;left:-999px}
+  .skip-link:focus{left:12px;top:12px;background:#fff;padding:8px 14px;border-radius:8px;z-index:200}
 
-  .btn{display:inline-flex;align-items:center;gap:9px;font-family:var(--display);font-weight:650;font-size:15px;
-    padding:13px 22px;border-radius:13px;border:1px solid transparent;cursor:pointer;
-    transition:transform .16s ease,box-shadow .22s ease,background .22s,border-color .22s;white-space:nowrap}
+  /* ── Buttons ─────────────────────────────────────────────── */
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;
+    font-weight:700;font-size:15px;border-radius:12px;padding:14px 20px;border:1.5px solid transparent;
+    cursor:pointer;transition:transform .15s ease,box-shadow .15s ease,background .15s ease;white-space:nowrap}
   .btn:active{transform:translateY(1px)}
-  .btn:focus-visible{outline:2px solid var(--accent-1);outline-offset:3px}
-  .btn-primary{color:#fff;background:linear-gradient(180deg,#6098ff,var(--accent));
-    box-shadow:0 12px 30px -10px rgba(79,140,255,.65),0 1px 0 rgba(255,255,255,.35) inset}
-  .btn-primary:hover{box-shadow:0 20px 46px -12px rgba(79,140,255,.8);transform:translateY(-1px)}
-  .btn-ghost{color:var(--ink);background:color-mix(in srgb,var(--surface) 65%,transparent);border-color:var(--line-2);backdrop-filter:blur(10px)}
-  .btn-ghost:hover{border-color:var(--accent)}
-  .btn-lg{padding:15px 26px;font-size:16px}
-  .btn-block{width:100%;justify-content:center}
+  .btn-primary{background:var(--navy);color:#fff}
+  .btn-primary:hover{box-shadow:0 12px 24px -12px rgba(14,27,61,.7)}
+  .btn-outline{background:#fff;color:var(--navy);border-color:var(--line-2)}
+  .btn-outline:hover{border-color:var(--blue);color:var(--blue-ink)}
+  .btn-gold{background:linear-gradient(180deg,var(--gold),var(--gold-2));color:#3a2a05;
+    box-shadow:0 14px 26px -14px rgba(240,160,20,.9)}
+  .btn-block{width:100%}
+  .btn-lg{padding:16px 24px;font-size:16px}
 
-  header.nav{position:sticky;top:0;z-index:60;border-bottom:1px solid transparent;transition:.3s}
-  header.nav.scrolled{border-color:var(--line);background:color-mix(in srgb,var(--bg) 74%,transparent);backdrop-filter:blur(18px) saturate(1.4)}
-  .nav-in{display:flex;align-items:center;gap:20px;height:70px}
-  .brand{display:flex;align-items:center;gap:11px;font-family:var(--display);font-weight:800;font-size:19px;letter-spacing:-.02em}
-  .mark{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;color:#fff;font-size:15px;
-    background:conic-gradient(from 210deg,var(--accent),var(--violet),var(--emerald),var(--accent));
-    box-shadow:0 8px 20px -8px rgba(79,140,255,.9),0 1px 0 rgba(255,255,255,.4) inset}
-  .nav-links{display:flex;gap:4px;margin-left:10px}
-  .nav-links a{font-size:14.5px;color:var(--ink-1);font-weight:500;padding:8px 12px;border-radius:9px;transition:.18s}
-  .nav-links a:hover{color:var(--ink);background:color-mix(in srgb,var(--surface) 70%,transparent)}
-  .nav-right{margin-left:auto;display:flex;align-items:center;gap:10px}
-  .icon-btn{width:40px;height:40px;border-radius:11px;border:1px solid var(--line-2);background:var(--surface);color:var(--ink);cursor:pointer;font-size:14px;display:grid;place-items:center}
-  .icon-btn:hover{border-color:var(--accent)}
-  .nav-signin{display:flex;align-items:center;gap:0;background:var(--surface);border:1px solid var(--line-2);border-radius:11px;overflow:hidden;height:40px}
-  .nav-signin input{border:0;background:transparent;color:var(--ink);font:inherit;font-size:13.5px;padding:0 4px 0 12px;width:96px;outline:none}
-  .nav-signin .sfx{color:var(--ink-2);font-size:12.5px;padding-right:8px;white-space:nowrap}
-  .nav-signin button{border:0;background:var(--surface-3);color:var(--ink);font:inherit;font-weight:650;font-size:13px;padding:0 14px;height:100%;cursor:pointer;border-left:1px solid var(--line-2)}
-  .nav-signin button:hover{background:var(--accent);color:#fff}
-  .nav-toggle{display:none}
-  .mobile-menu{display:none}
-  @media(max-width:1000px){.nav-links{display:none}.nav-toggle{display:grid}}
-  @media(max-width:720px){.nav-right .nav-signin{display:none}}
-  @media(max-width:440px){.nav-cta{display:none}}
+  /* ── Header ──────────────────────────────────────────────── */
+  .site-head{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.9);
+    backdrop-filter:saturate(180%) blur(10px);border-bottom:1px solid transparent;transition:border-color .2s,box-shadow .2s}
+  .site-head.scrolled{border-bottom-color:var(--line);box-shadow:0 6px 20px -18px rgba(20,40,90,.5)}
+  .head-in{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px 0}
+  .brand{display:flex;align-items:center;gap:11px}
+  .brand .logo{width:40px;height:40px;flex:0 0 auto}
+  .brand .bt{display:flex;flex-direction:column;line-height:1.05}
+  .brand .bn{font-size:21px;font-weight:800;color:var(--navy);letter-spacing:-.02em}
+  .brand .bs{font-size:11.5px;color:var(--ink-2);font-weight:500}
+  .head-nav{display:none;align-items:center;gap:26px}
+  .head-nav a{font-weight:600;font-size:14.5px;color:var(--ink-2)}
+  .head-nav a:hover{color:var(--navy)}
+  .head-right{display:flex;align-items:center;gap:10px}
+  .head-cta{display:none}
+  .menu-btn{width:46px;height:46px;flex:0 0 auto;border:none;border-radius:12px;background:var(--navy);color:#fff;
+    font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer}
+  .menu-btn .fa-xmark{display:none}
+  .menu-open .menu-btn .fa-bars{display:none}
+  .menu-open .menu-btn .fa-xmark{display:block}
   /* mobile drawer */
-  .mobile-menu{border-top:1px solid var(--line);background:color-mix(in srgb,var(--bg) 94%,transparent);backdrop-filter:blur(18px) saturate(1.4);overflow:hidden}
-  header.nav.menu-open .mobile-menu{display:block}
-  .mm-in{max-width:var(--maxw);margin:0 auto;padding:12px 22px 20px;display:flex;flex-direction:column;gap:4px}
-  .mm-link{padding:13px 10px;border-radius:11px;color:var(--ink-1);font-family:var(--display);font-weight:650;font-size:16px;border-bottom:1px solid var(--line)}
-  .mm-link:last-of-type{border-bottom:0}
-  .mm-link:hover,.mm-link:focus-visible{color:var(--ink);background:color-mix(in srgb,var(--surface) 70%,transparent)}
-  .mm-signin{display:flex !important;height:46px;margin-top:12px;width:100%}
-  .mm-signin input{flex:1;width:auto}
-  .mm-in .btn{margin-top:10px}
-  @media(min-width:1001px){.mobile-menu,header.nav.menu-open .mobile-menu{display:none}}
-  .nav-toggle .fa-xmark{display:none}
-  header.nav.menu-open .nav-toggle .fa-bars{display:none}
-  header.nav.menu-open .nav-toggle .fa-xmark{display:inline-block}
+  .drawer{display:none;border-top:1px solid var(--line);background:#fff}
+  .menu-open .drawer{display:block}
+  .drawer-in{display:flex;flex-direction:column;gap:4px;padding:12px 0 18px}
+  .drawer a.ml{padding:12px 6px;font-weight:600;color:var(--ink);border-radius:10px}
+  .drawer a.ml:hover{background:var(--soft)}
+  .signin{display:flex;align-items:center;gap:6px;background:var(--soft);border:1px solid var(--line);
+    border-radius:11px;padding:5px 5px 5px 12px;margin:8px 0 6px}
+  .signin input{border:none;background:transparent;outline:none;font-size:14px;min-width:0;flex:1;color:var(--ink);font-family:inherit}
+  .signin .sfx{font-size:12.5px;color:var(--ink-3);white-space:nowrap}
+  .signin button{border:none;background:var(--navy);color:#fff;font-weight:700;font-size:13px;padding:9px 13px;border-radius:8px;cursor:pointer}
 
-  .hero{padding:74px 0 26px;position:relative}
-  .hero-grid{display:grid;grid-template-columns:1.02fr .98fr;gap:56px;align-items:center}
-  .hero-grid>*{min-width:0}   /* let tracks shrink instead of forcing overflow */
-  @media(max-width:1000px){.hero-grid{grid-template-columns:1fr;gap:44px}}
-  .flag{display:inline-flex;align-items:center;gap:9px;padding:6px 6px 6px 7px;border-radius:999px;
-    border:1px solid var(--line-2);background:color-mix(in srgb,var(--surface) 60%,transparent);
-    font-size:12.5px;font-weight:600;color:var(--ink-1);backdrop-filter:blur(8px)}
-  .flag b{background:linear-gradient(135deg,var(--accent),var(--violet));color:#fff;font-size:11px;font-weight:800;padding:3px 9px;border-radius:999px}
-  .hero h1{font-size:clamp(40px,5.6vw,66px);font-weight:800;margin-top:20px}
-  .hero .lede{margin-top:22px;font-size:19px;line-height:1.62;color:var(--ink-1);max-width:36ch}
-  .hero-cta{display:flex;gap:14px;margin-top:32px;flex-wrap:wrap}
-  .assur{display:flex;align-items:center;gap:14px;margin-top:22px;color:var(--ink-2);font-size:13px;flex-wrap:wrap}
-  .assur span{display:inline-flex;align-items:center;gap:7px}
-  .assur i{color:var(--emerald)}
+  /* ── Hero ────────────────────────────────────────────────── */
+  .hero{padding:26px 0 8px;background:
+     radial-gradient(120% 90% at 100% -10%, #eaf0ff 0%, rgba(234,240,255,0) 55%),
+     radial-gradient(90% 70% at -10% 8%, #fff5e3 0%, rgba(255,245,227,0) 45%)}
+  .badge{display:inline-flex;align-items:center;gap:8px;background:var(--gold-tint);color:#7a5406;
+    font-weight:700;font-size:13px;padding:8px 14px;border-radius:999px;border:1px solid #f3dfae}
+  .badge i{color:var(--gold-2)}
+  .hero h1{font-size:clamp(34px,10vw,52px);margin:18px 0 0}
+  .hero h1 .accent{color:var(--blue)}
+  .hero .lede{margin-top:16px;font-size:17px;color:var(--ink-2);max-width:34ch}
+  .hero-cta{display:flex;flex-wrap:wrap;gap:12px;margin-top:24px}
+  .hero-cta .btn{flex:1 1 auto;min-width:150px}
+  .play{width:26px;height:26px;border-radius:50%;background:var(--blue-tint);color:var(--blue);
+    display:inline-flex;align-items:center;justify-content:center;font-size:11px}
+  .trust{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;margin-top:26px;
+    padding-top:20px;border-top:1px solid var(--line)}
+  .trust span{display:inline-flex;align-items:center;gap:9px;font-size:13.5px;font-weight:600;color:var(--ink)}
+  .trust i{color:var(--blue)}
+  .trust .sep{width:1px;height:16px;background:var(--line-2)}
 
-  .stage{perspective:1900px}
-  .deck-glow{position:absolute;inset:auto -8% -14% -8%;height:70%;filter:blur(46px);opacity:.6;z-index:0;
-    background:radial-gradient(60% 60% at 60% 40%,rgba(79,140,255,.5),transparent 70%)}
-  .deck{position:relative;z-index:1;transform:rotateY(-16deg) rotateX(7deg) rotate(1deg);transform-style:preserve-3d;transition:transform .6s cubic-bezier(.2,.7,.2,1)}
-  .stage:hover .deck{transform:rotateY(-9deg) rotateX(4deg)}
-  @media(prefers-reduced-motion:reduce){.deck{transition:none;transform:rotateY(-9deg) rotateX(4deg)}}
-  .app{display:grid;grid-template-columns:64px 1fr;border:1px solid var(--line-2);border-radius:20px;overflow:hidden;background:linear-gradient(180deg,var(--surface-2),var(--surface));box-shadow:var(--sh-2)}
-  .app-side{background:linear-gradient(180deg,var(--surface-3),var(--surface-2));border-right:1px solid var(--line);padding:14px 0;display:flex;flex-direction:column;align-items:center;gap:10px}
-  .side-logo{width:30px;height:30px;border-radius:9px;background:conic-gradient(from 210deg,var(--accent),var(--violet),var(--emerald),var(--accent))}
-  .side-ic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;color:var(--ink-2);font-size:13px}
-  .side-ic.on{background:color-mix(in srgb,var(--accent) 22%,transparent);color:var(--accent-1)}
-  .app-top{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--line)}
-  .app-top .ttl{font-family:var(--display);font-size:13px;font-weight:700}
-  .app-top .sub{font-size:11px;color:var(--ink-2)}
-  .seg{margin-left:auto;display:flex;background:var(--bg-1);border:1px solid var(--line);border-radius:9px;padding:3px}
-  .seg span{font-size:10.5px;font-weight:600;color:var(--ink-2);padding:4px 9px;border-radius:6px}
-  .seg span.on{background:var(--accent);color:#fff}
-  .app-body{padding:15px;display:grid;gap:12px}
-  .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-  .kpi{background:var(--bg-1);border:1px solid var(--line);border-radius:13px;padding:12px 13px;position:relative;overflow:hidden}
-  .kpi .k{font-size:10.5px;color:var(--ink-2);font-weight:600}
-  .kpi .v{font-family:var(--display);font-size:23px;font-weight:800;margin-top:5px;letter-spacing:-.03em}
-  .kpi .v.up{color:var(--emerald-1)} .kpi .v.blue{color:var(--accent-1)}
-  .kpi .d{font-size:10px;margin-top:3px;color:var(--emerald);font-weight:700}
-  .kpi .spark{position:absolute;right:8px;bottom:8px;width:44px;height:18px;opacity:.85}
-  .chart{background:var(--bg-1);border:1px solid var(--line);border-radius:13px;padding:14px 14px 8px}
-  .chart .ct{display:flex;justify-content:space-between;align-items:center;font-size:11px;color:var(--ink-2);font-weight:600;margin-bottom:6px}
-  .grid2{display:grid;grid-template-columns:1.3fr 1fr;gap:12px}
-  .rows{display:grid;gap:8px}
-  .row{display:flex;align-items:center;gap:10px;background:var(--bg-1);border:1px solid var(--line);border-radius:11px;padding:8px 11px;font-size:11.5px}
-  .row .nm{font-weight:600}.row .rt{margin-left:auto;font-weight:800}
-  .ava{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:9.5px;font-weight:700;background:linear-gradient(135deg,var(--violet),var(--accent))}
-  .tagly{padding:2px 8px;border-radius:999px;font-size:9.5px;font-weight:800;margin-left:auto}
-  .tagly.ok{background:color-mix(in srgb,var(--emerald) 20%,transparent);color:var(--emerald-1)}
-  .tagly.due{background:color-mix(in srgb,var(--gold) 22%,transparent);color:var(--gold)}
-  .tagly.blue{background:color-mix(in srgb,var(--accent) 22%,transparent);color:var(--accent-1)}
-  .float{position:absolute;background:color-mix(in srgb,var(--surface) 82%,transparent);border:1px solid var(--line-2);border-radius:15px;padding:12px 14px;backdrop-filter:blur(16px);box-shadow:var(--sh-2);transform:translateZ(80px)}
-  .float .fk{font-size:10.5px;color:var(--ink-2);font-weight:600}
-  .float .fv{font-family:var(--display);font-size:19px;font-weight:800;letter-spacing:-.02em;margin-top:2px}
-  .float.a{top:-24px;right:-20px;display:flex;align-items:center;gap:11px}
-  .float.b{bottom:-22px;left:-26px}
-  .ring{position:relative;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;background:conic-gradient(var(--emerald) 0 96%,var(--line-2) 96% 100%)}
-  .ring::after{content:"";width:28px;height:28px;border-radius:50%;background:var(--surface)}
-  .ring b{position:absolute;font-size:10.5px;font-weight:800;color:var(--emerald-1)}
-  @media(max-width:540px){.float.a{right:2px}.float.b{left:2px}.app{grid-template-columns:52px 1fr}}
+  /* ── Dashboard preview ───────────────────────────────────── */
+  .preview{padding:22px 0 6px}
+  .device{background:#fff;border:1px solid var(--line);border-radius:22px;box-shadow:var(--shadow);
+    overflow:hidden;display:flex;min-height:0}
+  .dv-side{width:92px;flex:0 0 auto;background:var(--navy);color:#c7d2ea;padding:11px 7px}
+  .dv-brand{display:flex;align-items:center;gap:6px;font-weight:800;color:#fff;font-size:11.5px;margin-bottom:11px}
+  .dv-brand .d{width:18px;height:18px;flex:0 0 auto;border-radius:5px;background:linear-gradient(150deg,var(--blue),#7aa2ff)}
+  .dv-nav{display:flex;flex-direction:column;gap:2px}
+  .dv-nav a{display:flex;align-items:center;gap:7px;font-size:10.5px;padding:6px 7px;border-radius:8px;color:#aeb9d6}
+  .dv-nav a i{width:13px;text-align:center;font-size:10.5px}
+  .dv-nav a.on{background:var(--blue);color:#fff;font-weight:700}
+  .dv-main{flex:1 1 auto;min-width:0;padding:16px 15px 18px;background:#fbfcfe}
+  .dv-top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:14px}
+  .dv-hi{font-size:16px;font-weight:800;color:var(--navy)}
+  .dv-sub{font-size:12px;color:var(--ink-2);margin-top:2px}
+  .dv-av{width:38px;height:38px;border-radius:50%;flex:0 0 auto;
+    background:linear-gradient(150deg,#5b76b7,#33436f);display:flex;align-items:center;justify-content:center;color:#fff;font-size:15px}
+  .dv-kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+  .dv-kpi{border-radius:13px;padding:11px 12px}
+  .dv-kpi .l{font-size:11.5px;font-weight:700}
+  .dv-kpi .v{font-size:21px;font-weight:800;color:var(--navy);line-height:1.1;margin-top:3px;letter-spacing:-.02em}
+  .dv-kpi .t{font-size:10.5px;font-weight:700;color:var(--green);margin-top:3px}
+  .dv-kpi.b{background:var(--blue-tint)} .dv-kpi.b .l{color:var(--blue-ink)}
+  .dv-kpi.g{background:var(--green-tint)} .dv-kpi.g .l{color:var(--green)}
+  .dv-kpi.p{background:#f2edfc} .dv-kpi.p .l{color:#7c4ddb}
+  .dv-kpi.y{background:var(--gold-tint)} .dv-kpi.y .l{color:#b3760a}
+  .dv-charts{display:grid;grid-template-columns:1fr;gap:10px;margin-top:11px}
+  .dv-card{border:1px solid var(--line);border-radius:13px;padding:11px 12px;background:#fff}
+  .dv-card h5{font-size:12.5px;font-weight:700;color:var(--navy);margin-bottom:8px}
+  .dv-axis{display:flex;justify-content:space-between;font-size:9.5px;color:var(--ink-3);margin-top:5px}
+  .donut-wrap{display:flex;align-items:center;gap:14px}
+  .donut{width:92px;height:92px;flex:0 0 auto;border-radius:50%;position:relative;
+    background:conic-gradient(var(--green) 0 92%, #ef5a5a 92% 96%, var(--gold) 96% 100%)}
+  .donut::after{content:"92%";position:absolute;inset:15px;background:#fff;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;font-weight:800;color:var(--navy);font-size:16px}
+  .leg{display:flex;flex-direction:column;gap:7px;font-size:12px;color:var(--ink)}
+  .leg span{display:flex;align-items:center;gap:8px}
+  .dot{width:10px;height:10px;border-radius:50%;flex:0 0 auto}
+  .dot.pr{background:var(--green)} .dot.ab{background:#ef5a5a} .dot.la{background:var(--gold)}
 
-  section{padding:76px 0}
-  .sec-head{max-width:660px;margin:0 auto 46px;text-align:center}
-  .sec-head h2{font-size:clamp(29px,3.7vw,42px);font-weight:800;margin-top:13px}
-  .sec-head p{margin-top:14px;color:var(--ink-1);font-size:17.5px}
+  /* ── Stats band ──────────────────────────────────────────── */
+  .stats{padding:22px 0}
+  .stats-in{background:var(--soft);border:1px solid var(--line);border-radius:var(--radius);
+    padding:22px 12px;display:grid;grid-template-columns:repeat(4,1fr);gap:8px;text-align:center}
+  .stat i{color:var(--blue);font-size:22px}
+  .stat .n{font-size:clamp(18px,5.4vw,26px);font-weight:800;color:var(--navy);margin-top:8px;letter-spacing:-.02em}
+  .stat .l{font-size:11.5px;color:var(--ink-2);font-weight:600;margin-top:2px;line-height:1.25}
 
-  .trust{padding:26px 0 2px}
-  .trust p{text-align:center;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-2);font-weight:700;margin-bottom:18px}
-  .trust .row2{display:flex;justify-content:center;gap:12px;flex-wrap:wrap}
-  .trust .row2 span{display:inline-flex;align-items:center;gap:9px;padding:9px 16px;border-radius:999px;border:1px solid var(--line);background:color-mix(in srgb,var(--surface) 60%,transparent);font-size:13.5px;font-weight:600;color:var(--ink-1)}
-  .trust .row2 i{color:var(--accent-1)}
+  /* ── Section heading ─────────────────────────────────────── */
+  .sec{padding:30px 0}
+  .sec-head{text-align:center;max-width:34ch;margin:0 auto 22px}
+  .sec-head h2{font-size:clamp(24px,7vw,34px)}
+  .sec-head h2 .accent{color:var(--blue)}
+  .sec-head p{margin-top:10px;color:var(--ink-2);font-size:15px}
 
-  .showcase{display:grid;grid-template-columns:1.15fr .85fr;gap:22px;align-items:stretch}
-  @media(max-width:820px){.showcase{grid-template-columns:1fr}}
-  .photo{position:relative;border-radius:var(--r);overflow:hidden;border:1px solid var(--line-2);min-height:380px;box-shadow:var(--sh-2);
-    background:radial-gradient(650px 320px at 22% 8%, rgba(79,140,255,.4),transparent 60%),radial-gradient(520px 340px at 92% 96%, rgba(22,204,147,.34),transparent 60%),linear-gradient(135deg,#15254a,#0d1a34)}
-  .photo img{width:100%;height:100%;object-fit:cover;position:absolute;inset:0}
-  .photo::after{content:"";position:absolute;inset:0;opacity:.35;mix-blend-mode:soft-light;background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='40' height='40'><path d='M0 20h40M20 0v40' stroke='white' stroke-opacity='0.15' stroke-width='0.5'/></svg>")}
-  .photo .glow-emblem{position:absolute;inset:0;display:grid;place-items:center;color:rgba(255,255,255,.14);font-size:120px}
-  .photo-cap{position:absolute;z-index:2;left:18px;bottom:16px;background:color-mix(in srgb,var(--surface) 82%,transparent);border:1px solid var(--line-2);border-radius:12px;padding:9px 13px;backdrop-filter:blur(10px);display:flex;align-items:center;gap:9px;font-size:12.5px;font-weight:650}
-  .photo-cap i{color:var(--accent-1)}
-  .showcase-side{display:grid;gap:16px}
-  .stat-card{background:linear-gradient(180deg,var(--surface-2),var(--surface));border:1px solid var(--line);border-radius:var(--r);padding:22px;box-shadow:var(--sh-1)}
-  .stat-card .ic{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;color:#fff;font-size:16px;margin-bottom:12px}
-  .stat-card h4{font-size:16px;font-weight:750}
-  .stat-card p{margin-top:6px;color:var(--ink-1);font-size:14px}
+  /* ── Feature grid ────────────────────────────────────────── */
+  .feat-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+  .feat{background:#fff;border:1px solid var(--line);border-radius:var(--radius-sm);padding:16px 14px;
+    box-shadow:var(--shadow-sm);transition:transform .15s ease,box-shadow .15s ease}
+  .feat:hover{transform:translateY(-3px);box-shadow:0 16px 30px -18px rgba(20,40,90,.4)}
+  .feat .fic{width:46px;height:46px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:19px;margin-bottom:12px}
+  .feat h3{font-size:15px;font-weight:700;color:var(--navy)}
+  .fic.c1{background:var(--blue-tint);color:var(--blue)}
+  .fic.c2{background:var(--green-tint);color:var(--green)}
+  .fic.c3{background:var(--gold-tint);color:#c07f08}
+  .fic.c4{background:#eceafd;color:#5b46d6}
+  .fic.c5{background:#f6ecfb;color:#a855c7}
+  .fic.c6{background:#ffeede;color:#e07219}
+  .fic.c7{background:#ffe9e9;color:#e04747}
+  .fic.c8{background:#e7f7ef;color:#12a150}
 
-  .bento{display:grid;grid-template-columns:repeat(6,1fr);gap:16px}
-  .cell{background:linear-gradient(180deg,var(--surface-2),var(--surface));border:1px solid var(--line);border-radius:var(--r);padding:24px;position:relative;overflow:hidden;box-shadow:var(--sh-1);transition:border-color .22s,transform .22s,box-shadow .22s;display:flex;flex-direction:column}
-  .cell::before{content:"";position:absolute;inset:0;opacity:0;transition:.3s;pointer-events:none;background:radial-gradient(400px 200px at 80% -10%,rgba(79,140,255,.18),transparent 60%)}
-  .cell:hover{transform:translateY(-4px);border-color:var(--line-2);box-shadow:var(--glow)}
-  .cell:hover::before{opacity:1}
-  .cell h3{font-size:18.5px;font-weight:760;margin-bottom:6px}
-  .cell p{font-size:14px;color:var(--ink-1)}
-  .c-4{grid-column:span 4}.c-3{grid-column:span 3}.c-2{grid-column:span 2}
-  .r-2{grid-row:span 2}
-  @media(max-width:920px){.bento{grid-template-columns:repeat(2,1fr)}.c-4,.c-3,.c-2{grid-column:span 2}.r-2{grid-row:auto}}
-  @media(max-width:560px){.bento{grid-template-columns:1fr}.c-4,.c-3,.c-2{grid-column:auto}}
-  .fic{width:44px;height:44px;border-radius:13px;display:grid;place-items:center;font-size:18px;color:#fff;margin-bottom:15px;box-shadow:0 10px 22px -10px rgba(0,0,0,.5)}
-  .mini{background:var(--bg-1);border:1px solid var(--line);border-radius:13px;padding:12px;margin-top:16px}
-  .mrow{display:flex;align-items:center;gap:8px;font-size:12px;padding:6px 0}
-  .mrow+.mrow{border-top:1px dashed var(--line)}
-  .chip{padding:3px 9px;border-radius:999px;font-size:10.5px;font-weight:800;margin-left:auto}
-  .chip.ok{background:color-mix(in srgb,var(--emerald) 20%,transparent);color:var(--emerald-1)}
-  .chip.due{background:color-mix(in srgb,var(--gold) 22%,transparent);color:var(--gold)}
-  .chip.blue{background:color-mix(in srgb,var(--accent) 22%,transparent);color:var(--accent-1)}
-  .prog{height:8px;border-radius:999px;background:var(--line);overflow:hidden;margin-top:10px}
-  .prog i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,var(--accent),var(--emerald))}
+  /* ── Nigeria card ────────────────────────────────────────── */
+  .ng{background:var(--green-tint);border:1px solid #cdecd8;border-radius:var(--radius);padding:22px 18px}
+  .ng-head{display:flex;align-items:center;gap:12px}
+  .ng-flag{width:34px;height:24px;border-radius:4px;overflow:hidden;flex:0 0 auto;display:flex;box-shadow:0 1px 3px rgba(0,0,0,.15)}
+  .ng-flag i{flex:1}.ng-flag .gr{background:#0b8a3c}.ng-flag .wh{background:#fff}
+  .ng h3{font-size:19px;color:var(--navy)}
+  .ng .exam{font-size:13.5px;color:var(--ink-2);font-weight:600;margin-top:2px}
+  .ng-list{display:grid;grid-template-columns:1fr 1fr;gap:12px 14px;margin-top:18px}
+  .ng-list li{display:flex;align-items:flex-start;gap:9px;list-style:none;font-size:13.5px;font-weight:600;color:var(--navy)}
+  .ng-list li i{color:var(--green);margin-top:2px}
+  .ng-list{padding:0}
 
-  .quotes{display:grid;grid-template-columns:repeat(3,1fr);gap:18px}
-  @media(max-width:900px){.quotes{grid-template-columns:1fr}}
-  .quote{background:linear-gradient(180deg,var(--surface-2),var(--surface));border:1px solid var(--line);border-radius:var(--r);padding:26px;display:flex;flex-direction:column;gap:16px;box-shadow:var(--sh-1)}
-  .quote .stars{color:var(--gold);font-size:14px;letter-spacing:3px}
-  .quote p{font-size:15.5px;color:var(--ink);line-height:1.62}
-  .who{display:flex;align-items:center;gap:12px;margin-top:auto;padding-top:16px;border-top:1px solid var(--line)}
-  .who .av{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;font-family:var(--display);font-weight:800;color:#fff;font-size:16px;background:linear-gradient(135deg,var(--violet),var(--emerald));box-shadow:0 0 0 3px color-mix(in srgb,var(--accent) 25%,transparent)}
-  .who .n{font-weight:750;font-size:14.5px}
-  .who .role{font-size:12.5px;color:var(--ink-2)}
+  /* ── Gold CTA band ───────────────────────────────────────── */
+  .join{padding:6px 0 30px}
+  .join a{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;
+    background:linear-gradient(180deg,var(--gold),var(--gold-2));color:#3a2a05;font-weight:800;font-size:17px;
+    padding:18px 22px;border-radius:14px;box-shadow:0 16px 30px -14px rgba(240,160,20,.9)}
 
-  .tiers{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;align-items:stretch}
-  @media(max-width:880px){.tiers{grid-template-columns:1fr;max-width:430px;margin-inline:auto}}
-  .tier{background:linear-gradient(180deg,var(--surface-2),var(--surface));border:1px solid var(--line-2);border-radius:var(--r);padding:28px;display:flex;flex-direction:column;box-shadow:var(--sh-1);position:relative}
-  .tier.feat{background:linear-gradient(var(--surface),var(--surface)) padding-box,linear-gradient(135deg,var(--gold),var(--accent) 55%,var(--emerald)) border-box;border:2px solid transparent;box-shadow:0 28px 70px -30px rgba(246,191,80,.45),var(--sh-1);transform:translateY(-6px)}
-  @media(max-width:880px){.tier.feat{transform:none}}
-  .tier-badge{position:absolute;top:-13px;left:50%;transform:translateX(-50%);background:linear-gradient(135deg,var(--gold),#ffd47a);color:#3a2a05;font-family:var(--display);font-weight:800;font-size:11px;letter-spacing:.07em;text-transform:uppercase;padding:5px 14px;border-radius:999px;white-space:nowrap;box-shadow:0 8px 20px -8px rgba(246,191,80,.9)}
-  .tier-name{font-family:var(--display);font-weight:760;font-size:16px}
-  .tier-amt{font-family:var(--display);font-size:42px;font-weight:850;letter-spacing:-.035em;margin-top:14px;display:flex;align-items:baseline;gap:2px}
-  .tier-amt small{font-size:15px;font-weight:600;color:var(--ink-2);letter-spacing:0}
-  .tier-save{font-size:12.5px;font-weight:700;color:var(--emerald-1);min-height:20px;margin-top:4px}
-  .tier ul{list-style:none;padding:0;margin:18px 0 0;display:grid;gap:12px}
-  .tier li{display:flex;gap:11px;font-size:14px;color:var(--ink-1);align-items:flex-start}
-  .tier li i{color:var(--emerald-1);margin-top:2px}
-  .tier .btn{margin-top:22px}
-  .price-note{text-align:center;margin-top:20px;font-size:13px;color:var(--ink-2)}
-  .price-note i{color:var(--accent-1)}
+  /* ── Pricing ─────────────────────────────────────────────── */
+  .cyc-toggle{display:inline-flex;background:var(--soft);border:1px solid var(--line);border-radius:999px;padding:4px;gap:2px;margin:0 auto 20px}
+  .cyc{border:none;background:transparent;color:var(--ink-2);font-weight:700;font-size:13px;padding:9px 15px;border-radius:999px;cursor:pointer;font-family:inherit}
+  .cyc.on{background:#fff;color:var(--navy);box-shadow:var(--shadow-sm)}
+  .cyc em{font-style:normal;color:var(--green);font-size:11px}
+  .tiers{display:grid;grid-template-columns:1fr;gap:14px}
+  .tier{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:20px 18px;position:relative;box-shadow:var(--shadow-sm)}
+  .tier.feat{border-color:var(--blue);box-shadow:0 20px 40px -22px rgba(47,107,255,.55)}
+  .tier-badge{position:absolute;top:-11px;left:18px;background:var(--blue);color:#fff;font-size:11px;font-weight:700;padding:4px 11px;border-radius:999px}
+  .tier-name{font-weight:800;color:var(--navy);font-size:17px}
+  .tier-amt{font-size:30px;font-weight:800;color:var(--navy);margin:8px 0 2px;letter-spacing:-.02em}
+  .tier-amt small{font-size:13px;color:var(--ink-2);font-weight:600}
+  .tier-save{min-height:18px;font-size:12px;color:var(--green);font-weight:700}
+  .tier ul{list-style:none;padding:0;margin:14px 0;display:flex;flex-direction:column;gap:9px}
+  .tier li{display:flex;gap:9px;font-size:13.5px;color:var(--ink)}
+  .tier li i{color:var(--green);margin-top:3px}
+  .tier li.muted{color:var(--ink-3)} .tier li.muted i{color:var(--ink-3)}
+  .price-note{text-align:center;color:var(--ink-2);font-size:13px;margin-top:16px}
+  .price-note i{color:var(--gold-2)}
 
-  .faq{max-width:780px;margin:0 auto;display:grid;gap:12px}
-  details{background:linear-gradient(180deg,var(--surface-2),var(--surface));border:1px solid var(--line);border-radius:var(--r-sm);padding:2px 20px;box-shadow:var(--sh-1)}
-  summary{list-style:none;cursor:pointer;padding:17px 0;font-family:var(--display);font-weight:700;font-size:15.5px;display:flex;align-items:center;gap:12px}
-  summary::-webkit-details-marker{display:none}
-  summary .ico{margin-left:auto;color:var(--ink-2);transition:.25s}
-  details[open] summary .ico{transform:rotate(45deg);color:var(--accent-1)}
-  details p{padding:0 0 18px;color:var(--ink-1);font-size:14.5px;line-height:1.65}
+  /* ── FAQ ─────────────────────────────────────────────────── */
+  .faq{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:10px}
+  .faq details{background:#fff;border:1px solid var(--line);border-radius:13px;padding:2px 16px}
+  .faq summary{list-style:none;cursor:pointer;font-weight:700;color:var(--navy);font-size:15px;
+    padding:15px 0;display:flex;align-items:center;justify-content:space-between;gap:12px}
+  .faq summary::-webkit-details-marker{display:none}
+  .faq summary .ico{width:26px;height:26px;flex:0 0 auto;border-radius:8px;background:var(--soft);
+    display:flex;align-items:center;justify-content:center;color:var(--blue);font-size:12px}
+  .faq details[open] summary .ico i{transform:rotate(45deg)}
+  .faq p{padding:0 0 15px;color:var(--ink-2);font-size:14px}
 
-  .contact-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px}
-  .contact-card{display:flex;align-items:center;gap:12px;background:linear-gradient(180deg,var(--surface-2),var(--surface));border:1px solid var(--line);border-radius:var(--r-sm);padding:16px 18px;box-shadow:var(--sh-1);transition:border-color .2s,transform .2s}
-  .contact-card:hover{border-color:var(--accent);transform:translateY(-2px)}
-  .contact-card.primary{background:linear-gradient(135deg,var(--accent),var(--violet));border-color:transparent;color:#fff}
-  .contact-card .ic-sm{width:40px;height:40px;border-radius:11px;display:grid;place-items:center;background:color-mix(in srgb,var(--accent) 18%,transparent);color:var(--accent-1);font-size:16px}
-  .contact-card.primary .ic-sm{background:rgba(255,255,255,.2);color:#fff}
-  .contact-card strong{display:block;font-size:14px}
-  .contact-card .cval{font-size:12.5px;color:var(--ink-2)}
-  .contact-card.primary .cval{color:rgba(255,255,255,.85)}
+  /* ── Contact ─────────────────────────────────────────────── */
+  .contact-row{display:grid;grid-template-columns:1fr;gap:12px;max-width:820px;margin:0 auto}
+  .contact-card{display:flex;align-items:center;gap:13px;background:#fff;border:1px solid var(--line);
+    border-radius:14px;padding:15px 16px;box-shadow:var(--shadow-sm)}
+  .contact-card .ic{width:42px;height:42px;flex:0 0 auto;border-radius:11px;background:var(--blue-tint);color:var(--blue);
+    display:flex;align-items:center;justify-content:center;font-size:16px}
+  .contact-card.primary{background:var(--navy);border-color:var(--navy)}
+  .contact-card.primary,.contact-card.primary .cval{color:#fff}
+  .contact-card.primary .ic{background:rgba(255,255,255,.14);color:#fff}
+  .contact-card strong{display:block;font-size:14.5px;color:inherit}
+  .contact-card .cval{font-size:13px;color:var(--ink-2)}
 
-  .cta-band{position:relative;overflow:hidden;border:1px solid var(--line-2);border-radius:28px;padding:60px 30px;text-align:center;box-shadow:var(--sh-2);
-    background:radial-gradient(720px 320px at 50% -10%,rgba(79,140,255,.28),transparent 65%),linear-gradient(180deg,var(--surface-2),var(--surface))}
-  .cta-band h2{font-size:clamp(29px,4.2vw,44px);font-weight:850}
-  .cta-band p{margin-top:14px;color:var(--ink-1);font-size:17.5px}
-
-  footer{border-top:1px solid var(--line);margin-top:80px;padding:52px 0 34px}
-  .foot-grid{display:grid;grid-template-columns:1.6fr 1fr 1fr 1fr;gap:30px}
-  @media(max-width:760px){.foot-grid{grid-template-columns:1fr 1fr}}
-  .foot-brand .foot-tag{margin-top:12px;color:var(--ink-1);font-size:14px;max-width:34ch}
-  .foot-social{display:flex;gap:10px;margin-top:16px}
-  .foot-social a{width:38px;height:38px;border-radius:10px;border:1px solid var(--line-2);background:var(--surface);display:grid;place-items:center;color:var(--ink-1)}
-  .foot-social a:hover{border-color:var(--accent);color:var(--ink)}
-  .foot-col h4{font-family:var(--display);font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-2);margin:0 0 14px}
-  .foot-col a{display:block;color:var(--ink-1);font-size:14px;padding:5px 0}
-  .foot-col a:hover{color:var(--ink)}
-  .foot-bottom{display:flex;justify-content:space-between;gap:18px;flex-wrap:wrap;margin-top:40px;padding-top:22px;border-top:1px solid var(--line);color:var(--ink-2);font-size:13px}
-
-  /* ---- Mobile: flatten the 3D dashboard so nothing overflows the viewport ---- */
-  @media(max-width:600px){
-    .wrap{padding:0 18px}
-    .hero{padding:52px 0 20px}
-    .stage{perspective:none;margin-top:6px;min-width:0}
-    .deck{transform:none !important;display:flex;flex-direction:column;gap:10px;width:100%;min-width:0}
-    .app{width:100%;min-width:0}
-    .app>*{min-width:0}
-    .app-body{padding:12px;min-width:0}
-    .kpis{gap:7px;grid-template-columns:repeat(3,minmax(0,1fr))}
-    .kpi{padding:10px;min-width:0}
-    .kpi .v{font-size:19px}
-    .kpi .spark{display:none}
-    .grid2{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
-    .chart svg{max-width:100%}
-    .deck-glow{display:none}
-    .float{position:static;transform:none;backdrop-filter:none;box-shadow:var(--sh-1);display:flex;align-items:center;gap:11px}
-    .float.a,.float.b{inset:auto}
-    section{padding:56px 0}
-    .sec-head{margin-bottom:34px}
-    .nav-in{gap:10px;height:64px}
-    .nav-right{gap:8px}
-    .nav-right .btn-primary{padding:11px 15px;font-size:14px}
-  }
-  @media(max-width:400px){
-    .brand{font-size:17px}
-    .mark{width:30px;height:30px}
-    .nav-right .btn-primary{padding:10px 13px}
-  }
+  /* ── Footer ──────────────────────────────────────────────── */
+  footer{background:var(--navy);color:#c3cee6;margin-top:14px}
+  .foot-grid{display:grid;grid-template-columns:1fr;gap:24px;padding:34px 0 20px}
+  .foot-brand .fb{display:flex;align-items:center;gap:10px;color:#fff;font-weight:800;font-size:18px}
+  .foot-brand .fb img{width:32px;height:32px}
+  .foot-tag{margin-top:10px;font-size:13.5px;color:#93a1c4;max-width:40ch}
+  .foot-social{display:flex;gap:10px;margin-top:14px}
+  .foot-social a{width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.08);color:#cfd9ef;
+    display:flex;align-items:center;justify-content:center}
+  .foot-col h4{color:#fff;font-size:13px;text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px}
+  .foot-col a{display:block;color:#a7b4d4;font-size:14px;padding:5px 0}
+  .foot-col a:hover{color:#fff}
+  .foot-bottom{border-top:1px solid rgba(255,255,255,.1);padding:16px 0;display:flex;flex-direction:column;gap:6px;
+    font-size:12.5px;color:#8b99bd;text-align:center}
 
   .reveal{opacity:0;transform:translateY(16px)}
-  .reveal.in{opacity:1;transform:none;transition:opacity .7s ease,transform .7s cubic-bezier(.2,.7,.2,1)}
+  .reveal.in{opacity:1;transform:none;transition:opacity .6s ease,transform .6s cubic-bezier(.2,.7,.2,1)}
   @media(prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none}}
+
+  /* ── Desktop ─────────────────────────────────────────────── */
+  @media(min-width:720px){
+    .dv-side{width:132px;padding:14px 10px}
+    .dv-brand{font-size:14px;gap:7px}.dv-brand .d{width:22px;height:22px}
+    .dv-nav a{font-size:12.5px;padding:8px 9px;gap:9px}.dv-nav a i{width:15px;font-size:12px}
+    .dv-kpis{grid-template-columns:repeat(4,1fr)}
+    .dv-charts{grid-template-columns:1.35fr 1fr}
+    .feat-grid{grid-template-columns:repeat(4,1fr)}
+    .ng-list{grid-template-columns:repeat(2,1fr);max-width:640px}
+    .contact-row{grid-template-columns:repeat(2,1fr)}
+    .tiers{grid-template-columns:repeat(3,1fr);align-items:start}
+  }
+  @media(min-width:960px){
+    .head-nav{display:flex}
+    .head-cta{display:inline-flex}
+    .hero{padding:52px 0 20px}
+    .hero .lede{font-size:19px}
+    .foot-grid{grid-template-columns:2fr 1fr 1fr 1fr}
+    .foot-bottom{flex-direction:row;justify-content:space-between;text-align:left}
+  }
 </style>
 <script type="application/ld+json" nonce="{{ csp_nonce }}">
-{
-  "@context": "https://schema.org",
-  "@graph": [
-    {
-      "@type": "Organization",
-      "name": {{ content.brand | tojson }},
-      "url": {{ _home | tojson }},
-      "logo": {{ url_for('static', filename='icons/icon-512.png', _external=True) | tojson }},
-      "contactPoint": {
-        "@type": "ContactPoint",
-        "contactType": "sales",
-        "email": {{ (content.contact.email if content.contact else 'hello@' ~ base_domain) | tojson }}
-      }
-    },
-    {
-      "@type": "SoftwareApplication",
-      "name": {{ content.brand | tojson }},
-      "applicationCategory": "BusinessApplication",
-      "operatingSystem": "Web",
-      "description": {{ _desc | tojson }},
-      "offers": {
-        "@type": "Offer",
-        "price": {{ (content.price_naira or 0) | tojson }},
-        "priceCurrency": "NGN"
-      }
-    }{% if content.faqs %},
-    {
-      "@type": "FAQPage",
-      "mainEntity": [
-        {% for q in content.faqs %}{
-          "@type": "Question",
-          "name": {{ q.q | tojson }},
-          "acceptedAnswer": { "@type": "Answer", "text": {{ q.a | tojson }} }
-        }{{ "," if not loop.last }}{% endfor %}
-      ]
-    }{% endif %}
-  ]
-}
+{ "@context":"https://schema.org", "@type":"SoftwareApplication",
+  "name":{{ content.brand | tojson }}, "applicationCategory":"BusinessApplication",
+  "operatingSystem":"Web", "url":{{ _home | tojson }},
+  "offers":{"@type":"Offer","price":"0","priceCurrency":"NGN"} }
 </script>
 </head>
 <body>
 <a class="skip-link" href="#top">Skip to content</a>
 
-<header class="nav" id="nav"><div class="wrap nav-in">
-  <a class="brand" href="#top"><span class="mark">◈</span> {{ content.brand }}</a>
-  <nav class="nav-links" aria-label="Primary">
-    <a href="#features">Product</a><a href="#benefits">Why us</a>
-    <a href="#pricing">Pricing</a><a href="#faq">FAQ</a><a href="#contact">Contact</a>
-  </nav>
-  <div class="nav-right">
-    <button class="icon-btn" id="themeBtn" type="button" aria-label="Toggle colour theme"><i class="fas fa-moon"></i></button>
-    <form class="nav-signin js-school" title="Go to your school">
-      <input class="js-sub" placeholder="your-school" aria-label="Your school subdomain" autocomplete="off">
-      <span class="sfx">.{{ base_domain }}</span>
-      <button type="submit">Sign in</button>
-    </form>
-    <a class="btn btn-primary nav-cta" href="{{ register_url }}">{{ content.hero_cta }}</a>
-    <button class="icon-btn nav-toggle" id="navToggle" type="button" aria-label="Menu" aria-expanded="false" aria-controls="mobileMenu"><i class="fas fa-bars"></i><i class="fas fa-xmark"></i></button>
+<header class="site-head" id="head">
+  <div class="wrap head-in">
+    <a class="brand" href="#top">
+      <img class="logo" src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="{{ content.brand }} logo">
+      <span class="bt"><span class="bn">{{ content.brand }}</span><span class="bs">School Management, Simplified.</span></span>
+    </a>
+    <nav class="head-nav" aria-label="Primary">
+      <a href="#features">Features</a><a href="#pricing">Pricing</a>
+      <a href="#faq">FAQ</a><a href="#contact">Contact</a>
+    </nav>
+    <div class="head-right">
+      <a class="btn btn-primary head-cta" href="{{ register_url }}">Get Started Free</a>
+      <button class="menu-btn" id="menuBtn" type="button" aria-label="Menu" aria-expanded="false" aria-controls="drawer">
+        <i class="fas fa-bars"></i><i class="fas fa-xmark"></i>
+      </button>
+    </div>
   </div>
-</div>
-  <!-- Mobile drawer -->
-  <div class="mobile-menu" id="mobileMenu">
-    <div class="mm-in">
-      <a class="mm-link" href="#features">Product</a>
-      <a class="mm-link" href="#benefits">Why us</a>
-      <a class="mm-link" href="#pricing">Pricing</a>
-      <a class="mm-link" href="#faq">FAQ</a>
-      <a class="mm-link" href="#contact">Contact</a>
-      <form class="nav-signin mm-signin js-school" title="Go to your school">
+  <div class="drawer" id="drawer">
+    <div class="wrap drawer-in">
+      <a class="ml" href="#features">Features</a>
+      <a class="ml" href="#pricing">Pricing</a>
+      <a class="ml" href="#faq">FAQ</a>
+      <a class="ml" href="#contact">Contact</a>
+      <form class="signin js-school" title="Go to your school">
         <input class="js-sub" placeholder="your-school" aria-label="Your school subdomain" autocomplete="off">
         <span class="sfx">.{{ base_domain }}</span>
         <button type="submit">Sign in</button>
       </form>
-      <a class="btn btn-primary btn-block" href="{{ register_url }}">{{ content.hero_cta }} <i class="fas fa-arrow-right"></i></a>
+      <a class="btn btn-primary btn-block" href="{{ register_url }}">Get Started Free <i class="fas fa-arrow-right"></i></a>
     </div>
   </div>
 </header>
 
 <main id="top">
   <!-- HERO -->
-  <section class="hero"><div class="wrap hero-grid">
-    <div>
-      <span class="flag"><b>NEW</b> Mock JAMB &amp; WAEC analytics, built in</span>
-      <h1>{{ content.hero_title }}</h1>
-      <p class="lede">{{ content.hero_subtitle }}</p>
-      <div class="hero-cta">
-        <a class="btn btn-primary btn-lg" href="{{ register_url }}">{{ content.hero_cta }} <i class="fas fa-arrow-right"></i></a>
-        <a class="btn btn-ghost btn-lg" href="#contact"><i class="fas fa-play"></i> Book a demo</a>
-      </div>
-      <div class="assur">
-        <span><i class="fas fa-check"></i> {{ content.trial_note }}</span><span class="kbd-dot"></span>
-        <span><i class="fas fa-check"></i> No per-student fees</span><span class="kbd-dot"></span>
-        <span><i class="fas fa-check"></i> Set up in minutes</span>
-      </div>
+  <section class="hero"><div class="wrap">
+    <span class="badge"><i class="fas fa-trophy"></i> Nigeria's Preferred School Management System</span>
+    <h1>Run Your School Smarter.<br><span class="accent">All-in-One Management System.</span></h1>
+    <p class="lede">Student records. Attendance. Fees. Results. Communication. Everything in one place.</p>
+    <div class="hero-cta">
+      <a class="btn btn-primary btn-lg" href="{{ register_url }}">Get Started Free <i class="fas fa-arrow-right"></i></a>
+      <a class="btn btn-outline btn-lg" href="#preview"><span class="play"><i class="fas fa-play"></i></span> Watch Demo</a>
     </div>
+    <div class="trust">
+      <span><i class="fas fa-shield-halved"></i> Secure &amp; Reliable</span><span class="sep"></span>
+      <span><i class="fas fa-sitemap"></i> Multi-Branch Support</span><span class="sep"></span>
+      <span><i class="fas fa-mobile-screen-button"></i> Works on Mobile</span>
+    </div>
+  </div></section>
 
-    <div class="stage">
-      <div class="deck-glow"></div>
-      <div class="deck">
-        <div class="app">
-          <div class="app-side">
-            <div class="side-logo"></div>
-            <div class="side-ic on"><i class="fas fa-table-columns"></i></div>
-            <div class="side-ic"><i class="fas fa-user-graduate"></i></div>
-            <div class="side-ic"><i class="fas fa-file-lines"></i></div>
-            <div class="side-ic"><i class="fas fa-wallet"></i></div>
-            <div class="side-ic"><i class="fas fa-chart-line"></i></div>
-          </div>
+  <!-- DASHBOARD PREVIEW -->
+  <section class="preview" id="preview"><div class="wrap reveal">
+    <div class="device">
+      <aside class="dv-side">
+        <div class="dv-brand"><span class="d"></span> {{ content.brand }}</div>
+        <nav class="dv-nav">
+          <a class="on"><i class="fas fa-table-columns"></i> Dashboard</a>
+          <a><i class="fas fa-user-graduate"></i> Students</a>
+          <a><i class="fas fa-clipboard-user"></i> Attendance</a>
+          <a><i class="fas fa-file-lines"></i> Results</a>
+          <a><i class="fas fa-wallet"></i> Fees</a>
+          <a><i class="fas fa-book"></i> Library</a>
+          <a><i class="fas fa-chart-line"></i> Reports</a>
+          <a><i class="fas fa-gear"></i> More</a>
+        </nav>
+      </aside>
+      <div class="dv-main">
+        <div class="dv-top">
           <div>
-            <div class="app-top">
-              <div><div class="ttl">Principal dashboard</div><div class="sub">{{ base_domain }} · this term</div></div>
-              <div class="seg"><span class="on">Term</span><span>Year</span></div>
-            </div>
-            <div class="app-body">
-              <div class="kpis">
-                <div class="kpi"><div class="k">WAEC pass rate</div><div class="v up tnum" data-count="89" data-suffix="%">0%</div><div class="d">▲ 6% vs last year</div>
-                  <svg class="spark" viewBox="0 0 44 18" aria-hidden="true"><polyline fill="none" stroke="var(--emerald-1)" stroke-width="2" points="0,14 9,11 18,12 27,6 36,7 44,2"/></svg></div>
-                <div class="kpi"><div class="k">Attendance</div><div class="v blue tnum" data-count="96" data-suffix="%">0%</div><div class="d">▲ 2% this term</div>
-                  <svg class="spark" viewBox="0 0 44 18" aria-hidden="true"><polyline fill="none" stroke="var(--accent-1)" stroke-width="2" points="0,10 9,9 18,11 27,7 36,8 44,4"/></svg></div>
-                <div class="kpi"><div class="k">Fees collected</div><div class="v tnum">₦4.2M</div><div class="d">78% of target</div>
-                  <svg class="spark" viewBox="0 0 44 18" aria-hidden="true"><polyline fill="none" stroke="var(--gold)" stroke-width="2" points="0,15 9,12 18,10 27,9 36,5 44,4"/></svg></div>
-              </div>
-              <div class="chart">
-                <div class="ct"><span>Termly performance</span><span>SSS3 average</span></div>
-                <svg viewBox="0 0 320 90" preserveAspectRatio="none" style="width:100%;height:78px" aria-hidden="true">
-                  <defs><linearGradient id="ag" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="var(--accent)" stop-opacity=".35"/><stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs>
-                  <path d="M0,70 L45,60 L90,64 L135,40 L180,48 L225,28 L270,32 L320,14 L320,90 L0,90 Z" fill="url(#ag)"/>
-                  <path d="M0,70 L45,60 L90,64 L135,40 L180,48 L225,28 L270,32 L320,14" fill="none" stroke="var(--accent)" stroke-width="2.5" stroke-linecap="round"/>
-                  <circle cx="320" cy="14" r="3.5" fill="var(--accent)"/>
-                </svg>
-              </div>
-              <div class="grid2">
-                <div class="rows">
-                  <div class="row"><span class="ava">CF</span><span class="nm">Chidera F.</span><span class="rt tnum" style="color:var(--emerald-1)">284</span></div>
-                  <div class="row"><span class="ava">AO</span><span class="nm">Aisha O.</span><span class="tagly due">Part-paid</span></div>
-                  <div class="row"><span class="ava">TM</span><span class="nm">Tunde M.</span><span class="tagly ok">Present</span></div>
-                </div>
-                <div class="rows">
-                  <div class="row"><span class="nm">Mathematics</span><span class="tagly ok">A1</span></div>
-                  <div class="row"><span class="nm">English</span><span class="tagly ok">B2</span></div>
-                  <div class="row"><span class="nm">Physics</span><span class="tagly blue">C4</span></div>
-                </div>
+            <div class="dv-hi">Good morning, Admin 👋</div>
+            <div class="dv-sub">St. James' College – Main Campus</div>
+          </div>
+          <div class="dv-av"><i class="fas fa-user"></i></div>
+        </div>
+        <div class="dv-kpis">
+          <div class="dv-kpi b"><div class="l">Students</div><div class="v">1,248</div><div class="t">↑ 12% vs last term</div></div>
+          <div class="dv-kpi g"><div class="l">Attendance</div><div class="v">92%</div><div class="t">↑ 6% vs last week</div></div>
+          <div class="dv-kpi p"><div class="l">Fees Collected</div><div class="v">₦8.45M</div><div class="t">↑ 18% vs last month</div></div>
+          <div class="dv-kpi y"><div class="l">Results</div><div class="v">87%</div><div class="t">↑ 4% vs last term</div></div>
+        </div>
+        <div class="dv-charts">
+          <div class="dv-card">
+            <h5>Academic Performance</h5>
+            <svg viewBox="0 0 300 96" preserveAspectRatio="none" style="width:100%;height:84px" aria-hidden="true">
+              <defs><linearGradient id="perf" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0" stop-color="#2f6bff" stop-opacity=".22"/><stop offset="1" stop-color="#2f6bff" stop-opacity="0"/></linearGradient></defs>
+              <path d="M4,78 L46,58 L88,64 L130,40 L172,48 L214,26 L256,30 L296,16 L296,96 L4,96 Z" fill="url(#perf)"/>
+              <polyline fill="none" stroke="#2f6bff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"
+                points="4,78 46,58 88,64 130,40 172,48 214,26 256,30 296,16"/>
+              <polyline fill="none" stroke="#c7d6f7" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"
+                points="4,86 46,80 88,82 130,72 172,76 214,66 256,70 296,60"/>
+            </svg>
+            <div class="dv-axis"><span>Term 1</span><span>Term 2</span><span>Term 3</span></div>
+          </div>
+          <div class="dv-card">
+            <h5>Attendance Overview</h5>
+            <div class="donut-wrap">
+              <div class="donut"></div>
+              <div class="leg">
+                <span><span class="dot pr"></span> Present</span>
+                <span><span class="dot ab"></span> Absent</span>
+                <span><span class="dot la"></span> Late</span>
               </div>
             </div>
           </div>
         </div>
-        <div class="float a"><div class="ring"><b>96%</b></div><div><div class="fk">Present today</div><div class="fv tnum">1,204</div></div></div>
-        <div class="float b"><div class="fk">Outstanding recovered</div><div class="fv tnum">₦18.6M</div></div>
       </div>
     </div>
   </div></section>
 
-  <!-- TRUST STRIP -->
-  <div class="trust"><div class="wrap reveal">
-    <p>Everything a school runs on — in one place</p>
-    <div class="row2">
-      <span><i class="fas fa-user-graduate"></i> Students</span>
-      <span><i class="fas fa-chart-line"></i> Results</span>
-      <span><i class="fas fa-wallet"></i> Fees</span>
-      <span><i class="fas fa-clipboard-check"></i> Attendance</span>
-      <span><i class="fas fa-desktop"></i> CBT / Mock</span>
-      <span><i class="fas fa-comments"></i> Parents</span>
-    </div>
-  </div></div>
-
-  <!-- SHOWCASE -->
-  <section id="benefits"><div class="wrap">
-    <div class="sec-head reveal">
-      <span class="eyebrow">Built for real classrooms</span>
-      <h2>Software that meets your school where it is</h2>
-      <p>From nursery to SSS3, on any phone, tablet or laptop — no training weekend required.</p>
-    </div>
-    <div class="showcase reveal">
-      <div class="photo">
-        <!-- To use a real photo, drop it in static/img/ and replace the emblem below, e.g.:
-             <img src="{{ url_for('static', filename='img/classroom.jpg') }}" alt="Students in a modern classroom"> -->
-        <div class="glow-emblem"><i class="fas fa-school"></i></div>
-        <div class="photo-cap"><i class="fas fa-circle-check"></i> One private, branded portal — staff, parents &amp; students</div>
-      </div>
-      <div class="showcase-side">
-        <div class="stat-card"><div class="ic" style="background:linear-gradient(145deg,var(--accent),var(--violet))"><i class="fas fa-file-lines"></i></div>
-          <h4>Report cards, automatically</h4><p>Score entry, positions and branded report cards computed for you — printed in a click.</p></div>
-        <div class="stat-card"><div class="ic" style="background:linear-gradient(145deg,var(--emerald),#0e9e73)"><i class="fas fa-hand-holding-dollar"></i></div>
-          <h4>Fees that collect themselves</h4><p>Parents see balances and pay online; defaulter reminders go out on their own.</p></div>
-        <div class="stat-card"><div class="ic" style="background:linear-gradient(145deg,var(--accent),var(--emerald))"><i class="fas fa-shield-halved"></i></div>
-          <h4>Private &amp; secure by design</h4><p>Each school on its own isolated database and subdomain, with role-based access.</p></div>
-      </div>
+  <!-- STATS BAND -->
+  <section class="stats"><div class="wrap reveal">
+    <div class="stats-in">
+      <div class="stat"><i class="fas fa-building-columns"></i><div class="n">500+</div><div class="l">Schools</div></div>
+      <div class="stat"><i class="fas fa-users"></i><div class="n">120K+</div><div class="l">Students</div></div>
+      <div class="stat"><i class="fas fa-layer-group"></i><div class="n">2M+</div><div class="l">Results Processed</div></div>
+      <div class="stat"><i class="fas fa-clock"></i><div class="n">98.7%</div><div class="l">System Uptime</div></div>
     </div>
   </div></section>
 
-  <!-- BENTO FEATURES -->
-  <section id="features"><div class="wrap">
+  <!-- FEATURES -->
+  <section class="sec" id="features"><div class="wrap">
     <div class="sec-head reveal">
-      <span class="eyebrow">Everything in one system</span>
-      <h2>One portal. Every part of the school.</h2>
-      <p>No spreadsheets, no scattered tools — each module feeds the next.</p>
+      <h2>Built for the way<br><span class="accent">Nigerian schools actually work</span></h2>
     </div>
-    {% set ficons = ['fa-chart-simple','fa-wallet','fa-desktop','fa-comments','fa-clipboard-check','fa-code-branch'] %}
-    {% set fgrads = ['linear-gradient(145deg,var(--accent),var(--violet))','linear-gradient(145deg,var(--emerald),#0e9e73)','linear-gradient(145deg,var(--violet),var(--accent))','linear-gradient(145deg,var(--gold),#e79a1f)','linear-gradient(145deg,#ff8a5b,#ff6b6b)','linear-gradient(145deg,var(--accent),var(--emerald))'] %}
-    {% set spans = ['c-4 r-2','c-2','c-2','c-4','c-3','c-3'] %}
-    <div class="bento">
-      {% for f in content.features %}
-      <div class="cell {{ spans[loop.index0 % spans|length] }} reveal">
-        <div class="fic" style="background:{{ fgrads[loop.index0 % fgrads|length] }}"><i class="fas {{ ficons[loop.index0 % ficons|length] }}"></i></div>
-        <h3>{{ f.title }}</h3><p>{{ f.body }}</p>
-        {% if loop.index0 == 0 %}
-        <div class="mini">
-          <div class="mrow"><span>Mathematics</span><span class="tnum muted">82</span><span class="chip ok">A1</span></div>
-          <div class="mrow"><span>English Language</span><span class="tnum muted">71</span><span class="chip ok">B2</span></div>
-          <div class="mrow"><span>Biology</span><span class="tnum muted">58</span><span class="chip blue">C4</span></div>
-          <div class="prog"><i style="width:89%"></i></div>
-          <div style="font-size:11px;color:var(--ink-2);margin-top:7px">Class average 74% · 3rd of 6 arms</div>
+    <div class="feat-grid reveal">
+      <div class="feat"><div class="fic c1"><i class="fas fa-graduation-cap"></i></div><h3>Academic Management</h3></div>
+      <div class="feat"><div class="fic c2"><i class="fas fa-user-check"></i></div><h3>Attendance Management</h3></div>
+      <div class="feat"><div class="fic c3"><i class="fas fa-wallet"></i></div><h3>Finance Management</h3></div>
+      <div class="feat"><div class="fic c4"><i class="fas fa-clipboard-check"></i></div><h3>Examination Intelligence</h3></div>
+      <div class="feat"><div class="fic c5"><i class="fas fa-bullhorn"></i></div><h3>Communication</h3></div>
+      <div class="feat"><div class="fic c6"><i class="fas fa-building"></i></div><h3>Multi-Branch Management</h3></div>
+      <div class="feat"><div class="fic c7"><i class="fas fa-user-group"></i></div><h3>Parents &amp; Students</h3></div>
+      <div class="feat"><div class="fic c8"><i class="fas fa-chart-column"></i></div><h3>Reports &amp; Analytics</h3></div>
+    </div>
+  </div></section>
+
+  <!-- NIGERIA CARD -->
+  <section class="sec" style="padding-top:6px"><div class="wrap reveal">
+    <div class="ng">
+      <div class="ng-head">
+        <span class="ng-flag"><i class="gr"></i><i class="wh"></i><i class="gr"></i></span>
+        <div>
+          <h3>Perfect for Nigerian Schools</h3>
+          <div class="exam">WAEC • NECO • JAMB • Post-UME Ready</div>
         </div>
-        {% elif loop.index0 == 3 %}
-        <div class="mini">
-          <div class="mrow"><span><i class="fas fa-bullhorn" style="color:var(--accent-1)"></i> Resumption notice</span><span class="chip ok">Delivered</span></div>
-          <div class="mrow"><span><i class="fas fa-chart-line" style="color:var(--accent-1)"></i> Results published</span><span class="chip blue">Parents notified</span></div>
-        </div>
-        {% endif %}
       </div>
-      {% endfor %}
+      <ul class="ng-list">
+        <li><i class="fas fa-check"></i> Local grading system</li>
+        <li><i class="fas fa-check"></i> Nigerian curriculum support</li>
+        <li><i class="fas fa-check"></i> School fee management</li>
+        <li><i class="fas fa-check"></i> Parents &amp; student portals</li>
+      </ul>
     </div>
   </div></section>
 
-  <!-- SECURITY & PRIVACY -->
-  <section id="security"><div class="wrap">
-    <div class="sec-head reveal">
-      <span class="eyebrow">Security &amp; privacy</span>
-      <h2>Your school's data, kept your school's business</h2>
-      <p>Every school runs in its own isolated space — data never mixes with another school's, and access is controlled and logged.</p>
-    </div>
-    <div class="sec-grid reveal" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:18px;max-width:1000px;margin:0 auto">
-      <div class="stat-card"><div class="ic" style="background:linear-gradient(145deg,var(--accent),var(--violet))"><i class="fas fa-database"></i></div>
-        <h4>Isolated database per school</h4><p>Each school has its own database and subdomain — one school can never see or reach another's records.</p></div>
-      <div class="stat-card"><div class="ic" style="background:linear-gradient(145deg,var(--emerald),#0e9e73)"><i class="fas fa-lock"></i></div>
-        <h4>Encrypted in transit &amp; at rest</h4><p>Traffic is served over HTTPS and sensitive fields and backups are encrypted, so data stays protected end to end.</p></div>
-      <div class="stat-card"><div class="ic" style="background:linear-gradient(145deg,var(--violet),var(--accent))"><i class="fas fa-cloud-arrow-up"></i></div>
-        <h4>Automatic daily backups</h4><p>Your data is backed up every day and retained, so an accident or device loss never means losing records.</p></div>
-      <div class="stat-card"><div class="ic" style="background:linear-gradient(145deg,var(--gold),#e79a1f)"><i class="fas fa-user-shield"></i></div>
-        <h4>Role-based access &amp; audit trail</h4><p>Staff see only what their role allows, and sensitive actions are recorded — you always know who did what.</p></div>
-      <div class="stat-card"><div class="ic" style="background:linear-gradient(145deg,#ff8a5b,#ff6b6b)"><i class="fas fa-shield-halved"></i></div>
-        <h4>NDPR-aligned data handling</h4><p>Data is handled in line with Nigeria's data-protection rules — you stay the owner of your school's information.</p></div>
-      <div class="stat-card"><div class="ic" style="background:linear-gradient(145deg,var(--accent),var(--emerald))"><i class="fas fa-key"></i></div>
-        <h4>You're in control</h4><p>Export your data any time and manage exactly who on your team can sign in and what they can do.</p></div>
-    </div>
+  <!-- JOIN CTA -->
+  <section class="join"><div class="wrap reveal">
+    <a href="{{ register_url }}">Join 500+ Schools on {{ content.brand }} <i class="fas fa-arrow-right"></i></a>
   </div></section>
-
-  <!-- TESTIMONIALS -->
-  {% if content.testimonials %}
-  <section id="voices"><div class="wrap">
-    <div class="sec-head reveal"><span class="eyebrow">Loved by school teams</span>
-      <h2>Trusted for day-to-day management</h2></div>
-    <div class="quotes">
-      {% for t in content.testimonials %}
-      <div class="quote reveal">
-        <div class="stars">★★★★★</div>
-        <p>“{{ t.quote }}”</p>
-        <div class="who"><span class="av">{{ t.name[0]|upper }}</span>
-          <span><span class="n">{{ t.name }}</span>{% if t.role %}<span class="role">{{ t.role }}</span>{% endif %}</span></div>
-      </div>
-      {% endfor %}
-    </div>
-  </div></section>
-  {% endif %}
 
   <!-- PRICING -->
-  <section id="pricing"><div class="wrap">
-    <div class="sec-head reveal"><span class="eyebrow">Simple pricing</span>
-      <h2>Start free, then pick your plan</h2>
-      <p>Choose the tier that fits — one flat price per school, never per student. Longer cycles save more.</p></div>
-
-    {% set defcyc = 'monthly' %}
-    <div class="cyc-toggle reveal" role="tablist" aria-label="Billing cycle">
-      {% for cid, clabel in [('monthly','Monthly'),('termly','Termly'),('annual','Annual')] %}
-      <button type="button" class="cyc {{ 'on' if cid == defcyc }}" data-cycle="{{ cid }}">{{ clabel }}{% if cid == 'annual' %} <em>save more</em>{% endif %}</button>
-      {% endfor %}
+  <section class="sec" id="pricing" style="background:var(--soft)"><div class="wrap">
+    <div class="sec-head reveal">
+      <h2>Start free, then <span class="accent">pick your plan</span></h2>
+      <p>One flat price per school — never per student. Longer cycles save more.</p>
     </div>
-
+    {% set defcyc = 'monthly' %}
+    <div style="text-align:center" class="reveal">
+      <div class="cyc-toggle" role="tablist" aria-label="Billing cycle">
+        {% for cid, clabel in [('monthly','Monthly'),('termly','Termly'),('annual','Annual')] %}
+        <button type="button" class="cyc {{ 'on' if cid == defcyc }}" data-cycle="{{ cid }}">{{ clabel }}{% if cid == 'annual' %} <em>save more</em>{% endif %}</button>
+        {% endfor %}
+      </div>
+    </div>
     <div class="tiers reveal">
       {% for row in grid %}
       {% set p = row.plans[defcyc] %}
       <div class="tier{{ ' feat' if row.popular }}" data-tier="{{ row.tier }}">
         {% if row.popular %}<span class="tier-badge">★ Most popular</span>{% endif %}
         <div class="tier-name">{{ row.label }}</div>
-        <div class="tier-amt tnum">₦<span class="t-num">{{ '{:,.0f}'.format(p.price_naira) }}</span><small>/<span class="t-per">{{ p.per }}</span></small></div>
+        <div class="tier-amt">₦<span class="t-num">{{ '{:,.0f}'.format(p.price_naira) }}</span><small>/<span class="t-per">{{ p.per }}</span></small></div>
         <div class="tier-save"><span class="t-save">{% if p.savings > 0 %}Save {{ p.savings }}% vs monthly{% endif %}</span></div>
         <ul>
           <li><i class="fas fa-user-group"></i> {{ 'Unlimited students' if row.limits.students == -1 else '{:,} students'.format(row.limits.students) }}</li>
@@ -642,7 +496,7 @@
           <li class="{{ '' if row.features.website_builder else 'muted' }}"><i class="fas {{ 'fa-check' if row.features.website_builder else 'fa-minus' }}"></i> Website builder</li>
           <li><i class="fas fa-check"></i> Daily backups &amp; encryption</li>
         </ul>
-        <a class="btn btn-block {{ 'btn-primary' if row.popular else 'btn-ghost' }} t-cta" data-tier="{{ row.tier }}" href="{{ register_url }}?tier={{ row.tier }}&amp;cycle={{ defcyc }}">{{ content.hero_cta }}</a>
+        <a class="btn btn-block {{ 'btn-primary' if row.popular else 'btn-outline' }} t-cta" data-tier="{{ row.tier }}" href="{{ register_url }}?tier={{ row.tier }}&amp;cycle={{ defcyc }}">Get Started Free</a>
       </div>
       {% endfor %}
     </div>
@@ -652,8 +506,8 @@
 
   <!-- FAQ -->
   {% if content.faqs %}
-  <section id="faq"><div class="wrap">
-    <div class="sec-head reveal"><span class="eyebrow center">Questions</span><h2>Frequently asked</h2></div>
+  <section class="sec" id="faq"><div class="wrap">
+    <div class="sec-head reveal"><h2>Frequently <span class="accent">asked</span></h2></div>
     <div class="faq">
       {% for q in content.faqs %}
       <details class="reveal"{{ ' open' if loop.first }}><summary>{{ q.q }}<span class="ico"><i class="fas fa-plus"></i></span></summary><p>{{ q.a }}</p></details>
@@ -664,34 +518,22 @@
 
   <!-- CONTACT -->
   {% set ct = content.contact or {} %}
-  <section id="contact"><div class="wrap">
-    <div class="sec-head reveal"><span class="eyebrow center">Talk to us</span>
-      <h2>Questions? We’re here to help</h2>
-      <p>Book a demo or reach out — we’ll help you get your school set up.</p></div>
+  <section class="sec" id="contact" style="background:var(--soft)"><div class="wrap">
+    <div class="sec-head reveal"><h2>Questions? <span class="accent">We're here to help</span></h2>
+      <p>Book a demo or reach out — we'll help you get your school set up.</p></div>
     <div class="contact-row reveal">
-      {% if ct.email %}<a class="contact-card" href="mailto:{{ ct.email }}"><span class="ic-sm"><i class="fas fa-envelope"></i></span><span><strong>Email</strong><span class="cval">{{ ct.email }}</span></span></a>{% endif %}
-      {% if ct.phone %}<a class="contact-card" href="tel:{{ ct.phone | replace(' ', '') }}"><span class="ic-sm"><i class="fas fa-phone"></i></span><span><strong>Call</strong><span class="cval">{{ ct.phone }}</span></span></a>{% endif %}
-      {% if ct.whatsapp %}<a class="contact-card" href="https://wa.me/{{ ct.whatsapp }}" rel="noopener" target="_blank"><span class="ic-sm"><i class="fab fa-whatsapp"></i></span><span><strong>WhatsApp</strong><span class="cval">Chat with us</span></span></a>{% endif %}
-      <a class="contact-card primary" href="{{ register_url }}"><span class="ic-sm"><i class="fas fa-rocket"></i></span><span><strong>Start free trial</strong><span class="cval">Set up in minutes</span></span></a>
+      {% if ct.email %}<a class="contact-card" href="mailto:{{ ct.email }}"><span class="ic"><i class="fas fa-envelope"></i></span><span><strong>Email</strong><span class="cval">{{ ct.email }}</span></span></a>{% endif %}
+      {% if ct.phone %}<a class="contact-card" href="tel:{{ ct.phone | replace(' ', '') }}"><span class="ic"><i class="fas fa-phone"></i></span><span><strong>Call</strong><span class="cval">{{ ct.phone }}</span></span></a>{% endif %}
+      {% if ct.whatsapp %}<a class="contact-card" href="https://wa.me/{{ ct.whatsapp }}" rel="noopener" target="_blank"><span class="ic"><i class="fab fa-whatsapp"></i></span><span><strong>WhatsApp</strong><span class="cval">Chat with us</span></span></a>{% endif %}
+      <a class="contact-card primary" href="{{ register_url }}"><span class="ic"><i class="fas fa-rocket"></i></span><span><strong>Start free trial</strong><span class="cval">Set up in minutes</span></span></a>
     </div>
   </div></section>
-
-  <!-- FINAL CTA -->
-  <div class="wrap"><div class="cta-band reveal">
-    <span class="eyebrow center">Get started today</span>
-    <h2 style="margin-top:12px">Your school, running on one portal</h2>
-    <p>Set up your free trial in a few minutes — no card required.</p>
-    <div style="display:flex;gap:14px;justify-content:center;margin-top:28px;flex-wrap:wrap">
-      <a class="btn btn-primary btn-lg" href="{{ register_url }}">{{ content.hero_cta }} <i class="fas fa-arrow-right"></i></a>
-      <a class="btn btn-ghost btn-lg" href="#contact">Talk to sales</a>
-    </div>
-  </div></div>
 </main>
 
 <footer><div class="wrap">
   <div class="foot-grid">
     <div class="foot-brand">
-      <div class="brand"><span class="mark">◈</span> {{ content.brand }}</div>
+      <div class="fb"><img src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt=""> {{ content.brand }}</div>
       <p class="foot-tag">All-in-one school management for nurseries, primary &amp; secondary schools — and school groups.</p>
       <div class="foot-social">
         {% if ct.email %}<a href="mailto:{{ ct.email }}" aria-label="Email us"><i class="fas fa-envelope"></i></a>{% endif %}
@@ -699,21 +541,14 @@
         {% if ct.phone %}<a href="tel:{{ ct.phone | replace(' ', '') }}" aria-label="Call us"><i class="fas fa-phone"></i></a>{% endif %}
       </div>
     </div>
-    <nav class="foot-col" aria-label="Product">
-      <h4>Product</h4>
-      <a href="#features">Features</a><a href="#pricing">Pricing</a>
-      <a href="#benefits">Why us</a><a href="#faq">FAQ</a>
-    </nav>
-    <nav class="foot-col" aria-label="Company">
-      <h4>Company</h4>
-      <a href="#contact">Contact</a><a href="{{ register_url }}">Start free trial</a>
-    </nav>
-    <nav class="foot-col" aria-label="Legal">
-      <h4>Legal</h4>
+    <nav class="foot-col" aria-label="Product"><h4>Product</h4>
+      <a href="#features">Features</a><a href="#pricing">Pricing</a><a href="#faq">FAQ</a></nav>
+    <nav class="foot-col" aria-label="Company"><h4>Company</h4>
+      <a href="#contact">Contact</a><a href="{{ register_url }}">Start free trial</a></nav>
+    <nav class="foot-col" aria-label="Legal"><h4>Legal</h4>
       <a href="{{ url_for('marketing.legal', slug='privacy') }}">Privacy Policy</a>
       <a href="{{ url_for('marketing.legal', slug='terms') }}">Terms of Service</a>
-      <a href="{{ url_for('marketing.legal', slug='cookies') }}">Cookie Policy</a>
-    </nav>
+      <a href="{{ url_for('marketing.legal', slug='cookies') }}">Cookie Policy</a></nav>
   </div>
   <div class="foot-bottom">
     <span>{{ content.footer }}</span>
@@ -723,20 +558,9 @@
 
 <script nonce="{{ csp_nonce }}">
   var BASE_DOMAIN = {{ base_domain | tojson }};
-  // theme toggle
-  var root = document.documentElement, tb = document.getElementById('themeBtn');
-  function sysDark(){ return matchMedia('(prefers-color-scheme:dark)').matches; }
-  function syncIcon(){ var d = root.getAttribute('data-theme') || (sysDark()?'dark':'light');
-    tb.innerHTML = d==='dark' ? '<i class="fas fa-moon"></i>' : '<i class="fas fa-sun"></i>'; }
-  tb.addEventListener('click', function(){
-    var cur = root.getAttribute('data-theme') || (sysDark()?'dark':'light');
-    root.setAttribute('data-theme', cur==='dark'?'light':'dark'); syncIcon();
-  });
-  syncIcon();
-  // sticky-nav shadow
-  var nav = document.getElementById('nav');
-  addEventListener('scroll', function(){ nav.classList.toggle('scrolled', scrollY > 8); }, {passive:true});
-  // sign-in -> school subdomain (works for the bar form and the drawer form)
+  var head = document.getElementById('head');
+  addEventListener('scroll', function(){ head.classList.toggle('scrolled', scrollY > 8); }, {passive:true});
+  // sign-in -> school subdomain
   document.querySelectorAll('.js-school').forEach(function(form){
     form.addEventListener('submit', function(e){
       e.preventDefault();
@@ -745,40 +569,28 @@
       if (s) location.href = 'https://' + s + '.' + BASE_DOMAIN + '/';
     });
   });
-  // mobile hamburger drawer
-  var navToggle = document.getElementById('navToggle');
-  function closeMenu(){ nav.classList.remove('menu-open'); navToggle.setAttribute('aria-expanded','false'); }
-  navToggle.addEventListener('click', function(){
-    var open = nav.classList.toggle('menu-open');
-    navToggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+  // mobile drawer
+  var menuBtn = document.getElementById('menuBtn');
+  function closeMenu(){ head.classList.remove('menu-open'); menuBtn.setAttribute('aria-expanded','false'); }
+  menuBtn.addEventListener('click', function(){
+    var open = head.classList.toggle('menu-open');
+    menuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
   });
-  document.querySelectorAll('#mobileMenu .mm-link').forEach(function(a){ a.addEventListener('click', closeMenu); });
+  document.querySelectorAll('#drawer .ml').forEach(function(a){ a.addEventListener('click', closeMenu); });
   document.addEventListener('keydown', function(e){ if(e.key === 'Escape') closeMenu(); });
-  document.addEventListener('click', function(e){
-    if (nav.classList.contains('menu-open') && !nav.contains(e.target)) closeMenu();
-  });
-  addEventListener('resize', function(){ if (innerWidth > 1000) closeMenu(); });
-  // scroll reveal + count-up (skipped when the visitor prefers reduced motion)
+  addEventListener('resize', function(){ if (innerWidth > 960) closeMenu(); });
+  // scroll reveal
   var reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
   var els = document.querySelectorAll('.reveal');
   if (reduce || !('IntersectionObserver' in window)) {
     els.forEach(function(el){ el.classList.add('in'); });
-    document.querySelectorAll('[data-count]').forEach(function(el){ el.textContent = el.dataset.count + (el.dataset.suffix||''); });
   } else {
     var io = new IntersectionObserver(function(es){
       es.forEach(function(e){ if(e.isIntersecting){ e.target.classList.add('in'); io.unobserve(e.target); } });
     }, {threshold:.12});
     els.forEach(function(el){ io.observe(el); });
-    var cio = new IntersectionObserver(function(es){
-      es.forEach(function(e){ if(e.isIntersecting){ countUp(e.target); cio.unobserve(e.target); } });
-    }, {threshold:.5});
-    document.querySelectorAll('[data-count]').forEach(function(el){ cio.observe(el); });
-    function countUp(el){ var to = +el.dataset.count, suf = el.dataset.suffix||'', start=null;
-      function step(t){ start = start||t; var p = Math.min((t-start)/900,1);
-        el.textContent = Math.round(p*to) + suf; if(p<1) requestAnimationFrame(step); }
-      requestAnimationFrame(step); }
   }
-  // pricing: billing-cycle toggle updates each tier's price + CTA link
+  // pricing billing-cycle toggle
   (function(){
     var node = document.getElementById('pricingData');
     if (!node) return;
