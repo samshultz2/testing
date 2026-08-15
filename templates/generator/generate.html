@@ -50,9 +50,15 @@
 <div class="card mb-3">
     <div class="card-header" style="background: #fff3cd;"><h3><i class="fas fa-exclamation-triangle"></i> Issues Found</h3></div>
     <div class="card-body">
-        <ul class="mb-0">
+        <ul class="mb-0" style="list-style:none; padding-left:0;">
             {% for issue in issues %}
-            <li>{{ issue }}</li>
+            {% set is_err = issue.type == 'error' %}
+            <li style="display:flex; align-items:flex-start; gap:.5rem; padding:.25rem 0;
+                       color:{{ '#b42318' if is_err else '#b25e09' }};">
+                <i class="fas {{ 'fa-circle-xmark' if is_err else 'fa-triangle-exclamation' }}"
+                   style="margin-top:.15rem;"></i>
+                <span>{{ issue.msg }}</span>
+            </li>
             {% endfor %}
         </ul>
         {% if issues|length == 10 %}
