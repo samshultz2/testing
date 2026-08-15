@@ -70,11 +70,43 @@ details.ba > summary{cursor:pointer;font-weight:700;padding:.3rem 0}
                     <option value="untagged">Untagged only — fill in the blanks (safe)</option>
                     <option value="all">Re-classify all — upgrade existing tags with improved keywords</option>
                 </select></div>
+            {% if years %}
+            <div class="form-group mb-0"><label class="form-label">Year</label>
+                <select name="year" class="form-control" style="max-width:150px;">
+                    <option value="">All years</option>
+                    {% for y in years %}<option value="{{ y }}">{{ y }}</option>{% endfor %}
+                </select></div>
+            {% endif %}
             <label class="text-sm" style="display:inline-flex;align-items:center;gap:.4rem;padding-bottom:.5rem;">
                 <input type="checkbox" name="ensure_section" value="1"> Make still-unmatched questions drawable (assign a section)</label>
             <button class="btn btn-primary btn-sm"><i class="fas fa-wand-magic-sparkles"></i> Run auto-tag</button>
         </form>
         <p class="text-xs text-muted" style="margin:.5rem 0 0;"><i class="fas fa-circle-info"></i> The classifier never invents a topic. Notation-only, figure-only or out-of-syllabus questions may stay untagged; ticking “make drawable” still lets them be used in exams (they just won't carry a topic label).</p>
+    </div>
+</div>
+
+<div class="card" style="margin-bottom:1rem;border-left:4px solid #2563eb;">
+    <div class="card-header"><h3><i class="fas fa-robot"></i> Tag with AI <span class="text-muted text-sm">— uses your linked Anthropic key</span></h3></div>
+    <div class="card-body">
+        <p class="text-sm text-muted" style="margin-top:0;">Sends {{ subject.name }}'s bank questions to Claude, using the key set in <a href="{{ url_for('settings.ocr_settings') }}">Settings&nbsp;→&nbsp;OCR</a>, and assigns each the best-matching JAMB&nbsp;syllabus topic. Re-tags the whole subject (or one year), overwriting existing topics — it only ever uses real syllabus topics, never invented ones.</p>
+        {% if ai_ready %}
+        <form method="post" action="{{ url_for('mock_jamb.bank_ai_retag') }}" style="display:flex;gap:.7rem;align-items:flex-end;flex-wrap:wrap;"
+              onsubmit="var b=this.querySelector('button');b.disabled=true;b.innerHTML='<i class=&quot;fas fa-spinner fa-spin&quot;></i> Tagging… this can take a moment';">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="subject_id" value="{{ subject_id }}">
+            {% if years %}
+            <div class="form-group mb-0"><label class="form-label">Year</label>
+                <select name="year" class="form-control" style="max-width:150px;">
+                    <option value="">All years</option>
+                    {% for y in years %}<option value="{{ y }}">{{ y }}</option>{% endfor %}
+                </select></div>
+            {% endif %}
+            <button class="btn btn-sm" style="background:#2563eb;color:#fff;"><i class="fas fa-robot"></i> Tag with AI</button>
+        </form>
+        <p class="text-xs text-muted" style="margin:.5rem 0 0;"><i class="fas fa-circle-info"></i> This calls your Anthropic account (a cost per run) and can take a moment for large banks — up to 400 questions per run, so pick a year to tag a big subject in passes.</p>
+        {% else %}
+        <p class="text-sm" style="color:#b42318;margin-bottom:0;"><i class="fas fa-triangle-exclamation"></i> No Anthropic key is active. Add one under <a href="{{ url_for('settings.ocr_settings') }}">Settings&nbsp;→&nbsp;OCR</a> (and make sure the <code>anthropic</code> package is installed on the server) to enable AI tagging.</p>
+        {% endif %}
     </div>
 </div>
 

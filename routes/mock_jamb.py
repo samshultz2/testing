@@ -1281,8 +1281,23 @@ def bank_analytics():
     subject_id = request.args.get('subject_id', type=int) or (subjects[0].id if subjects else None)
     subject = db.session.get(Subject, subject_id) if subject_id else None
     data = subject_breakdown(subject) if subject else None
+    # Past-question years present in this subject's bank, for the tag-scope picker.
+    years = []
+    if subject_id:
+        years = sorted({(y or '').strip() for (y,) in db.session.query(MockJAMBQuestion.exam_year)
+                        .filter(MockJAMBQuestion.subject_id == subject_id,
+                                MockJAMBQuestion.mock_exam_id.is_(None),
+                                MockJAMBQuestion.exam_year.isnot(None)).distinct().all()
+                        if (y or '').strip()}, reverse=True)
+    try:
+        from utils.waec_ocr import _vision_config
+        _vc = _vision_config()
+        ai_ready = bool(_vc['installed'] and _vc['has_key'])
+    except Exception:
+        ai_ready = False
     return render_template('mock_jamb/bank_analytics.html', subjects=subjects,
-                           subject=subject, subject_id=subject_id, data=data,
+                           subject=subject, subject_id=subject_id, data=data, years=years,
+                           ai_ready=ai_ready,
                            bank_url=url_for('mock_jamb.bank', subject_id=subject_id or ''),
                            index_url=url_for('mock_jamb.index'))
 
@@ -1301,7 +1316,8 @@ def bank_retag():
         return redirect(url_for('mock_jamb.bank_analytics'))
     mode = 'all' if request.form.get('mode') == 'all' else 'untagged'
     ensure_section = bool(request.form.get('ensure_section'))
-    res = retag_untagged(subject, mode=mode, ensure_section=ensure_section)
+    year = (request.form.get('year') or '').strip() or None
+    res = retag_untagged(subject, mode=mode, ensure_section=ensure_section, year=year)
     verb = 'Re-classified' if mode == 'all' else 'Auto-tagged'
     if res['topic_set'] or res['section_ensured']:
         parts = []
@@ -1318,6 +1334,41 @@ def bank_retag():
         flash(msg, 'success')
     else:
         flash(f"No {subject.name} question matched the syllabus keywords — nothing changed.", 'info')
+    return redirect(url_for('mock_jamb.bank_analytics', subject_id=subject_id))
+
+
+@mock_jamb_bp.route('/bank/ai-retag', methods=['POST'])
+@login_required
+def bank_ai_retag():
+    """Tag a subject's bank questions with AI, using the Anthropic key linked in
+    Settings → OCR. Assigns each question a real JAMB-syllabus topic (never an
+    invented one), across the whole subject or one past-question year."""
+    from utils.mock_bank_ai_retag import ai_retag
+    subject_id = request.form.get('subject_id', type=int)
+    subject = db.session.get(Subject, subject_id) if subject_id else None
+    if not subject:
+        flash('Pick a subject first.', 'error')
+        return redirect(url_for('mock_jamb.bank_analytics'))
+    year = (request.form.get('year') or '').strip() or None
+    res = ai_retag(subject, year=year)
+    err = res.get('error')
+    scope = f' ({year})' if year else ''
+    if err == 'no_key':
+        flash('No Anthropic API key is set. Add one under Settings → OCR to use AI tagging.', 'error')
+    elif err == 'not_installed':
+        flash('The "anthropic" package is not installed on the server, so AI tagging is unavailable.', 'error')
+    elif err == 'no_syllabus':
+        flash(f'No JAMB syllabus is available for {subject.name}, so AI tagging has no topics to assign.', 'error')
+    elif res['topic_set']:
+        more = (f" {res['total'] - res['scanned']} more remain — run again"
+                f"{' or pick a year' if not year else ''} to continue." if res.get('capped') else '')
+        flash(f"AI tagged {res['topic_set']} of {res['scanned']} {subject.name}{scope} "
+              f"question(s) with a syllabus topic.{more}", 'success')
+    elif res['scanned']:
+        flash(f"AI reviewed {res['scanned']} {subject.name}{scope} question(s) but set no topics — "
+              f"check the key and model under Settings → OCR.", 'info')
+    else:
+        flash(f'No stand-alone {subject.name}{scope} bank questions to tag.', 'info')
     return redirect(url_for('mock_jamb.bank_analytics', subject_id=subject_id))
 
 

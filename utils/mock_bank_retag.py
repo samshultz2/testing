@@ -20,15 +20,18 @@ def _cap(v, n):
     return v[:n] if isinstance(v, str) else v
 
 
-def _target_ids(subject, mode):
+def _target_ids(subject, mode, year=None):
     """Primary keys of the bank questions to (re)tag, fully materialised up front —
     so we never hold a server-side cursor open across the per-chunk commits (which
-    would invalidate it: psycopg InvalidCursorName)."""
+    would invalidate it: psycopg InvalidCursorName). ``year`` (a past-question
+    exam_year string) narrows the set to that year only."""
     from models import db, MockJAMBQuestion
     q = db.session.query(MockJAMBQuestion.id).filter(
         MockJAMBQuestion.subject_id == subject.id,
         MockJAMBQuestion.mock_exam_id.is_(None),
         MockJAMBQuestion.passage_id.is_(None))       # never re-tag passage-bound questions
+    if year:
+        q = q.filter(MockJAMBQuestion.exam_year == str(year))
     if mode != 'all':
         q = q.filter((MockJAMBQuestion.topic.is_(None)) | (MockJAMBQuestion.topic == ''))
     return [row[0] for row in q.order_by(MockJAMBQuestion.id).all()]
@@ -53,7 +56,7 @@ def _drawable_sections(subject):
         or [s['section'] for s in sections_for(subject.name)]
 
 
-def retag_untagged(subject, mode='untagged', fill_section=True, ensure_section=False, batch=500):
+def retag_untagged(subject, mode='untagged', fill_section=True, ensure_section=False, batch=500, year=None):
     """Classify a subject's bank questions and set topic/sub-topic (and section)
     where confident. Returns
     ``{scanned, topic_set, section_set, section_ensured, still_untagged}``.
@@ -66,7 +69,7 @@ def retag_untagged(subject, mode='untagged', fill_section=True, ensure_section=F
     draw_sections = _drawable_sections(subject)
     is_english = ms.norm_subject(subject.name) == 'english language'
 
-    ids = _target_ids(subject, mode)
+    ids = _target_ids(subject, mode, year=year)
     scanned = topic_set = section_set = section_ensured = 0
     # Process in id-chunks, committing after each — never stream a server-side
     # cursor across commits (that invalidates it on Postgres).

@@ -3845,6 +3845,13 @@
 ]
 ],
 [
+"mock_jamb.bank_ai_retag",
+"/mock-jamb/bank/ai-retag",
+[
+"POST"
+]
+],
+[
 "mock_jamb.bank_analytics",
 "/mock-jamb/bank/analytics",
 [
