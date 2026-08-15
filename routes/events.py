@@ -1,5 +1,6 @@
 """Events & Calendar routes — month calendar, agenda list, and event CRUD."""
 import calendar as _cal
+from utils import timeutil
 from datetime import datetime, date, timedelta
 
 from flask import (Blueprint, render_template, request, redirect, url_for, flash, jsonify)
@@ -64,7 +65,7 @@ def _event_json(e):
 @events_bp.route('/')
 @login_required
 def calendar():
-    today = date.today()
+    today = timeutil.today()
     year = request.args.get('year', type=int) or today.year
     month = request.args.get('month', type=int) or today.month
     if month < 1:
@@ -120,7 +121,7 @@ def agenda():
     if category:
         q = q.filter_by(category=category)
     if upcoming == '1':
-        q = q.filter(db.func.coalesce(SchoolEvent.end_date, SchoolEvent.start_date) >= date.today())
+        q = q.filter(db.func.coalesce(SchoolEvent.end_date, SchoolEvent.start_date) >= timeutil.today())
     events = q.order_by(SchoolEvent.start_date, SchoolEvent.start_time).all()
 
     def row(e):
@@ -144,7 +145,7 @@ def _read(e):
     e.title = (request.form.get('title') or '').strip()
     e.description = (request.form.get('description') or '').strip() or None
     e.category = request.form.get('category') or 'General'
-    e.start_date = _d(request.form.get('start_date')) or date.today()
+    e.start_date = _d(request.form.get('start_date')) or timeutil.today()
     e.end_date = _d(request.form.get('end_date'))
     if e.end_date and e.end_date < e.start_date:
         e.end_date = None

@@ -68,7 +68,7 @@ class StaffInvite(db.Model):
 
     @property
     def expired(self):
-        return bool(self.expires_at and datetime.now() >= self.expires_at)
+        return bool(self.expires_at and local_now() >= self.expires_at)
 
     @property
     def used_up(self):

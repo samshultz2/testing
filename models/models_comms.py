@@ -54,7 +54,7 @@ class Announcement(db.Model):
     @property
     def is_active(self):
         from datetime import date
-        today = date.today()
+        today = local_now().date()
         if self.starts_on and today < self.starts_on:
             return False
         if self.ends_on and today > self.ends_on:

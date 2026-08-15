@@ -3,6 +3,7 @@ Student Contributions Module - SSS3 Graduation Fund Tracking
 Hidden module accessible only with special access code
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session
+from utils import timeutil
 from utils.helpers import get_active_term, get_active_session
 from models import (
     db, Student, StudentEnrollment, ClassArmAssignment, SchoolClass, ContributionSettings, ContributionPayment,
@@ -191,7 +192,7 @@ def dashboard():
     
     # Today and this week collections
     from datetime import timedelta
-    today = date.today()
+    today = timeutil.today()
     week_start = today - timedelta(days=today.weekday())
     
     today_collections = db.session.query(func.sum(ContributionPayment.amount)).filter(
@@ -304,7 +305,7 @@ def quick_entry():
     return _render({
         'page': 'quick_entry',
         'students': students_list,
-        'today': date.today().strftime('%Y-%m-%d'),
+        'today': timeutil.today().strftime('%Y-%m-%d'),
         'max_due': max_due,
         'submit_url': url_for('contributions.quick_entry'),
     })
@@ -350,7 +351,7 @@ def add_payment():
     return _render({
         'page': 'add_payment',
         'students': students_list,
-        'today': date.today().strftime('%Y-%m-%d'),
+        'today': timeutil.today().strftime('%Y-%m-%d'),
         'preselect': request.args.get('student_id', type=int),
         'submit_url': url_for('contributions.add_payment'),
         'info_url_base': url_for('contributions.api_student_info', student_id=0),
@@ -421,7 +422,7 @@ def student_detail(student_id):
         week_end = week_start + timedelta(days=6)
         week_payments = [p for p in payments if week_start <= p.payment_date <= week_end]
         week_total = sum(p.amount for p in week_payments)
-        if week_total > 0 or week_start <= date.today():
+        if week_total > 0 or week_start <= timeutil.today():
             weekly_data.append({'week': week_num,
                                 'period': f"{week_start.strftime('%d %b')} - {week_end.strftime('%d %b')}",
                                 'amount': week_total})
@@ -496,7 +497,7 @@ def add_expense():
             return _err(f'Error: {str(e)}', url_for('contributions.add_expense'))
     return _render({
         'page': 'add_expense',
-        'today': date.today().strftime('%Y-%m-%d'),
+        'today': timeutil.today().strftime('%Y-%m-%d'),
         'submit_url': url_for('contributions.add_expense'),
         'back_url': url_for('contributions.expenses_list'),
     })
@@ -642,7 +643,7 @@ def export_excel():
         output = BytesIO()
         wb.save(output)
         output.seek(0)
-        filename = f'contributions_report_{date.today().strftime("%Y%m%d")}.xlsx'
+        filename = f'contributions_report_{timeutil.today().strftime("%Y%m%d")}.xlsx'
         return send_file(output, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', as_attachment=True, download_name=filename)
     except Exception as e:
         flash(f'Export error: {str(e)}', 'error')
@@ -1059,7 +1060,7 @@ def export_defaulters():
         return send_file(output,
             mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
             as_attachment=True,
-            download_name=f'defaulters_{date.today().strftime("%Y%m%d")}.xlsx'
+            download_name=f'defaulters_{timeutil.today().strftime("%Y%m%d")}.xlsx'
         )
     except Exception as e:
         flash(f'Export error: {str(e)}', 'error')

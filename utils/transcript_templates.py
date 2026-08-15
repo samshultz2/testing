@@ -13,6 +13,7 @@ signatures). The shared verification footer (QR + code) is appended by
 Register a new design by adding an entry to ``TRANSCRIPT_TEMPLATES``.
 """
 from reportlab.lib import colors
+from utils import timeutil
 from reportlab.lib.units import mm
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT
@@ -411,7 +412,7 @@ def _t_nawair(ctx):
     el += [Spacer(1, 4), HRFlowable(width='100%', thickness=1.2, color=accent), Spacer(1, 6)]
     from datetime import date
     issued = (ctx['doc'].created_at.strftime('%d/%m/%Y') if ctx.get('doc') and ctx['doc'].created_at
-              else date.today().strftime('%d/%m/%Y'))
+              else timeutil.today().strftime('%d/%m/%Y'))
     el.append(Paragraph(f"Date: {issued}", S['left']))
     el.append(Paragraph("To Whom It May Concern,", S['left']))
     el.append(Spacer(1, 6))
@@ -704,7 +705,7 @@ def _t_lagos(ctx):
     el = [head, Spacer(1, 4),
           Paragraph('<u>STUDENT ACADEMIC TRANSCRIPT</u>', ParagraphStyle('ti', parent=S['center'],
                     fontSize=13, fontName='Helvetica-Bold', spaceBefore=2, spaceAfter=8))]
-    issued = date.today().strftime('%d/%m/%Y')
+    issued = timeutil.today().strftime('%d/%m/%Y')
     hw = USABLE_W / 2 - 3 * mm
     left = _boxed_info('PERSONAL INFORMATION', [
         ('Student Name', ctx['student'].full_name), ('Student ID', ctx['student'].student_id),
@@ -926,7 +927,7 @@ def _t_bishop(ctx):
     # authentication row: QR + verification + signatures
     qr = _dth.qr(serial, size=20)
     auth_left = [Paragraph(f"<b>Transcript No.:</b> {_esc(serial)}", S['small']),
-                 Paragraph(f"<b>Date Issued:</b> {date.today().strftime('%d %B %Y')}", S['small']),
+                 Paragraph(f"<b>Date Issued:</b> {timeutil.today().strftime('%d %B %Y')}", S['small']),
                  Paragraph("Verify at the school portal.", S['small'])]
     authrow = Table([[qr or '', auth_left]], colWidths=[24 * mm, USABLE_W - 24 * mm]) if qr is not None \
         else Table([[auth_left]], colWidths=[USABLE_W])

@@ -2,6 +2,7 @@
 Student Promotion Management routes
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, abort
+from utils import timeutil
 from utils.helpers import get_active_session
 from models import (
     db, Student, StudentEnrollment, ClassArmAssignment, PromotionRule, PromotionRecord,
@@ -113,7 +114,7 @@ def mark_graduate(student_id):
     active_session = get_active_session()
     try:
         student.is_graduated = True
-        student.graduation_date = date.today()
+        student.graduation_date = timeutil.today()
         student.graduate_status = student.graduate_status or 'Graduated'
         if active_session:
             student.graduation_session_id = active_session.id
@@ -208,7 +209,7 @@ def graduate_sss3():
         for student in students:
             if not student.is_graduated:
                 student.is_graduated = True
-                student.graduation_date = date.today()
+                student.graduation_date = timeutil.today()
                 student.graduate_status = student.graduate_status or 'Graduated'
                 if active_session:
                     student.graduation_session_id = active_session.id
@@ -345,7 +346,7 @@ def document_verifications():
     scoped_ids = [s.id for s in scope_query(
         Student.query.filter_by(is_graduated=True), Student).with_entities(Student.id).all()]
     days = min(max(request.args.get('days', 90, type=int) or 90, 1), 365)
-    since = date.today() - timedelta(days=days)
+    since = timeutil.today() - timedelta(days=days)
     base = DocumentVerification.query.filter(DocumentVerification.created_at >= since)
     scoped = base.filter(DocumentVerification.student_id.in_(scoped_ids)) if scoped_ids \
         else base.filter(_false())
@@ -820,7 +821,7 @@ def fulfill_request(req_id):
     verify_url = secure_external_url('graduate_verify.verify', code=doc.verification_code)
     buf, fname = graduate_docs.render(student, doc, verify_url)
     req.status = 'fulfilled'
-    req.handled_at = datetime.now()
+    req.handled_at = timeutil.now()
     req.handled_by = actor
     req.response_note = (req.response_note or 'Issued.')
     db.session.add(GraduateAudit(
@@ -844,7 +845,7 @@ def decline_request(req_id):
     me = get_current_user()
     data = request.get_json(silent=True) or request.form
     req.status = 'declined'
-    req.handled_at = datetime.now()
+    req.handled_at = timeutil.now()
     req.handled_by = (me.username if me else 'admin')
     req.response_note = (data.get('response_note') or '').strip()[:500] or 'Declined.'
     db.session.commit()
@@ -1288,7 +1289,7 @@ def execute_promotion():
             # Handle graduation - update student record
             if action == 'graduated':
                 student.is_graduated = True
-                student.graduation_date = date.today()
+                student.graduation_date = timeutil.today()
                 student.graduation_session_id = from_session_id
                 graduated += 1
             elif action == 'promoted':

@@ -1,5 +1,6 @@
 """Admissions helpers — pipeline definitions, stats and applicant→student conversion."""
 from datetime import date
+from utils import timeutil
 
 from sqlalchemy import func
 
@@ -81,7 +82,7 @@ def convert_to_student(applicant, assignment_id=None):
 
     applicant.admitted_student_id = student.id
     applicant.status = 'Admitted'
-    applicant.decision_date = date.today()
+    applicant.decision_date = timeutil.today()
     db.session.commit()
     return student, None
 

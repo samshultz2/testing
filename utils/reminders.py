@@ -12,6 +12,7 @@ would act on without creating anything; ``force=True`` bypasses both the opt-in
 gate and the interval guard (for manual/testing use).
 """
 import logging
+from utils import timeutil
 from datetime import datetime, timedelta
 
 _log = logging.getLogger('posyhub.reminders')
@@ -53,7 +54,7 @@ def run_fee_reminders(app, *, dry_run=False, force=False):
         from utils import comms
 
         if not force:
-            since = datetime.now() - timedelta(days=interval)
+            since = timeutil.now() - timedelta(days=interval)
             recent = (Message.query
                       .filter(Message.title.ilike('Fee reminder:%'),
                               Message.term_id == term.id,

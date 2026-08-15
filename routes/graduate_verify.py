@@ -13,6 +13,7 @@ checks and spot suspicious activity — writes are best-effort and never break t
 public page.
 """
 import base64
+from utils import timeutil
 import hashlib
 import io
 
@@ -91,7 +92,7 @@ def _visitor_hash(req):
     secret = current_app.config.get('SECRET_KEY', '') or 'doc-verify'
     fwd = req.headers.get('X-Forwarded-For', '')
     ip = (fwd.split(',')[0].strip() if fwd else (req.remote_addr or '')).strip()
-    raw = f'{date.today().isoformat()}|{secret}|{ip}|{req.headers.get("User-Agent", "")}'
+    raw = f'{timeutil.today().isoformat()}|{secret}|{ip}|{req.headers.get("User-Agent", "")}'
     return hashlib.sha256(raw.encode('utf-8')).hexdigest()
 
 
@@ -160,7 +161,7 @@ def verify_receipt(code):
         branding = document_branding()
     except Exception:
         branding = {}
-    checked_at = datetime.now().strftime('%d %B %Y, %H:%M')
+    checked_at = timeutil.now().strftime('%d %B %Y, %H:%M')
     buf = vr.render_receipt(
         school=school_profile(), branding=branding, result=result, code=code,
         verify_url=_verify_abs_url(code), checked_at=checked_at)

@@ -1,5 +1,6 @@
 """attendance blueprint — reports routes (split from the former routes/attendance.py)."""
 from routes.attendance import *  # noqa: F401,F403
+from utils import timeutil
 from utils.web_exports import csv_response
 
 
@@ -13,7 +14,7 @@ def daily_summary():
     if target_date:
         target_date = datetime.strptime(target_date, '%Y-%m-%d').date()
     else:
-        target_date = date.today()
+        target_date = timeutil.today()
     
     # Get assignments for dropdown
     active_term = get_active_term()
@@ -44,7 +45,7 @@ def daily_summary():
             week = pick_current_week(weeks, on=target_date)
             if week:
                 holiday_dates = {h.date for h in Holiday.query.filter_by(term_id=active_term.id).all()}
-                today = date.today()
+                today = timeutil.today()
                 d = week.start_date
                 while d <= week.end_date:
                     if d.weekday() < 5 and d not in holiday_dates and d <= today:

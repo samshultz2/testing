@@ -7,6 +7,7 @@ Automated notifications from other modules funnel through the same campaign
 engine (see utils.comms.build_campaign / create_draft_campaign).
 """
 from datetime import datetime
+from utils import timeutil
 from utils.helpers import get_active_term, session_terms
 import csv
 from utils.web_exports import csv_response
@@ -111,7 +112,7 @@ def dashboard():
     success_rate = round(sent_all / attempted * 100, 1) if attempted else None
 
     # Today's deliveries, split by channel (SMS / Email / other).
-    start = datetime.combine(date.today(), time.min)
+    start = datetime.combine(timeutil.today(), time.min)
     today_rows = (_recip_q().with_entities(Message.channel, func.count(MessageRecipient.id))
                   .filter(MessageRecipient.status == 'Sent', MessageRecipient.sent_at >= start)
                   .group_by(Message.channel).all())
@@ -645,7 +646,7 @@ def compose():
         scheduled_at, status = None, 'Draft'
         if request.form.get('schedule') and gateway_ready:
             scheduled_at = _dt(request.form.get('scheduled_at'))
-            if scheduled_at and scheduled_at > datetime.now():
+            if scheduled_at and scheduled_at > timeutil.now():
                 status = 'Scheduled'
 
         from utils.branch_scope import branch_for_new
@@ -1249,7 +1250,7 @@ def mark_sent(message_id, rid):
     require_branch_access(r.message.branch_id)
     if r.status != 'Sent':
         r.status = 'Sent'
-        r.sent_at = datetime.now()
+        r.sent_at = timeutil.now()
         r.message.sent_count = (r.message.sent_count or 0) + 1
         db.session.commit()
     if request.headers.get('X-Requested-With') == 'fetch':
@@ -1265,7 +1266,7 @@ def mark_all_sent(message_id):
     n = 0
     for r in msg.recipients.filter(MessageRecipient.status != 'Sent').all():
         r.status = 'Sent'
-        r.sent_at = datetime.now()
+        r.sent_at = timeutil.now()
         n += 1
     msg.sent_count = msg.recipients.filter_by(status='Sent').count()
     db.session.commit()

@@ -8,6 +8,7 @@ turned back into a person. Recording is best-effort: a failure here must never
 break the public page, so every write swallows its own errors.
 """
 import hashlib
+from utils import timeutil
 from datetime import date, timedelta
 
 from flask import current_app
@@ -71,7 +72,7 @@ def record(path, req):
     """Count one public page view. Best-effort and side-effect-free on failure."""
     if _is_bot(req.headers.get('User-Agent')):
         return
-    day = date.today()
+    day = timeutil.today()
     path = (path or '/')[:200]
     try:
         _bump(SiteViewDaily, {'day': day, 'path': path})
@@ -93,7 +94,7 @@ def record(path, req):
 def summary(days=30):
     """Aggregate stats for the admin dashboard over the last ``days`` days."""
     from sqlalchemy import func
-    today = date.today()
+    today = timeutil.today()
     start = today - timedelta(days=days - 1)
 
     views_rows = (db.session.query(SiteViewDaily.day, func.sum(SiteViewDaily.views))

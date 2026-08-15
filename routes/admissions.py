@@ -3,6 +3,7 @@ Admissions routes — applicant pipeline, screening/decisions, one-click
 conversion of an admitted applicant into a Student, dashboard and CSV export.
 """
 from datetime import datetime, date
+from utils import timeutil
 from utils.web_exports import csv_response
 from utils.helpers import get_active_session
 import csv
@@ -172,7 +173,7 @@ def add_applicant():
             return _err('First name and surname are required.', url_for('admissions.add_applicant'))
         a = Applicant(application_no=Applicant.generate_application_no(),
                       status=request.form.get('status') or 'Applied',
-                      applied_date=date.today())
+                      applied_date=timeutil.today())
         _read_form(a)
         a.branch_id = branch_for_new()
         db.session.add(a)
@@ -275,7 +276,7 @@ def set_status(applicant_id):
     if new_status in admissions.ALL_STATUSES:
         a.status = new_status
         if new_status in ('Rejected', 'Admitted'):
-            a.decision_date = date.today()
+            a.decision_date = timeutil.today()
         score = request.form.get('entrance_score', type=float)
         if score is not None:
             a.entrance_score = score

@@ -2,6 +2,7 @@
 Main routes for dashboard and general pages
 """
 import re
+from utils import timeutil
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session, abort
 from utils.helpers import get_active_term, get_active_session, safe_redirect
 from utils.web_exports import xlsx_response, pdf_response
@@ -326,7 +327,7 @@ def dashboard_payload():
 
     user = session.get('user')
     return dict(
-        today=date.today().isoformat(),
+        today=timeutil.today().isoformat(),
         user_name=(user.split()[0] if user else ''),
         active_session={'id': active_session.id, 'name': active_session.name} if active_session else None,
         active_term={'id': active_term.id, 'name': active_term.name} if active_term else None,
@@ -422,7 +423,7 @@ def _dash_finance(active_term):
         payments = scope_query(
             FeePayment.query.filter_by(term_id=active_term.id), FeePayment).all()
         collected = sum(p.amount for p in payments)
-        today = date.today()
+        today = timeutil.today()
         collected_today = sum(p.amount for p in payments
                               if getattr(p, 'payment_date', None) == today)
         expenses = sum(e.amount for e in scope_query(
@@ -654,7 +655,7 @@ def _dash_sales(active_term):
     try:
         from utils.branch_scope import scope_query
         from models import Sale
-        today = date.today()
+        today = timeutil.today()
         rows = scope_query(Sale.query, Sale).all()
         today_total = sum(s.total for s in rows if getattr(s, 'created_at', None)
                           and s.created_at.date() == today)
@@ -686,7 +687,7 @@ def _dash_hr():
             ids = {s.id for s in rows}
             if ids:
                 todays = StaffAttendance.query.filter(
-                    StaffAttendance.date == date.today(),
+                    StaffAttendance.date == timeutil.today(),
                     StaffAttendance.staff_id.in_(ids)).all()
                 att['marked'] = len(todays)
                 att['present'] = sum(1 for a in todays if a.status == 'Present')
@@ -709,7 +710,7 @@ def _dash_timetable_today(active_term, tscope):
         from models import ClassArmAssignment, local_now
         from utils.branch_scope import scope_query
         from collections import Counter
-        dow = date.today().weekday()          # Mon=0 .. Sun=6
+        dow = timeutil.today().weekday()          # Mon=0 .. Sun=6
         slots = TimetableSlot.query.filter_by(is_active=True).order_by(
             TimetableSlot.start_time).all()
         if not slots:
@@ -771,7 +772,7 @@ def _dash_timetable_slot(active_term, tscope, slot_id):
         slot = TimetableSlot.query.filter_by(id=slot_id, is_active=True).first()
         if not slot:
             return None
-        dow = date.today().weekday()
+        dow = timeutil.today().weekday()
         q = (ClassTimetable.query
              .join(ClassArmAssignment,
                    ClassTimetable.class_arm_assignment_id == ClassArmAssignment.id)
@@ -945,7 +946,7 @@ def _dash_insights(active_term, tscope):
     if can_access_module('library'):
         try:
             from utils.library_notify import _overdue_total
-            n = _overdue_total(date.today())
+            n = _overdue_total(timeutil.today())
             if n:
                 add('library_overdue', 'medium', 'fa-book',
                     f'{n} library book{"s" if n != 1 else ""} overdue',
@@ -969,7 +970,7 @@ def _dash_insights(active_term, tscope):
                     (f'{n_out} out of stock. ' if n_out else '') + 'Reorder before they run out.',
                     url_for('sales.products') + '?stock=low')
             # Products expiring within 30 days (or already expired) with stock.
-            today = date.today()
+            today = timeutil.today()
             horizon = today + timedelta(days=30)
             exp = [p for p in prods if getattr(p, 'expiry_date', None)
                    and (p.stock_qty or 0) > 0 and p.expiry_date <= horizon]
@@ -1010,11 +1011,11 @@ def _dash_insights(active_term, tscope):
                     f'{pending} leave request{"s" if pending != 1 else ""} pending',
                     'Staff leave awaiting your approval.',
                     url_for('hr.leave_list'))
-            soon = date.today() + timedelta(days=7)
+            soon = timeutil.today() + timedelta(days=7)
             upcoming = scope_query(LeaveRecord.query.join(
                 StaffMember, LeaveRecord.staff_id == StaffMember.id)
                 .filter(LeaveRecord.status == 'Approved',
-                        LeaveRecord.start_date >= date.today(),
+                        LeaveRecord.start_date >= timeutil.today(),
                         LeaveRecord.start_date <= soon), StaffMember).count()
             if upcoming:
                 add('leave_upcoming', 'low', 'fa-calendar-day',
@@ -1371,7 +1372,7 @@ def _dash_attendance_stats(active_term, tscope=None):
              'week_average': 0, 'term_average': 0}
     if not active_term:
         return stats
-    today = date.today()
+    today = timeutil.today()
     branch_enr = None
     if tscope is not None:
         # Restrict to enrolments in the teacher's own class assignments.
@@ -1450,7 +1451,7 @@ def _dash_birthdays(tscope=None):
     """Students whose birthday is today, and within the next 6 days."""
     def sq(query):
         return _student_scope(query, tscope)
-    today = date.today()
+    today = timeutil.today()
     birthdays_today = sq(Student.query.filter(
         Student.is_active == True,
         Student.date_of_birth != None,
@@ -2185,7 +2186,7 @@ def _student_view_payload(student):
         # Change history is only shown to users who can manage the student, since
         # it can carry previous values of edited fields.
         'history': _student_audit_history(sid) if can_manage else None,
-        'today': date.today().isoformat(),
+        'today': timeutil.today().isoformat(),
         'can_manage': can_manage,
         'urls': {
             'list': url_for('main.students_list'),
@@ -2916,7 +2917,7 @@ def export_students_image(student_data, fields):
     d.text((pad, 56 * S),
            "Students List  ·  %d student%s  ·  %s" % (
                len(student_data), '' if len(student_data) == 1 else 's',
-               datetime.now().strftime('%d %b %Y')),
+               timeutil.now().strftime('%d %b %Y')),
            fill=(220, 240, 232), font=sub_f)
 
     # Column header row
@@ -2947,7 +2948,7 @@ def export_students_image(student_data, fields):
 
     # Footer
     d.text((pad, y + 16 * S),
-           "Generated by %s · %s" % (school_name, datetime.now().strftime('%d %b %Y %H:%M')),
+           "Generated by %s · %s" % (school_name, timeutil.now().strftime('%d %b %Y %H:%M')),
            fill=MUTED, font=foot_f)
 
     out = BytesIO()

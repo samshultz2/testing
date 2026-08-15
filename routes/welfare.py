@@ -3,6 +3,7 @@
 Recorded from the student profile. Branch-scoped like the rest of the app.
 """
 from datetime import date
+from utils import timeutil
 
 from flask import Blueprint, request, redirect, url_for, flash, session
 
@@ -34,7 +35,7 @@ def add_discipline(student_id):
         return redirect(url_for('main.view_student', student_id=s.id))
     db.session.add(DisciplineRecord(
         student_id=s.id, branch_id=s.branch_id or branch_for_new(),
-        date=parse_date(request.form.get('date')) or date.today(),
+        date=parse_date(request.form.get('date')) or timeutil.today(),
         category=request.form.get('category') or None,
         severity=request.form.get('severity') or None,
         description=desc,
@@ -67,7 +68,7 @@ def add_clinic(student_id):
         return redirect(url_for('main.view_student', student_id=s.id))
     db.session.add(ClinicVisit(
         student_id=s.id, branch_id=s.branch_id or branch_for_new(),
-        date=parse_date(request.form.get('date')) or date.today(),
+        date=parse_date(request.form.get('date')) or timeutil.today(),
         complaint=complaint,
         treatment=(request.form.get('treatment') or '').strip() or None,
         parent_notified=request.form.get('parent_notified') == 'on',

@@ -2,6 +2,7 @@
 Academic management routes - Sessions, Terms, Classes, Arms
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from utils import timeutil
 from utils.helpers import get_active_term
 from datetime import timedelta, date
 from models import (
@@ -451,7 +452,7 @@ def add_next_week(term_id):
                 new_start_date = start
             else:
                 # Use next Monday from today
-                today = date.today()
+                today = timeutil.today()
                 days_until_monday = (7 - today.weekday()) % 7
                 if days_until_monday == 0:
                     days_until_monday = 7

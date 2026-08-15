@@ -8,6 +8,7 @@ configured, the applicant is created only AFTER the school's Paystack rail
 verifies the payment (pay-first), and the fee is booked to Finance idempotently.
 """
 from datetime import datetime, date
+from utils import timeutil
 
 from models import db, SchoolSettings, Applicant, Branch, SchoolClass, AcademicSession
 
@@ -92,7 +93,7 @@ def create_applicant(clean, *, fee_paid=0.0, fee_reference=None):
         date_of_birth=clean['date_of_birth'],
         session_id=cfg['session_id'], intended_class_id=clean['intended_class_id'],
         previous_school=clean['previous_school'] or None, source='Website',
-        status='Applied', applied_date=date.today(),
+        status='Applied', applied_date=timeutil.today(),
         parent_name=clean['parent_name'] or None, parent_phone=clean['parent_phone'] or None,
         parent_email=clean['parent_email'] or None, address=clean['address'] or None,
     )

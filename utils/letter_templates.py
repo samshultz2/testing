@@ -10,6 +10,7 @@ library as selectable templates.
 Standard design-module interface, so it plugs into :mod:`utils.graduate_docs`.
 """
 from datetime import date
+from utils import timeutil
 
 from utils import doc_themes as _th
 from utils import letter_layouts as _ll
@@ -178,7 +179,7 @@ def _content(ctx):
     cum = (ctx.get('academic') or {}).get('cumulative')
     doc = ctx.get('doc')
     issued = (doc.created_at.strftime('%d %B %Y') if doc and getattr(doc, 'created_at', None)
-              else date.today().strftime('%d %B %Y'))
+              else timeutil.today().strftime('%d %B %Y'))
     fmt = {
         'name': _esc(st.full_name),
         'adm': _esc(getattr(st, 'student_id', '') or ''),

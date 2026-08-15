@@ -11,6 +11,7 @@ so a stats hiccup can't fail a results save). A manual bulk recompute is exposed
 for backfilling existing data.
 """
 import json
+from utils import timeutil
 import logging
 from datetime import date
 
@@ -122,7 +123,7 @@ class AnalyticsEngine:
         if row is None:
             row = StudentRiskAssessment(student_id=student_id)
             db.session.add(row)
-        row.assessment_date = date.today()
+        row.assessment_date = timeutil.today()
         row.overall_risk_score = overall
         row.academic_risk_score = academic
         row.attendance_risk_score = attendance
@@ -167,7 +168,7 @@ class AnalyticsEngine:
         if row is None:
             row = AcademicPrediction(student_id=student_id, prediction_type='JAMB_SCORE')
             db.session.add(row)
-        row.prediction_date = date.today()
+        row.prediction_date = timeutil.today()
         row.predicted_value = str(predicted)
         row.confidence_score = confidence
         row.model_version = source

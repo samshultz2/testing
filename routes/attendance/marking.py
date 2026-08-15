@@ -1,5 +1,6 @@
 """attendance blueprint — marking routes (split from the former routes/attendance.py)."""
 from routes.attendance import *  # noqa: F401,F403
+from utils import timeutil
 
 
 @attendance_bp.route('/')
@@ -80,9 +81,9 @@ def mark_attendance_page():
         try:
             target_date = datetime.strptime(target_date, '%Y-%m-%d').date()
         except Exception:
-            target_date = date.today()
+            target_date = timeutil.today()
     else:
-        target_date = date.today()
+        target_date = timeutil.today()
     
     # Find which week this date belongs to
     if weeks:
@@ -169,9 +170,9 @@ def save_attendance():
         already_marked = bool(all_enrollment_ids) and (
             Attendance.query.filter(Attendance.enrollment_id.in_(all_enrollment_ids),
                                     Attendance.date == target_date).first() is not None)
-        if target_date < date.today() or already_marked:
+        if target_date < timeutil.today() or already_marked:
             from utils.audit import log_action
-            kind = 'attendance.backdated' if target_date < date.today() else 'attendance.modified'
+            kind = 'attendance.backdated' if target_date < timeutil.today() else 'attendance.modified'
             log_action(kind, detail=f'class={assignment_id} date={target_date.isoformat()} '
                                     f'by={marked_by}')
 

@@ -7,6 +7,7 @@ auto-sent) and alerts admins in-app; due-soon alerts admins only. Everything is
 best-effort and never raises into the worker loop.
 """
 from __future__ import annotations
+from utils import timeutil
 
 import datetime as _dt
 
@@ -80,7 +81,7 @@ def _maybe_draft_overdue(today):
     from models import Message
     from datetime import datetime, timedelta
     recent = (Message.query.filter(Message.title == 'Library overdue reminder',
-                                   Message.created_at >= datetime.now() - timedelta(days=_MIN_INTERVAL_DAYS))
+                                   Message.created_at >= timeutil.now() - timedelta(days=_MIN_INTERVAL_DAYS))
               .first())
     if recent:
         return recent

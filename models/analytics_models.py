@@ -140,7 +140,7 @@ class AnalyticsCache(db.Model):
         import json
         cache = AnalyticsCache.query.filter_by(cache_key=key).first()
         if cache:
-            if cache.expires_at and cache.expires_at < datetime.now():
+            if cache.expires_at and cache.expires_at < local_now():
                 db.session.delete(cache)
                 db.session.commit()
                 return None
@@ -156,12 +156,12 @@ class AnalyticsCache(db.Model):
         cache = AnalyticsCache.query.filter_by(cache_key=key).first()
         if cache:
             cache.cache_value = json.dumps(value)
-            cache.expires_at = datetime.now() + timedelta(seconds=ttl_seconds)
+            cache.expires_at = local_now() + timedelta(seconds=ttl_seconds)
         else:
             cache = AnalyticsCache(
                 cache_key=key,
                 cache_value=json.dumps(value),
-                expires_at=datetime.now() + timedelta(seconds=ttl_seconds)
+                expires_at=local_now() + timedelta(seconds=ttl_seconds)
             )
             db.session.add(cache)
         db.session.commit()

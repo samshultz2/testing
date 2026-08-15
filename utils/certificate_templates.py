@@ -13,6 +13,7 @@ statement modules, so it plugs straight into :mod:`utils.graduate_docs`:
 ``build_flowables``, ``page_decorator``, ``is_landscape``, ``sample_ctx``.
 """
 from datetime import date
+from utils import timeutil
 
 from utils import doc_themes as _th
 from utils import cert_layouts as _cl
@@ -159,7 +160,7 @@ def _content(ctx):
     }
     doc = ctx.get('doc')
     issued = (doc.created_at.strftime('%d %B %Y') if doc and getattr(doc, 'created_at', None)
-              else date.today().strftime('%d %B %Y'))
+              else timeutil.today().strftime('%d %B %Y'))
     serial = (doc.document_number if doc and getattr(doc, 'document_number', None)
               else f"{(school.split()[0][:3].upper() if school else 'DOC')}/CERT/0001")
     cum = (ctx.get('academic') or {}).get('cumulative')

@@ -4,6 +4,7 @@ audience resolution (turning "JSS1 Rose" or "fee defaulters" into a concrete
 list of parents to message).
 """
 import re
+from utils import timeutil
 
 from models import (
     db, Student, ParentContact, StudentEnrollment, ClassArmAssignment, SchoolSettings,
@@ -127,7 +128,7 @@ def dispatch_campaign(msg, cfg=None):
     for r in msg.recipients.filter(MessageRecipient.status != 'Sent').all():
         ok, info = sms_gateway.send_sms(r.phone, r.body, cfg)
         if ok:
-            r.status, r.sent_at, r.error = 'Sent', datetime.now(), None
+            r.status, r.sent_at, r.error = 'Sent', timeutil.now(), None
             sent += 1
         else:
             r.status, r.error = 'Failed', info
@@ -223,7 +224,7 @@ def dispatch_campaign_email(msg, base_url=None):
             html = _tracking_html(r.body, pixel)
         if r.email and mailer.send_email(r.email, subject, r.body, html=html,
                                          attachments=attachments):
-            r.status, r.sent_at, r.error = 'Sent', datetime.now(), None
+            r.status, r.sent_at, r.error = 'Sent', timeutil.now(), None
             sent += 1
         else:
             r.status = 'Failed'
@@ -281,7 +282,7 @@ def dispatch_due_scheduled():
         return 0
     due = Message.query.filter(Message.status == 'Scheduled',
                                Message.scheduled_at != None,
-                               Message.scheduled_at <= datetime.now()).all()
+                               Message.scheduled_at <= timeutil.now()).all()
     processed = 0
     for msg in due:
         if not _claim_message(msg.id):   # someone else already grabbed it

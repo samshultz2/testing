@@ -7,6 +7,7 @@ record, and never a query that isn't already filtered to public content. Every
 data-backed block reads through here so a mistake can only happen in one place.
 """
 from datetime import date
+from utils import timeutil
 
 
 def public_branding():
@@ -34,7 +35,7 @@ def public_events(limit=6):
     try:
         rows = (SchoolEvent.query
                 .filter(SchoolEvent.audience == 'All')
-                .filter(db.func.coalesce(SchoolEvent.end_date, SchoolEvent.start_date) >= date.today())
+                .filter(db.func.coalesce(SchoolEvent.end_date, SchoolEvent.start_date) >= timeutil.today())
                 .order_by(SchoolEvent.start_date.asc())
                 .limit(max(1, min(limit, 24))).all())
     except Exception:

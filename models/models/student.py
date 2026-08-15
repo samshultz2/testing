@@ -159,7 +159,7 @@ class Student(db.Model):
     def age(self):
         """Calculate student's age"""
         if self.date_of_birth:
-            today = date.today()
+            today = local_now().date()
             return today.year - self.date_of_birth.year - (
                 (today.month, today.day) < (self.date_of_birth.month, self.date_of_birth.day)
             )

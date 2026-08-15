@@ -3,6 +3,7 @@ Library routes — book catalogue, issue/return with overdue fines, loan history
 and a dashboard.
 """
 from datetime import datetime, date, timedelta
+from utils import timeutil
 import csv
 from utils.web_exports import csv_response
 import io
@@ -87,7 +88,7 @@ def _scope_loans(query):
 @login_required
 def dashboard():
     import datetime as _dt
-    today = date.today()
+    today = timeutil.today()
     month_start = today.replace(day=1)
     books_q = scope_query(Book.query.filter_by(is_active=True), Book)
     titles = books_q.count()
@@ -377,9 +378,9 @@ def issue():
             return _err(f'"{book.title}" is reference-only and cannot be borrowed.', url_for('library.issue'))
         if not book.borrowable:
             return _err('No copies available for that title.', url_for('library.issue'))
-        due = _d(request.form.get('due_date')) or (date.today() + timedelta(days=s['loan_days']))
+        due = _d(request.form.get('due_date')) or (timeutil.today() + timedelta(days=s['loan_days']))
         loan = BookLoan(book_id=book.id, borrower_type=borrower_type,
-                        borrowed_date=date.today(), due_date=due, status='Borrowed')
+                        borrowed_date=timeutil.today(), due_date=due, status='Borrowed')
         if borrower_type == 'staff':
             loan.staff_id = borrower.id
             name = borrower.display_name or borrower.full_name
@@ -396,7 +397,7 @@ def issue():
     preset = db.session.get(Book, request.args.get('book_id', type=int)) if request.args.get('book_id') else None
     return _render({
         'page': 'issue', 'settings': s,
-        'default_due': (date.today() + timedelta(days=s['loan_days'])).isoformat(),
+        'default_due': (timeutil.today() + timedelta(days=s['loan_days'])).isoformat(),
         'preset': ({'id': preset.id, 'title': preset.title, 'available': preset.copies_available,
                     'reference_only': bool(preset.reference_only)} if preset else None),
         'urls': {'staff_search': url_for('library.staff_search'),
@@ -454,7 +455,7 @@ def return_loan(loan_id):
     if loan.status != 'Borrowed':
         return _err('This loan is already closed.', url_for('library.loans'), info=True)
     s = _settings()
-    loan.returned_date = date.today()
+    loan.returned_date = timeutil.today()
     loan.status = 'Returned'
     if request.form.get('waive'):
         loan.fine_waived = True
@@ -484,7 +485,7 @@ def renew_loan(loan_id):
     if loan.status != 'Borrowed':
         return _err('Only an active loan can be renewed.', url_for('library.loans'), info=True)
     s = _settings()
-    base = max(loan.due_date or date.today(), date.today())
+    base = max(loan.due_date or timeutil.today(), timeutil.today())
     loan.due_date = base + timedelta(days=s['loan_days'])
     loan.renew_count = (loan.renew_count or 0) + 1
     db.session.commit()
@@ -510,7 +511,7 @@ def mark_loan(loan_id):
     if cost is None:
         cost = (loan.book.price or 0) if loan.book else 0
     loan.status = kind
-    loan.returned_date = date.today()
+    loan.returned_date = timeutil.today()
     loan.replacement_cost = round(cost or 0, 2)
     # The copy is gone/out of service — reduce total stock, tally on the book.
     if loan.book:
@@ -538,7 +539,7 @@ def loans():
     status = request.args.get('status', 'Borrowed')
     q = _scope_loans(BookLoan.query)
     if status == 'Overdue':
-        q = q.filter(BookLoan.status == 'Borrowed', BookLoan.due_date < date.today())
+        q = q.filter(BookLoan.status == 'Borrowed', BookLoan.due_date < timeutil.today())
     elif status in ('Borrowed', 'Returned', 'Lost', 'Damaged'):
         q = q.filter_by(status=status)
     rows = q.order_by(BookLoan.borrowed_date.desc(), BookLoan.id.desc()).limit(500).all()
@@ -558,7 +559,7 @@ def borrowers():
     """Directory of everyone who has ever borrowed, aggregated with their active /
     overdue / total counts. Searchable and filterable by borrower type."""
     from sqlalchemy import func, case, and_
-    today = date.today()
+    today = timeutil.today()
     btype = request.args.get('type') or ''
     q = (request.args.get('q') or '').strip().lower()
     active = case((BookLoan.status == 'Borrowed', 1), else_=0)
@@ -756,8 +757,8 @@ def reservation_fulfill(res_id):
     s = _settings()
     loan = BookLoan(book_id=book.id, borrower_type=r.borrower_type,
                     student_id=r.student_id, staff_id=r.staff_id,
-                    borrowed_date=date.today(),
-                    due_date=date.today() + timedelta(days=s['loan_days']), status='Borrowed')
+                    borrowed_date=timeutil.today(),
+                    due_date=timeutil.today() + timedelta(days=s['loan_days']), status='Borrowed')
     book.copies_available = (book.copies_available or 0) - 1
     r.status = 'Fulfilled'
     db.session.add(loan)
@@ -954,7 +955,7 @@ def remind_overdue():
     have overdue library books. Staff borrowers have no parent channel, so only
     student borrowers are included. Never auto-sends — a human reviews the draft."""
     q = (_scope_loans(BookLoan.query)
-         .filter(BookLoan.status == 'Borrowed', BookLoan.due_date < date.today(),
+         .filter(BookLoan.status == 'Borrowed', BookLoan.due_date < timeutil.today(),
                  BookLoan.borrower_type != 'staff', BookLoan.student_id.isnot(None)))
     student_ids = sorted({l.student_id for l in q.all() if l.student_id})
     if not student_ids:

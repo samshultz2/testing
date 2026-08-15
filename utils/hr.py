@@ -2,6 +2,7 @@
 attendance-aware payroll generation."""
 
 from sqlalchemy import func, extract
+from utils import timeutil
 
 from models import (db, StaffMember, Department, LeaveRecord, Payslip, StaffAttendance,
                     SchoolSettings)
@@ -722,7 +723,7 @@ def record_event(staff, kind, title, detail=None, effective_date=None, created_b
     from models import StaffEvent
     from datetime import date
     ev = StaffEvent(staff_id=staff.id, kind=kind, title=title,
-                    detail=(detail or None), effective_date=effective_date or date.today(),
+                    detail=(detail or None), effective_date=effective_date or timeutil.today(),
                     created_by=created_by)
     db.session.add(ev)
     return ev

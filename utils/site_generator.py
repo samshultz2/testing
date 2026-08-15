@@ -16,6 +16,7 @@ Because it produces ordinary ``SitePage``/``SiteSettings`` rows, everything it
 makes is fully editable in the normal editor afterwards.
 """
 import hashlib
+from utils import timeutil
 import random
 
 from models import db, SiteSettings, SitePage
@@ -277,7 +278,7 @@ def _seed_posts(name, src):
          'Thank you to everyone who came out to support our students. See you at the next event!',
          'Events'),
     ]
-    today = date.today()
+    today = timeutil.today()
     for i, (title, excerpt, body, cat) in enumerate(starters):
         db.session.add(NewsPost(
             slug=_post_slug(title), title=title, excerpt=excerpt, body=body, category=cat,

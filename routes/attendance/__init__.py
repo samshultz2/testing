@@ -2,6 +2,7 @@
 Attendance management routes
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, Response, abort
+from utils import timeutil
 from utils.helpers import get_active_term, session_terms
 from utils.web_exports import xlsx_response
 from datetime import datetime, date, timedelta
@@ -108,7 +109,7 @@ def _validate_attendance_date(target_date, term_id):
     an error string, or None when the date is acceptable. Stops silent back- or
     future-dating of attendance — the save endpoint previously trusted any date.
     """
-    if target_date > date.today():
+    if target_date > timeutil.today():
         return 'You cannot mark attendance for a future date.'
     term = db.session.get(Term, term_id) if term_id else None
     if term and term.start_date and target_date < term.start_date:

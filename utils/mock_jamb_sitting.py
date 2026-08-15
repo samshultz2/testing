@@ -16,6 +16,7 @@ A candidate sits the subjects they registered for (``Student.jamb_subject_list``
 that have questions; English is placed first and the set is capped at 4.
 """
 from __future__ import annotations
+from utils import timeutil
 import random
 
 
@@ -407,7 +408,7 @@ def attempt_expired(attempt, grace_seconds=AUTO_SUBMIT_GRACE_SECONDS):
         return False
     dur = attempt.duration_minutes or 120
     deadline = attempt.started_at + timedelta(minutes=dur, seconds=grace_seconds)
-    return datetime.now() >= deadline
+    return timeutil.now() >= deadline
 
 
 def auto_submit_expired(exam=None, student=None, grace_seconds=AUTO_SUBMIT_GRACE_SECONDS):
@@ -471,6 +472,6 @@ def grade_attempt(attempt):
 
     attempt.total_score = total
     attempt.status = 'Submitted'
-    attempt.submitted_at = datetime.now()
+    attempt.submitted_at = timeutil.now()
     db.session.commit()
     return per

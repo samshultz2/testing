@@ -62,7 +62,7 @@ class Applicant(db.Model):
 
     @staticmethod
     def generate_application_no():
-        yr = date.today().year
+        yr = local_now().date().year
         prefix = f'APP{yr}-'
         last = (Applicant.query.filter(Applicant.application_no.like(f'{prefix}%'))
                 .order_by(Applicant.id.desc()).first())

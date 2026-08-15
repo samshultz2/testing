@@ -107,13 +107,13 @@ class BookLoan(db.Model):
     @property
     def is_overdue(self):
         return (self.status == 'Borrowed' and self.due_date
-                and self.due_date < date.today())
+                and self.due_date < local_now().date())
 
     @property
     def days_overdue(self):
         if not self.due_date:
             return 0
-        end = self.returned_date or date.today()
+        end = self.returned_date or local_now().date()
         return max((end - self.due_date).days, 0)
 
     def __repr__(self):

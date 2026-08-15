@@ -8,6 +8,7 @@ issue record lives in ``GraduateDocument``; the PDF is rendered on demand from t
 permanent record so a reprint always reflects the stored history.
 """
 import io
+from utils import timeutil
 
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
@@ -226,7 +227,7 @@ def _slc_fields(ctx):
                else (ctx.get('grad_session') or '').split('/')[-1])
     doc = ctx.get('doc')
     issued = (doc.created_at.strftime('%d %B %Y') if doc and getattr(doc, 'created_at', None)
-              else date.today().strftime('%d %B %Y'))
+              else timeutil.today().strftime('%d %B %Y'))
     ctx.update(performance=perf, subjects_list=', '.join(subs),
                character='Satisfactory', from_year=from_year, to_year=to_year, issued=issued)
     return ctx

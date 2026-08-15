@@ -1176,7 +1176,7 @@ def download_backup():
             return redirect(url_for('settings.backup_page'))
 
         # Create backup filename with timestamp
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = timeutil.now().strftime('%Y%m%d_%H%M%S')
         backup_filename = f'school_backup_{timestamp}.db'
 
         log_action('data.backup_download', detail=backup_filename)
@@ -1203,7 +1203,7 @@ def export_json():
         )
 
         data = {
-            'export_date': datetime.now().isoformat(),
+            'export_date': timeutil.now().isoformat(),
             'school_settings': [{
                 'key': s.key, 'value': s.value, 'value_type': s.value_type
             } for s in SchoolSettings.query.all()],
@@ -1235,7 +1235,7 @@ def export_json():
 
         # Create JSON response
         json_str = json.dumps(data, indent=2)
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = timeutil.now().strftime('%Y%m%d_%H%M%S')
 
         return Response(
             json_str,

@@ -8,6 +8,7 @@ approve before the loan becomes active. If the requested monthly deduction is to
 small to clear the loan by November, it is automatically raised.
 """
 from datetime import date
+from utils import timeutil
 
 from models import db, SchoolSettings, StaffLoan, LoanGuarantor, LoanRepayment
 
@@ -89,7 +90,7 @@ def compute(principal, rate, method, months):
 def quote(principal, taken=None, *, method=None, rate=None):
     """A preview of a loan's terms without creating it."""
     cfg = settings()
-    taken = taken or date.today()
+    taken = taken or timeutil.today()
     method = method or cfg['method']
     rate = cfg['rate'] if rate is None else rate
     months = months_until_november(taken)
@@ -116,7 +117,7 @@ def create_loan(*, staff_id, branch_id, principal, guarantor_ids, taken=None,
     gids = list(dict.fromkeys(gids))                         # de-dup, drop the borrower
     if len(gids) < cfg['guarantors_required']:
         return None, f'Select {cfg["guarantors_required"]} different guarantors (staff members).'
-    taken = taken or date.today()
+    taken = taken or timeutil.today()
     months = months_until_november(taken)
     total, min_monthly = compute(principal, cfg['rate'], cfg['method'], months)
     monthly = min_monthly
@@ -229,7 +230,7 @@ def act_on_guarantor(loan, guarantor_staff_id, *, approve, by=''):
     if loan.status not in ('pending',):
         return 'This loan is no longer awaiting guarantor approval.'
     g.status = 'approved' if approve else 'declined'
-    g.acted_at = datetime.now()
+    g.acted_at = timeutil.now()
     g.acted_by = (by or '')[:80]
     if not approve:
         loan.status = 'rejected'
@@ -246,7 +247,7 @@ def record_repayment(loan, amount, *, source='manual', payroll_run_id=None, when
     if amount <= 0:
         return 0.0
     db.session.add(LoanRepayment(loan_id=loan.id, amount=amount, source=source,
-                                 payroll_run_id=payroll_run_id, date=(when or date.today()),
+                                 payroll_run_id=payroll_run_id, date=(when or timeutil.today()),
                                  note=(note or '')[:200]))
     loan.amount_repaid = round((loan.amount_repaid or 0) + amount, 2)
     if loan.outstanding <= 0:

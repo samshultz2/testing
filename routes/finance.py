@@ -4,6 +4,7 @@ payments with printable receipts, discounts/waivers, defaulters and a finance
 dashboard.
 """
 from datetime import date, datetime
+from utils import timeutil
 from utils.helpers import get_active_term, session_terms
 
 from flask import (Blueprint, render_template, request, redirect, url_for,
@@ -41,7 +42,7 @@ def _parse_date(value, default=None):
     try:
         return datetime.strptime(value, '%Y-%m-%d').date()
     except (ValueError, TypeError):
-        return default or date.today()
+        return default or timeutil.today()
 
 
 # --- SPA helpers (no-reload React shell + JSON-aware action responses) ---
@@ -93,7 +94,7 @@ def collections():
     Spans all terms by default (cash reconciliation), with an optional filter
     to narrow the day-book to a single term.
     """
-    today = date.today()
+    today = timeutil.today()
     from_date = _parse_date(request.args.get('from'), today.replace(day=1))
     to_date = _parse_date(request.args.get('to'), today)
     term_id = request.args.get('term_id', type=int)
@@ -132,7 +133,7 @@ def collections():
 @login_required
 def collections_export():
     import csv, io
-    today = date.today()
+    today = timeutil.today()
     from_date = _parse_date(request.args.get('from'), today.replace(day=1))
     to_date = _parse_date(request.args.get('to'), today)
     term_id = request.args.get('term_id', type=int)
@@ -618,7 +619,7 @@ def record_payment():
         'page': 'record_payment', 'nav': _nav_urls(),
         'term_id': term_id or '', 'assignment_id': assignment_id or '',
         'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
-        'methods': PAYMENT_METHODS, 'today': date.today().isoformat(),
+        'methods': PAYMENT_METHODS, 'today': timeutil.today().isoformat(),
         'current_user': session.get('user', ''),
         'student': ({'id': student.id, 'full_name': student.full_name,
                      'student_id': student.student_id} if student else None),
@@ -1006,7 +1007,7 @@ def expenses_list():
     return _render({
         'page': 'expenses', 'nav': _nav_urls(), 'is_admin': _is_admin(),
         'term_id': term_id or '', 'category_id': category_id or '', 'total': total,
-        'today': date.today().isoformat(), 'methods': PAYMENT_METHODS,
+        'today': timeutil.today().isoformat(), 'methods': PAYMENT_METHODS,
         'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
         'categories': [{'id': c.id, 'name': c.name,
                         'delete_url': url_for('finance.delete_expense_category', category_id=c.id)}

@@ -2,6 +2,7 @@
 a struggling student's attendance recovers. Read/writes only the intervention
 tables; never the attendance marking path."""
 from datetime import datetime
+from utils import timeutil
 
 from models import (db, AttendanceIntervention, InterventionNote, Student,
                     StudentEnrollment, ClassArmAssignment)
@@ -57,7 +58,7 @@ def set_status(intervention, status, *, outcome=None):
     if outcome:
         intervention.outcome = outcome
     if status in ('Resolved', 'Closed'):
-        intervention.resolved_at = datetime.now()
+        intervention.resolved_at = timeutil.now()
         term = intervention.term_id
         intervention.resolved_pct = student_term_percentage(intervention.student_id, term)
     db.session.commit()

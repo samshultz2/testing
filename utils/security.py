@@ -3,6 +3,7 @@ Security utilities for PosyHub Student Management System
 Provides authentication, authorization, input validation, and protection utilities
 """
 import re
+from utils import timeutil
 import html
 import secrets
 from datetime import datetime, timedelta
@@ -58,7 +59,7 @@ class RateLimiter:
             except Exception:
                 pass  # table missing / db hiccup → fall back
         with self._lock:
-            now = datetime.now()
+            now = timeutil.now()
             cutoff = now - timedelta(minutes=window_minutes)
             self._attempts[key] = [t for t in self._attempts[key] if t > cutoff]
             return len(self._attempts[key]) >= max_attempts
@@ -83,7 +84,7 @@ class RateLimiter:
             except Exception:
                 pass
         with self._lock:
-            self._attempts[key].append(datetime.now())
+            self._attempts[key].append(timeutil.now())
 
     def clear_attempts(self, key):
         from sqlalchemy import text
@@ -120,7 +121,7 @@ class RateLimiter:
                 return 0
             oldest = min(self._attempts[key])
             unlock_time = oldest + timedelta(minutes=window_minutes)
-            return max(0, int((unlock_time - datetime.now()).total_seconds()))
+            return max(0, int((unlock_time - timeutil.now()).total_seconds()))
 
 
 # Global rate limiter instance
@@ -342,7 +343,7 @@ def login_required(f):
         if 'login_time' in session:
             login_time = datetime.fromisoformat(session['login_time'])
             max_age = current_app.config.get('PERMANENT_SESSION_LIFETIME', timedelta(hours=8))
-            if datetime.now() - login_time > max_age:
+            if timeutil.now() - login_time > max_age:
                 session.clear()
                 flash('Your session has expired. Please log in again.', 'warning')
                 return redirect(url_for('auth.login'))
@@ -350,9 +351,9 @@ def login_required(f):
         # Refresh session token periodically (every 30 minutes)
         if 'last_refresh' in session:
             last_refresh = datetime.fromisoformat(session['last_refresh'])
-            if datetime.now() - last_refresh > timedelta(minutes=30):
+            if timeutil.now() - last_refresh > timedelta(minutes=30):
                 session['session_token'] = generate_session_token()
-                session['last_refresh'] = datetime.now().isoformat()
+                session['last_refresh'] = timeutil.now().isoformat()
         
         return f(*args, **kwargs)
     return decorated_function
@@ -599,7 +600,7 @@ def add_security_headers(response):
 
 def log_security_event(event_type: str, details: str = '', user: str = None):
     """Log security-relevant events"""
-    timestamp = datetime.now().isoformat()
+    timestamp = timeutil.now().isoformat()
     ip = request.remote_addr if request else 'N/A'
     user = user or session.get('user', 'anonymous')
     

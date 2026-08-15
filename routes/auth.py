@@ -3,6 +3,7 @@ Enhanced Authentication routes for PosyHub
 Supports both legacy password login and user-based login
 """
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash
+from utils import timeutil
 import hmac
 from datetime import datetime, timedelta
 from config import Config
@@ -116,7 +117,7 @@ def _complete_login(user, dest=None, remember=True, trust_device=False):
     if new_device:                       # notify the owner of a sign-in from a new browser
         alert_new_device(user, request.headers.get('User-Agent'), request.remote_addr)
 
-    user.last_login = datetime.now()
+    user.last_login = timeutil.now()
     db.session.commit()
     log_action('auth.login', detail=user.username)   # session identity now set
     flash(f'Welcome back, {user.full_name or user.username}!', 'success')
@@ -185,7 +186,7 @@ def login():
                 if user.mfa_enabled and user.mfa_secret and not _trusted_here:
                     session.clear()
                     session['_pending_mfa_uid'] = user.id
-                    session['_pending_mfa_ts'] = int(datetime.now().timestamp())
+                    session['_pending_mfa_ts'] = int(timeutil.now().timestamp())
                     session['_pending_remember'] = remember    # survive the 2FA hop
                     if next_url:
                         session['_pending_next'] = next_url   # survive the 2FA hop
@@ -232,7 +233,7 @@ def login():
 
     return render_template('auth/login.html', next_url=next_url,
                            legacy_login=bool(Config.ENABLE_LEGACY_LOGIN and Config.ADMIN_PASSWORD),
-                           now_year=datetime.now().year)
+                           now_year=timeutil.now().year)
 
 
 @auth_bp.route('/login/verify', methods=['GET', 'POST'])
@@ -242,7 +243,7 @@ def verify_mfa():
     complete the login. No `logged_in` is set until this passes."""
     uid = session.get('_pending_mfa_uid')
     ts = session.get('_pending_mfa_ts') or 0
-    if not uid or (datetime.now().timestamp() - ts) > 600:   # 10-minute window
+    if not uid or (timeutil.now().timestamp() - ts) > 600:   # 10-minute window
         session.pop('_pending_mfa_uid', None)
         session.pop('_pending_mfa_ts', None)
         flash('Your sign-in step expired. Please log in again.', 'warning')

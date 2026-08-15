@@ -14,6 +14,7 @@ Questions that depend on a figure we can't capture are skipped and counted
 stem text and kept. Any genuine figure image found is re-hosted locally.
 """
 from __future__ import annotations
+from utils import timeutil
 
 from datetime import datetime
 
@@ -59,7 +60,7 @@ def start_harvest(subjects, exam='jamb', year_min=None, year_max=None, max_pages
     from utils import myschool as ms
     exam = (exam or 'jamb').strip().lower()
     y1 = int(year_min) if year_min else 2001
-    y2 = int(year_max) if year_max else datetime.now().year - 1
+    y2 = int(year_max) if year_max else timeutil.now().year - 1
     if y1 > y2:
         y1, y2 = y2, y1
     years = list(range(y1, y2 + 1))
@@ -75,7 +76,7 @@ def start_harvest(subjects, exam='jamb', year_min=None, year_max=None, max_pages
         'max_pages': int(max_pages), 'current': None,
         'per_subject': {}, 'found': {}, 'last_error': '',
         'subjects': sorted({c['subject'] for c in cells}),
-        'updated_at': datetime.now().isoformat(timespec='seconds'),
+        'updated_at': timeutil.now().isoformat(timespec='seconds'),
     }
     state.update(_blank_counters())
     save_state(state)
@@ -282,7 +283,7 @@ def harvest_step(max_questions=6):
         db.session.rollback()
         state['status'] = 'paused'
         state['last_error'] = f'{type(exc).__name__}: {exc}'[:200]
-    state['updated_at'] = datetime.now().isoformat(timespec='seconds')
+    state['updated_at'] = timeutil.now().isoformat(timespec='seconds')
     save_state(state)
     return _public(state)
 

@@ -3,6 +3,7 @@ Staff / HR routes — personnel directory, departments, leave management and
 monthly payroll (with optional posting of the salary run to Finance expenses).
 """
 from datetime import datetime, date
+from utils import timeutil
 from utils.helpers import get_active_term
 
 from flask import (Blueprint, render_template, request, redirect, url_for,
@@ -363,7 +364,7 @@ def staff_detail(staff_id):
 
     initials = ((s.first_name[0] if s.first_name else '') + (s.surname[0] if s.surname else '')).upper()
     from utils.comms import normalise_phone
-    today = date.today()
+    today = timeutil.today()
     contract_left = s.contract_days_left
     return _render({
         'page': 'staff_detail', 'nav': _nav_urls(), 'is_admin': _is_admin(),
@@ -469,7 +470,7 @@ def adjust_salary(staff_id):
     old_salary = s.salary or 0          # capture before overwriting for the audit
     db.session.add(SalaryHistory(
         staff_id=s.id, previous_salary=old_salary, new_salary=new_salary,
-        effective_date=_d(request.form.get('effective_date')) or date.today(),
+        effective_date=_d(request.form.get('effective_date')) or timeutil.today(),
         reason=(request.form.get('reason') or '').strip() or None,
         created_by=_current_user()))
     s.salary = new_salary
@@ -492,7 +493,7 @@ def promote_staff(staff_id):
     if not new_title:
         return _err('Enter the new position/title.', url_for('hr.staff_detail', staff_id=staff_id))
     old_title = s.designation or '—'
-    eff = _d(request.form.get('effective_date')) or date.today()
+    eff = _d(request.form.get('effective_date')) or timeutil.today()
     detail = f'{old_title} → {new_title}'
     # Optional salary change rides along with the promotion.
     new_salary = request.form.get('new_salary', type=float)
@@ -531,7 +532,7 @@ def transfer_staff(staff_id):
                     url_for('hr.staff_detail', staff_id=staff_id))
     old_branch = db.session.get(Branch, s.branch_id) if s.branch_id else None
     old = old_branch.name if old_branch else 'Unassigned'
-    eff = _d(request.form.get('effective_date')) or date.today()
+    eff = _d(request.form.get('effective_date')) or timeutil.today()
     s.branch_id = target.id
     hr.record_event(s, 'transfer', f'Transferred to {target.name}',
                     detail=f'{old} → {target.name}', effective_date=eff, created_by=_current_user())
@@ -549,7 +550,7 @@ def confirm_staff(staff_id):
     s = db.get_or_404(StaffMember, staff_id)
     from utils.branch_scope import require_branch_access
     require_branch_access(s.branch_id)
-    eff = _d(request.form.get('effective_date')) or date.today()
+    eff = _d(request.form.get('effective_date')) or timeutil.today()
     s.confirmation_date = eff
     db.session.commit()
     from utils.audit import log_action
@@ -569,7 +570,7 @@ def add_staff_note(staff_id):
     if not title:
         return _err('Enter a note.', url_for('hr.staff_detail', staff_id=staff_id))
     hr.record_event(s, 'note', title, detail=(request.form.get('detail') or '').strip() or None,
-                    effective_date=_d(request.form.get('effective_date')) or date.today(),
+                    effective_date=_d(request.form.get('effective_date')) or timeutil.today(),
                     created_by=_current_user())
     db.session.commit()
     return _ok('Note added to the timeline.', url_for('hr.staff_detail', staff_id=staff_id))
@@ -726,7 +727,7 @@ def add_review(staff_id):
         return _err('Enter the review period.', url_for('hr.staff_detail', staff_id=staff_id))
     from models import PerformanceReview
     db.session.add(PerformanceReview(
-        staff_id=s.id, period=period, review_date=_d(request.form.get('review_date')) or date.today(),
+        staff_id=s.id, period=period, review_date=_d(request.form.get('review_date')) or timeutil.today(),
         reviewer=(request.form.get('reviewer') or _current_user()).strip() or None,
         score=request.form.get('score', type=float), rating=request.form.get('rating') or None,
         strengths=(request.form.get('strengths') or '').strip() or None,
@@ -942,7 +943,7 @@ def leave_list():
     staff = scope_query(StaffMember.query.filter_by(is_active=True), StaffMember).order_by(StaffMember.surname).all()
     return _render({
         'page': 'leave', 'nav': _nav_urls(), 'status': status or '',
-        'leave_types': hr.LEAVE_TYPES, 'today': date.today().isoformat(),
+        'leave_types': hr.LEAVE_TYPES, 'today': timeutil.today().isoformat(),
         'staff': [{'id': s.id, 'full_name': s.full_name} for s in staff],
         'leaves': [{'id': lv.id, 'staff_name': lv.staff.full_name, 'staff_id': lv.staff_id,
                     'leave_type': lv.leave_type, 'days': lv.days, 'status': lv.status,
@@ -981,7 +982,7 @@ def leave_status(leave_id):
     if new_status in ('Approved', 'Rejected', 'Pending'):
         lv.status = new_status
         # Reflect an approved, currently-active leave on the staff status.
-        if new_status == 'Approved' and lv.start_date <= date.today() <= lv.end_date:
+        if new_status == 'Approved' and lv.start_date <= timeutil.today() <= lv.end_date:
             lv.staff.status = 'On Leave'
         db.session.commit()
         # Tell the staff member (if they have a login) that their request moved.
@@ -1027,7 +1028,7 @@ def payroll_list():
     if not is_central():
         q = q.filter(PayrollRun.branch_id.isnot(None))
     runs = q.order_by(PayrollRun.year.desc(), PayrollRun.month.desc()).all()
-    today = date.today()
+    today = timeutil.today()
     show_branch = is_central()
     return _render({
         'page': 'payroll', 'nav': _nav_urls(), 'is_admin': _is_admin(),
@@ -1147,7 +1148,7 @@ def finalize_payroll(run_id):
                 branch_id=run.branch_id or branch_for_new(),
                 description=f'Payroll — {run.period_label}',
                 amount=hr.run_total(run),
-                expense_date=date.today(),
+                expense_date=timeutil.today(),
                 method='Bank Transfer',
                 notes=f'Auto-posted from HR payroll #{run.id}')
             db.session.add(exp)
@@ -1223,7 +1224,7 @@ def sync_deductions(run_id):
 @login_required
 def attendance():
     from utils.branch_scope import scope_query
-    day = _d(request.args.get('date')) or date.today()
+    day = _d(request.args.get('date')) or timeutil.today()
     dept_id = request.args.get('department_id', type=int)
     query = scope_query(StaffMember.query.filter_by(is_active=True, status='Active'), StaffMember)
     if dept_id:
@@ -1268,7 +1269,7 @@ def _current_staff():
 
 
 def _today_att_dict(staff_id):
-    a = StaffAttendance.query.filter_by(staff_id=staff_id, date=date.today()).first()
+    a = StaffAttendance.query.filter_by(staff_id=staff_id, date=timeutil.today()).first()
     if not a:
         return None
     return {'status': a.status, 'clock_in': a.clock_in or '', 'note': a.note or '',
@@ -1286,7 +1287,7 @@ def checkin():
         'page': 'checkin', 'nav': _nav_urls(),
         'staff': ({'id': staff.id, 'name': staff.full_name, 'staff_id': staff.staff_id}
                   if staff else None),
-        'today_label': date.today().strftime('%A, %d %b %Y'),
+        'today_label': timeutil.today().strftime('%A, %d %b %Y'),
         'today': _today_att_dict(staff.id) if staff else None,
         'geo': {'enabled': bool(s['geo_enabled']), 'radius': s['geo_radius']},
         'prefill_code': request.args.get('c') or '',
@@ -1361,7 +1362,7 @@ def clock():
         return _err('You can view your attendance but not clock in. Ask an administrator.',
                     url_for('auth.profile'))
     require_branch_access(staff.branch_id)
-    today = StaffAttendance.query.filter_by(staff_id=staff.id, date=date.today()).first()
+    today = StaffAttendance.query.filter_by(staff_id=staff.id, date=timeutil.today()).first()
     if today and today.clock_in and not today.clock_out:
         rec, out = hr.clock_out_now(staff.id)
         db.session.commit()
@@ -1417,7 +1418,7 @@ def checkin_qr():
     return _render({
         'page': 'checkin_qr', 'nav': _nav_urls(),
         'qr': hr.qr_svg_data_uri(checkin_url), 'url': checkin_url,
-        'today_label': date.today().strftime('%A, %d %b %Y'),
+        'today_label': timeutil.today().strftime('%A, %d %b %Y'),
         'urls': {'attendance': url_for('hr.attendance')},
     })
 
@@ -1479,7 +1480,7 @@ def _int(v):
 @hr_bp.route('/attendance/save', methods=['POST'])
 @login_required
 def save_attendance():
-    day = _d(request.form.get('date')) or date.today()
+    day = _d(request.form.get('date')) or timeutil.today()
     settings = hr.get_settings()
     staff_ids = request.form.getlist('staff_id', type=int)
     saved = 0
@@ -1945,13 +1946,13 @@ def hire_applicant(app_id):
                     prior_experience_years=a.experience_years,
                     department_id=v.department_id, staff_type=v.staff_type,
                     employment_type=v.employment_type, designation=v.title,
-                    date_employed=date.today(), status='Active')
+                    date_employed=timeutil.today(), status='Active')
     db.session.add(s)
     db.session.flush()
     a.status = 'Hired'
     a.hired_staff_id = s.id
     hr.record_event(s, 'employment', 'Hired', detail=f'Recruited for "{v.title}"',
-                    effective_date=date.today(), created_by=_current_user())
+                    effective_date=timeutil.today(), created_by=_current_user())
     # Mark the vacancy Filled once every opening is taken.
     hired = v.applications.filter_by(status='Hired').count()
     if hired >= (v.positions or 1):

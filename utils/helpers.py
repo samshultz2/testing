@@ -2,6 +2,7 @@
 Helper utility functions for the Student Management System
 """
 from datetime import datetime, date, timedelta
+from utils import timeutil
 from functools import wraps
 from flask import session, redirect, url_for, flash
 
@@ -155,7 +156,7 @@ def get_age_from_dob(dob):
     if not dob:
         return None
     
-    today = date.today()
+    today = timeutil.today()
     age = today.year - dob.year
     
     if (today.month, today.day) < (dob.month, dob.day):
@@ -484,7 +485,7 @@ def _session_current_term(session_id):
     terms = Term.query.filter_by(session_id=session_id).all()
     if not terms:
         return None
-    today = date.today()
+    today = timeutil.today()
     for t in terms:
         if t.start_date and t.end_date and t.start_date <= today <= t.end_date:
             return t
@@ -588,7 +589,7 @@ def pick_current_week(weeks, on=None):
     Week objects. Returns None for an empty list."""
     if not weeks:
         return None
-    on = on or date.today()
+    on = on or timeutil.today()
     for w in weeks:
         if w.start_date and w.end_date and w.start_date <= on <= w.end_date:
             return w

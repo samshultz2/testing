@@ -5,6 +5,7 @@ testable. Approval is the ONLY place a real ``User`` is created from a link, so
 all the account-creation rules live here.
 """
 from __future__ import annotations
+from utils import timeutil
 
 from datetime import datetime, timedelta
 
@@ -51,7 +52,7 @@ def create_invite(*, label, role, permission_group_id, branch_id, scope,
         role=(role or 'staff'), permission_group_id=permission_group_id,
         branch_id=branch_id, scope=(scope or 'branch'),
         max_uses=(int(max_uses) if max_uses else None),
-        expires_at=(datetime.now() + timedelta(days=int(expires_days))) if expires_days else None,
+        expires_at=(timeutil.now() + timedelta(days=int(expires_days))) if expires_days else None,
         created_by=created_by,
         position=((position or '').strip() or None), fields=valid)
     db.session.add(inv)
@@ -139,7 +140,7 @@ def approve_signup(signup, reviewer_username):
 
     signup.status = 'approved'
     signup.reviewed_by = reviewer_username
-    signup.reviewed_at = datetime.now()
+    signup.reviewed_at = timeutil.now()
     signup.user_id = u.id
     db.session.commit()
     return u, None
@@ -165,7 +166,7 @@ def _create_staff_member(signup, user):
                 department_id=signup.department_id,
                 designation=signup.position or (user.role or 'staff').replace('_', ' ').title(),
                 staff_type=(signup.staff_type or 'Teaching'),
-                date_employed=date.today(), qualification=signup.qualification,
+                date_employed=timeutil.today(), qualification=signup.qualification,
                 status='Active', is_active=True, user_id=user.id))
     except Exception:
         pass                              # savepoint rolled back; account stands
@@ -177,6 +178,6 @@ def reject_signup(signup, reviewer_username):
         return False
     signup.status = 'rejected'
     signup.reviewed_by = reviewer_username
-    signup.reviewed_at = datetime.now()
+    signup.reviewed_at = timeutil.now()
     db.session.commit()
     return True

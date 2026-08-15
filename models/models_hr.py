@@ -105,7 +105,7 @@ class StaffMember(db.Model):
         if not self.date_employed:
             return 0
         from datetime import date
-        today = date.today()
+        today = local_now().date()
         yrs = today.year - self.date_employed.year - (
             (today.month, today.day) < (self.date_employed.month, self.date_employed.day))
         return max(yrs, 0)
@@ -120,7 +120,7 @@ class StaffMember(db.Model):
         if not self.date_of_birth:
             return None
         from datetime import date
-        today = date.today()
+        today = local_now().date()
         return today.year - self.date_of_birth.year - (
             (today.month, today.day) < (self.date_of_birth.month, self.date_of_birth.day))
 
@@ -130,7 +130,7 @@ class StaffMember(db.Model):
         if not self.contract_end:
             return None
         from datetime import date
-        return (self.contract_end - date.today()).days
+        return (self.contract_end - local_now().date()).days
 
     @staticmethod
     def generate_staff_id():
@@ -376,7 +376,7 @@ class StaffDocument(db.Model):
     @property
     def is_expired(self):
         from datetime import date
-        return bool(self.expires_on and self.expires_on < date.today())
+        return bool(self.expires_on and self.expires_on < local_now().date())
 
 
 class TrainingRecord(db.Model):

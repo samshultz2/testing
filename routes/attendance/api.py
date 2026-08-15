@@ -1,5 +1,6 @@
 """attendance blueprint — api routes (split from the former routes/attendance.py)."""
 from routes.attendance import *  # noqa: F401,F403
+from utils import timeutil
 
 
 @attendance_bp.route('/api/summary/<int:assignment_id>/<date_str>')
@@ -101,9 +102,9 @@ def api_roster():
 
     ds = request.args.get('date')
     try:
-        target = datetime.strptime(ds, '%Y-%m-%d').date() if ds else date.today()
+        target = datetime.strptime(ds, '%Y-%m-%d').date() if ds else timeutil.today()
     except Exception:
-        target = date.today()
+        target = timeutil.today()
 
     holidays = Holiday.query.filter_by(term_id=caa.term_id).all()
     week = _week_for_date(caa.term_id, target)
@@ -238,7 +239,7 @@ def api_context():
     return jsonify({
         'term': {'id': term.id, 'name': term.full_name} if term else None,
         'terms': terms, 'classes': classes, 'weeks': weeks, 'holidays': holidays,
-        'today': date.today().isoformat(),
+        'today': timeutil.today().isoformat(),
         'default_class': default_class,   # form teacher's class (SPA auto-selects)
         'default_week': default_week,     # current week (SPA auto-selects)
         'can_mark': can_mark_attendance(),   # gates the marking tabs in the SPA
@@ -394,7 +395,7 @@ def api_report_daily():
         return err
     ds = request.args.get('date')
     try:
-        target = datetime.strptime(ds, '%Y-%m-%d').date() if ds else date.today()
+        target = datetime.strptime(ds, '%Y-%m-%d').date() if ds else timeutil.today()
     except Exception:
         return jsonify({'error': 'bad date'}), 400
     holidays = Holiday.query.filter_by(term_id=caa.term_id).all()
@@ -419,7 +420,7 @@ def api_week_totals():
         return err
     ds = request.args.get('date')
     try:
-        on = datetime.strptime(ds, '%Y-%m-%d').date() if ds else date.today()
+        on = datetime.strptime(ds, '%Y-%m-%d').date() if ds else timeutil.today()
     except Exception:
         return jsonify({'error': 'bad date'}), 400
     weeks = Week.query.filter_by(term_id=caa.term_id).order_by(Week.week_number).all()
@@ -427,7 +428,7 @@ def api_week_totals():
     days = []
     if week:
         holiday_dates = {h.date for h in Holiday.query.filter_by(term_id=caa.term_id).all()}
-        today = date.today()
+        today = timeutil.today()
         d = week.start_date
         while d <= week.end_date:
             if d.weekday() < 5 and d not in holiday_dates and d <= today:
