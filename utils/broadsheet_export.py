@@ -756,7 +756,60 @@ def explore_pdf(subjects, scope_meta, rows, term_name, pass_mark=50, filter_labe
 # and picks the format. One code path → PDF, PNG and Excel stay identical.
 # --------------------------------------------------------------------------- #
 
-def combo_pdf(headers, data_rows, title, subtitle='', numeric_from=1):
+# Short codes for subjects so wide broadsheets fit A4 at a legible font size.
+_SUBJECT_ABBR = {
+    'Mathematics': 'MTH', 'English Language': 'ENG', 'Civic Education': 'CIV',
+    'Biology': 'BIO', 'Chemistry': 'CHE', 'Physics': 'PHY', 'Economics': 'ECO',
+    'Government': 'GOV', 'Literature in English': 'LIT', 'Commerce': 'COM',
+    'Christian Religious Studies': 'CRS', 'Islamic Religious Studies': 'IRS',
+    'Financial Accounting': 'ACC', 'Accounting': 'ACC', 'Geography': 'GEO',
+    'Agricultural Science': 'AGR', 'Further Mathematics': 'FMT', 'History': 'HIS',
+    'Data Processing': 'DPR', 'Computer Studies': 'CMP', 'Technical Drawing': 'TDR',
+    'Food and Nutrition': 'FDN', 'Home Management': 'HMG', 'Marketing': 'MKT',
+    'Yoruba': 'YOR', 'Hausa': 'HAU', 'Igbo': 'IGB', 'French': 'FRN', 'Fine Art': 'ART',
+    'Music': 'MUS', 'Livestock Farming': 'LVF', 'Digital Technologies': 'DGT',
+    'Health Education': 'HED', 'Physical Education': 'PHE', 'Book Keeping': 'BKP',
+    'Catering Craft Practice': 'CCP', 'Animal Husbandry': 'ANH', 'Insurance': 'INS',
+}
+
+
+def _abbr_one(name):
+    """A short code for a subject name: a known code, else an acronym of the
+    significant words, else the first letters — always 2–4 upper-case chars."""
+    name = (name or '').strip()
+    if not name:
+        return '?'
+    if name in _SUBJECT_ABBR:
+        return _SUBJECT_ABBR[name]
+    stop = {'in', 'of', 'and', 'the', '&'}
+    words = [w for w in name.replace('/', ' ').split() if w.lower() not in stop]
+    if len(words) >= 2:
+        code = ''.join(w[0] for w in words[:4]).upper()
+    else:
+        code = name[:3].upper()
+    return code
+
+
+def abbreviate_subjects(names):
+    """Map a list of subject names to unique short codes, returning
+    ``(codes, legend)`` where legend is a list of ``(code, full_name)`` for a key
+    printed beneath the table. Collisions get a numeric suffix so codes stay
+    unique."""
+    codes, legend, seen = [], [], {}
+    for n in names:
+        base = _abbr_one(n)
+        code = base
+        k = 2
+        while code in seen and seen[code] != n:
+            code = f'{base}{k}'
+            k += 1
+        seen[code] = n
+        codes.append(code)
+        legend.append((code, n))
+    return codes, legend
+
+
+def combo_pdf(headers, data_rows, title, subtitle='', numeric_from=1, legend=None):
     """Print-ready PDF of an arbitrary table (landscape A4). ``headers`` is a
     list of column titles; ``data_rows`` a list of equal-length string rows;
     ``numeric_from`` is the first column index to centre (names stay left)."""
@@ -769,11 +822,24 @@ def combo_pdf(headers, data_rows, title, subtitle='', numeric_from=1):
 
     primary, accent, light, ink = _theme()
     styles = getSampleStyleSheet()
+    ncol = len(headers)
+    # Scale the body font to the column count so a slim table (short codes) is
+    # printed large and legible, and a very wide one still fits A4.
+    if ncol <= 10:
+        fs = 11
+    elif ncol <= 14:
+        fs = 10
+    elif ncol <= 18:
+        fs = 9
+    else:
+        fs = 8
     h = ParagraphStyle('h', parent=styles['Title'], fontSize=15, textColor=primary, spaceAfter=2)
     sub = ParagraphStyle('sub', parent=styles['Normal'], fontSize=9.5, textColor=colors.HexColor('#6B7A74'))
-    cell = ParagraphStyle('c', parent=styles['Normal'], fontSize=7.6, leading=9)
-    headp = ParagraphStyle('hp', parent=styles['Normal'], fontSize=7.8, leading=9,
-                           textColor=colors.white, fontName='Helvetica-Bold')
+    cell = ParagraphStyle('c', parent=styles['Normal'], fontSize=fs, leading=fs + 1.5)
+    headp = ParagraphStyle('hp', parent=styles['Normal'], fontSize=fs, leading=fs + 1.5,
+                           textColor=colors.white, fontName='Helvetica-Bold', alignment=1)
+    keyst = ParagraphStyle('key', parent=styles['Normal'], fontSize=8.5, leading=11,
+                           textColor=colors.HexColor('#44524C'))
 
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=landscape(A4), topMargin=10 * mm, bottomMargin=10 * mm,
@@ -796,12 +862,12 @@ def combo_pdf(headers, data_rows, title, subtitle='', numeric_from=1):
                 line.append(str(v))
         data.append(line)
 
-    ncol = len(headers)
     # First column (S/N) narrow, second (name) wide, the rest share the remainder.
-    name_w = 42 * mm
+    name_w = 40 * mm
     sn_w = 9 * mm if ncol > 1 else 0
     rest = max(ncol - 2, 1)
-    other_w = max(12 * mm, (avail - name_w - sn_w) / rest)
+    # Short codes let columns be narrow; never let the minimum overflow the page.
+    other_w = min(max(8 * mm, (avail - name_w - sn_w) / rest), (avail - name_w - sn_w) / rest)
     widths = []
     for j in range(ncol):
         if j == 0 and ncol > 1:
@@ -813,20 +879,26 @@ def combo_pdf(headers, data_rows, title, subtitle='', numeric_from=1):
     t = Table(data, colWidths=widths, repeatRows=1)
     t.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), primary), ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-        ('FONTSIZE', (0, 0), (-1, -1), 7.6),
+        ('FONTSIZE', (0, 0), (-1, -1), fs),
         ('ALIGN', (max(numeric_from, 1), 0), (-1, -1), 'CENTER'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#D5DED9')),
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, light]),
         ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3)]))
     elems.append(t)
+    if legend:
+        parts = ' &nbsp;·&nbsp; '.join(f'<b>{pdf_escape(code)}</b> = {pdf_escape(full)}'
+                                       for code, full in legend)
+        elems.append(Spacer(1, 6))
+        elems.append(Paragraph('Key: ' + parts, keyst))
     doc.build(elems)
     return buf.getvalue()
 
 
-def combo_png(headers, data_rows, title, subtitle=''):
+def combo_png(headers, data_rows, title, subtitle='', legend=None):
     """High-resolution PNG of an arbitrary table, brand-styled to match the
-    students-list image export."""
+    students-list image export. ``legend`` (list of (code, full)) prints a key
+    line beneath the table when subject names were abbreviated."""
     from PIL import Image, ImageDraw, ImageFont
     S = 3
 
@@ -837,8 +909,8 @@ def combo_png(headers, data_rows, title, subtitle=''):
         except Exception:
             return ImageFont.load_default()
 
-    body, body_b = fnt(11), fnt(11, True)
-    title_f, sub_f = fnt(20, True), fnt(11)
+    body, body_b = fnt(14), fnt(14, True)
+    title_f, sub_f, key_f = fnt(22, True), fnt(12), fnt(11)
     GREEN, HEAD, TEXT, MUTED = (13, 106, 78), (10, 86, 64), (31, 41, 55), (107, 114, 128)
     ZEBRA, LINE, WHITE = (249, 250, 251), (229, 231, 235), (255, 255, 255)
 
@@ -863,8 +935,25 @@ def combo_png(headers, data_rows, title, subtitle=''):
     table_w = sum(col_w)
     title_h = 40 * S + (24 * S if subtitle else 0)
     width = int(table_w + 2 * pad)
-    height = int(title_h + header_h + row_h * len(data_rows) + 2 * pad)
     width = max(width, 420 * S)
+
+    # Legend ("Key: LIT = Literature …") wrapped to the table width.
+    key_lines = []
+    if legend:
+        line = 'Key:  '
+        for c, f in legend:
+            piece = '%s = %s' % (c, f)
+            trial = line + piece + '    '
+            if tw(trial, key_f) > table_w and line not in ('Key:  ',):
+                key_lines.append(line.rstrip())
+                line = piece + '    '
+            else:
+                line = trial
+        if line.strip():
+            key_lines.append(line.rstrip())
+    key_line_h = (tmp.textbbox((0, 0), "Ay", font=key_f)[3] + 4 * S)
+    legend_h = (len(key_lines) * key_line_h + 8 * S) if key_lines else 0
+    height = int(title_h + header_h + row_h * len(data_rows) + legend_h + 2 * pad)
 
     img = Image.new('RGB', (width, height), WHITE)
     d = ImageDraw.Draw(img)
@@ -898,6 +987,12 @@ def combo_png(headers, data_rows, title, subtitle=''):
     for j in range(ncol - 1):
         x += col_w[j]
         d.line([x, y0, x, y], fill=LINE, width=1)
+
+    # Legend / key beneath the table.
+    ky = y + 8 * S
+    for kl in key_lines:
+        d.text((pad, ky), kl, fill=MUTED, font=key_f)
+        ky += key_line_h
 
     out = io.BytesIO()
     img = img.resize((width // S, height // S), Image.LANCZOS)

@@ -1022,8 +1022,22 @@ def waec_broadsheet():
     years = _waec_broadsheet_years()
     year = resolve_exam_year(request.args.get('year', type=int), years)
     bs = _waec_broadsheet_cached(year, viewing_branch_id()) if year else None
+    # {stream: [subjects students in that stream actually offered]} so the custom-
+    # download modal can auto-tick a stream's subjects when the stream is picked.
+    stream_subjects = {}
+    if bs and bs.get('rows'):
+        for r in bs['rows']:
+            st = (r['student'].get('stream') or '').strip()
+            if not st:
+                continue
+            present = stream_subjects.setdefault(st, set())
+            for subj in bs['subjects']:
+                if r['cells'].get(subj):
+                    present.add(subj)
+        stream_subjects = {k: sorted(v) for k, v in stream_subjects.items()}
     return render_template('results/waec_broadsheet.html', bs=bs, selected_year=year,
-                           years=years, grade_classes=_WAEC_GRADE_CLASS)
+                           years=years, grade_classes=_WAEC_GRADE_CLASS,
+                           stream_subjects=stream_subjects)
 
 
 @results_bp.route('/waec/broadsheet.pdf')
@@ -1129,35 +1143,41 @@ def waec_broadsheet_download():
         flash('No students match the selected streams for that year.', 'warning')
         return redirect(url_for('results.waec_broadsheet', year=year))
 
-    headers = ['S/N', 'Student'] + subjects + ['Credits', 'Avg grade']
-    data_rows = []
-    for i, r in enumerate(rows, 1):
-        line = [str(i), r['student']['full_name']]
-        line += [r['cells'].get(subj, '–') for subj in subjects]
-        line += [str(r['credits']), r['avg_grade']]
-        data_rows.append(line)
-
     stream_label = ', '.join(sorted(s.title() for s in want_streams)) if want_streams else 'All streams'
     subtitle = f'WAEC Broadsheet {year} · {stream_label} · {len(rows)} student(s)'
     title = f'WAEC Broadsheet {year}'
 
     fmt = (request.args.get('format') or 'pdf').lower()
     from utils import broadsheet_export as bx
-    if fmt in ('image', 'png'):
-        data = bx.combo_png(headers, data_rows, title, subtitle)
-        return Response(data, mimetype='image/png', headers={
-            'Content-Disposition': f'attachment; filename="waec_broadsheet_{year}.png"'})
+
+    # Spreadsheet/CSV keep the full subject names (they aren't width-constrained).
+    full_headers = ['S/N', 'Student'] + subjects + ['Credits', 'Avg grade']
+    full_rows = []
+    for i, r in enumerate(rows, 1):
+        line = [str(i), r['student']['full_name']]
+        line += [r['cells'].get(subj, '–') for subj in subjects]
+        line += [str(r['credits']), r['avg_grade']]
+        full_rows.append(line)
+
     if fmt in ('excel', 'xlsx'):
-        wb = bx.combo_xlsx(headers, data_rows, title, subtitle)
+        wb = bx.combo_xlsx(full_headers, full_rows, title, subtitle)
         return xlsx_response(wb, f'waec_broadsheet_{year}.xlsx')
     if fmt == 'csv':
         import csv as _csv
         from io import StringIO
-        buf = StringIO(); w = _csv.writer(buf); w.writerow(headers)
-        for dr in data_rows:
+        buf = StringIO(); w = _csv.writer(buf); w.writerow(full_headers)
+        for dr in full_rows:
             w.writerow(dr)
         return Response(buf.getvalue(), mimetype='text/csv', headers={
             'Content-Disposition': f'attachment; filename="waec_broadsheet_{year}.csv"'})
-    data = bx.combo_pdf(headers, data_rows, title, subtitle, numeric_from=2)
+
+    # PDF / image: short subject codes + a legend, so a wide sheet fits A4 legibly.
+    codes, legend = bx.abbreviate_subjects(subjects)
+    headers = ['S/N', 'Student'] + codes + ['Cred', 'Avg']
+    if fmt in ('image', 'png'):
+        data = bx.combo_png(headers, full_rows, title, subtitle, legend=legend)
+        return Response(data, mimetype='image/png', headers={
+            'Content-Disposition': f'attachment; filename="waec_broadsheet_{year}.png"'})
+    data = bx.combo_pdf(headers, full_rows, title, subtitle, numeric_from=2, legend=legend)
     return Response(data, mimetype='application/pdf', headers={
         'Content-Disposition': f'attachment; filename="waec_broadsheet_{year}.pdf"'})

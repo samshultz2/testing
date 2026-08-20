@@ -21,6 +21,17 @@ def _seed(app):
         return sci.id, art.id
 
 
+def test_abbreviate_subjects_known_and_unique():
+    from utils.broadsheet_export import abbreviate_subjects
+    codes, legend = abbreviate_subjects(
+        ['Literature in English', 'Christian Religious Studies', 'Mathematics'])
+    assert codes == ['LIT', 'CRS', 'MTH']
+    assert legend[0] == ('LIT', 'Literature in English')
+    # Two different subjects that would collide get distinct codes.
+    codes2, _ = abbreviate_subjects(['Civic Education', 'Creative Enterprise'])
+    assert len(set(codes2)) == 2
+
+
 def test_download_formats_and_stream_filter(app):
     ids = _seed(app)
     c = app.test_client()

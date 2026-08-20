@@ -200,6 +200,21 @@
     document.querySelectorAll('.bs-subj').forEach(function (b) { b.checked = true; }); });
   document.getElementById('bsSubjNone').addEventListener('click', function () {
     document.querySelectorAll('.bs-subj').forEach(function (b) { b.checked = false; }); });
+
+  // Picking stream(s) auto-selects exactly the subjects students in those
+  // streams actually offer. With no stream ticked, leave the subject choices be.
+  var STREAM_SUBJECTS = {{ stream_subjects|tojson }};
+  function syncSubjectsToStreams() {
+    var streams = picked('bs-stream');
+    if (!streams.length) return;
+    var want = {};
+    streams.forEach(function (s) {
+      (STREAM_SUBJECTS[s] || []).forEach(function (subj) { want[subj] = true; });
+    });
+    document.querySelectorAll('.bs-subj').forEach(function (b) { b.checked = !!want[b.value]; });
+  }
+  document.querySelectorAll('.bs-stream').forEach(function (b) {
+    b.addEventListener('change', syncSubjectsToStreams); });
   modal.querySelectorAll('[data-fmt]').forEach(function (btn) {
     btn.addEventListener('click', function () {
       var p = new URLSearchParams();
