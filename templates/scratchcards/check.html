@@ -3,7 +3,12 @@
 {% block content %}
 <div class="portal-card" style="max-width:460px;margin:7vh auto 0;">
     <div style="text-align:center;margin-bottom:1rem;">
-        <img src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="" style="width:64px;height:64px;border-radius:16px;">
+        {% if school_brand.logo_url %}
+        <img src="{{ school_brand.logo_url }}" alt="{{ school_brand.name }}" style="width:64px;height:64px;border-radius:16px;object-fit:contain;background:#fff;">
+        {% else %}
+        <span style="display:inline-flex;width:64px;height:64px;border-radius:16px;background:var(--portal-primary);color:#fff;align-items:center;justify-content:center;font-size:1.7rem;"><i class="fas fa-graduation-cap"></i></span>
+        {% endif %}
+        {% if school_brand.name %}<div style="margin-top:.5rem;font-weight:600;color:var(--portal-ink);">{{ school_brand.name }}</div>{% endif %}
         <h1 style="margin-top:.6rem;">Result Checker</h1>
         <p class="text-muted" style="margin:0;">Enter your Student ID and scratch-card PIN</p>
     </div>

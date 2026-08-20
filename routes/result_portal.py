@@ -394,4 +394,34 @@ def view_result():
         flash('That result is no longer available.', 'error')
         return redirect(url_for('result_portal.check'))
     return render_template('scratchcards/result.html', student=student, term=term,
-                           report_data=report_data, uses_left=rv.get('uses_left'))
+                           report_data=report_data, uses_left=rv.get('uses_left'),
+                           pdf_url=url_for('result_portal.view_result_pdf'))
+
+
+@result_portal_bp.route('/report.pdf')
+def view_result_pdf():
+    """Download the just-unlocked result as the same designed report-card PDF the
+    parent portal produces. Authorised by the session token a successful scratch-
+    card check set (no new check, no extra card use)."""
+    from flask import send_file
+    from models import SchoolSettings
+    from utils.report_pdf import report_card_pdf
+    from utils.report_card import active_traits, RATING_LABELS
+    rv = session.get('result_view')
+    if not rv:
+        return redirect(url_for('result_portal.check'))
+    student = db.session.get(Student, rv.get('sid'))
+    term = db.session.get(Term, rv.get('tid'))
+    if not student or not term:
+        session.pop('result_view', None)
+        return redirect(url_for('result_portal.check'))
+    _, report = build_report_card(student.id, term.id)
+    if not report:
+        session.pop('result_view', None)
+        flash('That result is no longer available.', 'error')
+        return redirect(url_for('result_portal.check'))
+    buf = report_card_pdf(student, report, term,
+                          SchoolSettings.get('school_name', 'School'),
+                          active_traits(), RATING_LABELS)
+    return send_file(buf, mimetype='application/pdf', as_attachment=True,
+                     download_name=f'{student.student_id}_report.pdf')

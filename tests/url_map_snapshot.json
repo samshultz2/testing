@@ -5081,6 +5081,13 @@
 ]
 ],
 [
+"result_portal.view_result_pdf",
+"/check-result/report.pdf",
+[
+"GET"
+]
+],
+[
 "results.add_jamb",
 "/results/jamb/add",
 [
