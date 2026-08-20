@@ -437,6 +437,11 @@ def ocr_settings():
             model = (request.form.get('model') or 'claude-haiku-4-5').strip()
             SchoolSettings.set('ocr_vision_enabled', enabled, 'bool', 'Use Claude vision for WAEC/JAMB scans')
             SchoolSettings.set('ocr_vision_model', model, 'string', 'Claude model for vision OCR')
+            from utils.ocr_engine import ENGINES
+            engine = (request.form.get('engine') or 'auto').strip().lower()
+            if engine in ENGINES:
+                SchoolSettings.set('ocr_engine', engine, 'string',
+                                   'Score-sheet OCR engine (auto/claude/tesseract/paddle)')
             if (request.form.get('clear_key') or '').strip().lower() in ('1', 'true', 'on', 'yes'):
                 SchoolSettings.set('ocr_vision_api_key', '', 'string', 'Anthropic API key (encrypted)')
             else:
@@ -450,6 +455,7 @@ def ocr_settings():
         return _ok('OCR settings saved.', url_for('settings.ocr_settings'))
 
     from utils.waec_ocr import _vision_config, vision_available
+    from utils.ocr_engine import selected_engine, status_rows
     cfg = _vision_config()
     return _render({
         'page': 'ocr',
@@ -461,6 +467,8 @@ def ocr_settings():
         'anthropic_installed': cfg['installed'],
         'active': vision_available(),
         'models': ['claude-haiku-4-5', 'claude-sonnet-4-6', 'claude-opus-4-8'],
+        'engine': selected_engine(),
+        'engine_status': status_rows(),
         'submit_url': url_for('settings.ocr_settings'),
         'back_url': url_for('settings.index'),
     })

@@ -142,6 +142,7 @@ def scores_entry():
         'urls': {'scan': url_for('subjects.scoresheet_scan', term_id=term_id or '', assignment_id=assignment_id or '', class_subject_id=class_subject_id or ''),
                  'paste': url_for('subjects.scoresheet_paste', term_id=term_id or '', assignment_id=assignment_id or '', class_subject_id=class_subject_id or ''),
                  'import': url_for('subjects.import_scores', term_id=term_id or '', assignment_id=assignment_id or '', class_subject_id=class_subject_id or ''),
+                 'broadsheet_import': url_for('subjects.broadsheet_import', term_id=term_id or '', assignment_id=assignment_id or ''),
                  'blank_sheet': (url_for('subjects.blank_score_sheet', term_id=term_id or '', assignment_id=assignment_id or '',
                                          subject=selected_class_subject.subject.name if selected_class_subject else '')
                                  if term_id and assignment_id else '')},
@@ -670,20 +671,35 @@ def scoresheet_scan():
         is_pdf = upload.filename.lower().endswith('.pdf')
         sheet_cols = _sheet_columns(class_subject, term=term_id)
 
-        # Prefer Claude vision when configured (reads handwriting); fall back to
-        # Tesseract text parsing on any failure or for PDFs.
+        # Read with the school's chosen engine first, then fall back through the
+        # others that are available. PDFs always go through the text path.
+        from utils.ocr_engine import engine_order
+        col_labels = [(at.short_name or at.name) for at, _mx in sheet_cols]
+        max_scores = [mx for _at, mx in sheet_cols]
         parsed = None
-        if not is_pdf and vision_available():
-            col_labels = [(at.short_name or at.name) for at, _mx in sheet_cols]
-            parsed = vision_extract_scoresheet(data, col_labels, upload.mimetype or 'image/png')
-
-        if parsed is None:
+        order = engine_order() if not is_pdf else ['tesseract']
+        for eng in order:
+            try:
+                if eng == 'claude' and vision_available():
+                    parsed = vision_extract_scoresheet(data, col_labels, upload.mimetype or 'image/png')
+                elif eng == 'paddle':
+                    from utils.paddle_ocr import extract_scoresheet as _paddle
+                    parsed = _paddle(data, col_labels, max_scores)
+                elif eng == 'tesseract':
+                    text = extract_text_from_pdf(data) if is_pdf else extract_text(data)
+                    parsed = parse_score_sheet(text, num_columns=len(sheet_cols))
+            except Exception:
+                parsed = None
+            if parsed:
+                break
+        if parsed is None and not order:
+            # Nothing available; last-resort tesseract text path.
             try:
                 text = extract_text_from_pdf(data) if is_pdf else extract_text(data)
+                parsed = parse_score_sheet(text, num_columns=len(sheet_cols))
             except Exception as e:
                 flash(f'Could not read the image: {e}', 'error')
                 return render_template('subjects/scoresheet_scan.html', **ctx)
-            parsed = parse_score_sheet(text, num_columns=len(sheet_cols))
 
         if not parsed:
             flash('No student rows could be detected. Try a clearer, straight photo.', 'warning')
@@ -970,3 +986,163 @@ def scoresheet_save():
 
     return redirect(url_for('subjects.scores_entry',
         term_id=term_id, assignment_id=assignment_id, class_subject_id=class_subject_id))
+
+
+# ============================================================================
+# BROADSHEET IMPORT — upload an Excel/CSV of per-subject TOTALS for a class,
+# map columns to subjects + rows to students, auto-break each total into the
+# term's assessment components, preview/edit, then save.
+# ============================================================================
+
+@subjects_bp.route('/scores/broadsheet-import', methods=['GET', 'POST'])
+@login_required
+def broadsheet_import():
+    """Upload a whole-class broadsheet (subject totals) and review the mapping."""
+    if not can_enter_results() and not is_admin():
+        flash('You do not have permission to enter scores.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    ctx = _scan_selector_context()
+    if request.method == 'POST':
+        term_id = ctx['term_id']
+        assignment_id = ctx['assignment_id']
+        assignment = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None
+        if not (assignment and term_id):
+            flash('Select a term and class before uploading.', 'error')
+            return render_template('subjects/broadsheet_import.html', **ctx)
+        if not can_access_class(assignment_id):
+            flash('You do not have access to this class.', 'error')
+            return redirect(url_for('subjects.broadsheet_import'))
+
+        upload = request.files.get('file')
+        if not upload or not upload.filename:
+            flash('No file selected.', 'error')
+            return render_template('subjects/broadsheet_import.html', **ctx)
+        from utils.uploads import ext_ok
+        if not ext_ok(upload.filename, {'.xlsx', '.xlsm', '.xls', '.csv'}):
+            flash('Please upload an Excel (.xlsx) or CSV file.', 'error')
+            return render_template('subjects/broadsheet_import.html', **ctx)
+
+        from utils.broadsheet_import import parse_table, guess_name_column, match_subject
+        try:
+            parsed = parse_table(upload.read(), upload.filename)
+        except Exception as e:
+            flash(f'Could not read the file: {e}', 'error')
+            return render_template('subjects/broadsheet_import.html', **ctx)
+        headers = parsed['headers']
+        rows = parsed['rows']
+        if not headers or not rows:
+            flash('No table with a header row and data was found in the file.', 'warning')
+            return render_template('subjects/broadsheet_import.html', **ctx)
+
+        # Class subjects (mapping targets) + their term component config.
+        class_subjects = ClassSubject.query.filter_by(
+            term_id=term_id, class_id=assignment.class_id, is_active=True
+        ).filter((ClassSubject.arm_id == None) | (ClassSubject.arm_id == assignment.arm_id)  # noqa: E711
+                 ).join(Subject).order_by(Subject.name).all()
+        subjects = [cs.subject for cs in class_subjects]
+        cs_by_subject = {cs.subject_id: cs for cs in class_subjects}
+
+        # Auto-guess column→subject and the name column.
+        name_col = guess_name_column(headers)
+        col_map = []
+        for idx, hdr in enumerate(headers):
+            s = None if idx == name_col else match_subject(hdr, subjects)
+            col_map.append(cs_by_subject[s.id].id if s and s.id in cs_by_subject else '')
+
+        # Enrolled students + auto name match.
+        from utils.waec_ocr import match_students_unique
+        enrollments = StudentEnrollment.query.filter_by(
+            class_arm_assignment_id=assignment_id, is_active=True
+        ).join(Student).order_by(Student.surname, Student.first_name).all()
+        students = [e.student for e in enrollments]
+        row_names = [(r[name_col] if name_col is not None and name_col < len(r) else '') for r in rows]
+        matches = match_students_unique(row_names, students)
+        matched_ids = [(s.id if s else '') for s, _sc in matches]
+
+        # Component config per class-subject for the JS breakdown preview.
+        subject_components = {}
+        for cs in class_subjects:
+            cols = _sheet_columns(cs, term=term_id)
+            subject_components[cs.id] = {
+                'subject': cs.subject.name,
+                'components': [{'at_id': at.id, 'name': (at.short_name or at.name), 'max': mx}
+                               for at, mx in cols],
+            }
+
+        return render_template('subjects/broadsheet_review.html',
+            term_id=term_id, assignment_id=assignment_id, assignment=assignment,
+            headers=headers, rows=rows, name_col=(name_col if name_col is not None else ''),
+            col_map=col_map, class_subjects=class_subjects,
+            students=students, matched_ids=matched_ids,
+            subject_components=subject_components,
+            save_url=url_for('subjects.broadsheet_save'))
+
+    return render_template('subjects/broadsheet_import.html', **ctx)
+
+
+@subjects_bp.route('/scores/broadsheet-import/save', methods=['POST'])
+@login_required
+def broadsheet_save():
+    """Persist a reviewed broadsheet: for each (student, mapped subject) total,
+    break it into the term's components and write the component scores."""
+    if not can_enter_results() and not is_admin():
+        flash('You do not have permission to enter scores.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    term_id = request.form.get('term_id', type=int)
+    assignment_id = request.form.get('assignment_id', type=int)
+    assignment = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None
+    if not (assignment and term_id) or not can_access_class(assignment_id):
+        flash('Invalid class/term, or no access.', 'error')
+        return redirect(url_for('subjects.broadsheet_import'))
+
+    from utils.score_breakdown import breakdown_for_subject
+    import json as _json
+    # payload: [{student_id, cells: {class_subject_id: total}}]
+    try:
+        payload = _json.loads(request.form.get('payload') or '[]')
+    except ValueError:
+        payload = []
+
+    cs_ids = {int(k) for row in payload for k in (row.get('cells') or {}).keys()}
+    cs_by_id = {cs.id: cs for cs in ClassSubject.query.filter(ClassSubject.id.in_(cs_ids)).all()
+                if cs_ids} if cs_ids else {}
+
+    saved = subjects_touched = skipped = 0
+    blocked = False
+    for row in payload:
+        sid = row.get('student_id')
+        if not sid:
+            continue
+        student = db.session.get(Student, int(sid))
+        if not student:
+            continue
+        for cs_id_s, total in (row.get('cells') or {}).items():
+            cs = cs_by_id.get(int(cs_id_s))
+            if not cs:
+                continue
+            if str(total).strip() == '':
+                continue
+            comps = breakdown_for_subject(cs.subject, term_id, total)
+            items = [(student.id, at.id, str(sc), mx) for at, mx, sc in comps]
+            counts = persist_scores(term_id, assignment_id, cs.id, cs.subject_id, items,
+                                    allow_delete=False)
+            if counts is None:
+                blocked = True
+                continue
+            saved += counts['saved']
+            subjects_touched += 1
+    if not blocked:
+        db.session.commit()
+        # Recompute term results/positions for the class.
+        from utils.report_card import compute_term_summaries
+        compute_term_summaries(term_id, assignment.class_id)
+        from utils.results_analytics import bust as _bust
+        _bust(term_id, assignment_id)
+        flash(f'Imported {saved} component score(s) across {subjects_touched} '
+              f'student-subject total(s).', 'success')
+    else:
+        db.session.rollback()
+        flash('Results for this term are published — ask an admin to unlock them first.', 'error')
+    return redirect(url_for('subjects.scores_entry', term_id=term_id, assignment_id=assignment_id))

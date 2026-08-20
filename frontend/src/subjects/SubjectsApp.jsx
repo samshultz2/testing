@@ -579,6 +579,7 @@ function Scores({ d, notify }) {
         <div className="page-header-actions">
           {canWrite(d) && <a href={d.urls.scan} className="btn btn-primary" data-native><i aria-hidden="true" className="fas fa-camera" /> Scan Score Sheet</a>}
           {canWrite(d) && <a href={d.urls.import} className="btn btn-secondary" data-native><i aria-hidden="true" className="fas fa-file-excel" /> Import Excel</a>}
+          {canWrite(d) && d.urls.broadsheet_import && <a href={d.urls.broadsheet_import} className="btn btn-secondary" data-native><i aria-hidden="true" className="fas fa-table" /> Import broadsheet (totals)</a>}
           {d.urls.blank_sheet && <a href={d.urls.blank_sheet} className="btn btn-secondary" data-native target="_blank" rel="noopener"><i aria-hidden="true" className="fas fa-file-lines" /> Blank sheet</a>}
         </div>
       </div>

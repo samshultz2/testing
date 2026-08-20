@@ -707,13 +707,14 @@ function Ocr({ d, notify }) {
   const save = useSave(notify);
   const [f, setF] = useState({
     enabled: !!d.enabled, model: d.model || 'claude-haiku-4-5', api_key: '', clear_key: false,
+    engine: d.engine || 'auto',
   });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const toggle = (k) => (e) => setF({ ...f, [k]: e.target.checked });
   const submit = (e) => {
     e.preventDefault();
     save(d.submit_url, {
-      enabled: f.enabled ? '1' : '0', model: f.model,
+      enabled: f.enabled ? '1' : '0', model: f.model, engine: f.engine,
       api_key: f.clear_key ? '' : f.api_key, clear_key: f.clear_key ? '1' : '0',
     }, () => nav.refresh());
   };
@@ -737,6 +738,24 @@ function Ocr({ d, notify }) {
 
       <div className="card"><div className="card-body">
         <form onSubmit={submit}>
+          <div className="form-group"><label className="form-label">Score-sheet OCR engine</label>
+            <select className="form-control" value={f.engine} onChange={set('engine')}>
+              <option value="auto">Auto — Claude if configured, else Tesseract</option>
+              <option value="claude">Claude vision (handwriting; needs API key)</option>
+              <option value="tesseract">Tesseract (printed text; free, on-server)</option>
+              <option value="paddle">PaddleOCR + OpenCV (fast, cell-cropped digits)</option>
+            </select>
+            <span className="form-hint d-block">The chosen engine is tried first; the others act as fallback. Availability on this server:</span>
+            <ul style={{ margin: '.35rem 0 0', paddingLeft: '1.1rem', fontSize: 'var(--text-sm)' }}>
+              {(d.engine_status || []).map((s) => (
+                <li key={s.id} style={{ color: s.available ? '#137333' : 'var(--text-muted)' }}>
+                  <i aria-hidden="true" className={'fas ' + (s.available ? 'fa-circle-check' : 'fa-circle-xmark')} /> {s.label}
+                  {!s.available && s.hint ? <span className="text-muted"> — {s.hint}</span> : null}
+                </li>
+              ))}
+            </ul>
+          </div>
+
           <div className="form-group">
             <label className="form-check" style={{ display: 'flex', alignItems: 'center', gap: '.5rem' }}>
               <input type="checkbox" checked={f.enabled} onChange={toggle('enabled')} />

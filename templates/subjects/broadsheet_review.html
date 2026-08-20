@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% block title %}Review Broadsheet Import - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('subjects.broadsheet_import') }}">Import Broadsheet</a> / <span>Review</span>{% endblock %}
+{% block extra_css %}
+<style>
+.bi-wrap{overflow:auto;max-height:70vh;border:1px solid var(--border-color);border-radius:var(--radius-md)}
+.bi-table{border-collapse:collapse;font-size:.82rem;white-space:nowrap}
+.bi-table th,.bi-table td{border:1px solid var(--border-light);padding:.25rem .35rem;text-align:center}
+.bi-table thead th{position:sticky;top:0;background:var(--bg-card);z-index:2}
+.bi-table .stick{position:sticky;left:0;background:var(--bg-card);z-index:1;text-align:left}
+.bi-cell{width:3.4rem;text-align:center;padding:.15rem;border:1px solid var(--border-light);border-radius:4px}
+.bi-cell.err{border-color:var(--danger);background:rgba(220,53,69,.08)}
+.bi-map{min-width:9rem}
+.bi-split{font-size:.72rem;color:var(--text-muted)}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div><h1>Review import — {{ assignment.display_name }}</h1>
+        <p class="text-muted text-sm">Map each column to a subject (or skip it), pick the student for any unmatched row, edit totals if needed, then save. Each total is split into this term's components automatically.</p>
+    </div>
+</div>
+
+<form method="POST" action="{{ save_url }}" id="biForm">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="term_id" value="{{ term_id }}">
+    <input type="hidden" name="assignment_id" value="{{ assignment_id }}">
+    <input type="hidden" name="payload" id="biPayload">
+
+    <div class="card mb-2"><div class="card-body">
+        <div class="d-flex gap-3 flex-wrap align-center">
+            <div><strong>Student-name column:</strong>
+                <select id="biNameCol" class="form-control" style="width:auto;display:inline-block;">
+                    {% for h in headers %}<option value="{{ loop.index0 }}" {% if name_col == loop.index0 %}selected{% endif %}>{{ h or ('Column ' ~ loop.index) }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="text-muted text-sm">Rows: {{ rows|length }} · Columns: {{ headers|length }}</div>
+            <div style="margin-left:auto;">
+                <label class="d-flex gap-2 align-center mb-0"><input type="checkbox" id="biPreview"> Show breakdown</label>
+            </div>
+        </div>
+    </div></div>
+
+    <div class="bi-wrap"><table class="bi-table">
+        <thead>
+            <tr>
+                <th class="stick">Student</th>
+                {% for h in headers %}
+                {% set col_idx = loop.index0 %}
+                <th data-col="{{ col_idx }}">
+                    <div>{{ h or ('Col ' ~ loop.index) }}</div>
+                    <select class="form-control bi-map bi-mapsel" data-col="{{ col_idx }}">
+                        <option value="">— skip —</option>
+                        {% for cs in class_subjects %}
+                        <option value="{{ cs.id }}" {% if col_map[col_idx]|string == cs.id|string %}selected{% endif %}>{{ cs.subject.name }}</option>
+                        {% endfor %}
+                    </select>
+                </th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in rows %}
+            {% set row_idx = loop.index0 %}
+            <tr data-row="{{ row_idx }}">
+                <td class="stick">
+                    <select class="form-control bi-student" data-row="{{ row_idx }}" style="min-width:12rem;">
+                        <option value="">— unmatched —</option>
+                        {% for s in students %}
+                        <option value="{{ s.id }}" {% if matched_ids[row_idx]|string == s.id|string %}selected{% endif %}>{{ s.full_name }}{% if s.student_id %} ({{ s.student_id }}){% endif %}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="text-muted" style="font-size:.7rem;">{{ r[name_col|int] if name_col != '' and name_col|int < r|length else '' }}</div>
+                </td>
+                {% for cell in r %}
+                <td data-col="{{ loop.index0 }}">
+                    <input type="text" class="bi-cell" data-row="{{ row_idx }}" data-col="{{ loop.index0 }}" value="{{ cell }}" inputmode="numeric" autocomplete="off">
+                    <div class="bi-split" data-row="{{ row_idx }}" data-col="{{ loop.index0 }}"></div>
+                </td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table></div>
+
+    <div class="page-header-actions mt-3">
+        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save imported scores</button>
+        <a href="{{ url_for('subjects.broadsheet_import', term_id=term_id, assignment_id=assignment_id) }}" class="btn btn-secondary">Start over</a>
+        <span id="biMsg" class="text-muted text-sm"></span>
+    </div>
+</form>
+
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var COMP = {{ subject_components|tojson }};   // {cs_id: {subject, components:[{at_id,name,max}]}}
+
+  // Integer proportional split of a total across component maxima (largest-remainder).
+  function distribute(total, maxes) {
+    var n = maxes.length; if (!n) return [];
+    total = Math.max(0, Math.min(Math.round(total), maxes.reduce(function (a, b) { return a + b; }, 0)));
+    var ceiling = maxes.reduce(function (a, b) { return a + b; }, 0);
+    if (total === 0) return maxes.map(function () { return 0; });
+    if (total === ceiling) return maxes.slice();
+    var shares = maxes.map(function (m) { return total * m / ceiling; });
+    var base = shares.map(function (s, i) { return Math.min(Math.floor(s), maxes[i]); });
+    var rem = total - base.reduce(function (a, b) { return a + b; }, 0);
+    var order = shares.map(function (s, i) { return [s - Math.floor(s), i]; })
+                      .sort(function (a, b) { return b[0] - a[0]; }).map(function (x) { return x[1]; });
+    var k = 0, guard = 0;
+    while (rem > 0 && guard < 10 * n + 10) {
+      var i = order[k % n];
+      if (base[i] < maxes[i]) { base[i]++; rem--; }
+      k++; guard++;
+    }
+    return base;
+  }
+
+  var nameColSel = document.getElementById('biNameCol');
+  var mapSels = Array.prototype.slice.call(document.querySelectorAll('.bi-mapsel'));
+  var showPrev = document.getElementById('biPreview');
+
+  function colSubject(col) {
+    var sel = mapSels[col];
+    return sel && sel.value ? sel.value : '';
+  }
+  function renderSplits() {
+    document.querySelectorAll('.bi-split').forEach(function (el) { el.textContent = ''; });
+    if (!showPrev.checked) return;
+    document.querySelectorAll('.bi-cell').forEach(function (inp) {
+      var col = inp.getAttribute('data-col'), row = inp.getAttribute('data-row');
+      var csId = colSubject(parseInt(col, 10));
+      if (!csId || !COMP[csId]) return;
+      var v = parseFloat(inp.value); if (isNaN(v)) return;
+      var comps = COMP[csId].components;
+      var split = distribute(v, comps.map(function (c) { return c.max; }));
+      var txt = comps.map(function (c, i) { return c.name + ' ' + split[i]; }).join('  ');
+      var el = document.querySelector('.bi-split[data-row="' + row + '"][data-col="' + col + '"]');
+      if (el) el.textContent = txt;
+    });
+  }
+  // Grey-out / validate cells for unmapped columns and out-of-range totals.
+  function validate() {
+    document.querySelectorAll('.bi-cell').forEach(function (inp) {
+      var col = parseInt(inp.getAttribute('data-col'), 10);
+      var csId = colSubject(col);
+      inp.disabled = !csId;
+      var v = parseFloat(inp.value);
+      var bad = csId && inp.value.trim() !== '' && (isNaN(v) || v < 0 || v > 100);
+      inp.classList.toggle('err', !!bad);
+    });
+  }
+  mapSels.forEach(function (s) { s.addEventListener('change', function () { validate(); renderSplits(); }); });
+  document.querySelectorAll('.bi-cell').forEach(function (inp) {
+    inp.addEventListener('input', function () { validate(); if (showPrev.checked) renderSplits(); });
+  });
+  showPrev.addEventListener('change', renderSplits);
+
+  document.getElementById('biForm').addEventListener('submit', function (e) {
+    var payload = [];
+    document.querySelectorAll('tr[data-row]').forEach(function (tr) {
+      var row = tr.getAttribute('data-row');
+      var stu = tr.querySelector('.bi-student').value;
+      if (!stu) return;                              // skip unmatched rows
+      var cells = {};
+      tr.querySelectorAll('.bi-cell').forEach(function (inp) {
+        var csId = colSubject(parseInt(inp.getAttribute('data-col'), 10));
+        if (!csId) return;
+        var val = inp.value.trim();
+        if (val !== '') cells[csId] = val;
+      });
+      if (Object.keys(cells).length) payload.push({ student_id: parseInt(stu, 10), cells: cells });
+    });
+    if (!payload.length) {
+      e.preventDefault();
+      document.getElementById('biMsg').textContent = 'Map at least one subject column and match at least one student.';
+      return;
+    }
+    document.getElementById('biPayload').value = JSON.stringify(payload);
+  });
+
+  validate();
+})();
+</script>
+{% endblock %}

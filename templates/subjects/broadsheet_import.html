@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Import Broadsheet - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('subjects.scores_entry') }}">Scores</a> / <span>Import Broadsheet</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div><h1>Import Broadsheet</h1>
+        <p class="text-muted text-sm">Upload a whole-class Excel/CSV of <strong>subject totals</strong> (one row per student, one column per subject). You'll map the columns to subjects, resolve any unknown names, and each total is broken down into this term's assessment components before you save.</p>
+    </div>
+    <div class="page-header-actions">
+        <a href="{{ url_for('subjects.scoresheet_scan', term_id=term_id, assignment_id=assignment_id) }}" class="btn btn-secondary"><i class="fas fa-camera"></i> Scan single subject</a>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header"><h3>Step 1: Select term &amp; class</h3></div>
+    <div class="card-body">
+        <form method="GET" class="filter-form">
+            <div class="form-group"><label class="form-label">Term</label>
+                <select name="term_id" class="form-control" data-autosubmit>
+                    <option value="">Select Term</option>
+                    {% for term in terms %}<option value="{{ term.id }}" {% if term_id == term.id %}selected{% endif %}>{{ term.full_name }}</option>{% endfor %}
+                </select>
+            </div>
+            <div class="form-group"><label class="form-label">Class</label>
+                <select name="assignment_id" class="form-control" data-autosubmit>
+                    <option value="">Select Class</option>
+                    {% for a in assignments %}<option value="{{ a.id }}" {% if assignment_id == a.id %}selected{% endif %}>{{ a.display_name }}</option>{% endfor %}
+                </select>
+            </div>
+        </form>
+    </div>
+</div>
+
+{% if assignment_id and term_id %}
+<div class="card">
+    <div class="card-header"><h3>Step 2: Upload the broadsheet file</h3></div>
+    <div class="card-body">
+        <form method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="term_id" value="{{ term_id }}">
+            <input type="hidden" name="assignment_id" value="{{ assignment_id }}">
+            <div class="form-group">
+                <label class="form-label">Excel or CSV file <span class="required">*</span></label>
+                <input type="file" name="file" class="form-control" accept=".xlsx,.xlsm,.xls,.csv" required>
+                <span class="form-hint d-block">.xlsx or .csv. The first row with two or more filled cells is treated as the header. Cells are each subject's <strong>final total</strong> (0–100).</span>
+            </div>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-table"></i> Read &amp; map</button>
+        </form>
+    </div>
+</div>
+{% else %}
+<div class="card"><div class="card-body"><div class="empty-state">
+    <i class="fas fa-hand-pointer"></i><h3>Select a term and class above</h3>
+    <p>Then upload the class broadsheet file.</p>
+</div></div></div>
+{% endif %}
+{% endblock %}

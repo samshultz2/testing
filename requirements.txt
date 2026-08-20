@@ -85,6 +85,16 @@ pytest==9.0.3          # 8.3.3 -> CVE-2025-71176
 # sentence-transformers==3.0.1
 # numpy            # ships with sentence-transformers; used for the cosine match
 
+# Optional: PaddleOCR + OpenCV score-sheet reader (utils/paddle_ocr.py), the
+# third OCR engine selectable in Settings → AI Vision OCR. Heavy (~1GB with the
+# downloaded models); nothing imports it unless a scan actually uses it. Install
+# on the server with:
+#   pip install paddleocr paddlepaddle opencv-python-headless numpy
+# paddleocr
+# paddlepaddle
+# opencv-python-headless
+# cv2              # provided by opencv-python-headless; imported in utils/paddle_ocr.py
+
 # Optional: external error monitoring via Sentry. Activate by installing this and
 # setting SENTRY_DSN (see utils/monitoring.py). The app runs fine without it —
 # the always-on in-app Error Log + email alerts need no extra packages.
