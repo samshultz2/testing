@@ -17,9 +17,15 @@ function Home({ d, go }) {
   return (
     <>
       <div className="top"><div className="wrap">
-        <div>
-          <h1>{d.student.full_name}</h1>
-          <p>{d.student.student_id}{d.student.class_name ? ` · ${d.student.class_name}` : ''}</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '.7rem', minWidth: 0 }}>
+          {d.school && d.school.logo_url ? (
+            <img src={d.school.logo_url} alt="" style={{ width: 42, height: 42, borderRadius: 10, objectFit: 'contain', background: '#fff', padding: 3, flex: 'none' }} />
+          ) : null}
+          <div style={{ minWidth: 0 }}>
+            {d.school && d.school.name ? <p style={{ fontWeight: 600, opacity: 1, fontSize: '.8rem', textTransform: 'uppercase', letterSpacing: '.04em' }}>{d.school.name}</p> : null}
+            <h1 style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{d.student.full_name}</h1>
+            <p>{d.student.student_id}{d.student.class_name ? ` · ${d.student.class_name}` : ''}</p>
+          </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '.6rem' }}>
           {d.siblings.length > 1 && (
@@ -52,15 +58,22 @@ function Home({ d, go }) {
               <>
                 <div className={`big ${owing ? 'owe' : 'ok'}`}>{money(d.bill.balance)}</div>
                 <p className="muted">Billed {money(d.bill.payable)} · Paid {money(d.bill.paid)}</p>
-                {d.pay_enabled && owing && (
+                {owing && d.pay_enabled && (
                   <form method="POST" action={d.urls.pay} style={{ marginTop: '.7rem' }}>
                     <input type="hidden" name="_csrf_token" value={csrfToken()} />
                     <input type="hidden" name="term_id" value={d.term_id || ''} />
+                    <label className="muted" style={{ fontSize: '.75rem' }}>Amount to pay (₦)</label>
                     <input type="number" name="amount" min="100" step="50" value={amount}
-                      onChange={(e) => setAmount(e.target.value)} className="form-control" style={{ marginBottom: '.4rem' }} />
-                    <button type="submit" className="pay-btn"><i aria-hidden="true" className="fas fa-credit-card" /> Pay online</button>
+                      onChange={(e) => setAmount(e.target.value)} className="form-control" style={{ margin: '.2rem 0 .4rem' }} />
+                    <button type="submit" className="pay-btn"><i aria-hidden="true" className="fas fa-credit-card" /> Pay fees online</button>
                   </form>
                 )}
+                {owing && !d.pay_enabled && (
+                  <p className="muted" style={{ marginTop: '.6rem', fontSize: '.8rem' }}>
+                    <i aria-hidden="true" className="fas fa-circle-info" /> Online payment isn’t set up for this school yet. Please pay at the school office.
+                  </p>
+                )}
+                {!owing && <p className="ok" style={{ marginTop: '.5rem', fontSize: '.85rem' }}><i aria-hidden="true" className="fas fa-check-circle" /> Fees fully paid.</p>}
               </>
             ) : <p className="muted">No fee record for this term.</p>}
           </div>
@@ -133,7 +146,8 @@ function Home({ d, go }) {
           {r ? (
             <>
               <p className="muted" style={{ fontSize: 'var(--text-xs)', marginTop: '-.4rem' }}><i aria-hidden="true" className="fas fa-wifi" /> Tip: once opened, this page works offline — and the PDF can be saved to your phone.</p>
-              <table>
+              <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+              <table style={{ minWidth: 480 }}>
                 <thead><tr><th>Subject</th>{r.assessment_types.map((at) => <th key={at.id}>{at.label}</th>)}<th>Total</th><th>Grade</th><th>Remark</th></tr></thead>
                 <tbody>
                   {r.subjects.map((row, i) => (
@@ -145,15 +159,18 @@ function Home({ d, go }) {
                   ))}
                 </tbody>
               </table>
+              </div>
               {r.affective.length > 0 && (
                 <>
                   <h2 style={{ marginTop: '1.2rem' }}>Behaviour</h2>
-                  <table>
+                  <div style={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+                  <table style={{ minWidth: 320 }}>
                     <thead><tr><th>Trait</th><th>Rating</th></tr></thead>
                     <tbody>
                       {r.affective.map((a, i) => <tr key={i}><td>{a.label}</td><td>{a.rating}/5 · {a.rating_label}</td></tr>)}
                     </tbody>
                   </table>
+                  </div>
                 </>
               )}
               {(r.teacher_comment || r.principal_comment) && (
@@ -163,6 +180,15 @@ function Home({ d, go }) {
                 </>
               )}
             </>
+          ) : d.needs_card ? (
+            <div style={{ textAlign: 'center', padding: '1rem .5rem' }}>
+              <div style={{ fontSize: '2rem', color: '#334155', marginBottom: '.4rem' }}><i aria-hidden="true" className="fas fa-lock" /></div>
+              <p style={{ fontWeight: 600, marginBottom: '.3rem' }}>This term's result is ready.</p>
+              <p className="muted" style={{ marginBottom: '.8rem' }}>Unlock it with a scratch card from the school. Once unlocked, it stays available here on the portal.</p>
+              <a href={d.urls.result_checker} className="pay-btn" style={{ display: 'inline-block', width: 'auto', padding: '.6rem 1.2rem', textDecoration: 'none' }}>
+                <i aria-hidden="true" className="fas fa-ticket" /> Unlock with scratch card
+              </a>
+            </div>
           ) : (
             <p className="muted">Results for this term are not yet available. Please check back after the school has released them.</p>
           )}

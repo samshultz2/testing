@@ -134,6 +134,17 @@ def test_parent_results_publish_gate(app):
     with app.app_context():
         T.query.get(ids['term']).results_published = True
         db.session.commit()
+    # Released but not yet unlocked with a scratch card -> still hidden, prompting
+    # the parent to unlock (new per-term scratch-card gate).
+    gated = c.get(f'/parent/?term_id={ids["term"]}',
+                  headers={'X-Requested-With': 'fetch'}).get_json()
+    assert gated['report'] is None and not gated['results_ready'] and gated['needs_card']
+    # A successful scratch-card check for this student+term unlocks it on the portal.
+    with app.app_context():
+        from models import ResultCheckLog
+        db.session.add(ResultCheckLog(student_id=ids['a'], term_id=ids['term'],
+                                      success=True, detail='test unlock'))
+        db.session.commit()
     shown = c.get(f'/parent/?term_id={ids["term"]}',
                   headers={'X-Requested-With': 'fetch'}).get_json()
-    assert shown['report'] is not None and shown['results_ready']     # released -> visible
+    assert shown['report'] is not None and shown['results_ready']     # unlocked -> visible

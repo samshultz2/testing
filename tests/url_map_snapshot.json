@@ -5074,6 +5074,13 @@
 ]
 ],
 [
+"result_portal.view_result",
+"/check-result/view",
+[
+"GET"
+]
+],
+[
 "results.add_jamb",
 "/results/jamb/add",
 [

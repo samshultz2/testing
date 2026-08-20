@@ -2,12 +2,12 @@
 {% block title %}{{ exam.display_name }}{% endblock %}
 {% block head_extra %}
 <style>
-.mjs-bar{position:sticky;top:0;z-index:20;background:#0d6a4e;color:#fff;border-radius:12px;padding:.7rem 1rem;display:flex;align-items:center;gap:.8rem;flex-wrap:wrap;margin-bottom:.8rem}
+.mjs-bar{position:sticky;top:0;z-index:20;background:#334155;color:#fff;border-radius:12px;padding:.7rem 1rem;display:flex;align-items:center;gap:.8rem;flex-wrap:wrap;margin-bottom:.8rem}
 .mjs-bar .timer{font-family:'Space Grotesk',monospace;font-weight:700;font-size:1.15rem;background:rgba(255,255,255,.16);padding:.2rem .6rem;border-radius:8px}
 .mjs-bar .timer.warn{background:#c0392b}
 .mjs-tabs{display:flex;gap:.4rem;overflow-x:auto;margin-bottom:.8rem;-webkit-overflow-scrolling:touch}
 .mjs-tab{white-space:nowrap;padding:.5rem .9rem;border-radius:999px;border:1px solid var(--border-color);background:var(--bg-card);cursor:pointer;font-weight:600;font-size:.85rem}
-.mjs-tab.active{background:#0d6a4e;color:#fff;border-color:#0d6a4e}
+.mjs-tab.active{background:#334155;color:#fff;border-color:#334155}
 .mjs-tab .cnt{opacity:.7;font-weight:400;font-size:.75rem}
 .mjs-subject{display:none}.mjs-subject.active{display:block}
 .mjs-passage{background:#f4f7f5;border-left:4px solid #7c3aed;border-radius:10px;padding:.8rem 1rem;margin:.7rem 0;white-space:pre-wrap;line-height:1.55;font-size:.92rem}
@@ -16,8 +16,8 @@
 .mjs-q .qh{font-weight:600;margin-bottom:.5rem}
 .mjs-opt{display:flex;align-items:center;gap:.6rem;padding:.5rem .7rem;border:1px solid var(--border-color);border-radius:8px;margin-bottom:.4rem;cursor:pointer}
 .mjs-opt:hover{background:#f0fbf6}
-.mjs-opt input{accent-color:#0d6a4e;width:18px;height:18px}
-.mjs-opt.chosen{border-color:#0d6a4e;background:#eafaf3}
+.mjs-opt input{accent-color:#334155;width:18px;height:18px}
+.mjs-opt.chosen{border-color:#334155;background:#f1f5f9}
 .mjs-q img{max-height:180px;border-radius:8px;margin:.3rem 0;pointer-events:none;-webkit-user-drag:none;user-drag:none}
 .mjs-answered{font-size:.85rem}
 /* Discourage copying exam content (best-effort; screenshots can't be blocked). */
@@ -26,15 +26,15 @@
 /* On-screen basic (JAMB-style) calculator: draggable, toggled, no sci functions. */
 .mjcalc{position:fixed;right:18px;bottom:18px;z-index:60;width:236px;background:var(--bg-card,#fff);border:1px solid var(--border-color,#cbd5e1);border-radius:14px;box-shadow:0 16px 40px rgba(0,0,0,.28);display:none;user-select:none}
 .mjcalc.open{display:block}
-.mjcalc-head{display:flex;justify-content:space-between;align-items:center;padding:.45rem .7rem;background:#0d6a4e;color:#fff;border-radius:14px 14px 0 0;cursor:move;font-size:.82rem;font-weight:600}
+.mjcalc-head{display:flex;justify-content:space-between;align-items:center;padding:.45rem .7rem;background:#334155;color:#fff;border-radius:14px 14px 0 0;cursor:move;font-size:.82rem;font-weight:600}
 .mjcalc-head button{background:none;border:none;color:#fff;font-size:1.2rem;line-height:1;cursor:pointer;padding:0 .2rem}
 .mjcalc-scr{font-family:'Space Grotesk',monospace;text-align:right;font-size:1.5rem;padding:.55rem .7rem;background:var(--gray-50,#f4f7f5);border-bottom:1px solid var(--border-color,#e5e7eb);min-height:2.4rem;overflow:hidden;word-break:break-all}
 .mjcalc-keys{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;padding:7px}
 .mjcalc-keys button{padding:.75rem 0;font-size:1.02rem;border:1px solid var(--border-color,#e5e7eb);border-radius:9px;background:#fff;cursor:pointer;font-weight:700;color:#14211c}
 .mjcalc-keys button:active{transform:translateY(1px)}
-.mjcalc-keys .op{background:#eef7f3;color:#0d6a4e}
+.mjcalc-keys .op{background:#f1f5f9;color:#334155}
 .mjcalc-keys .fn{background:#fdecea;color:#b43a2e}
-.mjcalc-keys .eq{background:#0d6a4e;color:#fff}
+.mjcalc-keys .eq{background:#334155;color:#fff}
 .mjcalc-keys .zero{grid-column:span 2}
 </style>
 {% endblock %}

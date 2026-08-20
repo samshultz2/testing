@@ -3,35 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Parent Portal — {{ app_name }}</title>
+    <title>Parent Portal — {{ school_brand.name or app_name }}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
     <style>
         * { margin:0; padding:0; box-sizing:border-box; }
         body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
                min-height:100vh; display:flex; align-items:center; justify-content:center;
-               background:linear-gradient(135deg,#0d6a4e 0%,#1a1f26 100%); padding:1rem; }
+               background:linear-gradient(135deg,#334155 0%,#1a1f26 100%); padding:1rem; }
         .card { background:#fff; border-radius:16px; padding:2rem; width:100%; max-width:400px;
                 box-shadow:0 20px 40px rgba(0,0,0,.3); }
         .head { text-align:center; margin-bottom:1.5rem; }
         .head .icon { width:64px; height:64px; border-radius:16px; margin:0 auto 1rem;
-                      background:#e8f5f1; color:#0d6a4e; display:flex; align-items:center;
+                      background:#f1f5f9; color:#334155; display:flex; align-items:center;
                       justify-content:center; font-size:1.8rem; }
         .head h1 { font-size:1.4rem; color:#333; } .head p { color:#666; font-size:.875rem; }
         .form-group { margin-bottom:1rem; }
         label { display:block; font-weight:500; margin-bottom:.5rem; color:#333; font-size:.875rem; }
         .form-control { width:100%; padding:.75rem 1rem; border:2px solid #e0e0e0; border-radius:8px; font-size:1rem; }
-        .form-control:focus { outline:none; border-color:#0d6a4e; }
-        .btn { width:100%; padding:.875rem; background:linear-gradient(135deg,#0d6a4e,#11998e);
+        .form-control:focus { outline:none; border-color:#334155; }
+        .btn { width:100%; padding:.875rem; background:linear-gradient(135deg,#334155,#475569);
                color:#fff; border:none; border-radius:8px; font-size:1rem; font-weight:600; cursor:pointer; }
         .flash { padding:.75rem 1rem; border-radius:8px; margin-bottom:1rem; font-size:.875rem; }
         .flash-error { background:#fee2e2; color:#dc2626; } .flash-info { background:#dbeafe; color:#2563eb; }
-        .alt { display:block; text-align:center; margin-top:1rem; color:#0d6a4e; text-decoration:none; font-size:.85rem; }
+        .alt { display:block; text-align:center; margin-top:1rem; color:#334155; text-decoration:none; font-size:.85rem; }
     </style>
 </head>
 <body>
     <div class="card">
         <div class="head">
+            {% if school_brand.logo_url %}
+            <div class="icon" style="background:#fff;padding:6px;"><img src="{{ school_brand.logo_url }}" alt="" style="max-width:100%;max-height:100%;object-fit:contain;"></div>
+            {% else %}
             <div class="icon"><i class="fas fa-user-group"></i></div>
+            {% endif %}
+            {% if school_brand.name and school_brand.name != app_name %}<p style="font-weight:600;color:#334155;margin-bottom:.15rem;">{{ school_brand.name }}</p>{% endif %}
             <h1>Parent Portal</h1>
             <p>View your child's results, attendance &amp; fees</p>
         </div>

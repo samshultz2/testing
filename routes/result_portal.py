@@ -5,7 +5,7 @@
   Student ID + card PIN to view a published term result. No staff login.
 """
 from flask import (Blueprint, render_template, request, redirect, url_for,
-                   flash, jsonify)
+                   flash, jsonify, session)
 
 from models import db, ScratchCard, ResultCheckLog, Term, Student
 from utils.access_control import login_required, result_card_required
@@ -366,8 +366,32 @@ def check():
             card.student_id = student.id
         _log_check(card, student, term, True, f'viewed; {card.uses_left} left')
 
-        return render_template('scratchcards/result.html', student=student,
-                               term=term, report_data=report_data,
-                               uses_left=card.uses_left)
+        # Post/Redirect/Get: show the result on a GET view instead of rendering
+        # it on the POST. Refreshing the result page then just re-renders (no new
+        # check, no extra card use). The check is already recorded above.
+        session['result_view'] = {'sid': student.id, 'tid': term.id,
+                                  'uses_left': card.uses_left}
+        return redirect(url_for('result_portal.view_result'))
 
     return render_template('scratchcards/check.html', **ctx)
+
+
+@result_portal_bp.route('/view')
+def view_result():
+    """Renders the result a scratch-card check just unlocked (from a session
+    token), so a page refresh never consumes another check."""
+    rv = session.get('result_view')
+    if not rv:
+        return redirect(url_for('result_portal.check'))
+    student = db.session.get(Student, rv.get('sid'))
+    term = db.session.get(Term, rv.get('tid'))
+    if not student or not term:
+        session.pop('result_view', None)
+        return redirect(url_for('result_portal.check'))
+    enrollment, report_data = build_report_card(student.id, term.id)
+    if not report_data:
+        session.pop('result_view', None)
+        flash('That result is no longer available.', 'error')
+        return redirect(url_for('result_portal.check'))
+    return render_template('scratchcards/result.html', student=student, term=term,
+                           report_data=report_data, uses_left=rv.get('uses_left'))

@@ -7,6 +7,7 @@ from utils.finance import student_bill, next_receipt_no
 from utils.report_card import build_report_card, _attendance_pct
 from utils.helpers import get_active_term, session_terms
 from utils import payments
+from utils.school import school_profile, logo_url
 from utils.security import login_limiter
 
 parent_bp = Blueprint('parent', __name__, url_prefix='/parent')
@@ -194,9 +195,16 @@ def home():
     bill = student_bill(student.id, term_id) if term_id else None
     enrollment, report = build_report_card(student.id, term_id) if term_id else (None, None)
     # Results are visible to parents only when the term is RELEASED (published) by
-    # staff and finalised (positions computed).
-    results_ready = (bool(report and report.get('term_summary'))
-                     and bool(term and term.results_published))
+    # staff and finalised (positions computed) AND the parent has unlocked that
+    # term for this student at least once with a scratch card. The card check is
+    # what monetises access; the portal then lets them revisit it.
+    from models import ResultCheckLog
+    published_final = (bool(report and report.get('term_summary'))
+                       and bool(term and term.results_published))
+    unlocked = bool(term_id and ResultCheckLog.query.filter_by(
+        student_id=student.id, term_id=term_id, success=True).first())
+    results_ready = published_final and unlocked
+    needs_card = published_final and not unlocked
 
     attendance = None
     if enrollment:
@@ -224,6 +232,9 @@ def home():
         'attendance': attendance,
         'report': _report_payload(report if results_ready else None, aff_traits, RATING_LABELS),
         'results_ready': results_ready,
+        'needs_card': needs_card,
+        'school': {'name': (school_profile() or {}).get('name') or '',
+                   'logo_url': logo_url() or ''},
         'aspiration': _parent_aspiration(student),
         'announcements': [{'title': a.title, 'body': a.body, 'is_pinned': bool(a.is_pinned)}
                           for a in announcements],
