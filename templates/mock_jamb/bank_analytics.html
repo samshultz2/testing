@@ -110,6 +110,44 @@ details.ba > summary{cursor:pointer;font-weight:700;padding:.3rem 0}
     </div>
 </div>
 
+<div class="card" style="margin-bottom:1rem;border-left:4px solid #0e7c66;">
+    <div class="card-header"><h3><i class="fas fa-microchip"></i> Tag locally <span class="text-muted text-sm">— offline, no key, runs in the background</span></h3></div>
+    <div class="card-body">
+        <p class="text-sm text-muted" style="margin-top:0;">Tags {{ subject.name }}'s bank with topic <b>and sub-topic</b> using an on-server model — no Anthropic key and no per-run cost, only real syllabus topics. Best for the one-off full tagging; later runs just catch newly added questions.</p>
+        {% if local_job %}
+        <p class="text-sm" style="margin:.2rem 0 .9rem;">
+            {% if local_job.status == 'running' %}<i class="fas fa-spinner fa-spin"></i> Tagging in progress — {{ local_job.progress or 0 }}/{{ local_job.total or '?' }} scanned. Refresh to update.
+            {% elif local_job.status == 'queued' %}<i class="fas fa-clock"></i> Queued — starting shortly. Refresh to update.
+            {% elif local_job.status == 'done' %}<i class="fas fa-circle-check" style="color:#2c7a51;"></i> Last run finished{% if local_job.result %} ({{ local_job.result }}){% endif %}.
+            {% elif local_job.status == 'failed' %}<i class="fas fa-triangle-exclamation" style="color:#b42318;"></i> Last run failed: {{ local_job.message }}
+            {% endif %}
+        </p>
+        {% endif %}
+        {% if local_ready %}
+        <form method="post" action="{{ url_for('mock_jamb.bank_local_tag') }}" style="display:flex;gap:.7rem;align-items:flex-end;flex-wrap:wrap;">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="subject_id" value="{{ subject_id }}">
+            <div class="form-group mb-0"><label class="form-label">Scope</label>
+                <select name="mode" class="form-control" style="max-width:300px;">
+                    <option value="untagged">Untagged only — fill blanks (safe, default)</option>
+                    <option value="all">Re-tag all — overwrite existing topics</option>
+                </select></div>
+            {% if years %}
+            <div class="form-group mb-0"><label class="form-label">Year</label>
+                <select name="year" class="form-control" style="max-width:150px;">
+                    <option value="">All years</option>
+                    {% for y in years %}<option value="{{ y }}">{{ y }}</option>{% endfor %}
+                </select></div>
+            {% endif %}
+            <button class="btn btn-sm" style="background:#0e7c66;color:#fff;"><i class="fas fa-microchip"></i> Tag locally</button>
+        </form>
+        <p class="text-xs text-muted" style="margin:.5rem 0 0;"><i class="fas fa-circle-info"></i> Runs on the server — no internet, no cost. The first full pass over a large bank can take several minutes; it tags as it goes, so you can refresh to watch progress.</p>
+        {% else %}
+        <p class="text-sm" style="color:#b25e09;margin-bottom:0;"><i class="fas fa-triangle-exclamation"></i> The <code>sentence-transformers</code> package isn't installed on the server. Install it to enable offline local tagging.</p>
+        {% endif %}
+    </div>
+</div>
+
 {# ---- Topic breakdown ---- #}
 <div class="card" style="margin-bottom:1rem;">
     <div class="card-header"><h3><i class="fas fa-layer-group"></i> By topic <span class="text-muted text-sm">— share of the bank &amp; when last set</span></h3></div>

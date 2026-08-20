@@ -130,3 +130,28 @@ def _handle_analytics_recompute(job, branch_id=None, **_):
     from utils.exam_refresh import run_exam_analytics_refresh
     summary = run_exam_analytics_refresh(current_app, warm=True, branch_id=branch_id)
     return {'students': summary.get('students'), 'at': summary.get('at')}
+
+
+@register('bank_local_tag')
+def _handle_bank_local_tag(job, subject_id=None, mode='untagged', year=None, **_):
+    """Local (offline, no-key) topic+sub-topic tagging of a subject's Mock-JAMB
+    bank via sentence-embeddings. Runs here in the jobs worker so torch never
+    loads in a web process; the engine is imported lazily for the same reason."""
+    from models import db, Subject
+    subject = db.session.get(Subject, subject_id) if subject_id else None
+    if not subject:
+        job.message = 'Subject not found.'
+        return {}
+    from utils.mock_bank_local_tag import available, local_tag
+    if not available():
+        job.message = 'sentence-transformers is not installed on the server.'
+        return {'error': 'not_installed'}
+
+    def _progress(done, total):
+        job.progress, job.total = done, total
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+
+    return local_tag(subject, mode=mode, year=year, progress_cb=_progress)

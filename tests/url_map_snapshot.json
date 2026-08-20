@@ -3909,6 +3909,13 @@
 ]
 ],
 [
+"mock_jamb.bank_local_tag",
+"/mock-jamb/bank/local-tag",
+[
+"POST"
+]
+],
+[
 "mock_jamb.bank_needs_images",
 "/mock-jamb/bank/needs-images",
 [

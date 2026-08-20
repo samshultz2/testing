@@ -1295,9 +1295,25 @@ def bank_analytics():
         ai_ready = bool(_vc['installed'] and _vc['has_key'])
     except Exception:
         ai_ready = False
+    # Local (offline) tagger: package present, and the latest run for this subject.
+    try:
+        from utils.mock_bank_local_tag import available as _local_available
+        local_ready = _local_available()
+    except Exception:
+        local_ready = False
+    local_job = None
+    if subject_id:
+        try:
+            from models import BackgroundJob
+            local_job = (BackgroundJob.query
+                         .filter(BackgroundJob.kind == 'bank_local_tag',
+                                 BackgroundJob.params.like(f'%"subject_id": {subject_id}%'))
+                         .order_by(BackgroundJob.id.desc()).first())
+        except Exception:
+            local_job = None
     return render_template('mock_jamb/bank_analytics.html', subjects=subjects,
                            subject=subject, subject_id=subject_id, data=data, years=years,
-                           ai_ready=ai_ready,
+                           ai_ready=ai_ready, local_ready=local_ready, local_job=local_job,
                            bank_url=url_for('mock_jamb.bank', subject_id=subject_id or ''),
                            index_url=url_for('mock_jamb.index'))
 
@@ -1369,6 +1385,34 @@ def bank_ai_retag():
               f"check the key and model under Settings → OCR.", 'info')
     else:
         flash(f'No stand-alone {subject.name}{scope} bank questions to tag.', 'info')
+    return redirect(url_for('mock_jamb.bank_analytics', subject_id=subject_id))
+
+
+@mock_jamb_bp.route('/bank/local-tag', methods=['POST'])
+@login_required
+def bank_local_tag():
+    """Queue local (offline, no-key) embedding-based topic + sub-topic tagging.
+    It runs in the background jobs worker (loads a model) — never inline in a web
+    request, so torch stays out of the web workers."""
+    from utils.mock_bank_local_tag import available
+    from utils import jobs
+    subject_id = request.form.get('subject_id', type=int)
+    subject = db.session.get(Subject, subject_id) if subject_id else None
+    if not subject:
+        flash('Pick a subject first.', 'error')
+        return redirect(url_for('mock_jamb.bank_analytics'))
+    if not available():
+        flash('Local tagging needs the "sentence-transformers" package installed on the server.', 'error')
+        return redirect(url_for('mock_jamb.bank_analytics', subject_id=subject_id))
+    if not jobs.async_enabled():
+        flash('Local tagging runs in the background — enable the jobs worker '
+              '(ASYNC_JOBS / the edusyncra-jobs service) to use it.', 'error')
+        return redirect(url_for('mock_jamb.bank_analytics', subject_id=subject_id))
+    year = (request.form.get('year') or '').strip() or None
+    mode = 'all' if request.form.get('mode') == 'all' else 'untagged'
+    jobs.enqueue('bank_local_tag', {'subject_id': subject_id, 'mode': mode, 'year': year})
+    flash(f'Local tagging of {subject.name} started in the background — questions get tagged '
+          f'as it runs. The first full run can take a while; refresh to see progress.', 'success')
     return redirect(url_for('mock_jamb.bank_analytics', subject_id=subject_id))
 
 
