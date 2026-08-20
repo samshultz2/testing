@@ -515,6 +515,48 @@ class AcademicAnalytics:
         return {'years': [p['year'] for p in points], 'points': points}
 
     @staticmethod
+    def get_waec_subject_trends(branch_id=None, limit_years=8):
+        """Per-subject WAEC credit-rate (C6+) across years, plus the biggest
+        improvers/decliners (latest year vs the year before). Lets a school see
+        which subjects are gaining or losing ground, not just the cohort totals."""
+        from collections import defaultdict
+        q = WAECResult.query.with_entities(
+            WAECResult.exam_year, WAECResult.subject, WAECResult.grade)
+        if branch_id is not None:
+            q = q.join(Student, WAECResult.student_id == Student.id).filter(
+                Student.branch_id == branch_id)
+        rows = q.all()
+        if not rows:
+            return {'years': [], 'subjects': [], 'series': {}, 'movers': []}
+        credit = lambda g: g in AcademicAnalytics.PASS_GRADES
+        # year -> subject -> [offered, credited]
+        agg = defaultdict(lambda: defaultdict(lambda: [0, 0]))
+        subj_present = set()
+        for yr, subj, g in rows:
+            subj_present.add(subj)
+            cell = agg[yr][subj]
+            cell[0] += 1
+            cell[1] += 1 if credit(g) else 0
+        years = sorted(agg)[-limit_years:]
+        subjects = AcademicAnalytics._ordered_waec_subjects(subj_present)
+        series = {}
+        for subj in subjects:
+            series[subj] = [round(agg[y][subj][1] / agg[y][subj][0] * 100, 1)
+                            if agg[y][subj][0] else None for y in years]
+        movers = []
+        if len(years) >= 2:
+            latest, prev = years[-1], years[-2]
+            for subj in subjects:
+                a, b = agg[latest][subj], agg[prev][subj]
+                if a[0] and b[0]:
+                    lr = round(a[1] / a[0] * 100, 1)
+                    pr = round(b[1] / b[0] * 100, 1)
+                    movers.append({'subject': subj, 'latest': lr, 'prev': pr,
+                                   'delta': round(lr - pr, 1)})
+            movers.sort(key=lambda m: m['delta'], reverse=True)
+        return {'years': years, 'subjects': subjects, 'series': series, 'movers': movers}
+
+    @staticmethod
     def _ordered_waec_subjects(present):
         """WAEC subjects in canonical order (core first), extras appended A–Z."""
         try:
@@ -563,7 +605,8 @@ class AcademicAnalytics:
                 # plain dict (not the ORM object) so the whole broadsheet is
                 # JSON-serialisable and can be memoised in AnalyticsCache
                 'student': {'id': student.id, 'full_name': student.full_name,
-                            'surname': student.surname or '', 'first_name': student.first_name or ''},
+                            'surname': student.surname or '', 'first_name': student.first_name or '',
+                            'stream': student.stream or ''},
                 'cells': gmap,                                 # {subject: grade}
                 'credits': credits,
                 'distinctions': sum(1 for g in grades if g in AcademicAnalytics.DISTINCTION_GRADES),

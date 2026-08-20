@@ -47,6 +47,7 @@
         <a href="{{ url_for('results.waec_broadsheet_pdf', year=selected_year) }}" target="_blank" rel="noopener" class="btn btn-primary btn-sm"><i class="fas fa-print"></i> Print / PDF</a>
         <a href="{{ url_for('results.waec_broadsheet_pdf', year=selected_year, download=1) }}" class="btn btn-outline btn-sm"><i class="fas fa-file-pdf"></i> Download PDF</a>
         <a href="{{ url_for('results.waec_broadsheet_export', year=selected_year) }}" class="btn btn-success btn-sm"><i class="fas fa-file-excel"></i> Excel</a>
+        <button type="button" id="bsCustomBtn" class="btn btn-secondary btn-sm no-print"><i class="fas fa-sliders"></i> Custom download</button>
         <a href="{{ url_for('results.analytics_hub', year=selected_year) }}" class="btn btn-info btn-sm no-print"><i class="fas fa-chart-column"></i> Analytics</a>
     </div>
     {% endif %}
@@ -138,5 +139,70 @@
         </div>
     </div>
 </div>
+{% endif %}{# /if not bs or not bs.rows → else #}
+
+{% if bs and bs.rows %}
+<div id="bsCustomModal" class="no-print" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center;">
+  <div class="card" style="max-width:520px;width:94%;max-height:88vh;overflow:auto;" onclick="event.stopPropagation()">
+    <div class="card-header"><h3><i class="fas fa-sliders"></i> Custom broadsheet download</h3></div>
+    <div class="card-body">
+      <p class="text-muted text-sm">Choose which students and subjects to include, then pick a format.</p>
+      <div style="font-weight:600;margin:.4rem 0 .3rem;">Streams <span class="text-muted" style="font-weight:400;">(none ticked = all students)</span></div>
+      <div style="display:flex;flex-wrap:wrap;gap:.4rem 1.1rem;margin-bottom:.7rem;">
+        {% for st in ['Science', 'Arts', 'Commercial'] %}
+        <label style="display:flex;align-items:center;gap:.4rem;"><input type="checkbox" class="bs-stream" value="{{ st }}"> {{ st }}</label>
+        {% endfor %}
+      </div>
+      <div style="font-weight:600;margin:.2rem 0 .3rem;display:flex;gap:.6rem;align-items:center;">
+        Subjects
+        <button type="button" id="bsSubjAll" class="btn btn-secondary btn-sm">All</button>
+        <button type="button" id="bsSubjNone" class="btn btn-secondary btn-sm">None</button>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:.35rem 1rem;margin-bottom:.9rem;max-height:34vh;overflow:auto;">
+        {% for subj in bs.subjects %}
+        <label style="display:flex;align-items:center;gap:.4rem;"><input type="checkbox" class="bs-subj" value="{{ subj }}" checked> {{ subj }}</label>
+        {% endfor %}
+      </div>
+      <div class="page-header-actions">
+        <button type="button" class="btn btn-danger btn-sm" data-fmt="pdf"><i class="fas fa-file-pdf"></i> PDF</button>
+        <button type="button" class="btn btn-primary btn-sm" data-fmt="image"><i class="fas fa-file-image"></i> Image</button>
+        <button type="button" class="btn btn-success btn-sm" data-fmt="excel"><i class="fas fa-file-excel"></i> Excel</button>
+        <button type="button" class="btn btn-secondary btn-sm" data-fmt="csv">CSV</button>
+        <button type="button" class="btn btn-link btn-sm" id="bsCustomCancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var modal = document.getElementById('bsCustomModal');
+  var openBtn = document.getElementById('bsCustomBtn');
+  if (!modal || !openBtn) return;
+  var base = "{{ url_for('results.waec_broadsheet_download', year=selected_year) }}";
+  function show() { modal.style.display = 'flex'; }
+  function hide() { modal.style.display = 'none'; }
+  openBtn.addEventListener('click', show);
+  modal.addEventListener('click', hide);
+  document.getElementById('bsCustomCancel').addEventListener('click', hide);
+  function picked(cls) {
+    return Array.prototype.slice.call(document.querySelectorAll('.' + cls))
+      .filter(function (b) { return b.checked; }).map(function (b) { return b.value; });
+  }
+  document.getElementById('bsSubjAll').addEventListener('click', function () {
+    document.querySelectorAll('.bs-subj').forEach(function (b) { b.checked = true; }); });
+  document.getElementById('bsSubjNone').addEventListener('click', function () {
+    document.querySelectorAll('.bs-subj').forEach(function (b) { b.checked = false; }); });
+  modal.querySelectorAll('[data-fmt]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var p = new URLSearchParams();
+      p.set('format', btn.getAttribute('data-fmt'));
+      var streams = picked('bs-stream'); if (streams.length) p.set('streams', streams.join(','));
+      var subs = picked('bs-subj'); if (subs.length) p.set('subjects', subs.join(','));
+      window.location.href = base + (base.indexOf('?') > -1 ? '&' : '?') + p.toString();
+      hide();
+    });
+  });
+})();
+</script>
 {% endif %}
 {% endblock %}

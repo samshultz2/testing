@@ -379,6 +379,40 @@ def get_sss3_students():
     return scope_query(Student.query.filter_by(is_active=True), Student).order_by(Student.surname).all()
 
 
+def is_third_term(term):
+    """True when ``term`` (a Term or its id) is the third term of its session.
+    SSS3 sit no internal exams in third term — only WAEC/NECO/JAMB — so third-term
+    internal results and analytics exclude the SSS3 class."""
+    from models import Term, db
+    if term is None:
+        return False
+    if not hasattr(term, 'term_number'):
+        term = db.session.get(Term, term)
+    return bool(term and term.term_number == 3)
+
+
+def strip_sss3_third_term(assignments, term):
+    """Drop the SSS3 class arms from a list of ClassArmAssignment when ``term`` is
+    the third term. Used by internal score-entry, broadsheet and analytics so
+    SSS3 never appears there in third term (they only write WAEC/NECO/JAMB then).
+    A no-op for other terms, or when no SSS3 class is configured."""
+    if not is_third_term(term):
+        return assignments
+    sss3 = get_sss3_class()
+    if not sss3:
+        return assignments
+    return [a for a in assignments if a.class_id != sss3.id]
+
+
+def is_sss3_third_term_assignment(assignment, term):
+    """True when this specific assignment is the SSS3 class in the third term —
+    i.e. one that internal results/analytics must refuse."""
+    if assignment is None or not is_third_term(term):
+        return False
+    sss3 = get_sss3_class()
+    return bool(sss3 and assignment.class_id == sss3.id)
+
+
 def student_subject_map(students):
     """
     Build {student_id: {'waec': [...], 'jamb': [...]}} for the given students so

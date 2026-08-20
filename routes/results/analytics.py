@@ -511,7 +511,36 @@ def analytics_trends():
     bid = viewing_branch_id()
     waec = AcademicAnalytics.get_waec_multiyear_trends(bid)
     jamb = AcademicAnalytics.get_jamb_multiyear_trends(bid)
-    return render_template('results/analytics_trends.html', waec=waec, jamb=jamb)
+    subject_trends = AcademicAnalytics.get_waec_subject_trends(bid)
+
+    def _delta(points, key):
+        """Latest value, the change from the prior year, and the best year on
+        record for one series metric — the headline 'insights' derived from the
+        multi-year points."""
+        if not points:
+            return None
+        latest = points[-1]
+        prev = points[-2] if len(points) >= 2 else None
+        best = max(points, key=lambda p: p.get(key, 0))
+        return {
+            'latest': latest.get(key), 'year': latest.get('year'),
+            'delta': (round(latest.get(key, 0) - prev.get(key, 0), 1) if prev else None),
+            'prev_year': prev.get('year') if prev else None,
+            'best': best.get(key), 'best_year': best.get('year'),
+        }
+
+    insights = {
+        'waec_core': _delta(waec['points'], 'with_5_incl_core_pct'),
+        'waec_credit': _delta(waec['points'], 'credit_rate'),
+        'waec_f9': _delta(waec['points'], 'f9_rate'),
+        'jamb_avg': _delta(jamb['points'], 'avg_score'),
+        'jamb_200': _delta(jamb['points'], 'above_200_pct'),
+    }
+    top_movers = subject_trends['movers'][:5]
+    bottom_movers = list(reversed(subject_trends['movers'][-5:])) if subject_trends['movers'] else []
+    return render_template('results/analytics_trends.html', waec=waec, jamb=jamb,
+                           insights=insights, subject_trends=subject_trends,
+                           top_movers=top_movers, bottom_movers=bottom_movers)
 
 
 @results_bp.route('/analytics/watchlist')
@@ -1070,3 +1099,65 @@ def waec_broadsheet_export():
 
     from utils.http_cache import stamp
     return stamp(xlsx_response(wb, f'waec_broadsheet_{year}.xlsx'), etag)
+
+
+@results_bp.route('/waec/broadsheet/download')
+@login_required
+@rate_limited('export', max_requests=40, window_minutes=10)
+def waec_broadsheet_download():
+    """Content-selectable WAEC broadsheet download: pick the streams (Science /
+    Arts / Commercial) and the subjects to include, and the format
+    (pdf | image | excel | csv). Powers the broadsheet's "Custom download" modal.
+    """
+    from flask import Response
+    years = _waec_broadsheet_years()
+    year = resolve_exam_year(request.args.get('year', type=int), years)
+    bs = _waec_broadsheet_cached(year, viewing_branch_id()) if year else None
+    if not bs or not bs['rows']:
+        flash('No WAEC results recorded for that year.', 'warning')
+        return redirect(url_for('results.waec_broadsheet', year=year))
+
+    all_subjects = bs['subjects']
+    want_subj = [s.strip() for s in (request.args.get('subjects') or '').split(',') if s.strip()]
+    subjects = [s for s in all_subjects if s in want_subj] or all_subjects
+    want_streams = {s.strip().lower() for s in (request.args.get('streams') or '').split(',') if s.strip()}
+
+    rows = bs['rows']
+    if want_streams:
+        rows = [r for r in rows if (r['student'].get('stream') or '').lower() in want_streams]
+    if not rows:
+        flash('No students match the selected streams for that year.', 'warning')
+        return redirect(url_for('results.waec_broadsheet', year=year))
+
+    headers = ['S/N', 'Student'] + subjects + ['Credits', 'Avg grade']
+    data_rows = []
+    for i, r in enumerate(rows, 1):
+        line = [str(i), r['student']['full_name']]
+        line += [r['cells'].get(subj, '–') for subj in subjects]
+        line += [str(r['credits']), r['avg_grade']]
+        data_rows.append(line)
+
+    stream_label = ', '.join(sorted(s.title() for s in want_streams)) if want_streams else 'All streams'
+    subtitle = f'WAEC Broadsheet {year} · {stream_label} · {len(rows)} student(s)'
+    title = f'WAEC Broadsheet {year}'
+
+    fmt = (request.args.get('format') or 'pdf').lower()
+    from utils import broadsheet_export as bx
+    if fmt in ('image', 'png'):
+        data = bx.combo_png(headers, data_rows, title, subtitle)
+        return Response(data, mimetype='image/png', headers={
+            'Content-Disposition': f'attachment; filename="waec_broadsheet_{year}.png"'})
+    if fmt in ('excel', 'xlsx'):
+        wb = bx.combo_xlsx(headers, data_rows, title, subtitle)
+        return xlsx_response(wb, f'waec_broadsheet_{year}.xlsx')
+    if fmt == 'csv':
+        import csv as _csv
+        from io import StringIO
+        buf = StringIO(); w = _csv.writer(buf); w.writerow(headers)
+        for dr in data_rows:
+            w.writerow(dr)
+        return Response(buf.getvalue(), mimetype='text/csv', headers={
+            'Content-Disposition': f'attachment; filename="waec_broadsheet_{year}.csv"'})
+    data = bx.combo_pdf(headers, data_rows, title, subtitle, numeric_from=2)
+    return Response(data, mimetype='application/pdf', headers={
+        'Content-Disposition': f'attachment; filename="waec_broadsheet_{year}.pdf"'})

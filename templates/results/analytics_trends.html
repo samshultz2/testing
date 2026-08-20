@@ -36,6 +36,39 @@
     <a href="{{ url_for('results.analytics_hub') }}" class="btn btn-secondary" style="margin-left:auto;">Back to Analytics</a>
 </div>
 
+{% macro insight_card(title, ins, unit, good_up=True) %}
+  {% if ins and ins.latest is not none %}
+  <div class="card" style="flex:1 1 180px;min-width:170px;">
+    <div class="card-body">
+      <div class="text-muted text-sm">{{ title }}</div>
+      <div style="font-size:1.6rem;font-weight:700;">{{ ins.latest }}{{ unit }}</div>
+      <div class="text-sm">
+        {% if ins.delta is not none %}
+          {% set up = ins.delta > 0 %}
+          {% set positive = (up if good_up else not up) %}
+          <span style="color:{{ '#28a745' if positive else ('#dc3545' if ins.delta != 0 else 'var(--text-muted)') }};">
+            <i class="fas fa-arrow-{{ 'up' if up else 'down' if ins.delta < 0 else 'right' }}"></i>
+            {{ ins.delta if ins.delta < 0 else '+' ~ ins.delta }}{{ unit }} vs {{ ins.prev_year }}
+          </span>
+        {% else %}<span class="text-muted">first year on record</span>{% endif %}
+      </div>
+      <div class="text-muted text-sm" style="margin-top:.2rem;">Best: {{ ins.best }}{{ unit }} ({{ ins.best_year }})</div>
+    </div>
+  </div>
+  {% endif %}
+{% endmacro %}
+
+{% if insights %}
+<h2 class="section-title">At a glance ({{ waec.years[-1] if waec.years else '' }})</h2>
+<div style="display:flex;flex-wrap:wrap;gap:1rem;margin-bottom:1.2rem;">
+  {{ insight_card('5 credits incl. English & Maths', insights.waec_core, '%') }}
+  {{ insight_card('WAEC credit rate', insights.waec_credit, '%') }}
+  {{ insight_card('WAEC F9 (fail) rate', insights.waec_f9, '%', good_up=False) }}
+  {{ insight_card('JAMB average score', insights.jamb_avg, '') }}
+  {{ insight_card('JAMB ≥ 200 rate', insights.jamb_200, '%') }}
+</div>
+{% endif %}
+
 <h2 class="section-title">WAEC / WASSCE</h2>
 {% if waec.points %}
     {{ bars(waec.points, 'with_5_incl_core_pct', 'Candidates with 5 credits incl. English & Maths', '%') }}
@@ -53,6 +86,41 @@
             </tbody>
         </table>
     </div></div>
+
+    {% if subject_trends and subject_trends.movers %}
+    <div style="display:flex;flex-wrap:wrap;gap:1rem;margin-bottom:1rem;">
+      <div class="card" style="flex:1 1 300px;">
+        <div class="card-header"><h3><i class="fas fa-arrow-trend-up" style="color:#28a745;"></i> Most improved subjects</h3>
+          <span class="text-muted text-sm">credit rate, {{ subject_trends.years[-2] }} → {{ subject_trends.years[-1] }}</span></div>
+        <div class="card-body" style="overflow-x:auto;">
+          <table class="table" style="width:100%;"><thead><tr><th>Subject</th><th>{{ subject_trends.years[-2] }}</th><th>{{ subject_trends.years[-1] }}</th><th>Change</th></tr></thead>
+            <tbody>{% for m in top_movers %}
+              <tr><td>{{ m.subject }}</td><td>{{ m.prev }}%</td><td>{{ m.latest }}%</td>
+                  <td style="color:{{ '#28a745' if m.delta > 0 else ('#dc3545' if m.delta < 0 else 'inherit') }};font-weight:600;">{{ '+' ~ m.delta if m.delta > 0 else m.delta }}%</td></tr>
+            {% endfor %}</tbody></table>
+        </div>
+      </div>
+      <div class="card" style="flex:1 1 300px;">
+        <div class="card-header"><h3><i class="fas fa-arrow-trend-down" style="color:#dc3545;"></i> Needs attention</h3>
+          <span class="text-muted text-sm">biggest credit-rate drops</span></div>
+        <div class="card-body" style="overflow-x:auto;">
+          <table class="table" style="width:100%;"><thead><tr><th>Subject</th><th>{{ subject_trends.years[-2] }}</th><th>{{ subject_trends.years[-1] }}</th><th>Change</th></tr></thead>
+            <tbody>{% for m in bottom_movers %}
+              <tr><td>{{ m.subject }}</td><td>{{ m.prev }}%</td><td>{{ m.latest }}%</td>
+                  <td style="color:{{ '#28a745' if m.delta > 0 else ('#dc3545' if m.delta < 0 else 'inherit') }};font-weight:600;">{{ '+' ~ m.delta if m.delta > 0 else m.delta }}%</td></tr>
+            {% endfor %}</tbody></table>
+        </div>
+      </div>
+    </div>
+
+    <div class="card mb-4"><div class="card-body" style="overflow-x:auto;">
+        <h3 style="margin-top:0;">Per-subject credit rate by year</h3>
+        <table class="table" style="width:100%;"><thead><tr><th>Subject</th>{% for y in subject_trends.years %}<th>{{ y }}</th>{% endfor %}</tr></thead>
+          <tbody>{% for subj in subject_trends.subjects %}
+            <tr><td>{{ subj }}</td>{% for v in subject_trends.series[subj] %}<td>{{ (v ~ '%') if v is not none else '—' }}</td>{% endfor %}</tr>
+          {% endfor %}</tbody></table>
+    </div></div>
+    {% endif %}
 {% else %}
     <div class="card mb-4"><div class="card-body text-muted">No WAEC results recorded yet.</div></div>
 {% endif %}

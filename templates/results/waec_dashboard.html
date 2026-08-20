@@ -783,9 +783,9 @@
         </table>
     </div>
     </div>{# /.cap-list #}
-    {% if students|length > 12 %}
+    {% if students %}
     <button type="button" class="btn btn-secondary btn-sm cap-toggle" data-cap-toggle aria-label="Show all results"
-            data-more="Show all {{ students|length }} students" data-less="Show fewer">
+            data-more="Show all {{ students|length }} students" data-less="Show fewer" style="display:none;">
         <i class="fas fa-chevron-down" aria-hidden="true"></i> <span class="cap-label">Show all {{ students|length }} students</span>
     </button>
     {% endif %}

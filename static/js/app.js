@@ -149,6 +149,49 @@ function bindLiveSearch(input) {
     if ((input.value || '').trim()) apply();   // honour a prefilled query
 }
 
+// Show/hide each cap-list's "Show all" toggle based on whether the list really
+// overflows its cap on the current device. The button controlling a cap-list is
+// the sibling [data-cap-toggle] immediately after it (or one whose selector
+// targets it). If a cap-list overflows but has no button, inject a generic one
+// so no capped content is ever unreachable.
+function capListToggleFor(list) {
+    var sib = list.nextElementSibling;
+    if (sib && sib.getAttribute && sib.getAttribute('data-cap-toggle') !== null) return sib;
+    // Or a button elsewhere targeting this list by selector/id.
+    if (list.id) {
+        var byId = document.querySelector('[data-cap-toggle="#' + list.id + '"]');
+        if (byId) return byId;
+    }
+    return null;
+}
+
+function initCapLists() {
+    var lists = document.querySelectorAll('.cap-list');
+    for (var i = 0; i < lists.length; i++) {
+        var list = lists[i];
+        var btn = capListToggleFor(list);
+        // Never fight an expanded list or an active live-search reveal.
+        var expanded = list.classList.contains('expanded');
+        var overflowing = list.scrollHeight > list.clientHeight + 4;
+        if (!btn) {
+            if (overflowing && !expanded) {
+                btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'btn btn-secondary btn-sm cap-toggle';
+                btn.setAttribute('data-cap-toggle', '');
+                btn.setAttribute('data-more', 'Show all');
+                btn.setAttribute('data-less', 'Show fewer');
+                btn.innerHTML = '<i class="fas fa-chevron-down" aria-hidden="true"></i> <span class="cap-label">Show all</span>';
+                list.parentNode.insertBefore(btn, list.nextSibling);
+            }
+            continue;
+        }
+        // A rendered button: reveal only when the list overflows (or is already
+        // expanded, so the user can collapse it again).
+        btn.style.display = (overflowing || expanded) ? '' : 'none';
+    }
+}
+
 // Account dropdown (consolidates install / clear-cache / logout / identity).
 function initProfileMenu() {
     var btn = document.getElementById('profileBtn');
@@ -654,6 +697,19 @@ document.addEventListener('DOMContentLoaded', function() {
         var lbl = btn.querySelector('.cap-label');
         if (lbl) lbl.textContent = expanded ? (btn.getAttribute('data-less') || 'Show less')
                                             : (btn.getAttribute('data-more') || 'Show all');
+    });
+
+    // A "Show all" button is only useful when the capped list actually clips its
+    // content — and that depends on the device, not on a fixed row count. (A
+    // filtered list of 10 fits on a wide desktop table but overflows the same cap
+    // as tall mobile cards, where a count-based gate wrongly hid the button.)
+    // So show the toggle exactly when the list overflows, and re-check on resize.
+    initCapLists();
+    setTimeout(initCapLists, 300);                 // re-check after fonts/badges settle
+    window.addEventListener('load', initCapLists);
+    var _capT;
+    window.addEventListener('resize', function () {
+        clearTimeout(_capT); _capT = setTimeout(initCapLists, 200);
     });
 
     // Live client-side search: an <input data-live-search="containerId"> instantly

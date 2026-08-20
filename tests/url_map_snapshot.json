@@ -5503,6 +5503,13 @@
 ]
 ],
 [
+"results.waec_broadsheet_download",
+"/results/waec/broadsheet/download",
+[
+"GET"
+]
+],
+[
 "results.waec_broadsheet_export",
 "/results/waec/broadsheet/export",
 [

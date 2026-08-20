@@ -35,9 +35,15 @@ def scores_entry():
     assignments = []
     if term_id:
         all_assignments = ClassArmAssignment.query.filter_by(term_id=term_id).all()
-        assignments = filter_classes_for_user(all_assignments)
-    
+        # SSS3 write no internal exams in third term (only WAEC/NECO/JAMB), so
+        # they never appear in third-term internal score entry.
+        assignments = strip_sss3_third_term(filter_classes_for_user(all_assignments), term_id)
+
     selected_assignment = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None
+    # Refuse a directly-passed SSS3 third-term class (e.g. a stale bookmark).
+    if is_sss3_third_term_assignment(selected_assignment, term_id):
+        flash('SSS3 sit no internal exams in third term — only WAEC/NECO/JAMB.', 'info')
+        return redirect(url_for('subjects.scores_entry', term_id=term_id))
     
     # Get subjects for selected class (filter by teacher's assigned subjects if not admin)
     class_subjects = []
@@ -220,8 +226,8 @@ def workflow():
         active = get_active_term()
         term_id = active.id if active else None
     terms = session_terms()
-    assignments = (filter_classes_for_user(
-        ClassArmAssignment.query.filter_by(term_id=term_id).all()) if term_id else [])
+    assignments = (strip_sss3_third_term(filter_classes_for_user(
+        ClassArmAssignment.query.filter_by(term_id=term_id).all()), term_id) if term_id else [])
     selected = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None
 
     steps = None
@@ -285,8 +291,8 @@ def bulk_entry():
         active = get_active_term()
         term_id = active.id if active else None
     terms = session_terms()
-    assignments = (filter_classes_for_user(
-        ClassArmAssignment.query.filter_by(term_id=term_id).all()) if term_id else [])
+    assignments = (strip_sss3_third_term(filter_classes_for_user(
+        ClassArmAssignment.query.filter_by(term_id=term_id).all()), term_id) if term_id else [])
     selected = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None
     assessment_types = AssessmentType.query.filter_by(is_active=True).order_by(AssessmentType.order).all()
 
@@ -548,10 +554,10 @@ def import_scores():
     class_subject_id = request.args.get('class_subject_id', type=int)
     
     terms = session_terms()
-    assignments = filter_classes_for_user(
-        ClassArmAssignment.query.filter_by(term_id=term_id).all()) if term_id else []
+    assignments = strip_sss3_third_term(filter_classes_for_user(
+        ClassArmAssignment.query.filter_by(term_id=term_id).all()), term_id) if term_id else []
     class_subjects = []
-    
+
     if assignment_id:
         assignment = db.session.get(ClassArmAssignment, assignment_id)
         if assignment:

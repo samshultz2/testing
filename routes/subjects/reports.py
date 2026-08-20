@@ -24,12 +24,13 @@ def broadsheet():
     
     selected_term = db.session.get(Term, term_id) if term_id else None
     
-    # Filter assignments for teachers
+    # Filter assignments for teachers. SSS3 write no internal exams in third term
+    # (only WAEC/NECO/JAMB), so third-term internal broadsheets exclude SSS3.
     assignments = []
     if term_id:
         all_assignments = ClassArmAssignment.query.filter_by(term_id=term_id).all()
-        assignments = filter_classes_for_user(all_assignments)
-    
+        assignments = strip_sss3_third_term(filter_classes_for_user(all_assignments), term_id)
+
     selected_assignment = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None
     
     # Build broadsheet data
@@ -158,7 +159,9 @@ def _explore_dataset(term_id, scope_ids):
     allowed_ids = set()
     if term_id:
         all_assignments = ClassArmAssignment.query.filter_by(term_id=term_id).all()
-        allowed = filter_classes_for_user(all_assignments)
+        # SSS3 have no internal results in third term (only WAEC/NECO/JAMB), so
+        # the explorer/combination datasets omit SSS3 arms in third term.
+        allowed = strip_sss3_third_term(filter_classes_for_user(all_assignments), term_id)
         allowed_ids = {a.id for a in allowed}
         by_class = OrderedDict()
         for a in sorted(allowed, key=lambda x: (
@@ -612,8 +615,8 @@ def analytics_dashboard():
         flash('You do not have access to this class.', 'error')
         return redirect(url_for('subjects.analytics_dashboard'))
     terms = session_terms()
-    assignments = (filter_classes_for_user(
-        ClassArmAssignment.query.filter_by(term_id=term_id).all()) if term_id else [])
+    assignments = (strip_sss3_third_term(filter_classes_for_user(
+        ClassArmAssignment.query.filter_by(term_id=term_id).all()), term_id) if term_id else [])
     data = None
     if term_id and assignment_id:
         from utils.results_analytics import class_analytics
@@ -669,8 +672,8 @@ def _org_allowed_ids(term_id):
     (meaning 'everything', the fast path)."""
     if is_admin():
         return None
-    asgs = filter_classes_for_user(
-        ClassArmAssignment.query.filter_by(term_id=term_id).all()) if term_id else []
+    asgs = strip_sss3_third_term(filter_classes_for_user(
+        ClassArmAssignment.query.filter_by(term_id=term_id).all()), term_id) if term_id else []
     return {a.id for a in asgs}
 
 
@@ -929,8 +932,8 @@ def affective():
         active = get_active_term()
         term_id = active.id if active else None
     terms = session_terms()
-    assignments = (filter_classes_for_user(
-        ClassArmAssignment.query.filter_by(term_id=term_id).all()) if term_id else [])
+    assignments = (strip_sss3_third_term(filter_classes_for_user(
+        ClassArmAssignment.query.filter_by(term_id=term_id).all()), term_id) if term_id else [])
     selected_assignment = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None
 
     if request.method == 'POST' and selected_assignment and term_id:
@@ -989,8 +992,8 @@ def comments():
         active = get_active_term()
         term_id = active.id if active else None
     terms = session_terms()
-    assignments = (filter_classes_for_user(
-        ClassArmAssignment.query.filter_by(term_id=term_id).all()) if term_id else [])
+    assignments = (strip_sss3_third_term(filter_classes_for_user(
+        ClassArmAssignment.query.filter_by(term_id=term_id).all()), term_id) if term_id else [])
     selected_assignment = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None
 
     if request.method == 'POST' and selected_assignment and term_id:
@@ -1373,11 +1376,11 @@ def print_all_report_cards():
 
     assignments = []
     if term_id:
-        assignments = filter_classes_for_user(
-            ClassArmAssignment.query.filter_by(term_id=term_id).all())
+        assignments = strip_sss3_third_term(filter_classes_for_user(
+            ClassArmAssignment.query.filter_by(term_id=term_id).all()), term_id)
 
     selected_assignment = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None
-    
+
     all_reports = []
     
     if selected_assignment and selected_term:

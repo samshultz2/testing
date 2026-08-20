@@ -2,7 +2,8 @@
 Subjects and Score Management routes
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
-from utils.helpers import get_active_term, session_terms
+from utils.helpers import (get_active_term, session_terms, strip_sss3_third_term,
+                           is_sss3_third_term_assignment)
 from utils.web_exports import xlsx_response
 from utils.db_tx import safe_transaction
 from utils.branch_scope import require_branch_access
