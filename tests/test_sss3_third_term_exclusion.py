@@ -38,3 +38,33 @@ def test_is_third_term_and_strip(app):
         # First term: unchanged.
         kept1 = strip_sss3_third_term(both, t1.id)
         assert sss3_a in kept1 and other_a in kept1
+
+
+def test_org_analytics_scope_excludes_sss3_third_term(app):
+    """The institution rollup must not count SSS3 arms in third term, so no SSS3
+    subject appears and no SSS3 teacher is flagged for 'incomplete' entry."""
+    from utils.results_analytics_org import _scope_assignments
+    sss3_id = _sss3(app)
+    with app.app_context():
+        sess = AcademicSession(name='ORG-Sess'); db.session.add(sess); db.session.flush()
+        t3 = Term(session_id=sess.id, term_number=3, name='ORG-T3')
+        db.session.add(t3); db.session.flush()
+        other_cls = SchoolClass.query.filter(SchoolClass.id != sss3_id).first() \
+            or SchoolClass(name='SSS1', level=10)
+        if not other_cls.id:
+            db.session.add(other_cls); db.session.flush()
+        arm = ClassArm.query.first() or ClassArm(name='A', is_active=True)
+        if not arm.id:
+            db.session.add(arm); db.session.flush()
+        a_sss3 = ClassArmAssignment(class_id=sss3_id, arm_id=arm.id, term_id=t3.id)
+        a_other = ClassArmAssignment(class_id=other_cls.id, arm_id=arm.id, term_id=t3.id)
+        db.session.add_all([a_sss3, a_other]); db.session.commit()
+        try:
+            rows = _scope_assignments(t3.id, 'school', None, None)
+            class_ids = {a.class_id for a in rows}
+            assert sss3_id not in class_ids          # SSS3 excluded in third term
+            assert other_cls.id in class_ids         # other classes still counted
+        finally:
+            for o in (a_sss3, a_other):
+                db.session.delete(o)
+            db.session.delete(t3); db.session.delete(sess); db.session.commit()

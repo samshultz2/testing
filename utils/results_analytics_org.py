@@ -119,6 +119,13 @@ def _scope_assignments(term_id, scope, scope_id, allowed_ids):
     elif scope == 'section' and scope_id:
         want = str(scope_id).lower()
         rows = [a for a in rows if a.school_class and (a.school_class.section or '').lower() == want]
+    # SSS3 sit no internal exams in third term (only WAEC/NECO/JAMB), so they must
+    # not appear in third-term internal analytics — no SSS3 subjects, and no
+    # teacher flagged for "incomplete" SSS3 entry. Strip them at the source so
+    # every downstream rollup (completion, subjects, teachers) excludes them.
+    from utils.helpers import strip_sss3_third_term
+    from models import db, Term
+    rows = strip_sss3_third_term(rows, db.session.get(Term, term_id) if term_id else None)
     return rows
 
 
@@ -459,6 +466,8 @@ def _org_trends(term_id, scope, scope_id, allowed_ids, ref_assignments):
                 term_id=t.id, class_id=arm_key[0], arm_id=arm_key[1]).all()
             if allowed_ids is not None:
                 rows = [r for r in rows if r.id in allowed_ids]
+            from utils.helpers import strip_sss3_third_term
+            rows = strip_sss3_third_term(rows, t)     # SSS3 has no 3rd-term internal data
             ids = [r.id for r in rows]
         else:
             ids = [a.id for a in _scope_assignments(t.id, scope, scope_id, allowed_ids)]
