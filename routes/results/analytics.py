@@ -1145,7 +1145,11 @@ def waec_broadsheet_download():
 
     stream_label = ', '.join(sorted(s.title() for s in want_streams)) if want_streams else 'All streams'
     subtitle = f'WAEC Broadsheet {year} · {stream_label} · {len(rows)} student(s)'
-    title = f'WAEC Broadsheet {year}'
+    # Optional custom heading typed by the user (e.g. "SSS3 SCIENCE MERIT LIST").
+    title = (request.args.get('title') or '').strip() or f'WAEC Broadsheet {year}'
+    from utils.school import logo_path as _logo_path, school_profile as _school_profile
+    _lp = _logo_path()
+    _sname = (_school_profile() or {}).get('name') or None
 
     fmt = (request.args.get('format') or 'pdf').lower()
     from utils import broadsheet_export as bx
@@ -1175,13 +1179,15 @@ def waec_broadsheet_download():
     codes, legend = bx.abbreviate_subjects(subjects)
     headers = ['S/N', 'Student'] + codes + ['Cred', 'Avg']
     if fmt in ('image', 'png'):
-        pages = bx.combo_png_pages(headers, full_rows, title, subtitle, legend=legend)
+        pages = bx.combo_png_pages(headers, full_rows, title, subtitle, legend=legend,
+                                   logo_path=_lp, school_name=_sname)
         page = request.args.get('page', type=int) or 1
         page = max(1, min(page, len(pages)))
         suffix = '' if len(pages) == 1 else f'_p{page}'
         return Response(pages[page - 1], mimetype='image/png', headers={
             'Content-Disposition': f'attachment; filename="waec_broadsheet_{year}{suffix}.png"',
             'X-Total-Pages': str(len(pages)), 'Access-Control-Expose-Headers': 'X-Total-Pages'})
-    data = bx.combo_pdf(headers, full_rows, title, subtitle, numeric_from=2, legend=legend)
+    data = bx.combo_pdf(headers, full_rows, title, subtitle, numeric_from=2, legend=legend,
+                        logo_path=_lp, school_name=_sname)
     return Response(data, mimetype='application/pdf', headers={
         'Content-Disposition': f'attachment; filename="waec_broadsheet_{year}.pdf"'})

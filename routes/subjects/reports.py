@@ -655,13 +655,28 @@ def combine_export():
     if active:
         bits.append('Filter: ' + cond)
     subtitle = 'Subject Combination · ' + ' · '.join(bits)
-    title = 'Subject Combination Results'
+    # Optional custom heading typed by the user (e.g. "SSS2 SCIENCE MERIT LIST").
+    title = (request.args.get('title') or '').strip() or 'Subject Combination Results'
 
     fmt = (request.args.get('format') or 'pdf').lower()
     from utils import broadsheet_export as bx
     from flask import Response
+    from utils.school import logo_path as _logo_path, school_profile as _school_profile
+    _lp = _logo_path()
+    _sname = (_school_profile() or {}).get('name') or None
+
+    # For PDF / image, replace long subject headers with short codes + a key so
+    # columns stay narrow and full names fit; spreadsheets keep full names.
+    subj_cols = [(idx, k.split(':', 1)[1]) for idx, k in enumerate(keys) if k.startswith('subj:')]
+    codes, legend = bx.abbreviate_subjects([subj_lookup[sid]['name'] for _, sid in subj_cols]) \
+        if subj_cols else ([], [])
+    short_headers = list(headers)
+    for (idx, _sid), code in zip(subj_cols, codes):
+        short_headers[idx] = code
+
     if fmt in ('image', 'png'):
-        pages = bx.combo_png_pages(headers, data_rows, title, subtitle)
+        pages = bx.combo_png_pages(short_headers, data_rows, title, subtitle, legend=legend,
+                                   logo_path=_lp, school_name=_sname)
         page = request.args.get('page', type=int) or 1
         page = max(1, min(page, len(pages)))
         suffix = '' if len(pages) == 1 else f'_p{page}'
@@ -679,7 +694,9 @@ def combine_export():
             w.writerow(dr)
         return Response(buf.getvalue(), mimetype='text/csv', headers={
             'Content-Disposition': 'attachment; filename="subject_combination.csv"'})
-    data = bx.combo_pdf(headers, data_rows, title, subtitle, numeric_from=_combo_numeric_from(keys))
+    data = bx.combo_pdf(short_headers, data_rows, title, subtitle,
+                        numeric_from=_combo_numeric_from(keys), legend=legend,
+                        logo_path=_lp, school_name=_sname)
     return Response(data, mimetype='application/pdf', headers={
         'Content-Disposition': 'attachment; filename="subject_combination.pdf"'})
 

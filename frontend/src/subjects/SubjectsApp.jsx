@@ -2086,6 +2086,7 @@ function Combine({ d, notify }) {
 
   // Export column picker
   const [showExport, setShowExport] = useState(false);
+  const [expTitle, setExpTitle] = useState('');
   const [cols, setCols] = useState({ sn: true, student: true, class: true, arm: true, subjects: true, total: true, average: true, missing: false });
   const setCol = (k) => setCols((c) => ({ ...c, [k]: !c[k] }));
   const exportUrl = (fmt) => {
@@ -2108,6 +2109,7 @@ function Combine({ d, notify }) {
         op: c.op, value: c.value }))));
     }
     p.set('columns', keys.join(','));
+    if (expTitle.trim()) p.set('title', expTitle.trim());
     p.set('format', fmt);
     return `${d.urls.export}?${p.toString()}`;
   };
@@ -2272,6 +2274,10 @@ function Combine({ d, notify }) {
             <div className="card-header"><h3><i aria-hidden="true" className="fas fa-download" /> Export combination</h3></div>
             <div className="card-body">
               <p className="text-muted text-sm">Choose the columns to include, then pick a format.</p>
+              <label className="form-label" style={{ fontWeight: 600 }}>Heading <span className="text-muted" style={{ fontWeight: 400 }}>(optional)</span></label>
+              <input type="text" className="form-control" style={{ marginBottom: '.8rem' }} maxLength={120}
+                     placeholder="e.g. SSS2 SCIENCE CLASS MERIT LIST" value={expTitle}
+                     onChange={(e) => setExpTitle(e.target.value)} />
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '.4rem 1.1rem', marginBottom: '.8rem' }}>
                 {[['sn', 'S/N'], ['student', 'Student'], ['class', 'Class'], ['arm', 'Arm'], ['subjects', 'Each subject'], ['total', 'Combined total'], ['average', 'Combined average'], ['missing', 'Missing count']].map(([k, label]) => (
                   <label key={k} className="form-check" style={{ display: 'flex', gap: '.4rem', alignItems: 'center' }}>
