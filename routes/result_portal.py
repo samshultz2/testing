@@ -28,14 +28,45 @@ _wants_json, _render, _ok, _err = section_responders(
 # ADMIN
 # ===========================================================================
 
+def _apply_card_status(q, status):
+    """Narrow a ScratchCard query by a status keyword used across the list and
+    the rule-based bulk actions."""
+    if status == 'active':
+        return q.filter(ScratchCard.is_active.is_(True))
+    if status == 'disabled':
+        return q.filter(ScratchCard.is_active.is_(False))
+    if status == 'unused':
+        return q.filter((ScratchCard.used_count == 0) | (ScratchCard.used_count.is_(None)))
+    if status == 'used':
+        return q.filter(ScratchCard.used_count > 0)
+    return q
+
+
+def _id_list(raw):
+    out = []
+    for tok in (raw or '').replace(',', ' ').split():
+        try:
+            out.append(int(tok))
+        except ValueError:
+            pass
+    return out
+
+
 @scratchcards_bp.route('/')
 @login_required
 def index():
     batch = request.args.get('batch') or None
+    status = request.args.get('status') or None
+    page = max(1, request.args.get('page', 1, type=int) or 1)
+    per_page = min(max(request.args.get('per_page', 50, type=int) or 50, 10), 200)
+
     q = ScratchCard.query
     if batch:
         q = q.filter_by(batch_label=batch)
-    cards = q.order_by(ScratchCard.created_at.desc(), ScratchCard.id.desc()).all()
+    q = _apply_card_status(q, status)
+    pg = (q.order_by(ScratchCard.created_at.desc(), ScratchCard.id.desc())
+          .paginate(page=page, per_page=per_page, error_out=False))
+
     batches = [b[0] for b in db.session.query(ScratchCard.batch_label)
                .distinct().all() if b[0]]
     from sqlalchemy import func
@@ -49,7 +80,11 @@ def index():
         'page': 'index',
         'stats': stats,
         'batch': batch,
+        'status': status or '',
         'batches': batches,
+        # pagination + filtered-count meta for the list controls
+        'pg': {'page': pg.page, 'pages': pg.pages, 'total': pg.total,
+               'per_page': per_page, 'has_prev': pg.has_prev, 'has_next': pg.has_next},
         'terms': [{'id': t.id, 'name': t.full_name or t.name,
                    'results_published': bool(t.results_published),
                    'publish_url': url_for('scratchcards.publish', term_id=t.id)} for t in terms],
@@ -57,12 +92,66 @@ def index():
                    'used_count': c.used_count, 'max_uses': c.max_uses, 'uses_left': c.uses_left,
                    'term_name': c.term.name if c.term else 'Any', 'batch_label': c.batch_label or '—',
                    'is_active': bool(c.is_active),
-                   'toggle_url': url_for('scratchcards.toggle', card_id=c.id)} for c in cards],
+                   'toggle_url': url_for('scratchcards.toggle', card_id=c.id)} for c in pg.items],
         'generate_url': url_for('scratchcards.generate'),
         'logs_url': url_for('scratchcards.logs'),
         'self_url': url_for('scratchcards.index'),
+        'bulk_toggle_url': url_for('scratchcards.bulk_toggle'),
+        'bulk_delete_url': url_for('scratchcards.bulk_delete'),
         'print_batch_url': url_for('scratchcards.print_cards', batch=batch) if batch else None,
     })
+
+
+@scratchcards_bp.route('/bulk-toggle', methods=['POST'])
+@login_required
+def bulk_toggle():
+    """Enable or disable many cards at once (selected ids)."""
+    ids = _id_list(request.form.get('ids'))
+    if not ids:
+        return _err('No cards selected.', url_for('scratchcards.index'))
+    active = request.form.get('active') == '1'
+    n = (ScratchCard.query.filter(ScratchCard.id.in_(ids))
+         .update({'is_active': active}, synchronize_session=False))
+    db.session.commit()
+    log_action('scratchcard.bulk_toggle', f'{n} card(s) → {"active" if active else "disabled"}')
+    return _ok(f'{n} card(s) {"enabled" if active else "disabled"}.', url_for('scratchcards.index'))
+
+
+@scratchcards_bp.route('/bulk-delete', methods=['POST'])
+@login_required
+def bulk_delete():
+    """Delete cards — either an explicit selection (``ids``) or, when none is
+    given, everything matching a rule (batch + status) up to an optional
+    ``limit`` (e.g. 200), oldest first. Audit logs are kept (their card link is
+    cleared) so a delete never loses the check history."""
+    ids = _id_list(request.form.get('ids'))
+    if ids:
+        target_ids = [r.id for r in ScratchCard.query
+                      .filter(ScratchCard.id.in_(ids)).with_entities(ScratchCard.id).all()]
+    else:
+        batch = request.form.get('batch') or None
+        status = request.form.get('status') or None
+        try:
+            limit = int(request.form.get('limit') or 0)
+        except (TypeError, ValueError):
+            limit = 0
+        q = ScratchCard.query
+        if batch:
+            q = q.filter_by(batch_label=batch)
+        q = _apply_card_status(q, status)
+        q = q.order_by(ScratchCard.created_at.asc(), ScratchCard.id.asc())
+        if limit > 0:
+            q = q.limit(limit)
+        target_ids = [r.id for r in q.with_entities(ScratchCard.id).all()]
+
+    if not target_ids:
+        return _err('No matching cards to delete.', url_for('scratchcards.index'))
+    ResultCheckLog.query.filter(ResultCheckLog.card_id.in_(target_ids)).update(
+        {'card_id': None}, synchronize_session=False)
+    n = ScratchCard.query.filter(ScratchCard.id.in_(target_ids)).delete(synchronize_session=False)
+    db.session.commit()
+    log_action('scratchcard.bulk_delete', f'{n} card(s) deleted')
+    return _ok(f'Deleted {n} scratch card(s).', url_for('scratchcards.index'))
 
 
 @scratchcards_bp.route('/generate', methods=['POST'])

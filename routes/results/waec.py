@@ -242,8 +242,11 @@ def waec_subject(subject):
 @login_required
 def add_waec():
     """Add WAEC results for a student"""
-    # Only offer students who don't already have this year's WAEC results.
-    exam_year = request.args.get('year', type=int) or _date.today().year
+    # External exams are session-based: default to the active academic session's
+    # exam year (2025/2026 → 2026), not the raw calendar year.
+    exam_year = (request.args.get('year', type=int)
+                 or session_exam_year(get_active_session()) or _date.today().year)
+    # Only offer students who don't already have this session's WAEC results.
     students = students_needing_result(get_sss3_students(), WAECResult, exam_year)
 
     if request.method == 'POST':
@@ -299,7 +302,7 @@ def add_waec():
         default_subjects=WAEC_DEFAULT_SUBJECTS,
         stream_defaults=STREAM_WAEC_SUBJECTS,
         subject_map=student_subject_map(students),
-        current_year=exam_year
+        current_year=exam_year, sessions=exam_year_choices()
     )
 
 

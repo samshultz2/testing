@@ -184,8 +184,11 @@ def jamb_list():
 @login_required
 def add_jamb():
     """Add JAMB results for a student"""
-    # Only offer students who don't already have this year's JAMB result.
-    exam_year = request.args.get('year', type=int) or _date.today().year
+    # External exams are session-based: default to the active academic session's
+    # exam year (2025/2026 → 2026), not the raw calendar year.
+    exam_year = (request.args.get('year', type=int)
+                 or session_exam_year(get_active_session()) or _date.today().year)
+    # Only offer students who don't already have this session's JAMB result.
     students = students_needing_result(get_sss3_students(), JAMBResult, exam_year)
 
     if request.method == 'POST':
@@ -246,7 +249,7 @@ def add_jamb():
         students=students,
         subjects=WAEC_SUBJECTS,
         subject_map=student_subject_map(students),
-        current_year=exam_year
+        current_year=exam_year, sessions=exam_year_choices()
     )
 
 

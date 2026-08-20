@@ -735,7 +735,8 @@ def assignments_list():
                          'name': a.display_name,
                          'form_teacher': a.form_teacher_name or '',
                          'students': a.enrollments.filter_by(is_active=True).count(),
-                         'view_url': url_for('academics.view_assignment', assignment_id=a.id)}
+                         'view_url': url_for('academics.view_assignment', assignment_id=a.id),
+                         'edit_teacher_url': url_for('academics.edit_assignment_teacher', assignment_id=a.id)}
                         for a in assignments],
         'self_url': url_for('academics.assignments_list'),
         'add_url': url_for('academics.add_assignment'),
@@ -780,6 +781,21 @@ def add_assignment():
     except Exception as e:
         db.session.rollback()
         return _err(f'Error: {str(e)}', url_for('academics.assignments_list', term_id=term_id or ''))
+
+
+@academics_bp.route('/assignments/<int:assignment_id>/edit-teacher', methods=['POST'])
+@login_required
+def edit_assignment_teacher(assignment_id):
+    """Correct the form (class) teacher's name (and phone) on an existing
+    assignment — e.g. a misspelling or the wrong teacher."""
+    a = db.get_or_404(ClassArmAssignment, assignment_id)
+    from utils.branch_scope import require_branch_access
+    require_branch_access(a.branch_id)                # no cross-branch edits
+    a.form_teacher_name = (request.form.get('form_teacher', '') or '').strip() or None
+    if 'form_teacher_phone' in request.form:
+        a.form_teacher_phone = (request.form.get('form_teacher_phone', '') or '').strip() or None
+    db.session.commit()
+    return _ok('Class teacher updated.', url_for('academics.assignments_list', term_id=a.term_id))
 
 
 @academics_bp.route('/assignments/setup-all', methods=['POST'])

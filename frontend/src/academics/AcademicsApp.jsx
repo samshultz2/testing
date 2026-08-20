@@ -418,16 +418,47 @@ function Assignments({ d, notify }) {
           <div className="card-body" style={{ padding: 0 }}>
             {d.assignments.length ? (
               <div className="data-cards" style={{ padding: '1rem' }}>{d.assignments.map((a) => (
-                <div className="data-card" key={a.id}>
-                  <div className="data-card-header"><div className="data-card-title">{a.name}</div></div>
-                  <div className="data-card-row"><span className="data-card-label">Teacher</span><span>{a.form_teacher || '-'}</span></div>
-                  <div className="data-card-row"><span className="data-card-label">Students</span><span>{a.students}</span></div>
-                  <div className="data-card-actions"><a href={a.view_url} className="btn btn-secondary btn-sm w-100"><i aria-hidden="true" className="fas fa-users" /> Manage Students</a></div>
-                </div>))}</div>
+                <AssignmentCard key={a.id} a={a} notify={notify} />))}</div>
             ) : <Empty icon="fa-chalkboard" title=""><p>No class-arms set up for this term</p></Empty>}
           </div></div>
       </>)}
     </>
+  );
+}
+
+// ---- One class-arm card, with inline "edit teacher name" -------------------
+function AssignmentCard({ a, notify }) {
+  const nav = useNav();
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(a.form_teacher || '');
+  const save = async () => {
+    const r = await submitJson(a.edit_teacher_url, { form_teacher: name });
+    if (r.ok) { notify('success', r.message || 'Teacher updated.'); setEditing(false); nav.refresh(); }
+    else notify('error', r.error || 'Could not update.');
+  };
+  return (
+    <div className="data-card">
+      <div className="data-card-header"><div className="data-card-title">{a.name}</div></div>
+      <div className="data-card-row"><span className="data-card-label">Teacher</span>
+        {editing ? (
+          <span style={{ display: 'flex', gap: '.4rem', flex: 1, justifyContent: 'flex-end' }}>
+            <input type="text" className="form-control" value={name} placeholder="Teacher name"
+              autoFocus onChange={(e) => setName(e.target.value)} style={{ maxWidth: '11rem' }} />
+            <button type="button" className="btn btn-primary btn-sm" onClick={save}>Save</button>
+            <button type="button" className="btn btn-secondary btn-sm"
+              onClick={() => { setEditing(false); setName(a.form_teacher || ''); }}>Cancel</button>
+          </span>
+        ) : (
+          <span style={{ display: 'inline-flex', gap: '.5rem', alignItems: 'center' }}>
+            {a.form_teacher || '-'}
+            <button type="button" className="btn btn-link btn-sm" title="Edit teacher name"
+              onClick={() => setEditing(true)} style={{ padding: 0 }}><i aria-hidden="true" className="fas fa-pen" /></button>
+          </span>
+        )}
+      </div>
+      <div className="data-card-row"><span className="data-card-label">Students</span><span>{a.students}</span></div>
+      <div className="data-card-actions"><a href={a.view_url} className="btn btn-secondary btn-sm w-100"><i aria-hidden="true" className="fas fa-users" /> Manage Students</a></div>
+    </div>
   );
 }
 

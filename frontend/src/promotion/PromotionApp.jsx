@@ -216,8 +216,13 @@ function Process({ d, notify }) {
           <select className="form-control" value={d.to_session_id} onChange={(e) => navParams(nav.go, d.urls.self, { from_session_id: d.from_session_id, to_session_id: e.target.value, class_id: d.class_id })}>
             <option value="">Select Session</option>{d.sessions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
         <div className="form-group"><label className="form-label">Class</label>
-          <select className="form-control" value={d.class_id} onChange={(e) => navParams(nav.go, d.urls.self, { from_session_id: d.from_session_id, to_session_id: d.to_session_id, class_id: e.target.value })}>
+          <select className="form-control" value={d.class_id} onChange={(e) => navParams(nav.go, d.urls.self, { from_session_id: d.from_session_id, to_session_id: d.to_session_id, class_id: e.target.value, arm_id: '' })}>
             <option value="">Select Class</option>{d.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+        {d.class_id && (d.arm_options || []).length > 0 && (
+          <div className="form-group"><label className="form-label">Arm <span className="text-muted">(optional)</span></label>
+            <select className="form-control" value={d.arm_id} onChange={(e) => navParams(nav.go, d.urls.self, { from_session_id: d.from_session_id, to_session_id: d.to_session_id, class_id: d.class_id, arm_id: e.target.value })}>
+              <option value="">All Arms</option>{d.arm_options.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
+        )}
       </div></div></div>
 
       {d.students.length ? (<>

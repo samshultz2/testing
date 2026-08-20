@@ -191,7 +191,8 @@ def class_subjects_list():
                            for cs in class_subjects],
         'self_url': url_for('subjects.class_subjects_list'),
         'urls': {'assign': url_for('subjects.assign_class_subjects'),
-                 'copy': url_for('subjects.copy_class_subjects')},
+                 'copy': url_for('subjects.copy_class_subjects'),
+                 'bulk_teacher': url_for('subjects.bulk_teacher_class_subjects')},
     })
 
 
@@ -318,6 +319,43 @@ def edit_class_subject(cs_id):
         'submit_url': url_for('subjects.edit_class_subject', cs_id=cs.id),
         'cancel_url': url_for('subjects.class_subjects_list', term_id=cs.term_id, class_id=cs.class_id),
     })
+
+
+@subjects_bp.route('/class-subjects/bulk-teacher', methods=['POST'])
+@login_required
+def bulk_teacher_class_subjects():
+    """Apply one teacher name to many selected class-subject rows at once.
+
+    A teacher usually takes the same subject across several classes/arms, so
+    rather than editing each row, pick the rows and set the name once.
+    """
+    raw = request.form.getlist('cs_ids[]') or request.form.getlist('cs_ids')
+    ids = []
+    for r in raw:
+        for part in str(r).replace(',', ' ').split():
+            if part.isdigit():
+                ids.append(int(part))
+    ids = list(dict.fromkeys(ids))
+    teacher_name = (request.form.get('teacher_name', '') or '').strip() or None
+    term_id = request.form.get('term_id', type=int)
+    class_id = request.form.get('class_id', type=int)
+    redirect_url = url_for('subjects.class_subjects_list',
+                           term_id=term_id or '', class_id=class_id or '')
+    if not ids:
+        return _err('Select at least one subject.', redirect_url)
+    try:
+        n = (ClassSubject.query.filter(ClassSubject.id.in_(ids))
+             .update({'teacher_name': teacher_name}, synchronize_session=False))
+        db.session.commit()
+        from utils.audit import log_action
+        log_action('subject.bulk_teacher',
+                   detail=f'{n} class_subject(s) → {teacher_name or "(cleared)"}',
+                   target_type='classsubject', target_id=None)
+        who = f'"{teacher_name}"' if teacher_name else 'no teacher'
+        return _ok(f'Set {who} on {n} subject(s).', redirect_url)
+    except Exception as e:
+        db.session.rollback()
+        return _err(f'Error: {str(e)}', redirect_url)
 
 
 @subjects_bp.route('/class-subjects/<int:cs_id>/delete', methods=['POST'])

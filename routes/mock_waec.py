@@ -564,7 +564,10 @@ def _slug(subject):
 def add_result(exam_id):
     exam = db.get_or_404(MockWAECExam, exam_id)
     require_branch_access(exam.branch_id)
-    students = get_sss3_students()
+    # Don't offer students who already have a result entered for this mock.
+    entered = {sid for (sid,) in db.session.query(MockWAECResult.student_id)
+               .filter_by(mock_exam_id=exam_id).distinct()}
+    students = [s for s in get_sss3_students() if s.id not in entered]
 
     if request.method == 'POST':
         student_id = request.form.get('student_id', type=int)

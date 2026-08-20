@@ -569,6 +569,26 @@ def resolve_exam_year(requested, years):
     return years[0] if years else None
 
 
+def exam_year_choices():
+    """Session picker for external-exam entry: a list of ``(exam_year, label)``
+    newest first, where the label is the academic-session name (e.g.
+    ``(2026, "2025/2026")``). External exams are session-based — the stored
+    ``exam_year`` is the session's second year — so the UI shows sessions while
+    the value written stays the exam year, needing no data migration."""
+    from models import AcademicSession
+    seen, out = set(), []
+    for s in AcademicSession.query.order_by(AcademicSession.name.desc()).all():
+        ey = session_exam_year(s)
+        if ey and ey not in seen:
+            seen.add(ey)
+            out.append((ey, s.name))
+    # Make sure the active session's year is always offered, even with no data yet.
+    ay = session_exam_year(get_active_session())
+    if ay and ay not in seen:
+        out.insert(0, (ay, (get_active_session().name if get_active_session() else str(ay))))
+    return out
+
+
 def safe_redirect(fallback):
     """Redirect to the page the user came from, but only if it is same-origin.
 

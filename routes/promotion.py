@@ -1106,33 +1106,48 @@ def process_promotion():
     from_session_id = request.args.get('from_session_id', type=int)
     to_session_id = request.args.get('to_session_id', type=int)
     class_id = request.args.get('class_id', type=int)
-    
+    arm_id = request.args.get('arm_id', type=int)
+
     sessions = AcademicSession.query.order_by(AcademicSession.id.desc()).all()
     classes = SchoolClass.query.order_by(SchoolClass.level).all()
-    
+    # Arms present for the chosen class/term, so the UI can offer an optional
+    # arm filter for a more granular (single-stream) promotion run.
+    arm_options = []
+
     students_data = []
     from_session = None
     to_session = None
     selected_class = None
     promotion_threshold = SchoolSettings.get('promotion_threshold', 50)
-    
+
     if from_session_id and class_id:
         from_session = db.session.get(AcademicSession, from_session_id)
         to_session = db.session.get(AcademicSession, to_session_id) if to_session_id else None
         selected_class = db.session.get(SchoolClass, class_id)
-        
+
         # Get third term for the session
         third_term = Term.query.filter_by(
             session_id=from_session_id,
             term_number=3
         ).first()
-        
+
         if third_term:
-            # Get all class arm assignments for this class in the term (scoped)
-            assignments = scope_query(ClassArmAssignment.query.filter_by(
-                term_id=third_term.id,
-                class_id=class_id
-            ), ClassArmAssignment).all()
+            # Arms actually assigned for this class in the term (for the filter).
+            arm_rows = (scope_query(
+                db.session.query(ClassArm.id, ClassArm.name)
+                .join(ClassArmAssignment, ClassArmAssignment.arm_id == ClassArm.id)
+                .filter(ClassArmAssignment.term_id == third_term.id,
+                        ClassArmAssignment.class_id == class_id),
+                ClassArmAssignment).distinct().all())
+            arm_options = [{'id': aid, 'name': aname}
+                           for aid, aname in sorted(arm_rows, key=lambda r: (r[1] or ''))]
+
+            # Get all class arm assignments for this class in the term (scoped),
+            # optionally narrowed to a single arm.
+            aq = ClassArmAssignment.query.filter_by(term_id=third_term.id, class_id=class_id)
+            if arm_id:
+                aq = aq.filter_by(arm_id=arm_id)
+            assignments = scope_query(aq, ClassArmAssignment).all()
             
             for assignment in assignments:
                 # Get enrolled students
@@ -1188,7 +1203,8 @@ def process_promotion():
         'page': 'process', 'sessions': _sessions_json(), 'classes': classes_json,
         'class_streams': class_streams_json, 'streams': list(STREAMS),
         'from_session_id': from_session_id or '', 'to_session_id': to_session_id or '',
-        'class_id': class_id or '', 'threshold': promotion_threshold,
+        'class_id': class_id or '', 'arm_id': arm_id or '', 'arm_options': arm_options,
+        'threshold': promotion_threshold,
         'selected_class_name': selected_class.name if selected_class else '',
         'execute_url': url_for('promotion.execute_promotion'),
         'urls': {'self': url_for('promotion.process_promotion')},

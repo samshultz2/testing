@@ -185,11 +185,28 @@ function ClassSubjects({ d, notify }) {
   const nav = useNav();
   const [showCopy, setShowCopy] = useState(false);
   const [copyFrom, setCopyFrom] = useState('');
+  const [sel, setSel] = useState(() => new Set());
+  const [bulkName, setBulkName] = useState('');
+  const [busy, setBusy] = useState(false);
   const go = (extra) => navParams(nav.go, d.self_url, { term_id: d.term_id, class_id: d.class_id, ...extra });
   const del = async (url, name) => {
     if (!await confirm(`Remove ${name}?`)) return;
     const r = await submitJson(url, {});
     if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Could not remove.');
+  };
+  const toggleSel = (id) => setSel((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const allSelected = d.class_subjects.length > 0 && d.class_subjects.every((cs) => sel.has(cs.id));
+  const toggleAll = () => setSel(() => allSelected ? new Set() : new Set(d.class_subjects.map((cs) => cs.id)));
+  const applyBulk = async () => {
+    if (!sel.size) return;
+    const name = bulkName.trim();
+    if (!name && !await confirm(`Clear the teacher on ${sel.size} subject(s)?`)) return;
+    setBusy(true);
+    const r = await submitJson(d.urls.bulk_teacher, { term_id: d.term_id || '', class_id: d.class_id || '',
+      'cs_ids[]': [...sel], teacher_name: name });
+    setBusy(false);
+    if (r.ok) { notify('success', r.message); setSel(new Set()); setBulkName(''); nav.refresh(); }
+    else notify('error', r.error || 'Could not apply.');
   };
   const copy = async (e) => {
     e.preventDefault();
@@ -231,13 +248,37 @@ function ClassSubjects({ d, notify }) {
             <option value="">All Classes</option>{d.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
       </form></div></div>
 
+      {canWrite(d) && d.class_subjects.length > 0 && (
+        <div className="card mb-3" style={{ borderColor: 'var(--primary)' }}>
+          <div className="card-body">
+            <div className="d-flex gap-2 align-center flex-wrap">
+              <label className="d-flex gap-2 align-center mb-0" style={{ whiteSpace: 'nowrap' }}>
+                <input type="checkbox" checked={allSelected} onChange={toggleAll} />
+                <span className="text-sm">{sel.size ? `${sel.size} selected` : 'Select all'}</span>
+              </label>
+              <span className="text-muted text-sm">Set teacher on selected:</span>
+              <input type="text" className="form-control" style={{ maxWidth: 260 }} placeholder="Teacher name (blank clears)"
+                     value={bulkName} onChange={(e) => setBulkName(e.target.value)} />
+              <button type="button" className="btn btn-primary btn-sm" disabled={busy || !sel.size} onClick={applyBulk}>
+                <i aria-hidden="true" className="fas fa-user-check" /> Apply to {sel.size || 0}</button>
+              {sel.size > 0 && <button type="button" className="btn btn-secondary btn-sm" onClick={() => setSel(new Set())}>Clear</button>}
+            </div>
+            <p className="text-muted text-sm mb-0 mt-2">Tick the subjects a teacher takes, type the name once, and apply it to all of them.</p>
+          </div></div>
+      )}
+
       {d.class_subjects.length ? (
         <div className="card"><div className="card-header"><h3>Subjects ({d.class_subjects.length})</h3></div>
           <div className="card-body" style={{ padding: 0 }}>
             <div className="data-cards" style={{ padding: '1rem' }}>
               {d.class_subjects.map((cs) => (
-                <div className="data-card" key={cs.id}>
-                  <div className="data-card-header"><div className="data-card-title">{cs.subject}</div><span className="badge badge-info">{cs.class_name}</span></div>
+                <div className={`data-card${sel.has(cs.id) ? ' selected' : ''}`} key={cs.id} style={sel.has(cs.id) ? { borderColor: 'var(--primary)' } : undefined}>
+                  <div className="data-card-header">
+                    <div className="data-card-title d-flex gap-2 align-center">
+                      {canWrite(d) && <input type="checkbox" checked={sel.has(cs.id)} onChange={() => toggleSel(cs.id)} aria-label={`Select ${cs.subject}`} />}
+                      {cs.subject}
+                    </div>
+                    <span className="badge badge-info">{cs.class_name}</span></div>
                   <div className="data-card-row"><span className="data-card-label">Teacher</span><span>{cs.teacher_name || '-'}</span></div>
                   {cs.arm && <div className="data-card-row"><span className="data-card-label">Arm</span><span>{cs.arm}</span></div>}
                   {canWrite(d) && <div className="data-card-actions">
