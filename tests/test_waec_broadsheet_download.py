@@ -32,6 +32,25 @@ def test_abbreviate_subjects_known_and_unique():
     assert len(set(codes2)) == 2
 
 
+def test_combo_png_pages_are_a4_and_paginate():
+    from utils.broadsheet_export import combo_png_pages, zip_pngs
+    from PIL import Image
+    import io
+    headers = ['S/N', 'Student', 'MTH', 'ENG', 'Avg']
+    rows = [[str(i), 'Student %d' % i, 'B2', 'A1', '78'] for i in range(1, 61)]
+    pages = combo_png_pages(headers, rows, 'Broadsheet', 'sub')
+    assert len(pages) >= 2                                  # 60 rows overflow one A4
+    im = Image.open(io.BytesIO(pages[0]))
+    assert im.size == (1754, 1240)                          # landscape A4 @ 150 DPI
+    assert all(p[:4] == b'\x89PNG' for p in pages)
+    z = zip_pngs(pages, 'bs')
+    assert z[:2] == b'PK'                                    # valid zip archive
+
+    # A short table stays a single page.
+    one = combo_png_pages(headers, rows[:5], 'Broadsheet', 'sub')
+    assert len(one) == 1
+
+
 def test_download_formats_and_stream_filter(app):
     ids = _seed(app)
     c = app.test_client()
@@ -40,9 +59,10 @@ def test_download_formats_and_stream_filter(app):
     # PDF
     r = c.get('/results/waec/broadsheet/download', query_string={'year': 2031, 'format': 'pdf'})
     assert r.status_code == 200 and r.data[:4] == b'%PDF'
-    # Image (PNG)
+    # Image (PNG) — per-page, with a total-pages header for the client loop.
     r = c.get('/results/waec/broadsheet/download', query_string={'year': 2031, 'format': 'image'})
     assert r.status_code == 200 and r.data[:8] == b'\x89PNG\r\n\x1a\n'
+    assert int(r.headers.get('X-Total-Pages', '1')) >= 1
     # CSV limited to Science stream → only the science student's row present.
     r = c.get('/results/waec/broadsheet/download',
               query_string={'year': 2031, 'format': 'csv', 'streams': 'Science'})

@@ -1175,9 +1175,13 @@ def waec_broadsheet_download():
     codes, legend = bx.abbreviate_subjects(subjects)
     headers = ['S/N', 'Student'] + codes + ['Cred', 'Avg']
     if fmt in ('image', 'png'):
-        data = bx.combo_png(headers, full_rows, title, subtitle, legend=legend)
-        return Response(data, mimetype='image/png', headers={
-            'Content-Disposition': f'attachment; filename="waec_broadsheet_{year}.png"'})
+        pages = bx.combo_png_pages(headers, full_rows, title, subtitle, legend=legend)
+        page = request.args.get('page', type=int) or 1
+        page = max(1, min(page, len(pages)))
+        suffix = '' if len(pages) == 1 else f'_p{page}'
+        return Response(pages[page - 1], mimetype='image/png', headers={
+            'Content-Disposition': f'attachment; filename="waec_broadsheet_{year}{suffix}.png"',
+            'X-Total-Pages': str(len(pages)), 'Access-Control-Expose-Headers': 'X-Total-Pages'})
     data = bx.combo_pdf(headers, full_rows, title, subtitle, numeric_from=2, legend=legend)
     return Response(data, mimetype='application/pdf', headers={
         'Content-Disposition': f'attachment; filename="waec_broadsheet_{year}.pdf"'})

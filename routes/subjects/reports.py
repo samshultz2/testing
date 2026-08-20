@@ -661,9 +661,13 @@ def combine_export():
     from utils import broadsheet_export as bx
     from flask import Response
     if fmt in ('image', 'png'):
-        data = bx.combo_png(headers, data_rows, title, subtitle)
-        return Response(data, mimetype='image/png', headers={
-            'Content-Disposition': 'attachment; filename="subject_combination.png"'})
+        pages = bx.combo_png_pages(headers, data_rows, title, subtitle)
+        page = request.args.get('page', type=int) or 1
+        page = max(1, min(page, len(pages)))
+        suffix = '' if len(pages) == 1 else f'_p{page}'
+        return Response(pages[page - 1], mimetype='image/png', headers={
+            'Content-Disposition': f'attachment; filename="subject_combination{suffix}.png"',
+            'X-Total-Pages': str(len(pages)), 'Access-Control-Expose-Headers': 'X-Total-Pages'})
     if fmt in ('excel', 'xlsx'):
         wb = bx.combo_xlsx(headers, data_rows, title, subtitle)
         return xlsx_response(wb, 'subject_combination.xlsx')

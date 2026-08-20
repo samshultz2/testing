@@ -172,6 +172,24 @@ def _theme():
     return HexColor('#0D6A4E'), HexColor('#C9A227'), HexColor('#F4F7F5'), HexColor('#14211C')
 
 
+def _neutral():
+    """A professional, brand-neutral slate palette for the generic table exports
+    (combination / broadsheet downloads) — no green. Returns
+    (header, accent, zebra, ink)."""
+    from reportlab.lib.colors import HexColor
+    return HexColor('#334155'), HexColor('#64748B'), HexColor('#F1F5F9'), HexColor('#0F172A')
+
+# Neutral RGB tuples for the Pillow (image) exports.
+_NEUTRAL_RGB = {
+    'header': (51, 65, 85),      # slate-700
+    'text': (15, 23, 42),        # slate-900
+    'muted': (100, 116, 139),    # slate-500
+    'zebra': (241, 245, 249),    # slate-100
+    'line': (203, 213, 225),     # slate-300
+    'white': (255, 255, 255),
+}
+
+
 def broadsheet_pdf(term_id, assignment_id, mono=True, min_score=None, filter_field=None):
     """Filled broadsheet as a PDF.
 
@@ -820,19 +838,21 @@ def combo_pdf(headers, data_rows, title, subtitle='', numeric_from=1, legend=Non
     from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer)
     from utils.web_exports import pdf_escape
 
-    primary, accent, light, ink = _theme()
+    primary, accent, light, ink = _neutral()
     styles = getSampleStyleSheet()
     ncol = len(headers)
     # Scale the body font to the column count so a slim table (short codes) is
     # printed large and legible, and a very wide one still fits A4.
-    if ncol <= 10:
-        fs = 11
+    if ncol <= 8:
+        fs = 13
+    elif ncol <= 10:
+        fs = 12
     elif ncol <= 14:
-        fs = 10
+        fs = 11
     elif ncol <= 18:
-        fs = 9
+        fs = 9.5
     else:
-        fs = 8
+        fs = 8.5
     h = ParagraphStyle('h', parent=styles['Title'], fontSize=15, textColor=primary, spaceAfter=2)
     sub = ParagraphStyle('sub', parent=styles['Normal'], fontSize=9.5, textColor=colors.HexColor('#6B7A74'))
     cell = ParagraphStyle('c', parent=styles['Normal'], fontSize=fs, leading=fs + 1.5)
@@ -895,109 +915,169 @@ def combo_pdf(headers, data_rows, title, subtitle='', numeric_from=1, legend=Non
     return buf.getvalue()
 
 
-def combo_png(headers, data_rows, title, subtitle='', legend=None):
-    """High-resolution PNG of an arbitrary table, brand-styled to match the
-    students-list image export. ``legend`` (list of (code, full)) prints a key
-    line beneath the table when subject names were abbreviated."""
+def combo_png_pages(headers, data_rows, title, subtitle='', legend=None):
+    """Render an arbitrary table as one or more **landscape-A4** PNG pages
+    (neutral slate styling, no green). Columns are scaled to fit the A4 width and
+    the body font grows to suit; rows that don't fit an A4 page overflow onto
+    further pages, so a long list downloads as several equal A4 images. Returns a
+    list of PNG byte strings (one per page)."""
     from PIL import Image, ImageDraw, ImageFont
-    S = 3
+    S = 2                                   # supersample, downscaled on save
+    DPI = 150
+    PW = int(round(297 / 25.4 * DPI))       # landscape-A4 width  px (~1754)
+    PH = int(round(210 / 25.4 * DPI))       # landscape-A4 height px (~1240)
+    C = _NEUTRAL_RGB
+    ncol = len(headers)
 
     def fnt(size, bold=False):
         path = "/usr/share/fonts/truetype/dejavu/DejaVuSans%s.ttf" % ("-Bold" if bold else "")
         try:
-            return ImageFont.truetype(path, size * S)
+            return ImageFont.truetype(path, int(size * S))
         except Exception:
             return ImageFont.load_default()
 
-    body, body_b = fnt(14), fnt(14, True)
-    title_f, sub_f, key_f = fnt(22, True), fnt(12), fnt(11)
-    GREEN, HEAD, TEXT, MUTED = (13, 106, 78), (10, 86, 64), (31, 41, 55), (107, 114, 128)
-    ZEBRA, LINE, WHITE = (249, 250, 251), (229, 231, 235), (255, 255, 255)
+    # Body font scales with the column count so slim tables print large.
+    if ncol <= 8:
+        fs = 22
+    elif ncol <= 10:
+        fs = 20
+    elif ncol <= 14:
+        fs = 17
+    elif ncol <= 18:
+        fs = 15
+    else:
+        fs = 13
+    body, body_b = fnt(fs), fnt(fs, True)
+    title_f, sub_f, key_f = fnt(26, True), fnt(14), fnt(13)
 
     tmp = ImageDraw.Draw(Image.new('RGB', (1, 1)))
 
     def tw(text, f):
         b = tmp.textbbox((0, 0), str(text), font=f); return b[2] - b[0]
 
-    pad, cpx, cpy = 26 * S, 12 * S, 9 * S
-    ncol = len(headers)
-    # Column widths: fit content, within bounds.
+    def fit(text, f, maxw):
+        text = str(text)
+        if tw(text, f) <= maxw:
+            return text
+        while text and tw(text + '…', f) > maxw:
+            text = text[:-1]
+        return (text + '…') if text else ''
+
+    margin = 34 * S
+    avail = PW * S - 2 * margin
+    # S/N narrow, Student wide, the rest share the remainder (fit A4 width).
+    sn_w = int(38 * S) if ncol > 1 else 0
+    name_w = int(min(240 * S, max(150 * S, avail * 0.20)))
+    rest = max(ncol - 2, 1)
+    other_w = (avail - sn_w - name_w) / rest
     col_w = []
     for j in range(ncol):
-        w = tw(headers[j], body_b)
-        for r in data_rows:
-            w = max(w, tw(r[j] if j < len(r) else '', body))
-        col_w.append(min(max(w + 2 * cpx, 40 * S), 300 * S))
-    line_bbox = tmp.textbbox((0, 0), "Ay", font=body)
-    row_h = (line_bbox[3] - line_bbox[1]) + 2 * cpy
-    header_h = row_h + 4 * S
-
+        col_w.append(sn_w if (j == 0 and ncol > 1) else name_w if j == 1 else other_w)
     table_w = sum(col_w)
-    title_h = 40 * S + (24 * S if subtitle else 0)
-    width = int(table_w + 2 * pad)
-    width = max(width, 420 * S)
+
+    cpx, cpy = int(8 * S), int(6 * S)
+    line_h = tmp.textbbox((0, 0), "Ay", font=body)[3]
+    row_h = line_h + 2 * cpy
+    header_h = row_h + int(4 * S)
+    title_h = int(34 * S) + (int(22 * S) if subtitle else 0)
+
+    top = margin + title_h
+    bottom_reserve = margin + int(24 * S)          # page footer
+    rows_area = PH * S - top - header_h - bottom_reserve
+    per_page = max(1, int(rows_area // row_h))
 
     # Legend ("Key: LIT = Literature …") wrapped to the table width.
     key_lines = []
     if legend:
         line = 'Key:  '
-        for c, f in legend:
-            piece = '%s = %s' % (c, f)
-            trial = line + piece + '    '
-            if tw(trial, key_f) > table_w and line not in ('Key:  ',):
-                key_lines.append(line.rstrip())
-                line = piece + '    '
+        for code, full in legend:
+            piece = '%s = %s' % (code, full)
+            trial = line + piece + '     '
+            if tw(trial, key_f) > table_w and line != 'Key:  ':
+                key_lines.append(line.rstrip()); line = piece + '     '
             else:
                 line = trial
         if line.strip():
             key_lines.append(line.rstrip())
-    key_line_h = (tmp.textbbox((0, 0), "Ay", font=key_f)[3] + 4 * S)
-    legend_h = (len(key_lines) * key_line_h + 8 * S) if key_lines else 0
-    height = int(title_h + header_h + row_h * len(data_rows) + legend_h + 2 * pad)
+    key_line_h = tmp.textbbox((0, 0), "Ay", font=key_f)[3] + int(5 * S)
 
-    img = Image.new('RGB', (width, height), WHITE)
-    d = ImageDraw.Draw(img)
-    d.text((pad, pad), title or 'Results', fill=GREEN, font=title_f)
-    if subtitle:
-        d.text((pad, pad + 26 * S), subtitle, fill=MUTED, font=sub_f)
+    chunks = [data_rows[i:i + per_page] for i in range(0, len(data_rows), per_page)] or [[]]
+    n_pages = len(chunks)
+    pages = []
+    for pi, chunk in enumerate(chunks):
+        img = Image.new('RGB', (PW * S, PH * S), C['white'])
+        d = ImageDraw.Draw(img)
+        d.text((margin, margin), title or 'Results', fill=C['header'], font=title_f)
+        if subtitle:
+            d.text((margin, margin + int(30 * S)), fit(subtitle, sub_f, avail), fill=C['muted'], font=sub_f)
 
-    y0 = pad + title_h
-    # Header band
-    d.rectangle([pad, y0, pad + table_w, y0 + header_h], fill=HEAD)
-    x = pad
-    for j in range(ncol):
-        d.text((x + cpx, y0 + (header_h - (line_bbox[3] - line_bbox[1])) // 2 - 2 * S),
-               str(headers[j]), fill=WHITE, font=body_b)
-        x += col_w[j]
-    # Rows
-    y = y0 + header_h
-    for i, r in enumerate(data_rows):
-        if i % 2:
-            d.rectangle([pad, y, pad + table_w, y + row_h], fill=ZEBRA)
-        x = pad
+        y0 = top
+        d.rectangle([margin, y0, margin + table_w, y0 + header_h], fill=C['header'])
+        x = margin
         for j in range(ncol):
-            val = str(r[j]) if j < len(r) else ''
-            d.text((x + cpx, y + cpy - 2 * S), val, fill=TEXT, font=body)
+            d.text((x + cpx, y0 + (header_h - line_h) // 2), fit(headers[j], body_b, col_w[j] - 2 * cpx),
+                   fill=C['white'], font=body_b)
             x += col_w[j]
-        d.line([pad, y, pad + table_w, y], fill=LINE, width=1)
-        y += row_h
-    # Outer border + column separators
-    d.rectangle([pad, y0, pad + table_w, y], outline=LINE, width=1)
-    x = pad
-    for j in range(ncol - 1):
-        x += col_w[j]
-        d.line([x, y0, x, y], fill=LINE, width=1)
+        y = y0 + header_h
+        for i, r in enumerate(chunk):
+            if i % 2:
+                d.rectangle([margin, y, margin + table_w, y + row_h], fill=C['zebra'])
+            x = margin
+            for j in range(ncol):
+                val = str(r[j]) if j < len(r) else ''
+                align_left = (j <= 1)
+                txt = fit(val, body, col_w[j] - 2 * cpx)
+                tx = x + cpx if align_left else x + (col_w[j] - tw(txt, body)) / 2
+                d.text((tx, y + cpy), txt, fill=C['text'], font=body)
+                x += col_w[j]
+            d.line([margin, y, margin + table_w, y], fill=C['line'], width=1)
+            y += row_h
+        d.rectangle([margin, y0, margin + table_w, y], outline=C['line'], width=1)
+        x = margin
+        for j in range(ncol - 1):
+            x += col_w[j]
+            d.line([x, y0, x, y], fill=C['line'], width=1)
 
-    # Legend / key beneath the table.
-    ky = y + 8 * S
-    for kl in key_lines:
-        d.text((pad, ky), kl, fill=MUTED, font=key_f)
-        ky += key_line_h
+        # Legend on the last page if it fits; otherwise it gets its own page below.
+        if pi == n_pages - 1 and key_lines and (y + int(10 * S) + len(key_lines) * key_line_h) < PH * S - margin:
+            ky = y + int(10 * S)
+            for kl in key_lines:
+                d.text((margin, ky), kl, fill=C['muted'], font=key_f); ky += key_line_h
+            key_lines = []
 
-    out = io.BytesIO()
-    img = img.resize((width // S, height // S), Image.LANCZOS)
-    img.save(out, format='PNG'); out.seek(0)
-    return out.getvalue()
+        d.text((PW * S - margin - int(160 * S), PH * S - margin), 'Page %d of %d' % (pi + 1, n_pages),
+               fill=C['muted'], font=key_f)
+        out = io.BytesIO()
+        img.resize((PW, PH), Image.LANCZOS).save(out, format='PNG')
+        pages.append(out.getvalue())
+
+    # Legend didn't fit on the last data page — render it on a trailing A4 page.
+    if key_lines:
+        img = Image.new('RGB', (PW * S, PH * S), C['white'])
+        d = ImageDraw.Draw(img)
+        d.text((margin, margin), 'Key', fill=C['header'], font=title_f)
+        ky = margin + int(40 * S)
+        for kl in key_lines:
+            d.text((margin, ky), kl, fill=C['text'], font=key_f); ky += key_line_h
+        out = io.BytesIO()
+        img.resize((PW, PH), Image.LANCZOS).save(out, format='PNG')
+        pages.append(out.getvalue())
+    return pages
+
+
+def combo_png(headers, data_rows, title, subtitle='', legend=None):
+    """Backward-compatible single-image export — the first A4 page."""
+    return combo_png_pages(headers, data_rows, title, subtitle, legend=legend)[0]
+
+
+def zip_pngs(pages, base='page'):
+    """Bundle a list of PNG byte strings into a zip archive (bytes)."""
+    import zipfile
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, 'w', zipfile.ZIP_DEFLATED) as zf:
+        for i, data in enumerate(pages, 1):
+            zf.writestr('%s_page_%d.png' % (base, i), data)
+    return buf.getvalue()
 
 
 def combo_xlsx(headers, data_rows, title, subtitle=''):

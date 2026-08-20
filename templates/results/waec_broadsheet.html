@@ -215,13 +215,36 @@
   }
   document.querySelectorAll('.bs-stream').forEach(function (b) {
     b.addEventListener('change', syncSubjectsToStreams); });
+  function saveBlob(blob, name) {
+    var u = URL.createObjectURL(blob);
+    var a = document.createElement('a'); a.href = u; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(u); }, 4000);
+  }
+  // Images can span several A4 pages — fetch and save each page as its own file.
+  function downloadImages(url) {
+    var page = 1;
+    function next() {
+      fetch(url + '&page=' + page, { credentials: 'same-origin' }).then(function (res) {
+        var total = parseInt(res.headers.get('X-Total-Pages') || '1', 10) || 1;
+        return res.blob().then(function (blob) {
+          saveBlob(blob, total > 1 ? 'waec_broadsheet_p' + page + '.png' : 'waec_broadsheet.png');
+          page += 1;
+          if (page <= total) setTimeout(next, 400);
+        });
+      });
+    }
+    next();
+  }
   modal.querySelectorAll('[data-fmt]').forEach(function (btn) {
     btn.addEventListener('click', function () {
+      var fmt = btn.getAttribute('data-fmt');
       var p = new URLSearchParams();
-      p.set('format', btn.getAttribute('data-fmt'));
+      p.set('format', fmt);
       var streams = picked('bs-stream'); if (streams.length) p.set('streams', streams.join(','));
       var subs = picked('bs-subj'); if (subs.length) p.set('subjects', subs.join(','));
-      window.location.href = base + (base.indexOf('?') > -1 ? '&' : '?') + p.toString();
+      var url = base + (base.indexOf('?') > -1 ? '&' : '?') + p.toString();
+      if (fmt === 'image') { downloadImages(url); } else { window.location.href = url; }
       hide();
     });
   });

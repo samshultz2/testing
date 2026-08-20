@@ -2111,8 +2111,28 @@ function Combine({ d, notify }) {
     p.set('format', fmt);
     return `${d.urls.export}?${p.toString()}`;
   };
+  const saveBlob = (blob, name) => {
+    const u = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = u; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(u), 4000);
+  };
+  // Images can span several A4 pages; download each page as its own file.
+  const downloadImages = async (url) => {
+    let page = 1, total = 1;
+    do {
+      const res = await fetch(url + '&page=' + page, { credentials: 'same-origin' });
+      if (!res.ok) { notify('error', 'Could not generate the image.'); return; }
+      total = parseInt(res.headers.get('X-Total-Pages') || '1', 10) || 1;
+      const blob = await res.blob();
+      saveBlob(blob, total > 1 ? `subject_combination_p${page}.png` : 'subject_combination.png');
+      page += 1;
+    } while (page <= total);
+    if (total > 1) notify('success', `Downloaded ${total} image pages.`);
+  };
   const doExport = (fmt) => {
     if (!chosen.length) { notify('error', 'Pick at least one subject to combine.'); return; }
+    if (fmt === 'image') { downloadImages(exportUrl(fmt)); setShowExport(false); return; }
     window.location.href = exportUrl(fmt);
     setShowExport(false);
   };
