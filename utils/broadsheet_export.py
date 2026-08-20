@@ -747,3 +747,179 @@ def explore_pdf(subjects, scope_meta, rows, term_name, pass_mark=50, filter_labe
     elems += [Paragraph(f'Students ({len(rows)})', h3), st]
     doc.build(elems)
     return buf.getvalue()
+
+
+# --------------------------------------------------------------------------- #
+# Generic, column-selectable table export (Combination Explorer)
+# Used by the subject-combination results tool: the caller decides the exact
+# columns (student, per-subject scores, combined total/average, …) and rows,
+# and picks the format. One code path → PDF, PNG and Excel stay identical.
+# --------------------------------------------------------------------------- #
+
+def combo_pdf(headers, data_rows, title, subtitle='', numeric_from=1):
+    """Print-ready PDF of an arbitrary table (landscape A4). ``headers`` is a
+    list of column titles; ``data_rows`` a list of equal-length string rows;
+    ``numeric_from`` is the first column index to centre (names stay left)."""
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.units import mm
+    from reportlab.lib import colors
+    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer)
+    from utils.web_exports import pdf_escape
+
+    primary, accent, light, ink = _theme()
+    styles = getSampleStyleSheet()
+    h = ParagraphStyle('h', parent=styles['Title'], fontSize=15, textColor=primary, spaceAfter=2)
+    sub = ParagraphStyle('sub', parent=styles['Normal'], fontSize=9.5, textColor=colors.HexColor('#6B7A74'))
+    cell = ParagraphStyle('c', parent=styles['Normal'], fontSize=7.6, leading=9)
+    headp = ParagraphStyle('hp', parent=styles['Normal'], fontSize=7.8, leading=9,
+                           textColor=colors.white, fontName='Helvetica-Bold')
+
+    buf = io.BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=landscape(A4), topMargin=10 * mm, bottomMargin=10 * mm,
+                            leftMargin=8 * mm, rightMargin=8 * mm, title=title or 'Results')
+    avail = landscape(A4)[0] - 16 * mm
+
+    elems = [Paragraph(pdf_escape(_school_name()), h)]
+    if subtitle:
+        elems.append(Paragraph(pdf_escape(subtitle), sub))
+    elems.append(Spacer(1, 5))
+
+    head = [Paragraph(pdf_escape(str(x)), headp) for x in headers]
+    data = [head]
+    for r in data_rows:
+        line = []
+        for j, v in enumerate(r):
+            if j == 0 or (numeric_from is not None and j < numeric_from):
+                line.append(Paragraph(pdf_escape(str(v)), cell))
+            else:
+                line.append(str(v))
+        data.append(line)
+
+    ncol = len(headers)
+    # First column (S/N) narrow, second (name) wide, the rest share the remainder.
+    name_w = 42 * mm
+    sn_w = 9 * mm if ncol > 1 else 0
+    rest = max(ncol - 2, 1)
+    other_w = max(12 * mm, (avail - name_w - sn_w) / rest)
+    widths = []
+    for j in range(ncol):
+        if j == 0 and ncol > 1:
+            widths.append(sn_w)
+        elif j == 1:
+            widths.append(name_w)
+        else:
+            widths.append(other_w)
+    t = Table(data, colWidths=widths, repeatRows=1)
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), primary), ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('FONTSIZE', (0, 0), (-1, -1), 7.6),
+        ('ALIGN', (max(numeric_from, 1), 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#D5DED9')),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, light]),
+        ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3)]))
+    elems.append(t)
+    doc.build(elems)
+    return buf.getvalue()
+
+
+def combo_png(headers, data_rows, title, subtitle=''):
+    """High-resolution PNG of an arbitrary table, brand-styled to match the
+    students-list image export."""
+    from PIL import Image, ImageDraw, ImageFont
+    S = 3
+
+    def fnt(size, bold=False):
+        path = "/usr/share/fonts/truetype/dejavu/DejaVuSans%s.ttf" % ("-Bold" if bold else "")
+        try:
+            return ImageFont.truetype(path, size * S)
+        except Exception:
+            return ImageFont.load_default()
+
+    body, body_b = fnt(11), fnt(11, True)
+    title_f, sub_f = fnt(20, True), fnt(11)
+    GREEN, HEAD, TEXT, MUTED = (13, 106, 78), (10, 86, 64), (31, 41, 55), (107, 114, 128)
+    ZEBRA, LINE, WHITE = (249, 250, 251), (229, 231, 235), (255, 255, 255)
+
+    tmp = ImageDraw.Draw(Image.new('RGB', (1, 1)))
+
+    def tw(text, f):
+        b = tmp.textbbox((0, 0), str(text), font=f); return b[2] - b[0]
+
+    pad, cpx, cpy = 26 * S, 12 * S, 9 * S
+    ncol = len(headers)
+    # Column widths: fit content, within bounds.
+    col_w = []
+    for j in range(ncol):
+        w = tw(headers[j], body_b)
+        for r in data_rows:
+            w = max(w, tw(r[j] if j < len(r) else '', body))
+        col_w.append(min(max(w + 2 * cpx, 40 * S), 300 * S))
+    line_bbox = tmp.textbbox((0, 0), "Ay", font=body)
+    row_h = (line_bbox[3] - line_bbox[1]) + 2 * cpy
+    header_h = row_h + 4 * S
+
+    table_w = sum(col_w)
+    title_h = 40 * S + (24 * S if subtitle else 0)
+    width = int(table_w + 2 * pad)
+    height = int(title_h + header_h + row_h * len(data_rows) + 2 * pad)
+    width = max(width, 420 * S)
+
+    img = Image.new('RGB', (width, height), WHITE)
+    d = ImageDraw.Draw(img)
+    d.text((pad, pad), title or 'Results', fill=GREEN, font=title_f)
+    if subtitle:
+        d.text((pad, pad + 26 * S), subtitle, fill=MUTED, font=sub_f)
+
+    y0 = pad + title_h
+    # Header band
+    d.rectangle([pad, y0, pad + table_w, y0 + header_h], fill=HEAD)
+    x = pad
+    for j in range(ncol):
+        d.text((x + cpx, y0 + (header_h - (line_bbox[3] - line_bbox[1])) // 2 - 2 * S),
+               str(headers[j]), fill=WHITE, font=body_b)
+        x += col_w[j]
+    # Rows
+    y = y0 + header_h
+    for i, r in enumerate(data_rows):
+        if i % 2:
+            d.rectangle([pad, y, pad + table_w, y + row_h], fill=ZEBRA)
+        x = pad
+        for j in range(ncol):
+            val = str(r[j]) if j < len(r) else ''
+            d.text((x + cpx, y + cpy - 2 * S), val, fill=TEXT, font=body)
+            x += col_w[j]
+        d.line([pad, y, pad + table_w, y], fill=LINE, width=1)
+        y += row_h
+    # Outer border + column separators
+    d.rectangle([pad, y0, pad + table_w, y], outline=LINE, width=1)
+    x = pad
+    for j in range(ncol - 1):
+        x += col_w[j]
+        d.line([x, y0, x, y], fill=LINE, width=1)
+
+    out = io.BytesIO()
+    img = img.resize((width // S, height // S), Image.LANCZOS)
+    img.save(out, format='PNG'); out.seek(0)
+    return out.getvalue()
+
+
+def combo_xlsx(headers, data_rows, title, subtitle=''):
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment, PatternFill
+    wb = Workbook(); ws = wb.active; ws.title = 'Combination'
+    if subtitle:
+        ws.append([subtitle]); ws.append([])
+    ws.append(list(headers))
+    hrow = ws.max_row
+    hf, fill, ctr = Font(bold=True, color='FFFFFF'), PatternFill('solid', fgColor='0D6A4E'), Alignment(horizontal='center')
+    for c in range(1, len(headers) + 1):
+        cell = ws.cell(row=hrow, column=c); cell.font = hf; cell.fill = fill; cell.alignment = ctr
+    for r in data_rows:
+        ws.append(list(r))
+    ws.freeze_panes = ws.cell(row=hrow + 1, column=1)
+    for col in ws.columns:
+        width = max((len(str(c.value)) for c in col if c.value is not None), default=8)
+        ws.column_dimensions[col[0].column_letter].width = min(max(width + 2, 8), 34)
+    return wb

@@ -339,6 +339,7 @@ def broadsheet_explore():
         'rows': ds['rows'], 'pass_mark': ds['pass_mark'],
         'self_url': url_for('subjects.broadsheet_explore'),
         'urls': {'broadsheet': url_for('subjects.broadsheet', term_id=term_id or ''),
+                 'combine': url_for('subjects.broadsheet_combine', term_id=term_id or ''),
                  'export': url_for('subjects.export_explore')},
     })
 
@@ -382,6 +383,200 @@ def export_explore():
     wb = bx.explore_xlsx(ds['subjects'], ds['scope_meta'], rows, term_name,
                          pass_mark=ds['pass_mark'], filter_label=filter_label)
     return xlsx_response(wb, 'results_explorer.xlsx')
+
+
+def _combine_rows(ds, subject_ids, metric, op, value):
+    """Compute a combined total/average over just the chosen subjects for each
+    student, then filter by the condition. Missing subject scores count as 0 and
+    the average divides by the number of chosen subjects (matches the literal
+    '(a+b+c)/3'). Returns (rows, active, label)."""
+    sids = [str(s) for s in subject_ids]
+    n = len(sids)
+    out = []
+    for r in ds['rows']:
+        present = [r['subjects'].get(s) for s in sids]
+        got = [p for p in present if p is not None]
+        total = round(sum(got), 1)
+        avg = round(total / n, 2) if n else 0
+        row = dict(r)
+        row['combo_total'] = total
+        row['combo_average'] = avg
+        row['combo_missing'] = n - len(got)
+        out.append(row)
+
+    active = value is not None and n > 0
+    if active:
+        key = 'combo_average' if metric == 'average' else 'combo_total'
+
+        def ok(r):
+            x = r[key]
+            if op == 'gte':
+                return x >= value
+            if op == 'lte':
+                return x <= value
+            if op == 'eq':
+                return x == value
+            return True
+        out = [r for r in out if ok(r)]
+
+    op_text = {'gte': '≥', 'lte': '≤', 'eq': '='}.get(op, '')
+    metric_text = 'Average' if metric == 'average' else 'Total'
+    label = f'{metric_text} {op_text} {value:g}' if active else ''
+    # Sort by the combined metric, best first.
+    out.sort(key=lambda r: (r['combo_average'] if metric == 'average' else r['combo_total']), reverse=True)
+    return out, active, label
+
+
+@subjects_bp.route('/broadsheet/combine')
+@login_required
+def broadsheet_combine():
+    """Subject-combination explorer: pick any set of subjects and filter students
+    by their combined total/average across just those subjects."""
+    term_id = request.args.get('term_id', type=int)
+    if not term_id:
+        active_term = get_active_term()
+        if active_term:
+            term_id = active_term.id
+    ds = _explore_dataset(term_id, _explore_scope_ids())
+    terms = session_terms()
+    return _render({
+        'page': 'combine', 'nav': _nav_urls(),
+        'term_id': term_id or '', 'scopes': ds['selected_ids'],
+        'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
+        'scope_options': ds['scope_options'],
+        'scope_meta': ds['scope_meta'],
+        'subjects_union': ds['subjects'],
+        'rows': ds['rows'], 'pass_mark': ds['pass_mark'],
+        'self_url': url_for('subjects.broadsheet_combine'),
+        'urls': {'broadsheet': url_for('subjects.broadsheet', term_id=term_id or ''),
+                 'explore': url_for('subjects.broadsheet_explore', term_id=term_id or ''),
+                 'export': url_for('subjects.combine_export')},
+    })
+
+
+@subjects_bp.route('/broadsheet/combine/export')
+@login_required
+def combine_export():
+    """Export the subject-combination view (pdf | image | excel | csv) with a
+    caller-chosen column set. Params mirror the on-screen tool so the file
+    matches exactly what the user sees."""
+    term_id = request.args.get('term_id', type=int)
+    if not term_id:
+        active_term = get_active_term()
+        if active_term:
+            term_id = active_term.id
+    ds = _explore_dataset(term_id, _explore_scope_ids())
+
+    subj_raw = request.args.get('subjects', '') or ''
+    subject_ids = [x for x in subj_raw.replace(' ', '').split(',') if x.isdigit()]
+    subj_lookup = {str(s['id']): s for s in ds['subjects']}
+    chosen_subjects = [subj_lookup[s] for s in subject_ids if s in subj_lookup]
+
+    metric = request.args.get('metric', 'total')
+    op = request.args.get('op', 'gte')
+    value = request.args.get('value', type=float)
+    rows, active, cond = _combine_rows(ds, subject_ids, metric, op, value)
+
+    if not chosen_subjects:
+        flash('Pick at least one subject to combine before exporting.', 'error')
+        return redirect(url_for('subjects.broadsheet_combine', term_id=term_id or '',
+                                scopes=','.join(str(i) for i in ds['selected_ids'])))
+
+    # Column selection from the modal. Keys: sn, student, class, arm,
+    # gender is not carried; subj:<id>, total, average, missing.
+    cols_raw = request.args.get('columns', '') or ''
+    keys = [k for k in cols_raw.split(',') if k]
+    if not keys:
+        keys = ['sn', 'student', 'class', 'arm'] + [f'subj:{s["id"]}' for s in chosen_subjects] + ['total', 'average']
+
+    def header_for(k):
+        if k == 'sn':
+            return 'S/N'
+        if k == 'student':
+            return 'Student'
+        if k == 'class':
+            return 'Class'
+        if k == 'arm':
+            return 'Arm'
+        if k == 'total':
+            return 'Combined total'
+        if k == 'average':
+            return 'Combined average'
+        if k == 'missing':
+            return 'Missing'
+        if k.startswith('subj:'):
+            s = subj_lookup.get(k.split(':', 1)[1])
+            return s['name'] if s else k
+        return k
+
+    from utils.numfmt import fmt_num as _n
+
+    def value_for(k, r, i):
+        if k == 'sn':
+            return str(i)
+        if k == 'student':
+            return r['student']
+        if k == 'class':
+            return r['class_name']
+        if k == 'arm':
+            return r['arm_name']
+        if k == 'total':
+            return _n(r['combo_total'])
+        if k == 'average':
+            return _n(r['combo_average'])
+        if k == 'missing':
+            return str(r['combo_missing'])
+        if k.startswith('subj:'):
+            v = r['subjects'].get(k.split(':', 1)[1])
+            return _n(v) if v is not None else '–'
+        return ''
+
+    headers = [header_for(k) for k in keys]
+    data_rows = [[value_for(k, r, i) for k in keys] for i, r in enumerate(rows, 1)]
+
+    term = db.session.get(Term, term_id) if term_id else None
+    scope_names = ', '.join(m['label'] for m in ds['scope_meta']) or '—'
+    subj_names = ', '.join(s['name'] for s in chosen_subjects)
+    bits = [subj_names, scope_names]
+    if term:
+        bits.append(term.full_name)
+    if active:
+        bits.append('Filter: ' + cond)
+    subtitle = 'Subject Combination · ' + ' · '.join(bits)
+    title = 'Subject Combination Results'
+
+    fmt = (request.args.get('format') or 'pdf').lower()
+    from utils import broadsheet_export as bx
+    from flask import Response
+    if fmt in ('image', 'png'):
+        data = bx.combo_png(headers, data_rows, title, subtitle)
+        return Response(data, mimetype='image/png', headers={
+            'Content-Disposition': 'attachment; filename="subject_combination.png"'})
+    if fmt in ('excel', 'xlsx'):
+        wb = bx.combo_xlsx(headers, data_rows, title, subtitle)
+        return xlsx_response(wb, 'subject_combination.xlsx')
+    if fmt == 'csv':
+        import csv as _csv
+        from io import StringIO
+        buf = StringIO(); w = _csv.writer(buf); w.writerow(headers)
+        for dr in data_rows:
+            w.writerow(dr)
+        return Response(buf.getvalue(), mimetype='text/csv', headers={
+            'Content-Disposition': 'attachment; filename="subject_combination.csv"'})
+    data = bx.combo_pdf(headers, data_rows, title, subtitle, numeric_from=_combo_numeric_from(keys))
+    return Response(data, mimetype='application/pdf', headers={
+        'Content-Disposition': 'attachment; filename="subject_combination.pdf"'})
+
+
+def _combo_numeric_from(keys):
+    """Index of the first numeric column (everything up to and including the last
+    of student/class/arm stays left-aligned)."""
+    left = {'sn', 'student', 'class', 'arm'}
+    idx = 0
+    for i, k in enumerate(keys):
+        if k in left:
+            idx = i + 1
+    return max(idx, 1)
 
 
 @subjects_bp.route('/broadsheet/compute', methods=['POST'])

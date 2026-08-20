@@ -98,7 +98,20 @@ def scores_entry():
     if selected_class_subject and selected_assessment:
         from utils.assessments import effective_max
         max_score = effective_max(selected_class_subject.subject, selected_assessment, term=term_id)
-    
+
+    # Roster for the "by student" entry mode: every student in the selected
+    # class arm, so the UI can offer a live-filterable single-student picker
+    # without an extra round-trip.
+    roster = []
+    if selected_assignment:
+        from sqlalchemy.orm import joinedload as _jl
+        for e in (StudentEnrollment.query
+                  .options(_jl(StudentEnrollment.student))
+                  .filter_by(class_arm_assignment_id=assignment_id, is_active=True)
+                  .join(Student).order_by(Student.surname, Student.first_name).all()):
+            roster.append({'id': e.student.id, 'full_name': e.student.full_name,
+                           'gender': e.student.gender or ''})
+
     return _render({
         'page': 'scores', 'nav': _nav_urls(),
         'term_id': term_id or '', 'assignment_id': assignment_id or '',
@@ -115,8 +128,11 @@ def scores_entry():
                            'gender': it['student'].gender or '',
                            'score': it['score'] if it['score'] is not None else ''}
                           for it in students_data],
+        'roster': roster,
         'self_url': url_for('subjects.scores_entry'),
         'save_url': url_for('subjects.save_scores'),
+        'save_student_url': url_for('subjects.save_student_scores'),
+        'student_scores_api': url_for('subjects.api_student_subject_scores'),
         'urls': {'scan': url_for('subjects.scoresheet_scan', term_id=term_id or '', assignment_id=assignment_id or '', class_subject_id=class_subject_id or ''),
                  'paste': url_for('subjects.scoresheet_paste', term_id=term_id or '', assignment_id=assignment_id or '', class_subject_id=class_subject_id or ''),
                  'import': url_for('subjects.import_scores', term_id=term_id or '', assignment_id=assignment_id or '', class_subject_id=class_subject_id or ''),
@@ -340,6 +356,98 @@ def bulk_entry():
         'self_url': url_for('subjects.bulk_entry'), 'submit_url': url_for('subjects.bulk_entry'),
         'broadsheet_url': url_for('subjects.broadsheet', term_id=term_id or '', assignment_id=assignment_id or ''),
     })
+
+
+@subjects_bp.route('/api/student-subject-scores')
+@login_required
+def api_student_subject_scores():
+    """All assessment rows (CA1, CA2, Exam…) for one student in one class-subject,
+    with each row's effective max and any existing score — powers the single-
+    student entry mode (enter the whole subject for a student at once)."""
+    term_id = request.args.get('term_id', type=int)
+    assignment_id = request.args.get('assignment_id', type=int)
+    class_subject_id = request.args.get('class_subject_id', type=int)
+    student_id = request.args.get('student_id', type=int)
+    if not (assignment_id and class_subject_id and student_id):
+        return jsonify({'error': 'Missing selection.'}), 400
+    if not can_access_class(assignment_id):
+        return jsonify({'error': 'No access to this class.'}), 403
+    cs = db.session.get(ClassSubject, class_subject_id)
+    student = db.session.get(Student, student_id)
+    if not cs or not student:
+        return jsonify({'error': 'Not found.'}), 404
+    require_branch_access(student.branch_id)
+
+    from utils.assessments import effective_max
+    ats = AssessmentType.query.filter_by(is_active=True).order_by(AssessmentType.order).all()
+    existing = {s.assessment_type_id: s.score for s in StudentScore.query.filter_by(
+        student_id=student_id, class_subject_id=class_subject_id).all()}
+    rows = [{'assessment_type_id': at.id, 'name': at.name,
+             'max_score': effective_max(cs.subject, at, term=term_id),
+             'score': existing.get(at.id) if existing.get(at.id) is not None else ''}
+            for at in ats]
+    return jsonify({'subject': cs.subject.name, 'student': student.full_name, 'rows': rows})
+
+
+@subjects_bp.route('/scores/save-student', methods=['POST'])
+@login_required
+def save_student_scores():
+    """Save every assessment score for a single student in one class-subject."""
+    try:
+        term_id = request.form.get('term_id', type=int)
+        assignment_id = request.form.get('assignment_id', type=int)
+        class_subject_id = request.form.get('class_subject_id', type=int)
+        student_id = request.form.get('student_id', type=int)
+        at_ids = request.form.getlist('assessment_type_id[]')
+        scores = request.form.getlist('score[]')
+
+        cs = db.session.get(ClassSubject, class_subject_id) if class_subject_id else None
+        if not (cs and student_id):
+            return _err('Select a student and subject first.',
+                        url_for('subjects.scores_entry', term_id=term_id, assignment_id=assignment_id))
+        if not can_enter_results(assignment_id, cs.subject_id):
+            return _err('You can only enter scores for the subjects you teach in this class.',
+                        url_for('subjects.scores_entry', term_id=term_id, assignment_id=assignment_id))
+
+        from utils.assessments import effective_max
+        items = []
+        for i, at_raw in enumerate(at_ids):
+            try:
+                at_id = int(at_raw)
+            except (TypeError, ValueError):
+                continue
+            at = db.session.get(AssessmentType, at_id)
+            mx = effective_max(cs.subject, at, term=term_id) if at else None
+            items.append((int(student_id), at_id,
+                          scores[i].strip() if i < len(scores) else '', mx))
+
+        counts = persist_scores(term_id, assignment_id, class_subject_id, cs.subject_id, items)
+        if counts is None:
+            return _err('Results for this term are published — ask an admin to '
+                        'unlock them before editing scores.',
+                        url_for('subjects.scores_entry', term_id=term_id, assignment_id=assignment_id))
+        db.session.commit()
+        if term_id and assignment_id:
+            asg = db.session.get(ClassArmAssignment, assignment_id)
+            if asg:
+                from utils.report_card import compute_term_summaries
+                compute_term_summaries(term_id, asg.class_id)
+            from utils.results_analytics import bust as _bust_analytics
+            _bust_analytics(term_id, assignment_id)
+            from utils.results_analytics_org import bust_all as _bust_org
+            _bust_org()
+        msg = f'{counts["saved"]} score(s) saved for this student.'
+        if counts['rejected']:
+            msg += f' {counts["rejected"]} skipped (out of range).'
+        if counts['blocked']:
+            msg += f' {counts["blocked"]} left unchanged (existing scores locked).'
+        return _ok(msg, url_for('subjects.scores_entry', term_id=term_id,
+                   assignment_id=assignment_id, class_subject_id=class_subject_id))
+    except Exception as e:
+        db.session.rollback()
+        return _err(f'Error: {str(e)}', url_for('subjects.scores_entry',
+                    term_id=request.form.get('term_id', type=int),
+                    assignment_id=request.form.get('assignment_id', type=int)))
 
 
 @subjects_bp.route('/api/student-scores/<int:student_id>/<int:term_id>')

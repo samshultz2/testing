@@ -387,8 +387,110 @@ function EditClassSubject({ d, notify }) {
 }
 
 // ---- Score entry -----------------------------------------------------------
+// ---- Single-student entry: one student, every assessment of a subject -------
+function StudentEntry({ d, notify }) {
+  const roster = d.roster || [];
+  const [q, setQ] = useState('');
+  const [studentId, setStudentId] = useState('');
+  const [rows, setRows] = useState(null);       // [{assessment_type_id,name,max_score,score}]
+  const [vals, setVals] = useState({});          // at_id -> string
+  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
+
+  const filtered = React.useMemo(() => {
+    const t = q.trim().toLowerCase();
+    return t ? roster.filter((s) => s.full_name.toLowerCase().includes(t)) : roster;
+  }, [q, roster]);
+
+  const load = React.useCallback(async (sid) => {
+    if (!sid || !d.class_subject_id) { setRows(null); return; }
+    setLoading(true);
+    try {
+      const p = new URLSearchParams({ term_id: d.term_id || '', assignment_id: d.assignment_id || '',
+        class_subject_id: d.class_subject_id || '', student_id: sid });
+      const res = await fetch(`${d.student_scores_api}?${p.toString()}`,
+        { credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } });
+      const body = await res.json();
+      if (!res.ok) { notify('error', body.error || 'Could not load scores.'); setRows(null); }
+      else { setRows(body.rows); const m = {}; body.rows.forEach((r) => { m[r.assessment_type_id] = r.score === '' ? '' : String(r.score); }); setVals(m); }
+    } catch (e) { notify('error', 'Network error loading scores.'); setRows(null); }
+    finally { setLoading(false); }
+  }, [d.term_id, d.assignment_id, d.class_subject_id, d.student_scores_api, notify]);
+
+  const pick = (sid) => { setStudentId(String(sid)); load(sid); };
+  // Reloading when the subject changes keeps the grid in sync with the picker.
+  React.useEffect(() => { if (studentId) load(studentId); }, [d.class_subject_id]); // eslint-disable-line
+
+  const save = async () => {
+    if (!studentId || !rows) return;
+    setBusy(true);
+    const fields = { term_id: d.term_id, assignment_id: d.assignment_id, class_subject_id: d.class_subject_id,
+      student_id: studentId, 'assessment_type_id[]': rows.map((r) => r.assessment_type_id),
+      'score[]': rows.map((r) => vals[r.assessment_type_id] ?? '') };
+    const r = await submitJson(d.save_student_url, fields);
+    setBusy(false);
+    if (r.ok) { notify('success', r.message); load(studentId); } else notify('error', r.error || 'Could not save.');
+  };
+
+  if (!d.assignment_id || !d.class_subject_id) {
+    return <div className="card"><div className="card-body"><Empty icon="fa-hand-pointer" title="Select class and subject">
+      <p>Pick a term, class and subject above, then choose a student to enter all their {`${d.selected_subject || 'subject'}`} scores at once.</p></Empty></div></div>;
+  }
+  const picked = roster.find((s) => String(s.id) === String(studentId));
+  const invalid = (r) => { const raw = vals[r.assessment_type_id]; if (raw === '' || raw == null) return false; const n = Number(raw); return !Number.isFinite(n) || n < 0 || n > r.max_score; };
+
+  return (
+    <div className="row" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'flex-start' }}>
+      <div className="card" style={{ flex: '1 1 260px', minWidth: 240 }}>
+        <div className="card-header"><h3>Students ({filtered.length})</h3></div>
+        <div className="card-body">
+          <input type="search" className="form-control mb-2" placeholder="Filter students by name…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Filter students" />
+          <div style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+            {filtered.map((s) => (
+              <button type="button" key={s.id} onClick={() => pick(s.id)}
+                      className={'btn btn-sm w-100 ' + (String(s.id) === String(studentId) ? 'btn-primary' : 'btn-secondary')}
+                      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '.35rem', textAlign: 'left' }}>
+                <span>{s.full_name}</span>
+                <span className={'badge ' + (s.gender === 'Male' ? 'badge-info' : 'badge-warning')}>{s.gender || '—'}</span>
+              </button>
+            ))}
+            {!filtered.length && <p className="text-muted text-sm">No students match.</p>}
+          </div>
+        </div>
+      </div>
+
+      <div className="card" style={{ flex: '2 1 340px', minWidth: 300 }}>
+        <div className="card-header"><h3>{picked ? picked.full_name : 'Pick a student'}{d.selected_subject ? ` · ${d.selected_subject}` : ''}</h3></div>
+        <div className="card-body">
+          {loading ? <p className="text-muted"><i aria-hidden="true" className="fas fa-spinner fa-spin" /> Loading…</p>
+           : !picked ? <Empty icon="fa-user" title="No student selected"><p>Choose a student on the left to enter their scores.</p></Empty>
+           : rows && rows.length ? (
+            <form onSubmit={(e) => { e.preventDefault(); save(); }}>
+              <table className="data-table"><thead><tr><th>Assessment</th><th>Max</th><th>Score</th></tr></thead>
+                <tbody>{rows.map((r) => (
+                  <tr key={r.assessment_type_id}>
+                    <td>{r.name}</td><td>{r.max_score}</td>
+                    <td><input type="number" className={'form-control' + (invalid(r) ? ' is-invalid' : '')} style={{ width: 110, ...(invalid(r) ? { borderColor: '#e74a3b', background: '#fff5f5' } : {}) }}
+                               min="0" max={r.max_score} step="0.5" value={vals[r.assessment_type_id] ?? ''}
+                               onChange={(e) => setVals((m) => ({ ...m, [r.assessment_type_id]: e.target.value }))} /></td>
+                  </tr>))}</tbody>
+              </table>
+              {canWrite(d) && <div className="page-header-actions mt-3">
+                <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save all scores</button>
+              </div>}
+            </form>
+          ) : <Empty icon="fa-list" title="No assessments"><p>No assessment types are configured.</p></Empty>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function Scores({ d, notify }) {
   const nav = useNav();
+  // Entry mode: 'assessment' = one assessment for the whole class (classic);
+  // 'student' = one student, every assessment of a subject at once.
+  const [mode, setMode] = useState('assessment');
   const [scores, setScores] = useState(() => { const m = {}; d.students_data.forEach((s) => { m[s.id] = s.score === '' ? '' : String(s.score); }); return m; });
   const [busy, setBusy] = useState(false);
   // Multi-select + bulk fill: tick several students and set them all to one score
@@ -481,6 +583,12 @@ function Scores({ d, notify }) {
         </div>
       </div>
       <RecentClasses currentId={d.assignment_id} onPick={(term, asg) => set({ term_id: term, assignment_id: asg, class_subject_id: '', assessment_type_id: '' })} />
+      <div className="btn-group mb-3" role="tablist" aria-label="Entry mode">
+        <button type="button" className={'btn btn-sm ' + (mode === 'assessment' ? 'btn-primary' : 'btn-secondary')} onClick={() => setMode('assessment')} aria-pressed={mode === 'assessment'}>
+          <i aria-hidden="true" className="fas fa-users" /> By assessment (whole class)</button>
+        <button type="button" className={'btn btn-sm ' + (mode === 'student' ? 'btn-primary' : 'btn-secondary')} onClick={() => setMode('student')} aria-pressed={mode === 'student'}>
+          <i aria-hidden="true" className="fas fa-user" /> By student (all assessments)</button>
+      </div>
       <div className="card mb-3"><div className="card-body"><form className="filter-form">
         <div className="form-group"><label className="form-label">Term</label>
           <select className="form-control" value={d.term_id} onChange={(e) => set({ term_id: e.target.value, assignment_id: '', class_subject_id: '', assessment_type_id: '' })}>
@@ -491,12 +599,16 @@ function Scores({ d, notify }) {
         <div className="form-group"><label className="form-label">Subject</label>
           <select className="form-control" value={d.class_subject_id} onChange={(e) => set({ class_subject_id: e.target.value, assessment_type_id: d.assessment_type_id })}>
             <option value="">Select Subject</option>{d.class_subjects.map((cs) => <option key={cs.id} value={cs.id}>{cs.subject_name}</option>)}</select></div>
+        {mode === 'assessment' && (
         <div className="form-group"><label className="form-label">Assessment</label>
           <select className="form-control" value={d.assessment_type_id} onChange={(e) => set({ assessment_type_id: e.target.value })}>
             <option value="">Select Assessment</option>{d.assessment_types.map((at) => <option key={at.id} value={at.id}>{at.name} ({at.max_score})</option>)}</select></div>
+        )}
       </form></div></div>
 
-      {d.students_data.length ? (
+      {mode === 'student' ? (
+        <StudentEntry d={d} notify={notify} />
+      ) : d.students_data.length ? (
         <div className="card">
           <div className="card-header"><h3>{d.selected_subject} - {d.selected_assessment}</h3><span className="badge badge-primary">Max: {d.max_score}</span></div>
           <div className="card-body"><form onSubmit={save}>
@@ -1739,6 +1851,7 @@ function Explore({ d }) {
         <div><h1>Results Explorer</h1>
           <p className="text-muted text-sm">Filter and compare results within a class arm, across arms and across classes.</p></div>
         <div className="page-header-actions">
+          {d.urls.combine && <a href={d.urls.combine} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-layer-group" /> Combine subjects</a>}
           {d.urls.broadsheet && <a href={d.urls.broadsheet} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-table" /> Broadsheet</a>}
         </div>
       </div>
@@ -1896,11 +2009,230 @@ function Explore({ d }) {
   );
 }
 
+// ---- Subject Combination Explorer -----------------------------------------
+// Pick any set of subjects; filter students by their COMBINED total/average
+// across just those subjects; export the view (with a column picker).
+function Combine({ d, notify }) {
+  const nav = useNav();
+  const rows = d.rows || [];
+  const subjects = d.subjects_union || [];
+
+  const [sel, setSel] = useState(() => new Set((d.scopes || []).map(String)));
+  const toggleScope = (id) => setSel((s) => { const n = new Set(s); const k = String(id); n.has(k) ? n.delete(k) : n.add(k); return n; });
+  const toggleClass = (cls, on) => setSel((s) => { const n = new Set(s); cls.arms.forEach((a) => { on ? n.add(String(a.assignment_id)) : n.delete(String(a.assignment_id)); }); return n; });
+  const classAll = (cls) => cls.arms.every((a) => sel.has(String(a.assignment_id)));
+  const load = () => navParams(nav.go, d.self_url, { term_id: d.term_id, scopes: [...sel].join(',') });
+  const selChanged = [...sel].sort().join(',') !== (d.scopes || []).map(String).sort().join(',');
+
+  // Subject combination
+  const [subjSel, setSubjSel] = useState(() => new Set());
+  const toggleSubj = (id) => setSubjSel((s) => { const n = new Set(s); const k = String(id); n.has(k) ? n.delete(k) : n.add(k); return n; });
+  const chosen = subjects.filter((s) => subjSel.has(String(s.id)));
+
+  // Filter
+  const [metric, setMetric] = useState('total');   // total | average
+  const [op, setOp] = useState('gte');             // gte | lte | eq
+  const [val, setVal] = useState('');
+  const nVal = parseFloat(val);
+  const hasVal = !Number.isNaN(nVal);
+
+  const computed = React.useMemo(() => {
+    const n = chosen.length;
+    return rows.map((r) => {
+      let total = 0;
+      chosen.forEach((s) => { const v = r.subjects[String(s.id)]; if (v != null) total += v; });
+      total = Math.round(total * 10) / 10;
+      const average = n ? Math.round((total / n) * 100) / 100 : 0;
+      return { ...r, combo_total: total, combo_average: average };
+    });
+  }, [rows, subjSel]);
+
+  const active = hasVal && chosen.length > 0;
+  const matches = (r) => {
+    const x = metric === 'average' ? r.combo_average : r.combo_total;
+    if (op === 'gte') return x >= nVal;
+    if (op === 'lte') return x <= nVal;
+    if (op === 'eq') return x === nVal;
+    return true;
+  };
+  const shown = React.useMemo(() => {
+    const list = active ? computed.filter(matches) : computed.slice();
+    list.sort((a, b) => (metric === 'average' ? b.combo_average - a.combo_average : b.combo_total - a.combo_total));
+    return list;
+  }, [computed, active, op, nVal, metric]);
+
+  // Export column picker
+  const [showExport, setShowExport] = useState(false);
+  const [cols, setCols] = useState({ sn: true, student: true, class: true, arm: true, subjects: true, total: true, average: true, missing: false });
+  const setCol = (k) => setCols((c) => ({ ...c, [k]: !c[k] }));
+  const exportUrl = (fmt) => {
+    const keys = [];
+    if (cols.sn) keys.push('sn');
+    if (cols.student) keys.push('student');
+    if (cols.class) keys.push('class');
+    if (cols.arm) keys.push('arm');
+    if (cols.subjects) chosen.forEach((s) => keys.push('subj:' + s.id));
+    if (cols.total) keys.push('total');
+    if (cols.average) keys.push('average');
+    if (cols.missing) keys.push('missing');
+    const p = new URLSearchParams();
+    p.set('term_id', d.term_id || '');
+    p.set('scopes', (d.scopes || []).join(','));
+    p.set('subjects', chosen.map((s) => s.id).join(','));
+    p.set('metric', metric); p.set('op', op);
+    if (hasVal) p.set('value', val);
+    p.set('columns', keys.join(','));
+    p.set('format', fmt);
+    return `${d.urls.export}?${p.toString()}`;
+  };
+  const doExport = (fmt) => {
+    if (!chosen.length) { notify('error', 'Pick at least one subject to combine.'); return; }
+    window.location.href = exportUrl(fmt);
+    setShowExport(false);
+  };
+
+  const metricName = metric === 'average' ? 'Average' : 'Total';
+  const opText = { gte: '≥', lte: '≤', eq: '=' }[op];
+
+  return (
+    <>
+      <div className="page-header">
+        <div><h1>Subject Combination</h1>
+          <p className="text-muted text-sm">Pick subjects (e.g. Physics + Chemistry + Biology) and filter students by their combined total or average across just those subjects.</p></div>
+        <div className="page-header-actions">
+          {d.urls.explore && <a href={d.urls.explore} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-filter" /> Explorer</a>}
+          {d.urls.broadsheet && <a href={d.urls.broadsheet} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-table" /> Broadsheet</a>}
+        </div>
+      </div>
+
+      {/* Term + scope picker */}
+      <div className="card mb-3"><div className="card-body">
+        <div className="filter-form" style={{ marginBottom: '.6rem' }}>
+          <div className="form-group"><label className="form-label">Term</label>
+            <select className="form-control" value={d.term_id} onChange={(e) => navParams(nav.go, d.self_url, { term_id: e.target.value, scopes: '' })}>
+              <option value="">Select Term</option>{d.terms.map((t) => <option key={t.id} value={t.id}>{t.full_name}</option>)}</select></div>
+        </div>
+        {d.scope_options.length ? (
+          <>
+            <label className="form-label">Classes &amp; arms to include</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '.9rem', margin: '.3rem 0 .7rem' }}>
+              {d.scope_options.map((cls) => (
+                <div key={cls.class_id} className="card" style={{ padding: '.5rem .7rem', minWidth: 150 }}>
+                  <label className="form-check" style={{ fontWeight: 700, display: 'flex', gap: '.4rem', alignItems: 'center' }}>
+                    <input type="checkbox" checked={classAll(cls)} onChange={(e) => toggleClass(cls, e.target.checked)} /> {cls.class_name}
+                  </label>
+                  <div style={{ paddingLeft: '.4rem', marginTop: '.2rem' }}>
+                    {cls.arms.map((a) => (
+                      <label key={a.assignment_id} className="form-check" style={{ display: 'flex', gap: '.4rem', alignItems: 'center', fontSize: 'var(--text-sm)' }}>
+                        <input type="checkbox" checked={sel.has(String(a.assignment_id))} onChange={() => toggleScope(a.assignment_id)} /> {a.arm_name || cls.class_name}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <button type="button" className="btn btn-primary btn-sm" onClick={load} disabled={!selChanged && rows.length > 0}>
+              <i aria-hidden="true" className="fas fa-rotate" /> Load selected</button>
+          </>
+        ) : <p className="text-muted text-sm">Pick a term to choose classes and arms.</p>}
+      </div></div>
+
+      {rows.length > 0 && (
+        <div className="card mb-3"><div className="card-body">
+          <label className="form-label">Subjects to combine</label>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '.5rem 1.1rem', margin: '.3rem 0 .8rem' }}>
+            {subjects.map((s) => (
+              <label key={s.id} className="form-check" style={{ display: 'flex', gap: '.4rem', alignItems: 'center' }}>
+                <input type="checkbox" checked={subjSel.has(String(s.id))} onChange={() => toggleSubj(s.id)} /> {s.name}
+              </label>
+            ))}
+          </div>
+          {chosen.length > 0 && (
+            <div className="filter-form" style={{ alignItems: 'flex-end' }}>
+              <div className="form-group"><label className="form-label">Combined</label>
+                <select className="form-control" value={metric} onChange={(e) => setMetric(e.target.value)}>
+                  <option value="total">Total (sum)</option><option value="average">Average</option></select></div>
+              <div className="form-group"><label className="form-label">Condition</label>
+                <select className="form-control" value={op} onChange={(e) => setOp(e.target.value)}>
+                  <option value="gte">≥ (at least)</option><option value="lte">≤ (at most)</option><option value="eq">= (exactly)</option></select></div>
+              <div className="form-group"><label className="form-label">Value</label>
+                <input type="number" className="form-control" style={{ width: 120 }} value={val} onChange={(e) => setVal(e.target.value)} placeholder="e.g. 180" /></div>
+              <div className="form-group">
+                <button type="button" className="btn btn-success" onClick={() => setShowExport(true)}><i aria-hidden="true" className="fas fa-download" /> Export</button>
+              </div>
+            </div>
+          )}
+          {chosen.length > 0 && (
+            <p className="text-muted text-sm mb-0" style={{ marginTop: '.4rem' }}>
+              Combining <strong>{chosen.map((s) => s.name).join(' + ')}</strong>
+              {active ? <> · showing {metricName} {opText} {nVal} ({shown.length} of {rows.length})</> : <> · {rows.length} students</>}
+              . Average divides by {chosen.length} (missing subjects count as 0).
+            </p>
+          )}
+        </div></div>
+      )}
+
+      {chosen.length > 0 && (
+        <div className="card">
+          <div className="card-header"><h3>Students ({shown.length})</h3></div>
+          <div className="card-body" style={{ padding: 0 }}><div className="table-container" style={{ maxHeight: '70vh', overflow: 'auto' }}>
+            <table className="data-table"><thead><tr>
+              <th style={{ position: 'sticky', top: 0, background: 'var(--gray-50)', zIndex: 2 }}>#</th>
+              <th style={{ position: 'sticky', top: 0, background: 'var(--gray-50)', zIndex: 2 }}>Student</th>
+              <th style={{ position: 'sticky', top: 0, background: 'var(--gray-50)', zIndex: 2 }}>Class</th>
+              <th style={{ position: 'sticky', top: 0, background: 'var(--gray-50)', zIndex: 2 }}>Arm</th>
+              {chosen.map((s) => <th key={s.id} title={s.name} style={{ position: 'sticky', top: 0, background: 'var(--gray-50)', zIndex: 2, textAlign: 'center', fontSize: 'var(--text-xs)' }}>{s.short}</th>)}
+              <th style={{ position: 'sticky', top: 0, background: 'var(--gray-50)', zIndex: 2, textAlign: 'center' }}>Total</th>
+              <th style={{ position: 'sticky', top: 0, background: 'var(--gray-50)', zIndex: 2, textAlign: 'center' }}>Avg</th>
+            </tr></thead>
+            <tbody>{shown.length ? shown.map((r, i) => (
+              <tr key={i}>
+                <td style={{ fontWeight: 'bold' }}>{i + 1}</td>
+                <td style={{ whiteSpace: 'nowrap' }}>{r.student}</td>
+                <td>{r.class_name}</td><td>{r.arm_name}</td>
+                {chosen.map((s) => { const v = r.subjects[String(s.id)]; return <td key={s.id} style={{ textAlign: 'center' }}>{v != null ? fmtNum(v) : '-'}</td>; })}
+                <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{fmtNum(r.combo_total)}</td>
+                <td style={{ textAlign: 'center', fontWeight: 'bold' }}>{fmtNum(r.combo_average)}</td>
+              </tr>
+            )) : <tr><td colSpan={6 + chosen.length} style={{ textAlign: 'center', padding: '1.5rem', color: 'var(--text-muted)' }}>No students match this condition.</td></tr>}</tbody>
+            </table>
+          </div></div>
+        </div>
+      )}
+
+      {showExport && (
+        <div className="modal-backdrop" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 1000, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={() => setShowExport(false)}>
+          <div className="card" style={{ maxWidth: 460, width: '92%' }} onClick={(e) => e.stopPropagation()}>
+            <div className="card-header"><h3><i aria-hidden="true" className="fas fa-download" /> Export combination</h3></div>
+            <div className="card-body">
+              <p className="text-muted text-sm">Choose the columns to include, then pick a format.</p>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '.4rem 1.1rem', marginBottom: '.8rem' }}>
+                {[['sn', 'S/N'], ['student', 'Student'], ['class', 'Class'], ['arm', 'Arm'], ['subjects', 'Each subject'], ['total', 'Combined total'], ['average', 'Combined average'], ['missing', 'Missing count']].map(([k, label]) => (
+                  <label key={k} className="form-check" style={{ display: 'flex', gap: '.4rem', alignItems: 'center' }}>
+                    <input type="checkbox" checked={!!cols[k]} onChange={() => setCol(k)} /> {label}
+                  </label>
+                ))}
+              </div>
+              <div className="page-header-actions">
+                <button type="button" className="btn btn-danger btn-sm" onClick={() => doExport('pdf')}><i aria-hidden="true" className="fas fa-file-pdf" /> PDF</button>
+                <button type="button" className="btn btn-primary btn-sm" onClick={() => doExport('image')}><i aria-hidden="true" className="fas fa-file-image" /> Image</button>
+                <button type="button" className="btn btn-success btn-sm" onClick={() => doExport('excel')}><i aria-hidden="true" className="fas fa-file-excel" /> Excel</button>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => doExport('csv')}>CSV</button>
+                <button type="button" className="btn btn-link btn-sm" onClick={() => setShowExport(false)}>Cancel</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 const SCREENS = { list: List, add: SubjectForm, edit: SubjectForm, bulk_add: BulkAdd,
   class_subjects: ClassSubjects, assign: Assign, edit_class_subject: EditClassSubject,
   scores: Scores, workflow: Workflow, bulk_entry: BulkEntry, broadsheet: Broadsheet,
   affective: Affective, comments: Comments, analytics: Analytics, institution: Institution,
-  teacher: Teacher, subject: SubjectScorecard, explore: Explore };
+  teacher: Teacher, subject: SubjectScorecard, explore: Explore, combine: Combine };
 
 export default function SubjectsApp({ data }) {
   const { data: d, go, refresh } = useSection(data);
