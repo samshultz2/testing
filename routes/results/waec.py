@@ -295,12 +295,14 @@ def add_waec():
             db.session.rollback()
             flash(f'Error saving results: {str(e)}', 'error')
     
+    from utils.exam_subject_config import get_config, stream_waec_map
+    _wcfg = get_config()['waec']
     return render_template('results/add_waec.html',
         students=students,
-        subjects=WAEC_SUBJECTS,
+        subjects=_wcfg['catalog'] or WAEC_SUBJECTS,
         grades=WAEC_GRADES,
-        default_subjects=WAEC_DEFAULT_SUBJECTS,
-        stream_defaults=STREAM_WAEC_SUBJECTS,
+        default_subjects=_wcfg['general'] or WAEC_DEFAULT_SUBJECTS,
+        stream_defaults=stream_waec_map(),
         subject_map=student_subject_map(students),
         current_year=exam_year, sessions=exam_year_choices()
     )

@@ -75,6 +75,7 @@ def index():
             'notifications': url_for('settings.notification_prefs'),
             'performance': url_for('settings.performance'),
             'admissions': url_for('settings.admissions_data'),
+            'exam_subjects': url_for('settings.exam_subjects'),
         },
     })
 
@@ -463,6 +464,41 @@ def ocr_settings():
         'submit_url': url_for('settings.ocr_settings'),
         'back_url': url_for('settings.index'),
     })
+
+
+# ---------------------------------------------------------------------------
+# External-exam (WAEC / JAMB) subjects — per-school catalogue, General
+# (all-stream) subjects, and per-stream compulsories.
+# ---------------------------------------------------------------------------
+
+@settings_bp.route('/exam-subjects', methods=['GET', 'POST'])
+@login_required
+def exam_subjects():
+    from utils.exam_subject_config import get_config, save_config
+    from utils.helpers import STREAMS
+    if not is_admin():
+        return _err('Only an admin can change exam subjects.', url_for('settings.index'))
+
+    if request.method == 'POST':
+        try:
+            cfg = {}
+            for exam in ('waec', 'jamb'):
+                catalog = [s.strip() for s in request.form.getlist(f'{exam}_subject[]') if s.strip()]
+                general = [s.strip() for s in request.form.getlist(f'{exam}_general[]') if s.strip()]
+                streams = {}
+                for st in STREAMS:
+                    streams[st] = [s.strip() for s in
+                                   request.form.getlist(f'{exam}_stream_{st}[]') if s.strip()]
+                cfg[exam] = {'catalog': catalog, 'general': general, 'streams': streams}
+            save_config(cfg)
+            log_action('exam_subjects.save', 'Updated WAEC/JAMB subject configuration')
+        except Exception as e:
+            return _err(f'Error: {str(e)}', url_for('settings.exam_subjects'))
+        return _ok('External-exam subjects saved.', url_for('settings.exam_subjects'))
+
+    return render_template('settings/exam_subjects.html',
+                           config=get_config(), streams=STREAMS,
+                           back_url=url_for('settings.index'))
 
 
 # ---------------------------------------------------------------------------

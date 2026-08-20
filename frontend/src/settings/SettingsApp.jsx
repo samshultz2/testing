@@ -42,6 +42,7 @@ function Index({ d }) {
         {card(u.backup, 'fa-database', 'Backup & Restore', 'Download backup, restore data')}
         {d.is_central && card(u.audit, 'fa-clipboard-list', 'Audit Log', 'Who changed what, and when')}
         {card(u.ocr, 'fa-robot', 'AI Vision OCR', 'Optional Claude key for reading result images')}
+        {u.exam_subjects && cardExt(u.exam_subjects, 'fa-file-signature', 'Exam Subjects', 'WAEC/JAMB catalogue, general & per-stream compulsories')}
         {u.notifications && cardExt(u.notifications, 'fa-bell', 'Notifications', 'Choose which channels you receive alerts on')}
         {d.is_central && u.performance && cardExt(u.performance, 'fa-gauge-high', 'Performance', 'Recent slow requests and SQL queries')}
         {d.is_central && u.admissions && cardExt(u.admissions, 'fa-graduation-cap', 'Admissions data', 'Universities, courses & JAMB cut-offs')}

@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}External Exam Subjects — {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('settings.index') }}">Settings</a> / <span>External Exam Subjects</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.es-table{width:100%;border-collapse:collapse;font-size:.9rem}
+.es-table th,.es-table td{padding:.5rem .6rem;border-bottom:1px solid var(--border-light);text-align:center}
+.es-table th:first-child,.es-table td:first-child{text-align:left}
+.es-table thead th{font-size:.75rem;text-transform:uppercase;letter-spacing:.03em;color:var(--text-muted)}
+.es-add{display:flex;gap:.5rem;align-items:center;margin-top:.75rem;flex-wrap:wrap}
+.es-tablewrap{overflow-x:auto}
+.es-name{font-weight:500}
+.es-rm{color:var(--danger);background:none;border:0;cursor:pointer;font-size:.95rem}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>External Exam Subjects</h1>
+        <p class="text-muted text-sm">Per-school WAEC &amp; JAMB subjects. Tick <strong>General</strong> for subjects every stream must offer, and tick a stream for subjects compulsory only for that stream. A stream's effective list is <em>General + that stream's ticks</em>. These drive the auto-fill on the student and result-entry pages.</p>
+    </div>
+    <div class="page-header-actions">
+        <a href="{{ back_url }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>
+    </div>
+</div>
+
+<form method="post">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
+    {% for exam, cfg in [('waec', config.waec), ('jamb', config.jamb)] %}
+    <div class="card mb-3">
+        <div class="card-header"><h3>{{ 'WAEC / NECO' if exam == 'waec' else 'JAMB (UTME)' }} subjects</h3></div>
+        <div class="card-body">
+            <div class="es-tablewrap">
+            <table class="es-table" data-exam="{{ exam }}">
+                <thead><tr>
+                    <th>Subject</th><th>General<br><span class="text-muted" style="font-weight:400">(all streams)</span></th>
+                    {% for st in streams %}<th>{{ st }}</th>{% endfor %}
+                    <th></th>
+                </tr></thead>
+                <tbody>
+                {% for subj in cfg.catalog %}
+                    <tr>
+                        <td class="es-name"><input type="hidden" name="{{ exam }}_subject[]" value="{{ subj }}">{{ subj }}</td>
+                        <td><input type="checkbox" name="{{ exam }}_general[]" value="{{ subj }}" {% if subj in cfg.general %}checked{% endif %}></td>
+                        {% for st in streams %}
+                        <td><input type="checkbox" name="{{ exam }}_stream_{{ st }}[]" value="{{ subj }}" {% if subj in cfg.streams.get(st, []) %}checked{% endif %}></td>
+                        {% endfor %}
+                        <td><button type="button" class="es-rm" title="Remove subject" aria-label="Remove {{ subj }}"><i class="fas fa-times"></i></button></td>
+                    </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            </div>
+            <div class="es-add">
+                <input type="text" class="form-control" style="max-width:260px" placeholder="Add a subject…" data-add-input="{{ exam }}">
+                <button type="button" class="btn btn-secondary btn-sm" data-add-btn="{{ exam }}"><i class="fas fa-plus"></i> Add subject</button>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+
+    <div class="page-header-actions">
+        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save subjects</button>
+        <a href="{{ back_url }}" class="btn btn-secondary">Cancel</a>
+    </div>
+</form>
+
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var STREAMS = {{ streams|tojson }};
+  function esc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]; }); }
+
+  function addRow(exam, name) {
+    var table = document.querySelector('.es-table[data-exam="' + exam + '"] tbody');
+    if (!table) return;
+    // Skip duplicates (case-insensitive).
+    var existing = Array.prototype.map.call(table.querySelectorAll('input[type=hidden]'), function (h) { return h.value.toLowerCase(); });
+    if (existing.indexOf(name.toLowerCase()) > -1) return;
+    var tr = document.createElement('tr');
+    var html = '<td class="es-name"><input type="hidden" name="' + exam + '_subject[]" value="' + esc(name) + '">' + esc(name) + '</td>'
+             + '<td><input type="checkbox" name="' + exam + '_general[]" value="' + esc(name) + '"></td>';
+    STREAMS.forEach(function (st) {
+      html += '<td><input type="checkbox" name="' + exam + '_stream_' + st + '[]" value="' + esc(name) + '"></td>';
+    });
+    html += '<td><button type="button" class="es-rm" title="Remove subject"><i class="fas fa-times"></i></button></td>';
+    tr.innerHTML = html;
+    table.appendChild(tr);
+  }
+
+  document.querySelectorAll('[data-add-btn]').forEach(function (btn) {
+    var exam = btn.getAttribute('data-add-btn');
+    var input = document.querySelector('[data-add-input="' + exam + '"]');
+    function commit() {
+      var v = (input.value || '').trim();
+      if (v) { addRow(exam, v); input.value = ''; input.focus(); }
+    }
+    btn.addEventListener('click', commit);
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); commit(); } });
+  });
+
+  document.addEventListener('click', function (e) {
+    var rm = e.target.closest ? e.target.closest('.es-rm') : null;
+    if (rm) { var tr = rm.closest('tr'); if (tr) tr.parentNode.removeChild(tr); }
+  });
+})();
+</script>
+{% endblock %}

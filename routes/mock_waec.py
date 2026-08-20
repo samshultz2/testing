@@ -240,8 +240,18 @@ def broadsheet_pdf_view(exam_id):
 def broadsheet_blank(exam_id):
     exam = db.get_or_404(MockWAECExam, exam_id)
     require_branch_access(exam.branch_id)
+    # Offer a subject picker: the full ordered catalogue, with the subjects the
+    # cohort actually offers (saved WAEC subjects) pre-checked. Only checked
+    # subjects go on the printed sheet.
+    students = get_sss3_students()
+    smap = student_subject_map(students)
+    offered = set().union(*[set(smap.get(s.id, {}).get('waec') or []) for s in students]) if students else set()
+    saved = offered or set(WAEC_DEFAULT_SUBJECTS)
+    candidates = MockWAECAnalytics._ordered_subjects(saved | set(WAEC_DEFAULT_SUBJECTS))
+    subject_choices = [{'name': s, 'checked': s in saved} for s in candidates]
     return render_template('mock_waec/pdf_preview.html', exam=exam, show_cols=True,
         show_orient=True, title='Blank recording sheet (PDF)', options=_OPTS_BLANK,
+        subject_choices=subject_choices,
         pdf_url=url_for('mock_waec.broadsheet_blank_pdf', exam_id=exam_id),
         back_url=url_for('mock_waec.view_exam', exam_id=exam_id))
 
@@ -259,6 +269,14 @@ def broadsheet_blank_pdf(exam_id):
     offered = {s.id: set(smap.get(s.id, {}).get('waec') or []) for s in students}
     union = set().union(*offered.values()) if offered else set()
     subjects = MockWAECAnalytics._ordered_subjects(union or set(WAEC_DEFAULT_SUBJECTS))
+    # Optional subject filter from the preview page — keep only the checked
+    # subjects (preserving the canonical order). Absent param = include all.
+    picked = request.args.get('subjects')
+    if picked is not None:
+        wanted = {s.strip() for s in picked.split(',') if s.strip()}
+        subjects = [s for s in subjects if s in wanted]
+        if not subjects:
+            subjects = MockWAECAnalytics._ordered_subjects(union or set(WAEC_DEFAULT_SUBJECTS))
     from utils.mock_waec_pdf import blank_broadsheet_pdf
     per = request.args.get('cols', default=0, type=int)
     buf = blank_broadsheet_pdf(students, offered, subjects, exam, _school_profile(),
@@ -604,9 +622,11 @@ def add_result(exam_id):
             return redirect(url_for('mock_waec.student_progress', student_id=student_id))
         return redirect(url_for('mock_waec.view_exam', exam_id=exam_id))
 
+    from utils.exam_subject_config import get_config, stream_waec_map
+    _wcfg = get_config()['waec']
     return render_template('mock_waec/add_result.html',
-        exam=exam, students=students, subjects=WAEC_SUBJECTS, grades=WAEC_GRADES,
-        default_subjects=WAEC_DEFAULT_SUBJECTS, stream_defaults=STREAM_WAEC_SUBJECTS,
+        exam=exam, students=students, subjects=_wcfg['catalog'] or WAEC_SUBJECTS, grades=WAEC_GRADES,
+        default_subjects=_wcfg['general'] or WAEC_DEFAULT_SUBJECTS, stream_defaults=stream_waec_map(),
         subject_map=student_subject_map(students))
 
 

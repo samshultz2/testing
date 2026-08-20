@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { postForm } from '../lib/forms';
+import { postForm, submitJson } from '../lib/forms';
 import { useDraft } from '../lib/draft';
 import { Banner } from '../components/ui';
 import { TextField, TextAreaField, SelectField, FormCard } from '../components/Form';
@@ -146,13 +146,32 @@ export default function StudentForm({ data }) {
     setErrors((e) => ({ ...e, [key]: String(f[key] || '').trim() ? undefined : `${label} is required.` }));
   const relationships = opt.relationships || RELATIONSHIP_FALLBACK;
   const allSubjects = opt.waec_subjects || [];
+  const jambSubjects = opt.jamb_subjects || opt.waec_subjects || [];
 
-  // Selecting a stream fills the WAEC subjects from its default set (matches
-  // the classic page: change overwrites the WAEC selection).
+  // Selecting a stream fills the WAEC + JAMB subjects from that stream's
+  // compulsory set (matches the classic page: change overwrites the selection).
   const onStream = (v) => {
     set('stream', v);
-    const subs = (opt.stream_waec || {})[v];
-    if (subs) setWaec(new Set(subs));
+    const wsubs = (opt.stream_waec || {})[v];
+    if (wsubs) setWaec(new Set(wsubs));
+    const jsubs = (opt.stream_jamb || {})[v];
+    if (jsubs) setJamb(new Set(jsubs));
+  };
+
+  // Extrapolate the chosen stream's compulsory subjects to every SSS2/SSS3
+  // student in that stream (fills empties only). Explicit, deliberate action.
+  const [applying, setApplying] = useState(false);
+  const applyStreamToAll = async () => {
+    if (!f.stream) { alert('Pick a stream first.'); return; }
+    if (!opt.apply_stream_url) return;
+    if (!window.confirm(`Apply ${f.stream} stream WAEC + JAMB subjects to all SSS2/SSS3 ${f.stream} students who don't have a list yet?`)) return;
+    setApplying(true);
+    try {
+      const r = await submitJson(opt.apply_stream_url, { stream: f.stream });
+      if (r && !r.error) {
+        alert(`Applied to ${r.matched} student(s): WAEC filled ${r.waec_filled}, JAMB filled ${r.jamb_filled}.`);
+      } else { alert((r && r.error) || 'Could not apply.'); }
+    } finally { setApplying(false); }
   };
   const toggle = (setter) => (subj) => setter((prev) => {
     const next = new Set(prev); next.has(subj) ? next.delete(subj) : next.add(subj); return next;
@@ -545,11 +564,22 @@ export default function StudentForm({ data }) {
       <FormCard icon="fa-file-signature" title="External Exam Subjects" note="(optional)" collapsible defaultOpen={isEdit && (waec.size > 0 || jamb.size > 0)}>
         <p className="text-muted text-sm mb-3">
           Select the subjects this student is registered for. These pre-fill the WAEC and JAMB
-          result-entry pages. You can skip this and set it later.
+          result-entry pages. Picking a <strong>Stream</strong> above fills the stream's compulsory
+          WAEC + JAMB subjects. The subject lists, the General (all-stream) subjects and each
+          stream's compulsories are configured for the whole school
+          {opt.exam_subjects_settings_url ? <> in <a href={opt.exam_subjects_settings_url}>Settings → Exam Subjects</a></> : null}.
         </p>
+        {f.stream && opt.apply_stream_url && (
+          <div className="mb-3">
+            <button type="button" className="btn btn-secondary btn-sm" onClick={applyStreamToAll} disabled={applying}>
+              <i aria-hidden="true" className={'fas ' + (applying ? 'fa-spinner fa-spin' : 'fa-users')} /> {applying ? 'Applying…' : `Apply ${f.stream} subjects to all SSS2/SSS3 ${f.stream} students`}
+            </button>
+            <span className="text-muted text-sm" style={{ marginLeft: '.5rem' }}>Fills empty lists only; never overwrites a custom selection.</span>
+          </div>
+        )}
         <SubjectChecks legendIcon="fa-file-alt" legend="WAEC Subjects" all={allSubjects} name="waec_subjects[]"
                        selected={waec} onToggle={toggle(setWaec)} onClear={() => setWaec(new Set())} />
-        <SubjectChecks legendIcon="fa-file-contract" legend="JAMB Subjects" all={allSubjects} name="jamb_subjects[]"
+        <SubjectChecks legendIcon="fa-file-contract" legend="JAMB Subjects" all={jambSubjects} name="jamb_subjects[]"
                        selected={jamb} onToggle={toggle(setJamb)} onClear={() => setJamb(new Set())} />
       </FormCard>
 

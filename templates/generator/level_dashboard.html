@@ -4,16 +4,22 @@
 
 {% block extra_css %}
 <style>
-.level-header{display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem;padding:1rem;border-radius:var(--radius-lg);color:white}
+.level-header{display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem;padding:1rem;border-radius:var(--radius-lg);color:white;flex-wrap:wrap}
 .level-header.jss{background:linear-gradient(135deg,#11998e 0%,#38ef7d 100%)}
 .level-header.sss{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%)}
 .level-header-icon{font-size:2rem}
+.level-header-info{flex:1 1 12rem;min-width:0}
 .level-header-info h1{margin:0;font-size:1.25rem}
 .level-header-info p{margin:0;opacity:.9;font-size:.85rem}
-.level-switch{margin-left:auto;padding:.5rem 1rem;background:rgba(255,255,255,.2);border-radius:20px;color:white;text-decoration:none;font-size:.85rem;transition:background .2s}
+.level-actions{margin-left:auto;display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
+.level-switch{padding:.5rem 1rem;background:rgba(255,255,255,.2);border-radius:20px;color:white;text-decoration:none;font-size:.85rem;transition:background .2s}
 .level-switch:hover{background:rgba(255,255,255,.3);color:white}
 .config-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;margin-bottom:1.5rem}
 @media(min-width:768px){.config-grid{grid-template-columns:repeat(4,1fr)}}
+.config-grid.secondary{grid-template-columns:1fr;max-width:500px;margin:0 auto 1.5rem}
+@media(min-width:520px){.config-grid.secondary{grid-template-columns:repeat(2,1fr)}}
+@media(min-width:768px){.config-grid.secondary.sss{grid-template-columns:repeat(3,1fr);max-width:760px}}
+@media(max-width:600px){.level-actions{margin-left:0;width:100%}}
 .config-card{background:var(--bg-card);border-radius:var(--radius-lg);border:1px solid var(--border-color);padding:1.25rem;text-align:center;transition:all .2s}
 .config-card:hover{border-color:var(--primary);transform:translateY(-2px)}
 .config-card a{text-decoration:none;color:inherit;display:block}
@@ -50,7 +56,7 @@
         <h1>{{ level_name }}</h1>
         <p>Configure teachers, subjects, classes and generate timetables</p>
     </div>
-    <div style="margin-left:auto;display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;">
+    <div class="level-actions">
         <a href="{{ url_for('generator.setup_guide') }}" class="level-switch" title="Step-by-step checklist">
             <i class="fas fa-list-check"></i> Setup guide
         </a>
@@ -100,7 +106,7 @@
 </div>
 
 <!-- Rules, rooms (+ streams for SSS) -->
-<div class="config-grid" style="grid-template-columns:repeat({{ 3 if level == 'sss' else 2 }},1fr);max-width:{{ 760 if level == 'sss' else 500 }}px;margin:0 auto 1.5rem">
+<div class="config-grid secondary {{ 'sss' if level == 'sss' else '' }}">
     {% if level == 'sss' %}
     <div class="config-card">
         <a href="{{ url_for('generator.streams_list') }}">

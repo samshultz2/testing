@@ -855,27 +855,42 @@ def bulk_set_stream():
         {Student.stream: stream}, synchronize_session=False
     )
 
-    # Assigning a stream should also give those students that stream's WAEC
-    # subjects. Fill where the student has none yet (don't clobber a custom
-    # list). Clearing the stream (stream=None) leaves WAEC subjects untouched.
-    waec_filled = 0
-    defaults = STREAM_WAEC_SUBJECTS.get(stream) if stream else None
-    if defaults:
-        joined = ', '.join(defaults)
+    # Assigning a stream should also give those students that stream's WAEC and
+    # JAMB subjects (from the per-school config). Fill where the student has none
+    # yet (don't clobber a custom list). Clearing the stream (stream=None) leaves
+    # the subject lists untouched.
+    from utils.exam_subject_config import stream_waec_subjects, stream_jamb_subjects
+    waec_filled = jamb_filled = 0
+    waec_defaults = stream_waec_subjects(stream) if stream else []
+    jamb_defaults = stream_jamb_subjects(stream) if stream else []
+    if waec_defaults or jamb_defaults:
+        waec_joined = ', '.join(waec_defaults)
+        jamb_joined = ', '.join(jamb_defaults)
         for student in Student.query.filter(Student.id.in_(ids)).all():
-            if not student.waec_subject_list:
-                student.waec_subjects = joined
+            if waec_defaults and not student.waec_subject_list:
+                student.waec_subjects = waec_joined
                 waec_filled += 1
+            if jamb_defaults and not student.jamb_subject_list:
+                student.jamb_subjects = jamb_joined
+                jamb_filled += 1
     db.session.commit()
 
     label = stream if stream else 'cleared'
+    fills = []
+    if waec_filled:
+        fills.append(f'WAEC filled {waec_filled}')
+    if jamb_filled:
+        fills.append(f'JAMB filled {jamb_filled}')
     log_action('bulk_set_stream', f'{updated} students -> {label}'
-               + (f', WAEC filled {waec_filled}' if waec_filled else ''))
+               + (f', {", ".join(fills)}' if fills else ''))
     msg = f'Stream set to {label} for {updated} student(s).'
     if waec_filled:
-        msg += f' WAEC subjects filled from stream for {waec_filled}.'
+        msg += f' WAEC subjects filled for {waec_filled}.'
+    if jamb_filled:
+        msg += f' JAMB subjects filled for {jamb_filled}.'
     flash(msg, 'success')
-    return jsonify({'updated': updated, 'stream': stream, 'waec_filled': waec_filled})
+    return jsonify({'updated': updated, 'stream': stream,
+                    'waec_filled': waec_filled, 'jamb_filled': jamb_filled})
 
 
 @main_bp.route('/students/bulk-gender', methods=['POST'])
@@ -1050,15 +1065,70 @@ def bulk_add_subject():
 @admin_required
 def apply_stream_waec():
     """Fill WAEC subjects from each student's stream where not already set."""
+    from utils.exam_subject_config import stream_waec_subjects
     updated = 0
     for student in Student.query.filter_by(is_active=True).all():
-        defaults = STREAM_WAEC_SUBJECTS.get(student.stream)
+        defaults = stream_waec_subjects(student.stream)
         if defaults and not student.waec_subject_list:
             student.waec_subjects = ', '.join(defaults)
             updated += 1
     db.session.commit()
     flash(f'WAEC subjects filled from stream for {updated} student(s).', 'success')
     return safe_redirect(url_for('main.students_list'))
+
+
+@main_bp.route('/students/apply-stream-subjects', methods=['POST'])
+@admin_required
+def apply_stream_subjects():
+    """Extrapolate a stream's compulsory WAEC + JAMB subjects to every SSS2/SSS3
+    student in that stream. Fills empties only (never clobbers a custom list).
+    Triggered by the explicit button on the student edit page."""
+    import re
+    from utils.exam_subject_config import stream_waec_subjects, stream_jamb_subjects
+    from utils.branch_scope import scope_query
+    stream = (request.form.get('stream') or '').strip()
+    if stream not in STREAMS:
+        return jsonify({'error': 'Choose a valid stream first.'}), 400
+
+    waec_defaults = stream_waec_subjects(stream)
+    jamb_defaults = stream_jamb_subjects(stream)
+
+    # Senior classes that carry streams (SSS2 + SSS3), matched tolerantly.
+    senior_ids = []
+    for c in SchoolClass.query.all():
+        norm = re.sub(r'[^a-z0-9]', '', (c.name or '').lower())
+        if norm in ('sss2', 'ss2', 'seniorsecondary2', 'sss3', 'ss3', 'seniorsecondary3'):
+            senior_ids.append(c.id)
+
+    active_term = get_active_term()
+    students = {}
+    if senior_ids and active_term:
+        assignments = scope_query(ClassArmAssignment.query.filter(
+            ClassArmAssignment.class_id.in_(senior_ids),
+            ClassArmAssignment.term_id == active_term.id), ClassArmAssignment).all()
+        for a in assignments:
+            for e in StudentEnrollment.query.filter_by(
+                    class_arm_assignment_id=a.id, is_active=True).join(Student).all():
+                st = e.student
+                if st.is_active and st.stream == stream:
+                    students[st.id] = st
+
+    waec_joined = ', '.join(waec_defaults)
+    jamb_joined = ', '.join(jamb_defaults)
+    waec_filled = jamb_filled = 0
+    for st in students.values():
+        if waec_defaults and not st.waec_subject_list:
+            st.waec_subjects = waec_joined
+            waec_filled += 1
+        if jamb_defaults and not st.jamb_subject_list:
+            st.jamb_subjects = jamb_joined
+            jamb_filled += 1
+    db.session.commit()
+    log_action('apply_stream_subjects',
+               f'{stream}: WAEC filled {waec_filled}, JAMB filled {jamb_filled} '
+               f'(of {len(students)} SSS2/SSS3 students)')
+    return jsonify({'stream': stream, 'matched': len(students),
+                    'waec_filled': waec_filled, 'jamb_filled': jamb_filled})
 
 
 @main_bp.route('/students/bulk-delete', methods=['POST'])
@@ -1337,13 +1407,24 @@ def export_students_data():
         # Parent phone
         if 'parent_phone' in fields:
             data['Parent Phone'] = phone_map.get(student.id, '')
-        
+
+        # External-exam identity records
+        if 'nin' in fields:
+            data['NIN'] = student.nin or ''
+        if 'jamb_profile_code' in fields:
+            data['JAMB Profile Code'] = student.jamb_profile_code or ''
+        if 'jamb_reg_number' in fields:
+            data['JAMB Reg Number'] = student.jamb_reg_number or ''
+        if 'waec_reg_number' in fields:
+            data['WAEC Reg Number'] = student.waec_reg_number or ''
+
         student_data.append(data)
-    
+
     # Get ordered field names for export
-    field_order = ['Student ID', 'Surname', 'First Name', 'Middle Name', 'Gender', 
-                   'Class', 'Date of Birth', 'Age', 'Religion', 'Home Address', 
-                   'Hobbies', 'Parent Phone']
+    field_order = ['Student ID', 'Surname', 'First Name', 'Middle Name', 'Gender',
+                   'Class', 'Date of Birth', 'Age', 'Religion', 'Home Address',
+                   'Hobbies', 'Parent Phone',
+                   'NIN', 'JAMB Profile Code', 'JAMB Reg Number', 'WAEC Reg Number']
     export_fields = [f for f in field_order if f in student_data[0]] if student_data else []
     
     if format_type == 'csv':

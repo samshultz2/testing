@@ -18,7 +18,7 @@
 {% endblock %}
 
 {% block content %}
-  <div class="cards" style="grid-template-columns:repeat(5,1fr)">
+  <div class="cards" style="grid-template-columns:repeat(auto-fit,minmax(130px,1fr))">
     <div class="kpi"><div class="lab">Total</div><div class="num">{{ summary.total }}</div></div>
     <div class="kpi"><div class="lab">Paying</div><div class="num">{{ summary.paying }}</div></div>
     <div class="kpi"><div class="lab">Trial</div><div class="num">{{ summary.trial }}</div></div>

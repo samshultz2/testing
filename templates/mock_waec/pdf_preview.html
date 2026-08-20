@@ -50,6 +50,24 @@
     </div>
 </div></div>
 
+{% if subject_choices %}
+<div class="card mb-2"><div class="card-body">
+    <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem;">
+        <span style="font-weight:600;">Subjects to include</span>
+        <button type="button" id="subjAll" class="btn btn-secondary btn-sm">Select all</button>
+        <button type="button" id="subjNone" class="btn btn-secondary btn-sm">Clear all</button>
+        <span class="text-muted text-sm">Only checked subjects appear as columns. Defaults come from the cohort’s saved WAEC subjects.</span>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:.5rem 1.2rem;align-items:center;">
+        {% for c in subject_choices %}
+        <label style="display:flex;align-items:center;gap:.4rem;margin:0;">
+            <input type="checkbox" class="pdf-subj" value="{{ c.name }}" {% if c.checked %}checked{% endif %}> {{ c.name }}
+        </label>
+        {% endfor %}
+    </div>
+</div></div>
+{% endif %}
+
 <div id="pdfHost" style="position:relative;">
     <iframe id="pdf" title="PDF preview" style="width:100%;height:76vh;border:1px solid var(--border-color);border-radius:var(--radius-md);background:#fff;"></iframe>
     <div id="pdfFallback" class="text-muted text-sm" style="display:none;padding:1rem;text-align:center;">
@@ -70,11 +88,17 @@
   var orientSel = document.getElementById('orientSel');
   var signersSel = document.getElementById('signersSel');
   var opts = Array.prototype.slice.call(document.querySelectorAll('.pdf-opt'));
+  var subjBoxes = Array.prototype.slice.call(document.querySelectorAll('.pdf-subj'));
   var lastBlob = null;
 
   function build(extra) {
     var p = [];
     opts.forEach(function (o) { if (!o.checked) p.push(o.dataset.param + '=0'); });
+    if (subjBoxes.length) {
+      var chosen = subjBoxes.filter(function (b) { return b.checked; })
+                            .map(function (b) { return encodeURIComponent(b.value); });
+      p.push('subjects=' + chosen.join(','));
+    }
     if (orientSel) p.push('orient=' + orientSel.value);
     if (signersSel) p.push('signers=' + signersSel.value);
     if (colsSel && colsSel.value !== '') p.push('cols=' + colsSel.value);
@@ -106,6 +130,10 @@
       .catch(function () { iframe.style.display = 'none'; fallback.style.display = ''; });
   }
   opts.forEach(function (o) { o.addEventListener('change', refresh); });
+  subjBoxes.forEach(function (b) { b.addEventListener('change', refresh); });
+  var subjAll = document.getElementById('subjAll'), subjNone = document.getElementById('subjNone');
+  if (subjAll) subjAll.addEventListener('click', function () { subjBoxes.forEach(function (b) { b.checked = true; }); refresh(); });
+  if (subjNone) subjNone.addEventListener('click', function () { subjBoxes.forEach(function (b) { b.checked = false; }); refresh(); });
   if (colsSel) colsSel.addEventListener('change', refresh);
   if (orientSel) orientSel.addEventListener('change', refresh);
   if (signersSel) signersSel.addEventListener('change', refresh);

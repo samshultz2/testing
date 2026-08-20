@@ -1945,10 +1945,16 @@ RELATIONSHIPS = ['Father', 'Mother', 'Guardian', 'Sibling', 'Other']
 def _student_form_options(with_enrolment=False):
     """Shared option lists for the add/edit forms; the enrolment block (add
     only) is class-scoped to the current user with their form class default."""
+    from utils.exam_subject_config import get_config, stream_waec_map, stream_jamb_map
+    _cfg = get_config()
     opts = {
-        'religions': RELIGIONS, 'streams': STREAMS, 'waec_subjects': WAEC_SUBJECTS,
-        'stream_waec': STREAM_WAEC_SUBJECTS, 'relationships': RELATIONSHIPS,
-        'genders': ['Male', 'Female'],
+        'religions': RELIGIONS, 'streams': STREAMS,
+        'waec_subjects': _cfg['waec']['catalog'] or WAEC_SUBJECTS,
+        'jamb_subjects': _cfg['jamb']['catalog'] or WAEC_SUBJECTS,
+        'stream_waec': stream_waec_map(), 'stream_jamb': stream_jamb_map(),
+        'relationships': RELATIONSHIPS, 'genders': ['Male', 'Female'],
+        'apply_stream_url': url_for('main.apply_stream_subjects'),
+        'exam_subjects_settings_url': url_for('settings.exam_subjects'),
     }
     # University-aspiration reference lists for the searchable dropdowns + the
     # course-requirements auto-fill endpoint. Best-effort (empty on a DB where the

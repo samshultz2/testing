@@ -57,8 +57,9 @@ def test_bulk_set_stream_fills_waec_subjects(app, auth_client):
         b = db.session.get(Student, blank)
         c = db.session.get(Student, custom)
         assert b.stream == 'Science' and c.stream == 'Science'
-        # the blank student got the Science default WAEC subjects
-        assert b.waec_subject_list == list(STREAM_WAEC_SUBJECTS['Science'])
+        # the blank student got the Science default WAEC subjects (per-school
+        # config groups General subjects first, so compare membership not order)
+        assert set(b.waec_subject_list) == set(STREAM_WAEC_SUBJECTS['Science'])
         # the custom student kept their own list
         assert c.waec_subjects == 'Mathematics, English Language'
 

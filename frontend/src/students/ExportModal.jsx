@@ -6,6 +6,8 @@ const FIELDS = [
   ['middle_name', 'Middle Name'], ['gender', 'Gender'], ['current_class', 'Class'],
   ['date_of_birth', 'Date of Birth'], ['age', 'Age'], ['religion', 'Religion'],
   ['home_address', 'Home Address'], ['hobbies', 'Hobbies'], ['parent_phone', 'Parent Phone'],
+  ['nin', 'NIN'], ['jamb_profile_code', 'JAMB Profile Code'],
+  ['jamb_reg_number', 'JAMB Reg Number'], ['waec_reg_number', 'WAEC Reg Number'],
 ];
 const DEFAULT_ON = new Set(['student_id', 'surname', 'first_name', 'gender', 'current_class']);
 const FORMATS = [
