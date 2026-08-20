@@ -2029,12 +2029,16 @@ function Combine({ d, notify }) {
   const toggleSubj = (id) => setSubjSel((s) => { const n = new Set(s); const k = String(id); n.has(k) ? n.delete(k) : n.add(k); return n; });
   const chosen = subjects.filter((s) => subjSel.has(String(s.id)));
 
-  // Filter
-  const [metric, setMetric] = useState('total');   // total | average
-  const [op, setOp] = useState('gte');             // gte | lte | eq
-  const [val, setVal] = useState('');
-  const nVal = parseFloat(val);
-  const hasVal = !Number.isNaN(nVal);
+  // Multi-condition AND filter. Each condition tests a basis (all subjects vs the
+  // chosen combination, total vs average) optionally on one assessment component
+  // (e.g. Exam) — so you can ask e.g. "all-subject average ≥ 50 AND exam average
+  // ≥ 67 across Physics+Chemistry+Biology" to pick who qualifies for a stream.
+  const ats = d.assessment_types || [];
+  let condId = React.useRef(1);
+  const [conds, setConds] = useState(() => [{ id: 0, basis: 'combo_average', component: '', op: 'gte', value: '' }]);
+  const addCond = () => setConds((cs) => [...cs, { id: condId.current++, basis: 'combo_average', component: '', op: 'gte', value: '' }]);
+  const rmCond = (id) => setConds((cs) => (cs.length > 1 ? cs.filter((c) => c.id !== id) : cs));
+  const setCond = (id, k, v) => setConds((cs) => cs.map((c) => (c.id === id ? { ...c, [k]: v } : c)));
 
   const computed = React.useMemo(() => {
     const n = chosen.length;
@@ -2047,19 +2051,38 @@ function Combine({ d, notify }) {
     });
   }, [rows, subjSel]);
 
-  const active = hasVal && chosen.length > 0;
-  const matches = (r) => {
-    const x = metric === 'average' ? r.combo_average : r.combo_total;
-    if (op === 'gte') return x >= nVal;
-    if (op === 'lte') return x <= nVal;
-    if (op === 'eq') return x === nVal;
+  const condValue = (r, basis, component) => {
+    if (basis === 'all_total') return r.total;
+    if (basis === 'all_average') return r.average;
+    const n = chosen.length;
+    if (!n) return null;
+    let tot = 0;
+    chosen.forEach((s) => {
+      const sid = String(s.id);
+      let v;
+      if (component) v = (r.components && r.components[sid]) ? r.components[sid][String(component)] : undefined;
+      else v = r.subjects[sid];
+      tot += (v != null ? v : 0);
+    });
+    tot = Math.round(tot * 10) / 10;
+    return basis === 'combo_total' ? tot : Math.round((tot / n) * 100) / 100;
+  };
+  const activeConds = conds.filter((c) => c.value !== '' && !Number.isNaN(parseFloat(c.value)));
+  const active = activeConds.length > 0 && chosen.length > 0;
+  const passes = (r, c) => {
+    const x = condValue(r, c.basis, c.basis.indexOf('combo') === 0 ? c.component : '');
+    if (x == null) return false;
+    const v = parseFloat(c.value);
+    if (c.op === 'gte') return x >= v;
+    if (c.op === 'lte') return x <= v;
+    if (c.op === 'eq') return x === v;
     return true;
   };
   const shown = React.useMemo(() => {
-    const list = active ? computed.filter(matches) : computed.slice();
-    list.sort((a, b) => (metric === 'average' ? b.combo_average - a.combo_average : b.combo_total - a.combo_total));
+    const list = active ? computed.filter((r) => activeConds.every((c) => passes(r, c))) : computed.slice();
+    list.sort((a, b) => b.combo_total - a.combo_total);
     return list;
-  }, [computed, active, op, nVal, metric]);
+  }, [computed, conds]);
 
   // Export column picker
   const [showExport, setShowExport] = useState(false);
@@ -2079,8 +2102,11 @@ function Combine({ d, notify }) {
     p.set('term_id', d.term_id || '');
     p.set('scopes', (d.scopes || []).join(','));
     p.set('subjects', chosen.map((s) => s.id).join(','));
-    p.set('metric', metric); p.set('op', op);
-    if (hasVal) p.set('value', val);
+    if (activeConds.length) {
+      p.set('conditions', JSON.stringify(activeConds.map((c) => ({
+        basis: c.basis, component: c.basis.indexOf('combo') === 0 ? c.component : '',
+        op: c.op, value: c.value }))));
+    }
     p.set('columns', keys.join(','));
     p.set('format', fmt);
     return `${d.urls.export}?${p.toString()}`;
@@ -2091,14 +2117,11 @@ function Combine({ d, notify }) {
     setShowExport(false);
   };
 
-  const metricName = metric === 'average' ? 'Average' : 'Total';
-  const opText = { gte: '≥', lte: '≤', eq: '=' }[op];
-
   return (
     <>
       <div className="page-header">
         <div><h1>Subject Combination</h1>
-          <p className="text-muted text-sm">Pick subjects (e.g. Physics + Chemistry + Biology) and filter students by their combined total or average across just those subjects.</p></div>
+          <p className="text-muted text-sm">Pick subjects (e.g. Physics + Chemistry + Biology) and stack conditions — e.g. all-subject average ≥ 50 AND exam average ≥ 67 across the chosen subjects — to find who qualifies (for a stream, an award, etc.).</p></div>
         <div className="page-header-actions">
           {d.urls.explore && <a href={d.urls.explore} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-filter" /> Explorer</a>}
           {d.urls.broadsheet && <a href={d.urls.broadsheet} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-table" /> Broadsheet</a>}
@@ -2148,25 +2171,48 @@ function Combine({ d, notify }) {
             ))}
           </div>
           {chosen.length > 0 && (
-            <div className="filter-form" style={{ alignItems: 'flex-end' }}>
-              <div className="form-group"><label className="form-label">Combined</label>
-                <select className="form-control" value={metric} onChange={(e) => setMetric(e.target.value)}>
-                  <option value="total">Total (sum)</option><option value="average">Average</option></select></div>
-              <div className="form-group"><label className="form-label">Condition</label>
-                <select className="form-control" value={op} onChange={(e) => setOp(e.target.value)}>
-                  <option value="gte">≥ (at least)</option><option value="lte">≤ (at most)</option><option value="eq">= (exactly)</option></select></div>
-              <div className="form-group"><label className="form-label">Value</label>
-                <input type="number" className="form-control" style={{ width: 120 }} value={val} onChange={(e) => setVal(e.target.value)} placeholder="e.g. 180" /></div>
-              <div className="form-group">
-                <button type="button" className="btn btn-success" onClick={() => setShowExport(true)}><i aria-hidden="true" className="fas fa-download" /> Export</button>
+            <div style={{ marginTop: '.3rem' }}>
+              <label className="form-label">Conditions <span className="text-muted" style={{ fontWeight: 400 }}>(all must be met)</span></label>
+              {conds.map((c) => {
+                const isCombo = c.basis.indexOf('combo') === 0;
+                return (
+                  <div key={c.id} className="filter-form" style={{ alignItems: 'flex-end', marginBottom: '.4rem' }}>
+                    <div className="form-group"><label className="form-label">Basis</label>
+                      <select className="form-control" value={c.basis} onChange={(e) => setCond(c.id, 'basis', e.target.value)}>
+                        <option value="combo_average">Selected subjects · average</option>
+                        <option value="combo_total">Selected subjects · total</option>
+                        <option value="all_average">All subjects · average</option>
+                        <option value="all_total">All subjects · total</option>
+                      </select></div>
+                    {isCombo && ats.length > 0 && (
+                      <div className="form-group"><label className="form-label">Component</label>
+                        <select className="form-control" value={c.component} onChange={(e) => setCond(c.id, 'component', e.target.value)}>
+                          <option value="">Whole subject</option>
+                          {ats.map((at) => <option key={at.id} value={at.id}>{at.name} only</option>)}
+                        </select></div>
+                    )}
+                    <div className="form-group"><label className="form-label">Is</label>
+                      <select className="form-control" value={c.op} onChange={(e) => setCond(c.id, 'op', e.target.value)}>
+                        <option value="gte">≥ (at least)</option><option value="lte">≤ (at most)</option><option value="eq">= (exactly)</option></select></div>
+                    <div className="form-group"><label className="form-label">Value</label>
+                      <input type="number" className="form-control" style={{ width: 110 }} value={c.value} onChange={(e) => setCond(c.id, 'value', e.target.value)} placeholder="e.g. 50" /></div>
+                    <div className="form-group">
+                      <button type="button" className="btn btn-secondary btn-sm" title="Remove condition" disabled={conds.length <= 1} onClick={() => rmCond(c.id)}><i aria-hidden="true" className="fas fa-times" /></button>
+                    </div>
+                  </div>
+                );
+              })}
+              <div className="d-flex gap-2" style={{ marginTop: '.2rem' }}>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={addCond}><i aria-hidden="true" className="fas fa-plus" /> Add condition</button>
+                <button type="button" className="btn btn-success btn-sm" onClick={() => setShowExport(true)}><i aria-hidden="true" className="fas fa-download" /> Export</button>
               </div>
             </div>
           )}
           {chosen.length > 0 && (
-            <p className="text-muted text-sm mb-0" style={{ marginTop: '.4rem' }}>
+            <p className="text-muted text-sm mb-0" style={{ marginTop: '.5rem' }}>
               Combining <strong>{chosen.map((s) => s.name).join(' + ')}</strong>
-              {active ? <> · showing {metricName} {opText} {nVal} ({shown.length} of {rows.length})</> : <> · {rows.length} students</>}
-              . Average divides by {chosen.length} (missing subjects count as 0).
+              {active ? <> · <strong>{shown.length}</strong> of {rows.length} students meet all {activeConds.length} condition(s)</> : <> · {rows.length} students</>}
+              . Averages divide by {chosen.length} chosen subject(s); missing scores count as 0.
             </p>
           )}
         </div></div>

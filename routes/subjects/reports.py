@@ -217,6 +217,7 @@ def _explore_dataset(term_id, scope_ids):
 
         all_cs_ids = [cs.id for cs in cs_rows]
         score_map = {}
+        comp_map = {}            # (student_id, cs_id, at_id) -> component score
         if student_ids and all_cs_ids and at_ids:
             for s in StudentScore.query.filter(
                     StudentScore.student_id.in_(student_ids),
@@ -224,6 +225,7 @@ def _explore_dataset(term_id, scope_ids):
                     StudentScore.assessment_type_id.in_(at_ids)).all():
                 key = (s.student_id, s.class_subject_id)
                 score_map[key] = score_map.get(key, 0) + (s.score or 0)
+                comp_map[(s.student_id, s.class_subject_id, s.assessment_type_id)] = (s.score or 0)
 
         for a in selected:
             for cs in subjects_for(a):
@@ -241,13 +243,19 @@ def _explore_dataset(term_id, scope_ids):
             a = assignments_by_id[e.class_arm_assignment_id]
             asg_cs = subjects_for(a)
             subj_totals = {}
+            components = {}          # {subject_id: {at_id: score}} for component filters
             total = 0.0
             passed = failed = 0
             for cs in asg_cs:
                 st = score_map.get((e.student_id, cs.id))
                 if st is None:
                     continue
-                subj_totals[str(cs_subject[cs.id].id)] = round(st, 1)
+                sid_key = str(cs_subject[cs.id].id)
+                subj_totals[sid_key] = round(st, 1)
+                comp = {str(at): round(comp_map[(e.student_id, cs.id, at)], 1)
+                        for at in at_ids if (e.student_id, cs.id, at) in comp_map}
+                if comp:
+                    components[sid_key] = comp
                 total += st
                 if st >= pass_mark:
                     passed += 1
@@ -261,15 +269,21 @@ def _explore_dataset(term_id, scope_ids):
                 'arm_name': a.arm.name if a.arm else '',
                 'scope_label': a.display_name,
                 'subjects': subj_totals,
+                'components': components,
                 'total': round(total, 1), 'average': avg,
                 'passed': passed, 'failed': failed})
         rows.sort(key=lambda r: r['average'], reverse=True)
+
+    assessment_types = [{'id': at.id, 'name': at.name}
+                        for at in AssessmentType.query.filter_by(is_active=True)
+                        .order_by(AssessmentType.order).all()]
 
     return {
         'scope_options': scope_options,
         'selected_ids': scope_ids,
         'scope_meta': scope_meta,
         'subjects': sorted(subjects_union.values(), key=lambda s: s['name']),
+        'assessment_types': assessment_types,
         'rows': rows,
         'pass_mark': pass_mark,
     }
@@ -430,6 +444,80 @@ def _combine_rows(ds, subject_ids, metric, op, value):
     return out, active, label
 
 
+def _cond_value(r, subject_ids, basis, component):
+    """The value a single condition tests for one student row.
+
+    basis: all_total | all_average | combo_total | combo_average.
+    component: '' (whole-subject total) or an assessment-type id (e.g. Exam) — it
+    only applies to the two ``combo_*`` bases. Missing subject scores count as 0;
+    the combined average divides by the number of chosen subjects.
+    """
+    if basis == 'all_total':
+        return r.get('total', 0)
+    if basis == 'all_average':
+        return r.get('average', 0)
+    sids = [str(s) for s in subject_ids]
+    n = len(sids)
+    if not n:
+        return None
+    tot = 0.0
+    for sid in sids:
+        if component:
+            v = (r.get('components', {}).get(sid, {}) or {}).get(str(component))
+        else:
+            v = r.get('subjects', {}).get(sid)
+        tot += (v or 0)
+    tot = round(tot, 1)
+    return tot if basis == 'combo_total' else round(tot / n, 2)
+
+
+def _combine_multi(rows_in, subject_ids, conditions, at_names=None):
+    """Filter rows by ANY number of AND-combined conditions. Each condition is
+    ``{basis, component, op, value}``. Returns ``(rows, active, labels)`` where
+    labels is a human list like ['All-subject average ≥ 50', 'Exam average ≥ 67']."""
+    at_names = at_names or {}
+    valid = []
+    for c in conditions:
+        try:
+            v = float(c.get('value'))
+        except (TypeError, ValueError):
+            continue
+        basis = c.get('basis') or 'combo_total'
+        op = c.get('op') or 'gte'
+        comp = str(c.get('component') or '')
+        if basis in ('all_total', 'all_average'):
+            comp = ''
+        valid.append({'basis': basis, 'op': op, 'value': v, 'component': comp})
+
+    def passes(r, c):
+        x = _cond_value(r, subject_ids, c['basis'], c['component'])
+        if x is None:
+            return False
+        if c['op'] == 'gte':
+            return x >= c['value']
+        if c['op'] == 'lte':
+            return x <= c['value']
+        if c['op'] == 'eq':
+            return x == c['value']
+        return True
+
+    rows = rows_in
+    if valid:
+        rows = [r for r in rows if all(passes(r, c) for c in valid)]
+
+    op_text = {'gte': '≥', 'lte': '≤', 'eq': '='}
+    basis_text = {'all_total': 'All-subject total', 'all_average': 'All-subject average',
+                  'combo_total': 'Combined total', 'combo_average': 'Combined average'}
+    labels = []
+    for c in valid:
+        name = basis_text.get(c['basis'], c['basis'])
+        if c['component'] and c['basis'].startswith('combo'):
+            comp_name = at_names.get(str(c['component']), 'component')
+            name += f' ({comp_name})'
+        labels.append(f"{name} {op_text.get(c['op'], '')} {c['value']:g}")
+    return rows, bool(valid), labels
+
+
 @subjects_bp.route('/broadsheet/combine')
 @login_required
 def broadsheet_combine():
@@ -449,6 +537,7 @@ def broadsheet_combine():
         'scope_options': ds['scope_options'],
         'scope_meta': ds['scope_meta'],
         'subjects_union': ds['subjects'],
+        'assessment_types': ds['assessment_types'],
         'rows': ds['rows'], 'pass_mark': ds['pass_mark'],
         'self_url': url_for('subjects.broadsheet_combine'),
         'urls': {'broadsheet': url_for('subjects.broadsheet', term_id=term_id or ''),
@@ -478,7 +567,27 @@ def combine_export():
     metric = request.args.get('metric', 'total')
     op = request.args.get('op', 'gte')
     value = request.args.get('value', type=float)
-    rows, active, cond = _combine_rows(ds, subject_ids, metric, op, value)
+    # All rows with the combined columns computed (no single-metric filtering).
+    all_combo, _, _ = _combine_rows(ds, subject_ids, metric, op, None)
+
+    # Multi-condition (AND) filter — the primary path. Falls back to the legacy
+    # single metric/op/value when no `conditions` JSON is supplied.
+    import json as _json
+    conditions = []
+    raw_cond = request.args.get('conditions')
+    if raw_cond:
+        try:
+            parsed = _json.loads(raw_cond)
+            if isinstance(parsed, list):
+                conditions = parsed
+        except (ValueError, TypeError):
+            conditions = []
+    if conditions:
+        at_names = {str(at['id']): at['name'] for at in ds['assessment_types']}
+        rows, active, labels = _combine_multi(all_combo, subject_ids, conditions, at_names)
+        cond = '; '.join(labels)
+    else:
+        rows, active, cond = _combine_rows(ds, subject_ids, metric, op, value)
 
     if not chosen_subjects:
         flash('Pick at least one subject to combine before exporting.', 'error')
