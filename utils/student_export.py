@@ -32,9 +32,22 @@ _SHORT_HEADER = {
     'Parent Phone': 'Phone',
 }
 
-_DEJAVU = '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'
-_DEJAVU_BOLD = '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'
-_DEJAVU_OBL = '/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf'
+def _first_font(cands):
+    for p in cands:
+        if os.path.exists(p):
+            return p
+    return cands[-1]
+
+
+# Prefer Liberation Sans (a clean, modern humanist grotesque) and fall back to
+# DejaVu. Liberation covers the glyphs we use (♂ ♀ ● — …).
+_LIB = '/usr/share/fonts/truetype/liberation/'
+_DV = '/usr/share/fonts/truetype/dejavu/'
+_FONT_REG = _first_font([_LIB + 'LiberationSans-Regular.ttf', _DV + 'DejaVuSans.ttf'])
+_FONT_BOLD = _first_font([_LIB + 'LiberationSans-Bold.ttf', _DV + 'DejaVuSans-Bold.ttf'])
+_FONT_ITAL = _first_font([_LIB + 'LiberationSans-Italic.ttf', _DV + 'DejaVuSans-Oblique.ttf'])
+# Back-compat aliases (used by the image renderer helpers below).
+_DEJAVU, _DEJAVU_BOLD, _DEJAVU_OBL = _FONT_REG, _FONT_BOLD, _FONT_ITAL
 
 
 def short_header(name):
@@ -64,7 +77,7 @@ def students_pdf(rows, headers, school, total=None):
     from reportlab.lib import colors
     from reportlab.lib.enums import TA_LEFT, TA_CENTER
     from reportlab.platypus import (BaseDocTemplate, Frame, PageTemplate, Table,
-                                    TableStyle, Paragraph)
+                                    TableStyle, Paragraph, NextPageTemplate)
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.pdfbase import pdfmetrics
     from reportlab.pdfbase.ttfonts import TTFont
@@ -73,12 +86,9 @@ def students_pdf(rows, headers, school, total=None):
 
     base, boldf, obl = 'Helvetica', 'Helvetica-Bold', 'Helvetica-Oblique'
     try:
-        if os.path.exists(_DEJAVU):
-            pdfmetrics.registerFont(TTFont('DejaVu', _DEJAVU)); base = 'DejaVu'
-        if os.path.exists(_DEJAVU_BOLD):
-            pdfmetrics.registerFont(TTFont('DejaVu-Bold', _DEJAVU_BOLD)); boldf = 'DejaVu-Bold'
-        if os.path.exists(_DEJAVU_OBL):
-            pdfmetrics.registerFont(TTFont('DejaVu-Obl', _DEJAVU_OBL)); obl = 'DejaVu-Obl'
+        pdfmetrics.registerFont(TTFont('Body', _FONT_REG)); base = 'Body'
+        pdfmetrics.registerFont(TTFont('Body-Bold', _FONT_BOLD)); boldf = 'Body-Bold'
+        pdfmetrics.registerFont(TTFont('Body-Obl', _FONT_ITAL)); obl = 'Body-Obl'
     except Exception:
         pass
 
@@ -89,7 +99,7 @@ def students_pdf(rows, headers, school, total=None):
     foot_h = 14 * mm
     avail = PW - 2 * margin - 2 * mm
 
-    fs = 11
+    fs = 13
     cell = ParagraphStyle('c', fontName=base, fontSize=fs, leading=fs + 3, textColor=colors.HexColor(INK))
     cellc = ParagraphStyle('cc', parent=cell, alignment=TA_CENTER)
     headp = ParagraphStyle('h', fontName=boldf, fontSize=fs, leading=fs + 2,
@@ -129,8 +139,18 @@ def students_pdf(rows, headers, school, total=None):
             tot = sum(col_w); over = tot - avail
         if over > 0:
             f = avail / tot; col_w = [w * f for w in col_w]
-    # Columns stay tight to their content (address/hobbies capped so they wrap);
-    # a narrower-than-page table is centred rather than stretched.
+    elif tot < avail:
+        # Fill the full A4 width: hand the leftover to the text/wrap columns
+        # (address, hobbies, names) so numeric/short columns stay tight.
+        grow = [j for j in range(ncol)
+                if _is_wrap(headers[j]) or 'name' in headers[j].lower()
+                or headers[j].lower() in ('surname', 'religion', 'class', 'current_class')]
+        if not grow:
+            grow = list(range(ncol))
+        base_sum = sum(col_w[j] for j in grow) or 1
+        left = avail - tot
+        for j in grow:
+            col_w[j] += left * (col_w[j] / base_sum)
 
     data = [[Paragraph(short_header(h), headp) for h in headers]]
     for r in rows:
@@ -146,31 +166,44 @@ def students_pdf(rows, headers, school, total=None):
                 line.append(Paragraph(v, cell))
         data.append(line)
 
-    t = Table(data, colWidths=col_w, repeatRows=1, hAlign='CENTER')
+    # Modern, minimal table: a solid navy header, roomy rows, soft zebra and
+    # horizontal hairlines only — no vertical gridlines or heavy outer box.
+    t = Table(data, colWidths=col_w, repeatRows=1, hAlign='LEFT')
     t.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor(NAVY)),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('TOPPADDING', (0, 0), (-1, -1), 5), ('BOTTOMPADDING', (0, 0), (-1, -1), 5),
-        ('LEFTPADDING', (0, 0), (-1, -1), 5), ('RIGHTPADDING', (0, 0), (-1, -1), 5),
-        ('LINEBELOW', (0, 0), (-1, -1), 0.4, colors.HexColor(LINE)),
-        ('LINEAFTER', (0, 0), (-2, -1), 0.4, colors.HexColor(LINE)),
+        ('TOPPADDING', (0, 0), (-1, 0), 9), ('BOTTOMPADDING', (0, 0), (-1, 0), 9),
+        ('TOPPADDING', (0, 1), (-1, -1), 7), ('BOTTOMPADDING', (0, 1), (-1, -1), 7),
+        ('LEFTPADDING', (0, 0), (-1, -1), 9), ('RIGHTPADDING', (0, 0), (-1, -1), 9),
+        ('LINEBELOW', (0, 1), (-1, -1), 0.5, colors.HexColor(LINE)),
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor(ZEBRA)]),
-        ('BOX', (0, 0), (-1, -1), 0.7, colors.HexColor(NAVY)),
+        ('LINEBELOW', (0, 0), (-1, 0), 1.2, colors.HexColor(GOLD)),
     ]))
 
     buf = io.BytesIO()
-    frame = Frame(margin + 1 * mm, margin + foot_h, avail, PH - mast_h - foot_h - margin,
-                  leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)
+    # The masthead is drawn on the first page only; later pages use the full
+    # height (below a small top gap) so the table keeps flowing.
+    frame_first = Frame(margin + 1 * mm, margin + foot_h, avail, PH - mast_h - foot_h - margin,
+                        leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)
+    frame_later = Frame(margin + 1 * mm, margin + foot_h, avail, PH - foot_h - margin - 12 * mm,
+                        leftPadding=0, rightPadding=0, topPadding=0, bottomPadding=0)
 
-    def paint(cv, doc):
+    def paint_first(cv, doc):
         _draw_border(cv, PW, PH, margin)
         _draw_masthead(cv, PW, PH, margin, school, total, 'PDF', base, boldf, obl)
         _draw_footer(cv, PW, margin, foot_h, school, base, boldf, obl)
 
+    def paint_later(cv, doc):
+        _draw_border(cv, PW, PH, margin)
+        _draw_footer(cv, PW, margin, foot_h, school, base, boldf, obl)
+
     doc = BaseDocTemplate(buf, pagesize=(PW, PH), leftMargin=margin, rightMargin=margin,
                           topMargin=margin, bottomMargin=margin)
-    doc.addPageTemplates([PageTemplate(id='main', frames=[frame], onPage=paint)])
+    doc.addPageTemplates([
+        PageTemplate(id='first', frames=[frame_first], onPage=paint_first),
+        PageTemplate(id='later', frames=[frame_later], onPage=paint_later),
+    ])
 
     class Numbered(_canvas.Canvas):
         def __init__(self, *a, **k):
@@ -186,7 +219,7 @@ def students_pdf(rows, headers, school, total=None):
                 super().showPage()
             super().save()
 
-    doc.build([t], canvasmaker=Numbered)
+    doc.build([NextPageTemplate('later'), t], canvasmaker=Numbered)
     return buf.getvalue()
 
 
@@ -201,8 +234,24 @@ def _draw_border(cv, PW, PH, margin):
 def _draw_masthead(cv, PW, PH, margin, school, total, fmt, base, boldf, obl):
     from reportlab.lib import colors
     from reportlab.lib.units import mm
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+
+    def _fit(s, font, size, maxw):
+        s = str(s)
+        if stringWidth(s, font, size) <= maxw:
+            return s
+        while s and stringWidth(s + '…', font, size) > maxw:
+            s = s[:-1]
+        return (s + '…') if s else ''
+
     top = PH - margin - 3 * mm
     x = margin + 5 * mm
+
+    # Right info panel — geometry first so the left block keeps a gutter.
+    pw = 118 * mm; ph = 28 * mm
+    px = PW - margin - 5 * mm - pw; py = top - ph
+    right_limit = px - 8 * mm  # gutter between the left details and the panel
+
     logo = (school or {}).get('logo_path')
     lx = x
     if logo and os.path.exists(logo):
@@ -215,24 +264,25 @@ def _draw_masthead(cv, PW, PH, margin, school, total, fmt, base, boldf, obl):
             lx = x + min(w, 30 * mm) + 6 * mm
         except Exception:
             lx = x
-    name = (school or {}).get('name') or 'School'
-    cv.setFillColor(colors.HexColor(NAVY)); cv.setFont(boldf, 29)
-    cv.drawString(lx, top - 9 * mm, name.upper()[:40])
+    avail_l = right_limit - lx
+    name = ((school or {}).get('name') or 'School').upper()
+    nsize = 29
+    while nsize > 16 and stringWidth(name, boldf, nsize) > avail_l:
+        nsize -= 1
+    cv.setFillColor(colors.HexColor(NAVY)); cv.setFont(boldf, nsize)
+    cv.drawString(lx, top - 9 * mm, _fit(name, boldf, nsize, avail_l))
     cv.setFillColor(colors.HexColor(INK)); cv.setFont(base, 11.5)
     addr = (school or {}).get('address') or ''
     if addr:
-        cv.drawString(lx, top - 16 * mm, ('●  ' + addr)[:78])
+        cv.drawString(lx, top - 16 * mm, _fit('●  ' + addr, base, 11.5, avail_l))
     contact = '       '.join(p for p in [(school or {}).get('phone') or '', (school or {}).get('email') or ''] if p)
     if contact:
-        cv.drawString(lx, top - 21.5 * mm, contact[:78])
+        cv.drawString(lx, top - 21.5 * mm, _fit(contact, base, 11.5, avail_l))
     motto = (school or {}).get('motto') or ''
     if motto:
         cv.setFillColor(colors.HexColor(GOLD)); cv.setFont(obl, 12)
-        cv.drawString(lx, top - 28 * mm, ('—  ' + motto + '  —')[:78])
+        cv.drawString(lx, top - 28 * mm, _fit('—  ' + motto + '  —', obl, 12, avail_l))
 
-    # Right info panel — large.
-    pw = 118 * mm; ph = 28 * mm
-    px = PW - margin - 5 * mm - pw; py = top - ph
     cv.setFillColor(colors.HexColor(PANEL)); cv.setStrokeColor(colors.HexColor(LINE)); cv.setLineWidth(0.8)
     cv.roundRect(px, py, pw, ph, 6, stroke=1, fill=1)
     cells = [('DATE GENERATED', timeutil.today().strftime('%d %b %Y')),
@@ -286,10 +336,10 @@ def students_image_pages(rows, headers, school, total=None):
     C = {'navy': (30, 42, 74), 'gold': (184, 134, 43), 'ink': (31, 41, 55),
          'muted': (107, 114, 128), 'zebra': (244, 246, 249), 'line': (216, 222, 233),
          'white': (255, 255, 255), 'panel': (247, 248, 250)}
-    body, body_b = fnt(12), fnt(12, True)
-    name_f, addr_f, motto_f = fnt(28, True), fnt(12), fnt(12)
-    hdr_f, panel_lab, panel_val = fnt(12, True), fnt(9), fnt(15, True)
-    foot_b, foot_s = fnt(11, True), fnt(9)
+    body, body_b = fnt(16), fnt(16, True)
+    name_f, addr_f, motto_f = fnt(42, True), fnt(17), fnt(17)
+    hdr_f, panel_lab, panel_val = fnt(16, True), fnt(12), fnt(22, True)
+    foot_b, foot_s = fnt(13, True), fnt(11)
     tmp = ImageDraw.Draw(Image.new('RGB', (1, 1)))
 
     def tw(t, f):
@@ -321,7 +371,7 @@ def students_image_pages(rows, headers, school, total=None):
 
     margin = 30 * S
     avail = PW * S - 2 * margin
-    pad = 20 * S
+    pad = 34 * S            # must exceed 2*cpx (per-cell L/R padding) so nothing clips
     ncol = len(headers)
 
     def _disp(j, v):
@@ -354,13 +404,23 @@ def students_image_pages(rows, headers, school, total=None):
             tot = sum(col_w); over = tot - avail
         if over > 0:
             f = avail / tot; col_w = [int(w * f) for w in col_w]
+    elif tot < avail:
+        # Fill the full A4 width — leftover goes to the text/wrap columns.
+        grow = [j for j in range(ncol)
+                if _is_wrap(headers[j]) or 'name' in headers[j].lower()
+                or headers[j].lower() in ('surname', 'religion', 'class', 'current_class')]
+        if not grow:
+            grow = list(range(ncol))
+        base_sum = sum(col_w[j] for j in grow) or 1
+        left = avail - tot
+        for j in grow:
+            col_w[j] += int(left * (col_w[j] / base_sum))
     table_w = sum(col_w)
-    # Centre a table that is narrower than the page (columns stay tight).
-    tx0 = margin + max(0, (avail - table_w) // 2)
+    tx0 = margin  # full-width, left-aligned to the page margin
 
     line_h = tmp.textbbox((0, 0), 'Ay', font=body)[3]
-    cpx = 8 * S
-    mast_h = 170 * S
+    cpx = 12 * S
+    mast_h = 200 * S
     foot_h = 46 * S
 
     def row_lines(r):
@@ -393,7 +453,9 @@ def students_image_pages(rows, headers, school, total=None):
         _img_masthead(d, img, PW * S, margin, school, total, C, name_f, addr_f, motto_f,
                       panel_lab, panel_val, body, fit, tw)
         y0 = margin + mast_h
+        # Solid navy header band with a thin gold accent underline.
         d.rectangle([tx0, y0, tx0 + table_w, y0 + header_h], fill=C['navy'])
+        d.rectangle([tx0, y0 + header_h - 3, tx0 + table_w, y0 + header_h], fill=C['gold'])
         x = tx0
         for j in range(ncol):
             d.text((x + cpx, y0 + (header_h - line_h) // 2), fit(short_header(headers[j]), hdr_f, col_w[j] - 2 * cpx),
@@ -410,13 +472,15 @@ def students_image_pages(rows, headers, school, total=None):
                 if headers[j].lower() == 'gender':
                     g, _hex = _gender_glyph(v); v = (g + ' ' + v).strip()
                 lines = wrap(v, body, col_w[j] - 2 * cpx) if _is_wrap(headers[j]) else [fit(v, body, col_w[j] - 2 * cpx)]
-                ty = yy + 6 * S
+                ty = yy + 9 * S
                 for ln in lines:
                     d.text((x + cpx, ty), ln, fill=col, font=body); ty += line_h + 4 * S
                 x += col_w[j]
-            d.line([tx0, yy, tx0 + table_w, yy], fill=C['line'], width=1)
+            # horizontal hairline only — no vertical gridlines (modern, minimal)
+            d.line([tx0, yy + rh, tx0 + table_w, yy + rh], fill=C['line'], width=1)
             yy += rh
-        d.rectangle([tx0, y0, tx0 + table_w, yy], outline=C['navy'], width=2)
+        # subtle closing rule instead of a boxed outline
+        d.line([tx0, yy, tx0 + table_w, yy], fill=C['line'], width=1)
         fy = PH * S - foot_h
         d.line([margin, fy, PW * S - margin, fy], fill=C['line'], width=1)
         d.text((margin, fy + 10 * S), ((school or {}).get('name') or 'School').upper(), fill=C['navy'], font=foot_b)
@@ -439,33 +503,46 @@ def _img_masthead(d, img, PW, margin, school, total, C, name_f, addr_f, motto_f,
     if logo and os.path.exists(logo):
         try:
             lg = Image.open(logo).convert('RGBA')
-            h = 150; w = int(lg.width * h / lg.height)
-            lg = lg.resize((min(w, 180), h), Image.LANCZOS)
-            img.paste(lg, (x, margin + 8), lg)
-            lx = x + min(w, 180) + 26
+            h = 190; w = int(lg.width * h / lg.height)
+            lg = lg.resize((min(w, 220), h), Image.LANCZOS)
+            img.paste(lg, (x, margin + 10), lg)
+            lx = x + min(w, 220) + 30
         except Exception:
             lx = x
-    d.text((lx, margin + 10), ((school or {}).get('name') or 'School').upper(), fill=C['navy'], font=name_f)
-    ty = margin + 10 + 64
-    addr = (school or {}).get('address') or ''
-    if addr:
-        d.text((lx, ty), '●  ' + addr, fill=C['ink'], font=addr_f); ty += 32
-    contact = '       '.join(p for p in [(school or {}).get('phone') or '', (school or {}).get('email') or ''] if p)
-    if contact:
-        d.text((lx, ty), contact, fill=C['ink'], font=addr_f); ty += 32
-    motto = (school or {}).get('motto') or ''
-    if motto:
-        d.text((lx, ty), '—  ' + motto + '  —', fill=C['gold'], font=motto_f)
-    # info panel — large
-    pw = 560; ph = 130
-    px = PW - margin - 10 - pw; py = margin + 8
-    d.rounded_rectangle([px, py, px + pw, py + ph], radius=12, fill=C['panel'], outline=C['line'], width=2)
+    # info panel — large (defined first so left text keeps a gutter before it)
+    pw = 780; ph = 176
+    px = PW - margin - 12 - pw; py = margin + 10
+    right_limit = px - 32
+    d.rounded_rectangle([px, py, px + pw, py + ph], radius=14, fill=C['panel'], outline=C['line'], width=2)
     cells = [('DATE GENERATED', timeutil.today().strftime('%d %b %Y')),
              ('TOTAL STUDENTS', str(total)), ('EXPORTED AS', 'IMAGE')]
     cwid = pw / 3
     for i, (lab, val) in enumerate(cells):
         cx = px + i * cwid + cwid / 2
-        d.text((cx - tw(lab, panel_lab) / 2, py + 24), lab, fill=C['muted'], font=panel_lab)
-        d.text((cx - tw(val, panel_val) / 2, py + 66), val, fill=C['navy'], font=panel_val)
+        d.text((cx - tw(lab, panel_lab) / 2, py + 34), lab, fill=C['muted'], font=panel_lab)
+        d.text((cx - tw(val, panel_val) / 2, py + 92), val, fill=C['navy'], font=panel_val)
         if i:
-            d.line([px + i * cwid, py + 18, px + i * cwid, py + ph - 18], fill=C['line'], width=1)
+            d.line([px + i * cwid, py + 24, px + i * cwid, py + ph - 24], fill=C['line'], width=1)
+    # left: school identity — shrink the name to fit before the panel, don't clip.
+    from PIL import ImageFont
+    nm = ((school or {}).get('name') or 'School').upper()
+    nf, nsz = name_f, 42
+    while nsz > 22 and tw(nm, nf) > (right_limit - lx):
+        nsz -= 2
+        try:
+            nf = ImageFont.truetype(_DEJAVU_BOLD, int(nsz * 2))
+        except Exception:
+            break
+    name_top = margin + 14
+    d.text((lx, name_top), fit(nm, nf, right_limit - lx), fill=C['navy'], font=nf)
+    # start the details clear of the tall name glyphs
+    ty = d.textbbox((lx, name_top), nm, font=nf)[3] + 22
+    addr = (school or {}).get('address') or ''
+    if addr:
+        d.text((lx, ty), fit('●  ' + addr, addr_f, right_limit - lx), fill=C['ink'], font=addr_f); ty += 46
+    contact = '       '.join(p for p in [(school or {}).get('phone') or '', (school or {}).get('email') or ''] if p)
+    if contact:
+        d.text((lx, ty), fit(contact, addr_f, right_limit - lx), fill=C['ink'], font=addr_f); ty += 46
+    motto = (school or {}).get('motto') or ''
+    if motto:
+        d.text((lx, ty), fit('—  ' + motto + '  —', motto_f, right_limit - lx), fill=C['gold'], font=motto_f)
