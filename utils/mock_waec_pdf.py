@@ -376,89 +376,339 @@ def _signature_row(signers):
     return t
 
 
-def result_slips_pdf(slips, exam, school, opts=None, signers='both'):
-    """One A4 "Statement of Result" per student. ``opts`` toggles the summary box
-    and the shared school-identity / banner blocks; ``signers`` chooses which
-    signature line(s) appear (both / principal / teacher / none)."""
-    _styles()
-    buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=A4, topMargin=12 * mm, bottomMargin=12 * mm,
-                            leftMargin=14 * mm, rightMargin=14 * mm,
-                            title=f'Results — {exam.display_name}')
-    e = []
+import os as _os
+from reportlab.pdfbase import pdfmetrics as _pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont as _TTFont
+
+# Palette + fonts for the designed "Competence Result" slip.
+_SL = {
+    'NAVY': colors.HexColor('#20304F'), 'GOLD': colors.HexColor('#B8862B'),
+    'TAN': colors.HexColor('#D9BC86'), 'INK': colors.HexColor('#22303C'),
+    'MUTED': colors.HexColor('#6B7280'), 'LINE': colors.HexColor('#DBE0E8'),
+    'PANEL': colors.HexColor('#F6F7F9'), 'ZEBRA': colors.HexColor('#F3F5F8'),
+    'STEEL': colors.HexColor('#9AA6BE'), 'RED': colors.HexColor('#B91C1C'),
+    'REDBG': colors.HexColor('#F2DADA'), 'WHITE': colors.white,
+    'BORDER': colors.HexColor('#111827'),
+}
+_ICON = {'pin': '', 'phone': '', 'mail': '', 'user': '',
+         'mars': '', 'venus': '', 'book': '', 'cert': '',
+         'layers': '', 'award': '', 'star': '', 'chart': '',
+         'check': '', 'clip': ''}
+
+
+def _slip_fonts():
+    """Register the icon font once; the serif faces are reportlab built-ins."""
+    fa = 'Helvetica-Bold'
+    try:
+        if 'FA' not in _pdfmetrics.getRegisteredFontNames():
+            p = _os.path.join(_os.path.dirname(__file__), '..', 'static', 'vendor',
+                              'fontawesome', 'webfonts', 'fa-solid-900.ttf')
+            _pdfmetrics.registerFont(_TTFont('FA', p))
+        fa = 'FA'
+    except Exception:
+        fa = None
+    return {'ser': 'Times-Roman', 'serb': 'Times-Bold', 'seri': 'Times-Italic', 'fa': fa}
+
+
+def _grade_badge_colors(grade):
+    g = (grade or '').upper()
+    if g == 'A1':
+        return _SL['NAVY'], _SL['WHITE']
+    if g in ('B2', 'B3'):
+        return _SL['TAN'], _SL['INK']
+    if g in ('C4', 'C5', 'C6'):
+        return _SL['STEEL'], _SL['WHITE']
+    return _SL['REDBG'], _SL['RED']
+
+
+def _draw_competence_slip(c, PW, PH, student, s, exam, school, opts, signers, F):
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+    NAVY, GOLD, TAN = _SL['NAVY'], _SL['GOLD'], _SL['TAN']
+    INK, MUTED, LINE = _SL['INK'], _SL['MUTED'], _SL['LINE']
+    PANEL, ZEBRA, WHITE = _SL['PANEL'], _SL['ZEBRA'], _SL['WHITE']
+    ser, serb, seri, fa = F['ser'], F['serb'], F['seri'], F['fa']
+    M = 30
     session = exam.session.name if exam.session else ''
-    show_summary = _opt(opts, 'summary')
-    for idx, slip in enumerate(slips):
-        student, s = slip['student'], slip['summary']
-        sub = f'{exam.display_name} — Statement of Result'
-        if session:
-            sub += f' · {session}'
-        _school_header(e, school, opts, sub)
 
-        meta = [
-            [Paragraph(f'<b>Name:</b> {pdf_escape(student.full_name)}', _S['cell']),
-             Paragraph(f"<b>Stream:</b> {pdf_escape(student.stream or '—')}", _S['cell'])],
-            [Paragraph(f'<b>Gender:</b> {pdf_escape(student.gender or "—")}', _S['cell']),
-             Paragraph('', _S['cell'])],
-        ]
-        mt = Table(meta, colWidths=[95 * mm, 87 * mm])
-        mt.setStyle(TableStyle([('BOTTOMPADDING', (0, 0), (-1, -1), 4)]))
-        e.append(mt)
-        e.append(Spacer(1, 4))
+    def icon(ch, cx, cy, size, color):
+        if not fa or not ch:
+            return
+        c.setFont(fa, size); c.setFillColor(color)
+        c.drawString(cx - stringWidth(ch, fa, size) / 2, cy - size * 0.36, ch)
 
-        if s and s.get('results'):
-            data = [['#', 'Subject', 'Score', 'Grade', 'Remark']]
-            for i, r in enumerate(s['results'], 1):
-                data.append([str(i), r.subject,
-                             '' if r.score is None else str(r.score),
-                             r.grade or '—', 'Credit' if r.is_pass else 'Fail'])
-            t = Table(data, colWidths=[10 * mm, 92 * mm, 24 * mm, 24 * mm, 32 * mm], repeatRows=1)
-            t.setStyle(TableStyle([
-                ('GRID', (0, 0), (-1, -1), 0.7, _BLACK),
-                ('BACKGROUND', (0, 0), (-1, 0), _HEAD),
-                ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTNAME', (3, 1), (3, -1), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, -1), 9.5),
-                ('ALIGN', (0, 0), (0, -1), 'CENTER'),
-                ('ALIGN', (2, 0), (-1, -1), 'CENTER'),
-                ('TOPPADDING', (0, 0), (-1, -1), 3),
-                ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
-            ]))
-            for ri, r in enumerate(s['results'], 1):
-                t.setStyle(TableStyle([('TEXTCOLOR', (4, ri), (4, ri),
-                    colors.HexColor('#047857') if r.is_pass else colors.HexColor('#b91c1c'))]))
-            e.append(t)
-            e.append(Spacer(1, 6))
+    def icon_circle(ch, cx, cy, r, glyph_size, ring=LINE, glyph=NAVY):
+        c.setStrokeColor(ring); c.setFillColor(WHITE); c.setLineWidth(1)
+        c.circle(cx, cy, r, stroke=1, fill=1)
+        icon(ch, cx, cy, glyph_size, glyph)
 
-            if show_summary:
-                core = ', '.join(s.get('missing_core') or []) or 'None'
-                summ = [
-                    [Paragraph(f"<b>Subjects:</b> {s['subjects']}", _S['cell']),
-                     Paragraph(f"<b>Credits (C6+):</b> {s['credits']}", _S['cell'])],
-                    [Paragraph(f"<b>Distinctions (A1–B3):</b> {s['distinctions']}", _S['cell']),
-                     Paragraph(f"<b>Average:</b> {s['average_score'] if s['average_score'] is not None else '—'}%", _S['cell'])],
-                    [Paragraph(f"<b>5 credits incl. English &amp; Maths:</b> {'YES' if s['has_5_incl_core'] else 'NO'}", _S['cell']),
-                     Paragraph(f"<b>Missing core:</b> {pdf_escape(core)}", _S['cell'])],
-                ]
-                stbl = Table(summ, colWidths=[95 * mm, 87 * mm])
-                stbl.setStyle(TableStyle([
-                    ('BOX', (0, 0), (-1, -1), 0.7, _BLACK),
-                    ('INNERGRID', (0, 0), (-1, -1), 0.3, colors.HexColor('#cccccc')),
-                    ('TOPPADDING', (0, 0), (-1, -1), 4), ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-                    ('LEFTPADDING', (0, 0), (-1, -1), 6),
-                ]))
-                e.append(stbl)
+    # outer border
+    c.setStrokeColor(_SL['BORDER']); c.setLineWidth(1.4)
+    c.roundRect(14, 14, PW - 28, PH - 28, 6, stroke=1, fill=0)
+
+    top = PH - 34
+    # ---- Masthead ----------------------------------------------------------
+    box_w = 120
+    box_x = PW - M - box_w
+    logo = (school or {}).get('logo_path')
+    name_x = M
+    if logo and _os.path.exists(logo):
+        try:
+            from reportlab.lib.utils import ImageReader
+            ir = ImageReader(logo); iw, ih = ir.getSize()
+            lh = 74; lw = lh * (iw / ih) if ih else 74
+            lw = min(lw, 86)
+            c.drawImage(ir, M, top - lh + 4, width=lw, height=lh, mask='auto',
+                        preserveAspectRatio=True)
+            name_x = M + lw + 14
+        except Exception:
+            name_x = M
+    name = ((school or {}).get('name') or 'School').upper()
+    nsize = 30
+    name_avail = box_x - 12 - name_x
+    while nsize > 15 and stringWidth(name, serb, nsize) > name_avail:
+        nsize -= 1
+    c.setFillColor(NAVY); c.setFont(serb, nsize)
+    c.drawString(name_x, top - 20, name)
+    # contact rows
+    cy = top - 38
+    c.setFont(ser, 10.5)
+    addr = (school or {}).get('address') or ''
+    if _opt(opts, 'address') and addr:
+        icon(_ICON['pin'], name_x + 5, cy + 3.5, 10, NAVY)
+        c.setFillColor(INK); c.setFont(ser, 10.5)
+        c.drawString(name_x + 15, cy, addr[:70]); cy -= 16
+    if _opt(opts, 'contact'):
+        phone = (school or {}).get('phone') or ''
+        email = (school or {}).get('email') or ''
+        x = name_x + 5
+        if phone:
+            icon(_ICON['phone'], x, cy + 3.5, 9.5, NAVY)
+            c.setFillColor(INK); c.setFont(ser, 10.5); c.drawString(x + 12, cy, phone)
+            x += 12 + stringWidth(phone, ser, 10.5) + 24
+        if email:
+            icon(_ICON['mail'], x, cy + 3.5, 9.5, NAVY)
+            c.setFillColor(INK); c.setFont(ser, 10.5); c.drawString(x + 13, cy, email)
+        cy -= 16
+    motto = (school or {}).get('motto') or ''
+    if _opt(opts, 'motto') and motto:
+        c.setFillColor(GOLD)
+        mtext = motto
+        mw = stringWidth(mtext, seri, 12)
+        mcx = name_x + (name_avail) / 2
+        c.setFont(seri, 12); c.setFillColor(colors.HexColor('#4B4B4B'))
+        c.drawCentredString(mcx, cy - 2, mtext)
+        c.setStrokeColor(GOLD); c.setLineWidth(1)
+        c.line(name_x, cy + 2, mcx - mw / 2 - 8, cy + 2)
+        c.line(mcx + mw / 2 + 8, cy + 2, box_x - 12, cy + 2)
+
+    # session box
+    bx, by, bh = box_x, top - 82, 84
+    c.setStrokeColor(LINE); c.setFillColor(colors.HexColor('#FAFBFC')); c.setLineWidth(1)
+    c.roundRect(bx, by, box_w, bh, 8, stroke=1, fill=1)
+    icon_circle(_ICON['cert'], bx + box_w / 2, by + bh - 20, 14, 15, ring=GOLD, glyph=NAVY)
+    c.setFillColor(MUTED); c.setFont(serb, 8.5)
+    c.drawCentredString(bx + box_w / 2, by + bh - 44, 'ACADEMIC')
+    c.drawCentredString(bx + box_w / 2, by + bh - 54, 'SESSION')
+    c.setFillColor(NAVY); c.setFont(serb, 15)
+    c.drawCentredString(bx + box_w / 2, by + 16, session or '—')
+    c.setStrokeColor(GOLD); c.setLineWidth(1.4)
+    c.line(bx + 20, by + 12, bx + box_w - 20, by + 12)
+
+    y = top - 108
+    # ---- COMPETENCE RESULT heading ----------------------------------------
+    if _opt(opts, 'title'):
+        c.setFillColor(NAVY); c.setFont(serb, 26)
+        heading = 'COMPETENCE RESULT'
+        c.drawCentredString(PW / 2, y - 18, heading)
+        hw = stringWidth(heading, serb, 26)
+        for sgn in (-1, 1):
+            ex = PW / 2 + sgn * (hw / 2 + 18)
+            c.setStrokeColor(GOLD); c.setLineWidth(1.2)
+            c.line(ex, y - 10, ex + sgn * 40, y - 10)
+            c.setFillColor(GOLD)
+            c.rect(ex + sgn * 44, y - 13, 5, 5, stroke=0, fill=1)
+        y -= 40
+
+    # ---- ribbon banner -----------------------------------------------------
+    sub = '%s — Statement of Result' % exam.display_name
+    c.setFont(serb, 11.5)
+    rw = min(stringWidth(sub, serb, 11.5) + 60, PW - 2 * M)
+    rx = PW / 2 - rw / 2; rh2 = 26; ry = y - rh2
+    notch = 10
+    c.setFillColor(NAVY)
+    c.rect(rx, ry, rw, rh2, stroke=0, fill=1)
+    p = c.beginPath(); p.moveTo(rx, ry); p.lineTo(rx - notch, ry + rh2 / 2); p.lineTo(rx, ry + rh2); p.close()
+    c.drawPath(p, stroke=0, fill=1)
+    p = c.beginPath(); p.moveTo(rx + rw, ry); p.lineTo(rx + rw + notch, ry + rh2 / 2); p.lineTo(rx + rw, ry + rh2); p.close()
+    c.drawPath(p, stroke=0, fill=1)
+    c.setFillColor(WHITE); c.setFont(serb, 11.5)
+    c.drawCentredString(PW / 2, ry + 8, sub)
+    y = ry - 16
+
+    # ---- student info bar --------------------------------------------------
+    bar_h = 52
+    c.setStrokeColor(LINE); c.setFillColor(PANEL); c.setLineWidth(1)
+    c.roundRect(M, y - bar_h, PW - 2 * M, bar_h, 8, stroke=1, fill=1)
+    g = (student.gender or '').lower()
+    gi = _ICON['mars'] if g.startswith('m') else (_ICON['venus'] if g.startswith('f') else _ICON['user'])
+    cells = [(_ICON['user'], 'Name', student.full_name),
+             (gi, 'Gender', student.gender or '—'),
+             (_ICON['book'], 'Stream', student.stream or '—')]
+    cw = (PW - 2 * M) / 3
+    for i, (ic, lab, val) in enumerate(cells):
+        cx0 = M + i * cw
+        if i:
+            c.setStrokeColor(LINE); c.setLineWidth(0.8)
+            c.line(cx0, y - bar_h + 10, cx0, y - 10)
+        icon_circle(ic, cx0 + 24, y - bar_h / 2, 13, 13, ring=LINE, glyph=NAVY)
+        c.setFillColor(MUTED); c.setFont(ser, 9.5)
+        c.drawString(cx0 + 44, y - bar_h / 2 + 3, lab + ':')
+        c.setFillColor(INK); c.setFont(serb, 12.5)
+        c.drawString(cx0 + 44, y - bar_h / 2 - 12, str(val)[:26])
+    y -= bar_h + 14
+
+    # ---- results table -----------------------------------------------------
+    results = (s or {}).get('results') or []
+    cols = [34, PW - 2 * M - 34 - 96 - 92 - 118, 96, 92, 118]  # #, Subject, Score, Grade, Remark
+    headers = ['#', 'SUBJECT', 'SCORE (%)', 'GRADE', 'REMARK']
+    x0 = M
+    hh = 28
+    c.setFillColor(NAVY); c.rect(x0, y - hh, sum(cols), hh, stroke=0, fill=1)
+    cxp = x0
+    c.setFont(serb, 10.5); c.setFillColor(WHITE)
+    aligns = ['c', 'l', 'c', 'c', 'c']
+    for w, h, al in zip(cols, headers, aligns):
+        if al == 'l':
+            c.drawString(cxp + 14, y - hh + 9, h)
         else:
-            e.append(Paragraph('No results recorded for this student.', _S['cell']))
+            c.drawCentredString(cxp + w / 2, y - hh + 9, h)
+        cxp += w
+    yy = y - hh
+    n = max(1, len(results))
+    rh = min(34, max(20, (yy - 150) / n))   # keep room for the summary below
+    for i, r in enumerate(results, 1):
+        if i % 2 == 0:
+            c.setFillColor(ZEBRA); c.rect(x0, yy - rh, sum(cols), rh, stroke=0, fill=1)
+        mid = yy - rh / 2
+        c.setFillColor(INK); c.setFont(serb, 11)
+        c.drawCentredString(x0 + cols[0] / 2, mid - 4, str(i))
+        c.setFont(ser, 11)
+        c.drawString(x0 + cols[0] + 14, mid - 4, str(r.subject)[:34])
+        c.drawCentredString(x0 + cols[0] + cols[1] + cols[2] / 2, mid - 4,
+                            '' if r.score is None else str(r.score))
+        # grade badge
+        bgc, fgc = _grade_badge_colors(r.grade)
+        bw2 = 40; bh2 = 20
+        bcx = x0 + cols[0] + cols[1] + cols[2] + cols[3] / 2
+        c.setFillColor(bgc)
+        c.roundRect(bcx - bw2 / 2, mid - bh2 / 2, bw2, bh2, 4, stroke=0, fill=1)
+        c.setFillColor(fgc); c.setFont(serb, 10.5)
+        c.drawCentredString(bcx, mid - 4, (r.grade or '—'))
+        # remark
+        rk = 'Credit' if r.is_pass else 'Fail'
+        c.setFillColor(INK if r.is_pass else _SL['RED']); c.setFont(ser, 11)
+        c.drawCentredString(x0 + cols[0] + cols[1] + cols[2] + cols[3] + cols[4] / 2, mid - 4, rk)
+        c.setStrokeColor(LINE); c.setLineWidth(0.6)
+        c.line(x0, yy - rh, x0 + sum(cols), yy - rh)
+        yy -= rh
+    if not results:
+        c.setFillColor(MUTED); c.setFont(seri, 11)
+        c.drawCentredString(PW / 2, yy - 24, 'No results recorded for this student.')
+        yy -= 44
+    c.setStrokeColor(NAVY); c.setLineWidth(1)
+    c.rect(x0, yy, sum(cols), (y - hh) - yy, stroke=1, fill=0)
+    c.rect(x0, y - hh, sum(cols), hh, stroke=1, fill=0)
+    y = yy - 14
 
-        sign = _signature_row(signers)
-        if sign is not None:
-            e.append(Spacer(1, 22))
-            e.append(sign)
-        if idx != len(slips) - 1:
-            e.append(PageBreak())
+    # ---- summary panel -----------------------------------------------------
+    if _opt(opts, 'summary') and s:
+        core = ', '.join(s.get('missing_core') or []) or 'None'
+        avg = s.get('average_score')
+        rows = [
+            (_ICON['layers'], 'Subjects:', str(s.get('subjects', 0)),
+             _ICON['award'], 'Credits (C6+):', str(s.get('credits', 0))),
+            (_ICON['star'], 'Distinctions (A1–B3):', str(s.get('distinctions', 0)),
+             _ICON['chart'], 'Average:', ('%s%%' % avg if avg is not None else '—')),
+            (_ICON['check'], '5 credits incl. English & Maths:',
+             'YES' if s.get('has_5_incl_core') else 'NO',
+             _ICON['clip'], 'Missing core:', core),
+        ]
+        ph = 30 * len(rows) + 16
+        c.setStrokeColor(LINE); c.setFillColor(PANEL); c.setLineWidth(1)
+        c.roundRect(M, y - ph, PW - 2 * M, ph, 8, stroke=1, fill=1)
+        colw = (PW - 2 * M) / 2
+        ry2 = y - 8
+        for r in rows:
+            for half in (0, 1):
+                ic, lab, val = r[half * 3], r[half * 3 + 1], r[half * 3 + 2]
+                cx0 = M + half * colw + 12
+                midy = ry2 - 15
+                icon_circle(ic, cx0 + 11, midy, 11, 11, ring=LINE, glyph=NAVY)
+                c.setFillColor(MUTED); c.setFont(ser, 10)
+                c.drawString(cx0 + 28, midy + 3.5, lab)
+                c.setFillColor(NAVY); c.setFont(serb, 12)
+                vx = M + half * colw + colw - 16
+                c.drawRightString(vx, midy - 4, str(val)[:22])
+                # dotted leader
+                lab_end = cx0 + 28 + stringWidth(lab, ser, 10) + 6
+                val_w = stringWidth(str(val)[:22], serb, 12)
+                c.setDash(1, 2); c.setStrokeColor(LINE); c.setLineWidth(0.6)
+                if vx - val_w - 6 > lab_end:
+                    c.line(lab_end, midy - 1, vx - val_w - 6, midy - 1)
+                c.setDash()
+            ry2 -= 30
+        y -= ph + 16
+
+    # ---- signatures --------------------------------------------------------
+    if signers in ('both', 'teacher', 'principal'):
+        labels = []
+        if signers in ('both', 'teacher'):
+            labels.append('Class Teacher')
+        if signers in ('both', 'principal'):
+            labels.append('Principal')
+        sy = max(y, 96)
+        seg = (PW - 2 * M) / len(labels)
+        for i, lab in enumerate(labels):
+            lcx = M + seg * i + seg / 2
+            c.setStrokeColor(INK); c.setLineWidth(0.8)
+            c.line(lcx - 70, sy, lcx + 70, sy)
+            c.setFillColor(INK); c.setFont(ser, 10.5)
+            c.drawCentredString(lcx, sy - 14, lab)
+            c.setFillColor(MUTED); c.setFont(ser, 9.5)
+            c.drawString(lcx - 70, sy - 30, 'Date: ')
+            c.setStrokeColor(LINE); c.setLineWidth(0.7)
+            c.line(lcx - 42, sy - 30, lcx + 70, sy - 30)
+
+    # ---- footer ------------------------------------------------------------
+    c.setStrokeColor(_SL['BORDER']); c.setLineWidth(0.8)
+    c.line(M, 40, PW - M, 40)
+    c.setFillColor(GOLD); c.setFont(serb, 9)
+    tail = 'Thank you for choosing %s' % ((school or {}).get('name') or 'our school')
+    c.setFillColor(colors.HexColor('#4B4B4B')); c.setFont(seri, 10)
+    tw = stringWidth(tail, seri, 10)
+    c.drawCentredString(PW / 2, 27, tail)
+    c.setFillColor(GOLD)
+    for sgn in (-1, 1):
+        c.circle(PW / 2 + sgn * (tw / 2 + 12), 30.5, 1.6, stroke=0, fill=1)
+
+
+def result_slips_pdf(slips, exam, school, opts=None, signers='both'):
+    """One A4 designed "Competence Result" statement per student. ``opts`` toggles
+    the identity/banner/summary blocks; ``signers`` chooses the signature line(s)."""
+    from reportlab.pdfgen import canvas as _canvas
+    F = _slip_fonts()
+    buf = io.BytesIO()
+    PW, PH = A4
+    c = _canvas.Canvas(buf, pagesize=A4)
+    c.setTitle('Results — %s' % exam.display_name)
     if not slips:
-        e.append(Paragraph('No results to print.', _S['cell']))
-    doc.build(e)
-    buf.seek(0)
+        c.setFont('Times-Roman', 12)
+        c.drawCentredString(PW / 2, PH / 2, 'No results to print.')
+        c.showPage(); c.save(); buf.seek(0)
+        return buf
+    for slip in slips:
+        _draw_competence_slip(c, PW, PH, slip['student'], slip['summary'],
+                              exam, school, opts, signers, F)
+        c.showPage()
+    c.save(); buf.seek(0)
     return buf
