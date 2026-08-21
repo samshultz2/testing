@@ -39,13 +39,14 @@ def _first_font(cands):
     return cands[-1]
 
 
-# Prefer Liberation Sans (a clean, modern humanist grotesque) and fall back to
-# DejaVu. Liberation covers the glyphs we use (♂ ♀ ● — …).
+# Prefer Work Sans — a modern, geometric humanist grotesque vendored with the
+# app — then fall back to Liberation Sans and DejaVu if it is ever missing.
+_FONTS = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'assets', 'fonts')
 _LIB = '/usr/share/fonts/truetype/liberation/'
 _DV = '/usr/share/fonts/truetype/dejavu/'
-_FONT_REG = _first_font([_LIB + 'LiberationSans-Regular.ttf', _DV + 'DejaVuSans.ttf'])
-_FONT_BOLD = _first_font([_LIB + 'LiberationSans-Bold.ttf', _DV + 'DejaVuSans-Bold.ttf'])
-_FONT_ITAL = _first_font([_LIB + 'LiberationSans-Italic.ttf', _DV + 'DejaVuSans-Oblique.ttf'])
+_FONT_REG = _first_font([os.path.join(_FONTS, 'WorkSans-Regular.ttf'), _LIB + 'LiberationSans-Regular.ttf', _DV + 'DejaVuSans.ttf'])
+_FONT_BOLD = _first_font([os.path.join(_FONTS, 'WorkSans-Bold.ttf'), _LIB + 'LiberationSans-Bold.ttf', _DV + 'DejaVuSans-Bold.ttf'])
+_FONT_ITAL = _first_font([os.path.join(_FONTS, 'WorkSans-Italic.ttf'), _LIB + 'LiberationSans-Italic.ttf', _DV + 'DejaVuSans-Oblique.ttf'])
 # Back-compat aliases (used by the image renderer helpers below).
 _DEJAVU, _DEJAVU_BOLD, _DEJAVU_OBL = _FONT_REG, _FONT_BOLD, _FONT_ITAL
 
@@ -59,12 +60,19 @@ def _is_wrap(h):
     return 'address' in k or 'hobb' in k
 
 
+def _hex_rgb(h):
+    h = (h or '#000000').lstrip('#')
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+
 def _gender_glyph(value):
+    # A small colour-coded dot (blue = male, pink = female). We use ● rather
+    # than ♂/♀ so it renders in the modern body font without a symbol fallback.
     v = (value or '').strip().lower()
     if v.startswith('m'):
-        return '♂', '#1D4ED8'
+        return '●', '#1D4ED8'
     if v.startswith('f'):
-        return '♀', '#BE185D'
+        return '●', '#BE185D'
     return '', MUTED
 
 
@@ -99,54 +107,75 @@ def students_pdf(rows, headers, school, total=None):
     foot_h = 14 * mm
     avail = PW - 2 * margin - 2 * mm
 
-    fs = 13
+    fs = 16
     cell = ParagraphStyle('c', fontName=base, fontSize=fs, leading=fs + 3, textColor=colors.HexColor(INK))
     cellc = ParagraphStyle('cc', parent=cell, alignment=TA_CENTER)
     headp = ParagraphStyle('h', fontName=boldf, fontSize=fs, leading=fs + 2,
                            textColor=colors.white, alignment=TA_CENTER)
 
     ncol = len(headers)
-    pad = 8 * mm
-    # Content-based widths: each column fits its widest value; wrap columns are
-    # capped (they wrap), other columns capped so one long value can't blow out.
+    cell_pad = 6            # points of L/R padding inside each table cell
+    pad = 6 * mm            # width budget per column; must exceed 2*cell_pad
     def _disp(j, v):
         if headers[j].lower() == 'gender':
             g, _c = _gender_glyph(v)
             return (g + ' ' + v).strip()
         return v
 
-    def measure(j):
-        w = stringWidth(short_header(headers[j]), boldf, fs)
+    def _hdr_word(j):
+        # Longest word in the (possibly multi-word) header, so headers may wrap.
+        return max([stringWidth(t, boldf, fs) for t in short_header(headers[j]).split()] or [0])
+
+    def val_w(j):
+        w = 0
         for r in rows:
             v = '' if j >= len(r) else ('' if r[j] is None else str(r[j]))
             w = max(w, stringWidth(_disp(j, v), base, fs))
+        return w
+
+    def word_floor(j):
+        # Widest single token (value words or header words). A wrap column
+        # narrower than this would break words character-by-character.
+        w = _hdr_word(j)
+        for r in rows:
+            v = '' if j >= len(r) else ('' if r[j] is None else str(r[j]))
+            for tok in str(v).split():
+                w = max(w, stringWidth(tok, base, fs))
         return w + pad
-    col_w = []
+    col_w, floors = [], {}
     for j in range(ncol):
-        w = measure(j)
-        w = min(w, 60 * mm) if _is_wrap(headers[j]) else min(w, 46 * mm)
+        if _is_wrap(headers[j]):
+            # Address / hobbies wrap onto several lines: keep them just wide
+            # enough for the longest word so the table stays phone-narrow.
+            fl = word_floor(j)
+            floors[j] = fl
+            w = max(min(val_w(j) + pad, 38 * mm), fl)
+        else:
+            # Non-wrap: fit the widest value and the longest header word (the
+            # header itself may wrap); the value never wraps.
+            w = min(max(val_w(j), _hdr_word(j)) + pad, 50 * mm)
         col_w.append(max(w, 9 * mm))
     tot = sum(col_w)
     if tot > avail:
+        # Shrink wrap columns, but never below their longest word.
         wrap_idx = [j for j in range(ncol) if _is_wrap(headers[j])]
-        slack = sum(max(0, col_w[j] - 24 * mm) for j in wrap_idx)
+        slack = sum(max(0, col_w[j] - floors[j]) for j in wrap_idx)
         over = tot - avail
         if slack > 0:
             take = min(over, slack)
             for j in wrap_idx:
-                s = max(0, col_w[j] - 24 * mm)
+                s = max(0, col_w[j] - floors[j])
                 col_w[j] -= take * (s / slack) if slack else 0
             tot = sum(col_w); over = tot - avail
         if over > 0:
             f = avail / tot; col_w = [w * f for w in col_w]
     elif tot < avail:
-        # Fill the full A4 width: hand the leftover to the text/wrap columns
-        # (address, hobbies, names) so numeric/short columns stay tight.
-        grow = [j for j in range(ncol)
-                if _is_wrap(headers[j]) or 'name' in headers[j].lower()
-                or headers[j].lower() in ('surname', 'religion', 'class', 'current_class')]
+        # Fill the A4 width by growing the non-wrap text columns; the wrap
+        # columns stay narrow so address/hobbies keep wrapping.
+        grow = [j for j in range(ncol) if not _is_wrap(headers[j])
+                and headers[j].lower() not in ('s/n', 'sn', 'age', 'gender')]
         if not grow:
-            grow = list(range(ncol))
+            grow = [j for j in range(ncol) if not _is_wrap(headers[j])] or list(range(ncol))
         base_sum = sum(col_w[j] for j in grow) or 1
         left = avail - tot
         for j in grow:
@@ -175,7 +204,7 @@ def students_pdf(rows, headers, school, total=None):
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('TOPPADDING', (0, 0), (-1, 0), 9), ('BOTTOMPADDING', (0, 0), (-1, 0), 9),
         ('TOPPADDING', (0, 1), (-1, -1), 7), ('BOTTOMPADDING', (0, 1), (-1, -1), 7),
-        ('LEFTPADDING', (0, 0), (-1, -1), 9), ('RIGHTPADDING', (0, 0), (-1, -1), 9),
+        ('LEFTPADDING', (0, 0), (-1, -1), cell_pad), ('RIGHTPADDING', (0, 0), (-1, -1), cell_pad),
         ('LINEBELOW', (0, 1), (-1, -1), 0.5, colors.HexColor(LINE)),
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor(ZEBRA)]),
         ('LINEBELOW', (0, 0), (-1, 0), 1.2, colors.HexColor(GOLD)),
@@ -336,9 +365,9 @@ def students_image_pages(rows, headers, school, total=None):
     C = {'navy': (30, 42, 74), 'gold': (184, 134, 43), 'ink': (31, 41, 55),
          'muted': (107, 114, 128), 'zebra': (244, 246, 249), 'line': (216, 222, 233),
          'white': (255, 255, 255), 'panel': (247, 248, 250)}
-    body, body_b = fnt(16), fnt(16, True)
+    body, body_b = fnt(18), fnt(18, True)
     name_f, addr_f, motto_f = fnt(42, True), fnt(17), fnt(17)
-    hdr_f, panel_lab, panel_val = fnt(16, True), fnt(12), fnt(22, True)
+    hdr_f, panel_lab, panel_val = fnt(18, True), fnt(12), fnt(22, True)
     foot_b, foot_s = fnt(13, True), fnt(11)
     tmp = ImageDraw.Draw(Image.new('RGB', (1, 1)))
 
@@ -380,37 +409,55 @@ def students_image_pages(rows, headers, school, total=None):
             return (g + ' ' + v).strip()
         return v
 
-    def measure(j):
-        w = tw(short_header(headers[j]), hdr_f)
+    def _hdr_word(j):
+        return max([tw(t, hdr_f) for t in short_header(headers[j]).split()] or [0])
+
+    def val_w(j):
+        w = 0
         for r in rows:
             v = '' if j >= len(r) else ('' if r[j] is None else str(r[j]))
             w = max(w, tw(_disp(j, v), body))
+        return w
+
+    def word_floor(j):
+        w = _hdr_word(j)
+        for r in rows:
+            v = '' if j >= len(r) else ('' if r[j] is None else str(r[j]))
+            for tok in str(v).split():
+                w = max(w, tw(tok, body))
         return w + pad
-    col_w = []
+    col_w, floors = [], {}
     for j in range(ncol):
-        w = measure(j)
-        w = min(w, int(300 * S)) if _is_wrap(headers[j]) else min(w, int(260 * S))
+        if _is_wrap(headers[j]):
+            # Keep address / hobbies just wide enough for the longest word so
+            # they wrap onto several lines without breaking words apart.
+            fl = word_floor(j)
+            floors[j] = fl
+            w = max(min(val_w(j) + pad, int(210 * S)), fl)
+        else:
+            # Non-wrap: fit widest value + longest header word (header may wrap).
+            w = min(max(val_w(j), _hdr_word(j)) + pad, int(280 * S))
         col_w.append(max(w, int(56 * S)))
     tot = sum(col_w)
-    if tot > avail:                        # shrink wrap columns first, then all
+    if tot > avail:                        # shrink wrap columns, never below a word
         wrap_idx = [j for j in range(ncol) if _is_wrap(headers[j])]
-        slack = sum(max(0, col_w[j] - int(150 * S)) for j in wrap_idx)
+        slack = sum(max(0, col_w[j] - floors[j]) for j in wrap_idx)
         over = tot - avail
         if slack > 0:
             take = min(over, slack)
             for j in wrap_idx:
-                s = max(0, col_w[j] - int(150 * S))
+                s = max(0, col_w[j] - floors[j])
                 col_w[j] -= int(take * (s / slack)) if slack else 0
             tot = sum(col_w); over = tot - avail
         if over > 0:
             f = avail / tot; col_w = [int(w * f) for w in col_w]
     elif tot < avail:
-        # Fill the full A4 width — leftover goes to the text/wrap columns.
-        grow = [j for j in range(ncol)
-                if _is_wrap(headers[j]) or 'name' in headers[j].lower()
-                or headers[j].lower() in ('surname', 'religion', 'class', 'current_class')]
+        # Fill the A4 width by growing the non-wrap text columns; wrap columns
+        # stay capped so address/hobbies keep wrapping.
+        grow = [j for j in range(ncol) if not _is_wrap(headers[j])
+                and headers[j].lower() not in ('s/n', 'sn', 'age', 'gender')]
         if not grow:
-            grow = list(range(ncol))
+            grow = [j for j in range(ncol) if not _is_wrap(headers[j])] or list(range(ncol))
         base_sum = sum(col_w[j] for j in grow) or 1
         left = avail - tot
         for j in grow:
@@ -468,13 +515,19 @@ def students_image_pages(rows, headers, school, total=None):
             x = tx0
             for j in range(ncol):
                 v = '' if j >= len(r) else ('' if r[j] is None else str(r[j]))
-                col = C['ink']
-                if headers[j].lower() == 'gender':
-                    g, _hex = _gender_glyph(v); v = (g + ' ' + v).strip()
-                lines = wrap(v, body, col_w[j] - 2 * cpx) if _is_wrap(headers[j]) else [fit(v, body, col_w[j] - 2 * cpx)]
                 ty = yy + 9 * S
+                if headers[j].lower() == 'gender':
+                    g, ghex = _gender_glyph(v)
+                    gx = x + cpx
+                    if g:
+                        d.text((gx, ty), g, fill=_hex_rgb(ghex), font=body)
+                        gx += tw(g + ' ', body)
+                    d.text((gx, ty), fit(v, body, col_w[j] - 2 * cpx - (gx - x - cpx)), fill=C['ink'], font=body)
+                    x += col_w[j]
+                    continue
+                lines = wrap(v, body, col_w[j] - 2 * cpx) if _is_wrap(headers[j]) else [fit(v, body, col_w[j] - 2 * cpx)]
                 for ln in lines:
-                    d.text((x + cpx, ty), ln, fill=col, font=body); ty += line_h + 4 * S
+                    d.text((x + cpx, ty), ln, fill=C['ink'], font=body); ty += line_h + 4 * S
                 x += col_w[j]
             # horizontal hairline only — no vertical gridlines (modern, minimal)
             d.line([tx0, yy + rh, tx0 + table_w, yy + rh], fill=C['line'], width=1)
