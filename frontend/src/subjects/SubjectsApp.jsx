@@ -445,13 +445,12 @@ function StudentEntry({ d, notify }) {
         <div className="card-header"><h3>Students ({filtered.length})</h3></div>
         <div className="card-body">
           <input type="search" className="form-control mb-2" placeholder="Filter students by name…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Filter students" />
-          <div style={{ maxHeight: '60vh', overflowY: 'auto' }}>
+          <div className="stu-picker">
             {filtered.map((s) => (
               <button type="button" key={s.id} onClick={() => pick(s.id)}
-                      className={'btn btn-sm w-100 ' + (String(s.id) === String(studentId) ? 'btn-primary' : 'btn-secondary')}
-                      style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '.35rem', textAlign: 'left' }}>
-                <span>{s.full_name}</span>
-                <span className={'badge ' + (s.gender === 'Male' ? 'badge-info' : 'badge-warning')}>{s.gender || '—'}</span>
+                      className={'stu-pick' + (String(s.id) === String(studentId) ? ' active' : '')}>
+                <span className="nm">{s.full_name}</span>
+                <span className={'g ' + (s.gender === 'Male' ? 'm' : 'f')}>{s.gender || '—'}</span>
               </button>
             ))}
             {!filtered.length && <p className="text-muted text-sm">No students match.</p>}
@@ -577,11 +576,11 @@ function Scores({ d, notify }) {
     <>
       <div className="page-header"><h1>Score Entry</h1>
         {canWrite(d) && (
-        <div className="page-header-actions">
-          {d.urls.subject_sheet_import && <a href={d.urls.subject_sheet_import} className="btn btn-primary" data-native><i aria-hidden="true" className="fas fa-file-import" /> Import subject sheet</a>}
-          {d.urls.broadsheet_import && <a href={d.urls.broadsheet_import} className="btn btn-secondary" data-native><i aria-hidden="true" className="fas fa-table" /> Import broadsheet (totals)</a>}
-          {d.urls.scan && <a href={d.urls.scan} className="btn btn-secondary" data-native><i aria-hidden="true" className="fas fa-camera" /> Scan (photo)</a>}
-          {d.urls.blank_sheet && <a href={d.urls.blank_sheet} className="btn btn-secondary" data-native target="_blank" rel="noopener"><i aria-hidden="true" className="fas fa-file-lines" /> Blank sheet</a>}
+        <div className="score-actions">
+          {d.urls.subject_sheet_import && <a href={d.urls.subject_sheet_import} className="btn btn-primary btn-sm" data-native><i aria-hidden="true" className="fas fa-file-import" /> Import subject sheet</a>}
+          {d.urls.broadsheet_import && <a href={d.urls.broadsheet_import} className="btn btn-secondary btn-sm" data-native><i aria-hidden="true" className="fas fa-table" /> Import broadsheet</a>}
+          {d.urls.scan && <a href={d.urls.scan} className="btn btn-secondary btn-sm" data-native><i aria-hidden="true" className="fas fa-camera" /> Scan photo</a>}
+          {d.urls.blank_sheet && <a href={d.urls.blank_sheet} className="btn btn-secondary btn-sm" data-native target="_blank" rel="noopener"><i aria-hidden="true" className="fas fa-file-lines" /> Blank sheet</a>}
         </div>)}
       </div>
       <RecentClasses currentId={d.assignment_id} onPick={(term, asg) => set({ term_id: term, assignment_id: asg, class_subject_id: '', assessment_type_id: '' })} />
