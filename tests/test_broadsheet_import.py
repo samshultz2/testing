@@ -82,6 +82,31 @@ def test_upload_renders_review(app):
     assert 'Review import' in body and 'Ada Obi' in body
 
 
+def test_paste_csv_renders_review(app):
+    """The "Paste AI/Text" flow parses pasted CSV into the same review screen."""
+    ids = _setup_class_with_subject(app)
+    c = app.test_client()
+    c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': login_token(c)})
+    csv_text = 'Name,%s,Average\nAda Obi,82,82\n' % ids['subject_name']
+    r = c.post('/subjects/scores/broadsheet-import',
+               data={'term_id': str(ids['term_id']), 'assignment_id': str(ids['assignment_id']),
+                     '_csrf_token': auth_csrf(c), 'csv_text': csv_text})
+    assert r.status_code == 200
+    body = r.get_data(as_text=True)
+    assert 'Review import' in body and 'Ada Obi' in body
+
+
+def test_import_page_shows_paste_button_and_prompt(app):
+    ids = _setup_class_with_subject(app)
+    c = app.test_client()
+    c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': login_token(c)})
+    body = c.get('/subjects/scores/broadsheet-import',
+                 query_string={'term_id': ids['term_id'], 'assignment_id': ids['assignment_id']}
+                 ).get_data(as_text=True)
+    assert 'Paste AI/Text' in body and 'pastePanel' in body
+    assert 'Copy prompt' in body and 'comma-separated' in body
+
+
 def test_image_upload_uses_ocr(app, monkeypatch):
     """An image upload is read via the OCR engine into the same review flow."""
     ids = _setup_class_with_subject(app)

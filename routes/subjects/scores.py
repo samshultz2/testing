@@ -1001,6 +1001,21 @@ def broadsheet_import():
         return redirect(url_for('main.dashboard'))
 
     ctx = _scan_selector_context()
+    # An AI prompt the teacher can copy into Claude/Gemini/etc. to turn a raw
+    # list or screenshot into the CSV this page accepts.
+    _subs = [cs.subject.name for cs in (ctx.get('class_subjects') or [])]
+    _cols = ', '.join(_subs) if _subs else 'one column per subject'
+    ctx['ai_prompt'] = (
+        "Convert the class broadsheet below into CSV using these exact rules:\n"
+        "- First column header is 'Name' — the student's full name.\n"
+        "- Then one numeric column per subject, using these subject headers: " + _cols + ".\n"
+        "- Each subject cell is that student's FINAL TOTAL as a whole number 0-100 "
+        "(convert any grade to its score; leave blank if truly missing).\n"
+        "- Add a final 'Average' column if an average is shown.\n"
+        "- One student per row. Output ONLY the CSV — the header row first, "
+        "comma-separated, with no commentary and no code fences.\n\n"
+        "Broadsheet data:\n<paste your list or screenshot text here>"
+    )
     if request.method == 'POST':
         term_id = ctx['term_id']
         assignment_id = ctx['assignment_id']
@@ -1012,62 +1027,72 @@ def broadsheet_import():
             flash('You do not have access to this class.', 'error')
             return redirect(url_for('subjects.broadsheet_import'))
 
-        upload = request.files.get('file')
-        if not upload or not upload.filename:
-            flash('No file selected.', 'error')
-            return render_template('subjects/broadsheet_import.html', **ctx)
-        from utils.uploads import ext_ok, IMAGE_EXTS
-        data = upload.read()
-        is_image = ext_ok(upload.filename, IMAGE_EXTS)
-        if not (is_image or ext_ok(upload.filename, {'.xlsx', '.xlsm', '.xls', '.csv'})):
-            flash('Please upload an Excel/CSV file or a photo (JPG/PNG) of the broadsheet.', 'error')
-            return render_template('subjects/broadsheet_import.html', **ctx)
-
         from utils.broadsheet_import import parse_table, guess_name_column, match_subject
         ocr_flags, ocr_review_count, image_data_uri = {}, 0, None
-        if is_image:
-            # OCR the photographed broadsheet into the same headers+rows table,
-            # using the school's chosen engine (Claude vision / Tesseract).
-            from utils.table_ocr import ocr_table_rich
-            from utils.ocr_engine import engine_order
-            if not engine_order():
-                flash('No OCR engine is available. Configure one in Settings → AI Vision OCR, '
-                      'or upload an Excel/CSV file instead.', 'error')
-                return render_template('subjects/broadsheet_import.html', **ctx)
-            # Subject names hint the table reconstructor's header detection.
-            _subs = ClassSubject.query.filter_by(
-                term_id=term_id, class_id=assignment.class_id, is_active=True
-            ).filter((ClassSubject.arm_id == None) | (ClassSubject.arm_id == assignment.arm_id)  # noqa: E711
-                     ).join(Subject).all()
-            expected = ['Student Name'] + [cs.subject.name for cs in _subs] \
-                + [cs.subject.short_name for cs in _subs if cs.subject.short_name]
-            tried = engine_order()
-            rich = ocr_table_rich(data, upload.mimetype or 'image/png', expected_headers=expected)
-            if not rich:
-                names = {'claude': 'Claude vision', 'tesseract': 'Tesseract'}
-                who = ', '.join(names.get(e, e) for e in tried) or 'the configured engine'
-                extra = ''
-                if 'claude' in tried:
-                    from utils.waec_ocr import last_vision_error
-                    ve = last_vision_error()
-                    if ve:
-                        extra = ' ' + ve
-                flash(f'{who} could not read a table from that image.{extra} Try a clearer, '
-                      f'straight photo, switch the engine in Settings → AI Vision OCR, or upload '
-                      f'the Excel/CSV instead.', 'warning')
-                return render_template('subjects/broadsheet_import.html', **ctx)
-            parsed = {'headers': rich['headers'], 'rows': rich['rows']}
-            ocr_flags = rich.get('cell_flags') or {}
-            ocr_review_count = rich.get('review_count') or 0
-            import base64
-            image_data_uri = 'data:%s;base64,%s' % (
-                upload.mimetype or 'image/png', base64.b64encode(data).decode())
-        else:
+
+        # Pasted CSV / AI-extracted text — parse it exactly like an uploaded CSV.
+        csv_text = (request.form.get('csv_text') or '').strip()
+        if csv_text:
             try:
-                parsed = parse_table(data, upload.filename)
+                parsed = parse_table(csv_text.encode('utf-8'), 'pasted.csv')
             except Exception as e:
-                flash(f'Could not read the file: {e}', 'error')
+                flash(f'Could not read the pasted text: {e}', 'error')
                 return render_template('subjects/broadsheet_import.html', **ctx)
+        else:
+            upload = request.files.get('file')
+            if not upload or not upload.filename:
+                flash('No file selected.', 'error')
+                return render_template('subjects/broadsheet_import.html', **ctx)
+            from utils.uploads import ext_ok, IMAGE_EXTS
+            data = upload.read()
+            is_image = ext_ok(upload.filename, IMAGE_EXTS)
+            if not (is_image or ext_ok(upload.filename, {'.xlsx', '.xlsm', '.xls', '.csv'})):
+                flash('Please upload an Excel/CSV file or a photo (JPG/PNG) of the broadsheet.', 'error')
+                return render_template('subjects/broadsheet_import.html', **ctx)
+
+            if is_image:
+                # OCR the photographed broadsheet into the same headers+rows table,
+                # using the school's chosen engine (Claude vision / Tesseract).
+                from utils.table_ocr import ocr_table_rich
+                from utils.ocr_engine import engine_order
+                if not engine_order():
+                    flash('No OCR engine is available. Configure one in Settings → AI Vision OCR, '
+                          'or upload an Excel/CSV file instead.', 'error')
+                    return render_template('subjects/broadsheet_import.html', **ctx)
+                # Subject names hint the table reconstructor's header detection.
+                _subs = ClassSubject.query.filter_by(
+                    term_id=term_id, class_id=assignment.class_id, is_active=True
+                ).filter((ClassSubject.arm_id == None) | (ClassSubject.arm_id == assignment.arm_id)  # noqa: E711
+                         ).join(Subject).all()
+                expected = ['Student Name'] + [cs.subject.name for cs in _subs] \
+                    + [cs.subject.short_name for cs in _subs if cs.subject.short_name]
+                tried = engine_order()
+                rich = ocr_table_rich(data, upload.mimetype or 'image/png', expected_headers=expected)
+                if not rich:
+                    names = {'claude': 'Claude vision', 'tesseract': 'Tesseract'}
+                    who = ', '.join(names.get(e, e) for e in tried) or 'the configured engine'
+                    extra = ''
+                    if 'claude' in tried:
+                        from utils.waec_ocr import last_vision_error
+                        ve = last_vision_error()
+                        if ve:
+                            extra = ' ' + ve
+                    flash(f'{who} could not read a table from that image.{extra} Try a clearer, '
+                          f'straight photo, switch the engine in Settings → AI Vision OCR, or upload '
+                          f'the Excel/CSV instead.', 'warning')
+                    return render_template('subjects/broadsheet_import.html', **ctx)
+                parsed = {'headers': rich['headers'], 'rows': rich['rows']}
+                ocr_flags = rich.get('cell_flags') or {}
+                ocr_review_count = rich.get('review_count') or 0
+                import base64
+                image_data_uri = 'data:%s;base64,%s' % (
+                    upload.mimetype or 'image/png', base64.b64encode(data).decode())
+            else:
+                try:
+                    parsed = parse_table(data, upload.filename)
+                except Exception as e:
+                    flash(f'Could not read the file: {e}', 'error')
+                    return render_template('subjects/broadsheet_import.html', **ctx)
         headers = parsed['headers']
         rows = parsed['rows']
         if not headers or not rows:

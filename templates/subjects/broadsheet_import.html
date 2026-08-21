@@ -6,9 +6,11 @@
     <div><h1>Import Broadsheet</h1>
         <p class="text-muted text-sm">Upload a whole-class Excel/CSV of <strong>subject totals</strong> (one row per student, one column per subject). You'll map the columns to subjects, resolve any unknown names, and each total is broken down into this term's assessment components before you save.</p>
     </div>
+    {% if assignment_id and term_id %}
     <div class="page-header-actions">
-        <a href="{{ url_for('subjects.scoresheet_scan', term_id=term_id, assignment_id=assignment_id) }}" class="btn btn-secondary"><i class="fas fa-camera"></i> Scan single subject</a>
+        <button type="button" id="pasteToggle" class="btn btn-secondary"><i class="fas fa-paste"></i> Paste AI/Text</button>
     </div>
+    {% endif %}
 </div>
 
 <div class="card mb-3">
@@ -49,10 +51,77 @@
         </form>
     </div>
 </div>
+
+<!-- Slide-in "Paste AI/Text" panel — no page navigation -->
+<div class="card mt-3 paste-panel" id="pastePanel" hidden>
+    <div class="card-header"><h3><i class="fas fa-paste"></i> Paste AI / Text (CSV)</h3></div>
+    <div class="card-body">
+        <p class="text-muted text-sm">Paste a <strong>comma-separated</strong> broadsheet: the first column is the student's <strong>Name</strong>, then one column per subject holding that subject's <strong>total (0–100)</strong>, and optionally a final <strong>Average</strong> column. The first row must be the header. It's read exactly like the Excel/CSV import — you'll map columns, resolve names, mark any <strong>missing subject</strong> (its total is worked back from the Average), preview the breakdown, then save.</p>
+
+        <details class="mb-2">
+            <summary style="cursor:pointer;font-weight:600;"><i class="fas fa-robot"></i> No spreadsheet? Copy this prompt into Claude / Gemini / ChatGPT</summary>
+            <p class="form-hint mt-1">Paste your raw list (or a screenshot's text) after the prompt, then paste the CSV it returns into the box below.</p>
+            <textarea id="aiPrompt" class="form-control" rows="8" readonly style="font-family:monospace;font-size:.8rem;">{{ ai_prompt }}</textarea>
+            <button type="button" id="copyPrompt" class="btn btn-secondary btn-sm mt-1"><i class="fas fa-copy"></i> Copy prompt</button>
+            <span id="copyMsg" class="text-success text-sm" style="display:none;"><i class="fas fa-check"></i> Copied</span>
+        </details>
+
+        <form method="POST">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="term_id" value="{{ term_id }}">
+            <input type="hidden" name="assignment_id" value="{{ assignment_id }}">
+            <div class="form-group">
+                <label class="form-label">Paste CSV here <span class="required">*</span></label>
+                <textarea name="csv_text" id="csvText" class="form-control" rows="8" required
+                          placeholder="Name,{% for cs in class_subjects[:3] %}{{ cs.subject.short_name or cs.subject.name }},{% endfor %}Average&#10;Ada Obi,84,72,90,82&#10;Musa Bello,60,55,C6,58"
+                          style="font-family:monospace;font-size:.85rem;"></textarea>
+                <span class="form-hint d-block">Tip: a cell may be left blank for a missing score. If a whole subject column is missing, still include the <strong>Average</strong> column and mark that subject as missing on the next screen — it will be computed.</span>
+            </div>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-table"></i> Read &amp; map</button>
+            <button type="button" id="pasteCancel" class="btn btn-secondary">Cancel</button>
+        </form>
+    </div>
+</div>
 {% else %}
 <div class="card"><div class="card-body"><div class="empty-state">
     <i class="fas fa-hand-pointer"></i><h3>Select a term and class above</h3>
-    <p>Then upload the class broadsheet file.</p>
+    <p>Then upload the class broadsheet file, or paste AI/CSV text.</p>
 </div></div></div>
 {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var toggle = document.getElementById('pasteToggle');
+  var panel = document.getElementById('pastePanel');
+  if (toggle && panel) {
+    toggle.addEventListener('click', function () {
+      panel.hidden = !panel.hidden;
+      if (!panel.hidden) {
+        panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        var ta = document.getElementById('csvText'); if (ta) ta.focus();
+      }
+    });
+  }
+  var cancel = document.getElementById('pasteCancel');
+  if (cancel && panel) cancel.addEventListener('click', function () { panel.hidden = true; });
+
+  var copyBtn = document.getElementById('copyPrompt');
+  if (copyBtn) {
+    copyBtn.addEventListener('click', function () {
+      var txt = document.getElementById('aiPrompt');
+      if (!txt) return;
+      txt.select();
+      var done = function () {
+        var msg = document.getElementById('copyMsg');
+        if (msg) { msg.style.display = 'inline'; setTimeout(function () { msg.style.display = 'none'; }, 2000); }
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(txt.value).then(done, function () { try { document.execCommand('copy'); done(); } catch (e) {} });
+      } else { try { document.execCommand('copy'); done(); } catch (e) {} }
+    });
+  }
+})();
+</script>
 {% endblock %}
