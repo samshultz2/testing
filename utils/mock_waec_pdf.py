@@ -410,6 +410,14 @@ def _slip_fonts():
     return {'ser': 'Times-Roman', 'serb': 'Times-Bold', 'seri': 'Times-Italic', 'fa': fa}
 
 
+def _waec_remark(grade):
+    """WAEC band descriptor for the remark column."""
+    g = (grade or '').upper()
+    return {'A1': 'Excellent', 'B2': 'Very Good', 'B3': 'Good',
+            'C4': 'Credit', 'C5': 'Credit', 'C6': 'Credit',
+            'D7': 'Pass', 'E8': 'Pass', 'F9': 'Fail'}.get(g, '—')
+
+
 def _grade_badge_colors(grade, bw=False):
     """(fill, text, border) for a grade badge. In B&W: distinctions are solid
     black, everything else is an outlined white chip so it prints cleanly."""
@@ -586,7 +594,8 @@ def _draw_competence_slip(c, PW, PH, student, s, exam, school, opts, signers, F,
              (_ICON['book'], 'Stream', student.stream or '—')]
     # Name needs the most room; Gender/Stream are short — proportion the cells so
     # a long name never runs under Gender and the short cells aren't half-empty.
-    weights = [2.4, 1.0, 1.35]
+    # (Shared by the colour and black-and-white variants.)
+    weights = [2.7, 0.95, 1.3]
     total_w = PW - 2 * M
     widths = [total_w * w / sum(weights) for w in weights]
     x_at = M
@@ -602,9 +611,9 @@ def _draw_competence_slip(c, PW, PH, student, s, exam, school, opts, signers, F,
         c.setFillColor(MUTED); c.setFont(ser, 9.5)
         c.drawString(tx, y - bar_h / 2 + 3, lab + ':')
         vt = str(val); vf = 12.5
-        while vf > 9.5 and stringWidth(vt, serb, vf) > avail_v:
+        while vf > 9 and stringWidth(vt, serb, vf) > avail_v:
             vf -= 0.5
-        if stringWidth(vt, serb, vf) > avail_v:
+        if stringWidth(vt, serb, vf) > avail_v:      # still too long → ellipsise
             while vt and stringWidth(vt + '…', serb, vf) > avail_v:
                 vt = vt[:-1]
             vt = (vt + '…') if vt else ''
@@ -653,10 +662,12 @@ def _draw_competence_slip(c, PW, PH, student, s, exam, school, opts, signers, F,
                     stroke=(1 if bdc is not None else 0), fill=1)
         c.setFillColor(fgc); c.setFont(serb, 10.5)
         c.drawCentredString(bcx, mid - 4, (r.grade or '—'))
-        # remark
-        rk = 'Credit' if r.is_pass else 'Fail'
-        remark_col = INK if (r.is_pass or bw) else _SL['RED']
-        c.setFillColor(remark_col); c.setFont(serb if (not r.is_pass) else ser, 11)
+        # remark — WAEC band descriptor (Excellent / Very Good / Good / Credit /
+        # Pass / Fail). A fail (F9) is emphasised.
+        rk = _waec_remark(r.grade)
+        is_fail = (rk == 'Fail')
+        remark_col = (_SL['RED'] if (is_fail and not bw) else INK)
+        c.setFillColor(remark_col); c.setFont(serb if is_fail else ser, 11)
         c.drawCentredString(x0 + cols[0] + cols[1] + cols[2] + cols[3] + cols[4] / 2, mid - 4, rk)
         c.setStrokeColor(LINE); c.setLineWidth(0.6)
         c.line(x0, yy - rh, x0 + sum(cols), yy - rh)
