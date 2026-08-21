@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Import Subject Sheet - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('subjects.scores_entry') }}">Scores</a> / <span>Import Subject Sheet</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div><h1>Import a Subject Sheet</h1>
+        <p class="text-muted text-sm">Upload one subject's record sheet — Excel/CSV or a photo — where the columns are the assessment components (CA1, CA2, HA, Exam…). You'll map columns to components, resolve any unknown names, review, then save. No breakdown is done — the scores go straight to their components.</p>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header"><h3>Step 1: Select term, class &amp; subject</h3></div>
+    <div class="card-body">
+        <form method="GET" class="filter-form">
+            <div class="form-group"><label class="form-label">Term</label>
+                <select name="term_id" class="form-control" data-autosubmit>
+                    <option value="">Select Term</option>
+                    {% for term in terms %}<option value="{{ term.id }}" {% if term_id == term.id %}selected{% endif %}>{{ term.full_name }}</option>{% endfor %}
+                </select></div>
+            <div class="form-group"><label class="form-label">Class</label>
+                <select name="assignment_id" class="form-control" data-autosubmit>
+                    <option value="">Select Class</option>
+                    {% for a in assignments %}<option value="{{ a.id }}" {% if assignment_id == a.id %}selected{% endif %}>{{ a.display_name }}</option>{% endfor %}
+                </select></div>
+            <div class="form-group"><label class="form-label">Subject</label>
+                <select name="class_subject_id" class="form-control" data-autosubmit>
+                    <option value="">Select Subject</option>
+                    {% for cs in class_subjects %}<option value="{{ cs.id }}" {% if class_subject_id == cs.id %}selected{% endif %}>{{ cs.subject.name }}</option>{% endfor %}
+                </select></div>
+        </form>
+    </div>
+</div>
+
+{% if assignment_id and term_id and class_subject_id %}
+<div class="card">
+    <div class="card-header"><h3>Step 2: Upload the subject sheet</h3></div>
+    <div class="card-body">
+        <form method="POST" enctype="multipart/form-data">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="term_id" value="{{ term_id }}">
+            <input type="hidden" name="assignment_id" value="{{ assignment_id }}">
+            <input type="hidden" name="class_subject_id" value="{{ class_subject_id }}">
+            <div class="form-group">
+                <label class="form-label">Excel/CSV file or a photo of the sheet <span class="required">*</span></label>
+                <input type="file" name="file" class="form-control" accept=".xlsx,.xlsm,.xls,.csv,image/*" capture="environment" required>
+                <span class="form-hint d-block">Columns should be the assessment components (CA1, CA2, HA, Exam…). Photos are read with your chosen engine in <a href="{{ url_for('settings.ocr_settings') }}">Settings → AI Vision OCR</a>. Always review before saving.</span>
+            </div>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-table"></i> Read &amp; map</button>
+        </form>
+    </div>
+</div>
+{% else %}
+<div class="card"><div class="card-body"><div class="empty-state">
+    <i class="fas fa-hand-pointer"></i><h3>Select a term, class and subject above</h3>
+    <p>Then upload the subject's record sheet.</p>
+</div></div></div>
+{% endif %}
+{% endblock %}

@@ -142,10 +142,14 @@ def _otsu_threshold(hist):
     return best_thr
 
 
-def extract_text(image_bytes, binarize=False):
-    """Run Tesseract over the image bytes and return the raw text. ``binarize``
-    Otsu-thresholds the grayscale image — crisper for faint / low-contrast table
-    text (e.g. a phone screenshot of a coloured results table)."""
+def extract_text(image_bytes, binarize=False, psm=None, target_width=None):
+    """Run Tesseract over the image bytes and return the raw text.
+
+    ``binarize`` Otsu-thresholds the grayscale image; ``psm`` overrides the page
+    segmentation mode (6 = a single uniform block, best for tidy tables);
+    ``target_width`` upscales narrow screenshots so small table text is legible.
+    These let the caller try a few strategies and keep the best read (e.g. a
+    phone screenshot of a coloured WAEC results table)."""
     import pytesseract
     from PIL import Image, ImageOps
 
@@ -167,15 +171,20 @@ def extract_text(image_bytes, binarize=False):
         img = _auto_orient(img, pytesseract)
     img = ImageOps.grayscale(img)
     img = ImageOps.autocontrast(img)
-    # Upscale small images first so the threshold works on smooth edges.
-    if max(img.size) < _MIN_OCR_DIM:
+    # Upscale small images first so the threshold works on smooth edges. A
+    # ``target_width`` upscales by width (narrow screenshots have tiny table text).
+    if target_width and img.width < target_width:
+        scale = min(target_width / img.width, 4.0)
+        img = img.resize((int(img.width * scale), int(img.height * scale)))
+    elif max(img.size) < _MIN_OCR_DIM:
         scale = _MIN_OCR_DIM / max(img.size)
         img = img.resize((int(img.width * scale), int(img.height * scale)))
     if binarize:
         thr = _otsu_threshold(img.histogram()[:256])
         img = img.point(lambda p: 255 if p > thr else 0)
     # Bound a single OCR pass so a crafted image can't hang a worker.
-    return pytesseract.image_to_string(img, timeout=_OCR_TIMEOUT_SECONDS)
+    config = ('--psm %d' % int(psm)) if psm else ''
+    return pytesseract.image_to_string(img, timeout=_OCR_TIMEOUT_SECONDS, config=config)
 
 
 def pdf_available():

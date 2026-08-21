@@ -576,12 +576,13 @@ function Scores({ d, notify }) {
   return (
     <>
       <div className="page-header"><h1>Score Entry</h1>
+        {canWrite(d) && (
         <div className="page-header-actions">
-          {canWrite(d) && <a href={d.urls.scan} className="btn btn-primary" data-native><i aria-hidden="true" className="fas fa-camera" /> Scan Score Sheet</a>}
-          {canWrite(d) && <a href={d.urls.import} className="btn btn-secondary" data-native><i aria-hidden="true" className="fas fa-file-excel" /> Import Excel</a>}
-          {canWrite(d) && d.urls.broadsheet_import && <a href={d.urls.broadsheet_import} className="btn btn-secondary" data-native><i aria-hidden="true" className="fas fa-table" /> Import broadsheet (totals)</a>}
+          {d.urls.subject_sheet_import && <a href={d.urls.subject_sheet_import} className="btn btn-primary" data-native><i aria-hidden="true" className="fas fa-file-import" /> Import subject sheet</a>}
+          {d.urls.broadsheet_import && <a href={d.urls.broadsheet_import} className="btn btn-secondary" data-native><i aria-hidden="true" className="fas fa-table" /> Import broadsheet (totals)</a>}
+          {d.urls.scan && <a href={d.urls.scan} className="btn btn-secondary" data-native><i aria-hidden="true" className="fas fa-camera" /> Scan (photo)</a>}
           {d.urls.blank_sheet && <a href={d.urls.blank_sheet} className="btn btn-secondary" data-native target="_blank" rel="noopener"><i aria-hidden="true" className="fas fa-file-lines" /> Blank sheet</a>}
-        </div>
+        </div>)}
       </div>
       <RecentClasses currentId={d.assignment_id} onPick={(term, asg) => set({ term_id: term, assignment_id: asg, class_subject_id: '', assessment_type_id: '' })} />
       <div className="score-tabs" role="tablist" aria-label="Score entry mode">

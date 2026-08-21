@@ -143,6 +143,7 @@ def scores_entry():
                  'paste': url_for('subjects.scoresheet_paste', term_id=term_id or '', assignment_id=assignment_id or '', class_subject_id=class_subject_id or ''),
                  'import': url_for('subjects.import_scores', term_id=term_id or '', assignment_id=assignment_id or '', class_subject_id=class_subject_id or ''),
                  'broadsheet_import': url_for('subjects.broadsheet_import', term_id=term_id or '', assignment_id=assignment_id or ''),
+                 'subject_sheet_import': url_for('subjects.subject_sheet_import', term_id=term_id or '', assignment_id=assignment_id or '', class_subject_id=class_subject_id or ''),
                  'blank_sheet': (url_for('subjects.blank_score_sheet', term_id=term_id or '', assignment_id=assignment_id or '',
                                          subject=selected_class_subject.subject.name if selected_class_subject else '')
                                  if term_id and assignment_id else '')},
@@ -1185,3 +1186,162 @@ def broadsheet_save():
         db.session.rollback()
         flash('Results for this term are published — ask an admin to unlock them first.', 'error')
     return redirect(url_for('subjects.scores_entry', term_id=term_id, assignment_id=assignment_id))
+
+
+# ============================================================================
+# SINGLE-SUBJECT SHEET IMPORT — one subject whose columns are the assessment
+# components (CA1, CA2, HA, Exam…) already broken out. Map columns to assessment
+# types, resolve students, preview, save. No breakdown. Excel/CSV or a photo.
+# ============================================================================
+
+@subjects_bp.route('/scores/subject-sheet-import', methods=['GET', 'POST'])
+@login_required
+def subject_sheet_import():
+    if not can_enter_results() and not is_admin():
+        flash('You do not have permission to enter scores.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    ctx = _scan_selector_context()
+    if request.method == 'POST':
+        term_id = ctx['term_id']
+        assignment_id = ctx['assignment_id']
+        class_subject_id = ctx['class_subject_id']
+        assignment = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None
+        cs = db.session.get(ClassSubject, class_subject_id) if class_subject_id else None
+        if not (assignment and term_id and cs):
+            flash('Select a term, class and subject before uploading.', 'error')
+            return render_template('subjects/subject_sheet_import.html', **ctx)
+        if not can_access_class(assignment_id):
+            flash('You do not have access to this class.', 'error')
+            return redirect(url_for('subjects.subject_sheet_import'))
+
+        upload = request.files.get('file')
+        if not upload or not upload.filename:
+            flash('No file selected.', 'error')
+            return render_template('subjects/subject_sheet_import.html', **ctx)
+
+        from utils.uploads import ext_ok, IMAGE_EXTS
+        data = upload.read()
+        is_image = ext_ok(upload.filename, IMAGE_EXTS)
+        if not (is_image or ext_ok(upload.filename, {'.xlsx', '.xlsm', '.xls', '.csv'})):
+            flash('Please upload an Excel/CSV file or a photo of the sheet.', 'error')
+            return render_template('subjects/subject_sheet_import.html', **ctx)
+
+        from utils.broadsheet_import import parse_table, guess_name_column
+        image_data_uri, ocr_flags, ocr_review = None, {}, 0
+        if is_image:
+            from utils.table_ocr import ocr_table_rich
+            from utils.ocr_engine import engine_order
+            if not engine_order():
+                flash('No OCR engine is available. Configure one in Settings → AI Vision OCR, '
+                      'or upload an Excel/CSV file instead.', 'error')
+                return render_template('subjects/subject_sheet_import.html', **ctx)
+            cols = _sheet_columns(cs, term=term_id)
+            expected = ['Student Name'] + [(at.short_name or at.name) for at, _mx in cols]
+            rich = ocr_table_rich(data, upload.mimetype or 'image/png', expected_headers=expected)
+            if not rich:
+                flash('Could not read a table from that image. Try a clearer photo or Excel/CSV.', 'warning')
+                return render_template('subjects/subject_sheet_import.html', **ctx)
+            parsed = {'headers': rich['headers'], 'rows': rich['rows']}
+            ocr_flags, ocr_review = rich.get('cell_flags') or {}, rich.get('review_count') or 0
+            import base64
+            image_data_uri = 'data:%s;base64,%s' % (upload.mimetype or 'image/png',
+                                                    base64.b64encode(data).decode())
+        else:
+            try:
+                parsed = parse_table(data, upload.filename)
+            except Exception as e:
+                flash(f'Could not read the file: {e}', 'error')
+                return render_template('subjects/subject_sheet_import.html', **ctx)
+        headers, rows = parsed['headers'], parsed['rows']
+        if not headers or not rows:
+            flash('No table with a header row and data was found.', 'warning')
+            return render_template('subjects/subject_sheet_import.html', **ctx)
+
+        # Component columns for this subject/term (mapping targets).
+        comp_cols = _sheet_columns(cs, term=term_id)          # [(at, max)]
+        at_by_norm = {}
+        import re as _re
+        for at, mx in comp_cols:
+            for key in (at.name, at.short_name):
+                if key:
+                    at_by_norm[_re.sub(r'[^a-z0-9]', '', key.lower())] = at.id
+
+        name_col = guess_name_column(headers)
+        col_map = []
+        for idx, hdr in enumerate(headers):
+            key = _re.sub(r'[^a-z0-9]', '', (hdr or '').lower())
+            col_map.append(at_by_norm.get(key, '') if idx != name_col else '')
+
+        from utils.waec_ocr import match_students_unique
+        enrollments = StudentEnrollment.query.filter_by(
+            class_arm_assignment_id=assignment_id, is_active=True
+        ).join(Student).order_by(Student.surname, Student.first_name).all()
+        students = [e.student for e in enrollments]
+        row_names = [(r[name_col] if name_col is not None and name_col < len(r) else '') for r in rows]
+        matches = match_students_unique(row_names, students)
+        matched_ids = [(s.id if s else '') for s, _sc in matches]
+
+        return render_template('subjects/subject_sheet_review.html',
+            term_id=term_id, assignment_id=assignment_id, class_subject_id=class_subject_id,
+            assignment=assignment, class_subject=cs,
+            headers=headers, rows=rows, name_col=(name_col if name_col is not None else ''),
+            col_map=col_map,
+            components=[{'id': at.id, 'name': (at.short_name or at.name), 'max': mx} for at, mx in comp_cols],
+            students=students, matched_ids=matched_ids,
+            cell_flags=ocr_flags, review_count=ocr_review, image_data_uri=image_data_uri,
+            save_url=url_for('subjects.subject_sheet_save'))
+
+    return render_template('subjects/subject_sheet_import.html', **ctx)
+
+
+@subjects_bp.route('/scores/subject-sheet-import/save', methods=['POST'])
+@login_required
+def subject_sheet_save():
+    if not can_enter_results() and not is_admin():
+        flash('You do not have permission to enter scores.', 'error')
+        return redirect(url_for('main.dashboard'))
+
+    term_id = request.form.get('term_id', type=int)
+    assignment_id = request.form.get('assignment_id', type=int)
+    class_subject_id = request.form.get('class_subject_id', type=int)
+    assignment = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None
+    cs = db.session.get(ClassSubject, class_subject_id) if class_subject_id else None
+    if not (assignment and term_id and cs) or not can_access_class(assignment_id):
+        flash('Invalid class/subject, or no access.', 'error')
+        return redirect(url_for('subjects.subject_sheet_import'))
+
+    from utils.assessments import effective_max
+    import json as _json
+    try:
+        payload = _json.loads(request.form.get('payload') or '[]')   # [{student_id, cells:{at_id: value}}]
+    except ValueError:
+        payload = []
+    at_by_id = {at.id: at for at in AssessmentType.query.filter_by(is_active=True).all()}
+
+    items = []
+    for row in payload:
+        sid = row.get('student_id')
+        if not sid:
+            continue
+        for at_s, val in (row.get('cells') or {}).items():
+            at = at_by_id.get(int(at_s))
+            if not at:
+                continue
+            mx = effective_max(cs.subject, at, term=term_id)
+            items.append((int(sid), at.id, str(val), mx))
+    counts = persist_scores(term_id, assignment_id, cs.id, cs.subject_id, items, allow_delete=False)
+    if counts is None:
+        flash('Results for this term are published — ask an admin to unlock them first.', 'error')
+        return redirect(url_for('subjects.scores_entry', term_id=term_id, assignment_id=assignment_id))
+    db.session.commit()
+    from utils.report_card import compute_term_summaries
+    compute_term_summaries(term_id, assignment.class_id)
+    from utils.results_analytics import bust as _bust
+    _bust(term_id, assignment_id)
+    msg = f'Imported {counts["saved"]} score(s) for {cs.subject.name}.'
+    if counts['rejected']:
+        msg += f' {counts["rejected"]} skipped (out of range).'
+    flash(msg, 'success')
+    return redirect(url_for('subjects.scores_entry', term_id=term_id,
+                            assignment_id=assignment_id, class_subject_id=class_subject_id))

@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+{% block title %}Review Subject Import - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('subjects.subject_sheet_import') }}">Import Subject Sheet</a> / <span>Review</span>{% endblock %}
+{% block extra_css %}
+<style>
+.ss-wrap{overflow:auto;max-height:70vh;border:1px solid var(--border-color);border-radius:var(--radius-md)}
+.ss-table{border-collapse:collapse;font-size:.82rem;white-space:nowrap}
+.ss-table th,.ss-table td{border:1px solid var(--border-light);padding:.25rem .35rem;text-align:center}
+.ss-table thead th{position:sticky;top:0;background:var(--bg-card);z-index:2}
+.ss-table .stick{position:sticky;left:0;background:var(--bg-card);z-index:1;text-align:left}
+.ss-cell{width:3.6rem;text-align:center;padding:.15rem;border:1px solid var(--border-light);border-radius:4px}
+.ss-cell.err{border-color:var(--danger);background:rgba(220,53,69,.08)}
+.ss-cell.flagged{border-color:var(--warning,#d18b00);background:rgba(240,173,0,.14)}
+.ss-map{min-width:8rem}
+.ss-imgwrap{max-height:44vh;overflow:auto;border:1px solid var(--border-light);border-radius:var(--radius-md)}
+.ss-imgwrap img{max-width:100%;display:block}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div><h1>Review — {{ class_subject.subject.name }} · {{ assignment.display_name }}</h1>
+        <p class="text-muted text-sm">Map each column to an assessment component (or skip it), pick the student for any unmatched row, edit values, then save. Each component is validated against its maximum.</p>
+    </div>
+</div>
+
+{% if review_count and review_count > 0 %}
+<div class="card mb-2" style="border-color:var(--warning,#d18b00)"><div class="card-body">
+    <span style="font-weight:600;"><i class="fas fa-triangle-exclamation" style="color:var(--warning,#d18b00)"></i> {{ review_count }} cell(s) need review</span>
+    <span class="text-muted text-sm">Amber cells were read with low confidence or corrected — check them against the image.</span>
+</div></div>
+{% endif %}
+{% if image_data_uri %}
+<div class="card mb-2"><div class="card-body">
+    <label class="d-flex gap-2 align-center mb-0" style="font-weight:600;cursor:pointer;"><input type="checkbox" id="ssShowImg" checked> Show the uploaded sheet</label>
+    <div id="ssImgPanel" class="ss-imgwrap mt-2"><img src="{{ image_data_uri }}" alt="Uploaded subject sheet"></div>
+</div></div>
+{% endif %}
+
+<form method="POST" action="{{ save_url }}" id="ssForm">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="term_id" value="{{ term_id }}">
+    <input type="hidden" name="assignment_id" value="{{ assignment_id }}">
+    <input type="hidden" name="class_subject_id" value="{{ class_subject_id }}">
+    <input type="hidden" name="payload" id="ssPayload">
+
+    <div class="card mb-2"><div class="card-body d-flex gap-3 flex-wrap align-center">
+        <div><strong>Student-name column:</strong>
+            <select id="ssNameCol" class="form-control" style="width:auto;display:inline-block;">
+                {% for h in headers %}<option value="{{ loop.index0 }}" {% if name_col == loop.index0 %}selected{% endif %}>{{ h or ('Column ' ~ loop.index) }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="text-muted text-sm">Rows: {{ rows|length }} · Columns: {{ headers|length }}</div>
+    </div></div>
+
+    <div class="ss-wrap"><table class="ss-table">
+        <thead><tr>
+            <th class="stick">Student</th>
+            {% for h in headers %}
+            {% set col_idx = loop.index0 %}
+            <th data-col="{{ col_idx }}">
+                <div>{{ h or ('Col ' ~ loop.index) }}</div>
+                <select class="form-control ss-map ss-mapsel" data-col="{{ col_idx }}">
+                    <option value="">— skip —</option>
+                    {% for c in components %}
+                    <option value="{{ c.id }}" {% if col_map[col_idx]|string == c.id|string %}selected{% endif %}>{{ c.name }} ({{ c.max }})</option>
+                    {% endfor %}
+                </select>
+            </th>
+            {% endfor %}
+        </tr></thead>
+        <tbody>
+            {% for r in rows %}
+            {% set row_idx = loop.index0 %}
+            <tr data-row="{{ row_idx }}">
+                <td class="stick">
+                    <select class="form-control ss-student" data-row="{{ row_idx }}" style="min-width:12rem;">
+                        <option value="">— unmatched —</option>
+                        {% for s in students %}
+                        <option value="{{ s.id }}" {% if matched_ids[row_idx]|string == s.id|string %}selected{% endif %}>{{ s.full_name }}{% if s.student_id %} ({{ s.student_id }}){% endif %}</option>
+                        {% endfor %}
+                    </select>
+                    <div class="text-muted" style="font-size:.7rem;">{{ r[name_col|int] if name_col != '' and name_col|int < r|length else '' }}</div>
+                </td>
+                {% for cell in r %}
+                {% set fk = row_idx ~ ',' ~ loop.index0 %}
+                {% set flag = (cell_flags|default({})).get(fk) %}
+                <td data-col="{{ loop.index0 }}">
+                    <input type="text" class="ss-cell{% if flag %} flagged{% endif %}" data-row="{{ row_idx }}" data-col="{{ loop.index0 }}" value="{{ cell }}" inputmode="numeric" autocomplete="off"
+                           {% if flag %}title="Needs review: {{ flag.reasons|join(', ') }}"{% endif %}>
+                </td>
+                {% endfor %}
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table></div>
+
+    <div class="page-header-actions mt-3">
+        <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save scores</button>
+        <a href="{{ url_for('subjects.subject_sheet_import', term_id=term_id, assignment_id=assignment_id, class_subject_id=class_subject_id) }}" class="btn btn-secondary">Start over</a>
+        <span id="ssMsg" class="text-muted text-sm"></span>
+    </div>
+</form>
+
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var MAX = {{ components|tojson }};       // [{id,name,max}]
+  var maxById = {}; MAX.forEach(function (c) { maxById[c.id] = c.max; });
+  var mapSels = Array.prototype.slice.call(document.querySelectorAll('.ss-mapsel'));
+  function colAt(col) { var s = mapSels[col]; return s && s.value ? s.value : ''; }
+  function validate() {
+    document.querySelectorAll('.ss-cell').forEach(function (inp) {
+      var col = parseInt(inp.getAttribute('data-col'), 10);
+      var atId = colAt(col);
+      inp.disabled = !atId;
+      var v = parseFloat(inp.value);
+      var mx = atId ? maxById[atId] : 100;
+      inp.classList.toggle('err', !!(atId && inp.value.trim() !== '' && (isNaN(v) || v < 0 || v > mx)));
+    });
+  }
+  mapSels.forEach(function (s) { s.addEventListener('change', validate); });
+  document.querySelectorAll('.ss-cell').forEach(function (inp) { inp.addEventListener('input', validate); });
+  document.getElementById('ssForm').addEventListener('submit', function (e) {
+    var payload = [];
+    document.querySelectorAll('tr[data-row]').forEach(function (tr) {
+      var stu = tr.querySelector('.ss-student').value;
+      if (!stu) return;
+      var cells = {};
+      tr.querySelectorAll('.ss-cell').forEach(function (inp) {
+        var atId = colAt(parseInt(inp.getAttribute('data-col'), 10));
+        if (!atId) return;
+        var val = inp.value.trim();
+        if (val !== '') cells[atId] = val;
+      });
+      if (Object.keys(cells).length) payload.push({ student_id: parseInt(stu, 10), cells: cells });
+    });
+    if (!payload.length) { e.preventDefault(); document.getElementById('ssMsg').textContent = 'Map at least one component column and match at least one student.'; return; }
+    document.getElementById('ssPayload').value = JSON.stringify(payload);
+  });
+  var showImg = document.getElementById('ssShowImg'), imgPanel = document.getElementById('ssImgPanel');
+  if (showImg && imgPanel) showImg.addEventListener('change', function () { imgPanel.style.display = showImg.checked ? '' : 'none'; });
+  validate();
+})();
+</script>
+{% endblock %}
