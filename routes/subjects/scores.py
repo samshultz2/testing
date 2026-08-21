@@ -1018,21 +1018,38 @@ def broadsheet_import():
         if not upload or not upload.filename:
             flash('No file selected.', 'error')
             return render_template('subjects/broadsheet_import.html', **ctx)
-        from utils.uploads import ext_ok
-        if not ext_ok(upload.filename, {'.xlsx', '.xlsm', '.xls', '.csv'}):
-            flash('Please upload an Excel (.xlsx) or CSV file.', 'error')
+        from utils.uploads import ext_ok, IMAGE_EXTS
+        data = upload.read()
+        is_image = ext_ok(upload.filename, IMAGE_EXTS)
+        if not (is_image or ext_ok(upload.filename, {'.xlsx', '.xlsm', '.xls', '.csv'})):
+            flash('Please upload an Excel/CSV file or a photo (JPG/PNG) of the broadsheet.', 'error')
             return render_template('subjects/broadsheet_import.html', **ctx)
 
         from utils.broadsheet_import import parse_table, guess_name_column, match_subject
-        try:
-            parsed = parse_table(upload.read(), upload.filename)
-        except Exception as e:
-            flash(f'Could not read the file: {e}', 'error')
-            return render_template('subjects/broadsheet_import.html', **ctx)
+        if is_image:
+            # OCR the photographed broadsheet into the same headers+rows table,
+            # using the school's chosen engine (Claude vision / PaddleOCR / Tesseract).
+            from utils.table_ocr import ocr_table
+            from utils.ocr_engine import engine_order
+            if not engine_order():
+                flash('No OCR engine is available. Configure one in Settings → AI Vision OCR, '
+                      'or upload an Excel/CSV file instead.', 'error')
+                return render_template('subjects/broadsheet_import.html', **ctx)
+            parsed = ocr_table(data, upload.mimetype or 'image/png')
+            if not parsed:
+                flash('Could not read a table from that image. Try a clearer, straight photo, '
+                      'a different OCR engine, or upload the Excel/CSV instead.', 'warning')
+                return render_template('subjects/broadsheet_import.html', **ctx)
+        else:
+            try:
+                parsed = parse_table(data, upload.filename)
+            except Exception as e:
+                flash(f'Could not read the file: {e}', 'error')
+                return render_template('subjects/broadsheet_import.html', **ctx)
         headers = parsed['headers']
         rows = parsed['rows']
         if not headers or not rows:
-            flash('No table with a header row and data was found in the file.', 'warning')
+            flash('No table with a header row and data was found. Check the file/photo and try again.', 'warning')
             return render_template('subjects/broadsheet_import.html', **ctx)
 
         # Class subjects (mapping targets) + their term component config.

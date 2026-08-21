@@ -121,6 +121,53 @@ def extract_scoresheet(image_bytes, col_labels, max_scores=None):
         return None
 
 
+def extract_broadsheet(image_bytes):
+    """Read a whole-class broadsheet photo into ``{'headers': [...], 'rows':
+    [[...]]}`` — one row per student, one column per subject. Boxes are clustered
+    into rows by vertical centre and into columns by horizontal centre so cells
+    line up under their header. Returns None when unavailable or unreadable, so
+    the caller can fall back to another engine."""
+    if not paddle_available():
+        return None
+    try:
+        import cv2
+        import numpy as np
+        img = cv2.imdecode(np.frombuffer(image_bytes, np.uint8), cv2.IMREAD_COLOR)
+        if img is None:
+            return None
+        boxes = _flatten_boxes(_reader().ocr(img, cls=True))
+        if len(boxes) < 4:
+            return None
+        rows = _cluster_rows(boxes)
+        if len(rows) < 2:
+            return None
+        # Column centres from the header row (top-most cluster).
+        rows_sorted = sorted(rows, key=lambda r: sum(b['cy'] for b in r) / len(r))
+        header = sorted(rows_sorted[0], key=lambda b: b['cx'])
+        centres = [b['cx'] for b in header]
+        headers = [b['text'].strip() for b in header]
+        ncol = len(centres)
+        if ncol < 2:
+            return None
+
+        def to_cols(items):
+            cells = [''] * ncol
+            for b in sorted(items, key=lambda x: x['cx']):
+                # snap each box to the nearest header column centre
+                j = min(range(ncol), key=lambda k: abs(centres[k] - b['cx']))
+                cells[j] = (cells[j] + ' ' + b['text'].strip()).strip() if cells[j] else b['text'].strip()
+            return cells
+
+        out_rows = []
+        for r in rows_sorted[1:]:
+            cells = to_cols(r)
+            if any(cells):
+                out_rows.append(cells)
+        return {'headers': headers, 'rows': out_rows} if out_rows else None
+    except Exception:
+        return None
+
+
 def _flatten_boxes(result):
     """Normalise PaddleOCR output (versioned shapes) to
     ``[{text, cx, cy, box}]``."""

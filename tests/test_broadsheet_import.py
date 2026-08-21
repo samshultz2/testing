@@ -82,6 +82,28 @@ def test_upload_renders_review(app):
     assert 'Review import' in body and 'Ada Obi' in body
 
 
+def test_image_upload_uses_ocr(app, monkeypatch):
+    """An image upload is read via the OCR engine into the same review flow."""
+    ids = _setup_class_with_subject(app)
+    # Simulate an available engine + a successful table read.
+    import utils.ocr_engine as oe
+    import utils.table_ocr as to
+    monkeypatch.setattr(oe, 'engine_order', lambda: ['claude'])
+    monkeypatch.setattr(to, 'ocr_table',
+                        lambda data, mt='image/png': {'headers': ['Student Name', ids['subject_name']],
+                                                      'rows': [['Ada Obi', '82']]})
+    c = app.test_client()
+    c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': login_token(c)})
+    data = {'term_id': str(ids['term_id']), 'assignment_id': str(ids['assignment_id']),
+            '_csrf_token': auth_csrf(c),
+            'file': (io.BytesIO(b'\x89PNG\r\n\x1a\n fake'), 'sheet.png')}
+    r = c.post('/subjects/scores/broadsheet-import', data=data,
+               content_type='multipart/form-data')
+    assert r.status_code == 200
+    body = r.get_data(as_text=True)
+    assert 'Review import' in body and 'Ada Obi' in body
+
+
 def test_save_breaks_total_into_components(app):
     from models import db, StudentScore
     ids = _setup_class_with_subject(app)

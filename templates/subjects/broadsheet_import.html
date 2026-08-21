@@ -40,9 +40,10 @@
             <input type="hidden" name="term_id" value="{{ term_id }}">
             <input type="hidden" name="assignment_id" value="{{ assignment_id }}">
             <div class="form-group">
-                <label class="form-label">Excel or CSV file <span class="required">*</span></label>
-                <input type="file" name="file" class="form-control" accept=".xlsx,.xlsm,.xls,.csv" required>
-                <span class="form-hint d-block">.xlsx or .csv. The first row with two or more filled cells is treated as the header. Cells are each subject's <strong>final total</strong> (0–100).</span>
+                <label class="form-label">Excel/CSV file or a photo of the broadsheet <span class="required">*</span></label>
+                <input type="file" name="file" class="form-control" accept=".xlsx,.xlsm,.xls,.csv,image/*" capture="environment" required>
+                <span class="form-hint d-block">.xlsx / .csv, or a clear straight <strong>photo</strong> (JPG/PNG) when you only have the printed sheet. Cells are each subject's <strong>final total</strong> (0–100); the first row is the header.</span>
+                <span class="form-hint d-block">Photos are read with your chosen engine in <a href="{{ url_for('settings.ocr_settings') }}">Settings → AI Vision OCR</a> (Claude vision is most accurate for photos). Always review before saving.</span>
             </div>
             <button type="submit" class="btn btn-primary"><i class="fas fa-table"></i> Read &amp; map</button>
         </form>

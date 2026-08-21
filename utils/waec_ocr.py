@@ -686,6 +686,63 @@ def vision_extract_scoresheet(image_bytes, column_labels, media_type='image/png'
         return None
 
 
+def vision_extract_broadsheet(image_bytes, media_type='image/png'):
+    """Read a whole-class *broadsheet* photo (one row per student, one column per
+    subject, each cell a total) with Claude vision into ``{'headers': [...],
+    'rows': [[...]]}`` — the same shape as ``utils.broadsheet_import.parse_table``,
+    so it feeds the identical review/mapping screen. Returns None on any failure.
+    """
+    cfg = _vision_config()
+    if not (cfg['enabled'] and cfg['has_key'] and cfg['installed']):
+        return None
+    try:
+        import base64
+        import json
+        import anthropic
+
+        client = anthropic.Anthropic(api_key=cfg['key'])
+        data = base64.standard_b64encode(image_bytes).decode('utf-8')
+        instruction = (
+            "This is a Nigerian school class broadsheet: one row per student, one "
+            "column per subject, each cell the student's TOTAL for that subject. "
+            "Read the column headers exactly as written (keep short codes like LIT, "
+            "PHY, CHM, P/W). Read EVERY student row top to bottom. Return ONLY JSON: "
+            '{"headers": [col1, col2, ...], "rows": [[cell1, cell2, ...], ...]} '
+            "where the first header/cell is the student's name column. Use \"\" for "
+            "any blank/dash cell. Keep every row the same length as headers. Do not "
+            "invent rows or columns."
+        )
+        message = client.messages.create(
+            model=cfg['model'],
+            max_tokens=12000,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": data}},
+                    {"type": "text", "text": instruction},
+                ],
+            }],
+        )
+        text = next((b.text for b in message.content if b.type == "text"), "").strip()
+        if text.startswith("```"):
+            text = text.strip("`")
+            text = text[text.find("{"):text.rfind("}") + 1]
+        parsed = json.loads(text)
+        headers = [str(h).strip() for h in (parsed.get('headers') or [])]
+        if not headers:
+            return None
+        ncol = len(headers)
+        rows = []
+        for r in (parsed.get('rows') or []):
+            cells = ['' if v is None else str(v).strip() for v in r][:ncol]
+            cells += [''] * (ncol - len(cells))
+            if any(cells):
+                rows.append(cells)
+        return {'headers': headers, 'rows': rows} if rows else None
+    except Exception:
+        return None
+
+
 def _name_tokens(*parts):
     """Alphabetic name tokens (length >= 2), lower-cased. Drops punctuation,
     numbers and lone initials so ordering and middle names don't defeat matching."""
