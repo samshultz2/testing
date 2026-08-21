@@ -170,16 +170,30 @@ def students_pdf(rows, headers, school, total=None):
         if over > 0:
             f = avail / tot; col_w = [w * f for w in col_w]
     elif tot < avail:
-        # Fill the A4 width by growing the non-wrap text columns; the wrap
-        # columns stay narrow so address/hobbies keep wrapping.
-        grow = [j for j in range(ncol) if not _is_wrap(headers[j])
-                and headers[j].lower() not in ('s/n', 'sn', 'age', 'gender')]
-        if not grow:
-            grow = [j for j in range(ncol) if not _is_wrap(headers[j])] or list(range(ncol))
-        base_sum = sum(col_w[j] for j in grow) or 1
+        # Keep columns responsive to their content — do NOT stretch them to fill
+        # the page (that leaves big gaps). Hand spare width first to any wrap
+        # column (address / subject-grades) so it wraps onto fewer lines, then
+        # only gently widen the text columns; the remainder is trailing space.
         left = avail - tot
-        for j in grow:
-            col_w[j] += left * (col_w[j] / base_sum)
+        wrap_cols = [j for j in range(ncol) if _is_wrap(headers[j])]
+        if wrap_cols and left > 0:
+            room = {j: max(0, 62 * mm - col_w[j]) for j in wrap_cols}
+            tr = sum(room.values())
+            if tr > 0:
+                take = min(left, tr)
+                for j in wrap_cols:
+                    col_w[j] += take * (room[j] / tr)
+                left -= take
+        if left > 0:
+            grow = [j for j in range(ncol) if not _is_wrap(headers[j])
+                    and headers[j].lower() not in ('s/n', 'sn', 'age', 'gender')]
+            # cap each text column's growth so cells stay close to their content
+            room = {j: min(col_w[j] * 0.35, 16 * mm) for j in grow}
+            tr = sum(room.values())
+            if tr > 0:
+                take = min(left, tr)
+                for j in grow:
+                    col_w[j] += take * (room[j] / tr)
 
     data = [[Paragraph(short_header(h), headp) for h in headers]]
     for r in rows:
@@ -452,16 +466,29 @@ def students_image_pages(rows, headers, school, total=None):
         if over > 0:
             f = avail / tot; col_w = [int(w * f) for w in col_w]
     elif tot < avail:
-        # Fill the A4 width by growing the non-wrap text columns; wrap columns
-        # stay capped so address/hobbies keep wrapping.
-        grow = [j for j in range(ncol) if not _is_wrap(headers[j])
-                and headers[j].lower() not in ('s/n', 'sn', 'age', 'gender')]
-        if not grow:
-            grow = [j for j in range(ncol) if not _is_wrap(headers[j])] or list(range(ncol))
-        base_sum = sum(col_w[j] for j in grow) or 1
+        # Keep columns responsive to content — don't stretch them to fill the
+        # page. Spare width goes first to a wrap column (address / subject-
+        # grades) so it wraps onto fewer lines, then gently to the text columns;
+        # anything left over is trailing space.
         left = avail - tot
-        for j in grow:
-            col_w[j] += int(left * (col_w[j] / base_sum))
+        wrap_cols = [j for j in range(ncol) if _is_wrap(headers[j])]
+        if wrap_cols and left > 0:
+            room = {j: max(0, int(360 * S) - col_w[j]) for j in wrap_cols}
+            tr = sum(room.values())
+            if tr > 0:
+                take = min(left, tr)
+                for j in wrap_cols:
+                    col_w[j] += int(take * (room[j] / tr))
+                left = avail - sum(col_w)
+        if left > 0:
+            grow = [j for j in range(ncol) if not _is_wrap(headers[j])
+                    and headers[j].lower() not in ('s/n', 'sn', 'age', 'gender')]
+            room = {j: min(int(col_w[j] * 0.35), int(95 * S)) for j in grow}
+            tr = sum(room.values())
+            if tr > 0:
+                take = min(left, tr)
+                for j in grow:
+                    col_w[j] += int(take * (room[j] / tr))
     table_w = sum(col_w)
     tx0 = margin  # full-width, left-aligned to the page margin
 

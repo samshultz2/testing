@@ -640,7 +640,8 @@ def _waec_branded_export(year, fmt):
             rows.append([sub['subject']] + [str(cell[k]) for k, _l in specs if k in cols])
     else:
         if not cols:
-            cols = {'rank', 'student_id', 'a1', 'credits', 'avg', 'grades'}
+            # Mirror the on-screen students table by default.
+            cols = {'rank', 'student_id', 'a1', 'b2', 'b3', 'credits', 'avg', 'grades'}
         headers = []
         if 'rank' in cols:
             headers.append('S/N')
