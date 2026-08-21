@@ -11,23 +11,42 @@ is tried first, then the others that are installed.
 
 def ocr_table(image_bytes, mimetype='image/png'):
     """Best-effort table read. Returns ``{'headers','rows'}`` or None."""
+    rich = ocr_table_rich(image_bytes, mimetype)
+    return {'headers': rich['headers'], 'rows': rich['rows']} if rich else None
+
+
+def ocr_table_rich(image_bytes, mimetype='image/png', expected_headers=None, max_scores=None):
+    """Table read with cell-level review metadata when the engine supports it.
+
+    Returns ``{'headers','rows','cell_flags','review_count','engine','warnings'}``
+    or None. PaddleOCR goes through the modular reconstruction pipeline
+    (bbox-based rows/columns + validation + per-cell review flags); Claude and
+    Tesseract return the table without per-cell flags."""
     from utils.ocr_engine import engine_order
     for eng in engine_order():
+        out = None
+        flags, review_count, warnings = {}, 0, []
         try:
             if eng == 'claude':
                 from utils.waec_ocr import vision_extract_broadsheet
                 out = vision_extract_broadsheet(image_bytes, mimetype or 'image/png')
             elif eng == 'paddle':
-                from utils.paddle_ocr import extract_broadsheet
-                out = extract_broadsheet(image_bytes)
+                from utils.ocr.pipeline import extract_table
+                res = extract_table(image_bytes, expected_headers=expected_headers,
+                                    max_scores=max_scores)
+                if res:
+                    out = {'headers': res['headers'], 'rows': res['rows']}
+                    flags = res.get('cell_flags', {})
+                    review_count = res.get('review_count', 0)
+                    warnings = res.get('warnings', [])
             elif eng == 'tesseract':
                 out = _tesseract_table(image_bytes)
-            else:
-                out = None
         except Exception:
             out = None
         if out and out.get('headers') and out.get('rows'):
-            return out
+            return {'headers': out['headers'], 'rows': out['rows'],
+                    'cell_flags': flags, 'review_count': review_count,
+                    'engine': eng, 'warnings': warnings}
     return None
 
 

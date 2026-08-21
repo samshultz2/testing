@@ -10,6 +10,10 @@
 .bi-table .stick{position:sticky;left:0;background:var(--bg-card);z-index:1;text-align:left}
 .bi-cell{width:3.4rem;text-align:center;padding:.15rem;border:1px solid var(--border-light);border-radius:4px}
 .bi-cell.err{border-color:var(--danger);background:rgba(220,53,69,.08)}
+.bi-cell.bi-flagged{border-color:var(--warning,#d18b00);background:rgba(240,173,0,.14)}
+.bi-cell.bi-current{outline:2px solid var(--primary);outline-offset:1px}
+.bi-imgwrap{max-height:44vh;overflow:auto;border:1px solid var(--border-light);border-radius:var(--radius-md)}
+.bi-imgwrap img{max-width:100%;display:block}
 .bi-map{min-width:9rem}
 .bi-split{font-size:.72rem;color:var(--text-muted)}
 </style>
@@ -20,6 +24,26 @@
         <p class="text-muted text-sm">Map each column to a subject (or skip it), pick the student for any unmatched row, edit totals if needed, then save. Each total is split into this term's components automatically.</p>
     </div>
 </div>
+
+{% if review_count and review_count > 0 %}
+<div class="card mb-2" style="border-color:var(--warning,#d18b00)"><div class="card-body d-flex gap-3 align-center flex-wrap">
+    <span style="font-weight:600;"><i class="fas fa-triangle-exclamation" style="color:var(--warning,#d18b00)"></i> {{ review_count }} cell(s) need review</span>
+    <span class="text-muted text-sm">Amber cells were read with low confidence, corrected, or fell outside 0–100. Check them against the image before saving.</span>
+    <span style="margin-left:auto;">
+        <button type="button" id="biPrevIssue" class="btn btn-secondary btn-sm">‹ Prev</button>
+        <button type="button" id="biNextIssue" class="btn btn-secondary btn-sm">Next ›</button>
+    </span>
+</div></div>
+{% endif %}
+
+{% if image_data_uri %}
+<div class="card mb-2"><div class="card-body">
+    <label class="d-flex gap-2 align-center mb-0" style="font-weight:600;cursor:pointer;">
+        <input type="checkbox" id="biShowImg" checked> Show the uploaded sheet (compare while you review)
+    </label>
+    <div id="biImgPanel" class="bi-imgwrap mt-2"><img src="{{ image_data_uri }}" alt="Uploaded score sheet"></div>
+</div></div>
+{% endif %}
 
 <form method="POST" action="{{ save_url }}" id="biForm">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
@@ -73,8 +97,11 @@
                     <div class="text-muted" style="font-size:.7rem;">{{ r[name_col|int] if name_col != '' and name_col|int < r|length else '' }}</div>
                 </td>
                 {% for cell in r %}
+                {% set fk = row_idx ~ ',' ~ loop.index0 %}
+                {% set flag = (cell_flags|default({})).get(fk) %}
                 <td data-col="{{ loop.index0 }}">
-                    <input type="text" class="bi-cell" data-row="{{ row_idx }}" data-col="{{ loop.index0 }}" value="{{ cell }}" inputmode="numeric" autocomplete="off">
+                    <input type="text" class="bi-cell{% if flag %} bi-flagged{% endif %}" data-row="{{ row_idx }}" data-col="{{ loop.index0 }}" value="{{ cell }}" inputmode="numeric" autocomplete="off"
+                           {% if flag %}data-review="1" title="Needs review: {{ flag.reasons|join(', ') }}"{% endif %}>
                     <div class="bi-split" data-row="{{ row_idx }}" data-col="{{ loop.index0 }}"></div>
                 </td>
                 {% endfor %}
@@ -179,6 +206,31 @@
   });
 
   validate();
+
+  // Issue navigation: jump between the amber (review) cells.
+  var flagged = Array.prototype.slice.call(document.querySelectorAll('.bi-cell.bi-flagged'));
+  var curIssue = -1;
+  function gotoIssue(delta) {
+    if (!flagged.length) return;
+    if (flagged[curIssue]) flagged[curIssue].classList.remove('bi-current');
+    curIssue = (curIssue + delta + flagged.length) % flagged.length;
+    var el = flagged[curIssue];
+    el.classList.add('bi-current');
+    el.scrollIntoView({ block: 'center', inline: 'center', behavior: 'smooth' });
+    el.focus();
+  }
+  var nextBtn = document.getElementById('biNextIssue'), prevBtn = document.getElementById('biPrevIssue');
+  if (nextBtn) nextBtn.addEventListener('click', function () { gotoIssue(1); });
+  if (prevBtn) prevBtn.addEventListener('click', function () { gotoIssue(-1); });
+  // Clearing a flagged cell's doubt (editing it) drops the amber highlight.
+  flagged.forEach(function (el) {
+    el.addEventListener('input', function () { el.classList.remove('bi-flagged'); }, { once: true });
+  });
+
+  var showImg = document.getElementById('biShowImg'), imgPanel = document.getElementById('biImgPanel');
+  if (showImg && imgPanel) showImg.addEventListener('change', function () {
+    imgPanel.style.display = showImg.checked ? '' : 'none';
+  });
 })();
 </script>
 {% endblock %}

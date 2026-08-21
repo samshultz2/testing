@@ -1026,20 +1026,34 @@ def broadsheet_import():
             return render_template('subjects/broadsheet_import.html', **ctx)
 
         from utils.broadsheet_import import parse_table, guess_name_column, match_subject
+        ocr_flags, ocr_review_count, image_data_uri = {}, 0, None
         if is_image:
             # OCR the photographed broadsheet into the same headers+rows table,
             # using the school's chosen engine (Claude vision / PaddleOCR / Tesseract).
-            from utils.table_ocr import ocr_table
+            from utils.table_ocr import ocr_table_rich
             from utils.ocr_engine import engine_order
             if not engine_order():
                 flash('No OCR engine is available. Configure one in Settings → AI Vision OCR, '
                       'or upload an Excel/CSV file instead.', 'error')
                 return render_template('subjects/broadsheet_import.html', **ctx)
-            parsed = ocr_table(data, upload.mimetype or 'image/png')
-            if not parsed:
+            # Subject names hint the table reconstructor's header detection.
+            _subs = ClassSubject.query.filter_by(
+                term_id=term_id, class_id=assignment.class_id, is_active=True
+            ).filter((ClassSubject.arm_id == None) | (ClassSubject.arm_id == assignment.arm_id)  # noqa: E711
+                     ).join(Subject).all()
+            expected = ['Student Name'] + [cs.subject.name for cs in _subs] \
+                + [cs.subject.short_name for cs in _subs if cs.subject.short_name]
+            rich = ocr_table_rich(data, upload.mimetype or 'image/png', expected_headers=expected)
+            if not rich:
                 flash('Could not read a table from that image. Try a clearer, straight photo, '
                       'a different OCR engine, or upload the Excel/CSV instead.', 'warning')
                 return render_template('subjects/broadsheet_import.html', **ctx)
+            parsed = {'headers': rich['headers'], 'rows': rich['rows']}
+            ocr_flags = rich.get('cell_flags') or {}
+            ocr_review_count = rich.get('review_count') or 0
+            import base64
+            image_data_uri = 'data:%s;base64,%s' % (
+                upload.mimetype or 'image/png', base64.b64encode(data).decode())
         else:
             try:
                 parsed = parse_table(data, upload.filename)
@@ -1093,6 +1107,7 @@ def broadsheet_import():
             col_map=col_map, class_subjects=class_subjects,
             students=students, matched_ids=matched_ids,
             subject_components=subject_components,
+            cell_flags=ocr_flags, review_count=ocr_review_count, image_data_uri=image_data_uri,
             save_url=url_for('subjects.broadsheet_save'))
 
     return render_template('subjects/broadsheet_import.html', **ctx)
