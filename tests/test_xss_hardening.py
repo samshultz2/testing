@@ -85,9 +85,12 @@ def test_client_sinks_are_escaped():
     assert 'window.escapeHtml(s.name)' in jamb
     assert '${s.name}' not in jamb
 
+    # The WAEC dashboard builds its exports on the server, so no student name is
+    # interpolated into client-side HTML — assert there is no raw name sink.
     waec = _read('templates/results/waec_dashboard.html')
-    assert 'window.escapeHtml(s.name)' in waec
     assert "+ s.name +" not in waec
+    assert '${s.name}' not in waec
+    assert 's.name +' not in waec and '+s.name' not in waec
 
     # generator arm modals build options safely (no innerHTML += of arm names)
     for f in ('templates/generator/add_clash_rule.html',

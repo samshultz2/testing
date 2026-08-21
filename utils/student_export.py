@@ -57,7 +57,7 @@ def short_header(name):
 
 def _is_wrap(h):
     k = (h or '').lower()
-    return 'address' in k or 'hobb' in k
+    return 'address' in k or 'hobb' in k or 'subject' in k
 
 
 def _hex_rgb(h):
@@ -606,3 +606,112 @@ def _img_masthead(d, img, PW, margin, school, total, C, name_f, addr_f, motto_f,
     motto = (school or {}).get('motto') or ''
     if motto:
         d.text((lx, ty), fit('—  ' + motto + '  —', motto_f, right_limit - lx), fill=C['gold'], font=motto_f)
+
+
+# --------------------------------------------------------------------------- #
+# Word (python-docx) — branded, A4 landscape, same visual language.
+# --------------------------------------------------------------------------- #
+def students_word(rows, headers, school, total=None, filename='students_export.docx'):
+    """A branded Word (.docx) export sharing the PDF/image design language:
+    a centred masthead (logo, school name, address/contact, motto, meta line)
+    and a navy table with a gold header rule, zebra rows and wrapping
+    address/hobbies/subject columns. Returns a Flask Response."""
+    from docx import Document
+    from docx.shared import Pt, Inches, Cm, RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.enum.table import WD_TABLE_ALIGNMENT, WD_ROW_HEIGHT_RULE
+    from docx.oxml.ns import nsdecls
+    from docx.oxml import parse_xml
+    from io import BytesIO
+    from flask import Response
+
+    total = total if total is not None else len(rows)
+    navy = RGBColor(0x1E, 0x2A, 0x4A)
+    gold = RGBColor(0xB8, 0x86, 0x2B)
+    muted = RGBColor(0x6B, 0x72, 0x80)
+
+    doc = Document()
+    section = doc.sections[0]
+    section.page_width, section.page_height = section.page_height, section.page_width  # landscape
+    section.left_margin = section.right_margin = Cm(1.4)
+    section.top_margin = section.bottom_margin = Cm(1.2)
+
+    # Masthead --------------------------------------------------------------
+    logo = (school or {}).get('logo_path')
+    if logo and os.path.exists(logo):
+        try:
+            p = doc.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            p.add_run().add_picture(logo, height=Cm(1.6))
+        except Exception:
+            pass
+    nm = doc.add_paragraph(); nm.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r = nm.add_run(((school or {}).get('name') or 'School').upper())
+    r.bold = True; r.font.size = Pt(20); r.font.color.rgb = navy
+    line2 = '    '.join(x for x in [(school or {}).get('address') or '',
+                                    (school or {}).get('phone') or '',
+                                    (school or {}).get('email') or ''] if x)
+    if line2:
+        sp = doc.add_paragraph(); sp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        sp.add_run(line2).font.size = Pt(9.5)
+    if (school or {}).get('motto'):
+        mp = doc.add_paragraph(); mp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        rm = mp.add_run('—  ' + school['motto'] + '  —'); rm.italic = True
+        rm.font.size = Pt(10); rm.font.color.rgb = gold
+    meta = doc.add_paragraph(); meta.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    mr = meta.add_run('%d records  ·  %s' % (total, timeutil.today().strftime('%d %b %Y')))
+    mr.font.size = Pt(9); mr.font.color.rgb = muted
+
+    # Column widths (proportional weights that fit the usable landscape width).
+    ncol = len(headers)
+
+    def _weight(h):
+        k = (h or '').lower()
+        if _is_wrap(h):
+            return 3.0
+        if k in ('s/n', 'sn'):
+            return 0.5
+        if k in ('gender', 'age', 'a1', 'b2', 'b3', 'c4', 'c5', 'c6', 'd7', 'e8', 'f9',
+                 'credits', 'cr', 'n'):
+            return 0.7
+        return 1.4
+    weights = [_weight(h) for h in headers]
+    usable = 26.6  # cm of usable width in landscape A4 with these margins
+    widths = [Cm(usable * w / (sum(weights) or 1)) for w in weights]
+
+    table = doc.add_table(rows=1, cols=ncol)
+    table.style = 'Table Grid'
+    table.alignment = WD_TABLE_ALIGNMENT.CENTER
+    table.autofit = False
+
+    hdr = table.rows[0]
+    hdr.height_rule = WD_ROW_HEIGHT_RULE.AT_LEAST; hdr.height = Pt(24)
+    for i, h in enumerate(headers):
+        cell = hdr.cells[i]; cell.width = widths[i]
+        cell.text = short_header(h)
+        para = cell.paragraphs[0]; para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = para.runs[0]; run.bold = True; run.font.size = Pt(10)
+        run.font.color.rgb = RGBColor(255, 255, 255)
+        cell._tc.get_or_add_tcPr().append(parse_xml(f'<w:shd {nsdecls("w")} w:fill="1E2A4A"/>'))
+
+    for idx, r_ in enumerate(rows, 1):
+        row = table.add_row()
+        row.height_rule = WD_ROW_HEIGHT_RULE.AT_LEAST
+        for i in range(ncol):
+            v = '' if i >= len(r_) else ('' if r_[i] is None else str(r_[i]))
+            cell = row.cells[i]; cell.width = widths[i]; cell.text = v
+            para = cell.paragraphs[0]
+            para.alignment = WD_ALIGN_PARAGRAPH.LEFT if (_is_wrap(headers[i]) or i == 1) else WD_ALIGN_PARAGRAPH.CENTER
+            if para.runs:
+                para.runs[0].font.size = Pt(9.5)
+            if idx % 2 == 0:
+                cell._tc.get_or_add_tcPr().append(parse_xml(f'<w:shd {nsdecls("w")} w:fill="F4F6F9"/>'))
+
+    doc.add_paragraph()
+    foot = doc.add_paragraph('Total: %d' % total)
+    if foot.runs:
+        foot.runs[0].bold = True; foot.runs[0].font.color.rgb = navy
+
+    out = BytesIO(); doc.save(out); out.seek(0)
+    return Response(out.getvalue(),
+                    mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                    headers={'Content-Disposition': 'attachment; filename=%s' % filename})

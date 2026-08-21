@@ -567,26 +567,161 @@ def api_waec_subject_stats(year):
     return jsonify([])
 
 
+def _waec_students_rows(year):
+    """Per-student WAEC aggregates for the year (branch-scoped), name-sorted."""
+    from utils.branch_scope import scope_query
+    students = scope_query(
+        db.session.query(Student).join(WAECResult).filter(WAECResult.exam_year == year),
+        Student).distinct().all()
+    by_student = {}
+    if students:
+        for r in WAECResult.query.filter(
+                WAECResult.student_id.in_([s.id for s in students]),
+                WAECResult.exam_year == year).all():
+            by_student.setdefault(r.student_id, []).append(r)
+    out = []
+    for s in students:
+        results = by_student.get(s.id, [])
+        gc = {g: sum(1 for r in results if r.grade == g) for g in WAEC_GRADES}
+        pts = sum(WAECResult.grade_to_average_points(r.grade) for r in results)
+        out.append({
+            'student_id': s.student_id, 'name': s.full_name,
+            'grade_counts': gc,
+            'credit_count': sum(gc[g] for g in ['A1', 'B2', 'B3', 'C4', 'C5', 'C6']),
+            'avg_points': round(pts / len(results), 2) if results else 0,
+            'results': [{'subject': r.subject, 'grade': r.grade} for r in results],
+        })
+    out.sort(key=lambda x: x['name'])
+    return out
+
+
+def _waec_subject_rows(year):
+    """Per-subject grade breakdown for the year (branch-scoped)."""
+    from utils.branch_scope import scope_by_student
+    counts = defaultdict(lambda: {g: 0 for g in WAEC_GRADES})
+    for r in scope_by_student(WAECResult.query.filter_by(exam_year=year), WAECResult).all():
+        counts[r.subject][r.grade] += 1
+    rows = []
+    for subject, gc in counts.items():
+        total = sum(gc.values())
+        credits = sum(gc[g] for g in ['A1', 'B2', 'B3', 'C4', 'C5', 'C6'])
+        rows.append({'subject': subject, 'grades': gc, 'total': total,
+                     'pass_rate': round(credits / total * 100, 1) if total else 0})
+    rows.sort(key=lambda x: x['grades'].get('A1', 0), reverse=True)
+    return rows
+
+
+def _waec_branded_export(year, fmt):
+    """Branded WAEC PDF / image / Word export sharing the students design."""
+    from io import BytesIO
+    from flask import Response
+    from utils.web_exports import pdf_response
+    from utils.school import school_profile
+    from utils.student_export import students_pdf, students_image_pages, students_word
+    from utils.broadsheet_export import _abbr_one
+
+    etype = request.args.get('type', 'students')
+    cols = set((request.args.get('cols') or '').split(',')) - {''}
+
+    if etype == 'subjects':
+        if not cols:
+            cols = {'total', 'a1', 'b2', 'b3', 'passrate'}
+        headers = ['Subject']
+        specs = [('total', 'N'), ('a1', 'A1'), ('b2', 'B2'), ('b3', 'B3'),
+                 ('c456', 'C4-6'), ('d7f9', 'D7-F9'), ('passrate', 'Pass %')]
+        headers += [label for key, label in specs if key in cols]
+        rows = []
+        for sub in _waec_subject_rows(year):
+            g = sub['grades']
+            cell = {'total': sub['total'], 'a1': g.get('A1', 0), 'b2': g.get('B2', 0),
+                    'b3': g.get('B3', 0), 'c456': g.get('C4', 0) + g.get('C5', 0) + g.get('C6', 0),
+                    'd7f9': g.get('D7', 0) + g.get('E8', 0) + g.get('F9', 0),
+                    'passrate': '%s%%' % sub['pass_rate']}
+            rows.append([sub['subject']] + [str(cell[k]) for k, _l in specs if k in cols])
+    else:
+        if not cols:
+            cols = {'rank', 'student_id', 'a1', 'credits', 'avg', 'grades'}
+        headers = []
+        if 'rank' in cols:
+            headers.append('S/N')
+        headers.append('Name')
+        if 'student_id' in cols:
+            headers.append('Student ID')
+        grade_specs = [('a1', 'A1'), ('b2', 'B2'), ('b3', 'B3')]
+        headers += [label for key, label in grade_specs if key in cols]
+        if 'allgrades' in cols:
+            headers += list(WAEC_GRADES)
+        if 'credits' in cols:
+            headers.append('Credits')
+        if 'avg' in cols:
+            headers.append('Avg Pts')
+        if 'grades' in cols:
+            headers.append('Subject Grades')
+        rows = []
+        for i, s in enumerate(_waec_students_rows(year), 1):
+            gc = s['grade_counts']
+            row = []
+            if 'rank' in cols:
+                row.append(str(i))
+            row.append(s['name'])
+            if 'student_id' in cols:
+                row.append(s['student_id'] or '')
+            for key, label in grade_specs:
+                if key in cols:
+                    row.append(str(gc.get(label, 0)))
+            if 'allgrades' in cols:
+                row += [str(gc.get(g, 0)) for g in WAEC_GRADES]
+            if 'credits' in cols:
+                row.append(str(s['credit_count']))
+            if 'avg' in cols:
+                row.append(str(s['avg_points']))
+            if 'grades' in cols:
+                row.append(' '.join('%s:%s' % (_abbr_one(r['subject']), r['grade'])
+                                    for r in s['results']))
+            rows.append(row)
+
+    school = school_profile()
+    total = len(rows)
+    if fmt == 'pdf':
+        data = students_pdf(rows, headers, school, total=total)
+        return pdf_response(BytesIO(data), 'waec_results_%s.pdf' % year, inline=False)
+    if fmt == 'word':
+        return students_word(rows, headers, school, total=total,
+                             filename='waec_results_%s.docx' % year)
+    # image — one A4 page per request; client loops via X-Total-Pages
+    pages = students_image_pages(rows, headers, school, total=total)
+    page = request.args.get('page', type=int) or 1
+    page = max(1, min(page, len(pages)))
+    suffix = '' if len(pages) == 1 else ('_p%d' % page)
+    return Response(pages[page - 1], mimetype='image/png', headers={
+        'Content-Disposition': 'attachment; filename="waec_results_%s%s.png"' % (year, suffix),
+        'X-Total-Pages': str(len(pages)), 'Access-Control-Expose-Headers': 'X-Total-Pages'})
+
+
 @results_bp.route('/waec/export')
 @login_required
 @rate_limited('export', max_requests=40, window_minutes=10)
 def export_waec():
-    """Export WAEC results to Excel"""
+    """Export WAEC results — Excel (matrix) or a branded PDF / image / Word."""
     from openpyxl import Workbook
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
     from io import BytesIO
-    
+
     year = request.args.get('year', type=int)
     if not year:
         flash('Please select a year to export.', 'error')
         return redirect(url_for('results.waec_list'))
-    log_action('data.export_results', detail=f'WAEC {year}')
+    fmt = request.args.get('format', 'excel')
+    log_action('data.export_results', detail=f'WAEC {year} ({fmt})')
+
+    if fmt in ('pdf', 'image', 'word'):
+        return _waec_branded_export(year, fmt)
 
     from utils.branch_scope import scope_query
     students_with_results = scope_query(
         db.session.query(Student).join(WAECResult).filter(WAECResult.exam_year == year),
         Student).distinct().order_by(Student.surname).all()
-    
+
     wb = Workbook()
     ws = wb.active
     ws.title = f"WAEC {year}"

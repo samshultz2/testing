@@ -800,19 +800,6 @@
 {% endif %}
 
 <!-- Hidden Export Container - Compact Mobile-Friendly -->
-<div id="exportContainer" style="position: absolute; left: -9999px; width: 600px;">
-    <div id="exportContent" style="padding: 12px; background: white; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-        <h2 style="color: #28a745; text-align: center; margin: 0 0 8px 0; font-size: 18px;">WAEC Results {{ selected_year }}</h2>
-        <p id="exportSummary" style="text-align: center; color: #666; margin: 0 0 10px 0; font-size: 11px;"></p>
-        <table id="exportTable" style="width: 100%; border-collapse: collapse; font-size: 11px;">
-            <thead id="exportTableHead"></thead>
-            <tbody id="exportTableBody"></tbody>
-        </table>
-        <div id="exportGradeSummary" style="margin-top: 10px; padding: 8px; background: #f8f9fa; border-radius: 6px; text-align: center;"></div>
-        <p style="text-align: center; margin: 8px 0 0 0; color: #999; font-size: 9px;" id="exportFooter"></p>
-    </div>
-</div>
-
 <!-- Export Options Modal -->
 <div id="exportModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999; padding: 0.5rem; overflow-y: auto;">
     <div style="background: white; border-radius: 12px; max-width: 500px; margin: 1rem auto; max-height: calc(100vh - 2rem); overflow-y: auto;">
@@ -824,14 +811,18 @@
             <!-- Format -->
             <div style="margin-bottom: 1rem;">
                 <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.5rem;">Format:</label>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
-                    <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem; background: #e3f2fd; border: 2px solid #2196f3; border-radius: 8px; cursor: pointer;">
-                        <input type="radio" name="exportFormat" value="image" checked>
-                        <span style="font-size: 0.85rem; font-weight: 500;"><i class="fas fa-image"></i> Image (PNG)</span>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem;">
+                    <label style="display: flex; align-items: center; gap: 0.4rem; padding: 0.65rem; background: #f8f9fa; border: 2px solid #ddd; border-radius: 8px; cursor: pointer;">
+                        <input type="radio" name="exportFormat" value="pdf" checked>
+                        <span style="font-size: 0.8rem; font-weight: 500;"><i class="fas fa-file-pdf"></i> PDF</span>
                     </label>
-                    <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem; background: #f8f9fa; border: 2px solid #ddd; border-radius: 8px; cursor: pointer;">
-                        <input type="radio" name="exportFormat" value="pdf">
-                        <span style="font-size: 0.85rem; font-weight: 500;"><i class="fas fa-file-pdf"></i> PDF</span>
+                    <label style="display: flex; align-items: center; gap: 0.4rem; padding: 0.65rem; background: #f8f9fa; border: 2px solid #ddd; border-radius: 8px; cursor: pointer;">
+                        <input type="radio" name="exportFormat" value="image">
+                        <span style="font-size: 0.8rem; font-weight: 500;"><i class="fas fa-image"></i> Image</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 0.4rem; padding: 0.65rem; background: #f8f9fa; border: 2px solid #ddd; border-radius: 8px; cursor: pointer;">
+                        <input type="radio" name="exportFormat" value="word">
+                        <span style="font-size: 0.8rem; font-weight: 500;"><i class="fas fa-file-word"></i> Word</span>
                     </label>
                 </div>
             </div>
@@ -883,26 +874,6 @@
                 </div>
             </div>
             
-            <!-- Summary Stats -->
-            <div style="margin-bottom: 1rem;">
-                <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.5rem;">Include Summary:</label>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.25rem;">
-                    <label class="exp-check"><input type="checkbox" id="expSummary" checked><span>Overall Stats</span></label>
-                    <label class="exp-check"><input type="checkbox" id="expGradeCount" checked><span>Grade Totals</span></label>
-                    <label class="exp-check"><input type="checkbox" id="expTimestamp" checked><span>Timestamp</span></label>
-                </div>
-            </div>
-            
-            <!-- Quality -->
-            <div style="margin-bottom: 1rem;">
-                <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.5rem;">Image Quality:</label>
-                <select id="expQuality" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 6px; font-size: 0.9rem;">
-                    <option value="2">Standard (2x)</option>
-                    <option value="3" selected>HD (3x)</option>
-                    <option value="4">Ultra HD (4x)</option>
-                </select>
-            </div>
-            
             <!-- Buttons -->
             <div style="display: flex; gap: 0.5rem;">
                 <button data-call="closeExportModal" class="btn btn-secondary" style="flex: 1;">Cancel</button>
@@ -929,8 +900,6 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', filename='vendor/html2canvas.min.js') }}"></script>
-<script src="{{ url_for('static', filename='vendor/jspdf.umd.min.js') }}"></script>
 <script nonce="{{ csp_nonce }}">
 // Data for export
 var studentsData = [];
@@ -980,259 +949,73 @@ document.getElementById('exportModal').onclick = function(e) {
     if (e.target === this) closeExportModal();
 };
 
-// Slice a tall canvas across A4 pages and download as a PDF.
-function saveCanvasAsPdf(canvas, filename) {
-    var jsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
-    var pdf = new jsPDF('p', 'mm', 'a4');
-    var pageW = pdf.internal.pageSize.getWidth();
-    var pageH = pdf.internal.pageSize.getHeight();
-    var imgW = pageW;
-    var imgH = canvas.height * imgW / canvas.width;
-    if (imgH <= pageH) {
-        pdf.addImage(canvas.toDataURL('image/png', 1.0), 'PNG', 0, 0, imgW, imgH);
+// Column checkbox → server column-key mapping.
+function waecExportCols(type) {
+    var keys = [];
+    function on(id) { var el = document.getElementById(id); return el && el.checked; }
+    if (type === 'students') {
+        if (on('expRank')) keys.push('rank');
+        if (on('expStudentId')) keys.push('student_id');
+        if (on('expA1')) keys.push('a1');
+        if (on('expB2')) keys.push('b2');
+        if (on('expB3')) keys.push('b3');
+        if (on('expAllGrades')) keys.push('allgrades');
+        if (on('expCredits')) keys.push('credits');
+        if (on('expAvgPts')) keys.push('avg');
+        if (on('expSubjectGrades')) keys.push('grades');
     } else {
-        // Paginate: draw the full image shifted up each page.
-        var remaining = imgH, pos = 0;
-        while (remaining > 0) {
-            pdf.addImage(canvas.toDataURL('image/png', 1.0), 'PNG', 0, pos, imgW, imgH);
-            remaining -= pageH;
-            pos -= pageH;
-            if (remaining > 0) pdf.addPage();
-        }
+        if (on('expSubjTotal')) keys.push('total');
+        if (on('expSubjA1')) keys.push('a1');
+        if (on('expSubjB2')) keys.push('b2');
+        if (on('expSubjB3')) keys.push('b3');
+        if (on('expSubjC456')) keys.push('c456');
+        if (on('expSubjD7F9')) keys.push('d7f9');
+        if (on('expSubjPassRate')) keys.push('passrate');
     }
-    pdf.save(filename);
+    return keys.join(',');
 }
 
+function waecSaveBlob(blob, name) {
+    var u = URL.createObjectURL(blob);
+    var a = document.createElement('a'); a.href = u; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(u); }, 4000);
+}
+
+// A long roster spans several A4 images — download each page as its own file.
+function waecDownloadImages(url) {
+    var page = 1, total = 1;
+    function next() {
+        return fetch(url + '&page=' + page, { credentials: 'same-origin' }).then(function (res) {
+            if (!res.ok) return;
+            total = parseInt(res.headers.get('X-Total-Pages') || '1', 10) || 1;
+            return res.blob().then(function (blob) {
+                waecSaveBlob(blob, total > 1 ? ('waec_results_p' + page + '.png') : 'waec_results.png');
+                page += 1;
+                if (page <= total) return next();
+            });
+        });
+    }
+    return next();
+}
+
+// Build the branded export on the server (same design as the students exports).
 function generateWAECExport() {
-    var exportType = document.querySelector('input[name="exportType"]:checked').value;
-    var exportFormat = document.querySelector('input[name="exportFormat"]:checked').value;
-    var quality = parseInt(document.getElementById('expQuality').value);
-    var showSummary = document.getElementById('expSummary').checked;
-    var showGradeCount = document.getElementById('expGradeCount').checked;
-    var showTimestamp = document.getElementById('expTimestamp').checked;
-    
-    if (exportType === 'students') {
-        generateStudentsExport();
-    } else {
-        generateSubjectsExport();
-    }
-    
-    // Summary
-    if (showSummary && schoolStats) {
-        document.getElementById('exportSummary').innerHTML = 
-            'Total Students: <strong>' + (schoolStats.unique_students || 0) + '</strong> | ' +
-            'Pass Rate: <strong>' + (schoolStats.overall_pass_rate || 0) + '%</strong> | ' +
-            'Distinction Rate: <strong>' + (schoolStats.overall_distinction_rate || 0) + '%</strong>';
-        document.getElementById('exportSummary').style.display = 'block';
-    } else {
-        document.getElementById('exportSummary').style.display = 'none';
-    }
-    
-    // Grade count summary
-    if (showGradeCount) {
-        var gradeHtml = '<div style="display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center;">';
-        allGrades.forEach(function(g) {
-            var count = gradeDistribution[g] || 0;
-            var color = g === 'A1' ? '#28a745' : (g === 'B2' || g === 'B3') ? '#17a2b8' : (g === 'C4' || g === 'C5' || g === 'C6') ? '#ffc107' : '#dc3545';
-            gradeHtml += '<span style="padding: 0.25rem 0.5rem; background: ' + color + '20; color: ' + color + '; border-radius: 4px; font-weight: 600; font-size: 11px;">' + g + ': ' + count + '</span>';
-        });
-        gradeHtml += '</div>';
-        document.getElementById('exportGradeSummary').innerHTML = gradeHtml;
-        document.getElementById('exportGradeSummary').style.display = 'block';
-    } else {
-        document.getElementById('exportGradeSummary').style.display = 'none';
-    }
-    
-    // Timestamp
-    if (showTimestamp) {
-        var now = new Date();
-        document.getElementById('exportFooter').innerHTML = 'Generated on ' + now.toLocaleDateString() + ' ' + now.toLocaleTimeString() + ' | School Management System';
-        document.getElementById('exportFooter').style.display = 'block';
-    } else {
-        document.getElementById('exportFooter').style.display = 'none';
-    }
-    
+    var type = document.querySelector('input[name="exportType"]:checked').value;
+    var format = document.querySelector('input[name="exportFormat"]:checked').value;
+    var base = "{{ url_for('results.export_waec') }}";
+    var p = new URLSearchParams();
+    p.set('year', selectedYear);
+    p.set('format', format);
+    p.set('type', type);
+    p.set('cols', waecExportCols(type));
+    var url = base + '?' + p.toString();
     closeExportModal();
-    
-    // Show loading indicator
-    var loadingDiv = document.createElement('div');
-    loadingDiv.id = 'exportLoading';
-    loadingDiv.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;color:white;';
-    loadingDiv.innerHTML = '<div style="font-size:18px;margin-bottom:10px;">Generating ' + (exportFormat === 'pdf' ? 'PDF' : 'image') + '...</div><div style="font-size:14px;">Please wait</div>';
-    document.body.appendChild(loadingDiv);
-    
-    // Generate image - compact width for mobile viewing
-    var container = document.getElementById('exportContainer');
-    container.style.position = 'fixed';
-    container.style.left = '0';
-    container.style.top = '0';
-    container.style.zIndex = '9999';
-    container.style.background = 'white';
-    
-    setTimeout(function() {
-        html2canvas(container, {
-            scale: quality,
-            useCORS: true,
-            allowTaint: true,
-            backgroundColor: '#ffffff',
-            width: 600,
-            windowWidth: 600
-        }).then(function(canvas) {
-            container.style.position = 'absolute';
-            container.style.left = '-9999px';
-
-            // Remove loading
-            document.getElementById('exportLoading').remove();
-
-            // PDF: build and download directly.
-            if (exportFormat === 'pdf') {
-                try {
-                    saveCanvasAsPdf(canvas, 'WAEC_Results_' + selectedYear + '.pdf');
-                } catch (e) {
-                    alert('Error generating PDF: ' + e.message);
-                }
-                return;
-            }
-
-            // Create modal to show image for manual save (mobile-friendly)
-            var imgData = canvas.toDataURL('image/png', 1.0);
-            var saveModal = document.createElement('div');
-            saveModal.id = 'saveImageModal';
-            saveModal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.9);z-index:99999;padding:10px;overflow:auto;';
-            saveModal.innerHTML = 
-                '<div style="text-align:center;margin-bottom:10px;">' +
-                '<p style="color:white;margin:0 0 10px 0;font-size:14px;">Long-press the image below to save</p>' +
-                '<button data-remove-target="saveImageModal" style="padding:8px 20px;background:#dc3545;color:white;border:none;border-radius:6px;font-size:14px;">Close</button>' +
-                '</div>' +
-                '<img src="' + imgData + '" style="width:100%;border-radius:8px;display:block;" alt="WAEC Results Export">';
-            document.body.appendChild(saveModal);
-            
-        }).catch(function(err) {
-            container.style.position = 'absolute';
-            container.style.left = '-9999px';
-            document.getElementById('exportLoading').remove();
-            alert('Error generating image: ' + err.message);
-        });
-    }, 100);
-}
-
-function generateStudentsExport() {
-    var showRank = document.getElementById('expRank').checked;
-    var showStudentId = document.getElementById('expStudentId').checked;
-    var showA1 = document.getElementById('expA1').checked;
-    var showB2 = document.getElementById('expB2').checked;
-    var showB3 = document.getElementById('expB3').checked;
-    var showCredits = document.getElementById('expCredits').checked;
-    var showAvgPts = document.getElementById('expAvgPts').checked;
-    var showAllGrades = document.getElementById('expAllGrades').checked;
-    var showSubjectGrades = document.getElementById('expSubjectGrades').checked;
-    
-    // Compact header style
-    var thStyle = 'padding:4px 6px;background:#28a745;color:white;border:1px solid #1e7e34;font-size:10px;white-space:nowrap;';
-    var tdStyle = 'padding:3px 5px;border:1px solid #ddd;font-size:10px;';
-    
-    // Build header
-    var headerHtml = '<tr>';
-    if (showRank) headerHtml += '<th style="' + thStyle + '">#</th>';
-    headerHtml += '<th style="' + thStyle + 'text-align:left;">Name</th>';
-    if (showStudentId) headerHtml += '<th style="' + thStyle + '">ID</th>';
-    if (showA1) headerHtml += '<th style="' + thStyle + '">A1</th>';
-    if (showB2) headerHtml += '<th style="' + thStyle + '">B2</th>';
-    if (showB3) headerHtml += '<th style="' + thStyle + '">B3</th>';
-    if (showAllGrades) {
-        for (var i = 0; i < allGrades.length; i++) {
-            headerHtml += '<th style="' + thStyle + '">' + allGrades[i] + '</th>';
-        }
+    if (format === 'image') {
+        waecDownloadImages(url);
+    } else {
+        window.location.href = url;
     }
-    if (showCredits) headerHtml += '<th style="' + thStyle + '">Cr</th>';
-    if (showAvgPts) headerHtml += '<th style="' + thStyle + '">Avg</th>';
-    if (showSubjectGrades) headerHtml += '<th style="' + thStyle + 'text-align:left;">Grades</th>';
-    headerHtml += '</tr>';
-    document.getElementById('exportTableHead').innerHTML = headerHtml;
-    
-    // Build body
-    var bodyHtml = '';
-    for (var idx = 0; idx < studentsData.length; idx++) {
-        var s = studentsData[idx];
-        var rowBg = idx % 2 === 0 ? '#ffffff' : '#f9f9f9';
-        bodyHtml += '<tr style="background:' + rowBg + '">';
-        if (showRank) bodyHtml += '<td style="' + tdStyle + 'text-align:center;font-weight:600;">' + (idx + 1) + '</td>';
-        bodyHtml += '<td style="' + tdStyle + '">' + window.escapeHtml(s.name) + '</td>';
-        if (showStudentId) bodyHtml += '<td style="' + tdStyle + 'font-size:9px;">' + window.escapeHtml(s.student_id) + '</td>';
-        if (showA1) bodyHtml += '<td style="' + tdStyle + 'text-align:center;color:#28a745;font-weight:600;">' + s.a1_count + '</td>';
-        if (showB2) bodyHtml += '<td style="' + tdStyle + 'text-align:center;color:#17a2b8;font-weight:600;">' + s.b2_count + '</td>';
-        if (showB3) bodyHtml += '<td style="' + tdStyle + 'text-align:center;color:#17a2b8;">' + s.b3_count + '</td>';
-        if (showAllGrades) {
-            for (var j = 0; j < allGrades.length; j++) {
-                var count = s.grade_counts ? (s.grade_counts[allGrades[j]] || 0) : 0;
-                bodyHtml += '<td style="' + tdStyle + 'text-align:center;">' + count + '</td>';
-            }
-        }
-        if (showCredits) bodyHtml += '<td style="' + tdStyle + 'text-align:center;font-weight:600;">' + s.credit_count + '</td>';
-        if (showAvgPts) {
-            var color = s.avg_points >= 7 ? '#28a745' : s.avg_points >= 5 ? '#ffc107' : '#dc3545';
-            bodyHtml += '<td style="' + tdStyle + 'text-align:center;color:' + color + ';font-weight:600;">' + s.avg_points + '</td>';
-        }
-        if (showSubjectGrades && s.results) {
-            var grades = '';
-            for (var k = 0; k < s.results.length; k++) {
-                var r = s.results[k];
-                grades += window.escapeHtml(String(r.subject).substring(0, 3) + ':' + r.grade) + ' ';
-            }
-            bodyHtml += '<td style="' + tdStyle + 'font-size:8px;">' + grades + '</td>';
-        }
-        bodyHtml += '</tr>';
-    }
-    document.getElementById('exportTableBody').innerHTML = bodyHtml;
-}
-
-function generateSubjectsExport() {
-    var showTotal = document.getElementById('expSubjTotal').checked;
-    var showA1 = document.getElementById('expSubjA1').checked;
-    var showB2 = document.getElementById('expSubjB2').checked;
-    var showB3 = document.getElementById('expSubjB3').checked;
-    var showC456 = document.getElementById('expSubjC456').checked;
-    var showD7F9 = document.getElementById('expSubjD7F9').checked;
-    var showPassRate = document.getElementById('expSubjPassRate').checked;
-    
-    // Compact styles
-    var thStyle = 'padding:4px 6px;background:#28a745;color:white;border:1px solid #1e7e34;font-size:10px;white-space:nowrap;';
-    var tdStyle = 'padding:3px 5px;border:1px solid #ddd;font-size:10px;';
-    
-    // Build header
-    var headerHtml = '<tr>';
-    headerHtml += '<th style="' + thStyle + 'text-align:left;">Subject</th>';
-    if (showTotal) headerHtml += '<th style="' + thStyle + '">N</th>';
-    if (showA1) headerHtml += '<th style="' + thStyle + '">A1</th>';
-    if (showB2) headerHtml += '<th style="' + thStyle + '">B2</th>';
-    if (showB3) headerHtml += '<th style="' + thStyle + '">B3</th>';
-    if (showC456) headerHtml += '<th style="' + thStyle + '">C4-6</th>';
-    if (showD7F9) headerHtml += '<th style="' + thStyle + '">D7-F9</th>';
-    if (showPassRate) headerHtml += '<th style="' + thStyle + '">Pass%</th>';
-    headerHtml += '</tr>';
-    document.getElementById('exportTableHead').innerHTML = headerHtml;
-    
-    // Build body
-    var bodyHtml = '';
-    for (var idx = 0; idx < subjectsByGrade.length; idx++) {
-        var subj = subjectsByGrade[idx];
-        var rowBg = idx % 2 === 0 ? '#ffffff' : '#f9f9f9';
-        var c456 = (subj.grades.C4 || 0) + (subj.grades.C5 || 0) + (subj.grades.C6 || 0);
-        var d7f9 = (subj.grades.D7 || 0) + (subj.grades.E8 || 0) + (subj.grades.F9 || 0);
-        var passColor = subj.pass_rate >= 70 ? '#28a745' : subj.pass_rate >= 50 ? '#ffc107' : '#dc3545';
-        
-        bodyHtml += '<tr style="background:' + rowBg + '">';
-        bodyHtml += '<td style="' + tdStyle + 'font-weight:500;">' + subj.subject + '</td>';
-        if (showTotal) bodyHtml += '<td style="' + tdStyle + 'text-align:center;">' + subj.total + '</td>';
-        if (showA1) bodyHtml += '<td style="' + tdStyle + 'text-align:center;color:#28a745;font-weight:600;">' + (subj.grades.A1 || 0) + '</td>';
-        if (showB2) bodyHtml += '<td style="' + tdStyle + 'text-align:center;color:#17a2b8;">' + (subj.grades.B2 || 0) + '</td>';
-        if (showB3) bodyHtml += '<td style="' + tdStyle + 'text-align:center;color:#17a2b8;">' + (subj.grades.B3 || 0) + '</td>';
-        if (showC456) bodyHtml += '<td style="' + tdStyle + 'text-align:center;color:#856404;">' + c456 + '</td>';
-        if (showD7F9) bodyHtml += '<td style="' + tdStyle + 'text-align:center;color:#dc3545;">' + d7f9 + '</td>';
-        if (showPassRate) bodyHtml += '<td style="' + tdStyle + 'text-align:center;color:' + passColor + ';font-weight:600;">' + subj.pass_rate + '%</td>';
-        bodyHtml += '</tr>';
-    }
-    document.getElementById('exportTableBody').innerHTML = bodyHtml;
 }
 
 // Grade tab switching
