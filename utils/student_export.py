@@ -479,12 +479,16 @@ def students_image_pages(rows, headers, school, total=None):
         return m
 
     header_h = line_h + 18 * S
-    # Paginate accounting for variable (wrapped) row heights.
+    top_gap = 40 * S  # small top margin on later (masthead-free) pages
+    # The masthead is on the first page only, so page 1 has less room for rows
+    # than the rest — paginate with the right body height for each page.
     pages_rows, cur, cur_h = [], [], 0
-    body_area = PH * S - margin - mast_h - header_h - foot_h
+    first_area = PH * S - margin - mast_h - header_h - foot_h
+    rest_area = PH * S - margin - top_gap - header_h - foot_h
     for r in rows:
         rh = row_lines(r) * (line_h + 4 * S) + 12 * S
-        if cur and cur_h + rh > body_area:
+        area = first_area if not pages_rows else rest_area
+        if cur and cur_h + rh > area:
             pages_rows.append(cur); cur, cur_h = [], 0
         cur.append((r, rh)); cur_h += rh
     if cur or not pages_rows:
@@ -497,9 +501,12 @@ def students_image_pages(rows, headers, school, total=None):
         d = ImageDraw.Draw(img)
         d.rounded_rectangle([int(margin * 0.6), int(margin * 0.6), PW * S - int(margin * 0.6), PH * S - int(margin * 0.6)],
                             radius=18, outline=C['gold'], width=4)
-        _img_masthead(d, img, PW * S, margin, school, total, C, name_f, addr_f, motto_f,
-                      panel_lab, panel_val, body, fit, tw)
-        y0 = margin + mast_h
+        if pi == 0:
+            _img_masthead(d, img, PW * S, margin, school, total, C, name_f, addr_f, motto_f,
+                          panel_lab, panel_val, body, fit, tw)
+            y0 = margin + mast_h
+        else:
+            y0 = margin + top_gap
         # Solid navy header band with a thin gold accent underline.
         d.rectangle([tx0, y0, tx0 + table_w, y0 + header_h], fill=C['navy'])
         d.rectangle([tx0, y0 + header_h - 3, tx0 + table_w, y0 + header_h], fill=C['gold'])
