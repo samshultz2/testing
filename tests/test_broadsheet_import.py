@@ -125,3 +125,17 @@ def test_save_breaks_total_into_components(app):
         for s in scores:
             db.session.delete(s)
         db.session.commit()
+
+
+def test_reconstruct_missing_score_from_average():
+    from utils.broadsheet_import import reconstruct_missing_scores
+    # Student did 4 shown subjects summing 300 (avg 75 each), plus a missing one.
+    # Average over all 5 is 80 -> total 400 -> missing = 400 - 300 = 100.
+    assert reconstruct_missing_scores(80, [80, 70, 90, 60]) == [100]
+    # Single missing, exact: shown [50,60,70] (sum 180), avg 60 over 4 -> 240-180=60.
+    assert reconstruct_missing_scores(60, [50, 60, 70]) == [60]
+    # Two missing subjects split evenly (remainder on the first).
+    out = reconstruct_missing_scores(50, [40, 60], num_missing=2)  # N=4, total 200-100=100
+    assert sum(out) == 100 and len(out) == 2
+    # No shown subjects: N=1, missing = round(avg).
+    assert reconstruct_missing_scores(73, []) == [73]

@@ -83,6 +83,36 @@ NON_SUBJECT_HEADERS = {'sn', 'sno', 'sn0', 'no', 'num', 'id', 'studentid', 'stud
                        'average', 'total', 'position', 'pos', 'remark', 'remarks'}
 
 
+def _round_half_up(x):
+    import math
+    return int(math.floor(x + 0.5))
+
+
+def reconstruct_missing_scores(average, shown_scores, num_missing=1):
+    """Work back the score(s) of subject(s) left off the sheet but still counted
+    in a student's average.
+
+    ``average`` is the value in the sheet's Average column; ``shown_scores`` the
+    student's scores for the subjects that ARE on the sheet. The denominator of
+    the average is ``N = len(shown) + num_missing`` (the missing subjects are
+    counted), so the missing total is ``round(average*N) - sum(shown)``. Returns
+    a list of length ``num_missing`` (evenly split, remainder on the first) — for
+    the common single-missing case that's the exact reconstructed score.
+
+    This mirrors the client-side reconstruction in the review page; it's kept
+    here as the tested reference for the formula.
+    """
+    shown = [float(s) for s in shown_scores if s is not None and str(s) != '']
+    m = len(shown)
+    n = m + max(1, int(num_missing))
+    total_missing = _round_half_up(float(average) * n) - sum(shown)
+    k = max(1, int(num_missing))
+    per = _round_half_up(total_missing / k)
+    out = [per] * k
+    out[0] += total_missing - per * k
+    return out
+
+
 def guess_name_column(headers):
     """Index of the most likely student-name column, or None."""
     for i, h in enumerate(headers):

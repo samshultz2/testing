@@ -1040,10 +1040,14 @@ def broadsheet_import():
                      ).join(Subject).all()
             expected = ['Student Name'] + [cs.subject.name for cs in _subs] \
                 + [cs.subject.short_name for cs in _subs if cs.subject.short_name]
+            tried = engine_order()
             rich = ocr_table_rich(data, upload.mimetype or 'image/png', expected_headers=expected)
             if not rich:
-                flash('Could not read a table from that image. Try a clearer, straight photo, '
-                      'a different OCR engine, or upload the Excel/CSV instead.', 'warning')
+                names = {'claude': 'Claude vision', 'tesseract': 'Tesseract'}
+                who = ', '.join(names.get(e, e) for e in tried) or 'the configured engine'
+                flash(f'{who} could not read a table from that image. Try a clearer, straight '
+                      f'photo, switch the engine in Settings → AI Vision OCR, or upload the '
+                      f'Excel/CSV instead.', 'warning')
                 return render_template('subjects/broadsheet_import.html', **ctx)
             parsed = {'headers': rich['headers'], 'rows': rich['rows']}
             ocr_flags = rich.get('cell_flags') or {}

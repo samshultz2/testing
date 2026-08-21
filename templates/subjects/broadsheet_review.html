@@ -16,6 +16,10 @@
 .bi-imgwrap img{max-width:100%;display:block}
 .bi-map{min-width:9rem}
 .bi-split{font-size:.72rem;color:var(--text-muted)}
+.bi-vcell{width:3.4rem;text-align:center;padding:.15rem;border:1px dashed var(--primary);border-radius:4px;background:rgba(37,99,235,.07)}
+.bi-vcell.err{border-color:var(--danger);background:rgba(220,53,69,.1)}
+.bi-vhead{background:rgba(37,99,235,.07)!important}
+.bi-vhead .rm{border:0;background:none;color:var(--danger);cursor:pointer;font-size:.8rem}
 </style>
 {% endblock %}
 {% block content %}
@@ -63,6 +67,26 @@
                 <label class="d-flex gap-2 align-center mb-0"><input type="checkbox" id="biPreview"> Show breakdown</label>
             </div>
         </div>
+    </div></div>
+
+    <div class="card mb-2"><div class="card-body">
+        <div class="d-flex gap-3 flex-wrap align-center">
+            <div><strong>Average column:</strong>
+                <select id="biAvgCol" class="form-control" style="width:auto;display:inline-block;">
+                    <option value="">— none —</option>
+                    {% for h in headers %}<option value="{{ loop.index0 }}">{{ h or ('Column ' ~ loop.index) }}</option>{% endfor %}
+                </select>
+            </div>
+            <div><strong>Missing subject:</strong>
+                <select id="biMissingSel" class="form-control" style="width:auto;display:inline-block;">
+                    <option value="">— subject not on the sheet —</option>
+                    {% for cs in class_subjects %}<option value="{{ cs.id }}" data-name="{{ cs.subject.name }}">{{ cs.subject.name }}</option>{% endfor %}
+                </select>
+                <button type="button" id="biAddMissing" class="btn btn-secondary btn-sm"><i class="fas fa-plus"></i> Add</button>
+            </div>
+            <span id="biMissingList" class="text-muted text-sm"></span>
+        </div>
+        <p class="text-muted text-sm mb-0 mt-1">A missing subject (e.g. Maths) is one the school left off the sheet but still counted in each student's average. Pick the Average column and add the missing subject — its score is worked back from the average and the shown subjects for each student, then split into components like any other total. Always review before saving.</p>
     </div></div>
 
     <div class="bi-wrap"><table class="bi-table">
@@ -150,6 +174,103 @@
     var sel = mapSels[col];
     return sel && sel.value ? sel.value : '';
   }
+
+  // ---- Missing-subject-from-average reconstruction -------------------------
+  var avgSel = document.getElementById('biAvgCol');
+  var missingSel = document.getElementById('biMissingSel');
+  var missing = [];                 // [{csid, name}]
+  // Auto-pick the average column from a header named AV / AVG / Average.
+  (function () {
+    var opts = avgSel.options;
+    for (var i = 1; i < opts.length; i++) {
+      var t = opts[i].textContent.trim().toLowerCase().replace(/[^a-z]/g, '');
+      if (t === 'av' || t === 'avg' || t === 'average') { avgSel.value = opts[i].value; break; }
+    }
+  })();
+  function mappedCsIds() {
+    var set = {};
+    mapSels.forEach(function (s) { if (s.value) set[s.value] = true; });
+    missing.forEach(function (m) { set[m.csid] = true; });
+    return set;
+  }
+  function renderMissingCols() {
+    // Remove existing virtual columns.
+    document.querySelectorAll('.bi-vhead, .bi-vcell-td').forEach(function (el) { el.parentNode.removeChild(el); });
+    var headTr = document.querySelector('.bi-table thead tr');
+    var list = document.getElementById('biMissingList');
+    list.textContent = missing.length ? '' : '';
+    missing.forEach(function (m) {
+      var th = document.createElement('th');
+      th.className = 'bi-vhead'; th.setAttribute('data-csid', m.csid);
+      th.innerHTML = '<div>' + m.name + '</div><small>from average</small> ' +
+                     '<button type="button" class="rm" title="Remove">✕</button>';
+      th.querySelector('.rm').addEventListener('click', function () {
+        missing = missing.filter(function (x) { return x.csid !== m.csid; });
+        renderMissingCols();
+      });
+      headTr.appendChild(th);
+      document.querySelectorAll('tbody tr[data-row]').forEach(function (tr) {
+        var td = document.createElement('td');
+        td.className = 'bi-vcell-td';
+        td.innerHTML = '<input type="text" class="bi-vcell" data-row="' + tr.getAttribute('data-row') +
+                       '" data-csid="' + m.csid + '" inputmode="numeric" autocomplete="off">';
+        td.querySelector('input').addEventListener('input', function (e) { e.target.dataset.dirty = '1'; });
+        tr.appendChild(td);
+      });
+    });
+    var names = missing.map(function (m) { return m.name; });
+    document.getElementById('biMissingList').textContent =
+      names.length ? ('Reconstructing: ' + names.join(', ')) : '';
+    recomputeMissing();
+  }
+  function recomputeMissing() {
+    if (!missing.length) return;
+    var avgCol = avgSel.value === '' ? -1 : parseInt(avgSel.value, 10);
+    document.querySelectorAll('tbody tr[data-row]').forEach(function (tr) {
+      var row = tr.getAttribute('data-row');
+      var avg = NaN;
+      if (avgCol >= 0) {
+        var ac = tr.querySelector('.bi-cell[data-col="' + avgCol + '"]');
+        if (ac) avg = parseFloat(ac.value);
+      }
+      var sumShown = 0, M = 0;
+      tr.querySelectorAll('.bi-cell').forEach(function (inp) {
+        var col = parseInt(inp.getAttribute('data-col'), 10);
+        if (col === avgCol) return;                 // never count the average column
+        if (!colSubject(col)) return;               // only mapped subject columns
+        var v = parseFloat(inp.value);
+        if (!isNaN(v)) { sumShown += v; M++; }
+      });
+      var K = missing.length, N = M + K;
+      var vcells = tr.querySelectorAll('.bi-vcell');
+      if (isNaN(avg) || N === 0) {
+        vcells.forEach(function (vc) { if (!vc.dataset.dirty) { vc.value = ''; vc.classList.remove('err'); } });
+        return;
+      }
+      var totalMissing = Math.round(avg * N) - sumShown;
+      var per = Math.round(totalMissing / K);
+      var rem = totalMissing - per * K;             // put any remainder on the first
+      vcells.forEach(function (vc, i) {
+        if (vc.dataset.dirty) return;               // user overrode this cell
+        var val = per + (i === 0 ? rem : 0);
+        vc.value = (val === val) ? String(val) : '';
+        vc.classList.toggle('err', val < 0 || val > 100);
+      });
+    });
+  }
+  avgSel.addEventListener('change', recomputeMissing);
+  document.getElementById('biAddMissing').addEventListener('click', function () {
+    var csid = missingSel.value;
+    if (!csid) return;
+    if (mappedCsIds()[csid]) {
+      document.getElementById('biMsg').textContent = 'That subject is already a column or already added.';
+      return;
+    }
+    var name = missingSel.options[missingSel.selectedIndex].getAttribute('data-name') || 'Subject';
+    missing.push({ csid: csid, name: name });
+    missingSel.value = '';
+    renderMissingCols();
+  });
   function renderSplits() {
     document.querySelectorAll('.bi-split').forEach(function (el) { el.textContent = ''; });
     if (!showPrev.checked) return;
@@ -176,9 +297,9 @@
       inp.classList.toggle('err', !!bad);
     });
   }
-  mapSels.forEach(function (s) { s.addEventListener('change', function () { validate(); renderSplits(); }); });
+  mapSels.forEach(function (s) { s.addEventListener('change', function () { validate(); renderSplits(); recomputeMissing(); }); });
   document.querySelectorAll('.bi-cell').forEach(function (inp) {
-    inp.addEventListener('input', function () { validate(); if (showPrev.checked) renderSplits(); });
+    inp.addEventListener('input', function () { validate(); if (showPrev.checked) renderSplits(); recomputeMissing(); });
   });
   showPrev.addEventListener('change', renderSplits);
 
@@ -194,6 +315,12 @@
         if (!csId) return;
         var val = inp.value.trim();
         if (val !== '') cells[csId] = val;
+      });
+      // Reconstructed missing-subject cells (keyed by class-subject id directly).
+      tr.querySelectorAll('.bi-vcell').forEach(function (vc) {
+        var csId = vc.getAttribute('data-csid');
+        var val = vc.value.trim();
+        if (csId && val !== '') cells[csId] = val;
       });
       if (Object.keys(cells).length) payload.push({ student_id: parseInt(stu, 10), cells: cells });
     });

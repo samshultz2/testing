@@ -442,6 +442,11 @@ def ocr_settings():
             if engine in ENGINES:
                 SchoolSettings.set('ocr_engine', engine, 'string',
                                    'Score-sheet OCR engine (auto/claude/tesseract)')
+                # Choosing Claude as the engine implies turning Claude vision on,
+                # so the picker is authoritative (no separate checkbox trap).
+                if engine == 'claude':
+                    SchoolSettings.set('ocr_vision_enabled', True, 'bool',
+                                       'Use Claude vision for WAEC/JAMB scans')
             if (request.form.get('clear_key') or '').strip().lower() in ('1', 'true', 'on', 'yes'):
                 SchoolSettings.set('ocr_vision_api_key', '', 'string', 'Anthropic API key (encrypted)')
             else:
