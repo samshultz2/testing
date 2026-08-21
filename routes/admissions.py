@@ -4,7 +4,7 @@ conversion of an admitted applicant into a Student, dashboard and CSV export.
 """
 from datetime import datetime, date
 from utils import timeutil
-from utils.web_exports import csv_response
+from utils.web_exports import csv_response, pdf_response
 from utils.helpers import get_active_session
 import csv
 import io
@@ -23,6 +23,13 @@ from utils.search import like_term
 adm_bp = Blueprint('admissions', __name__, url_prefix='/admissions')
 
 TABS = [['dashboard', 'fa-chart-pie', 'Overview'], ['applicants', 'fa-user-plus', 'Applicants']]
+
+
+@adm_bp.before_request
+def _heal_admissions_schema():
+    # Add post-baseline applicant columns (emergency contact) to older tenant DBs.
+    from utils.admissions_schema import ensure_admissions_schema
+    ensure_admissions_schema()
 
 
 def _d(value, default=None):
@@ -59,6 +66,7 @@ def _render(payload):
     payload['urls'] = {**{
         'dashboard': url_for('admissions.dashboard'), 'applicants': url_for('admissions.applicants'),
         'add': url_for('admissions.add_applicant'), 'export': url_for('admissions.export'),
+        'blank_form': url_for('admissions.blank_application_form'),
     }, **payload.get('urls', {})}
     from utils.spa import render_or_json
     return render_or_json('admissions/app.html', 'adm_json', payload)
@@ -162,6 +170,10 @@ def _read_form(a):
     a.parent_email = (request.form.get('parent_email') or '').strip() or None
     a.relationship = strip_tags(request.form.get('relationship')) or None
     a.address = strip_tags(request.form.get('address')) or None
+    a.emergency_name = strip_tags(request.form.get('emergency_name')) or None
+    a.emergency_phone = (request.form.get('emergency_phone') or '').strip() or None
+    a.emergency_relationship = strip_tags(request.form.get('emergency_relationship')) or None
+    a.emergency_address = strip_tags(request.form.get('emergency_address')) or None
     a.notes = strip_tags(request.form.get('notes')) or None
 
 
@@ -197,6 +209,9 @@ def _form_payload(a):
             'parent_name': a.parent_name or '', 'relationship': a.relationship or '',
             'parent_phone': a.parent_phone or '', 'parent_email': a.parent_email or '',
             'address': a.address or '', 'notes': a.notes or '',
+            'emergency_name': a.emergency_name or '', 'emergency_phone': a.emergency_phone or '',
+            'emergency_relationship': a.emergency_relationship or '',
+            'emergency_address': a.emergency_address or '',
             'detail_url': url_for('admissions.applicant_detail', applicant_id=a.id),
         } if a else None),
         'sessions': _sessions_json(), 'classes': _classes_json(),
@@ -233,6 +248,9 @@ def applicant_detail(applicant_id):
     parent = [['Name', a.parent_name or '—'], ['Relationship', a.relationship or '—'],
               ['Phone', a.parent_phone or '—'], ['Email', a.parent_email or '—'],
               ['Address', a.address or '—']]
+    emergency = [['Name', a.emergency_name or '—'], ['Relationship', a.emergency_relationship or '—'],
+                 ['Phone', a.emergency_phone or '—'], ['Address', a.emergency_address or '—']]
+    has_emergency = any(v not in (None, '', '—') for _l, v in emergency)
     return _render({
         'page': 'applicant_detail', 'tabs': TABS, 'active': 'applicants',
         'applicant': {
@@ -246,13 +264,77 @@ def applicant_detail(applicant_id):
             'student_url': url_for('main.view_student', student_id=a.admitted_student_id) if a.admitted_student_id else None,
         },
         'stages': admissions.STAGES, 'outcomes': admissions.OUTCOMES, 'info': info, 'parent': parent,
+        'emergency': emergency if has_emergency else None,
         'notes': a.notes,
         'assignments': [{'id': x.id, 'label': x.display_name + (' · ' + x.term.full_name if x.term else '')} for x in assignments],
         'urls': {'edit': url_for('admissions.edit_applicant', applicant_id=a.id),
                  'status': url_for('admissions.set_status', applicant_id=a.id),
                  'convert': url_for('admissions.convert', applicant_id=a.id),
-                 'delete': url_for('admissions.delete_applicant', applicant_id=a.id)},
+                 'delete': url_for('admissions.delete_applicant', applicant_id=a.id),
+                 'pdf': url_for('admissions.export_applicant', applicant_id=a.id, format='pdf'),
+                 'docx': url_for('admissions.export_applicant', applicant_id=a.id, format='docx')},
     })
+
+
+@adm_bp.route('/applicants/blank-form')
+@login_required
+def blank_application_form():
+    """Download a branded, fillable (interactive AcroForm) blank application form."""
+    from utils.school import school_profile
+    from utils.applicant_export import applicant_blank_pdf
+    data = applicant_blank_pdf(school_profile())
+    return pdf_response(io.BytesIO(data), 'application_form.pdf', inline=False)
+
+
+@adm_bp.route('/applicants/<int:applicant_id>/export')
+@login_required
+def export_applicant(applicant_id):
+    """Download the applicant record as a branded PDF (reportlab) or Word file."""
+    a = db.get_or_404(Applicant, applicant_id)
+    require_branch_access(a.branch_id)
+    fmt = request.args.get('format', 'pdf')
+    from utils.school import school_profile
+    from utils.applicant_export import applicant_pdf, applicant_docx
+
+    def dash(v):
+        return v if v not in (None, '') else '—'
+
+    sections = [
+        ('Applicant', [
+            ('Gender', dash(a.gender)),
+            ('Date of Birth', a.date_of_birth.strftime('%d %b %Y') if a.date_of_birth else '—'),
+            ('Previous School', dash(a.previous_school)),
+            ('How did they hear?', dash(a.source)),
+        ]),
+        ('Application', [
+            ('Intended Class', a.intended_class.name if a.intended_class else '—'),
+            ('Session', a.session.name if a.session else '—'),
+            ('Entrance Score', a.entrance_score if a.entrance_score is not None else '—'),
+            ('Applied', a.applied_date.strftime('%d %b %Y') if a.applied_date else '—'),
+        ]),
+        ('Parent / Guardian', [
+            ('Name', dash(a.parent_name)), ('Relationship', dash(a.relationship)),
+            ('Phone', dash(a.parent_phone)), ('Email', dash(a.parent_email)),
+            ('Address', dash(a.address)),
+        ]),
+        ('Emergency Contact', [
+            ('Name', dash(a.emergency_name)), ('Relationship', dash(a.emergency_relationship)),
+            ('Phone', dash(a.emergency_phone)), ('Address', dash(a.emergency_address)),
+        ]),
+    ]
+    if a.notes:
+        sections.append(('Notes', [('', a.notes)]))
+    record = {
+        'title': 'Applicant Record',
+        'name': a.full_name,
+        'meta': [('Application No', a.application_no or '—'), ('Status', a.status or '—')],
+        'sections': sections,
+    }
+    base = (a.application_no or 'applicant').replace('/', '-')
+    if fmt == 'docx':
+        return applicant_docx(record, school_profile(), filename='%s.docx' % base)
+    data = applicant_pdf(record, school_profile())
+    return pdf_response(io.BytesIO(data), '%s.pdf' % base, inline=False)
 
 
 @adm_bp.route('/applicants/<int:applicant_id>/edit', methods=['GET', 'POST'])

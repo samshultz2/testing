@@ -43,6 +43,12 @@ class Applicant(db.Model):
     relationship = db.Column(db.String(40))
     address = db.Column(db.String(255))
 
+    # Emergency contact (a second person to reach if the parent is unreachable)
+    emergency_name = db.Column(db.String(100))
+    emergency_phone = db.Column(db.String(20))
+    emergency_relationship = db.Column(db.String(40))
+    emergency_address = db.Column(db.String(255))
+
     notes = db.Column(db.Text)
     admitted_student_id = db.Column(db.Integer, db.ForeignKey('students.id'))
     created_at = db.Column(db.DateTime, default=local_now)

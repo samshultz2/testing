@@ -85,6 +85,7 @@ function Applicants({ d }) {
   return (
     <>
       <PageHeader title="Applicants" actions={<>
+        {d.urls.blank_form && <a href={d.urls.blank_form} data-native className="btn btn-secondary" title="Download a printable / fillable application form"><i aria-hidden="true" className="fas fa-file-pdf" /> Blank form</a>}
         <a href={d.urls.export} data-native className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-csv" /> Export</a>
         {canWrite(d) && <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-user-plus" /> New Application</a>}
       </>} />
@@ -138,6 +139,8 @@ function ApplicantForm({ d, notify }) {
     entrance_score: a.entrance_score === '' || a.entrance_score == null ? '' : String(a.entrance_score),
     parent_name: a.parent_name || '', relationship: a.relationship || '', parent_phone: a.parent_phone || '',
     parent_email: a.parent_email || '', address: a.address || '', notes: a.notes || '',
+    emergency_name: a.emergency_name || '', emergency_relationship: a.emergency_relationship || '',
+    emergency_phone: a.emergency_phone || '', emergency_address: a.emergency_address || '',
   });
   const [busy, setBusy] = useState(false);
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
@@ -158,7 +161,8 @@ function ApplicantForm({ d, notify }) {
   );
   return (
     <>
-      <PageHeader title={editing ? 'Edit Application' : 'New Application'} />
+      <PageHeader title={editing ? 'Edit Application' : 'New Application'} actions={
+        d.urls.blank_form ? <a href={d.urls.blank_form} data-native className="btn btn-secondary" title="Download a printable / fillable application form"><i aria-hidden="true" className="fas fa-file-pdf" /> Blank form</a> : null} />
       <form onSubmit={submit}>
         <div className="card mb-3"><div className="card-header"><h3>Applicant</h3></div><div className="card-body">
           <div className="form-row">{F({ label: 'First name', k: 'first_name', req: true })}{F({ label: 'Surname', k: 'surname', req: true })}</div>
@@ -193,6 +197,11 @@ function ApplicantForm({ d, notify }) {
           <div className="form-group mb-0"><label className="form-label">Notes</label><textarea className="form-control" rows="2" value={f.notes} onChange={(e) => set('notes', e.target.value)} /></div>
         </div></div>
 
+        <div className="card mb-3"><div className="card-header"><h3>Emergency Contact</h3></div><div className="card-body">
+          <div className="form-row">{F({ label: 'Name', k: 'emergency_name' })}{F({ label: 'Relationship', k: 'emergency_relationship', placeholder: 'Uncle/Aunt/Neighbour' })}</div>
+          <div className="form-row">{F({ label: 'Phone', k: 'emergency_phone' })}{F({ label: 'Address', k: 'emergency_address' })}</div>
+        </div></div>
+
         <div className="page-header-actions">
           <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> {editing ? 'Save Changes' : 'Create Application'}</button>
           <a href={editing ? a.detail_url : d.urls.applicants} className="btn btn-secondary">Cancel</a>
@@ -222,6 +231,8 @@ function ApplicantDetail({ d, notify }) {
     <>
       <PageHeader title="Application" actions={<>
         {a.parent_phone && <a href={'tel:' + a.parent_phone} className="btn btn-secondary" aria-label="Call"><i aria-hidden="true" className="fas fa-phone" /></a>}
+        {d.urls.pdf && <a href={d.urls.pdf} className="btn btn-secondary" title="Download PDF"><i aria-hidden="true" className="fas fa-file-pdf" /> PDF</a>}
+        {d.urls.docx && <a href={d.urls.docx} className="btn btn-secondary" title="Download Word"><i aria-hidden="true" className="fas fa-file-word" /> Word</a>}
         {canWrite(d) && <a href={d.urls.edit} className="btn btn-primary"><i aria-hidden="true" className="fas fa-edit" /> Edit</a>}
         {canWrite(d) && d.is_admin && <button type="button" className="btn btn-danger" disabled={busy}
           onClick={() => act(d.urls.delete, {}, 'Delete this application?')}><i aria-hidden="true" className="fas fa-trash" /></button>}
@@ -280,6 +291,13 @@ function ApplicantDetail({ d, notify }) {
             {d.parent.map(([k, v]) => <div className="info-row" key={k}><span className="k">{k}</span><span className="v">{v}</span></div>)}
           </div>{d.notes && <p className="text-muted text-sm mt-2">{d.notes}</p>}</div></div>
       </div>
+
+      {d.emergency && (
+        <div className="card mt-3"><div className="card-header"><h3>Emergency Contact</h3></div>
+          <div className="card-body"><div className="info-grid">
+            {d.emergency.map(([k, v]) => <div className="info-row" key={k}><span className="k">{k}</span><span className="v">{v}</span></div>)}
+          </div></div></div>
+      )}
     </>
   );
 }

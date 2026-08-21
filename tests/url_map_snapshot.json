@@ -265,6 +265,13 @@
 ]
 ],
 [
+"admissions.blank_application_form",
+"/admissions/applicants/blank-form",
+[
+"GET"
+]
+],
+[
 "admissions.convert",
 "/admissions/applicants/<int:applicant_id>/convert",
 [
@@ -296,6 +303,13 @@
 [
 "admissions.export",
 "/admissions/export",
+[
+"GET"
+]
+],
+[
+"admissions.export_applicant",
+"/admissions/applicants/<int:applicant_id>/export",
 [
 "GET"
 ]
