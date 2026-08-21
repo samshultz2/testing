@@ -230,11 +230,15 @@ def applicant_docx(record, school, filename='applicant.docx'):
                     headers={'Content-Disposition': 'attachment; filename=%s' % filename})
 
 
-def applicant_blank_pdf(school):
+def applicant_blank_pdf(school, bw=False):
     """A branded, *fillable* blank application form (interactive AcroForm PDF).
 
     Every field is a real PDF form field the applicant can type into (or print
-    and fill by hand). Built with reportlab. Returns bytes."""
+    and fill by hand). Built with reportlab. Returns bytes.
+
+    ``bw=True`` produces a black-and-white print-friendly variant: black text,
+    strong dark field borders, white fills and no colour accents, so it stays
+    crisp and legible on a monochrome printer."""
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm
     from reportlab.lib import colors
@@ -254,9 +258,22 @@ def applicant_blank_pdf(school):
     PW, PH = A4
     margin = 14 * mm
     avail = PW - 2 * margin
-    navy = colors.HexColor(NAVY); gold = colors.HexColor(GOLD)
-    ink = colors.HexColor(INK); muted = colors.HexColor(MUTED)
-    line = colors.HexColor(LINE); panel = colors.HexColor(PANEL)
+    if bw:
+        # Monochrome, high-contrast: black ink, strong grey borders, white
+        # field fills, and no colour accents — prints cleanly on a mono printer.
+        navy = colors.black
+        gold = colors.HexColor('#333333')
+        ink = colors.black
+        muted = colors.HexColor('#333333')
+        line = colors.HexColor('#555555')
+        panel = colors.white
+        field_border = colors.HexColor('#333333')
+        field_bw = 1.0
+    else:
+        navy = colors.HexColor(NAVY); gold = colors.HexColor(GOLD)
+        ink = colors.HexColor(INK); muted = colors.HexColor(MUTED)
+        line = colors.HexColor(LINE); panel = colors.HexColor(PANEL)
+        field_border = line; field_bw = 0.7
 
     buf = io.BytesIO()
     c = _canvas.Canvas(buf, pagesize=A4)
@@ -340,8 +357,8 @@ def applicant_blank_pdf(school):
         state['n'] += 1
         form.textfield(name='f%d' % state['n'], tooltip=label,
                        x=x, y=state['y'] - 5 * mm - h, width=w, height=h,
-                       borderColor=line, fillColor=panel, textColor=ink,
-                       borderWidth=0.7, forceBorder=True, fontSize=11,
+                       borderColor=field_border, fillColor=panel, textColor=ink,
+                       borderWidth=field_bw, forceBorder=True, fontSize=11,
                        fieldFlags=('multiline' if big else ''))
         return h
 

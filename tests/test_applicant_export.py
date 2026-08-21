@@ -55,6 +55,11 @@ def test_blank_application_form_is_fillable_pdf(app):
     # it is an interactive AcroForm (has fillable field objects)
     assert b'/AcroForm' in r.data and b'/Widget' in r.data
 
+    # a black-and-white, print-friendly variant is available and still fillable
+    bw = client.get('/admissions/applicants/blank-form', query_string={'bw': '1'})
+    assert bw.status_code == 200 and bw.data[:4] == b'%PDF'
+    assert b'/AcroForm' in bw.data and b'/Widget' in bw.data
+
 
 def test_applicant_export_pdf_and_docx(app):
     aid = _seed(app)

@@ -85,7 +85,8 @@ function Applicants({ d }) {
   return (
     <>
       <PageHeader title="Applicants" actions={<>
-        {d.urls.blank_form && <a href={d.urls.blank_form} data-native className="btn btn-secondary" title="Download a printable / fillable application form"><i aria-hidden="true" className="fas fa-file-pdf" /> Blank form</a>}
+        {d.urls.blank_form && <a href={d.urls.blank_form} data-native className="btn btn-secondary" title="Fillable application form (colour)"><i aria-hidden="true" className="fas fa-file-pdf" /> Blank form</a>}
+        {d.urls.blank_form && <a href={d.urls.blank_form + '?bw=1'} data-native className="btn btn-secondary" title="Fillable application form — black &amp; white, print-friendly"><i aria-hidden="true" className="fas fa-print" /> B&amp;W form</a>}
         <a href={d.urls.export} data-native className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-csv" /> Export</a>
         {canWrite(d) && <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-user-plus" /> New Application</a>}
       </>} />
@@ -162,7 +163,10 @@ function ApplicantForm({ d, notify }) {
   return (
     <>
       <PageHeader title={editing ? 'Edit Application' : 'New Application'} actions={
-        d.urls.blank_form ? <a href={d.urls.blank_form} data-native className="btn btn-secondary" title="Download a printable / fillable application form"><i aria-hidden="true" className="fas fa-file-pdf" /> Blank form</a> : null} />
+        d.urls.blank_form ? <>
+          <a href={d.urls.blank_form} data-native className="btn btn-secondary" title="Fillable application form (colour)"><i aria-hidden="true" className="fas fa-file-pdf" /> Blank form</a>
+          <a href={d.urls.blank_form + '?bw=1'} data-native className="btn btn-secondary" title="Fillable application form — black &amp; white, print-friendly"><i aria-hidden="true" className="fas fa-print" /> B&amp;W</a>
+        </> : null} />
       <form onSubmit={submit}>
         <div className="card mb-3"><div className="card-header"><h3>Applicant</h3></div><div className="card-body">
           <div className="form-row">{F({ label: 'First name', k: 'first_name', req: true })}{F({ label: 'Surname', k: 'surname', req: true })}</div>

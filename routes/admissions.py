@@ -279,11 +279,14 @@ def applicant_detail(applicant_id):
 @adm_bp.route('/applicants/blank-form')
 @login_required
 def blank_application_form():
-    """Download a branded, fillable (interactive AcroForm) blank application form."""
+    """Download a branded, fillable (interactive AcroForm) blank application form.
+    ``?bw=1`` returns a black-and-white, print-friendly variant."""
     from utils.school import school_profile
     from utils.applicant_export import applicant_blank_pdf
-    data = applicant_blank_pdf(school_profile())
-    return pdf_response(io.BytesIO(data), 'application_form.pdf', inline=False)
+    bw = request.args.get('bw') in ('1', 'true', 'yes')
+    data = applicant_blank_pdf(school_profile(), bw=bw)
+    name = 'application_form_bw.pdf' if bw else 'application_form.pdf'
+    return pdf_response(io.BytesIO(data), name, inline=False)
 
 
 @adm_bp.route('/applicants/<int:applicant_id>/export')
