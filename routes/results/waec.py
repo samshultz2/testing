@@ -367,6 +367,17 @@ def scan_waec():
                 text = '(read by Claude vision)\n' + text
         if not parsed:
             parsed = parse_waec_result(text)
+            # Faint / low-contrast screenshots (e.g. a phone photo of a coloured
+            # results table) often yield only the name on the first pass. Retry
+            # once with an Otsu-binarised image and keep whichever read more.
+            if not is_pdf and len(parsed.get('subjects') or []) < 3:
+                try:
+                    text2 = extract_text(file_bytes, binarize=True)
+                    parsed2 = parse_waec_result(text2)
+                    if len(parsed2.get('subjects') or []) > len(parsed.get('subjects') or []):
+                        parsed, text = parsed2, text2
+                except Exception:
+                    pass
         matched, score = match_student(parsed['name'], students)
 
         return render_template('results/waec_scan_review.html',

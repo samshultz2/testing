@@ -1045,9 +1045,15 @@ def broadsheet_import():
             if not rich:
                 names = {'claude': 'Claude vision', 'tesseract': 'Tesseract'}
                 who = ', '.join(names.get(e, e) for e in tried) or 'the configured engine'
-                flash(f'{who} could not read a table from that image. Try a clearer, straight '
-                      f'photo, switch the engine in Settings → AI Vision OCR, or upload the '
-                      f'Excel/CSV instead.', 'warning')
+                extra = ''
+                if 'claude' in tried:
+                    from utils.waec_ocr import last_vision_error
+                    ve = last_vision_error()
+                    if ve:
+                        extra = ' ' + ve
+                flash(f'{who} could not read a table from that image.{extra} Try a clearer, '
+                      f'straight photo, switch the engine in Settings → AI Vision OCR, or upload '
+                      f'the Excel/CSV instead.', 'warning')
                 return render_template('subjects/broadsheet_import.html', **ctx)
             parsed = {'headers': rich['headers'], 'rows': rich['rows']}
             ocr_flags = rich.get('cell_flags') or {}

@@ -119,8 +119,33 @@ def _auto_orient(img, pytesseract):
     return img
 
 
-def extract_text(image_bytes):
-    """Run Tesseract over the image bytes and return the raw text."""
+def _otsu_threshold(hist):
+    """Otsu's method on a 256-bin grayscale histogram → threshold (0–255)."""
+    total = sum(hist) or 1
+    sum_all = sum(i * hist[i] for i in range(256))
+    w_b = 0.0
+    sum_b = 0.0
+    best_thr, best_var = 127, -1.0
+    for t in range(256):
+        w_b += hist[t]
+        if w_b == 0:
+            continue
+        w_f = total - w_b
+        if w_f == 0:
+            break
+        sum_b += t * hist[t]
+        m_b = sum_b / w_b
+        m_f = (sum_all - sum_b) / w_f
+        var = w_b * w_f * (m_b - m_f) ** 2
+        if var > best_var:
+            best_var, best_thr = var, t
+    return best_thr
+
+
+def extract_text(image_bytes, binarize=False):
+    """Run Tesseract over the image bytes and return the raw text. ``binarize``
+    Otsu-thresholds the grayscale image — crisper for faint / low-contrast table
+    text (e.g. a phone screenshot of a coloured results table)."""
     import pytesseract
     from PIL import Image, ImageOps
 
@@ -142,9 +167,13 @@ def extract_text(image_bytes):
         img = _auto_orient(img, pytesseract)
     img = ImageOps.grayscale(img)
     img = ImageOps.autocontrast(img)
+    # Upscale small images first so the threshold works on smooth edges.
     if max(img.size) < _MIN_OCR_DIM:
         scale = _MIN_OCR_DIM / max(img.size)
         img = img.resize((int(img.width * scale), int(img.height * scale)))
+    if binarize:
+        thr = _otsu_threshold(img.histogram()[:256])
+        img = img.point(lambda p: 255 if p > thr else 0)
     # Bound a single OCR pass so a crafted image can't hang a worker.
     return pytesseract.image_to_string(img, timeout=_OCR_TIMEOUT_SECONDS)
 
@@ -259,17 +288,36 @@ def _extract_name(lines):
         if len(cand) >= 3:
             return cand.title()
 
-    label_re = re.compile(r'(candidate\s*name|name\s*of\s*candidate|name)\s*[:\-]\s*(.+)', re.I)
+    # Label variants: "Candidate's Name", "Name of Candidate", "Candidate Name".
+    # WAEC's table layout has no ':' — the value sits in the next cell (same line,
+    # whitespace-separated) or on the next line — so the separator is optional.
+    label_re = re.compile(r"candidate'?s?\s*name|name\s*of\s*candidate", re.I)
     skip = ('west african', 'examination', 'council', 'result', 'statement',
-            'waec', 'subject', 'grade', 'candidate no', 'exam', 'year')
+            'waec', 'subject', 'grade', 'candidate no', 'candidate number',
+            'exam', 'year', 'centre', 'center', 'number', 'wassce')
 
-    for line in lines:
+    def _name_words(s):
+        return re.findall(r"[A-Za-z][A-Za-z'\-]+", s)
+
+    for i, line in enumerate(lines):
         m = label_re.search(line)
-        if m:
-            candidate = m.group(2).strip()
-            candidate = re.sub(r'\s{2,}.*$', '', candidate)  # drop trailing columns
-            if len(candidate) >= 3:
-                return candidate.title()
+        if not m:
+            continue
+        # (a) value on the same line, after the label.
+        after = line[m.end():].strip(" :\t-|")
+        after = re.sub(r'\s{3,}.*$', '', after)          # drop a trailing column
+        w = _name_words(after)
+        if 2 <= len(w) <= 6 and sum(len(x) for x in w) >= 6:
+            return ' '.join(w).title()
+        # (b) value on the next line(s) — the common table-cell layout.
+        for nxt in lines[i + 1:i + 3]:
+            low = nxt.lower()
+            if any(s in low for s in skip) or _match_subject(nxt) or _grades_in(nxt):
+                continue
+            w2 = _name_words(nxt)
+            if 2 <= len(w2) <= 6 and sum(len(x) for x in w2) >= 6:
+                return ' '.join(w2).title()
+        break
 
     # Fallback: first line that looks like a person's name (2+ alpha words,
     # not a header and not a subject name).
@@ -538,6 +586,34 @@ def vision_available():
     return bool(cfg['enabled'] and cfg['has_key'] and cfg['installed'])
 
 
+# Last Claude-vision failure reason, surfaced to the user when a scan falls back.
+_LAST_VISION_ERROR = None
+
+
+def last_vision_error():
+    return _LAST_VISION_ERROR
+
+
+def _note_vision_error(exc):
+    """Record a friendly reason for a Claude-vision failure. The most common one
+    for a fresh key is an empty API balance — a Claude Pro/Max *subscription* does
+    not include API access, which is billed separately."""
+    global _LAST_VISION_ERROR
+    msg = str(exc or '').strip()
+    low = msg.lower()
+    if 'credit balance is too low' in low or 'insufficient' in low or 'billing' in low:
+        _LAST_VISION_ERROR = ('Claude API has no credit. A Claude Pro/Max subscription does '
+                              'NOT include API access — add API credit at console.anthropic.com '
+                              '(Billing), or use Tesseract.')
+    elif 'authentication' in low or 'invalid x-api-key' in low or '401' in low:
+        _LAST_VISION_ERROR = 'Claude API key was rejected — check the key in Settings → AI Vision OCR.'
+    elif 'rate limit' in low or '429' in low:
+        _LAST_VISION_ERROR = 'Claude API rate-limited — wait a moment and try again.'
+    elif msg:
+        _LAST_VISION_ERROR = 'Claude vision error: ' + msg[:200]
+    return _LAST_VISION_ERROR
+
+
 def vision_extract(image_bytes, exam='waec', media_type='image/png'):
     """
     Use Claude vision to read a result image into structured data. Returns the
@@ -682,7 +758,8 @@ def vision_extract_scoresheet(image_bytes, column_labels, media_type='image/png'
             rows.append({'student_num': (r.get('student_num') or '').strip(),
                          'name': name, 'cells': cells})
         return rows or None
-    except Exception:
+    except Exception as e:
+        _note_vision_error(e)
         return None
 
 
@@ -739,7 +816,8 @@ def vision_extract_broadsheet(image_bytes, media_type='image/png'):
             if any(cells):
                 rows.append(cells)
         return {'headers': headers, 'rows': rows} if rows else None
-    except Exception:
+    except Exception as e:
+        _note_vision_error(e)
         return None
 
 

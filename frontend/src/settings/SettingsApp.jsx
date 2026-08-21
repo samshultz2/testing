@@ -732,7 +732,10 @@ function Ocr({ d, notify }) {
             The <code>anthropic</code> library isn't installed on the server. Run <code>pip install anthropic</code> and restart, then it can be turned on here.
           </p>)}
         <p className="text-muted" style={{ marginTop: '.4rem', fontSize: 'var(--text-sm)' }}>
-          Reads result images with Claude (more accurate than Tesseract, handles handwriting). It bills your Anthropic account — about $0.003 per image on Haiku. Sign up at <strong>platform.claude.com</strong> → Billing → API Keys.
+          Reads result images with Claude (more accurate than Tesseract, handles handwriting). It bills your Anthropic account — about $0.003 per image on Haiku. Sign up at <strong>console.anthropic.com</strong> → Billing → API Keys.
+        </p>
+        <p style={{ marginTop: '.3rem', fontSize: 'var(--text-sm)', color: '#b06000' }}>
+          <i aria-hidden="true" className="fas fa-circle-info" /> A Claude <strong>Pro/Max subscription does NOT include API access</strong> — the API is billed separately. If scans fail with "credit balance too low", add API credit at console.anthropic.com → Billing, or use Tesseract.
         </p>
       </div></div>
 

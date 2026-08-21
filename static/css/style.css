@@ -4128,3 +4128,15 @@ body .bill-line span:last-child, body .pl-row span:last-child { font-variant-num
 @media (prefers-reduced-motion: reduce) {
     body .funnel .step:hover, body .roster-item:hover { transform: none; }
 }
+
+/* Segmented tabs for the score-entry mode switch (By assessment / By student) */
+.score-tabs{display:inline-flex;gap:.25rem;padding:.25rem;background:var(--gray-100);border-radius:var(--radius-lg);border:1px solid var(--border-color);margin-bottom:1rem;flex-wrap:wrap}
+.score-tab{display:flex;align-items:center;gap:.6rem;padding:.5rem .9rem;border:0;background:transparent;border-radius:var(--radius-md);cursor:pointer;color:var(--text-muted);font:inherit;transition:background .15s,color .15s,box-shadow .15s}
+.score-tab i{font-size:1.05rem;width:1.2rem;text-align:center}
+.score-tab span{display:flex;flex-direction:column;line-height:1.15;text-align:left}
+.score-tab span strong{font-weight:600;font-size:.9rem}
+.score-tab span small{font-weight:400;font-size:.7rem;opacity:.8}
+.score-tab:hover{color:var(--text)}
+.score-tab.active{background:var(--bg-card);color:var(--primary);box-shadow:var(--shadow-sm)}
+.score-tab.active i{color:var(--primary)}
+@media(max-width:560px){.score-tabs{display:flex;width:100%}.score-tab{flex:1;justify-content:center}}

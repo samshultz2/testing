@@ -584,11 +584,17 @@ function Scores({ d, notify }) {
         </div>
       </div>
       <RecentClasses currentId={d.assignment_id} onPick={(term, asg) => set({ term_id: term, assignment_id: asg, class_subject_id: '', assessment_type_id: '' })} />
-      <div className="btn-group mb-3" role="tablist" aria-label="Entry mode">
-        <button type="button" className={'btn btn-sm ' + (mode === 'assessment' ? 'btn-primary' : 'btn-secondary')} onClick={() => setMode('assessment')} aria-pressed={mode === 'assessment'}>
-          <i aria-hidden="true" className="fas fa-users" /> By assessment (whole class)</button>
-        <button type="button" className={'btn btn-sm ' + (mode === 'student' ? 'btn-primary' : 'btn-secondary')} onClick={() => setMode('student')} aria-pressed={mode === 'student'}>
-          <i aria-hidden="true" className="fas fa-user" /> By student (all assessments)</button>
+      <div className="score-tabs" role="tablist" aria-label="Score entry mode">
+        <button type="button" role="tab" aria-selected={mode === 'assessment'}
+                className={'score-tab' + (mode === 'assessment' ? ' active' : '')} onClick={() => setMode('assessment')}>
+          <i aria-hidden="true" className="fas fa-users" />
+          <span><strong>By assessment</strong><small>Whole class · one assessment</small></span>
+        </button>
+        <button type="button" role="tab" aria-selected={mode === 'student'}
+                className={'score-tab' + (mode === 'student' ? ' active' : '')} onClick={() => setMode('student')}>
+          <i aria-hidden="true" className="fas fa-user-graduate" />
+          <span><strong>By student</strong><small>One student · all assessments</small></span>
+        </button>
       </div>
       <div className="card mb-3"><div className="card-body"><form className="filter-form">
         <div className="form-group"><label className="form-label">Term</label>
