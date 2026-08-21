@@ -24,6 +24,25 @@ export default function ExportModal({ total, selectedIds, exportUrl, applied, on
   const [format, setFormat] = useState('excel');
   const toggle = (k) => setChecked((c) => ({ ...c, [k]: !c[k] }));
 
+  const saveBlob = (blob, name) => {
+    const u = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = u; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(u), 4000);
+  };
+  // A long list spans several A4 images — download each page as its own file.
+  const downloadImages = async (url) => {
+    let page = 1, total = 1;
+    do {
+      const res = await fetch(url + '&page=' + page, { credentials: 'same-origin' });
+      if (!res.ok) break;
+      total = parseInt(res.headers.get('X-Total-Pages') || '1', 10) || 1;
+      const blob = await res.blob();
+      saveBlob(blob, total > 1 ? `students_export_p${page}.png` : 'students_export.png');
+      page += 1;
+    } while (page <= total);
+  };
+
   const doExport = () => {
     const fields = FIELDS.filter(([k]) => checked[k]).map(([k]) => k);
     if (!fields.length) return;
@@ -35,7 +54,8 @@ export default function ExportModal({ total, selectedIds, exportUrl, applied, on
       // export all matching the current filters
       Object.entries(applied || {}).forEach(([k, v]) => { if (v) p.set(k, v); });
     }
-    window.location.href = `${exportUrl}?${p.toString()}`;
+    const url = `${exportUrl}?${p.toString()}`;
+    if (format === 'image') { downloadImages(url); } else { window.location.href = url; }
     onClose();
   };
 

@@ -2571,11 +2571,35 @@ def export_students_word(student_data, fields):
     section.left_margin = Cm(1.5)
     section.right_margin = Cm(1.5)
     
-    # Title
-    title = doc.add_heading('STUDENTS LIST', 0)
-    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    # Branded masthead: logo + school name + address/contact + motto.
+    import os as _os
+    from docx.shared import RGBColor as _RGB
+    from datetime import date as _date
+    from utils.school import school_profile as _sp
+    school = _sp()
+    if school.get('logo_path') and _os.path.exists(school['logo_path']):
+        try:
+            p = doc.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            p.add_run().add_picture(school['logo_path'], height=Cm(1.6))
+        except Exception:
+            pass
+    nm = doc.add_paragraph(); nm.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    r = nm.add_run((school.get('name') or 'School').upper()); r.bold = True; r.font.size = Pt(18)
+    r.font.color.rgb = _RGB(0x1E, 0x2A, 0x4A)
+    line2 = '   '.join(x for x in [school.get('address') or '', school.get('phone') or '',
+                                   school.get('email') or ''] if x)
+    if line2:
+        sp = doc.add_paragraph(); sp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        rr = sp.add_run(line2); rr.font.size = Pt(9)
+    if school.get('motto'):
+        mp = doc.add_paragraph(); mp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        rm = mp.add_run(school['motto']); rm.italic = True; rm.font.size = Pt(9.5)
+        rm.font.color.rgb = _RGB(0xB8, 0x86, 0x2B)
+    meta = doc.add_paragraph(); meta.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    mr = meta.add_run('Students List  ·  %d students  ·  %s' % (len(student_data), _date.today().strftime('%d %b %Y')))
+    mr.font.size = Pt(9); mr.font.color.rgb = _RGB(0x6B, 0x72, 0x80)
     doc.add_paragraph()
-    
+
     # Column width mapping (in inches)
     col_width_map = {
         'S/N': 0.5,
@@ -2609,19 +2633,20 @@ def export_students_word(student_data, fields):
     header_row.height_rule = WD_ROW_HEIGHT_RULE.AT_LEAST
     header_row.height = Pt(25)
     
+    from utils.student_export import short_header as _short
     for i, header in enumerate(all_headers):
         cell = header_row.cells[i]
-        cell.text = header
-        
+        cell.text = _short(header)
+
         # Bold and center header text
         paragraph = cell.paragraphs[0]
         paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
         run = paragraph.runs[0]
         run.bold = True
         run.font.size = Pt(10)
-        
-        # Set header background color (blue)
-        shading = parse_xml(f'<w:shd {nsdecls("w")} w:fill="4472C4"/>')
+
+        # Set header background color (navy, matching the PDF/image design)
+        shading = parse_xml(f'<w:shd {nsdecls("w")} w:fill="1E2A4A"/>')
         cell._tc.get_or_add_tcPr().append(shading)
         run.font.color.rgb = None  # Reset to let white show
         # Set white text
@@ -2692,276 +2717,34 @@ def export_students_word(student_data, fields):
 
 
 def export_students_pdf(student_data, fields):
-    """Export students to PDF format with selected fields - wraps text and adjusts row heights"""
-    from reportlab.lib import colors
-    from reportlab.lib.pagesizes import A4, landscape
-    from reportlab.lib.units import mm
-    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
-    from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+    """Branded, A4-fitting students PDF (masthead + navy table + footer), paginated."""
     from io import BytesIO
-    from flask import Response
-    
-    output = BytesIO()
-    
-    # Use landscape for more space
-    page_size = landscape(A4)
-    doc = SimpleDocTemplate(output, pagesize=page_size, leftMargin=10*mm, rightMargin=10*mm,
-                           topMargin=10*mm, bottomMargin=10*mm)
-    
-    elements = []
-    styles = getSampleStyleSheet()
-    
-    # Create custom styles for cells
-    cell_style = ParagraphStyle(
-        'CellStyle',
-        parent=styles['Normal'],
-        fontSize=8,
-        leading=10,  # Line height
-        alignment=0,  # Left align
-    )
-    
-    header_style = ParagraphStyle(
-        'HeaderStyle',
-        parent=styles['Normal'],
-        fontSize=9,
-        leading=11,
-        alignment=1,  # Center align
-        textColor=colors.white,
-        fontName='Helvetica-Bold',
-    )
-    
-    # Title
-    title_style = ParagraphStyle('CustomTitle', parent=styles['Heading1'], fontSize=16, alignment=1, spaceAfter=10)
-    elements.append(Paragraph('STUDENTS LIST', title_style))
-    elements.append(Spacer(1, 5*mm))
-    
-    # Column width mapping (in mm)
-    col_width_map = {
-        'S/N': 10*mm,
-        'Student ID': 22*mm,
-        'Surname': 28*mm,
-        'First Name': 28*mm,
-        'Middle Name': 25*mm,
-        'Gender': 15*mm,
-        'Class': 25*mm,
-        'Date of Birth': 22*mm,
-        'Age': 12*mm,
-        'Religion': 20*mm,
-        'Home Address': 45*mm,
-        'Hobbies': 40*mm,
-        'Parent Phone': 25*mm,
-    }
-    
-    # Build column widths list
-    all_headers = ['S/N'] + fields
-    col_widths = [col_width_map.get(h, 25*mm) for h in all_headers]
-    
-    # Adjust widths to fit page if needed
-    total_width = sum(col_widths)
-    available_width = page_size[0] - 20*mm
-    if total_width > available_width:
-        scale = available_width / total_width
-        col_widths = [w * scale for w in col_widths]
-    
-    # Build table data with Paragraphs for text wrapping
-    table_data = []
-    
-    # Header row
-    header_row = [Paragraph(h, header_style) for h in all_headers]
-    table_data.append(header_row)
-    
-    # Data rows
-    for idx, student in enumerate(student_data, 1):
-        row = [Paragraph(str(idx), cell_style)]
-        for field in fields:
-            value = str(student.get(field, '') or '')
-            row.append(Paragraph(value, cell_style))
-        table_data.append(row)
-    
-    # Create table - let ReportLab calculate row heights automatically
-    table = Table(table_data, colWidths=col_widths, repeatRows=1)
-    
-    # Style the table
-    style_commands = [
-        # Header styling
-        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4472C4')),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 9),
-        
-        # Data styling
-        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 1), (-1, -1), 8),
-        
-        # Alignment
-        ('ALIGN', (0, 0), (-1, 0), 'CENTER'),  # Header centered
-        ('ALIGN', (0, 1), (0, -1), 'CENTER'),  # S/N column centered
-        ('ALIGN', (1, 1), (-1, -1), 'LEFT'),   # Data left aligned
-        ('VALIGN', (0, 0), (-1, -1), 'TOP'),   # Top align all cells
-        
-        # Padding
-        ('TOPPADDING', (0, 0), (-1, -1), 4),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-        ('LEFTPADDING', (0, 0), (-1, -1), 3),
-        ('RIGHTPADDING', (0, 0), (-1, -1), 3),
-        
-        # Grid
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CCCCCC')),
-        ('BOX', (0, 0), (-1, -1), 1, colors.HexColor('#4472C4')),
-        
-        # Header bottom border
-        ('LINEBELOW', (0, 0), (-1, 0), 1.5, colors.HexColor('#4472C4')),
-    ]
-    
-    # Add alternating row colors
-    for i in range(1, len(table_data)):
-        if i % 2 == 0:
-            style_commands.append(('BACKGROUND', (0, i), (-1, i), colors.HexColor('#F5F5F5')))
-    
-    table.setStyle(TableStyle(style_commands))
-    elements.append(table)
-    
-    # Footer
-    elements.append(Spacer(1, 5*mm))
-    footer_style = ParagraphStyle('Footer', parent=styles['Normal'], fontSize=10, fontName='Helvetica-Bold')
-    elements.append(Paragraph(f'Total: {len(student_data)} students', footer_style))
-    
-    doc.build(elements)
-    return pdf_response(output, 'students_export.pdf', inline=False)
+    from utils.school import school_profile
+    from utils.student_export import students_pdf
+    headers = ['S/N'] + list(fields)
+    rows = [[str(i)] + [('' if s.get(f) is None else str(s.get(f, ''))) for f in fields]
+            for i, s in enumerate(student_data, 1)]
+    data = students_pdf(rows, headers, school_profile(), total=len(student_data))
+    return pdf_response(BytesIO(data), 'students_export.pdf', inline=False)
 
 
 def export_students_image(student_data, fields):
-    """Render the students list to a modern, high-resolution PNG."""
-    from PIL import Image, ImageDraw, ImageFont
-    from io import BytesIO
-    from flask import Response
-    from datetime import datetime
-
-    S = 3  # supersampling for a crisp, high-DPI image
-
-    def fnt(size, bold=False):
-        path = "/usr/share/fonts/truetype/dejavu/DejaVuSans%s.ttf" % ("-Bold" if bold else "")
-        try:
-            return ImageFont.truetype(path, size * S)
-        except Exception:
-            return ImageFont.load_default()
-
-    body = fnt(12)
-    body_b = fnt(12, True)
-    head_f = fnt(12, True)
-    title_f = fnt(22, True)
-    sub_f = fnt(11)
-    foot_f = fnt(10)
-
-    # Brand colours
-    GREEN = (13, 106, 78)
-    GREEN_DK = (6, 78, 54)
-    HEAD = (10, 86, 64)
-    TEXT = (31, 41, 55)
-    MUTED = (107, 114, 128)
-    ZEBRA = (249, 250, 251)
-    LINE = (229, 231, 235)
-    WHITE = (255, 255, 255)
-
-    try:
-        from models import SchoolSettings
-        school_name = SchoolSettings.get('school_name', 'PosyHub') or 'PosyHub'
-    except Exception:
-        school_name = 'PosyHub'
-
-    tmp = ImageDraw.Draw(Image.new('RGB', (1, 1)))
-
-    if not student_data:
-        img = Image.new('RGB', (560 * S, 160 * S), WHITE)
-        d = ImageDraw.Draw(img)
-        d.text((40 * S, 60 * S), "No students to export", fill=TEXT, font=title_f)
-        out = BytesIO(); img.save(out, format='PNG'); out.seek(0)
-        return Response(out.getvalue(), mimetype='image/png',
-                        headers={'Content-Disposition': 'attachment; filename=students_export.png'})
-
-    pad = 26 * S
-    cpx = 12 * S
-    cpy = 9 * S
-    header_h = 42 * S
-    min_row_h = 38 * S
-    line_bbox = tmp.textbbox((0, 0), "Ay", font=body)
-    line_h = (line_bbox[3] - line_bbox[1]) + 6 * S
-
-    all_headers = ['S/N'] + fields
-    width_map = {'S/N': 56, 'Student ID': 130, 'Surname': 150, 'First Name': 150,
-                 'Middle Name': 150, 'Gender': 86, 'Age': 70, 'Class': 130,
-                 'Religion': 120, 'Date of Birth': 130, 'Stream': 120,
-                 'Home Address': 230, 'Hobbies': 210, 'Parent Phone': 140}
-    col_widths = [width_map.get(h, 150) * S for h in all_headers]
-
-    # Wrap + measure rows
-    wrapped_data, row_heights = [], []
-    for idx, student in enumerate(student_data):
-        row, max_lines = [], 1
-        for i, header in enumerate(all_headers):
-            value = str(idx + 1) if i == 0 else str(student.get(fields[i - 1], '') or '')
-            lines = wrap_text(tmp, value, col_widths[i] - cpx * 2, body)
-            row.append(lines)
-            max_lines = max(max_lines, len(lines))
-        wrapped_data.append(row)
-        row_heights.append(max(min_row_h, max_lines * line_h + cpy * 2))
-
-    table_w = sum(col_widths)
-    band_h = 88 * S
-    total_w = table_w + pad * 2
-    total_h = band_h + header_h + sum(row_heights) + 56 * S
-
-    img = Image.new('RGB', (int(total_w), int(total_h)), WHITE)
-    d = ImageDraw.Draw(img)
-
-    # Header band with a vertical gradient
-    for yy in range(band_h):
-        t = yy / band_h
-        col = tuple(int(GREEN[k] + (GREEN_DK[k] - GREEN[k]) * t) for k in range(3))
-        d.line([(0, yy), (total_w, yy)], fill=col)
-    d.text((pad, 20 * S), school_name, fill=WHITE, font=title_f)
-    d.text((pad, 56 * S),
-           "Students List  ·  %d student%s  ·  %s" % (
-               len(student_data), '' if len(student_data) == 1 else 's',
-               timeutil.now().strftime('%d %b %Y')),
-           fill=(220, 240, 232), font=sub_f)
-
-    # Column header row
-    y = band_h
-    d.rectangle([0, y, total_w, y + header_h], fill=HEAD)
-    x = pad
-    for i, header in enumerate(all_headers):
-        bb = d.textbbox((0, 0), header, font=head_f)
-        d.text((x + cpx, y + (header_h - (bb[3] - bb[1])) // 2 - bb[1]), header, fill=WHITE, font=head_f)
-        x += col_widths[i]
-    y += header_h
-
-    # Data rows (zebra + subtle separators)
-    for idx, (row, rh) in enumerate(zip(wrapped_data, row_heights)):
-        if idx % 2 == 1:
-            d.rectangle([pad, y, pad + table_w, y + rh], fill=ZEBRA)
-        x = pad
-        for i, lines in enumerate(row):
-            ty = y + cpy
-            f = body_b if i == 0 else body
-            fill = GREEN if i == 0 else TEXT
-            for ln in lines:
-                d.text((x + cpx, ty), ln, fill=fill, font=f)
-                ty += line_h
-            x += col_widths[i]
-        d.line([(pad, y + rh), (pad + table_w, y + rh)], fill=LINE, width=max(1, S // 2))
-        y += rh
-
-    # Footer
-    d.text((pad, y + 16 * S),
-           "Generated by %s · %s" % (school_name, timeutil.now().strftime('%d %b %Y %H:%M')),
-           fill=MUTED, font=foot_f)
-
-    out = BytesIO()
-    img.save(out, format='PNG')
-    out.seek(0)
-    return Response(out.getvalue(), mimetype='image/png',
-                    headers={'Content-Disposition': 'attachment; filename=students_export.png'})
+    """Branded, A4-page students image. One A4 page per image; the client loops
+    over pages using the X-Total-Pages header so a long list downloads as several
+    images."""
+    from flask import Response, request
+    from utils.school import school_profile
+    from utils.student_export import students_image_pages
+    headers = ['S/N'] + list(fields)
+    rows = [[str(i)] + [('' if s.get(f) is None else str(s.get(f, ''))) for f in fields]
+            for i, s in enumerate(student_data, 1)]
+    pages = students_image_pages(rows, headers, school_profile(), total=len(student_data))
+    page = request.args.get('page', type=int) or 1
+    page = max(1, min(page, len(pages)))
+    suffix = '' if len(pages) == 1 else ('_p%d' % page)
+    return Response(pages[page - 1], mimetype='image/png', headers={
+        'Content-Disposition': 'attachment; filename="students_export%s.png"' % suffix,
+        'X-Total-Pages': str(len(pages)), 'Access-Control-Expose-Headers': 'X-Total-Pages'})
 
 
 def wrap_text(draw, text, max_width, font):
