@@ -30,6 +30,9 @@
                 <option value="none">None</option>
             </select>
         </label>
+        <label style="display:flex;align-items:center;gap:.4rem;margin:0;">
+            <input type="checkbox" id="bwOpt"> Black &amp; white (print-friendly)
+        </label>
         {% endif %}
         {% if show_orient %}
         <label style="display:flex;align-items:center;gap:.4rem;margin:0;">Orientation:
@@ -87,6 +90,7 @@
   var colsSel = document.getElementById('colsSel');
   var orientSel = document.getElementById('orientSel');
   var signersSel = document.getElementById('signersSel');
+  var bwOpt = document.getElementById('bwOpt');
   var opts = Array.prototype.slice.call(document.querySelectorAll('.pdf-opt'));
   var subjBoxes = Array.prototype.slice.call(document.querySelectorAll('.pdf-subj'));
   var lastBlob = null;
@@ -102,6 +106,7 @@
     if (orientSel) p.push('orient=' + orientSel.value);
     if (signersSel) p.push('signers=' + signersSel.value);
     if (colsSel && colsSel.value !== '') p.push('cols=' + colsSel.value);
+    if (bwOpt && bwOpt.checked) p.push('bw=1');
     if (extra) p.push(extra);
     return base + (p.length ? ('?' + p.join('&')) : '');
   }
@@ -136,6 +141,7 @@
   if (subjNone) subjNone.addEventListener('click', function () { subjBoxes.forEach(function (b) { b.checked = false; }); refresh(); });
   if (colsSel) colsSel.addEventListener('change', refresh);
   if (orientSel) orientSel.addEventListener('change', refresh);
+  if (bwOpt) bwOpt.addEventListener('change', refresh);
   if (signersSel) signersSel.addEventListener('change', refresh);
   refresh();
 })();

@@ -983,8 +983,9 @@ def result_slip_pdf(exam_id, student_id):
     from utils.access_control import assert_exam_student
     assert_exam_student(student_id)          # own-arm only for SSS3 teachers
     from utils.mock_waec_pdf import result_slips_pdf
+    bw = request.args.get('bw') in ('1', 'true', 'yes')
     buf = result_slips_pdf(_slips_for(exam_id, student_id), exam,
-                           _school_profile(), opts=_pdf_opts(), signers=_signers())
+                           _school_profile(), opts=_pdf_opts(), signers=_signers(), bw=bw)
     student = db.session.get(Student, student_id)
     name = f"result_{(student.full_name if student else student_id)}.pdf".replace(' ', '_')
     return send_file(buf, mimetype='application/pdf',
@@ -998,8 +999,9 @@ def result_slips_pdf_view(exam_id):
     exam = db.get_or_404(MockWAECExam, exam_id)
     require_branch_access(exam.branch_id)
     from utils.mock_waec_pdf import result_slips_pdf
+    bw = request.args.get('bw') in ('1', 'true', 'yes')
     buf = result_slips_pdf(_slips_for(exam_id), exam, _school_profile(),
-                           opts=_pdf_opts(), signers=_signers())
+                           opts=_pdf_opts(), signers=_signers(), bw=bw)
     name = f"results_{exam.exam_number}_{exam.session.name.replace('/', '-')}.pdf"
     return send_file(buf, mimetype='application/pdf',
                      as_attachment=request.args.get('download') == '1', download_name=name)

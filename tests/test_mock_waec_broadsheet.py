@@ -226,6 +226,14 @@ def test_result_slip_and_print_views(app):
     dl = c.get(f'/mock-waec/exam/{exam_id}/broadsheet.pdf?download=1')
     assert 'attachment' in dl.headers.get('Content-Disposition', '')
 
+    # Black-and-white, print-friendly slip variant renders too.
+    bw = c.get(f'/mock-waec/exam/{exam_id}/student/{sid}/slip.pdf?bw=1')
+    assert bw.status_code == 200 and bw.get_data()[:5] == b'%PDF-'
+    bwall = c.get(f'/mock-waec/exam/{exam_id}/slips.pdf?bw=1')
+    assert bwall.status_code == 200 and bwall.get_data()[:5] == b'%PDF-'
+    # the preview page offers the black & white toggle
+    assert 'bwOpt' in prev
+
 
 def test_blank_recording_sheet_and_pdf_options(app):
     ssid = _session(app)

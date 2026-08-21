@@ -410,22 +410,37 @@ def _slip_fonts():
     return {'ser': 'Times-Roman', 'serb': 'Times-Bold', 'seri': 'Times-Italic', 'fa': fa}
 
 
-def _grade_badge_colors(grade):
+def _grade_badge_colors(grade, bw=False):
+    """(fill, text, border) for a grade badge. In B&W: distinctions are solid
+    black, everything else is an outlined white chip so it prints cleanly."""
     g = (grade or '').upper()
+    if bw:
+        # Uniform grey chips (matches the print-friendly reference); a fail is an
+        # outlined white chip so it still reads differently on a mono printer.
+        if g in ('A1', 'B2', 'B3', 'C4', 'C5', 'C6'):
+            return colors.HexColor('#9BA0A6'), colors.HexColor('#161616'), None
+        return colors.white, colors.HexColor('#161616'), colors.HexColor('#555555')
     if g == 'A1':
-        return _SL['NAVY'], _SL['WHITE']
+        return _SL['NAVY'], _SL['WHITE'], None
     if g in ('B2', 'B3'):
-        return _SL['TAN'], _SL['INK']
+        return _SL['TAN'], _SL['INK'], None
     if g in ('C4', 'C5', 'C6'):
-        return _SL['STEEL'], _SL['WHITE']
-    return _SL['REDBG'], _SL['RED']
+        return _SL['STEEL'], _SL['WHITE'], None
+    return _SL['REDBG'], _SL['RED'], None
 
 
-def _draw_competence_slip(c, PW, PH, student, s, exam, school, opts, signers, F):
+def _draw_competence_slip(c, PW, PH, student, s, exam, school, opts, signers, F, bw=False):
     from reportlab.pdfbase.pdfmetrics import stringWidth
-    NAVY, GOLD, TAN = _SL['NAVY'], _SL['GOLD'], _SL['TAN']
-    INK, MUTED, LINE = _SL['INK'], _SL['MUTED'], _SL['LINE']
-    PANEL, ZEBRA, WHITE = _SL['PANEL'], _SL['ZEBRA'], _SL['WHITE']
+    if bw:
+        NAVY = colors.black; GOLD = colors.HexColor('#333333'); TAN = colors.white
+        INK = colors.black; MUTED = colors.HexColor('#333333'); LINE = colors.HexColor('#666666')
+        PANEL = colors.HexColor('#F2F2F2'); ZEBRA = colors.HexColor('#EFEFEF')
+        WHITE = colors.white; border = colors.black
+    else:
+        NAVY, GOLD, TAN = _SL['NAVY'], _SL['GOLD'], _SL['TAN']
+        INK, MUTED, LINE = _SL['INK'], _SL['MUTED'], _SL['LINE']
+        PANEL, ZEBRA, WHITE = _SL['PANEL'], _SL['ZEBRA'], _SL['WHITE']
+        border = _SL['BORDER']
     ser, serb, seri, fa = F['ser'], F['serb'], F['seri'], F['fa']
     M = 30
     session = exam.session.name if exam.session else ''
@@ -442,8 +457,23 @@ def _draw_competence_slip(c, PW, PH, student, s, exam, school, opts, signers, F)
         icon(ch, cx, cy, glyph_size, glyph)
 
     # outer border
-    c.setStrokeColor(_SL['BORDER']); c.setLineWidth(1.4)
+    c.setStrokeColor(border); c.setLineWidth(1.4)
     c.roundRect(14, 14, PW - 28, PH - 28, 6, stroke=1, fill=0)
+
+    # faint crest watermark behind the table (grayscale, print-friendly)
+    logo0 = (school or {}).get('logo_path')
+    if bw and logo0 and _os.path.exists(logo0):
+        try:
+            from PIL import Image as _PILImage
+            from reportlab.lib.utils import ImageReader
+            im = _PILImage.open(logo0).convert('L')
+            im = im.point(lambda v: int(255 - (255 - v) * 0.08))   # ~8% ink → very light
+            wm = ImageReader(im)
+            ws = 340
+            c.drawImage(wm, PW / 2 - ws / 2, PH / 2 - ws / 2 - 40, width=ws, height=ws,
+                        mask='auto', preserveAspectRatio=True)
+        except Exception:
+            pass
 
     top = PH - 34
     # ---- Masthead ----------------------------------------------------------
@@ -554,17 +584,33 @@ def _draw_competence_slip(c, PW, PH, student, s, exam, school, opts, signers, F)
     cells = [(_ICON['user'], 'Name', student.full_name),
              (gi, 'Gender', student.gender or '—'),
              (_ICON['book'], 'Stream', student.stream or '—')]
-    cw = (PW - 2 * M) / 3
+    # Name needs the most room; Gender/Stream are short — proportion the cells so
+    # a long name never runs under Gender and the short cells aren't half-empty.
+    weights = [2.4, 1.0, 1.35]
+    total_w = PW - 2 * M
+    widths = [total_w * w / sum(weights) for w in weights]
+    x_at = M
     for i, (ic, lab, val) in enumerate(cells):
-        cx0 = M + i * cw
+        cx0 = x_at
+        cwid = widths[i]
         if i:
             c.setStrokeColor(LINE); c.setLineWidth(0.8)
             c.line(cx0, y - bar_h + 10, cx0, y - 10)
         icon_circle(ic, cx0 + 24, y - bar_h / 2, 13, 13, ring=LINE, glyph=NAVY)
+        tx = cx0 + 44
+        avail_v = cwid - 44 - 12
         c.setFillColor(MUTED); c.setFont(ser, 9.5)
-        c.drawString(cx0 + 44, y - bar_h / 2 + 3, lab + ':')
-        c.setFillColor(INK); c.setFont(serb, 12.5)
-        c.drawString(cx0 + 44, y - bar_h / 2 - 12, str(val)[:26])
+        c.drawString(tx, y - bar_h / 2 + 3, lab + ':')
+        vt = str(val); vf = 12.5
+        while vf > 9.5 and stringWidth(vt, serb, vf) > avail_v:
+            vf -= 0.5
+        if stringWidth(vt, serb, vf) > avail_v:
+            while vt and stringWidth(vt + '…', serb, vf) > avail_v:
+                vt = vt[:-1]
+            vt = (vt + '…') if vt else ''
+        c.setFillColor(INK); c.setFont(serb, vf)
+        c.drawString(tx, y - bar_h / 2 - 12, vt)
+        x_at += cwid
     y -= bar_h + 14
 
     # ---- results table -----------------------------------------------------
@@ -597,16 +643,20 @@ def _draw_competence_slip(c, PW, PH, student, s, exam, school, opts, signers, F)
         c.drawCentredString(x0 + cols[0] + cols[1] + cols[2] / 2, mid - 4,
                             '' if r.score is None else str(r.score))
         # grade badge
-        bgc, fgc = _grade_badge_colors(r.grade)
+        bgc, fgc, bdc = _grade_badge_colors(r.grade, bw)
         bw2 = 40; bh2 = 20
         bcx = x0 + cols[0] + cols[1] + cols[2] + cols[3] / 2
         c.setFillColor(bgc)
-        c.roundRect(bcx - bw2 / 2, mid - bh2 / 2, bw2, bh2, 4, stroke=0, fill=1)
+        if bdc is not None:
+            c.setStrokeColor(bdc); c.setLineWidth(0.8)
+        c.roundRect(bcx - bw2 / 2, mid - bh2 / 2, bw2, bh2, 4,
+                    stroke=(1 if bdc is not None else 0), fill=1)
         c.setFillColor(fgc); c.setFont(serb, 10.5)
         c.drawCentredString(bcx, mid - 4, (r.grade or '—'))
         # remark
         rk = 'Credit' if r.is_pass else 'Fail'
-        c.setFillColor(INK if r.is_pass else _SL['RED']); c.setFont(ser, 11)
+        remark_col = INK if (r.is_pass or bw) else _SL['RED']
+        c.setFillColor(remark_col); c.setFont(serb if (not r.is_pass) else ser, 11)
         c.drawCentredString(x0 + cols[0] + cols[1] + cols[2] + cols[3] + cols[4] / 2, mid - 4, rk)
         c.setStrokeColor(LINE); c.setLineWidth(0.6)
         c.line(x0, yy - rh, x0 + sum(cols), yy - rh)
@@ -666,23 +716,29 @@ def _draw_competence_slip(c, PW, PH, student, s, exam, school, opts, signers, F)
             labels.append('Class Teacher')
         if signers in ('both', 'principal'):
             labels.append('Principal')
-        sy = max(y, 96)
-        seg = (PW - 2 * M) / len(labels)
+        nsig = len(labels)
+        sy = max(y - 30, 92)             # y of the signature rule (clear of the panel)
+        seg = (PW - 2 * M) / nsig
+        halfline = min(84, seg / 2 - 24)
+        if nsig == 2:                    # divider between the two signers
+            c.setStrokeColor(LINE); c.setLineWidth(0.8)
+            c.line(PW / 2, sy + 34, PW / 2, sy - 40)
         for i, lab in enumerate(labels):
             lcx = M + seg * i + seg / 2
-            c.setStrokeColor(INK); c.setLineWidth(0.8)
-            c.line(lcx - 70, sy, lcx + 70, sy)
-            c.setFillColor(INK); c.setFont(ser, 10.5)
-            c.drawCentredString(lcx, sy - 14, lab)
-            c.setFillColor(MUTED); c.setFont(ser, 9.5)
-            c.drawString(lcx - 70, sy - 30, 'Date: ')
+            c.setStrokeColor(INK); c.setLineWidth(0.9)          # signature rule
+            c.line(lcx - halfline, sy, lcx + halfline, sy)
+            c.setFillColor(INK); c.setFont(ser, 11)             # label under the rule
+            c.drawCentredString(lcx, sy - 16, lab)
+            c.setFillColor(MUTED); c.setFont(ser, 10)           # Date: ______
+            dlabel = 'Date:'
+            c.drawString(lcx - halfline, sy - 34, dlabel)
+            dx = lcx - halfline + stringWidth(dlabel + ' ', ser, 10) + 3
             c.setStrokeColor(LINE); c.setLineWidth(0.7)
-            c.line(lcx - 42, sy - 30, lcx + 70, sy - 30)
+            c.line(dx, sy - 34, lcx + halfline, sy - 34)
 
     # ---- footer ------------------------------------------------------------
-    c.setStrokeColor(_SL['BORDER']); c.setLineWidth(0.8)
+    c.setStrokeColor(border); c.setLineWidth(0.8)
     c.line(M, 40, PW - M, 40)
-    c.setFillColor(GOLD); c.setFont(serb, 9)
     tail = 'Thank you for choosing %s' % ((school or {}).get('name') or 'our school')
     c.setFillColor(colors.HexColor('#4B4B4B')); c.setFont(seri, 10)
     tw = stringWidth(tail, seri, 10)
@@ -692,9 +748,10 @@ def _draw_competence_slip(c, PW, PH, student, s, exam, school, opts, signers, F)
         c.circle(PW / 2 + sgn * (tw / 2 + 12), 30.5, 1.6, stroke=0, fill=1)
 
 
-def result_slips_pdf(slips, exam, school, opts=None, signers='both'):
+def result_slips_pdf(slips, exam, school, opts=None, signers='both', bw=False):
     """One A4 designed "Competence Result" statement per student. ``opts`` toggles
-    the identity/banner/summary blocks; ``signers`` chooses the signature line(s)."""
+    the identity/banner/summary blocks; ``signers`` chooses the signature line(s).
+    ``bw=True`` renders a black-and-white, print-friendly variant."""
     from reportlab.pdfgen import canvas as _canvas
     F = _slip_fonts()
     buf = io.BytesIO()
@@ -708,7 +765,7 @@ def result_slips_pdf(slips, exam, school, opts=None, signers='both'):
         return buf
     for slip in slips:
         _draw_competence_slip(c, PW, PH, slip['student'], slip['summary'],
-                              exam, school, opts, signers, F)
+                              exam, school, opts, signers, F, bw=bw)
         c.showPage()
     c.save(); buf.seek(0)
     return buf
