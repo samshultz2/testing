@@ -1002,16 +1002,21 @@ def broadsheet_import():
 
     ctx = _scan_selector_context()
     # An AI prompt the teacher can copy into Claude/Gemini/etc. to turn a raw
-    # list or screenshot into the CSV this page accepts.
-    _subs = [cs.subject.name for cs in (ctx.get('class_subjects') or [])]
-    _cols = ', '.join(_subs) if _subs else 'one column per subject'
+    # list or screenshot into the CSV this page accepts. It deliberately keeps
+    # the source's own column headers (schools use their own short forms) and
+    # order — the mapping to real subjects is done here on the review screen.
     ctx['ai_prompt'] = (
-        "Convert the class broadsheet below into CSV using these exact rules:\n"
-        "- First column header is 'Name' — the student's full name.\n"
-        "- Then one numeric column per subject, using these subject headers: " + _cols + ".\n"
-        "- Each subject cell is that student's FINAL TOTAL as a whole number 0-100 "
-        "(convert any grade to its score; leave blank if truly missing).\n"
-        "- Add a final 'Average' column if an average is shown.\n"
+        "Convert the class broadsheet below into CSV. Rules:\n"
+        "- The first column header must be 'Name' — the student's full name.\n"
+        "- Keep every subject column exactly as it appears in the source: the "
+        "SAME columns, in the SAME order, with the EXACT header text "
+        "(abbreviations and all). Do not rename to full subject names, and do "
+        "not add, drop or reorder columns.\n"
+        "- Each subject cell is that student's final total as a whole number "
+        "0-100 (convert any grade to its score; leave a cell blank only if it "
+        "is genuinely missing in the source).\n"
+        "- If an average is shown, keep it as the last column with its original "
+        "header (e.g. AV or Average).\n"
         "- One student per row. Output ONLY the CSV — the header row first, "
         "comma-separated, with no commentary and no code fences.\n\n"
         "Broadsheet data:\n<paste your list or screenshot text here>"
