@@ -77,7 +77,7 @@ def preprocess(image_bytes, config=None):
             work = cv2.resize(work, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_CUBIC)
             meta['steps'].append('upscale')
 
-    if work.ndim == 2:                       # PaddleOCR expects 3-channel
+    if work.ndim == 2:                       # OCR wants 3-channel
         work = cv2.cvtColor(work, cv2.COLOR_GRAY2BGR)
     meta['proc_size'] = [int(work.shape[1]), int(work.shape[0])]
     meta['ok'] = True

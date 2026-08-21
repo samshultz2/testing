@@ -743,7 +743,6 @@ function Ocr({ d, notify }) {
               <option value="auto">Auto — Claude if configured, else Tesseract</option>
               <option value="claude">Claude vision (handwriting; needs API key)</option>
               <option value="tesseract">Tesseract (printed text; free, on-server)</option>
-              <option value="paddle">PaddleOCR + OpenCV (fast, cell-cropped digits)</option>
             </select>
             <span className="form-hint d-block">The chosen engine is tried first; the others act as fallback. Availability on this server:</span>
             <ul style={{ margin: '.35rem 0 0', paddingLeft: '1.1rem', fontSize: 'var(--text-sm)' }}>

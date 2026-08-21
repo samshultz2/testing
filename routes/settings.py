@@ -441,7 +441,7 @@ def ocr_settings():
             engine = (request.form.get('engine') or 'auto').strip().lower()
             if engine in ENGINES:
                 SchoolSettings.set('ocr_engine', engine, 'string',
-                                   'Score-sheet OCR engine (auto/claude/tesseract/paddle)')
+                                   'Score-sheet OCR engine (auto/claude/tesseract)')
             if (request.form.get('clear_key') or '').strip().lower() in ('1', 'true', 'on', 'yes'):
                 SchoolSettings.set('ocr_vision_api_key', '', 'string', 'Anthropic API key (encrypted)')
             else:

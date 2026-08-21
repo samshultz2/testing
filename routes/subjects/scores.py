@@ -682,9 +682,6 @@ def scoresheet_scan():
             try:
                 if eng == 'claude' and vision_available():
                     parsed = vision_extract_scoresheet(data, col_labels, upload.mimetype or 'image/png')
-                elif eng == 'paddle':
-                    from utils.paddle_ocr import extract_scoresheet as _paddle
-                    parsed = _paddle(data, col_labels, max_scores)
                 elif eng == 'tesseract':
                     text = extract_text_from_pdf(data) if is_pdf else extract_text(data)
                     parsed = parse_score_sheet(text, num_columns=len(sheet_cols))
@@ -1029,7 +1026,7 @@ def broadsheet_import():
         ocr_flags, ocr_review_count, image_data_uri = {}, 0, None
         if is_image:
             # OCR the photographed broadsheet into the same headers+rows table,
-            # using the school's chosen engine (Claude vision / PaddleOCR / Tesseract).
+            # using the school's chosen engine (Claude vision / Tesseract).
             from utils.table_ocr import ocr_table_rich
             from utils.ocr_engine import engine_order
             if not engine_order():

@@ -93,7 +93,7 @@ def test_image_upload_uses_ocr(app, monkeypatch):
                         lambda data, mt='image/png', expected_headers=None, max_scores=None: {
                             'headers': ['Student Name', ids['subject_name']],
                             'rows': [['Ada Obi', '82']], 'cell_flags': {'0,1': {'status': 'REVIEW_REQUIRED', 'reasons': ['low_confidence']}},
-                            'review_count': 1, 'engine': 'paddle', 'warnings': []})
+                            'review_count': 1, 'engine': 'tesseract', 'warnings': []})
     c = app.test_client()
     c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': login_token(c)})
     data = {'term_id': str(ids['term_id']), 'assignment_id': str(ids['assignment_id']),

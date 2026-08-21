@@ -1,4 +1,4 @@
-"""Orchestrate the score-sheet OCR: preprocess → PaddleOCR tokens → table
+"""Orchestrate the score-sheet OCR: preprocess → Tesseract tokens → table
 reconstruction → post-processing/validation. Produces a reviewable extraction —
 it NEVER writes to permanent scores.
 
@@ -13,8 +13,8 @@ log = logging.getLogger('ocr.pipeline')
 
 
 def available():
-    from utils.ocr import paddle_engine
-    return paddle_engine.available()
+    from utils.ocr import tesseract_engine
+    return tesseract_engine.available()
 
 
 def _guess_name_col(headers):
@@ -29,21 +29,21 @@ def _guess_name_col(headers):
 def extract_table(image_bytes, expected_headers=None, config=None,
                   min_conf=0.6, max_scores=None, tokens=None):
     """Full pipeline. ``tokens`` may be supplied directly (for tests / a
-    different engine), bypassing preprocessing + PaddleOCR. Returns None when no
-    OCR engine is available and no tokens were supplied."""
+    different engine), bypassing preprocessing + Tesseract. Returns None when
+    Tesseract is unavailable and no tokens were supplied."""
     from utils.ocr import preprocess as pre
-    from utils.ocr import paddle_engine
+    from utils.ocr import tesseract_engine
     from utils.ocr.reconstruct import reconstruct
     from utils.ocr import postprocess as pp
 
-    meta = {'engine': 'paddle'}
+    meta = {'engine': 'tesseract'}
     if tokens is None:
-        if not paddle_engine.available():
+        if not tesseract_engine.available():
             return None
         proc, pmeta = pre.preprocess(image_bytes, config)
         meta['preprocess'] = pmeta
         image_width = (pmeta.get('proc_size') or pmeta.get('orig_size') or [None])[0]
-        tokens = paddle_engine.to_tokens(proc if proc is not None else image_bytes)
+        tokens = tesseract_engine.to_tokens(proc if proc is not None else image_bytes)
         if not tokens:
             return None
     else:
