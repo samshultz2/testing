@@ -974,7 +974,8 @@ function jambSubjectStats() {
     studentsData.forEach(function (s) {
         (s.subjects || []).forEach(function (sub) {
             if (!sub || !sub.name) return;
-            var m = map[sub.name] || (map[sub.name] = { subject: sub.name, count: 0, sum: 0, max: 0, min: 999, weak: 0 });
+            var code = sub.code || String(sub.name).substring(0, 3).toUpperCase();
+            var m = map[sub.name] || (map[sub.name] = { subject: code, name: sub.name, count: 0, sum: 0, max: 0, min: 999, weak: 0 });
             var v = Number(sub.score) || 0;
             m.count++; m.sum += v; m.max = Math.max(m.max, v); m.min = Math.min(m.min, v);
             if (v < 50) m.weak++;
@@ -1022,7 +1023,8 @@ function buildJambStudentsExport() {
         if (showSubjects) {
             for (let i = 0; i < 4; i++) {
                 if (s.subjects[i]) {
-                    bodyHtml += `<td style="${tdStyle}text-align:center;"><span style="font-size:8px;color:#666;">${window.escapeHtml(String(s.subjects[i].name).substring(0,6))}</span><br><strong>${s.subjects[i].score}</strong></td>`;
+                    const _code = s.subjects[i].code || String(s.subjects[i].name).substring(0,3).toUpperCase();
+                    bodyHtml += `<td style="${tdStyle}text-align:center;"><span style="font-size:8px;color:#666;font-weight:600;">${window.escapeHtml(_code)}</span><br><strong>${s.subjects[i].score}</strong></td>`;
                 } else {
                     bodyHtml += `<td style="${tdStyle}text-align:center;">-</td>`;
                 }

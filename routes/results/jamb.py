@@ -142,12 +142,14 @@ def jamb_list():
         
         results = query.all()
         
+        from utils.broadsheet_export import _abbr_one
         for idx, r in enumerate(results):
             subjects = []
-            if r.subject1: subjects.append({'name': r.subject1, 'score': r.subject1_score or 0})
-            if r.subject2: subjects.append({'name': r.subject2, 'score': r.subject2_score or 0})
-            if r.subject3: subjects.append({'name': r.subject3, 'score': r.subject3_score or 0})
-            if r.subject4: subjects.append({'name': r.subject4, 'score': r.subject4_score or 0})
+            # `code` is the short CAPITAL abbreviation used in the image/PDF export.
+            if r.subject1: subjects.append({'name': r.subject1, 'code': _abbr_one(r.subject1), 'score': r.subject1_score or 0})
+            if r.subject2: subjects.append({'name': r.subject2, 'code': _abbr_one(r.subject2), 'score': r.subject2_score or 0})
+            if r.subject3: subjects.append({'name': r.subject3, 'code': _abbr_one(r.subject3), 'score': r.subject3_score or 0})
+            if r.subject4: subjects.append({'name': r.subject4, 'code': _abbr_one(r.subject4), 'score': r.subject4_score or 0})
             
             students_data.append({
                 'id': r.student.id,
