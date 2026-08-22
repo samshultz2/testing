@@ -787,7 +787,7 @@
 {% endif %}
 
 <!-- Hidden Export Container - Compact Mobile-Friendly -->
-<div id="exportContainer" style="position: absolute; left: -9999px; width: 500px;">
+<div id="exportContainer" style="position: absolute; left: -9999px; width: 700px;">
     <div id="exportContent" style="padding: 12px; background: white; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
         <div style="text-align: center; margin: 0 0 10px 0; padding-bottom: 8px; border-bottom: 2px solid #007bff;">
             <div style="font-size: 17px; font-weight: 800; color: #0f172a; letter-spacing: .3px; line-height: 1.2;">{{ school_brand.name|upper }}</div>
@@ -1065,8 +1065,8 @@ function jambSubjectStats() {
     return out;
 }
 
-var _JAMB_TH = 'padding:4px 6px;background:#007bff;color:white;border:1px solid #0056b3;font-size:10px;white-space:nowrap;';
-var _JAMB_TD = 'padding:3px 5px;border:1px solid #ddd;font-size:10px;';
+var _JAMB_TH = 'padding:7px 6px;background:#007bff;color:white;border:1px solid #0056b3;font-size:14px;white-space:nowrap;';
+var _JAMB_TD = 'padding:7px 6px;border:1px solid #ddd;font-size:14px;';
 
 function buildJambStudentsExport() {
     const showRank = document.getElementById('expRank').checked;
@@ -1090,21 +1090,21 @@ function buildJambStudentsExport() {
         const scoreColor = s.total_score >= 300 ? '#28a745' : s.total_score >= 250 ? '#17a2b8' : s.total_score >= 200 ? '#856404' : '#dc3545';
         const rowBg = idx % 2 === 0 ? '#ffffff' : '#f9f9f9';
         bodyHtml += `<tr style="background:${rowBg}">`;
-        if (showRank) bodyHtml += `<td style="${tdStyle}text-align:center;font-weight:600;">${s.rank}</td>`;
-        bodyHtml += `<td style="${tdStyle}">${window.escapeHtml(s.name)}</td>`;
-        if (showStudentId) bodyHtml += `<td style="${tdStyle}font-size:9px;">${window.escapeHtml(s.student_id)}</td>`;
-        bodyHtml += `<td style="${tdStyle}text-align:center;font-weight:600;color:${scoreColor};">${s.total_score}</td>`;
+        if (showRank) bodyHtml += `<td style="${tdStyle}text-align:center;font-weight:600;font-size:18px;">${s.rank}</td>`;
+        bodyHtml += `<td style="${tdStyle}font-size:18px;font-weight:500;">${window.escapeHtml(s.name)}</td>`;
+        if (showStudentId) bodyHtml += `<td style="${tdStyle}font-size:13px;">${window.escapeHtml(s.student_id)}</td>`;
+        bodyHtml += `<td style="${tdStyle}text-align:center;font-weight:700;font-size:18px;color:${scoreColor};">${s.total_score}</td>`;
         if (showSubjects) {
             for (let i = 0; i < 4; i++) {
                 if (s.subjects[i]) {
                     const _code = s.subjects[i].code || String(s.subjects[i].name).substring(0,3).toUpperCase();
-                    bodyHtml += `<td style="${tdStyle}text-align:center;"><span style="font-size:8px;color:#666;font-weight:600;">${window.escapeHtml(_code)}</span><br><strong>${s.subjects[i].score}</strong></td>`;
+                    bodyHtml += `<td style="${tdStyle}text-align:center;"><span style="font-size:11px;color:#666;font-weight:600;">${window.escapeHtml(_code)}</span><br><strong style="font-size:17px;">${s.subjects[i].score}</strong></td>`;
                 } else {
-                    bodyHtml += `<td style="${tdStyle}text-align:center;">-</td>`;
+                    bodyHtml += `<td style="${tdStyle}text-align:center;color:#ccc;font-size:16px;">-</td>`;
                 }
             }
         }
-        if (showLevel) bodyHtml += `<td style="${tdStyle}font-size:9px;">${s.performance_level.replace('_', ' ')}</td>`;
+        if (showLevel) bodyHtml += `<td style="${tdStyle}font-size:13px;">${s.performance_level.replace('_', ' ')}</td>`;
         bodyHtml += '</tr>';
     });
     document.getElementById('exportTableBody').innerHTML = bodyHtml;
