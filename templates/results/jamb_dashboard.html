@@ -318,41 +318,6 @@
 /* Desktop Table */
 .desktop-table { display: none; }
 
-/* Export Container */
-#exportContainer {
-    background: var(--bg-card);
-    padding: 1.5rem;
-}
-
-#exportContainer h2 {
-    text-align: center;
-    margin-bottom: 1rem;
-    color: var(--text-primary);
-}
-
-#exportContainer .export-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 12px;
-}
-
-#exportContainer .export-table th,
-#exportContainer .export-table td {
-    padding: 8px 12px;
-    border: 1px solid #ddd;
-    text-align: left;
-}
-
-#exportContainer .export-table th {
-    background: #007bff;
-    color: white;
-    font-weight: 600;
-}
-
-#exportContainer .export-table tbody tr:nth-child(even) {
-    background: var(--gray-50);
-}
-
 /* ===== TABLET+ ===== */
 @media (min-width: 768px) {
     .stats-grid {
@@ -428,8 +393,10 @@
         <a href="{{ url_for('results.scan_jamb') }}" class="btn btn-info btn-sm" title="Scan result image"><i class="fas fa-camera"></i> Scan</a>
         <a href="{{ url_for('results.paste_jamb') }}" class="btn btn-secondary btn-sm" title="Paste result text (from an AI) — no OCR"><i class="fas fa-clipboard"></i> Paste</a>
         {% if selected_year %}
-        <a href="{{ url_for('results.export_jamb', year=selected_year) }}" class="btn btn-secondary btn-sm" title="Export Excel"><i class="fas fa-file-excel"></i></a>
-        <button data-call="exportAsImage" class="btn btn-secondary btn-sm" title="Export image or PDF"><i class="fas fa-file-export"></i></button>
+        <a href="{{ url_for('results.export_jamb', year=selected_year, format='excel') }}" data-native class="btn btn-secondary btn-sm" title="Export Excel"><i class="fas fa-file-excel"></i> Excel</a>
+        <a href="{{ url_for('results.export_jamb', year=selected_year, format='pdf') }}" data-native class="btn btn-secondary btn-sm" title="Export PDF"><i class="fas fa-file-pdf"></i> PDF</a>
+        <a href="{{ url_for('results.export_jamb', year=selected_year, format='word') }}" data-native class="btn btn-secondary btn-sm" title="Export Word"><i class="fas fa-file-word"></i> Word</a>
+        <button type="button" id="jambImgExport" data-img-url="{{ url_for('results.export_jamb', year=selected_year, format='image') }}" class="btn btn-secondary btn-sm" title="Export HD image"><i class="fas fa-file-image"></i> Image</button>
         {% endif %}
     </div>
 </div>
@@ -786,383 +753,38 @@
 </div>
 {% endif %}
 
-<!-- Hidden Export Container - Compact Mobile-Friendly -->
-<div id="exportContainer" style="position: absolute; left: -9999px; width: 500px;">
-    <div id="exportContent" style="padding: 12px; background: white; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
-        <h2 style="color: #007bff; text-align: center; margin: 0 0 8px 0; font-size: 18px;">JAMB Results {{ selected_year }}</h2>
-        <p id="exportSummary" style="text-align: center; color: #666; margin: 0 0 10px 0; font-size: 11px;"></p>
-        <table id="exportTable" style="width: 100%; border-collapse: collapse; font-size: 11px;">
-            <thead id="exportTableHead"></thead>
-            <tbody id="exportTableBody"></tbody>
-        </table>
-        <p style="text-align: center; margin: 8px 0 0 0; color: #999; font-size: 9px;" id="exportFooter"></p>
-    </div>
-</div>
-
-<!-- Export Options Modal -->
-<div id="exportModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999; padding: 1rem;">
-    <div style="background: white; border-radius: 12px; max-width: 400px; margin: 2rem auto; max-height: 90vh; overflow-y: auto;">
-        <div style="padding: 1rem; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center;">
-            <h3 style="margin: 0; font-size: 1.1rem;"><i class="fas fa-file-export"></i> Export JAMB Results</h3>
-            <button data-call="closeExportModal" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #666;">&times;</button>
-        </div>
-        <div style="padding: 1rem;">
-            <!-- Format -->
-            <div style="margin-bottom: 1rem;">
-                <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.5rem;">Format:</label>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
-                    <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem; background: #e3f2fd; border: 2px solid #2196f3; border-radius: 8px; cursor: pointer;">
-                        <input type="radio" name="exportFormat" value="image" checked>
-                        <span style="font-size: 0.85rem; font-weight: 500;"><i class="fas fa-image"></i> Image</span>
-                    </label>
-                    <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem; background: #f8f9fa; border: 2px solid #ddd; border-radius: 8px; cursor: pointer;">
-                        <input type="radio" name="exportFormat" value="pdf">
-                        <span style="font-size: 0.85rem; font-weight: 500;"><i class="fas fa-file-pdf"></i> PDF</span>
-                    </label>
-                </div>
-            </div>
-
-            <!-- Export Type -->
-            <div style="margin-bottom: 1rem;">
-                <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.5rem;">Export Type:</label>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
-                    <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem; background: #e3f2fd; border: 2px solid #2196f3; border-radius: 8px; cursor: pointer;">
-                        <input type="radio" name="exportType" value="students" checked data-call="toggleJambExportOptions" data-on="change">
-                        <span style="font-size: 0.85rem; font-weight: 500;">Students List</span>
-                    </label>
-                    <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.6rem; background: #f8f9fa; border: 2px solid #ddd; border-radius: 8px; cursor: pointer;">
-                        <input type="radio" name="exportType" value="subjects" data-call="toggleJambExportOptions" data-on="change">
-                        <span style="font-size: 0.85rem; font-weight: 500;">Subjects Analysis</span>
-                    </label>
-                </div>
-            </div>
-
-            <p style="font-size: 0.85rem; color: #666; margin-bottom: 1rem;">Select what to include:</p>
-
-            <div id="studentOptions" style="margin-bottom: 1rem;">
-                <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: #f8f9fa; border-radius: 6px; margin-bottom: 0.5rem; cursor: pointer;">
-                    <input type="checkbox" id="expRank" checked>
-                    <span style="font-size: 0.9rem;">Rank</span>
-                </label>
-                <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: #f8f9fa; border-radius: 6px; margin-bottom: 0.5rem; cursor: pointer;">
-                    <input type="checkbox" id="expName" checked disabled>
-                    <span style="font-size: 0.9rem;">Student Name (required)</span>
-                </label>
-                <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: #f8f9fa; border-radius: 6px; margin-bottom: 0.5rem; cursor: pointer;">
-                    <input type="checkbox" id="expStudentId" checked>
-                    <span style="font-size: 0.9rem;">Student ID</span>
-                </label>
-                <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: #f8f9fa; border-radius: 6px; margin-bottom: 0.5rem; cursor: pointer;">
-                    <input type="checkbox" id="expScore" checked disabled>
-                    <span style="font-size: 0.9rem;">Total Score (required)</span>
-                </label>
-                <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: #f8f9fa; border-radius: 6px; margin-bottom: 0.5rem; cursor: pointer;">
-                    <input type="checkbox" id="expSubjects" checked>
-                    <span style="font-size: 0.9rem;">Subject Scores</span>
-                </label>
-                <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: #f8f9fa; border-radius: 6px; margin-bottom: 0.5rem; cursor: pointer;">
-                    <input type="checkbox" id="expLevel">
-                    <span style="font-size: 0.9rem;">Performance Level</span>
-                </label>
-            </div>
-            
-            <div id="subjectOptions" style="display: none; margin-bottom: 1rem;">
-                <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: #f8f9fa; border-radius: 6px; margin-bottom: 0.5rem; cursor: pointer;">
-                    <input type="checkbox" id="expSubjCount" checked><span style="font-size: 0.9rem;">Candidates (count)</span>
-                </label>
-                <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: #f8f9fa; border-radius: 6px; margin-bottom: 0.5rem; cursor: pointer;">
-                    <input type="checkbox" id="expSubjAvg" checked><span style="font-size: 0.9rem;">Average score</span>
-                </label>
-                <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: #f8f9fa; border-radius: 6px; margin-bottom: 0.5rem; cursor: pointer;">
-                    <input type="checkbox" id="expSubjMax" checked><span style="font-size: 0.9rem;">Highest</span>
-                </label>
-                <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: #f8f9fa; border-radius: 6px; margin-bottom: 0.5rem; cursor: pointer;">
-                    <input type="checkbox" id="expSubjMin" checked><span style="font-size: 0.9rem;">Lowest</span>
-                </label>
-                <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: #f8f9fa; border-radius: 6px; margin-bottom: 0.5rem; cursor: pointer;">
-                    <input type="checkbox" id="expSubjWeak"><span style="font-size: 0.9rem;">Weak candidates (&lt; 50)</span>
-                </label>
-            </div>
-
-            <div style="margin-bottom: 1rem;">
-                <label style="font-size: 0.85rem; font-weight: 500; display: block; margin-bottom: 0.5rem;">Include Summary Stats:</label>
-                <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: #f8f9fa; border-radius: 6px; margin-bottom: 0.5rem; cursor: pointer;">
-                    <input type="checkbox" id="expSummary" checked>
-                    <span style="font-size: 0.9rem;">Show summary (Total, Average, Highest)</span>
-                </label>
-                <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: #f8f9fa; border-radius: 6px; margin-bottom: 0.5rem; cursor: pointer;">
-                    <input type="checkbox" id="expTimestamp" checked>
-                    <span style="font-size: 0.9rem;">Show timestamp</span>
-                </label>
-            </div>
-            
-            <div style="margin-bottom: 1rem;">
-                <label style="font-size: 0.85rem; font-weight: 500; display: block; margin-bottom: 0.5rem;">Image Quality:</label>
-                <select id="expQuality" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 6px;">
-                    <option value="2">Standard (2x)</option>
-                    <option value="3" selected>HD (3x)</option>
-                    <option value="4">Ultra HD (4x)</option>
-                </select>
-            </div>
-            
-            <div style="display: flex; gap: 0.5rem;">
-                <button data-call="closeExportModal" class="btn btn-secondary" style="flex: 1;">Cancel</button>
-                <button data-call="generateExport" class="btn btn-primary" style="flex: 1;"><i class="fas fa-download"></i> Export</button>
-            </div>
-        </div>
-    </div>
-</div>
 {% endblock %}
 
 {% block extra_js %}
 <script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
-<script src="{{ url_for('static', filename='vendor/html2canvas.min.js') }}"></script>
-<script src="{{ url_for('static', filename='vendor/jspdf.umd.min.js') }}"></script>
 <script nonce="{{ csp_nonce }}">
-// Student data for export
-var studentsData = {{ students|tojson }};
-var selectedYear = {{ selected_year|tojson }};
-var schoolStats = {{ school_stats|tojson if school_stats else 'null' }};
-
-// Show export modal
-function exportAsImage() {
-    document.getElementById('exportModal').style.display = 'block';
-}
-
-// Close export modal
-function closeExportModal() {
-    document.getElementById('exportModal').style.display = 'none';
-}
-
-// Switch the visible column options for students vs subjects analysis.
-function toggleJambExportOptions() {
-    var t = document.querySelector('input[name="exportType"]:checked').value;
-    document.getElementById('studentOptions').style.display = t === 'students' ? 'block' : 'none';
-    document.getElementById('subjectOptions').style.display = t === 'subjects' ? 'block' : 'none';
-}
-
-// Slice a tall canvas across A4 pages and download as a PDF.
-function saveCanvasAsPdf(canvas, filename) {
-    var jsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
-    var pdf = new jsPDF('p', 'mm', 'a4');
-    var pageW = pdf.internal.pageSize.getWidth();
-    var pageH = pdf.internal.pageSize.getHeight();
-    var imgW = pageW;
-    var imgH = canvas.height * imgW / canvas.width;
-    var img = canvas.toDataURL('image/png', 1.0);
-    if (imgH <= pageH) {
-        pdf.addImage(img, 'PNG', 0, 0, imgW, imgH);
-    } else {
-        var remaining = imgH, pos = 0;
-        while (remaining > 0) {
-            pdf.addImage(img, 'PNG', 0, pos, imgW, imgH);
-            remaining -= pageH; pos -= pageH;
-            if (remaining > 0) pdf.addPage();
-        }
+// Server-rendered exports (Excel/PDF/Word are plain links). A long image
+// export spans several A4 pages — download each page as its own file.
+(function () {
+  var btn = document.getElementById('jambImgExport');
+  if (!btn) return;
+  btn.addEventListener('click', function () {
+    var base = btn.getAttribute('data-img-url'); if (!base) return;
+    var sep = base.indexOf('?') === -1 ? '?' : '&';
+    var page = 1, total = 1;
+    function save(blob, name) {
+      var u = URL.createObjectURL(blob); var a = document.createElement('a');
+      a.href = u; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(u); }, 4000);
     }
-    pdf.save(filename);
-}
-
-// Aggregate per-subject stats from the loaded students (JAMB subjects vary per
-// candidate, so this is computed client-side, like the WAEC subject analysis).
-function jambSubjectStats() {
-    var map = {};
-    studentsData.forEach(function (s) {
-        (s.subjects || []).forEach(function (sub) {
-            if (!sub || !sub.name) return;
-            var m = map[sub.name] || (map[sub.name] = { subject: sub.name, count: 0, sum: 0, max: 0, min: 999, weak: 0 });
-            var v = Number(sub.score) || 0;
-            m.count++; m.sum += v; m.max = Math.max(m.max, v); m.min = Math.min(m.min, v);
-            if (v < 50) m.weak++;
+    function next() {
+      return fetch(base + sep + 'page=' + page, { credentials: 'same-origin' }).then(function (res) {
+        if (!res.ok) return;
+        total = parseInt(res.headers.get('X-Total-Pages') || '1', 10) || 1;
+        return res.blob().then(function (b) {
+          save(b, total > 1 ? ('jamb_results_p' + page + '.png') : 'jamb_results.png');
+          page += 1; if (page <= total) return next();
         });
-    });
-    var out = Object.keys(map).map(function (k) {
-        var m = map[k];
-        m.average = m.count ? Math.round((m.sum / m.count) * 10) / 10 : 0;
-        if (m.min === 999) m.min = 0;
-        return m;
-    });
-    out.sort(function (a, b) { return b.average - a.average; });
-    return out;
-}
-
-var _JAMB_TH = 'padding:4px 6px;background:#007bff;color:white;border:1px solid #0056b3;font-size:10px;white-space:nowrap;';
-var _JAMB_TD = 'padding:3px 5px;border:1px solid #ddd;font-size:10px;';
-
-function buildJambStudentsExport() {
-    const showRank = document.getElementById('expRank').checked;
-    const showStudentId = document.getElementById('expStudentId').checked;
-    const showSubjects = document.getElementById('expSubjects').checked;
-    const showLevel = document.getElementById('expLevel').checked;
-    const thStyle = _JAMB_TH, tdStyle = _JAMB_TD;
-
-    let headerHtml = '<tr>';
-    if (showRank) headerHtml += `<th style="${thStyle}">#</th>`;
-    headerHtml += `<th style="${thStyle}text-align:left;">Name</th>`;
-    if (showStudentId) headerHtml += `<th style="${thStyle}">ID</th>`;
-    headerHtml += `<th style="${thStyle}">Score</th>`;
-    if (showSubjects) headerHtml += `<th style="${thStyle}">S1</th><th style="${thStyle}">S2</th><th style="${thStyle}">S3</th><th style="${thStyle}">S4</th>`;
-    if (showLevel) headerHtml += `<th style="${thStyle}">Level</th>`;
-    headerHtml += '</tr>';
-    document.getElementById('exportTableHead').innerHTML = headerHtml;
-
-    let bodyHtml = '';
-    studentsData.forEach((s, idx) => {
-        const scoreColor = s.total_score >= 300 ? '#28a745' : s.total_score >= 250 ? '#17a2b8' : s.total_score >= 200 ? '#856404' : '#dc3545';
-        const rowBg = idx % 2 === 0 ? '#ffffff' : '#f9f9f9';
-        bodyHtml += `<tr style="background:${rowBg}">`;
-        if (showRank) bodyHtml += `<td style="${tdStyle}text-align:center;font-weight:600;">${s.rank}</td>`;
-        bodyHtml += `<td style="${tdStyle}">${window.escapeHtml(s.name)}</td>`;
-        if (showStudentId) bodyHtml += `<td style="${tdStyle}font-size:9px;">${window.escapeHtml(s.student_id)}</td>`;
-        bodyHtml += `<td style="${tdStyle}text-align:center;font-weight:600;color:${scoreColor};">${s.total_score}</td>`;
-        if (showSubjects) {
-            for (let i = 0; i < 4; i++) {
-                if (s.subjects[i]) {
-                    bodyHtml += `<td style="${tdStyle}text-align:center;"><span style="font-size:8px;color:#666;">${window.escapeHtml(String(s.subjects[i].name).substring(0,6))}</span><br><strong>${s.subjects[i].score}</strong></td>`;
-                } else {
-                    bodyHtml += `<td style="${tdStyle}text-align:center;">-</td>`;
-                }
-            }
-        }
-        if (showLevel) bodyHtml += `<td style="${tdStyle}font-size:9px;">${s.performance_level.replace('_', ' ')}</td>`;
-        bodyHtml += '</tr>';
-    });
-    document.getElementById('exportTableBody').innerHTML = bodyHtml;
-}
-
-function buildJambSubjectsExport() {
-    const showCount = document.getElementById('expSubjCount').checked;
-    const showAvg = document.getElementById('expSubjAvg').checked;
-    const showMax = document.getElementById('expSubjMax').checked;
-    const showMin = document.getElementById('expSubjMin').checked;
-    const showWeak = document.getElementById('expSubjWeak').checked;
-    const thStyle = _JAMB_TH, tdStyle = _JAMB_TD;
-
-    let headerHtml = '<tr><th style="' + thStyle + 'text-align:left;">Subject</th>';
-    if (showCount) headerHtml += `<th style="${thStyle}">N</th>`;
-    if (showAvg) headerHtml += `<th style="${thStyle}">Avg</th>`;
-    if (showMax) headerHtml += `<th style="${thStyle}">Max</th>`;
-    if (showMin) headerHtml += `<th style="${thStyle}">Min</th>`;
-    if (showWeak) headerHtml += `<th style="${thStyle}">&lt;50</th>`;
-    headerHtml += '</tr>';
-    document.getElementById('exportTableHead').innerHTML = headerHtml;
-
-    let bodyHtml = '';
-    jambSubjectStats().forEach((m, idx) => {
-        const rowBg = idx % 2 === 0 ? '#ffffff' : '#f9f9f9';
-        const avgColor = m.average >= 70 ? '#28a745' : m.average >= 50 ? '#856404' : '#dc3545';
-        bodyHtml += `<tr style="background:${rowBg}">`;
-        bodyHtml += `<td style="${tdStyle}font-weight:500;">${window.escapeHtml(m.subject)}</td>`;
-        if (showCount) bodyHtml += `<td style="${tdStyle}text-align:center;">${m.count}</td>`;
-        if (showAvg) bodyHtml += `<td style="${tdStyle}text-align:center;font-weight:600;color:${avgColor};">${m.average}</td>`;
-        if (showMax) bodyHtml += `<td style="${tdStyle}text-align:center;color:#28a745;">${m.max}</td>`;
-        if (showMin) bodyHtml += `<td style="${tdStyle}text-align:center;color:#dc3545;">${m.min}</td>`;
-        if (showWeak) bodyHtml += `<td style="${tdStyle}text-align:center;color:#dc3545;">${m.weak}</td>`;
-        bodyHtml += '</tr>';
-    });
-    document.getElementById('exportTableBody').innerHTML = bodyHtml;
-}
-
-// Generate export based on selected options
-function generateExport() {
-    const exportType = document.querySelector('input[name="exportType"]:checked').value;
-    const exportFormat = document.querySelector('input[name="exportFormat"]:checked').value;
-    const showSummary = document.getElementById('expSummary').checked;
-    const showTimestamp = document.getElementById('expTimestamp').checked;
-    const quality = parseInt(document.getElementById('expQuality').value);
-
-    if (exportType === 'subjects') {
-        buildJambSubjectsExport();
-    } else {
-        buildJambStudentsExport();
+      });
     }
-
-    // Summary
-    if (showSummary && schoolStats) {
-        document.getElementById('exportSummary').innerHTML = `Students: <strong>${studentsData.length}</strong> | Avg: <strong>${schoolStats.mean_score}</strong> | High: <strong>${schoolStats.max_score}</strong> | Low: <strong>${schoolStats.min_score}</strong>`;
-        document.getElementById('exportSummary').style.display = 'block';
-    } else {
-        document.getElementById('exportSummary').style.display = 'none';
-    }
-    
-    // Timestamp
-    if (showTimestamp) {
-        const now = new Date();
-        document.getElementById('exportFooter').innerHTML = `Generated ${now.toLocaleDateString()} ${now.toLocaleTimeString()}`;
-        document.getElementById('exportFooter').style.display = 'block';
-    } else {
-        document.getElementById('exportFooter').style.display = 'none';
-    }
-    
-    // Close modal
-    closeExportModal();
-    
-    // Show loading indicator
-    var loadingDiv = document.createElement('div');
-    loadingDiv.id = 'exportLoading';
-    loadingDiv.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;color:white;';
-    loadingDiv.innerHTML = '<div style="font-size:18px;margin-bottom:10px;">Generating ' + (exportFormat === 'pdf' ? 'PDF' : 'image') + '...</div><div style="font-size:14px;">Please wait</div>';
-    document.body.appendChild(loadingDiv);
-
-    // Generate image - compact width for mobile viewing
-    var container = document.getElementById('exportContainer');
-    container.style.position = 'fixed';
-    container.style.left = '0';
-    container.style.top = '0';
-    container.style.zIndex = '9999';
-    container.style.background = 'white';
-    
-    setTimeout(function() {
-        html2canvas(container, {
-            scale: quality,
-            useCORS: true,
-            allowTaint: true,
-            backgroundColor: '#ffffff',
-            width: 500,
-            windowWidth: 500
-        }).then(function(canvas) {
-            container.style.position = 'absolute';
-            container.style.left = '-9999px';
-
-            // Remove loading
-            document.getElementById('exportLoading').remove();
-
-            // PDF: build and download directly.
-            if (exportFormat === 'pdf') {
-                try {
-                    saveCanvasAsPdf(canvas, 'JAMB_Results_' + selectedYear + '.pdf');
-                } catch (e) {
-                    alert('Error generating PDF: ' + e.message);
-                }
-                return;
-            }
-
-            // Create modal to show image for manual save (mobile-friendly)
-            var imgData = canvas.toDataURL('image/png', 1.0);
-            var saveModal = document.createElement('div');
-            saveModal.id = 'saveImageModal';
-            saveModal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.9);z-index:99999;padding:10px;overflow:auto;';
-            saveModal.innerHTML =
-                '<div style="text-align:center;margin-bottom:10px;">' +
-                '<p style="color:white;margin:0 0 10px 0;font-size:14px;">Long-press the image below to save</p>' +
-                '<button data-remove-target="saveImageModal" style="padding:8px 20px;background:#dc3545;color:white;border:none;border-radius:6px;font-size:14px;">Close</button>' +
-                '</div>' +
-                '<img src="' + imgData + '" style="width:100%;border-radius:8px;display:block;" alt="JAMB Results Export">';
-            document.body.appendChild(saveModal);
-            
-        }).catch(function(err) {
-            container.style.position = 'absolute';
-            container.style.left = '-9999px';
-            document.getElementById('exportLoading').remove();
-            alert('Error generating image: ' + err.message);
-        });
-    }, 100);
-}
-
-// Close modal on outside click
-document.getElementById('exportModal').addEventListener('click', function(e) {
-    if (e.target === this) closeExportModal();
-});
+    next();
+  });
+})();
 
 document.addEventListener('DOMContentLoaded', function() {
     const opts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } };

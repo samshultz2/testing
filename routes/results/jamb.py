@@ -564,20 +564,84 @@ def api_jamb_score_distribution(year):
     return jsonify(distribution)
 
 
+def _jamb_masthead():
+    """(school_name, branch_name_UPPER) for the export masthead — just the two."""
+    from utils.school import school_profile
+    from models import Branch
+    sname = (school_profile() or {}).get('name') or None
+    bid = viewing_branch_id()
+    branch = db.session.get(Branch, bid) if bid else None
+    return sname, (branch.name.upper() if branch else '')
+
+
+def _jamb_branded_export(year, fmt):
+    """Branded JAMB results as PDF / HD image / Word — masthead of the school
+    name + branch only, subject names as short CAPITAL codes, A4-fit and
+    paginated. Mirrors the shared combine export builders."""
+    from flask import Response
+    from utils import broadsheet_export as bx
+    from utils.broadsheet_export import _abbr_one
+
+    results = (scope_by_student(JAMBResult.query.filter_by(exam_year=year), JAMBResult)
+               .options(joinedload(JAMBResult.student)).join(Student)
+               .order_by(JAMBResult.total_score.desc()).all())
+
+    def code(name):
+        return _abbr_one(name) if name else '–'
+
+    headers = ['S/N', 'Student', 'Total', 'Sub 1', 'Score', 'Sub 2', 'Score',
+               'Sub 3', 'Score', 'Sub 4', 'Score']
+    rows = []
+    for i, r in enumerate(results, 1):
+        rows.append([
+            str(i), r.student.full_name, str(r.total_score if r.total_score is not None else '–'),
+            code(r.subject1), str(r.subject1_score if r.subject1_score is not None else '–'),
+            code(r.subject2), str(r.subject2_score if r.subject2_score is not None else '–'),
+            code(r.subject3), str(r.subject3_score if r.subject3_score is not None else '–'),
+            code(r.subject4), str(r.subject4_score if r.subject4_score is not None else '–'),
+        ])
+
+    sname, branch = _jamb_masthead()
+    title = sname or 'JAMB Results'          # school name is the big masthead line
+    subtitle = branch                        # e.g. "JEMILA BRANCH" (blank if school-wide)
+
+    if fmt in ('word', 'docx'):
+        data = bx.combo_docx(headers, rows, title, subtitle, numeric_from=2,
+                             logo_path=None, school_name=None)
+        return Response(data, mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                        headers={'Content-Disposition': f'attachment; filename="jamb_results_{year}.docx"'})
+    if fmt in ('image', 'png'):
+        pages = bx.combo_png_pages(headers, rows, title, subtitle,
+                                   logo_path=None, school_name=None)
+        page = request.args.get('page', type=int) or 1
+        page = max(1, min(page, len(pages)))
+        suffix = '' if len(pages) == 1 else f'_p{page}'
+        return Response(pages[page - 1], mimetype='image/png', headers={
+            'Content-Disposition': f'attachment; filename="jamb_results_{year}{suffix}.png"',
+            'X-Total-Pages': str(len(pages)), 'Access-Control-Expose-Headers': 'X-Total-Pages'})
+    data = bx.combo_pdf(headers, rows, title, subtitle, numeric_from=2,
+                        logo_path=None, school_name=None)
+    return Response(data, mimetype='application/pdf', headers={
+        'Content-Disposition': f'attachment; filename="jamb_results_{year}.pdf"'})
+
+
 @results_bp.route('/jamb/export')
 @login_required
 @rate_limited('export', max_requests=40, window_minutes=10)
 def export_jamb():
-    """Export JAMB results to Excel"""
+    """Export JAMB results — Excel, or a branded PDF / image / Word."""
     from openpyxl import Workbook
     from openpyxl.styles import Font, PatternFill, Border, Side
     from io import BytesIO
-    
+
     year = request.args.get('year', type=int)
     if not year:
         flash('Please select a year to export.', 'error')
         return redirect(url_for('results.jamb_list'))
-    log_action('data.export_results', detail=f'JAMB {year}')
+    fmt = (request.args.get('format') or 'excel').lower()
+    log_action('data.export_results', detail=f'JAMB {year} ({fmt})')
+    if fmt in ('pdf', 'image', 'png', 'word', 'docx'):
+        return _jamb_branded_export(year, fmt)
 
     results = (scope_by_student(JAMBResult.query.filter_by(exam_year=year), JAMBResult)
                .options(joinedload(JAMBResult.student)).join(Student)
