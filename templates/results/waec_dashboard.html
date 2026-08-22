@@ -1018,8 +1018,8 @@ function waecDownloadImages(url) {
 }
 
 // ---- Client-side students export (JAMB-style subject grid: S1..S9 = code + grade) ----
-var _WAEC_TH = 'padding:6px 5px;background:#007bff;color:white;border:1px solid #0056b3;font-size:13px;white-space:nowrap;';
-var _WAEC_TD = 'padding:6px 5px;border:1px solid #ddd;font-size:14px;';
+var _WAEC_TH = 'padding:5px;background:#007bff;color:white;border:1px solid #0056b3;font-size:12px;white-space:nowrap;';
+var _WAEC_TD = 'padding:5px;border:1px solid #ddd;font-size:12px;';
 
 function waecGradeColor(g) {
     if (['A1', 'B2', 'B3'].indexOf(g) !== -1) return '#28a745';
@@ -1061,9 +1061,9 @@ function buildWaecStudentsCanvasTable() {
     studentsData.forEach(function (s, idx) {
         var bg = idx % 2 === 0 ? '#ffffff' : '#f9f9f9';
         body += `<tr style="background:${bg}">`;
-        if (showRank) body += `<td style="${td}text-align:center;font-weight:600;font-size:16px;">${idx + 1}</td>`;
-        body += `<td style="${td}font-size:16px;font-weight:500;">${window.escapeHtml(s.name)}</td>`;
-        if (showId) body += `<td style="${td}font-size:12px;">${window.escapeHtml(s.student_id || '')}</td>`;
+        if (showRank) body += `<td style="${td}text-align:center;font-weight:600;font-size:14px;">${idx + 1}</td>`;
+        body += `<td style="${td}font-size:14px;font-weight:500;">${window.escapeHtml(s.name)}</td>`;
+        if (showId) body += `<td style="${td}font-size:11px;">${window.escapeHtml(s.student_id || '')}</td>`;
         if (showA1) body += `<td style="${td}text-align:center;">${s.a1_count}</td>`;
         if (showB2) body += `<td style="${td}text-align:center;">${s.b2_count}</td>`;
         if (showB3) body += `<td style="${td}text-align:center;">${s.b3_count}</td>`;
@@ -1078,9 +1078,9 @@ function buildWaecStudentsCanvasTable() {
             for (var i = 0; i < nSub; i++) {
                 if (res[i]) {
                     var code = res[i].code || String(res[i].subject).substring(0, 3).toUpperCase();
-                    body += `<td style="${td}text-align:center;"><span style="font-size:10px;color:#666;font-weight:600;">${window.escapeHtml(code)}</span><br><strong style="font-size:16px;color:${waecGradeColor(res[i].grade)};">${window.escapeHtml(res[i].grade)}</strong></td>`;
+                    body += `<td style="${td}text-align:center;"><span style="font-size:9px;color:#666;font-weight:600;">${window.escapeHtml(code)}</span><br><strong style="font-size:14px;color:${waecGradeColor(res[i].grade)};">${window.escapeHtml(res[i].grade)}</strong></td>`;
                 } else {
-                    body += `<td style="${td}text-align:center;color:#ccc;font-size:15px;">-</td>`;
+                    body += `<td style="${td}text-align:center;color:#ccc;font-size:13px;">-</td>`;
                 }
             }
         }
