@@ -164,3 +164,13 @@ def test_reconstruct_missing_score_from_average():
     assert sum(out) == 100 and len(out) == 2
     # No shown subjects: N=1, missing = round(avg).
     assert reconstruct_missing_scores(73, []) == [73]
+
+
+def test_reconstruct_excludes_zero_scored_subjects_by_default():
+    from utils.broadsheet_import import reconstruct_missing_scores
+    # 4 sat subjects (sum 300) plus 2 scored 0. The sheet's average (80) counts
+    # only the sat subjects, so the missing subject is worked back over 4+1=5:
+    # 400 - 300 = 100.
+    assert reconstruct_missing_scores(80, [80, 70, 90, 60, 0, 0]) == [100]
+    # Opting to count every subject (incl. the zeros): N = 6 + 1 = 7 → 560-300.
+    assert reconstruct_missing_scores(80, [80, 70, 90, 60, 0, 0], count_nonzero=False) == [260]

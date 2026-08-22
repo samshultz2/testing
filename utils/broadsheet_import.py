@@ -88,22 +88,27 @@ def _round_half_up(x):
     return int(math.floor(x + 0.5))
 
 
-def reconstruct_missing_scores(average, shown_scores, num_missing=1):
+def reconstruct_missing_scores(average, shown_scores, num_missing=1, count_nonzero=True):
     """Work back the score(s) of subject(s) left off the sheet but still counted
     in a student's average.
 
     ``average`` is the value in the sheet's Average column; ``shown_scores`` the
     student's scores for the subjects that ARE on the sheet. The denominator of
-    the average is ``N = len(shown) + num_missing`` (the missing subjects are
-    counted), so the missing total is ``round(average*N) - sum(shown)``. Returns
-    a list of length ``num_missing`` (evenly split, remainder on the first) — for
-    the common single-missing case that's the exact reconstructed score.
+    the average is ``N = M + num_missing`` where ``M`` is the number of shown
+    subjects that count toward the average. Blanks never count. When
+    ``count_nonzero`` is true (the common case — schools average only over the
+    subjects a student actually sat) subjects scored 0 are also excluded from
+    ``M``; set it false to divide by every shown subject. The missing total is
+    ``round(average*N) - sum(shown)``. Returns a list of length ``num_missing``
+    (evenly split, remainder on the first) — for the single-missing case that's
+    the exact reconstructed score.
 
     This mirrors the client-side reconstruction in the review page; it's kept
     here as the tested reference for the formula.
     """
     shown = [float(s) for s in shown_scores if s is not None and str(s) != '']
-    m = len(shown)
+    counted = [s for s in shown if s != 0] if count_nonzero else shown
+    m = len(counted)
     n = m + max(1, int(num_missing))
     total_missing = _round_half_up(float(average) * n) - sum(shown)
     k = max(1, int(num_missing))
