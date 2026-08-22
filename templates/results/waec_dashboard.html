@@ -799,7 +799,23 @@
 </div>
 {% endif %}
 
-<!-- Hidden Export Container - Compact Mobile-Friendly -->
+<!-- Hidden Export Container - client-side image/PDF (JAMB-style subject grid) -->
+<div id="waecExportContainer" style="position: absolute; left: -9999px; width: 720px;">
+    <div id="waecExportContent" style="padding: 12px; background: white; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+        <div style="text-align: center; margin: 0 0 10px 0; padding-bottom: 8px; border-bottom: 2px solid #007bff;">
+            <div style="font-size: 17px; font-weight: 800; color: #0f172a; letter-spacing: .3px; line-height: 1.2;">{{ school_brand.name|upper }}</div>
+            {% if export_branch %}<div style="font-size: 12px; font-weight: 700; color: #334155; margin-top: 2px;">{{ export_branch|upper }}</div>{% endif %}
+            <div style="font-size: 12px; font-weight: 600; color: #007bff; margin-top: 4px;">WAEC{% if selected_year %} {{ selected_year }}/{{ selected_year + 1 }}{% endif %} RESULTS</div>
+        </div>
+        <p id="waecExportSummary" style="text-align: center; color: #666; margin: 0 0 10px 0; font-size: 11px;"></p>
+        <table id="waecExportTable" style="width: 100%; border-collapse: collapse; font-size: 11px;">
+            <thead id="waecExportTableHead"></thead>
+            <tbody id="waecExportTableBody"></tbody>
+        </table>
+        <p style="text-align: center; margin: 8px 0 0 0; color: #999; font-size: 9px;" id="waecExportFooter"></p>
+    </div>
+</div>
+
 <!-- Export Options Modal -->
 <div id="exportModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999; padding: 0.5rem; overflow-y: auto;">
     <div style="background: white; border-radius: 12px; max-width: 500px; margin: 1rem auto; max-height: calc(100vh - 2rem); overflow-y: auto;">
@@ -900,6 +916,8 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="{{ url_for('static', filename='vendor/html2canvas.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/jspdf.umd.min.js') }}"></script>
 <script nonce="{{ csp_nonce }}">
 // Data for export
 var studentsData = [];
@@ -999,10 +1017,202 @@ function waecDownloadImages(url) {
     return next();
 }
 
-// Build the branded export on the server (same design as the students exports).
+// ---- Client-side students export (JAMB-style subject grid: S1..S9 = code + grade) ----
+var _WAEC_TH = 'padding:4px 6px;background:#007bff;color:white;border:1px solid #0056b3;font-size:10px;white-space:nowrap;';
+var _WAEC_TD = 'padding:3px 5px;border:1px solid #ddd;font-size:10px;';
+
+function waecGradeColor(g) {
+    if (['A1', 'B2', 'B3'].indexOf(g) !== -1) return '#28a745';
+    if (['C4', 'C5', 'C6'].indexOf(g) !== -1) return '#856404';
+    return '#dc3545';                                   // D7, E8, F9
+}
+
+// Most subjects any displayed student has (drives the S1..Sn columns), capped at 9.
+function waecMaxSubjects() {
+    var m = 0;
+    studentsData.forEach(function (s) { m = Math.max(m, (s.results || []).length); });
+    return Math.min(Math.max(m, 1), 9);
+}
+
+function buildWaecStudentsCanvasTable() {
+    function on(id) { var el = document.getElementById(id); return el && el.checked; }
+    var showRank = on('expRank'), showId = on('expStudentId'),
+        showA1 = on('expA1'), showB2 = on('expB2'), showB3 = on('expB3'),
+        showCredits = on('expCredits'), showAvg = on('expAvgPts'),
+        showAll = on('expAllGrades'), showSubjects = on('expSubjectGrades');
+    var th = _WAEC_TH, td = _WAEC_TD;
+    var nSub = waecMaxSubjects();
+
+    var head = '<tr>';
+    if (showRank) head += `<th style="${th}">#</th>`;
+    head += `<th style="${th}text-align:left;">Name</th>`;
+    if (showId) head += `<th style="${th}">ID</th>`;
+    if (showA1) head += `<th style="${th}">A1</th>`;
+    if (showB2) head += `<th style="${th}">B2</th>`;
+    if (showB3) head += `<th style="${th}">B3</th>`;
+    if (showCredits) head += `<th style="${th}">Cred</th>`;
+    if (showAvg) head += `<th style="${th}">Avg</th>`;
+    if (showAll) allGrades.forEach(function (g) { head += `<th style="${th}">${g}</th>`; });
+    if (showSubjects) for (var i = 1; i <= nSub; i++) head += `<th style="${th}">S${i}</th>`;
+    head += '</tr>';
+    document.getElementById('waecExportTableHead').innerHTML = head;
+
+    var body = '';
+    studentsData.forEach(function (s, idx) {
+        var bg = idx % 2 === 0 ? '#ffffff' : '#f9f9f9';
+        body += `<tr style="background:${bg}">`;
+        if (showRank) body += `<td style="${td}text-align:center;font-weight:600;">${idx + 1}</td>`;
+        body += `<td style="${td}">${window.escapeHtml(s.name)}</td>`;
+        if (showId) body += `<td style="${td}font-size:9px;">${window.escapeHtml(s.student_id || '')}</td>`;
+        if (showA1) body += `<td style="${td}text-align:center;">${s.a1_count}</td>`;
+        if (showB2) body += `<td style="${td}text-align:center;">${s.b2_count}</td>`;
+        if (showB3) body += `<td style="${td}text-align:center;">${s.b3_count}</td>`;
+        if (showCredits) body += `<td style="${td}text-align:center;font-weight:600;">${s.credit_count}</td>`;
+        if (showAvg) body += `<td style="${td}text-align:center;">${s.avg_points}</td>`;
+        if (showAll) allGrades.forEach(function (g) {
+            var c = (s.grade_counts && s.grade_counts[g]) || 0;
+            body += `<td style="${td}text-align:center;${c ? '' : 'color:#ccc;'}">${c || '-'}</td>`;
+        });
+        if (showSubjects) {
+            var res = s.results || [];
+            for (var i = 0; i < nSub; i++) {
+                if (res[i]) {
+                    var code = res[i].code || String(res[i].subject).substring(0, 3).toUpperCase();
+                    body += `<td style="${td}text-align:center;"><span style="font-size:8px;color:#666;font-weight:600;">${window.escapeHtml(code)}</span><br><strong style="color:${waecGradeColor(res[i].grade)};">${window.escapeHtml(res[i].grade)}</strong></td>`;
+                } else {
+                    body += `<td style="${td}text-align:center;color:#ccc;">-</td>`;
+                }
+            }
+        }
+        body += '</tr>';
+    });
+    document.getElementById('waecExportTableBody').innerHTML = body;
+}
+
+// Row boundaries (canvas px) so page breaks never cut through a row.
+function waecRowBreaks(container, scale) {
+    var top = container.getBoundingClientRect().top;
+    var breaks = [];
+    container.querySelectorAll('tr').forEach(function (r) {
+        breaks.push(Math.round((r.getBoundingClientRect().bottom - top) * scale));
+    });
+    return breaks;
+}
+
+// Slice a tall canvas into A4-portrait pages, breaking on row boundaries so a
+// student's row (name/grade) is never cut; leftover space is a white margin.
+function waecSliceA4(canvas, breaks) {
+    var w = canvas.width, pageH = Math.round(w * 297 / 210);
+    if (canvas.height <= pageH) return [canvas.toDataURL('image/png', 1.0)];
+    var sorted = (breaks || []).slice().sort(function (a, b) { return a - b; });
+    var pages = [], y = 0;
+    while (y < canvas.height) {
+        var end = Math.min(y + pageH, canvas.height);
+        if (end < canvas.height) {
+            var best = -1;
+            for (var i = 0; i < sorted.length; i++) {
+                if (sorted[i] > y && sorted[i] <= end) best = sorted[i];
+                else if (sorted[i] > end) break;
+            }
+            if (best > y) end = best;
+        }
+        var sliceH = end - y;
+        var pc = document.createElement('canvas');
+        pc.width = w; pc.height = pageH;
+        var ctx = pc.getContext('2d');
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, pc.width, pc.height);
+        ctx.drawImage(canvas, 0, y, w, sliceH, 0, 0, w, sliceH);
+        pages.push(pc.toDataURL('image/png', 1.0));
+        y = end;
+    }
+    return pages;
+}
+
+function waecSavePdf(canvas, breaks) {
+    var jsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+    var pdf = new jsPDF('p', 'mm', 'a4');
+    var pageW = pdf.internal.pageSize.getWidth(), pageH = pdf.internal.pageSize.getHeight();
+    waecSliceA4(canvas, breaks).forEach(function (data, i) {
+        if (i > 0) pdf.addPage();
+        pdf.addImage(data, 'PNG', 0, 0, pageW, pageH);
+    });
+    pdf.save('WAEC_Results_' + selectedYear + '.pdf');
+}
+
+// Render the hidden container to a canvas, then download as image pages or a PDF.
+function waecClientExport(format) {
+    if (!studentsData.length) { alert('No students to export.'); return; }
+    buildWaecStudentsCanvasTable();
+
+    var n = studentsData.length;
+    var a1 = studentsData.reduce(function (a, s) { return a + (s.a1_count || 0); }, 0);
+    var cred = studentsData.reduce(function (a, s) { return a + (s.credit_count || 0); }, 0);
+    document.getElementById('waecExportSummary').innerHTML =
+        `Students: <strong>${n}</strong> | Total A1: <strong>${a1}</strong> | Total Credits (A1–C6): <strong>${cred}</strong>`;
+    var now = new Date();
+    document.getElementById('waecExportFooter').innerHTML = `Generated ${now.toLocaleDateString()} ${now.toLocaleTimeString()}`;
+
+    closeExportModal();
+    var loading = document.createElement('div');
+    loading.id = 'waecExportLoading';
+    loading.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);z-index:99999;display:flex;align-items:center;justify-content:center;color:white;font-size:18px;';
+    loading.textContent = 'Generating ' + (format === 'pdf' ? 'PDF' : 'image') + '…';
+    document.body.appendChild(loading);
+
+    var container = document.getElementById('waecExportContainer');
+    var W = 720;
+    container.style.position = 'fixed'; container.style.left = '0'; container.style.top = '0';
+    container.style.zIndex = '9999'; container.style.background = 'white';
+
+    setTimeout(function () {
+        html2canvas(container, { scale: 3, useCORS: true, allowTaint: true, backgroundColor: '#ffffff', width: W, windowWidth: W })
+        .then(function (canvas) {
+            var breaks = waecRowBreaks(container, canvas.width / container.offsetWidth);
+            container.style.position = 'absolute'; container.style.left = '-9999px';
+            document.getElementById('waecExportLoading').remove();
+
+            if (format === 'pdf') {
+                try { waecSavePdf(canvas, breaks); } catch (e) { alert('Error generating PDF: ' + e.message); }
+                return;
+            }
+            var pages = waecSliceA4(canvas, breaks);
+            var multi = pages.length > 1;
+            var modal = document.createElement('div');
+            modal.id = 'waecSaveImageModal';
+            modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.9);z-index:99999;padding:10px;overflow:auto;';
+            var html = '<div style="text-align:center;margin-bottom:10px;">' +
+                '<p style="color:white;margin:0 0 10px 0;font-size:14px;">' +
+                (multi ? (pages.length + ' pages — tap “Download” on each (or long-press it) to save.')
+                       : 'Tap “Download” (or long-press the image) to save.') + '</p>' +
+                '<button data-remove-target="waecSaveImageModal" style="padding:8px 20px;background:#dc3545;color:white;border:none;border-radius:6px;font-size:14px;">Close</button>' +
+                '</div>';
+            pages.forEach(function (data, i) {
+                var fname = 'WAEC_Results_' + selectedYear + (multi ? ('_p' + (i + 1)) : '') + '.png';
+                html += '<div style="max-width:760px;margin:0 auto 16px auto;">' +
+                    (multi ? '<div style="color:#cbd5e1;font-size:12px;margin:0 0 4px 2px;">Page ' + (i + 1) + ' of ' + pages.length + '</div>' : '') +
+                    '<a href="' + data + '" download="' + fname + '" style="display:inline-block;margin-bottom:6px;padding:7px 16px;background:#007bff;color:white;border-radius:6px;font-size:13px;text-decoration:none;"><i class="fas fa-download"></i> Download</a>' +
+                    '<img src="' + data + '" style="width:100%;border-radius:8px;display:block;" alt="WAEC Results page ' + (i + 1) + '">' +
+                    '</div>';
+            });
+            modal.innerHTML = html;
+            document.body.appendChild(modal);
+        }).catch(function (err) {
+            container.style.position = 'absolute'; container.style.left = '-9999px';
+            var l = document.getElementById('waecExportLoading'); if (l) l.remove();
+            alert('Error generating export: ' + err.message);
+        });
+    }, 100);
+}
+
+// Students image/PDF render as the JAMB-style subject grid client-side; Word and
+// the subjects-analysis export still come from the server (unchanged design).
 function generateWAECExport() {
     var type = document.querySelector('input[name="exportType"]:checked').value;
     var format = document.querySelector('input[name="exportFormat"]:checked').value;
+    if (type === 'students' && (format === 'image' || format === 'pdf')) {
+        waecClientExport(format);
+        return;
+    }
     var base = "{{ url_for('results.export_waec') }}";
     var p = new URLSearchParams();
     p.set('year', selectedYear);

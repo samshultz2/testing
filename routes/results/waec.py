@@ -1,6 +1,7 @@
 """results blueprint — waec routes (split from the former routes/results.py)."""
 from routes.results import *  # noqa: F401,F403
 from utils.search import like_term
+from utils.broadsheet_export import _abbr_one
 
 
 @results_bp.route('/waec')
@@ -150,7 +151,9 @@ def waec_list():
                 'credit_count': credit_count,
                 'total_points': total_points,
                 'avg_points': round(total_points / len(results), 2) if results else 0,
-                'results': [{'subject': r.subject, 'grade': r.grade} for r in results]
+                # `code` is the short CAPITAL subject abbreviation for the export grid.
+                'results': [{'subject': r.subject, 'grade': r.grade, 'code': _abbr_one(r.subject)}
+                            for r in results]
             }
             students_data.append(student_data)
         
@@ -190,10 +193,23 @@ def waec_list():
     else:
         yoy_data = AcademicAnalytics.get_year_over_year_comparison(viewing_branch_id())
 
+    # Branch name for the export masthead — the branch these results are scoped
+    # to (same rule as the JAMB export): a picked/own branch, the single branch
+    # for a one-branch school, else "All Branches".
+    from models.models_branch import Branch
+    _bid = viewing_branch_id()
+    if _bid and _bid not in (None, -1):
+        _b = db.session.get(Branch, _bid)
+        export_branch = _b.name if _b else ''
+    else:
+        _branches = Branch.query.all()
+        export_branch = _branches[0].name if len(_branches) == 1 else 'All Branches'
+
     return render_template('results/waec_dashboard.html',
         students=students_data,
         years=years,
         selected_year=exam_year,
+        export_branch=export_branch,
         subjects=WAEC_SUBJECTS,
         grades=WAEC_GRADES,
         subject_filter=subject_filter,
