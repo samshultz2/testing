@@ -631,28 +631,10 @@ def combine_export():
         keys = ['sn', 'student', 'class', 'arm'] + [f'subj:{s["id"]}' for s in chosen_subjects] + ['total', 'average']
 
     # Optional: split the qualifying students into N ability-balanced groups by
-    # combined average. Rows get a Group column, are ordered A→…, and S/N
-    # restarts within each group.
+    # combined average — each group is exported on its own page(s)/sheet.
     groups_n = request.args.get('groups', type=int) or 1
-    split_note = None
-    if groups_n and groups_n >= 2:
-        buckets = _split_into_groups(rows, groups_n)
-        ordered_rows = []
-        for gi, members in enumerate(buckets):
-            letter = chr(ord('A') + gi) if gi < 26 else str(gi + 1)
-            for sn, r in enumerate(members, 1):
-                rr = dict(r); rr['_group'] = 'Group ' + letter; rr['_sn'] = sn
-                ordered_rows.append(rr)
-        rows = ordered_rows
-        if 'group' not in keys:
-            keys = ['group'] + keys
-        sizes = [len(b) for b in buckets]
-        split_note = 'Split into %d balanced groups (%s) by average' % (
-            groups_n, '/'.join(str(x) for x in sizes))
 
     def header_for(k):
-        if k == 'group':
-            return 'Group'
         if k == 'sn':
             return 'S/N'
         if k == 'student':
@@ -675,10 +657,8 @@ def combine_export():
     from utils.numfmt import fmt_num as _n
 
     def value_for(k, r, i):
-        if k == 'group':
-            return r.get('_group', '')
         if k == 'sn':
-            return str(r.get('_sn', i))
+            return str(i)
         if k == 'student':
             return r['student']
         if k == 'class':
@@ -697,7 +677,24 @@ def combine_export():
         return ''
 
     headers = [header_for(k) for k in keys]
-    data_rows = [[value_for(k, r, i) for k in keys] for i, r in enumerate(rows, 1)]
+
+    def rows_to_data(subset):
+        return [[value_for(k, r, i) for k in keys] for i, r in enumerate(subset, 1)]
+
+    # Sections: one per balanced group when splitting, else a single unnamed
+    # section. Each group is exported on its own page(s)/sheet with S/N from 1.
+    split_note = None
+    if groups_n and groups_n >= 2:
+        buckets = _split_into_groups(rows, groups_n)
+        sections = []
+        for gi, members in enumerate(buckets):
+            letter = chr(ord('A') + gi) if gi < 26 else str(gi + 1)
+            sections.append(('GROUP ' + letter, rows_to_data(members)))
+        split_note = 'Split into %d balanced groups (%s) by average' % (
+            groups_n, '/'.join(str(len(b)) for b in buckets))
+    else:
+        sections = [(None, rows_to_data(rows))]
+    data_rows = [dr for _t, drs in sections for dr in drs]   # flat (CSV/back-compat)
 
     term = db.session.get(Term, term_id) if term_id else None
     scope_names = ', '.join(m['label'] for m in ds['scope_meta']) or '—'
@@ -729,9 +726,11 @@ def combine_export():
     for (idx, _sid), code in zip(subj_cols, codes):
         short_headers[idx] = code
 
+    # For PDF/image the section rows use the short-code headers; for spreadsheets
+    # and CSV keep the full names.
     if fmt in ('image', 'png'):
         pages = bx.combo_png_pages(short_headers, data_rows, title, subtitle, legend=legend,
-                                   logo_path=_lp, school_name=_sname)
+                                   logo_path=_lp, school_name=_sname, sections=sections)
         page = request.args.get('page', type=int) or 1
         page = max(1, min(page, len(pages)))
         suffix = '' if len(pages) == 1 else f'_p{page}'
@@ -739,19 +738,28 @@ def combine_export():
             'Content-Disposition': f'attachment; filename="subject_combination{suffix}.png"',
             'X-Total-Pages': str(len(pages)), 'Access-Control-Expose-Headers': 'X-Total-Pages'})
     if fmt in ('excel', 'xlsx'):
-        wb = bx.combo_xlsx(headers, data_rows, title, subtitle)
+        wb = bx.combo_xlsx(headers, data_rows, title, subtitle, sections=sections)
         return xlsx_response(wb, 'subject_combination.xlsx')
+    if fmt in ('word', 'docx'):
+        data = bx.combo_docx(short_headers, data_rows, title, subtitle, legend=legend,
+                             logo_path=_lp, school_name=_sname, sections=sections,
+                             numeric_from=_combo_numeric_from(keys))
+        return Response(data, mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                        headers={'Content-Disposition': 'attachment; filename="subject_combination.docx"'})
     if fmt == 'csv':
         import csv as _csv
         from io import StringIO
-        buf = StringIO(); w = _csv.writer(buf); w.writerow(headers)
-        for dr in data_rows:
-            w.writerow(dr)
+        buf = StringIO(); w = _csv.writer(buf)
+        multi = len(sections) > 1 or sections[0][0]
+        w.writerow((['Group'] if multi else []) + list(headers))
+        for sec_title, drs in sections:
+            for dr in drs:
+                w.writerow(([sec_title] if multi else []) + list(dr))
         return Response(buf.getvalue(), mimetype='text/csv', headers={
             'Content-Disposition': 'attachment; filename="subject_combination.csv"'})
     data = bx.combo_pdf(short_headers, data_rows, title, subtitle,
                         numeric_from=_combo_numeric_from(keys), legend=legend,
-                        logo_path=_lp, school_name=_sname)
+                        logo_path=_lp, school_name=_sname, sections=sections)
     return Response(data, mimetype='application/pdf', headers={
         'Content-Disposition': 'attachment; filename="subject_combination.pdf"'})
 

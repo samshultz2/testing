@@ -181,12 +181,17 @@ def _neutral():
 
 # Neutral RGB tuples for the Pillow (image) exports.
 _NEUTRAL_RGB = {
-    'header': (51, 65, 85),      # slate-700
+    'header': (51, 65, 85),      # slate-700  (title/heading text)
     'text': (15, 23, 42),        # slate-900
     'muted': (100, 116, 139),    # slate-500
-    'zebra': (241, 245, 249),    # slate-100
-    'line': (203, 213, 225),     # slate-300
+    'zebra': (245, 247, 250),    # very light row stripe
+    'line': (213, 219, 227),     # light gridline
     'white': (255, 255, 255),
+    # Print-friendly table header: a light fill with dark text + a rule, instead
+    # of a heavy dark band (saves toner and reads cleanly in black & white).
+    'head_bg': (233, 237, 242),
+    'head_fg': (15, 23, 42),
+    'rule': (148, 163, 184),
 }
 
 
@@ -828,26 +833,42 @@ def abbreviate_subjects(names):
 
 
 def combo_pdf(headers, data_rows, title, subtitle='', numeric_from=1, legend=None,
-              logo_path=None, school_name=None):
+              logo_path=None, school_name=None, sections=None):
     """Print-ready PDF of an arbitrary table (landscape A4). ``headers`` is a
     list of column titles; ``data_rows`` a list of equal-length string rows;
-    ``numeric_from`` is the first column index to centre (names stay left)."""
+    ``numeric_from`` is the first column index to centre (names stay left).
+
+    ``sections`` (optional) is a list of ``(section_title, rows)`` — each renders
+    on its own fresh page(s) with the masthead + a "… — TITLE" heading, so
+    groups land on separate sheets. The masthead shows on the first page of each
+    section only. Column widths adapt to content and fill the A4 width.
+    Colours are light/toner-friendly for printing."""
     from reportlab.lib.pagesizes import A4, landscape
     from reportlab.lib.units import mm
     from reportlab.lib import colors
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-    from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image)
+    from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle, Paragraph,
+                                    Spacer, Image, PageBreak, KeepTogether)
     from reportlab.lib.enums import TA_LEFT
     from utils.web_exports import pdf_escape
     from reportlab.pdfbase.pdfmetrics import stringWidth
 
+    if sections is None:
+        sections = [(None, data_rows)]
+    all_rows = [r for _t, rows in sections for r in rows]
+
     primary, accent, light, ink = _neutral()
+    # Print-friendly header: a light fill with dark bold text + a rule, instead
+    # of a heavy dark band (saves toner and reads cleanly in black & white).
+    head_bg = colors.HexColor('#E9EDF2')
+    head_fg = colors.HexColor('#0F172A')
+    rule = colors.HexColor('#94A3B8')
+    grid = colors.HexColor('#D5DBE3')
+    zebra = colors.HexColor('#F5F7FA')
     if school_name is None:
         school_name = _school_name()
     styles = getSampleStyleSheet()
     ncol = len(headers)
-    # Scale the body font to the column count so a slim table (short codes) is
-    # printed large and legible, and a very wide one still fits A4.
     if ncol <= 8:
         fs = 13
     elif ncol <= 10:
@@ -863,110 +884,121 @@ def combo_pdf(headers, data_rows, title, subtitle='', numeric_from=1, legend=Non
     h = ParagraphStyle('h', parent=styles['Title'], fontSize=17, textColor=primary, spaceAfter=2, alignment=TA_LEFT)
     sub = ParagraphStyle('sub', parent=styles['Normal'], fontSize=9.5, textColor=colors.HexColor('#6B7A74'))
     cell = ParagraphStyle('c', parent=styles['Normal'], fontSize=fs, leading=fs + 1.5)
+    cellc = ParagraphStyle('cc', parent=cell, alignment=1)
     headp = ParagraphStyle('hp', parent=styles['Normal'], fontSize=fs, leading=fs + 1.5,
-                           textColor=colors.white, fontName='Helvetica-Bold', alignment=1)
+                           textColor=head_fg, fontName='Helvetica-Bold', alignment=1)
     keyst = ParagraphStyle('key', parent=styles['Normal'], fontSize=8.5, leading=11,
                            textColor=colors.HexColor('#44524C'))
 
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=landscape(A4), topMargin=10 * mm, bottomMargin=10 * mm,
+    doc = SimpleDocTemplate(buf, pagesize=landscape(A4), topMargin=10 * mm, bottomMargin=12 * mm,
                             leftMargin=8 * mm, rightMargin=8 * mm, title=title or 'Results')
     avail = landscape(A4)[0] - 16 * mm
 
-    # Masthead: school logo (left) beside the school name + heading.
-    heading_cells = []
-    if school_name:
-        heading_cells.append(Paragraph(pdf_escape(school_name), schoolst))
-    heading_cells.append(Paragraph(pdf_escape(title or 'Results'), h))
-    if subtitle:
-        heading_cells.append(Paragraph(pdf_escape(subtitle), sub))
-    logo_flowable = None
-    if logo_path:
+    # Column widths: each column tight to its content; the leftover width is
+    # given to the flexible name column so the table fills A4 without padding
+    # out the numeric columns (bootstrap-grid style). Shrinks to fit if wide.
+    nat = []
+    for j in range(ncol):
+        w = stringWidth(str(headers[j]), 'Helvetica-Bold', fs)
+        for r in all_rows:
+            if j < len(r):
+                w = max(w, stringWidth(str(r[j]), 'Helvetica', fs))
+        nat.append(w + 6 * mm)
+    tot = sum(nat) or 1
+    flex = 1 if ncol > 1 else 0            # the Student column absorbs slack
+    if tot < avail:
+        widths = list(nat); widths[flex] += (avail - tot)
+    else:
+        widths = [w * (avail / tot) for w in nat]
+
+    def logo_flowable():
+        if not logo_path:
+            return None
         try:
             from PIL import Image as _PILImage
             iw, ih = _PILImage.open(logo_path).size
             lw = 20 * mm
             lh = lw * (ih / iw) if iw else 20 * mm
-            logo_flowable = Image(logo_path, width=lw, height=min(lh, 22 * mm))
+            return Image(logo_path, width=lw, height=min(lh, 22 * mm))
         except Exception:
-            logo_flowable = None
-    if logo_flowable is not None:
-        mast = Table([[logo_flowable, heading_cells]], colWidths=[24 * mm, avail - 24 * mm])
-        mast.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                                  ('LEFTPADDING', (0, 0), (-1, -1), 0),
-                                  ('RIGHTPADDING', (0, 0), (-1, -1), 0)]))
-        elems = [mast, Spacer(1, 6)]
-    else:
-        elems = list(heading_cells) + [Spacer(1, 5)]
+            return None
 
-    head = [Paragraph(pdf_escape(str(x)), headp) for x in headers]
-    data = [head]
-    for r in data_rows:
-        line = []
-        for j, v in enumerate(r):
-            if j == 0 or (numeric_from is not None and j < numeric_from):
-                line.append(Paragraph(pdf_escape(str(v)), cell))
-            else:
-                line.append(str(v))
-        data.append(line)
+    def masthead(sec_title):
+        heading_text = (title or 'Results') + (' — ' + sec_title if sec_title else '')
+        cells = []
+        if school_name:
+            cells.append(Paragraph(pdf_escape(school_name), schoolst))
+        cells.append(Paragraph(pdf_escape(heading_text), h))
+        if subtitle:
+            cells.append(Paragraph(pdf_escape(subtitle), sub))
+        lg = logo_flowable()
+        if lg is not None:
+            mast = Table([[lg, cells]], colWidths=[24 * mm, avail - 24 * mm])
+            mast.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                                      ('LEFTPADDING', (0, 0), (-1, -1), 0),
+                                      ('RIGHTPADDING', (0, 0), (-1, -1), 0)]))
+            return [mast, Spacer(1, 6)]
+        return list(cells) + [Spacer(1, 5)]
 
-    # S/N sized to its digits (never wraps); name column takes the remainder so
-    # full names fit; the rest (short subject codes) share what's left.
-    if ncol > 1:
-        max_sn = max([stringWidth('S/N', 'Helvetica-Bold', fs)]
-                     + [stringWidth(str(r[0]), 'Helvetica', fs) for r in data_rows] or [0])
-        sn_w = min(max_sn + 6 * mm, 20 * mm)
-    else:
-        sn_w = 0
-    rest = max(ncol - 2, 1)
-    # Give subject/meta columns a modest share; the name column gets the rest.
-    other_w = max(11 * mm, min(20 * mm, (avail - sn_w) * 0.55 / rest))
-    name_w = max(45 * mm, avail - sn_w - other_w * rest)
-    # If that overshoots the page, pull width back from the name column first.
-    overflow = (sn_w + name_w + other_w * rest) - avail
-    if overflow > 0:
-        name_w = max(35 * mm, name_w - overflow)
-    widths = []
-    for j in range(ncol):
-        if j == 0 and ncol > 1:
-            widths.append(sn_w)
-        elif j == 1:
-            widths.append(name_w)
-        else:
-            widths.append(other_w)
-    t = Table(data, colWidths=widths, repeatRows=1)
-    t.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), primary), ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-        ('FONTSIZE', (0, 0), (-1, -1), fs),
-        ('ALIGN', (max(numeric_from, 1), 0), (-1, -1), 'CENTER'),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#D5DED9')),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, light]),
-        ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3)]))
-    elems.append(t)
-    if legend:
-        parts = ' &nbsp;·&nbsp; '.join(f'<b>{pdf_escape(code)}</b> = {pdf_escape(full)}'
-                                       for code, full in legend)
-        elems.append(Spacer(1, 6))
-        elems.append(Paragraph('Key: ' + parts, keyst))
+    def make_table(rows):
+        data = [[Paragraph(pdf_escape(str(x)), headp) for x in headers]]
+        for r in rows:
+            line = []
+            for j, v in enumerate(r):
+                if j == 0 or (numeric_from is not None and j < numeric_from):
+                    line.append(Paragraph(pdf_escape(str(v)), cell))
+                else:
+                    line.append(Paragraph(pdf_escape(str(v)), cellc))
+            data.append(line)
+        t = Table(data, colWidths=widths, repeatRows=1)
+        t.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), head_bg),
+            ('LINEBELOW', (0, 0), (-1, 0), 1.1, rule),
+            ('FONTSIZE', (0, 0), (-1, -1), fs),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('LINEBELOW', (0, 1), (-1, -1), 0.4, grid),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, zebra]),
+            ('BOX', (0, 0), (-1, -1), 0.5, grid),
+            ('TOPPADDING', (0, 0), (-1, -1), 4), ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('LEFTPADDING', (0, 0), (-1, -1), 5), ('RIGHTPADDING', (0, 0), (-1, -1), 5)]))
+        return t
+
+    elems = []
+    for si, (sec_title, rows) in enumerate(sections):
+        if si:
+            elems.append(PageBreak())
+        # Keep the masthead with the header row so a section never starts with a
+        # lone masthead at the foot of a page.
+        elems.append(KeepTogether(masthead(sec_title)))
+        elems.append(make_table(rows))
+        if legend and si == len(sections) - 1:
+            parts = ' &nbsp;·&nbsp; '.join(f'<b>{pdf_escape(code)}</b> = {pdf_escape(full)}'
+                                           for code, full in legend)
+            elems.append(Spacer(1, 6))
+            elems.append(Paragraph('Key: ' + parts, keyst))
     doc.build(elems)
     return buf.getvalue()
 
 
 def combo_png_pages(headers, data_rows, title, subtitle='', legend=None,
-                    logo_path=None, school_name=None):
-    """Render an arbitrary table as one or more **landscape-A4** PNG pages
-    (neutral slate styling, no green). The S/N column fits its digits, the name
-    column takes the remaining width so full names show, and the other columns
-    (short subject codes) share what's left. Rows that don't fit an A4 page
-    overflow onto further pages. Returns a list of PNG byte strings."""
+                    logo_path=None, school_name=None, sections=None):
+    """Render an arbitrary table as one or more **HD landscape-A4** PNG pages
+    (print-friendly light styling). Column widths adapt to their content and
+    fill the page width. ``sections`` (optional) is a list of
+    ``(section_title, rows)`` — each group starts on a fresh page with the
+    masthead + a "… — TITLE" heading, and the masthead shows only on the first
+    page of each group. Returns a list of PNG byte strings."""
     from PIL import Image, ImageDraw, ImageFont
     S = 2                                   # supersample, downscaled on save
-    DPI = 150
-    PW = int(round(297 / 25.4 * DPI))       # landscape-A4 width  px (~1754)
-    PH = int(round(210 / 25.4 * DPI))       # landscape-A4 height px (~1240)
+    DPI = 200                               # HD
+    PW = int(round(297 / 25.4 * DPI))       # landscape-A4 width  px (~2339)
+    PH = int(round(210 / 25.4 * DPI))       # landscape-A4 height px (~1654)
     C = _NEUTRAL_RGB
     ncol = len(headers)
+    if sections is None:
+        sections = [(None, data_rows)]
+    all_rows = [r for _t, rows in sections for r in rows]
     if school_name is None:
         school_name = _school_name()
     logo_im = None
@@ -983,7 +1015,6 @@ def combo_png_pages(headers, data_rows, title, subtitle='', legend=None,
         except Exception:
             return ImageFont.load_default()
 
-    # Body font scales with the column count so slim tables print large.
     if ncol <= 8:
         fs = 22
     elif ncol <= 10:
@@ -1012,42 +1043,29 @@ def combo_png_pages(headers, data_rows, title, subtitle='', legend=None,
 
     margin = 34 * S
     avail = PW * S - 2 * margin
-    cpx, cpy = int(8 * S), int(6 * S)
+    cpx, cpy = int(9 * S), int(7 * S)
 
-    def _natw(j, f_body, f_head):
-        w = tw(headers[j], f_head)
-        for r in data_rows:
-            w = max(w, tw(r[j] if j < len(r) else '', f_body))
-        return w + 2 * cpx
-
-    # Fit the body font, S/N and subject columns to content; the name column
-    # takes whatever remains so full names are shown. Shrink the font only if the
-    # name column would be squeezed below a usable width.
-    while True:
-        body, body_b = fnt(fs), fnt(fs, True)
-        sn_w = _natw(0, body, body_b) if ncol > 1 else 0
-        rest = max(ncol - 2, 1)
-        others = [min(max(_natw(j, body, body_b), int(34 * S)), int(150 * S)) for j in range(2, ncol)]
-        name_w = avail - sn_w - sum(others)
-        if name_w >= int(200 * S) or fs <= 12:
-            break
-        fs -= 1
-    if name_w < int(120 * S):                    # extreme case: clamp so it still renders
-        name_w = int(120 * S)
-    col_w = []
-    oi = 0
+    # Each column tight to its content; the flexible name column absorbs the
+    # leftover so the table fills the page width without padding out numbers.
+    nat = []
     for j in range(ncol):
-        if j == 0 and ncol > 1:
-            col_w.append(sn_w)
-        elif j == 1:
-            col_w.append(name_w)
-        else:
-            col_w.append(others[oi]); oi += 1
+        w = tw(headers[j], body_b)
+        for r in all_rows:
+            w = max(w, tw(r[j] if j < len(r) else '', body))
+        nat.append(w + 2 * cpx)
+    tot = sum(nat) or 1
+    flex = 1 if ncol > 1 else 0
+    if tot < avail:
+        col_w = list(nat); col_w[flex] += (avail - tot)
+    else:
+        col_w = [int(w * (avail / tot)) for w in nat]
+    col_w = [int(w) for w in col_w]
     table_w = sum(col_w)
+
     line_h = tmp.textbbox((0, 0), "Ay", font=body)[3]
     row_h = line_h + 2 * cpy
     header_h = row_h + int(4 * S)
-    # Masthead: logo at left, school name + heading to its right, then subtitle.
+
     logo_box = int(64 * S)
     logo_draw = None
     if logo_im is not None:
@@ -1056,34 +1074,26 @@ def combo_png_pages(headers, data_rows, title, subtitle='', legend=None,
         logo_draw = logo_im.resize((max(1, int(lw * scale)), max(1, int(lh * scale))), Image.LANCZOS)
     text_x = margin + (logo_box + int(14 * S) if logo_draw is not None else 0)
     mast_lines = int(34 * S) + (int(20 * S) if school_name else 0) + (int(22 * S) if subtitle else 0)
-    title_h = max(mast_lines, logo_box if logo_draw is not None else 0)
+    mast_h = max(mast_lines, logo_box if logo_draw is not None else 0)
 
-    top = margin + title_h
-    bottom_reserve = margin + int(24 * S)          # page footer
-    rows_area = PH * S - top - header_h - bottom_reserve
-    per_page = max(1, int(rows_area // row_h))
+    top_gap = int(12 * S)                          # top margin on masthead-free pages
+    bottom_reserve = margin + int(24 * S)
+    per_first = max(1, int((PH * S - (margin + mast_h) - header_h - bottom_reserve) // row_h))
+    per_rest = max(1, int((PH * S - (margin + top_gap) - header_h - bottom_reserve) // row_h))
 
-    # Legend ("Key: LIT = Literature …") wrapped to the table width.
-    key_lines = []
-    if legend:
-        line = 'Key:  '
-        for code, full in legend:
-            piece = '%s = %s' % (code, full)
-            trial = line + piece + '     '
-            if tw(trial, key_f) > table_w and line != 'Key:  ':
-                key_lines.append(line.rstrip()); line = piece + '     '
-            else:
-                line = trial
-        if line.strip():
-            key_lines.append(line.rstrip())
-    key_line_h = tmp.textbbox((0, 0), "Ay", font=key_f)[3] + int(5 * S)
+    # Build the page plan: each section starts fresh; masthead on its 1st page.
+    plan = []      # (sec_title, chunk, draw_mast)
+    for sec_title, rows in sections:
+        if not rows:
+            plan.append((sec_title, [], True)); continue
+        i, first = 0, True
+        while i < len(rows):
+            cap = per_first if first else per_rest
+            plan.append((sec_title, rows[i:i + cap], first))
+            i += cap; first = False
+    n_pages = len(plan)
 
-    chunks = [data_rows[i:i + per_page] for i in range(0, len(data_rows), per_page)] or [[]]
-    n_pages = len(chunks)
-    pages = []
-    for pi, chunk in enumerate(chunks):
-        img = Image.new('RGB', (PW * S, PH * S), C['white'])
-        d = ImageDraw.Draw(img)
+    def draw_masthead(d, img, sec_title):
         if logo_draw is not None:
             img.paste(logo_draw, (margin, margin), logo_draw)
         ty = margin
@@ -1091,18 +1101,29 @@ def combo_png_pages(headers, data_rows, title, subtitle='', legend=None,
         if school_name:
             d.text((text_x, ty), fit(school_name, sub_f, text_avail), fill=C['muted'], font=sub_f)
             ty += int(20 * S)
-        d.text((text_x, ty), fit(title or 'Results', title_f, text_avail), fill=C['header'], font=title_f)
+        heading = (title or 'Results') + (' — ' + sec_title if sec_title else '')
+        d.text((text_x, ty), fit(heading, title_f, text_avail), fill=C['header'], font=title_f)
         ty += int(34 * S)
         if subtitle:
             d.text((text_x, ty), fit(subtitle, sub_f, text_avail), fill=C['muted'], font=sub_f)
 
-        y0 = top
-        d.rectangle([margin, y0, margin + table_w, y0 + header_h], fill=C['header'])
+    pages = []
+    for pi, (sec_title, chunk, draw_mast) in enumerate(plan):
+        img = Image.new('RGB', (PW * S, PH * S), C['white'])
+        d = ImageDraw.Draw(img)
+        if draw_mast:
+            draw_masthead(d, img, sec_title)
+            y0 = margin + mast_h
+        else:
+            y0 = margin + top_gap
+        # header band — light fill, dark text, accent rule beneath
+        d.rectangle([margin, y0, margin + table_w, y0 + header_h], fill=C['head_bg'])
         x = margin
         for j in range(ncol):
             d.text((x + cpx, y0 + (header_h - line_h) // 2), fit(headers[j], body_b, col_w[j] - 2 * cpx),
-                   fill=C['white'], font=body_b)
+                   fill=C['head_fg'], font=body_b)
             x += col_w[j]
+        d.rectangle([margin, y0 + header_h - max(2, S), margin + table_w, y0 + header_h], fill=C['rule'])
         y = y0 + header_h
         for i, r in enumerate(chunk):
             if i % 2:
@@ -1123,27 +1144,15 @@ def combo_png_pages(headers, data_rows, title, subtitle='', legend=None,
             x += col_w[j]
             d.line([x, y0, x, y], fill=C['line'], width=1)
 
-        # Legend on the last page if it fits; otherwise it gets its own page below.
-        if pi == n_pages - 1 and key_lines and (y + int(10 * S) + len(key_lines) * key_line_h) < PH * S - margin:
-            ky = y + int(10 * S)
-            for kl in key_lines:
-                d.text((margin, ky), kl, fill=C['muted'], font=key_f); ky += key_line_h
-            key_lines = []
-
-        d.text((PW * S - margin - int(160 * S), PH * S - margin), 'Page %d of %d' % (pi + 1, n_pages),
+        d.text((PW * S - margin - int(200 * S), PH * S - margin), 'Page %d of %d' % (pi + 1, n_pages),
                fill=C['muted'], font=key_f)
-        out = io.BytesIO()
-        img.resize((PW, PH), Image.LANCZOS).save(out, format='PNG')
-        pages.append(out.getvalue())
-
-    # Legend didn't fit on the last data page — render it on a trailing A4 page.
-    if key_lines:
-        img = Image.new('RGB', (PW * S, PH * S), C['white'])
-        d = ImageDraw.Draw(img)
-        d.text((margin, margin), 'Key', fill=C['header'], font=title_f)
-        ky = margin + int(40 * S)
-        for kl in key_lines:
-            d.text((margin, ky), kl, fill=C['text'], font=key_f); ky += key_line_h
+        if legend and pi == n_pages - 1:
+            ky = y + int(12 * S)
+            line = 'Key:  '
+            for code, full in legend:
+                line += '%s = %s     ' % (code, full)
+            if ky + key_f.size < PH * S - margin:
+                d.text((margin, ky), fit(line.rstrip(), key_f, table_w), fill=C['muted'], font=key_f)
         out = io.BytesIO()
         img.resize((PW, PH), Image.LANCZOS).save(out, format='PNG')
         pages.append(out.getvalue())
@@ -1165,21 +1174,114 @@ def zip_pngs(pages, base='page'):
     return buf.getvalue()
 
 
-def combo_xlsx(headers, data_rows, title, subtitle=''):
+def combo_xlsx(headers, data_rows, title, subtitle='', sections=None):
+    """Workbook of the combination table. When ``sections`` (list of
+    ``(section_title, rows)``) is given, each group gets its own worksheet
+    (Group A, Group B, …); otherwise a single sheet is used."""
     from openpyxl import Workbook
     from openpyxl.styles import Font, Alignment, PatternFill
-    wb = Workbook(); ws = wb.active; ws.title = 'Combination'
-    if subtitle:
-        ws.append([subtitle]); ws.append([])
-    ws.append(list(headers))
-    hrow = ws.max_row
-    hf, fill, ctr = Font(bold=True, color='FFFFFF'), PatternFill('solid', fgColor='0D6A4E'), Alignment(horizontal='center')
-    for c in range(1, len(headers) + 1):
-        cell = ws.cell(row=hrow, column=c); cell.font = hf; cell.fill = fill; cell.alignment = ctr
-    for r in data_rows:
-        ws.append(list(r))
-    ws.freeze_panes = ws.cell(row=hrow + 1, column=1)
-    for col in ws.columns:
-        width = max((len(str(c.value)) for c in col if c.value is not None), default=8)
-        ws.column_dimensions[col[0].column_letter].width = min(max(width + 2, 8), 34)
+    if sections is None:
+        sections = [(None, data_rows)]
+    wb = Workbook()
+    hf = Font(bold=True, color='0F172A')
+    fill = PatternFill('solid', fgColor='E9EDF2')      # print-friendly light header
+    ctr = Alignment(horizontal='center')
+
+    def _sheet(ws, sec_title, rows):
+        if subtitle:
+            ws.append([subtitle]); ws.append([])
+        ws.append(list(headers))
+        hrow = ws.max_row
+        for c in range(1, len(headers) + 1):
+            cell = ws.cell(row=hrow, column=c); cell.font = hf; cell.fill = fill; cell.alignment = ctr
+        for r in rows:
+            ws.append(list(r))
+        ws.freeze_panes = ws.cell(row=hrow + 1, column=1)
+        for col in ws.columns:
+            width = max((len(str(c.value)) for c in col if c.value is not None), default=8)
+            ws.column_dimensions[col[0].column_letter].width = min(max(width + 2, 8), 34)
+
+    first = True
+    for si, (sec_title, rows) in enumerate(sections):
+        ws = wb.active if first else wb.create_sheet()
+        ws.title = (sec_title or 'Combination')[:31]
+        _sheet(ws, sec_title, rows)
+        first = False
     return wb
+
+
+def combo_docx(headers, data_rows, title, subtitle='', legend=None,
+               logo_path=None, school_name=None, sections=None, numeric_from=1):
+    """Word (.docx) of the combination table. Each ``sections`` group starts on
+    a new page with the masthead + a "… — TITLE" heading; the masthead shows
+    once per group. Returns the raw .docx bytes."""
+    from docx import Document
+    from docx.shared import Pt, Cm, RGBColor
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.enum.table import WD_TABLE_ALIGNMENT
+    from docx.oxml.ns import nsdecls
+    from docx.oxml import parse_xml
+    from docx.enum.section import WD_ORIENT
+    import os as _os
+    import io as _io
+
+    if sections is None:
+        sections = [(None, data_rows)]
+    if school_name is None:
+        school_name = _school_name()
+    navy = RGBColor(0x33, 0x41, 0x55); muted = RGBColor(0x64, 0x74, 0x8B)
+
+    doc = Document()
+    sec = doc.sections[0]
+    sec.orientation = WD_ORIENT.LANDSCAPE
+    sec.page_width, sec.page_height = sec.page_height, sec.page_width
+    sec.left_margin = sec.right_margin = Cm(1.0); sec.top_margin = sec.bottom_margin = Cm(1.0)
+
+    def masthead(sec_title):
+        if logo_path and _os.path.exists(logo_path):
+            try:
+                p = doc.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                p.add_run().add_picture(logo_path, height=Cm(1.4))
+            except Exception:
+                pass
+        if school_name:
+            sp = doc.add_paragraph(); r = sp.add_run(school_name)
+            r.bold = True; r.font.size = Pt(11); r.font.color.rgb = muted
+        hp = doc.add_paragraph()
+        hr = hp.add_run((title or 'Results') + (' — ' + sec_title if sec_title else ''))
+        hr.bold = True; hr.font.size = Pt(16); hr.font.color.rgb = navy
+        if subtitle:
+            sb = doc.add_paragraph(); sr = sb.add_run(subtitle)
+            sr.font.size = Pt(9); sr.font.color.rgb = muted
+
+    def build_table(rows):
+        t = doc.add_table(rows=1, cols=len(headers)); t.style = 'Table Grid'
+        t.alignment = WD_TABLE_ALIGNMENT.CENTER
+        for i, hlabel in enumerate(headers):
+            cell = t.rows[0].cells[i]; cell.text = str(hlabel)
+            pr = cell.paragraphs[0]; pr.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            if pr.runs:
+                pr.runs[0].bold = True; pr.runs[0].font.size = Pt(9)
+            cell._tc.get_or_add_tcPr().append(parse_xml(f'<w:shd {nsdecls("w")} w:fill="E9EDF2"/>'))
+        for r in rows:
+            cells = t.add_row().cells
+            for i in range(len(headers)):
+                v = '' if i >= len(r) else str(r[i])
+                cells[i].text = v
+                pr = cells[i].paragraphs[0]
+                pr.alignment = (WD_ALIGN_PARAGRAPH.LEFT if (i == 0 or i < numeric_from)
+                                else WD_ALIGN_PARAGRAPH.CENTER)
+                if pr.runs:
+                    pr.runs[0].font.size = Pt(9)
+
+    for si, (sec_title, rows) in enumerate(sections):
+        if si:
+            doc.add_page_break()
+        masthead(sec_title)
+        build_table(rows)
+    if legend:
+        lp = doc.add_paragraph()
+        lr = lp.add_run('Key:  ' + '   '.join('%s = %s' % (c, f) for c, f in legend))
+        lr.font.size = Pt(8); lr.font.color.rgb = muted
+
+    out = _io.BytesIO(); doc.save(out); return out.getvalue()

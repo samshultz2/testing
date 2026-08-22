@@ -2311,6 +2311,7 @@ function Combine({ d, notify }) {
                 <button type="button" className="btn btn-danger btn-sm" onClick={() => doExport('pdf')}><i aria-hidden="true" className="fas fa-file-pdf" /> PDF</button>
                 <button type="button" className="btn btn-primary btn-sm" onClick={() => doExport('image')}><i aria-hidden="true" className="fas fa-file-image" /> Image</button>
                 <button type="button" className="btn btn-success btn-sm" onClick={() => doExport('excel')}><i aria-hidden="true" className="fas fa-file-excel" /> Excel</button>
+                <button type="button" className="btn btn-primary btn-sm" onClick={() => doExport('word')}><i aria-hidden="true" className="fas fa-file-word" /> Word</button>
                 <button type="button" className="btn btn-secondary btn-sm" onClick={() => doExport('csv')}>CSV</button>
                 <button type="button" className="btn btn-link btn-sm" onClick={() => setShowExport(false)}>Cancel</button>
               </div>

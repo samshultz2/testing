@@ -41,7 +41,7 @@ def test_combo_png_pages_are_a4_and_paginate():
     pages = combo_png_pages(headers, rows, 'Broadsheet', 'sub')
     assert len(pages) >= 2                                  # 60 rows overflow one A4
     im = Image.open(io.BytesIO(pages[0]))
-    assert im.size == (1754, 1240)                          # landscape A4 @ 150 DPI
+    assert im.size == (2339, 1654)                          # landscape A4 @ 200 DPI (HD)
     assert all(p[:4] == b'\x89PNG' for p in pages)
     z = zip_pngs(pages, 'bs')
     assert z[:2] == b'PK'                                    # valid zip archive
@@ -49,6 +49,19 @@ def test_combo_png_pages_are_a4_and_paginate():
     # A short table stays a single page.
     one = combo_png_pages(headers, rows[:5], 'Broadsheet', 'sub')
     assert len(one) == 1
+
+
+def test_combo_sections_split_onto_separate_pages():
+    from utils.broadsheet_export import combo_png_pages, combo_pdf
+    headers = ['S/N', 'Student', 'Avg']
+    mk = lambda n: [[str(i), 'S%d' % i, '80'] for i in range(1, n + 1)]
+    sections = [('GROUP A', mk(3)), ('GROUP B', mk(3))]
+    pages = combo_png_pages(headers, [r for _t, rs in sections for r in rs],
+                            'Combo', 'sub', sections=sections)
+    assert len(pages) == 2                                  # one page per small group
+    pdf = combo_pdf(headers, [r for _t, rs in sections for r in rs],
+                    'Combo', 'sub', sections=sections)
+    assert pdf[:4] == b'%PDF'
 
 
 def test_download_formats_and_stream_filter(app):
