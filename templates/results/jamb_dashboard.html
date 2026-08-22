@@ -1164,18 +1164,14 @@ function generateExport() {
         buildJambStudentsExport();
     }
 
-    // Summary — computed from the filtered rows, with the active range noted.
+    // Summary — computed from the filtered rows (the filter is simply applied;
+    // the export doesn't spell out what range was used).
     if (showSummary) {
         const scores = rows.map(r => Number(r.total_score) || 0);
         const avg = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length * 10) / 10;
         const hi = Math.max.apply(null, scores), lo = Math.min.apply(null, scores);
-        const minEl = document.getElementById('expMinScore'), maxEl = document.getElementById('expMaxScore');
-        let range = '';
-        if (minEl && minEl.value !== '') range += ` &ge; ${minEl.value}`;
-        if (maxEl && maxEl.value !== '') range += ` &le; ${maxEl.value}`;
         document.getElementById('exportSummary').innerHTML =
-            `Students: <strong>${rows.length}</strong> | Avg: <strong>${avg}</strong> | High: <strong>${hi}</strong> | Low: <strong>${lo}</strong>` +
-            (range ? ` | Score${range}` : '');
+            `Students: <strong>${rows.length}</strong> | Avg: <strong>${avg}</strong> | High: <strong>${hi}</strong> | Low: <strong>${lo}</strong>`;
         document.getElementById('exportSummary').style.display = 'block';
     } else {
         document.getElementById('exportSummary').style.display = 'none';
