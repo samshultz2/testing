@@ -391,7 +391,8 @@ def attendance_alerts():
         class_ids = [c.id for c in accessible]
         enrollments = StudentEnrollment.query.filter(
             StudentEnrollment.class_arm_assignment_id.in_(class_ids or [-1]),
-            StudentEnrollment.is_active == True
+            StudentEnrollment.is_active == True,
+            StudentEnrollment.student.has(is_active=True)   # exclude departed
         ).all() if class_ids else []
         
         # Get weeks for this term

@@ -37,6 +37,7 @@ def absentee_student_ids(caa_ids, target_date):
             .join(StudentEnrollment, Attendance.enrollment_id == StudentEnrollment.id)
             .filter(StudentEnrollment.class_arm_assignment_id.in_(caa_ids),
                     StudentEnrollment.is_active == True,          # noqa: E712
+                    StudentEnrollment.student.has(is_active=True),  # exclude departed
                     Attendance.date == target_date)
             .all())
     ids = []
@@ -60,7 +61,8 @@ def _low_attendance_student_ids(term, caa_ids, threshold):
     week_ids = [w.id for w in Week.query.filter_by(term_id=term.id).all()]
     enrollments = (StudentEnrollment.query
                    .filter(StudentEnrollment.class_arm_assignment_id.in_(caa_ids),
-                           StudentEnrollment.is_active == True)   # noqa: E712
+                           StudentEnrollment.is_active == True,   # noqa: E712
+                           StudentEnrollment.student.has(is_active=True))  # exclude departed
                    .all())
     present = {e.id: 0 for e in enrollments}
     if week_ids:

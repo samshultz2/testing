@@ -40,7 +40,8 @@ def _student_pct_map(caa_ids, week_ids, school_days_count):
     """{enrollment_id: (present_sessions, student_id, caa_id)} for a set of classes."""
     enrollments = (StudentEnrollment.query
                    .filter(StudentEnrollment.class_arm_assignment_id.in_(caa_ids or [-1]),
-                           StudentEnrollment.is_active == True)  # noqa: E712
+                           StudentEnrollment.is_active == True,  # noqa: E712
+                           StudentEnrollment.student.has(is_active=True))  # exclude departed
                    .all())
     present = {e.id: 0 for e in enrollments}
     if week_ids:

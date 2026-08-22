@@ -31,7 +31,7 @@ def _active_enrollments(class_arm_assignment_id):
     ordered as a register (boys first then girls, each alphabetical by surname)."""
     return (StudentEnrollment.query
             .filter_by(class_arm_assignment_id=class_arm_assignment_id, is_active=True)
-            .join(Student)
+            .join(Student).filter(Student.is_active == True)   # exclude departed/deleted
             .options(joinedload(StudentEnrollment.student))
             .order_by(*roster_order())
             .all())

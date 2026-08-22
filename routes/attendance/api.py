@@ -111,7 +111,8 @@ def api_roster():
     hol = next((h for h in holidays if h.date == target), None)
     enrollments = (StudentEnrollment.query
                    .filter_by(class_arm_assignment_id=assignment_id, is_active=True)
-                   .join(Student).order_by(*roster_order()).all())
+                   .join(Student).filter(Student.is_active == True)  # noqa: E712  exclude departed
+                   .order_by(*roster_order()).all())
     existing = {a.enrollment_id: a for a in Attendance.query.filter(
         Attendance.enrollment_id.in_([e.id for e in enrollments] or [-1]),
         Attendance.date == target).all()}
@@ -164,8 +165,9 @@ def api_mark():
         reason = hol.reason if hol else 'weekend'
         return jsonify({'error': f'not a school day ({reason})'}), 400
 
-    enrollments = StudentEnrollment.query.filter_by(
-        class_arm_assignment_id=assignment_id, is_active=True).all()
+    enrollments = (StudentEnrollment.query.filter_by(
+        class_arm_assignment_id=assignment_id, is_active=True)
+        .join(Student).filter(Student.is_active == True).all())  # noqa: E712  exclude departed
     enroll_ids = [e.id for e in enrollments]
     valid = set(enroll_ids)
 
@@ -265,7 +267,8 @@ def api_week():
     days = _week_school_days(week, holidays)
     enrollments = (StudentEnrollment.query
                    .filter_by(class_arm_assignment_id=assignment_id, is_active=True)
-                   .join(Student).order_by(*roster_order()).all())
+                   .join(Student).filter(Student.is_active == True)  # noqa: E712  exclude departed
+                   .order_by(*roster_order()).all())
     recs = {}
     for r in Attendance.query.filter(
             Attendance.enrollment_id.in_([e.id for e in enrollments] or [-1]),
@@ -302,7 +305,8 @@ def api_week_mark():
     holidays = Holiday.query.filter_by(term_id=week.term_id).all()
     valid_days = {d.isoformat() for d in _week_school_days(week, holidays)}
     enroll_ids = {e.id for e in StudentEnrollment.query.filter_by(
-        class_arm_assignment_id=caa.id, is_active=True).all()}
+        class_arm_assignment_id=caa.id, is_active=True)
+        .join(Student).filter(Student.is_active == True).all()}  # noqa: E712  exclude departed
     existing = {(r.enrollment_id, r.date.isoformat()): r for r in Attendance.query.filter(
         Attendance.enrollment_id.in_(list(enroll_ids) or [-1]),
         Attendance.week_id == week.id).all()}
@@ -354,8 +358,9 @@ def api_copy_previous():
     prev, n = target - timedelta(days=1), 0
     while n < 10 and (prev.weekday() >= 5 or prev in holiday_dates):
         prev -= timedelta(days=1); n += 1
-    enrollments = StudentEnrollment.query.filter_by(
-        class_arm_assignment_id=caa.id, is_active=True).all()
+    enrollments = (StudentEnrollment.query.filter_by(
+        class_arm_assignment_id=caa.id, is_active=True)
+        .join(Student).filter(Student.is_active == True).all())  # noqa: E712  exclude departed
     prevmap = {a.enrollment_id: a for a in Attendance.query.filter(
         Attendance.enrollment_id.in_([e.id for e in enrollments] or [-1]),
         Attendance.date == prev).all()}
@@ -512,6 +517,7 @@ def api_report_alerts():
         enrollments = (StudentEnrollment.query
                        .filter(StudentEnrollment.class_arm_assignment_id.in_(list(class_by_id)),
                                StudentEnrollment.is_active == True)  # noqa: E712
+                       .join(Student).filter(Student.is_active == True)  # noqa: E712  exclude departed
                        .all())
         present_by_enrollment = {}
         for a in Attendance.query.filter(
