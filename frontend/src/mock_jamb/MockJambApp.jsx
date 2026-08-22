@@ -786,19 +786,19 @@ function buildExportNode(d, st, o) {
     const bg = i % 2 === 0 ? '#fff' : '#f8f9fa';
     const sc = scoreColor(r.total_score);
     tbody += `<tr style="background:${bg};">`;
-    if (o.rank) tbody += `<td style="padding:5px;text-align:center;font-weight:bold;">${r.rank}</td>`;
-    tbody += `<td style="padding:5px;font-size:10px;">${esc(r.student.full_name)}</td>`;
-    if (o.studentId) tbody += `<td style="padding:5px;font-size:9px;color:#666;">${esc(r.student.student_id)}</td>`;
-    tbody += `<td style="padding:5px;text-align:center;font-weight:bold;color:${sc};">${r.total_score}</td>`;
+    if (o.rank) tbody += `<td style="padding:7px 6px;text-align:center;font-weight:bold;font-size:18px;">${r.rank}</td>`;
+    tbody += `<td style="padding:7px 6px;font-size:18px;font-weight:500;">${esc(r.student.full_name)}</td>`;
+    if (o.studentId) tbody += `<td style="padding:7px 6px;font-size:13px;color:#666;">${esc(r.student.student_id)}</td>`;
+    tbody += `<td style="padding:7px 6px;text-align:center;font-weight:bold;font-size:18px;color:${sc};">${r.total_score}</td>`;
     // Per-subject cell (JAMB-style): short CAPITAL code above the score.
     if (o.subjects) {
       for (let k = 0; k < 4; k++) {
         const s = r.subjects[k];
-        if (s) tbody += `<td style="padding:5px;text-align:center;"><span style="font-size:8px;color:#666;font-weight:600;">${esc(s.code || String(s.name).substring(0, 3).toUpperCase())}</span><br><strong>${s.score}</strong></td>`;
-        else tbody += '<td style="padding:5px;text-align:center;color:#ccc;">-</td>';
+        if (s) tbody += `<td style="padding:7px 6px;text-align:center;"><span style="font-size:11px;color:#666;font-weight:600;">${esc(s.code || String(s.name).substring(0, 3).toUpperCase())}</span><br><strong style="font-size:17px;">${s.score}</strong></td>`;
+        else tbody += '<td style="padding:7px 6px;text-align:center;color:#ccc;font-size:16px;">-</td>';
       }
     }
-    if (o.level) tbody += `<td style="padding:5px;font-size:9px;text-align:center;">${esc(r.performance_level)}</td>`;
+    if (o.level) tbody += `<td style="padding:7px 6px;font-size:13px;text-align:center;">${esc(r.performance_level)}</td>`;
     tbody += '</tr>';
   });
 
@@ -811,8 +811,8 @@ function buildExportNode(d, st, o) {
 
   wrap.innerHTML = `<div style="padding:12px;background:white;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
     ${masthead(d.exam.display_name)}
-    <p style="text-align:center;color:#666;margin:0 0 10px 0;font-size:11px;">${summary}</p>
-    <table style="width:100%;border-collapse:collapse;font-size:11px;"><thead>${thead}</thead><tbody>${tbody}</tbody></table>
+    <p style="text-align:center;color:#666;margin:0 0 10px 0;font-size:13px;">${summary}</p>
+    <table style="width:100%;border-collapse:collapse;font-size:14px;"><thead>${thead}</thead><tbody>${tbody}</tbody></table>
     ${o.distribution ? `<div style="margin-top:10px;padding:8px;background:#f8f9fa;border-radius:6px;">${distHtml}</div>` : ''}
     <p style="text-align:center;margin:8px 0 0 0;color:#999;font-size:9px;">${footer}</p>
   </div>`;
