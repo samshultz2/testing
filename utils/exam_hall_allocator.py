@@ -229,16 +229,52 @@ def _roundrobin_seq(n, counts, group_class):
 
 
 def _seat_layout_diagonal(n, rows, cols, counts, group_class):
-    """Deterministic, count-preserving fallback: fill the two colours of a
-    checkerboard (cells of one colour are never orthogonally adjacent) with the
-    class-spread sequence, so same-class seats rarely touch. Good on its own and
-    a warm start for CP-SAT."""
-    seq = _roundrobin_seq(n, counts, group_class)
-    cells = [(i // cols, i % cols) for i in range(n)]          # used cells, row-major
-    cells.sort(key=lambda rc: ((rc[0] + rc[1]) % 2, rc[0], rc[1]))   # checkerboard
+    """Deterministic, count-preserving layout that concentrates each CLASS on one
+    colour of a checkerboard. Cells of a colour are never orthogonally adjacent,
+    so every neighbour pair is opposite-colour: if each class sits on a single
+    colour, no two same-class candidates touch. For two balanced classes this is
+    a *guaranteed* perfect alternation (SSS1/SSS2/SSS1…); with more classes or a
+    dominant class it packs them as disjointly as possible. Also a warm start for
+    CP-SAT. Arms of a class are then round-robined across that class's seats."""
+    from collections import defaultdict
+    used = list(range(n))                                      # first n cells, row-major
+    white = [i for i in used if ((i // cols) + (i % cols)) % 2 == 0]
+    black = [i for i in used if ((i // cols) + (i % cols)) % 2 == 1]
+    free = {0: white, 1: black}
+
+    classes = sorted(set(group_class),
+                     key=lambda c: sum(counts[g] for g in range(len(counts))
+                                       if group_class[g] == c), reverse=True)
+    cell_class = [None] * (rows * cols)
+    for c in classes:
+        need = sum(counts[g] for g in range(len(counts)) if group_class[g] == c)
+        primary = 0 if len(free[0]) >= len(free[1]) else 1     # the emptier... fullest colour
+        for color in (primary, 1 - primary):
+            take = min(need, len(free[color]))
+            for _ in range(take):
+                cell_class[free[color].pop()] = c
+            need -= take
+            if need == 0:
+                break
+
+    # Within each class's seats, spread its arms round-robin.
+    cells_by_class = defaultdict(list)
+    for i in used:
+        cells_by_class[cell_class[i]].append(i)
     out = [None] * (rows * cols)
-    for i, (r, c) in enumerate(cells):
-        out[r * cols + c] = seq[i]
+    for c, cells in cells_by_class.items():
+        gs = [g for g in range(len(counts)) if group_class[g] == c]
+        rem = {g: counts[g] for g in gs}
+        seq = []
+        while len(seq) < len(cells):
+            progressed = False
+            for g in sorted(gs, key=lambda g: rem[g], reverse=True):
+                if rem[g] > 0:
+                    seq.append(g); rem[g] -= 1; progressed = True
+            if not progressed:
+                break
+        for cell, g in zip(cells, seq):
+            out[cell] = g
     return out
 
 

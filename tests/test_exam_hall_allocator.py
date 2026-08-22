@@ -154,3 +154,11 @@ def test_sss1_sits_between_sss2():
     row = [c['student']['class_name'] for c in res['rows'][0] if c]
     assert row == ['SSS2', 'SSS1', 'SSS2']
     assert res['conflicts'] == 0
+
+
+def test_two_balanced_classes_alternate_without_solver():
+    # The core promise: two balanced classes -> perfect alternation (SSS2 between
+    # SSS1 and vice versa), guaranteed by the deterministic layout alone.
+    students = _cls_students({('SSS1', 'A'): 30, ('SSS2', 'A'): 30})
+    res = seat_hall(students, cols=6, optimize=False)   # deterministic, no CP-SAT
+    assert res['conflicts'] == 0
