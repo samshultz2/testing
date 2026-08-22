@@ -872,12 +872,14 @@ def combo_pdf(headers, data_rows, title, subtitle='', numeric_from=1, legend=Non
     if body_fs:
         fs = body_fs
     elif ncol <= 8:
-        fs = 13
+        fs = 18
     elif ncol <= 10:
-        fs = 12
-    elif ncol <= 14:
+        fs = 15
+    elif ncol <= 12:
+        fs = 13
+    elif ncol <= 16:
         fs = 11
-    elif ncol <= 18:
+    elif ncol <= 20:
         fs = 9.5
     else:
         fs = 8.5
@@ -984,7 +986,7 @@ def combo_pdf(headers, data_rows, title, subtitle='', numeric_from=1, legend=Non
 
 
 def combo_png_pages(headers, data_rows, title, subtitle='', legend=None,
-                    logo_path=None, school_name=None, sections=None):
+                    logo_path=None, school_name=None, sections=None, body_fs=None):
     """Render an arbitrary table as one or more **HD landscape-A4** PNG pages
     (print-friendly light styling). Column widths adapt to their content and
     fill the page width. ``sections`` (optional) is a list of
@@ -1017,16 +1019,20 @@ def combo_png_pages(headers, data_rows, title, subtitle='', legend=None,
         except Exception:
             return ImageFont.load_default()
 
-    if ncol <= 8:
-        fs = 22
+    if body_fs:
+        fs = int(round(body_fs * 22 / 13))     # match PDF points → image scale
+    elif ncol <= 8:
+        fs = 30
     elif ncol <= 10:
-        fs = 20
-    elif ncol <= 14:
-        fs = 17
-    elif ncol <= 18:
-        fs = 15
+        fs = 25
+    elif ncol <= 12:
+        fs = 22
+    elif ncol <= 16:
+        fs = 18
+    elif ncol <= 20:
+        fs = 16
     else:
-        fs = 13
+        fs = 14
     body, body_b = fnt(fs), fnt(fs, True)
     title_f, sub_f, key_f = fnt(26, True), fnt(14), fnt(13)
 
@@ -1232,6 +1238,17 @@ def combo_docx(headers, data_rows, title, subtitle='', legend=None,
     if school_name is None:
         school_name = _school_name()
     navy = RGBColor(0x33, 0x41, 0x55); muted = RGBColor(0x64, 0x74, 0x8B)
+    # Larger, column-scaled body font (Word renders true points and can't
+    # shrink-to-fit, so cap a little below the PDF's 18pt to avoid heavy wrap).
+    ncol = len(headers)
+    if ncol <= 8:
+        fs = 14
+    elif ncol <= 12:
+        fs = 12
+    elif ncol <= 16:
+        fs = 10.5
+    else:
+        fs = 9.5
 
     doc = Document()
     sec = doc.sections[0]
@@ -1263,7 +1280,7 @@ def combo_docx(headers, data_rows, title, subtitle='', legend=None,
             cell = t.rows[0].cells[i]; cell.text = str(hlabel)
             pr = cell.paragraphs[0]; pr.alignment = WD_ALIGN_PARAGRAPH.CENTER
             if pr.runs:
-                pr.runs[0].bold = True; pr.runs[0].font.size = Pt(9)
+                pr.runs[0].bold = True; pr.runs[0].font.size = Pt(fs)
             cell._tc.get_or_add_tcPr().append(parse_xml(f'<w:shd {nsdecls("w")} w:fill="E9EDF2"/>'))
         for r in rows:
             cells = t.add_row().cells
@@ -1274,7 +1291,7 @@ def combo_docx(headers, data_rows, title, subtitle='', legend=None,
                 pr.alignment = (WD_ALIGN_PARAGRAPH.LEFT if (i == 0 or i < numeric_from)
                                 else WD_ALIGN_PARAGRAPH.CENTER)
                 if pr.runs:
-                    pr.runs[0].font.size = Pt(9)
+                    pr.runs[0].font.size = Pt(fs)
 
     for si, (sec_title, rows) in enumerate(sections):
         if si:
