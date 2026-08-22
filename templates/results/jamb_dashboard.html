@@ -791,8 +791,8 @@
     <div id="exportContent" style="padding: 12px; background: white; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
         <div style="text-align: center; margin: 0 0 10px 0; padding-bottom: 8px; border-bottom: 2px solid #007bff;">
             <div style="font-size: 17px; font-weight: 800; color: #0f172a; letter-spacing: .3px; line-height: 1.2;">{{ school_brand.name|upper }}</div>
-            {% if school_brand.branch %}<div style="font-size: 12px; font-weight: 700; color: #334155; margin-top: 2px;">{{ school_brand.branch|upper }}</div>{% endif %}
-            <div style="font-size: 12px; font-weight: 600; color: #007bff; margin-top: 4px;">JAMB RESULTS{% if selected_year %} {{ selected_year }}/{{ selected_year + 1 }}{% endif %}</div>
+            {% if export_branch %}<div style="font-size: 12px; font-weight: 700; color: #334155; margin-top: 2px;">{{ export_branch|upper }}</div>{% endif %}
+            <div style="font-size: 12px; font-weight: 600; color: #007bff; margin-top: 4px;">JAMB RESULTS{% if selected_year %} {{ selected_year - 1 }}/{{ selected_year }}{% endif %}</div>
         </div>
         <p id="exportSummary" style="text-align: center; color: #666; margin: 0 0 10px 0; font-size: 11px;"></p>
         <table id="exportTable" style="width: 100%; border-collapse: collapse; font-size: 11px;">
@@ -965,6 +965,28 @@ function saveCanvasAsPdf(canvas, filename) {
         }
     }
     pdf.save(filename);
+}
+
+// Slice a tall canvas into A4-portrait page images (white-padded to full page
+// height), so a long results table downloads as several pages instead of one
+// giant strip. Returns an array of PNG data URLs.
+function sliceCanvasToA4Pages(canvas) {
+    var pageH = Math.round(canvas.width * 297 / 210);   // A4 portrait, same width
+    if (canvas.height <= pageH) {
+        return [canvas.toDataURL('image/png', 1.0)];
+    }
+    var pages = [];
+    for (var y = 0; y < canvas.height; y += pageH) {
+        var sliceH = Math.min(pageH, canvas.height - y);
+        var pc = document.createElement('canvas');
+        pc.width = canvas.width; pc.height = pageH;
+        var ctx = pc.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, pc.width, pc.height);
+        ctx.drawImage(canvas, 0, y, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+        pages.push(pc.toDataURL('image/png', 1.0));
+    }
+    return pages;
 }
 
 // Aggregate per-subject stats from the loaded students (JAMB subjects vary per
@@ -1143,19 +1165,31 @@ function generateExport() {
                 return;
             }
 
-            // Create modal to show image for manual save (mobile-friendly)
-            var imgData = canvas.toDataURL('image/png', 1.0);
+            // Image: slice into A4 pages so a long table isn't one giant strip.
+            var pages = sliceCanvasToA4Pages(canvas);
+            var multi = pages.length > 1;
             var saveModal = document.createElement('div');
             saveModal.id = 'saveImageModal';
             saveModal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.9);z-index:99999;padding:10px;overflow:auto;';
-            saveModal.innerHTML =
+            var html =
                 '<div style="text-align:center;margin-bottom:10px;">' +
-                '<p style="color:white;margin:0 0 10px 0;font-size:14px;">Long-press the image below to save</p>' +
+                '<p style="color:white;margin:0 0 10px 0;font-size:14px;">' +
+                (multi ? (pages.length + ' pages — tap “Download” on each (or long-press it) to save.')
+                       : 'Tap “Download” (or long-press the image) to save.') + '</p>' +
                 '<button data-remove-target="saveImageModal" style="padding:8px 20px;background:#dc3545;color:white;border:none;border-radius:6px;font-size:14px;">Close</button>' +
-                '</div>' +
-                '<img src="' + imgData + '" style="width:100%;border-radius:8px;display:block;" alt="JAMB Results Export">';
+                '</div>';
+            pages.forEach(function (data, i) {
+                var fname = 'JAMB_Results_' + selectedYear + (multi ? ('_p' + (i + 1)) : '') + '.png';
+                html +=
+                    '<div style="max-width:640px;margin:0 auto 16px auto;">' +
+                    (multi ? '<div style="color:#cbd5e1;font-size:12px;margin:0 0 4px 2px;">Page ' + (i + 1) + ' of ' + pages.length + '</div>' : '') +
+                    '<a href="' + data + '" download="' + fname + '" style="display:inline-block;margin-bottom:6px;padding:7px 16px;background:#007bff;color:white;border-radius:6px;font-size:13px;text-decoration:none;"><i class="fas fa-download"></i> Download</a>' +
+                    '<img src="' + data + '" style="width:100%;border-radius:8px;display:block;" alt="JAMB Results page ' + (i + 1) + '">' +
+                    '</div>';
+            });
+            saveModal.innerHTML = html;
             document.body.appendChild(saveModal);
-            
+
         }).catch(function(err) {
             container.style.position = 'absolute';
             container.style.left = '-9999px';

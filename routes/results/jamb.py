@@ -165,10 +165,24 @@ def jamb_list():
     from utils.branch_scope import viewing_branch_id
     yoy_data = [] if scope_ids is not None else AcademicAnalytics.get_year_over_year_comparison(viewing_branch_id())
 
+    # Branch name for the export masthead — the branch these results are actually
+    # scoped to (a central user's picked branch, or a branch user's own). When
+    # viewing every branch, name the single branch if the school has only one,
+    # else "All Branches".
+    from models import Branch
+    _bid = viewing_branch_id()
+    if _bid and _bid not in (None, -1):
+        _b = db.session.get(Branch, _bid)
+        export_branch = _b.name if _b else ''
+    else:
+        _branches = Branch.query.all()
+        export_branch = _branches[0].name if len(_branches) == 1 else 'All Branches'
+
     return render_template('results/jamb_dashboard.html',
         students=students_data,
         years=years,
         selected_year=exam_year,
+        export_branch=export_branch,
         min_score=min_score,
         max_score=max_score,
         search=search,
