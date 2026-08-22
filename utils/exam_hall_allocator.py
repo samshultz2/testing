@@ -21,6 +21,7 @@ Public entry points: ``allocate_halls(groups, halls, balance_gender=True)`` and
 ``seat_hall(students, cols=5)``.
 """
 import math
+import random
 
 
 def _largest_remainder(n, weights):
@@ -47,16 +48,19 @@ def _gender_bucket(g):
     return 'O'
 
 
-def allocate_halls(groups, halls, balance_gender=True):
+def allocate_halls(groups, halls, balance_gender=True, seed=None):
     """Allocate candidates to halls.
 
     ``groups``: list of ``{'key': 'SSS1 Rose', 'students': [ {id, name, gender,
     class_name, arm, student_id}, ... ]}``. Each group is one class+arm.
     ``halls``: list of ``{'name': str, 'capacity': int, 'is_main': bool}``.
+    ``seed``: shuffles which candidates land in which hall so each run gives a
+    fresh (but still rule-abiding) arrangement; pass a fixed value to reproduce.
 
     Returns a dict describing the filled halls plus per-hall and per-group stats.
     Raises ``ValueError`` if there are no halls/capacity or capacity < candidates.
     """
+    rng = random.Random(seed)
     halls = [dict(h) for h in halls]
     n_h = len(halls)
     caps = [max(0, int(h.get('capacity') or 0)) for h in halls]
@@ -79,9 +83,10 @@ def allocate_halls(groups, halls, balance_gender=True):
     base_order = sorted(range(n_h), key=lambda i: caps[i], reverse=True)
 
     for gi, g in enumerate(groups):
-        students = g['students']
+        students = list(g['students'])
         if not students:
             continue
+        rng.shuffle(students)                # different candidates per hall each run
         for s in students:
             s['_group_key'] = g['key']       # for per-hall group breakdown stats
 
@@ -278,7 +283,7 @@ def _seat_layout_diagonal(n, rows, cols, counts, group_class):
     return out
 
 
-def _seat_layout_cpsat(n, rows, cols, counts, group_class, time_limit, hint):
+def _seat_layout_cpsat(n, rows, cols, counts, group_class, time_limit, hint, rand_seed=0):
     """CP-SAT: assign a group to each of the first ``n`` cells minimising, in
     priority order, same-CLASS orthogonal neighbours then same-arm (same group)
     neighbours. So classes are separated first and, when a hall is one class,
@@ -332,6 +337,7 @@ def _seat_layout_cpsat(n, rows, cols, counts, group_class, time_limit, hint):
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = float(time_limit)
     solver.parameters.num_search_workers = 8
+    solver.parameters.random_seed = int(rand_seed) & 0x7fffffff
     status = solver.Solve(m)
     if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
         return None
@@ -344,15 +350,17 @@ def _seat_layout_cpsat(n, rows, cols, counts, group_class, time_limit, hint):
     return out
 
 
-def seat_hall(students, cols=5, optimize=True, time_limit=4.0):
+def seat_hall(students, cols=5, optimize=True, time_limit=4.0, seed=None):
     """Lay a hall's ``students`` onto a seat grid (``cols`` seats per row),
     numbering seats and keeping the same class out of adjacent seats (row and
-    column) where the numbers allow.
+    column) where the numbers allow. ``seed`` varies which candidate takes which
+    seat so each run differs while still obeying the rules.
 
     Returns ``{'rows': [[seat|None,...],...], 'cols', 'nrows', 'count',
     'conflicts'}`` where each seat is ``{'seat': n, 'student': {...}}`` and
     ``conflicts`` counts remaining same-group orthogonal neighbours (0 is ideal).
     """
+    rng = random.Random(seed)
     students = list(students)
     n = len(students)
     cols = max(2, int(cols or 5))
@@ -379,11 +387,16 @@ def seat_hall(students, cols=5, optimize=True, time_limit=4.0):
     hint = _seat_layout_diagonal(n, rows, cols, counts, group_class)
     layout = None
     if optimize:
-        layout = _seat_layout_cpsat(n, rows, cols, counts, group_class, tl, hint)
+        layout = _seat_layout_cpsat(n, rows, cols, counts, group_class, tl, hint,
+                                    rand_seed=rng.randrange(1 << 31))
     if layout is None:
         layout = hint
 
+    # Shuffle each group's members so which candidate takes which of that
+    # group's seats varies per run (the layout/rules are unchanged).
     pools = {k: list(buckets[k]) for k in order}
+    for k in pools:
+        rng.shuffle(pools[k])
     flat = []
     for idx in range(rows * cols):
         gi = layout[idx]

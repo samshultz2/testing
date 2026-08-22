@@ -143,15 +143,21 @@ def allocate():
         flash('Add at least one hall with a capacity.', 'error')
         return redirect(url_for('exam_halls.index'))
     cols = request.form.get('seats_per_row', type=int) or 5
+    # A fresh seed each time (unless one is carried in) → a new arrangement per
+    # "Allocate"; the PDF re-uses this same seed so it matches what's shown.
+    import random as _random
+    seed = request.form.get('seed', type=int)
+    if seed is None:
+        seed = _random.randrange(1_000_000_000)
     try:
-        result = allocate_halls(groups, halls, balance_gender=balance)
+        result = allocate_halls(groups, halls, balance_gender=balance, seed=seed)
     except ValueError as e:
         flash(str(e), 'error')
         return redirect(url_for('exam_halls.index'))
 
-    # Number each hall's seats, keeping same class+arm out of adjacent seats.
-    for hall in result['halls']:
-        hall['seating'] = seat_hall(hall['students'], cols=cols)
+    # Number each hall's seats, keeping same class out of adjacent seats.
+    for i, hall in enumerate(result['halls']):
+        hall['seating'] = seat_hall(hall['students'], cols=cols, seed=seed + i)
 
     sname, branch, term = _masthead()
     # Preserve the submitted inputs so the PDF button can re-run identically.
@@ -162,7 +168,8 @@ def allocate():
                'balance_gender': 'on' if balance else '',
                'candidate_set': request.form.get('candidate_set', 'all'),
                'streams': request.form.getlist('streams'),
-               'seats_per_row': str(cols)}
+               'seats_per_row': str(cols),
+               'seed': str(seed)}
     return render_template('exam_halls/result.html', result=result,
                            school_name=sname, branch=branch, term=term,
                            payload=payload)
@@ -176,13 +183,14 @@ def pdf():
     halls = _parse_halls(request.form)
     balance = request.form.get('balance_gender') == 'on'
     cols = request.form.get('seats_per_row', type=int) or 5
+    seed = request.form.get('seed', type=int) or 0
     try:
-        result = allocate_halls(groups, halls, balance_gender=balance)
+        result = allocate_halls(groups, halls, balance_gender=balance, seed=seed)
     except ValueError as e:
         flash(str(e), 'error')
         return redirect(url_for('exam_halls.index'))
-    for hall in result['halls']:
-        hall['seating'] = seat_hall(hall['students'], cols=cols)
+    for i, hall in enumerate(result['halls']):
+        hall['seating'] = seat_hall(hall['students'], cols=cols, seed=seed + i)
     sname, branch, term = _masthead()
     data = _build_pdf(result, sname, branch, term)
     return Response(data, mimetype='application/pdf', headers={

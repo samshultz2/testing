@@ -39,6 +39,19 @@
   <h1 style="font-size:1.2rem;margin:0;"><i class="fas fa-chair"></i> Hall Allocation</h1>
   <div style="display:flex;gap:.4rem;flex-wrap:wrap;">
     <a href="{{ url_for('exam_halls.index') }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Change</a>
+    <form method="POST" action="{{ url_for('exam_halls.allocate') }}" style="display:inline;" title="Shuffle into a different arrangement">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      {% for a in payload.assignments %}<input type="hidden" name="assignments" value="{{ a }}">{% endfor %}
+      {% for h in payload.hall_name %}<input type="hidden" name="hall_name" value="{{ h }}">{% endfor %}
+      {% for c in payload.hall_capacity %}<input type="hidden" name="hall_capacity" value="{{ c }}">{% endfor %}
+      <input type="hidden" name="main_hall" value="{{ payload.main_hall }}">
+      {% if payload.balance_gender %}<input type="hidden" name="balance_gender" value="on">{% endif %}
+      <input type="hidden" name="candidate_set" value="{{ payload.candidate_set }}">
+      {% for st in payload.streams %}<input type="hidden" name="streams" value="{{ st }}">{% endfor %}
+      <input type="hidden" name="seats_per_row" value="{{ payload.seats_per_row }}">
+      {# no seed -> a fresh arrangement each time #}
+      <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-shuffle"></i> Regenerate</button>
+    </form>
     <button type="button" class="btn btn-secondary btn-sm" data-print><i class="fas fa-print"></i> Print</button>
     <form method="POST" action="{{ url_for('exam_halls.pdf') }}" style="display:inline;">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
@@ -50,6 +63,7 @@
       <input type="hidden" name="candidate_set" value="{{ payload.candidate_set }}">
       {% for st in payload.streams %}<input type="hidden" name="streams" value="{{ st }}">{% endfor %}
       <input type="hidden" name="seats_per_row" value="{{ payload.seats_per_row }}">
+      <input type="hidden" name="seed" value="{{ payload.seed }}">
       <button type="submit" class="btn btn-secondary btn-sm"><i class="fas fa-file-pdf"></i> PDF (one hall per page)</button>
     </form>
   </div>

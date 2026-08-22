@@ -76,9 +76,14 @@ def test_deterministic():
     groups = [_group('A', 33), _group('B', 27), _group('C', 41)]
     halls = [{'name': 'M', 'capacity': 80, 'is_main': True},
              {'name': 'B', 'capacity': 30}, {'name': 'C', 'capacity': 30}]
-    a = allocate_halls(groups, halls)
-    b = allocate_halls(groups, halls)
-    assert [h['count'] for h in a['halls']] == [h['count'] for h in b['halls']]
+    # Same seed -> identical layout (so a re-run / the PDF reproduces the sheet).
+    a = allocate_halls(groups, halls, seed=7)
+    b = allocate_halls(groups, halls, seed=7)
+    assert [[s['id'] for s in h['students']] for h in a['halls']] == \
+           [[s['id'] for s in h['students']] for h in b['halls']]
+    # Different seeds -> counts unchanged (capacity-driven) but a fresh mix.
+    c = allocate_halls(groups, halls, seed=99)
+    assert [h['count'] for h in a['halls']] == [h['count'] for h in c['halls']]
 
 
 # ---- Seat layout within a hall -------------------------------------------------
