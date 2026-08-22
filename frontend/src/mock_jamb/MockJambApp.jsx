@@ -435,11 +435,16 @@ function ViewExam({ d, notify }) {
     const node = buildExportNode(d, st, opts);
     document.body.appendChild(node);
     try {
-      const canvas = await window.html2canvas(node.firstChild, { scale: opts.quality, backgroundColor: '#ffffff' });
+      const root = node.firstChild;
+      const canvas = await window.html2canvas(root, { scale: opts.quality, backgroundColor: '#ffffff' });
+      // Break A4 pages on real row boundaries so no student row is cut in half.
+      const breaks = mjRowBreaks(root, canvas.width / root.offsetWidth);
+      const pages = mjSliceA4(canvas, breaks);
+      const base = (d.exam.display_name || 'mock-jamb').replace(/[^\w-]+/g, '_');
       if (opts.format === 'pdf') {
-        canvasToPdf(canvas, (d.exam.display_name || 'mock-jamb').replace(/[^\w-]+/g, '_') + '.pdf');
+        canvasPagesToPdf(pages, base + '.pdf');
       } else {
-        setSaveImg(canvas.toDataURL('image/png'));
+        setSaveImg({ pages, name: base });
       }
     } catch (err) {
       notify('error', 'Could not generate ' + (opts.format === 'pdf' ? 'PDF' : 'image') + '.');
@@ -583,7 +588,7 @@ function ViewExam({ d, notify }) {
 
       {exporting && <ExportModal onClose={() => setExporting(false)} onGenerate={doExport}
                                  hasSubjects={!!(st && st.subject_analysis && st.subject_analysis.length)} />}
-      {saveImg && <SaveModal src={saveImg} onClose={() => setSaveImg(null)} />}
+      {saveImg && <SaveModal pages={saveImg.pages} name={saveImg.name} onClose={() => setSaveImg(null)} />}
     </>
   );
 }
@@ -652,47 +657,88 @@ function ExportModal({ onClose, onGenerate, hasSubjects }) {
   );
 }
 
-function SaveModal({ src, onClose }) {
+function SaveModal({ pages, name, onClose }) {
+  const multi = pages.length > 1;
   return (
-    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.8)', zIndex: 10000, padding: '1rem', overflowY: 'auto' }}>
+    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.9)', zIndex: 10000, padding: '1rem', overflowY: 'auto' }}>
       <div style={{ maxWidth: '100%', margin: '1rem auto', textAlign: 'center' }}>
-        <p style={{ color: 'white', marginBottom: '1rem' }}>Long-press image to save</p>
-        <img src={src} alt="Results export" style={{ maxWidth: '100%', borderRadius: 8, boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }} />
-        <div><button onClick={onClose} style={{ marginTop: '1rem', padding: '0.75rem 2rem', background: 'white', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}>Close</button></div>
+        <p style={{ color: 'white', marginBottom: '1rem' }}>
+          {multi ? `${pages.length} pages — tap “Download” on each (or long-press it) to save.`
+                 : 'Tap “Download” (or long-press the image) to save.'}</p>
+        <button onClick={onClose} style={{ padding: '0.6rem 2rem', background: '#dc3545', color: 'white', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}>Close</button>
+        {pages.map((src, i) => (
+          <div key={i} style={{ maxWidth: 760, margin: '16px auto 0' }}>
+            {multi && <div style={{ color: '#cbd5e1', fontSize: 12, margin: '0 0 4px 2px' }}>Page {i + 1} of {pages.length}</div>}
+            <a href={src} download={`${name}${multi ? '_p' + (i + 1) : ''}.png`} style={{ display: 'inline-block', marginBottom: 6, padding: '7px 16px', background: '#11998e', color: 'white', borderRadius: 6, fontSize: 13, textDecoration: 'none' }}><i aria-hidden="true" className="fas fa-download" /> Download</a>
+            <img src={src} alt={`Results page ${i + 1}`} style={{ maxWidth: '100%', borderRadius: 8, display: 'block', boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }} />
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 
-// Slice a tall canvas across A4 pages and download it as a PDF (jsPDF UMD).
-function canvasToPdf(canvas, filename) {
+// Row boundaries (canvas px) so page breaks never cut through a student row.
+function mjRowBreaks(root, scale) {
+  const top = root.getBoundingClientRect().top;
+  const breaks = [];
+  root.querySelectorAll('tr').forEach((r) => breaks.push(Math.round((r.getBoundingClientRect().bottom - top) * scale)));
+  return breaks;
+}
+
+// Slice a tall canvas into A4-portrait pages, breaking on row boundaries; the
+// leftover space below the last full row becomes a clean white bottom margin.
+function mjSliceA4(canvas, breaks) {
+  const w = canvas.width, pageH = Math.round(w * 297 / 210);
+  if (canvas.height <= pageH) return [canvas.toDataURL('image/png', 1.0)];
+  const sorted = (breaks || []).slice().sort((a, b) => a - b);
+  const pages = []; let y = 0;
+  while (y < canvas.height) {
+    let end = Math.min(y + pageH, canvas.height);
+    if (end < canvas.height) {
+      let best = -1;
+      for (let i = 0; i < sorted.length; i++) {
+        if (sorted[i] > y && sorted[i] <= end) best = sorted[i];
+        else if (sorted[i] > end) break;
+      }
+      if (best > y) end = best;
+    }
+    const sliceH = end - y;
+    const pc = document.createElement('canvas'); pc.width = w; pc.height = pageH;
+    const ctx = pc.getContext('2d');
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, pc.width, pc.height);
+    ctx.drawImage(canvas, 0, y, w, sliceH, 0, 0, w, sliceH);
+    pages.push(pc.toDataURL('image/png', 1.0)); y = end;
+  }
+  return pages;
+}
+
+// Build a PDF from pre-sliced A4 page images (each already A4-portrait).
+function canvasPagesToPdf(pages, filename) {
   const JsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
   const pdf = new JsPDF('p', 'mm', 'a4');
   const pageW = pdf.internal.pageSize.getWidth();
   const pageH = pdf.internal.pageSize.getHeight();
-  const imgW = pageW;
-  const imgH = canvas.height * imgW / canvas.width;
-  const img = canvas.toDataURL('image/png', 1.0);
-  if (imgH <= pageH) {
-    pdf.addImage(img, 'PNG', 0, 0, imgW, imgH);
-  } else {
-    let remaining = imgH, pos = 0;
-    while (remaining > 0) {
-      pdf.addImage(img, 'PNG', 0, pos, imgW, imgH);
-      remaining -= pageH; pos -= pageH;
-      if (remaining > 0) pdf.addPage();
-    }
-  }
+  pages.forEach((data, i) => { if (i > 0) pdf.addPage(); pdf.addImage(data, 'PNG', 0, 0, pageW, pageH); });
   pdf.save(filename);
 }
 
 // Build an off-screen node for html2canvas to snapshot (ported from the Jinja version).
 function buildExportNode(d, st, o) {
   const wrap = document.createElement('div');
-  wrap.style.cssText = 'position:absolute;left:-9999px;width:500px;';
+  wrap.style.cssText = 'position:absolute;left:-9999px;width:700px;';
   const dist = (st && st.distribution) || {};
   const stats = (st && st.statistics) || {};
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+  // Masthead: school name + branch (kept in the green the page uses), then the
+  // exam name, date and session — same established pattern as JAMB/WAEC.
+  const masthead = (title) => `<div style="text-align:center;margin:0 0 10px 0;padding-bottom:8px;border-bottom:2px solid #11998e;">
+      <div style="font-size:18px;font-weight:800;color:#11998e;letter-spacing:.3px;line-height:1.2;">${esc((d.exam.school_name || '').toUpperCase())}</div>
+      ${d.exam.branch_name ? `<div style="font-size:12px;font-weight:700;color:#334155;margin-top:2px;">${esc(d.exam.branch_name.toUpperCase())}</div>` : ''}
+      <div style="font-size:13px;font-weight:700;color:#0f172a;margin-top:4px;">${esc(title)}</div>
+      <div style="font-size:11px;color:#666;margin-top:2px;">${esc(d.exam.exam_date)}${d.exam.session_name ? ' | ' + esc(d.exam.session_name) : ''}</div>
+    </div>`;
 
   // Subjects-analysis export: one row per JAMB subject.
   if (o.type === 'subjects') {
@@ -718,8 +764,8 @@ function buildExportNode(d, st, o) {
     });
     const sfoot = o.timestamp ? `Generated: ${new Date().toLocaleString()}` : '';
     wrap.innerHTML = `<div style="padding:12px;background:white;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-      <h2 style="color:#11998e;text-align:center;margin:0 0 8px 0;font-size:18px;">${esc(d.exam.display_name)} — Subject Analysis</h2>
-      <p style="text-align:center;color:#666;margin:0 0 10px 0;font-size:11px;">${esc(d.exam.exam_date)}${o.summary && st ? ` | ${st.student_count} students` : ''}</p>
+      ${masthead(d.exam.display_name + ' — Subject Analysis')}
+      ${o.summary && st ? `<p style="text-align:center;color:#666;margin:0 0 10px 0;font-size:11px;">${st.student_count} students</p>` : ''}
       <table style="width:100%;border-collapse:collapse;font-size:11px;"><thead>${sh}</thead><tbody>${sb}</tbody></table>
       <p style="text-align:center;margin:8px 0 0 0;color:#999;font-size:9px;">${sfoot}</p>
     </div>`;
@@ -731,7 +777,7 @@ function buildExportNode(d, st, o) {
   thead += '<th style="padding:6px;">Name</th>';
   if (o.studentId) thead += '<th style="padding:6px;">ID</th>';
   thead += '<th style="padding:6px;text-align:center;">Score</th>';
-  if (o.subjects) thead += '<th style="padding:6px;text-align:center;">Subjects</th>';
+  if (o.subjects) thead += '<th style="padding:6px;text-align:center;">S1</th><th style="padding:6px;text-align:center;">S2</th><th style="padding:6px;text-align:center;">S3</th><th style="padding:6px;text-align:center;">S4</th>';
   if (o.level) thead += '<th style="padding:6px;text-align:center;">Level</th>';
   thead += '</tr>';
 
@@ -739,13 +785,19 @@ function buildExportNode(d, st, o) {
   d.results.forEach((r, i) => {
     const bg = i % 2 === 0 ? '#fff' : '#f8f9fa';
     const sc = scoreColor(r.total_score);
-    const subs = r.subjects.filter(Boolean);
     tbody += `<tr style="background:${bg};">`;
     if (o.rank) tbody += `<td style="padding:5px;text-align:center;font-weight:bold;">${r.rank}</td>`;
     tbody += `<td style="padding:5px;font-size:10px;">${esc(r.student.full_name)}</td>`;
     if (o.studentId) tbody += `<td style="padding:5px;font-size:9px;color:#666;">${esc(r.student.student_id)}</td>`;
     tbody += `<td style="padding:5px;text-align:center;font-weight:bold;color:${sc};">${r.total_score}</td>`;
-    if (o.subjects) tbody += `<td style="padding:5px;font-size:9px;">${subs.map((s) => esc(s.name).substring(0, 3) + ':' + s.score).join(' ')}</td>`;
+    // Per-subject cell (JAMB-style): short CAPITAL code above the score.
+    if (o.subjects) {
+      for (let k = 0; k < 4; k++) {
+        const s = r.subjects[k];
+        if (s) tbody += `<td style="padding:5px;text-align:center;"><span style="font-size:8px;color:#666;font-weight:600;">${esc(s.code || String(s.name).substring(0, 3).toUpperCase())}</span><br><strong>${s.score}</strong></td>`;
+        else tbody += '<td style="padding:5px;text-align:center;color:#ccc;">-</td>';
+      }
+    }
     if (o.level) tbody += `<td style="padding:5px;font-size:9px;text-align:center;">${esc(r.performance_level)}</td>`;
     tbody += '</tr>';
   });
@@ -758,8 +810,7 @@ function buildExportNode(d, st, o) {
   const footer = o.timestamp ? `Generated: ${new Date().toLocaleString()}` : '';
 
   wrap.innerHTML = `<div style="padding:12px;background:white;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-    <h2 style="color:#11998e;text-align:center;margin:0 0 8px 0;font-size:18px;">${esc(d.exam.display_name)}</h2>
-    <p style="text-align:center;color:#666;margin:0 0 4px 0;font-size:11px;">${esc(d.exam.exam_date)}${d.exam.session_name ? ' | ' + esc(d.exam.session_name) : ''}</p>
+    ${masthead(d.exam.display_name)}
     <p style="text-align:center;color:#666;margin:0 0 10px 0;font-size:11px;">${summary}</p>
     <table style="width:100%;border-collapse:collapse;font-size:11px;"><thead>${thead}</thead><tbody>${tbody}</tbody></table>
     ${o.distribution ? `<div style="margin-top:10px;padding:8px;background:#f8f9fa;border-radius:6px;">${distHtml}</div>` : ''}

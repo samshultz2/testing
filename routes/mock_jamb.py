@@ -287,12 +287,15 @@ def view_exam(exam_id):
     
     results = query.all()
 
+    from utils.broadsheet_export import _abbr_one
+
     def subj_arr(r):
         out = []
         for i in (1, 2, 3, 4):
             name = getattr(r, f'subject{i}')
             score = getattr(r, f'subject{i}_score')
-            out.append({'name': name, 'score': score} if name else None)
+            # `code` is the short CAPITAL subject abbreviation for the export grid.
+            out.append({'name': name, 'code': _abbr_one(name), 'score': score} if name else None)
         return out
 
     results_payload = []
@@ -319,11 +322,20 @@ def view_exam(exam_id):
             'subject_analysis': statistics['subject_analysis'],
         }
 
+    # School + branch for the export masthead (branch = the branch the exam/results
+    # belong to).
+    from utils.school import school_profile
+    from models.models_branch import Branch
+    _school_name = (school_profile() or {}).get('name') or ''
+    _branch = db.session.get(Branch, exam.branch_id) if exam.branch_id else None
+    _branch_name = _branch.name if _branch else ''
+
     return _render({
         'page': 'view_exam',
         'exam': {'id': exam.id, 'display_name': exam.display_name,
                  'exam_date': exam.exam_date.strftime('%d %B %Y') if exam.exam_date else '',
-                 'session_name': exam.session.name if exam.session else ''},
+                 'session_name': exam.session.name if exam.session else '',
+                 'school_name': _school_name, 'branch_name': _branch_name},
         'statistics': stats_payload,
         'results': results_payload,
         'filters': {'search': search, 'min_score': min_score or '', 'max_score': max_score or '',
