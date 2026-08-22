@@ -185,44 +185,113 @@ def _sk(s):
     return (s.get('class_name') or s.get('_group_key') or '').strip()
 
 
-def _seat_layout_cpsat(n, rows, cols, counts, time_limit):
-    """CP-SAT: assign a group index to each of the first ``n`` grid cells
-    (row-major) so orthogonally-adjacent cells rarely share a group. Returns a
-    list of length rows*cols (group index, or None for the trailing empties), or
-    None if OR-tools is unavailable or finds nothing."""
-    try:
-        from ortools.sat.python import cp_model
-    except Exception:
-        return None
-    G = len(counts)
-    used = list(range(n))                       # first n cells are seats
-    m = cp_model.CpModel()
-    y = {(u, g): m.NewBoolVar(f'y{u}_{g}') for u in used for g in range(G)}
-    for u in used:
-        m.Add(sum(y[u, g] for g in range(G)) == 1)
-    for g in range(G):
-        m.Add(sum(y[u, g] for u in used) == counts[g])
-
+def _pairs(n, rows, cols):
+    """Orthogonal (row/column) neighbour cell-index pairs among the first n
+    row-major cells."""
     def cell(r, c):
         return r * cols + c
-
-    pairs = []
+    out = []
     for r in range(rows):
         for c in range(cols):
             u = cell(r, c)
             if u >= n:
                 continue
             if c + 1 < cols and cell(r, c + 1) < n:
-                pairs.append((u, cell(r, c + 1)))
+                out.append((u, cell(r, c + 1)))
             if r + 1 < rows and cell(r + 1, c) < n:
-                pairs.append((u, cell(r + 1, c)))
-    same = []
+                out.append((u, cell(r + 1, c)))
+    return out
+
+
+def _roundrobin_seq(n, counts, group_class):
+    """A sequence of group indices that spreads CLASSES first: round-robin across
+    classes (largest class first), and within a class round-robin across its
+    arms. So consecutive items are different classes wherever possible."""
+    from collections import defaultdict
+    by_class = defaultdict(list)
+    for g in range(len(counts)):
+        by_class[group_class[g]].append(g)
+    remaining = list(counts)
+    class_order = sorted(by_class, key=lambda c: sum(remaining[g] for g in by_class[c]),
+                         reverse=True)
+    seq = []
+    while len(seq) < n:
+        progressed = False
+        for c in class_order:
+            gs = [g for g in by_class[c] if remaining[g] > 0]
+            if not gs:
+                continue
+            g = max(gs, key=lambda g: remaining[g])   # fullest arm of this class
+            seq.append(g); remaining[g] -= 1; progressed = True
+        if not progressed:
+            break
+    return seq
+
+
+def _seat_layout_diagonal(n, rows, cols, counts, group_class):
+    """Deterministic, count-preserving fallback: fill the two colours of a
+    checkerboard (cells of one colour are never orthogonally adjacent) with the
+    class-spread sequence, so same-class seats rarely touch. Good on its own and
+    a warm start for CP-SAT."""
+    seq = _roundrobin_seq(n, counts, group_class)
+    cells = [(i // cols, i % cols) for i in range(n)]          # used cells, row-major
+    cells.sort(key=lambda rc: ((rc[0] + rc[1]) % 2, rc[0], rc[1]))   # checkerboard
+    out = [None] * (rows * cols)
+    for i, (r, c) in enumerate(cells):
+        out[r * cols + c] = seq[i]
+    return out
+
+
+def _seat_layout_cpsat(n, rows, cols, counts, group_class, time_limit, hint):
+    """CP-SAT: assign a group to each of the first ``n`` cells minimising, in
+    priority order, same-CLASS orthogonal neighbours then same-arm (same group)
+    neighbours. So classes are separated first and, when a hall is one class,
+    arms are separated. Warm-started from ``hint``. Returns a per-cell group list
+    (None for trailing empties) or None if OR-tools is unavailable / finds none."""
+    try:
+        from ortools.sat.python import cp_model
+    except Exception:
+        return None
+    G = len(counts)
+    classes = sorted(set(group_class))
+    cls_idx = {c: i for i, c in enumerate(classes)}
+    used = list(range(n))
+    m = cp_model.CpModel()
+    y = {(u, g): m.NewBoolVar(f'y{u}_{g}') for u in used for g in range(G)}
+    for u in used:
+        m.Add(sum(y[u, g] for g in range(G)) == 1)
+    for g in range(G):
+        m.Add(sum(y[u, g] for u in used) == counts[g])
+    # Per-cell class indicator (derived from the chosen group).
+    yc = {}
+    for u in used:
+        for c in classes:
+            gs = [g for g in range(G) if group_class[g] == c]
+            var = m.NewBoolVar(f'yc{u}_{cls_idx[c]}')
+            m.Add(var == sum(y[u, g] for g in gs))
+            yc[u, c] = var
+
+    pairs = _pairs(n, rows, cols)
+    same_class, same_group = [], []
     for a, b in pairs:
-        z = m.NewBoolVar(f'z{a}_{b}')
+        zc = m.NewBoolVar(f'zc{a}_{b}')
+        for c in classes:
+            m.Add(zc >= yc[a, c] + yc[b, c] - 1)
+        same_class.append(zc)
+        zg = m.NewBoolVar(f'zg{a}_{b}')
         for g in range(G):
-            m.Add(z >= y[a, g] + y[b, g] - 1)
-        same.append(z)
-    m.Minimize(sum(same))
+            m.Add(zg >= y[a, g] + y[b, g] - 1)
+        same_group.append(zg)
+    # Class separation dominates; arm separation breaks ties (matters most when a
+    # hall is a single class, where every same_class term is unavoidable).
+    big = len(pairs) + 1
+    m.Minimize(big * sum(same_class) + sum(same_group))
+
+    if hint:
+        for u in used:
+            g = hint[u]
+            if g is not None:
+                m.AddHint(y[u, g], 1)
 
     solver = cp_model.CpSolver()
     solver.parameters.max_time_in_seconds = float(time_limit)
@@ -236,27 +305,6 @@ def _seat_layout_cpsat(n, rows, cols, counts, time_limit):
             if solver.Value(y[u, g]) == 1:
                 out[u] = g
                 break
-    return out
-
-
-def _seat_layout_roundrobin(n, rows, cols, counts):
-    """Deterministic fallback: emit group indices round-robin (largest group
-    first) so equal groups alternate, then drop them into cells row-major."""
-    remaining = list(counts)
-    order = sorted(range(len(counts)), key=lambda g: counts[g], reverse=True)
-    seq = []
-    while len(seq) < n:
-        placed = False
-        for g in order:
-            if remaining[g] > 0:
-                seq.append(g)
-                remaining[g] -= 1
-                placed = True
-        if not placed:
-            break
-    out = [None] * (rows * cols)
-    for i in range(n):
-        out[i] = seq[i]
     return out
 
 
@@ -276,20 +324,28 @@ def seat_hall(students, cols=5, optimize=True, time_limit=4.0):
         return {'rows': [], 'cols': cols, 'nrows': 0, 'count': 0, 'conflicts': 0}
     rows = math.ceil(n / cols)
 
-    buckets, order = {}, []
+    # Fine groups = class + arm; each carries its class so the layout can
+    # separate classes first and arms second.
+    buckets, order, group_class = {}, [], []
     for s in students:
-        k = _sk(s)
+        cls = _sk(s)                                   # the class (separation key)
+        arm = (s.get('arm') or '').strip()
+        k = (cls, arm)
         if k not in buckets:
             buckets[k] = []
             order.append(k)
+            group_class.append(cls)
         buckets[k].append(s)
     counts = [len(buckets[k]) for k in order]
 
+    # Bigger halls get more solver time; warm-start from the diagonal fallback.
+    tl = time_limit if n <= 60 else min(20.0, time_limit + n / 20.0)
+    hint = _seat_layout_diagonal(n, rows, cols, counts, group_class)
     layout = None
-    if optimize and len(order) > 1:
-        layout = _seat_layout_cpsat(n, rows, cols, counts, time_limit)
+    if optimize:
+        layout = _seat_layout_cpsat(n, rows, cols, counts, group_class, tl, hint)
     if layout is None:
-        layout = _seat_layout_roundrobin(n, rows, cols, counts)
+        layout = hint
 
     pools = {k: list(buckets[k]) for k in order}
     flat = []
