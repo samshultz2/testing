@@ -12,8 +12,9 @@ halls in proportion to capacity, interleave genders) this construction is
 optimal, instant and reproducible, with no solver time or tuning to babysit.
 
 Within a hall, ``seat_hall`` then lays candidates out on a seat grid so that no
-two students from the same class + arm sit in adjacent seats (front/back/side) —
-using OR-tools CP-SAT when available to minimise same-group neighbours, with a
+two students from the same class sit in adjacent seats (front/back/side) — an
+SSS1 candidate ends up between SSS2 candidates, row-wise and column-wise —
+using OR-tools CP-SAT when available to minimise same-class neighbours, with a
 deterministic round-robin fallback.
 
 Public entry points: ``allocate_halls(groups, halls, balance_gender=True)`` and
@@ -176,9 +177,12 @@ def allocate_halls(groups, halls, balance_gender=True):
 # --------------------------------------------------------------------------- #
 
 def _sk(s):
-    """The class+arm key a student is grouped by for seating."""
-    return s.get('_group_key') or (
-        (s.get('class_name') or '') + (' ' + s.get('arm') if s.get('arm') else '')).strip()
+    """The key a student is separated by for seating: the CLASS. Same-class
+    candidates (any arm) write the same papers, so they must not sit next to each
+    other (in a row or a column); different classes may interleave — e.g. an SSS1
+    candidate sits between two SSS2 candidates. Falls back to the class+arm group
+    key when the class isn't carried on the record."""
+    return (s.get('class_name') or s.get('_group_key') or '').strip()
 
 
 def _seat_layout_cpsat(n, rows, cols, counts, time_limit):
@@ -258,8 +262,8 @@ def _seat_layout_roundrobin(n, rows, cols, counts):
 
 def seat_hall(students, cols=5, optimize=True, time_limit=4.0):
     """Lay a hall's ``students`` onto a seat grid (``cols`` seats per row),
-    numbering seats and keeping same class+arm out of adjacent seats where the
-    numbers allow.
+    numbering seats and keeping the same class out of adjacent seats (row and
+    column) where the numbers allow.
 
     Returns ``{'rows': [[seat|None,...],...], 'cols', 'nrows', 'count',
     'conflicts'}`` where each seat is ``{'seat': n, 'student': {...}}`` and

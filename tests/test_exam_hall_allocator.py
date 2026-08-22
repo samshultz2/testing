@@ -126,3 +126,31 @@ def test_seating_beats_naive_block_layout():
     # A naive "all A, then all B, then all C" block layout has many same-group
     # neighbours; the allocator should do far better.
     assert _conflicts(res) <= 4
+
+
+def _cls_students(spec):
+    """spec: {('SSS2','Rose'): 8, ('SSS1',''): 4} -> students carrying class_name/arm."""
+    out = []
+    for (cls, arm), n in spec.items():
+        for i in range(n):
+            out.append({'id': f'{cls}{arm}-{i}', 'name': f'{cls} {arm} {i}', 'gender': 'Male',
+                        'class_name': cls, 'arm': arm})
+    return out
+
+
+def test_seating_separates_by_class_not_arm():
+    # Same class, two different arms — they must still be kept apart (same papers).
+    students = _cls_students({('SSS2', 'Rose'): 10, ('SSS2', 'Lily'): 10, ('SSS1', 'A'): 20})
+    res = seat_hall(students, cols=6)
+    # With 20 SSS1 to interleave 20 SSS2 across a 6-wide grid, no two SSS2 need
+    # ever be adjacent — conflicts (same CLASS neighbours) should be zero.
+    assert res['conflicts'] == 0
+
+
+def test_sss1_sits_between_sss2():
+    # The user's example: 2 SSS2 + 1 SSS1 in a single row -> SSS1 in the middle.
+    students = _cls_students({('SSS2', 'A'): 2, ('SSS1', 'A'): 1})
+    res = seat_hall(students, cols=3)
+    row = [c['student']['class_name'] for c in res['rows'][0] if c]
+    assert row == ['SSS2', 'SSS1', 'SSS2']
+    assert res['conflicts'] == 0
