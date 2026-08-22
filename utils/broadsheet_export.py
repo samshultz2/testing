@@ -833,7 +833,7 @@ def abbreviate_subjects(names):
 
 
 def combo_pdf(headers, data_rows, title, subtitle='', numeric_from=1, legend=None,
-              logo_path=None, school_name=None, sections=None):
+              logo_path=None, school_name=None, sections=None, body_fs=None):
     """Print-ready PDF of an arbitrary table (landscape A4). ``headers`` is a
     list of column titles; ``data_rows`` a list of equal-length string rows;
     ``numeric_from`` is the first column index to centre (names stay left).
@@ -869,7 +869,9 @@ def combo_pdf(headers, data_rows, title, subtitle='', numeric_from=1, legend=Non
         school_name = _school_name()
     styles = getSampleStyleSheet()
     ncol = len(headers)
-    if ncol <= 8:
+    if body_fs:
+        fs = body_fs
+    elif ncol <= 8:
         fs = 13
     elif ncol <= 10:
         fs = 12
