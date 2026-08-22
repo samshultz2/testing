@@ -249,6 +249,8 @@ def create_app(config_class=None):
     app.register_blueprint(timetable_bp)
     app.register_blueprint(promotion_bp)
     app.register_blueprint(generator_bp)
+    from routes.exam_halls import exam_halls_bp
+    app.register_blueprint(exam_halls_bp)
     app.register_blueprint(contributions_bp)
     app.register_blueprint(mock_jamb_bp)
     app.register_blueprint(mock_jamb_portal_bp)

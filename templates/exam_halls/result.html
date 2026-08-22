@@ -1,0 +1,111 @@
+{% extends "base.html" %}
+{% block title %}Hall Allocation - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('exam_halls.index') }}">Exam Hall Allocator</a> <span>Result</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.eh-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: .6rem; margin-bottom: 1rem; }
+.eh-stat { background: var(--bg-card); border: 1px solid #e0e0e0; border-radius: 10px; padding: .75rem; text-align: center; }
+.eh-stat .v { font-size: 1.4rem; font-weight: 700; }
+.eh-stat .l { font-size: .72rem; color: var(--text-muted); }
+.hall-card { background: var(--bg-card); border: 1px solid #e0e0e0; border-radius: 10px; margin-bottom: 1rem; overflow: hidden; break-inside: avoid; }
+.hall-head { padding: .7rem 1rem; background: #007bff; color: #fff; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: .5rem; }
+.hall-head.main { background: #0f172a; }
+.hall-head h3 { margin: 0; font-size: 1rem; }
+.hall-head .meta { font-size: .8rem; opacity: .95; }
+.hall-tbl { width: 100%; border-collapse: collapse; font-size: .82rem; }
+.hall-tbl th, .hall-tbl td { padding: .4rem .6rem; border-bottom: 1px solid #eee; text-align: left; }
+.hall-tbl th { background: var(--gray-50); font-weight: 600; }
+.hall-tbl td.c, .hall-tbl th.c { text-align: center; }
+.grp-badge { display: inline-block; font-size: .72rem; padding: .1rem .4rem; background: var(--gray-50); border: 1px solid #e5e7eb; border-radius: 5px; margin: .1rem; }
+.mix { font-size: .78rem; color: var(--text-muted); }
+@media print {
+  .no-print { display: none !important; }
+  .hall-card { border: 1px solid #999; page-break-inside: avoid; }
+  .hall-head { background: #0f172a !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header no-print" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem;">
+  <h1 style="font-size:1.2rem;margin:0;"><i class="fas fa-chair"></i> Hall Allocation</h1>
+  <div style="display:flex;gap:.4rem;flex-wrap:wrap;">
+    <a href="{{ url_for('exam_halls.index') }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Change</a>
+    <button type="button" class="btn btn-secondary btn-sm" data-print><i class="fas fa-print"></i> Print</button>
+    <form method="POST" action="{{ url_for('exam_halls.pdf') }}" style="display:inline;">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      {% for a in payload.assignments %}<input type="hidden" name="assignments" value="{{ a }}">{% endfor %}
+      {% for h in payload.hall_name %}<input type="hidden" name="hall_name" value="{{ h }}">{% endfor %}
+      {% for c in payload.hall_capacity %}<input type="hidden" name="hall_capacity" value="{{ c }}">{% endfor %}
+      <input type="hidden" name="main_hall" value="{{ payload.main_hall }}">
+      {% if payload.balance_gender %}<input type="hidden" name="balance_gender" value="on">{% endif %}
+      <button type="submit" class="btn btn-secondary btn-sm"><i class="fas fa-file-pdf"></i> PDF (one hall per page)</button>
+    </form>
+  </div>
+</div>
+
+<div style="text-align:center;margin:0 0 1rem;">
+  <div style="font-size:1.1rem;font-weight:800;color:var(--text-primary);">{{ school_name|upper }}</div>
+  {% if branch %}<div style="font-size:.85rem;font-weight:600;color:var(--text-muted);">{{ branch|upper }}</div>{% endif %}
+  <div style="font-size:.85rem;color:#007bff;font-weight:600;">EXAM HALL ALLOCATION{% if term %} — {{ term }}{% endif %}</div>
+</div>
+
+<div class="eh-summary">
+  <div class="eh-stat"><div class="v">{{ result.total_students }}</div><div class="l">Candidates</div></div>
+  <div class="eh-stat"><div class="v">{{ result.halls|length }}</div><div class="l">Halls</div></div>
+  <div class="eh-stat"><div class="v">{{ result.total_capacity }}</div><div class="l">Total seats</div></div>
+  <div class="eh-stat"><div class="v">{{ result.groups|length }}</div><div class="l">Class/arms</div></div>
+</div>
+
+<!-- Spread check: how thinly each class/arm is scattered -->
+<div class="hall-card no-print">
+  <div class="hall-head" style="background:var(--gray-50);color:var(--text-primary);"><h3>Spread per class / arm</h3><span class="meta" style="color:var(--text-muted);">most in any one hall → lower is better</span></div>
+  <table class="hall-tbl">
+    <thead><tr><th>Class / Arm</th><th class="c">Students</th><th class="c">Halls used</th><th class="c">Most in one hall</th></tr></thead>
+    <tbody>
+      {% for g in result.groups %}
+      <tr><td>{{ g.key }}</td><td class="c">{{ g.size }}</td><td class="c">{{ g.halls_used }}/{{ result.halls|length }}</td><td class="c">{{ g.max_in_hall }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+{% for hall in result.halls %}
+<div class="hall-card">
+  <div class="hall-head {% if hall.is_main %}main{% endif %}">
+    <h3>{{ hall.name }}{% if hall.is_main %} <span style="font-size:.7rem;opacity:.85;">(MAIN)</span>{% endif %}</h3>
+    <span class="meta">{{ hall.count }}/{{ hall.capacity }} seats · {{ hall.gender.Female }}F / {{ hall.gender.Male }}M{% if hall.gender.Other %} / {{ hall.gender.Other }} other{% endif %}</span>
+  </div>
+  <div style="padding:.5rem 1rem;" class="no-print">
+    {% for key, cnt in hall.by_group.items() %}<span class="grp-badge">{{ key }}: {{ cnt }}</span>{% endfor %}
+  </div>
+  {% if hall.students %}
+  <table class="hall-tbl">
+    <thead><tr><th class="c">S/N</th><th>Student ID</th><th>Name</th><th>Class/Arm</th><th class="c">Gender</th></tr></thead>
+    <tbody>
+      {% for s in hall.students %}
+      <tr>
+        <td class="c">{{ loop.index }}</td>
+        <td>{{ s.student_id }}</td>
+        <td>{{ s.name }}</td>
+        <td>{{ s.class_name }}{% if s.arm %} {{ s.arm }}{% endif %}</td>
+        <td class="c">{{ s.gender }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p class="mix" style="padding:.75rem 1rem;">No candidates assigned.</p>
+  {% endif %}
+</div>
+{% endfor %}
+{% endblock %}
+
+{% block extra_js %}
+<script nonce="{{ csp_nonce }}">
+document.querySelectorAll('[data-print]').forEach(function (b) {
+  b.addEventListener('click', function () { window.print(); });
+});
+</script>
+{% endblock %}

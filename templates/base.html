@@ -680,6 +680,13 @@
                         </ul>
                     </li>
                     {% endif %}
+                    {% if session.get('role') in ('super_admin', 'admin') %}
+                    <li class="nav-item">
+                        <a href="{{ url_for('exam_halls.index') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('exam_halls.') %}active{% endif %}">
+                            <i class="fas fa-chair"></i><span>Exam Hall Allocator</span>
+                        </a>
+                    </li>
+                    {% endif %}
                     {% if can_access_module('website') %}
                     <li class="nav-item">
                         <a href="{{ url_for('website_admin.index') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('website_admin.') %}active{% endif %}">

@@ -1,0 +1,126 @@
+{% extends "base.html" %}
+{% block title %}Exam Hall Allocator - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Tools</span> <span>Exam Hall Allocator</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.eh-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+@media (min-width: 900px) { .eh-grid { grid-template-columns: 1.2fr 1fr; } }
+.eh-card { background: var(--bg-card); border: 1px solid #e0e0e0; border-radius: 10px; padding: 1rem; margin-bottom: 1rem; }
+.eh-card h3 { font-size: 1rem; margin: 0 0 .75rem 0; }
+.cls-list { display: grid; grid-template-columns: 1fr 1fr; gap: .4rem; }
+@media (max-width: 560px) { .cls-list { grid-template-columns: 1fr; } }
+.cls-item { display: flex; align-items: center; gap: .5rem; padding: .5rem .6rem; background: var(--gray-50); border: 1px solid #e5e7eb; border-radius: 8px; cursor: pointer; font-size: .85rem; }
+.cls-item .cnt { margin-left: auto; color: var(--text-muted); font-size: .78rem; font-weight: 600; }
+.hall-row { display: grid; grid-template-columns: 1.4fr .8fr auto auto; gap: .5rem; align-items: center; margin-bottom: .5rem; }
+.hall-row input[type=text], .hall-row input[type=number] { padding: .5rem; border: 1px solid #ddd; border-radius: 6px; width: 100%; }
+.hall-row .main-pick { font-size: .72rem; color: var(--text-muted); text-align: center; }
+.eh-actions { display: flex; gap: .5rem; flex-wrap: wrap; margin-top: 1rem; }
+.muted { color: var(--text-muted); font-size: .8rem; }
+.linkbtn { background: none; border: none; color: var(--primary); cursor: pointer; font-size: .82rem; padding: 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem;">
+  <div>
+    <h1 style="font-size:1.25rem;margin:0;"><i class="fas fa-chair"></i> Exam Hall Allocator</h1>
+    <p class="muted" style="margin:.25rem 0 0;">Spread each class &amp; arm across halls to reduce malpractice. The Main hall (bigger capacity) automatically takes proportionally more candidates.</p>
+  </div>
+</div>
+
+{% if not has_term %}
+  <div class="eh-card"><p class="muted" style="margin:0;">No active term is set. Set an active term first, then come back to allocate halls.</p></div>
+{% elif not assignments %}
+  <div class="eh-card"><p class="muted" style="margin:0;">No classes with enrolled students were found for the active term in your branch.</p></div>
+{% else %}
+<form method="POST" action="{{ url_for('exam_halls.allocate') }}">
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+  <div class="eh-grid">
+    <!-- Classes & arms -->
+    <div class="eh-card">
+      <h3>1. Classes &amp; arms to seat</h3>
+      <div style="margin-bottom:.6rem;">
+        <button type="button" class="linkbtn" data-eh="all">Select all</button> ·
+        <button type="button" class="linkbtn" data-eh="none">Clear</button>
+      </div>
+      <div class="cls-list">
+        {% for a in assignments %}
+        <label class="cls-item">
+          <input type="checkbox" name="assignments" value="{{ a.id }}" class="eh-cls">
+          <span>{{ a.label }}</span>
+          <span class="cnt">{{ a.count }}</span>
+        </label>
+        {% endfor %}
+      </div>
+      <p class="muted" style="margin:.6rem 0 0;">Total selected: <strong id="ehSel">0</strong> candidates</p>
+    </div>
+
+    <!-- Halls -->
+    <div class="eh-card">
+      <h3>2. Halls</h3>
+      <div class="hall-row" style="font-weight:600;font-size:.72rem;color:var(--text-muted);">
+        <div>Hall name</div><div>Capacity</div><div class="main-pick">Main</div><div></div>
+      </div>
+      <div id="hallRows"></div>
+      <button type="button" class="linkbtn" id="addHall"><i class="fas fa-plus"></i> Add hall</button>
+      <label style="display:flex;align-items:center;gap:.5rem;margin-top:.9rem;font-size:.85rem;">
+        <input type="checkbox" name="balance_gender" checked> Balance gender within each hall
+      </label>
+      <p class="muted" style="margin:.5rem 0 0;">Mark your biggest room as <strong>Main</strong> and give it a larger capacity (e.g. 2–3× a normal hall). Candidates are shared out in proportion to capacity.</p>
+    </div>
+  </div>
+
+  <div class="eh-actions">
+    <button type="submit" class="btn btn-primary"><i class="fas fa-wand-magic-sparkles"></i> Allocate halls</button>
+  </div>
+</form>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var rows = document.getElementById('hallRows');
+  var n = 0;
+  function addHall(name, cap, main) {
+    var i = n++;
+    var div = document.createElement('div');
+    div.className = 'hall-row';
+    div.innerHTML =
+      '<input type="text" name="hall_name" placeholder="Hall ' + (i + 1) + '" value="' + (name || '') + '">' +
+      '<input type="number" name="hall_capacity" min="1" placeholder="seats" value="' + (cap || '') + '">' +
+      '<div class="main-pick"><input type="radio" name="main_hall" value="' + i + '"' + (main ? ' checked' : '') + '></div>' +
+      '<button type="button" class="linkbtn eh-del" title="Remove">&times;</button>';
+    rows.appendChild(div);
+    div.querySelector('.eh-del').addEventListener('click', function () { div.remove(); });
+  }
+  // Sensible starting point: a Main hall plus two standard halls.
+  addHall('Main Hall', 120, true);
+  addHall('Hall 2', 40, false);
+  addHall('Hall 3', 40, false);
+  document.getElementById('addHall').addEventListener('click', function () { addHall('', '', false); });
+
+  var boxes = Array.prototype.slice.call(document.querySelectorAll('.eh-cls'));
+  var sel = document.getElementById('ehSel');
+  function recount() {
+    var t = 0;
+    boxes.forEach(function (b) {
+      if (b.checked) {
+        var c = b.closest('.cls-item').querySelector('.cnt');
+        t += parseInt(c.textContent, 10) || 0;
+      }
+    });
+    sel.textContent = t;
+  }
+  boxes.forEach(function (b) { b.addEventListener('change', recount); });
+  document.querySelectorAll('[data-eh]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var on = btn.getAttribute('data-eh') === 'all';
+      boxes.forEach(function (b) { b.checked = on; });
+      recount();
+    });
+  });
+})();
+</script>
+{% endblock %}
