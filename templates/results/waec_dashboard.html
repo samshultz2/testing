@@ -805,7 +805,7 @@
         <div style="text-align: center; margin: 0 0 10px 0; padding-bottom: 8px; border-bottom: 2px solid #007bff;">
             <div style="font-size: 17px; font-weight: 800; color: #0f172a; letter-spacing: .3px; line-height: 1.2;">{{ school_brand.name|upper }}</div>
             {% if export_branch %}<div style="font-size: 12px; font-weight: 700; color: #334155; margin-top: 2px;">{{ export_branch|upper }}</div>{% endif %}
-            <div style="font-size: 12px; font-weight: 600; color: #007bff; margin-top: 4px;">WAEC{% if selected_year %} {{ selected_year }}/{{ selected_year + 1 }}{% endif %} RESULTS</div>
+            <div style="font-size: 12px; font-weight: 600; color: #007bff; margin-top: 4px;">WAEC{% if selected_year %} {{ selected_year - 1 }}/{{ selected_year }}{% endif %} RESULTS</div>
         </div>
         <p id="waecExportSummary" style="text-align: center; color: #666; margin: 0 0 10px 0; font-size: 11px;"></p>
         <table id="waecExportTable" style="width: 100%; border-collapse: collapse; font-size: 11px;">
