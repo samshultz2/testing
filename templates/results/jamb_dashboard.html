@@ -962,12 +962,12 @@ function toggleJambExportOptions() {
 
 // Build the PDF from the same A4 page slices as the image export, so each PDF
 // page keeps its bottom margin and breaks on a row gap (no half-cut scores).
-function saveCanvasAsPdf(canvas, filename) {
+function saveCanvasAsPdf(canvas, filename, breaks) {
     var jsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
     var pdf = new jsPDF('p', 'mm', 'a4');
     var pageW = pdf.internal.pageSize.getWidth();
     var pageH = pdf.internal.pageSize.getHeight();
-    var pages = sliceCanvasToA4Pages(canvas);
+    var pages = sliceCanvasToA4Pages(canvas, breaks);
     pages.forEach(function (data, i) {
         if (i > 0) pdf.addPage();
         // Each slice is already A4-portrait proportioned, so it fills the page.
@@ -976,44 +976,43 @@ function saveCanvasAsPdf(canvas, filename) {
     pdf.save(filename);
 }
 
+// The canvas-Y (in device pixels) of the bottom edge of every table row in the
+// export, so page breaks can land on a real row boundary. `scale` maps the
+// container's CSS pixels to the rendered canvas pixels.
+function computeRowBreaks(container, scale) {
+    var top = container.getBoundingClientRect().top;
+    var breaks = [];
+    container.querySelectorAll('tr').forEach(function (r) {
+        breaks.push(Math.round((r.getBoundingClientRect().bottom - top) * scale));
+    });
+    return breaks;
+}
+
 // Slice a tall canvas into A4-portrait page images (white-padded to full page
 // height), so a long results table downloads as several pages instead of one
-// giant strip. Each page keeps a white margin at the bottom, and page breaks
-// are nudged up to a blank scan-line so a table row (and its score) is never
-// cut in half at the bottom edge. Returns an array of PNG data URLs.
-function sliceCanvasToA4Pages(canvas) {
+// giant strip. Each page break lands on a real row boundary (`breaks`), so a
+// table row — and its name/score — is never cut in half; the leftover space
+// below the last full row becomes a clean white bottom margin.
+function sliceCanvasToA4Pages(canvas, breaks) {
     var w = canvas.width;
     var pageH = Math.round(w * 297 / 210);              // A4 portrait, same width
     if (canvas.height <= pageH) {
         return [canvas.toDataURL('image/png', 1.0)];
     }
-    var margin = Math.round(pageH * 0.04);              // white gutter at page bottom
-    var usable = pageH - margin;
-
-    // Read pixels once so we can find blank (all-white) rows to break on.
-    var img = null;
-    try { img = canvas.getContext('2d').getImageData(0, 0, w, canvas.height); }
-    catch (e) { img = null; }                           // tainted canvas → skip smart break
-    function rowIsBlank(yy) {
-        if (!img) return false;
-        var d = img.data, base = yy * w * 4;
-        for (var x = 0; x < w; x++) {
-            var p = base + x * 4;
-            if (d[p] < 245 || d[p + 1] < 245 || d[p + 2] < 245) return false;
-        }
-        return true;
-    }
+    var sorted = (breaks || []).slice().sort(function (a, b) { return a - b; });
 
     var pages = [], y = 0;
     while (y < canvas.height) {
-        var end = Math.min(y + usable, canvas.height);
+        var end = Math.min(y + pageH, canvas.height);
         if (end < canvas.height) {
-            // Search back from the nominal break for a blank line (a row gap),
-            // but don't shrink a page below 60% of its usable height.
-            var floor = y + Math.round(usable * 0.6);
-            for (var s = end; s > floor; s--) {
-                if (rowIsBlank(s)) { end = s; break; }
+            // Largest row boundary that fits fully on this page.
+            var best = -1;
+            for (var i = 0; i < sorted.length; i++) {
+                if (sorted[i] > y && sorted[i] <= end) best = sorted[i];
+                else if (sorted[i] > end) break;
             }
+            if (best > y) end = best;                   // else: a single row taller
+                                                        // than a page → hard cut
         }
         var sliceH = end - y;
         var pc = document.createElement('canvas');
@@ -1218,6 +1217,10 @@ function generateExport() {
             width: 500,
             windowWidth: 500
         }).then(function(canvas) {
+            // Row boundaries (canvas px) measured while the container is still
+            // laid out, so page breaks never cut through a row.
+            var breaks = computeRowBreaks(container, canvas.width / container.offsetWidth);
+
             container.style.position = 'absolute';
             container.style.left = '-9999px';
 
@@ -1227,7 +1230,7 @@ function generateExport() {
             // PDF: build and download directly.
             if (exportFormat === 'pdf') {
                 try {
-                    saveCanvasAsPdf(canvas, 'JAMB_Results_' + selectedYear + '.pdf');
+                    saveCanvasAsPdf(canvas, 'JAMB_Results_' + selectedYear + '.pdf', breaks);
                 } catch (e) {
                     alert('Error generating PDF: ' + e.message);
                 }
@@ -1235,7 +1238,7 @@ function generateExport() {
             }
 
             // Image: slice into A4 pages so a long table isn't one giant strip.
-            var pages = sliceCanvasToA4Pages(canvas);
+            var pages = sliceCanvasToA4Pages(canvas, breaks);
             var multi = pages.length > 1;
             var saveModal = document.createElement('div');
             saveModal.id = 'saveImageModal';
