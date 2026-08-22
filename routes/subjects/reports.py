@@ -518,6 +518,35 @@ def _combine_multi(rows_in, subject_ids, conditions, at_names=None):
     return rows, bool(valid), labels
 
 
+def _split_into_groups(rows, n):
+    """Split the filtered rows into ``n`` ability-balanced groups by combined
+    average.
+
+    Students are ordered by average (desc) and grouped into 10-point bands
+    (90+, 80–89.99, …). Within each band the group that receives the next
+    student rotates, and the rotation pointer carries over between bands, so:
+    every band is shared as evenly as possible, no group ends up with more
+    high-scorers than another, and the group sizes differ by at most one
+    (well within the ±2 requirement). Returns a list of ``n`` row lists."""
+    from itertools import groupby
+
+    def avg_of(r):
+        a = r.get('combo_average')
+        return a if isinstance(a, (int, float)) else -1.0
+
+    def band(r):
+        return int(avg_of(r) // 10)
+
+    ordered = sorted(rows, key=avg_of, reverse=True)
+    groups = [[] for _ in range(n)]
+    ptr = 0
+    for _b, members in groupby(ordered, key=band):     # highest band first
+        for r in members:
+            groups[ptr % n].append(r)
+            ptr += 1                                    # continuous → balanced
+    return groups
+
+
 @subjects_bp.route('/broadsheet/combine')
 @login_required
 def broadsheet_combine():
@@ -601,7 +630,29 @@ def combine_export():
     if not keys:
         keys = ['sn', 'student', 'class', 'arm'] + [f'subj:{s["id"]}' for s in chosen_subjects] + ['total', 'average']
 
+    # Optional: split the qualifying students into N ability-balanced groups by
+    # combined average. Rows get a Group column, are ordered A→…, and S/N
+    # restarts within each group.
+    groups_n = request.args.get('groups', type=int) or 1
+    split_note = None
+    if groups_n and groups_n >= 2:
+        buckets = _split_into_groups(rows, groups_n)
+        ordered_rows = []
+        for gi, members in enumerate(buckets):
+            letter = chr(ord('A') + gi) if gi < 26 else str(gi + 1)
+            for sn, r in enumerate(members, 1):
+                rr = dict(r); rr['_group'] = 'Group ' + letter; rr['_sn'] = sn
+                ordered_rows.append(rr)
+        rows = ordered_rows
+        if 'group' not in keys:
+            keys = ['group'] + keys
+        sizes = [len(b) for b in buckets]
+        split_note = 'Split into %d balanced groups (%s) by average' % (
+            groups_n, '/'.join(str(x) for x in sizes))
+
     def header_for(k):
+        if k == 'group':
+            return 'Group'
         if k == 'sn':
             return 'S/N'
         if k == 'student':
@@ -624,8 +675,10 @@ def combine_export():
     from utils.numfmt import fmt_num as _n
 
     def value_for(k, r, i):
+        if k == 'group':
+            return r.get('_group', '')
         if k == 'sn':
-            return str(i)
+            return str(r.get('_sn', i))
         if k == 'student':
             return r['student']
         if k == 'class':
@@ -654,6 +707,8 @@ def combine_export():
         bits.append(term.full_name)
     if active:
         bits.append('Filter: ' + cond)
+    if split_note:
+        bits.append(split_note)
     subtitle = 'Subject Combination · ' + ' · '.join(bits)
     # Optional custom heading typed by the user (e.g. "SSS2 SCIENCE MERIT LIST").
     title = (request.args.get('title') or '').strip() or 'Subject Combination Results'
@@ -704,7 +759,7 @@ def combine_export():
 def _combo_numeric_from(keys):
     """Index of the first numeric column (everything up to and including the last
     of student/class/arm stays left-aligned)."""
-    left = {'sn', 'student', 'class', 'arm'}
+    left = {'group', 'sn', 'student', 'class', 'arm'}
     idx = 0
     for i, k in enumerate(keys):
         if k in left:

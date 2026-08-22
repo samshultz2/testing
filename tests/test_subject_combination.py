@@ -24,6 +24,29 @@ def test_combine_rows_total_and_average():
     assert rows3[0]['combo_total'] == 60 and rows3[0]['combo_average'] == 30.0
 
 
+def test_split_into_groups_is_balanced_by_average():
+    from routes.subjects.reports import _split_into_groups
+    # 10 students across bands; split into 3 groups.
+    rows = [{'student': 's%d' % i, 'combo_average': a} for i, a in enumerate(
+        [95, 92, 88, 85, 82, 78, 74, 61, 55, 30])]
+    groups = _split_into_groups(rows, 3)
+    assert len(groups) == 3
+    sizes = sorted(len(g) for g in groups)
+    assert sizes[-1] - sizes[0] <= 2                 # sizes within ±2
+    assert sum(sizes) == len(rows)                    # everyone placed once
+    # No group hoards the top scorers: each group's mean average is close.
+    means = [sum(r['combo_average'] for r in g) / len(g) for g in groups if g]
+    assert max(means) - min(means) < 20
+    # The three highest scorers land in three different groups.
+    top = {'s0', 's1', 's2'}
+    where = {}
+    for gi, g in enumerate(groups):
+        for r in g:
+            if r['student'] in top:
+                where[r['student']] = gi
+    assert len(set(where.values())) == 3
+
+
 def test_combine_export_smoke(app):
     """The export endpoint returns each format with the right content type."""
     c = app.test_client()

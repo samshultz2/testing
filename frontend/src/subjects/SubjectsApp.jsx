@@ -2094,6 +2094,7 @@ function Combine({ d, notify }) {
   // Export column picker
   const [showExport, setShowExport] = useState(false);
   const [expTitle, setExpTitle] = useState('');
+  const [groupsN, setGroupsN] = useState(1);   // 1 = don't split
   const [cols, setCols] = useState({ sn: true, student: true, class: true, arm: true, subjects: true, total: true, average: true, missing: false });
   const setCol = (k) => setCols((c) => ({ ...c, [k]: !c[k] }));
   const exportUrl = (fmt) => {
@@ -2117,6 +2118,7 @@ function Combine({ d, notify }) {
     }
     p.set('columns', keys.join(','));
     if (expTitle.trim()) p.set('title', expTitle.trim());
+    if (groupsN >= 2) p.set('groups', String(groupsN));
     p.set('format', fmt);
     return `${d.urls.export}?${p.toString()}`;
   };
@@ -2291,6 +2293,19 @@ function Combine({ d, notify }) {
                     <input type="checkbox" checked={!!cols[k]} onChange={() => setCol(k)} /> {label}
                   </label>
                 ))}
+              </div>
+              <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: '.7rem', marginBottom: '.8rem' }}>
+                <label className="form-label" style={{ fontWeight: 600 }}>Split into balanced groups</label>
+                <div style={{ display: 'flex', gap: '.5rem', alignItems: 'center' }}>
+                  <select className="form-control" style={{ width: 'auto' }} value={groupsN}
+                          onChange={(e) => setGroupsN(parseInt(e.target.value, 10) || 1)}>
+                    <option value={1}>Don't split — one list</option>
+                    {[2, 3, 4, 5, 6].map((n) => <option key={n} value={n}>{n} groups</option>)}
+                  </select>
+                  <span className="text-muted text-sm">Group A, B, … balanced by average</span>
+                </div>
+                {groupsN >= 2 && <p className="text-muted text-sm" style={{ margin: '.4rem 0 0' }}>
+                  Students are shared evenly across {groupsN} groups by their combined average, so each group has a similar mix of abilities and roughly the same size.</p>}
               </div>
               <div className="page-header-actions">
                 <button type="button" className="btn btn-danger btn-sm" onClick={() => doExport('pdf')}><i aria-hidden="true" className="fas fa-file-pdf" /> PDF</button>
