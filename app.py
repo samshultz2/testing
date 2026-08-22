@@ -361,6 +361,21 @@ def create_app(config_class=None):
     from utils.tenant_runtime import route_tenant, enforce_billing
     from routes.marketing import serve_marketing_home
     app.before_request(route_tenant)
+
+    # Backfill any class-arm assignment left without a branch to the default
+    # branch (once per tenant engine), so unbranched arms don't disappear when a
+    # specific branch is selected. Cheap no-op after the first heal.
+    def _heal_academics_branch():
+        from flask import request as _req
+        if _req.endpoint == 'static':
+            return
+        try:
+            from utils.academics_schema import ensure_class_arm_branch
+            ensure_class_arm_branch()
+        except Exception:
+            pass
+    app.before_request(_heal_academics_branch)
+
     # On a platform host (www/signup/apex-without-owner) the homepage is the
     # public marketing page, served here before any login gate. No-op otherwise.
     app.before_request(serve_marketing_home)

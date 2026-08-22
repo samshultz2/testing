@@ -772,8 +772,10 @@ def add_assignment():
             return _err('This class is already set up for this term.',
                         url_for('academics.assignments_list', term_id=term_id))
 
+        from utils.branch_scope import branch_for_new
         db.session.add(ClassArmAssignment(
             term_id=term_id, class_id=class_id, arm_id=arm_id,
+            branch_id=branch_for_new(),          # no branch picked -> default branch
             form_teacher_name=form_teacher or None,
             form_teacher_phone=form_teacher_phone or None))
         db.session.commit()
@@ -1046,11 +1048,12 @@ def copy_term_setup():
                 if existing:
                     dest_assign = existing
                 else:
-                    # Create new assignment
+                    # Create new assignment (inherit the source's branch)
                     dest_assign = ClassArmAssignment(
                         term_id=to_term_id,
                         class_id=src_assign.class_id,
-                        arm_id=src_assign.arm_id
+                        arm_id=src_assign.arm_id,
+                        branch_id=src_assign.branch_id
                     )
                     db.session.add(dest_assign)
                     db.session.flush()  # Get ID
