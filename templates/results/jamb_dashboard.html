@@ -889,6 +889,21 @@
             </div>
 
             <div style="margin-bottom: 1rem;">
+                <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.5rem;">Filter by JAMB score:</label>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                    <div>
+                        <label style="font-size: 0.72rem; color: #666; display: block; margin-bottom: 0.2rem;">Score &ge; (min)</label>
+                        <input type="number" id="expMinScore" min="0" max="400" placeholder="e.g. 200" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 6px;">
+                    </div>
+                    <div>
+                        <label style="font-size: 0.72rem; color: #666; display: block; margin-bottom: 0.2rem;">Score &le; (max)</label>
+                        <input type="number" id="expMaxScore" min="0" max="400" placeholder="e.g. 300" style="width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 6px;">
+                    </div>
+                </div>
+                <p style="font-size: 0.72rem; color: #888; margin: 0.35rem 0 0 0;">Only students within this range are shown and downloaded. Leave blank to include everyone.</p>
+            </div>
+
+            <div style="margin-bottom: 1rem;">
                 <label style="font-size: 0.85rem; font-weight: 500; display: block; margin-bottom: 0.5rem;">Include Summary Stats:</label>
                 <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.5rem; background: #f8f9fa; border-radius: 6px; margin-bottom: 0.5rem; cursor: pointer;">
                     <input type="checkbox" id="expSummary" checked>
@@ -945,55 +960,93 @@ function toggleJambExportOptions() {
     document.getElementById('subjectOptions').style.display = t === 'subjects' ? 'block' : 'none';
 }
 
-// Slice a tall canvas across A4 pages and download as a PDF.
+// Build the PDF from the same A4 page slices as the image export, so each PDF
+// page keeps its bottom margin and breaks on a row gap (no half-cut scores).
 function saveCanvasAsPdf(canvas, filename) {
     var jsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
     var pdf = new jsPDF('p', 'mm', 'a4');
     var pageW = pdf.internal.pageSize.getWidth();
     var pageH = pdf.internal.pageSize.getHeight();
-    var imgW = pageW;
-    var imgH = canvas.height * imgW / canvas.width;
-    var img = canvas.toDataURL('image/png', 1.0);
-    if (imgH <= pageH) {
-        pdf.addImage(img, 'PNG', 0, 0, imgW, imgH);
-    } else {
-        var remaining = imgH, pos = 0;
-        while (remaining > 0) {
-            pdf.addImage(img, 'PNG', 0, pos, imgW, imgH);
-            remaining -= pageH; pos -= pageH;
-            if (remaining > 0) pdf.addPage();
-        }
-    }
+    var pages = sliceCanvasToA4Pages(canvas);
+    pages.forEach(function (data, i) {
+        if (i > 0) pdf.addPage();
+        // Each slice is already A4-portrait proportioned, so it fills the page.
+        pdf.addImage(data, 'PNG', 0, 0, pageW, pageH);
+    });
     pdf.save(filename);
 }
 
 // Slice a tall canvas into A4-portrait page images (white-padded to full page
 // height), so a long results table downloads as several pages instead of one
-// giant strip. Returns an array of PNG data URLs.
+// giant strip. Each page keeps a white margin at the bottom, and page breaks
+// are nudged up to a blank scan-line so a table row (and its score) is never
+// cut in half at the bottom edge. Returns an array of PNG data URLs.
 function sliceCanvasToA4Pages(canvas) {
-    var pageH = Math.round(canvas.width * 297 / 210);   // A4 portrait, same width
+    var w = canvas.width;
+    var pageH = Math.round(w * 297 / 210);              // A4 portrait, same width
     if (canvas.height <= pageH) {
         return [canvas.toDataURL('image/png', 1.0)];
     }
-    var pages = [];
-    for (var y = 0; y < canvas.height; y += pageH) {
-        var sliceH = Math.min(pageH, canvas.height - y);
+    var margin = Math.round(pageH * 0.04);              // white gutter at page bottom
+    var usable = pageH - margin;
+
+    // Read pixels once so we can find blank (all-white) rows to break on.
+    var img = null;
+    try { img = canvas.getContext('2d').getImageData(0, 0, w, canvas.height); }
+    catch (e) { img = null; }                           // tainted canvas → skip smart break
+    function rowIsBlank(yy) {
+        if (!img) return false;
+        var d = img.data, base = yy * w * 4;
+        for (var x = 0; x < w; x++) {
+            var p = base + x * 4;
+            if (d[p] < 245 || d[p + 1] < 245 || d[p + 2] < 245) return false;
+        }
+        return true;
+    }
+
+    var pages = [], y = 0;
+    while (y < canvas.height) {
+        var end = Math.min(y + usable, canvas.height);
+        if (end < canvas.height) {
+            // Search back from the nominal break for a blank line (a row gap),
+            // but don't shrink a page below 60% of its usable height.
+            var floor = y + Math.round(usable * 0.6);
+            for (var s = end; s > floor; s--) {
+                if (rowIsBlank(s)) { end = s; break; }
+            }
+        }
+        var sliceH = end - y;
         var pc = document.createElement('canvas');
-        pc.width = canvas.width; pc.height = pageH;
+        pc.width = w; pc.height = pageH;
         var ctx = pc.getContext('2d');
         ctx.fillStyle = '#ffffff';
         ctx.fillRect(0, 0, pc.width, pc.height);
-        ctx.drawImage(canvas, 0, y, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+        ctx.drawImage(canvas, 0, y, w, sliceH, 0, 0, w, sliceH);
         pages.push(pc.toDataURL('image/png', 1.0));
+        y = end;
     }
     return pages;
+}
+
+// Students to include in the export, after the optional JAMB-score range filter.
+function currentExportRows() {
+    var minEl = document.getElementById('expMinScore');
+    var maxEl = document.getElementById('expMaxScore');
+    var minV = minEl && minEl.value !== '' ? parseFloat(minEl.value) : NaN;
+    var maxV = maxEl && maxEl.value !== '' ? parseFloat(maxEl.value) : NaN;
+    return studentsData.filter(function (s) {
+        var v = Number(s.total_score) || 0;
+        if (!isNaN(minV) && v < minV) return false;
+        if (!isNaN(maxV) && v > maxV) return false;
+        return true;
+    });
 }
 
 // Aggregate per-subject stats from the loaded students (JAMB subjects vary per
 // candidate, so this is computed client-side, like the WAEC subject analysis).
 function jambSubjectStats() {
     var map = {};
-    studentsData.forEach(function (s) {
+    currentExportRows().forEach(function (s) {
         (s.subjects || []).forEach(function (sub) {
             if (!sub || !sub.name) return;
             var code = sub.code || String(sub.name).substring(0, 3).toUpperCase();
@@ -1034,7 +1087,7 @@ function buildJambStudentsExport() {
     document.getElementById('exportTableHead').innerHTML = headerHtml;
 
     let bodyHtml = '';
-    studentsData.forEach((s, idx) => {
+    currentExportRows().forEach((s, idx) => {
         const scoreColor = s.total_score >= 300 ? '#28a745' : s.total_score >= 250 ? '#17a2b8' : s.total_score >= 200 ? '#856404' : '#dc3545';
         const rowBg = idx % 2 === 0 ? '#ffffff' : '#f9f9f9';
         bodyHtml += `<tr style="background:${rowBg}">`;
@@ -1099,15 +1152,31 @@ function generateExport() {
     const showTimestamp = document.getElementById('expTimestamp').checked;
     const quality = parseInt(document.getElementById('expQuality').value);
 
+    // Apply the score-range filter first so nothing outside it is built/exported.
+    const rows = currentExportRows();
+    if (!rows.length) {
+        alert('No students match the selected score range. Adjust the min/max and try again.');
+        return;
+    }
+
     if (exportType === 'subjects') {
         buildJambSubjectsExport();
     } else {
         buildJambStudentsExport();
     }
 
-    // Summary
-    if (showSummary && schoolStats) {
-        document.getElementById('exportSummary').innerHTML = `Students: <strong>${studentsData.length}</strong> | Avg: <strong>${schoolStats.mean_score}</strong> | High: <strong>${schoolStats.max_score}</strong> | Low: <strong>${schoolStats.min_score}</strong>`;
+    // Summary — computed from the filtered rows, with the active range noted.
+    if (showSummary) {
+        const scores = rows.map(r => Number(r.total_score) || 0);
+        const avg = Math.round(scores.reduce((a, b) => a + b, 0) / scores.length * 10) / 10;
+        const hi = Math.max.apply(null, scores), lo = Math.min.apply(null, scores);
+        const minEl = document.getElementById('expMinScore'), maxEl = document.getElementById('expMaxScore');
+        let range = '';
+        if (minEl && minEl.value !== '') range += ` &ge; ${minEl.value}`;
+        if (maxEl && maxEl.value !== '') range += ` &le; ${maxEl.value}`;
+        document.getElementById('exportSummary').innerHTML =
+            `Students: <strong>${rows.length}</strong> | Avg: <strong>${avg}</strong> | High: <strong>${hi}</strong> | Low: <strong>${lo}</strong>` +
+            (range ? ` | Score${range}` : '');
         document.getElementById('exportSummary').style.display = 'block';
     } else {
         document.getElementById('exportSummary').style.display = 'none';
