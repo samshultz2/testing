@@ -53,21 +53,50 @@
         </label>
         {% endfor %}
       </div>
-      <p class="muted" style="margin:.6rem 0 0;">Total selected: <strong id="ehSel">0</strong> candidates</p>
+      <p class="muted" style="margin:.6rem 0 0;">Total selected: <strong id="ehSel">0</strong> candidates <span class="muted">(before the filters below)</span></p>
+
+      <hr style="border:none;border-top:1px solid #eee;margin:.9rem 0;">
+      <label style="font-size:.8rem;font-weight:600;display:block;margin-bottom:.35rem;">Candidate set</label>
+      <select name="candidate_set" style="width:100%;padding:.5rem;border:1px solid #ddd;border-radius:6px;font-size:.85rem;">
+        {% for val, label in candidate_sets.items() %}
+        <option value="{{ val }}">{{ label }}</option>
+        {% endfor %}
+      </select>
+      <label style="font-size:.8rem;font-weight:600;display:block;margin:.75rem 0 .35rem;">Limit to streams <span class="muted">(optional)</span></label>
+      <div style="display:flex;gap:.5rem;flex-wrap:wrap;">
+        {% for st in streams %}
+        <label class="cls-item" style="flex:0 0 auto;"><input type="checkbox" name="streams" value="{{ st }}"> {{ st }}</label>
+        {% endfor %}
+      </div>
+      <p class="muted" style="margin:.5rem 0 0;">Use this to seat only WAEC/JAMB-registered candidates, or a single stream — the tool then fits internal exams, WAEC and JAMB.</p>
     </div>
 
     <!-- Halls -->
     <div class="eh-card">
-      <h3>2. Halls</h3>
+      <h3>2. Halls <span class="muted" style="font-weight:400;">— you choose how many</span></h3>
+      <div style="display:flex;align-items:end;gap:.5rem;flex-wrap:wrap;margin-bottom:.75rem;">
+        <div><label style="font-size:.72rem;color:var(--text-muted);display:block;">Number of halls</label>
+          <input type="number" id="hallCount" min="1" max="40" value="3" style="width:90px;padding:.45rem;border:1px solid #ddd;border-radius:6px;"></div>
+        <div><label style="font-size:.72rem;color:var(--text-muted);display:block;">Main capacity</label>
+          <input type="number" id="mainCap" min="1" value="120" style="width:90px;padding:.45rem;border:1px solid #ddd;border-radius:6px;"></div>
+        <div><label style="font-size:.72rem;color:var(--text-muted);display:block;">Other capacity</label>
+          <input type="number" id="stdCap" min="1" value="40" style="width:90px;padding:.45rem;border:1px solid #ddd;border-radius:6px;"></div>
+        <button type="button" class="btn btn-secondary btn-sm" id="genHalls">Generate</button>
+      </div>
       <div class="hall-row" style="font-weight:600;font-size:.72rem;color:var(--text-muted);">
         <div>Hall name</div><div>Capacity</div><div class="main-pick">Main</div><div></div>
       </div>
       <div id="hallRows"></div>
       <button type="button" class="linkbtn" id="addHall"><i class="fas fa-plus"></i> Add hall</button>
-      <label style="display:flex;align-items:center;gap:.5rem;margin-top:.9rem;font-size:.85rem;">
-        <input type="checkbox" name="balance_gender" checked> Balance gender within each hall
-      </label>
-      <p class="muted" style="margin:.5rem 0 0;">Mark your biggest room as <strong>Main</strong> and give it a larger capacity (e.g. 2–3× a normal hall). Candidates are shared out in proportion to capacity.</p>
+
+      <div style="display:flex;align-items:end;gap:.5rem;margin-top:.9rem;">
+        <div><label style="font-size:.72rem;color:var(--text-muted);display:block;">Seats per row</label>
+          <input type="number" name="seats_per_row" min="2" max="20" value="5" style="width:90px;padding:.45rem;border:1px solid #ddd;border-radius:6px;"></div>
+        <label style="display:flex;align-items:center;gap:.5rem;font-size:.85rem;padding-bottom:.4rem;">
+          <input type="checkbox" name="balance_gender" checked> Balance gender per hall
+        </label>
+      </div>
+      <p class="muted" style="margin:.5rem 0 0;">Mark your biggest room as <strong>Main</strong> with a larger capacity (2–3× a normal hall) — candidates are shared in proportion to capacity. Within each hall, seats are numbered so classmates from the same arm don't sit next to each other.</p>
     </div>
   </div>
 
@@ -95,10 +124,16 @@
     rows.appendChild(div);
     div.querySelector('.eh-del').addEventListener('click', function () { div.remove(); });
   }
-  // Sensible starting point: a Main hall plus two standard halls.
-  addHall('Main Hall', 120, true);
-  addHall('Hall 2', 40, false);
-  addHall('Hall 3', 40, false);
+  function generate() {
+    var k = Math.max(1, Math.min(40, parseInt(document.getElementById('hallCount').value, 10) || 1));
+    var mainCap = parseInt(document.getElementById('mainCap').value, 10) || 120;
+    var stdCap = parseInt(document.getElementById('stdCap').value, 10) || 40;
+    rows.innerHTML = ''; n = 0;
+    addHall('Main Hall', mainCap, true);
+    for (var i = 2; i <= k; i++) addHall('Hall ' + i, stdCap, false);
+  }
+  generate();       // sensible starting point from the defaults above
+  document.getElementById('genHalls').addEventListener('click', generate);
   document.getElementById('addHall').addEventListener('click', function () { addHall('', '', false); });
 
   var boxes = Array.prototype.slice.call(document.querySelectorAll('.eh-cls'));

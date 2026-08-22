@@ -79,3 +79,50 @@ def test_deterministic():
     a = allocate_halls(groups, halls)
     b = allocate_halls(groups, halls)
     assert [h['count'] for h in a['halls']] == [h['count'] for h in b['halls']]
+
+
+# ---- Seat layout within a hall -------------------------------------------------
+from utils.exam_hall_allocator import seat_hall
+
+
+def _seat_students(spec):
+    """spec: {'SSS1 Rose': 10, ...} -> flat student list stamped with group key."""
+    out = []
+    for key, n in spec.items():
+        for i in range(n):
+            out.append({'id': f'{key}-{i}', 'name': f'{key} {i}', 'gender': 'Male',
+                        '_group_key': key})
+    return out
+
+
+def _conflicts(res):
+    return res['conflicts']
+
+
+def test_seat_grid_shape_and_numbering():
+    res = seat_hall(_seat_students({'A': 7, 'B': 6}), cols=5)
+    assert res['cols'] == 5 and res['nrows'] == 3 and res['count'] == 13
+    seats = [c['seat'] for row in res['rows'] for c in row if c]
+    assert seats == list(range(1, 14))          # numbered 1..N, no gaps
+
+
+def test_seating_avoids_same_group_neighbours():
+    # Two equal groups on a wide-enough grid can be laid out with zero conflicts.
+    res = seat_hall(_seat_students({'SSS1 Rose': 15, 'SSS1 Lily': 15}), cols=6)
+    assert _conflicts(res) == 0
+
+
+def test_seating_single_group_is_handled():
+    res = seat_hall(_seat_students({'Solo': 12}), cols=4)
+    # One group only — adjacency is unavoidable, but it must still seat everyone.
+    assert res['count'] == 12
+    seats = [c for row in res['rows'] for c in row if c]
+    assert len(seats) == 12
+
+
+def test_seating_beats_naive_block_layout():
+    students = _seat_students({'A': 12, 'B': 12, 'C': 12})
+    res = seat_hall(students, cols=6, optimize=True)
+    # A naive "all A, then all B, then all C" block layout has many same-group
+    # neighbours; the allocator should do far better.
+    assert _conflicts(res) <= 4

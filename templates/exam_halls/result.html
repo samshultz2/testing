@@ -19,7 +19,14 @@
 .hall-tbl td.c, .hall-tbl th.c { text-align: center; }
 .grp-badge { display: inline-block; font-size: .72rem; padding: .1rem .4rem; background: var(--gray-50); border: 1px solid #e5e7eb; border-radius: 5px; margin: .1rem; }
 .mix { font-size: .78rem; color: var(--text-muted); }
+.seat-grid { border-collapse: separate; border-spacing: 5px; margin: 0 auto .5rem; }
+.seat { width: 78px; height: 48px; border: 1px solid #cbd5e1; border-radius: 6px; background: var(--gray-50); text-align: center; vertical-align: middle; padding: 3px; }
+.seat.empty { background: transparent; border: 1px dashed #e5e7eb; }
+.seat .sn { display: block; font-weight: 700; font-size: .82rem; }
+.seat .sid { display: block; font-size: .62rem; color: var(--text-muted); }
+.seat .sarm { display: block; font-size: .62rem; color: #007bff; }
 @media print {
+  .seat { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .no-print { display: none !important; }
   .hall-card { border: 1px solid #999; page-break-inside: avoid; }
   .hall-head { background: #0f172a !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -40,6 +47,9 @@
       {% for c in payload.hall_capacity %}<input type="hidden" name="hall_capacity" value="{{ c }}">{% endfor %}
       <input type="hidden" name="main_hall" value="{{ payload.main_hall }}">
       {% if payload.balance_gender %}<input type="hidden" name="balance_gender" value="on">{% endif %}
+      <input type="hidden" name="candidate_set" value="{{ payload.candidate_set }}">
+      {% for st in payload.streams %}<input type="hidden" name="streams" value="{{ st }}">{% endfor %}
+      <input type="hidden" name="seats_per_row" value="{{ payload.seats_per_row }}">
       <button type="submit" class="btn btn-secondary btn-sm"><i class="fas fa-file-pdf"></i> PDF (one hall per page)</button>
     </form>
   </div>
@@ -79,20 +89,48 @@
   </div>
   <div style="padding:.5rem 1rem;" class="no-print">
     {% for key, cnt in hall.by_group.items() %}<span class="grp-badge">{{ key }}: {{ cnt }}</span>{% endfor %}
+    {% if hall.seating %}
+      <span class="grp-badge" style="background:{% if hall.seating.conflicts %}#fef3c7{% else %}#dcfce7{% endif %};">
+        Same-arm neighbours: {{ hall.seating.conflicts }}</span>
+    {% endif %}
   </div>
+
   {% if hall.students %}
+  {% if hall.seating and hall.seating.rows %}
+  <!-- Seating chart: front of hall at the top -->
+  <div style="padding:.25rem 1rem 0;">
+    <div class="mix" style="text-align:center;margin:.25rem 0;">⟵ FRONT OF HALL ⟶</div>
+    <div style="overflow-x:auto;">
+      <table class="seat-grid">
+        {% for row in hall.seating.rows %}
+        <tr>
+          {% for cell in row %}
+          {% if cell %}
+          <td class="seat" title="{{ cell.student.name }} — {{ cell.student.class_name }}{% if cell.student.arm %} {{ cell.student.arm }}{% endif %}">
+            <span class="sn">{{ cell.seat }}</span>
+            <span class="sid">{{ cell.student.student_id }}</span>
+            <span class="sarm">{{ cell.student.class_name }}{% if cell.student.arm %} {{ cell.student.arm }}{% endif %}</span>
+          </td>
+          {% else %}<td class="seat empty"></td>{% endif %}
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </table>
+    </div>
+  </div>
+  {% endif %}
   <table class="hall-tbl">
-    <thead><tr><th class="c">S/N</th><th>Student ID</th><th>Name</th><th>Class/Arm</th><th class="c">Gender</th></tr></thead>
+    <thead><tr><th class="c">Seat</th><th>Student ID</th><th>Name</th><th>Class/Arm</th><th class="c">Gender</th></tr></thead>
     <tbody>
-      {% for s in hall.students %}
+      {% for row in hall.seating.rows %}{% for cell in row %}{% if cell %}
       <tr>
-        <td class="c">{{ loop.index }}</td>
-        <td>{{ s.student_id }}</td>
-        <td>{{ s.name }}</td>
-        <td>{{ s.class_name }}{% if s.arm %} {{ s.arm }}{% endif %}</td>
-        <td class="c">{{ s.gender }}</td>
+        <td class="c">{{ cell.seat }}</td>
+        <td>{{ cell.student.student_id }}</td>
+        <td>{{ cell.student.name }}</td>
+        <td>{{ cell.student.class_name }}{% if cell.student.arm %} {{ cell.student.arm }}{% endif %}</td>
+        <td class="c">{{ cell.student.gender }}</td>
       </tr>
-      {% endfor %}
+      {% endif %}{% endfor %}{% endfor %}
     </tbody>
   </table>
   {% else %}

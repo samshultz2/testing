@@ -11,7 +11,13 @@ than a constraint solver: for the stated objective (spread each group across
 halls in proportion to capacity, interleave genders) this construction is
 optimal, instant and reproducible, with no solver time or tuning to babysit.
 
-Public entry point: ``allocate_halls(groups, halls, balance_gender=True)``.
+Within a hall, ``seat_hall`` then lays candidates out on a seat grid so that no
+two students from the same class + arm sit in adjacent seats (front/back/side) —
+using OR-tools CP-SAT when available to minimise same-group neighbours, with a
+deterministic round-robin fallback.
+
+Public entry points: ``allocate_halls(groups, halls, balance_gender=True)`` and
+``seat_hall(students, cols=5)``.
 """
 import math
 
@@ -163,3 +169,153 @@ def allocate_halls(groups, halls, balance_gender=True):
         'total_capacity': total_cap,
         'balanced_by_gender': balance_gender,
     }
+
+
+# --------------------------------------------------------------------------- #
+# Seat layout within a hall: keep same class+arm out of adjacent seats.
+# --------------------------------------------------------------------------- #
+
+def _sk(s):
+    """The class+arm key a student is grouped by for seating."""
+    return s.get('_group_key') or (
+        (s.get('class_name') or '') + (' ' + s.get('arm') if s.get('arm') else '')).strip()
+
+
+def _seat_layout_cpsat(n, rows, cols, counts, time_limit):
+    """CP-SAT: assign a group index to each of the first ``n`` grid cells
+    (row-major) so orthogonally-adjacent cells rarely share a group. Returns a
+    list of length rows*cols (group index, or None for the trailing empties), or
+    None if OR-tools is unavailable or finds nothing."""
+    try:
+        from ortools.sat.python import cp_model
+    except Exception:
+        return None
+    G = len(counts)
+    used = list(range(n))                       # first n cells are seats
+    m = cp_model.CpModel()
+    y = {(u, g): m.NewBoolVar(f'y{u}_{g}') for u in used for g in range(G)}
+    for u in used:
+        m.Add(sum(y[u, g] for g in range(G)) == 1)
+    for g in range(G):
+        m.Add(sum(y[u, g] for u in used) == counts[g])
+
+    def cell(r, c):
+        return r * cols + c
+
+    pairs = []
+    for r in range(rows):
+        for c in range(cols):
+            u = cell(r, c)
+            if u >= n:
+                continue
+            if c + 1 < cols and cell(r, c + 1) < n:
+                pairs.append((u, cell(r, c + 1)))
+            if r + 1 < rows and cell(r + 1, c) < n:
+                pairs.append((u, cell(r + 1, c)))
+    same = []
+    for a, b in pairs:
+        z = m.NewBoolVar(f'z{a}_{b}')
+        for g in range(G):
+            m.Add(z >= y[a, g] + y[b, g] - 1)
+        same.append(z)
+    m.Minimize(sum(same))
+
+    solver = cp_model.CpSolver()
+    solver.parameters.max_time_in_seconds = float(time_limit)
+    solver.parameters.num_search_workers = 8
+    status = solver.Solve(m)
+    if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
+        return None
+    out = [None] * (rows * cols)
+    for u in used:
+        for g in range(G):
+            if solver.Value(y[u, g]) == 1:
+                out[u] = g
+                break
+    return out
+
+
+def _seat_layout_roundrobin(n, rows, cols, counts):
+    """Deterministic fallback: emit group indices round-robin (largest group
+    first) so equal groups alternate, then drop them into cells row-major."""
+    remaining = list(counts)
+    order = sorted(range(len(counts)), key=lambda g: counts[g], reverse=True)
+    seq = []
+    while len(seq) < n:
+        placed = False
+        for g in order:
+            if remaining[g] > 0:
+                seq.append(g)
+                remaining[g] -= 1
+                placed = True
+        if not placed:
+            break
+    out = [None] * (rows * cols)
+    for i in range(n):
+        out[i] = seq[i]
+    return out
+
+
+def seat_hall(students, cols=5, optimize=True, time_limit=4.0):
+    """Lay a hall's ``students`` onto a seat grid (``cols`` seats per row),
+    numbering seats and keeping same class+arm out of adjacent seats where the
+    numbers allow.
+
+    Returns ``{'rows': [[seat|None,...],...], 'cols', 'nrows', 'count',
+    'conflicts'}`` where each seat is ``{'seat': n, 'student': {...}}`` and
+    ``conflicts`` counts remaining same-group orthogonal neighbours (0 is ideal).
+    """
+    students = list(students)
+    n = len(students)
+    cols = max(2, int(cols or 5))
+    if n == 0:
+        return {'rows': [], 'cols': cols, 'nrows': 0, 'count': 0, 'conflicts': 0}
+    rows = math.ceil(n / cols)
+
+    buckets, order = {}, []
+    for s in students:
+        k = _sk(s)
+        if k not in buckets:
+            buckets[k] = []
+            order.append(k)
+        buckets[k].append(s)
+    counts = [len(buckets[k]) for k in order]
+
+    layout = None
+    if optimize and len(order) > 1:
+        layout = _seat_layout_cpsat(n, rows, cols, counts, time_limit)
+    if layout is None:
+        layout = _seat_layout_roundrobin(n, rows, cols, counts)
+
+    pools = {k: list(buckets[k]) for k in order}
+    flat = []
+    for idx in range(rows * cols):
+        gi = layout[idx]
+        flat.append(pools[order[gi]].pop(0) if gi is not None else None)
+
+    grid, seat_no = [], 0
+    for r in range(rows):
+        row_cells = []
+        for c in range(cols):
+            st = flat[r * cols + c]
+            if st is not None:
+                seat_no += 1
+                row_cells.append({'seat': seat_no, 'student': st})
+            else:
+                row_cells.append(None)
+        grid.append(row_cells)
+
+    def gk(idx):
+        return _sk(flat[idx]) if flat[idx] is not None else None
+
+    conflicts = 0
+    for r in range(rows):
+        for c in range(cols):
+            idx = r * cols + c
+            if flat[idx] is None:
+                continue
+            if c + 1 < cols and flat[idx + 1] is not None and gk(idx) == gk(idx + 1):
+                conflicts += 1
+            if r + 1 < rows and flat[idx + cols] is not None and gk(idx) == gk(idx + cols):
+                conflicts += 1
+    return {'rows': grid, 'cols': cols, 'nrows': rows, 'count': n, 'conflicts': conflicts}

@@ -11,7 +11,15 @@ from models import db, Student, StudentEnrollment, ClassArmAssignment
 from utils.helpers import get_active_term
 from utils.branch_scope import scope_query, viewing_branch_id, can_access_branch
 from utils.access_control import login_required, is_admin
-from utils.exam_hall_allocator import allocate_halls
+from utils.exam_hall_allocator import allocate_halls, seat_hall
+
+# Candidate sets the tool can seat, so it fits internal exams, WAEC and JAMB.
+CANDIDATE_SETS = {
+    'all': 'All enrolled students',
+    'waec': 'WAEC-registered only (has WAEC reg. number)',
+    'jamb': 'JAMB-registered only (has JAMB reg. number)',
+}
+STREAMS = ['Science', 'Arts', 'Commercial']
 
 exam_halls_bp = Blueprint('exam_halls', __name__, url_prefix='/tools/exam-halls')
 
@@ -75,9 +83,22 @@ def _parse_halls(form):
 
 
 def _gather_groups(form):
-    """Selected class-arm assignments -> allocator groups (branch/access checked)."""
+    """Selected class-arm assignments -> allocator groups (branch/access checked),
+    narrowed by candidate set (all / WAEC / JAMB registered) and stream."""
     from utils.access_control import can_access_class
     ids = form.getlist('assignments', type=int)
+    cand = form.get('candidate_set', 'all')
+    streams = set(form.getlist('streams'))
+
+    def keep(s):
+        if cand == 'waec' and not (s.waec_reg_number or '').strip():
+            return False
+        if cand == 'jamb' and not (s.jamb_reg_number or '').strip():
+            return False
+        if streams and (s.stream or '') not in streams:
+            return False
+        return True
+
     groups = []
     for aid in ids:
         a = db.session.get(ClassArmAssignment, aid)
@@ -88,7 +109,7 @@ def _gather_groups(form):
         studs = []
         for e in enrs:
             s = e.student
-            if not s:
+            if not s or not keep(s):
                 continue
             studs.append({'id': s.id, 'student_id': s.student_id, 'name': s.full_name,
                           'gender': s.gender, 'class_name': a.school_class.name if a.school_class else '',
@@ -104,6 +125,7 @@ def index():
     _admin_only()
     return render_template('exam_halls/index.html',
                            assignments=_assignments_for_term(),
+                           candidate_sets=CANDIDATE_SETS, streams=STREAMS,
                            has_term=bool(get_active_term()))
 
 
@@ -120,11 +142,16 @@ def allocate():
     if not halls:
         flash('Add at least one hall with a capacity.', 'error')
         return redirect(url_for('exam_halls.index'))
+    cols = request.form.get('seats_per_row', type=int) or 5
     try:
         result = allocate_halls(groups, halls, balance_gender=balance)
     except ValueError as e:
         flash(str(e), 'error')
         return redirect(url_for('exam_halls.index'))
+
+    # Number each hall's seats, keeping same class+arm out of adjacent seats.
+    for hall in result['halls']:
+        hall['seating'] = seat_hall(hall['students'], cols=cols)
 
     sname, branch, term = _masthead()
     # Preserve the submitted inputs so the PDF button can re-run identically.
@@ -132,7 +159,10 @@ def allocate():
                'hall_name': request.form.getlist('hall_name'),
                'hall_capacity': request.form.getlist('hall_capacity'),
                'main_hall': request.form.get('main_hall', ''),
-               'balance_gender': 'on' if balance else ''}
+               'balance_gender': 'on' if balance else '',
+               'candidate_set': request.form.get('candidate_set', 'all'),
+               'streams': request.form.getlist('streams'),
+               'seats_per_row': str(cols)}
     return render_template('exam_halls/result.html', result=result,
                            school_name=sname, branch=branch, term=term,
                            payload=payload)
@@ -145,11 +175,14 @@ def pdf():
     groups = _gather_groups(request.form)
     halls = _parse_halls(request.form)
     balance = request.form.get('balance_gender') == 'on'
+    cols = request.form.get('seats_per_row', type=int) or 5
     try:
         result = allocate_halls(groups, halls, balance_gender=balance)
     except ValueError as e:
         flash(str(e), 'error')
         return redirect(url_for('exam_halls.index'))
+    for hall in result['halls']:
+        hall['seating'] = seat_hall(hall['students'], cols=cols)
     sname, branch, term = _masthead()
     data = _build_pdf(result, sname, branch, term)
     return Response(data, mimetype='application/pdf', headers={
@@ -192,10 +225,15 @@ def _build_pdf(result, school_name, branch, term):
         elems.append(Paragraph(
             f"{hall['name'].upper()}  ·  {hall['count']}/{hall['capacity']} seats  ·  "
             f"{g['Female']}F / {g['Male']}M", h_hall))
-        data = [['S/N', 'Student ID', 'Name', 'Class/Arm', 'Gender']]
-        for i, s in enumerate(hall['students'], 1):
+        # Roster ordered by seat number (seats keep same class+arm apart).
+        seating = hall.get('seating') or {}
+        seats = [c for row in seating.get('rows', []) for c in row if c]
+        data = [['Seat', 'Student ID', 'Name', 'Class/Arm', 'Gender']]
+        rows_src = ([(c['seat'], c['student']) for c in seats] if seats
+                    else [(i, s) for i, s in enumerate(hall['students'], 1)])
+        for seat, s in rows_src:
             arm = (s.get('class_name') or '') + (f" {s.get('arm')}" if s.get('arm') else '')
-            data.append([str(i), s.get('student_id') or '', s.get('name') or '',
+            data.append([str(seat), s.get('student_id') or '', s.get('name') or '',
                          arm.strip(), s.get('gender') or ''])
         t = Table(data, colWidths=[13 * mm, 28 * mm, 72 * mm, 40 * mm, 22 * mm], repeatRows=1)
         t.setStyle(TableStyle([
