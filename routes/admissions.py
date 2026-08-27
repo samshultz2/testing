@@ -193,6 +193,7 @@ def _read_form(a):
     a.state_of_origin = strip_tags(request.form.get('state_of_origin')) or None
     a.lga = strip_tags(request.form.get('lga')) or None
     a.father_occupation = strip_tags(request.form.get('father_occupation')) or None
+    a.languages_spoken = strip_tags(request.form.get('languages_spoken')) or None
     a.blood_group = (request.form.get('blood_group') or '').strip() or None
     a.genotype = (request.form.get('genotype') or '').strip() or None
     a.notes = strip_tags(request.form.get('notes')) or None
@@ -236,6 +237,7 @@ def _form_payload(a):
             'emergency_address': a.emergency_address or '',
             'country': a.country or '', 'state_of_origin': a.state_of_origin or '',
             'lga': a.lga or '', 'father_occupation': a.father_occupation or '',
+            'languages_spoken': a.languages_spoken or '',
             'blood_group': a.blood_group or '', 'genotype': a.genotype or '',
             'photo_url': (url_for('admissions.applicant_photo', applicant_id=a.id)
                           if (a.photo and a.photo.data) else ''),
@@ -303,7 +305,8 @@ def applicant_detail(applicant_id):
     })
 
 
-@adm_bp.route('/applicants/blank-form')
+@adm_bp.route('/applicants/blank-form.pdf')
+@adm_bp.route('/applicants/blank-form')          # legacy path, kept for old links
 @login_required
 def blank_application_form():
     """Download a branded, fillable (interactive AcroForm) blank application form.
@@ -353,6 +356,7 @@ def export_applicant(applicant_id):
         ('Origin & Health', [
             ('Country', dash(a.country)), ('State of Origin', dash(a.state_of_origin)),
             ('L.G.A. of Origin', dash(a.lga)), ("Father's Occupation", dash(a.father_occupation)),
+            ('Languages at Home', dash(a.languages_spoken)),
             ('Blood Group', dash(a.blood_group)), ('Genotype', dash(a.genotype)),
         ]),
     ]

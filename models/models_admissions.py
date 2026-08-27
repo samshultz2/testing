@@ -54,6 +54,7 @@ class Applicant(db.Model):
     state_of_origin = db.Column(db.String(60))
     lga = db.Column(db.String(80))               # local government of origin
     father_occupation = db.Column(db.String(100))
+    languages_spoken = db.Column(db.String(120))   # languages spoken at home
     blood_group = db.Column(db.String(6))
     genotype = db.Column(db.String(6))
 

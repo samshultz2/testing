@@ -143,7 +143,8 @@ function ApplicantForm({ d, notify }) {
     emergency_name: a.emergency_name || '', emergency_relationship: a.emergency_relationship || '',
     emergency_phone: a.emergency_phone || '', emergency_address: a.emergency_address || '',
     country: a.country || 'Nigeria', state_of_origin: a.state_of_origin || '', lga: a.lga || '',
-    father_occupation: a.father_occupation || '', blood_group: a.blood_group || '', genotype: a.genotype || '',
+    father_occupation: a.father_occupation || '', languages_spoken: a.languages_spoken || '',
+    blood_group: a.blood_group || '', genotype: a.genotype || '',
     photo_data: '',
   });
   const existingPhoto = a.photo_url || '';
@@ -231,7 +232,8 @@ function ApplicantForm({ d, notify }) {
 
         <div className="card mb-3"><div className="card-header"><h3>Origin &amp; Health</h3></div><div className="card-body">
           <div className="form-row">{F({ label: 'Country', k: 'country' })}{F({ label: 'State of origin', k: 'state_of_origin' })}{F({ label: 'L.G.A. of origin', k: 'lga' })}</div>
-          <div className="form-row">{F({ label: "Father's occupation", k: 'father_occupation' })}
+          <div className="form-row">{F({ label: "Father's occupation", k: 'father_occupation' })}{F({ label: 'Languages spoken at home', k: 'languages_spoken' })}</div>
+          <div className="form-row">
             <div className="form-group"><label className="form-label">Blood group</label>
               <select className="form-control" value={f.blood_group} onChange={(e) => set('blood_group', e.target.value)}>
                 <option value="">—</option>{['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map((g) => <option key={g}>{g}</option>)}</select></div>

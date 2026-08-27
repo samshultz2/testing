@@ -331,13 +331,13 @@ def applicant_blank_pdf(school, bw=False):
             if motto:
                 c.setFillColor(gold); c.setFont(obl, 9.5)
                 c.drawString(lx, top - 20 * mm, ('—  ' + motto + '  —')[:110])
-            c.setFillColor(navy); c.setFont(boldf, 16)
-            c.drawString(margin, top - 30 * mm, 'APPLICATION FORM')
-            c.setFillColor(muted); c.setFont(obl, 9)
-            c.drawString(margin, top - 35 * mm, 'Please complete in BLOCK letters.')
+            c.setFillColor(navy); c.setFont(boldf, 15)
+            c.drawString(margin, top - 27 * mm, 'APPLICATION FORM')
+            c.setFillColor(muted); c.setFont(obl, 8.5)
+            c.drawRightString(PW - margin, top - 27 * mm, 'Please complete in BLOCK letters.')
             c.setStrokeColor(gold); c.setLineWidth(1)
-            c.line(margin, top - 38 * mm, PW - margin, top - 38 * mm)
-            state['y'] = top - 46 * mm
+            c.line(margin, top - 30 * mm, PW - margin, top - 30 * mm)
+            state['y'] = top - 37 * mm
         else:
             state['y'] = top
         # footer
@@ -353,18 +353,18 @@ def applicant_blank_pdf(school, bw=False):
             c.showPage(); new_page(first=False)
 
     def heading(text):
-        ensure(13 * mm)
-        state['y'] -= 2 * mm
-        c.setFillColor(navy); c.setFont(boldf, 11.5)
-        c.drawString(margin, state['y'] - 3.5 * mm, text)
+        ensure(11 * mm)
+        state['y'] -= 1.5 * mm
+        c.setFillColor(navy); c.setFont(boldf, 11)
+        c.drawString(margin, state['y'] - 3.2 * mm, text)
         c.setStrokeColor(line); c.setLineWidth(0.5)
-        c.line(margin, state['y'] - 5.5 * mm, PW - margin, state['y'] - 5.5 * mm)
-        state['y'] -= 8 * mm
+        c.line(margin, state['y'] - 5 * mm, PW - margin, state['y'] - 5 * mm)
+        state['y'] -= 6.5 * mm
 
     fh = 7 * mm   # field height
 
     def field(label, x, w, big=False):
-        h = (fh + 6 * mm) if big else fh
+        h = (fh + 5 * mm) if big else fh
         c.setFillColor(muted); c.setFont(boldf, 8)
         c.drawString(x, state['y'] - 2.6 * mm, label.upper())
         state['n'] += 1
@@ -381,14 +381,14 @@ def applicant_blank_pdf(school, bw=False):
         gap = 5 * mm
         wsum = sum(f[1] for f in fields)
         span = (maxw if maxw is not None else avail) - gap * (len(fields) - 1)
-        ensure((fh + 6 * mm if big else fh) + 8 * mm)
+        ensure((fh + 5 * mm if big else fh) + 6 * mm)
         x = margin
         maxh = 0
         for f in fields:
             w = span * (f[1] / wsum)
             maxh = max(maxh, field(f[0], x, w, big=(len(f) > 2 and f[2])))
             x += w + gap
-        state['y'] -= (maxh + 8 * mm)
+        state['y'] -= (maxh + 6 * mm)
 
     new_page(first=True)
 
@@ -405,21 +405,23 @@ def applicant_blank_pdf(school, bw=False):
     clear = avail - box_w - 12 * mm
     row([('First name', 1), ('Surname', 1)], maxw=clear)
     row([('Middle name', 1), ('Gender', 1)], maxw=clear)
-    row([('Date of birth', 1), ('Previous school', 1.4)])
+    row([('Date of birth', 1)])
 
     heading('Origin & Health')
     row([('Country', 1), ('State of origin', 1), ('L.G.A. of origin', 1.1)])
-    row([("Father's occupation", 1.4), ('Blood group', 0.8), ('Genotype', 0.8)])
+    row([("Father's occupation", 1.3), ('Languages spoken at home', 1.3),
+         ('Blood group', 0.7), ('Genotype', 0.7)])
 
     heading('Application')
-    row([('Intended class', 1), ('Session / year', 1), ('Entrance score', 0.7)])
+    row([('Intended class', 1), ('Previous school', 1.4)])
 
     heading('Parent / Guardian')
-    row([('Full name', 1.3), ('Relationship', 1), ('Phone', 1)])
-    row([('Email', 1), ('Residential address', 1.6)])
+    row([('Full name', 1.4), ('Phone', 1), ('Email', 1.2)])
+    row([('Residential address', 1, True)])
 
     heading('Emergency Contact')
-    row([('Full name', 1.3), ('Relationship', 1), ('Phone', 1), ('Address', 1.4)])
+    row([('Full name', 1.4), ('Phone', 1)])
+    row([('Address', 1, True)])
 
     # signature line
     ensure(20 * mm)

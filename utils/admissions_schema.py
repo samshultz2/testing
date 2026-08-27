@@ -20,6 +20,7 @@ _APPLICANT_COLUMNS = {
     'state_of_origin': 'VARCHAR(60)',
     'lga': 'VARCHAR(80)',
     'father_occupation': 'VARCHAR(100)',
+    'languages_spoken': 'VARCHAR(120)',
     'blood_group': 'VARCHAR(6)',
     'genotype': 'VARCHAR(6)',
 }

@@ -279,6 +279,13 @@
 ]
 ],
 [
+"admissions.blank_application_form",
+"/admissions/applicants/blank-form.pdf",
+[
+"GET"
+]
+],
+[
 "admissions.convert",
 "/admissions/applicants/<int:applicant_id>/convert",
 [

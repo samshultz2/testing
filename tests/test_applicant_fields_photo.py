@@ -25,7 +25,8 @@ def test_new_fields_and_photo(app):
         '_csrf_token': auth_csrf(c),
         'first_name': f'Ada{tag}', 'surname': 'Origin',
         'country': 'Nigeria', 'state_of_origin': 'Edo', 'lga': 'Oredo',
-        'father_occupation': 'Engineer', 'blood_group': 'O+', 'genotype': 'AA',
+        'father_occupation': 'Engineer', 'languages_spoken': 'Edo, English',
+        'blood_group': 'O+', 'genotype': 'AA',
         'photo_data': _data_url(),
     }, follow_redirects=False)
     assert r.status_code in (200, 302)
@@ -35,6 +36,7 @@ def test_new_fields_and_photo(app):
         assert a is not None
         assert a.state_of_origin == 'Edo' and a.lga == 'Oredo'
         assert a.father_occupation == 'Engineer' and a.blood_group == 'O+' and a.genotype == 'AA'
+        assert a.languages_spoken == 'Edo, English'
         assert ApplicantPhoto.query.filter_by(applicant_id=a.id).count() == 1
         aid = a.id
 
