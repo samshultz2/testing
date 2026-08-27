@@ -55,7 +55,7 @@
                     {% set entry = tt.grid[day_idx].get(period) %}
                     <td style="text-align: center;">
                         {% if entry and entry.subject %}
-                        <strong>{{ entry.subject.name }}</strong>
+                        <strong>{{ entry.subject.short_name or entry.subject.name }}</strong>
                         {% if entry.teacher %}
                         <br><small class="text-muted">{{ entry.teacher.name }}</small>
                         {% endif %}

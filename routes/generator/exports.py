@@ -2,6 +2,19 @@
 from routes.generator import *  # noqa: F401,F403
 
 
+def _short(subj, fallback_map, maxlen):
+    """The short label to print for a generator subject: the user's own short
+    name from /generator/subjects when set, else the built-in abbreviation, else
+    a truncation of the full name."""
+    if subj is None:
+        return ''
+    sn = (getattr(subj, 'short_name', '') or '').strip()
+    if sn:
+        return sn
+    name = getattr(subj, 'name', '') or ''
+    return fallback_map.get(name, name[:maxlen])
+
+
 @generator_bp.route('/results/<batch_id>/print')
 @login_required
 def print_results(batch_id):
@@ -253,8 +266,7 @@ def export_results(batch_id):
                 entry = tt['grid'][day_idx].get(p)
                 value = ""
                 if entry and entry.subject:
-                    subj_name = entry.subject.name
-                    value = abbrev_map.get(subj_name, subj_name[:6])
+                    value = _short(entry.subject, abbrev_map, 6)
                 
                 cell = ws.cell(row=current_row, column=col, value=value)
                 cell.font = cell_font
@@ -272,8 +284,7 @@ def export_results(batch_id):
                 entry = tt['grid'][day_idx].get(p)
                 value = ""
                 if entry and entry.subject:
-                    subj_name = entry.subject.name
-                    value = abbrev_map.get(subj_name, subj_name[:6])
+                    value = _short(entry.subject, abbrev_map, 6)
                 
                 cell = ws.cell(row=current_row, column=col, value=value)
                 cell.font = cell_font
@@ -565,8 +576,7 @@ def export_results_by_day(batch_id):
                 if slot_result and slot_result.subject_id:
                     subj = subject_lookup.get(slot_result.subject_id)
                     if subj:
-                        subj_name = subj.name
-                        value = abbrev_map.get(subj_name, subj_name[:5])
+                        value = _short(subj, abbrev_map, 5)
                 
                 cell = ws.cell(row=current_row, column=col, value=value)
                 cell.font = cell_font
@@ -587,8 +597,7 @@ def export_results_by_day(batch_id):
                 if slot_result and slot_result.subject_id:
                     subj = subject_lookup.get(slot_result.subject_id)
                     if subj:
-                        subj_name = subj.name
-                        value = abbrev_map.get(subj_name, subj_name[:5])
+                        value = _short(subj, abbrev_map, 5)
                 
                 cell = ws.cell(row=current_row, column=col, value=value)
                 cell.font = cell_font
@@ -769,7 +778,7 @@ def export_results_by_day_pdf(batch_id):
             for p in range(1, 6):
                 slot_result = next((r for r in arm_results if r.period_number == p), None)
                 if slot_result and slot_result.subject:
-                    row.append(abbrev_map.get(slot_result.subject.name, slot_result.subject.name[:5]))
+                    row.append(_short(slot_result.subject, abbrev_map, 5))
                 else:
                     row.append('')
             
@@ -780,7 +789,7 @@ def export_results_by_day_pdf(batch_id):
             for p in range(6, periods_per_day + 1):
                 slot_result = next((r for r in arm_results if r.period_number == p), None)
                 if slot_result and slot_result.subject:
-                    row.append(abbrev_map.get(slot_result.subject.name, slot_result.subject.name[:5]))
+                    row.append(_short(slot_result.subject, abbrev_map, 5))
                 else:
                     row.append('')
             
