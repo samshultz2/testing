@@ -49,6 +49,14 @@ class Applicant(db.Model):
     emergency_relationship = db.Column(db.String(40))
     emergency_address = db.Column(db.String(255))
 
+    # Origin & health
+    country = db.Column(db.String(60))
+    state_of_origin = db.Column(db.String(60))
+    lga = db.Column(db.String(80))               # local government of origin
+    father_occupation = db.Column(db.String(100))
+    blood_group = db.Column(db.String(6))
+    genotype = db.Column(db.String(6))
+
     notes = db.Column(db.Text)
     admitted_student_id = db.Column(db.Integer, db.ForeignKey('students.id'))
     created_at = db.Column(db.DateTime, default=local_now)
@@ -82,3 +90,23 @@ class Applicant(db.Model):
 
     def __repr__(self):
         return f'<Applicant {self.application_no} {self.full_name} {self.status}>'
+
+
+class ApplicantPhoto(db.Model):
+    """An applicant's passport photograph, stored in the tenant DB (its own table
+    so the applicants table stays lean). One row per applicant; re-uploading
+    replaces the bytes. Served only behind login + branch scope (PII)."""
+    __tablename__ = 'applicant_photos'
+
+    id = db.Column(db.Integer, primary_key=True)
+    applicant_id = db.Column(db.Integer, db.ForeignKey('applicants.id'),
+                             nullable=False, unique=True, index=True)
+    data = db.Column(db.LargeBinary, nullable=False)
+    mime = db.Column(db.String(40), nullable=False, default='image/jpeg')
+    width = db.Column(db.Integer)
+    height = db.Column(db.Integer)
+    bytes = db.Column(db.Integer)
+    updated_at = db.Column(db.DateTime, default=local_now, onupdate=local_now)
+
+    applicant = db.relationship('Applicant', backref=db.backref(
+        'photo', uselist=False, cascade='all, delete-orphan'))

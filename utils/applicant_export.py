@@ -89,6 +89,19 @@ def applicant_pdf(record, school):
         if motto:
             cv.setFillColor(colors.HexColor(GOLD)); cv.setFont(obl, 10)
             cv.drawString(lx, top - 22 * mm, ('—  ' + motto + '  —')[:110])
+        # passport photo (top-right corner of the first page)
+        pb = record.get('photo_bytes')
+        if pb and doc.page == 1:
+            try:
+                from reportlab.lib.utils import ImageReader
+                pw_, ph_ = 24 * mm, 30 * mm
+                px = PW - margin - 4 * mm - pw_
+                cv.drawImage(ImageReader(io.BytesIO(pb)), px, top - ph_, width=pw_, height=ph_,
+                             preserveAspectRatio=True, mask='auto')
+                cv.setStrokeColor(colors.HexColor(LINE)); cv.setLineWidth(0.6)
+                cv.rect(px, top - ph_, pw_, ph_, stroke=1, fill=0)
+            except Exception:
+                pass
         # gold divider under the masthead
         cv.setStrokeColor(colors.HexColor(GOLD)); cv.setLineWidth(1)
         cv.line(margin, PH - margin - mast_h + 4 * mm, PW - margin, PH - margin - mast_h + 4 * mm)
@@ -340,23 +353,23 @@ def applicant_blank_pdf(school, bw=False):
             c.showPage(); new_page(first=False)
 
     def heading(text):
-        ensure(16 * mm)
-        state['y'] -= 3 * mm
-        c.setFillColor(navy); c.setFont(boldf, 12.5)
-        c.drawString(margin, state['y'] - 4 * mm, text)
+        ensure(13 * mm)
+        state['y'] -= 2 * mm
+        c.setFillColor(navy); c.setFont(boldf, 11.5)
+        c.drawString(margin, state['y'] - 3.5 * mm, text)
         c.setStrokeColor(line); c.setLineWidth(0.5)
-        c.line(margin, state['y'] - 6.5 * mm, PW - margin, state['y'] - 6.5 * mm)
-        state['y'] -= 11 * mm
+        c.line(margin, state['y'] - 5.5 * mm, PW - margin, state['y'] - 5.5 * mm)
+        state['y'] -= 8 * mm
 
-    fh = 8 * mm   # field height
+    fh = 7 * mm   # field height
 
     def field(label, x, w, big=False):
-        h = (fh + 9 * mm) if big else fh
-        c.setFillColor(muted); c.setFont(boldf, 8.5)
-        c.drawString(x, state['y'] - 3 * mm, label.upper())
+        h = (fh + 6 * mm) if big else fh
+        c.setFillColor(muted); c.setFont(boldf, 8)
+        c.drawString(x, state['y'] - 2.6 * mm, label.upper())
         state['n'] += 1
         form.textfield(name='f%d' % state['n'], tooltip=label,
-                       x=x, y=state['y'] - 5 * mm - h, width=w, height=h,
+                       x=x, y=state['y'] - 4 * mm - h, width=w, height=h,
                        borderColor=field_border, fillColor=panel, textColor=ink,
                        borderWidth=field_bw, forceBorder=True, fontSize=11,
                        fieldFlags=('multiline' if big else ''))
@@ -365,17 +378,17 @@ def applicant_blank_pdf(school, bw=False):
     def row(fields, maxw=None):
         # fields: list of (label, weight, big?)
         big = any(len(f) > 2 and f[2] for f in fields)
-        gap = 6 * mm
+        gap = 5 * mm
         wsum = sum(f[1] for f in fields)
         span = (maxw if maxw is not None else avail) - gap * (len(fields) - 1)
-        ensure((fh + 9 * mm if big else fh) + 10 * mm)
+        ensure((fh + 6 * mm if big else fh) + 8 * mm)
         x = margin
         maxh = 0
         for f in fields:
             w = span * (f[1] / wsum)
             maxh = max(maxh, field(f[0], x, w, big=(len(f) > 2 and f[2])))
             x += w + gap
-        state['y'] -= (maxh + 12 * mm)
+        state['y'] -= (maxh + 8 * mm)
 
     new_page(first=True)
 
@@ -393,22 +406,20 @@ def applicant_blank_pdf(school, bw=False):
     row([('First name', 1), ('Surname', 1)], maxw=clear)
     row([('Middle name', 1), ('Gender', 1)], maxw=clear)
     row([('Date of birth', 1), ('Previous school', 1.4)])
-    row([('How did they hear about the school?', 1)])
+
+    heading('Origin & Health')
+    row([('Country', 1), ('State of origin', 1), ('L.G.A. of origin', 1.1)])
+    row([("Father's occupation", 1.4), ('Blood group', 0.8), ('Genotype', 0.8)])
 
     heading('Application')
     row([('Intended class', 1), ('Session / year', 1), ('Entrance score', 0.7)])
 
     heading('Parent / Guardian')
-    row([('Full name', 1.3), ('Relationship', 1)])
-    row([('Phone', 1), ('Email', 1.2)])
-    row([('Residential address', 1, True)])
+    row([('Full name', 1.3), ('Relationship', 1), ('Phone', 1)])
+    row([('Email', 1), ('Residential address', 1.6)])
 
     heading('Emergency Contact')
-    row([('Full name', 1.3), ('Relationship', 1)])
-    row([('Phone', 1), ('Address', 1.4)])
-
-    heading('Notes')
-    row([('Notes', 1, True)])
+    row([('Full name', 1.3), ('Relationship', 1), ('Phone', 1), ('Address', 1.4)])
 
     # signature line
     ensure(20 * mm)

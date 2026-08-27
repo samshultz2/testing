@@ -16,6 +16,12 @@ _APPLICANT_COLUMNS = {
     'emergency_phone': 'VARCHAR(20)',
     'emergency_relationship': 'VARCHAR(40)',
     'emergency_address': 'VARCHAR(255)',
+    'country': 'VARCHAR(60)',
+    'state_of_origin': 'VARCHAR(60)',
+    'lga': 'VARCHAR(80)',
+    'father_occupation': 'VARCHAR(100)',
+    'blood_group': 'VARCHAR(6)',
+    'genotype': 'VARCHAR(6)',
 }
 
 
@@ -62,5 +68,12 @@ def ensure_admissions_schema():
                             f'ALTER TABLE applicants ADD COLUMN IF NOT EXISTS {name} {ddl}'))
             except Exception:
                 pass   # best-effort; a concurrent add or race is harmless
+
+    # Create the applicant_photos table on tenant DBs that predate it.
+    try:
+        from models import ApplicantPhoto
+        ApplicantPhoto.__table__.create(bind=engine, checkfirst=True)
+    except Exception:
+        pass
 
     _ensured.add(key)

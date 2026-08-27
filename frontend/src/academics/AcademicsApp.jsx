@@ -366,13 +366,17 @@ function Arms({ d, notify }) {
 function Assignments({ d, notify }) {
   const nav = useNav();
   const usesArms = d.uses_arms;
-  const [f, setF] = useState({ class_id: '', arm_id: '', form_teacher: '' });
+  const [f, setF] = useState({ class_id: '', arm_ids: [], form_teacher: '' });
+  const toggleArm = (id) => setF((s) => ({
+    ...s, arm_ids: s.arm_ids.includes(id) ? s.arm_ids.filter((x) => x !== id) : [...s.arm_ids, id],
+  }));
   const add = async (e) => {
     e.preventDefault();
     if (!f.class_id) { notify('error', 'Pick a class.'); return; }
-    if (usesArms && !f.arm_id) { notify('error', 'Class and arm are required.'); return; }
-    const r = await submitJson(d.add_url, { ...f, term_id: d.term_id });
-    if (r.ok) { setF({ class_id: '', arm_id: '', form_teacher: '' }); notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Could not add.');
+    if (usesArms && f.arm_ids.length === 0) { notify('error', 'Pick at least one arm.'); return; }
+    const r = await submitJson(d.add_url, {
+      class_id: f.class_id, form_teacher: f.form_teacher, arm_ids: f.arm_ids, term_id: d.term_id });
+    if (r.ok) { setF({ class_id: '', arm_ids: [], form_teacher: '' }); notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Could not add.');
   };
   const toggleArms = async (on) => {
     const r = await submitJson(d.toggle_url, { uses_arms: on ? '1' : '0' });
@@ -409,7 +413,21 @@ function Assignments({ d, notify }) {
             <form onSubmit={add} className="filter-form">
               <div className="form-group"><label className="form-label">Class</label><select className="form-control" required value={f.class_id} onChange={(e) => setF((s) => ({ ...s, class_id: e.target.value }))}><option value="">Select</option>{d.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
               {usesArms && (
-                <div className="form-group"><label className="form-label">Arm</label><select className="form-control" required value={f.arm_id} onChange={(e) => setF((s) => ({ ...s, arm_id: e.target.value }))}><option value="">Select</option>{d.arms.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>)}
+                <div className="form-group" style={{ minWidth: '16rem' }}>
+                  <label className="form-label">Arms <span className="form-hint">(pick one or many)</span></label>
+                  <div style={{ marginBottom: '.35rem' }}>
+                    <button type="button" className="btn btn-secondary btn-sm" onClick={() => setF((s) => ({ ...s, arm_ids: d.arms.map((a) => a.id) }))}>All</button>{' '}
+                    <button type="button" className="btn btn-secondary btn-sm" onClick={() => setF((s) => ({ ...s, arm_ids: [] }))}>Clear</button>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '.4rem' }}>
+                    {d.arms.map((a) => (
+                      <label key={a.id} className="form-check" style={{ display: 'flex', alignItems: 'center', gap: '.35rem', padding: '.35rem .55rem', border: '1px solid var(--border-color,#ddd)', borderRadius: '6px', cursor: 'pointer', background: f.arm_ids.includes(a.id) ? 'var(--primary-50,#eef2ff)' : 'transparent' }}>
+                        <input type="checkbox" checked={f.arm_ids.includes(a.id)} onChange={() => toggleArm(a.id)} />
+                        <span>{a.name}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>)}
               <div className="form-group"><label className="form-label">Teacher</label><input type="text" className="form-control" placeholder="Name" value={f.form_teacher} onChange={(e) => setF((s) => ({ ...s, form_teacher: e.target.value }))} /></div>
               <div className="filter-actions"><button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add</button></div>
             </form></div></div>}

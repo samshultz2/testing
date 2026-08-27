@@ -258,6 +258,13 @@
 ]
 ],
 [
+"admissions.applicant_photo",
+"/admissions/applicants/<int:applicant_id>/photo",
+[
+"GET"
+]
+],
+[
 "admissions.applicants",
 "/admissions/applicants",
 [

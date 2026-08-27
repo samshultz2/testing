@@ -10,7 +10,7 @@ import csv
 import io
 
 from flask import (Blueprint, render_template, request, redirect, url_for,
-                   flash, Response, jsonify)
+                   flash, Response, jsonify, abort)
 from sqlalchemy import func
 
 from models import (db, Applicant, AcademicSession, SchoolClass, ClassArmAssignment)
@@ -154,6 +154,21 @@ def applicants():
     })
 
 
+def _save_photo(a):
+    """Store the applicant's passport photo from the form's ``photo_data`` data
+    URL (or clear it), after the applicant row exists. Best-effort."""
+    data_url = request.form.get('photo_data')
+    if data_url == '__clear__':
+        from utils.applicant_photo import delete as _del
+        _del(a); db.session.commit(); return
+    if data_url and data_url.startswith('data:image'):
+        try:
+            from utils.applicant_photo import save_data_url
+            save_data_url(a, data_url); db.session.commit()
+        except ValueError:
+            db.session.rollback()
+
+
 def _read_form(a):
     a.first_name = strip_tags(request.form.get('first_name'))
     a.surname = strip_tags(request.form.get('surname'))
@@ -174,6 +189,12 @@ def _read_form(a):
     a.emergency_phone = (request.form.get('emergency_phone') or '').strip() or None
     a.emergency_relationship = strip_tags(request.form.get('emergency_relationship')) or None
     a.emergency_address = strip_tags(request.form.get('emergency_address')) or None
+    a.country = strip_tags(request.form.get('country')) or None
+    a.state_of_origin = strip_tags(request.form.get('state_of_origin')) or None
+    a.lga = strip_tags(request.form.get('lga')) or None
+    a.father_occupation = strip_tags(request.form.get('father_occupation')) or None
+    a.blood_group = (request.form.get('blood_group') or '').strip() or None
+    a.genotype = (request.form.get('genotype') or '').strip() or None
     a.notes = strip_tags(request.form.get('notes')) or None
 
 
@@ -190,6 +211,7 @@ def add_applicant():
         a.branch_id = branch_for_new()
         db.session.add(a)
         db.session.commit()
+        _save_photo(a)
         return _ok(f'Application {a.application_no} created for {a.full_name}.',
                    url_for('admissions.applicant_detail', applicant_id=a.id))
     return _render(_form_payload(None))
@@ -212,6 +234,11 @@ def _form_payload(a):
             'emergency_name': a.emergency_name or '', 'emergency_phone': a.emergency_phone or '',
             'emergency_relationship': a.emergency_relationship or '',
             'emergency_address': a.emergency_address or '',
+            'country': a.country or '', 'state_of_origin': a.state_of_origin or '',
+            'lga': a.lga or '', 'father_occupation': a.father_occupation or '',
+            'blood_group': a.blood_group or '', 'genotype': a.genotype or '',
+            'photo_url': (url_for('admissions.applicant_photo', applicant_id=a.id)
+                          if (a.photo and a.photo.data) else ''),
             'detail_url': url_for('admissions.applicant_detail', applicant_id=a.id),
         } if a else None),
         'sessions': _sessions_json(), 'classes': _classes_json(),
@@ -307,7 +334,6 @@ def export_applicant(applicant_id):
             ('Gender', dash(a.gender)),
             ('Date of Birth', a.date_of_birth.strftime('%d %b %Y') if a.date_of_birth else '—'),
             ('Previous School', dash(a.previous_school)),
-            ('How did they hear?', dash(a.source)),
         ]),
         ('Application', [
             ('Intended Class', a.intended_class.name if a.intended_class else '—'),
@@ -324,14 +350,22 @@ def export_applicant(applicant_id):
             ('Name', dash(a.emergency_name)), ('Relationship', dash(a.emergency_relationship)),
             ('Phone', dash(a.emergency_phone)), ('Address', dash(a.emergency_address)),
         ]),
+        ('Origin & Health', [
+            ('Country', dash(a.country)), ('State of Origin', dash(a.state_of_origin)),
+            ('L.G.A. of Origin', dash(a.lga)), ("Father's Occupation", dash(a.father_occupation)),
+            ('Blood Group', dash(a.blood_group)), ('Genotype', dash(a.genotype)),
+        ]),
     ]
     if a.notes:
         sections.append(('Notes', [('', a.notes)]))
+    from utils.applicant_photo import load as _load_photo
+    _pb, _ = _load_photo(a.id)
     record = {
         'title': 'Applicant Record',
         'name': a.full_name,
         'meta': [('Application No', a.application_no or '—'), ('Status', a.status or '—')],
         'sections': sections,
+        'photo_bytes': _pb,
     }
     base = (a.application_no or 'applicant').replace('/', '-')
     if fmt == 'docx':
@@ -348,8 +382,32 @@ def edit_applicant(applicant_id):
     if request.method == 'POST':
         _read_form(a)
         db.session.commit()
+        _save_photo(a)
         return _ok('Application updated.', url_for('admissions.applicant_detail', applicant_id=a.id))
     return _render(_form_payload(a))
+
+
+@adm_bp.route('/applicants/<int:applicant_id>/photo')
+@login_required
+def applicant_photo(applicant_id):
+    """Serve an applicant's passport photo from the tenant DB (login + branch
+    scoped — it is PII, never public). Cached privately + ETag'd."""
+    from flask import Response
+    from models import ApplicantPhoto
+    a = db.session.get(Applicant, applicant_id)
+    if not a:
+        abort(404)
+    require_branch_access(a.branch_id)
+    row = ApplicantPhoto.query.filter_by(applicant_id=a.id).first()
+    if row is None or not row.data:
+        abort(404)
+    etag = 'ap-%d-%d' % (row.id, row.bytes or 0)
+    if request.headers.get('If-None-Match') == etag:
+        return Response(status=304)
+    resp = Response(bytes(row.data), mimetype=row.mime or 'image/jpeg')
+    resp.headers['Cache-Control'] = 'private, max-age=3600'
+    resp.headers['ETag'] = etag
+    return resp
 
 
 @adm_bp.route('/applicants/<int:applicant_id>/status', methods=['POST'])

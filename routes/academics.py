@@ -753,7 +753,13 @@ def add_assignment():
     try:
         term_id = request.form.get('term_id', type=int)
         class_id = request.form.get('class_id', type=int)
-        arm_id = request.form.get('arm_id', type=int)
+        # Accept one arm (arm_id) or many (arm_ids) so several arms of a class can
+        # be set up in one go.
+        arm_ids = request.form.getlist('arm_ids', type=int)
+        single = request.form.get('arm_id', type=int)
+        if single and single not in arm_ids:
+            arm_ids.append(single)
+        arm_ids = [a for a in dict.fromkeys(arm_ids) if a]   # de-dupe, drop 0/None
         form_teacher = request.form.get('form_teacher', '').strip()
         form_teacher_phone = request.form.get('form_teacher_phone', '').strip()
 
@@ -761,25 +767,33 @@ def add_assignment():
             return _err('Term and class are required.',
                         url_for('academics.assignments_list', term_id=term_id or ''))
         from models import SchoolSettings
-        if not arm_id:                                   # no arm picked
+        if not arm_ids:                                  # no arm picked
             if bool(SchoolSettings.get('uses_class_arms', True)):
-                return _err('Pick an arm for this class.',
+                return _err('Pick at least one arm for this class.',
                             url_for('academics.assignments_list', term_id=term_id))
-            arm_id = ClassArm.default().id               # arm-less school -> default arm
-        existing = ClassArmAssignment.query.filter_by(
-            term_id=term_id, class_id=class_id, arm_id=arm_id).first()
-        if existing:
-            return _err('This class is already set up for this term.',
-                        url_for('academics.assignments_list', term_id=term_id))
+            arm_ids = [ClassArm.default().id]            # arm-less school -> default arm
 
         from utils.branch_scope import branch_for_new
-        db.session.add(ClassArmAssignment(
-            term_id=term_id, class_id=class_id, arm_id=arm_id,
-            branch_id=branch_for_new(),          # no branch picked -> default branch
-            form_teacher_name=form_teacher or None,
-            form_teacher_phone=form_teacher_phone or None))
+        created, skipped = 0, 0
+        for arm_id in arm_ids:
+            if ClassArmAssignment.query.filter_by(
+                    term_id=term_id, class_id=class_id, arm_id=arm_id).first():
+                skipped += 1
+                continue
+            db.session.add(ClassArmAssignment(
+                term_id=term_id, class_id=class_id, arm_id=arm_id,
+                branch_id=branch_for_new(),      # no branch picked -> default branch
+                form_teacher_name=form_teacher or None,
+                form_teacher_phone=form_teacher_phone or None))
+            created += 1
         db.session.commit()
-        return _ok('Class set up for the term!', url_for('academics.assignments_list', term_id=term_id))
+        if not created:
+            return _err('Those class/arm(s) are already set up for this term.',
+                        url_for('academics.assignments_list', term_id=term_id))
+        msg = f'{created} class/arm(s) set up for the term.'
+        if skipped:
+            msg += f' {skipped} already existed.'
+        return _ok(msg, url_for('academics.assignments_list', term_id=term_id))
     except Exception as e:
         db.session.rollback()
         return _err(f'Error: {str(e)}', url_for('academics.assignments_list', term_id=term_id or ''))

@@ -31,7 +31,7 @@ from .models_hr import (Department, StaffMember, StaffEvent, LeaveRecord, Payrol
                         SalaryHistory, StaffAttendance, PayrollDeductionType,
                         PayslipDeduction, StaffDeduction, StaffDocument, TrainingRecord,
                         PerformanceReview, StaffLoan, LoanGuarantor, LoanRepayment)
-from .models_admissions import Applicant
+from .models_admissions import Applicant, ApplicantPhoto
 from .models_recruitment import JobVacancy, JobApplication, Interview
 from .models_attendance_intervention import AttendanceIntervention, InterventionNote
 from .models_library import Book, BookLoan, BookReservation, ReadingListItem
@@ -92,7 +92,7 @@ __all__ = [
     'SalaryHistory', 'StaffAttendance', 'PayrollDeductionType', 'PayslipDeduction',
     'StaffDeduction', 'StaffLoan', 'LoanGuarantor', 'LoanRepayment',
     'StaffDocument', 'TrainingRecord', 'PerformanceReview',
-    'Applicant',
+    'Applicant', 'ApplicantPhoto',
     'JobVacancy', 'JobApplication', 'Interview',
     'AttendanceIntervention', 'InterventionNote',
     'Book', 'BookLoan', 'BookReservation', 'ReadingListItem',

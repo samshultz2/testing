@@ -142,7 +142,21 @@ function ApplicantForm({ d, notify }) {
     parent_email: a.parent_email || '', address: a.address || '', notes: a.notes || '',
     emergency_name: a.emergency_name || '', emergency_relationship: a.emergency_relationship || '',
     emergency_phone: a.emergency_phone || '', emergency_address: a.emergency_address || '',
+    country: a.country || 'Nigeria', state_of_origin: a.state_of_origin || '', lga: a.lga || '',
+    father_occupation: a.father_occupation || '', blood_group: a.blood_group || '', genotype: a.genotype || '',
+    photo_data: '',
   });
+  const existingPhoto = a.photo_url || '';
+  const photoPreview = f.photo_data === '__clear__' ? ''
+    : (f.photo_data && f.photo_data.slice(0, 5) === 'data:' ? f.photo_data : existingPhoto);
+  const onPhoto = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    if (file.size > 8 * 1024 * 1024) { notify('error', 'Image too large (max 8 MB).'); return; }
+    const reader = new FileReader();
+    reader.onload = () => setF((s) => ({ ...s, photo_data: reader.result }));
+    reader.readAsDataURL(file);
+  };
   const [busy, setBusy] = useState(false);
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
   const submit = async (e) => {
@@ -164,20 +178,29 @@ function ApplicantForm({ d, notify }) {
     <>
       <PageHeader title={editing ? 'Edit Application' : 'New Application'} actions={
         d.urls.blank_form ? <>
-          <a href={d.urls.blank_form} data-native className="btn btn-secondary" title="Fillable application form (colour)"><i aria-hidden="true" className="fas fa-file-pdf" /> Blank form</a>
-          <a href={d.urls.blank_form + '?bw=1'} data-native className="btn btn-secondary" title="Fillable application form — black &amp; white, print-friendly"><i aria-hidden="true" className="fas fa-print" /> B&amp;W</a>
+          <a href={d.urls.blank_form} download="Application-Form.pdf" data-no-spa className="btn btn-secondary" title="Fillable application form (colour)"><i aria-hidden="true" className="fas fa-file-pdf" /> Blank form</a>
+          <a href={d.urls.blank_form + '?bw=1'} download="Application-Form-BW.pdf" data-no-spa className="btn btn-secondary" title="Fillable application form — black &amp; white, print-friendly"><i aria-hidden="true" className="fas fa-print" /> B&amp;W</a>
         </> : null} />
       <form onSubmit={submit}>
         <div className="card mb-3"><div className="card-header"><h3>Applicant</h3></div><div className="card-body">
+          <div className="form-group">
+            <label className="form-label">Passport photograph</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+              {photoPreview
+                ? <img src={photoPreview} alt="Passport" style={{ width: 64, height: 80, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border-color,#ddd)' }} />
+                : <div style={{ width: 64, height: 80, border: '1px dashed #bbb', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '.6rem', color: '#888', textAlign: 'center' }}>No photo</div>}
+              <div>
+                <input type="file" accept="image/*" onChange={onPhoto} />
+                {photoPreview && <div><button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: '.4rem' }} onClick={() => setF((s) => ({ ...s, photo_data: '__clear__' }))}>Remove</button></div>}
+              </div>
+            </div>
+          </div>
           <div className="form-row">{F({ label: 'First name', k: 'first_name', req: true })}{F({ label: 'Surname', k: 'surname', req: true })}</div>
           <div className="form-row">{F({ label: 'Middle name', k: 'middle_name' })}
             <div className="form-group"><label className="form-label">Gender</label>
               <select className="form-control" value={f.gender} onChange={(e) => set('gender', e.target.value)}><option value="">—</option><option>Male</option><option>Female</option></select></div>
             {F({ label: 'Date of birth', k: 'date_of_birth', type: 'date' })}</div>
-          <div className="form-row">{F({ label: 'Previous school', k: 'previous_school' })}
-            <div className="form-group"><label className="form-label">How did they hear?</label>
-              <select className="form-control" value={f.source} onChange={(e) => set('source', e.target.value)}><option value="">—</option>{d.sources.map((s) => <option key={s}>{s}</option>)}</select></div>
-          </div>
+          <div className="form-row">{F({ label: 'Previous school', k: 'previous_school' })}</div>
         </div></div>
 
         <div className="card mb-3"><div className="card-header"><h3>Application</h3></div><div className="card-body">
@@ -204,6 +227,18 @@ function ApplicantForm({ d, notify }) {
         <div className="card mb-3"><div className="card-header"><h3>Emergency Contact</h3></div><div className="card-body">
           <div className="form-row">{F({ label: 'Name', k: 'emergency_name' })}{F({ label: 'Relationship', k: 'emergency_relationship', placeholder: 'Uncle/Aunt/Neighbour' })}</div>
           <div className="form-row">{F({ label: 'Phone', k: 'emergency_phone' })}{F({ label: 'Address', k: 'emergency_address' })}</div>
+        </div></div>
+
+        <div className="card mb-3"><div className="card-header"><h3>Origin &amp; Health</h3></div><div className="card-body">
+          <div className="form-row">{F({ label: 'Country', k: 'country' })}{F({ label: 'State of origin', k: 'state_of_origin' })}{F({ label: 'L.G.A. of origin', k: 'lga' })}</div>
+          <div className="form-row">{F({ label: "Father's occupation", k: 'father_occupation' })}
+            <div className="form-group"><label className="form-label">Blood group</label>
+              <select className="form-control" value={f.blood_group} onChange={(e) => set('blood_group', e.target.value)}>
+                <option value="">—</option>{['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map((g) => <option key={g}>{g}</option>)}</select></div>
+            <div className="form-group"><label className="form-label">Genotype</label>
+              <select className="form-control" value={f.genotype} onChange={(e) => set('genotype', e.target.value)}>
+                <option value="">—</option>{['AA', 'AS', 'SS', 'AC', 'SC'].map((g) => <option key={g}>{g}</option>)}</select></div>
+          </div>
         </div></div>
 
         <div className="page-header-actions">
