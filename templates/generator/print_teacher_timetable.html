@@ -132,7 +132,7 @@
                 {% if classes_taught.append(class_key) %}{% endif %}
                 {% endif %}
                 <td class="period-cell has-class">
-                    <div class="subject-name">{{ entry.subject.name[:12] if entry.subject else '-' }}</div>
+                    <div class="subject-name">{{ (entry.subject.short_name or entry.subject.name)[:12] if entry.subject else '-' }}</div>
                     <div class="class-name">{{ entry.class_name }} {{ entry.arm_name }}</div>
                 </td>
                 {% else %}

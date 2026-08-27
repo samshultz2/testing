@@ -65,7 +65,7 @@
                     <td style="text-align: center; {% if entry %}background: #e8f5e9;{% endif %}">
                         {% if entry %}
                         <strong>{{ entry.class_name }} {{ entry.arm_name }}</strong>
-                        <br><small class="text-muted">{{ entry.subject.name if entry.subject else '-' }}</small>
+                        <br><small class="text-muted">{{ (entry.subject.short_name or entry.subject.name) if entry.subject else '-' }}</small>
                         {% else %}
                         <span class="text-muted">-</span>
                         {% endif %}
