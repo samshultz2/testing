@@ -101,6 +101,19 @@ SUBJECT_ABBREV = {
 }
 
 
+def _abbrev(subj, maxlen=6):
+    """The short label for a subject in the image: the user's own short name
+    (from /generator/subjects) if set, else the built-in abbreviation, else a
+    truncation of the full name."""
+    if subj is None:
+        return ''
+    sn = (getattr(subj, 'short_name', '') or '').strip()
+    if sn:
+        return sn
+    name = getattr(subj, 'name', '') or ''
+    return SUBJECT_ABBREV.get(name, name[:maxlen] if len(name) > maxlen else name)
+
+
 def get_school_name():
     """Get school name from GenSettings"""
     try:
@@ -389,8 +402,7 @@ def generate_timetable_image(batch_id, layout='by_day', quality='ultra'):
                 if result:
                     subj = GenSubject.query.get(result.subject_id)
                     if subj:
-                        subj_name = subj.name
-                        abbrev = SUBJECT_ABBREV.get(subj_name, subj_name[:6] if len(subj_name) > 6 else subj_name)
+                        abbrev = _abbrev(subj, 6)
                         if font_cell:
                             bbox = draw.textbbox((0, 0), abbrev, font=font_cell)
                             text_width = bbox[2] - bbox[0]
@@ -424,8 +436,7 @@ def generate_timetable_image(batch_id, layout='by_day', quality='ultra'):
                 if result:
                     subj = GenSubject.query.get(result.subject_id)
                     if subj:
-                        subj_name = subj.name
-                        abbrev = SUBJECT_ABBREV.get(subj_name, subj_name[:6] if len(subj_name) > 6 else subj_name)
+                        abbrev = _abbrev(subj, 6)
                         if font_cell:
                             bbox = draw.textbbox((0, 0), abbrev, font=font_cell)
                             text_width = bbox[2] - bbox[0]
@@ -573,7 +584,7 @@ def generate_teacher_timetable_image(batch_id, teacher_id):
             
             if result:
                 subj = GenSubject.query.get(result.subject_id)
-                subj_text = SUBJECT_ABBREV.get(subj.name, subj.name[:8]) if subj else ""
+                subj_text = _abbrev(subj, 8) if subj else ""
                 short_class = get_short_code(result.class_name, result.arm_name)
                 
                 if font_cell:
