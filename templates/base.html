@@ -665,6 +665,13 @@
                         <ul class="submenu">
                             <li><a href="{{ url_for('generator.index') }}"><i class="fas fa-home"></i> Dashboard</a></li>
                             <li><a href="{{ url_for('generator.setup_guide') }}"><i class="fas fa-list-check"></i> Setup Guide</a></li>
+                            {% set _gen_level = session.get('generator_level', 'sss') %}
+                            <li class="submenu-divider"></li>
+                            <li style="padding:.35rem .9rem .1rem;font-size:.68rem;letter-spacing:.4px;text-transform:uppercase;opacity:.7;">Working on</li>
+                            <li style="display:flex;gap:.35rem;padding:.15rem .8rem .5rem;">
+                                <a href="{{ url_for('generator.level_dashboard', level='jss') }}" class="btn btn-sm {% if _gen_level == 'jss' %}btn-primary{% else %}btn-secondary{% endif %}" style="flex:1;text-align:center;">JSS</a>
+                                <a href="{{ url_for('generator.level_dashboard', level='sss') }}" class="btn btn-sm {% if _gen_level == 'sss' %}btn-primary{% else %}btn-secondary{% endif %}" style="flex:1;text-align:center;">SSS</a>
+                            </li>
                             <li><a href="{{ url_for('generator.teachers_list') }}"><i class="fas fa-chalkboard-teacher"></i> Teachers</a></li>
                             <li><a href="{{ url_for('generator.subjects_config') }}"><i class="fas fa-book"></i> Subjects</a></li>
                             <li><a href="{{ url_for('generator.streams_list') }}"><i class="fas fa-layer-group"></i> Streams</a></li>

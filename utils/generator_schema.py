@@ -26,7 +26,7 @@ _TABLES = (
 # fresh SQLite (dev/test) DBs get the right constraint from create_all.
 _UNIQUE_SWAPS = {
     'gen_subjects': ('uq_gen_subject_branch_name_level', ['branch_id', 'name', 'school_level']),
-    'gen_streams': ('uq_gen_stream_branch_name', ['branch_id', 'name']),
+    'gen_streams': ('uq_gen_stream_branch_name_level', ['branch_id', 'name', 'school_level']),
     'gen_settings': ('uq_gen_setting_branch_key', ['branch_id', 'setting_key']),
 }
 
@@ -139,6 +139,17 @@ def ensure_generator_schema():
                             {'b': default_bid})
                     except Exception:
                         pass
+            # Streams gained a school_level so JSS/SSS can have their own; add it
+            # and backfill existing streams to SSS (streams are an SSS concept).
+            scols = _cols(insp, 'gen_streams')
+            if scols is not None and 'school_level' not in scols:
+                try:
+                    conn.execute(text(
+                        "ALTER TABLE gen_streams ADD COLUMN school_level VARCHAR(10)"))
+                    conn.execute(text(
+                        "UPDATE gen_streams SET school_level = 'sss' WHERE school_level IS NULL"))
+                except Exception:
+                    pass
             if is_pg:
                 _swap_uniques_postgres(conn)     # best-effort; each stmt autocommits
     except Exception:

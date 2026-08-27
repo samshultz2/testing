@@ -520,8 +520,9 @@ def teacher_timetable():
     
     teacher_id = request.args.get('teacher_id', type=int)
     batch_id = request.args.get('batch_id')
-    
-    teachers = GenTeacher.query.filter_by(is_active=True, branch_id=gen_bid()).order_by(GenTeacher.name).all()
+
+    level = get_current_level()
+    teachers = GenTeacher.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).order_by(GenTeacher.name).all()
     
     if not batch_id:
         latest = GenTimetableResult.query.filter_by(branch_id=gen_bid()).order_by(GenTimetableResult.generated_at.desc()).first()

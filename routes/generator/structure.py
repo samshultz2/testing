@@ -51,8 +51,10 @@ def delete_room(room_id):
 @generator_bp.route('/streams')
 @login_required
 def streams_list():
-    streams = GenStream.query.filter_by(is_active=True, branch_id=gen_bid()).order_by(GenStream.name).all()
-    return render_template('generator/streams.html', streams=streams)
+    level = get_current_level()
+    streams = GenStream.query.filter_by(
+        is_active=True, school_level=level, branch_id=gen_bid()).order_by(GenStream.name).all()
+    return render_template('generator/streams.html', streams=streams, level=level)
 
 
 @generator_bp.route('/streams/add', methods=['GET', 'POST'])
@@ -64,12 +66,14 @@ def add_stream():
             if not name:
                 flash('Stream name is required.', 'error')
                 return redirect(url_for('generator.add_stream'))
-            if GenStream.query.filter_by(name=name, branch_id=gen_bid()).first():
-                flash('Stream exists.', 'error')
+            level = get_current_level()
+            if GenStream.query.filter_by(name=name, school_level=level, branch_id=gen_bid()).first():
+                flash('Stream exists for this level.', 'error')
                 return redirect(url_for('generator.add_stream'))
             stream = GenStream(
                 name=name,
                 branch_id=gen_bid(),
+                school_level=level,
                 short_name=request.form.get('short_name', '').strip() or None,
                 description=request.form.get('description', '').strip() or None
             )
@@ -87,11 +91,12 @@ def add_stream():
 @login_required
 def edit_stream(stream_id):
     stream = gen_owned_or_404(GenStream, stream_id)
-    # Streams are SSS-only
-    all_subjects = GenSubject.query.filter_by(is_active=True, school_level='sss', branch_id=gen_bid()).order_by(GenSubject.name).all()
+    # Offer this stream's own level's subjects.
+    lv = stream.school_level or 'sss'
+    all_subjects = GenSubject.query.filter_by(is_active=True, school_level=lv, branch_id=gen_bid()).order_by(GenSubject.name).all()
     assigned = {ss.subject_id: ss for ss in stream.subjects}
     # Get global subject configs for default periods display
-    global_configs = {cfg.subject_id: cfg for cfg in GenSubjectConfig.query.filter_by(is_active=True, school_level='sss', branch_id=gen_bid()).all()}
+    global_configs = {cfg.subject_id: cfg for cfg in GenSubjectConfig.query.filter_by(is_active=True, school_level=lv, branch_id=gen_bid()).all()}
     return render_template('generator/edit_stream.html',
         stream=stream, all_subjects=all_subjects, assigned=assigned, global_configs=global_configs
     )

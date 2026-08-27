@@ -161,10 +161,12 @@ class GenStream(db.Model):
     name = db.Column(db.String(50), nullable=False)
     short_name = db.Column(db.String(10))
     description = db.Column(db.String(200))
+    school_level = db.Column(db.String(10), default='sss')  # 'jss' or 'sss'
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=local_now)
 
-    __table_args__ = (db.UniqueConstraint('branch_id', 'name', name='uq_gen_stream_branch_name'),)
+    __table_args__ = (db.UniqueConstraint('branch_id', 'name', 'school_level',
+                                          name='uq_gen_stream_branch_name_level'),)
 
     # Relationships
     subjects = db.relationship('GenStreamSubject', backref='stream', lazy='dynamic', cascade='all, delete-orphan')
