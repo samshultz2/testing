@@ -49,6 +49,11 @@
                     <a href="{{ url_for('generator.class_subjects_config', class_id=class_config.id) }}" class="btn btn-secondary btn-sm">
                         <i class="fas fa-book"></i> Subjects
                     </a>
+                    {% if class_config.has_streams %}
+                    <a href="{{ url_for('generator.class_stream_subjects', class_id=class_config.id) }}" class="btn btn-secondary btn-sm" title="Set subject periods per arm/stream (e.g. Physics differs for SSS3 Rose vs Lily)">
+                        <i class="fas fa-layer-group"></i> Stream Subjects
+                    </a>
+                    {% endif %}
                 </div>
             </div>
             {% endfor %}
