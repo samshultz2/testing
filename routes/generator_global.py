@@ -73,7 +73,10 @@ def generate_global_timetable(class_ids, periods_per_day, break_after, db_sessio
                         # Pass all configs for priority resolution
                         subjects.append((ss.subject_id, ss.subject.name, cfg, class_cfg, ss, class_stream_cfg))
             else:
-                for cfg in GenSubjectConfig.query.filter_by(is_active=True, branch_id=gen_bid()).all():
+                # Non-stream class: offer this class's OWN level's subjects only, so
+                # a JSS class never picks up SSS subjects (and vice versa).
+                for cfg in GenSubjectConfig.query.filter_by(
+                        is_active=True, school_level=cc.school_level, branch_id=gen_bid()).all():
                     class_cfg = class_configs.get(cfg.subject_id)
                     if class_cfg and not class_cfg.is_enabled:
                         continue

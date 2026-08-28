@@ -30,6 +30,7 @@
                         <th>Subject</th>
                         <th style="width: 100px;">Periods/Week</th>
                         <th style="width: 80px;">Double?</th>
+                        <th style="width: 90px;">Doubles/Week</th>
                         <th style="width: 120px;">Default</th>
                     </tr>
                 </thead>
@@ -56,6 +57,15 @@
                             <input type="checkbox" name="double_{{ subj.id }}" value="1"
                                    id="double_{{ data.stream.id }}_{{ subj.id }}"
                                    {% if subj.needs_double %}checked{% endif %}
+                                   {% if not subj.is_enabled %}disabled{% endif %}>
+                        </td>
+                        <td style="text-align: center;">
+                            <input type="number" name="double_count_{{ subj.id }}"
+                                   id="double_count_{{ data.stream.id }}_{{ subj.id }}"
+                                   class="form-control form-control-sm"
+                                   min="1" max="5" style="width: 60px; margin: 0 auto;"
+                                   value="{{ subj.double_count if subj.double_count else '' }}"
+                                   placeholder="1"
                                    {% if not subj.is_enabled %}disabled{% endif %}>
                         </td>
                         <td class="text-muted" style="font-size: 12px;">
@@ -112,6 +122,8 @@ var WEEKLY_CAPACITY = {{ weekly_capacity }};
 function toggleRow(subjectId, enabled, streamId) {
     document.getElementById('periods_' + streamId + '_' + subjectId).disabled = !enabled;
     document.getElementById('double_' + streamId + '_' + subjectId).disabled = !enabled;
+    var dc = document.getElementById('double_count_' + streamId + '_' + subjectId);
+    if (dc) dc.disabled = !enabled;
     updateTotal(streamId);
 }
 

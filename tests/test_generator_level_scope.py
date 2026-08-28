@@ -124,3 +124,69 @@ def test_exports_render_with_custom_break_position(app):
         r = c.get(url)
         assert r.status_code == 200, f'{url} -> {r.status_code}'
         assert len(r.get_data()) > 100, f'{url} produced an empty file'
+
+
+def test_stream_subject_double_count_persists(app):
+    """The stream page's 'Doubles/Week' count is saved, not hardcoded to 1."""
+    from models import GenSubject, GenStreamSubject
+    tag = next(_SEQ)
+    with app.app_context():
+        bid = Branch.get_default().id
+        st = GenStream(name=f'Sci{tag}', school_level='sss', branch_id=bid, is_active=True)
+        sub = GenSubject(name=f'Phy{tag}', short_name='PHY', school_level='sss', branch_id=bid, is_active=True)
+        db.session.add_all([st, sub])
+        db.session.commit()
+        sid, subid = st.id, sub.id
+
+    c = app.test_client()
+    c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': login_token(c)})
+    c.get('/generator/level/sss')
+    c.post(f'/generator/streams/{sid}/subjects', data={
+        '_csrf_token': auth_csrf(c),
+        'subject_ids[]': str(subid),
+        f'periods_{subid}': '6',
+        f'double_{subid}': '1',
+        f'double_count_{subid}': '2',
+    })
+    with app.app_context():
+        row = GenStreamSubject.query.filter_by(stream_id=sid, subject_id=subid).first()
+        assert row is not None and row.needs_double_period is True
+        assert row.double_period_count == 2      # honoured the count, not hardcoded 1
+
+
+def test_class_stream_double_count_persists_and_clamps(app):
+    """Class-stream page saves its own count, clamped so 2×doubles <= periods."""
+    from models import (GenSubject, GenClassConfig, GenClassArmStream,
+                        GenClassStreamSubject, GenStreamSubject)
+    tag = next(_SEQ)
+    with app.app_context():
+        bid = Branch.get_default().id
+        st = GenStream(name=f'Art{tag}', school_level='sss', branch_id=bid, is_active=True)
+        sub = GenSubject(name=f'Lit{tag}', short_name='LIT', school_level='sss', branch_id=bid, is_active=True)
+        cc = GenClassConfig(class_name=f'SS{tag}', school_level='sss', branch_id=bid,
+                            num_arms=1, arm_names='A', has_streams=True, is_active=True)
+        db.session.add_all([st, sub, cc])
+        db.session.commit()
+        db.session.add(GenClassArmStream(class_config_id=cc.id, arm_name='A', stream_id=st.id))
+        db.session.add(GenStreamSubject(stream_id=st.id, subject_id=sub.id, is_compulsory=True))
+        db.session.commit()
+        cid, sid, subid = cc.id, st.id, sub.id
+
+    c = app.test_client()
+    c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': login_token(c)})
+    c.get('/generator/level/sss')
+    # Ask for 5 doubles on a 4-period subject -> clamp to 4//2 = 2.
+    c.post(f'/generator/classes/{cid}/stream-subjects/save', data={
+        '_csrf_token': auth_csrf(c),
+        'stream_id': str(sid),
+        'subject_ids[]': str(subid),
+        f'periods_{subid}': '4',
+        f'double_{subid}': '1',
+        f'double_count_{subid}': '5',
+        f'enabled_{subid}': '1',
+    })
+    with app.app_context():
+        row = GenClassStreamSubject.query.filter_by(
+            class_config_id=cid, stream_id=sid, subject_id=subid).first()
+        assert row is not None and row.needs_double_period is True
+        assert row.double_period_count == 2      # clamped from 5 to periods//2

@@ -131,14 +131,21 @@ def update_stream_subjects(stream_id):
             periods_str = request.form.get(f'periods_{subject_id}', '').strip()
             periods = int(periods_str) if periods_str else None
             needs_double = request.form.get(f'double_{subject_id}') == '1'
-            
+            # How many double periods per week (default 1 when the box is ticked
+            # but no count given); clamp so 2×doubles never exceeds the week's
+            # periods for this subject.
+            dc = request.form.get(f'double_count_{subject_id}', type=int) or 1
+            if periods:
+                dc = min(dc, periods // 2)
+            double_count = max(1, dc) if needs_double else None
+
             db.session.add(GenStreamSubject(
-                stream_id=stream_id, 
+                stream_id=stream_id,
                 subject_id=subject_id,
                 is_compulsory=subject_id in compulsory_ids,
                 periods_per_week=periods,
                 needs_double_period=needs_double if needs_double else None,
-                double_period_count=1 if needs_double else None
+                double_period_count=double_count
             ))
         db.session.commit()
         flash(f'Updated subjects for {stream.name}!', 'success')

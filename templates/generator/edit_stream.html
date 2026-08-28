@@ -47,6 +47,7 @@
                         <th>Subject</th>
                         <th style="width: 80px;">Periods/Week</th>
                         <th style="width: 80px;">Double?</th>
+                        <th style="width: 90px;">Doubles/Week</th>
                         <th style="width: 100px;">Compulsory</th>
                     </tr>
                 </thead>
@@ -78,6 +79,14 @@
                             <input type="checkbox" name="double_{{ subject.id }}" value="1"
                                    class="stream-input-{{ subject.id }}"
                                    {% if stream_subj and stream_subj.needs_double_period %}checked{% endif %}
+                                   {% if not stream_subj %}disabled{% endif %}>
+                        </td>
+                        <td style="text-align: center;">
+                            <input type="number" name="double_count_{{ subject.id }}"
+                                   class="form-control form-control-sm stream-input-{{ subject.id }}"
+                                   min="1" max="5" style="width: 60px; margin: 0 auto;"
+                                   value="{{ stream_subj.double_period_count if stream_subj and stream_subj.double_period_count else '' }}"
+                                   placeholder="1"
                                    {% if not stream_subj %}disabled{% endif %}>
                         </td>
                         <td style="text-align: center;">

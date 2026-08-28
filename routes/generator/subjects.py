@@ -350,28 +350,33 @@ def class_stream_subjects(class_id):
             if class_stream_cfg:
                 periods = class_stream_cfg.periods_per_week
                 needs_double = class_stream_cfg.needs_double_period
+                double_count = class_stream_cfg.double_period_count
                 is_enabled = class_stream_cfg.is_enabled
             elif ss.periods_per_week is not None:
                 periods = ss.periods_per_week
                 needs_double = ss.needs_double_period or False
+                double_count = ss.double_period_count
                 is_enabled = True
             elif cfg:
                 periods = cfg.periods_per_week
                 needs_double = cfg.needs_double_period
+                double_count = cfg.double_period_count
                 is_enabled = True
             else:
                 periods = 2
                 needs_double = False
+                double_count = 0
                 is_enabled = True
-            
+
             if is_enabled:
                 total_periods += periods
-            
+
             subjects.append({
                 'id': ss.subject_id,
                 'name': ss.subject.name if ss.subject else f'[Subject {ss.subject_id}]',
                 'periods': periods,
                 'needs_double': needs_double,
+                'double_count': double_count or 0,
                 'is_enabled': is_enabled,
                 'global_periods': cfg.periods_per_week if cfg else 2,
                 'stream_periods': ss.periods_per_week
@@ -415,21 +420,20 @@ def save_class_stream_subjects(class_id):
             periods = int(request.form.get(f'periods_{subject_id}', 2))
             needs_double = request.form.get(f'double_{subject_id}') == '1'
             is_enabled = request.form.get(f'enabled_{subject_id}') == '1'
-            
+
             existing = GenClassStreamSubject.query.filter_by(
                 class_config_id=class_id,
                 stream_id=stream_id,
                 subject_id=subject_id
             ).first()
-            
-            # Get double_period_count from per-class settings
+
+            # How many double periods per week — taken from THIS page's own count
+            # box (default 1 when ticked without a number), clamped so 2×doubles
+            # never exceeds the subject's weekly periods.
             double_count = 0
             if needs_double:
-                per_class_config = GenClassSubjectConfig.query.filter_by(
-                    class_config_id=class_id,
-                    subject_id=subject_id
-                ).first()
-                double_count = per_class_config.double_period_count if per_class_config else 1
+                dc = request.form.get(f'double_count_{subject_id}', type=int) or 1
+                double_count = max(1, min(dc, periods // 2) if periods else dc)
             
             if existing:
                 existing.periods_per_week = periods
