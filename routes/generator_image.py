@@ -472,22 +472,31 @@ def generate_teacher_timetable_image(batch_id, teacher_id):
     if not results or not teacher:
         return None
     
-    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, branch_id=gen_bid()).all()}
+    school_level = results[0].school_level or 'sss'
+    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, school_level=school_level, branch_id=gen_bid()).all()}
     periods_per_day = int(rules.get('periods_per_day', 8))
-    
+    break_after = _break_after(rules, periods_per_day)
+
+    # Break time label (e.g. "11:40-12:10") from this level's day clock.
+    _sh, _sm, _plen, _blen = clock_params(rules)
+    _bs = _sh * 60 + _sm + break_after * _plen
+    _be = _bs + _blen
+    break_label = f"{_bs // 60}:{_bs % 60:02d}-{_be // 60}:{_be % 60:02d}"
+
     days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
     school_name = get_school_name()
-    
+
     # HIGH RESOLUTION (4x scale)
     scale = 4
     cell_width = 110 * scale
     cell_height = 55 * scale
     header_height = 42 * scale
     day_col_width = 100 * scale
+    break_col_width = 62 * scale
     margin = 50 * scale
     title_height = 100 * scale
-    
-    table_width = day_col_width + (periods_per_day * cell_width)
+
+    table_width = day_col_width + (periods_per_day * cell_width) + break_col_width
     table_height = header_height + (5 * cell_height)
     img_width = table_width + (margin * 2)
     img_height = title_height + table_height + (margin * 2) + 30 * scale  # Extra for watermark
@@ -500,13 +509,15 @@ def generate_teacher_timetable_image(batch_id, teacher_id):
     font_title = get_font(24 * scale, bold=True)
     font_subtitle = get_font(12 * scale, bold=False)
     font_header = get_font(13 * scale, bold=True)
-    font_cell = get_font(11 * scale)
-    font_cell_small = get_font(9 * scale)
+    font_cell = get_font(16 * scale, bold=True)         # subject — larger + bold
+    font_cell_small = get_font(12 * scale, bold=True)   # class — larger + bold
+    font_break = get_font(11 * scale, bold=True)
     font_watermark = get_font(9 * scale, bold=False)
-    
+
     color_black = (0, 0, 0)
     color_gray = (100, 100, 100)
     color_light_gray = (245, 245, 245)
+    color_break = (235, 235, 235)
     color_border = (100, 100, 100)
     color_watermark = (200, 200, 200)
     
@@ -560,7 +571,19 @@ def generate_teacher_timetable_image(batch_id, teacher_id):
             draw.text((x + (cell_width - text_width) // 2, y_start + 12 * scale), text,
                      fill=color_black, font=font_header)
         x += cell_width
-    
+
+        # BREAK header column, right after the configured break period
+        if p == break_after:
+            draw.rectangle([x, y_start, x + break_col_width, y_start + header_height],
+                          fill=color_break, outline=color_border, width=scale)
+            for ln, fnt, dy in [('BREAK', font_break, 8), (break_label, font_watermark, 26)]:
+                if fnt:
+                    bbox = draw.textbbox((0, 0), ln, font=fnt)
+                    tw = bbox[2] - bbox[0]
+                    draw.text((x + (break_col_width - tw) // 2, y_start + dy * scale),
+                             ln, fill=color_black, font=fnt)
+            x += break_col_width
+
     y_start += header_height
     
     # Day rows
@@ -583,26 +606,32 @@ def generate_teacher_timetable_image(batch_id, teacher_id):
             result = day_results.get(p)
             draw.rectangle([x, y_start, x + cell_width, y_start + cell_height],
                           fill='white', outline=color_border, width=scale)
-            
+
             if result:
                 subj = GenSubject.query.get(result.subject_id)
                 subj_text = _abbrev(subj, 8) if subj else ""
                 short_class = get_short_code(result.class_name, result.arm_name)
-                
+
                 if font_cell:
                     bbox = draw.textbbox((0, 0), subj_text, font=font_cell)
                     text_width = bbox[2] - bbox[0]
-                    draw.text((x + (cell_width - text_width) // 2, y_start + 12 * scale), subj_text,
+                    draw.text((x + (cell_width - text_width) // 2, y_start + 9 * scale), subj_text,
                              fill=color_black, font=font_cell)
-                
+
                 if font_cell_small:
                     bbox = draw.textbbox((0, 0), short_class, font=font_cell_small)
                     text_width = bbox[2] - bbox[0]
-                    draw.text((x + (cell_width - text_width) // 2, y_start + 32 * scale), short_class,
-                             fill=color_gray, font=font_cell_small)
-            
+                    draw.text((x + (cell_width - text_width) // 2, y_start + 34 * scale), short_class,
+                             fill=color_black, font=font_cell_small)
+
             x += cell_width
-        
+
+            # Shaded BREAK cell in each day row
+            if p == break_after:
+                draw.rectangle([x, y_start, x + break_col_width, y_start + cell_height],
+                              fill=color_break, outline=color_border, width=scale)
+                x += break_col_width
+
         y_start += cell_height
     
     # Watermark

@@ -250,3 +250,41 @@ def test_by_day_pdf_is_one_page_per_day(app):
     assert r.status_code == 200
     pages = len(PdfReader(io.BytesIO(r.get_data())).pages)
     assert pages == 5, f'expected 5 pages (one per weekday), got {pages}'
+
+
+def test_teacher_timetable_image_has_break_and_renders(app):
+    """Teacher timetable image renders and includes the break column in its width."""
+    import io
+    from PIL import Image
+    from models import (GenTimetableResult, GenTimetableRule, GenSubject,
+                        GenTeacher, Branch)
+    tag = next(_SEQ)
+    batch = f'ttimg{tag}'
+    with app.app_context():
+        bid = Branch.get_default().id
+        t = GenTeacher(name=f'T{tag}', school_level='sss', branch_id=bid,
+                       is_active=True, max_periods_per_day=6)
+        subj = GenSubject(name=f'Mth{tag}', short_name='MTH', school_level='sss',
+                          branch_id=bid, is_active=True)
+        db.session.add_all([t, subj])
+        for rt, val in [('periods_per_day', '8'), ('break_after_period', '5')]:
+            db.session.add(GenTimetableRule(rule_type=rt, value=val, school_level='sss',
+                                            is_active=True, branch_id=bid))
+        db.session.flush()
+        for d in range(5):
+            for p in range(1, 9):
+                db.session.add(GenTimetableResult(
+                    branch_id=bid, batch_id=batch, school_level='sss',
+                    class_name='SSS1', arm_name='D', day_of_week=d, period_number=p,
+                    subject_id=subj.id, teacher_id=t.id))
+        db.session.commit()
+        tid = t.id
+
+    c = app.test_client()
+    c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': login_token(c)})
+    c.get('/generator/level/sss')
+    r = c.get(f'/generator/results/{batch}/teacher/{tid}/image')
+    assert r.status_code == 200
+    w = Image.open(io.BytesIO(r.get_data())).size[0]
+    # Day col + 8 periods*110 + break(62) + 2*margin(50), all *4 scale.
+    assert w == (100 + 8 * 110 + 62 + 2 * 50) * 4     # break column is in the width
