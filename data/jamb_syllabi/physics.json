@@ -1,0 +1,1370 @@
+{
+  "subject": "Physics",
+  "code": "JAMB-PHY",
+  "prefix": "PHY",
+  "version": "2026",
+  "sections": [
+    {
+      "code": "MEAS",
+      "name": "Measurements and Units",
+      "topics": [
+        {
+          "code": "MEAS.A",
+          "name": "Units",
+          "items": [
+            {
+              "code": "MEAS.A.1",
+              "name": "Fundamental units (length, mass, time, electric charge, temperature, luminous intensity, amount of substance)"
+            },
+            {
+              "code": "MEAS.A.2",
+              "name": "Derived units (weight, area, volume, force, speed etc.)"
+            }
+          ]
+        },
+        {
+          "code": "MEAS.B",
+          "name": "Measuring instruments",
+          "items": [
+            {
+              "code": "MEAS.B.1",
+              "name": "Vernier caliper, metre rule, micrometer screw gauge, measuring cylinder, stop watch, beam balance"
+            }
+          ]
+        },
+        {
+          "code": "MEAS.C",
+          "name": "Physical quantities",
+          "items": [
+            {
+              "code": "MEAS.C.1",
+              "name": "Fundamental physical quantities"
+            },
+            {
+              "code": "MEAS.C.2",
+              "name": "Derived physical quantities and their units (combinations of fundamental quantities)"
+            }
+          ]
+        },
+        {
+          "code": "MEAS.D",
+          "name": "Dimensions and limitations",
+          "items": [
+            {
+              "code": "MEAS.D.1",
+              "name": "Dimensions (definition and simple examples)"
+            },
+            {
+              "code": "MEAS.D.2",
+              "name": "Limitations of experimental measurements (accuracy, errors, significant figures, standard form)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "VEC",
+      "name": "Scalars, Vectors and Position",
+      "topics": [
+        {
+          "code": "VEC.A",
+          "name": "Scalars and vectors",
+          "items": [
+            {
+              "code": "VEC.A.1",
+              "name": "Definition and examples of scalar and vector quantities"
+            },
+            {
+              "code": "VEC.A.2",
+              "name": "Relative velocity"
+            },
+            {
+              "code": "VEC.A.3",
+              "name": "Resolution of vectors into two perpendicular directions (including graphical methods)"
+            }
+          ]
+        },
+        {
+          "code": "VEC.B",
+          "name": "Position, distance and displacement",
+          "items": [
+            {
+              "code": "VEC.B.1",
+              "name": "Concept of displacement; distinction between distance and displacement"
+            },
+            {
+              "code": "VEC.B.2",
+              "name": "Concept of position and coordinates; frame of reference"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "MOT",
+      "name": "Motion",
+      "topics": [
+        {
+          "code": "MOT.A",
+          "name": "Newton's laws of motion",
+          "items": [
+            {
+              "code": "MOT.A.1",
+              "name": "Inertia, mass and force; relationship between mass and acceleration"
+            },
+            {
+              "code": "MOT.A.2",
+              "name": "Impulse and momentum; force-time graph"
+            },
+            {
+              "code": "MOT.A.3",
+              "name": "Conservation of linear momentum"
+            }
+          ]
+        },
+        {
+          "code": "MOT.B",
+          "name": "Types and causes of motion",
+          "items": [
+            {
+              "code": "MOT.B.1",
+              "name": "Types of motion (translational, oscillatory, rotational, spin, random)"
+            },
+            {
+              "code": "MOT.B.2",
+              "name": "Relative motion"
+            },
+            {
+              "code": "MOT.B.3",
+              "name": "Causes of motion"
+            },
+            {
+              "code": "MOT.B.4",
+              "name": "Types of force (contact, force field)"
+            }
+          ]
+        },
+        {
+          "code": "MOT.C",
+          "name": "Linear motion",
+          "items": [
+            {
+              "code": "MOT.C.1",
+              "name": "Speed, velocity and acceleration; equations of uniformly accelerated motion"
+            },
+            {
+              "code": "MOT.C.2",
+              "name": "Motion under gravity"
+            },
+            {
+              "code": "MOT.C.3",
+              "name": "Distance-time and velocity-time graphs"
+            },
+            {
+              "code": "MOT.C.4",
+              "name": "Instantaneous velocity and acceleration"
+            }
+          ]
+        },
+        {
+          "code": "MOT.D",
+          "name": "Projectiles",
+          "items": [
+            {
+              "code": "MOT.D.1",
+              "name": "Calculation of range, maximum height and time of flight"
+            },
+            {
+              "code": "MOT.D.2",
+              "name": "Applications of projectile motion"
+            }
+          ]
+        },
+        {
+          "code": "MOT.E",
+          "name": "Motion in a circle",
+          "items": [
+            {
+              "code": "MOT.E.1",
+              "name": "Angular velocity and angular acceleration"
+            },
+            {
+              "code": "MOT.E.2",
+              "name": "Centripetal and centrifugal forces; applications"
+            }
+          ]
+        },
+        {
+          "code": "MOT.F",
+          "name": "Simple harmonic motion (S.H.M)",
+          "items": [
+            {
+              "code": "MOT.F.1",
+              "name": "Definition, explanation and examples of S.H.M"
+            },
+            {
+              "code": "MOT.F.2",
+              "name": "Period, frequency, amplitude, velocity and acceleration of S.H.M"
+            },
+            {
+              "code": "MOT.F.3",
+              "name": "Energy change in S.H.M; forced vibration and resonance"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "GRAV",
+      "name": "Gravitational Field",
+      "topics": [
+        {
+          "code": "GRAV.A",
+          "name": "Gravitational field",
+          "items": [
+            {
+              "code": "GRAV.A.1",
+              "name": "Newton's law of universal gravitation; gravitational potential"
+            },
+            {
+              "code": "GRAV.A.2",
+              "name": "Conservative and non-conservative fields"
+            },
+            {
+              "code": "GRAV.A.3",
+              "name": "Acceleration due to gravity; variation of g on the earth's surface"
+            },
+            {
+              "code": "GRAV.A.4",
+              "name": "Distinction between mass and weight; escape velocity"
+            },
+            {
+              "code": "GRAV.A.5",
+              "name": "Parking orbit and weightlessness"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "EQUI",
+      "name": "Equilibrium of Forces",
+      "topics": [
+        {
+          "code": "EQUI.A",
+          "name": "Equilibrium of particles",
+          "items": [
+            {
+              "code": "EQUI.A.1",
+              "name": "Equilibrium of coplanar forces; triangle and polygon of forces; Lami's theorem"
+            }
+          ]
+        },
+        {
+          "code": "EQUI.B",
+          "name": "Principle of moments",
+          "items": [
+            {
+              "code": "EQUI.B.1",
+              "name": "Moment of a force; moment of a couple (torque); applications"
+            }
+          ]
+        },
+        {
+          "code": "EQUI.C",
+          "name": "Equilibrium of rigid bodies",
+          "items": [
+            {
+              "code": "EQUI.C.1",
+              "name": "Conditions for equilibrium under parallel and non-parallel forces"
+            },
+            {
+              "code": "EQUI.C.2",
+              "name": "Resolution and composition of forces; resultant and equilibrant"
+            }
+          ]
+        },
+        {
+          "code": "EQUI.D",
+          "name": "Centre of gravity and stability",
+          "items": [
+            {
+              "code": "EQUI.D.1",
+              "name": "Centre of gravity; stable, unstable and neutral equilibria"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "FRIC",
+      "name": "Friction",
+      "topics": [
+        {
+          "code": "FRIC.1",
+          "name": "Friction",
+          "items": [
+            {
+              "code": "FRIC.1.A",
+              "name": "Static and dynamic friction"
+            },
+            {
+              "code": "FRIC.1.B",
+              "name": "Coefficient of limiting friction and its determination"
+            },
+            {
+              "code": "FRIC.1.C",
+              "name": "Advantages, disadvantages and reduction of friction"
+            },
+            {
+              "code": "FRIC.1.D",
+              "name": "Qualitative treatment of viscosity and terminal velocity; Stoke's law"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "WEP",
+      "name": "Work, Energy and Power",
+      "topics": [
+        {
+          "code": "WEP.A",
+          "name": "Work, energy and power",
+          "items": [
+            {
+              "code": "WEP.A.1",
+              "name": "Definition of work, energy and power; forms of energy"
+            },
+            {
+              "code": "WEP.A.2",
+              "name": "Conservation of energy; transformations between forms of energy"
+            },
+            {
+              "code": "WEP.A.3",
+              "name": "Interpretation of area under the force-distance curve"
+            }
+          ]
+        },
+        {
+          "code": "WEP.B",
+          "name": "Energy and society",
+          "items": [
+            {
+              "code": "WEP.B.1",
+              "name": "Sources of energy; renewable and non-renewable energy"
+            },
+            {
+              "code": "WEP.B.2",
+              "name": "Uses of energy; energy and development; energy diversification"
+            },
+            {
+              "code": "WEP.B.3",
+              "name": "Environmental impact of energy (global warming, greenhouse effect, spillage); energy crises"
+            },
+            {
+              "code": "WEP.B.4",
+              "name": "Conversion of energy; devices used in energy production"
+            }
+          ]
+        },
+        {
+          "code": "WEP.C",
+          "name": "Energy production",
+          "items": [
+            {
+              "code": "WEP.C.1",
+              "name": "Dams and energy production (location of dams, energy production)"
+            },
+            {
+              "code": "WEP.C.2",
+              "name": "Nuclear energy"
+            },
+            {
+              "code": "WEP.C.3",
+              "name": "Solar energy (photoelectric effect, solar collector, solar panel)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "MACH",
+      "name": "Simple Machines",
+      "topics": [
+        {
+          "code": "MACH.1",
+          "name": "Simple machines",
+          "items": [
+            {
+              "code": "MACH.1.A",
+              "name": "Definition and types of simple machines"
+            },
+            {
+              "code": "MACH.1.B",
+              "name": "Mechanical advantage, velocity ratio and efficiency of machines"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "ELAS",
+      "name": "Elasticity",
+      "topics": [
+        {
+          "code": "ELAS.1",
+          "name": "Elasticity",
+          "items": [
+            {
+              "code": "ELAS.1.A",
+              "name": "Hooke's law and Young's modulus; elastic limit, yield point, breaking point"
+            },
+            {
+              "code": "ELAS.1.B",
+              "name": "The spring balance as a device for measuring force"
+            },
+            {
+              "code": "ELAS.1.C",
+              "name": "Work done per unit volume in springs and elastic strings"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "PRES",
+      "name": "Pressure",
+      "topics": [
+        {
+          "code": "PRES.A",
+          "name": "Atmospheric pressure",
+          "items": [
+            {
+              "code": "PRES.A.1",
+              "name": "Definition and units of pressure (Pa); measurement of pressure"
+            },
+            {
+              "code": "PRES.A.2",
+              "name": "Simple mercury barometer, aneroid barometer and manometer"
+            },
+            {
+              "code": "PRES.A.3",
+              "name": "Variation of pressure with height; barometer as an altimeter"
+            }
+          ]
+        },
+        {
+          "code": "PRES.B",
+          "name": "Pressure in liquids",
+          "items": [
+            {
+              "code": "PRES.B.1",
+              "name": "Relationship between pressure, depth and density (P = rho*g*h)"
+            },
+            {
+              "code": "PRES.B.2",
+              "name": "Transmission of pressure in liquids (Pascal's principle); applications"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "LIQ",
+      "name": "Liquids At Rest",
+      "topics": [
+        {
+          "code": "LIQ.1",
+          "name": "Liquids at rest",
+          "items": [
+            {
+              "code": "LIQ.1.A",
+              "name": "Determination of density of solids and liquids; relative density"
+            },
+            {
+              "code": "LIQ.1.B",
+              "name": "Upthrust on a body immersed in a liquid"
+            },
+            {
+              "code": "LIQ.1.C",
+              "name": "Archimedes' principle and law of flotation; applications (ships, hydrometers)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "TEMP",
+      "name": "Temperature and Its Measurement",
+      "topics": [
+        {
+          "code": "TEMP.1",
+          "name": "Temperature and its measurement",
+          "items": [
+            {
+              "code": "TEMP.1.A",
+              "name": "Concept of temperature; thermometric properties"
+            },
+            {
+              "code": "TEMP.1.B",
+              "name": "Calibration of thermometers; temperature scales (Celsius and Kelvin)"
+            },
+            {
+              "code": "TEMP.1.C",
+              "name": "Types of thermometers; conversion between temperature scales"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "HEAT",
+      "name": "Quantity of Heat",
+      "topics": [
+        {
+          "code": "HEAT.1",
+          "name": "Quantity of heat",
+          "items": [
+            {
+              "code": "HEAT.1.A",
+              "name": "Heat as a form of energy"
+            },
+            {
+              "code": "HEAT.1.B",
+              "name": "Heat capacity and specific heat capacity of solids and liquids"
+            },
+            {
+              "code": "HEAT.1.C",
+              "name": "Determination by method of mixtures, electrical method and Newton's law of cooling"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "STATE",
+      "name": "Change of State",
+      "topics": [
+        {
+          "code": "STATE.1",
+          "name": "Change of state",
+          "items": [
+            {
+              "code": "STATE.1.A",
+              "name": "Latent heat; specific latent heats of fusion and vaporization"
+            },
+            {
+              "code": "STATE.1.B",
+              "name": "Melting, evaporation and boiling"
+            },
+            {
+              "code": "STATE.1.C",
+              "name": "Influence of pressure and of dissolved substances on boiling and melting points"
+            },
+            {
+              "code": "STATE.1.D",
+              "name": "Application in appliances"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "EXP",
+      "name": "Thermal Expansion",
+      "topics": [
+        {
+          "code": "EXP.A",
+          "name": "Solids",
+          "items": [
+            {
+              "code": "EXP.A.1",
+              "name": "Linear, volume and area expansivities (definition and determination)"
+            },
+            {
+              "code": "EXP.A.2",
+              "name": "Effects and applications (expansion strips, railway lines); relationship between expansivities"
+            }
+          ]
+        },
+        {
+          "code": "EXP.B",
+          "name": "Liquids",
+          "items": [
+            {
+              "code": "EXP.B.1",
+              "name": "Volume expansivity; real and apparent expansivities"
+            },
+            {
+              "code": "EXP.B.2",
+              "name": "Determination of volume expansivity; anomalous expansion of water"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "GAS",
+      "name": "Gas Laws",
+      "topics": [
+        {
+          "code": "GAS.1",
+          "name": "Gas laws",
+          "items": [
+            {
+              "code": "GAS.1.A",
+              "name": "Boyle's law (isothermal), Charles' law (isobaric), Pressure law (isochoric)"
+            },
+            {
+              "code": "GAS.1.B",
+              "name": "Absolute zero of temperature; general gas equation (PV/T = constant)"
+            },
+            {
+              "code": "GAS.1.C",
+              "name": "Ideal gas equation (PV = nRT); Van der Waals gas"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "VAP",
+      "name": "Vapours",
+      "topics": [
+        {
+          "code": "VAP.1",
+          "name": "Vapours",
+          "items": [
+            {
+              "code": "VAP.1.A",
+              "name": "Unsaturated and saturated vapours; S.V.P and boiling"
+            },
+            {
+              "code": "VAP.1.B",
+              "name": "Determination of S.V.P by barometer tube method"
+            },
+            {
+              "code": "VAP.1.C",
+              "name": "Formation of dew, mist, fog, cloud and rain; dew point, humidity and relative humidity"
+            },
+            {
+              "code": "VAP.1.D",
+              "name": "Hygrometry; estimation of humidity using wet and dry bulb hygrometers"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "KIN",
+      "name": "Structure of Matter and Kinetic Theory",
+      "topics": [
+        {
+          "code": "KIN.A",
+          "name": "Molecular nature of matter",
+          "items": [
+            {
+              "code": "KIN.A.1",
+              "name": "Atoms and molecules"
+            },
+            {
+              "code": "KIN.A.2",
+              "name": "Molecular theory (Brownian motion, diffusion, surface tension, capillarity, adhesion, cohesion, angle of contact); law of definite proportion"
+            }
+          ]
+        },
+        {
+          "code": "KIN.B",
+          "name": "Kinetic theory",
+          "items": [
+            {
+              "code": "KIN.B.1",
+              "name": "Assumptions of the kinetic theory"
+            },
+            {
+              "code": "KIN.B.2",
+              "name": "Using the theory to explain gas pressure, Boyle's and Charles' laws, melting, boiling, vapourization, evaporation"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "TRAN",
+      "name": "Heat Transfer",
+      "topics": [
+        {
+          "code": "TRAN.1",
+          "name": "Heat transfer",
+          "items": [
+            {
+              "code": "TRAN.1.A",
+              "name": "Conduction, convection and radiation as modes of heat transfer"
+            },
+            {
+              "code": "TRAN.1.B",
+              "name": "Temperature gradient, thermal conductivity and heat flux"
+            },
+            {
+              "code": "TRAN.1.C",
+              "name": "Effect of the nature of the surface on energy radiated and absorbed"
+            },
+            {
+              "code": "TRAN.1.D",
+              "name": "Thermos/vacuum flask; land and sea breeze; combustion engines"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "WAVE",
+      "name": "Waves",
+      "topics": [
+        {
+          "code": "WAVE.A",
+          "name": "Production and propagation",
+          "items": [
+            {
+              "code": "WAVE.A.1",
+              "name": "Wave motion; vibrating systems as source of waves; waves as energy transfer"
+            },
+            {
+              "code": "WAVE.A.2",
+              "name": "Distinction between particle motion and wave motion"
+            },
+            {
+              "code": "WAVE.A.3",
+              "name": "Relationship between frequency, wavelength and wave velocity (V = f*lambda)"
+            },
+            {
+              "code": "WAVE.A.4",
+              "name": "Phase difference, wave number and wave vector; progressive wave equation"
+            }
+          ]
+        },
+        {
+          "code": "WAVE.B",
+          "name": "Classification",
+          "items": [
+            {
+              "code": "WAVE.B.1",
+              "name": "Mechanical and electromagnetic waves; longitudinal and transverse waves"
+            },
+            {
+              "code": "WAVE.B.2",
+              "name": "Stationary and progressive waves; examples from springs, ropes, strings and ripple tank"
+            }
+          ]
+        },
+        {
+          "code": "WAVE.C",
+          "name": "Characteristics/properties",
+          "items": [
+            {
+              "code": "WAVE.C.1",
+              "name": "Reflection, refraction, diffraction and plane polarization"
+            },
+            {
+              "code": "WAVE.C.2",
+              "name": "Superposition of waves (interference); beats; Doppler effect (qualitative)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "SND",
+      "name": "Propagation of Sound Waves",
+      "topics": [
+        {
+          "code": "SND.1",
+          "name": "Propagation of sound waves",
+          "items": [
+            {
+              "code": "SND.1.A",
+              "name": "Necessity for a material medium; speed of sound in solids, liquids and air"
+            },
+            {
+              "code": "SND.1.B",
+              "name": "Reflection of sound; echoes, reverberation and applications"
+            },
+            {
+              "code": "SND.1.C",
+              "name": "Advantages and disadvantages of echoes and reverberation"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "SNDC",
+      "name": "Characteristics of Sound Waves",
+      "topics": [
+        {
+          "code": "SNDC.1",
+          "name": "Characteristics of sound waves",
+          "items": [
+            {
+              "code": "SNDC.1.A",
+              "name": "Noise and musical notes"
+            },
+            {
+              "code": "SNDC.1.B",
+              "name": "Quality, pitch, intensity and loudness; application to musical instruments"
+            },
+            {
+              "code": "SNDC.1.C",
+              "name": "Harmonics and overtones from vibrating strings and columns"
+            },
+            {
+              "code": "SNDC.1.D",
+              "name": "Acoustic resonance; frequency of notes from closed and open pipes"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "LGHT",
+      "name": "Light Energy",
+      "topics": [
+        {
+          "code": "LGHT.A",
+          "name": "Sources of light",
+          "items": [
+            {
+              "code": "LGHT.A.1",
+              "name": "Natural and artificial sources of light; luminous and non-luminous objects"
+            }
+          ]
+        },
+        {
+          "code": "LGHT.B",
+          "name": "Propagation of light",
+          "items": [
+            {
+              "code": "LGHT.B.1",
+              "name": "Speed, frequency and wavelength of light"
+            },
+            {
+              "code": "LGHT.B.2",
+              "name": "Formation of shadows and eclipse; the pin-hole camera"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "REFL",
+      "name": "Reflection of Light at Plane and Curved Surfaces",
+      "topics": [
+        {
+          "code": "REFL.1",
+          "name": "Reflection of light",
+          "items": [
+            {
+              "code": "REFL.1.A",
+              "name": "Laws of reflection and applications"
+            },
+            {
+              "code": "REFL.1.B",
+              "name": "Image formation by plane, concave and convex mirrors; ray diagrams"
+            },
+            {
+              "code": "REFL.1.C",
+              "name": "Use of the mirror formula; linear and angular magnification"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "REFR",
+      "name": "Refraction of Light Through Plane and Curved Surfaces",
+      "topics": [
+        {
+          "code": "REFR.A",
+          "name": "Refraction",
+          "items": [
+            {
+              "code": "REFR.A.1",
+              "name": "Laws of refraction; refraction in terms of velocity of light"
+            },
+            {
+              "code": "REFR.A.2",
+              "name": "Refractive index of a medium; determination using Snell's law"
+            },
+            {
+              "code": "REFR.A.3",
+              "name": "Real and apparent depth; lateral displacement"
+            },
+            {
+              "code": "REFR.A.4",
+              "name": "Critical angle and total internal reflection"
+            }
+          ]
+        },
+        {
+          "code": "REFR.B",
+          "name": "Glass prism and lenses",
+          "items": [
+            {
+              "code": "REFR.B.1",
+              "name": "Use of the minimum deviation formula; types of lenses"
+            },
+            {
+              "code": "REFR.B.2",
+              "name": "Use of the lens formula and Newton's formula; magnification"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "OPT",
+      "name": "Optical Instruments",
+      "topics": [
+        {
+          "code": "OPT.1",
+          "name": "Optical instruments",
+          "items": [
+            {
+              "code": "OPT.1.A",
+              "name": "Principles of microscopes, telescopes, projectors, cameras and the human eye"
+            },
+            {
+              "code": "OPT.1.B",
+              "name": "Power of a lens; angular magnification; near and far points"
+            },
+            {
+              "code": "OPT.1.C",
+              "name": "Sight defects and their corrections"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "DISP",
+      "name": "Dispersion of Light and Electromagnetic Spectrum",
+      "topics": [
+        {
+          "code": "DISP.A",
+          "name": "Dispersion of light and colours",
+          "items": [
+            {
+              "code": "DISP.A.1",
+              "name": "Dispersion of white light by a triangular prism; production of pure spectrum"
+            },
+            {
+              "code": "DISP.A.2",
+              "name": "Colour mixing by addition and subtraction; colour of objects and colour filters"
+            },
+            {
+              "code": "DISP.A.3",
+              "name": "Rainbow and its formation"
+            }
+          ]
+        },
+        {
+          "code": "DISP.B",
+          "name": "Electromagnetic spectrum",
+          "items": [
+            {
+              "code": "DISP.B.1",
+              "name": "Sources and uses of various types of radiation"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "ESTAT",
+      "name": "Electrostatics",
+      "topics": [
+        {
+          "code": "ESTAT.1",
+          "name": "Electrostatics",
+          "items": [
+            {
+              "code": "ESTAT.1.A",
+              "name": "Positive and negative charges in matter; charging by friction, contact and induction"
+            },
+            {
+              "code": "ESTAT.1.B",
+              "name": "Electroscope"
+            },
+            {
+              "code": "ESTAT.1.C",
+              "name": "Coulomb's inverse square law; electric field and potential"
+            },
+            {
+              "code": "ESTAT.1.D",
+              "name": "Electric field intensity, potential and potential difference"
+            },
+            {
+              "code": "ESTAT.1.E",
+              "name": "Electric discharge and lightning"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "CAP",
+      "name": "Capacitors",
+      "topics": [
+        {
+          "code": "CAP.1",
+          "name": "Capacitors",
+          "items": [
+            {
+              "code": "CAP.1.A",
+              "name": "Types and functions of capacitors; parallel plate capacitors"
+            },
+            {
+              "code": "CAP.1.B",
+              "name": "Capacitance; relationship between capacitance, area, separation and medium"
+            },
+            {
+              "code": "CAP.1.C",
+              "name": "Capacitors in series and parallel; energy stored in a capacitor"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "CELL",
+      "name": "Electric Cells",
+      "topics": [
+        {
+          "code": "CELL.1",
+          "name": "Electric cells",
+          "items": [
+            {
+              "code": "CELL.1.A",
+              "name": "Simple voltaic cell and its defects"
+            },
+            {
+              "code": "CELL.1.B",
+              "name": "Daniel cell, Leclanche cell (wet and dry)"
+            },
+            {
+              "code": "CELL.1.C",
+              "name": "Lead-acid accumulator, Nickel-Iron (Nife), Lithium-ion and Mercury-cadmium cells"
+            },
+            {
+              "code": "CELL.1.D",
+              "name": "Maintenance of cells and batteries; arrangement and efficiency of cells"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "CUR",
+      "name": "Current Electricity",
+      "topics": [
+        {
+          "code": "CUR.1",
+          "name": "Current electricity",
+          "items": [
+            {
+              "code": "CUR.1.A",
+              "name": "emf, potential difference, current, internal resistance and lost volt"
+            },
+            {
+              "code": "CUR.1.B",
+              "name": "Ohm's law, resistivity and conductivity; measurement of resistance; metre bridge"
+            },
+            {
+              "code": "CUR.1.C",
+              "name": "Resistances in series and parallel and their combination"
+            },
+            {
+              "code": "CUR.1.D",
+              "name": "Potentiometer method of measuring emf, current and internal resistance; electrical networks"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "EPOW",
+      "name": "Electrical Energy and Power",
+      "topics": [
+        {
+          "code": "EPOW.1",
+          "name": "Electrical energy and power",
+          "items": [
+            {
+              "code": "EPOW.1.A",
+              "name": "Concepts of electrical energy and power; commercial unit of electric energy"
+            },
+            {
+              "code": "EPOW.1.B",
+              "name": "Electric power transmission; heating effects of electric current"
+            },
+            {
+              "code": "EPOW.1.C",
+              "name": "Electrical wiring of houses; use of fuses"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "MAG",
+      "name": "Magnets and Magnetic Fields",
+      "topics": [
+        {
+          "code": "MAG.1",
+          "name": "Magnets and magnetic fields",
+          "items": [
+            {
+              "code": "MAG.1.A",
+              "name": "Natural and artificial magnets; magnetic properties of soft iron and steel"
+            },
+            {
+              "code": "MAG.1.B",
+              "name": "Methods of making and demagnetizing magnets"
+            },
+            {
+              "code": "MAG.1.C",
+              "name": "Magnetic field of a permanent magnet, straight conductor, circular wire and solenoid"
+            },
+            {
+              "code": "MAG.1.D",
+              "name": "Earth's magnetic field; magnetic meridian, angle of dip and declination"
+            },
+            {
+              "code": "MAG.1.E",
+              "name": "Flux and flux density; variation of magnetic field over the earth's surface"
+            },
+            {
+              "code": "MAG.1.F",
+              "name": "Applications: earth's magnetic field in navigation and mineral exploration"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "FORCE",
+      "name": "Force on a Current-Carrying Conductor in a Magnetic Field",
+      "topics": [
+        {
+          "code": "FORCE.1",
+          "name": "Force on a current-carrying conductor",
+          "items": [
+            {
+              "code": "FORCE.1.A",
+              "name": "Force between two parallel current-carrying conductors"
+            },
+            {
+              "code": "FORCE.1.B",
+              "name": "Force on a charge moving in a magnetic field"
+            },
+            {
+              "code": "FORCE.1.C",
+              "name": "The d.c. motor; electromagnets; carbon microphone"
+            },
+            {
+              "code": "FORCE.1.D",
+              "name": "Moving coil and moving iron instruments; galvanometer conversion using shunts and multipliers; sensitivity"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "EMI",
+      "name": "Electromagnetic Induction, Inductance and Eddy Currents",
+      "topics": [
+        {
+          "code": "EMI.A",
+          "name": "Electromagnetic induction",
+          "items": [
+            {
+              "code": "EMI.A.1",
+              "name": "Faraday's laws; Lenz's law and conservation of energy; factors affecting induced emf"
+            },
+            {
+              "code": "EMI.A.2",
+              "name": "a.c. and d.c. generators; transformers; the induction coil"
+            }
+          ]
+        },
+        {
+          "code": "EMI.B",
+          "name": "Inductance",
+          "items": [
+            {
+              "code": "EMI.B.1",
+              "name": "Explanation and unit of inductance; energy stored in an inductor; applications"
+            }
+          ]
+        },
+        {
+          "code": "EMI.C",
+          "name": "Eddy current",
+          "items": [
+            {
+              "code": "EMI.C.1",
+              "name": "Reduction, applications and effects of eddy current"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "AC",
+      "name": "Simple A.C. Circuits",
+      "topics": [
+        {
+          "code": "AC.1",
+          "name": "Simple a.c. circuits",
+          "items": [
+            {
+              "code": "AC.1.A",
+              "name": "a.c. current and voltage; peak and r.m.s. values"
+            },
+            {
+              "code": "AC.1.B",
+              "name": "a.c. through a resistor, capacitor (capacitive reactance) and inductor (inductive reactance)"
+            },
+            {
+              "code": "AC.1.C",
+              "name": "R-L-C circuits; vector diagram, phase angle and power factor"
+            },
+            {
+              "code": "AC.1.D",
+              "name": "Resistance and impedance; effective voltage; resonance and resonance frequency"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "COND",
+      "name": "Conduction of Electricity Through Liquids and Gases",
+      "topics": [
+        {
+          "code": "COND.A",
+          "name": "Liquids",
+          "items": [
+            {
+              "code": "COND.A.1",
+              "name": "Electrolytes and non-electrolytes; concept of electrolysis"
+            },
+            {
+              "code": "COND.A.2",
+              "name": "Faraday's laws of electrolysis; applications (electroplating, calibration of ammeter)"
+            }
+          ]
+        },
+        {
+          "code": "COND.B",
+          "name": "Gases",
+          "items": [
+            {
+              "code": "COND.B.1",
+              "name": "Discharge through gases (qualitative); applications of conduction through gases"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "MOD",
+      "name": "Elementary Modern Physics",
+      "topics": [
+        {
+          "code": "MOD.1",
+          "name": "Elementary modern physics",
+          "items": [
+            {
+              "code": "MOD.1.A",
+              "name": "Bohr's and Rutherford's theories; radioactivity; models of the atom and their limitations"
+            },
+            {
+              "code": "MOD.1.B",
+              "name": "Elementary structure of the atom; energy levels and spectra"
+            },
+            {
+              "code": "MOD.1.C",
+              "name": "Thermionic and photoelectric emissions; Einstein's equation and stopping potential"
+            },
+            {
+              "code": "MOD.1.D",
+              "name": "Applications of thermionic emission and photoelectric effect; production of x-rays"
+            },
+            {
+              "code": "MOD.1.E",
+              "name": "Properties and applications of alpha, beta and gamma rays; half-life and decay constant"
+            },
+            {
+              "code": "MOD.1.F",
+              "name": "Energy from fusion and fission; binding energy, mass defect and Einstein's energy equation"
+            },
+            {
+              "code": "MOD.1.G",
+              "name": "Wave-particle duality; electron diffraction; the uncertainty principle"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "ELEC",
+      "name": "Introductory Electronics",
+      "topics": [
+        {
+          "code": "ELEC.1",
+          "name": "Introductory electronics",
+          "items": [
+            {
+              "code": "ELEC.1.A",
+              "name": "Distinction between metals, semiconductors and insulators (band gap)"
+            },
+            {
+              "code": "ELEC.1.B",
+              "name": "Intrinsic and extrinsic semiconductors (n-type and p-type)"
+            },
+            {
+              "code": "ELEC.1.C",
+              "name": "Uses of semiconductors and diodes in rectification and transistors in amplification"
+            },
+            {
+              "code": "ELEC.1.D",
+              "name": "Elementary knowledge of diodes and transistors"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "FIB",
+      "name": "Introduction to Fibre Optics and Lasers",
+      "topics": [
+        {
+          "code": "FIB.1",
+          "name": "Fibre optics and lasers",
+          "items": [
+            {
+              "code": "FIB.1.A",
+              "name": "Fibre optics"
+            },
+            {
+              "code": "FIB.1.B",
+              "name": "Lasers"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
