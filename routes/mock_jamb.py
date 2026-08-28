@@ -1278,8 +1278,127 @@ def bank():
                            has_passage_sections=any(s['passage'] for s in sections),
                            novel_section=any(s['section'] == 'novel' for s in sections),
                            syllabus_url=url_for('cbt.syllabus', subject_id=subject_id or ''),
+                           coded_syllabus_url=url_for('mock_jamb.bank_syllabus', subject_id=subject_id or ''),
                            analytics_url=url_for('mock_jamb.bank_analytics', subject_id=subject_id or ''),
                            index_url=url_for('mock_jamb.index'))
+
+
+def _syllabus_tree(subject_id):
+    """The stored coded syllabus for a subject as a nested list for display:
+    [{code,name,count, topics:[{code,name, items:[{code,name}]}]}]."""
+    from models import MockJAMBSyllabus, MockJAMBSyllabusNode
+    syll = MockJAMBSyllabus.query.filter_by(subject_id=subject_id).first()
+    if not syll:
+        return None, None
+    nodes = (MockJAMBSyllabusNode.query.filter_by(syllabus_id=syll.id)
+             .order_by(MockJAMBSyllabusNode.sort_order, MockJAMBSyllabusNode.code).all())
+    by_parent = {}
+    for n in nodes:
+        by_parent.setdefault(n.parent_id, []).append(n)
+
+    def kids(pid, kind):
+        return [n for n in by_parent.get(pid, []) if n.kind == kind]
+
+    tree = []
+    for sec in kids(None, 'section'):
+        tree.append({
+            'code': sec.code, 'name': sec.name, 'count': sec.question_count,
+            'topics': [{
+                'code': t.code, 'name': t.name,
+                'items': [{'code': it.code, 'name': it.name} for it in kids(t.id, 'item')],
+            } for t in kids(sec.id, 'topic')],
+        })
+    return syll, tree
+
+
+def _bundled_syllabi():
+    """Syllabus JSON files shipped in the repo (data, not code) that an admin can
+    one-click import: {slug: {label, path}}."""
+    base = os.path.join(current_app.root_path, 'data', 'jamb_syllabi')
+    out = {}
+    try:
+        for fn in sorted(os.listdir(base)):
+            if fn.endswith('.json'):
+                out[fn[:-5]] = {'label': fn[:-5].replace('_', ' ').title(),
+                                'path': os.path.join(base, fn)}
+    except OSError:
+        pass
+    return out
+
+
+def _match_subject(name):
+    """Find the tenant's Subject row whose name matches an imported syllabus's
+    subject, tolerant of the usual Nigerian exam aliases (Maths/Mathematics …)."""
+    from utils.jamb_blueprint import norm_subject
+    key = norm_subject(name)
+    for s in _mock_subjects():
+        if norm_subject(s.name) == key:
+            return s
+    return None
+
+
+@mock_jamb_bp.route('/bank/syllabus')
+@login_required
+def bank_syllabus():
+    """Coded-syllabus manager: view a subject's imported syllabus (stable codes)
+    and import/replace it from JSON or CSV."""
+    subjects = _mock_subjects()
+    subject_id = request.args.get('subject_id', type=int) or (subjects[0].id if subjects else None)
+    subject = db.session.get(Subject, subject_id) if subject_id else None
+    syll, tree = _syllabus_tree(subject_id) if subject_id else (None, None)
+    return render_template('mock_jamb/bank_syllabus.html',
+                           subjects=subjects, subject=subject, subject_id=subject_id,
+                           syllabus=syll, tree=tree, bundled=_bundled_syllabi(),
+                           bank_url=url_for('mock_jamb.bank', subject_id=subject_id or ''))
+
+
+@mock_jamb_bp.route('/bank/syllabus/import', methods=['POST'])
+@login_required
+@csrf_protect
+def bank_syllabus_import():
+    """Import a syllabus (pasted text, uploaded file, or a bundled data file) and
+    reconcile it into the coded tables for a subject."""
+    from utils.jamb_syllabus_import import import_syllabus, SyllabusImportError
+    subject_id = request.form.get('subject_id', type=int)
+    subject = db.session.get(Subject, subject_id) if subject_id else None
+    if not subject:
+        flash('Pick a subject first.', 'error')
+        return redirect(url_for('mock_jamb.bank_syllabus'))
+
+    fmt = (request.form.get('format') or 'auto').lower()
+    version = (request.form.get('version') or '').strip() or None
+    text = None
+    bundled = (request.form.get('bundled') or '').strip()
+    if bundled:
+        b = _bundled_syllabi().get(bundled)
+        if b:
+            with open(b['path'], encoding='utf-8') as fh:
+                text = fh.read()
+            fmt = 'json'
+    if text is None and request.files.get('file') and request.files['file'].filename:
+        f = request.files['file']
+        text = f.read().decode('utf-8', 'replace')
+        if fmt == 'auto':
+            fmt = 'csv' if f.filename.lower().endswith('.csv') else 'json'
+    if text is None:
+        text = request.form.get('text') or ''
+    if not text.strip():
+        flash('Paste a syllabus, upload a file, or choose a bundled one.', 'error')
+        return redirect(url_for('mock_jamb.bank_syllabus', subject_id=subject_id))
+
+    try:
+        diff = import_syllabus(subject, text, fmt=fmt, version=version)
+    except SyllabusImportError as e:
+        db.session.rollback()
+        flash(f'Import failed: {e}', 'error')
+        return redirect(url_for('mock_jamb.bank_syllabus', subject_id=subject_id))
+
+    flash(f"Syllabus imported for {subject.name}: "
+          f"{len(diff['added'])} added, {len(diff['renamed'])} renamed, "
+          f"{len(diff['removed'])} removed "
+          f"({diff['sections']} sections, {diff['topics']} topics, {diff['items']} items).",
+          'success')
+    return redirect(url_for('mock_jamb.bank_syllabus', subject_id=subject_id))
 
 
 @mock_jamb_bp.route('/bank/analytics')

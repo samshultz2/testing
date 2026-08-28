@@ -1,0 +1,165 @@
+{
+  "subject": "Mathematics",
+  "code": "JAMB-MATH",
+  "prefix": "MATH",
+  "version": "2026",
+  "total": 40,
+  "blueprint": [
+    {"section": "number", "label": "Number & Numeration", "count": 10},
+    {"section": "algebra", "label": "Algebra", "count": 12},
+    {"section": "geometry", "label": "Geometry & Trigonometry", "count": 10},
+    {"section": "calculus", "label": "Calculus", "count": 4},
+    {"section": "statistics", "label": "Statistics", "count": 4}
+  ],
+  "sections": [
+    {
+      "code": "NUM", "name": "Number and Numeration",
+      "topics": [
+        {"code": "NUM.1", "name": "Number bases / Modular Arithmetic", "items": [
+          {"code": "NUM.1.A", "name": "Operations in different number bases from 2 to 10"},
+          {"code": "NUM.1.B", "name": "Conversion from one base to another including fractional parts"},
+          {"code": "NUM.1.C", "name": "Modular arithmetic"}
+        ]},
+        {"code": "NUM.2", "name": "Fractions, Decimals, Approximations and Percentages", "items": [
+          {"code": "NUM.2.A", "name": "Fractions and decimals"},
+          {"code": "NUM.2.B", "name": "Significant figures"},
+          {"code": "NUM.2.C", "name": "Decimal places"},
+          {"code": "NUM.2.D", "name": "Percentage errors"},
+          {"code": "NUM.2.E", "name": "Simple interest"},
+          {"code": "NUM.2.F", "name": "Profit and loss percent"},
+          {"code": "NUM.2.G", "name": "Ratio, proportion and rate"},
+          {"code": "NUM.2.H", "name": "Shares and value added tax (VAT)"}
+        ]},
+        {"code": "NUM.3", "name": "Indices, Logarithms and Surds", "items": [
+          {"code": "NUM.3.A", "name": "Laws of indices"},
+          {"code": "NUM.3.B", "name": "Equations involving indices"},
+          {"code": "NUM.3.C", "name": "Standard form"},
+          {"code": "NUM.3.D", "name": "Laws of logarithm"},
+          {"code": "NUM.3.E", "name": "Logarithm of any positive number to a given base"},
+          {"code": "NUM.3.F", "name": "Change of bases in logarithm and application"},
+          {"code": "NUM.3.G", "name": "Relationship between indices and logarithm"},
+          {"code": "NUM.3.H", "name": "Surds"}
+        ]},
+        {"code": "NUM.4", "name": "Sets", "items": [
+          {"code": "NUM.4.A", "name": "Types of sets"},
+          {"code": "NUM.4.B", "name": "Algebra of sets"},
+          {"code": "NUM.4.C", "name": "Venn diagrams and their applications"}
+        ]}
+      ]
+    },
+    {
+      "code": "ALG", "name": "Algebra",
+      "topics": [
+        {"code": "ALG.1", "name": "Polynomials", "items": [
+          {"code": "ALG.1.A", "name": "Change of subject of formula"},
+          {"code": "ALG.1.B", "name": "Addition, subtraction, multiplication and division of polynomials"},
+          {"code": "ALG.1.C", "name": "Factorization of polynomials of degree not exceeding 3"},
+          {"code": "ALG.1.D", "name": "Roots of polynomials not exceeding degree 3"},
+          {"code": "ALG.1.E", "name": "Factor and remainder theorems"},
+          {"code": "ALG.1.F", "name": "Simultaneous equations including one linear one quadratic"},
+          {"code": "ALG.1.G", "name": "Graphs of polynomials of degree not greater than 3"}
+        ]},
+        {"code": "ALG.2", "name": "Variation", "items": [
+          {"code": "ALG.2.A", "name": "Direct variation"},
+          {"code": "ALG.2.B", "name": "Inverse variation"},
+          {"code": "ALG.2.C", "name": "Joint variation"},
+          {"code": "ALG.2.D", "name": "Partial variation"},
+          {"code": "ALG.2.E", "name": "Percentage increase and decrease"}
+        ]},
+        {"code": "ALG.3", "name": "Inequalities", "items": [
+          {"code": "ALG.3.A", "name": "Analytical and graphical solutions of linear inequalities"},
+          {"code": "ALG.3.B", "name": "Quadratic inequalities with integral roots only"}
+        ]},
+        {"code": "ALG.4", "name": "Progression", "items": [
+          {"code": "ALG.4.A", "name": "nth term of a progression"},
+          {"code": "ALG.4.B", "name": "Sum of A.P. and G.P."}
+        ]},
+        {"code": "ALG.5", "name": "Binary Operations", "items": [
+          {"code": "ALG.5.A", "name": "Properties of closure, commutativity, associativity and distributivity"},
+          {"code": "ALG.5.B", "name": "Identity and inverse elements (simple cases only)"}
+        ]},
+        {"code": "ALG.6", "name": "Matrices and Determinants", "items": [
+          {"code": "ALG.6.A", "name": "Algebra of matrices not exceeding 3 x 3"},
+          {"code": "ALG.6.B", "name": "Determinants of matrices not exceeding 3 x 3"},
+          {"code": "ALG.6.C", "name": "Inverses of 2 x 2 matrices"}
+        ]}
+      ]
+    },
+    {
+      "code": "GEO", "name": "Geometry and Trigonometry",
+      "topics": [
+        {"code": "GEO.1", "name": "Euclidean Geometry", "items": [
+          {"code": "GEO.1.A", "name": "Properties of angles and lines"},
+          {"code": "GEO.1.B", "name": "Polygons: triangles, quadrilaterals and general polygons"},
+          {"code": "GEO.1.C", "name": "Circles: angle properties, cyclic quadrilaterals and intersecting chords"},
+          {"code": "GEO.1.D", "name": "Construction"}
+        ]},
+        {"code": "GEO.2", "name": "Mensuration", "items": [
+          {"code": "GEO.2.A", "name": "Lengths and areas of plane geometrical figures"},
+          {"code": "GEO.2.B", "name": "Lengths of arcs and chords of a circle"},
+          {"code": "GEO.2.C", "name": "Perimeters and areas of sectors and segments of circles"},
+          {"code": "GEO.2.D", "name": "Surface areas and volumes of simple solids and composite figures"},
+          {"code": "GEO.2.E", "name": "The earth as a sphere: longitudes and latitudes"}
+        ]},
+        {"code": "GEO.3", "name": "Loci", "items": [
+          {"code": "GEO.3.A", "name": "Locus in 2 dimensions based on geometric principles relating to lines and curves"}
+        ]},
+        {"code": "GEO.4", "name": "Coordinate Geometry", "items": [
+          {"code": "GEO.4.A", "name": "Midpoint and gradient of a line segment"},
+          {"code": "GEO.4.B", "name": "Distance between two points"},
+          {"code": "GEO.4.C", "name": "Parallel and perpendicular lines"},
+          {"code": "GEO.4.D", "name": "Equations of straight lines"}
+        ]},
+        {"code": "GEO.5", "name": "Trigonometry", "items": [
+          {"code": "GEO.5.A", "name": "Trigonometrical ratios of angles"},
+          {"code": "GEO.5.B", "name": "Angles of elevation and depression"},
+          {"code": "GEO.5.C", "name": "Bearings"},
+          {"code": "GEO.5.D", "name": "Areas and solutions of triangle"},
+          {"code": "GEO.5.E", "name": "Graphs of sine and cosine"},
+          {"code": "GEO.5.F", "name": "Sine and cosine formulae"}
+        ]}
+      ]
+    },
+    {
+      "code": "CAL", "name": "Calculus",
+      "topics": [
+        {"code": "CAL.1", "name": "Differentiation", "items": [
+          {"code": "CAL.1.A", "name": "Limit of a function"},
+          {"code": "CAL.1.B", "name": "Differentiation of explicit algebraic and simple trigonometrical functions (sine, cosine, tangent)"}
+        ]},
+        {"code": "CAL.2", "name": "Application of differentiation", "items": [
+          {"code": "CAL.2.A", "name": "Rate of change"},
+          {"code": "CAL.2.B", "name": "Maxima and minima"}
+        ]},
+        {"code": "CAL.3", "name": "Integration", "items": [
+          {"code": "CAL.3.A", "name": "Integration of explicit algebraic and simple trigonometrical functions"},
+          {"code": "CAL.3.B", "name": "Area under the curve"}
+        ]}
+      ]
+    },
+    {
+      "code": "STA", "name": "Statistics",
+      "topics": [
+        {"code": "STA.1", "name": "Representation of data", "items": [
+          {"code": "STA.1.A", "name": "Frequency distribution"},
+          {"code": "STA.1.B", "name": "Histogram, bar chart and pie chart"}
+        ]},
+        {"code": "STA.2", "name": "Measures of Location", "items": [
+          {"code": "STA.2.A", "name": "Mean, mode and median of ungrouped and grouped data (simple cases only)"},
+          {"code": "STA.2.B", "name": "Cumulative frequency"}
+        ]},
+        {"code": "STA.3", "name": "Measures of Dispersion", "items": [
+          {"code": "STA.3.A", "name": "Range, mean deviation, variance and standard deviation"}
+        ]},
+        {"code": "STA.4", "name": "Permutation and Combination", "items": [
+          {"code": "STA.4.A", "name": "Linear and circular arrangements"},
+          {"code": "STA.4.B", "name": "Arrangements involving repeated objects"}
+        ]},
+        {"code": "STA.5", "name": "Probability", "items": [
+          {"code": "STA.5.A", "name": "Experimental probability (tossing of coin, throwing of a dice etc.)"},
+          {"code": "STA.5.B", "name": "Addition and multiplication of probabilities (mutual and independent cases)"}
+        ]}
+      ]
+    }
+  ]
+}

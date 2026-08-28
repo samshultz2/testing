@@ -1,0 +1,68 @@
+{
+  "subject": "English Language",
+  "code": "JAMB-ENG",
+  "prefix": "ENG",
+  "version": "2026",
+  "total": 60,
+  "blueprint": [
+    {"section": "comprehension", "label": "Comprehension passage", "count": 5, "passage": true, "per_passage": 5},
+    {"section": "summary", "label": "Summary passage", "count": 5, "passage": true, "per_passage": 5},
+    {"section": "cloze", "label": "Cloze passage", "count": 10, "passage": true, "per_passage": 10},
+    {"section": "reading_text", "label": "Reading text", "count": 5},
+    {"section": "sentence_interpretation", "label": "Sentence interpretation", "count": 5},
+    {"section": "antonyms", "label": "Antonyms", "count": 5},
+    {"section": "synonyms", "label": "Synonyms", "count": 5},
+    {"section": "basic_grammar", "label": "Basic grammar", "count": 10},
+    {"section": "vowels", "label": "Vowels", "count": 2},
+    {"section": "consonants", "label": "Consonants", "count": 2},
+    {"section": "rhymes", "label": "Rhymes", "count": 2},
+    {"section": "word_stress", "label": "Word stress", "count": 2},
+    {"section": "emphatic_stress", "label": "Emphatic stress", "count": 2}
+  ],
+  "sections": [
+    {
+      "code": "CMP", "name": "Comprehension and Summary",
+      "topics": [
+        {"code": "CMP.1", "name": "Passage types", "items": [
+          {"code": "CMP.1.A", "name": "Description"},
+          {"code": "CMP.1.B", "name": "Narration"},
+          {"code": "CMP.1.C", "name": "Exposition"},
+          {"code": "CMP.1.D", "name": "Argumentation / persuasion"}
+        ]},
+        {"code": "CMP.2", "name": "What the questions test", "items": [
+          {"code": "CMP.2.A", "name": "Comprehension of the whole or part of each passage"},
+          {"code": "CMP.2.B", "name": "Comprehension of words, phrases, clauses, sentences, figures of speech and idioms in the passages"},
+          {"code": "CMP.2.C", "name": "Coherence and logical reasoning (deductions, inferences, etc.)"},
+          {"code": "CMP.2.D", "name": "Approved reading text"},
+          {"code": "CMP.2.E", "name": "Synthesis of ideas from the passages (summary)"}
+        ]}
+      ]
+    },
+    {
+      "code": "LEX", "name": "Lexis and Structure",
+      "topics": [
+        {"code": "LEX.1", "name": "Lexis and Structure", "items": [
+          {"code": "LEX.1.A", "name": "Synonyms"},
+          {"code": "LEX.1.B", "name": "Antonyms"},
+          {"code": "LEX.1.C", "name": "Clause and sentence patterns"},
+          {"code": "LEX.1.D", "name": "Word classes and their functions"},
+          {"code": "LEX.1.E", "name": "Mood, tense, aspect, number, agreement/concord, degree and question tags"},
+          {"code": "LEX.1.F", "name": "Mechanics"},
+          {"code": "LEX.1.G", "name": "Ordinary usage, figurative usage and idiomatic usage"}
+        ]}
+      ]
+    },
+    {
+      "code": "ORA", "name": "Oral Forms",
+      "topics": [
+        {"code": "ORA.1", "name": "Oral Forms", "items": [
+          {"code": "ORA.1.A", "name": "Vowels (monophthongs, diphthongs and triphthongs)"},
+          {"code": "ORA.1.B", "name": "Consonants (including clusters)"},
+          {"code": "ORA.1.C", "name": "Rhymes (including homophones)"},
+          {"code": "ORA.1.D", "name": "Word stress (monosyllabic and polysyllabic)"},
+          {"code": "ORA.1.E", "name": "Emphatic stress (in connected speech)"}
+        ]}
+      ]
+    }
+  ]
+}

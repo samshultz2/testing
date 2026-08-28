@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}Syllabus - Question Bank{% endblock %}
+{% block breadcrumb %}<a href="{{ bank_url }}">Question Bank</a> / <span>Syllabus</span>{% endblock %}
+{% block extra_css %}
+<style>
+.syl-sec{border:1px solid var(--border-color);border-radius:var(--radius-md);margin-bottom:.8rem;overflow:hidden}
+.syl-sec-head{display:flex;align-items:center;gap:.6rem;padding:.55rem .8rem;background:var(--gray-50);font-weight:700}
+.syl-code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:.72rem;background:rgba(37,99,235,.12);color:#2563eb;border-radius:var(--radius-sm);padding:.05rem .4rem}
+.syl-topic{padding:.35rem .8rem;border-top:1px dashed var(--border-color)}
+.syl-topic-name{font-weight:600;font-size:.9rem}
+.syl-item{font-size:.83rem;color:var(--text-muted);padding:.12rem 0 .12rem 1rem;display:flex;gap:.5rem}
+.syl-item .syl-code{background:var(--gray-100);color:var(--text-muted)}
+.pill{font-size:.72rem;background:var(--gray-100);border-radius:var(--radius-full);padding:.1rem .55rem}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+  <h1>JAMB Syllabus</h1>
+  <p class="text-muted">Import each subject's syllabus (JSON or CSV). Every item keeps a stable code
+     (e.g. <code>MATH.NUM.1.A</code>) so re-imports reconcile by code, not by name.</p>
+</div>
+
+<form method="GET" action="{{ url_for('mock_jamb.bank_syllabus') }}" class="mb-3" data-autosubmit>
+  <label class="form-label">Subject</label>
+  <select name="subject_id" class="form-control" style="max-width:320px"
+          data-call="submitForm" data-on="change">
+    {% for s in subjects %}
+      <option value="{{ s.id }}" {% if subject and s.id == subject.id %}selected{% endif %}>{{ s.name }}</option>
+    {% endfor %}
+  </select>
+</form>
+
+<div class="card mb-3">
+  <div class="card-header"><h3>Import a syllabus{% if subject %} for {{ subject.name }}{% endif %}</h3></div>
+  <div class="card-body">
+    <form method="POST" action="{{ url_for('mock_jamb.bank_syllabus_import') }}" enctype="multipart/form-data">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="subject_id" value="{{ subject_id }}">
+
+      {% if bundled %}
+      <div class="form-group">
+        <label class="form-label">Quick import a bundled syllabus</label>
+        <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+          {% for slug, b in bundled.items() %}
+          <button type="submit" name="bundled" value="{{ slug }}" class="btn btn-secondary btn-sm">
+            <i class="fas fa-download"></i> {{ b.label }}
+          </button>
+          {% endfor %}
+        </div>
+        <span class="form-hint">Imports the repo's ready-made syllabus into the selected subject, reconciling by code.</span>
+      </div>
+      <hr>
+      {% endif %}
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Format</label>
+          <select name="format" class="form-control" style="max-width:160px">
+            <option value="auto">Auto-detect</option>
+            <option value="json">JSON</option>
+            <option value="csv">CSV</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Version (optional)</label>
+          <input type="text" name="version" class="form-control" style="max-width:160px" placeholder="2026">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Upload a file (.json / .csv)</label>
+          <input type="file" name="file" class="form-control" accept=".json,.csv">
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">…or paste the syllabus</label>
+        <textarea name="text" class="form-control" rows="8"
+                  placeholder='{"subject":"Mathematics","prefix":"MATH","version":"2026","sections":[...]}'></textarea>
+        <span class="form-hint">JSON is preferred for hierarchical syllabi; CSV columns: <code>code,kind,name,parent,count</code>.</span>
+      </div>
+      <button type="submit" class="btn btn-primary"><i class="fas fa-file-import"></i> Import &amp; reconcile</button>
+    </form>
+  </div>
+</div>
+
+{% if syllabus %}
+<div class="card">
+  <div class="card-header" style="display:flex;justify-content:space-between;align-items:center">
+    <h3>Current syllabus <span class="text-muted" style="font-weight:400">
+      {{ syllabus.prefix }}{% if syllabus.version %} · v{{ syllabus.version }}{% endif %}
+      {% if syllabus.total_questions %} · {{ syllabus.total_questions }} questions{% endif %}</span></h3>
+  </div>
+  <div class="card-body">
+    {% for sec in tree %}
+    <div class="syl-sec">
+      <div class="syl-sec-head">
+        <span class="syl-code">{{ sec.code }}</span>{{ sec.name }}
+        {% if sec.count %}<span class="pill">{{ sec.count }} q</span>{% endif %}
+      </div>
+      {% for t in sec.topics %}
+      <div class="syl-topic">
+        <div class="syl-topic-name"><span class="syl-code">{{ t.code }}</span> {{ t.name }}</div>
+        {% for it in t['items'] %}
+        <div class="syl-item"><span class="syl-code">{{ it.code }}</span> {{ it.name }}</div>
+        {% endfor %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% else %}
+<div class="card"><div class="card-body text-muted">
+  No syllabus imported for this subject yet. Import one above.
+</div></div>
+{% endif %}
+{% endblock %}

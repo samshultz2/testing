@@ -63,6 +63,7 @@ def ensure_mock_jamb_schema():
             'difficulty': 'VARCHAR(10)', 'source': 'VARCHAR(20)',
             'source_ref': 'VARCHAR(40)', 'exam_year': 'VARCHAR(8)',
             'needs_image': 'BOOLEAN DEFAULT 0',
+            'syllabus_item_code': 'VARCHAR(60)',
         }
         for col, ddl in add.items():
             if col not in mq:
@@ -82,4 +83,16 @@ def ensure_mock_jamb_schema():
                         pass   # column may already exist / concurrent add
         except Exception:
             pass
+
+    # Create the imported-syllabus tables if this tenant DB predates them.
+    try:
+        from models.mock_jamb import MockJAMBSyllabus, MockJAMBSyllabusNode
+        db.metadata.create_all(
+            bind=engine,
+            tables=[MockJAMBSyllabus.__table__, MockJAMBSyllabusNode.__table__],
+            checkfirst=True,
+        )
+    except Exception:
+        pass
+
     _ensured.add(key)

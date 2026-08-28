@@ -19,6 +19,7 @@ Subjects without an explicit blueprint fall back to a single ``general`` section
 of 40 — the draw simply samples 40 from the subject's pool.
 """
 from __future__ import annotations
+import json
 import re
 
 
@@ -166,11 +167,39 @@ _EXTRA_SECTIONS = {
 }
 
 
+def imported_blueprint(subject_name):
+    """The blueprint from an admin-imported syllabus for this subject, or None.
+
+    Imported syllabi (data, not code) take priority over the built-in defaults so
+    the per-subject question distribution comes from what the school imported.
+    DB access is guarded so this stays usable outside a request/app context.
+    """
+    try:
+        from models import Subject, MockJAMBSyllabus
+        key = norm_subject(subject_name)
+        row = (MockJAMBSyllabus.query.join(Subject, MockJAMBSyllabus.subject_id == Subject.id)
+               .filter(MockJAMBSyllabus.blueprint.isnot(None)).all())
+        for s in row:
+            if norm_subject(s.subject_name or (s.subject.name if s.subject else '')) == key:
+                secs = json.loads(s.blueprint)
+                if secs:
+                    return [_sec(x['section'], x.get('label', x['section']), int(x.get('count', 0)),
+                                 bool(x.get('passage')), int(x.get('per_passage') or 5)) for x in secs]
+    except Exception:
+        pass
+    return None
+
+
 def blueprint_for(subject_name, override=None):
     """Return this subject's blueprint (a deep-ish copy), with any per-mock
-    ``override`` — a ``{section: count}`` map — applied to the counts."""
-    base = JAMB_BLUEPRINT.get(norm_subject(subject_name), DEFAULT_BLUEPRINT)
-    sections = [dict(s) for s in base['sections']]
+    ``override`` — a ``{section: count}`` map — applied to the counts. An imported
+    syllabus's blueprint wins over the built-in default when present."""
+    imported = imported_blueprint(subject_name)
+    if imported is not None:
+        sections = [dict(s) for s in imported]
+    else:
+        base = JAMB_BLUEPRINT.get(norm_subject(subject_name), DEFAULT_BLUEPRINT)
+        sections = [dict(s) for s in base['sections']]
     if override:
         for s in sections:
             if s['section'] in override and override[s['section']] is not None:
@@ -187,7 +216,7 @@ def blueprint_total(subject_name, override=None):
     the blueprint section counts, honouring any per-mock override). 0 if the
     subject has no JAMB blueprint. Used as the hard cap so a paper never serves
     the whole bank when the questions aren't section-tagged."""
-    if norm_subject(subject_name) not in JAMB_BLUEPRINT:
+    if norm_subject(subject_name) not in JAMB_BLUEPRINT and imported_blueprint(subject_name) is None:
         return 0
     return blueprint_for(subject_name, override)['total']
 
@@ -196,10 +225,12 @@ def sections_for(subject_name):
     """The taggable sections for a subject in the bank UI: its blueprint sections
     (plus any extra catalogue entries), each ``{section, label, passage}``."""
     key = norm_subject(subject_name)
-    base = JAMB_BLUEPRINT.get(key)
     out = []
     seen = set()
-    for s in (base['sections'] if base else []):
+    # An imported syllabus's blueprint defines the taggable sections when present.
+    imported = imported_blueprint(subject_name)
+    base = None if imported is not None else JAMB_BLUEPRINT.get(key)
+    for s in (imported or (base['sections'] if base else [])):
         out.append({'section': s['section'], 'label': s['label'], 'passage': s['passage']})
         seen.add(s['section'])
     for s in _EXTRA_SECTIONS.get(key, []):

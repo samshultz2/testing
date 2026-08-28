@@ -434,6 +434,10 @@ class MockJAMBQuestion(db.Model):
     exam_year = db.Column(db.String(8))          # the past-question year, when known (e.g. '2018')
     topic = db.Column(db.String(100))
     subtopic = db.Column(db.String(120))
+    # Stable syllabus-item code (e.g. 'MATH.NUM.1.A') from an imported syllabus.
+    # NULL until a question is tagged; a later retag pass fills it. Names are not
+    # used as identifiers — this code is the stable link to a syllabus item.
+    syllabus_item_code = db.Column(db.String(60), index=True)
     question_text = db.Column(db.Text, nullable=False)
     image_url = db.Column(db.String(300))        # optional figure / diagram
     # True => the question refers to a figure we couldn't fetch; it is held out
@@ -516,3 +520,63 @@ class MockJAMBAnswer(db.Model):
     )
 
 
+
+
+class MockJAMBSyllabus(db.Model):
+    """A subject's imported JAMB syllabus (one canonical row per subject).
+
+    The curriculum lives in ``MockJAMBSyllabusNode`` (section > topic > item,
+    each with a stable code). ``blueprint`` optionally stores the exam draw
+    distribution (per-section question counts) as JSON, so how many questions a
+    mock draws per section comes from imported data, not hard-coded logic.
+    """
+    __tablename__ = 'mock_jamb_syllabi'
+
+    id = db.Column(db.Integer, primary_key=True)
+    subject_id = db.Column(db.Integer, db.ForeignKey('subjects.id'), nullable=False, index=True)
+    subject_name = db.Column(db.String(80))
+    code = db.Column(db.String(40))          # e.g. 'JAMB-MATH'
+    prefix = db.Column(db.String(20))        # stable code prefix, e.g. 'MATH'
+    version = db.Column(db.String(20))       # e.g. '2026'
+    total_questions = db.Column(db.Integer)  # blueprint total (e.g. 40 / 60)
+    blueprint = db.Column(db.Text)           # JSON: [{section,label,count,passage,per_passage}]
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+    subject = db.relationship('Subject')
+    nodes = db.relationship('MockJAMBSyllabusNode', backref='syllabus',
+                            lazy='dynamic', cascade='all, delete-orphan')
+
+    __table_args__ = (
+        db.UniqueConstraint('subject_id', name='uq_mock_jamb_syllabus_subject'),
+    )
+
+
+class MockJAMBSyllabusNode(db.Model):
+    """One node in a subject's syllabus tree: a section, a topic, or a leaf item.
+
+    ``code`` is the stable identifier (e.g. 'MATH.NUM.1.A') and is unique within
+    the syllabus — reconciliation on re-import matches on it, never on the name.
+    """
+    __tablename__ = 'mock_jamb_syllabus_nodes'
+
+    id = db.Column(db.Integer, primary_key=True)
+    syllabus_id = db.Column(db.Integer, db.ForeignKey('mock_jamb_syllabi.id'), nullable=False, index=True)
+    parent_id = db.Column(db.Integer, db.ForeignKey('mock_jamb_syllabus_nodes.id'), index=True)
+    code = db.Column(db.String(60), nullable=False)     # stable, e.g. 'MATH.NUM.1.A'
+    kind = db.Column(db.String(10))                     # 'section' | 'topic' | 'item'
+    name = db.Column(db.String(300))
+    sort_order = db.Column(db.Integer, default=0)
+    # Blueprint hints (mainly on sections): how many questions to draw, whether
+    # the section is passage-based and how many questions per passage.
+    question_count = db.Column(db.Integer)
+    passage = db.Column(db.Boolean, default=False)
+    per_passage = db.Column(db.Integer)
+
+    parent = db.relationship('MockJAMBSyllabusNode', remote_side=[id],
+                             backref=db.backref('children', lazy='dynamic'))
+
+    __table_args__ = (
+        db.UniqueConstraint('syllabus_id', 'code', name='uq_mock_jamb_syllabus_node_code'),
+        db.Index('ix_mock_jamb_syllabus_node_kind', 'syllabus_id', 'kind'),
+    )
