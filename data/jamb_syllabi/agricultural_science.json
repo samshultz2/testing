@@ -1,0 +1,816 @@
+{
+  "subject": "Agricultural Science",
+  "code": "JAMB-AGRIC",
+  "prefix": "AGR",
+  "version": "2026",
+  "sections": [
+    {
+      "code": "GEN",
+      "name": "General Agriculture",
+      "topics": [
+        {
+          "code": "GEN.1",
+          "name": "Meaning and Scope of Agriculture",
+          "items": [
+            {
+              "code": "GEN.1.A",
+              "name": "Definition of agriculture"
+            },
+            {
+              "code": "GEN.1.B",
+              "name": "Branches of agriculture"
+            },
+            {
+              "code": "GEN.1.C",
+              "name": "Types (subsistence and commercial)"
+            }
+          ]
+        },
+        {
+          "code": "GEN.2",
+          "name": "Importance of Agriculture",
+          "items": [
+            {
+              "code": "GEN.2.A",
+              "name": "Provision of raw materials for agro-allied industries"
+            },
+            {
+              "code": "GEN.2.B",
+              "name": "Provision of employment"
+            },
+            {
+              "code": "GEN.2.C",
+              "name": "Development of rural areas"
+            }
+          ]
+        },
+        {
+          "code": "GEN.3",
+          "name": "Agricultural Ecology",
+          "items": [
+            {
+              "code": "GEN.3.A",
+              "name": "Ecological zones of West Africa"
+            },
+            {
+              "code": "GEN.3.B",
+              "name": "Agricultural products of each ecological zone"
+            },
+            {
+              "code": "GEN.3.C",
+              "name": "Environmental factors and their effects on crop and livestock production"
+            }
+          ]
+        },
+        {
+          "code": "GEN.4",
+          "name": "Agricultural Genetics",
+          "items": [
+            {
+              "code": "GEN.4.A",
+              "name": "First and second laws of Mendel"
+            },
+            {
+              "code": "GEN.4.B",
+              "name": "Cell division"
+            },
+            {
+              "code": "GEN.4.C",
+              "name": "Terminologies (locus, alleles, genotype, dominance)"
+            },
+            {
+              "code": "GEN.4.D",
+              "name": "Methods of crop improvement"
+            },
+            {
+              "code": "GEN.4.E",
+              "name": "Methods of animal improvement and breeding systems"
+            }
+          ]
+        },
+        {
+          "code": "GEN.5",
+          "name": "Farm Inputs",
+          "items": [
+            {
+              "code": "GEN.5.A",
+              "name": "Planting materials, agrochemicals, etc."
+            }
+          ]
+        },
+        {
+          "code": "GEN.6",
+          "name": "History of Agricultural Development in West Africa",
+          "items": [
+            {
+              "code": "GEN.6.A",
+              "name": "Agricultural systems (shifting cultivation, bush fallowing)"
+            },
+            {
+              "code": "GEN.6.B",
+              "name": "Problems of agricultural development (land tenure, infrastructure, finance, degradation)"
+            },
+            {
+              "code": "GEN.6.C",
+              "name": "National and international research institutes"
+            },
+            {
+              "code": "GEN.6.D",
+              "name": "Agricultural Development Projects (ADPs)"
+            },
+            {
+              "code": "GEN.6.E",
+              "name": "National agricultural programmes (OFN, NAFPP, NALDA, Green Revolution)"
+            }
+          ]
+        },
+        {
+          "code": "GEN.7",
+          "name": "Roles of Government and NGOs in Agricultural Development",
+          "items": [
+            {
+              "code": "GEN.7.A",
+              "name": "Fiscal policies favourable to production"
+            },
+            {
+              "code": "GEN.7.B",
+              "name": "Agricultural laws and reforms (Land Use Act)"
+            },
+            {
+              "code": "GEN.7.C",
+              "name": "Government programmes (subsidies, credit)"
+            },
+            {
+              "code": "GEN.7.D",
+              "name": "Provision of infrastructure"
+            },
+            {
+              "code": "GEN.7.E",
+              "name": "Contribution of NGOs"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "AGRON",
+      "name": "Agronomy",
+      "topics": [
+        {
+          "code": "AGRON.1",
+          "name": "Rocks and Soil Formation",
+          "items": [
+            {
+              "code": "AGRON.1.A",
+              "name": "Rock formation"
+            },
+            {
+              "code": "AGRON.1.B",
+              "name": "Factors affecting rock weathering and soil formation"
+            },
+            {
+              "code": "AGRON.1.C",
+              "name": "Physical properties of soil (profile, components, texture, structure)"
+            },
+            {
+              "code": "AGRON.1.D",
+              "name": "Chemical properties of soil (acidity/alkalinity, chemical components)"
+            }
+          ]
+        },
+        {
+          "code": "AGRON.2",
+          "name": "Soil Water and Soil Conservation",
+          "items": [
+            {
+              "code": "AGRON.2.A",
+              "name": "Soil water (importance, sources, movement, management, conservation)"
+            },
+            {
+              "code": "AGRON.2.B",
+              "name": "Soil conservation (causes, effects, prevention, control of erosion/leaching)"
+            },
+            {
+              "code": "AGRON.2.C",
+              "name": "Irrigation and drainage methods"
+            }
+          ]
+        },
+        {
+          "code": "AGRON.3",
+          "name": "Soil Fertility",
+          "items": [
+            {
+              "code": "AGRON.3.A",
+              "name": "Macro and micro-nutrients; carbon, water and nitrogen cycles"
+            },
+            {
+              "code": "AGRON.3.B",
+              "name": "Living population of the soil and their roles"
+            },
+            {
+              "code": "AGRON.3.C",
+              "name": "Maintenance of soil fertility"
+            },
+            {
+              "code": "AGRON.3.D",
+              "name": "Nutrient deficiency symptoms"
+            }
+          ]
+        },
+        {
+          "code": "AGRON.4",
+          "name": "Land Preparation and Soil Tillage",
+          "items": [
+            {
+              "code": "AGRON.4.A",
+              "name": "Principles and practices of land preparation and tillage"
+            },
+            {
+              "code": "AGRON.4.B",
+              "name": "Factors affecting choice of tillage methods"
+            }
+          ]
+        },
+        {
+          "code": "AGRON.5",
+          "name": "Plant Forms and Functions",
+          "items": [
+            {
+              "code": "AGRON.5.A",
+              "name": "Parts of monocot and dicot crop plants and their functions"
+            },
+            {
+              "code": "AGRON.5.B",
+              "name": "Anatomy and morphology of storage organs"
+            }
+          ]
+        },
+        {
+          "code": "AGRON.6",
+          "name": "Growth, Development and Reproduction",
+          "items": [
+            {
+              "code": "AGRON.6.A",
+              "name": "Gametogenesis"
+            },
+            {
+              "code": "AGRON.6.B",
+              "name": "Pollination"
+            },
+            {
+              "code": "AGRON.6.C",
+              "name": "Fertilization"
+            },
+            {
+              "code": "AGRON.6.D",
+              "name": "Embryo formation and development"
+            }
+          ]
+        },
+        {
+          "code": "AGRON.7",
+          "name": "Plant Propagation Methods",
+          "items": [
+            {
+              "code": "AGRON.7.A",
+              "name": "Sexual propagation (seeds, viability, seed rate, germination)"
+            },
+            {
+              "code": "AGRON.7.B",
+              "name": "Asexual/vegetative propagation (cutting, budding, grafting, layering)"
+            },
+            {
+              "code": "AGRON.7.C",
+              "name": "Nursery and nursery management"
+            }
+          ]
+        },
+        {
+          "code": "AGRON.8",
+          "name": "Cropping Systems, Planting Patterns and Plant Densities",
+          "items": [
+            {
+              "code": "AGRON.8.A",
+              "name": "Cropping systems (mono-, mixed-, multiple-, inter-, relay-, strip-, rotational)"
+            },
+            {
+              "code": "AGRON.8.B",
+              "name": "Planting patterns (broadcasting, row spacing, drilling)"
+            },
+            {
+              "code": "AGRON.8.C",
+              "name": "Plant densities (single, double, multiple stands)"
+            }
+          ]
+        },
+        {
+          "code": "AGRON.9",
+          "name": "Crop Husbandry",
+          "items": [
+            {
+              "code": "AGRON.9.A",
+              "name": "Cereals, legumes, tubers, vegetables and spices, fruits, beverages, oils, latex, fibres and sugars - names, morphology, propagation, husbandry, harvesting, processing, storage, diseases, pests and importance"
+            }
+          ]
+        },
+        {
+          "code": "AGRON.10",
+          "name": "Pasture and Forage Crops",
+          "items": [
+            {
+              "code": "AGRON.10.A",
+              "name": "Common pasture grasses and legumes (morphology, propagation, husbandry, conservation, uses)"
+            },
+            {
+              "code": "AGRON.10.B",
+              "name": "Natural grasslands and their distribution in West Africa"
+            },
+            {
+              "code": "AGRON.10.C",
+              "name": "Range management"
+            }
+          ]
+        },
+        {
+          "code": "AGRON.11",
+          "name": "Floriculture",
+          "items": [
+            {
+              "code": "AGRON.11.A",
+              "name": "Identification, establishment, maintenance and uses of ornamental trees, shrubs and flowers"
+            }
+          ]
+        },
+        {
+          "code": "AGRON.12",
+          "name": "Weeds",
+          "items": [
+            {
+              "code": "AGRON.12.A",
+              "name": "Morphology, reproduction, dispersal and effects of weeds"
+            },
+            {
+              "code": "AGRON.12.B",
+              "name": "Weed control methods"
+            }
+          ]
+        },
+        {
+          "code": "AGRON.13",
+          "name": "Crop Diseases",
+          "items": [
+            {
+              "code": "AGRON.13.A",
+              "name": "Identification of disease-causing organisms"
+            },
+            {
+              "code": "AGRON.13.B",
+              "name": "Diseases caused by fungi, bacteria, nematodes and viruses; symptoms and control"
+            },
+            {
+              "code": "AGRON.13.C",
+              "name": "Side effects of control methods"
+            }
+          ]
+        },
+        {
+          "code": "AGRON.14",
+          "name": "Crop Pests",
+          "items": [
+            {
+              "code": "AGRON.14.A",
+              "name": "Pests of agricultural plants; types, importance and control"
+            },
+            {
+              "code": "AGRON.14.B",
+              "name": "Life cycles of biting, boring and sucking insects"
+            },
+            {
+              "code": "AGRON.14.C",
+              "name": "Common pesticides and their side effects"
+            }
+          ]
+        },
+        {
+          "code": "AGRON.15",
+          "name": "Forest Management (Silviculture)",
+          "items": [
+            {
+              "code": "AGRON.15.A",
+              "name": "Importance (wood, pulp, fibre and other forest products)"
+            },
+            {
+              "code": "AGRON.15.B",
+              "name": "Conservation (regulation, exploitation, regeneration, afforestation, agro-forestry)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "ANIM",
+      "name": "Animal Production",
+      "topics": [
+        {
+          "code": "ANIM.1",
+          "name": "Forms and Classification of Major Farm Animals in West Africa",
+          "items": [
+            {
+              "code": "ANIM.1.A",
+              "name": "Species, breeds, distribution and uses"
+            },
+            {
+              "code": "ANIM.1.B",
+              "name": "External features of cattle, sheep, goat, pigs, rabbits and poultry"
+            }
+          ]
+        },
+        {
+          "code": "ANIM.2",
+          "name": "General Terminologies in Animal Production",
+          "items": [
+            {
+              "code": "ANIM.2.A",
+              "name": "Common terms in animal husbandry (calving, kidding, castrate, tupping, veal, mutton)"
+            }
+          ]
+        },
+        {
+          "code": "ANIM.3",
+          "name": "Anatomy and Physiology of Farm Animals",
+          "items": [
+            {
+              "code": "ANIM.3.A",
+              "name": "Functions of tissues and organs"
+            },
+            {
+              "code": "ANIM.3.B",
+              "name": "Animal body systems (digestive, reproductive, respiratory, urinary, nervous)"
+            },
+            {
+              "code": "ANIM.3.C",
+              "name": "Effect of environmental changes on physiological development"
+            }
+          ]
+        },
+        {
+          "code": "ANIM.4",
+          "name": "Reproduction in Farm Animals",
+          "items": [
+            {
+              "code": "ANIM.4.A",
+              "name": "Gametogenesis, oestrus cycle, gestation, parturition and hormones"
+            },
+            {
+              "code": "ANIM.4.B",
+              "name": "Development, nourishment and birth of the young; lactation"
+            },
+            {
+              "code": "ANIM.4.C",
+              "name": "Egg formation, incubation and hatching in poultry"
+            }
+          ]
+        },
+        {
+          "code": "ANIM.5",
+          "name": "Animal Nutrition",
+          "items": [
+            {
+              "code": "ANIM.5.A",
+              "name": "Feed nutrients and functions"
+            },
+            {
+              "code": "ANIM.5.B",
+              "name": "Feeds and feeding; ration formulation, hay and silage"
+            },
+            {
+              "code": "ANIM.5.C",
+              "name": "Nutrient deficiencies and their correction"
+            }
+          ]
+        },
+        {
+          "code": "ANIM.6",
+          "name": "Livestock Management",
+          "items": [
+            {
+              "code": "ANIM.6.A",
+              "name": "Housing, feeding, sanitation and veterinary care under intensive, semi-intensive and extensive systems"
+            }
+          ]
+        },
+        {
+          "code": "ANIM.7",
+          "name": "Animal Health",
+          "items": [
+            {
+              "code": "ANIM.7.A",
+              "name": "Animal diseases (predisposing factors, causal organisms, prevention and cure)"
+            },
+            {
+              "code": "ANIM.7.B",
+              "name": "Parasites (life cycles, economic importance, prevention and control)"
+            }
+          ]
+        },
+        {
+          "code": "ANIM.8",
+          "name": "Fisheries and Wildlife",
+          "items": [
+            {
+              "code": "ANIM.8.A",
+              "name": "Fish culture systems and common fishes"
+            },
+            {
+              "code": "ANIM.8.B",
+              "name": "Fish harvesting and processing methods"
+            },
+            {
+              "code": "ANIM.8.C",
+              "name": "Wildlife management"
+            }
+          ]
+        },
+        {
+          "code": "ANIM.9",
+          "name": "Bee-keeping (Apiculture)",
+          "items": [
+            {
+              "code": "ANIM.9.A",
+              "name": "Meaning and importance of apiculture"
+            },
+            {
+              "code": "ANIM.9.B",
+              "name": "Types of bees"
+            },
+            {
+              "code": "ANIM.9.C",
+              "name": "Methods of bee-keeping"
+            },
+            {
+              "code": "ANIM.9.D",
+              "name": "Equipment and safety measures"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "AECON",
+      "name": "Agricultural Economics and Extension",
+      "topics": [
+        {
+          "code": "AECON.1",
+          "name": "Factors of Agricultural Production",
+          "items": [
+            {
+              "code": "AECON.1.A",
+              "name": "Land (types of land ownership in West Africa)"
+            },
+            {
+              "code": "AECON.1.B",
+              "name": "Labour"
+            },
+            {
+              "code": "AECON.1.C",
+              "name": "Capital"
+            },
+            {
+              "code": "AECON.1.D",
+              "name": "Management"
+            }
+          ]
+        },
+        {
+          "code": "AECON.2",
+          "name": "Basic Economic Principles",
+          "items": [
+            {
+              "code": "AECON.2.A",
+              "name": "Demand and supply"
+            },
+            {
+              "code": "AECON.2.B",
+              "name": "Production function and stages of production"
+            },
+            {
+              "code": "AECON.2.C",
+              "name": "Characteristic features of agricultural production"
+            }
+          ]
+        },
+        {
+          "code": "AECON.3",
+          "name": "Labour Management",
+          "items": [
+            {
+              "code": "AECON.3.A",
+              "name": "Labour relations"
+            },
+            {
+              "code": "AECON.3.B",
+              "name": "Types of labour"
+            },
+            {
+              "code": "AECON.3.C",
+              "name": "National labour laws and regulations"
+            }
+          ]
+        },
+        {
+          "code": "AECON.4",
+          "name": "Farm Management",
+          "items": [
+            {
+              "code": "AECON.4.A",
+              "name": "Qualities, functions and problems of a farm manager"
+            },
+            {
+              "code": "AECON.4.B",
+              "name": "Records and record-keeping"
+            },
+            {
+              "code": "AECON.4.C",
+              "name": "Stock evaluation (gross/net profit, depreciation)"
+            },
+            {
+              "code": "AECON.4.D",
+              "name": "Agricultural insurance"
+            },
+            {
+              "code": "AECON.4.E",
+              "name": "Agricultural financing"
+            }
+          ]
+        },
+        {
+          "code": "AECON.5",
+          "name": "Marketing of Agricultural Produce",
+          "items": [
+            {
+              "code": "AECON.5.A",
+              "name": "Importance of marketing"
+            },
+            {
+              "code": "AECON.5.B",
+              "name": "Marketing channels"
+            },
+            {
+              "code": "AECON.5.C",
+              "name": "Characteristics of agricultural products affecting marketing"
+            }
+          ]
+        },
+        {
+          "code": "AECON.6",
+          "name": "Agricultural Extension",
+          "items": [
+            {
+              "code": "AECON.6.A",
+              "name": "Meaning and importance"
+            },
+            {
+              "code": "AECON.6.B",
+              "name": "Role of ADPs, universities, research institutes and cooperatives"
+            },
+            {
+              "code": "AECON.6.C",
+              "name": "Extension methods"
+            },
+            {
+              "code": "AECON.6.D",
+              "name": "Problems of agricultural extension and solutions"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "TECH",
+      "name": "Agricultural Technology",
+      "topics": [
+        {
+          "code": "TECH.1",
+          "name": "Farm Surveying and Farmstead Planning",
+          "items": [
+            {
+              "code": "TECH.1.A",
+              "name": "Meaning and importance"
+            },
+            {
+              "code": "TECH.1.B",
+              "name": "Common surveying equipment, uses and care"
+            },
+            {
+              "code": "TECH.1.C",
+              "name": "Common survey methods"
+            },
+            {
+              "code": "TECH.1.D",
+              "name": "Principles of farmstead planning"
+            }
+          ]
+        },
+        {
+          "code": "TECH.2",
+          "name": "Simple Farm Tools",
+          "items": [
+            {
+              "code": "TECH.2.A",
+              "name": "Simple farm tools"
+            }
+          ]
+        },
+        {
+          "code": "TECH.3",
+          "name": "Farm Machinery and Implements",
+          "items": [
+            {
+              "code": "TECH.3.A",
+              "name": "Types (machinery and implements)"
+            },
+            {
+              "code": "TECH.3.B",
+              "name": "Uses and maintenance of farm machinery and implements"
+            }
+          ]
+        },
+        {
+          "code": "TECH.4",
+          "name": "Mechanization and Sources of Farm Power",
+          "items": [
+            {
+              "code": "TECH.4.A",
+              "name": "Sources of farm power"
+            },
+            {
+              "code": "TECH.4.B",
+              "name": "Advantages and disadvantages of mechanization"
+            },
+            {
+              "code": "TECH.4.C",
+              "name": "Problems and prospects of mechanized agriculture in West Africa"
+            }
+          ]
+        },
+        {
+          "code": "TECH.5",
+          "name": "Processing and Storage",
+          "items": [
+            {
+              "code": "TECH.5.A",
+              "name": "Traditional and modern methods of food processing"
+            },
+            {
+              "code": "TECH.5.B",
+              "name": "Storage"
+            }
+          ]
+        },
+        {
+          "code": "TECH.6",
+          "name": "Introduction to Biotechnology",
+          "items": [
+            {
+              "code": "TECH.6.A",
+              "name": "Basic terms (tissue and anther culture, in-vitro fertilization, genetic engineering)"
+            }
+          ]
+        },
+        {
+          "code": "TECH.7",
+          "name": "Application of ICT in Agriculture",
+          "items": [
+            {
+              "code": "TECH.7.A",
+              "name": "Features of computers"
+            },
+            {
+              "code": "TECH.7.B",
+              "name": "Uses of computers in agriculture"
+            },
+            {
+              "code": "TECH.7.C",
+              "name": "Use of communication gadgets"
+            }
+          ]
+        },
+        {
+          "code": "TECH.8",
+          "name": "Introduction to Agricultural Research and Statistics",
+          "items": [
+            {
+              "code": "TECH.8.A",
+              "name": "Basic concepts in planning experiments"
+            },
+            {
+              "code": "TECH.8.B",
+              "name": "Interpretation of results (central tendency, experimental errors)"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

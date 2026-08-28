@@ -1,0 +1,850 @@
+{
+  "subject": "History",
+  "code": "JAMB-HIST",
+  "prefix": "HIST",
+  "version": "2026",
+  "sections": [
+    {
+      "code": "NIG1",
+      "name": "Part I - The Nigeria Area up to 1800",
+      "topics": [
+        {
+          "code": "NIG1.1",
+          "name": "Land and Peoples of the Nigeria Area",
+          "items": [
+            {
+              "code": "NIG1.1.A",
+              "name": "Geographical zones and the people"
+            },
+            {
+              "code": "NIG1.1.B",
+              "name": "The people's relationship with the environment"
+            },
+            {
+              "code": "NIG1.1.C",
+              "name": "Physical features and impact of geography on human activity"
+            },
+            {
+              "code": "NIG1.1.D",
+              "name": "Relations and integration among the peoples"
+            }
+          ]
+        },
+        {
+          "code": "NIG1.2",
+          "name": "Early Centres of Civilization",
+          "items": [
+            {
+              "code": "NIG1.2.A",
+              "name": "Nok, Daima, Ife, Benin, Igbo Ukwu and Iwo Eleru"
+            },
+            {
+              "code": "NIG1.2.B",
+              "name": "Monuments and shelter systems"
+            }
+          ]
+        },
+        {
+          "code": "NIG1.3",
+          "name": "Origins and Formation of States in the Nigeria Area",
+          "items": [
+            {
+              "code": "NIG1.3.A",
+              "name": "Central Sudan (Kanuri and Hausa states)"
+            },
+            {
+              "code": "NIG1.3.B",
+              "name": "Niger-Benue Valley (Nupe, Jukun, Igala, Idoma, Tiv, Ebira)"
+            },
+            {
+              "code": "NIG1.3.C",
+              "name": "Eastern Forest Belt (Igbo and Ibibio)"
+            },
+            {
+              "code": "NIG1.3.D",
+              "name": "Western Forest Belt (Yoruba and Edo)"
+            },
+            {
+              "code": "NIG1.3.E",
+              "name": "Coastal and Niger-Delta (Efik, Ijo, Itsekiri, Urhobo)"
+            }
+          ]
+        },
+        {
+          "code": "NIG1.4",
+          "name": "Economic Activities and Growth of States",
+          "items": [
+            {
+              "code": "NIG1.4.A",
+              "name": "Agriculture"
+            },
+            {
+              "code": "NIG1.4.B",
+              "name": "Industries (pottery, salt-making, iron-smelting, etc.)"
+            },
+            {
+              "code": "NIG1.4.C",
+              "name": "Trade and trade routes"
+            },
+            {
+              "code": "NIG1.4.D",
+              "name": "Expansion of states"
+            }
+          ]
+        },
+        {
+          "code": "NIG1.5",
+          "name": "External Influences",
+          "items": [
+            {
+              "code": "NIG1.5.A",
+              "name": "North Africans/Arabs/Tuaregs (Islam and trans-Saharan trade)"
+            },
+            {
+              "code": "NIG1.5.B",
+              "name": "Europeans (early trade, trans-Atlantic slave trade, missionary activities)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "NIG2",
+      "name": "Part I - The Nigeria Area 1800-1900",
+      "topics": [
+        {
+          "code": "NIG2.1",
+          "name": "The Sokoto Caliphate",
+          "items": [
+            {
+              "code": "NIG2.1.A",
+              "name": "Causes and process of the jihad"
+            },
+            {
+              "code": "NIG2.1.B",
+              "name": "Establishment and administration of the caliphate"
+            },
+            {
+              "code": "NIG2.1.C",
+              "name": "Achievements and impact"
+            },
+            {
+              "code": "NIG2.1.D",
+              "name": "Collapse of the caliphate"
+            }
+          ]
+        },
+        {
+          "code": "NIG2.2",
+          "name": "Kanem-Borno",
+          "items": [
+            {
+              "code": "NIG2.2.A",
+              "name": "Survival and collapse of the Saifawa dynasty"
+            },
+            {
+              "code": "NIG2.2.B",
+              "name": "Borno under the Shehus"
+            },
+            {
+              "code": "NIG2.2.C",
+              "name": "Borno under Rabeh"
+            },
+            {
+              "code": "NIG2.2.D",
+              "name": "Borno and the Sokoto caliphate"
+            }
+          ]
+        },
+        {
+          "code": "NIG2.3",
+          "name": "Yorubaland",
+          "items": [
+            {
+              "code": "NIG2.3.A",
+              "name": "Fall of the Old Oyo Empire"
+            },
+            {
+              "code": "NIG2.3.B",
+              "name": "Yoruba wars and their impact"
+            },
+            {
+              "code": "NIG2.3.C",
+              "name": "Peace treaty of 1886 and its aftermath"
+            }
+          ]
+        },
+        {
+          "code": "NIG2.4",
+          "name": "Benin",
+          "items": [
+            {
+              "code": "NIG2.4.A",
+              "name": "Internal political and cultural development"
+            },
+            {
+              "code": "NIG2.4.B",
+              "name": "Relations with neighbours"
+            },
+            {
+              "code": "NIG2.4.C",
+              "name": "Relations with the Europeans"
+            }
+          ]
+        },
+        {
+          "code": "NIG2.5",
+          "name": "Nupe",
+          "items": [
+            {
+              "code": "NIG2.5.A",
+              "name": "Internal political and cultural development"
+            },
+            {
+              "code": "NIG2.5.B",
+              "name": "Relations with neighbours"
+            },
+            {
+              "code": "NIG2.5.C",
+              "name": "Nupe imperialism"
+            }
+          ]
+        },
+        {
+          "code": "NIG2.6",
+          "name": "Igbo",
+          "items": [
+            {
+              "code": "NIG2.6.A",
+              "name": "Internal political and cultural development"
+            },
+            {
+              "code": "NIG2.6.B",
+              "name": "Relations with neighbours"
+            }
+          ]
+        },
+        {
+          "code": "NIG2.7",
+          "name": "Efik",
+          "items": [
+            {
+              "code": "NIG2.7.A",
+              "name": "Internal political and cultural development"
+            },
+            {
+              "code": "NIG2.7.B",
+              "name": "Relations with neighbours"
+            }
+          ]
+        },
+        {
+          "code": "NIG2.8",
+          "name": "European Penetration and Impact",
+          "items": [
+            {
+              "code": "NIG2.8.A",
+              "name": "European exploration of the interior"
+            },
+            {
+              "code": "NIG2.8.B",
+              "name": "Suppression of the trans-Atlantic slave trade"
+            },
+            {
+              "code": "NIG2.8.C",
+              "name": "Commodity trade and consular authority"
+            },
+            {
+              "code": "NIG2.8.D",
+              "name": "Christian missionary activities"
+            },
+            {
+              "code": "NIG2.8.E",
+              "name": "Activities of the trading companies"
+            },
+            {
+              "code": "NIG2.8.F",
+              "name": "Impact of European activities"
+            }
+          ]
+        },
+        {
+          "code": "NIG2.9",
+          "name": "British Conquest of the Nigeria Area",
+          "items": [
+            {
+              "code": "NIG2.9.A",
+              "name": "First phase 1851-1900"
+            },
+            {
+              "code": "NIG2.9.B",
+              "name": "Second phase and motives"
+            },
+            {
+              "code": "NIG2.9.C",
+              "name": "Methods of the conquest and its result"
+            },
+            {
+              "code": "NIG2.9.D",
+              "name": "Resistance and aftermath"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "NIG3",
+      "name": "Part I - Nigeria 1900-1960",
+      "topics": [
+        {
+          "code": "NIG3.1",
+          "name": "The Establishment of Colonial Rule up to 1914",
+          "items": [
+            {
+              "code": "NIG3.1.A",
+              "name": "Pacification and occupation of the territories"
+            },
+            {
+              "code": "NIG3.1.B",
+              "name": "Resistance (Ekumeku Movement, Satiru uprising)"
+            },
+            {
+              "code": "NIG3.1.C",
+              "name": "Administration of the Protectorates"
+            }
+          ]
+        },
+        {
+          "code": "NIG3.2",
+          "name": "The Amalgamation of 1914",
+          "items": [
+            {
+              "code": "NIG3.2.A",
+              "name": "Reasons"
+            },
+            {
+              "code": "NIG3.2.B",
+              "name": "Effects"
+            }
+          ]
+        },
+        {
+          "code": "NIG3.3",
+          "name": "Colonial Administration After the Amalgamation",
+          "items": [
+            {
+              "code": "NIG3.3.A",
+              "name": "Central administration (Legislative and Executive Councils)"
+            },
+            {
+              "code": "NIG3.3.B",
+              "name": "Indirect rule (reasons, working and effects)"
+            },
+            {
+              "code": "NIG3.3.C",
+              "name": "Local administrative institutions"
+            },
+            {
+              "code": "NIG3.3.D",
+              "name": "Resistance to colonial rule (Egba, Aba Women's Movement)"
+            }
+          ]
+        },
+        {
+          "code": "NIG3.4",
+          "name": "The Colonial Economy",
+          "items": [
+            {
+              "code": "NIG3.4.A",
+              "name": "Currency, taxation and forced labour"
+            },
+            {
+              "code": "NIG3.4.B",
+              "name": "Infrastructure"
+            },
+            {
+              "code": "NIG3.4.C",
+              "name": "Agriculture"
+            },
+            {
+              "code": "NIG3.4.D",
+              "name": "Mining"
+            },
+            {
+              "code": "NIG3.4.E",
+              "name": "Industry"
+            },
+            {
+              "code": "NIG3.4.F",
+              "name": "Commerce"
+            },
+            {
+              "code": "NIG3.4.G",
+              "name": "Banking"
+            }
+          ]
+        },
+        {
+          "code": "NIG3.5",
+          "name": "Social Development under Colonial Rule",
+          "items": [
+            {
+              "code": "NIG3.5.A",
+              "name": "Western education"
+            },
+            {
+              "code": "NIG3.5.B",
+              "name": "Urbanization/social integration"
+            },
+            {
+              "code": "NIG3.5.C",
+              "name": "Improvement unions"
+            },
+            {
+              "code": "NIG3.5.D",
+              "name": "Health institutions"
+            }
+          ]
+        },
+        {
+          "code": "NIG3.6",
+          "name": "Constitutional Developments, Nationalism and Independence",
+          "items": [
+            {
+              "code": "NIG3.6.A",
+              "name": "1922 Clifford Constitution and first political party"
+            },
+            {
+              "code": "NIG3.6.B",
+              "name": "World War II and the agitation for independence"
+            },
+            {
+              "code": "NIG3.6.C",
+              "name": "Rise of nationalist movements"
+            },
+            {
+              "code": "NIG3.6.D",
+              "name": "Richards (1946), Macpherson (1951) and Lyttleton (1954) Constitutions"
+            },
+            {
+              "code": "NIG3.6.E",
+              "name": "Party politics and the minority question"
+            },
+            {
+              "code": "NIG3.6.F",
+              "name": "Constitutional conferences and the 1959 elections and independence"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "NIG4",
+      "name": "Part I - Nigeria Since Independence",
+      "topics": [
+        {
+          "code": "NIG4.1",
+          "name": "The Politics of the First Republic and Military Intervention",
+          "items": [
+            {
+              "code": "NIG4.1.A",
+              "name": "Struggle for control of the centre"
+            },
+            {
+              "code": "NIG4.1.B",
+              "name": "Revenue allocation"
+            },
+            {
+              "code": "NIG4.1.C",
+              "name": "1962/63 census controversies"
+            },
+            {
+              "code": "NIG4.1.D",
+              "name": "1963 Republican constitution"
+            },
+            {
+              "code": "NIG4.1.E",
+              "name": "Minority agitations"
+            },
+            {
+              "code": "NIG4.1.F",
+              "name": "Action Group crisis and 1964/65 elections"
+            },
+            {
+              "code": "NIG4.1.G",
+              "name": "Coups of 1966 and the Ironsi regime"
+            }
+          ]
+        },
+        {
+          "code": "NIG4.2",
+          "name": "The Nigerian Civil War",
+          "items": [
+            {
+              "code": "NIG4.2.A",
+              "name": "Causes"
+            },
+            {
+              "code": "NIG4.2.B",
+              "name": "Course"
+            },
+            {
+              "code": "NIG4.2.C",
+              "name": "Effects"
+            }
+          ]
+        },
+        {
+          "code": "NIG4.3",
+          "name": "The Gowon Regime",
+          "items": [
+            {
+              "code": "NIG4.3.A",
+              "name": "The Gowon regime"
+            }
+          ]
+        },
+        {
+          "code": "NIG4.4",
+          "name": "Murtala/Obasanjo Regime",
+          "items": [
+            {
+              "code": "NIG4.4.A",
+              "name": "Murtala/Obasanjo regime"
+            }
+          ]
+        },
+        {
+          "code": "NIG4.5",
+          "name": "The Second Republic",
+          "items": [
+            {
+              "code": "NIG4.5.A",
+              "name": "The Second Republic"
+            }
+          ]
+        },
+        {
+          "code": "NIG4.6",
+          "name": "The Buhari Regime",
+          "items": [
+            {
+              "code": "NIG4.6.A",
+              "name": "The Buhari regime"
+            }
+          ]
+        },
+        {
+          "code": "NIG4.7",
+          "name": "The Babangida Regime",
+          "items": [
+            {
+              "code": "NIG4.7.A",
+              "name": "The Babangida regime"
+            }
+          ]
+        },
+        {
+          "code": "NIG4.8",
+          "name": "The Interim National Government (ING)",
+          "items": [
+            {
+              "code": "NIG4.8.A",
+              "name": "The Interim National Government"
+            }
+          ]
+        },
+        {
+          "code": "NIG4.9",
+          "name": "The Abacha Regime",
+          "items": [
+            {
+              "code": "NIG4.9.A",
+              "name": "The Abacha regime"
+            }
+          ]
+        },
+        {
+          "code": "NIG4.10",
+          "name": "Transition to the Fourth Republic",
+          "items": [
+            {
+              "code": "NIG4.10.A",
+              "name": "Transition to the Fourth Republic"
+            }
+          ]
+        },
+        {
+          "code": "NIG4.11",
+          "name": "Nigeria in International Organizations",
+          "items": [
+            {
+              "code": "NIG4.11.A",
+              "name": "ECOWAS"
+            },
+            {
+              "code": "NIG4.11.B",
+              "name": "African Union"
+            },
+            {
+              "code": "NIG4.11.C",
+              "name": "Commonwealth of Nations"
+            },
+            {
+              "code": "NIG4.11.D",
+              "name": "OPEC"
+            },
+            {
+              "code": "NIG4.11.E",
+              "name": "United Nations Organization"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "AFR1",
+      "name": "Part II - West and North Africa",
+      "topics": [
+        {
+          "code": "AFR1.1",
+          "name": "Islamic Reform Movements and State Building in West Africa",
+          "items": [
+            {
+              "code": "AFR1.1.A",
+              "name": "Relationship between Sokoto and other jihads"
+            },
+            {
+              "code": "AFR1.1.B",
+              "name": "Jihads of Seku Ahmadu and Al-Hajj Umar"
+            },
+            {
+              "code": "AFR1.1.C",
+              "name": "Activities of Samori Toure"
+            }
+          ]
+        },
+        {
+          "code": "AFR1.2",
+          "name": "Sierra Leone, Liberia and Christian Missionary Activities in West Africa",
+          "items": [
+            {
+              "code": "AFR1.2.A",
+              "name": "Foundation of Sierra Leone and Liberia and spread of Christianity"
+            },
+            {
+              "code": "AFR1.2.B",
+              "name": "Activities and impact of Christian missionaries"
+            }
+          ]
+        },
+        {
+          "code": "AFR1.3",
+          "name": "Egypt under Mohammed Ali and Khedive Ismail",
+          "items": [
+            {
+              "code": "AFR1.3.A",
+              "name": "Rise of Mohammed Ali and his reforms"
+            },
+            {
+              "code": "AFR1.3.B",
+              "name": "Relations with the Europeans"
+            },
+            {
+              "code": "AFR1.3.C",
+              "name": "Ismail's fiscal policies"
+            },
+            {
+              "code": "AFR1.3.D",
+              "name": "British occupation of Egypt"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "AFR2",
+      "name": "Part II - Horn of Africa and Southern Africa",
+      "topics": [
+        {
+          "code": "AFR2.1",
+          "name": "Ethiopia in the 19th Century",
+          "items": [
+            {
+              "code": "AFR2.1.A",
+              "name": "Rise of Theodore II and unification attempt"
+            },
+            {
+              "code": "AFR2.1.B",
+              "name": "Menelik II and Ethiopian independence"
+            }
+          ]
+        },
+        {
+          "code": "AFR2.2",
+          "name": "The Mfecane",
+          "items": [
+            {
+              "code": "AFR2.2.A",
+              "name": "Rise of the Zulu nation"
+            },
+            {
+              "code": "AFR2.2.B",
+              "name": "Causes, course and consequences of the Mfecane"
+            }
+          ]
+        },
+        {
+          "code": "AFR2.3",
+          "name": "The Great Trek",
+          "items": [
+            {
+              "code": "AFR2.3.A",
+              "name": "The frontier wars"
+            },
+            {
+              "code": "AFR2.3.B",
+              "name": "British intervention in Boer-African relations"
+            },
+            {
+              "code": "AFR2.3.C",
+              "name": "The Great Trek and its consequences"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "AFR3",
+      "name": "Part II - Imperialism, Colonialism and Problems of Nation-Building in Africa",
+      "topics": [
+        {
+          "code": "AFR3.1",
+          "name": "The New Imperialism and European Occupation of Africa",
+          "items": [
+            {
+              "code": "AFR3.1.A",
+              "name": "The New Imperialism in Africa"
+            },
+            {
+              "code": "AFR3.1.B",
+              "name": "European scramble for Africa"
+            },
+            {
+              "code": "AFR3.1.C",
+              "name": "The Berlin Conference"
+            },
+            {
+              "code": "AFR3.1.D",
+              "name": "Occupation and resistance by Africans"
+            }
+          ]
+        },
+        {
+          "code": "AFR3.2",
+          "name": "Patterns of Colonial Rule in Africa",
+          "items": [
+            {
+              "code": "AFR3.2.A",
+              "name": "The British"
+            },
+            {
+              "code": "AFR3.2.B",
+              "name": "The French"
+            },
+            {
+              "code": "AFR3.2.C",
+              "name": "The Portuguese"
+            },
+            {
+              "code": "AFR3.2.D",
+              "name": "The Belgians"
+            },
+            {
+              "code": "AFR3.2.E",
+              "name": "The Germans"
+            },
+            {
+              "code": "AFR3.2.F",
+              "name": "The Spanish"
+            }
+          ]
+        },
+        {
+          "code": "AFR3.3",
+          "name": "The Politics of Decolonization",
+          "items": [
+            {
+              "code": "AFR3.3.A",
+              "name": "Colonial policies and African discontent"
+            },
+            {
+              "code": "AFR3.3.B",
+              "name": "Impact of the two World Wars"
+            },
+            {
+              "code": "AFR3.3.C",
+              "name": "Nationalist activities and political parties"
+            },
+            {
+              "code": "AFR3.3.D",
+              "name": "Strategies for attaining independence"
+            }
+          ]
+        },
+        {
+          "code": "AFR3.4",
+          "name": "Apartheid in South Africa",
+          "items": [
+            {
+              "code": "AFR3.4.A",
+              "name": "Origin of apartheid"
+            },
+            {
+              "code": "AFR3.4.B",
+              "name": "Rise of Afrikaner nationalism"
+            },
+            {
+              "code": "AFR3.4.C",
+              "name": "Enactment of apartheid laws"
+            },
+            {
+              "code": "AFR3.4.D",
+              "name": "Internal and external reactions"
+            },
+            {
+              "code": "AFR3.4.E",
+              "name": "Dismantling of apartheid and post-apartheid developments"
+            }
+          ]
+        },
+        {
+          "code": "AFR3.5",
+          "name": "Problems of Nation-Building in Africa",
+          "items": [
+            {
+              "code": "AFR3.5.A",
+              "name": "Political and economic challenges"
+            },
+            {
+              "code": "AFR3.5.B",
+              "name": "Physical and environmental challenges"
+            },
+            {
+              "code": "AFR3.5.C",
+              "name": "Ethnic and religious pluralism"
+            },
+            {
+              "code": "AFR3.5.D",
+              "name": "Military intervention and instability"
+            },
+            {
+              "code": "AFR3.5.E",
+              "name": "Neo-colonialism, boundary disputes, civil wars, terrorism and globalisation"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

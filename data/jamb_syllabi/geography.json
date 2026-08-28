@@ -1,0 +1,500 @@
+{
+  "subject": "Geography",
+  "code": "JAMB-GEO",
+  "prefix": "GEO",
+  "version": "2026",
+  "sections": [
+    {
+      "code": "PRAC",
+      "name": "Practical Geography",
+      "topics": [
+        {
+          "code": "PRAC.A",
+          "name": "Maps",
+          "items": [
+            {
+              "code": "PRAC.A.A",
+              "name": "Types and uses of maps"
+            }
+          ]
+        },
+        {
+          "code": "PRAC.B",
+          "name": "Scale and Measurement",
+          "items": [
+            {
+              "code": "PRAC.B.A",
+              "name": "Scale, distances, areas, reduction and enlargement, directions, bearings and gradients on topographical maps"
+            }
+          ]
+        },
+        {
+          "code": "PRAC.C",
+          "name": "Map Reading and Interpretation",
+          "items": [
+            {
+              "code": "PRAC.C.A",
+              "name": "Cross profiles, intervisibility, description of physical and human features on topographical maps"
+            }
+          ]
+        },
+        {
+          "code": "PRAC.D",
+          "name": "Interpretation of Statistical Data",
+          "items": [
+            {
+              "code": "PRAC.D.A",
+              "name": "Interpretation of statistical data, maps and diagrams"
+            }
+          ]
+        },
+        {
+          "code": "PRAC.E",
+          "name": "Elementary Surveying",
+          "items": [
+            {
+              "code": "PRAC.E.A",
+              "name": "Chain and prismatic surveying, open and close traverse, procedure, problems, advantages and disadvantages"
+            }
+          ]
+        },
+        {
+          "code": "PRAC.F",
+          "name": "Geographic Information System (GIS)",
+          "items": [
+            {
+              "code": "PRAC.F.A",
+              "name": "Components, techniques, data sources and applications"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "PHYS",
+      "name": "Physical Geography",
+      "topics": [
+        {
+          "code": "PHYS.A",
+          "name": "The Earth as a Planet",
+          "items": [
+            {
+              "code": "PHYS.A.A",
+              "name": "The earth in the solar system, rotation and revolution"
+            },
+            {
+              "code": "PHYS.A.B",
+              "name": "Shape and size of the earth"
+            },
+            {
+              "code": "PHYS.A.C",
+              "name": "Latitudes and distances, longitudes and time"
+            }
+          ]
+        },
+        {
+          "code": "PHYS.B",
+          "name": "The Earth's Crust",
+          "items": [
+            {
+              "code": "PHYS.B.A",
+              "name": "Structure of the earth and the four spheres"
+            },
+            {
+              "code": "PHYS.B.B",
+              "name": "Rocks (types, characteristics, formation, uses)"
+            },
+            {
+              "code": "PHYS.B.C",
+              "name": "Earth's movement and tectonic forces"
+            },
+            {
+              "code": "PHYS.B.D",
+              "name": "Major landforms"
+            }
+          ]
+        },
+        {
+          "code": "PHYS.C",
+          "name": "Volcanism and Earthquakes",
+          "items": [
+            {
+              "code": "PHYS.C.A",
+              "name": "Landforms associated with volcanic activities"
+            },
+            {
+              "code": "PHYS.C.B",
+              "name": "Landforms of igneous rocks"
+            },
+            {
+              "code": "PHYS.C.C",
+              "name": "Origin and types of volcanoes"
+            },
+            {
+              "code": "PHYS.C.D",
+              "name": "Volcanic eruptions and earthquakes"
+            }
+          ]
+        },
+        {
+          "code": "PHYS.D",
+          "name": "Denudation Processes in the Tropics",
+          "items": [
+            {
+              "code": "PHYS.D.A",
+              "name": "Weathering"
+            },
+            {
+              "code": "PHYS.D.B",
+              "name": "Erosion"
+            },
+            {
+              "code": "PHYS.D.C",
+              "name": "Mass movement"
+            },
+            {
+              "code": "PHYS.D.D",
+              "name": "Deposition"
+            }
+          ]
+        },
+        {
+          "code": "PHYS.E",
+          "name": "Water Bodies",
+          "items": [
+            {
+              "code": "PHYS.E.A",
+              "name": "Oceans and seas"
+            },
+            {
+              "code": "PHYS.E.B",
+              "name": "Ocean currents"
+            },
+            {
+              "code": "PHYS.E.C",
+              "name": "Lakes"
+            },
+            {
+              "code": "PHYS.E.D",
+              "name": "Rivers and the action of running water"
+            }
+          ]
+        },
+        {
+          "code": "PHYS.F",
+          "name": "Weather and Climate",
+          "items": [
+            {
+              "code": "PHYS.F.A",
+              "name": "Concept and elements of weather and climate"
+            },
+            {
+              "code": "PHYS.F.B",
+              "name": "Factors controlling weather and climate"
+            },
+            {
+              "code": "PHYS.F.C",
+              "name": "Classification and major climate types (Koppen)"
+            },
+            {
+              "code": "PHYS.F.D",
+              "name": "Measuring weather parameters and climate change"
+            }
+          ]
+        },
+        {
+          "code": "PHYS.G",
+          "name": "Vegetation",
+          "items": [
+            {
+              "code": "PHYS.G.A",
+              "name": "Factors controlling plant growth"
+            },
+            {
+              "code": "PHYS.G.B",
+              "name": "Concept of vegetation"
+            },
+            {
+              "code": "PHYS.G.C",
+              "name": "Major types, characteristics and distribution"
+            },
+            {
+              "code": "PHYS.G.D",
+              "name": "Impact of human activities on vegetation"
+            }
+          ]
+        },
+        {
+          "code": "PHYS.H",
+          "name": "Soils",
+          "items": [
+            {
+              "code": "PHYS.H.A",
+              "name": "Definition and properties"
+            },
+            {
+              "code": "PHYS.H.B",
+              "name": "Factors and processes of formation"
+            },
+            {
+              "code": "PHYS.H.C",
+              "name": "Soil profiles"
+            },
+            {
+              "code": "PHYS.H.D",
+              "name": "Major tropical types and impact of human activities"
+            }
+          ]
+        },
+        {
+          "code": "PHYS.I",
+          "name": "Environmental Resources",
+          "items": [
+            {
+              "code": "PHYS.I.A",
+              "name": "Types of resources"
+            },
+            {
+              "code": "PHYS.I.B",
+              "name": "Renewable and non-renewable resources"
+            }
+          ]
+        },
+        {
+          "code": "PHYS.J",
+          "name": "Environmental Interaction",
+          "items": [
+            {
+              "code": "PHYS.J.A",
+              "name": "Land ecosystem"
+            },
+            {
+              "code": "PHYS.J.B",
+              "name": "Environmental balance and human interaction"
+            },
+            {
+              "code": "PHYS.J.C",
+              "name": "Effects of human activities on land ecosystem"
+            }
+          ]
+        },
+        {
+          "code": "PHYS.K",
+          "name": "Environmental Hazards",
+          "items": [
+            {
+              "code": "PHYS.K.A",
+              "name": "Natural hazards"
+            },
+            {
+              "code": "PHYS.K.B",
+              "name": "Man-induced hazards"
+            },
+            {
+              "code": "PHYS.K.C",
+              "name": "Effects, prevention and control"
+            }
+          ]
+        },
+        {
+          "code": "PHYS.L",
+          "name": "Environmental Conservation",
+          "items": [
+            {
+              "code": "PHYS.L.A",
+              "name": "Need for conservation"
+            },
+            {
+              "code": "PHYS.L.B",
+              "name": "Resources for conservation"
+            },
+            {
+              "code": "PHYS.L.C",
+              "name": "Methods of conservation"
+            },
+            {
+              "code": "PHYS.L.D",
+              "name": "Problems and difficulties"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "HUM",
+      "name": "Human Geography",
+      "topics": [
+        {
+          "code": "HUM.A",
+          "name": "Population",
+          "items": [
+            {
+              "code": "HUM.A.A",
+              "name": "World population distribution"
+            },
+            {
+              "code": "HUM.A.B",
+              "name": "Characteristics (birth/death rates, age/sex structure)"
+            },
+            {
+              "code": "HUM.A.C",
+              "name": "Factors and patterns of distribution"
+            },
+            {
+              "code": "HUM.A.D",
+              "name": "Factors and problems of population growth"
+            },
+            {
+              "code": "HUM.A.E",
+              "name": "Migration"
+            }
+          ]
+        },
+        {
+          "code": "HUM.B",
+          "name": "Settlement",
+          "items": [
+            {
+              "code": "HUM.B.A",
+              "name": "Types and patterns (rural and urban)"
+            },
+            {
+              "code": "HUM.B.B",
+              "name": "Rural settlement"
+            },
+            {
+              "code": "HUM.B.C",
+              "name": "Urban settlement"
+            },
+            {
+              "code": "HUM.B.D",
+              "name": "Factors of settlement location"
+            },
+            {
+              "code": "HUM.B.E",
+              "name": "Problems of urban centres"
+            },
+            {
+              "code": "HUM.B.F",
+              "name": "Rural-urban interrelationship"
+            }
+          ]
+        },
+        {
+          "code": "HUM.C",
+          "name": "Selected Economic Activities",
+          "items": [
+            {
+              "code": "HUM.C.A",
+              "name": "Types of economic activities"
+            },
+            {
+              "code": "HUM.C.B",
+              "name": "Agriculture"
+            },
+            {
+              "code": "HUM.C.C",
+              "name": "Manufacturing industries"
+            },
+            {
+              "code": "HUM.C.D",
+              "name": "Transportation and communication"
+            },
+            {
+              "code": "HUM.C.E",
+              "name": "World trade"
+            },
+            {
+              "code": "HUM.C.F",
+              "name": "Tourism"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "REG",
+      "name": "Regional Geography",
+      "topics": [
+        {
+          "code": "REG.A",
+          "name": "Broad Outline of Nigeria",
+          "items": [
+            {
+              "code": "REG.A.A",
+              "name": "Location, size, political division and peoples"
+            },
+            {
+              "code": "REG.A.B",
+              "name": "Boundaries and neighbours"
+            },
+            {
+              "code": "REG.A.C",
+              "name": "Physical setting"
+            },
+            {
+              "code": "REG.A.D",
+              "name": "Population"
+            },
+            {
+              "code": "REG.A.E",
+              "name": "Natural resources"
+            }
+          ]
+        },
+        {
+          "code": "REG.B",
+          "name": "Economic and Human Geography of Nigeria",
+          "items": [
+            {
+              "code": "REG.B.A",
+              "name": "Agricultural systems"
+            },
+            {
+              "code": "REG.B.B",
+              "name": "Manufacturing industries"
+            },
+            {
+              "code": "REG.B.C",
+              "name": "Transportation and communication"
+            },
+            {
+              "code": "REG.B.D",
+              "name": "Trade"
+            },
+            {
+              "code": "REG.B.E",
+              "name": "Tourism"
+            }
+          ]
+        },
+        {
+          "code": "REG.C",
+          "name": "ECOWAS",
+          "items": [
+            {
+              "code": "REG.C.A",
+              "name": "Meaning and objectives"
+            },
+            {
+              "code": "REG.C.B",
+              "name": "Member states"
+            },
+            {
+              "code": "REG.C.C",
+              "name": "Purpose/mandate"
+            },
+            {
+              "code": "REG.C.D",
+              "name": "Advantages and disadvantages"
+            },
+            {
+              "code": "REG.C.E",
+              "name": "Problems and solutions"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

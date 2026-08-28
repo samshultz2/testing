@@ -1,0 +1,560 @@
+{
+  "subject": "Principles of Accounts",
+  "code": "JAMB-ACC",
+  "prefix": "ACC",
+  "version": "2026",
+  "sections": [
+    {
+      "code": "BOOK",
+      "name": "Nature and Significance of Book Keeping and Accounting",
+      "topics": [
+        {
+          "code": "BOOK.1",
+          "name": "Nature and Significance of Book Keeping and Accounting",
+          "items": [
+            {
+              "code": "BOOK.1.A",
+              "name": "Development of accounting (including branches)"
+            },
+            {
+              "code": "BOOK.1.B",
+              "name": "Objectives of book keeping and accounting"
+            },
+            {
+              "code": "BOOK.1.C",
+              "name": "Users and characteristics of accounting information"
+            },
+            {
+              "code": "BOOK.1.D",
+              "name": "Principles, concepts and conventions of accounting"
+            },
+            {
+              "code": "BOOK.1.E",
+              "name": "Role of accounting records and information"
+            },
+            {
+              "code": "BOOK.1.F",
+              "name": "Career opportunities in book keeping and accounting"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "DENT",
+      "name": "Principles of Double Entry",
+      "topics": [
+        {
+          "code": "DENT.1",
+          "name": "Principles of Double Entry",
+          "items": [
+            {
+              "code": "DENT.1.A",
+              "name": "Source documents"
+            },
+            {
+              "code": "DENT.1.B",
+              "name": "Books of original entry"
+            },
+            {
+              "code": "DENT.1.C",
+              "name": "Accounting equation"
+            },
+            {
+              "code": "DENT.1.D",
+              "name": "Ledger and its classifications"
+            },
+            {
+              "code": "DENT.1.E",
+              "name": "Trial balance"
+            },
+            {
+              "code": "DENT.1.F",
+              "name": "Types and correction of errors"
+            },
+            {
+              "code": "DENT.1.G",
+              "name": "Suspense account"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "ETH",
+      "name": "Ethics, Professional and Regulatory Bodies in Accounting",
+      "topics": [
+        {
+          "code": "ETH.1",
+          "name": "Ethics, Professional and Regulatory Bodies in Accounting",
+          "items": [
+            {
+              "code": "ETH.1.A",
+              "name": "Objectives"
+            },
+            {
+              "code": "ETH.1.B",
+              "name": "Qualities of an accountant"
+            },
+            {
+              "code": "ETH.1.C",
+              "name": "Accounting professional bodies in Nigeria"
+            },
+            {
+              "code": "ETH.1.D",
+              "name": "Accounting regulatory bodies"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "CASH",
+      "name": "Cash Book",
+      "topics": [
+        {
+          "code": "CASH.1",
+          "name": "Cash Book",
+          "items": [
+            {
+              "code": "CASH.1.A",
+              "name": "Columnar cash books (single, double, three column)"
+            },
+            {
+              "code": "CASH.1.B",
+              "name": "Discounts"
+            },
+            {
+              "code": "CASH.1.C",
+              "name": "Petty cash book and imprest system"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "BANK",
+      "name": "Bank Transactions and Reconciliation Statements",
+      "topics": [
+        {
+          "code": "BANK.1",
+          "name": "Bank Transactions and Reconciliation Statements",
+          "items": [
+            {
+              "code": "BANK.1.A",
+              "name": "Instruments of bank transactions"
+            },
+            {
+              "code": "BANK.1.B",
+              "name": "E-banking system"
+            },
+            {
+              "code": "BANK.1.C",
+              "name": "Causes of discrepancies between cash book and bank statement"
+            },
+            {
+              "code": "BANK.1.D",
+              "name": "Bank reconciliation statement"
+            },
+            {
+              "code": "BANK.1.E",
+              "name": "Adjusted cash book"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "SOLE",
+      "name": "Final Accounts of a Sole Trader/Proprietor",
+      "topics": [
+        {
+          "code": "SOLE.1",
+          "name": "Final Accounts of a Sole Trader/Proprietor",
+          "items": [
+            {
+              "code": "SOLE.1.A",
+              "name": "Statement of profit or loss / income statement"
+            },
+            {
+              "code": "SOLE.1.B",
+              "name": "Statement of financial position"
+            },
+            {
+              "code": "SOLE.1.C",
+              "name": "Adjustments (bad debts, discounts, depreciation, accruals and prepayments)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "STOCK",
+      "name": "Stock Valuation",
+      "topics": [
+        {
+          "code": "STOCK.1",
+          "name": "Stock Valuation",
+          "items": [
+            {
+              "code": "STOCK.1.A",
+              "name": "Meaning and purpose of stock valuation"
+            },
+            {
+              "code": "STOCK.1.B",
+              "name": "Methods (FIFO, LIFO, simple average)"
+            },
+            {
+              "code": "STOCK.1.C",
+              "name": "Advantages and disadvantages of the methods"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "CTRL",
+      "name": "Control Accounts",
+      "topics": [
+        {
+          "code": "CTRL.1",
+          "name": "Control Accounts",
+          "items": [
+            {
+              "code": "CTRL.1.A",
+              "name": "Meaning and uses of control accounts"
+            },
+            {
+              "code": "CTRL.1.B",
+              "name": "Purchases ledger control account"
+            },
+            {
+              "code": "CTRL.1.C",
+              "name": "Sales ledger control account"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "INCM",
+      "name": "Incomplete Records and Single Entry",
+      "topics": [
+        {
+          "code": "INCM.1",
+          "name": "Incomplete Records and Single Entry",
+          "items": [
+            {
+              "code": "INCM.1.A",
+              "name": "Meaning of incomplete records and single entry"
+            },
+            {
+              "code": "INCM.1.B",
+              "name": "Difference between incomplete records and single entry"
+            },
+            {
+              "code": "INCM.1.C",
+              "name": "Determination of missing figures"
+            },
+            {
+              "code": "INCM.1.D",
+              "name": "Preparation of final accounts from incomplete records"
+            },
+            {
+              "code": "INCM.1.E",
+              "name": "Conversion of single entry to double entry"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "MANF",
+      "name": "Manufacturing Accounts",
+      "topics": [
+        {
+          "code": "MANF.1",
+          "name": "Manufacturing Accounts",
+          "items": [
+            {
+              "code": "MANF.1.A",
+              "name": "Purpose of manufacturing account"
+            },
+            {
+              "code": "MANF.1.B",
+              "name": "Cost classification"
+            },
+            {
+              "code": "MANF.1.C",
+              "name": "Cost apportionment"
+            },
+            {
+              "code": "MANF.1.D",
+              "name": "Preparation of manufacturing account"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "NPO",
+      "name": "Accounts of Not-For-Profit-Making Organizations",
+      "topics": [
+        {
+          "code": "NPO.1",
+          "name": "Accounts of Not-For-Profit-Making Organizations",
+          "items": [
+            {
+              "code": "NPO.1.A",
+              "name": "Objectives"
+            },
+            {
+              "code": "NPO.1.B",
+              "name": "Receipts and payments account"
+            },
+            {
+              "code": "NPO.1.C",
+              "name": "Income and expenditure account"
+            },
+            {
+              "code": "NPO.1.D",
+              "name": "Statement of financial position"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "DEPT",
+      "name": "Departmental Accounts",
+      "topics": [
+        {
+          "code": "DEPT.1",
+          "name": "Departmental Accounts",
+          "items": [
+            {
+              "code": "DEPT.1.A",
+              "name": "Objectives"
+            },
+            {
+              "code": "DEPT.1.B",
+              "name": "Apportionment of incomes and expenses"
+            },
+            {
+              "code": "DEPT.1.C",
+              "name": "Departmental statement of profit or loss"
+            },
+            {
+              "code": "DEPT.1.D",
+              "name": "Inter-departmental transfer"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "BRAN",
+      "name": "Branch Accounts",
+      "topics": [
+        {
+          "code": "BRAN.1",
+          "name": "Branch Accounts",
+          "items": [
+            {
+              "code": "BRAN.1.A",
+              "name": "Objectives"
+            },
+            {
+              "code": "BRAN.1.B",
+              "name": "Types of branches"
+            },
+            {
+              "code": "BRAN.1.C",
+              "name": "Pricing methods and head office accounts"
+            },
+            {
+              "code": "BRAN.1.D",
+              "name": "Accounts maintained by a branch"
+            },
+            {
+              "code": "BRAN.1.E",
+              "name": "Reconciliation of branch and head office books"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "JV",
+      "name": "Joint Venture Accounts",
+      "topics": [
+        {
+          "code": "JV.1",
+          "name": "Joint Venture Accounts",
+          "items": [
+            {
+              "code": "JV.1.A",
+              "name": "Objectives and features"
+            },
+            {
+              "code": "JV.1.B",
+              "name": "Forms of joint ventures"
+            },
+            {
+              "code": "JV.1.C",
+              "name": "Accounting procedures"
+            },
+            {
+              "code": "JV.1.D",
+              "name": "Memorandum joint venture accounts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "PART",
+      "name": "Partnership Accounts",
+      "topics": [
+        {
+          "code": "PART.1",
+          "name": "Partnership Accounts",
+          "items": [
+            {
+              "code": "PART.1.A",
+              "name": "Formation of partnership"
+            },
+            {
+              "code": "PART.1.B",
+              "name": "Partners' current and capital accounts"
+            },
+            {
+              "code": "PART.1.C",
+              "name": "Partnership final accounts"
+            },
+            {
+              "code": "PART.1.D",
+              "name": "Treatment of goodwill"
+            },
+            {
+              "code": "PART.1.E",
+              "name": "Admission/retirement of a partner"
+            },
+            {
+              "code": "PART.1.F",
+              "name": "Dissolution of partnership"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "COMP",
+      "name": "Introduction to Company Accounts",
+      "topics": [
+        {
+          "code": "COMP.1",
+          "name": "Introduction to Company Accounts",
+          "items": [
+            {
+              "code": "COMP.1.A",
+              "name": "Formation and classification of companies"
+            },
+            {
+              "code": "COMP.1.B",
+              "name": "Issue of shares and debentures"
+            },
+            {
+              "code": "COMP.1.C",
+              "name": "Final accounts of companies"
+            },
+            {
+              "code": "COMP.1.D",
+              "name": "Accounting ratios"
+            },
+            {
+              "code": "COMP.1.E",
+              "name": "Capital and revenue reserves"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "PUB",
+      "name": "Public Sector Accounting",
+      "topics": [
+        {
+          "code": "PUB.1",
+          "name": "Public Sector Accounting",
+          "items": [
+            {
+              "code": "PUB.1.A",
+              "name": "Accounting basis in public sector"
+            },
+            {
+              "code": "PUB.1.B",
+              "name": "Sources of government revenue"
+            },
+            {
+              "code": "PUB.1.C",
+              "name": "Capital and recurrent expenditure"
+            },
+            {
+              "code": "PUB.1.D",
+              "name": "Consolidated Revenue Fund"
+            },
+            {
+              "code": "PUB.1.E",
+              "name": "Statement of assets and liabilities"
+            },
+            {
+              "code": "PUB.1.F",
+              "name": "Responsibilities of the Accountant General, Auditor General, Minister of Finance and Treasurer of Local Government"
+            },
+            {
+              "code": "PUB.1.G",
+              "name": "Instruments of financial regulation"
+            },
+            {
+              "code": "PUB.1.H",
+              "name": "Current issues (TSA, IPSAS, IPPIS)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "IT",
+      "name": "Information Technology in Accounting",
+      "topics": [
+        {
+          "code": "IT.1",
+          "name": "Information Technology in Accounting",
+          "items": [
+            {
+              "code": "IT.1.A",
+              "name": "Manual and computerized accounting processing systems"
+            },
+            {
+              "code": "IT.1.B",
+              "name": "Procedures involved in data processing"
+            },
+            {
+              "code": "IT.1.C",
+              "name": "Digitization and digital technologies (AI, data analytics, mobile accounting, software)"
+            },
+            {
+              "code": "IT.1.D",
+              "name": "Block chain technology in accounting"
+            },
+            {
+              "code": "IT.1.E",
+              "name": "Virtual accounting"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

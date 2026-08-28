@@ -1,0 +1,690 @@
+{
+  "subject": "Computer Studies",
+  "code": "JAMB-COMP",
+  "prefix": "COMP",
+  "version": "2026",
+  "sections": [
+    {
+      "code": "EVOL",
+      "name": "Evolution of Computing",
+      "topics": [
+        {
+          "code": "EVOL.1",
+          "name": "History of Computing",
+          "items": [
+            {
+              "code": "EVOL.1.A",
+              "name": "Pre-computing age (19th century)"
+            },
+            {
+              "code": "EVOL.1.B",
+              "name": "Computing devices (20th century)"
+            },
+            {
+              "code": "EVOL.1.C",
+              "name": "The history behind each device"
+            }
+          ]
+        },
+        {
+          "code": "EVOL.2",
+          "name": "Classification of Computing Devices",
+          "items": [
+            {
+              "code": "EVOL.2.A",
+              "name": "By generation"
+            },
+            {
+              "code": "EVOL.2.B",
+              "name": "By size"
+            },
+            {
+              "code": "EVOL.2.C",
+              "name": "By purpose"
+            },
+            {
+              "code": "EVOL.2.D",
+              "name": "By type"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "FUND",
+      "name": "Fundamentals of Computing",
+      "topics": [
+        {
+          "code": "FUND.1",
+          "name": "Overview of Computing Systems",
+          "items": [
+            {
+              "code": "FUND.1.A",
+              "name": "Hardware and software"
+            },
+            {
+              "code": "FUND.1.B",
+              "name": "Characteristics of computers"
+            },
+            {
+              "code": "FUND.1.C",
+              "name": "Types, examples and uses of computer hardware"
+            },
+            {
+              "code": "FUND.1.D",
+              "name": "Logic circuits"
+            },
+            {
+              "code": "FUND.1.E",
+              "name": "Types, examples and uses of software"
+            }
+          ]
+        },
+        {
+          "code": "FUND.2",
+          "name": "Data and Information",
+          "items": [
+            {
+              "code": "FUND.2.A",
+              "name": "Differences between data and information"
+            },
+            {
+              "code": "FUND.2.B",
+              "name": "Data representation"
+            },
+            {
+              "code": "FUND.2.C",
+              "name": "Methods of digitisation"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "APPS",
+      "name": "Computer Application Packages",
+      "topics": [
+        {
+          "code": "APPS.1",
+          "name": "Word Processing Package",
+          "items": [
+            {
+              "code": "APPS.1.A",
+              "name": "General concept"
+            },
+            {
+              "code": "APPS.1.B",
+              "name": "Creating and saving documents"
+            },
+            {
+              "code": "APPS.1.C",
+              "name": "Editing, formatting and insertion"
+            },
+            {
+              "code": "APPS.1.D",
+              "name": "Printing"
+            },
+            {
+              "code": "APPS.1.E",
+              "name": "MS Word (features and operations)"
+            }
+          ]
+        },
+        {
+          "code": "APPS.2",
+          "name": "Spreadsheet Package",
+          "items": [
+            {
+              "code": "APPS.2.A",
+              "name": "General concept"
+            },
+            {
+              "code": "APPS.2.B",
+              "name": "Creating and saving documents"
+            },
+            {
+              "code": "APPS.2.C",
+              "name": "Editing, formatting and insertion"
+            },
+            {
+              "code": "APPS.2.D",
+              "name": "Printing"
+            },
+            {
+              "code": "APPS.2.E",
+              "name": "MS Excel (features and operations)"
+            }
+          ]
+        },
+        {
+          "code": "APPS.3",
+          "name": "Database Package",
+          "items": [
+            {
+              "code": "APPS.3.A",
+              "name": "Definition and examples of database packages"
+            },
+            {
+              "code": "APPS.3.B",
+              "name": "Database organizations"
+            },
+            {
+              "code": "APPS.3.C",
+              "name": "Features of database format"
+            },
+            {
+              "code": "APPS.3.D",
+              "name": "Basic operations using MS Access"
+            }
+          ]
+        },
+        {
+          "code": "APPS.4",
+          "name": "Graphics Package",
+          "items": [
+            {
+              "code": "APPS.4.A",
+              "name": "Definitions and examples of graphic packages"
+            },
+            {
+              "code": "APPS.4.B",
+              "name": "Features of CorelDraw"
+            },
+            {
+              "code": "APPS.4.C",
+              "name": "Simple design using CorelDraw"
+            }
+          ]
+        },
+        {
+          "code": "APPS.5",
+          "name": "Presentation Package",
+          "items": [
+            {
+              "code": "APPS.5.A",
+              "name": "Definition and examples of presentation packages"
+            },
+            {
+              "code": "APPS.5.B",
+              "name": "PowerPoint (features and operations)"
+            }
+          ]
+        },
+        {
+          "code": "APPS.6",
+          "name": "Web Design Package",
+          "items": [
+            {
+              "code": "APPS.6.A",
+              "name": "Definition and examples of web design packages"
+            },
+            {
+              "code": "APPS.6.B",
+              "name": "Uses of web design packages"
+            },
+            {
+              "code": "APPS.6.C",
+              "name": "Elements of web design"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "FILES",
+      "name": "Managing Computer Files",
+      "topics": [
+        {
+          "code": "FILES.1",
+          "name": "Concept of Computer Files",
+          "items": [
+            {
+              "code": "FILES.1.A",
+              "name": "Definitions of basic terms"
+            },
+            {
+              "code": "FILES.1.B",
+              "name": "File organisations"
+            },
+            {
+              "code": "FILES.1.C",
+              "name": "Methods of accessing files"
+            },
+            {
+              "code": "FILES.1.D",
+              "name": "File classifications and criteria"
+            }
+          ]
+        },
+        {
+          "code": "FILES.2",
+          "name": "Handling Computer Files",
+          "items": [
+            {
+              "code": "FILES.2.A",
+              "name": "Basic operations"
+            },
+            {
+              "code": "FILES.2.B",
+              "name": "Data loss"
+            },
+            {
+              "code": "FILES.2.C",
+              "name": "Security"
+            },
+            {
+              "code": "FILES.2.D",
+              "name": "Computer versus manual files"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "MAINT",
+      "name": "Computer Maintenance and Safety Measures",
+      "topics": [
+        {
+          "code": "MAINT.1",
+          "name": "Booting and Shutting Down Process",
+          "items": [
+            {
+              "code": "MAINT.1.A",
+              "name": "Booting and shutting down process"
+            }
+          ]
+        },
+        {
+          "code": "MAINT.2",
+          "name": "Computer Maintenance",
+          "items": [
+            {
+              "code": "MAINT.2.A",
+              "name": "Computer maintenance"
+            }
+          ]
+        },
+        {
+          "code": "MAINT.3",
+          "name": "Computer Room Management",
+          "items": [
+            {
+              "code": "MAINT.3.A",
+              "name": "Computer room management"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "ICT",
+      "name": "Information and Communication Technology (ICT)",
+      "topics": [
+        {
+          "code": "ICT.1",
+          "name": "Communication Systems",
+          "items": [
+            {
+              "code": "ICT.1.A",
+              "name": "Definitions and acronym of ICT"
+            },
+            {
+              "code": "ICT.1.B",
+              "name": "Types and examples of ICT"
+            }
+          ]
+        },
+        {
+          "code": "ICT.2",
+          "name": "Application Areas of ICT",
+          "items": [
+            {
+              "code": "ICT.2.A",
+              "name": "Application areas"
+            },
+            {
+              "code": "ICT.2.B",
+              "name": "ICT-based devices"
+            }
+          ]
+        },
+        {
+          "code": "ICT.3",
+          "name": "Internet",
+          "items": [
+            {
+              "code": "ICT.3.A",
+              "name": "Definition of terms"
+            },
+            {
+              "code": "ICT.3.B",
+              "name": "Internet browsers and their features"
+            },
+            {
+              "code": "ICT.3.C",
+              "name": "Internet services"
+            }
+          ]
+        },
+        {
+          "code": "ICT.4",
+          "name": "Electronic Mail",
+          "items": [
+            {
+              "code": "ICT.4.A",
+              "name": "Definition"
+            },
+            {
+              "code": "ICT.4.B",
+              "name": "E-mail service"
+            },
+            {
+              "code": "ICT.4.C",
+              "name": "Creating and opening mail; chatting"
+            },
+            {
+              "code": "ICT.4.D",
+              "name": "Features of an e-mail address"
+            }
+          ]
+        },
+        {
+          "code": "ICT.5",
+          "name": "Networking",
+          "items": [
+            {
+              "code": "ICT.5.A",
+              "name": "Definitions"
+            },
+            {
+              "code": "ICT.5.B",
+              "name": "Network types"
+            },
+            {
+              "code": "ICT.5.C",
+              "name": "Network topologies"
+            },
+            {
+              "code": "ICT.5.D",
+              "name": "Network devices"
+            }
+          ]
+        },
+        {
+          "code": "ICT.6",
+          "name": "World Wide Web (WWW)",
+          "items": [
+            {
+              "code": "ICT.6.A",
+              "name": "Definition and acronyms"
+            },
+            {
+              "code": "ICT.6.B",
+              "name": "History of WWW"
+            },
+            {
+              "code": "ICT.6.C",
+              "name": "Terminologies and protocols"
+            },
+            {
+              "code": "ICT.6.D",
+              "name": "Navigation, web development software and website vs email"
+            }
+          ]
+        },
+        {
+          "code": "ICT.7",
+          "name": "Cables and Connectors",
+          "items": [
+            {
+              "code": "ICT.7.A",
+              "name": "Network cables and connectors"
+            },
+            {
+              "code": "ICT.7.B",
+              "name": "Computer cables and connectors"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "PROG",
+      "name": "Developing Problem-Solving Skills",
+      "topics": [
+        {
+          "code": "PROG.1",
+          "name": "Programming Language (PL)",
+          "items": [
+            {
+              "code": "PROG.1.A",
+              "name": "Definition and classification of PL"
+            },
+            {
+              "code": "PROG.1.B",
+              "name": "Advantages and disadvantages of different levels of PL"
+            }
+          ]
+        },
+        {
+          "code": "PROG.2",
+          "name": "High Level Languages (HLL)",
+          "items": [
+            {
+              "code": "PROG.2.A",
+              "name": "Classifications of HLL"
+            },
+            {
+              "code": "PROG.2.B",
+              "name": "Characteristics of HLL"
+            },
+            {
+              "code": "PROG.2.C",
+              "name": "Translators"
+            }
+          ]
+        },
+        {
+          "code": "PROG.3",
+          "name": "Algorithm and Flowcharts",
+          "items": [
+            {
+              "code": "PROG.3.A",
+              "name": "Definitions"
+            },
+            {
+              "code": "PROG.3.B",
+              "name": "Functions of algorithm"
+            },
+            {
+              "code": "PROG.3.C",
+              "name": "Properties of algorithm"
+            },
+            {
+              "code": "PROG.3.D",
+              "name": "Flowchart symbols"
+            }
+          ]
+        },
+        {
+          "code": "PROG.4",
+          "name": "Programming Language Structure",
+          "items": [
+            {
+              "code": "PROG.4.A",
+              "name": "Basic statements"
+            },
+            {
+              "code": "PROG.4.B",
+              "name": "Arithmetic/string operators"
+            },
+            {
+              "code": "PROG.4.C",
+              "name": "Subunits"
+            },
+            {
+              "code": "PROG.4.D",
+              "name": "Primitive and non-primitive data"
+            }
+          ]
+        },
+        {
+          "code": "PROG.5",
+          "name": "Program Development",
+          "items": [
+            {
+              "code": "PROG.5.A",
+              "name": "Definition"
+            },
+            {
+              "code": "PROG.5.B",
+              "name": "Characteristics of programs"
+            },
+            {
+              "code": "PROG.5.C",
+              "name": "Precautions"
+            },
+            {
+              "code": "PROG.5.D",
+              "name": "Steps in developing a program"
+            }
+          ]
+        },
+        {
+          "code": "PROG.6",
+          "name": "System Development Life Cycle (SDLC)",
+          "items": [
+            {
+              "code": "PROG.6.A",
+              "name": "Definition of SDLC"
+            },
+            {
+              "code": "PROG.6.B",
+              "name": "Stages of SDLC"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "AI",
+      "name": "Artificial Intelligence (AI) and Robotics",
+      "topics": [
+        {
+          "code": "AI.1",
+          "name": "Definition of AI",
+          "items": [
+            {
+              "code": "AI.1.A",
+              "name": "Definition of AI"
+            }
+          ]
+        },
+        {
+          "code": "AI.2",
+          "name": "Branches of AI",
+          "items": [
+            {
+              "code": "AI.2.A",
+              "name": "Branches of AI"
+            }
+          ]
+        },
+        {
+          "code": "AI.3",
+          "name": "Applications of AI",
+          "items": [
+            {
+              "code": "AI.3.A",
+              "name": "Applications of AI"
+            }
+          ]
+        },
+        {
+          "code": "AI.4",
+          "name": "Fundamentals of Robotics",
+          "items": [
+            {
+              "code": "AI.4.A",
+              "name": "Definition of robotics"
+            },
+            {
+              "code": "AI.4.B",
+              "name": "Main components of robotics"
+            },
+            {
+              "code": "AI.4.C",
+              "name": "Types of robots"
+            },
+            {
+              "code": "AI.4.D",
+              "name": "Application areas of robotics"
+            },
+            {
+              "code": "AI.4.E",
+              "name": "Advantages and disadvantages of robots"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "ETH",
+      "name": "Computer Ethics and Human Issues",
+      "topics": [
+        {
+          "code": "ETH.1",
+          "name": "Ethical Issues",
+          "items": [
+            {
+              "code": "ETH.1.A",
+              "name": "Computer-related crime"
+            },
+            {
+              "code": "ETH.1.B",
+              "name": "Responsibility for computer failure"
+            },
+            {
+              "code": "ETH.1.C",
+              "name": "Protection of computer property, records and software"
+            },
+            {
+              "code": "ETH.1.D",
+              "name": "Privacy of the company, workers and customers"
+            }
+          ]
+        },
+        {
+          "code": "ETH.2",
+          "name": "Computer Security",
+          "items": [
+            {
+              "code": "ETH.2.A",
+              "name": "Computer security"
+            }
+          ]
+        },
+        {
+          "code": "ETH.3",
+          "name": "Cyber Risks and Protection",
+          "items": [
+            {
+              "code": "ETH.3.A",
+              "name": "Cyber risks and protection"
+            }
+          ]
+        },
+        {
+          "code": "ETH.4",
+          "name": "Potentials for Higher Studies in Computing",
+          "items": [
+            {
+              "code": "ETH.4.A",
+              "name": "Potentials for higher studies in computing"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

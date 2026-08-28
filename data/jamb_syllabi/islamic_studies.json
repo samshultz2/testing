@@ -1,0 +1,514 @@
+{
+  "subject": "Islamic Studies",
+  "code": "JAMB-ISL",
+  "prefix": "ISL",
+  "version": "2026",
+  "sections": [
+    {
+      "code": "QUR",
+      "name": "Part I - The Qur'an and Hadith",
+      "topics": [
+        {
+          "code": "QUR.1",
+          "name": "Revelation of the Glorious Qur'an",
+          "items": [
+            {
+              "code": "QUR.1.A",
+              "name": "Visits of the Prophet to Cave Hira"
+            },
+            {
+              "code": "QUR.1.B",
+              "name": "Reaction to the first revelation and its importance"
+            },
+            {
+              "code": "QUR.1.C",
+              "name": "Different modes of revelation"
+            },
+            {
+              "code": "QUR.1.D",
+              "name": "Piecemeal revelation"
+            },
+            {
+              "code": "QUR.1.E",
+              "name": "Names and attributes of the Qur'an"
+            },
+            {
+              "code": "QUR.1.F",
+              "name": "Preservation of the Qur'an"
+            },
+            {
+              "code": "QUR.1.G",
+              "name": "Importance of the Qur'an as a source of guidance"
+            },
+            {
+              "code": "QUR.1.H",
+              "name": "Divine authenticity of the Qur'an"
+            }
+          ]
+        },
+        {
+          "code": "QUR.2",
+          "name": "Tafsir",
+          "items": [
+            {
+              "code": "QUR.2.A",
+              "name": "Historical development of Tafsir"
+            },
+            {
+              "code": "QUR.2.B",
+              "name": "Importance of Tafsir"
+            },
+            {
+              "code": "QUR.2.C",
+              "name": "Types of Tafsir"
+            }
+          ]
+        },
+        {
+          "code": "QUR.3",
+          "name": "Introduction to Tajwid",
+          "items": [
+            {
+              "code": "QUR.3.A",
+              "name": "Theory and practice of Tajwid"
+            }
+          ]
+        },
+        {
+          "code": "QUR.4",
+          "name": "Study of Selected Suwar with Tajwid (Set 1)",
+          "items": [
+            {
+              "code": "QUR.4.A",
+              "name": "al-Fatihah, al-Adiyat, al-Qari'ah, at-Takathur, al-Asr, al-Humazah, al-Ma'un, al-Kawthar, al-Kafirun, al-Nasr, al-Masad, al-Ikhlas, al-Falaq and an-Nas"
+            }
+          ]
+        },
+        {
+          "code": "QUR.5",
+          "name": "Study of Selected Suwar/Ayat with Tajwid (Set 2)",
+          "items": [
+            {
+              "code": "QUR.5.A",
+              "name": "al-A'la, ad-Duha, al-Inshirah, at-Tin, al-Alaq, al-Qadr, al-Bayyinah, al-Zalzalah, Ayatul-Kursiyy, Amanar-Rasul and Laqad ja'akum"
+            }
+          ]
+        },
+        {
+          "code": "QUR.6",
+          "name": "Hadith",
+          "items": [
+            {
+              "code": "QUR.6.A",
+              "name": "History of Hadith literature"
+            },
+            {
+              "code": "QUR.6.B",
+              "name": "Authentication of Hadith (Isnad, Matn, classification)"
+            },
+            {
+              "code": "QUR.6.C",
+              "name": "Relationship between Hadith and the Qur'an"
+            },
+            {
+              "code": "QUR.6.D",
+              "name": "The six sound collectors of Hadith and their works"
+            },
+            {
+              "code": "QUR.6.E",
+              "name": "Muwatta and Imam Malik"
+            },
+            {
+              "code": "QUR.6.F",
+              "name": "Study of selected ahadith from an-Nawawi's collection"
+            }
+          ]
+        },
+        {
+          "code": "QUR.7",
+          "name": "Moral Lessons in the Qur'an and Hadith",
+          "items": [
+            {
+              "code": "QUR.7.A",
+              "name": "Admonition of Luqman"
+            },
+            {
+              "code": "QUR.7.B",
+              "name": "Goodness to parents"
+            },
+            {
+              "code": "QUR.7.C",
+              "name": "Honesty"
+            },
+            {
+              "code": "QUR.7.D",
+              "name": "Prohibition of bribery, alcohol, gambling, stealing and intoxicants"
+            },
+            {
+              "code": "QUR.7.E",
+              "name": "Dignity of labour"
+            },
+            {
+              "code": "QUR.7.F",
+              "name": "Modesty in dressing"
+            },
+            {
+              "code": "QUR.7.G",
+              "name": "Prohibition of adultery, fornication and obscenity"
+            },
+            {
+              "code": "QUR.7.H",
+              "name": "Leadership and justice"
+            },
+            {
+              "code": "QUR.7.I",
+              "name": "Trust and obligations"
+            },
+            {
+              "code": "QUR.7.J",
+              "name": "Piety (Taqwa)"
+            },
+            {
+              "code": "QUR.7.K",
+              "name": "Tolerance, perseverance and patience"
+            },
+            {
+              "code": "QUR.7.L",
+              "name": "Unity and brotherhood"
+            },
+            {
+              "code": "QUR.7.M",
+              "name": "Enjoining good and forbidding wrong"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "FIQH",
+      "name": "Part II - Tawhid and Fiqh",
+      "topics": [
+        {
+          "code": "FIQH.8",
+          "name": "Faith and Tawhid",
+          "items": [
+            {
+              "code": "FIQH.8.A",
+              "name": "Tawhid - importance and lessons"
+            },
+            {
+              "code": "FIQH.8.B",
+              "name": "Kalimatush-Shahadah - meaning and importance"
+            },
+            {
+              "code": "FIQH.8.C",
+              "name": "Oneness of Allah"
+            },
+            {
+              "code": "FIQH.8.D",
+              "name": "Servanthood and messengership of the Prophet"
+            },
+            {
+              "code": "FIQH.8.E",
+              "name": "Universality and finality of his message"
+            },
+            {
+              "code": "FIQH.8.F",
+              "name": "Shirk and beliefs incompatible with Tawhid"
+            },
+            {
+              "code": "FIQH.8.G",
+              "name": "Practices incompatible with Tawhid (superstition, fortune-telling, magic, cult worship, innovation)"
+            }
+          ]
+        },
+        {
+          "code": "FIQH.9",
+          "name": "Articles of Faith",
+          "items": [
+            {
+              "code": "FIQH.9.A",
+              "name": "Belief in Allah (existence, attributes, works)"
+            },
+            {
+              "code": "FIQH.9.B",
+              "name": "Belief in the angels"
+            },
+            {
+              "code": "FIQH.9.C",
+              "name": "Belief in His books"
+            },
+            {
+              "code": "FIQH.9.D",
+              "name": "Belief in His Prophets (Ulul-azmi)"
+            },
+            {
+              "code": "FIQH.9.E",
+              "name": "Belief in the Last Day"
+            },
+            {
+              "code": "FIQH.9.F",
+              "name": "Belief in destiny (Qada and Qadar)"
+            }
+          ]
+        },
+        {
+          "code": "FIQH.10",
+          "name": "Ibadat and their Types",
+          "items": [
+            {
+              "code": "FIQH.10.A",
+              "name": "Good deeds"
+            },
+            {
+              "code": "FIQH.10.B",
+              "name": "Taharah and its types"
+            },
+            {
+              "code": "FIQH.10.C",
+              "name": "Salah (importance, description, types)"
+            },
+            {
+              "code": "FIQH.10.D",
+              "name": "Zakah (types, collection, disbursement)"
+            },
+            {
+              "code": "FIQH.10.E",
+              "name": "Sawm (types, importance, exemptions)"
+            },
+            {
+              "code": "FIQH.10.F",
+              "name": "Hajj (importance, types, essentials)"
+            },
+            {
+              "code": "FIQH.10.G",
+              "name": "Jihad (concept, kinds, lessons)"
+            }
+          ]
+        },
+        {
+          "code": "FIQH.11",
+          "name": "Family Matters",
+          "items": [
+            {
+              "code": "FIQH.11.A",
+              "name": "Marriage (importance, prohibited categories, validity, rights and duties, polygamy)"
+            },
+            {
+              "code": "FIQH.11.B",
+              "name": "Idrar (ill-treatment of wife)"
+            },
+            {
+              "code": "FIQH.11.C",
+              "name": "Divorce (kinds, iddah, prohibited forms, custody)"
+            },
+            {
+              "code": "FIQH.11.D",
+              "name": "Inheritance (importance, heirs and shares)"
+            }
+          ]
+        },
+        {
+          "code": "FIQH.12",
+          "name": "Sources and Schools of Law",
+          "items": [
+            {
+              "code": "FIQH.12.A",
+              "name": "The four major sources (Qur'an, Sunnah, Ijma, Qiyas)"
+            },
+            {
+              "code": "FIQH.12.B",
+              "name": "The four Sunni schools of law and their founders"
+            }
+          ]
+        },
+        {
+          "code": "FIQH.13",
+          "name": "Islamic Economic System",
+          "items": [
+            {
+              "code": "FIQH.13.A",
+              "name": "Islamic attitude to Riba"
+            },
+            {
+              "code": "FIQH.13.B",
+              "name": "At-tatfif"
+            },
+            {
+              "code": "FIQH.13.C",
+              "name": "Hoarding (ihtikar)"
+            },
+            {
+              "code": "FIQH.13.D",
+              "name": "Islamic sources of revenue (Zakah, Jizyah, Kharaj, Ghanimah)"
+            },
+            {
+              "code": "FIQH.13.E",
+              "name": "Baitul-mal"
+            },
+            {
+              "code": "FIQH.13.F",
+              "name": "Islamic vs Western economic system"
+            }
+          ]
+        },
+        {
+          "code": "FIQH.14",
+          "name": "Islamic Political System",
+          "items": [
+            {
+              "code": "FIQH.14.A",
+              "name": "Allah as the Sovereign"
+            },
+            {
+              "code": "FIQH.14.B",
+              "name": "Concept of Shurah (consultation)"
+            },
+            {
+              "code": "FIQH.14.C",
+              "name": "Concept of Adalah (justice) and accountability"
+            },
+            {
+              "code": "FIQH.14.D",
+              "name": "Rights of non-Muslims in an Islamic state"
+            },
+            {
+              "code": "FIQH.14.E",
+              "name": "Islamic vs Western political system"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "HIST",
+      "name": "Part III - Islamic History and Civilization",
+      "topics": [
+        {
+          "code": "HIST.15",
+          "name": "Pre-Islamic Arabia (Jahiliyyah)",
+          "items": [
+            {
+              "code": "HIST.15.A",
+              "name": "Jahiliyyah practices"
+            },
+            {
+              "code": "HIST.15.B",
+              "name": "Islamic reforms"
+            }
+          ]
+        },
+        {
+          "code": "HIST.16",
+          "name": "The Life of Prophet Muhammad (SAW)",
+          "items": [
+            {
+              "code": "HIST.16.A",
+              "name": "Birth and early life"
+            },
+            {
+              "code": "HIST.16.B",
+              "name": "Call to Prophethood"
+            },
+            {
+              "code": "HIST.16.C",
+              "name": "Da'wah in Makkah and Madinah"
+            },
+            {
+              "code": "HIST.16.D",
+              "name": "The Hijrah"
+            },
+            {
+              "code": "HIST.16.E",
+              "name": "Administration of the Ummah in Madinah"
+            },
+            {
+              "code": "HIST.16.F",
+              "name": "Battles of Badr, Uhud and Khandaq"
+            },
+            {
+              "code": "HIST.16.G",
+              "name": "Treaty of al-Hudaibiyyah and conquest of Makkah"
+            },
+            {
+              "code": "HIST.16.H",
+              "name": "Farewell pilgrimage and its lessons"
+            },
+            {
+              "code": "HIST.16.I",
+              "name": "Qualities of the Prophet"
+            }
+          ]
+        },
+        {
+          "code": "HIST.17",
+          "name": "The Rightly Guided Caliphs",
+          "items": [
+            {
+              "code": "HIST.17.A",
+              "name": "Lives and contributions of the four Rightly Guided Caliphs"
+            }
+          ]
+        },
+        {
+          "code": "HIST.18",
+          "name": "Early Contact of Islam with Africa",
+          "items": [
+            {
+              "code": "HIST.18.A",
+              "name": "Hijrah to Abyssinia"
+            },
+            {
+              "code": "HIST.18.B",
+              "name": "Spread of Islam to Egypt"
+            },
+            {
+              "code": "HIST.18.C",
+              "name": "Role of traders, teachers, preachers, Murabitun, Sufi orders and Mujaddidun in West Africa"
+            }
+          ]
+        },
+        {
+          "code": "HIST.19",
+          "name": "The Impact of Islam in West Africa",
+          "items": [
+            {
+              "code": "HIST.19.A",
+              "name": "Influence of Islam on socio-political life of West African empires"
+            },
+            {
+              "code": "HIST.19.B",
+              "name": "Impact of Islam on the economic life of West African states"
+            }
+          ]
+        },
+        {
+          "code": "HIST.20",
+          "name": "Contributions of Islam to Education",
+          "items": [
+            {
+              "code": "HIST.20.A",
+              "name": "Aims and objectives of Islamic education"
+            },
+            {
+              "code": "HIST.20.B",
+              "name": "The Qur'an and Hadith on education"
+            },
+            {
+              "code": "HIST.20.C",
+              "name": "Intellectual activities of Islam in West Africa"
+            },
+            {
+              "code": "HIST.20.D",
+              "name": "Muslim scholars and their contributions"
+            },
+            {
+              "code": "HIST.20.E",
+              "name": "Islamic education institutions"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
