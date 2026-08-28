@@ -1,0 +1,600 @@
+{
+  "subject": "Chemistry",
+  "code": "JAMB-CHEM",
+  "prefix": "CHEM",
+  "version": "2026",
+  "sections": [
+    {
+      "code": "SEP",
+      "name": "Separation of Mixtures and Purification of Chemical Substances",
+      "topics": [
+        {
+          "code": "SEP.1",
+          "name": "Separation and purification",
+          "items": [
+            {
+              "code": "SEP.1.A",
+              "name": "Elements, compounds and mixtures"
+            },
+            {
+              "code": "SEP.1.B",
+              "name": "Chemical and physical changes"
+            },
+            {
+              "code": "SEP.1.C",
+              "name": "Pure and impure substances"
+            },
+            {
+              "code": "SEP.1.D",
+              "name": "Boiling, density, freezing and melting points"
+            },
+            {
+              "code": "SEP.1.E",
+              "name": "Separation processes (distillation, sublimation, chromatography, crystallization, filtration, centrifugation, etc.)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "COMB",
+      "name": "Chemical Combination",
+      "topics": [
+        {
+          "code": "COMB.1",
+          "name": "Chemical combination",
+          "items": [
+            {
+              "code": "COMB.1.A",
+              "name": "Laws of definite, multiple and reciprocal proportions; conservation of matter"
+            },
+            {
+              "code": "COMB.1.B",
+              "name": "Chemical symbols, formulae and equations"
+            },
+            {
+              "code": "COMB.1.C",
+              "name": "Relative atomic mass (C-12 scale), mole concept and stoichiometry"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "GAS",
+      "name": "Kinetic Theory of Matter and Gas Laws",
+      "topics": [
+        {
+          "code": "GAS.1",
+          "name": "Kinetic theory of matter",
+          "items": [
+            {
+              "code": "GAS.1.A",
+              "name": "Phenomena supporting the kinetic theory (melting, vapourisation, boiling, freezing, condensation, Brownian motion)"
+            }
+          ]
+        },
+        {
+          "code": "GAS.2",
+          "name": "Gas laws",
+          "items": [
+            {
+              "code": "GAS.2.A",
+              "name": "Laws of Boyle, Charles, Avogadro, Gay-Lussac, Graham and Dalton; molar volume and atomicity"
+            },
+            {
+              "code": "GAS.2.B",
+              "name": "The ideal gas equation (PV = nRT)"
+            },
+            {
+              "code": "GAS.2.C",
+              "name": "Vapour density and relative molecular mass"
+            },
+            {
+              "code": "GAS.2.D",
+              "name": "Ideal and real gases"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "ATOM",
+      "name": "Atomic Structure and Bonding",
+      "topics": [
+        {
+          "code": "ATOM.1",
+          "name": "Atomic structure",
+          "items": [
+            {
+              "code": "ATOM.1.A",
+              "name": "Atoms, molecules and ions; works of Dalton, Millikan, Rutherford, Moseley, Thompson, Bohr"
+            },
+            {
+              "code": "ATOM.1.B",
+              "name": "Quantum numbers, orbital arrangement, electron configuration, atomic/mass number, isotopes"
+            },
+            {
+              "code": "ATOM.1.C",
+              "name": "Shapes of s and p orbitals"
+            }
+          ]
+        },
+        {
+          "code": "ATOM.2",
+          "name": "Periodicity",
+          "items": [
+            {
+              "code": "ATOM.2.A",
+              "name": "The periodic table and periodicity of elements and their properties"
+            }
+          ]
+        },
+        {
+          "code": "ATOM.3",
+          "name": "Chemical bonding",
+          "items": [
+            {
+              "code": "ATOM.3.A",
+              "name": "Electrovalency and covalency; hydrogen, metallic and coordinate bonding; van der Waals forces"
+            },
+            {
+              "code": "ATOM.3.B",
+              "name": "Shapes of simple molecules (linear, non-linear, tetrahedral, pyramidal)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "NUC",
+      "name": "Nuclear Chemistry",
+      "topics": [
+        {
+          "code": "NUC.1",
+          "name": "Radioactivity",
+          "items": [
+            {
+              "code": "NUC.1.A",
+              "name": "Radioactivity - types, properties and detection of radiations"
+            },
+            {
+              "code": "NUC.1.B",
+              "name": "Natural and artificial radioactivity"
+            },
+            {
+              "code": "NUC.1.C",
+              "name": "Nuclear stability and radioactive decay"
+            },
+            {
+              "code": "NUC.1.D",
+              "name": "Nuclear reactions - fusion and fission"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "SOL",
+      "name": "Solubility",
+      "topics": [
+        {
+          "code": "SOL.1",
+          "name": "Solubility",
+          "items": [
+            {
+              "code": "SOL.1.A",
+              "name": "Unsaturated, saturated and supersaturated solutions; solubility curves and calculations"
+            },
+            {
+              "code": "SOL.1.B",
+              "name": "Solvents for fats, oil, perspiration and paints; removal of stains"
+            },
+            {
+              "code": "SOL.1.C",
+              "name": "True and false solutions (suspensions and colloids)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "POLL",
+      "name": "Environmental Pollution",
+      "topics": [
+        {
+          "code": "POLL.1",
+          "name": "Air",
+          "items": [
+            {
+              "code": "POLL.1.A",
+              "name": "Natural gaseous constituents of air and their proportions"
+            },
+            {
+              "code": "POLL.1.B",
+              "name": "Factors responsible for variation of components of air"
+            },
+            {
+              "code": "POLL.1.C",
+              "name": "Air as a mixture and uses of the noble gases"
+            }
+          ]
+        },
+        {
+          "code": "POLL.2",
+          "name": "Pollution",
+          "items": [
+            {
+              "code": "POLL.2.A",
+              "name": "Air pollution - pollutants, sources and effects"
+            },
+            {
+              "code": "POLL.2.B",
+              "name": "Water pollution (sewage and oil)"
+            },
+            {
+              "code": "POLL.2.C",
+              "name": "Soil pollution (oil spillage, biodegradable and non-biodegradable pollutants)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "ACID",
+      "name": "Acids, Bases and Salts",
+      "topics": [
+        {
+          "code": "ACID.1",
+          "name": "Acids, bases and salts",
+          "items": [
+            {
+              "code": "ACID.1.A",
+              "name": "Characteristics, properties and uses of acids, bases and salts; indicators and basicity"
+            },
+            {
+              "code": "ACID.1.B",
+              "name": "Conductance of molar solutions of strong and weak acids and bases"
+            },
+            {
+              "code": "ACID.1.C",
+              "name": "pH and pOH scale; calculations and buffer solutions"
+            },
+            {
+              "code": "ACID.1.D",
+              "name": "Acid/base titrations"
+            },
+            {
+              "code": "ACID.1.E",
+              "name": "Hydrolysis of salts"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "REDOX",
+      "name": "Oxidation and Reduction (Redox)",
+      "topics": [
+        {
+          "code": "REDOX.1",
+          "name": "Redox",
+          "items": [
+            {
+              "code": "REDOX.1.A",
+              "name": "Oxidation as addition of oxygen; reduction as removal of oxygen"
+            },
+            {
+              "code": "REDOX.1.B",
+              "name": "Oxidation and reduction in terms of electron transfer"
+            },
+            {
+              "code": "REDOX.1.C",
+              "name": "Oxidation numbers and balancing equations"
+            },
+            {
+              "code": "REDOX.1.D",
+              "name": "IUPAC nomenclature using oxidation number"
+            },
+            {
+              "code": "REDOX.1.E",
+              "name": "Tests for oxidizing and reducing agents"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "ELEC",
+      "name": "Electrolysis",
+      "topics": [
+        {
+          "code": "ELEC.1",
+          "name": "Electrolysis",
+          "items": [
+            {
+              "code": "ELEC.1.A",
+              "name": "Electrolytes and non-electrolytes; Faraday's laws"
+            },
+            {
+              "code": "ELEC.1.B",
+              "name": "Electrolysis of dilute H2SO4, CuSO4, CuCl2, NaCl solutions and fused NaCl; discharge of ions"
+            },
+            {
+              "code": "ELEC.1.C",
+              "name": "Uses of electrolysis (purification of metals; production of elements and compounds)"
+            },
+            {
+              "code": "ELEC.1.D",
+              "name": "Electrochemical cells; electrochemical series and electrode potentials"
+            },
+            {
+              "code": "ELEC.1.E",
+              "name": "Corrosion and prevention of corrosion"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "ENER",
+      "name": "Energy Changes",
+      "topics": [
+        {
+          "code": "ENER.1",
+          "name": "Energy changes",
+          "items": [
+            {
+              "code": "ENER.1.A",
+              "name": "Enthalpy changes; endothermic and exothermic reactions"
+            },
+            {
+              "code": "ENER.1.B",
+              "name": "Entropy as an order-disorder phenomenon"
+            },
+            {
+              "code": "ENER.1.C",
+              "name": "Spontaneity of reactions (free energy criterion)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "RATE",
+      "name": "Rates of Chemical Reaction",
+      "topics": [
+        {
+          "code": "RATE.1",
+          "name": "Rates of reaction",
+          "items": [
+            {
+              "code": "RATE.1.A",
+              "name": "Factors affecting reaction rate (temperature, concentration/pressure, surface area, catalyst)"
+            },
+            {
+              "code": "RATE.1.B",
+              "name": "Reaction rate curves"
+            },
+            {
+              "code": "RATE.1.C",
+              "name": "Activation energy; Arrhenius' law and collision theory"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "EQUIL",
+      "name": "Chemical Equilibria",
+      "topics": [
+        {
+          "code": "EQUIL.1",
+          "name": "Chemical equilibria",
+          "items": [
+            {
+              "code": "EQUIL.1.A",
+              "name": "Reversible reactions and factors governing equilibrium position; dynamic equilibrium"
+            },
+            {
+              "code": "EQUIL.1.B",
+              "name": "Le Chatelier's principle, industrial applications and equilibrium constant"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "NONMET",
+      "name": "Non-metals and their Compounds",
+      "topics": [
+        {
+          "code": "NONMET.1",
+          "name": "Hydrogen",
+          "items": [
+            {
+              "code": "NONMET.1.A",
+              "name": "Production, preparation, properties, uses and test for hydrogen"
+            }
+          ]
+        },
+        {
+          "code": "NONMET.2",
+          "name": "Halogens",
+          "items": [
+            {
+              "code": "NONMET.2.A",
+              "name": "Chlorine - preparation, properties and uses; HCl and hydrochloric acid; test for chlorides"
+            }
+          ]
+        },
+        {
+          "code": "NONMET.3",
+          "name": "Oxygen and Sulphur",
+          "items": [
+            {
+              "code": "NONMET.3.A",
+              "name": "Oxygen - preparation, properties, uses; oxides; ozone; water and hardness"
+            },
+            {
+              "code": "NONMET.3.B",
+              "name": "Sulphur - allotropes; SO2, trioxosulphate(IV) and tetraoxosulphate(VI) acids; H2S; tests"
+            }
+          ]
+        },
+        {
+          "code": "NONMET.4",
+          "name": "Nitrogen",
+          "items": [
+            {
+              "code": "NONMET.4.A",
+              "name": "Preparation and production of nitrogen"
+            },
+            {
+              "code": "NONMET.4.B",
+              "name": "Ammonia and ammonium salts; test for NH4+ and NH3"
+            },
+            {
+              "code": "NONMET.4.C",
+              "name": "Trioxonitrate(V) acid and salts; oxides of nitrogen; the nitrogen cycle"
+            }
+          ]
+        },
+        {
+          "code": "NONMET.5",
+          "name": "Carbon",
+          "items": [
+            {
+              "code": "NONMET.5.A",
+              "name": "Allotropes - uses and properties"
+            },
+            {
+              "code": "NONMET.5.B",
+              "name": "Carbon(IV) oxide; action of heat on trioxocarbonate(IV) salts; tests"
+            },
+            {
+              "code": "NONMET.5.C",
+              "name": "Carbon(II) oxide - preparation, properties and effect on blood"
+            },
+            {
+              "code": "NONMET.5.D",
+              "name": "Coal and coke; synthesis gas and uses"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "MET",
+      "name": "Metals and their Compounds",
+      "topics": [
+        {
+          "code": "MET.1",
+          "name": "General and alkali metals",
+          "items": [
+            {
+              "code": "MET.1.A",
+              "name": "General properties of metals"
+            },
+            {
+              "code": "MET.1.B",
+              "name": "Alkali metals e.g. sodium - NaOH, Na2CO3/NaHCO3, NaCl; test for Na+"
+            }
+          ]
+        },
+        {
+          "code": "MET.2",
+          "name": "Alkaline-earth metals and aluminium",
+          "items": [
+            {
+              "code": "MET.2.A",
+              "name": "Alkaline-earth metals e.g. calcium; oxide, hydroxide, trioxocarbonate(IV); cement; test for Ca2+"
+            },
+            {
+              "code": "MET.2.B",
+              "name": "Aluminium - purification of bauxite, extraction, properties and uses; test for Al3+"
+            }
+          ]
+        },
+        {
+          "code": "MET.3",
+          "name": "Tin and transition metals",
+          "items": [
+            {
+              "code": "MET.3.A",
+              "name": "Tin - extraction, properties and uses"
+            },
+            {
+              "code": "MET.3.B",
+              "name": "First transition series - characteristic properties (configuration, oxidation states, complexes, coloured ions, catalysis)"
+            },
+            {
+              "code": "MET.3.C",
+              "name": "Iron - extraction, properties, forms and uses; tests for Fe2+ and Fe3+"
+            },
+            {
+              "code": "MET.3.D",
+              "name": "Copper - extraction, properties and uses; CuSO4; test for Cu2+"
+            },
+            {
+              "code": "MET.3.E",
+              "name": "Alloys (steel, brass, bronze, duralumin, etc.) - constituents and uses"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "ORG",
+      "name": "Organic Compounds",
+      "topics": [
+        {
+          "code": "ORG.1",
+          "name": "Aliphatic hydrocarbons",
+          "items": [
+            {
+              "code": "ORG.1.A",
+              "name": "Alkanes - homologous series, substitution, isomerism; petroleum and petrochemicals"
+            },
+            {
+              "code": "ORG.1.B",
+              "name": "Alkenes - isomerism, addition and polymerization reactions"
+            },
+            {
+              "code": "ORG.1.C",
+              "name": "Alkynes - ethyne production, reactions and properties"
+            }
+          ]
+        },
+        {
+          "code": "ORG.2",
+          "name": "Aromatic hydrocarbons",
+          "items": [
+            {
+              "code": "ORG.2.A",
+              "name": "Benzene - structure, properties and uses"
+            }
+          ]
+        },
+        {
+          "code": "ORG.3",
+          "name": "Oxygen-containing organic compounds",
+          "items": [
+            {
+              "code": "ORG.3.A",
+              "name": "Alkanols - primary/secondary/tertiary; ethanol production; reactions of OH (Lucas test)"
+            },
+            {
+              "code": "ORG.3.B",
+              "name": "Alkanals and alkanones - chemical test to distinguish them"
+            },
+            {
+              "code": "ORG.3.C",
+              "name": "Alkanoic acids"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

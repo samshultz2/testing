@@ -45,6 +45,25 @@ def _subject(app, name):
         return s.id
 
 
+def test_all_bundled_syllabi_import_cleanly(app):
+    """Every shipped data/jamb_syllabi/*.json parses and reconciles without error."""
+    from utils.jamb_syllabus_import import import_syllabus
+    base = os.path.join(_ROOT, 'data', 'jamb_syllabi')
+    files = [f for f in os.listdir(base) if f.endswith('.json')]
+    assert files, 'no bundled syllabi found'
+    for fn in files:
+        sid = _subject(app, f'Bundled-{fn}-{next(_SEQ)}')
+        with app.app_context():
+            subj = db.session.get(Subject, sid)
+            with open(os.path.join(base, fn)) as fh:
+                diff = import_syllabus(subj, fh.read(), fmt='json')
+            assert diff['sections'] >= 1 and diff['items'] >= 1
+            # every stored node carries a stable, prefixed code
+            codes = [n.code for n in MockJAMBSyllabusNode.query
+                     .join(MockJAMBSyllabus).filter(MockJAMBSyllabus.subject_id == sid).all()]
+            assert codes and all('.' in c and c == c.upper() for c in codes)
+
+
 def test_parse_json_prefixes_stable_codes():
     from utils.jamb_syllabus_import import parse
     d = parse(_math_json(), fmt='json')

@@ -1,0 +1,486 @@
+{
+  "subject": "Biology",
+  "code": "JAMB-BIO",
+  "prefix": "BIO",
+  "version": "2026",
+  "sections": [
+    {
+      "code": "VAR",
+      "name": "Variety of Organisms",
+      "topics": [
+        {
+          "code": "VAR.1",
+          "name": "Living organisms",
+          "items": [
+            {
+              "code": "VAR.1.A",
+              "name": "Characteristics of living organisms"
+            },
+            {
+              "code": "VAR.1.B",
+              "name": "Cell structure and functions of cell components"
+            },
+            {
+              "code": "VAR.1.C",
+              "name": "Levels of organization (cell, tissue, organ, systems, organisms)"
+            }
+          ]
+        },
+        {
+          "code": "VAR.2",
+          "name": "Evolution among groups of organisms",
+          "items": [
+            {
+              "code": "VAR.2.A",
+              "name": "Monera (prokaryotes) e.g. bacteria and blue-green algae"
+            },
+            {
+              "code": "VAR.2.B",
+              "name": "Protista (protozoans and protophyta) e.g. Amoeba, Euglena, Paramecium"
+            },
+            {
+              "code": "VAR.2.C",
+              "name": "Fungi e.g. mushroom and Rhizopus"
+            },
+            {
+              "code": "VAR.2.D",
+              "name": "Plantae: Thallophyta, Bryophyta, Pteridophyta, Spermatophyta; life-cycle spans"
+            },
+            {
+              "code": "VAR.2.E",
+              "name": "Animalia: invertebrates and vertebrates"
+            }
+          ]
+        },
+        {
+          "code": "VAR.3",
+          "name": "Structural, functional and behavioural adaptations",
+          "items": [
+            {
+              "code": "VAR.3.A",
+              "name": "Adaptive colouration and its functions"
+            },
+            {
+              "code": "VAR.3.B",
+              "name": "Behavioural adaptations in social animals"
+            },
+            {
+              "code": "VAR.3.C",
+              "name": "Structural adaptations in organisms"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "FRM",
+      "name": "Form and Functions",
+      "topics": [
+        {
+          "code": "FRM.1",
+          "name": "Internal structure of plant and mammal",
+          "items": [
+            {
+              "code": "FRM.1.A",
+              "name": "Internal structure of a flowering plant (root, stem, leaf)"
+            },
+            {
+              "code": "FRM.1.B",
+              "name": "Internal structure of a mammal"
+            }
+          ]
+        },
+        {
+          "code": "FRM.2",
+          "name": "Nutrition",
+          "items": [
+            {
+              "code": "FRM.2.A",
+              "name": "Modes of nutrition (autotrophic, heterotrophic)"
+            },
+            {
+              "code": "FRM.2.B",
+              "name": "Types of nutrition"
+            },
+            {
+              "code": "FRM.2.C",
+              "name": "Plant nutrition (photosynthesis, chemosynthesis, mineral requirements)"
+            },
+            {
+              "code": "FRM.2.D",
+              "name": "Animal nutrition (food classes, food tests, teeth, alimentary canal, nutrition process)"
+            }
+          ]
+        },
+        {
+          "code": "FRM.3",
+          "name": "Transport",
+          "items": [
+            {
+              "code": "FRM.3.A",
+              "name": "Need for transportation"
+            },
+            {
+              "code": "FRM.3.B",
+              "name": "Materials for transportation"
+            },
+            {
+              "code": "FRM.3.C",
+              "name": "Channels for transportation (circulatory system, plant vascular system)"
+            },
+            {
+              "code": "FRM.3.D",
+              "name": "Media and processes/mechanism for transportation"
+            }
+          ]
+        },
+        {
+          "code": "FRM.4",
+          "name": "Respiration",
+          "items": [
+            {
+              "code": "FRM.4.A",
+              "name": "Respiratory organs and surfaces"
+            },
+            {
+              "code": "FRM.4.B",
+              "name": "Mechanism of gaseous exchange in plants and animals"
+            },
+            {
+              "code": "FRM.4.C",
+              "name": "Aerobic respiration"
+            },
+            {
+              "code": "FRM.4.D",
+              "name": "Anaerobic respiration"
+            }
+          ]
+        },
+        {
+          "code": "FRM.5",
+          "name": "Excretion",
+          "items": [
+            {
+              "code": "FRM.5.A",
+              "name": "Types of excretory structures"
+            },
+            {
+              "code": "FRM.5.B",
+              "name": "Excretory mechanisms (kidneys, lungs, skin)"
+            },
+            {
+              "code": "FRM.5.C",
+              "name": "Excretory products of plants"
+            }
+          ]
+        },
+        {
+          "code": "FRM.6",
+          "name": "Support and movement",
+          "items": [
+            {
+              "code": "FRM.6.A",
+              "name": "Tropic, tactic, nastic and sleep movements in plants"
+            },
+            {
+              "code": "FRM.6.B",
+              "name": "Supporting tissues in animals"
+            },
+            {
+              "code": "FRM.6.C",
+              "name": "Types and functions of the skeleton (exoskeleton, endoskeleton)"
+            }
+          ]
+        },
+        {
+          "code": "FRM.7",
+          "name": "Reproduction",
+          "items": [
+            {
+              "code": "FRM.7.A",
+              "name": "Asexual reproduction (fission, budding, vegetative propagation)"
+            },
+            {
+              "code": "FRM.7.B",
+              "name": "Sexual reproduction in flowering plants"
+            },
+            {
+              "code": "FRM.7.C",
+              "name": "Reproduction in mammals"
+            }
+          ]
+        },
+        {
+          "code": "FRM.8",
+          "name": "Growth",
+          "items": [
+            {
+              "code": "FRM.8.A",
+              "name": "Meaning of growth"
+            },
+            {
+              "code": "FRM.8.B",
+              "name": "Germination of seeds and conditions necessary"
+            }
+          ]
+        },
+        {
+          "code": "FRM.9",
+          "name": "Co-ordination and control",
+          "items": [
+            {
+              "code": "FRM.9.A",
+              "name": "Nervous coordination (CNS, PNS, impulse transmission, reflex action)"
+            },
+            {
+              "code": "FRM.9.B",
+              "name": "The sense organs (skin, nose, tongue, eye, ear)"
+            },
+            {
+              "code": "FRM.9.C",
+              "name": "Hormonal control (animal hormones, plant hormones)"
+            },
+            {
+              "code": "FRM.9.D",
+              "name": "Homeostasis (temperature, salt and water regulation)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "ECO",
+      "name": "Ecology",
+      "topics": [
+        {
+          "code": "ECO.1",
+          "name": "Factors affecting distribution of organisms",
+          "items": [
+            {
+              "code": "ECO.1.A",
+              "name": "Abiotic factors"
+            },
+            {
+              "code": "ECO.1.B",
+              "name": "Biotic factors"
+            }
+          ]
+        },
+        {
+          "code": "ECO.2",
+          "name": "Symbiotic interactions of plants and animals",
+          "items": [
+            {
+              "code": "ECO.2.A",
+              "name": "Energy flow in the ecosystem (food chains, food webs, trophic levels)"
+            },
+            {
+              "code": "ECO.2.B",
+              "name": "Nutrient cycling in nature (carbon, water, nitrogen cycles)"
+            }
+          ]
+        },
+        {
+          "code": "ECO.3",
+          "name": "Natural habitats",
+          "items": [
+            {
+              "code": "ECO.3.A",
+              "name": "Aquatic habitats (ponds, streams, lakes, seashores, mangrove swamps)"
+            },
+            {
+              "code": "ECO.3.B",
+              "name": "Terrestrial/arboreal habitats"
+            }
+          ]
+        },
+        {
+          "code": "ECO.4",
+          "name": "Local (Nigerian) biomes",
+          "items": [
+            {
+              "code": "ECO.4.A",
+              "name": "Tropical rainforest"
+            },
+            {
+              "code": "ECO.4.B",
+              "name": "Guinea savanna (southern and northern)"
+            },
+            {
+              "code": "ECO.4.C",
+              "name": "Sudan savanna"
+            },
+            {
+              "code": "ECO.4.D",
+              "name": "Desert"
+            },
+            {
+              "code": "ECO.4.E",
+              "name": "Highlands of montane forests and grasslands"
+            }
+          ]
+        },
+        {
+          "code": "ECO.5",
+          "name": "The ecology of populations",
+          "items": [
+            {
+              "code": "ECO.5.A",
+              "name": "Population density and overcrowding"
+            },
+            {
+              "code": "ECO.5.B",
+              "name": "Adaptation for survival (competition)"
+            },
+            {
+              "code": "ECO.5.C",
+              "name": "Factors affecting population sizes (biotic, abiotic)"
+            },
+            {
+              "code": "ECO.5.D",
+              "name": "Ecological succession (primary, secondary)"
+            }
+          ]
+        },
+        {
+          "code": "ECO.6",
+          "name": "Soil",
+          "items": [
+            {
+              "code": "ECO.6.A",
+              "name": "Characteristics of different types of soil (sandy, loamy, clayey)"
+            },
+            {
+              "code": "ECO.6.B",
+              "name": "Components of the soil"
+            },
+            {
+              "code": "ECO.6.C",
+              "name": "Soil fertility (loss, renewal and maintenance)"
+            }
+          ]
+        },
+        {
+          "code": "ECO.7",
+          "name": "Humans and environment",
+          "items": [
+            {
+              "code": "ECO.7.A",
+              "name": "Diseases (common, endemic and easily transmissible)"
+            },
+            {
+              "code": "ECO.7.B",
+              "name": "Drug abuse (addiction, commonly abused drugs, prevention)"
+            },
+            {
+              "code": "ECO.7.C",
+              "name": "Pollution and its control (sources, types, effects; sanitation and sewage)"
+            },
+            {
+              "code": "ECO.7.D",
+              "name": "Conservation of natural resources"
+            },
+            {
+              "code": "ECO.7.E",
+              "name": "Game reserves and national parks"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "HER",
+      "name": "Heredity and Variations",
+      "topics": [
+        {
+          "code": "HER.1",
+          "name": "Variation in population",
+          "items": [
+            {
+              "code": "HER.1.A",
+              "name": "Morphological variations (size, colour, fingerprints)"
+            },
+            {
+              "code": "HER.1.B",
+              "name": "Physiological variation (tongue rolling, PTC tasting, blood groups)"
+            },
+            {
+              "code": "HER.1.C",
+              "name": "Application of discontinuous variation (crime detection, transfusion, paternity)"
+            }
+          ]
+        },
+        {
+          "code": "HER.2",
+          "name": "Heredity",
+          "items": [
+            {
+              "code": "HER.2.A",
+              "name": "Inheritance of characters (heritable and non-heritable)"
+            },
+            {
+              "code": "HER.2.B",
+              "name": "Chromosomes - the basis of heredity"
+            },
+            {
+              "code": "HER.2.C",
+              "name": "Probability in genetics and sex determination"
+            },
+            {
+              "code": "HER.2.D",
+              "name": "Application of the principles of heredity (agriculture, medicine)"
+            },
+            {
+              "code": "HER.2.E",
+              "name": "Sex-linked characters (baldness, haemophilia, colour blindness)"
+            }
+          ]
+        },
+        {
+          "code": "HER.3",
+          "name": "Biotechnology",
+          "items": [
+            {
+              "code": "HER.3.A",
+              "name": "Application in agriculture, medicine, pharmaceuticals and food industry"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "EVO",
+      "name": "Evolution",
+      "topics": [
+        {
+          "code": "EVO.1",
+          "name": "Theories of evolution",
+          "items": [
+            {
+              "code": "EVO.1.A",
+              "name": "Lamarck's theory"
+            },
+            {
+              "code": "EVO.1.B",
+              "name": "Darwin's theory"
+            },
+            {
+              "code": "EVO.1.C",
+              "name": "Organic theory"
+            }
+          ]
+        },
+        {
+          "code": "EVO.2",
+          "name": "Evidence of evolution",
+          "items": [
+            {
+              "code": "EVO.2.A",
+              "name": "Evidence of evolution"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
