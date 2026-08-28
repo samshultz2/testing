@@ -1342,13 +1342,28 @@ def _match_subject(name):
 def bank_syllabus():
     """Coded-syllabus manager: view a subject's imported syllabus (stable codes)
     and import/replace it from JSON or CSV."""
+    import json as _json
     subjects = _mock_subjects()
     subject_id = request.args.get('subject_id', type=int) or (subjects[0].id if subjects else None)
     subject = db.session.get(Subject, subject_id) if subject_id else None
     syll, tree = _syllabus_tree(subject_id) if subject_id else (None, None)
+    blueprint = []
+    if syll and syll.blueprint:
+        try:
+            blueprint = _json.loads(syll.blueprint)
+        except (ValueError, TypeError):
+            blueprint = []
+    # Each bundled file labelled with the subject it will import into.
+    bundled = _bundled_syllabi()
+    for slug, b in bundled.items():
+        try:
+            with open(b['path'], encoding='utf-8') as fh:
+                b['target'] = (_json.load(fh) or {}).get('subject') or b['label']
+        except (OSError, ValueError):
+            b['target'] = b['label']
     return render_template('mock_jamb/bank_syllabus.html',
                            subjects=subjects, subject=subject, subject_id=subject_id,
-                           syllabus=syll, tree=tree, bundled=_bundled_syllabi(),
+                           syllabus=syll, tree=tree, blueprint=blueprint, bundled=bundled,
                            bank_url=url_for('mock_jamb.bank', subject_id=subject_id or ''))
 
 
@@ -1358,12 +1373,9 @@ def bank_syllabus():
 def bank_syllabus_import():
     """Import a syllabus (pasted text, uploaded file, or a bundled data file) and
     reconcile it into the coded tables for a subject."""
-    from utils.jamb_syllabus_import import import_syllabus, SyllabusImportError
+    from utils.jamb_syllabus_import import import_syllabus, parse, SyllabusImportError
     subject_id = request.form.get('subject_id', type=int)
     subject = db.session.get(Subject, subject_id) if subject_id else None
-    if not subject:
-        flash('Pick a subject first.', 'error')
-        return redirect(url_for('mock_jamb.bank_syllabus'))
 
     fmt = (request.form.get('format') or 'auto').lower()
     version = (request.form.get('version') or '').strip() or None
@@ -1371,10 +1383,32 @@ def bank_syllabus_import():
     bundled = (request.form.get('bundled') or '').strip()
     if bundled:
         b = _bundled_syllabi().get(bundled)
-        if b:
-            with open(b['path'], encoding='utf-8') as fh:
-                text = fh.read()
-            fmt = 'json'
+        if not b:
+            flash('That bundled syllabus is unavailable.', 'error')
+            return redirect(url_for('mock_jamb.bank_syllabus', subject_id=subject_id or ''))
+        with open(b['path'], encoding='utf-8') as fh:
+            text = fh.read()
+        fmt = 'json'
+        # A bundled file always imports into the subject IT declares (e.g. the
+        # Mathematics file -> the Mathematics subject), never whichever subject
+        # happened to be selected — so clicking "Mathematics" can't land on
+        # Accounting.
+        try:
+            declared = parse(text, fmt='json').get('subject')
+        except SyllabusImportError:
+            declared = None
+        matched = _match_subject(declared) if declared else None
+        if matched is None:
+            flash(f'No subject named "{declared}" exists here to import into. '
+                  f'Create or rename it first.', 'error')
+            return redirect(url_for('mock_jamb.bank_syllabus', subject_id=subject_id or ''))
+        subject = matched
+        subject_id = subject.id
+
+    if not subject:
+        flash('Pick a subject first.', 'error')
+        return redirect(url_for('mock_jamb.bank_syllabus'))
+
     if text is None and request.files.get('file') and request.files['file'].filename:
         f = request.files['file']
         text = f.read().decode('utf-8', 'replace')

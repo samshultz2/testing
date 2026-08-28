@@ -20,10 +20,9 @@
      (e.g. <code>MATH.NUM.1.A</code>) so re-imports reconcile by code, not by name.</p>
 </div>
 
-<form method="GET" action="{{ url_for('mock_jamb.bank_syllabus') }}" class="mb-3" data-autosubmit>
+<form method="GET" action="{{ url_for('mock_jamb.bank_syllabus') }}" class="mb-3">
   <label class="form-label">Subject</label>
-  <select name="subject_id" class="form-control" style="max-width:320px"
-          data-call="submitForm" data-on="change">
+  <select name="subject_id" class="form-control" style="max-width:320px" data-autosubmit>
     {% for s in subjects %}
       <option value="{{ s.id }}" {% if subject and s.id == subject.id %}selected{% endif %}>{{ s.name }}</option>
     {% endfor %}
@@ -43,11 +42,12 @@
         <div style="display:flex;gap:.5rem;flex-wrap:wrap">
           {% for slug, b in bundled.items() %}
           <button type="submit" name="bundled" value="{{ slug }}" class="btn btn-secondary btn-sm">
-            <i class="fas fa-download"></i> {{ b.label }}
+            <i class="fas fa-download"></i> {{ b.target }}
           </button>
           {% endfor %}
         </div>
-        <span class="form-hint">Imports the repo's ready-made syllabus into the selected subject, reconciling by code.</span>
+        <span class="form-hint">Each bundled syllabus imports into <strong>its own subject</strong>
+          (e.g. Mathematics &rarr; the Mathematics subject), regardless of the one selected above.</span>
       </div>
       <hr>
       {% endif %}
@@ -89,6 +89,21 @@
       {% if syllabus.total_questions %} · {{ syllabus.total_questions }} questions{% endif %}</span></h3>
   </div>
   <div class="card-body">
+    {% if blueprint %}
+    <div class="syl-sec" style="margin-bottom:1.1rem">
+      <div class="syl-sec-head">Exam blueprint — question selection
+        <span class="pill" style="margin-left:auto">{{ blueprint | sum(attribute='count') }} questions</span>
+      </div>
+      <div style="padding:.5rem .8rem;display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:.4rem">
+        {% for b in blueprint %}
+        <div style="display:flex;justify-content:space-between;gap:.5rem;font-size:.85rem;border:1px solid var(--border-color);border-radius:var(--radius-sm);padding:.3rem .5rem">
+          <span>{{ b.label }}{% if b.passage %} <span class="pill">passage</span>{% endif %}</span>
+          <strong>{{ b.count }}</strong>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
     {% for sec in tree %}
     <div class="syl-sec">
       <div class="syl-sec-head">

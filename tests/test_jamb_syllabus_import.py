@@ -122,3 +122,18 @@ def test_bank_syllabus_route_imports_bundled(app):
     assert r.status_code in (302, 303)
     body = c.get(f'/mock-jamb/bank/syllabus?subject_id={sid}').get_data(as_text=True)
     assert 'MATH.NUM.1.A' in body
+
+
+def test_bundled_import_targets_its_own_subject_not_the_selected_one(app):
+    """Clicking the Mathematics bundled button while another subject is selected
+    must import into Mathematics, never the selected subject."""
+    math_id = _subject(app, 'Mathematics')
+    other_id = _subject(app, f'Accounting{next(_SEQ)}')
+    c = app.test_client()
+    c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': login_token(c)})
+    r = c.post('/mock-jamb/bank/syllabus/import',
+               data={'_csrf_token': auth_csrf(c), 'subject_id': other_id, 'bundled': 'mathematics'})
+    assert str(math_id) in (r.headers.get('Location') or '')     # redirected to Mathematics
+    with app.app_context():
+        assert MockJAMBSyllabus.query.filter_by(subject_id=math_id).first() is not None
+        assert MockJAMBSyllabus.query.filter_by(subject_id=other_id).first() is None
