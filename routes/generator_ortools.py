@@ -11,6 +11,7 @@ from models import (
     GenSubjectClashRule, GenCombinedClassRule
 )
 from routes.generator import gen_bid
+from utils.generator_doubles import resolve_double
 from collections import defaultdict
 import uuid
 import random
@@ -124,25 +125,9 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
                         cfg = global_subject_configs.get(ss.subject_id)
                         periods = cfg.periods_per_week if cfg else 2
                     
-                    needs_double = False
-                    double_count = 0
-                    
-                    # Priority: per-class config > class-stream config > stream config > global config
-                    if class_cfg and class_cfg.needs_double_period:
-                        # Per-class settings (what user sets in UI) take priority
-                        needs_double = class_cfg.needs_double_period
-                        double_count = class_cfg.double_period_count or 0
-                    elif css and css.needs_double_period:
-                        needs_double = css.needs_double_period
-                        double_count = css.double_period_count or 0
-                    elif ss.needs_double_period:
-                        needs_double = ss.needs_double_period
-                        double_count = ss.double_period_count or 0
-                    else:
-                        cfg = global_subject_configs.get(ss.subject_id)
-                        if cfg:
-                            needs_double = cfg.needs_double_period
-                            double_count = cfg.double_period_count or 0
+                    # Double periods: class-stream > stream > per-class > global.
+                    needs_double, double_count = resolve_double(
+                        css, ss, class_cfg, global_subject_configs.get(ss.subject_id))
                     
                     not_first = False
                     not_last = False
@@ -176,14 +161,9 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
                         logger.debug(f"Warning: Subject ID {cfg.subject_id} not found, skipping...")
                         continue
                     
-                    needs_double = cfg.needs_double_period
-                    double_count = cfg.double_period_count or 0
-                    
-                    if not needs_double:
-                        gcfg = global_subject_configs.get(cfg.subject_id)
-                        if gcfg:
-                            needs_double = gcfg.needs_double_period
-                            double_count = gcfg.double_period_count or 0
+                    # Non-stream class: per-class > global (no stream layers here).
+                    needs_double, double_count = resolve_double(
+                        None, None, cfg, global_subject_configs.get(cfg.subject_id))
                     
                     not_first = False
                     not_last = False

@@ -6,6 +6,8 @@ from collections import defaultdict
 from random import shuffle, seed as random_seed
 import uuid
 
+from utils.generator_doubles import resolve_double
+
 
 def generate_global_timetable(class_ids, periods_per_day, break_after, db_session):
     """
@@ -93,23 +95,18 @@ def generate_global_timetable(class_ids, periods_per_day, break_after, db_sessio
             for subject_id, subject_name, cfg, class_cfg, stream_subj, class_stream_cfg in subjects:
                 teacher_id = assignments.get(subject_id)
                 
-                # Priority: class-stream > stream > class > global
+                # Periods: most specific layer that sets them wins.
                 if class_stream_cfg and class_stream_cfg.periods_per_week is not None:
                     periods = class_stream_cfg.periods_per_week
-                    needs_double = class_stream_cfg.needs_double_period or False
-                    double_count = class_stream_cfg.double_period_count if needs_double else 0
                 elif stream_subj and stream_subj.periods_per_week is not None:
                     periods = stream_subj.periods_per_week
-                    needs_double = stream_subj.needs_double_period if stream_subj.needs_double_period is not None else False
-                    double_count = stream_subj.double_period_count if needs_double else 0
                 elif class_cfg:
                     periods = class_cfg.periods_per_week
-                    needs_double = class_cfg.needs_double_period
-                    double_count = class_cfg.double_period_count if needs_double else 0
                 else:
                     periods = cfg.periods_per_week
-                    needs_double = cfg.needs_double_period
-                    double_count = cfg.double_period_count if needs_double else 0
+
+                # Double periods: class-stream > stream > per-class > global.
+                _, double_count = resolve_double(class_stream_cfg, stream_subj, class_cfg, cfg)
                 
                 all_events.append({
                     'class_name': cc.class_name,

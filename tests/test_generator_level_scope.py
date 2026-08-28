@@ -190,3 +190,27 @@ def test_class_stream_double_count_persists_and_clamps(app):
             class_config_id=cid, stream_id=sid, subject_id=subid).first()
         assert row is not None and row.needs_double_period is True
         assert row.double_period_count == 2      # clamped from 5 to periods//2
+
+
+def test_double_resolution_priority_order():
+    """class-stream > stream > per-class > global, count travels with the winner."""
+    from utils.generator_doubles import resolve_double
+
+    class L:
+        def __init__(self, nd, dc):
+            self.needs_double_period = nd
+            self.double_period_count = dc
+
+    css = L(True, 3); ss = L(True, 2); cls = L(True, 4); glob = L(True, 1)
+    # Most specific present wins.
+    assert resolve_double(css, ss, cls, glob) == (True, 3)
+    # class-stream not asking -> stream wins.
+    assert resolve_double(L(False, 0), ss, cls, glob) == (True, 2)
+    # stream deferring (NULL) -> per-class wins.
+    assert resolve_double(None, L(None, None), cls, glob) == (True, 4)
+    # only global asks.
+    assert resolve_double(None, None, L(False, 0), glob) == (True, 1)
+    # nobody asks -> no double.
+    assert resolve_double(None, None, None, L(False, 0)) == (False, 0)
+    # enabled but blank count defaults to 1.
+    assert resolve_double(L(True, 0), None, None, None) == (True, 1)
