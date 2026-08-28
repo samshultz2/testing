@@ -1,6 +1,6 @@
 """generator_bp — exports routes (split from the former routes/generator.py)."""
 from routes.generator import *  # noqa: F401,F403
-from utils.generator_times import clock_params
+from utils.generator_times import clock_params, break_after as _break_after
 
 
 def _short(subj, fallback_map, maxlen):
@@ -32,12 +32,13 @@ def print_results(batch_id):
             timetables[key] = {'class_name': r.class_name, 'arm_name': r.arm_name, 'grid': {d: {} for d in range(5)}}
         timetables[key]['grid'][r.day_of_week][r.period_number] = r
     
-    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, branch_id=gen_bid()).all()}
-    
+    school_level = results[0].school_level or 'sss'
+    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, school_level=school_level, branch_id=gen_bid()).all()}
+
     return render_template('generator/print_results.html',
         batch_id=batch_id, timetables=dict(sorted(timetables.items())),
         periods_per_day=int(rules.get('periods_per_day', 8)),
-        break_after_period=int(rules.get('break_after_period', 4)),
+        break_after_period=int(rules.get('break_after_period', 5)),
         days=DAYS_OF_WEEK,
         school_name=GenSettings.get('school_name', ''),
         academic_year=GenSettings.get('academic_year', ''),
@@ -57,12 +58,13 @@ def print_single_timetable(batch_id, class_name, arm_name):
     for r in results:
         grid[r.day_of_week][r.period_number] = r
     
-    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, branch_id=gen_bid()).all()}
-    
+    school_level = results[0].school_level or 'sss'
+    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, school_level=school_level, branch_id=gen_bid()).all()}
+
     return render_template('generator/print_single.html',
         batch_id=batch_id, class_name=class_name, arm_name=arm_name, grid=grid,
         periods_per_day=int(rules.get('periods_per_day', 8)),
-        break_after_period=int(rules.get('break_after_period', 4)),
+        break_after_period=int(rules.get('break_after_period', 5)),
         days=DAYS_OF_WEEK,
         school_name=GenSettings.get('school_name', ''),
         academic_year=GenSettings.get('academic_year', ''),
@@ -97,6 +99,7 @@ def export_results(batch_id):
     school_level = results[0].school_level or 'sss'
     rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, school_level=school_level, branch_id=gen_bid()).all()}
     periods_per_day = int(rules.get('periods_per_day', 8))
+    break_after = _break_after(rules, periods_per_day)
 
     # Period time slots — start/period-length/break-length are per-level settings.
     period_times = []
@@ -109,7 +112,7 @@ def export_results(batch_id):
         end_h, end_m = end_total // 60, end_total % 60
         period_times.append(f"P{p}\n{start_h}:{start_m:02d}-{end_h}:{end_m:02d}")
         start_hour, start_min = end_h, end_m
-        if p == 5:
+        if p == break_after:
             break_start = f"{end_h}:{end_m:02d}"
             start_total = start_hour * 60 + start_min + _blen
             start_hour, start_min = start_total // 60, start_total % 60
@@ -152,8 +155,8 @@ def export_results(batch_id):
     
     days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
     
-    # Total columns: Day label + P1-P5 + BREAK + P6-P8 = 1 + 5 + 1 + 3 = 10
-    total_cols = 1 + 5 + 1 + (periods_per_day - 5)
+    # Total columns: Day label + periods-before + BREAK + periods-after.
+    total_cols = 1 + break_after + 1 + (periods_per_day - break_after)
     
     # A4 Landscape: 297mm x 210mm
     # Safe margins for most printers: 0.5" (12.7mm) each side
@@ -226,23 +229,23 @@ def export_results(batch_id):
         cell.alignment = center_align
         col += 1
         
-        # P1-P5 headers
-        for i in range(5):
+        # Before-break period headers
+        for i in range(break_after):
             cell = ws.cell(row=current_row, column=col, value=period_times[i])
             cell.font = header_font
             cell.border = thick_border
             cell.alignment = center_align
             col += 1
-        
+
         # Break header
         cell = ws.cell(row=current_row, column=col, value=break_time)
         cell.font = break_header_font
         cell.border = thick_border
         cell.alignment = center_align
         col += 1
-        
-        # P6-P8 headers
-        for i in range(5, periods_per_day):
+
+        # After-break period headers
+        for i in range(break_after, periods_per_day):
             cell = ws.cell(row=current_row, column=col, value=period_times[i])
             cell.font = header_font
             cell.border = thick_border
@@ -263,26 +266,26 @@ def export_results(batch_id):
             cell.alignment = center_align
             col += 1
             
-            # P1-P5
-            for p in range(1, 6):
+            # Before-break periods
+            for p in range(1, break_after + 1):
                 entry = tt['grid'][day_idx].get(p)
                 value = ""
                 if entry and entry.subject:
                     value = _short(entry.subject, abbrev_map, 6)
-                
+
                 cell = ws.cell(row=current_row, column=col, value=value)
                 cell.font = cell_font
                 cell.border = thin_border
                 cell.alignment = center_align
                 col += 1
-            
+
             # Break column - empty with border
             cell = ws.cell(row=current_row, column=col, value="")
             cell.border = thin_border
             col += 1
-            
-            # P6-P8
-            for p in range(6, periods_per_day + 1):
+
+            # After-break periods
+            for p in range(break_after + 1, periods_per_day + 1):
                 entry = tt['grid'][day_idx].get(p)
                 value = ""
                 if entry and entry.subject:
@@ -330,19 +333,20 @@ def export_results_by_day(batch_id):
     
     rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, school_level=school_level, branch_id=gen_bid()).all()}
     periods_per_day = int(rules.get('periods_per_day', 8))
-    
+    break_after = _break_after(rules, periods_per_day)
+
     # Get school info
     school_name = GenSettings.get('school_name', 'School')
     school_address = GenSettings.get('school_address', '')
-    
+
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
-    
+
     days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
-    
+
     # Period time slots — start/period-length/break-length are per-level settings.
-    period_times_before_break = []  # P1-P5
-    period_times_after_break = []   # P6-P8
+    period_times_before_break = []  # before the break
+    period_times_after_break = []   # after the break
     break_time = ""
 
     start_hour, start_min, _plen, _blen = clock_params(rules)
@@ -354,15 +358,15 @@ def export_results_by_day(batch_id):
         start_str = f"{start_h}:{start_m:02d}"
         end_str = f"{end_h}:{end_m:02d}"
 
-        if p <= 5:
+        if p <= break_after:
             period_times_before_break.append(f"P{p}\n{start_str}-{end_str}")
         else:
             period_times_after_break.append(f"P{p}\n{start_str}-{end_str}")
 
         start_hour, start_min = end_h, end_m
 
-        # Capture break time after period 5
-        if p == 5:
+        # Capture break time after the configured period
+        if p == break_after:
             break_start = f"{end_h}:{end_m:02d}"
             start_total = start_hour * 60 + start_min + _blen
             start_hour, start_min = start_total // 60, start_total % 60
@@ -448,9 +452,9 @@ def export_results_by_day(batch_id):
     
     center_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
     
-    # Total columns: Class + P1-P5 + BREAK + P6-P8 = 1 + 5 + 1 + 3 = 10
-    total_cols = 1 + 5 + 1 + (periods_per_day - 5)
-    
+    # Total columns: Class + periods-before + BREAK + periods-after.
+    total_cols = 1 + break_after + 1 + (periods_per_day - break_after)
+
     # Calculate heights (conservative for safe printing)
     num_data_rows = len(class_arms)
     school_header_height = 35
@@ -529,24 +533,24 @@ def export_results_by_day(batch_id):
         cell.alignment = center_align
         col += 1
         
-        # P1-P5
-        for i, p in enumerate(range(1, 6)):
+        # Before-break periods
+        for i, p in enumerate(range(1, break_after + 1)):
             header_value = period_times_before_break[i] if d == 0 else f"P{p}"
             cell = ws.cell(row=current_row, column=col, value=header_value)
             cell.font = header_font
             cell.border = thick_border
             cell.alignment = center_align
             col += 1
-        
+
         # BREAK column header
         cell = ws.cell(row=current_row, column=col, value=break_time if d == 0 else "BREAK")
         cell.font = break_header_font
         cell.border = thick_border
         cell.alignment = center_align
         col += 1
-        
-        # P6-P8
-        for i, p in enumerate(range(6, periods_per_day + 1)):
+
+        # After-break periods
+        for i, p in enumerate(range(break_after + 1, periods_per_day + 1)):
             header_value = period_times_after_break[i] if d == 0 else f"P{p}"
             cell = ws.cell(row=current_row, column=col, value=header_value)
             cell.font = header_font
@@ -571,29 +575,29 @@ def export_results_by_day(batch_id):
             
             arm_results = [r for r in results if r.class_name == class_name and r.arm_name == arm and r.day_of_week == d]
             
-            # P1-P5
-            for p in range(1, 6):
+            # Before-break periods
+            for p in range(1, break_after + 1):
                 slot_result = next((r for r in arm_results if r.period_number == p), None)
                 value = ""
                 if slot_result and slot_result.subject_id:
                     subj = subject_lookup.get(slot_result.subject_id)
                     if subj:
                         value = _short(subj, abbrev_map, 5)
-                
+
                 cell = ws.cell(row=current_row, column=col, value=value)
                 cell.font = cell_font
                 cell.border = thin_border
                 cell.alignment = center_align
                 col += 1
-            
+
             # BREAK column - empty with border
             cell = ws.cell(row=current_row, column=col, value="")
             cell.border = thin_border
             cell.alignment = center_align
             col += 1
-            
-            # P6-P8
-            for p in range(6, periods_per_day + 1):
+
+            # After-break periods
+            for p in range(break_after + 1, periods_per_day + 1):
                 slot_result = next((r for r in arm_results if r.period_number == p), None)
                 value = ""
                 if slot_result and slot_result.subject_id:
@@ -639,6 +643,7 @@ def export_results_by_day_pdf(batch_id):
     school_level = results[0].school_level or 'sss'
     rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, school_level=school_level, branch_id=gen_bid()).all()}
     periods_per_day = int(rules.get('periods_per_day', 8))
+    break_after = _break_after(rules, periods_per_day)
 
     # Get school info
     school_name = GenSettings.get('school_name', 'School')
@@ -647,8 +652,8 @@ def export_results_by_day_pdf(batch_id):
     days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
 
     # Period times with break tracking — per-level start/period/break settings.
-    period_times_before = []  # P1-P5
-    period_times_after = []   # P6-P8
+    period_times_before = []  # before the break
+    period_times_after = []   # after the break
     break_time = ""
 
     start_hour, start_min, _plen, _blen = clock_params(rules)
@@ -659,13 +664,13 @@ def export_results_by_day_pdf(batch_id):
         end_h, end_m = end_total // 60, end_total % 60
 
         time_str = f"P{p}\n{start_h}:{start_m:02d}\n{end_h}:{end_m:02d}"
-        if p <= 5:
+        if p <= break_after:
             period_times_before.append(time_str)
         else:
             period_times_after.append(time_str)
 
         start_hour, start_min = end_h, end_m
-        if p == 5:
+        if p == break_after:
             break_start = f"{end_h}:{end_m:02d}"
             start_total = start_hour * 60 + start_min + _blen
             start_hour, start_min = start_total // 60, start_total % 60
@@ -709,9 +714,9 @@ def export_results_by_day_pdf(batch_id):
     
     elements = []
     
-    # Total columns: Class + P1-P5 + BREAK + P6-P8
-    num_periods_before = 5
-    num_periods_after = periods_per_day - 5
+    # Total columns: Class + periods-before + BREAK + periods-after
+    num_periods_before = break_after
+    num_periods_after = periods_per_day - break_after
     total_cols = 1 + num_periods_before + 1 + num_periods_after
     
     # Column widths - fill entire width
@@ -766,7 +771,7 @@ def export_results_by_day_pdf(batch_id):
         if d == 0:  # Monday - show times
             header_row = ['Class'] + period_times_before + [break_time] + period_times_after
         else:
-            header_row = ['Class'] + [f'P{p}' for p in range(1, 6)] + ['BREAK'] + [f'P{p}' for p in range(6, periods_per_day + 1)]
+            header_row = ['Class'] + [f'P{p}' for p in range(1, break_after + 1)] + ['BREAK'] + [f'P{p}' for p in range(break_after + 1, periods_per_day + 1)]
         table_data.append(header_row)
         row_heights.append(period_header_height)
         
@@ -777,19 +782,19 @@ def export_results_by_day_pdf(batch_id):
             
             arm_results = [r for r in results if r.class_name == class_name and r.arm_name == arm and r.day_of_week == d]
             
-            # P1-P5
-            for p in range(1, 6):
+            # Before-break periods
+            for p in range(1, break_after + 1):
                 slot_result = next((r for r in arm_results if r.period_number == p), None)
                 if slot_result and slot_result.subject:
                     row.append(_short(slot_result.subject, abbrev_map, 5))
                 else:
                     row.append('')
-            
+
             # BREAK column - empty
             row.append('')
-            
-            # P6-P8
-            for p in range(6, periods_per_day + 1):
+
+            # After-break periods
+            for p in range(break_after + 1, periods_per_day + 1):
                 slot_result = next((r for r in arm_results if r.period_number == p), None)
                 if slot_result and slot_result.subject:
                     row.append(_short(slot_result.subject, abbrev_map, 5))

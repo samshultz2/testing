@@ -88,3 +88,39 @@ def test_day_timing_saved_and_scoped_per_level(app):
     # JSS still reads back its own 08:00.
     c.get('/generator/level/jss')
     assert 'value="08:00"' in c.get('/generator/rules').get_data(as_text=True)
+
+
+def test_exports_render_with_custom_break_position(app):
+    """Excel/PDF/image exports must not index out of range when the break falls
+    somewhere other than after period 5 (here: 7 periods/day, break after 3)."""
+    from models import GenTimetableResult, GenTimetableRule, GenSubject, Branch
+    tag = next(_SEQ)
+    batch = f'ttbatch{tag}'
+    with app.app_context():
+        bid = Branch.get_default().id
+        subj = GenSubject(name=f'Maths{tag}', short_name='MTH', school_level='sss',
+                          branch_id=bid, is_active=True)
+        db.session.add(subj)
+        for rt, val in [('periods_per_day', '7'), ('break_after_period', '3'),
+                        ('day_start', '8:00'), ('period_minutes', '40'), ('break_minutes', '30')]:
+            db.session.add(GenTimetableRule(rule_type=rt, value=val, school_level='sss',
+                                            is_active=True, branch_id=bid))
+        db.session.flush()
+        for d in range(5):
+            for p in range(1, 8):
+                db.session.add(GenTimetableResult(
+                    branch_id=bid, batch_id=batch, school_level='sss',
+                    class_name='SSS1', arm_name='A', day_of_week=d, period_number=p,
+                    subject_id=subj.id))
+        db.session.commit()
+
+    c = app.test_client()
+    c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': login_token(c)})
+    c.get('/generator/level/sss')
+    for url in (f'/generator/results/{batch}/export',
+                f'/generator/results/{batch}/export_by_day',
+                f'/generator/results/{batch}/export_by_day_pdf',
+                f'/generator/results/{batch}/export_image'):
+        r = c.get(url)
+        assert r.status_code == 200, f'{url} -> {r.status_code}'
+        assert len(r.get_data()) > 100, f'{url} produced an empty file'

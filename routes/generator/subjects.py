@@ -383,9 +383,21 @@ def class_stream_subjects(class_id):
             'total_periods': total_periods
         })
     
+    # Weekly capacity = periods/day × 5 days, for THIS class's level (JSS or SSS
+    # can differ). Drives the "x/N periods" budget shown per stream.
+    level = class_config.school_level or 'sss'
+    ppd_rule = GenTimetableRule.query.filter_by(
+        rule_type='periods_per_day', school_level=level, is_active=True, branch_id=gen_bid()).first()
+    try:
+        periods_per_day = int(ppd_rule.value) if ppd_rule and ppd_rule.value else 8
+    except (TypeError, ValueError):
+        periods_per_day = 8
+    weekly_capacity = periods_per_day * 5
+
     return render_template('generator/class_stream_subjects.html',
         class_config=class_config,
-        streams_data=streams_data
+        streams_data=streams_data,
+        weekly_capacity=weekly_capacity
     )
 
 

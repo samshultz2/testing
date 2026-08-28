@@ -12,9 +12,9 @@
     <div class="card-header">
         <h3>
             {{ data.stream.name }} Stream
-            <span class="badge {% if data.total_periods == 40 %}badge-success{% elif data.total_periods > 40 %}badge-danger{% else %}badge-warning{% endif %}" style="float: right; font-size: 14px;">
-                {{ data.total_periods }}/40 periods
-                {% if data.total_periods > 40 %}({{ data.total_periods - 40 }} over!){% endif %}
+            <span class="badge {% if data.total_periods == weekly_capacity %}badge-success{% elif data.total_periods > weekly_capacity %}badge-danger{% else %}badge-warning{% endif %}" style="float: right; font-size: 14px;">
+                {{ data.total_periods }}/{{ weekly_capacity }} periods
+                {% if data.total_periods > weekly_capacity %}({{ data.total_periods - weekly_capacity }} over!){% endif %}
             </span>
         </h3>
     </div>
@@ -108,6 +108,7 @@
 {% endfor %}
 
 <script nonce="{{ csp_nonce }}">
+var WEEKLY_CAPACITY = {{ weekly_capacity }};
 function toggleRow(subjectId, enabled, streamId) {
     document.getElementById('periods_' + streamId + '_' + subjectId).disabled = !enabled;
     document.getElementById('double_' + streamId + '_' + subjectId).disabled = !enabled;
@@ -126,9 +127,9 @@ function updateTotal(streamId) {
     totalEl.textContent = total;
     
     // Update color
-    if (total === 40) {
+    if (total === WEEKLY_CAPACITY) {
         totalEl.style.color = 'green';
-    } else if (total > 40) {
+    } else if (total > WEEKLY_CAPACITY) {
         totalEl.style.color = 'red';
     } else {
         totalEl.style.color = 'orange';

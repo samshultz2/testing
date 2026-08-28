@@ -6,7 +6,7 @@ V3: JPG format, correct abbreviations, school watermark
 from flask import Response
 from models import GenTimetableResult, GenTimetableRule, GenTeacher, GenSubject, GenSettings
 from routes.generator import gen_bid
-from utils.generator_times import clock_params
+from utils.generator_times import clock_params, break_after as _break_after
 from PIL import Image, ImageDraw, ImageFont
 from io import BytesIO
 
@@ -156,7 +156,8 @@ def generate_timetable_image(batch_id, layout='by_day', quality='ultra'):
     
     rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, school_level=school_level, branch_id=gen_bid()).all()}
     periods_per_day = int(rules.get('periods_per_day', 8))
-    
+    break_after = _break_after(rules, periods_per_day)
+
     class_arms = sorted(set((r.class_name, r.arm_name) for r in results))
     days = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY']
     
@@ -181,13 +182,13 @@ def generate_timetable_image(batch_id, layout='by_day', quality='ultra'):
         end_h, end_m = end_total // 60, end_total % 60
 
         time_str = f"P{p}\n{start_h}:{start_m:02d}-{end_h}:{end_m:02d}"
-        if p <= 5:
+        if p <= break_after:
             period_times_before.append(time_str)
         else:
             period_times_after.append(time_str)
 
         start_hour, start_min = end_h, end_m
-        if p == 5:
+        if p == break_after:
             break_start = f"{end_h}:{end_m:02d}"
             start_total = start_hour * 60 + start_min + _blen
             start_hour, start_min = start_total // 60, start_total % 60
@@ -206,9 +207,9 @@ def generate_timetable_image(batch_id, layout='by_day', quality='ultra'):
     day_spacing = 25 * scale
     title_height = 120 * scale  # Taller for school name + address
     
-    # Total columns: Class + P1-P5 + BREAK + P6-P8
-    num_periods_before = 5
-    num_periods_after = periods_per_day - 5
+    # Total columns: Class + periods-before + BREAK + periods-after
+    num_periods_before = break_after
+    num_periods_after = periods_per_day - break_after
     
     table_width = class_col_width + (num_periods_before * cell_width) + break_col_width + (num_periods_after * cell_width)
     img_height = title_height + (len(days) * (day_header_height + header_height + (len(class_arms) * cell_height) + day_spacing)) + (margin * 2)
@@ -394,12 +395,12 @@ def generate_timetable_image(batch_id, layout='by_day', quality='ultra'):
             day_results = {r.period_number: r for r in results 
                           if r.class_name == class_name and r.arm_name == arm and r.day_of_week == day_idx}
             
-            # P1-P5 cells
-            for p in range(1, 6):
+            # Before-break cells
+            for p in range(1, break_after + 1):
                 result = day_results.get(p)
-                draw.rectangle([x, y_offset, x + cell_width, y_offset + cell_height], 
+                draw.rectangle([x, y_offset, x + cell_width, y_offset + cell_height],
                               fill='white', outline=color_border, width=scale)
-                
+
                 if result:
                     subj = GenSubject.query.get(result.subject_id)
                     if subj:
@@ -428,10 +429,10 @@ def generate_timetable_image(batch_id, layout='by_day', quality='ultra'):
                     draw.text((text_x, text_y), letter, fill=color_white, font=font_break)
             x += break_col_width
             
-            # P6-P8 cells
-            for p in range(6, periods_per_day + 1):
+            # After-break cells
+            for p in range(break_after + 1, periods_per_day + 1):
                 result = day_results.get(p)
-                draw.rectangle([x, y_offset, x + cell_width, y_offset + cell_height], 
+                draw.rectangle([x, y_offset, x + cell_width, y_offset + cell_height],
                               fill='white', outline=color_border, width=scale)
                 
                 if result:

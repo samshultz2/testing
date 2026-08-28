@@ -42,6 +42,16 @@ def clock_params(rules):
         _int(rules.get('break_minutes'), DEFAULT_BREAK)
 
 
+def break_after(rules, periods_per_day, default=5):
+    """The period number the mid-day break follows, from the level's rules.
+
+    Clamped to ``1..periods_per_day`` so export layouts never index out of
+    range (a break "after the last period" simply sits at the far end).
+    """
+    n = _int(rules.get('break_after_period'), default)
+    return max(1, min(n, periods_per_day))
+
+
 def day_end_time(rules, periods_per_day, break_after=5):
     """The computed dismissal time as ``H:MM`` for the given level.
 
