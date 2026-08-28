@@ -1,5 +1,6 @@
 """generator_bp — exports routes (split from the former routes/generator.py)."""
 from routes.generator import *  # noqa: F401,F403
+from utils.generator_times import clock_params
 
 
 def _short(subj, fallback_map, maxlen):
@@ -93,23 +94,24 @@ def export_results(batch_id):
             timetables[key] = {'class_name': r.class_name, 'arm_name': r.arm_name, 'grid': {d: {} for d in range(5)}}
         timetables[key]['grid'][r.day_of_week][r.period_number] = r
     
-    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, branch_id=gen_bid()).all()}
+    school_level = results[0].school_level or 'sss'
+    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, school_level=school_level, branch_id=gen_bid()).all()}
     periods_per_day = int(rules.get('periods_per_day', 8))
-    
-    # Period time slots (8:20 AM start, 40 min each, 30 min break after period 5)
+
+    # Period time slots — start/period-length/break-length are per-level settings.
     period_times = []
     break_time = ""
-    start_hour, start_min = 8, 20
+    start_hour, start_min, _plen, _blen = clock_params(rules)
     for p in range(1, periods_per_day + 1):
         start_total = start_hour * 60 + start_min
-        end_total = start_total + 40
+        end_total = start_total + _plen
         start_h, start_m = start_total // 60, start_total % 60
         end_h, end_m = end_total // 60, end_total % 60
         period_times.append(f"P{p}\n{start_h}:{start_m:02d}-{end_h}:{end_m:02d}")
         start_hour, start_min = end_h, end_m
         if p == 5:
             break_start = f"{end_h}:{end_m:02d}"
-            start_total = start_hour * 60 + start_min + 30
+            start_total = start_hour * 60 + start_min + _blen
             start_hour, start_min = start_total // 60, start_total % 60
             break_end = f"{start_hour}:{start_min:02d}"
             break_time = f"BREAK\n{break_start}\n-\n{break_end}"
@@ -338,31 +340,31 @@ def export_results_by_day(batch_id):
     
     days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
     
-    # Period time slots (8:20 AM start, 40 min each, 30 min break after period 5)
+    # Period time slots — start/period-length/break-length are per-level settings.
     period_times_before_break = []  # P1-P5
     period_times_after_break = []   # P6-P8
     break_time = ""
-    
-    start_hour, start_min = 8, 20
+
+    start_hour, start_min, _plen, _blen = clock_params(rules)
     for p in range(1, periods_per_day + 1):
         start_total = start_hour * 60 + start_min
-        end_total = start_total + 40
+        end_total = start_total + _plen
         start_h, start_m = start_total // 60, start_total % 60
         end_h, end_m = end_total // 60, end_total % 60
         start_str = f"{start_h}:{start_m:02d}"
         end_str = f"{end_h}:{end_m:02d}"
-        
+
         if p <= 5:
             period_times_before_break.append(f"P{p}\n{start_str}-{end_str}")
         else:
             period_times_after_break.append(f"P{p}\n{start_str}-{end_str}")
-        
+
         start_hour, start_min = end_h, end_m
-        
+
         # Capture break time after period 5
         if p == 5:
             break_start = f"{end_h}:{end_m:02d}"
-            start_total = start_hour * 60 + start_min + 30
+            start_total = start_hour * 60 + start_min + _blen
             start_hour, start_min = start_total // 60, start_total % 60
             break_end = f"{start_hour}:{start_min:02d}"
             break_time = f"BREAK\n{break_start}\n-\n{break_end}"
@@ -634,37 +636,38 @@ def export_results_by_day_pdf(batch_id):
         flash('No results.', 'error')
         return redirect(url_for('generator.results_list'))
     
-    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, branch_id=gen_bid()).all()}
+    school_level = results[0].school_level or 'sss'
+    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, school_level=school_level, branch_id=gen_bid()).all()}
     periods_per_day = int(rules.get('periods_per_day', 8))
-    
+
     # Get school info
     school_name = GenSettings.get('school_name', 'School')
     school_address = GenSettings.get('school_address', '')
-    
+
     days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
-    
-    # Period times with break tracking
+
+    # Period times with break tracking — per-level start/period/break settings.
     period_times_before = []  # P1-P5
     period_times_after = []   # P6-P8
     break_time = ""
-    
-    start_hour, start_min = 8, 20
+
+    start_hour, start_min, _plen, _blen = clock_params(rules)
     for p in range(1, periods_per_day + 1):
         start_total = start_hour * 60 + start_min
-        end_total = start_total + 40
+        end_total = start_total + _plen
         start_h, start_m = start_total // 60, start_total % 60
         end_h, end_m = end_total // 60, end_total % 60
-        
+
         time_str = f"P{p}\n{start_h}:{start_m:02d}\n{end_h}:{end_m:02d}"
         if p <= 5:
             period_times_before.append(time_str)
         else:
             period_times_after.append(time_str)
-        
+
         start_hour, start_min = end_h, end_m
         if p == 5:
             break_start = f"{end_h}:{end_m:02d}"
-            start_total = start_hour * 60 + start_min + 30
+            start_total = start_hour * 60 + start_min + _blen
             start_hour, start_min = start_total // 60, start_total % 60
             break_end = f"{start_hour}:{start_min:02d}"
             break_time = f"BREAK\n{break_start}\n-\n{break_end}"

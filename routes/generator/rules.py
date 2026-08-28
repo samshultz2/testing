@@ -5,9 +5,15 @@ from routes.generator import *  # noqa: F401,F403
 @generator_bp.route('/rules')
 @login_required
 def rules_config():
+    from utils.generator_times import day_end_time, clock_params
     level = get_current_level()
     rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).all()}
-    return render_template('generator/rules_config.html', rules=rules, level=level)
+    end_time = day_end_time(rules, int(rules.get('periods_per_day', 8)),
+                            int(rules.get('break_after_period', 5)))
+    sh, sm, _, _ = clock_params(rules)          # normalized HH:MM for the <input type="time">
+    day_start_hhmm = f"{sh:02d}:{sm:02d}"
+    return render_template('generator/rules_config.html', rules=rules, level=level,
+                           end_time=end_time, day_start_hhmm=day_start_hhmm)
 
 
 @generator_bp.route('/rules/save', methods=['POST'])
@@ -18,6 +24,10 @@ def save_rules():
         rules_to_save = [
             ('periods_per_day', request.form.get('periods_per_day', '8')),
             ('break_after_period', request.form.get('break_after_period', '5')),
+            # School-day clock (per level: JSS and SSS can start/end differently).
+            ('day_start', request.form.get('day_start', '8:20').strip() or '8:20'),
+            ('period_minutes', request.form.get('period_minutes', '40').strip() or '40'),
+            ('break_minutes', request.form.get('break_minutes', '30').strip() or '30'),
             ('no_repeat_same_day', 'true' if request.form.get('no_repeat_same_day') == 'on' else 'false'),
             ('max_consecutive', request.form.get('max_consecutive', '3')),
             ('distribute_evenly', 'true' if request.form.get('distribute_evenly') == 'on' else 'false'),

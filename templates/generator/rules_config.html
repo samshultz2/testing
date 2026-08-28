@@ -6,7 +6,9 @@
     <h1>Timetable Rules</h1>
 </div>
 
-<p class="text-muted mb-3">Configure constraints and rules for timetable generation.</p>
+<p class="text-muted mb-3">Configure constraints and rules for timetable generation. These settings apply to
+<strong>{{ 'Junior Secondary (JSS)' if level == 'jss' else 'Senior Secondary (SSS)' }}</strong> —
+switch level in the menu to configure the other.</p>
 
 <form method="POST" action="{{ url_for('generator.save_rules') }}">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
@@ -16,22 +18,53 @@
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Periods Per Day</label>
-                    <input type="number" name="periods_per_day" class="form-control" 
-                           value="{{ rules.get('periods_per_day', '8') }}" 
+                    <input type="number" name="periods_per_day" id="periods_per_day" class="form-control"
+                           value="{{ rules.get('periods_per_day', '8') }}"
                            min="4" max="12">
                     <span class="form-hint">Total number of periods in a school day</span>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Break After Period</label>
-                    <input type="number" name="break_after_period" class="form-control" 
-                           value="{{ rules.get('break_after_period', '4') }}" 
+                    <input type="number" name="break_after_period" id="break_after_period" class="form-control"
+                           value="{{ rules.get('break_after_period', '4') }}"
                            min="2" max="6">
                     <span class="form-hint">Break/recess comes after this period number</span>
                 </div>
             </div>
         </div>
     </div>
-    
+
+    <div class="card mb-3">
+        <div class="card-header"><h3>School Day Timing</h3></div>
+        <div class="card-body">
+            <p class="text-muted mb-3">When the {{ 'JSS' if level == 'jss' else 'SSS' }} day starts and how long
+            periods and break last. The dismissal time is worked out from these — JSS and SSS can start and end
+            at different times.</p>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Day Start Time</label>
+                    <input type="time" name="day_start" id="day_start" class="form-control"
+                           value="{{ day_start_hhmm }}">
+                    <span class="form-hint">When the first period begins</span>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Period Length (minutes)</label>
+                    <input type="number" name="period_minutes" id="period_minutes" class="form-control"
+                           value="{{ rules.get('period_minutes', '40') }}" min="20" max="120">
+                    <span class="form-hint">Duration of each teaching period</span>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Break Length (minutes)</label>
+                    <input type="number" name="break_minutes" id="break_minutes" class="form-control"
+                           value="{{ rules.get('break_minutes', '30') }}" min="0" max="120">
+                    <span class="form-hint">Length of the mid-day break/recess</span>
+                </div>
+            </div>
+            <p class="mt-2 mb-0">Day ends at <strong id="end_time_preview">{{ end_time }}</strong>
+               <span class="text-muted">(computed)</span></p>
+        </div>
+    </div>
+
     <div class="card mb-3">
         <div class="card-header"><h3>Scheduling Constraints</h3></div>
         <div class="card-body">
@@ -83,4 +116,30 @@
         <a href="{{ url_for('generator.index') }}" class="btn btn-secondary">Back</a>
     </div>
 </form>
+
+<script>
+// Live dismissal-time preview: mirrors utils/generator_times.day_end_time().
+(function () {
+    var ids = ['day_start', 'period_minutes', 'break_minutes', 'periods_per_day', 'break_after_period'];
+    var out = document.getElementById('end_time_preview');
+    function recompute() {
+        var ds = (document.getElementById('day_start').value || '08:20').split(':');
+        var sh = parseInt(ds[0], 10), sm = parseInt(ds[1], 10);
+        var plen = parseInt(document.getElementById('period_minutes').value, 10);
+        var blen = parseInt(document.getElementById('break_minutes').value, 10);
+        var ppd = parseInt(document.getElementById('periods_per_day').value, 10);
+        var ba = parseInt(document.getElementById('break_after_period').value, 10);
+        if ([sh, sm, plen, ppd].some(isNaN)) return;
+        if (isNaN(blen)) blen = 0;
+        var total = sh * 60 + sm + ppd * plen;
+        if (!isNaN(ba) && ba > 0 && ba < ppd) total += blen;
+        var h = Math.floor(total / 60), m = total % 60;
+        out.textContent = h + ':' + (m < 10 ? '0' + m : m);
+    }
+    ids.forEach(function (id) {
+        var el = document.getElementById(id);
+        if (el) el.addEventListener('input', recompute);
+    });
+})();
+</script>
 {% endblock %}

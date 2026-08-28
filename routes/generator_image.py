@@ -6,6 +6,7 @@ V3: JPG format, correct abbreviations, school watermark
 from flask import Response
 from models import GenTimetableResult, GenTimetableRule, GenTeacher, GenSubject, GenSettings
 from routes.generator import gen_bid
+from utils.generator_times import clock_params
 from PIL import Image, ImageDraw, ImageFont
 from io import BytesIO
 
@@ -167,28 +168,28 @@ def generate_timetable_image(batch_id, layout='by_day', quality='ultra'):
     except Exception:
         school_address = ''
     
-    # Calculate period times (8:20 AM start, 40 min each, 30 min break after P5)
+    # Period times — start/period-length/break-length are per-level settings.
     period_times_before = []  # P1-P5
     period_times_after = []   # P6-P8
     break_time = ""
-    
-    start_hour, start_min = 8, 20
+
+    start_hour, start_min, _plen, _blen = clock_params(rules)
     for p in range(1, periods_per_day + 1):
         start_total = start_hour * 60 + start_min
-        end_total = start_total + 40
+        end_total = start_total + _plen
         start_h, start_m = start_total // 60, start_total % 60
         end_h, end_m = end_total // 60, end_total % 60
-        
+
         time_str = f"P{p}\n{start_h}:{start_m:02d}-{end_h}:{end_m:02d}"
         if p <= 5:
             period_times_before.append(time_str)
         else:
             period_times_after.append(time_str)
-        
+
         start_hour, start_min = end_h, end_m
         if p == 5:
             break_start = f"{end_h}:{end_m:02d}"
-            start_total = start_hour * 60 + start_min + 30
+            start_total = start_hour * 60 + start_min + _blen
             start_hour, start_min = start_total // 60, start_total % 60
             break_end = f"{start_hour}:{start_min:02d}"
             break_time = f"{break_start}-{break_end}"

@@ -3,7 +3,7 @@ menu's level switch drives which level's data the pages show."""
 import itertools
 from config import Config
 from models import db, GenStream, Branch
-from tests.conftest import login_token
+from tests.conftest import login_token, auth_csrf
 
 _SEQ = itertools.count()
 
@@ -44,3 +44,47 @@ def test_streams_list_scoped_to_selected_level(app):
     c.get('/generator/level/sss')
     body = c.get('/generator/streams').get_data(as_text=True)
     assert f'SOnly{tag}' in body and f'JOnly{tag}' not in body
+
+
+def test_day_clock_helper_defaults_and_custom():
+    from utils.generator_times import clock_params, day_end_time
+    # Historical defaults when unset.
+    assert clock_params({}) == (8, 20, 40, 30)
+    assert day_end_time({}, 8, 5) == '14:10'
+    # A JSS-style day: 8:00 start, 40-min periods, 30-min break, 9 periods.
+    jss = {'day_start': '8:00', 'period_minutes': '40', 'break_minutes': '30'}
+    assert day_end_time(jss, 9, 5) == '14:30'
+    # Malformed values fall back to defaults (never raise).
+    assert clock_params({'day_start': 'nope', 'period_minutes': 'x'}) == (8, 20, 40, 30)
+    # No break counted when it would fall outside the day.
+    assert day_end_time({'day_start': '8:00', 'period_minutes': '40'}, 5, 6) == '11:20'
+
+
+def test_day_timing_saved_and_scoped_per_level(app):
+    """The School Day Timing form persists per level, and each level keeps its own."""
+    c = app.test_client()
+    c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': login_token(c)})
+
+    tok = auth_csrf(c)   # post-login CSRF token (login rotates it)
+
+    # JSS: starts 08:00.
+    c.get('/generator/level/jss')
+    c.post('/generator/rules/save', data={
+        '_csrf_token': tok, 'periods_per_day': '9', 'break_after_period': '5',
+        'day_start': '08:00', 'period_minutes': '40', 'break_minutes': '30', 'max_consecutive': '3',
+    })
+    jss_body = c.get('/generator/rules').get_data(as_text=True)
+    assert 'value="08:00"' in jss_body and 'School Day Timing' in jss_body
+
+    # SSS: starts 08:20 — must not clobber the JSS value.
+    c.get('/generator/level/sss')
+    c.post('/generator/rules/save', data={
+        '_csrf_token': tok, 'periods_per_day': '9', 'break_after_period': '5',
+        'day_start': '08:20', 'period_minutes': '35', 'break_minutes': '20', 'max_consecutive': '3',
+    })
+    sss_body = c.get('/generator/rules').get_data(as_text=True)
+    assert 'value="08:20"' in sss_body
+
+    # JSS still reads back its own 08:00.
+    c.get('/generator/level/jss')
+    assert 'value="08:00"' in c.get('/generator/rules').get_data(as_text=True)
