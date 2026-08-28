@@ -4063,6 +4063,13 @@
 ]
 ],
 [
+"mock_jamb.bank_syllabus_retag",
+"/mock-jamb/bank/syllabus/retag",
+[
+"POST"
+]
+],
+[
 "mock_jamb.bulk_entry",
 "/mock-jamb/exam/<int:exam_id>/results/bulk",
 [

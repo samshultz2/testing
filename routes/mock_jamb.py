@@ -1361,9 +1361,33 @@ def bank_syllabus():
                 b['target'] = (_json.load(fh) or {}).get('subject') or b['label']
         except (OSError, ValueError):
             b['target'] = b['label']
+    # Retag context: available years, whether an Anthropic key is set, and how
+    # many stand-alone questions are already coded.
+    years, tagged_count, total_q, key_set = [], 0, 0, False
+    if subject_id:
+        yr = (db.session.query(MockJAMBQuestion.exam_year)
+              .filter(MockJAMBQuestion.subject_id == subject_id,
+                      MockJAMBQuestion.mock_exam_id.is_(None),
+                      MockJAMBQuestion.exam_year.isnot(None), MockJAMBQuestion.exam_year != '')
+              .distinct().all())
+        years = sorted({y[0] for y in yr}, reverse=True)
+        base = MockJAMBQuestion.query.filter(
+            MockJAMBQuestion.subject_id == subject_id,
+            MockJAMBQuestion.mock_exam_id.is_(None),
+            MockJAMBQuestion.passage_id.is_(None))
+        total_q = base.count()
+        tagged_count = base.filter(MockJAMBQuestion.syllabus_item_code.isnot(None),
+                                   MockJAMBQuestion.syllabus_item_code != '').count()
+        try:
+            from utils.waec_ocr import _vision_config
+            key_set = _vision_config().get('has_key', False)
+        except Exception:
+            key_set = False
     return render_template('mock_jamb/bank_syllabus.html',
                            subjects=subjects, subject=subject, subject_id=subject_id,
                            syllabus=syll, tree=tree, blueprint=blueprint, bundled=bundled,
+                           years=years, tagged_count=tagged_count, total_questions_q=total_q,
+                           key_set=key_set,
                            bank_url=url_for('mock_jamb.bank', subject_id=subject_id or ''))
 
 
@@ -1458,6 +1482,47 @@ def bank_syllabus_clear():
     db.session.commit()
     flash(f'Syllabus cleared for {subject.name if subject else "the subject"}.', 'success')
     return redirect(url_for('mock_jamb.bank_syllabus', subject_id=subject_id or ''))
+
+
+@mock_jamb_bp.route('/bank/syllabus/retag', methods=['POST'])
+@login_required
+@csrf_protect
+def bank_syllabus_retag():
+    """AI-retag a subject's bank questions to its CODED syllabus items, using the
+    Anthropic key in Settings. The model may only pick from the imported syllabus
+    codes — it can never invent one."""
+    from utils.mock_bank_coded_retag import coded_retag
+    subject_id = request.form.get('subject_id', type=int)
+    subject = db.session.get(Subject, subject_id) if subject_id else None
+    if not subject:
+        flash('Pick a subject first.', 'error')
+        return redirect(url_for('mock_jamb.bank_syllabus'))
+    year = (request.form.get('year') or '').strip() or None
+    exam_body = (request.form.get('exam_body') or '').strip() or None
+    mode = 'untagged' if request.form.get('mode') == 'untagged' else 'all'
+
+    res = coded_retag(subject, year=year, exam_body=exam_body, mode=mode)
+    err = res.get('error')
+    scope = ' '.join(filter(None, [exam_body, year]))
+    scope = f' ({scope})' if scope else ''
+    if err == 'no_key':
+        flash('No Anthropic API key is set. Add one under Settings → AI Vision OCR to use AI tagging.', 'error')
+    elif err == 'not_installed':
+        flash('The "anthropic" package is not installed on the server, so AI tagging is unavailable.', 'error')
+    elif err == 'no_syllabus':
+        flash(f'Import a coded syllabus for {subject.name} first — the retag classifies against it.', 'error')
+    elif res['tagged'] or res['outside']:
+        more = (f" {res['total'] - res['scanned']} more remain — run again to continue."
+                if res.get('capped') else '')
+        outside = f"; {res['outside']} marked outside the syllabus" if res['outside'] else ''
+        flash(f"AI classified {res['tagged']} of {res['scanned']} {subject.name}{scope} "
+              f"question(s) to a syllabus code{outside}.{more}", 'success')
+    elif res['scanned']:
+        flash(f"AI reviewed {res['scanned']} {subject.name}{scope} question(s) but set no codes — "
+              f"check the key and model under Settings → AI Vision OCR.", 'info')
+    else:
+        flash(f'No stand-alone {subject.name}{scope} bank questions to tag.', 'info')
+    return redirect(url_for('mock_jamb.bank_syllabus', subject_id=subject_id))
 
 
 @mock_jamb_bp.route('/bank/analytics')

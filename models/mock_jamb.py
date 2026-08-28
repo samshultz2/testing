@@ -438,6 +438,9 @@ class MockJAMBQuestion(db.Model):
     # NULL until a question is tagged; a later retag pass fills it. Names are not
     # used as identifiers — this code is the stable link to a syllabus item.
     syllabus_item_code = db.Column(db.String(60), index=True)
+    # Optional comma-separated secondary syllabus item codes (when a question
+    # genuinely spans more than one item). Empty/NULL for the common single case.
+    syllabus_secondary_codes = db.Column(db.String(200))
     question_text = db.Column(db.Text, nullable=False)
     image_url = db.Column(db.String(300))        # optional figure / diagram
     # True => the question refers to a figure we couldn't fetch; it is held out

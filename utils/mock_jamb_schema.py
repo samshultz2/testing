@@ -64,6 +64,7 @@ def ensure_mock_jamb_schema():
             'source_ref': 'VARCHAR(40)', 'exam_year': 'VARCHAR(8)',
             'needs_image': 'BOOLEAN DEFAULT 0',
             'syllabus_item_code': 'VARCHAR(60)',
+            'syllabus_secondary_codes': 'VARCHAR(200)',
         }
         for col, ddl in add.items():
             if col not in mq:

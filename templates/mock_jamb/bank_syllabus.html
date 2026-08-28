@@ -82,6 +82,55 @@
 </div>
 
 {% if syllabus %}
+<div class="card mb-3">
+  <div class="card-header"><h3>AI retag questions to this syllabus</h3></div>
+  <div class="card-body">
+    <p class="text-muted mb-3">Classify {{ subject.name }}'s bank questions against the coded syllabus above
+      using your Anthropic key (Settings &rarr; AI Vision OCR). The model may only pick from these codes —
+      it never invents a syllabus item, and marks a question <code>OUTSIDE_SYLLABUS</code> when none fits.
+      {% if total_questions_q %}<strong>{{ tagged_count }}/{{ total_questions_q }}</strong> stand-alone
+      questions already carry a code.{% endif %}</p>
+    {% if not key_set %}
+      <p class="text-muted"><i class="fas fa-triangle-exclamation"></i>
+        No Anthropic API key is set. Add one under <strong>Settings &rarr; AI Vision OCR</strong> to enable this.</p>
+    {% endif %}
+    <form method="POST" action="{{ url_for('mock_jamb.bank_syllabus_retag') }}"
+          data-confirm="Retag {{ subject.name }} questions to the coded syllabus with AI? This calls your Anthropic key.">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="subject_id" value="{{ subject_id }}">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Exam type</label>
+          <select name="exam_body" class="form-control" style="max-width:150px">
+            <option value="">All</option>
+            <option value="JAMB">JAMB</option>
+            <option value="WAEC">WAEC</option>
+            <option value="Both">Both</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Year</label>
+          <select name="year" class="form-control" style="max-width:150px">
+            <option value="">All years</option>
+            {% for y in years %}<option value="{{ y }}">{{ y }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Scope</label>
+          <select name="mode" class="form-control" style="max-width:200px">
+            <option value="untagged">Only untagged questions</option>
+            <option value="all">All (re-tag everything)</option>
+          </select>
+        </div>
+      </div>
+      <button type="submit" class="btn btn-primary" {% if not key_set %}disabled{% endif %}>
+        <i class="fas fa-wand-magic-sparkles"></i> Retag with AI
+      </button>
+      <span class="form-hint">Runs up to 400 questions per click (chunked); run again to continue.</span>
+    </form>
+  </div>
+</div>
+
 <div class="card">
   <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;gap:.75rem">
     <h3 style="margin:0">Current syllabus <span class="text-muted" style="font-weight:400">
