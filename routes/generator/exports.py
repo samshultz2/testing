@@ -696,13 +696,17 @@ def export_results_by_day_pdf(batch_id):
     }
     
     output = BytesIO()
-    
-    # A4 landscape: 297mm x 210mm - safe margins for printers
-    margin = 10*mm
+
+    # A4 landscape: 297mm x 210mm - small margins so the grid fills the page.
+    margin = 7*mm
+    # reportlab's default Frame keeps 6pt of padding on every side; if we don't
+    # subtract it the table is fractionally taller than the frame and its last
+    # row is pushed onto a second page (leaving the first page half-empty).
+    frame_pad = 6
     page_w, page_h = landscape(A4)
-    usable_width = page_w - 2*margin
-    usable_height = page_h - 2*margin
-    
+    usable_width = page_w - 2*margin - 2*frame_pad
+    usable_height = page_h - 2*margin - 2*frame_pad
+
     doc = SimpleDocTemplate(
         output,
         pagesize=landscape(A4),
@@ -736,18 +740,19 @@ def export_results_by_day_pdf(batch_id):
         
         # Calculate row heights to fit EXACTLY on one page
         if d == 0:  # Monday - include school name and address
-            school_header_height = 8*mm
-            address_header_height = 4*mm if school_address else 0
-            day_header_height = 10*mm
-            period_header_height = 12*mm
+            school_header_height = 9*mm
+            address_header_height = 5*mm if school_address else 0
+            day_header_height = 11*mm
+            period_header_height = 16*mm    # taller: shows the P#/start/end times, bigger
             fixed_height = school_header_height + address_header_height + day_header_height + period_header_height
         else:
-            day_header_height = 10*mm
+            day_header_height = 11*mm
             period_header_height = 10*mm
             fixed_height = day_header_height + period_header_height
-        
-        # Data rows get remaining height divided equally
-        available_for_data = usable_height - fixed_height - 2*mm
+
+        # Data rows split ALL remaining height so the grid fills the page. (-1pt
+        # guards against float rounding tipping the table onto a second page.)
+        available_for_data = usable_height - fixed_height - 1
         data_row_height = available_for_data / num_data_rows
         
         # Build table data
@@ -807,8 +812,8 @@ def export_results_by_day_pdf(batch_id):
         # Create table with exact dimensions
         table = Table(table_data, colWidths=col_widths, rowHeights=row_heights)
         
-        # Break column index
-        break_col = 6
+        # Break column index = Class col (0) + the before-break periods
+        break_col = 1 + break_after
         
         # Calculate row indices
         if d == 0:
@@ -835,14 +840,16 @@ def export_results_by_day_pdf(batch_id):
             ('ALIGN', (0, day_row_idx), (-1, day_row_idx), 'CENTER'),
             ('VALIGN', (0, day_row_idx), (-1, day_row_idx), 'MIDDLE'),
             
-            # Period header row
+            # Period header row (P#/times) — bold and readable, not tiny
             ('FONTNAME', (0, header_row_idx), (-1, header_row_idx), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, header_row_idx), (-1, header_row_idx), 7 if d == 0 else 12),
+            ('FONTSIZE', (0, header_row_idx), (-1, header_row_idx), 11 if d == 0 else 13),
+            ('LEADING', (0, header_row_idx), (-1, header_row_idx), 12 if d == 0 else 15),
             ('ALIGN', (0, header_row_idx), (-1, header_row_idx), 'CENTER'),
             ('VALIGN', (0, header_row_idx), (-1, header_row_idx), 'MIDDLE'),
-            
-            # Break column header
-            ('FONTSIZE', (break_col, header_row_idx), (break_col, header_row_idx), 6),
+
+            # Break column header (narrow column, keep its multi-line label small)
+            ('FONTSIZE', (break_col, header_row_idx), (break_col, header_row_idx), 7),
+            ('LEADING', (break_col, header_row_idx), (break_col, header_row_idx), 8),
             
             # Class codes column
             ('FONTNAME', (0, data_start_row), (0, -1), 'Helvetica-Bold'),

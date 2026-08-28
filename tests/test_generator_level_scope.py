@@ -214,3 +214,39 @@ def test_double_resolution_priority_order():
     assert resolve_double(None, None, None, L(False, 0)) == (False, 0)
     # enabled but blank count defaults to 1.
     assert resolve_double(L(True, 0), None, None, None) == (True, 1)
+
+
+def test_by_day_pdf_is_one_page_per_day(app):
+    """Each weekday must fit on exactly one landscape page, even with many arms."""
+    import io
+    from pypdf import PdfReader
+    from models import GenTimetableResult, GenTimetableRule, GenSubject, Branch
+    tag = next(_SEQ)
+    batch = f'pdfpage{tag}'
+    with app.app_context():
+        bid = Branch.get_default().id
+        subj = GenSubject(name=f'Bio{tag}', short_name='BIO', school_level='sss',
+                          branch_id=bid, is_active=True)
+        db.session.add(subj)
+        for rt, val in [('periods_per_day', '8'), ('break_after_period', '5')]:
+            db.session.add(GenTimetableRule(rule_type=rt, value=val, school_level='sss',
+                                            is_active=True, branch_id=bid))
+        db.session.flush()
+        arms = ([('SSS1', a) for a in 'DILR'] + [('SSS2', a) for a in 'DILR']
+                + [('SSS3', a) for a in 'ILR'])            # 11 class-arms
+        for cn, arm in arms:
+            for d in range(5):
+                for p in range(1, 9):
+                    db.session.add(GenTimetableResult(
+                        branch_id=bid, batch_id=batch, school_level='sss',
+                        class_name=cn, arm_name=arm, day_of_week=d, period_number=p,
+                        subject_id=subj.id))
+        db.session.commit()
+
+    c = app.test_client()
+    c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': login_token(c)})
+    c.get('/generator/level/sss')
+    r = c.get(f'/generator/results/{batch}/export_by_day_pdf')
+    assert r.status_code == 200
+    pages = len(PdfReader(io.BytesIO(r.get_data())).pages)
+    assert pages == 5, f'expected 5 pages (one per weekday), got {pages}'
