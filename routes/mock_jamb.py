@@ -1389,21 +1389,26 @@ def bank_syllabus_import():
         with open(b['path'], encoding='utf-8') as fh:
             text = fh.read()
         fmt = 'json'
-        # A bundled file always imports into the subject IT declares (e.g. the
-        # Mathematics file -> the Mathematics subject), never whichever subject
-        # happened to be selected — so clicking "Mathematics" can't land on
-        # Accounting.
+        # A bundled file prefers the subject IT declares (e.g. the Mathematics
+        # file -> the Mathematics subject) so clicking "Mathematics" can't land
+        # on Accounting. But schools rename subjects (Accounting for "Principles
+        # of Accounts", Digital Technologies for "Computer Studies"), so when the
+        # declared subject has no match here, fall back to the SELECTED subject.
         try:
             declared = parse(text, fmt='json').get('subject')
         except SyllabusImportError:
             declared = None
         matched = _match_subject(declared) if declared else None
-        if matched is None:
-            flash(f'No subject named "{declared}" exists here to import into. '
-                  f'Create or rename it first.', 'error')
+        if matched is not None:
+            subject = matched
+            subject_id = subject.id
+        elif subject is None:
+            flash(f'No subject named "{declared}" exists here. Select the subject '
+                  f'to import it into, then click the bundled button again.', 'error')
             return redirect(url_for('mock_jamb.bank_syllabus', subject_id=subject_id or ''))
-        subject = matched
-        subject_id = subject.id
+        else:
+            flash(f'No subject named "{declared}" here — imported into the selected '
+                  f'subject "{subject.name}" instead.', 'warning')
 
     if not subject:
         flash('Pick a subject first.', 'error')

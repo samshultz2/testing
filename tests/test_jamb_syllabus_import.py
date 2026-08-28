@@ -143,6 +143,23 @@ def test_bank_syllabus_route_imports_bundled(app):
     assert 'MATH.NUM.1.A' in body
 
 
+def test_bundled_import_matches_renamed_subjects(app):
+    """Bundled files resolve to renamed subjects (Accounting <- Principles of
+    Accounts; Digital Technologies <- Computer Studies)."""
+    acc = _subject(app, 'Accounting')
+    dig = _subject(app, 'Digital Technologies')
+    c = app.test_client()
+    c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': login_token(c)})
+    tok = auth_csrf(c)
+    c.post('/mock-jamb/bank/syllabus/import',
+           data={'_csrf_token': tok, 'subject_id': acc, 'bundled': 'principles_of_accounts'})
+    c.post('/mock-jamb/bank/syllabus/import',
+           data={'_csrf_token': tok, 'subject_id': dig, 'bundled': 'computer_studies'})
+    with app.app_context():
+        assert MockJAMBSyllabus.query.filter_by(subject_id=acc).first() is not None
+        assert MockJAMBSyllabus.query.filter_by(subject_id=dig).first() is not None
+
+
 def test_clear_syllabus_removes_it(app):
     """The clear action deletes a subject's imported syllabus and its nodes."""
     sid = _subject(app, f'ClearMe{next(_SEQ)}')

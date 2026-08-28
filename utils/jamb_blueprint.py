@@ -36,9 +36,15 @@ def norm_subject(name):
         'lit': 'literature in english', 'literatureinenglish': 'literature in english',
         'literature': 'literature in english', 'crs': 'christian religious studies',
         'crk': 'christian religious studies', 'geo': 'geography', 'accounts': 'accounting',
-        'financialaccounting': 'accounting', 'agric': 'agricultural science',
+        'financialaccounting': 'accounting', 'principlesofaccounts': 'accounting',
+        'principlesofaccount': 'accounting', 'principleofaccounts': 'accounting',
+        'poa': 'accounting', 'agric': 'agricultural science',
         'agriculture': 'agricultural science', 'civic': 'civic education',
         'civics': 'civic education',
+        # Computer Studies is often renamed Digital Technologies / ICT / Computer Science.
+        'computerstudies': 'computer studies', 'computerscience': 'computer studies',
+        'digitaltechnology': 'computer studies', 'digitaltechnologies': 'computer studies',
+        'ict': 'computer studies', 'computer': 'computer studies',
     }
     if key in aliases:
         return aliases[key]
