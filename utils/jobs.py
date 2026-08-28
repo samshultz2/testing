@@ -155,3 +155,88 @@ def _handle_bank_local_tag(job, subject_id=None, mode='untagged', year=None, **_
             db.session.rollback()
 
     return local_tag(subject, mode=mode, year=year, progress_cb=_progress)
+
+
+_BATCH_MAX_POLLS = 2000     # non-blocking poll re-enqueues, paced by the tick
+
+
+@register('bank_batch_retag')
+def _handle_bank_batch_retag(job, subject_id=None, model='', year=None, exam_body=None,
+                             force=False, phase='submit', batch_id=None, attempt=0, **_):
+    """AI-retag a subject's bank questions to its coded syllabus via Anthropic's
+    Message Batches API (50% cheaper, async). Runs non-blocking: 'submit' sends
+    the batch then hands off to 'poll'; each 'poll' checks once and re-enqueues
+    until the batch has 'ended', then applies the codes."""
+    from models import db, Subject
+    from utils.waec_ocr import _vision_config
+    from utils.mock_bank_coded_retag import coded_nodes, _syllabus_block
+    from utils import mock_bank_batch_retag as batch
+
+    subject = db.session.get(Subject, subject_id) if subject_id else None
+    if not subject:
+        job.message = 'Subject not found.'
+        return {'error': 'no_subject'}
+
+    cfg = _vision_config()
+    if not cfg['installed']:
+        job.message = 'The "anthropic" package is not installed on the server.'
+        return {'error': 'not_installed'}
+    if not cfg['has_key']:
+        job.message = 'No Anthropic API key is set (Settings → AI Vision OCR).'
+        return {'error': 'no_key'}
+    by_code, _syll = coded_nodes(subject.id)
+    if not by_code:
+        job.message = f'No coded syllabus imported for {subject.name}.'
+        return {'error': 'no_syllabus'}
+    by_id = {n.id: n for n in by_code.values()}
+    use_model = (model or '').strip() or cfg['model']
+
+    import anthropic
+    client = anthropic.Anthropic(api_key=cfg['key'])
+
+    if phase == 'submit':
+        from models import MockJAMBQuestion
+        ids = batch.target_ids(subject, year=year, exam_body=exam_body, force=force)[:batch._MAX_REQUESTS]
+        job.total = len(ids)
+        db.session.commit()
+        if not ids:
+            job.message = f'No {subject.name} questions to tag.'
+            return {'tagged': 0, 'total': 0}
+        block = _syllabus_block(by_code)
+        rows = MockJAMBQuestion.query.filter(MockJAMBQuestion.id.in_(ids)).all()
+        reqs = batch.build_requests(subject.name, block, rows, use_model)
+        bid = batch.submit_batch(client, reqs)
+        job.message = f'Submitted {len(ids)} {subject.name} question(s) to a Claude batch ({use_model}); awaiting results…'
+        db.session.commit()
+        enqueue('bank_batch_retag', {'subject_id': subject_id, 'model': model, 'year': year,
+                                     'exam_body': exam_body, 'force': force,
+                                     'phase': 'poll', 'batch_id': bid, 'attempt': 0},
+                branch_id=job.branch_id)
+        return {'phase': 'submitted', 'batch_id': bid, 'requests': len(ids)}
+
+    # phase == 'poll'
+    status = batch.batch_status(client, batch_id)
+    if status == 'ended':
+        summary = batch.apply_results(client, batch_id, subject, by_code, by_id)
+        job.message = (f"Batch done — tagged {summary['tagged']} of {summary['scanned']} "
+                       f"{subject.name} question(s)"
+                       + (f"; {summary['outside']} outside the syllabus" if summary['outside'] else '')
+                       + '.')
+        db.session.commit()
+        summary['phase'] = 'ended'
+        summary['batch_id'] = batch_id
+        return summary
+    if status in ('canceling', 'canceled', 'expired'):
+        job.message = f'Claude batch {status}.'
+        return {'phase': status, 'batch_id': batch_id}
+    # still processing — poll again next tick (non-blocking)
+    if attempt < _BATCH_MAX_POLLS:
+        job.message = f'Claude batch processing… (poll {attempt + 1})'
+        db.session.commit()
+        enqueue('bank_batch_retag', {'subject_id': subject_id, 'model': model, 'year': year,
+                                     'exam_body': exam_body, 'force': force,
+                                     'phase': 'poll', 'batch_id': batch_id, 'attempt': attempt + 1},
+                branch_id=job.branch_id)
+        return {'phase': 'processing', 'batch_id': batch_id, 'attempt': attempt}
+    job.message = 'Claude batch still processing after many checks — results can be applied later.'
+    return {'phase': 'timeout', 'batch_id': batch_id}

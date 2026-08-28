@@ -94,14 +94,37 @@
       <p class="text-muted"><i class="fas fa-triangle-exclamation"></i>
         No Anthropic API key is set. Add one under <strong>Settings &rarr; AI Vision OCR</strong> to enable this.</p>
     {% endif %}
-    <form method="POST" action="{{ url_for('mock_jamb.bank_syllabus_retag') }}"
+    {% if batch_job %}
+    <div class="pill" style="display:block;margin-bottom:.8rem;padding:.5rem .7rem;background:var(--gray-100)">
+      <strong>Batch:</strong> {{ batch_job.message or batch_job.status }}
+      {% if batch_job.total %}<span class="text-muted">({{ batch_job.total }} question(s) submitted)</span>{% endif %}
+    </div>
+    {% endif %}
+
+    <form method="POST" id="retagForm"
+          action="{{ url_for('mock_jamb.bank_syllabus_retag') }}"
           data-confirm="Retag {{ subject.name }} questions to the coded syllabus with AI? This calls your Anthropic key.">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="subject_id" value="{{ subject_id }}">
       <div class="form-row">
         <div class="form-group">
+          <label class="form-label">Method</label>
+          <select name="__method" id="retagMethod" class="form-control" style="max-width:230px">
+            <option value="inline">Inline (now, up to 400/click)</option>
+            {% if batch_async %}<option value="batch">Batch (async, ~50% cheaper)</option>{% endif %}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Model</label>
+          <select name="model" class="form-control" style="max-width:220px">
+            <option value="">Default (Settings model)</option>
+            <option value="claude-haiku-4-5">Haiku (cheapest)</option>
+            <option value="claude-sonnet-4-5">Sonnet (higher quality)</option>
+          </select>
+        </div>
+        <div class="form-group">
           <label class="form-label">Exam type</label>
-          <select name="exam_body" class="form-control" style="max-width:150px">
+          <select name="exam_body" class="form-control" style="max-width:130px">
             <option value="">All</option>
             <option value="JAMB">JAMB</option>
             <option value="WAEC">WAEC</option>
@@ -110,26 +133,45 @@
         </div>
         <div class="form-group">
           <label class="form-label">Year</label>
-          <select name="year" class="form-control" style="max-width:150px">
+          <select name="year" class="form-control" style="max-width:130px">
             <option value="">All years</option>
             {% for y in years %}<option value="{{ y }}">{{ y }}</option>{% endfor %}
           </select>
         </div>
-        <div class="form-group">
-          <label class="form-label">Scope</label>
-          <select name="mode" class="form-control" style="max-width:200px">
-            <option value="untagged">Only untagged questions</option>
-            <option value="all">All (re-tag everything)</option>
-          </select>
-        </div>
+      </div>
+      <div class="form-group">
+        <label class="checkbox-label">
+          <input type="checkbox" name="force" id="retagForce" value="1">
+          <span>Re-tag already-tagged questions too (otherwise only untagged ones are tagged)</span>
+        </label>
       </div>
       <button type="submit" class="btn btn-primary" {% if not key_set %}disabled{% endif %}>
         <i class="fas fa-wand-magic-sparkles"></i> Retag with AI
       </button>
-      <span class="form-hint">Runs up to 400 questions per click (chunked); run again to continue.</span>
+      <span class="form-hint">Inline runs up to 400 questions per click; batch tags the whole set at ~half price in the background.</span>
     </form>
   </div>
 </div>
+
+<script nonce="{{ csp_nonce }}">
+// The Method select routes to the inline or batch endpoint; the checkbox maps to
+// the inline route's "mode" (untagged/all) as well as the batch "force" flag.
+(function () {
+    var form = document.getElementById('retagForm');
+    var method = document.getElementById('retagMethod');
+    var force = document.getElementById('retagForce');
+    if (!form || !method) return;
+    var INLINE = "{{ url_for('mock_jamb.bank_syllabus_retag') }}";
+    var BATCH = "{{ url_for('mock_jamb.bank_syllabus_batch_retag') }}";
+    form.addEventListener('submit', function () {
+        form.action = (method.value === 'batch') ? BATCH : INLINE;
+        // inline endpoint reads name="mode"; mirror the force checkbox into a hidden field
+        var m = form.querySelector('input[name="mode"]');
+        if (!m) { m = document.createElement('input'); m.type = 'hidden'; m.name = 'mode'; form.appendChild(m); }
+        m.value = (force && force.checked) ? 'all' : 'untagged';
+    });
+})();
+</script>
 
 <div class="card">
   <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;gap:.75rem">

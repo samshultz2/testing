@@ -1383,11 +1383,23 @@ def bank_syllabus():
             key_set = _vision_config().get('has_key', False)
         except Exception:
             key_set = False
+    from utils import jobs as _jobs
+    batch_async = _jobs.async_enabled()
+    batch_job = None
+    if subject_id:
+        try:
+            from models import BackgroundJob
+            batch_job = (BackgroundJob.query
+                         .filter(BackgroundJob.kind == 'bank_batch_retag',
+                                 BackgroundJob.params.like(f'%"subject_id": {subject_id}%'))
+                         .order_by(BackgroundJob.id.desc()).first())
+        except Exception:
+            batch_job = None
     return render_template('mock_jamb/bank_syllabus.html',
                            subjects=subjects, subject=subject, subject_id=subject_id,
                            syllabus=syll, tree=tree, blueprint=blueprint, bundled=bundled,
                            years=years, tagged_count=tagged_count, total_questions_q=total_q,
-                           key_set=key_set,
+                           key_set=key_set, batch_async=batch_async, batch_job=batch_job,
                            bank_url=url_for('mock_jamb.bank', subject_id=subject_id or ''))
 
 
@@ -1522,6 +1534,38 @@ def bank_syllabus_retag():
               f"check the key and model under Settings → AI Vision OCR.", 'info')
     else:
         flash(f'No stand-alone {subject.name}{scope} bank questions to tag.', 'info')
+    return redirect(url_for('mock_jamb.bank_syllabus', subject_id=subject_id))
+
+
+@mock_jamb_bp.route('/bank/syllabus/batch-retag', methods=['POST'])
+@login_required
+@csrf_protect
+def bank_syllabus_batch_retag():
+    """Queue a batch AI-retag (Anthropic Message Batches API — 50% cheaper, async)
+    to the coded syllabus. Runs in the background jobs worker."""
+    from utils import jobs
+    subject_id = request.form.get('subject_id', type=int)
+    subject = db.session.get(Subject, subject_id) if subject_id else None
+    if not subject:
+        flash('Pick a subject first.', 'error')
+        return redirect(url_for('mock_jamb.bank_syllabus'))
+    if not jobs.async_enabled():
+        flash('Batch retag runs in the background — enable the jobs worker '
+              '(ASYNC_JOBS / the edusyncra-jobs service) to use it. The inline retag works now.', 'error')
+        return redirect(url_for('mock_jamb.bank_syllabus', subject_id=subject_id))
+
+    params = {
+        'subject_id': subject_id,
+        'model': (request.form.get('model') or '').strip(),
+        'year': (request.form.get('year') or '').strip() or None,
+        'exam_body': (request.form.get('exam_body') or '').strip() or None,
+        'force': request.form.get('force') == '1',       # re-tag already-coded too
+        'phase': 'submit',
+    }
+    jobs.enqueue('bank_batch_retag', params)
+    scope = 'everything' if params['force'] else 'untagged questions'
+    flash(f'Batch retag queued for {subject.name} ({scope}). It runs in the background — '
+          f'refresh this page to watch progress; the tagged count updates as results apply.', 'success')
     return redirect(url_for('mock_jamb.bank_syllabus', subject_id=subject_id))
 
 
