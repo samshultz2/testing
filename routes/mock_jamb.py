@@ -1435,6 +1435,26 @@ def bank_syllabus_import():
     return redirect(url_for('mock_jamb.bank_syllabus', subject_id=subject_id))
 
 
+@mock_jamb_bp.route('/bank/syllabus/clear', methods=['POST'])
+@login_required
+@csrf_protect
+def bank_syllabus_clear():
+    """Remove a subject's imported syllabus entirely (its nodes cascade). Bank
+    questions and their draw blueprint are untouched — only the coded syllabus
+    tree is deleted, so it can be re-imported cleanly."""
+    from models import MockJAMBSyllabus
+    subject_id = request.form.get('subject_id', type=int)
+    subject = db.session.get(Subject, subject_id) if subject_id else None
+    syll = MockJAMBSyllabus.query.filter_by(subject_id=subject_id).first() if subject_id else None
+    if not syll:
+        flash('No syllabus to clear for this subject.', 'warning')
+        return redirect(url_for('mock_jamb.bank_syllabus', subject_id=subject_id or ''))
+    db.session.delete(syll)            # nodes cascade via the relationship
+    db.session.commit()
+    flash(f'Syllabus cleared for {subject.name if subject else "the subject"}.', 'success')
+    return redirect(url_for('mock_jamb.bank_syllabus', subject_id=subject_id or ''))
+
+
 @mock_jamb_bp.route('/bank/analytics')
 @login_required
 def bank_analytics():

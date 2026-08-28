@@ -143,6 +143,23 @@ def test_bank_syllabus_route_imports_bundled(app):
     assert 'MATH.NUM.1.A' in body
 
 
+def test_clear_syllabus_removes_it(app):
+    """The clear action deletes a subject's imported syllabus and its nodes."""
+    sid = _subject(app, f'ClearMe{next(_SEQ)}')
+    c = app.test_client()
+    c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': login_token(c)})
+    with app.app_context():
+        from utils.jamb_syllabus_import import import_syllabus
+        import_syllabus(db.session.get(Subject, sid), _math_json(), fmt='json')
+        assert MockJAMBSyllabus.query.filter_by(subject_id=sid).first() is not None
+    c.post('/mock-jamb/bank/syllabus/clear',
+           data={'_csrf_token': auth_csrf(c), 'subject_id': sid})
+    with app.app_context():
+        assert MockJAMBSyllabus.query.filter_by(subject_id=sid).first() is None
+        assert MockJAMBSyllabusNode.query.filter(
+            MockJAMBSyllabusNode.code.like('MATH.%')).count() == 0
+
+
 def test_bundled_import_targets_its_own_subject_not_the_selected_one(app):
     """Clicking the Mathematics bundled button while another subject is selected
     must import into Mathematics, never the selected subject."""
