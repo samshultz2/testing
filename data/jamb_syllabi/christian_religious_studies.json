@@ -1,0 +1,652 @@
+{
+  "subject": "Christian Religious Studies",
+  "code": "JAMB-CRS",
+  "prefix": "CRS",
+  "version": "2026",
+  "sections": [
+    {
+      "code": "A",
+      "name": "Themes from Creation to the Division of the Kingdom",
+      "topics": [
+        {
+          "code": "A.1",
+          "name": "The Sovereignty of God",
+          "items": [
+            {
+              "code": "A.1.A",
+              "name": "God as Creator and Controller of the Universe"
+            }
+          ]
+        },
+        {
+          "code": "A.2",
+          "name": "The Covenant",
+          "items": [
+            {
+              "code": "A.2.A",
+              "name": "The flood and God's covenant with Noah"
+            },
+            {
+              "code": "A.2.B",
+              "name": "God's covenant with Abraham"
+            },
+            {
+              "code": "A.2.C",
+              "name": "God's covenant with Israel"
+            },
+            {
+              "code": "A.2.D",
+              "name": "The New Covenant"
+            }
+          ]
+        },
+        {
+          "code": "A.3",
+          "name": "Leadership Qualities",
+          "items": [
+            {
+              "code": "A.3.A",
+              "name": "Joseph"
+            },
+            {
+              "code": "A.3.B",
+              "name": "Moses"
+            },
+            {
+              "code": "A.3.C",
+              "name": "Joshua"
+            },
+            {
+              "code": "A.3.D",
+              "name": "The Judges (Deborah, Gideon, Samson)"
+            }
+          ]
+        },
+        {
+          "code": "A.4",
+          "name": "Divine Providence, Guidance and Protection",
+          "items": [
+            {
+              "code": "A.4.A",
+              "name": "Guidance"
+            },
+            {
+              "code": "A.4.B",
+              "name": "Protection"
+            },
+            {
+              "code": "A.4.C",
+              "name": "Provision"
+            }
+          ]
+        },
+        {
+          "code": "A.5",
+          "name": "Parental Responsibility",
+          "items": [
+            {
+              "code": "A.5.A",
+              "name": "Eli and Samuel"
+            },
+            {
+              "code": "A.5.B",
+              "name": "David"
+            },
+            {
+              "code": "A.5.C",
+              "name": "Asa"
+            }
+          ]
+        },
+        {
+          "code": "A.6",
+          "name": "Obedience and Disobedience",
+          "items": [
+            {
+              "code": "A.6.A",
+              "name": "Obedience and rewards (Abraham, the three Hebrew youths, David)"
+            },
+            {
+              "code": "A.6.B",
+              "name": "Disobedience and consequences (Adam, the manna, the golden calf, Moses, Saul)"
+            }
+          ]
+        },
+        {
+          "code": "A.7",
+          "name": "A Man after God's own Heart",
+          "items": [
+            {
+              "code": "A.7.A",
+              "name": "The early life of David"
+            },
+            {
+              "code": "A.7.B",
+              "name": "David's submission to the will of God"
+            },
+            {
+              "code": "A.7.C",
+              "name": "David's repentance and forgiveness"
+            }
+          ]
+        },
+        {
+          "code": "A.8",
+          "name": "Decision-Making",
+          "items": [
+            {
+              "code": "A.8.A",
+              "name": "Reliance on a medium"
+            },
+            {
+              "code": "A.8.B",
+              "name": "The wisdom of Solomon"
+            },
+            {
+              "code": "A.8.C",
+              "name": "Unwise policies of Solomon and Rehoboam"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "B",
+      "name": "Themes from the Division of the Kingdom to the Return from Exile and the Prophets",
+      "topics": [
+        {
+          "code": "B.1",
+          "name": "Greed and its Effects",
+          "items": [
+            {
+              "code": "B.1.A",
+              "name": "Ahab"
+            },
+            {
+              "code": "B.1.B",
+              "name": "Gehazi"
+            }
+          ]
+        },
+        {
+          "code": "B.2",
+          "name": "The Supremacy of God",
+          "items": [
+            {
+              "code": "B.2.A",
+              "name": "Religious tension and the power of God on Mount Carmel"
+            }
+          ]
+        },
+        {
+          "code": "B.3",
+          "name": "Religious Reforms in Judah",
+          "items": [
+            {
+              "code": "B.3.A",
+              "name": "Cleansing of the Temple"
+            },
+            {
+              "code": "B.3.B",
+              "name": "Renewal of the Covenant"
+            }
+          ]
+        },
+        {
+          "code": "B.4",
+          "name": "Concern for Judah",
+          "items": [
+            {
+              "code": "B.4.A",
+              "name": "The fall of Jerusalem"
+            },
+            {
+              "code": "B.4.B",
+              "name": "Condition of Judah"
+            },
+            {
+              "code": "B.4.C",
+              "name": "Response to the state of Judah"
+            }
+          ]
+        },
+        {
+          "code": "B.5",
+          "name": "Faith, Courage and Protection",
+          "items": [
+            {
+              "code": "B.5.A",
+              "name": "Daniel, Shadrach, Meshach and Abednego"
+            }
+          ]
+        },
+        {
+          "code": "B.6",
+          "name": "God's Message to Nineveh",
+          "items": [
+            {
+              "code": "B.6.A",
+              "name": "Jonah and his message"
+            }
+          ]
+        },
+        {
+          "code": "B.7",
+          "name": "Social Justice, True Religion and Divine Love",
+          "items": [
+            {
+              "code": "B.7.A",
+              "name": "Social justice and true religion (Amos)"
+            },
+            {
+              "code": "B.7.B",
+              "name": "Divine love and human response (Hosea)"
+            }
+          ]
+        },
+        {
+          "code": "B.8",
+          "name": "Holiness and Divine Call",
+          "items": [
+            {
+              "code": "B.8.A",
+              "name": "Isaiah, Ezekiel and Jeremiah"
+            }
+          ]
+        },
+        {
+          "code": "B.9",
+          "name": "Punishment and Hope",
+          "items": [
+            {
+              "code": "B.9.A",
+              "name": "Jeremiah, Ezekiel and Isaiah"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "C",
+      "name": "Themes from the four Gospels and the Acts of the Apostles",
+      "topics": [
+        {
+          "code": "C.1",
+          "name": "The Birth and Early Life of Jesus",
+          "items": [
+            {
+              "code": "C.1.A",
+              "name": "John, the forerunner of Jesus"
+            },
+            {
+              "code": "C.1.B",
+              "name": "The birth and boyhood of Jesus"
+            }
+          ]
+        },
+        {
+          "code": "C.2",
+          "name": "The Baptism and Temptation of Jesus",
+          "items": []
+        },
+        {
+          "code": "C.3",
+          "name": "Discipleship",
+          "items": [
+            {
+              "code": "C.3.A",
+              "name": "The call of the first disciples"
+            },
+            {
+              "code": "C.3.B",
+              "name": "The demands of discipleship"
+            }
+          ]
+        },
+        {
+          "code": "C.4",
+          "name": "Miracles",
+          "items": [
+            {
+              "code": "C.4.A",
+              "name": "Nature miracles"
+            },
+            {
+              "code": "C.4.B",
+              "name": "Miracles of resuscitation"
+            },
+            {
+              "code": "C.4.C",
+              "name": "Healing miracles"
+            },
+            {
+              "code": "C.4.D",
+              "name": "Exorcism"
+            }
+          ]
+        },
+        {
+          "code": "C.5",
+          "name": "The Parables",
+          "items": [
+            {
+              "code": "C.5.A",
+              "name": "Parables of the kingdom"
+            },
+            {
+              "code": "C.5.B",
+              "name": "Parables about the love of God"
+            },
+            {
+              "code": "C.5.C",
+              "name": "Parables about love for one another"
+            },
+            {
+              "code": "C.5.D",
+              "name": "Parable about wealth (the rich fool)"
+            },
+            {
+              "code": "C.5.E",
+              "name": "Parables on prayer"
+            }
+          ]
+        },
+        {
+          "code": "C.6",
+          "name": "Sermon on the Mount",
+          "items": []
+        },
+        {
+          "code": "C.7",
+          "name": "Mission of the Disciples",
+          "items": [
+            {
+              "code": "C.7.A",
+              "name": "The mission of the twelve"
+            },
+            {
+              "code": "C.7.B",
+              "name": "The mission of the seventy"
+            }
+          ]
+        },
+        {
+          "code": "C.8",
+          "name": "The Great Confession",
+          "items": []
+        },
+        {
+          "code": "C.9",
+          "name": "The Transfiguration",
+          "items": []
+        },
+        {
+          "code": "C.10",
+          "name": "The Triumphal Entry and the Cleansing of the Temple",
+          "items": []
+        },
+        {
+          "code": "C.11",
+          "name": "The Last Supper",
+          "items": []
+        },
+        {
+          "code": "C.12",
+          "name": "The Trials and Death of Jesus",
+          "items": [
+            {
+              "code": "C.12.A",
+              "name": "The trials of Jesus (before the High Priest, Pilate and Herod)"
+            },
+            {
+              "code": "C.12.B",
+              "name": "Crucifixion and burial of Jesus"
+            }
+          ]
+        },
+        {
+          "code": "C.13",
+          "name": "Resurrection, Appearances and Ascension of Jesus",
+          "items": []
+        },
+        {
+          "code": "C.14",
+          "name": "Jesus' Teachings about Himself",
+          "items": [
+            {
+              "code": "C.14.A",
+              "name": "The Bread of Life and the Living Water"
+            },
+            {
+              "code": "C.14.B",
+              "name": "The Light of the World"
+            },
+            {
+              "code": "C.14.C",
+              "name": "The Door, the Lamb and the Good Shepherd"
+            },
+            {
+              "code": "C.14.D",
+              "name": "The True Vine"
+            },
+            {
+              "code": "C.14.E",
+              "name": "The Resurrection"
+            }
+          ]
+        },
+        {
+          "code": "C.15",
+          "name": "Love",
+          "items": [
+            {
+              "code": "C.15.A",
+              "name": "God's love for man"
+            },
+            {
+              "code": "C.15.B",
+              "name": "Love for one another"
+            }
+          ]
+        },
+        {
+          "code": "C.16",
+          "name": "Fellowship in the Early Church",
+          "items": [
+            {
+              "code": "C.16.A",
+              "name": "Communal living"
+            },
+            {
+              "code": "C.16.B",
+              "name": "Problems of communal living and solutions"
+            }
+          ]
+        },
+        {
+          "code": "C.17",
+          "name": "The Holy Spirit and the Mission of the Church",
+          "items": [
+            {
+              "code": "C.17.A",
+              "name": "The Pentecost"
+            },
+            {
+              "code": "C.17.B",
+              "name": "The mission of the Church"
+            }
+          ]
+        },
+        {
+          "code": "C.18",
+          "name": "Opposition to the Gospel Message",
+          "items": [
+            {
+              "code": "C.18.A",
+              "name": "The arrest and imprisonment of Peter and John"
+            },
+            {
+              "code": "C.18.B",
+              "name": "The martyrdom of Stephen"
+            },
+            {
+              "code": "C.18.C",
+              "name": "Persecution by Saul"
+            },
+            {
+              "code": "C.18.D",
+              "name": "Persecution of Paul"
+            }
+          ]
+        },
+        {
+          "code": "C.19",
+          "name": "Mission to the Gentiles",
+          "items": [
+            {
+              "code": "C.19.A",
+              "name": "Conversion of Saul"
+            },
+            {
+              "code": "C.19.B",
+              "name": "Conversion of Cornelius"
+            },
+            {
+              "code": "C.19.C",
+              "name": "The commissioning and mission of Paul"
+            },
+            {
+              "code": "C.19.D",
+              "name": "The Council of Jerusalem"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "D",
+      "name": "Themes from Selected Epistles",
+      "topics": [
+        {
+          "code": "D.1",
+          "name": "Justification by Faith",
+          "items": []
+        },
+        {
+          "code": "D.2",
+          "name": "The Law and Grace",
+          "items": []
+        },
+        {
+          "code": "D.3",
+          "name": "New Life in Christ",
+          "items": []
+        },
+        {
+          "code": "D.4",
+          "name": "Christians as Joint Heirs with Christ",
+          "items": []
+        },
+        {
+          "code": "D.5",
+          "name": "Humility",
+          "items": []
+        },
+        {
+          "code": "D.6",
+          "name": "Forgiveness",
+          "items": []
+        },
+        {
+          "code": "D.7",
+          "name": "Spiritual Gifts",
+          "items": []
+        },
+        {
+          "code": "D.8",
+          "name": "Christian Giving",
+          "items": []
+        },
+        {
+          "code": "D.9",
+          "name": "Civic Responsibility",
+          "items": []
+        },
+        {
+          "code": "D.10",
+          "name": "Dignity of Labour",
+          "items": []
+        },
+        {
+          "code": "D.11",
+          "name": "The Second Coming of Christ",
+          "items": [
+            {
+              "code": "D.11.A",
+              "name": "The signs of the coming of Christ"
+            },
+            {
+              "code": "D.11.B",
+              "name": "Preparation for His coming"
+            }
+          ]
+        },
+        {
+          "code": "D.12",
+          "name": "Impartiality",
+          "items": []
+        },
+        {
+          "code": "D.13",
+          "name": "Effective Prayer",
+          "items": []
+        },
+        {
+          "code": "D.14",
+          "name": "Christian Living in the Community",
+          "items": [
+            {
+              "code": "D.14.A",
+              "name": "Interpersonal relationships among Christians"
+            },
+            {
+              "code": "D.14.B",
+              "name": "Christians living among non-Christians"
+            },
+            {
+              "code": "D.14.C",
+              "name": "Christian attitude to persecution"
+            },
+            {
+              "code": "D.14.D",
+              "name": "Relationship in the Christian family"
+            }
+          ]
+        },
+        {
+          "code": "D.15",
+          "name": "Corruption",
+          "items": []
+        },
+        {
+          "code": "D.16",
+          "name": "Sexual Immorality",
+          "items": [
+            {
+              "code": "D.16.A",
+              "name": "Prostitution"
+            },
+            {
+              "code": "D.16.B",
+              "name": "Adultery and fornication"
+            },
+            {
+              "code": "D.16.C",
+              "name": "Homosexuality"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

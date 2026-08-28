@@ -1,0 +1,553 @@
+{
+  "subject": "Government",
+  "code": "JAMB-GOV",
+  "prefix": "GOV",
+  "version": "2026",
+  "sections": [
+    {
+      "code": "ELEM",
+      "name": "Part I: Elements of Government",
+      "topics": [
+        {
+          "code": "ELEM.1",
+          "name": "Definition and Scope of Government",
+          "items": []
+        },
+        {
+          "code": "ELEM.2",
+          "name": "Basic Concepts of Government",
+          "items": [
+            {
+              "code": "ELEM.2.A",
+              "name": "Power, influence, authority, legitimacy, sovereignty"
+            },
+            {
+              "code": "ELEM.2.B",
+              "name": "Society, state, nation, nation-state"
+            },
+            {
+              "code": "ELEM.2.C",
+              "name": "Political processes (political socialization, participation, culture)"
+            }
+          ]
+        },
+        {
+          "code": "ELEM.3",
+          "name": "Forms of Government",
+          "items": [
+            {
+              "code": "ELEM.3.A",
+              "name": "Monarchy, aristocracy, oligarchy, autocracy, republicanism, democracy - definitions, features, merits and demerits"
+            }
+          ]
+        },
+        {
+          "code": "ELEM.4",
+          "name": "Arms of Government",
+          "items": [
+            {
+              "code": "ELEM.4.A",
+              "name": "The Legislature - types, structure, functions, powers"
+            },
+            {
+              "code": "ELEM.4.B",
+              "name": "The Executive - types, functions, powers"
+            },
+            {
+              "code": "ELEM.4.C",
+              "name": "The Judiciary - functions, powers, components"
+            },
+            {
+              "code": "ELEM.4.D",
+              "name": "Their relationships"
+            }
+          ]
+        },
+        {
+          "code": "ELEM.5",
+          "name": "Structures of Governance",
+          "items": [
+            {
+              "code": "ELEM.5.A",
+              "name": "Unitary - features, reasons for adoption, merits and demerits"
+            },
+            {
+              "code": "ELEM.5.B",
+              "name": "Federal - features, reasons for adoption, merits and demerits"
+            },
+            {
+              "code": "ELEM.5.C",
+              "name": "Confederal - features, reasons for adoption, merits and demerits"
+            }
+          ]
+        },
+        {
+          "code": "ELEM.6",
+          "name": "Systems of Governance",
+          "items": [
+            {
+              "code": "ELEM.6.A",
+              "name": "Presidential, parliamentary and monarchical - features, merits and demerits"
+            }
+          ]
+        },
+        {
+          "code": "ELEM.7",
+          "name": "Political Ideologies",
+          "items": [
+            {
+              "code": "ELEM.7.A",
+              "name": "Communalism, feudalism, capitalism, socialism, communism, totalitarianism, fascism, Nazism, liberalism"
+            }
+          ]
+        },
+        {
+          "code": "ELEM.8",
+          "name": "Constitution",
+          "items": [
+            {
+              "code": "ELEM.8.A",
+              "name": "Meaning, sources, functions, types (written, unwritten, rigid and flexible)"
+            }
+          ]
+        },
+        {
+          "code": "ELEM.9",
+          "name": "Principles of Democratic Government",
+          "items": [
+            {
+              "code": "ELEM.9.A",
+              "name": "Ethics and accountability, separation of powers, checks and balances, individual and collective responsibility, constitutionalism, rule of law, representative government, centralization and decentralization"
+            }
+          ]
+        },
+        {
+          "code": "ELEM.10",
+          "name": "Processes of Legislation",
+          "items": [
+            {
+              "code": "ELEM.10.A",
+              "name": "Legislative enactments - Acts, Edicts, Bye-laws, delegated legislation, Decrees"
+            }
+          ]
+        },
+        {
+          "code": "ELEM.11",
+          "name": "Citizenship",
+          "items": [
+            {
+              "code": "ELEM.11.A",
+              "name": "Meaning and types"
+            },
+            {
+              "code": "ELEM.11.B",
+              "name": "Citizenship rights"
+            },
+            {
+              "code": "ELEM.11.C",
+              "name": "Dual citizenship, renunciation, deprivation"
+            },
+            {
+              "code": "ELEM.11.D",
+              "name": "Duties and obligations of citizens"
+            },
+            {
+              "code": "ELEM.11.E",
+              "name": "Duties and obligations of the state"
+            }
+          ]
+        },
+        {
+          "code": "ELEM.12",
+          "name": "The Electoral Process",
+          "items": [
+            {
+              "code": "ELEM.12.A",
+              "name": "Suffrage - evolution, types"
+            },
+            {
+              "code": "ELEM.12.B",
+              "name": "Election - types, ingredients of free and fair election, pre- and post-election crisis"
+            },
+            {
+              "code": "ELEM.12.C",
+              "name": "Electoral system - types, advantages and disadvantages"
+            },
+            {
+              "code": "ELEM.12.D",
+              "name": "Electoral commission - functions, problems"
+            }
+          ]
+        },
+        {
+          "code": "ELEM.13",
+          "name": "Political Parties and Party Systems",
+          "items": [
+            {
+              "code": "ELEM.13.A",
+              "name": "Political parties - definition, organization, functions"
+            },
+            {
+              "code": "ELEM.13.B",
+              "name": "Party systems - definition, organization, functions, merits and demerits"
+            }
+          ]
+        },
+        {
+          "code": "ELEM.14",
+          "name": "Pressure Groups",
+          "items": [
+            {
+              "code": "ELEM.14.A",
+              "name": "Definition, types, functions and modes of operation"
+            },
+            {
+              "code": "ELEM.14.B",
+              "name": "Differences between pressure groups and political parties"
+            }
+          ]
+        },
+        {
+          "code": "ELEM.15",
+          "name": "Public Opinion",
+          "items": [
+            {
+              "code": "ELEM.15.A",
+              "name": "Meaning, formation and measurement"
+            },
+            {
+              "code": "ELEM.15.B",
+              "name": "Functions and limitations"
+            }
+          ]
+        },
+        {
+          "code": "ELEM.16",
+          "name": "The Civil Service / Public Service",
+          "items": [
+            {
+              "code": "ELEM.16.A",
+              "name": "Civil service - definition, characteristics, functions, structure, control and problems"
+            },
+            {
+              "code": "ELEM.16.B",
+              "name": "Public service - definition, characteristics, functions, structure, control and problems"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "PDN",
+      "name": "Part II: Political Development in Nigeria",
+      "topics": [
+        {
+          "code": "PDN.1",
+          "name": "Pre-Colonial Polities",
+          "items": [
+            {
+              "code": "PDN.1.A",
+              "name": "Structural organization of pre-jihad Hausa/Fulani emirate, Tiv, Igbo, Yoruba"
+            },
+            {
+              "code": "PDN.1.B",
+              "name": "Functions of their various political institutions"
+            }
+          ]
+        },
+        {
+          "code": "PDN.2",
+          "name": "Imperialist Penetration",
+          "items": [
+            {
+              "code": "PDN.2.A",
+              "name": "British process of acquisition (trade, missionary activities, company rule, crown colony, protectorate)"
+            },
+            {
+              "code": "PDN.2.B",
+              "name": "British colonial administrative policy (direct and indirect rule)"
+            },
+            {
+              "code": "PDN.2.C",
+              "name": "French colonial administrative policy (assimilation and association)"
+            },
+            {
+              "code": "PDN.2.D",
+              "name": "Impact of British colonial rule (economic, political, socio-cultural)"
+            },
+            {
+              "code": "PDN.2.E",
+              "name": "Comparison of British and French colonial administration"
+            }
+          ]
+        },
+        {
+          "code": "PDN.3",
+          "name": "Process of Decolonization",
+          "items": [
+            {
+              "code": "PDN.3.A",
+              "name": "Nationalism - meaning, types"
+            },
+            {
+              "code": "PDN.3.B",
+              "name": "Nationalist movements - emergence, goals, strategies"
+            },
+            {
+              "code": "PDN.3.C",
+              "name": "Nationalist leaders"
+            },
+            {
+              "code": "PDN.3.D",
+              "name": "Emergence of nationalist parties"
+            },
+            {
+              "code": "PDN.3.E",
+              "name": "Influence of external factors"
+            }
+          ]
+        },
+        {
+          "code": "PDN.4",
+          "name": "Constitutional Development in Nigeria",
+          "items": [
+            {
+              "code": "PDN.4.A",
+              "name": "Clifford (1922), Richards (1946), Macpherson (1951), Lyttleton (1954) and Independence (1960) Constitutions - features, merits and demerits"
+            }
+          ]
+        },
+        {
+          "code": "PDN.5",
+          "name": "Post-Independence Constitutions",
+          "items": [
+            {
+              "code": "PDN.5.A",
+              "name": "1963, 1979, 1989 and 1999 (as amended) - characteristics and shortcomings"
+            }
+          ]
+        },
+        {
+          "code": "PDN.6",
+          "name": "Institutions of Government in Post-Independence Nigeria",
+          "items": [
+            {
+              "code": "PDN.6.A",
+              "name": "The Legislature - structures, functions and workings"
+            },
+            {
+              "code": "PDN.6.B",
+              "name": "The Executive - structure, functions and workings"
+            },
+            {
+              "code": "PDN.6.C",
+              "name": "The Judiciary - structure, functions and workings"
+            }
+          ]
+        },
+        {
+          "code": "PDN.7",
+          "name": "Public Commissions Established by the 1979 and Subsequent Constitutions",
+          "items": [
+            {
+              "code": "PDN.7.A",
+              "name": "Civil Service Commission, Public Complaints Commission, Electoral Commissions, National Boundary Commission, ICPC, EFCC and others - objectives, functions and problems"
+            }
+          ]
+        },
+        {
+          "code": "PDN.8",
+          "name": "Political Parties and Party Politics in Post-Independence Nigeria",
+          "items": [
+            {
+              "code": "PDN.8.A",
+              "name": "First, Second, Third and Fourth Republics - evolution, membership spread, structure"
+            }
+          ]
+        },
+        {
+          "code": "PDN.9",
+          "name": "The Structure and Workings of Nigerian Federalism",
+          "items": [
+            {
+              "code": "PDN.9.A",
+              "name": "Rationale for a federal system"
+            },
+            {
+              "code": "PDN.9.B",
+              "name": "Tiers of government and their relationship"
+            },
+            {
+              "code": "PDN.9.C",
+              "name": "Creation of states (1963, 1967, 1976, 1987, 1991, 1996)"
+            },
+            {
+              "code": "PDN.9.D",
+              "name": "Problems of Nigerian federalism and solutions (Federal Character Principle)"
+            }
+          ]
+        },
+        {
+          "code": "PDN.10",
+          "name": "Public Corporations and Parastatals",
+          "items": [
+            {
+              "code": "PDN.10.A",
+              "name": "Definition, types, purpose and functions"
+            },
+            {
+              "code": "PDN.10.B",
+              "name": "Finance, control and problems"
+            },
+            {
+              "code": "PDN.10.C",
+              "name": "Deregulation, privatization and commercialization - objectives, features, merits and demerits"
+            },
+            {
+              "code": "PDN.10.D",
+              "name": "Comparison between public corporations and parastatals"
+            }
+          ]
+        },
+        {
+          "code": "PDN.11",
+          "name": "Local Government",
+          "items": [
+            {
+              "code": "PDN.11.A",
+              "name": "Local government administration prior to 1976"
+            },
+            {
+              "code": "PDN.11.B",
+              "name": "Features of local government reforms (1976, 1989) - structure, functions, finance, inter-governmental relations"
+            },
+            {
+              "code": "PDN.11.C",
+              "name": "Traditional rulers and local governments"
+            },
+            {
+              "code": "PDN.11.D",
+              "name": "Problems of local government administration in Nigeria"
+            }
+          ]
+        },
+        {
+          "code": "PDN.12",
+          "name": "The Military in Nigerian Politics",
+          "items": [
+            {
+              "code": "PDN.12.A",
+              "name": "Factors that led to military intervention"
+            },
+            {
+              "code": "PDN.12.B",
+              "name": "Structure of military regimes"
+            },
+            {
+              "code": "PDN.12.C",
+              "name": "Impact of military rule (political and economic)"
+            },
+            {
+              "code": "PDN.12.D",
+              "name": "Processes of military disengagement"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "FOR",
+      "name": "Part III: Foreign Policy and Nigeria's Relationship with the International Community",
+      "topics": [
+        {
+          "code": "FOR.1",
+          "name": "Foreign Policy",
+          "items": [
+            {
+              "code": "FOR.1.A",
+              "name": "Definition, purpose, determining factors, formulation and implementation"
+            }
+          ]
+        },
+        {
+          "code": "FOR.2",
+          "name": "Nigeria's Foreign Policy",
+          "items": [
+            {
+              "code": "FOR.2.A",
+              "name": "Relations with major powers"
+            },
+            {
+              "code": "FOR.2.B",
+              "name": "Relations with developing countries (Technical Aid Corps, peace-keeping)"
+            },
+            {
+              "code": "FOR.2.C",
+              "name": "Nigeria's non-alignment policy"
+            }
+          ]
+        },
+        {
+          "code": "FOR.3",
+          "name": "Nigeria's Relations with African Countries",
+          "items": [
+            {
+              "code": "FOR.3.A",
+              "name": "Africa as the centre-piece of Nigeria's foreign policy"
+            },
+            {
+              "code": "FOR.3.B",
+              "name": "NEPAD - origin, objectives and implications"
+            }
+          ]
+        },
+        {
+          "code": "FOR.4",
+          "name": "Nigeria in International Organizations",
+          "items": [
+            {
+              "code": "FOR.4.A",
+              "name": "The United Nations"
+            },
+            {
+              "code": "FOR.4.B",
+              "name": "The Commonwealth"
+            },
+            {
+              "code": "FOR.4.C",
+              "name": "The OAU"
+            },
+            {
+              "code": "FOR.4.D",
+              "name": "The African Union"
+            },
+            {
+              "code": "FOR.4.E",
+              "name": "ECOWAS"
+            },
+            {
+              "code": "FOR.4.F",
+              "name": "OPEC"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "IORG",
+      "name": "Part IV: International Organizations",
+      "topics": [
+        {
+          "code": "IORG.1",
+          "name": "International Organizations",
+          "items": [
+            {
+              "code": "IORG.1.A",
+              "name": "ECOWAS, OAU/AU, Commonwealth, OPEC, UNO, African Petroleum Producers Association - origin, objectives, structure, functions, achievements, problems and prospects"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

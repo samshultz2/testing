@@ -1,0 +1,292 @@
+{
+  "subject": "Literature in English",
+  "code": "JAMB-LIT",
+  "prefix": "LIT",
+  "version": "2026",
+  "sections": [
+    {
+      "code": "DRA",
+      "name": "Drama",
+      "topics": [
+        {
+          "code": "DRA.A",
+          "name": "Types",
+          "items": [
+            {
+              "code": "DRA.A.A",
+              "name": "Tragedy"
+            },
+            {
+              "code": "DRA.A.B",
+              "name": "Comedy"
+            },
+            {
+              "code": "DRA.A.C",
+              "name": "Tragicomedy"
+            },
+            {
+              "code": "DRA.A.D",
+              "name": "Melodrama"
+            },
+            {
+              "code": "DRA.A.E",
+              "name": "Farce"
+            },
+            {
+              "code": "DRA.A.F",
+              "name": "Opera"
+            }
+          ]
+        },
+        {
+          "code": "DRA.B",
+          "name": "Dramatic Techniques",
+          "items": [
+            {
+              "code": "DRA.B.A",
+              "name": "Characterisation"
+            },
+            {
+              "code": "DRA.B.B",
+              "name": "Dialogue"
+            },
+            {
+              "code": "DRA.B.C",
+              "name": "Flashback"
+            },
+            {
+              "code": "DRA.B.D",
+              "name": "Mime"
+            },
+            {
+              "code": "DRA.B.E",
+              "name": "Costume"
+            },
+            {
+              "code": "DRA.B.F",
+              "name": "Music/Dance"
+            },
+            {
+              "code": "DRA.B.G",
+              "name": "Decor/scenery"
+            },
+            {
+              "code": "DRA.B.H",
+              "name": "Acts/Scenes"
+            },
+            {
+              "code": "DRA.B.I",
+              "name": "Soliloquy/aside"
+            },
+            {
+              "code": "DRA.B.J",
+              "name": "Figures of speech"
+            }
+          ]
+        },
+        {
+          "code": "DRA.C",
+          "name": "Interpretation of the Prescribed Texts",
+          "items": [
+            {
+              "code": "DRA.C.A",
+              "name": "Theme"
+            },
+            {
+              "code": "DRA.C.B",
+              "name": "Plot"
+            },
+            {
+              "code": "DRA.C.C",
+              "name": "Socio-political context"
+            },
+            {
+              "code": "DRA.C.D",
+              "name": "Setting"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "PRO",
+      "name": "Prose",
+      "topics": [
+        {
+          "code": "PRO.A",
+          "name": "Types",
+          "items": [
+            {
+              "code": "PRO.A.A",
+              "name": "Fiction (novel, novella/novelette, short story)"
+            },
+            {
+              "code": "PRO.A.B",
+              "name": "Non-fiction (biography, autobiography, memoir)"
+            },
+            {
+              "code": "PRO.A.C",
+              "name": "Faction (combination of fact and fiction)"
+            }
+          ]
+        },
+        {
+          "code": "PRO.B",
+          "name": "Narrative Techniques / Devices",
+          "items": [
+            {
+              "code": "PRO.B.A",
+              "name": "Point of view (omniscient, first, second, third person, stream of consciousness, epiphany)"
+            },
+            {
+              "code": "PRO.B.B",
+              "name": "Characterisation (round, flat, foil, hero, antihero, villain, heroine)"
+            },
+            {
+              "code": "PRO.B.C",
+              "name": "Language"
+            }
+          ]
+        },
+        {
+          "code": "PRO.C",
+          "name": "Textual Analysis",
+          "items": [
+            {
+              "code": "PRO.C.A",
+              "name": "Theme"
+            },
+            {
+              "code": "PRO.C.B",
+              "name": "Plot"
+            },
+            {
+              "code": "PRO.C.C",
+              "name": "Setting (temporal/spatial)"
+            },
+            {
+              "code": "PRO.C.D",
+              "name": "Socio-political context"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "POE",
+      "name": "Poetry",
+      "topics": [
+        {
+          "code": "POE.A",
+          "name": "Types",
+          "items": [
+            {
+              "code": "POE.A.A",
+              "name": "Sonnet"
+            },
+            {
+              "code": "POE.A.B",
+              "name": "Ode"
+            },
+            {
+              "code": "POE.A.C",
+              "name": "Lyrics"
+            },
+            {
+              "code": "POE.A.D",
+              "name": "Elegy"
+            },
+            {
+              "code": "POE.A.E",
+              "name": "Ballad"
+            },
+            {
+              "code": "POE.A.F",
+              "name": "Panegyric"
+            },
+            {
+              "code": "POE.A.G",
+              "name": "Epic"
+            },
+            {
+              "code": "POE.A.H",
+              "name": "Blank verse"
+            }
+          ]
+        },
+        {
+          "code": "POE.B",
+          "name": "Poetic Devices",
+          "items": [
+            {
+              "code": "POE.B.A",
+              "name": "Imagery"
+            },
+            {
+              "code": "POE.B.B",
+              "name": "Sound (rhyme/rhythm, repetition, pun, onomatopoeia)"
+            },
+            {
+              "code": "POE.B.C",
+              "name": "Diction"
+            },
+            {
+              "code": "POE.B.D",
+              "name": "Persona"
+            }
+          ]
+        },
+        {
+          "code": "POE.C",
+          "name": "Appreciation",
+          "items": [
+            {
+              "code": "POE.C.A",
+              "name": "Thematic preoccupation"
+            },
+            {
+              "code": "POE.C.B",
+              "name": "Socio-political relevance"
+            },
+            {
+              "code": "POE.C.C",
+              "name": "Style"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "TERM",
+      "name": "General Literary Terms and Principles",
+      "topics": [
+        {
+          "code": "TERM.A",
+          "name": "Literary Terms",
+          "items": [
+            {
+              "code": "TERM.A.A",
+              "name": "Foreshadowing, suspense, theatre, monologue, dialogue, soliloquy, symbolism, protagonist, antagonist, figures of speech, satire, stream of consciousness, synecdoche, metonymy"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "APPR",
+      "name": "Literary Appreciation",
+      "topics": [
+        {
+          "code": "APPR.1",
+          "name": "Literary Appreciation",
+          "items": [
+            {
+              "code": "APPR.1.A",
+              "name": "Unseen passages/extracts from Drama, Prose and Poetry"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
