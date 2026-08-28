@@ -1,0 +1,508 @@
+{
+  "subject": "Commerce",
+  "code": "JAMB-COMM",
+  "prefix": "COMM",
+  "version": "2026",
+  "sections": [
+    {
+      "code": "COM",
+      "name": "Commerce",
+      "topics": [
+        {
+          "code": "COM.1",
+          "name": "Commerce",
+          "items": [
+            {
+              "code": "COM.1.A",
+              "name": "Meaning of e-commerce / e-business"
+            },
+            {
+              "code": "COM.1.B",
+              "name": "Meaning and scope of commerce"
+            },
+            {
+              "code": "COM.1.C",
+              "name": "Characteristics of commerce"
+            },
+            {
+              "code": "COM.1.D",
+              "name": "Functions of commerce"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "OCC",
+      "name": "Occupation",
+      "topics": [
+        {
+          "code": "OCC.1",
+          "name": "Occupation",
+          "items": [
+            {
+              "code": "OCC.1.A",
+              "name": "Meaning and importance of occupation"
+            },
+            {
+              "code": "OCC.1.B",
+              "name": "Types of occupation (industrial, commercial and services)"
+            },
+            {
+              "code": "OCC.1.C",
+              "name": "Factors that determine choice of occupation"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "PRD",
+      "name": "Production",
+      "topics": [
+        {
+          "code": "PRD.1",
+          "name": "Production",
+          "items": [
+            {
+              "code": "PRD.1.A",
+              "name": "Factors, characteristics and rewards of production (land, labour, capital and entrepreneur)"
+            },
+            {
+              "code": "PRD.1.B",
+              "name": "Division of labour and specialization"
+            },
+            {
+              "code": "PRD.1.C",
+              "name": "Types of production (primary, secondary and tertiary)"
+            },
+            {
+              "code": "PRD.1.D",
+              "name": "Relationship between production, specialization and exchange"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "TRD",
+      "name": "Trade",
+      "topics": [
+        {
+          "code": "TRD.1",
+          "name": "Trade",
+          "items": [
+            {
+              "code": "TRD.1.A",
+              "name": "Home trade - retail trade (types, functions, setup factors, trends, advantages/disadvantages, success/failure)"
+            },
+            {
+              "code": "TRD.1.B",
+              "name": "Home trade - wholesale trade (types, channels of distribution, functions, advantages/disadvantages)"
+            },
+            {
+              "code": "TRD.1.C",
+              "name": "Foreign trade - types of foreign trade"
+            },
+            {
+              "code": "TRD.1.D",
+              "name": "Foreign trade - basic issues (balance of trade, balance of payments, counter trade)"
+            },
+            {
+              "code": "TRD.1.E",
+              "name": "Foreign trade - procedures and documents in export, import and entrepot trade"
+            },
+            {
+              "code": "TRD.1.F",
+              "name": "Foreign trade - barriers to international trade; tariffs and reasons for imposition"
+            },
+            {
+              "code": "TRD.1.G",
+              "name": "Foreign trade - tools for trade restriction and export promotion"
+            },
+            {
+              "code": "TRD.1.H",
+              "name": "Foreign trade - role of Customs and Excise, Ports Authority, etc."
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "PSG",
+      "name": "Purchase and Sale of Goods",
+      "topics": [
+        {
+          "code": "PSG.1",
+          "name": "Purchase and Sale of Goods",
+          "items": [
+            {
+              "code": "PSG.1.A",
+              "name": "Procedure and documentation (enquiry, quotation, order, invoice, proforma invoice, statement of accounts, indent, consular invoice, bill of lading, certificate of origin, consignment note)"
+            },
+            {
+              "code": "PSG.1.B",
+              "name": "Terms of trade (trade, quantity and cash discount, warranties, C.O.D., C.I.F., F.O.B., E.O.E.)"
+            },
+            {
+              "code": "PSG.1.C",
+              "name": "Terms of payment - cash (spot/prompt) and credit (types, functions, merits and demerits)"
+            },
+            {
+              "code": "PSG.1.D",
+              "name": "Means of payment (legal tender, cheques, standing order, bank draft, postal/money orders, bills of exchange, promissory note, transfers, traveller's cheques, e-payment, recharge card)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "AID",
+      "name": "Aids-to-Trade",
+      "topics": [
+        {
+          "code": "AID.1",
+          "name": "Aids-to-Trade",
+          "items": [
+            {
+              "code": "AID.1.A",
+              "name": "Advertising (meaning and roles; types, media and methods; advantages and disadvantages)"
+            },
+            {
+              "code": "AID.1.B",
+              "name": "Banking (types of bank; services; challenges; e-banking)"
+            },
+            {
+              "code": "AID.1.C",
+              "name": "Communication (process and procedure; types; trends; merits and demerits; barriers)"
+            },
+            {
+              "code": "AID.1.D",
+              "name": "Insurance (types; principles; terms; importance; types of risk)"
+            },
+            {
+              "code": "AID.1.E",
+              "name": "Tourism (meaning and forms; importance; agencies promoting tourism in Nigeria; challenges; tourist centres)"
+            },
+            {
+              "code": "AID.1.F",
+              "name": "Transportation (mode; importance; advantages and disadvantages)"
+            },
+            {
+              "code": "AID.1.G",
+              "name": "Warehousing (importance; types and functions; factors in siting a warehouse)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "BUN",
+      "name": "Business Units",
+      "topics": [
+        {
+          "code": "BUN.1",
+          "name": "Business Units",
+          "items": [
+            {
+              "code": "BUN.1.A",
+              "name": "Forms and features (sole proprietorship, partnership, limited liability companies, public corporations, cooperative societies)"
+            },
+            {
+              "code": "BUN.1.B",
+              "name": "Registration of businesses"
+            },
+            {
+              "code": "BUN.1.C",
+              "name": "Determination of choice of business units"
+            },
+            {
+              "code": "BUN.1.D",
+              "name": "Dissolution and liquidation"
+            },
+            {
+              "code": "BUN.1.E",
+              "name": "Merits and demerits of business units"
+            },
+            {
+              "code": "BUN.1.F",
+              "name": "Reasons for government ownership of public enterprises"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "FIN",
+      "name": "Financing Business",
+      "topics": [
+        {
+          "code": "FIN.1",
+          "name": "Financing Business",
+          "items": [
+            {
+              "code": "FIN.1.A",
+              "name": "Sources of finance (personal savings, sale of shares and bonds, loans, debentures, mortgage, bank overdraft, ploughing back of profit, credit purchase, leasing)"
+            },
+            {
+              "code": "FIN.1.B",
+              "name": "Types of capital (share, owned, authorized, issued, called-up, paid-up, liquid, working capital and owners' equity)"
+            },
+            {
+              "code": "FIN.1.C",
+              "name": "Calculation of forms of capital, profits (gross and net) and turnover"
+            },
+            {
+              "code": "FIN.1.D",
+              "name": "Problems of sourcing finance"
+            },
+            {
+              "code": "FIN.1.E",
+              "name": "Role of Bureau de Change in an economy"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "TAS",
+      "name": "Trade Associations",
+      "topics": [
+        {
+          "code": "TAS.1",
+          "name": "Trade Associations",
+          "items": [
+            {
+              "code": "TAS.1.A",
+              "name": "Objectives and functions of trade and manufacturers' associations"
+            },
+            {
+              "code": "TAS.1.B",
+              "name": "Objectives and functions of Chambers of Commerce"
+            },
+            {
+              "code": "TAS.1.C",
+              "name": "Forms of business combination / merger"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "MON",
+      "name": "Money",
+      "topics": [
+        {
+          "code": "MON.1",
+          "name": "Money",
+          "items": [
+            {
+              "code": "MON.1.A",
+              "name": "Evolution of money"
+            },
+            {
+              "code": "MON.1.B",
+              "name": "Forms and qualities of money"
+            },
+            {
+              "code": "MON.1.C",
+              "name": "Functions of money"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "STK",
+      "name": "Stock Exchange",
+      "topics": [
+        {
+          "code": "STK.1",
+          "name": "Stock Exchange",
+          "items": [
+            {
+              "code": "STK.1.A",
+              "name": "Importance and functions of the stock exchange"
+            },
+            {
+              "code": "STK.1.B",
+              "name": "Types of securities (stocks, shares, bonds, debentures)"
+            },
+            {
+              "code": "STK.1.C",
+              "name": "Procedure of transactions and speculations"
+            },
+            {
+              "code": "STK.1.D",
+              "name": "Second-Tier Securities Market (listing requirements, companies, advantages and regulations)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "MGT",
+      "name": "Elements of Business Management",
+      "topics": [
+        {
+          "code": "MGT.1",
+          "name": "Elements of Business Management",
+          "items": [
+            {
+              "code": "MGT.1.A",
+              "name": "Functions (planning, organizing, staffing, coordinating, motivating, communicating, controlling)"
+            },
+            {
+              "code": "MGT.1.B",
+              "name": "Principles (span of control, unity of command, delegation of authority)"
+            },
+            {
+              "code": "MGT.1.C",
+              "name": "Organizational structure (line, line and staff, functional, matrix and committee)"
+            },
+            {
+              "code": "MGT.1.D",
+              "name": "Functional areas of business (production, marketing, finance and personnel)"
+            },
+            {
+              "code": "MGT.1.E",
+              "name": "Business resources (man, money, materials, machines, opportunities/goodwill)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "MKT",
+      "name": "Elements of Marketing",
+      "topics": [
+        {
+          "code": "MKT.1",
+          "name": "Elements of Marketing",
+          "items": [
+            {
+              "code": "MKT.1.A",
+              "name": "Importance and functions of marketing"
+            },
+            {
+              "code": "MKT.1.B",
+              "name": "The marketing concept (consumer orientation, customer satisfaction, integrated marketing)"
+            },
+            {
+              "code": "MKT.1.C",
+              "name": "Marketing mix (product, price, place and promotion)"
+            },
+            {
+              "code": "MKT.1.D",
+              "name": "Market segmentation"
+            },
+            {
+              "code": "MKT.1.E",
+              "name": "Public relations and customer service"
+            },
+            {
+              "code": "MKT.1.F",
+              "name": "E-marketing"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "LAW",
+      "name": "Legal Aspects of Business",
+      "topics": [
+        {
+          "code": "LAW.1",
+          "name": "Legal Aspects of Business",
+          "items": [
+            {
+              "code": "LAW.1.A",
+              "name": "Meaning and validity of a simple contract"
+            },
+            {
+              "code": "LAW.1.B",
+              "name": "Agency, Sale of Goods Act and Hire Purchase Act"
+            },
+            {
+              "code": "LAW.1.C",
+              "name": "Contract of employment"
+            },
+            {
+              "code": "LAW.1.D",
+              "name": "Government regulation of business (registration, patents, trademarks, copyrights)"
+            },
+            {
+              "code": "LAW.1.E",
+              "name": "Consumer protection (SON, Trade Descriptions Act, Consumer Protection Council, NAFDAC, NDLEA, Customs and Excise)"
+            },
+            {
+              "code": "LAW.1.F",
+              "name": "Regulatory agencies"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "CMX",
+      "name": "Commodity Exchange",
+      "topics": [
+        {
+          "code": "CMX.1",
+          "name": "Commodity Exchange",
+          "items": [
+            {
+              "code": "CMX.1.A",
+              "name": "Meaning of commodity exchange"
+            },
+            {
+              "code": "CMX.1.B",
+              "name": "Types of tradable commodity (agricultural produce, solid minerals, oil and gas)"
+            },
+            {
+              "code": "CMX.1.C",
+              "name": "Requirements for trading (grading system, warehousing, clearing system, standardizing)"
+            },
+            {
+              "code": "CMX.1.D",
+              "name": "Methods of trading (open outcry, electronic mechanism)"
+            },
+            {
+              "code": "CMX.1.E",
+              "name": "Benefits of commodity exchange"
+            },
+            {
+              "code": "CMX.1.F",
+              "name": "Constraints to commodity trading"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "ENV",
+      "name": "Business Environment and Social Responsibility",
+      "topics": [
+        {
+          "code": "ENV.1",
+          "name": "Business Environment and Social Responsibility",
+          "items": [
+            {
+              "code": "ENV.1.A",
+              "name": "Legal, political, economic, social, cultural and technological environments"
+            },
+            {
+              "code": "ENV.1.B",
+              "name": "Safe products, philanthropic and societal consideration"
+            },
+            {
+              "code": "ENV.1.C",
+              "name": "Types and implications of pollution (water, air, land)"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

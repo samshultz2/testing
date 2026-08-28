@@ -1,0 +1,732 @@
+{
+  "subject": "Economics",
+  "code": "JAMB-ECON",
+  "prefix": "ECON",
+  "version": "2026",
+  "sections": [
+    {
+      "code": "SCI",
+      "name": "Economics as a Science",
+      "topics": [
+        {
+          "code": "SCI.1",
+          "name": "Economics as a Science",
+          "items": [
+            {
+              "code": "SCI.1.A",
+              "name": "Basic concepts (wants, scarcity, choice, scale of preference, opportunity cost, rationality, production, distribution, consumption)"
+            },
+            {
+              "code": "SCI.1.B",
+              "name": "Economic problems (what, how and for whom to produce; efficiency of resource use)"
+            },
+            {
+              "code": "SCI.1.C",
+              "name": "Application of the PPF to the solution of economic problems"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "SYS",
+      "name": "Economic Systems",
+      "topics": [
+        {
+          "code": "SYS.1",
+          "name": "Economic Systems",
+          "items": [
+            {
+              "code": "SYS.1.A",
+              "name": "Types and characteristics of free enterprise, centrally planned and mixed economies"
+            },
+            {
+              "code": "SYS.1.B",
+              "name": "Solutions to economic problems under different systems"
+            },
+            {
+              "code": "SYS.1.C",
+              "name": "Contemporary issues in economic systems (economic reforms - deregulation, banking consolidation, cashless policy)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "MTH",
+      "name": "Methods and Tools of Economic Analysis",
+      "topics": [
+        {
+          "code": "MTH.1",
+          "name": "Methods and Tools of Economic Analysis",
+          "items": [
+            {
+              "code": "MTH.1.A",
+              "name": "Scientific approach (inductive and deductive methods; positive and normative reasoning)"
+            },
+            {
+              "code": "MTH.1.B",
+              "name": "Basic tools - tables, charts and graphs"
+            },
+            {
+              "code": "MTH.1.C",
+              "name": "Measures of central tendency (mean, median, mode) and their applications"
+            },
+            {
+              "code": "MTH.1.D",
+              "name": "Measures of dispersion (variance, standard deviation, range) and their applications"
+            },
+            {
+              "code": "MTH.1.E",
+              "name": "Merits and demerits of the tools"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "DEM",
+      "name": "The Theory of Demand",
+      "topics": [
+        {
+          "code": "DEM.1",
+          "name": "The Theory of Demand",
+          "items": [
+            {
+              "code": "DEM.1.A",
+              "name": "Meaning and determinants of demand; demand schedules and curves; change in quantity demanded vs change in demand"
+            },
+            {
+              "code": "DEM.1.B",
+              "name": "Types of demand (composite, derived, competitive and joint)"
+            },
+            {
+              "code": "DEM.1.C",
+              "name": "Types, nature and determinants of elasticity and their measurement (price, income and cross elasticity)"
+            },
+            {
+              "code": "DEM.1.D",
+              "name": "Importance of elasticity of demand to consumers, producers and government"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "CON",
+      "name": "The Theory of Consumer Behaviour",
+      "topics": [
+        {
+          "code": "CON.1",
+          "name": "The Theory of Consumer Behaviour",
+          "items": [
+            {
+              "code": "CON.1.A",
+              "name": "Basic concepts - utility (cardinal, ordinal, total, average and marginal); indifference curve and budget line"
+            },
+            {
+              "code": "CON.1.B",
+              "name": "Diminishing marginal utility and the law of demand"
+            },
+            {
+              "code": "CON.1.C",
+              "name": "Consumer equilibrium using indifference curve and marginal analyses"
+            },
+            {
+              "code": "CON.1.D",
+              "name": "Effects of shift in the budget line and the indifference curve"
+            },
+            {
+              "code": "CON.1.E",
+              "name": "Consumer surplus and its applications"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "SUP",
+      "name": "The Theory of Supply",
+      "topics": [
+        {
+          "code": "SUP.1",
+          "name": "The Theory of Supply",
+          "items": [
+            {
+              "code": "SUP.1.A",
+              "name": "Meaning and determinants of supply; supply schedules and curves; change in quantity supplied vs change in supply"
+            },
+            {
+              "code": "SUP.1.B",
+              "name": "Types of supply (joint/complementary, competitive and composite)"
+            },
+            {
+              "code": "SUP.1.C",
+              "name": "Elasticity of supply (determinants, measurements, nature and applications)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "PRC",
+      "name": "The Theory of Price Determination",
+      "topics": [
+        {
+          "code": "PRC.1",
+          "name": "The Theory of Price Determination",
+          "items": [
+            {
+              "code": "PRC.1.A",
+              "name": "Concepts of market and price; functions of the price system"
+            },
+            {
+              "code": "PRC.1.B",
+              "name": "Equilibrium price and quantity in product and factor markets; price legislation and its effects"
+            },
+            {
+              "code": "PRC.1.C",
+              "name": "Effects of changes in supply and demand on equilibrium price and quantity"
+            },
+            {
+              "code": "PRC.1.D",
+              "name": "Simple linear equation of demand and supply"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "PRD",
+      "name": "The Theory of Production",
+      "topics": [
+        {
+          "code": "PRD.1",
+          "name": "The Theory of Production",
+          "items": [
+            {
+              "code": "PRD.1.A",
+              "name": "Meaning and types of production"
+            },
+            {
+              "code": "PRD.1.B",
+              "name": "Concepts of production and their interrelationships (TP, AP, MP and the law of variable proportion)"
+            },
+            {
+              "code": "PRD.1.C",
+              "name": "Division of labour and specialization"
+            },
+            {
+              "code": "PRD.1.D",
+              "name": "Scale of production (internal and external economies of scale and their implications)"
+            },
+            {
+              "code": "PRD.1.E",
+              "name": "Production functions and returns to scale"
+            },
+            {
+              "code": "PRD.1.F",
+              "name": "Producers' equilibrium (isoquant-isocost and marginal analyses)"
+            },
+            {
+              "code": "PRD.1.G",
+              "name": "Factors affecting productivity"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "CST",
+      "name": "Theory of Costs and Revenue",
+      "topics": [
+        {
+          "code": "CST.1",
+          "name": "Theory of Costs and Revenue",
+          "items": [
+            {
+              "code": "CST.1.A",
+              "name": "Concepts of cost (fixed, variable, total, average and marginal)"
+            },
+            {
+              "code": "CST.1.B",
+              "name": "Concepts of revenue (total, average and marginal revenue)"
+            },
+            {
+              "code": "CST.1.C",
+              "name": "Accountants' and economists' notions of cost"
+            },
+            {
+              "code": "CST.1.D",
+              "name": "Short-run and long-run costs"
+            },
+            {
+              "code": "CST.1.E",
+              "name": "The marginal cost and the supply curve of the firm"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "MKT",
+      "name": "Market Structures",
+      "topics": [
+        {
+          "code": "MKT.1",
+          "name": "Market Structures",
+          "items": [
+            {
+              "code": "MKT.1.A",
+              "name": "Perfectly competitive market (assumptions, characteristics; short-run and long-run equilibrium)"
+            },
+            {
+              "code": "MKT.1.B",
+              "name": "Imperfect market (pure monopoly, discriminatory monopoly, monopolistic competition; short-run and long-run equilibrium)"
+            },
+            {
+              "code": "MKT.1.C",
+              "name": "Break-even / shut-down analysis in the various markets"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "NAT",
+      "name": "National Income",
+      "topics": [
+        {
+          "code": "NAT.1",
+          "name": "National Income",
+          "items": [
+            {
+              "code": "NAT.1.A",
+              "name": "Concepts of GNP, GDP, NI, NNP"
+            },
+            {
+              "code": "NAT.1.B",
+              "name": "National income measurements and their problems"
+            },
+            {
+              "code": "NAT.1.C",
+              "name": "Uses and limitations of national income estimates"
+            },
+            {
+              "code": "NAT.1.D",
+              "name": "The circular flow of income (two- and three-sector models)"
+            },
+            {
+              "code": "NAT.1.E",
+              "name": "Concepts of consumption, investment and savings"
+            },
+            {
+              "code": "NAT.1.F",
+              "name": "The multiplier and its effects"
+            },
+            {
+              "code": "NAT.1.G",
+              "name": "Elementary theory of income determination and equilibrium national income"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "MON",
+      "name": "Money and Inflation",
+      "topics": [
+        {
+          "code": "MON.1",
+          "name": "Money and Inflation",
+          "items": [
+            {
+              "code": "MON.1.A",
+              "name": "Types, characteristics and functions of money"
+            },
+            {
+              "code": "MON.1.B",
+              "name": "Demand for money and the supply of money"
+            },
+            {
+              "code": "MON.1.C",
+              "name": "Quantity theory of money (Fisher equation)"
+            },
+            {
+              "code": "MON.1.D",
+              "name": "The value of money and the price level"
+            },
+            {
+              "code": "MON.1.E",
+              "name": "Inflation (types, measurements, effects and control)"
+            },
+            {
+              "code": "MON.1.F",
+              "name": "Deflation (measurements, effects and control)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "FIN",
+      "name": "Financial Institutions",
+      "topics": [
+        {
+          "code": "FIN.1",
+          "name": "Financial Institutions",
+          "items": [
+            {
+              "code": "FIN.1.A",
+              "name": "Types and functions of financial institutions (traditional, central bank, mortgage banks, merchant banks, insurance companies, building societies)"
+            },
+            {
+              "code": "FIN.1.B",
+              "name": "Role of financial institutions in economic development"
+            },
+            {
+              "code": "FIN.1.C",
+              "name": "Money and capital markets"
+            },
+            {
+              "code": "FIN.1.D",
+              "name": "Financial sector regulations"
+            },
+            {
+              "code": "FIN.1.E",
+              "name": "Deposit money banks and the creation of money"
+            },
+            {
+              "code": "FIN.1.F",
+              "name": "Monetary policy and its instruments"
+            },
+            {
+              "code": "FIN.1.G",
+              "name": "Challenges facing financial institutions in Nigeria"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "PUB",
+      "name": "Public Finance",
+      "topics": [
+        {
+          "code": "PUB.1",
+          "name": "Public Finance",
+          "items": [
+            {
+              "code": "PUB.1.A",
+              "name": "Meaning and objectives of public finance"
+            },
+            {
+              "code": "PUB.1.B",
+              "name": "Fiscal policy and its instruments"
+            },
+            {
+              "code": "PUB.1.C",
+              "name": "Sources of government revenue (taxes, royalties, rents, grants and aids)"
+            },
+            {
+              "code": "PUB.1.D",
+              "name": "Principles of taxation"
+            },
+            {
+              "code": "PUB.1.E",
+              "name": "Tax incidence and its effects"
+            },
+            {
+              "code": "PUB.1.F",
+              "name": "Effects of public expenditure"
+            },
+            {
+              "code": "PUB.1.G",
+              "name": "Government budget and public debts"
+            },
+            {
+              "code": "PUB.1.H",
+              "name": "Revenue allocation and resource control in Nigeria"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "GRO",
+      "name": "Economic Growth and Development",
+      "topics": [
+        {
+          "code": "GRO.1",
+          "name": "Economic Growth and Development",
+          "items": [
+            {
+              "code": "GRO.1.A",
+              "name": "Meaning and scope of growth and development"
+            },
+            {
+              "code": "GRO.1.B",
+              "name": "Indicators of growth and development"
+            },
+            {
+              "code": "GRO.1.C",
+              "name": "Factors affecting growth and development"
+            },
+            {
+              "code": "GRO.1.D",
+              "name": "Problems of development in Nigeria"
+            },
+            {
+              "code": "GRO.1.E",
+              "name": "Development planning in Nigeria"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "AGR",
+      "name": "Agriculture in Nigeria",
+      "topics": [
+        {
+          "code": "AGR.1",
+          "name": "Agriculture in Nigeria",
+          "items": [
+            {
+              "code": "AGR.1.A",
+              "name": "Types and features of agriculture"
+            },
+            {
+              "code": "AGR.1.B",
+              "name": "Role of agriculture in economic development"
+            },
+            {
+              "code": "AGR.1.C",
+              "name": "Problems of agriculture"
+            },
+            {
+              "code": "AGR.1.D",
+              "name": "Agricultural policies and their effects"
+            },
+            {
+              "code": "AGR.1.E",
+              "name": "Instability in agricultural incomes (causes, effects and solutions)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "IND",
+      "name": "Industry and Industrialization",
+      "topics": [
+        {
+          "code": "IND.1",
+          "name": "Industry and Industrialization",
+          "items": [
+            {
+              "code": "IND.1.A",
+              "name": "Concepts and effects of location and localization of industry in Nigeria"
+            },
+            {
+              "code": "IND.1.B",
+              "name": "Strategies of industrialization in Nigeria"
+            },
+            {
+              "code": "IND.1.C",
+              "name": "Industrialization and economic development in Nigeria"
+            },
+            {
+              "code": "IND.1.D",
+              "name": "Funding and management of business organization"
+            },
+            {
+              "code": "IND.1.E",
+              "name": "Factors determining the size of firms"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "RES",
+      "name": "Natural Resources and the Nigerian Economy",
+      "topics": [
+        {
+          "code": "RES.1",
+          "name": "Natural Resources and the Nigerian Economy",
+          "items": [
+            {
+              "code": "RES.1.A",
+              "name": "Development of major natural resources (petroleum, gold, diamond, timber, etc.)"
+            },
+            {
+              "code": "RES.1.B",
+              "name": "Contributions of the oil and non-oil sectors to the Nigerian economy"
+            },
+            {
+              "code": "RES.1.C",
+              "name": "Linkage effects"
+            },
+            {
+              "code": "RES.1.D",
+              "name": "Upstream / downstream of the oil sector"
+            },
+            {
+              "code": "RES.1.E",
+              "name": "Role of NNPC and OPEC in the oil sector"
+            },
+            {
+              "code": "RES.1.F",
+              "name": "Challenges facing natural resources exploitation"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "BUS",
+      "name": "Business Organizations",
+      "topics": [
+        {
+          "code": "BUS.1",
+          "name": "Business Organizations",
+          "items": [
+            {
+              "code": "BUS.1.A",
+              "name": "Private enterprises (sole proprietorship, partnership, limited liability companies, cooperative societies)"
+            },
+            {
+              "code": "BUS.1.B",
+              "name": "Problems of private enterprises"
+            },
+            {
+              "code": "BUS.1.C",
+              "name": "Public enterprises and their problems"
+            },
+            {
+              "code": "BUS.1.D",
+              "name": "Funding and management of business organizations"
+            },
+            {
+              "code": "BUS.1.E",
+              "name": "Factors determining the size of firms"
+            },
+            {
+              "code": "BUS.1.F",
+              "name": "Privatization and commercialization as solutions to the problems of public enterprises"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "POP",
+      "name": "Population",
+      "topics": [
+        {
+          "code": "POP.1",
+          "name": "Population",
+          "items": [
+            {
+              "code": "POP.1.A",
+              "name": "Meaning and theories of population"
+            },
+            {
+              "code": "POP.1.B",
+              "name": "Census (importance and problems)"
+            },
+            {
+              "code": "POP.1.C",
+              "name": "Size and growth (over-population, under-population and optimum population)"
+            },
+            {
+              "code": "POP.1.D",
+              "name": "Structure and distribution"
+            },
+            {
+              "code": "POP.1.E",
+              "name": "Population policy and economic development"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "INT",
+      "name": "International Trade",
+      "topics": [
+        {
+          "code": "INT.1",
+          "name": "International Trade",
+          "items": [
+            {
+              "code": "INT.1.A",
+              "name": "Meaning and basis for international trade (absolute and comparative costs)"
+            },
+            {
+              "code": "INT.1.B",
+              "name": "Balance of trade and balance of payments (problems and corrective measures)"
+            },
+            {
+              "code": "INT.1.C",
+              "name": "Composition and direction of Nigeria's foreign trade"
+            },
+            {
+              "code": "INT.1.D",
+              "name": "Exchange rate (meaning, types and determination)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "ORG",
+      "name": "International Economic Organizations",
+      "topics": [
+        {
+          "code": "ORG.1",
+          "name": "International Economic Organizations",
+          "items": [
+            {
+              "code": "ORG.1.A",
+              "name": "Roles and relevance of international organizations to Nigeria (ECOWAS, AU, EU, ECA, IMF, EEC, OECD, World Bank, IBRD, WTO, ADB, UNCTAD)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "code": "FAC",
+      "name": "Factors of Production and their Theories",
+      "topics": [
+        {
+          "code": "FAC.1",
+          "name": "Factors of Production and their Theories",
+          "items": [
+            {
+              "code": "FAC.1.A",
+              "name": "Types, features and rewards of factors of production"
+            },
+            {
+              "code": "FAC.1.B",
+              "name": "Determination of wages, interest and profits"
+            },
+            {
+              "code": "FAC.1.C",
+              "name": "Theories (marginal productivity theory of wages; liquidity preference theory)"
+            },
+            {
+              "code": "FAC.1.D",
+              "name": "Factor mobility and efficiency"
+            },
+            {
+              "code": "FAC.1.E",
+              "name": "Unemployment and its solutions"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}
