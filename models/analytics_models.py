@@ -1,169 +1,10 @@
 """
-Extended models for comprehensive academic analytics
-Supports internal exams, performance tracking, and longitudinal analysis
+Extended models for academic analytics: WAEC<->JAMB correlation, university
+cut-offs, persisted risk assessments / predictions, and an analytics cache.
 """
 from datetime import datetime, date
 from models.models import db, local_now
 
-
-# ============================================================================
-# INTERNAL EXAMINATION MODELS
-# ============================================================================
-
-class InternalExam(db.Model):
-    """Internal examination definition (CA, Mid-term, Final, Mock)"""
-    __tablename__ = 'internal_exams'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(100), nullable=False)  # e.g., "First Term Exam 2024"
-    exam_type = db.Column(db.String(30), nullable=False)  # CA1, CA2, MID_TERM, FINAL, MOCK
-    term_id = db.Column(db.Integer, db.ForeignKey('terms.id'), nullable=False)
-    max_score = db.Column(db.Integer, default=100)
-    weight = db.Column(db.Float, default=1.0)  # Weight for grade calculation
-    exam_date = db.Column(db.Date)
-    is_active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=local_now)
-    
-    # Relationships
-    term = db.relationship('Term', backref='internal_exams')
-    results = db.relationship('InternalExamResult', backref='exam', lazy='dynamic', cascade='all, delete-orphan')
-    
-    EXAM_TYPES = ['CA1', 'CA2', 'CA3', 'MID_TERM', 'FINAL', 'MOCK']
-    
-    def __repr__(self):
-        return f'<InternalExam {self.name}>'
-
-
-class InternalExamResult(db.Model):
-    """Individual student result for internal exams"""
-    __tablename__ = 'internal_exam_results'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    exam_id = db.Column(db.Integer, db.ForeignKey('internal_exams.id'), nullable=False)
-    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
-    subject_id = db.Column(db.Integer, db.ForeignKey('subjects.id'), nullable=False)
-    score = db.Column(db.Float, nullable=False)
-    grade = db.Column(db.String(2))  # A1-F9 equivalent
-    remarks = db.Column(db.String(200))
-    created_at = db.Column(db.DateTime, default=local_now)
-    updated_at = db.Column(db.DateTime, default=local_now, onupdate=local_now)
-    
-    # Relationships
-    student = db.relationship('Student', backref='internal_results')
-    subject = db.relationship('Subject', backref='internal_results')
-    
-    __table_args__ = (
-        db.UniqueConstraint('exam_id', 'student_id', 'subject_id', name='unique_internal_result'),
-    )
-    
-    @staticmethod
-    def score_to_grade(score, max_score=100):
-        """Convert score to WAEC-equivalent grade"""
-        percentage = (score / max_score) * 100 if max_score > 0 else 0
-        if percentage >= 75: return 'A1'
-        elif percentage >= 70: return 'B2'
-        elif percentage >= 65: return 'B3'
-        elif percentage >= 60: return 'C4'
-        elif percentage >= 55: return 'C5'
-        elif percentage >= 50: return 'C6'
-        elif percentage >= 45: return 'D7'
-        elif percentage >= 40: return 'E8'
-        else: return 'F9'
-    
-    @staticmethod
-    def grade_to_points(grade):
-        """Convert grade to points"""
-        points = {'A1': 1, 'B2': 2, 'B3': 3, 'C4': 4, 'C5': 5, 'C6': 6, 'D7': 7, 'E8': 8, 'F9': 9}
-        return points.get(grade, 9)
-
-
-# ============================================================================
-# PERFORMANCE TRACKING MODELS
-# ============================================================================
-
-class StudentPerformanceSnapshot(db.Model):
-    """Periodic snapshot of student performance for trend analysis"""
-    __tablename__ = 'student_performance_snapshots'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
-    term_id = db.Column(db.Integer, db.ForeignKey('terms.id'), nullable=False)
-    
-    # Aggregate metrics
-    total_subjects = db.Column(db.Integer, default=0)
-    average_score = db.Column(db.Float)
-    average_grade_points = db.Column(db.Float)
-    
-    # Grade counts
-    a1_count = db.Column(db.Integer, default=0)
-    credit_count = db.Column(db.Integer, default=0)  # A1-C6
-    pass_count = db.Column(db.Integer, default=0)    # A1-D7
-    fail_count = db.Column(db.Integer, default=0)    # E8-F9
-    
-    # Attendance metrics
-    attendance_rate = db.Column(db.Float)
-    days_present = db.Column(db.Integer, default=0)
-    days_absent = db.Column(db.Integer, default=0)
-    
-    # Risk assessment
-    risk_level = db.Column(db.String(10))  # GREEN, AMBER, RED
-    risk_factors = db.Column(db.Text)  # JSON list of risk factors
-    
-    # Rankings
-    class_rank = db.Column(db.Integer)
-    class_size = db.Column(db.Integer)
-    
-    created_at = db.Column(db.DateTime, default=local_now)
-    
-    # Relationships
-    student = db.relationship('Student', backref='performance_snapshots')
-    term = db.relationship('Term', backref='performance_snapshots')
-    
-    __table_args__ = (
-        db.UniqueConstraint('student_id', 'term_id', name='unique_student_term_snapshot'),
-    )
-
-
-class SubjectPerformanceMetrics(db.Model):
-    """Subject-level performance metrics per term"""
-    __tablename__ = 'subject_performance_metrics'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    subject_id = db.Column(db.Integer, db.ForeignKey('subjects.id'), nullable=False)
-    term_id = db.Column(db.Integer, db.ForeignKey('terms.id'), nullable=False)
-    class_id = db.Column(db.Integer, db.ForeignKey('school_classes.id'))
-    
-    # Score metrics
-    mean_score = db.Column(db.Float)
-    median_score = db.Column(db.Float)
-    std_deviation = db.Column(db.Float)
-    min_score = db.Column(db.Float)
-    max_score = db.Column(db.Float)
-    
-    # Grade distribution
-    total_students = db.Column(db.Integer, default=0)
-    a1_count = db.Column(db.Integer, default=0)
-    b2_b3_count = db.Column(db.Integer, default=0)
-    c4_c6_count = db.Column(db.Integer, default=0)
-    d7_e8_count = db.Column(db.Integer, default=0)
-    f9_count = db.Column(db.Integer, default=0)
-    
-    # Derived metrics
-    pass_rate = db.Column(db.Float)  # A1-C6 percentage
-    distinction_rate = db.Column(db.Float)  # A1-B3 percentage
-    failure_rate = db.Column(db.Float)  # F9 percentage
-    difficulty_index = db.Column(db.Float)  # Normalized difficulty score
-    
-    created_at = db.Column(db.DateTime, default=local_now)
-    
-    # Relationships
-    subject = db.relationship('Subject', backref='performance_metrics')
-    term = db.relationship('Term', backref='subject_metrics')
-    school_class = db.relationship('SchoolClass', backref='subject_metrics')
-    
-    __table_args__ = (
-        db.UniqueConstraint('subject_id', 'term_id', 'class_id', name='unique_subject_term_class_metrics'),
-    )
 
 
 class WAECJAMBCorrelation(db.Model):
@@ -324,3 +165,30 @@ class AnalyticsCache(db.Model):
             )
             db.session.add(cache)
         db.session.commit()
+
+
+class WaecGradeModel(db.Model):
+    """A trained per-(branch, subject) ordinal model for predicting real WAEC
+    grade bands from mock-WAEC scores. Stores the fitted parameters (JSON) plus
+    the metadata the auto-selector and UI need: pair count and cross-validated
+    Ranked Probability Score for the model vs the calibration bins. Re-fit (one
+    row per branch+subject, overwritten) whenever a new cohort's results land."""
+    __tablename__ = 'waec_grade_models'
+
+    id = db.Column(db.Integer, primary_key=True)
+    # branch_id NULL = a pooled/global model (not used by default — models are
+    # per-branch — but kept so pooling can be switched on without a schema change).
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'), nullable=True)
+    subject = db.Column(db.String(50), nullable=False)
+    params = db.Column(db.Text, nullable=False)        # JSON: mean/std/base/deltas/beta
+    n = db.Column(db.Integer)                           # training pairs
+    cv_rps = db.Column(db.Float)                        # model CV Ranked Probability Score
+    cv_rps_bins = db.Column(db.Float)                  # bins CV RPS (for comparison)
+    trained_at = db.Column(db.DateTime, default=local_now)
+
+    __table_args__ = (
+        db.UniqueConstraint('branch_id', 'subject', name='unique_waec_model_branch_subject'),
+    )
+
+    def __repr__(self):
+        return f'<WaecGradeModel {self.subject} branch={self.branch_id} n={self.n}>'

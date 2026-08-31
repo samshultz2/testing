@@ -1,0 +1,217 @@
+{% extends "base.html" %}
+{% block title %}University Aspirations — {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('results.analytics_hub') }}">Analytics</a> / <span>Aspirations</span>{% endblock %}
+
+{% set elig_badge = {'ON_TRACK': 'badge-success', 'CLOSE': 'badge-warning', 'OFF_TRACK': 'badge-danger', 'NO_DATA': 'badge-secondary'} %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>University Aspirations</h1>
+        <p class="text-muted text-sm">Where SSS3 candidates want to study, whether they're on track for their chosen course (projected from mock signals), and the admission funnel.</p>
+    </div>
+    <a href="{{ url_for('results.analytics_hub') }}" class="btn btn-secondary" style="margin-left:auto;">Back to Analytics</a>
+</div>
+
+<div class="card mb-3"><div class="card-body" style="display:flex;gap:1.5rem;flex-wrap:wrap;">
+    <div><strong style="font-size:1.5rem;">{{ data.totals.sss3 }}</strong><div class="text-muted text-sm">SSS3 candidates</div></div>
+    <div><strong style="font-size:1.5rem;">{{ data.totals.with_target }}</strong><div class="text-muted text-sm">with a target</div></div>
+    <div><strong style="font-size:1.5rem;">{{ data.totals.coverage }}%</strong><div class="text-muted text-sm">coverage</div></div>
+    {% for e in data.eligibility %}
+    <div><strong style="font-size:1.5rem;">{{ e.count }}</strong><div class="text-muted text-sm">{{ e.label }}</div></div>
+    {% endfor %}
+</div></div>
+
+{% if not data.totals.with_target %}
+<div class="card"><div class="card-body text-muted">
+    No SSS3 candidate has a target university or course set yet. Set targets on the student edit page to see aspiration analytics here.
+</div></div>
+{% else %}
+
+<div class="analytics-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem;">
+    <div class="card">
+        <div class="card-header"><h3>Course eligibility</h3></div>
+        <div class="card-body">
+            <table class="table" style="width:100%;">
+                <tbody>
+                {% for e in data.eligibility %}
+                    <tr><td><span class="badge {{ elig_badge.get(e.status, '') }}">{{ e.label }}</span></td>
+                        <td style="text-align:right;"><strong>{{ e.count }}</strong></td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header"><h3>Admission funnel</h3></div>
+        <div class="card-body">
+            <table class="table" style="width:100%;">
+                <tbody>
+                    <tr><td>Applied</td><td style="text-align:right;"><strong>{{ data.funnel.applied }}</strong></td></tr>
+                    <tr><td>Offered</td><td style="text-align:right;"><strong>{{ data.funnel.offered }}</strong></td></tr>
+                    <tr><td>Admitted</td><td style="text-align:right;"><strong>{{ data.funnel.admitted }}</strong></td></tr>
+                    <tr><td>Declined</td><td style="text-align:right;"><strong>{{ data.funnel.declined }}</strong></td></tr>
+                    <tr><td>Deferred</td><td style="text-align:right;"><strong>{{ data.funnel.deferred }}</strong></td></tr>
+                    <tr><td class="text-muted">Conversion (admitted / with target)</td><td style="text-align:right;"><strong>{{ data.funnel.conversion }}%</strong></td></tr>
+                    {% if data.funnel.target_university_rate is not none %}
+                    <tr><td class="text-muted">Admitted to target university</td><td style="text-align:right;"><strong>{{ data.funnel.target_university_rate }}%</strong></td></tr>
+                    <tr><td class="text-muted">Admitted to an alternative university</td><td style="text-align:right;">{{ data.funnel.alternative_university_rate }}%</td></tr>
+                    {% endif %}
+                    {% if data.funnel.target_course_rate is not none %}
+                    <tr><td class="text-muted">Admitted to target course</td><td style="text-align:right;"><strong>{{ data.funnel.target_course_rate }}%</strong></td></tr>
+                    <tr><td class="text-muted">Admitted to an alternative course</td><td style="text-align:right;">{{ data.funnel.alternative_course_rate }}%</td></tr>
+                    {% endif %}
+                    {% if data.funnel.no_admission_rate is not none %}
+                    <tr><td class="text-muted">No admission (of resolved, {{ data.funnel.resolved_outcomes }})</td><td style="text-align:right;">{{ data.funnel.no_admission_rate }}%</td></tr>
+                    {% endif %}
+                </tbody>
+            </table>
+            {% if data.funnel.target_university_rate is none and data.funnel.admitted %}
+            <p class="text-muted text-sm" style="margin:.4rem 0 0;">Record admitted university/course on admitted students to see target-achievement rates.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header"><h3>Most-wanted universities</h3></div>
+        <div class="card-body" style="overflow-x:auto;">
+            {% if data.top_universities %}
+            <table class="table" style="width:100%;">
+                <thead><tr><th>University</th><th style="text-align:right;">Students</th><th style="text-align:right;" title="Average competitive target">Avg target</th><th style="text-align:right;" title="Average projected JAMB">Avg proj.</th><th style="text-align:right;">On track</th></tr></thead>
+                <tbody>
+                {% for u in data.top_universities %}
+                    <tr><td>{{ u.name }}</td><td style="text-align:right;"><strong>{{ u.count }}</strong></td>
+                        <td style="text-align:right;">{{ u.avg_target if u.avg_target is not none else '—' }}</td>
+                        <td style="text-align:right;">{{ u.avg_projected if u.avg_projected is not none else '—' }}</td>
+                        <td style="text-align:right;">{{ u.on_track }}</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}<p class="text-muted">No universities chosen yet.</p>{% endif %}
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="card-header"><h3>Most-wanted courses</h3></div>
+        <div class="card-body" style="overflow-x:auto;">
+            {% if data.top_courses %}
+            <table class="table" style="width:100%;">
+                <thead><tr><th>Course</th><th style="text-align:right;">Students</th><th style="text-align:right;">Avg target</th><th style="text-align:right;">Avg proj.</th><th style="text-align:right;">On track</th></tr></thead>
+                <tbody>
+                {% for c in data.top_courses %}
+                    <tr><td>{{ c.name }}</td><td style="text-align:right;"><strong>{{ c.count }}</strong></td>
+                        <td style="text-align:right;">{{ c.avg_target if c.avg_target is not none else '—' }}</td>
+                        <td style="text-align:right;">{{ c.avg_projected if c.avg_projected is not none else '—' }}</td>
+                        <td style="text-align:right;">{{ c.on_track }}</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% else %}<p class="text-muted">No courses chosen yet.</p>{% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="card mb-3" style="margin-top:1rem;">
+    <div class="card-header"><h3>Prediction calibration
+        {% if data.calibration.hit_rate is not none %}<span class="badge badge-info">{{ data.calibration.hit_rate }}% hit rate</span>{% endif %}
+    </h3></div>
+    <div class="card-body" style="overflow-x:auto;">
+        {% if data.calibration.resolved_total %}
+        <p class="text-muted text-sm">How our projected eligibility lined up with actual admission outcomes, over the {{ data.calibration.resolved_total }} candidate(s) whose admission has resolved (Admitted or Declined). A well-calibrated model admits most of its "On track" and few of its "Off track".</p>
+        <table class="table" style="width:100%;">
+            <thead><tr><th>Predicted</th><th style="text-align:right;">Admitted</th><th style="text-align:right;">Not admitted</th><th style="text-align:right;">Resolved</th><th style="text-align:right;">Admit rate</th></tr></thead>
+            <tbody>
+            {% for r in data.calibration.rows %}
+                {% if r.total %}
+                <tr>
+                    <td><span class="badge {{ elig_badge.get(r.status, '') }}">{{ r.label }}</span></td>
+                    <td style="text-align:right;"><strong>{{ r.admitted }}</strong></td>
+                    <td style="text-align:right;">{{ r.not_admitted }}</td>
+                    <td style="text-align:right;">{{ r.total }}</td>
+                    <td style="text-align:right;"><strong>{{ r.admit_rate }}%</strong></td>
+                </tr>
+                {% endif %}
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted">No admission outcomes have resolved yet. Once candidates are marked <strong>Admitted</strong> or <strong>Declined</strong> on their profiles, this table shows whether the projected eligibility actually predicted the outcome.</p>
+        {% endif %}
+    </div>
+</div>
+
+{% set sd = data.score_distribution %}
+<div class="card mb-3" style="margin-top:1rem;">
+    <div class="card-header"><h3>Target vs projected JAMB spread
+        {% if sd.significantly_behind %}<span class="badge badge-danger">{{ sd.significantly_behind }} ≥{{ sd.behind_margin }} behind target</span>{% endif %}
+    </h3></div>
+    <div class="card-body" style="overflow-x:auto;">
+        <p class="text-muted text-sm">How many candidates sit in each JAMB band by their <strong>target</strong> and by their <strong>projected</strong> score (projection from mock signals). {% if not sd.has_projection %}<em>No mock projection available yet — only targets are shown.</em>{% endif %}</p>
+        <table class="table" style="width:100%;">
+            <thead><tr><th>Band</th>{% for b in sd.bands %}<th style="text-align:right;">{{ b }}</th>{% endfor %}</tr></thead>
+            <tbody>
+                <tr><td>By target</td>{% for n in sd.target %}<td style="text-align:right;">{{ n or '—' }}</td>{% endfor %}</tr>
+                {% if sd.has_projection %}<tr><td>By projected</td>{% for n in sd.projected %}<td style="text-align:right;">{{ n or '—' }}</td>{% endfor %}</tr>{% endif %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+{% set sch = data.scholarships %}
+<div class="card mb-3" style="margin-top:1rem;">
+    <div class="card-header"><h3>Scholarships <span class="text-muted text-sm">({{ sch.recipients }} recipient{{ '' if sch.recipients == 1 else 's' }})</span></h3></div>
+    <div class="card-body">
+        {% if sch.records %}
+        <div style="display:flex;gap:1.5rem;flex-wrap:wrap;margin-bottom:.75rem;">
+            <div><strong style="font-size:1.4rem;">{{ sch.recipients }}</strong><div class="text-muted text-sm">recipients</div></div>
+            <div><strong style="font-size:1.4rem;">{{ sch.records }}</strong><div class="text-muted text-sm">records</div></div>
+            {% if sch.awarded_count %}<div><strong style="font-size:1.4rem;">₦{{ '{:,.0f}'.format(sch.awarded_amount) }}</strong><div class="text-muted text-sm">awarded ({{ sch.awarded_count }})</div></div>{% endif %}
+        </div>
+        <div class="analytics-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;">
+            <div><strong class="text-sm">By status</strong>
+                <table class="table" style="width:100%;"><tbody>
+                {% for r in sch.by_status %}<tr><td>{{ r.name }}</td><td style="text-align:right;"><strong>{{ r.count }}</strong></td></tr>{% endfor %}
+                </tbody></table></div>
+            <div><strong class="text-sm">By course</strong>
+                <table class="table" style="width:100%;"><tbody>
+                {% for r in sch.by_course %}<tr><td>{{ r.name }}</td><td style="text-align:right;"><strong>{{ r.count }}</strong></td></tr>{% endfor %}
+                </tbody></table></div>
+            <div><strong class="text-sm">By university</strong>
+                <table class="table" style="width:100%;"><tbody>
+                {% for r in sch.by_university %}<tr><td>{{ r.name }}</td><td style="text-align:right;"><strong>{{ r.count }}</strong></td></tr>{% endfor %}
+                </tbody></table></div>
+        </div>
+        <p class="text-muted text-sm" style="margin:.6rem 0 0;"><i class="fas fa-circle-info"></i> Distribution only — recipients are often already strong candidates, so this does not attribute performance to scholarships.</p>
+        {% else %}
+        <p class="text-muted">No scholarships recorded for this cohort yet. Add them on a student's Admission &amp; Scholarships section.</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card mb-3" style="margin-top:1rem;">
+    <div class="card-header"><h3>JAMB subject-mismatch fix list <span class="text-muted text-sm">({{ data.mismatches|length }})</span></h3></div>
+    <div class="card-body" style="overflow-x:auto;">
+        {% if data.mismatches %}
+        <p class="text-muted text-sm">Candidates whose registered JAMB subjects don't cover their target course's requirements — fix the registration before the exam.</p>
+        <table class="table" style="width:100%;">
+            <thead><tr><th>Student</th><th>Target course</th><th>University</th><th>Missing JAMB subject(s)</th><th></th></tr></thead>
+            <tbody>
+            {% for m in data.mismatches %}
+                <tr>
+                    <td>{{ m.name }}</td>
+                    <td>{{ m.course or '—' }}</td>
+                    <td>{{ m.university or '—' }}</td>
+                    <td>{% for s in m.missing_jamb %}<span class="badge badge-danger" style="margin:1px;">{{ s }}</span>{% endfor %}</td>
+                    <td><a class="btn btn-secondary btn-sm" href="{{ url_for('main.edit_student', student_id=m.student_id) }}">Edit</a></td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted">No subject mismatches — every candidate with a target is registered for the required JAMB subjects.</p>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}

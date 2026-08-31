@@ -19,7 +19,12 @@ instance/*.db
 instance/*.db.backup
 instance/*.sqlite
 instance/backups/
+instance/metrics/
 instance/.secret_key
+instance/*.jsonl
+# Multi-tenancy: local control-plane + per-tenant SQLite databases (dev only).
+instance/tenants/
+control_plane.db
 /school.db
 
 # Uploads (user-generated)
@@ -44,3 +49,7 @@ Thumbs.db
 
 # CBT question image uploads (user content)
 static/uploads/
+loadtest/students.csv
+
+# React frontend build deps (the built bundle in static/js/react/ IS committed)
+frontend/node_modules/

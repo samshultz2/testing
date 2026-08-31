@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Branch Overview - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Branch Overview</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="fas fa-code-compare"></i> Branch Overview</h1>
+    {% if active_term %}<span class="badge badge-info">{{ active_term.name }}</span>{% endif %}
+</div>
+
+<p class="text-muted text-sm" style="margin-bottom:1rem;"><i class="fas fa-info-circle"></i>
+    Side-by-side comparison across every branch. Fees collected is for the active term;
+    use the header branch switcher to drill into a single branch.</p>
+
+<div class="card">
+    <div class="card-body" style="padding:0;">
+        <div class="table-container">
+        <table class="data-table table-stack no-mobile-scroll">
+            <thead><tr>
+                <th>Branch</th>
+                <th class="text-right">Students</th>
+                <th class="text-right">Staff</th>
+                <th class="text-right">Collected ({{ active_term.name if active_term else '—' }})</th>
+                <th class="text-right">Sales</th>
+                <th class="text-right">WAEC cand.</th>
+                <th class="text-right" title="5 credits incl. English & Maths">WAEC 5-credit</th>
+                <th class="text-right">JAMB avg</th>
+            </tr></thead>
+            <tbody>
+            {% for r in rows %}
+            <tr>
+                <td data-label="Branch"><strong>{{ r.branch.name }}</strong>{% if r.branch.is_default %} <span class="badge badge-secondary">Default</span>{% endif %}
+                    <div><a class="text-sm" href="{{ url_for('main.set_view_branch', branch_id=r.branch.id) }}"><i class="fas fa-arrow-right-to-bracket"></i> View this branch</a></div></td>
+                <td data-label="Students" class="text-right">{{ r.students }}</td>
+                <td data-label="Staff" class="text-right">{{ r.staff }}</td>
+                <td data-label="Collected" class="text-right">{{ r.collected|naira }}</td>
+                <td data-label="Sales" class="text-right">{{ r.sales|naira }}</td>
+                <td data-label="WAEC cand." class="text-right">{{ r.waec }}</td>
+                <td data-label="WAEC 5-credit" class="text-right">{{ r.waec_pass }}{% if r.waec %} <span class="text-muted text-sm">({{ (r.waec_pass / r.waec * 100)|round(0)|int }}%)</span>{% endif %}</td>
+                <td data-label="JAMB avg" class="text-right">{{ r.jamb_avg or '—' }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr style="font-weight:700;background:var(--gray-50);">
+                    <td>All branches</td>
+                    <td class="text-right">{{ totals.students }}</td>
+                    <td class="text-right">{{ totals.staff }}</td>
+                    <td class="text-right">{{ totals.collected|naira }}</td>
+                    <td class="text-right">{{ totals.sales|naira }}</td>
+                    <td class="text-right">{{ totals.waec }}</td>
+                    <td class="text-right">{{ totals.waec_pass }}</td>
+                    <td class="text-right">—</td>
+                </tr>
+            </tfoot>
+        </table>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,159 +1,178 @@
 """
-WAEC/NECO Question Scraper for myschool.ng
-Run this on your local machine.
+Past-questions scraper for myschool.ng  →  EduSyncra "Bulk import questions".
 
-Install dependencies first:
+For most people the easiest route is the in-app button:
+    Mock JAMB → Question bank → "Download questions from myschool.ng"
+which fetches and saves straight to the bank. This standalone script is for
+when you'd rather produce a text file and paste it yourself.
+
+Works for ANY subject, a single year or a year range, and for JAMB / WAEC /
+NECO / Post-UTME. It shares its scraping + tagging logic with the app
+(``utils/myschool.py``), so run it from the project root.
+
     pip install requests beautifulsoup4
 
-Usage:
-    python waec_scraper.py
+    # one subject, one year
+    python waec_scraper.py --subject mathematics --exam jamb --year 2019
+    # a range of years
+    python waec_scraper.py --subject commerce --exam jamb --from 2010 --to 2022
+
+It writes two files:
+  * <subject>_<exam>.txt              — paste-ready rows for the bank
+  * <subject>_<exam>_needs_review.txt — questions that rely on a diagram we
+                                        couldn't fetch (add these by hand)
+
+Each row is tab-separated in the importer's exact format, with year and an
+optional figure-URL column:
+    question  A  B  C  D  correct  section  topic  subtopic  year  [image URL]
+
+Then open the .txt, copy everything, and paste it into the subject's
+"Bulk import questions (paste)" box in the Mock JAMB question bank.
 """
+from __future__ import annotations
 
-import requests
-from bs4 import BeautifulSoup
-import json
-import time
+import argparse
 import re
+import sys
 
-HEADERS = {
-    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-    'Accept-Language': 'en-US,en;q=0.5',
-    'Connection': 'keep-alive',
-}
+try:
+    from utils import myschool as ms
+except Exception as exc:                       # pragma: no cover
+    sys.exit("Run this from the project root (needs utils/myschool.py): " + str(exc))
 
-BASE_URL = "https://myschool.ng/classroom"
 
-def scrape_page(subject, exam_type, year, page=1):
-    """Scrape a single page of questions"""
-    url = f"{BASE_URL}/{subject}?exam_type={exam_type}&exam_year={year}&page={page}"
-    
-    try:
-        response = requests.get(url, headers=HEADERS, timeout=15)
-        if response.status_code != 200:
-            print(f"  ✗ Page {page}: Status {response.status_code}")
+def _row(q):
+    """A tab-separated importer row from a parsed question dict."""
+    fields = [q["stem"], q["options"][0], q["options"][1], q["options"][2],
+              q["options"][3], q["correct"], q.get("section") or "",
+              q.get("topic") or "", q.get("subtopic") or "", str(q.get("year") or ""),
+              q.get("image_url") or ""]
+    return "\t".join(ms.clean(str(c)) for c in fields)
+
+
+class _BrowserFetcher:
+    """Optional Playwright renderer (``--images``). myschool injects question
+    figures with client-side JS, so only a real browser sees their URLs; this
+    renders each page and returns the hydrated HTML for the normal parser.
+
+    Requires:  pip install playwright  &&  playwright install chromium
+    Runs on YOUR machine (where the browser can reach myschool)."""
+
+    def __init__(self):
+        try:
+            from playwright.sync_api import sync_playwright
+        except ImportError:
+            sys.exit("The --images option needs Playwright:\n"
+                     "    pip install playwright && playwright install chromium")
+        self._p = sync_playwright().start()
+        self._browser = self._p.chromium.launch()
+        self._page = self._browser.new_page()
+
+    def get(self, url):
+        try:
+            self._page.goto(url, wait_until="networkidle", timeout=45000)
+            self._page.wait_for_timeout(900)     # let figures lazy-load
+            return self._page.content()
+        except Exception:
             return None
-        return response.text
-    except Exception as e:
-        print(f"  ✗ Page {page}: {e}")
-        return None
 
-def parse_questions(html, year, exam_type):
-    """Extract questions from HTML - adjust selectors based on actual page structure"""
-    soup = BeautifulSoup(html, 'html.parser')
-    questions = []
-    
-    # This selector will need adjustment based on actual HTML structure
-    # Run the test first to see what the HTML looks like
-    question_blocks = soup.find_all('div', class_=re.compile(r'question|item'))
-    
-    for block in question_blocks:
-        q = {
-            'year': year,
-            'exam_type': exam_type,
-            'text': block.get_text(strip=True)[:500],  # First 500 chars
-            'topic': None,  # To be filled by AI later
-        }
-        questions.append(q)
-    
-    return questions
+    def close(self):
+        try:
+            self._browser.close(); self._p.stop()
+        except Exception:
+            pass
 
-def scrape_subject(subject, exam_type, start_year, end_year):
-    """Scrape all years for a subject"""
-    all_questions = []
-    
-    for year in range(start_year, end_year + 1):
-        print(f"\n{exam_type.upper()} {year}...")
-        page = 1
-        year_questions = []
-        
-        while True:
-            html = scrape_page(subject, exam_type, year, page)
-            if not html:
-                break
-                
-            questions = parse_questions(html, year, exam_type)
-            if not questions:
-                break
-                
-            year_questions.extend(questions)
-            print(f"  ✓ Page {page}: {len(questions)} questions")
-            
-            page += 1
-            time.sleep(1)  # Be polite - 1 second between requests
-            
-            if page > 20:  # Safety limit
-                break
-        
-        all_questions.extend(year_questions)
-        print(f"  Total for {year}: {len(year_questions)}")
-    
-    return all_questions
 
-def test_connection():
-    """Test if we can access the site"""
-    print("Testing connection to myschool.ng...")
-    url = f"{BASE_URL}/mathematics?exam_type=waec&exam_year=2023"
-    
+def scrape(subject, exam, years, out, review_out, max_pages, delay, images=False):
+    session = ms._session()
+    browser = _BrowserFetcher() if images else None
+    seen = set()                                # de-dup by normalised stem
+    rows, review, per_year, with_images = [], [], {}, 0
+
+    print(f"Subject: {subject}  (slug: {ms.subject_slug(subject)})   Exam: {exam.upper()}")
+    print("Years: " + str(years[0]) + (f"–{years[-1]}" if len(years) > 1 else ""))
+    print("-" * 60)
+
+    detail_fetch = browser.get if browser else None
     try:
-        response = requests.get(url, headers=HEADERS, timeout=15)
-        print(f"Status: {response.status_code}")
-        
-        if response.status_code == 200:
-            print("✓ Connection successful!\n")
-            
-            # Save raw HTML so you can inspect the structure
-            with open("sample_page.html", "w", encoding="utf-8") as f:
-                f.write(response.text)
-            print("Saved sample_page.html - open this to see the HTML structure")
-            print("You'll need to adjust parse_questions() based on what you see.\n")
-            
-            # Show a preview
-            soup = BeautifulSoup(response.text, 'html.parser')
-            print("--- Text Preview (first 2000 chars) ---")
-            print(soup.get_text()[:2000])
-            return True
-        else:
-            print(f"✗ Failed with status {response.status_code}")
-            return False
-            
-    except Exception as e:
-        print(f"✗ Error: {e}")
-        return False
+        for year in years:
+            kept = dup = flagged = 0
+            for q in ms.scrape_year(subject, exam, year, session=session,
+                                    max_pages=max_pages, delay=delay,
+                                    detail_fetch=detail_fetch):
+                norm = re.sub(r"\s+", " ", q["stem"].lower()).strip()
+                if norm in seen:
+                    dup += 1
+                    continue
+                seen.add(norm)
+                if q.get("image_url"):
+                    with_images += 1
+                # with a captured figure, a "figure-dependent" question is now
+                # answerable — keep it in the main file.
+                if q["figure_dependent"] and not q.get("image_url"):
+                    review.append(_row(q))
+                    flagged += 1
+                    continue
+                rows.append(_row(q))
+                kept += 1
+            per_year[year] = kept
+            print(f"{year}: {kept} kept, {dup} duplicate(s), {flagged} need a diagram")
+    finally:
+        if browser:
+            browser.close()
+
+    with open(out, "w", encoding="utf-8") as f:
+        f.write("\n".join(rows) + ("\n" if rows else ""))
+    if review:
+        with open(review_out, "w", encoding="utf-8") as f:
+            f.write("\n".join(review) + "\n")
+
+    print("-" * 60)
+    print(f"Saved {len(rows)} question(s) to {out}"
+          + (f" ({with_images} with a figure image)" if with_images else ""))
+    if review:
+        print(f"Set aside {len(review)} figure-dependent question(s) in {review_out} "
+              f"— add these by hand (they need the diagram).")
+    print("\nOpen the file, copy everything, and paste it into the subject's")
+    print("'Bulk import questions (paste)' box in the Mock JAMB question bank.")
+
 
 def main():
-    # Step 1: Test connection first
-    if not test_connection():
-        print("\nConnection failed. Try:")
-        print("1. Check your internet connection")
-        print("2. Try accessing the URL in your browser")
-        print("3. They might be blocking your IP - try a VPN")
-        return
-    
-    print("\n" + "="*50)
-    print("Connection works! Next steps:")
-    print("="*50)
-    print("""
-1. Open sample_page.html in your browser
-2. Right-click → Inspect to see the HTML structure
-3. Find the CSS selector for question blocks
-4. Update parse_questions() with the correct selector
-5. Uncomment the scraping code below and run again
-    """)
-    
-    # Uncomment below once you've updated parse_questions()
-    # -------------------------------------------------------
-    # questions = scrape_subject(
-    #     subject="mathematics",
-    #     exam_type="waec", 
-    #     start_year=2015,
-    #     end_year=2024
-    # )
-    # 
-    # with open("waec_math_questions.json", "w") as f:
-    #     json.dump(questions, f, indent=2)
-    # 
-    # print(f"\nDone! Saved {len(questions)} questions to waec_math_questions.json")
+    ap = argparse.ArgumentParser(
+        description="Scrape myschool.ng past questions into EduSyncra bulk-import rows.")
+    ap.add_argument("--subject", required=True,
+                    help="Subject name, e.g. mathematics, commerce, 'english language'.")
+    ap.add_argument("--exam", default="jamb", help="jamb (default), waec, neco, post-utme.")
+    ap.add_argument("--year", type=int, help="A single year, e.g. 2019.")
+    ap.add_argument("--from", dest="from_year", type=int, help="Start year of a range.")
+    ap.add_argument("--to", dest="to_year", type=int, help="End year of a range.")
+    ap.add_argument("--out", help="Output file (default: <subject>_<exam>.txt).")
+    ap.add_argument("--max-pages", type=int, default=60,
+                    help="Safety cap on listing pages per year (default 60).")
+    ap.add_argument("--delay", type=float, default=0.6,
+                    help="Seconds between requests — be polite (default 0.6).")
+    ap.add_argument("--images", action="store_true",
+                    help="Render each question in a real browser (Playwright) to "
+                         "capture figure images. Slower; needs 'pip install playwright "
+                         "&& playwright install chromium'. The captured image URL fills "
+                         "the last column and shows on the platform.")
+    args = ap.parse_args()
+
+    if args.year:
+        years = [args.year]
+    elif args.from_year and args.to_year:
+        lo, hi = sorted((args.from_year, args.to_year))
+        years = list(range(lo, hi + 1))
+    else:
+        ap.error("Give either --year YYYY or --from YYYY --to YYYY.")
+
+    exam = args.exam.strip().lower()
+    stem = f"{ms.subject_slug(args.subject)}_{exam}"
+    out = args.out or f"{stem}.txt"
+    review_out = f"{stem}_needs_review.txt"
+    scrape(args.subject, exam, years, out, review_out, args.max_pages, args.delay,
+           images=args.images)
+
 
 if __name__ == "__main__":
     main()

@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Error Log - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Error Log</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="fas fa-triangle-exclamation"></i> Error Log</h1>
+    <p class="text-muted text-sm">Recent server &amp; client-side errors (newest first, last {{ errors|length }}). Kept in memory — they reset when the app restarts. Server logs hold the full history.</p>
+</div>
+<div class="card"><div class="card-body" style="padding:0;">
+{% if errors %}
+<div class="table-container">
+<table class="data-table table-stack no-mobile-scroll">
+    <thead><tr><th>When</th><th>Type</th><th>What</th><th>Where</th><th>User</th><th></th></tr></thead>
+    <tbody>
+    {% for e in errors %}
+    <tr>
+        <td data-label="When"><small>{{ e.ts }}</small></td>
+        <td data-label="Type"><span class="badge {% if e.kind == 'server' %}badge-danger{% else %}badge-warning{% endif %}">{{ e.kind }}</span></td>
+        <td data-label="What">{{ e.message }}</td>
+        <td data-label="Where"><code>{{ e.where }}</code></td>
+        <td data-label="User">{{ e.user }}</td>
+        <td data-label="">{% if e.detail %}<details><summary class="btn btn-sm btn-secondary" style="cursor:pointer;list-style:none;">Trace</summary><pre style="white-space:pre-wrap;font-size:.72rem;background:var(--gray-50);padding:.6rem;border-radius:6px;margin-top:.4rem;max-width:100%;overflow:auto;">{{ e.detail }}</pre></details>{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% else %}
+<div class="empty-state"><i class="fas fa-circle-check"></i><h3>No errors recorded</h3><p>Nothing has gone wrong since the last restart.</p></div>
+{% endif %}
+</div></div>
+{% endblock %}

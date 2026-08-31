@@ -12,8 +12,20 @@
     {% endif %}
     <p class="text-muted text-sm" style="margin-top:1rem;">Submitted {{ attempt.submitted_at.strftime('%d %b %Y, %I:%M %p') if attempt.submitted_at }}</p>
     <a href="{{ url_for('cbt_portal.home') }}" class="btn btn-primary w-100" style="margin-top:.5rem;"><i class="fas fa-arrow-left"></i> Back to my tests</a>
-    <button type="button" class="btn btn-secondary w-100" style="margin-top:.5rem;" onclick="document.getElementById('review').classList.toggle('hidden');this.querySelector('span').textContent=document.getElementById('review').classList.contains('hidden')?'Review answers':'Hide review';"><i class="fas fa-list-check"></i> <span>Review answers</span></button>
+    <button type="button" id="reviewToggle" class="btn btn-secondary w-100" style="margin-top:.5rem;"><i class="fas fa-list-check"></i> <span>Review answers</span></button>
 </div>
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var btn = document.getElementById('reviewToggle');
+  var rev = document.getElementById('review');
+  if (!btn || !rev) return;
+  btn.addEventListener('click', function () {
+    rev.classList.toggle('hidden');
+    btn.querySelector('span').textContent =
+      rev.classList.contains('hidden') ? 'Review answers' : 'Hide review';
+  });
+})();
+</script>
 
 <div id="review" class="portal-card hidden" style="margin-top:1rem;text-align:left;">
     <h3 style="margin-top:0;">Answer review</h3>
@@ -23,7 +35,7 @@
             <span style="font-weight:700;">{{ loop.index }}.</span>
             <div style="flex:1;">
                 <strong>{{ r.q.question_text }}</strong>
-                {% if r.q.image_url %}<div><img src="{{ r.q.image_url }}" alt="figure" style="max-width:240px;max-height:160px;border:1px solid var(--border-color);border-radius:6px;margin:.3rem 0"></div>{% endif %}
+                {% if r.q.image_url %}<div><img src="{{ r.q.image_url }}" alt="Question figure" style="max-width:240px;max-height:160px;border:1px solid var(--border-color);border-radius:6px;margin:.3rem 0"></div>{% endif %}
                 <div style="margin-top:.5rem;display:flex;flex-direction:column;gap:.3rem;">
                     {% for letter, text in r.q.options %}{% if text %}
                     {% set is_ans = (r.q.correct_option == letter) %}

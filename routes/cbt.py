@@ -9,16 +9,20 @@ Two surfaces:
     exam is gated by its own access password; answers are auto-graded.
 """
 from datetime import datetime, timedelta
+from utils.helpers import get_active_term, safe_redirect, session_terms
 from functools import wraps
+import hmac
 import io
 import os
 import random
 import secrets
 
 from flask import (Blueprint, render_template, request, redirect, url_for,
-                   flash, session, jsonify, Response, current_app)
+                   flash, session, jsonify, Response, current_app, abort)
 from werkzeug.utils import secure_filename
+from utils.web_exports import xlsx_response, pdf_response
 from sqlalchemy import func
+from sqlalchemy.orm import contains_eager
 
 from models import (db, CBTExam, CBTQuestion, CBTAttempt, CBTAnswer, CBTViolation,
                     QuestionBank, CBTLoginEvent, CBTDeviceSession, Subject, SchoolClass,
@@ -27,12 +31,144 @@ from models import (db, CBTExam, CBTQuestion, CBTAttempt, CBTAnswer, CBTViolatio
 from utils.access_control import login_required, admin_required, is_admin
 from utils import timeutil
 from utils.useragent import parse_user_agent
+from utils.search import like_term
 
 cbt_bp = Blueprint('cbt', __name__, url_prefix='/cbt')
 cbt_portal_bp = Blueprint('cbt_portal', __name__, url_prefix='/exam')
 
+# Auto-generated portal PINs are printed on credential sheets and typed by
+# students/parents, so we use an unambiguous alphabet (no 0/O/1/I/L) and 8
+# characters (~40 bits) — far stronger than the old 24-bit 6-hex token while
+# staying easy to read and key in.
+_PIN_ALPHABET = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'
+
+
+def _gen_portal_pin(n=8):
+    return ''.join(secrets.choice(_PIN_ALPHABET) for _ in range(n))
+
+
+# ── answer-key cache ──────────────────────────────────────────────────────────
+# The correct-option map for an exam is read on every autosave batch by the whole
+# cohort and never changes during a sitting, so cache it (Redis when available,
+# in-process otherwise). Invalidated automatically whenever an exam's questions
+# change via the SQLAlchemy event listener below — it can't be bypassed by a
+# route that forgets to clear it.
+def _tns():
+    """Cache-key namespace for the active school. In multi-tenant mode a single
+    Redis is shared by every school, so keys MUST be namespaced per tenant or
+    school A's exam 42 would collide with school B's exam 42 (wrong answer key →
+    cross-tenant mis-grading). 'single' in single-school mode."""
+    try:
+        from utils.tenant_runtime import current_tenant
+        t = current_tenant()
+        return t.subdomain if t is not None else 'single'
+    except Exception:
+        return 'single'
+
+
+def _exam_answer_key(exam_id):
+    """{question_id: correct_option} for an exam, cached (tenant-namespaced)."""
+    from utils import cache
+    ck = f'cbt:{_tns()}:key:{exam_id}'
+    cached = cache.get_json(ck)
+    if cached is not None:
+        return {int(k): v for k, v in cached.items()}
+    rows = (CBTQuestion.query.filter_by(exam_id=exam_id)
+            .with_entities(CBTQuestion.id, CBTQuestion.correct_option).all())
+    key = {qid: opt for qid, opt in rows}
+    cache.set_json(ck, {str(k): v for k, v in key.items()}, ttl=6 * 3600)
+    return key
+
+
+def _invalidate_answer_key(exam_id):
+    from utils import cache
+    cache.delete(f'cbt:{_tns()}:key:{exam_id}')
+
+
+from sqlalchemy import event as _sa_event   # noqa: E402
+
+
+@_sa_event.listens_for(CBTQuestion, 'after_insert')
+@_sa_event.listens_for(CBTQuestion, 'after_update')
+@_sa_event.listens_for(CBTQuestion, 'after_delete')
+def _drop_answer_key_cache(mapper, connection, target):
+    try:
+        _invalidate_answer_key(target.exam_id)
+    except Exception:
+        pass
+
+
+# ── async analytics + grading (see utils.jobqueue) ────────────────────────────
+def _async_grading_enabled():
+    """Queued grading only when explicitly enabled AND a real queue backs it —
+    otherwise submit() grades inline (the correct, immediate default)."""
+    from utils import jobqueue
+    flag = os.environ.get('CBT_ASYNC_GRADING', '').strip().lower()
+    return flag in ('1', 'true', 'yes', 'on') and jobqueue.backend_enabled()
+
+
+def _refresh_exam_analytics(exam_id):
+    """Recompute the psychometric item analysis and cache it. Called only from the
+    background worker (never on a user request), so analytics stay asynchronous."""
+    from utils import cache
+    from utils.psychometrics import item_analysis as _analyse
+    try:
+        data = _analyse(exam_id)
+    except Exception:
+        return
+    cache.set_json(f'cbt:{_tns()}:ia:{exam_id}', data, ttl=6 * 3600)
+
+
+def _cbt_grade_job(app, payload):
+    attempt_id = payload.get('attempt_id')
+    a = db.session.get(CBTAttempt, attempt_id) if attempt_id else None
+    if not a or a.status == 'Submitted':
+        return
+    exam = db.session.get(CBTExam, a.exam_id)
+    if not exam:
+        return
+    # _finalize itself enqueues the best-effort analytics refresh on commit.
+    _finalize(a, exam)
+
+
+def _cbt_analytics_job(app, payload):
+    exam_id = payload.get('exam_id')
+    if exam_id:
+        _refresh_exam_analytics(exam_id)
+
+
+from utils import jobqueue as _jobqueue   # noqa: E402
+_jobqueue.register('cbt_grade', _cbt_grade_job)
+_jobqueue.register('cbt_analytics', _cbt_analytics_job)
+
+
+# --- SPA helpers (no-reload React shell + JSON-aware action responses) ---
+from utils.spa import section_responders
+_wants_json, _render, _ok, _err = section_responders(
+    'cbt/app.html', 'cbt_json', 'cbt.dashboard')
+
+
+def _exam_403(exam_id):
+    """Load a staff-managed CBT exam by id, enforcing branch access so a guessed
+    id can't reach another branch's exam (central users still see everything)."""
+    from utils.branch_scope import require_branch_access
+    e = db.get_or_404(CBTExam, exam_id)
+    require_branch_access(e.branch_id)
+    return e
+
+
+def _nav_urls():
+    return {'dashboard': url_for('cbt.dashboard'), 'add_exam': url_for('cbt.add_exam'),
+            'bank': url_for('cbt.bank'), 'passwords': url_for('cbt.passwords'),
+            'settings': url_for('cbt.settings'), 'lab_setup': url_for('cbt.lab_setup'),
+            'syllabus': url_for('cbt.syllabus'), 'portal': url_for('cbt_portal.login')}
+
 PORTAL_KEY = 'cbt_student_id'
 MAX_VIOLATIONS = 3   # leave-page events allowed before the test auto-submits
+# After the timer expires, how long a returning student's device still gets the
+# chance to sync its locally-saved answers and submit them, before the server
+# force-grades the attempt from what it already has (network-outage recovery).
+OFFLINE_GRACE_SECONDS = 30 * 60
 
 
 def _d(value, default=None):
@@ -42,25 +178,39 @@ def _d(value, default=None):
         return default
 
 
-_IMG_EXTS = {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg'}
+# Raster images only — NO '.svg' (an SVG can carry <script> and, served from our
+# own /static origin, would be stored XSS). The uploaded image is also re-encoded
+# through Pillow below, so polyglots / spoofed content never reach disk.
+_IMG_EXTS = {'.png', '.jpg', '.jpeg', '.gif', '.webp'}
 
 
 def _save_question_image(file):
-    """Save an uploaded question figure under static/uploads/cbt; return its URL."""
+    """Save an uploaded question figure under static/uploads/cbt; return its URL.
+
+    The bytes are decoded and re-encoded via Pillow (with a decompression-bomb
+    cap), so only a genuine raster image is ever written, and compressed to a
+    ≤600 KB budget (JPEG for photos, PNG when the figure has transparency)."""
     if not file or not file.filename:
         return None
-    ext = os.path.splitext(secure_filename(file.filename))[1].lower()
-    if ext not in _IMG_EXTS:
+    from utils.uploads import ext_ok, open_image, encode_to_target
+    if not ext_ok(file.filename, _IMG_EXTS):
         return None
-    name = secrets.token_hex(8) + ext
+    try:
+        im = open_image(file)                     # raises on non-image / bomb / SVG
+    except Exception:
+        return None
+    raw, mime = encode_to_target(im)              # ≤600 KB, keeps alpha as PNG
+    ext = 'png' if mime == 'image/png' else 'jpg'
+    name = secrets.token_hex(8) + '.' + ext
     folder = os.path.join(current_app.root_path, 'static', 'uploads', 'cbt')
     os.makedirs(folder, exist_ok=True)
-    file.save(os.path.join(folder, name))
+    with open(os.path.join(folder, name), 'wb') as fh:
+        fh.write(raw)
     return url_for('static', filename='uploads/cbt/' + name)
 
 
 def _active_term():
-    return Term.query.filter_by(is_active=True).first()
+    return get_active_term()
 
 
 def _student_placement(student_id, term):
@@ -85,7 +235,7 @@ def _student_placement(student_id, term):
 @cbt_bp.route('/')
 @login_required
 def dashboard():
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     active = _active_term()
     # Term-scoped (default active term); 'all' shows history across terms.
     raw = request.args.get('term_id')
@@ -93,6 +243,9 @@ def dashboard():
         term_id = None
     else:
         term_id = request.args.get('term_id', type=int) or (active.id if active else None)
+    # Online tests are a shared catalogue: every CBT-permissioned user sees the
+    # same exams across all branches (access to manage them is gated by the CBT
+    # module permission, not by branch).
     q = CBTExam.query
     if term_id:
         q = q.filter(CBTExam.term_id == term_id)
@@ -103,9 +256,22 @@ def dashboard():
     exam_ids = [e.id for e in exams]
     attempts = (CBTAttempt.query.filter(CBTAttempt.status == 'Submitted',
                 CBTAttempt.exam_id.in_(exam_ids)).count() if exam_ids else 0)
-    return render_template('cbt/dashboard.html', exams=exams, total=total,
-        published=published, today_count=today_count, attempts=attempts,
-        terms=terms, term_id=term_id, show_all=(raw == 'all'))
+    return _render({
+        'page': 'dashboard', 'nav': _nav_urls(),
+        'total': total, 'published': published, 'today_count': today_count, 'attempts': attempts,
+        'term_id': term_id or '', 'show_all': (raw == 'all'),
+        'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
+        'exams': [{'id': e.id, 'title': e.title,
+                   'subject': e.subject.name if e.subject else '—',
+                   'class_name': (e.school_class.name if e.school_class else '—') + (f' {e.arm.name}' if e.arm and not e.arm.is_default else ''),
+                   'exam_date': e.exam_date.strftime('%d %b %Y') if e.exam_date else '',
+                   'question_count': e.question_count, 'is_published': bool(e.is_published),
+                   'detail_url': url_for('cbt.exam_detail', exam_id=e.id),
+                   'results_url': url_for('cbt.results', exam_id=e.id)} for e in exams],
+        'self_url': url_for('cbt.dashboard'),
+        'urls': {'add': url_for('cbt.add_exam'), 'export_all': url_for('cbt.results_export_all'),
+                 'subject_topics': url_for('cbt.subject_topics')},
+    })
 
 
 @cbt_bp.route('/settings', methods=['GET', 'POST'])
@@ -113,14 +279,15 @@ def dashboard():
 def settings():
     if request.method == 'POST':
         if not is_admin():
-            flash('Admins only.', 'error')
-            return redirect(url_for('cbt.settings'))
+            return _err('Admins only.', url_for('cbt.settings'), status=403)
         SchoolSettings.set('cbt_supervisor_pin', (request.form.get('supervisor_pin') or '').strip(),
                            'string', 'CBT supervisor override PIN')
-        flash('CBT settings saved.', 'success')
-        return redirect(url_for('cbt.settings'))
-    return render_template('cbt/settings.html',
-        supervisor_pin=SchoolSettings.get('cbt_supervisor_pin', ''))
+        return _ok('CBT settings saved.', url_for('cbt.settings'))
+    return _render({
+        'page': 'settings', 'nav': _nav_urls(), 'is_admin': is_admin(),
+        'supervisor_pin': SchoolSettings.get('cbt_supervisor_pin', ''),
+        'submit_url': url_for('cbt.settings'),
+    })
 
 
 @cbt_bp.route('/lab-setup')
@@ -128,15 +295,40 @@ def settings():
 def lab_setup():
     """Invigilator guide: launch lab laptops in locked kiosk mode."""
     portal_url = url_for('cbt_portal.login', _external=True)
-    return render_template('cbt/lab_setup.html', portal_url=portal_url)
+    return _render({'page': 'lab_setup', 'nav': _nav_urls(), 'portal_url': portal_url})
 
 
 def _exam_choices():
     return {
         'subjects': Subject.query.filter_by(is_active=True).order_by(Subject.name).all(),
         'classes': SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all(),
-        'arms': ClassArm.query.filter_by(is_active=True).order_by(ClassArm.name).all(),
-        'terms': Term.query.order_by(Term.id.desc()).all(),
+        'arms': ClassArm.query.filter_by(is_active=True, is_default=False).order_by(ClassArm.name).all(),
+        'terms': session_terms(),
+    }
+
+
+def _exam_form_payload(e, submit_url, cancel_url):
+    ch = _exam_choices()
+    active = _active_term()
+    ex = None
+    if e:
+        ex = {'id': e.id, 'title': e.title or '', 'subject_id': e.subject_id or '',
+              'class_id': e.class_id or '', 'arm_id': e.arm_id or '', 'term_id': e.term_id or '',
+              'exam_date': e.exam_date.isoformat() if e.exam_date else '',
+              'start_time': e.start_time or '', 'end_time': e.end_time or '',
+              'duration_minutes': e.duration_minutes or 30,
+              'max_score': e.max_score if e.max_score else '',
+              'access_password': e.access_password or '', 'instructions': e.instructions or '',
+              'shuffle': bool(e.shuffle), 'strict_mode': bool(e.strict_mode),
+              'violation_limit': e.violation_limit if e.violation_limit is not None else 3}
+    return {
+        'page': 'exam_form', 'nav': _nav_urls(), 'mode': 'edit' if e else 'add', 'exam': ex,
+        'active_term_id': active.id if active else '',
+        'subjects': [{'id': s.id, 'name': s.name} for s in ch['subjects']],
+        'classes': [{'id': c.id, 'name': c.name} for c in ch['classes']],
+        'arms': [{'id': a.id, 'name': a.name} for a in ch['arms']],
+        'terms': [{'id': t.id, 'full_name': t.full_name} for t in ch['terms']],
+        'submit_url': submit_url, 'cancel_url': cancel_url,
     }
 
 
@@ -164,48 +356,53 @@ def _read_exam(e):
 def add_exam():
     if request.method == 'POST':
         if not (request.form.get('title') and request.form.get('access_password')):
-            flash('Title and an access password are required.', 'error')
-            return redirect(url_for('cbt.add_exam'))
+            return _err('Title and an access password are required.', url_for('cbt.add_exam'))
         from flask import session as _s
         e = CBTExam(created_by=_s.get('username') or 'Admin')
         _read_exam(e)
+        from utils.branch_scope import branch_for_new
+        e.branch_id = branch_for_new()
         db.session.add(e)
         db.session.commit()
-        flash('Exam created — now add questions.', 'success')
-        return redirect(url_for('cbt.exam_detail', exam_id=e.id))
-    active = _active_term()
-    return render_template('cbt/exam_form.html', exam=None, active_term=active, **_exam_choices())
+        from utils.audit import log_action
+        log_action('cbt.exam_create', target=e)
+        return _ok('Exam created — now add questions.', url_for('cbt.exam_detail', exam_id=e.id))
+    return _render(_exam_form_payload(None, url_for('cbt.add_exam'), url_for('cbt.dashboard')))
 
 
 @cbt_bp.route('/exams/<int:exam_id>')
 @login_required
 def exam_detail(exam_id):
-    e = CBTExam.query.get_or_404(exam_id)
+    e = _exam_403(exam_id)
     questions = e.questions.order_by(CBTQuestion.order, CBTQuestion.id).all()
-    return render_template('cbt/exam_detail.html', e=e, questions=questions)
+    return render_template('cbt/exam_detail.html', e=e, questions=questions,
+                           topic_tree=_subject_topic_tree(e.subject_id),
+                           syllabus_url=url_for('cbt.syllabus', subject_id=e.subject_id or ''))
 
 
 @cbt_bp.route('/exams/<int:exam_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_exam(exam_id):
-    e = CBTExam.query.get_or_404(exam_id)
+    e = _exam_403(exam_id)
     if request.method == 'POST':
         _read_exam(e)
         db.session.commit()
-        flash('Exam updated.', 'success')
-        return redirect(url_for('cbt.exam_detail', exam_id=e.id))
-    return render_template('cbt/exam_form.html', exam=e, active_term=_active_term(), **_exam_choices())
+        return _ok('Exam updated.', url_for('cbt.exam_detail', exam_id=e.id))
+    return _render(_exam_form_payload(e, url_for('cbt.edit_exam', exam_id=e.id),
+                                      url_for('cbt.exam_detail', exam_id=e.id)))
 
 
 @cbt_bp.route('/exams/<int:exam_id>/publish', methods=['POST'])
 @login_required
 def toggle_publish(exam_id):
-    e = CBTExam.query.get_or_404(exam_id)
+    e = _exam_403(exam_id)
     if not e.is_published and e.question_count == 0:
         flash('Add at least one question before publishing.', 'error')
         return redirect(url_for('cbt.exam_detail', exam_id=e.id))
     e.is_published = not e.is_published
     db.session.commit()
+    from utils.audit import log_action
+    log_action('cbt.exam_publish' if e.is_published else 'cbt.exam_unpublish', target=e)
     flash('Exam published.' if e.is_published else 'Exam unpublished.', 'success')
     return redirect(url_for('cbt.exam_detail', exam_id=e.id))
 
@@ -213,7 +410,9 @@ def toggle_publish(exam_id):
 @cbt_bp.route('/exams/<int:exam_id>/delete', methods=['POST'])
 @admin_required
 def delete_exam(exam_id):
-    e = CBTExam.query.get_or_404(exam_id)
+    e = _exam_403(exam_id)
+    from utils.audit import log_action
+    log_action('cbt.exam_delete', detail=getattr(e, 'title', None), target=e)
     db.session.delete(e)
     db.session.commit()
     flash('Exam deleted.', 'success')
@@ -223,7 +422,7 @@ def delete_exam(exam_id):
 @cbt_bp.route('/exams/<int:exam_id>/questions/add', methods=['POST'])
 @login_required
 def add_question(exam_id):
-    e = CBTExam.query.get_or_404(exam_id)
+    e = _exam_403(exam_id)
     text = (request.form.get('question_text') or '').strip()
     correct = (request.form.get('correct_option') or '').strip().upper()
     if not text or correct not in ('A', 'B', 'C', 'D'):
@@ -234,6 +433,8 @@ def add_question(exam_id):
     image_url = _save_question_image(request.files.get('image'))
     db.session.add(CBTQuestion(
         exam_id=exam_id, question_text=text, image_url=image_url,
+        topic=(request.form.get('topic') or '').strip() or None,
+        subtopic=(request.form.get('subtopic') or '').strip() or None,
         option_a=(request.form.get('option_a') or '').strip(),
         option_b=(request.form.get('option_b') or '').strip(),
         option_c=(request.form.get('option_c') or '').strip(),
@@ -250,7 +451,7 @@ def add_question(exam_id):
 def import_questions_file(exam_id):
     """Bulk-add questions to an exam from an uploaded Excel/CSV file."""
     from utils import cbt_import
-    e = CBTExam.query.get_or_404(exam_id)
+    e = _exam_403(exam_id)
     f = request.files.get('file')
     if not f or not f.filename:
         flash('Choose an Excel or CSV file.', 'error')
@@ -267,7 +468,7 @@ def import_questions_file(exam_id):
                .filter(CBTQuestion.exam_id == exam_id).scalar())
     for q in parsed:
         nextord += 1
-        db.session.add(CBTQuestion(exam_id=exam_id, order=nextord, **{k: q[k] for k in
+        db.session.add(CBTQuestion(exam_id=exam_id, order=nextord, topic=q.get('topic'), **{k: q[k] for k in
             ('question_text', 'option_a', 'option_b', 'option_c', 'option_d', 'correct_option', 'marks')}))
     db.session.commit()
     flash(f'Imported {len(parsed)} question(s) into the exam.', 'success')
@@ -278,7 +479,7 @@ def import_questions_file(exam_id):
 @login_required
 def import_from_bank(exam_id):
     """Pick questions from the bank to copy into an exam."""
-    e = CBTExam.query.get_or_404(exam_id)
+    e = _exam_403(exam_id)
     if request.method == 'POST':
         ids = request.form.getlist('bank_id', type=int)
         nextord = (db.session.query(func.coalesce(func.max(CBTQuestion.order), 0))
@@ -287,7 +488,7 @@ def import_from_bank(exam_id):
         for bq in QuestionBank.query.filter(QuestionBank.id.in_(ids or [-1])).all():
             nextord += 1
             db.session.add(CBTQuestion(exam_id=exam_id, order=nextord,
-                question_text=bq.question_text, image_url=bq.image_url,
+                question_text=bq.question_text, image_url=bq.image_url, topic=bq.topic,
                 option_a=bq.option_a, option_b=bq.option_b,
                 option_c=bq.option_c, option_d=bq.option_d,
                 correct_option=bq.correct_option, marks=bq.marks))
@@ -301,18 +502,85 @@ def import_from_bank(exam_id):
         q = q.filter_by(subject_id=subject_id)
     topic = (request.args.get('topic') or '').strip()
     if topic:
-        q = q.filter(QuestionBank.topic.ilike(f'%{topic}%'))
+        q = q.filter(QuestionBank.topic.ilike(like_term(topic), escape='\\'))
     questions = q.order_by(QuestionBank.topic, QuestionBank.id.desc()).all()
     subjects = Subject.query.filter_by(is_active=True).order_by(Subject.name).all()
     return render_template('cbt/import_bank.html', e=e, questions=questions,
                            subjects=subjects, subject_id=subject_id, topic=topic)
 
 
+@cbt_bp.route('/exams/<int:exam_id>/fill-from-jamb', methods=['GET', 'POST'])
+@login_required
+def fill_from_jamb_bank(exam_id):
+    """Fill a CBT exam with questions drawn from the central Mock JAMB question
+    bank for the exam's subject — the teacher picks topics and a count, and the
+    system copies a random sample (de-duplicated against the exam) as CBT
+    questions. Great for a quick class test off the banked past questions."""
+    import random as _random
+    from models import MockJAMBQuestion
+    e = _exam_403(exam_id)
+    if not e.subject_id:
+        flash('Set the exam\'s subject first, then fill from the bank.', 'error')
+        return redirect(url_for('cbt.exam_detail', exam_id=exam_id))
+
+    base = (MockJAMBQuestion.query
+            .filter(MockJAMBQuestion.mock_exam_id.is_(None),
+                    MockJAMBQuestion.subject_id == e.subject_id,
+                    MockJAMBQuestion.passage_id.is_(None)))   # standalone only
+
+    if request.method == 'POST':
+        topics = [t for t in request.form.getlist('topics') if t.strip()]
+        count = max(1, min(request.form.get('count', type=int) or 20, 200))
+        marks = request.form.get('marks', type=float) or 1
+        q = base
+        if topics:
+            q = q.filter(MockJAMBQuestion.topic.in_(topics))
+        pool = q.all()
+        # de-dup against what the exam already has (by normalised text)
+        import re as _re
+        def _norm(t):
+            return _re.sub(r'\s+', ' ', (t or '').lower()).strip()
+        have = {_norm(x.question_text) for x in e.questions}
+        pool = [bq for bq in pool if _norm(bq.question_text) not in have]
+        _random.shuffle(pool)
+        chosen = pool[:count]
+        nextord = (db.session.query(func.coalesce(func.max(CBTQuestion.order), 0))
+                   .filter(CBTQuestion.exam_id == exam_id).scalar())
+        for bq in chosen:
+            nextord += 1
+            db.session.add(CBTQuestion(
+                exam_id=exam_id, order=nextord, question_text=bq.question_text,
+                image_url=bq.image_url, topic=bq.topic, subtopic=bq.subtopic,
+                option_a=bq.option_a, option_b=bq.option_b, option_c=bq.option_c,
+                option_d=bq.option_d, correct_option=bq.correct_option, marks=marks))
+        db.session.commit()
+        if chosen:
+            flash(f'Added {len(chosen)} question(s) from the bank'
+                  + (f' ({len(pool) - len(chosen)} more available)' if len(pool) > len(chosen) else '') + '.',
+                  'success')
+        else:
+            flash('No new bank questions matched — the bank may be empty for this '
+                  'subject/topics, or you already have them all.', 'warning')
+        return redirect(url_for('cbt.exam_detail', exam_id=exam_id))
+
+    # GET: per-topic availability for the picker
+    from sqlalchemy import func as _f
+    rows = (base.with_entities(MockJAMBQuestion.topic, _f.count(MockJAMBQuestion.id))
+            .group_by(MockJAMBQuestion.topic).all())
+    topics = sorted(({'topic': t or '(untagged)', 'value': t or '', 'count': n}
+                     for t, n in rows), key=lambda x: (-x['count'], x['topic']))
+    total = sum(t['count'] for t in topics)
+    return render_template('cbt/fill_from_jamb.html', e=e, topics=topics, total=total)
+
+
 @cbt_bp.route('/questions/<int:question_id>/delete', methods=['POST'])
 @login_required
 def delete_question(question_id):
-    q = CBTQuestion.query.get_or_404(question_id)
+    q = db.get_or_404(CBTQuestion, question_id)
     exam_id = q.exam_id
+    from utils.audit import log_action
+    log_action('cbt.question_delete', detail=f'exam={exam_id} question={question_id}',
+               target_type='cbtquestion', target_id=question_id)
     db.session.delete(q)
     db.session.commit()
     flash('Question removed.', 'success')
@@ -333,9 +601,9 @@ def bank():
     if subject_id:
         q = q.filter_by(subject_id=subject_id)
     if topic:
-        q = q.filter(QuestionBank.topic.ilike(f'%{topic}%'))
+        q = q.filter(QuestionBank.topic.ilike(like_term(topic), escape='\\'))
     if search:
-        q = q.filter(QuestionBank.question_text.ilike(f'%{search}%'))
+        q = q.filter(QuestionBank.question_text.ilike(like_term(search), escape='\\'))
     questions = q.order_by(QuestionBank.id.desc()).limit(500).all()
     subjects = Subject.query.filter_by(is_active=True).order_by(Subject.name).all()
     total = QuestionBank.query.filter_by(is_active=True).count()
@@ -372,11 +640,11 @@ def bank_add():
 @cbt_bp.route('/bank/<int:bank_id>/delete', methods=['POST'])
 @login_required
 def bank_delete(bank_id):
-    bq = QuestionBank.query.get_or_404(bank_id)
+    bq = db.get_or_404(QuestionBank, bank_id)
     bq.is_active = False
     db.session.commit()
     flash('Question removed from the bank.', 'success')
-    return redirect(request.referrer or url_for('cbt.bank'))
+    return safe_redirect(url_for('cbt.bank'))
 
 
 @cbt_bp.route('/bank/import', methods=['GET', 'POST'])
@@ -426,18 +694,13 @@ def bank_template():
         c.font = Font(bold=True, color='FFFFFF')
     ws.append(['What is 5 + 7?', '10', '12', '13', '11', 'B', 1, 'Arithmetic', 'Easy'])
     ws.append(['Water is made of hydrogen and ___?', 'Oxygen', 'Nitrogen', 'Carbon', 'Helium', 'A', 1, 'Science', 'Easy'])
-    output = io.BytesIO()
-    wb.save(output)
-    output.seek(0)
-    return Response(output.getvalue(),
-        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        headers={'Content-Disposition': 'attachment; filename=cbt_question_template.xlsx'})
+    return xlsx_response(wb, 'cbt_question_template.xlsx')
 
 
 @cbt_bp.route('/exams/<int:exam_id>/results')
 @login_required
 def results(exam_id):
-    e = CBTExam.query.get_or_404(exam_id)
+    e = _exam_403(exam_id)
     attempts = (e.attempts.join(Student).order_by(Student.surname, Student.first_name).all())
     submitted = [a for a in attempts if a.status == 'Submitted']
     avg = round(sum(a.score for a in submitted) / len(submitted), 1) if submitted else 0
@@ -455,24 +718,379 @@ def results(exam_id):
                 CBTAnswer.is_correct == True).count()
         pct = round(correct / len(submitted) * 100, 1) if submitted else 0
         analysis.append({'q': q, 'correct': correct, 'pct': pct})
-    return render_template('cbt/results.html', e=e, attempts=attempts, avg=avg,
-                           analysis=analysis, submitted_count=len(submitted))
+    return _render({
+        'page': 'results', 'nav': _nav_urls(),
+        'exam': {'id': e.id, 'title': e.title, 'total_marks': e.total_marks,
+                 'question_count': e.question_count},
+        'avg': avg, 'submitted_count': len(submitted),
+        'attempts': [{'id': a.id, 'student': a.student.full_name if a.student else '—',
+                      'student_id': a.student.student_id if a.student else '',
+                      'raw_score': a.raw_score, 'raw_total': a.raw_total,
+                      'score': a.score, 'total': a.total, 'percentage': a.percentage,
+                      'violations': a.violations, 'status': a.status,
+                      'review_url': url_for('cbt.attempt_review', attempt_id=a.id)} for a in attempts],
+        'analysis': [{'text': it['q'].question_text, 'correct': it['correct'], 'pct': it['pct']}
+                     for it in analysis],
+        'urls': {'export': url_for('cbt.results_export', exam_id=e.id),
+                 'detail': url_for('cbt.exam_detail', exam_id=e.id),
+                 'item_analysis': url_for('cbt.item_analysis', exam_id=e.id)},
+    })
+
+
+@cbt_bp.route('/exams/<int:exam_id>/item-analysis')
+@login_required
+def item_analysis(exam_id):
+    """Psychometric item analysis for a CBT exam — difficulty, discrimination,
+    point-biserial, distractor analysis and KR-20 reliability."""
+    e = _exam_403(exam_id)
+    # Prefer the analytics snapshot refreshed asynchronously by the background
+    # worker after each submission; only compute inline when the cache is cold
+    # (e.g. no worker configured) so the heavy psychometrics never block a sitting.
+    from utils import cache
+    _iak = f'cbt:{_tns()}:ia:{e.id}'
+    data = cache.get_json(_iak)
+    if data is None:
+        from utils.psychometrics import item_analysis as _analyse
+        data = _analyse(e.id)
+        cache.set_json(_iak, data, ttl=6 * 3600)
+    return _render({
+        'page': 'item_analysis', 'nav': _nav_urls(),
+        'exam': {'id': e.id, 'title': e.title},
+        'analysis': data,
+        'urls': {'results': url_for('cbt.results', exam_id=e.id),
+                 'detail': url_for('cbt.exam_detail', exam_id=e.id),
+                 'export_pdf': url_for('cbt.item_analysis_export', exam_id=e.id, format='pdf'),
+                 'export_excel': url_for('cbt.item_analysis_export', exam_id=e.id, format='excel')},
+    })
+
+
+@cbt_bp.route('/exams/<int:exam_id>/item-analysis/export')
+@login_required
+def item_analysis_export(exam_id):
+    """Item-analysis export. ``format`` = pdf (default) | excel."""
+    e = _exam_403(exam_id)
+    from utils.psychometrics import item_analysis as _analyse
+    from utils.psychometrics_report import item_analysis_pdf, item_analysis_xlsx
+    from utils.web_exports import pdf_response, xlsx_response
+    data = _analyse(e.id)
+    if not data or data.get('meta', {}).get('insufficient'):
+        flash('Not enough submitted attempts for an item analysis yet.', 'warning')
+        return redirect(url_for('cbt.item_analysis', exam_id=e.id))
+    stem = ('item_analysis_' + (e.title or 'exam')).replace(' ', '_')
+    fmt = (request.args.get('format') or 'pdf').lower()
+    if fmt in ('excel', 'xlsx'):
+        return xlsx_response(item_analysis_xlsx(data), f'{stem}.xlsx')
+    return pdf_response(item_analysis_pdf(data), f'{stem}.pdf', inline=False)
+
+
+# =============================================================================
+# SYLLABUS TOPICS & SUB-TOPICS (WAEC / JAMB) — the curriculum vocabulary that
+# powers the topic drop-downs when authoring questions and the mastery analytics.
+# =============================================================================
+
+def _subject_topic_tree(subject_id):
+    """[{id, title, exam_body, subtopics: [{id, title}]}] of active topics for a
+    subject, ordered — the shape the authoring drop-downs and the API consume."""
+    from models import SyllabusTopic
+    if not subject_id:
+        return []
+    rows = (SyllabusTopic.query.filter_by(subject_id=subject_id, is_active=True)
+            .order_by(SyllabusTopic.order, SyllabusTopic.title).all())
+    tops = [t for t in rows if t.parent_id is None]
+    kids = {}
+    for t in rows:
+        if t.parent_id is not None:
+            kids.setdefault(t.parent_id, []).append(t)
+    return [{'id': t.id, 'title': t.title, 'exam_body': t.exam_body,
+             'subtopics': [{'id': c.id, 'title': c.title} for c in kids.get(t.id, [])]}
+            for t in tops]
+
+
+# Complete JAMB/WAEC syllabus for the core & main subjects — an admin can seed a
+# subject's full curriculum with one click, then edit/extend. Keys are matched on
+# a normalised subject name so 'Maths'/'Mathematics' both resolve. See
+# ``utils.syllabus_data`` for the data itself.
+from utils.syllabus_data import FULL_SYLLABUS as _STARTER_SYLLABUS
+
+
+def _norm_subject_name(name):
+    import re
+    key = re.sub(r'[^a-z0-9]', '', (name or '').lower())
+    aliases = {
+        'maths': 'mathematics', 'math': 'mathematics', 'mathematic': 'mathematics',
+        'english': 'english language', 'englishlanguage': 'english language',
+        'useofenglish': 'english language', 'bio': 'biology', 'chem': 'chemistry',
+        'phy': 'physics', 'physic': 'physics', 'econs': 'economics', 'econ': 'economics',
+        'govt': 'government', 'gov': 'government', 'lit': 'literature in english',
+        'literature': 'literature in english', 'literatureinenglish': 'literature in english',
+        'crs': 'christian religious studies', 'crk': 'christian religious studies',
+        'geo': 'geography', 'accounts': 'accounting', 'financialaccounting': 'accounting',
+        'agric': 'agricultural science', 'agriculture': 'agricultural science',
+        'civic': 'civic education', 'civics': 'civic education',
+    }
+    return aliases.get(key, ' '.join(re.findall(r'[a-z]+|[0-9]+', (name or '').lower())).strip())
+
+
+@cbt_bp.route('/syllabus')
+@login_required
+def syllabus():
+    """Curriculum manager: add/edit/remove a subject's WAEC/JAMB topics and
+    sub-topics. These feed the topic drop-downs when authoring questions."""
+    subjects = Subject.query.filter_by(is_active=True).order_by(Subject.name).all()
+    subject_id = request.args.get('subject_id', type=int) or (subjects[0].id if subjects else None)
+    subject = db.session.get(Subject, subject_id) if subject_id else None
+    tree = _subject_topic_tree(subject_id)
+    can_seed = bool(subject and not tree
+                    and _norm_subject_name(subject.name) in _STARTER_SYLLABUS)
+    # How many subjects could be bulk-seeded (have a syllabus + no topics yet).
+    from models import SyllabusTopic
+    seed_all_count = 0
+    for s in subjects:
+        if (_norm_subject_name(s.name) in _STARTER_SYLLABUS
+                and not SyllabusTopic.query.filter_by(subject_id=s.id, parent_id=None).first()):
+            seed_all_count += 1
+    return render_template('cbt/syllabus.html', subjects=subjects, subject=subject,
+                           subject_id=subject_id, tree=tree, can_seed=can_seed,
+                           seed_all_count=seed_all_count,
+                           dashboard_url=url_for('cbt.dashboard'))
+
+
+@cbt_bp.route('/syllabus/add', methods=['POST'])
+@admin_required
+def syllabus_add():
+    """Add a topic (parent_id blank) or a sub-topic (parent_id set)."""
+    from models import SyllabusTopic
+    subject_id = request.form.get('subject_id', type=int)
+    title = (request.form.get('title') or '').strip()
+    parent_id = request.form.get('parent_id', type=int)
+    exam_body = (request.form.get('exam_body') or 'Both').strip()
+    if exam_body not in ('WAEC', 'JAMB', 'Both'):
+        exam_body = 'Both'
+    if not subject_id or not title:
+        flash('A subject and a title are required.', 'error')
+        return redirect(url_for('cbt.syllabus', subject_id=subject_id or ''))
+    parent = db.session.get(SyllabusTopic, parent_id) if parent_id else None
+    if parent and parent.subject_id != subject_id:
+        parent = None
+    exists = SyllabusTopic.query.filter_by(
+        subject_id=subject_id, parent_id=(parent.id if parent else None), title=title).first()
+    if exists:
+        flash('That topic already exists here.', 'warning')
+        return redirect(url_for('cbt.syllabus', subject_id=subject_id))
+    nextord = (db.session.query(func.coalesce(func.max(SyllabusTopic.order), 0))
+               .filter(SyllabusTopic.subject_id == subject_id,
+                       SyllabusTopic.parent_id == (parent.id if parent else None)).scalar()) + 1
+    db.session.add(SyllabusTopic(
+        subject_id=subject_id, parent_id=(parent.id if parent else None), title=title,
+        exam_body=(parent.exam_body if parent else exam_body), order=nextord))
+    db.session.commit()
+    flash('Sub-topic added.' if parent else 'Topic added.', 'success')
+    return redirect(url_for('cbt.syllabus', subject_id=subject_id))
+
+
+@cbt_bp.route('/syllabus/<int:topic_id>/edit', methods=['POST'])
+@admin_required
+def syllabus_edit(topic_id):
+    from models import SyllabusTopic
+    t = db.get_or_404(SyllabusTopic, topic_id)
+    title = (request.form.get('title') or '').strip()
+    if title:
+        t.title = title
+    eb = (request.form.get('exam_body') or '').strip()
+    if eb in ('WAEC', 'JAMB', 'Both'):
+        t.exam_body = eb
+    db.session.commit()
+    flash('Updated.', 'success')
+    return redirect(url_for('cbt.syllabus', subject_id=t.subject_id))
+
+
+@cbt_bp.route('/syllabus/<int:topic_id>/delete', methods=['POST'])
+@admin_required
+def syllabus_delete(topic_id):
+    from models import SyllabusTopic
+    t = db.get_or_404(SyllabusTopic, topic_id)
+    sid = t.subject_id
+    db.session.delete(t)   # cascade removes sub-topics
+    db.session.commit()
+    flash('Removed.', 'success')
+    return redirect(url_for('cbt.syllabus', subject_id=sid))
+
+
+@cbt_bp.route('/syllabus/seed', methods=['POST'])
+@admin_required
+def syllabus_seed():
+    """One-click starter WAEC/JAMB syllabus for a core subject."""
+    from models import SyllabusTopic
+    subject_id = request.form.get('subject_id', type=int)
+    subject = db.session.get(Subject, subject_id) if subject_id else None
+    if not subject:
+        flash('Choose a subject first.', 'error')
+        return redirect(url_for('cbt.syllabus'))
+    starter = _STARTER_SYLLABUS.get(_norm_subject_name(subject.name))
+    if not starter:
+        flash('No starter syllabus for this subject yet — add topics manually.', 'warning')
+        return redirect(url_for('cbt.syllabus', subject_id=subject_id))
+    added = 0
+    for i, (topic, subs) in enumerate(starter):
+        if SyllabusTopic.query.filter_by(subject_id=subject_id, parent_id=None, title=topic).first():
+            continue
+        t = SyllabusTopic(subject_id=subject_id, title=topic, order=i + 1, exam_body='Both')
+        db.session.add(t); db.session.flush(); added += 1
+        for j, sub in enumerate(subs):
+            db.session.add(SyllabusTopic(subject_id=subject_id, parent_id=t.id, title=sub,
+                                         order=j + 1, exam_body='Both')); added += 1
+    db.session.commit()
+    flash(f'Seeded {added} topics & sub-topics — edit or extend as needed.', 'success')
+    return redirect(url_for('cbt.syllabus', subject_id=subject_id))
+
+
+@cbt_bp.route('/syllabus/seed-all', methods=['POST'])
+@admin_required
+def syllabus_seed_all():
+    """Seed the full JAMB/WAEC syllabus for every active subject that has one and
+    isn't already populated — a one-click curriculum bootstrap for the school."""
+    from models import SyllabusTopic
+    subjects = Subject.query.filter_by(is_active=True).all()
+    added, seeded_subjects = 0, 0
+    for subject in subjects:
+        starter = _STARTER_SYLLABUS.get(_norm_subject_name(subject.name))
+        if not starter:
+            continue
+        # Skip a subject that already has any topics (never duplicate).
+        if SyllabusTopic.query.filter_by(subject_id=subject.id, parent_id=None).first():
+            continue
+        seeded_subjects += 1
+        for i, (topic, subs) in enumerate(starter):
+            t = SyllabusTopic(subject_id=subject.id, title=topic, order=i + 1, exam_body='Both')
+            db.session.add(t); db.session.flush(); added += 1
+            for j, sub in enumerate(subs):
+                db.session.add(SyllabusTopic(subject_id=subject.id, parent_id=t.id, title=sub,
+                                             order=j + 1, exam_body='Both')); added += 1
+    db.session.commit()
+    if added:
+        flash(f'Seeded {added} topics & sub-topics across {seeded_subjects} subject(s).', 'success')
+    else:
+        flash('Nothing to seed — matching subjects already have a syllabus.', 'info')
+    return redirect(url_for('cbt.syllabus'))
+
+
+@cbt_bp.route('/api/subjects/<int:subject_id>/topics')
+@login_required
+def api_subject_topics(subject_id):
+    """JSON topic tree for a subject — consumed by the question-authoring
+    drop-downs (topic → filtered sub-topic)."""
+    return jsonify({'topics': _subject_topic_tree(subject_id)})
+
+
+@cbt_bp.route('/subject-topics')
+@login_required
+def subject_topics():
+    """Topic mastery aggregated across all of a subject's CBT exams."""
+    from utils.subject_topics import subject_topic_mastery
+    from utils.branch_scope import viewing_branch_id
+    from models import Subject, Term
+    # Subjects that actually have CBT exams (so the picker is never empty noise).
+    subj_ids = [s for (s,) in db.session.query(CBTExam.subject_id).filter(
+        CBTExam.subject_id.isnot(None)).distinct().all()]
+    subjects = (Subject.query.filter(Subject.id.in_(subj_ids)).order_by(Subject.name).all()
+                if subj_ids else [])
+    terms = session_terms()
+    subject_id = request.args.get('subject_id', type=int) or (subjects[0].id if subjects else None)
+    term_id = request.args.get('term_id', type=int)
+    data = subject_topic_mastery(subject_id, term_id, viewing_branch_id()) if subject_id else None
+    return _render({
+        'page': 'subject_topics', 'nav': _nav_urls(),
+        'subjects': [{'id': s.id, 'name': s.name} for s in subjects],
+        'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
+        'selected_subject_id': subject_id or '', 'selected_term_id': term_id or '',
+        'analysis': data,
+        'self_url': url_for('cbt.subject_topics'),
+        'urls': {'dashboard': url_for('cbt.dashboard'),
+                 'export_excel': url_for('cbt.subject_topics_export',
+                                         subject_id=subject_id or '', term_id=term_id or '')},
+    })
+
+
+@cbt_bp.route('/subject-topics/export')
+@login_required
+def subject_topics_export():
+    """Excel export of subject topic mastery."""
+    from utils.subject_topics import subject_topic_mastery
+    from utils.branch_scope import viewing_branch_id
+    from utils.web_exports import xlsx_response
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, PatternFill, Alignment
+    subject_id = request.args.get('subject_id', type=int)
+    term_id = request.args.get('term_id', type=int)
+    data = subject_topic_mastery(subject_id, term_id, viewing_branch_id()) if subject_id else None
+    if not data or data['meta'].get('insufficient'):
+        flash('No tagged topic data for that subject yet.', 'warning')
+        return redirect(url_for('cbt.subject_topics', subject_id=subject_id or ''))
+    wb = Workbook(); ws = wb.active; ws.title = 'Topic mastery'
+    ws.append(['Topic', 'Mastery %', 'Band', 'Items', 'Exams', 'Students'])
+    for c in ws[1]:
+        c.fill = PatternFill('solid', fgColor='0D6A4E'); c.font = Font(bold=True, color='FFFFFF')
+        c.alignment = Alignment(horizontal='center')
+    for t in data['topics']:
+        ws.append([t['topic'], t['mastery'], t['band'], t['items'], t['exams'], t['students']])
+    for col in ws.columns:
+        w = max((len(str(c.value)) if c.value is not None else 0) for c in col) + 2
+        ws.column_dimensions[col[0].column_letter].width = min(max(w, 12), 40)
+    stem = ('topic_mastery_' + (data['meta'].get('subject') or 'subject')).replace(' ', '_')
+    return xlsx_response(wb, f'{stem}.xlsx')
 
 
 @cbt_bp.route('/exams/<int:exam_id>/monitor')
 @login_required
 def monitor(exam_id):
-    e = CBTExam.query.get_or_404(exam_id)
-    return render_template('cbt/monitor.html', e=e)
+    e = _exam_403(exam_id)
+    # Central users get a branch filter (CBT is school-wide); branch users are
+    # already scoped to their own branch.
+    from utils.branch_scope import is_central
+    from models import Branch
+    branches = (Branch.query.filter_by(is_active=True).order_by(Branch.name).all()
+                if is_central() else [])
+    return render_template('cbt/monitor.html', e=e, branches=branches)
+
+
+@cbt_bp.route('/attempts/<int:attempt_id>/force-submit', methods=['POST'])
+@admin_required
+def force_submit(attempt_id):
+    """Invigilator action: end an in-progress attempt and grade it from the
+    answers already saved on the server. The recovery tool for a student whose
+    device died / went offline and never came back to submit."""
+    attempt = db.get_or_404(CBTAttempt, attempt_id)
+    if attempt.status == 'Submitted':
+        return jsonify({'ok': True, 'already': True})
+    exam = db.session.get(CBTExam, attempt.exam_id)
+    _finalize(attempt, exam)
+    from utils.audit import log_action
+    log_action('cbt.force_submit',
+               f'attempt {attempt.id} ({attempt.student.full_name if attempt.student else "?"}) '
+               f'exam {exam.id}')
+    return jsonify({'ok': True, 'score': attempt.score, 'total': attempt.total})
 
 
 @cbt_bp.route('/exams/<int:exam_id>/monitor/data')
 @login_required
 def monitor_data(exam_id):
-    """Live JSON snapshot of every attempt for the invigilator monitor."""
-    e = CBTExam.query.get_or_404(exam_id)
+    """Live JSON snapshot of every attempt for the invigilator monitor.
+
+    CBT exams are school-wide (set centrally for every branch), but the device
+    fingerprints/attempts can be filtered by branch to make tracking easier.
+    Branch users are always restricted to their own branch.
+    """
+    e = _exam_403(exam_id)
     now = timeutil.now()
     qcount = e.question_count
+    # Resolve the branch filter: branch users -> their branch; a central user may
+    # pick one via the ?branch= param (else sees all branches).
+    from utils.branch_scope import viewing_branch_id
+    _vbid = viewing_branch_id()
+    if _vbid is not None:
+        branch_filter = _vbid
+    else:
+        branch_filter = request.args.get('branch', type=int)
     # answered counts per attempt (only saved answers with a choice)
     answered = dict(db.session.query(CBTAnswer.attempt_id, func.count(CBTAnswer.id))
                     .join(CBTAttempt, CBTAnswer.attempt_id == CBTAttempt.id)
@@ -480,10 +1098,16 @@ def monitor_data(exam_id):
                             CBTAnswer.selected_option != None)
                     .group_by(CBTAnswer.attempt_id).all())
     # Latest device fingerprint per student for this exam (login or start event).
+    # Bound the scan: this exam's events, plus recent global-login events only,
+    # newest first, capped — so the monitor never loads the full history table.
     fp_by_student = {}
+    _recent_cut = now - timedelta(days=1)
     fps = (CBTLoginEvent.query
-           .filter((CBTLoginEvent.exam_id == exam_id) | (CBTLoginEvent.exam_id == None))
-           .order_by(CBTLoginEvent.created_at.desc()).all())
+           .filter(db.or_(CBTLoginEvent.exam_id == exam_id,
+                          db.and_(CBTLoginEvent.exam_id == None,
+                                  CBTLoginEvent.created_at >= _recent_cut)))
+           .order_by(CBTLoginEvent.created_at.desc())
+           .limit(6000).all())
     for fp in fps:
         fp_by_student.setdefault(fp.student_id, fp)
     # Live devices per student (pinged recently) -> flag concurrent sessions.
@@ -494,7 +1118,11 @@ def monitor_data(exam_id):
                        CBTDeviceSession.last_seen >= active_cut).all()):
         active_by_student.setdefault(ds.student_id, []).append(ds)
     rows = []
-    for a in e.attempts.join(Student).order_by(Student.surname, Student.first_name).all():
+    # join Student for filter/order AND map it onto each attempt (no per-row load).
+    _attempts_q = e.attempts.join(Student).options(contains_eager(CBTAttempt.student))
+    if branch_filter:
+        _attempts_q = _attempts_q.filter(Student.branch_id == branch_filter)
+    for a in _attempts_q.order_by(Student.surname, Student.first_name).all():
         deadline = _deadline(a, e)
         remaining = int((deadline - now).total_seconds())
         seen_ago = int((now - a.last_seen).total_seconds()) if a.last_seen else None
@@ -555,7 +1183,7 @@ def _review_rows(exam, attempt):
 @cbt_bp.route('/attempts/<int:attempt_id>/review')
 @login_required
 def attempt_review(attempt_id):
-    attempt = CBTAttempt.query.get_or_404(attempt_id)
+    attempt = db.get_or_404(CBTAttempt, attempt_id)
     rows = _review_rows(attempt.exam, attempt)
     violations = attempt.violation_log.order_by(CBTViolation.created_at).all()
     total_away = sum(v.away_seconds or 0 for v in violations)
@@ -617,18 +1245,13 @@ def _safe_sheet_title(text):
 @login_required
 def results_export(exam_id):
     from openpyxl import Workbook
-    e = CBTExam.query.get_or_404(exam_id)
+    e = _exam_403(exam_id)
     wb = Workbook()
     ws = wb.active
     ws.title = _safe_sheet_title(e.subject.name if e.subject else 'Results')
     _exam_sheet(ws, e)
-    output = io.BytesIO()
-    wb.save(output)
-    output.seek(0)
     fname = _safe_sheet_title(f'{e.subject.name if e.subject else "exam"}_{e.title}') + '.xlsx'
-    return Response(output.getvalue(),
-        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        headers={'Content-Disposition': f'attachment; filename={fname}'})
+    return xlsx_response(wb, fname)
 
 
 @cbt_bp.route('/results/export-all')
@@ -652,12 +1275,7 @@ def results_export_all():
             title = _safe_sheet_title(f'{base} {n+1}')
         seen[base] = n + 1
         _exam_sheet(wb.create_sheet(title), e)
-    output = io.BytesIO()
-    wb.save(output)
-    output.seek(0)
-    return Response(output.getvalue(),
-        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        headers={'Content-Disposition': 'attachment; filename=cbt_all_results.xlsx'})
+    return xlsx_response(wb, 'cbt_all_results.xlsx')
 
 
 # ============================================================================
@@ -667,11 +1285,17 @@ def results_export_all():
 @cbt_bp.route('/passwords', methods=['GET', 'POST'])
 @login_required
 def passwords():
+    # Portal passwords are sensitive: only a central admin or a (branch) admin
+    # may view/manage them — not every CBT-module user.
+    from utils.access_control import is_admin
+    from utils.branch_scope import is_central
+    if not (is_central() or is_admin()):
+        abort(403)
     term = _active_term()
     class_id = request.values.get('class_id', type=int)
     arm_id = request.values.get('arm_id', type=int)
     classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all()
-    arms = ClassArm.query.filter_by(is_active=True).order_by(ClassArm.name).all()
+    arms = ClassArm.query.filter_by(is_active=True, is_default=False).order_by(ClassArm.name).all()
 
     if request.method == 'POST':
         action = request.form.get('action')
@@ -680,7 +1304,7 @@ def passwords():
         if action == 'set_individual':
             sid = request.form.get('one_student_id', type=int)
             pw = (request.form.get('one_password') or '').strip()
-            s = Student.query.get(sid) if sid else None
+            s = db.session.get(Student, sid) if sid else None
             if s and pw:
                 s.set_portal_password(pw)
                 db.session.commit()
@@ -692,16 +1316,40 @@ def passwords():
                     s.set_portal_password(pw)
                 db.session.commit()
                 flash(f'Set the same password for {len(students)} student(s).', 'success')
-        elif action == 'generate' and students:
-            generated = []
-            for s in students:
-                pw = secrets.token_hex(3)   # 6-char one-time password
-                s.set_portal_password(pw)
-                generated.append((s, pw))
-            db.session.commit()
-            return render_template('cbt/passwords.html', classes=classes, arms=arms, term=term,
-                class_id=class_id, arm_id=arm_id,
-                students=_password_roster(class_id, arm_id, term), generated=generated)
+        elif action in ('generate', 'generate_all', 'generate_one'):
+            # Hash-only: generate fresh PINs, set the hashes, and show/print or
+            # download the raw PINs in THIS response — nothing recoverable is
+            # ever stored (no DB plaintext, no session — Flask sessions are
+            # signed cookies, so a PIN there would leak to the client).
+            if action == 'generate_all':
+                targets = _password_roster(class_id, arm_id, term)
+            elif action == 'generate_one':
+                one = db.session.get(Student, request.form.get('one_student_id', type=int))
+                targets = [one] if one else []
+            else:
+                targets = students
+            if targets:
+                generated = []
+                for s in targets:
+                    pw = _gen_portal_pin()      # ~40-bit readable PIN
+                    s.set_portal_password(pw)
+                    generated.append((s, pw))
+                db.session.commit()
+                output = (request.form.get('output') or 'html').lower()
+                if output in ('xlsx', 'docx', 'pdf'):
+                    label = _roster_label(class_id, arm_id, classes, arms)
+                    school = SchoolSettings.get('school_name', 'School')
+                    safe = ''.join(c for c in label if c.isalnum() or c in ' -_').strip().replace(' ', '_') or 'students'
+                    rows = [(i + 1, s.student_id, s.full_name, pw)
+                            for i, (s, pw) in enumerate(generated)]
+                    if output == 'docx':
+                        return _passwords_docx(school, label, rows, safe)
+                    if output == 'pdf':
+                        return _passwords_pdf(school, label, rows, safe)
+                    return _passwords_xlsx(school, label, rows, safe)
+                return render_template('cbt/passwords.html', classes=classes, arms=arms, term=term,
+                    class_id=class_id, arm_id=arm_id,
+                    students=_password_roster(class_id, arm_id, term), generated=generated)
         return redirect(url_for('cbt.passwords', class_id=class_id or '', arm_id=arm_id or ''))
 
     return render_template('cbt/passwords.html', classes=classes, arms=arms, term=term,
@@ -710,48 +1358,32 @@ def passwords():
 
 
 def _password_roster(class_id, arm_id, term):
+    from utils.branch_scope import scope_query
     if class_id and term:
-        q = (StudentEnrollment.query
+        q = scope_query(StudentEnrollment.query
              .join(ClassArmAssignment,
                    StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
              .filter(StudentEnrollment.is_active == True,
                      ClassArmAssignment.term_id == term.id,
-                     ClassArmAssignment.class_id == class_id))
+                     ClassArmAssignment.class_id == class_id), ClassArmAssignment)
         if arm_id:
             q = q.filter(ClassArmAssignment.arm_id == arm_id)
         ids = [e.student_id for e in q.all()]
-        return Student.query.filter(Student.id.in_(ids or [-1])).order_by(Student.surname, Student.first_name).all()
-    return Student.query.filter_by(is_active=True).order_by(Student.surname).limit(300).all()
+        return scope_query(Student.query.filter(Student.id.in_(ids or [-1])), Student).order_by(Student.surname, Student.first_name).all()
+    return scope_query(Student.query.filter_by(is_active=True), Student).order_by(Student.surname).limit(300).all()
 
 
 def _roster_label(class_id, arm_id, classes, arms):
     cls = next((c for c in classes if c.id == class_id), None)
     arm = next((a for a in arms if a.id == arm_id), None)
-    return ' '.join(p for p in [cls.name if cls else 'All students', arm.name if arm else ''] if p)
+    return ' '.join(p for p in [cls.name if cls else 'All students',
+                                 arm.name if arm and not arm.is_default else ''] if p)
 
 
-@cbt_bp.route('/passwords/export')
-@login_required
-def passwords_export():
-    """Export portal passwords for a class arm as Excel / Word / PDF."""
-    term = _active_term()
-    class_id = request.args.get('class_id', type=int)
-    arm_id = request.args.get('arm_id', type=int)
-    fmt = (request.args.get('format') or 'xlsx').lower()
-    classes = SchoolClass.query.all()
-    arms = ClassArm.query.all()
-    label = _roster_label(class_id, arm_id, classes, arms)
-    students = _password_roster(class_id, arm_id, term)
-    rows = [(i + 1, s.student_id, s.full_name, s.portal_password_plain or '—')
-            for i, s in enumerate(students)]
-    school = SchoolSettings.get('school_name', 'School')
-    safe = ''.join(c for c in label if c.isalnum() or c in ' -_').strip().replace(' ', '_') or 'students'
-
-    if fmt == 'docx':
-        return _passwords_docx(school, label, rows, safe)
-    if fmt == 'pdf':
-        return _passwords_pdf(school, label, rows, safe)
-    return _passwords_xlsx(school, label, rows, safe)
+# NOTE: there is deliberately no "export existing passwords" route — portal
+# passwords are stored hash-only and cannot be recovered. The credential sheet
+# (Excel/Word/PDF) is produced from freshly-generated PINs inside `passwords()`
+# at generation time; the `_passwords_*` builders below are reused for that.
 
 
 def _passwords_xlsx(school, label, rows, safe):
@@ -810,11 +1442,12 @@ def _passwords_pdf(school, label, rows, safe):
     from reportlab.lib.units import mm
     from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
     from reportlab.lib.styles import getSampleStyleSheet
+    from utils.web_exports import pdf_escape
     out = io.BytesIO()
     doc = SimpleDocTemplate(out, pagesize=A4, topMargin=18 * mm, bottomMargin=18 * mm)
     styles = getSampleStyleSheet()
-    elems = [Paragraph(f'<b>{school}</b>', styles['Title']),
-             Paragraph(f'Test Portal Passwords — {label}', styles['Heading2']),
+    elems = [Paragraph(f'<b>{pdf_escape(school)}</b>', styles['Title']),
+             Paragraph(f'Test Portal Passwords — {pdf_escape(label)}', styles['Heading2']),
              Spacer(1, 6 * mm)]
     data = [['S/N', 'Student ID', 'Name', 'Password']] + [[str(c) for c in row] for row in rows]
     t = Table(data, colWidths=[14 * mm, 32 * mm, 78 * mm, 36 * mm], repeatRows=1)
@@ -830,9 +1463,7 @@ def _passwords_pdf(school, label, rows, safe):
     ]))
     elems.append(t)
     doc.build(elems)
-    out.seek(0)
-    return Response(out.getvalue(), mimetype='application/pdf',
-        headers={'Content-Disposition': f'attachment; filename=passwords_{safe}.pdf'})
+    return pdf_response(out, f'passwords_{safe}.pdf', inline=False)
 
 
 # ============================================================================
@@ -850,7 +1481,7 @@ def cbt_login_required(f):
 
 def _current_student():
     sid = session.get(PORTAL_KEY)
-    return Student.query.get(sid) if sid else None
+    return db.session.get(Student, sid) if sid else None
 
 
 def _record_login_event(student, event='login', exam_id=None):
@@ -917,15 +1548,31 @@ def login():
     if session.get(PORTAL_KEY):
         return redirect(url_for('cbt_portal.home'))
     if request.method == 'POST':
+        from utils.security import login_limiter
         student_id = (request.form.get('student_id') or '').strip()
         password = request.form.get('password') or ''
+        # Throttle by client IP AND by target account (enumerable Student IDs).
+        rkey = f"cbt_login:{request.remote_addr or 'unknown'}"
+        akey = f"cbt_login_acct:{student_id.lower()}" if student_id else rkey
+        if (login_limiter.is_rate_limited(rkey, max_attempts=15, window_minutes=15)
+                or login_limiter.is_rate_limited(akey, max_attempts=10, window_minutes=15)):
+            wait = login_limiter.get_remaining_time(rkey, 15) // 60 + 1
+            flash(f'Too many attempts. Try again in about {wait} minute(s).', 'error')
+            return render_template('cbt/portal_login.html')
         student = Student.query.filter_by(student_id=student_id, is_active=True).first()
         if student and student.check_portal_password(password):
+            login_limiter.clear_attempts(rkey)
+            login_limiter.clear_attempts(akey)
+            session.clear()           # prevent session fixation
             session[PORTAL_KEY] = student.id
+            from utils.csrf import rotate_csrf_token
+            rotate_csrf_token()
             ev_id = _record_login_event(student, event='login')
             if ev_id:
                 session['cbt_login_event'] = ev_id
             return redirect(url_for('cbt_portal.home'))
+        login_limiter.record_attempt(rkey)
+        login_limiter.record_attempt(akey)
         flash('Invalid student ID or password.', 'error')
     return render_template('cbt/portal_login.html')
 
@@ -951,6 +1598,8 @@ def home():
                                  CBTExam.exam_date == timeutil.today(),
                                  CBTExam.class_id == class_id)
         q = q.filter((CBTExam.arm_id == None) | (CBTExam.arm_id == arm_id))
+        # Online tests are shared across branches: a student sees every published
+        # exam for their class/arm today, regardless of which branch created it.
         exams = q.order_by(CBTExam.start_time, CBTExam.title).all()
     # attach this student's attempt status + availability window
     rows = []
@@ -969,6 +1618,9 @@ def _student_can_access(student, exam):
         return False
     if exam.arm_id and exam.arm_id != arm_id:
         return False
+    # Branch isolation: an exam stamped to a branch is only for that branch.
+    if exam.branch_id and student.branch_id and exam.branch_id != student.branch_id:
+        return False
     return True
 
 
@@ -976,7 +1628,7 @@ def _student_can_access(student, exam):
 @cbt_login_required
 def start(exam_id):
     student = _current_student()
-    exam = CBTExam.query.get_or_404(exam_id)
+    exam = db.get_or_404(CBTExam, exam_id)
     if not exam.is_published or not _student_can_access(student, exam):
         flash('This exam is not available for your class.', 'error')
         return redirect(url_for('cbt_portal.home'))
@@ -1027,28 +1679,46 @@ def _finalize(attempt, exam):
     attempt.score = exam.scale(raw_score)
     attempt.status = 'Submitted'
     attempt.submitted_at = timeutil.now()
-    db.session.commit()
+    try:
+        db.session.commit()
+    except Exception:
+        db.session.rollback()
+        from flask import current_app
+        current_app.logger.exception(
+            'CBT grading failed to commit for attempt %s (exam %s)',
+            getattr(attempt, 'id', '?'), getattr(exam, 'id', '?'))
+        raise   # surface the failure instead of leaving a half-graded attempt
+    # Keep the exam's cached analytics fresh — best-effort, worker-side only, so
+    # it never runs on a student request.
+    try:
+        _jobqueue.enqueue('cbt_analytics', {'exam_id': exam.id}, inline_fallback=False)
+    except Exception:
+        pass
 
 
 @cbt_portal_bp.route('/<int:exam_id>/take')
 @cbt_login_required
 def take(exam_id):
     student = _current_student()
-    exam = CBTExam.query.get_or_404(exam_id)
+    exam = db.get_or_404(CBTExam, exam_id)
     if not _student_can_access(student, exam):
         flash('This exam is not available for your class.', 'error')
         return redirect(url_for('cbt_portal.home'))
     attempt = CBTAttempt.query.filter_by(exam_id=exam.id, student_id=student.id).first()
     if not attempt:
         return redirect(url_for('cbt_portal.start', exam_id=exam.id))
-    if attempt.status == 'Submitted':
+    if attempt.status in ('Submitted', 'Submitting'):
         return redirect(url_for('cbt_portal.result', exam_id=exam.id))
-    # Timer already expired while away -> auto-submit from saved answers.
+    # Timer already expired while away. Give a grace window first: if the
+    # student went offline mid-exam, their latest answers may exist only on
+    # their device — rendering the page (at 00:00) lets the browser restore
+    # them and submit, instead of grading from stale server-side answers.
     remaining = int((_deadline(attempt, exam) - timeutil.now()).total_seconds())
-    if remaining <= 0:
+    if remaining <= -OFFLINE_GRACE_SECONDS:
         _finalize(attempt, exam)
         flash('Time was up — your test was submitted automatically.', 'info')
         return redirect(url_for('cbt_portal.result', exam_id=exam.id))
+    remaining = max(remaining, 0)
     questions = exam.questions.order_by(CBTQuestion.order, CBTQuestion.id).all()
     if exam.shuffle:
         random.Random(attempt.id).shuffle(questions)   # stable per attempt
@@ -1085,7 +1755,7 @@ def flag(exam_id):
     attempt = CBTAttempt.query.filter_by(exam_id=exam_id, student_id=student.id).first()
     if not attempt or attempt.status != 'In progress':
         return jsonify({'ok': False}), 400
-    exam = CBTExam.query.get(exam_id)
+    exam = db.session.get(CBTExam, exam_id)
     vtype = (request.form.get('type') or 'tab_switch').strip()[:30]
     away = request.form.get('away', type=int) or 0
     detail = (request.form.get('detail') or '').strip()[:500] or None
@@ -1119,7 +1789,7 @@ def supervisor_unlock(exam_id):
         return jsonify({'ok': False}), 400
     pin = (request.form.get('pin') or '').strip()
     real = (SchoolSettings.get('cbt_supervisor_pin', '') or '').strip()
-    if not real or pin != real:
+    if not real or not hmac.compare_digest(pin, real):
         return jsonify({'ok': False, 'error': 'Wrong supervisor PIN'}), 403
     minutes = request.form.get('minutes', type=int) or 3
     minutes = max(1, min(minutes, 15))
@@ -1138,9 +1808,15 @@ def ping(exam_id):
     student = _current_student()
     attempt = CBTAttempt.query.filter_by(exam_id=exam_id, student_id=student.id).first()
     if attempt and attempt.status == 'In progress':
-        attempt.last_seen = timeutil.now()
-        db.session.commit()
-        _touch_device_session(student, exam_id)
+        # Coalesce: only persist last_seen at most once per ~25s. Clients ping
+        # often (~every 30s); writing on every ping is the main heartbeat write
+        # load at scale. The gate lives in Redis when available (so the coalescing
+        # holds across all web workers), falling back to a per-process gate.
+        from utils import cache
+        if cache.should_run(f'cbt:{_tns()}:hb:{attempt.id}', 25):
+            attempt.last_seen = timeutil.now()
+            db.session.commit()
+            _touch_device_session(student, exam_id)
     return jsonify({'ok': True})
 
 
@@ -1212,15 +1888,54 @@ def answer(exam_id):
     return jsonify({'ok': True})
 
 
+@cbt_portal_bp.route('/<int:exam_id>/answers', methods=['POST'])
+@cbt_login_required
+def answers_batch(exam_id):
+    """Autosave several answers in ONE request/commit (the scalable autosave path).
+
+    The client batches changes and flushes here periodically; the final submit
+    still posts every answer from the form, so a missed batch never loses data.
+    Accepts form fields named ``q_<question_id>=<option>``.
+    """
+    student = _current_student()
+    attempt = CBTAttempt.query.filter_by(exam_id=exam_id, student_id=student.id).first()
+    if not attempt or attempt.status == 'Submitted':
+        return jsonify({'ok': False}), 400
+    correct = _exam_answer_key(exam_id)
+    existing = {a.question_id: a for a in attempt.answers}
+    changed = 0
+    for key, val in request.form.items():
+        if not key.startswith('q_'):
+            continue
+        try:
+            qid = int(key[2:])
+        except ValueError:
+            continue
+        if qid not in correct:
+            continue
+        sel = (val or '').strip().upper() or None
+        ans = existing.get(qid)
+        if ans is None:
+            ans = CBTAnswer(attempt_id=attempt.id, question_id=qid)
+            db.session.add(ans)
+            existing[qid] = ans
+        ans.selected_option = sel
+        ans.is_correct = (sel == correct[qid])
+        changed += 1
+    if changed:
+        db.session.commit()
+    return jsonify({'ok': True, 'saved': changed})
+
+
 @cbt_portal_bp.route('/<int:exam_id>/submit', methods=['POST'])
 @cbt_login_required
 def submit(exam_id):
     student = _current_student()
-    exam = CBTExam.query.get_or_404(exam_id)
+    exam = db.get_or_404(CBTExam, exam_id)
     attempt = CBTAttempt.query.filter_by(exam_id=exam.id, student_id=student.id).first()
     if not attempt:
         return redirect(url_for('cbt_portal.home'))
-    if attempt.status == 'Submitted':
+    if attempt.status in ('Submitted', 'Submitting'):
         return redirect(url_for('cbt_portal.result', exam_id=exam.id))
     # Persist any answers posted with the final submit (covers JS-off / last picks).
     for q in exam.questions.all():
@@ -1233,7 +1948,17 @@ def submit(exam_id):
             db.session.add(ans)
         ans.selected_option = sel
     db.session.flush()
-    _finalize(attempt, exam)
+    if _async_grading_enabled():
+        # Queue grading so a whole cohort submitting at the deadline doesn't grade
+        # synchronously on the web workers. The result page shows a brief
+        # "grading…" state and the worker finalises within seconds; if the worker
+        # is unreachable, result() self-heals by grading inline after a short grace.
+        attempt.status = 'Submitting'
+        attempt.submitted_at = timeutil.now()
+        db.session.commit()
+        _jobqueue.enqueue('cbt_grade', {'attempt_id': attempt.id})
+    else:
+        _finalize(attempt, exam)
     return redirect(url_for('cbt_portal.result', exam_id=exam.id))
 
 
@@ -1241,9 +1966,20 @@ def submit(exam_id):
 @cbt_login_required
 def result(exam_id):
     student = _current_student()
-    exam = CBTExam.query.get_or_404(exam_id)
+    exam = db.get_or_404(CBTExam, exam_id)
     attempt = CBTAttempt.query.filter_by(exam_id=exam.id, student_id=student.id).first()
-    if not attempt or attempt.status != 'Submitted':
+    if not attempt:
+        return redirect(url_for('cbt_portal.home'))
+    if attempt.status == 'Submitting':
+        # Queued grading in flight. Self-heal: if the worker hasn't finalised
+        # within a short grace, grade inline now so a student is never stuck.
+        grace = attempt.submitted_at and \
+            (timeutil.now() - attempt.submitted_at).total_seconds() > 60
+        if grace:
+            _finalize(attempt, exam)
+        else:
+            return render_template('cbt/portal_grading.html', exam=exam, student=student)
+    if attempt.status != 'Submitted':
         return redirect(url_for('cbt_portal.home'))
     rows = _review_rows(exam, attempt)
     return render_template('cbt/portal_result.html', exam=exam, student=student,

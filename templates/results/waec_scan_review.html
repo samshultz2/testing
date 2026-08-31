@@ -31,8 +31,8 @@ details.raw pre{white-space:pre-wrap;background:var(--gray-50);padding:.75rem;bo
 <div class="review-grid">
     <div class="scan-preview">
         <div class="card"><div class="card-body">
-            <img src="{{ preview }}" alt="Uploaded result">
-            <details class="raw"><summary>Raw OCR text</summary><pre>{{ raw_text }}</pre></details>
+            {% if preview %}<img src="{{ preview }}" alt="Uploaded result">{% endif %}
+            <details class="raw"><summary>{{ 'Raw OCR text' if preview else 'Pasted text' }}</summary><pre>{{ raw_text }}</pre></details>
         </div></div>
     </div>
 

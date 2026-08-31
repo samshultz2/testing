@@ -1,0 +1,1536 @@
+{% extends "base.html" %}
+{% block title %}Timetable Designer - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('timetable.index') }}">Timetable</a> / <span>Designer</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ---- controls (screen only) ---- */
+.tt-controls{display:grid;gap:1rem}
+.tt-controls .row3{display:grid;grid-template-columns:1fr;gap:.75rem}
+@media(min-width:768px){.tt-controls .row3{grid-template-columns:repeat(3,1fr)}}
+
+/* mobile-first session editor: big, full-width, stacked fields */
+.sess-card{border:1px solid var(--gray-200);border-radius:12px;padding:1rem;margin-bottom:.85rem;background:var(--gray-50)}
+.sess-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:.7rem}
+.sess-top strong{font-size:.95rem}
+.sess-del{background:var(--bg-card);border:1px solid var(--border-color);color:var(--danger,#dc2626);border-radius:8px;padding:.4rem .7rem;cursor:pointer;font-size:.85rem}
+.sess-grid{display:grid;grid-template-columns:1fr;gap:.75rem}
+@media(min-width:560px){.sess-grid{grid-template-columns:repeat(2,1fr)}}
+@media(min-width:920px){.sess-grid{grid-template-columns:repeat(3,1fr)}}
+.sess-grid label{display:flex;flex-direction:column;gap:.35rem;font-size:.8rem;font-weight:600;color:var(--text-secondary)}
+.sess-grid input{width:100%;padding:.7rem .75rem;font-size:1rem;border:1px solid var(--border-color);border-radius:9px;background:var(--bg-card);color:var(--text-primary)}
+.sess-grid input:focus{outline:none;border-color:var(--primary,#2563eb);box-shadow:0 0 0 3px rgba(37,99,235,.15)}
+.sess-hint{font-size:.82rem;color:var(--text-muted);margin:.25rem 0 .6rem}
+.sess-actions{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
+.sess-dup{background:var(--bg-card);border:1px solid var(--border-color);color:var(--text-secondary);border-radius:8px;padding:.4rem .7rem;cursor:pointer;font-size:.85rem}
+.bulk-box{border:1px dashed var(--border-color);border-radius:10px;padding:.75rem 1rem;margin-bottom:.85rem;background:var(--bg-card)}
+.bulk-box summary{cursor:pointer;font-weight:600;color:var(--primary,#2563eb)}
+.bulk-box textarea{width:100%;margin:.5rem 0;padding:.7rem;font-size:.95rem;border:1px solid var(--border-color);border-radius:9px;font-family:inherit;background:var(--bg-card);color:var(--text-primary)}
+
+/* save / saved-list + Saturday plan */
+.tt-save,.tt-sat{border-top:1px solid var(--border-color);padding-top:1rem;margin-top:.25rem}
+.tt-save .badge{display:inline-block;min-width:1.3em;padding:.05em .45em;border-radius:999px;background:var(--gray-200);color:var(--text-secondary);font-size:.78rem;font-weight:700;text-align:center}
+.saved-panel{margin-top:.85rem;border:1px solid var(--border-color);border-radius:10px;overflow:hidden}
+.saved-item{display:flex;align-items:center;gap:.6rem;padding:.6rem .85rem;border-bottom:1px solid var(--border-color)}
+.saved-item:last-child{border-bottom:none}
+.saved-item .s-name{font-weight:600;flex:1 1 auto;min-width:0}
+.saved-item .s-name small{display:block;font-weight:400;color:var(--text-muted);font-size:.78rem}
+.saved-item .s-actions{display:flex;gap:.4rem;flex-shrink:0}
+.saved-empty{padding:1rem;text-align:center;color:var(--text-muted)}
+.sat-manage{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.85rem}
+.sat-chip{display:flex;align-items:center;gap:.45rem;border:1px solid var(--border-color);border-radius:9px;padding:.4rem .6rem;font-size:.85rem;background:var(--bg-card)}
+.sat-chip.free{opacity:.7;text-decoration:line-through;background:var(--gray-50)}
+.sat-chip .s-wk{font-weight:700;color:var(--primary,#0d6a4e)}
+.sat-chip.free .s-wk{color:var(--danger,#dc2626)}
+
+/* ---- the printable sheet ---- */
+.tt-sheet{background:#fff;color:#111;padding:24px;border:1px solid var(--gray-200);border-radius:8px;max-width:1100px;margin:0 auto;overflow-x:auto;font-size:17px}
+.tt-sheet .tt-head{text-align:center;margin-bottom:14px}
+.tt-sheet .tt-headinner{display:inline-flex;align-items:center;gap:14px}
+.tt-sheet .tt-logo{max-height:72px;max-width:120px;object-fit:contain;flex-shrink:0}
+.tt-sheet .tt-school{font-size:2em;font-weight:800;letter-spacing:.5px}
+.tt-sheet .tt-title{font-size:1.4em;font-weight:700;margin-top:2px}
+.tt-sheet .tt-sub{font-size:1.05em;color:#555;margin-top:2px}
+.tt-sheet table{width:100%;border-collapse:collapse;margin-top:10px;font-size:1em}
+.tt-sheet th,.tt-sheet td{padding:10px 12px;text-align:left;vertical-align:top}
+.tt-sheet td.empty{height:34px}
+.tt-sheet .sig-col{min-width:160px}
+/* day grid cells: subject + teacher together, centred */
+.tt-sheet table.grid-tt th,.tt-sheet table.grid-tt td{text-align:center}
+/* fillable roster cells: type the class/group on duty straight into the grid */
+.tt-sheet table.grid-tt td.roster-cell{min-width:8em;min-height:1.9em;padding:.45em .5em;cursor:text;font-weight:600}
+.tt-sheet table.grid-tt td.roster-cell:focus{outline:2px solid var(--primary,#0d6a4e);outline-offset:-2px}
+/* Placeholder shown only while a roster cell is empty (and never on the printout). */
+.tt-sheet table.grid-tt td.roster-cell:empty::before{content:attr(data-ph);color:#b3b3b3;font-weight:400;font-style:italic}
+@media print{.tt-sheet table.grid-tt td.roster-cell:focus{outline:none}
+             .tt-sheet table.grid-tt td.roster-cell:empty::before{content:''}}
+.tt-sheet table.grid-tt th{font-size:1em}
+.tt-sheet table.grid-tt th.day-cell{vertical-align:middle;font-weight:800;font-size:1.05em}
+.tt-sheet table.grid-tt td.grp-cell{font-weight:700;white-space:nowrap}
+.tt-sheet .c-date{display:block;font-weight:600;font-size:.95em;opacity:1;margin-top:3px}
+.tt-sheet .c-subj{display:block;font-weight:700;font-size:1.18em;line-height:1.15}
+.tt-sheet .c-tchr{display:block;font-size:.85em;opacity:.85;margin-top:2px}
+.tt-sheet .c-sep{border:none;border-top:1px dashed currentColor;opacity:.3;margin:.3rem 0}
+.tt-sheet td.banner{text-align:center;vertical-align:middle;background:rgba(0,0,0,.04)}
+.tt-sheet td.banner .c-subj{font-size:1.5em;letter-spacing:2px;text-transform:uppercase}
+.tt-sheet td.merged{vertical-align:middle;text-align:center}
+/* A run that spans multiple periods (e.g. a trailing "Skill Acquisition") reads
+   as a tidy labelled block — a faint diagonal texture fills the space and the
+   text sits in a pill outline, so the big cell no longer looks empty. Uses
+   currentColor so it adapts to every sheet theme (incl. the dark chalkboard). */
+.tt-sheet td.merged.wide{
+  background-image:repeating-linear-gradient(-45deg,
+     rgba(125,125,125,.045) 0 9px, rgba(125,125,125,.11) 9px 18px);
+}
+.tt-sheet td.merged.wide .c-subj{
+  display:inline-block;font-weight:700;font-size:.98em;line-height:1.15;
+  letter-spacing:2.5px;text-transform:uppercase;
+  padding:.5em 1.25em;border:1.5px solid currentColor;border-radius:2em;
+}
+@media print{.tt-sheet td.merged.wide{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+/* days-as-columns: time on the left, group blocks side by side in a cell */
+.tt-sheet table.grid-tt th.time-cell{vertical-align:middle;font-weight:700;white-space:nowrap;font-size:.95em}
+.tt-sheet .g-row{display:flex;gap:5px;align-items:stretch;justify-content:center}
+.tt-sheet .g-block{flex:1 1 0;min-width:0;border-radius:7px;padding:5px 6px;background:rgba(0,0,0,.04)}
+.tt-sheet .g-tag{display:block;font-size:.72em;font-weight:800;text-transform:uppercase;opacity:.75;letter-spacing:.4px}
+/* bigger again when rendering the downloadable image/PDF */
+.tt-sheet.exporting{font-size:22px}
+/* The custom list/table has only a few wide columns, so it can (and should)
+   print at a larger, more readable size than a dense day×period timetable
+   (which would overflow the page if enlarged). */
+.tt-sheet.exporting table.grid-tt.listtable{font-size:30px}
+
+/* Clear visual demarcation between days (prints & exports too). currentColor
+   adapts to each theme (dark line on light sheets, light line on dark ones). */
+/* days-as-rows: a thick rule above every day after the first (each day is its
+   own <tbody class="day">). */
+.tt-sheet table.grid-tt tbody.day + tbody.day > tr:first-child > th,
+.tt-sheet table.grid-tt tbody.day + tbody.day > tr:first-child > td{border-top:3px solid currentColor}
+/* days-as-columns & the blank grid: a thick rule to the left of each day/column. */
+.tt-sheet table.grid-tt.cols th.day-col,
+.tt-sheet table.grid-tt.cols td.day-col,
+.tt-sheet table.grid-tt.blankgrid th.col-sep,
+.tt-sheet table.grid-tt.blankgrid td.col-sep{border-left:3px solid currentColor}
+/* auto-numbered custom table: narrow centred S/N column, left-aligned normal-
+   weight cells (a real table, not the wide bold roster boxes). */
+.tt-sheet table.grid-tt th.sn-col,
+.tt-sheet table.grid-tt td.sn-col{width:2.6em;text-align:center;font-weight:700}
+/* The table fills the full width, but each column sizes to its own content
+   (nowrap) rather than every column taking an equal share — so a long "Name"
+   gets the room and short columns like "Number" stay tight, and nothing wraps
+   onto a second line. The spare width goes to the widest (description-style)
+   column. If the data is wider than the page the sheet scrolls (screen) /
+   fits-to-width (PDF) instead of mangling the columns. */
+.tt-sheet table.grid-tt.listtable{width:100%;table-layout:auto}
+.tt-sheet table.grid-tt.listtable td.roster-cell{min-width:0;text-align:left;font-weight:400}
+.tt-sheet table.grid-tt.listtable th,
+.tt-sheet table.grid-tt.listtable td{white-space:nowrap}
+
+/* themes */
+.tt-sheet[data-theme="classic"]{font-family:Georgia,'Times New Roman',serif}
+.tt-sheet[data-theme="classic"] th,.tt-sheet[data-theme="classic"] td{border:1px solid #222}
+.tt-sheet[data-theme="classic"] th{background:#f0f0f0;text-transform:uppercase;font-size:.82rem;letter-spacing:.5px}
+
+.tt-sheet[data-theme="modern"]{font-family:'Segoe UI',system-ui,sans-serif}
+.tt-sheet[data-theme="modern"] th{background:#0f766e;color:#fff;border:1px solid #115e59}
+.tt-sheet[data-theme="modern"] td{border:1px solid #e2e8f0}
+.tt-sheet[data-theme="modern"] .tt-school{color:#0f766e}
+
+.tt-sheet[data-theme="colour"]{font-family:'Trebuchet MS',system-ui,sans-serif}
+.tt-sheet[data-theme="colour"] th{background:#4338ca;color:#fff;border:1px solid #3730a3}
+.tt-sheet[data-theme="colour"] td{border:1px solid #c7d2fe}
+.tt-sheet[data-theme="colour"] tbody tr:nth-child(even) td{background:#eef2ff}
+.tt-sheet[data-theme="colour"] .tt-head{background:#4338ca;color:#fff;padding:14px;border-radius:8px}
+.tt-sheet[data-theme="colour"] .tt-sub{color:#e0e7ff}
+
+.tt-sheet[data-theme="minimal"]{font-family:system-ui,sans-serif}
+.tt-sheet[data-theme="minimal"] th,.tt-sheet[data-theme="minimal"] td{border:1px solid #e5e7eb}
+.tt-sheet[data-theme="minimal"] th{border-bottom:2px solid #111;font-size:.82rem;text-transform:uppercase;letter-spacing:.6px}
+
+/* elegant — dark band with gold accents */
+.tt-sheet[data-theme="elegant"]{font-family:'Garamond','Georgia',serif}
+.tt-sheet[data-theme="elegant"] .tt-head{background:#1f2937;color:#fbbf24;padding:16px;border-radius:6px;border-bottom:3px solid #fbbf24}
+.tt-sheet[data-theme="elegant"] .tt-sub{color:#e5e7eb}
+.tt-sheet[data-theme="elegant"] th{background:#111827;color:#fbbf24;border:1px solid #374151;letter-spacing:.5px}
+.tt-sheet[data-theme="elegant"] td{border:1px solid #d1d5db}
+.tt-sheet[data-theme="elegant"] tbody tr:nth-child(even) td{background:#faf7ef}
+
+/* corporate — navy + grey, crisp */
+.tt-sheet[data-theme="corporate"]{font-family:'Arial',system-ui,sans-serif}
+.tt-sheet[data-theme="corporate"] .tt-school{color:#1e3a8a}
+.tt-sheet[data-theme="corporate"] th{background:#1e3a8a;color:#fff;border:1px solid #1e3a8a;font-size:.82rem;text-transform:uppercase}
+.tt-sheet[data-theme="corporate"] td{border:1px solid #cbd5e1}
+.tt-sheet[data-theme="corporate"] tbody tr:nth-child(even) td{background:#f1f5f9}
+
+/* chalkboard — dark green board, white chalk text */
+.tt-sheet[data-theme="chalkboard"]{font-family:'Comic Sans MS','Segoe Print',cursive;background:#1b3a2b;color:#f8fafc;border-color:#0f2a1d}
+.tt-sheet[data-theme="chalkboard"] .tt-school,.tt-sheet[data-theme="chalkboard"] .tt-title{color:#fff}
+.tt-sheet[data-theme="chalkboard"] .tt-sub{color:#bbf7d0}
+.tt-sheet[data-theme="chalkboard"] th{border:1px solid #4ade80;color:#fde68a}
+.tt-sheet[data-theme="chalkboard"] td{border:1px solid #2f5d45;color:#ecfdf5}
+
+/* sunset — warm gradient header */
+.tt-sheet[data-theme="sunset"]{font-family:'Verdana',system-ui,sans-serif}
+.tt-sheet[data-theme="sunset"] .tt-head{background:linear-gradient(90deg,#f97316,#db2777);color:#fff;padding:16px;border-radius:10px}
+.tt-sheet[data-theme="sunset"] .tt-sub{color:#ffe4e6}
+.tt-sheet[data-theme="sunset"] th{background:#fb923c;color:#7c2d12;border:1px solid #fdba74}
+.tt-sheet[data-theme="sunset"] td{border:1px solid #fed7aa}
+.tt-sheet[data-theme="sunset"] tbody tr:nth-child(even) td{background:#fff7ed}
+
+/* ocean — teal/cyan gradient, rounded */
+.tt-sheet[data-theme="ocean"]{font-family:'Segoe UI',system-ui,sans-serif}
+.tt-sheet[data-theme="ocean"] .tt-head{background:linear-gradient(90deg,#0891b2,#2563eb);color:#fff;padding:16px;border-radius:10px}
+.tt-sheet[data-theme="ocean"] .tt-sub{color:#cffafe}
+.tt-sheet[data-theme="ocean"] th{background:#0e7490;color:#fff;border:1px solid #155e75}
+.tt-sheet[data-theme="ocean"] td{border:1px solid #bae6fd}
+.tt-sheet[data-theme="ocean"] tbody tr:nth-child(even) td{background:#f0f9ff}
+
+/* rose — maroon header, soft pink rows */
+.tt-sheet[data-theme="rose"]{font-family:'Georgia',serif}
+.tt-sheet[data-theme="rose"] .tt-school{color:#9f1239}
+.tt-sheet[data-theme="rose"] th{background:#9f1239;color:#fff;border:1px solid #881337}
+.tt-sheet[data-theme="rose"] td{border:1px solid #fecdd3}
+.tt-sheet[data-theme="rose"] tbody tr:nth-child(even) td{background:#fff1f2}
+
+/* mono — high-contrast black & white, compact (great for photocopies) */
+.tt-sheet[data-theme="mono"]{font-family:'Courier New',monospace}
+.tt-sheet[data-theme="mono"] th{background:#000;color:#fff;border:1px solid #000;font-size:.8rem}
+.tt-sheet[data-theme="mono"] td{border:1px solid #000}
+
+/* forest — deep green header, warm cream rows */
+.tt-sheet[data-theme="forest"]{font-family:'Georgia',serif}
+.tt-sheet[data-theme="forest"] .tt-school{color:#14532d}
+.tt-sheet[data-theme="forest"] th{background:#166534;color:#fff;border:1px solid #14532d;letter-spacing:.4px}
+.tt-sheet[data-theme="forest"] td{border:1px solid #bbf7d0}
+.tt-sheet[data-theme="forest"] tbody tr:nth-child(even) td{background:#f3faf3}
+
+/* royal — regal purple, gold-tinted accents */
+.tt-sheet[data-theme="royal"]{font-family:'Palatino Linotype','Book Antiqua',serif}
+.tt-sheet[data-theme="royal"] .tt-head{background:#4c1d95;color:#fde68a;padding:16px;border-radius:8px;border-bottom:3px solid #fbbf24}
+.tt-sheet[data-theme="royal"] .tt-sub{color:#ede9fe}
+.tt-sheet[data-theme="royal"] th{background:#5b21b6;color:#fff;border:1px solid #4c1d95}
+.tt-sheet[data-theme="royal"] td{border:1px solid #ddd6fe}
+.tt-sheet[data-theme="royal"] tbody tr:nth-child(even) td{background:#f5f3ff}
+
+/* slate — cool professional grey-blue */
+.tt-sheet[data-theme="slate"]{font-family:'Segoe UI',system-ui,sans-serif}
+.tt-sheet[data-theme="slate"] .tt-school{color:#334155}
+.tt-sheet[data-theme="slate"] th{background:#475569;color:#fff;border:1px solid #334155;text-transform:uppercase;font-size:.82rem;letter-spacing:.5px}
+.tt-sheet[data-theme="slate"] td{border:1px solid #cbd5e1}
+.tt-sheet[data-theme="slate"] tbody tr:nth-child(even) td{background:#f8fafc}
+
+/* midnight — dark navy board with light text */
+.tt-sheet[data-theme="midnight"]{font-family:'Segoe UI',system-ui,sans-serif;background:#0f172a;color:#e2e8f0;border-color:#1e293b}
+.tt-sheet[data-theme="midnight"] .tt-school,.tt-sheet[data-theme="midnight"] .tt-title{color:#fff}
+.tt-sheet[data-theme="midnight"] .tt-sub{color:#93c5fd}
+.tt-sheet[data-theme="midnight"] th{background:#1d4ed8;color:#fff;border:1px solid #1e40af}
+.tt-sheet[data-theme="midnight"] td{border:1px solid #334155;color:#e2e8f0}
+.tt-sheet[data-theme="midnight"] tbody tr:nth-child(even) td{background:#1e293b}
+
+/* coral — warm coral header, peach rows */
+.tt-sheet[data-theme="coral"]{font-family:'Trebuchet MS',system-ui,sans-serif}
+.tt-sheet[data-theme="coral"] .tt-school{color:#be123c}
+.tt-sheet[data-theme="coral"] th{background:#f43f5e;color:#fff;border:1px solid #e11d48}
+.tt-sheet[data-theme="coral"] td{border:1px solid #fecdd3}
+.tt-sheet[data-theme="coral"] tbody tr:nth-child(even) td{background:#fff5f6}
+
+/* emerald — bright emerald gradient header, rounded */
+.tt-sheet[data-theme="emerald"]{font-family:'Segoe UI',system-ui,sans-serif}
+.tt-sheet[data-theme="emerald"] .tt-head{background:linear-gradient(90deg,#059669,#10b981);color:#fff;padding:16px;border-radius:10px}
+.tt-sheet[data-theme="emerald"] .tt-sub{color:#d1fae5}
+.tt-sheet[data-theme="emerald"] th{background:#047857;color:#fff;border:1px solid #065f46}
+.tt-sheet[data-theme="emerald"] td{border:1px solid #a7f3d0}
+.tt-sheet[data-theme="emerald"] tbody tr:nth-child(even) td{background:#ecfdf5}
+
+/* burgundy — deep wine header, serif */
+.tt-sheet[data-theme="burgundy"]{font-family:'Times New Roman',Georgia,serif}
+.tt-sheet[data-theme="burgundy"] .tt-school{color:#7f1d1d}
+.tt-sheet[data-theme="burgundy"] th{background:#7f1d1d;color:#fde68a;border:1px solid #641414;letter-spacing:.4px}
+.tt-sheet[data-theme="burgundy"] td{border:1px solid #e7d0c9}
+.tt-sheet[data-theme="burgundy"] tbody tr:nth-child(even) td{background:#fbf4f2}
+
+/* sky — light & airy blue */
+.tt-sheet[data-theme="sky"]{font-family:'Segoe UI',system-ui,sans-serif}
+.tt-sheet[data-theme="sky"] .tt-school{color:#0369a1}
+.tt-sheet[data-theme="sky"] th{background:#0ea5e9;color:#fff;border:1px solid #0284c7}
+.tt-sheet[data-theme="sky"] td{border:1px solid #bae6fd}
+.tt-sheet[data-theme="sky"] tbody tr:nth-child(even) td{background:#f0f9ff}
+
+/* amber — warm gold header, honey rows */
+.tt-sheet[data-theme="amber"]{font-family:'Verdana',system-ui,sans-serif}
+.tt-sheet[data-theme="amber"] .tt-school{color:#92400e}
+.tt-sheet[data-theme="amber"] th{background:#d97706;color:#fff;border:1px solid #b45309}
+.tt-sheet[data-theme="amber"] td{border:1px solid #fde68a}
+.tt-sheet[data-theme="amber"] tbody tr:nth-child(even) td{background:#fffbeb}
+
+/* plum — muted purple-grey, soft */
+.tt-sheet[data-theme="plum"]{font-family:'Trebuchet MS',system-ui,sans-serif}
+.tt-sheet[data-theme="plum"] .tt-school{color:#6b21a8}
+.tt-sheet[data-theme="plum"] th{background:#7e22ce;color:#fff;border:1px solid #6b21a8}
+.tt-sheet[data-theme="plum"] td{border:1px solid #e9d5ff}
+.tt-sheet[data-theme="plum"] tbody tr:nth-child(even) td{background:#faf5ff}
+
+/* graphite — near-black neutral, crisp for laser printers */
+.tt-sheet[data-theme="graphite"]{font-family:'Arial',system-ui,sans-serif}
+.tt-sheet[data-theme="graphite"] .tt-school{color:#111827}
+.tt-sheet[data-theme="graphite"] th{background:#1f2937;color:#fff;border:1px solid #111827;text-transform:uppercase;font-size:.82rem;letter-spacing:.5px}
+.tt-sheet[data-theme="graphite"] td{border:1px solid #d1d5db}
+.tt-sheet[data-theme="graphite"] tbody tr:nth-child(even) td{background:#f9fafb}
+
+/* keep the themed header/row colours when printing (browsers drop backgrounds
+   by default, which is why the print used to look plain) */
+.tt-sheet, .tt-sheet *{-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact}
+
+/* While exporting we widen the sheet to a fixed canvas width so it fills the
+   page horizontally; height stays natural (no vertical stretching). */
+.tt-sheet.exporting{position:fixed;left:-10000px;top:0;width:1480px;max-width:none;
+    height:auto;overflow:visible;border:none;border-radius:0}
+
+/* export preview modal */
+.export-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9999;
+    align-items:center;justify-content:center;padding:1rem}
+.export-modal .box{background:var(--bg-card);color:var(--text-primary);border-radius:12px;max-width:96vw;max-height:95vh;overflow:auto;
+    padding:1rem;display:flex;flex-direction:column;gap:.75rem}
+.export-modal .box h3{margin:0;font-size:1rem}
+.export-modal img{max-width:100%;max-height:68vh;border:1px solid var(--gray-200);align-self:center}
+.export-actions{display:flex;gap:.5rem;flex-wrap:wrap;justify-content:flex-end}
+.export-spinner{padding:1rem;text-align:center;color:var(--text-muted)}
+
+@media print{
+    body *{visibility:hidden}
+    #sheet, #sheet *{visibility:visible;-webkit-print-color-adjust:exact !important;print-color-adjust:exact !important;color-adjust:exact !important}
+    #sheet{position:absolute;left:0;top:0;width:100%;border:none;border-radius:0;padding:0;overflow:visible}
+    .no-print{display:none !important}
+    @page{margin:12mm;size:landscape}
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header no-print"><h1><i class="fas fa-drafting-compass"></i> Timetable Designer</h1></div>
+<p class="text-muted no-print" style="margin-top:-.5rem">Design a timetable (Saturday classes, holiday lessons, exams or a blank grid), print it, save it as PDF — or <b>save it with a name</b> to reload and edit later.</p>
+
+<div class="card mb-3 no-print">
+    <div class="card-body tt-controls">
+        <div class="row3">
+            <div class="form-group">
+                <label class="form-label">Layout</label>
+                <select id="layout" class="form-control">
+                    <option value="saturday">Saturday class timetable</option>
+                    <option value="holiday">Holiday lesson timetable</option>
+                    <option value="exam">Examination timetable</option>
+                    <option value="grid">Blank custom grid</option>
+                    <option value="list_table">Custom list / table (auto-numbered rows)</option>
+                    <option value="roster_week">Sweeping roster — weekly (one group sweeps all week)</option>
+                    <option value="roster_day">Sweeping roster — daily (one group sweeps that day)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Design theme</label>
+                <select id="theme" class="form-control">
+                    <option value="classic">Classic (bordered, serif)</option>
+                    <option value="modern" selected>Modern (teal header)</option>
+                    <option value="colour">Colourful (indigo, striped)</option>
+                    <option value="minimal">Minimal (clean lines)</option>
+                    <option value="elegant">Elegant (dark &amp; gold)</option>
+                    <option value="corporate">Corporate (navy)</option>
+                    <option value="chalkboard">Chalkboard (green board)</option>
+                    <option value="sunset">Sunset (orange–pink)</option>
+                    <option value="ocean">Ocean (cyan–blue)</option>
+                    <option value="rose">Rose (maroon &amp; pink)</option>
+                    <option value="mono">Mono (B&amp;W, photocopy-friendly)</option>
+                    <option value="forest">Forest (deep green, cream)</option>
+                    <option value="royal">Royal (purple &amp; gold)</option>
+                    <option value="slate">Slate (grey-blue, professional)</option>
+                    <option value="midnight">Midnight (dark navy board)</option>
+                    <option value="coral">Coral (warm coral &amp; peach)</option>
+                    <option value="emerald">Emerald (bright green)</option>
+                    <option value="burgundy">Burgundy (wine, serif)</option>
+                    <option value="sky">Sky (light blue)</option>
+                    <option value="amber">Amber (warm gold)</option>
+                    <option value="plum">Plum (soft purple)</option>
+                    <option value="graphite">Graphite (near-black, crisp)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">School name</label>
+                <input id="school" class="form-control" value="{{ school_name }}" placeholder="School name">
+            </div>
+            <div class="form-group" id="orientWrap">
+                <label class="form-label">Table orientation</label>
+                <select id="orient" class="form-control">
+                    <option value="rows">Days as rows (time across the top)</option>
+                    <option value="cols">Days as columns (time down the left)</option>
+                </select>
+            </div>
+        </div>
+        <div class="row3">
+            <div class="form-group">
+                <label class="form-label">Title</label>
+                <input id="title" class="form-control" placeholder="e.g. Saturday Class Timetable">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Subtitle <span class="text-muted">(optional)</span></label>
+                <input id="subtitle" class="form-control" placeholder="e.g. First Term 2025/2026 — SSS 3">
+            </div>
+            <div class="form-group" style="align-self:end">
+                <button class="btn btn-primary" data-call="openExport"><i class="fas fa-download"></i> Download (PDF / image)</button>
+            </div>
+        </div>
+
+        <!-- Save / load named designs -->
+        <div class="tt-save no-print">
+            <div class="row3" style="align-items:end">
+                <div class="form-group" style="margin:0">
+                    <label class="form-label">Save this timetable as</label>
+                    <input id="saveName" class="form-control" placeholder="e.g. Saturday Classes — First Term">
+                </div>
+                <div class="form-group" style="align-self:end;margin:0">
+                    <button class="btn btn-success" data-call="saveDesign"><i class="fas fa-save"></i> <span id="saveBtnLabel">Save</span></button>
+                    <button class="btn btn-light btn-sm" type="button" data-call="newDesign" id="newBtn" style="display:none"><i class="fas fa-file"></i> New</button>
+                </div>
+                <div class="form-group" style="align-self:end;margin:0">
+                    <button class="btn btn-secondary" type="button" data-call="toggleSaved"><i class="fas fa-folder-open"></i> Saved timetables <span id="savedCount" class="badge">0</span></button>
+                </div>
+            </div>
+            <div id="savedPanel" class="saved-panel" style="display:none"></div>
+        </div>
+
+        <!-- Saturday plan: first Saturday + lesson-free cascade (Saturday layout only) -->
+        <div id="satPanel" class="tt-sat no-print" style="display:none">
+            <div class="row3" style="align-items:end">
+                <div class="form-group" style="margin:0">
+                    <label class="form-label">First Saturday <span class="text-muted">(week 1)</span></label>
+                    <input type="date" id="satFirst" class="form-control">
+                </div>
+                <div class="form-group" style="align-self:end;margin:0;grid-column:span 2">
+                    <p class="sess-hint" style="margin:0">Enter a <b>week number</b> for each session below. Set the first Saturday’s date, then tick any Saturday as <b>lesson-free</b> — that week and every week after it shift to the next available Saturday automatically.</p>
+                </div>
+            </div>
+            <div id="satManage" class="sat-manage"></div>
+        </div>
+
+        <!-- Session editor (Saturday / Holiday / Exam) -->
+        <div id="rowEditor">
+            <label class="form-label">Sessions</label>
+            <p class="sess-hint" id="sessHint"></p>
+
+            <details class="bulk-box" id="gridPasteBox">
+                <summary><i class="fas fa-table"></i> Fastest: paste a whole grid (days × periods)</summary>
+                <p class="sess-hint" style="margin-top:.5rem">
+                    Paste the whole week as a table. <b>First line</b> = the period times (leave the first cell blank or write “Day”).
+                    <b>Each next line</b> = the day, then a subject per period. Separate cells with a comma, a | or a tab (copy straight from Excel/Sheets).
+                    Put a teacher in brackets, e.g. <code>Maths (Mr A)</code>. Leave a cell blank for a free period or a break.
+                    <b>Tip:</b> to fill the rest of a day with one activity (e.g. <code>Skill Acquisition</code>), repeat the same text in each remaining
+                    period — identical neighbouring cells merge into one block automatically (across periods and, where you use Class/Stream, across streams too).
+                </p>
+                <textarea id="gridPasteText" rows="6" placeholder="Day, 8:00-9:00, 9:00-10:00, 10:00-11:00&#10;Monday, Maths (Mr A), English, Physics&#10;Tuesday, English, Physics, Maths&#10;Wednesday, Physics, Maths, English"></textarea>
+                <button class="btn btn-primary btn-sm" data-call="gridPaste"><i class="fas fa-bolt"></i> Build timetable from grid</button>
+                <div style="margin-top:.6rem">
+                    <p class="sess-hint" style="margin:0 0 .3rem"><i class="fas fa-robot"></i> No spreadsheet? Snap a photo of the timetable, give any chatbot (Claude, Gemini, ChatGPT…) this prompt, then paste its answer above:</p>
+                    <pre id="tt-ai-prompt" style="white-space:pre-wrap;background:var(--bg-muted,var(--gray-50));border:1px solid var(--border-color);border-radius:8px;padding:.6rem;font-size:.8rem;margin:0">Read this class timetable and output it as a comma-separated grid, one row per line:
+- First line: the word "Day", then each period's time range — e.g. Day, 8:00-9:00, 9:00-10:00, 10:00-11:00
+- Each next line: the day name, then the subject in each period in order. Put the teacher in brackets, e.g. Maths (Mr A). Leave a cell empty for a free period or break.
+- If the rest of a day is a single activity (e.g. Skill Acquisition), repeat that exact same text in every remaining period so it merges into one block — do NOT write it only once.
+Output only the rows — no headings, totals or extra text, no code block.</pre>
+                    <button type="button" class="btn btn-secondary btn-sm" style="margin-top:.4rem" data-copy="tt-ai-prompt" data-copied="Copied"><i class="fas fa-copy"></i> Copy prompt</button>
+                </div>
+            </details>
+
+            <details class="bulk-box" id="fillDayBox">
+                <summary><i class="fas fa-fill-drip"></i> Fill the rest of a day (e.g. Skill Acquisition)</summary>
+                <p class="sess-hint" style="margin-top:.5rem">
+                    Fills every remaining period of a day — after its last lesson — with one activity, for every Class/Stream.
+                    Those matching cells then merge into a single block on the sheet.
+                </p>
+                <div style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:flex-end">
+                    <div class="form-group" style="margin:0;flex:1 1 8rem">
+                        <label class="form-label" style="font-size:.8rem">Day</label>
+                        <input id="fillDay" class="form-control" list="dayList" placeholder="e.g. Friday">
+                    </div>
+                    <div class="form-group" style="margin:0;flex:2 1 12rem">
+                        <label class="form-label" style="font-size:.8rem">Activity</label>
+                        <input id="fillAct" class="form-control" list="subjectList" placeholder="e.g. Skill Acquisition" value="Skill Acquisition">
+                    </div>
+                    <button class="btn btn-secondary btn-sm" data-call="fillRestOfDay" style="height:fit-content"><i class="fas fa-fill-drip"></i> Fill rest of day</button>
+                </div>
+            </details>
+
+            <details class="bulk-box">
+                <summary><i class="fas fa-list"></i> Quick add (one session per line)</summary>
+                <p class="sess-hint" id="bulkHint" style="margin-top:.5rem"></p>
+                <textarea id="bulkText" rows="6" placeholder=""></textarea>
+                <button class="btn btn-primary btn-sm" data-call="bulkAdd"><i class="fas fa-plus"></i> Add these</button>
+            </details>
+
+            <div id="rowBody"></div>
+            <div class="sess-actions">
+                <button class="btn btn-secondary" data-call="addRow"><i class="fas fa-plus"></i> Add session</button>
+                <button class="btn btn-light btn-sm" type="button" data-call="clearRows"><i class="fas fa-eraser"></i> Clear all</button>
+            </div>
+        </div>
+
+        <!-- Blank grid editor -->
+        <div id="gridEditor" style="display:none">
+            <div class="row3">
+                <div class="form-group" id="gridColsWrap">
+                    <label class="form-label">Column headers (comma separated)</label>
+                    <input id="gridCols" class="form-control" value="Monday, Tuesday, Wednesday, Thursday, Friday, Saturday">
+                </div>
+                <div class="form-group" id="rosterCountWrap" style="display:none">
+                    <label class="form-label">Students per week / day (one name per box)</label>
+                    <input id="rosterCount" type="number" min="1" max="10" value="5" class="form-control">
+                </div>
+                <div class="form-group" id="listRowsWrap" style="display:none">
+                    <label class="form-label">Number of rows</label>
+                    <input id="listRows" type="number" min="1" max="200" value="10" class="form-control">
+                </div>
+                <div class="form-group" id="gridRowsWrap" style="grid-column:span 2">
+                    <label class="form-label" id="gridRowsLabel">Row labels — one per line (e.g. period times)</label>
+                    <textarea id="gridRows" class="form-control" rows="4">8:00 - 9:00
+9:00 - 10:00
+10:00 - 11:00
+Break
+11:00 - 12:00
+12:00 - 1:00</textarea>
+                </div>
+            </div>
+
+            <!-- Custom list/table: paste a whole table (headers + rows) at once -->
+            <details class="bulk-box" id="listPasteBox" style="display:none">
+                <summary><i class="fas fa-table"></i> Fastest: paste the whole table</summary>
+                <p class="sess-hint" style="margin-top:.5rem">
+                    <b>First line</b> = the column headers. <b>Each next line</b> = one row (the rows are numbered for you).
+                    Separate cells with a comma, a | or a tab — copy straight from Excel/Sheets. Don’t include the S/N column.
+                </p>
+                <textarea id="listPasteText" rows="6" placeholder="Name, Subject, Branch, Number&#10;Comfort Airhunmwunde, Agric Science, Upper 2, 1&#10;Bartholomew Ajayi, Chemistry, Jemila, 2&#10;Nwachukwu Norbert, Chemistry, Jemila, 2"></textarea>
+                <button class="btn btn-primary btn-sm" data-call="listPaste"><i class="fas fa-bolt"></i> Build table from paste</button>
+                <div style="margin-top:.6rem">
+                    <p class="sess-hint" style="margin:0 0 .3rem"><i class="fas fa-robot"></i> No spreadsheet? Snap a photo of the list, give any chatbot (Claude, Gemini, ChatGPT…) this prompt, then paste its answer above:</p>
+                    <pre id="tt-list-prompt" style="white-space:pre-wrap;background:var(--bg-muted,var(--gray-50));border:1px solid var(--border-color);border-radius:8px;padding:.6rem;font-size:.8rem;margin:0">Read this list/table and output it as comma-separated rows, one row per line:
+- First line: the column headers (e.g. Name, Subject, Branch, Number).
+- Each next line: the values for one row, in the same order.
+Do not include a serial-number/S-N column. Output only the rows — no totals or extra text, no code block.</pre>
+                    <button type="button" class="btn btn-secondary btn-sm" style="margin-top:.4rem" data-copy="tt-list-prompt" data-copied="Copied"><i class="fas fa-copy"></i> Copy prompt</button>
+                </div>
+            </details>
+        </div>
+    </div>
+</div>
+
+<!-- The printable sheet -->
+<p id="rosterTip" class="text-muted no-print" style="display:none;margin:.25rem 0 .5rem">
+    <i class="fas fa-hand-pointer"></i> Click any box in the grid below and type <b>one student's name per box</b>. Set how many students per week/day with “Students per week / day” above. What you type prints and exports.
+</p>
+<div id="sheet" class="tt-sheet" data-theme="modern">
+    <div class="tt-head">
+        <div class="tt-headinner">
+            {% if school_logo_url %}<img class="tt-logo" id="pLogo" src="{{ school_logo_url }}" alt="">{% endif %}
+            <div class="tt-headtext">
+                <div class="tt-school" id="pSchool"></div>
+                <div class="tt-title" id="pTitle"></div>
+                <div class="tt-sub" id="pSub"></div>
+            </div>
+        </div>
+    </div>
+    <div id="pBody"></div>
+</div>
+
+<datalist id="subjectList">
+    {% for s in subjects %}<option value="{{ s }}">{% endfor %}
+</datalist>
+<datalist id="dayList">
+    <option value="Monday"><option value="Tuesday"><option value="Wednesday">
+    <option value="Thursday"><option value="Friday"><option value="Saturday"><option value="Sunday">
+</datalist>
+
+<!-- Export preview modal -->
+<div class="export-modal no-print" id="exportModal">
+    <div class="box">
+        <h3><i class="fas fa-eye"></i> Preview</h3>
+        <div id="exportSpinner" class="export-spinner"><i class="fas fa-spinner fa-spin"></i> Rendering…</div>
+        <img id="exportImg" alt="Timetable preview" style="display:none">
+        <div class="export-actions">
+            <button class="btn btn-primary" data-call="downloadPDF"><i class="fas fa-file-pdf"></i> Download PDF</button>
+            <button class="btn btn-success" data-call="downloadImage"><i class="fas fa-image"></i> Download image (Full HD)</button>
+            <button class="btn btn-secondary" data-call="closeExport">Close</button>
+        </div>
+    </div>
+</div>
+
+<script src="{{ url_for('static', filename='vendor/html2canvas.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/jspdf.umd.min.js') }}"></script>
+<script nonce="{{ csp_nonce }}">
+var LAYOUTS = {
+    saturday: {title:'Saturday Class Timetable', mode:'grid',
+               fields:['week','group','time','dur','subject','teacher'],
+               hint:'Each week becomes a row and each time slot a column, with the teacher shown under the subject. Set the “First Saturday” date above; the actual date for every week is worked out for you. Tick any Saturday as lesson-free and that week (and all later weeks) shift to the next Saturday. Use “Class / Stream” to stack more than one group under the same week (e.g. SSS3 and JSS3).'},
+    holiday:  {title:'Holiday Lesson Timetable', mode:'grid',
+               fields:['date','day','group','time','dur','subject','teacher'],
+               hint:'Each day is a row and each time slot a column. Enter a Date and the Day fills in automatically (both show together in the day column). Use “Class / Stream” when a day has different subjects per group — e.g. on Monday, Science vs Arts/Social-Science get their own rows.'},
+    exam:     {title:'Examination Timetable', mode:'list',
+               fields:['date','time','dur','subject','venue','teacher'],
+               hint:'Each exam is one row, listed by date and time. A blank “Invigilator’s Signature” column is added on the printout.'},
+    list_table:{title:'Custom Table', mode:'list_table', fields:[],
+               hint:'Set the column headers, then type into each auto-numbered row — for a staff list, a duty list, any table.'},
+};
+var FIELD = {
+    week:   {label:'Week'},
+    date:   {label:'Date'},
+    day:    {label:'Day'},
+    group:  {label:'Class / Stream (optional)'},
+    time:   {label:'Start time'},
+    dur:    {label:'Duration (minutes)'},
+    subject:{label:'Subject'},
+    teacher:{label:'Teacher (optional)'},
+    venue:  {label:'Venue'},
+};
+var DAY_ORDER = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+var rows = [];   // each: {date,day,group,time,dur,subject,teacher,venue}
+
+// Sweeping / duty rosters reuse the blank-grid renderer, but with roster presets and
+// editable cells. The primary axis (rows) is weeks or days; columns are days/areas.
+// A class's own sweeping roster: each time-unit (a whole week, or a single day) is
+// assigned ONE group of students who sweep together for that whole period — so a
+// single "Students on Duty" column, one fillable cell per week/day.
+var ROSTER_PRESETS = {
+    roster_week: {title:'Weekly Sweeping Roster',
+                  rows:'Week 1\nWeek 2\nWeek 3\nWeek 4\nWeek 5\nWeek 6'},
+    roster_day:  {title:'Daily Sweeping Roster',
+                  rows:'Monday\nTuesday\nWednesday\nThursday\nFriday'},
+};
+// Roster columns are numbered name-boxes (one student per box), 1..N (max 10).
+function rosterCols(){
+    var n=Math.max(1, Math.min(10, parseInt(el('rosterCount').value,10)||5));
+    var a=[]; for(var i=1;i<=n;i++) a.push(String(i));
+    return a.join(', ');
+}
+var rosterCells = {};   // "rowIndex:colIndex" -> typed text (persists across re-renders)
+
+function el(id){ return document.getElementById(id); }
+function esc(s){ var d=document.createElement('div'); d.textContent=s==null?'':s; return d.innerHTML; }
+function isRoster(){ return !!ROSTER_PRESETS[el('layout').value]; }
+function isListTable(){ return el('layout').value==='list_table'; }
+function isBlankGrid(){ var v=el('layout').value; return v==='grid' || v==='list_table' || isRoster(); }
+function layout(){
+    var v=el('layout').value;
+    if(ROSTER_PRESETS[v]) return {title:ROSTER_PRESETS[v].title, mode:'grid', fields:[]};
+    return LAYOUTS[v] || LAYOUTS.saturday;
+}
+
+function addMinutes(hhmm, mins){
+    if(!hhmm) return '';
+    var p=hhmm.split(':'); if(p.length<2) return hhmm;
+    var d=new Date(2000,0,1,parseInt(p[0],10),parseInt(p[1],10));
+    d.setMinutes(d.getMinutes()+(parseInt(mins,10)||0));
+    return ('0'+d.getHours()).slice(-2)+':'+('0'+d.getMinutes()).slice(-2);
+}
+function fmtT(hhmm){ if(!hhmm) return ''; var p=hhmm.split(':'); return p.length<2?hhmm:(parseInt(p[0],10)+':'+p[1]); }
+// Flexible date parsing: ISO (YYYY-MM-DD) and D/M/YY or D/M/YYYY (also - or .).
+function parseDateAny(s){
+    s=(s||'').trim(); if(!s) return null;
+    var y,m,d, a=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})$/);
+    if(a){ y=+a[1]; m=+a[2]; d=+a[3]; }
+    else { var b=s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/);
+        if(b){ d=+b[1]; m=+b[2]; y=+b[3]; if(y<100) y+=2000; } else return null; }
+    var dt=new Date(y, m-1, d); if(isNaN(dt)) return null;
+    return {iso:y+'-'+('0'+m).slice(-2)+'-'+('0'+d).slice(-2), dt:dt, y:y, m:m, d:d};
+}
+function toISO(s){ var p=parseDateAny(s); return p?p.iso:s; }
+function dayFromDate(d){ var p=parseDateAny(d);
+    return p?['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'][p.dt.getDay()]:''; }
+function fmtDate(d){ var p=parseDateAny(d); return p ? (p.d+'/'+p.m+'/'+String(p.y).slice(-2)) : (d||''); }
+// 12-hour clock label, e.g. "9", "9:30", "12", with optional am/pm suffix.
+function clock12(hhmm, suffix){
+    var p=(hhmm||'').split(':'); if(p.length<2) return hhmm||'';
+    var h=+p[0], m=+p[1], hh=h%12; if(hh===0) hh=12;
+    var s=hh+(m?(':'+('0'+m).slice(-2)):'');
+    return suffix ? s+(h<12?'am':'pm') : s;
+}
+function periodLabel(r){
+    if(!r.time) return '';
+    if(!r.dur) return clock12(r.time, true);
+    var end=addMinutes(r.time, r.dur);
+    var sh=+r.time.split(':')[0], eh=+end.split(':')[0];
+    var diffMer=(sh<12)!==(eh<12);                 // show am/pm on start only if it differs from end
+    return clock12(r.time, diffMer)+' – '+clock12(end, true);
+}
+function periodKey(r){ return r.time+'|'+(r.dur||''); }
+function dayRank(d){ var i=DAY_ORDER.indexOf(d); return i<0?99:i; }
+function isAll(g){ return (g||'').trim().toLowerCase()==='all'; }
+
+// ---------- mobile-first session editor ----------
+function fieldInput(r,c){
+    var v=esc(r[c]||'');
+    switch(c){
+        case 'week':    return '<input type="number" min="1" step="1" inputmode="numeric" data-f="week" value="'+v+'" placeholder="e.g. 1">';
+        case 'date':    return '<input type="date" data-f="date" value="'+v+'">';
+        case 'day':     return '<input data-f="day" list="dayList" value="'+v+'" placeholder="e.g. Monday">';
+        case 'time':    return '<input type="time" data-f="time" value="'+v+'">';
+        case 'dur':     return '<input type="number" min="0" step="5" inputmode="numeric" data-f="dur" value="'+v+'" placeholder="60">';
+        case 'subject': return '<input data-f="subject" list="subjectList" value="'+v+'" placeholder="e.g. Mathematics">';
+        case 'teacher': return '<input data-f="teacher" value="'+v+'" placeholder="e.g. Mr Bello">';
+        case 'group':   return '<input data-f="group" value="'+v+'" placeholder="e.g. Science / Arts / SSS3">';
+        case 'venue':   return '<input data-f="venue" value="'+v+'" placeholder="Hall / Room">';
+    }
+    return '';
+}
+function sessCard(r,i){
+    var inner=layout().fields.map(function(c){
+        return '<label><span>'+FIELD[c].label+'</span>'+fieldInput(r,c)+'</label>';
+    }).join('');
+    return '<div class="sess-card" data-i="'+i+'">'
+         + '<div class="sess-top"><strong>Session '+(i+1)+'</strong>'
+         + '<span class="sess-actions">'
+         + '<button type="button" class="sess-dup" data-call="dupRow" data-args="'+i+'"><i class="fas fa-copy"></i> Duplicate</button>'
+         + '<button type="button" class="sess-del" data-call="delRow" data-args="'+i+'"><i class="fas fa-trash"></i> Remove</button>'
+         + '</span></div>'
+         + '<div class="sess-grid">'+inner+'</div></div>';
+}
+var BULK_SHORT={week:'Week',date:'Date',day:'Day',group:'Class/Stream',time:'Start',dur:'Minutes',subject:'Subject',teacher:'Teacher',venue:'Venue'};
+function blankRow(){ return {week:'',date:'',day:'',group:'',time:'',dur:'60',subject:'',teacher:'',venue:''}; }
+function normTime(t){
+    t=(t||'').trim(); if(!t) return '';
+    var m=t.match(/^(\d{1,2})(?::(\d{1,2}))?\s*(am|pm)?$/i); if(!m) return t;
+    var h=+m[1], mi=m[2]?+m[2]:0;
+    if(m[3]){ var pm=/pm/i.test(m[3]); if(h===12) h=pm?12:0; else if(pm) h+=12; }
+    return ('0'+h).slice(-2)+':'+('0'+mi).slice(-2);
+}
+function renderEditor(){
+    el('sessHint').textContent = layout().hint || '';
+    el('bulkHint').textContent = 'One session per line, in this order: ' +
+        layout().fields.map(function(f){ return BULK_SHORT[f]; }).join(', ') +
+        '. Separate with a comma, a | or a tab (paste straight from Excel/Sheets). Trailing fields can be left out.';
+    el('rowBody').innerHTML = rows.map(sessCard).join('');
+}
+function focusCard(i){
+    var card=document.querySelector('#rowBody .sess-card[data-i="'+i+'"]'); if(!card) return;
+    var s=card.querySelector('[data-f="subject"]')||card.querySelector('input'); if(s) s.focus();
+}
+// New session inherits the previous one's day/stream/duration/venue and auto-
+// advances the start time by the duration, so building a day's periods is just
+// "type subject, Add, type subject, Add…".
+function addRow(){
+    var last=rows[rows.length-1], r=blankRow();
+    if(last){
+        r.week=last.week; r.date=last.date; r.day=last.day; r.group=last.group; r.dur=last.dur; r.venue=last.venue;
+        r.time=(last.time && last.dur)?addMinutes(last.time,last.dur):last.time;
+    }
+    rows.push(r); renderEditor(); renderSheet(); focusCard(rows.length-1);
+}
+function dupRow(i){ rows.splice(i+1,0,Object.assign({},rows[i])); renderEditor(); renderSheet(); focusCard(i+1); }
+function delRow(i){ rows.splice(i,1); renderEditor(); renderSheet(); }
+function clearRows(){ if(rows.length && !confirm('Clear all sessions?')) return; rows=[]; addRow(); }
+// Some quick-add columns have a recognisable value shape — used to re-align a
+// line that's missing a comma so later values don't shift into the wrong field.
+var TT_STRONG={date:1,day:1,time:1,dur:1};
+// Day names incl. common abbreviations (Tue/Tues/Wed/Weds/Thu/Thur/Thurs…),
+// each mapped to its canonical full name so sorting/grouping stays consistent.
+var DAY_ALIAS={mon:'Monday',monday:'Monday',tue:'Tuesday',tues:'Tuesday',tuesday:'Tuesday',
+    wed:'Wednesday',weds:'Wednesday',wednesday:'Wednesday',thu:'Thursday',thur:'Thursday',
+    thurs:'Thursday',thursday:'Thursday',fri:'Friday',friday:'Friday',sat:'Saturday',
+    saturday:'Saturday',sun:'Sunday',sunday:'Sunday'};
+function canonDay(v){ return DAY_ALIAS[(v||'').trim().toLowerCase().replace(/\.+$/,'')] || (v||'').trim(); }
+function ttLooks(field, v){
+    v=(v||'').trim(); if(!v) return false;
+    if(field==='date') return !!parseDateAny(v);
+    if(field==='day') return !!DAY_ALIAS[v.toLowerCase().replace(/\.+$/,'')];
+    if(field==='time'){ var m=v.match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/i);
+        if(!m) return false; var h=+m[1]; return m[3]?(h>=1&&h<=12):(h>=0&&h<=23); }
+    if(field==='dur') return /^\d{1,3}$/.test(v);
+    return false;
+}
+// Best-effort repair for a quick-add line missing one or more commas: walk the
+// expected fields and the pasted cells together; a strongly-typed field whose
+// value doesn't match its shape (or a free-text field sitting on a value that
+// clearly belongs to a later typed field) is treated as omitted and a blank is
+// inserted — so e.g. a missing Class/Stream no longer shoves the time into the
+// duration column. A present-but-empty cell (e.g. a leading ", " to skip the
+// date) is a real blank value and is kept in place. Correctly-sized lines are
+// returned unchanged, and trailing fields (e.g. Teacher) may simply be left off.
+function realignBulk(parts, fields){
+    parts=parts.slice(); var n=fields.length;
+    if(parts.length>=n) return parts;
+    var laterStrong=[];
+    for(var i=0;i<n;i++){ var s={}; for(var j=i+1;j<n;j++){ if(TT_STRONG[fields[j]]) s[fields[j]]=1; } laterStrong.push(s); }
+    var out=[], ci=0;
+    for(var fi=0;fi<n;fi++){
+        var f=fields[fi];
+        if(ci>=parts.length){ out.push(''); continue; }
+        var cell=(parts[ci]||'').trim(), short=(parts.length-ci)<(n-fi);
+        if(cell===''){ out.push(parts[ci]); ci++; continue; }   // present-but-blank value
+        if(TT_STRONG[f]){
+            if(ttLooks(f,cell)){ out.push(parts[ci]); ci++; }
+            else out.push('');                       // typed value omitted here
+        } else {
+            var belongsLater=false;
+            if(short){ for(var t in laterStrong[fi]){ if(ttLooks(t,cell)){ belongsLater=true; break; } } }
+            if(belongsLater) out.push('');            // this field's value was omitted
+            else { out.push(parts[ci]); ci++; }
+        }
+    }
+    while(ci<parts.length){ out.push(parts[ci]); ci++; }
+    return out.length>n ? out.slice(0,n) : out;
+}
+function bulkAdd(){
+    var lines=(el('bulkText').value||'').split('\n'), fields=layout().fields, added=0;
+    lines.forEach(function(line){
+        if(!line.trim()) return;
+        var parts = line.indexOf('\t')>=0 ? line.split('\t') : line.split(/\s*[|,]\s*/);
+        parts = realignBulk(parts, fields);          // repair a missing comma
+        var r=blankRow();
+        fields.forEach(function(f,idx){
+            if(idx<parts.length){
+                var val=(parts[idx]||'').trim();
+                r[f] = (f==='time') ? normTime(val)
+                     : (f==='date') ? toISO(val)
+                     : (f==='day') ? canonDay(val) : val;
+            }
+        });
+        if(r.date && !r.day){ var a=dayFromDate(r.date); if(a) r.day=a; }
+        rows.push(r); added++;
+    });
+    if(added){ el('bulkText').value=''; renderEditor(); renderSheet(); }
+}
+
+// ---------- fastest: paste a whole day×period grid ----------
+function splitCells(line){
+    return line.indexOf('\t') >= 0 ? line.split('\t') : line.split(/\s*[|,]\s*/);
+}
+function parsePeriodCell(s){
+    s = (s || '').trim(); if(!s) return null;
+    var m = s.split(/\s*[-–—]\s*/);
+    var start = normTime(m[0]), dur = '60';
+    if(m.length > 1){
+        var end = normTime(m[1]), a = start.split(':'), b = end.split(':');
+        if(a.length === 2 && b.length === 2){
+            var d = (+b[0] * 60 + +b[1]) - (+a[0] * 60 + +a[1]);
+            if(d > 0) dur = String(d);
+        }
+    }
+    return {time: start, dur: dur};
+}
+function parseSubjectCell(s){
+    s = (s || '').trim(); var teacher = '';
+    var m = s.match(/^(.*?)\s*[\(（](.+?)[\)）]\s*$/);     // "Subject (Teacher)"
+    if(m){ s = m[1].trim(); teacher = m[2].trim(); }
+    else { var sl = s.split(/\s*\/\s*/); if(sl.length > 1){ s = sl[0].trim(); teacher = sl.slice(1).join('/').trim(); } }
+    return {subject: s, teacher: teacher};
+}
+function gridPaste(){
+    var lines = (el('gridPasteText').value || '').split('\n').filter(function(s){ return s.trim(); });
+    if(lines.length < 2){ alert('Add a header line of period times and at least one day row.'); return; }
+    var header = splitCells(lines[0]);
+    var periods = header.slice(1).map(parsePeriodCell);   // first cell = the "Day" label
+    var added = 0;
+    for(var li = 1; li < lines.length; li++){
+        var cells = splitCells(lines[li]);
+        var first = (cells[0] || '').trim();
+        if(!first) continue;
+        var day = first, date = '';
+        if(parseDateAny(first)){ date = toISO(first); day = dayFromDate(first) || first; }
+        for(var pi = 0; pi < periods.length; pi++){
+            var p = periods[pi]; if(!p) continue;
+            var sc = parseSubjectCell(cells[pi + 1] || '');
+            if(!sc.subject) continue;
+            var r = blankRow();
+            r.day = day; r.date = date; r.time = p.time; r.dur = p.dur;
+            r.subject = sc.subject; r.teacher = sc.teacher;
+            rows.push(r); added++;
+        }
+    }
+    if(added){ el('gridPasteText').value = ''; renderEditor(); renderSheet(); }
+    else alert('Nothing added — check the grid format.');
+}
+
+// ---------- fill the remaining periods of a day with one activity ----------
+function fillRestOfDay(){
+    var day = canonDay((el('fillDay').value || '').trim());
+    var act = (el('fillAct').value || '').trim();
+    if(!day){ alert('Choose a day to fill (e.g. Friday).'); return; }
+    if(!act){ alert('Type the activity to fill (e.g. Skill Acquisition).'); return; }
+    function rowDay(r){ return canonDay((r.date ? dayFromDate(r.date) : '') || (r.day || '').trim()); }
+    var dayRows = rows.filter(function(r){ return !isAll(r.group) && r.time && rowDay(r) === day; });
+    if(!dayRows.length){ alert('No sessions found for ' + day + ' yet — add its lessons first.'); return; }
+    // periods across the whole timetable, in time order
+    var pmap = {}, periods = [];
+    rows.forEach(function(r){ if(!r.time || isAll(r.group)) return; var k = periodKey(r);
+        if(!pmap[k]){ pmap[k] = {time: r.time, dur: r.dur || '60', k: k}; periods.push(pmap[k]); } });
+    periods.sort(function(a, b){ return a.time.localeCompare(b.time); });
+    // the streams present that day (else a single unnamed group)
+    var gset = {}, groups = [];
+    dayRows.forEach(function(r){ var g = (r.group || '').trim(); if(!(g in gset)){ gset[g] = 1; groups.push(g); } });
+    if(!groups.length) groups = [''];
+    // the date this day maps to, if the timetable is date-based
+    var date = ''; for(var i = 0; i < dayRows.length; i++){ if(dayRows[i].date){ date = dayRows[i].date; break; } }
+    // last period (in order) that already has any lesson this day → fill only AFTER it
+    var lastFilled = -1;
+    periods.forEach(function(p, idx){
+        if(dayRows.some(function(r){ return r.subject && periodKey(r) === p.k; })) lastFilled = idx; });
+    // which (period,group) already hold a subject this day — never overwrite those
+    var have = {};
+    dayRows.forEach(function(r){ if(r.subject) have[periodKey(r) + '§' + (r.group || '').trim()] = 1; });
+    var added = 0;
+    periods.forEach(function(p, idx){
+        if(idx <= lastFilled) return;                    // keep the lessons; fill the tail
+        groups.forEach(function(g){
+            if(have[p.k + '§' + g]) return;
+            var r = blankRow();
+            r.day = day; r.date = date; r.time = p.time; r.dur = p.dur; r.subject = act; r.group = g;
+            rows.push(r); added++;
+        });
+    });
+    if(added){ renderEditor(); renderSheet(); }
+    else alert('Nothing to fill — every period on ' + day + ' already has an entry.');
+}
+
+// Custom table paste: first line = the column headers, each next line = a row.
+// Fills the auto-numbered grid (the S/N column is added automatically).
+function listPaste(){
+    var lines = (el('listPasteText').value || '').split('\n').filter(function(s){ return s.trim(); });
+    if(lines.length < 1){ alert('Paste at least a header line, then one row per line.'); return; }
+    var headers = splitCells(lines[0]).map(function(s){ return s.trim(); }).filter(Boolean);
+    if(headers.length) el('gridCols').value = headers.join(', ');
+    rosterCells = {};
+    var dataLines = lines.slice(1);
+    dataLines.forEach(function(line, ri){
+        splitCells(line).forEach(function(v, ci){
+            v = (v || '').trim();
+            if(v) rosterCells[ri + ':' + ci] = v;
+        });
+    });
+    el('listRows').value = Math.max(1, dataLines.length);
+    el('listPasteText').value = '';
+    renderSheet();
+}
+
+document.addEventListener('input', function(e){
+    var card=e.target.closest && e.target.closest('#rowBody .sess-card');
+    if(card){
+        var i=parseInt(card.dataset.i,10), f=e.target.dataset.f;
+        if(f){ rows[i][f]=e.target.value;
+            if(f==='date'){ var auto=dayFromDate(e.target.value); if(auto){ rows[i].day=auto;
+                var di=card.querySelector('[data-f="day"]'); if(di) di.value=auto; } }
+            if(f==='week') renderManageSaturdays(); }
+        renderSheet();
+    } else if(['title','subtitle','school','gridCols','gridRows','listRows'].indexOf(e.target.id)>=0){
+        renderSheet();
+    }
+});
+
+// ---------- printable sheet ----------
+function renderHead(){
+    el('pSchool').textContent = el('school').value || '';
+    el('pTitle').textContent = el('title').value || layout().title || 'Timetable';
+    var sub=el('subtitle').value; el('pSub').textContent=sub; el('pSub').style.display=sub?'block':'none';
+}
+
+// Day/Date × time-period grid: rows are days (or dates), each day may hold
+// several Class/Stream sub-rows, columns are the time slots. Cells identical
+// across every group in a period are merged vertically; a "All" group makes a
+// full-width band (e.g. Mock Examination).
+function cellInner(arr){
+    return arr.map(function(r){
+        return (r.subject?'<span class="c-subj">'+esc(r.subject)+'</span>':'')
+             + (r.teacher?'<span class="c-tchr">'+esc(r.teacher)+'</span>':'');
+    }).join('<hr class="c-sep">');
+}
+function renderGridModeSheet(){
+    // period columns come from real sessions (banners/All excluded)
+    var pmap={}, periods=[];
+    rows.forEach(function(r){ if(r.time && !isAll(r.group)){ var k=periodKey(r);
+        if(!pmap[k]){ pmap[k]={k:k,label:periodLabel(r),start:r.time}; periods.push(pmap[k]); } } });
+    periods.sort(function(a,b){ return a.start.localeCompare(b.start); });
+
+    var anyGroup = rows.some(function(r){ return (r.group||'').trim() && !isAll(r.group); });
+    var dmap={}, order=[];
+    rows.forEach(function(r){
+        var date=r.date||'';
+        var day=(date?dayFromDate(date):'') || (r.day||'').trim() || '—';
+        var key=date||day;
+        if(!dmap[key]){ dmap[key]={day:day, date:date, label:(r.daylabel||''),
+            sort:(parseDateAny(date)?parseDateAny(date).iso:('zz'+('0'+dayRank(day)).slice(-2))),
+            groups:[], gset:{}, cells:{}, banners:[]}; order.push(key); }
+        var d=dmap[key];
+        if(date && !d.date) d.date=date;
+        if(isAll(r.group)){ if(r.subject||r.teacher) d.banners.push(r); return; }
+        var g=(r.group||'').trim();
+        if(!(g in d.gset)){ d.gset[g]=1; d.groups.push(g); }
+        if(r.time){ var ck=g+'§'+periodKey(r); (d.cells[ck]=d.cells[ck]||[]).push(r); }
+    });
+    order.sort(function(a,b){ return String(dmap[a].sort).localeCompare(String(dmap[b].sort)); });
+
+    if(!periods.length && !order.some(function(k){ return dmap[k].banners.length; })){
+        el('pBody').innerHTML='<p style="text-align:center;color:#888;padding:1.5rem">Add sessions with a day, time and subject to build the grid.</p>';
+        return;
+    }
+    var spanAll = (anyGroup?1:0) + periods.length;
+    var thead='<tr><th>Day</th>'+(anyGroup?'<th>Class / Stream</th>':'')
+            + periods.map(function(p){ return '<th>'+esc(p.label)+'</th>'; }).join('')+'</tr>';
+
+    // Each day becomes its own <tbody class="day"> so a thick rule can separate
+    // one day's block from the next (see the CSS above) — on screen and export.
+    var body='';
+    order.forEach(function(key){
+        var d=dmap[key];
+        var dh='';
+        // dates with only a banner (e.g. Mock Examination) get no empty group row
+        var groups = anyGroup ? d.groups.slice() : [''];
+        var totalRows = groups.length + d.banners.length;
+        if(totalRows===0) totalRows=1;
+        var dlabel=esc(d.label || d.day || dayFromDate(d.date) || '—');
+        if(d.date){ dlabel+='<br><span class="c-date">'+esc(fmtDate(d.date))+'</span>'; }
+        var first=true;
+        // Merge blocks: a RUN of consecutive periods whose content is identical
+        // across every group becomes ONE rectangular cell — colspan = periods in
+        // the run, rowspan = number of groups. This collapses e.g. a trailing
+        // "Skill Acquisition" that fills the rest of a day for ANY run (periods
+        // 2–4, 3–4, the whole day, …), not only the whole day. Normal periods
+        // still render per group; a single uniform period keeps its vertical
+        // (rowspan) merge as before.
+        var uval = periods.map(function(p){
+            var vals = groups.map(function(g){ return cellInner(d.cells[g+'§'+p.k]||[]); });
+            return (vals[0] && vals.every(function(v){ return v===vals[0]; })) ? vals[0] : null;
+        });
+        var runStart=[], runLen=[];
+        for(var pi=0; pi<periods.length;){
+            if(uval[pi]!==null){
+                var pj=pi+1; while(pj<periods.length && uval[pj]===uval[pi]) pj++;
+                for(var pk=pi; pk<pj; pk++){ runStart[pk]=pi; runLen[pk]=pj-pi; }
+                pi=pj;
+            } else { runStart[pi]=-1; runLen[pi]=0; pi++; }
+        }
+        groups.forEach(function(g, gi){
+            dh+='<tr>';
+            if(first){ dh+='<th rowspan="'+totalRows+'" class="day-cell">'+dlabel+'</th>'; first=false; }
+            if(anyGroup) dh+='<td class="grp-cell">'+esc(g||'—')+'</td>';
+            periods.forEach(function(p, pidx){
+                if(uval[pidx]!==null){
+                    // only the top-left cell of each merge rectangle is emitted;
+                    // the cells it covers (other columns/rows) are skipped
+                    if(gi===0 && runStart[pidx]===pidx){
+                        var cs=runLen[pidx], rs=groups.length;
+                        dh+='<td class="cell merged'+(cs>1?' wide':'')+'"'
+                          + (cs>1?(' colspan="'+cs+'"'):'')
+                          + (rs>1?(' rowspan="'+rs+'"'):'')
+                          + '>'+uval[pidx]+'</td>';
+                    }
+                    return;
+                }
+                dh+='<td class="cell">'+cellInner(d.cells[g+'§'+p.k]||[])+'</td>';
+            });
+            dh+='</tr>';
+        });
+        d.banners.forEach(function(b){
+            dh+='<tr>';
+            if(first){ dh+='<th rowspan="'+totalRows+'" class="day-cell">'+dlabel+'</th>'; first=false; }
+            dh+='<td class="cell banner" colspan="'+spanAll+'">'
+                + (b.subject?'<span class="c-subj">'+esc(b.subject)+'</span>':'')
+                + (b.teacher?'<span class="c-tchr">'+esc(b.teacher)+'</span>':'')
+                + '</td></tr>';
+        });
+        body+='<tbody class="day">'+dh+'</tbody>';
+    });
+    el('pBody').innerHTML='<table class="grid-tt"><thead>'+thead+'</thead>'+body+'</table>';
+}
+
+// A small, harmonious palette assigned consistently per group (first-seen
+// order), so a few Class/Stream groups get calm, muted tints — not a clashing
+// colour per group.
+var GROUP_PALETTE = ['#eef2ff','#ecfdf5','#fff7ed','#fdf2f8','#f0f9ff','#f5f3ff'];
+var _groupColors = {};
+function buildGroupColors(){
+    _groupColors = {}; var i=0;
+    rows.forEach(function(r){ var g=(r.group||'').trim();
+        if(g && !isAll(r.group) && !(g in _groupColors)){ _groupColors[g]=GROUP_PALETTE[i % GROUP_PALETTE.length]; i++; } });
+}
+function groupBlock(r){
+    var g=(r.group||'').trim();
+    var bg=_groupColors[g]||'';
+    return '<div class="g-block"'+(bg?(' style="background:'+bg+'"'):'')+'>'
+        + (g?'<span class="g-tag">'+esc(g)+'</span>':'')
+        + (r.subject?'<span class="c-subj">'+esc(r.subject)+'</span>':'')
+        + (r.teacher?'<span class="c-tchr">'+esc(r.teacher)+'</span>':'')
+        + '</div>';
+}
+// Days as COLUMNS (time down the left). Multiple groups in a (period, day) cell
+// sit side by side; an "All" group at a period makes a full-width band (BREAK).
+function renderGridColumnsSheet(){
+    buildGroupColors();
+    var pmap={}, periods=[];
+    rows.forEach(function(r){ if(!r.time) return; var k=periodKey(r);
+        if(!pmap[k]){ pmap[k]={k:k,label:periodLabel(r),start:r.time,allText:''}; periods.push(pmap[k]); }
+        if(isAll(r.group) && (r.subject||r.teacher)){
+            var sig=(r.subject||'')+'|'+(r.teacher||'');
+            pmap[k]._seen = pmap[k]._seen || {};
+            if(!pmap[k]._seen[sig]){ pmap[k]._seen[sig]=1;
+                pmap[k].allText += (r.subject?'<span class="c-subj">'+esc(r.subject)+'</span>':'')
+                                 + (r.teacher?'<span class="c-tchr">'+esc(r.teacher)+'</span>':''); } }
+    });
+    periods.sort(function(a,b){ return a.start.localeCompare(b.start); });
+
+    var dseen={}, dayList=[];
+    rows.forEach(function(r){ if(isAll(r.group)) return;
+        var date=r.date||'', day=(date?dayFromDate(date):'')||(r.day||'').trim()||'—', key=date||day;
+        if(!(key in dseen)){ dseen[key]={day:day,date:date,
+            sort:(parseDateAny(date)?parseDateAny(date).iso:('zz'+('0'+dayRank(day)).slice(-2)))}; dayList.push(key); } });
+    dayList.sort(function(a,b){ return String(dseen[a].sort).localeCompare(String(dseen[b].sort)); });
+
+    if(!periods.length || !dayList.length){
+        el('pBody').innerHTML='<p style="text-align:center;color:#888;padding:1.5rem">Add sessions with a day, time and subject to build the grid.</p>';
+        return;
+    }
+    var cells={};
+    rows.forEach(function(r){ if(!r.time||isAll(r.group)) return;
+        var date=r.date||'', day=(date?dayFromDate(date):'')||(r.day||'').trim()||'—', dk=date||day, pk=periodKey(r);
+        (cells[pk]=cells[pk]||{}); (cells[pk][dk]=cells[pk][dk]||[]).push(r); });
+
+    var thead='<tr><th>Time</th>'+dayList.map(function(dk){ var d=dseen[dk];
+        var lbl=esc(d.day||'—'); if(d.date) lbl+='<br><span class="c-date">'+esc(fmtDate(d.date))+'</span>';
+        return '<th class="day-col">'+lbl+'</th>'; }).join('')+'</tr>';
+
+    // Per (period, day) inner html, then merge a RUN of consecutive periods that
+    // hold identical content within a day column into one cell (rowspan) — the
+    // "rest of the day is Skill Acquisition" case, mirroring the day-row grid. A
+    // full-width band period (p.allText) breaks any run.
+    var inner={};
+    periods.forEach(function(p,pi){ if(p.allText) return;
+        dayList.forEach(function(dk){
+            var arr=(cells[p.k] && cells[p.k][dk]) || [];
+            inner[pi+'|'+dk] = arr.length ? ('<div class="g-row">'+arr.map(groupBlock).join('')+'</div>') : '';
+        }); });
+    var span={}, skip={};
+    dayList.forEach(function(dk){
+        var pi=0;
+        while(pi<periods.length){
+            if(periods[pi].allText){ pi++; continue; }
+            var html=inner[pi+'|'+dk]||'';
+            if(html){
+                var pj=pi+1;
+                while(pj<periods.length && !periods[pj].allText && (inner[pj+'|'+dk]||'')===html) pj++;
+                if(pj-pi>1){ span[pi+'|'+dk]=pj-pi; for(var k=pi+1;k<pj;k++) skip[k+'|'+dk]=true; }
+                pi=pj;
+            } else pi++;
+        }
+    });
+    var body='';
+    periods.forEach(function(p,pi){
+        body+='<tr><th class="time-cell">'+esc(p.label)+'</th>';
+        if(p.allText){
+            body+='<td class="cell banner" colspan="'+dayList.length+'">'+p.allText+'</td>';
+        } else {
+            dayList.forEach(function(dk){
+                var kk=pi+'|'+dk;
+                if(skip[kk]) return;                       // covered by a rowspan above
+                var rs=span[kk], html=inner[kk]||'';
+                var cls='cell day-col'+(rs?' merged':'')+((rs&&html)?' wide':'');
+                body+='<td class="'+cls+'"'+(rs?(' rowspan="'+rs+'"'):'')+'>'+html+'</td>';
+            });
+        }
+        body+='</tr>';
+    });
+    el('pBody').innerHTML='<table class="grid-tt cols"><thead>'+thead+'</thead><tbody>'+body+'</tbody></table>';
+}
+
+// Exam list: one row per exam, with a blank signature column.
+function renderListSheet(){
+    var fields=layout().fields;
+    var labels={date:'Date', time:'Time', subject:'Subject', teacher:'Invigilator', venue:'Venue'};
+    var printCols=fields.filter(function(c){ return c!=='dur'; });
+    var thead='<tr>'+printCols.map(function(c){ return '<th>'+labels[c]+'</th>'; }).join('')
+            + '<th class="sig-col">Invigilator&#39;s Signature</th></tr>';
+    var sorted=rows.slice().sort(function(a,b){
+        return (a.date||'').localeCompare(b.date||'') || (a.time||'').localeCompare(b.time||''); });
+    var body=sorted.map(function(r){
+        return '<tr>'+printCols.map(function(c){
+            var v = c==='time' ? periodLabel(r) : (c==='date' ? fmtDate(r[c]) : (r[c]||''));
+            return '<td>'+esc(v)+'</td>';
+        }).join('')+'<td class="empty sig-col"></td></tr>';
+    }).join('');
+    if(!body) body='<tr><td colspan="'+(printCols.length+1)+'" style="text-align:center;color:#888">Add exams above to build the timetable.</td></tr>';
+    el('pBody').innerHTML='<table><thead>'+thead+'</thead><tbody>'+body+'</tbody></table>';
+}
+
+function renderBlankGridSheet(){
+    var roster=isRoster();
+    var cols=(el('gridCols').value||'').split(',').map(function(s){return s.trim();}).filter(Boolean);
+    // Auto-numbered custom table: a leading S/N column + N editable rows.
+    if(isListTable()){
+        var n=Math.max(1, Math.min(200, parseInt(el('listRows').value,10)||10));
+        var lthead='<tr><th class="sn-col">S/N</th>'+cols.map(function(c){return '<th class="col-sep">'+esc(c)+'</th>';}).join('')+'</tr>';
+        var lbody='';
+        for(var ri=0; ri<n; ri++){
+            lbody+='<tr><th class="sn-col">'+(ri+1)+'</th>'+cols.map(function(c,ci){
+                var k=ri+':'+ci;
+                return '<td class="roster-cell col-sep" contenteditable="true" data-rc="'+k+'" data-ph="">'+esc(rosterCells[k]||'')+'</td>';
+            }).join('')+'</tr>';
+        }
+        el('pBody').innerHTML='<table class="grid-tt blankgrid listtable"><thead>'+lthead+'</thead><tbody>'+lbody+'</tbody></table>';
+        return;
+    }
+    var rws=(el('gridRows').value||'').split('\n').map(function(s){return s.trim();}).filter(Boolean);
+    var corner = roster ? (el('layout').value==='roster_week' ? 'Week' : 'Day') : '';
+    var thead='<tr><th>'+esc(corner)+'</th>'+cols.map(function(c){return '<th class="col-sep">'+esc(c)+'</th>';}).join('')+'</tr>';
+    var body=rws.map(function(rl,ri){
+        return '<tr><th>'+esc(rl)+'</th>'+cols.map(function(c,ci){
+            // Every cell is fillable — type straight into the grid to build ANY
+            // timetable (subjects, names, notes …). Cells persist in rosterCells
+            // and are captured by the PDF/image export. Leave a cell blank to
+            // print it empty and fill by hand. Rosters show a "Name" placeholder.
+            var k=ri+':'+ci;
+            return '<td class="roster-cell col-sep" contenteditable="true" data-rc="'+k+'" data-ph="'+(roster?'Name':'')+'">'
+                 + esc(rosterCells[k]||'')+'</td>';
+        }).join('')+'</tr>';
+    }).join('');
+    el('pBody').innerHTML='<table class="grid-tt blankgrid"><thead>'+thead+'</thead><tbody>'+body+'</tbody></table>';
+}
+
+// ---------- Saturday plan: first-Saturday date + lesson-free cascade ----------
+// The Saturday timetable is ordered by WEEK; the actual date of each week is
+// computed from the first Saturday, skipping any Saturday marked lesson-free.
+// Marking a Saturday free shrinks the list of available Saturdays, so that week
+// and every later week automatically shift to the next Saturday(s).
+var saturdayPlan = { first:'', free:{} };   // free: { 'YYYY-MM-DD': true }
+function isSaturdayLayout(){ return el('layout').value==='saturday'; }
+function addDaysISO(iso, days){
+    var p=parseDateAny(iso); if(!p) return '';
+    var d=new Date(p.y, p.m-1, p.d); d.setDate(d.getDate()+days);
+    return d.getFullYear()+'-'+('0'+(d.getMonth()+1)).slice(-2)+'-'+('0'+d.getDate()).slice(-2);
+}
+function weeksInUse(){
+    var s={}; rows.forEach(function(r){ var w=parseInt(r.week,10); if(w>=1) s[w]=1; });
+    return Object.keys(s).map(Number).sort(function(a,b){ return a-b; });
+}
+// Generate consecutive Saturdays from the first date, assign each non-free one to
+// the next week, and offer a few spare upcoming Saturdays that can be freed too.
+function computeSaturdayDates(){
+    var first=saturdayPlan.first, weeks=weeksInUse();
+    var maxWeek=weeks.length?weeks[weeks.length-1]:0;
+    var out={ weekDate:{}, saturdays:[] };
+    if(!parseDateAny(first)) return out;
+    var iso=first, wk=0, extra=0, guard=0;
+    while(guard++ < 520){
+        var free=!!saturdayPlan.free[iso];
+        var e={iso:iso, free:free, week:0};
+        if(!free){ wk++; e.week=wk; out.weekDate[wk]=iso; }
+        out.saturdays.push(e);
+        if(wk>=maxWeek){ extra++; if(extra>=5) break; }   // a few spare Saturdays to offer
+        iso=addDaysISO(iso, 7);
+    }
+    return out;
+}
+// Stamp the computed date + a "Week N" label onto each Saturday session so the
+// generic grid renderer groups and sorts them by cascaded date.
+function applySaturdayDates(){
+    if(!isSaturdayLayout()) return;
+    var map=computeSaturdayDates().weekDate;
+    rows.forEach(function(r){
+        var w=parseInt(r.week,10);
+        if(w>=1){ r.daylabel='Week '+w; r.day='Week '+w; r.date=map[w]||''; }
+        else { r.daylabel=''; r.date=''; }
+    });
+}
+function renderManageSaturdays(){
+    var box=el('satManage'); if(!box) return;
+    if(!isSaturdayLayout()){ box.innerHTML=''; return; }
+    el('satFirst').value=saturdayPlan.first||'';
+    var info=computeSaturdayDates();
+    if(!info.saturdays.length){
+        box.innerHTML='<p class="sess-hint" style="margin:0">Set the first Saturday’s date above, then tick any Saturday that won’t hold lessons.</p>';
+        return;
+    }
+    box.innerHTML=info.saturdays.map(function(s){
+        var tag=s.free ? '<span class="s-wk">No lessons</span>'
+                       : '<span class="s-wk">Week '+s.week+'</span>';
+        return '<label class="sat-chip'+(s.free?' free':'')+'">'
+             + '<input type="checkbox" data-iso="'+s.iso+'"'+(s.free?' checked':'')+'> '
+             + tag+' · '+esc(fmtDate(s.iso))+'</label>';
+    }).join('');
+}
+
+// ---------- save / load / list named designs ----------
+var currentDesignId = null;
+var URL_SAVE = "{{ url_for('timetable.designer_save') }}";
+var URL_LIST = "{{ url_for('timetable.designer_saved') }}";
+var URL_LOAD = "{{ url_for('timetable.designer_load', design_id=0) }}".slice(0,-1);
+var URL_DEL  = "{{ url_for('timetable.designer_delete', design_id=0) }}".slice(0,-1);
+var INITIAL_SAVED = {{ saved_designs|tojson }};
+var LAYOUT_LABEL={saturday:'Saturday classes',holiday:'Holiday lessons',exam:'Examination',
+                  grid:'Blank grid',list_table:'Custom table',roster_week:'Weekly roster',roster_day:'Daily roster'};
+function labelForLayout(k){ return LAYOUT_LABEL[k]||k||''; }
+
+function collectState(){
+    return { v:1, layout:el('layout').value, theme:el('theme').value,
+        school:el('school').value, title:el('title').value,
+        titleTouched:!!el('title').dataset.touched, subtitle:el('subtitle').value,
+        orient:el('orient').value, gridCols:el('gridCols').value, gridRows:el('gridRows').value,
+        rosterCount:el('rosterCount').value, listRows:el('listRows').value,
+        rows:rows, rosterCells:rosterCells, saturday:saturdayPlan };
+}
+function applyState(s){
+    if(!s) return;
+    el('layout').value=s.layout||'saturday';
+    el('theme').value=s.theme||'modern';
+    el('school').value=s.school||'';
+    el('subtitle').value=s.subtitle||'';
+    el('orient').value=s.orient||'rows';
+    if(s.gridCols!=null) el('gridCols').value=s.gridCols;
+    if(s.gridRows!=null) el('gridRows').value=s.gridRows;
+    if(s.rosterCount!=null) el('rosterCount').value=s.rosterCount;
+    if(s.listRows!=null) el('listRows').value=s.listRows;
+    rows=Array.isArray(s.rows)?s.rows.map(function(r){ return Object.assign(blankRow(), r); }):[];
+    rosterCells=s.rosterCells||{};
+    saturdayPlan=(s.saturday && typeof s.saturday==='object')?s.saturday:{first:'',free:{}};
+    if(!saturdayPlan.free) saturdayPlan.free={};
+    el('satFirst').value=saturdayPlan.first||'';
+    syncLayoutUI();                                   // toggles panels without wiping loaded data
+    if(s.titleTouched) el('title').dataset.touched='1'; else delete el('title').dataset.touched;
+    el('title').value=s.title||'';
+    renderManageSaturdays();
+    if(!isBlankGrid()) renderEditor();
+    renderSheet();
+}
+function flashSaved(){
+    var l=el('saveBtnLabel'), fresh=currentDesignId?'Save changes':'Save';
+    l.textContent='Saved ✓';
+    setTimeout(function(){ l.textContent=fresh; }, 1400);
+}
+function _designMarkSaved(){
+    el('newBtn').style.display='';
+    el('saveBtnLabel').textContent='Save changes';
+}
+function saveDesign(){
+    var name=(el('saveName').value||'').trim();
+    if(!name){ alert('Give the timetable a name first.'); el('saveName').focus(); return; }
+    var body={ name:name, layout:el('layout').value, data:collectState() };
+    if(currentDesignId) body.id=currentDesignId;
+    fetch(URL_SAVE, { method:'POST', credentials:'same-origin',
+            headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) })
+      .then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j}; }); })
+      .then(function(res){
+        if(!res.ok){ alert((res.j&&res.j.error)||'Could not save the timetable.'); return; }
+        currentDesignId=res.j.id; _designMarkSaved(); flashSaved(); loadSavedList(true);
+      }).catch(function(){ alert('Network error while saving.'); });
+}
+function newDesign(){
+    currentDesignId=null; el('saveName').value='';
+    el('newBtn').style.display='none'; el('saveBtnLabel').textContent='Save';
+}
+function toggleSaved(){
+    var p=el('savedPanel');
+    if(p.style.display==='none'){ p.style.display='block'; loadSavedList(); }
+    else p.style.display='none';
+}
+function renderSavedList(list){
+    el('savedCount').textContent=list.length;
+    if(!list.length){ el('savedPanel').innerHTML='<div class="saved-empty">No saved timetables yet. Give one a name and click Save.</div>'; return; }
+    el('savedPanel').innerHTML=list.map(function(d){
+        return '<div class="saved-item">'
+             + '<div class="s-name">'+esc(d.name)+'<small>'+esc(labelForLayout(d.layout))+' · updated '+esc(d.updated_at)+'</small></div>'
+             + '<div class="s-actions">'
+             + '<button class="btn btn-sm btn-primary" data-call="loadDesign" data-args="'+d.id+'"><i class="fas fa-folder-open"></i> Load</button>'
+             + '<button class="btn btn-sm btn-secondary" title="Duplicate" data-call="dupDesign" data-args="'+d.id+'"><i class="fas fa-copy"></i></button>'
+             + '<button class="btn btn-sm btn-light" title="Delete" data-call="deleteDesign" data-args="'+d.id+'"><i class="fas fa-trash"></i></button>'
+             + '</div></div>';
+    }).join('');
+}
+function loadSavedList(silent){
+    fetch(URL_LIST, { credentials:'same-origin', headers:{'X-Requested-With':'fetch'} })
+      .then(function(r){ return r.json(); })
+      .then(renderSavedList)
+      .catch(function(){ if(!silent) el('savedPanel').innerHTML='<div class="saved-empty">Could not load saved timetables.</div>'; });
+}
+function _fetchDesign(id){
+    return fetch(URL_LOAD+id, { credentials:'same-origin', headers:{'X-Requested-With':'fetch'} })
+      .then(function(r){ return r.json(); });
+}
+function _parseData(d){ try{ return JSON.parse(d.data||'{}'); }catch(e){ return null; } }
+function loadDesign(id){
+    _fetchDesign(id).then(function(d){
+        if(d.error){ alert('Could not load that timetable.'); return; }
+        currentDesignId=d.id; el('saveName').value=d.name||''; _designMarkSaved();
+        applyState(_parseData(d));
+        el('savedPanel').style.display='none';
+        window.scrollTo({ top:0, behavior:'smooth' });
+    }).catch(function(){ alert('Network error while loading.'); });
+}
+function dupDesign(id){
+    _fetchDesign(id).then(function(d){
+        if(d.error){ alert('Could not load that timetable.'); return; }
+        newDesign(); el('saveName').value=(d.name||'Timetable')+' (copy)';
+        applyState(_parseData(d));
+        el('savedPanel').style.display='none';
+        window.scrollTo({ top:0, behavior:'smooth' });
+    }).catch(function(){ alert('Network error while loading.'); });
+}
+function deleteDesign(id){
+    if(!confirm('Delete this saved timetable? This cannot be undone.')) return;
+    fetch(URL_DEL+id, { method:'POST', credentials:'same-origin' })
+      .then(function(r){ return r.json(); })
+      .then(function(j){
+        if(j.error){ alert('Could not delete that timetable.'); return; }
+        if(String(currentDesignId)===String(id)) newDesign();
+        loadSavedList();
+      }).catch(function(){ alert('Network error while deleting.'); });
+}
+
+function renderSheet(){
+    el('sheet').setAttribute('data-theme', el('theme').value);
+    renderHead();
+    applySaturdayDates();
+    if(isBlankGrid()) renderBlankGridSheet();
+    else if(layout().mode==='grid') (el('orient').value==='cols' ? renderGridColumnsSheet() : renderGridModeSheet());
+    else renderListSheet();
+}
+
+// Show/hide the editor panels for the current layout. Pure UI — never resets
+// entered data, so it is safe to call when loading a saved design.
+function syncLayoutUI(){
+    var blank = isBlankGrid();
+    var isGridMode = !blank && layout().mode==='grid';
+    el('gridEditor').style.display = blank?'block':'none';
+    el('rowEditor').style.display = blank?'none':'block';
+    // For rosters, swap the free-text "Column headers" box for a "students per row"
+    // count (the columns are numbered name-boxes, one student each).
+    var listTable = isListTable();
+    el('gridColsWrap').style.display = isRoster() ? 'none' : '';
+    el('rosterCountWrap').style.display = isRoster() ? '' : 'none';
+    // the auto-numbered table uses a row-count + its own paste box; it has no
+    // manual row-label list.
+    el('listRowsWrap').style.display = listTable ? '' : 'none';
+    el('gridRowsWrap').style.display = listTable ? 'none' : '';
+    el('listPasteBox').style.display = listTable ? 'block' : 'none';
+    // grid paste & the orientation choice only apply to the day×period layouts
+    el('gridPasteBox').style.display = isGridMode ? 'block':'none';
+    el('orientWrap').style.display = isGridMode ? 'block':'none';
+    // the Saturday first-date + lesson-free planner only applies to Saturday classes
+    el('satPanel').style.display = isSaturdayLayout() ? 'block':'none';
+    el('gridRowsLabel').textContent = isRoster()
+        ? 'Row labels — one per line (e.g. Week 1, Week 2 … or Monday, Tuesday …)'
+        : 'Row labels — one per line (e.g. period times)';
+    // The fill tip applies to every editable grid (rosters + the blank grid).
+    var tip = el('rosterTip');
+    if(isBlankGrid()){
+        tip.style.display = 'block';
+        tip.innerHTML = isRoster()
+            ? '<i class="fas fa-hand-pointer"></i> Click any box and type <b>one student\'s name per box</b>. Set how many per week/day with “Students per week / day” above. What you type prints and exports.'
+            : listTable
+            ? '<i class="fas fa-hand-pointer"></i> Type into each auto-numbered row. Edit the <b>column headers</b> and set the <b>number of rows</b> above — or paste the whole table at once (button below). What you type prints and exports.'
+            : '<i class="fas fa-hand-pointer"></i> Click any box and type to build <b>any</b> timetable. Edit the <b>column headers</b> and <b>row labels</b> above to add/rename columns and rows. What you type prints and exports; leave a box blank to fill it by hand.';
+    } else {
+        tip.style.display = 'none';
+    }
+}
+function onLayoutChange(){
+    var v=el('layout').value;
+    var blank = isBlankGrid();
+    // A roster drops in its matching template (weeks×days or days×duty) and starts a
+    // fresh set of cells, since switching axis changes what each cell means.
+    if(ROSTER_PRESETS[v]){
+        el('gridRows').value=ROSTER_PRESETS[v].rows;
+        el('gridCols').value=rosterCols();
+        rosterCells={};
+    }
+    // Entering the custom table drops in sensible starter headers ONLY when the
+    // headers still look like the day-grid default — so re-entering a table you
+    // customised never wipes your headers or typed cells.
+    if(v==='list_table' && /\bMonday\b/.test(el('gridCols').value)){
+        el('gridCols').value='Name, Subject, Branch, Number';
+    }
+    syncLayoutUI();
+    if(!el('title').dataset.touched){ el('title').value=''; }
+    if(!blank) renderEditor();
+    renderManageSaturdays();
+    renderSheet();
+}
+// Save typed roster-cell text so it survives re-renders and the PDF/image export.
+el('pBody').addEventListener('input', function(e){
+    var td = e.target.closest && e.target.closest('[data-rc]');
+    if(td){ rosterCells[td.getAttribute('data-rc')] = td.textContent; }
+});
+el('layout').addEventListener('change', onLayoutChange);
+el('rosterCount').addEventListener('input', function(){
+    if(isRoster()){ el('gridCols').value=rosterCols(); renderSheet(); }
+});
+el('theme').addEventListener('change', renderSheet);
+el('orient').addEventListener('change', renderSheet);
+el('title').addEventListener('input', function(){ this.dataset.touched='1'; });
+// Saturday planner: set the first Saturday, then tick lesson-free Saturdays.
+el('satFirst').addEventListener('change', function(){
+    saturdayPlan.first = this.value; renderManageSaturdays(); renderSheet();
+});
+el('satManage').addEventListener('change', function(e){
+    var cb = e.target.closest && e.target.closest('input[type="checkbox"][data-iso]');
+    if(!cb) return;
+    var iso = cb.getAttribute('data-iso');
+    if(cb.checked) saturdayPlan.free[iso]=true; else delete saturdayPlan.free[iso];
+    renderManageSaturdays(); renderSheet();
+});
+
+// ---------- export (Full-HD image / PDF) with preview ----------
+var _exportCanvas = null;
+function exportName(){
+    return (el('title').value || layout().title || 'timetable').replace(/[^\w]+/g, '_');
+}
+function openExport(){
+    var sheet = el('sheet');
+    var modal = el('exportModal');
+    // Move the modal to <body> so its position:fixed is relative to the viewport
+    // and not a transformed/scrolled ancestor — otherwise on mobile it opens
+    // off-screen and you have to hunt for it. Also lock background scrolling.
+    if(modal.parentNode !== document.body) document.body.appendChild(modal);
+    document.body.style.overflow = 'hidden';
+    el('exportImg').style.display = 'none';
+    el('exportSpinner').style.display = 'block';
+    modal.style.display = 'flex';
+    sheet.classList.add('exporting');           // size to A4 landscape, fill it
+    var scale = Math.max(2, Math.ceil(1920 / (sheet.offsetWidth || 1480)));
+    html2canvas(sheet, {scale: scale, backgroundColor: '#ffffff',
+                        windowWidth: sheet.scrollWidth, windowHeight: sheet.scrollHeight})
+        .then(function(canvas){
+            sheet.classList.remove('exporting');
+            _exportCanvas = canvas;
+            var img = el('exportImg');
+            img.src = canvas.toDataURL('image/png');
+            img.style.display = 'block';
+            el('exportSpinner').style.display = 'none';
+        })
+        .catch(function(e){
+            sheet.classList.remove('exporting');
+            el('exportSpinner').textContent = 'Could not render the timetable: ' + e;
+        });
+}
+function closeExport(){ el('exportModal').style.display = 'none'; document.body.style.overflow = ''; }
+function downloadImage(){
+    if(!_exportCanvas) return;
+    var a = document.createElement('a');
+    a.href = _exportCanvas.toDataURL('image/png');
+    a.download = exportName() + '.png';
+    a.click();
+}
+function downloadPDF(){
+    if(!_exportCanvas) return;
+    var JsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+    var pdf = new JsPDF({orientation: 'landscape', unit: 'mm', format: 'a4'});
+    var pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
+    // Fill the page width and keep the natural aspect ratio (no vertical
+    // stretch); if that would overflow the page height, fit to height instead.
+    var iw = _exportCanvas.width, ih = _exportCanvas.height;
+    var imgW = pw, imgH = pw * ih / iw;
+    if(imgH > ph){ imgH = ph; imgW = ph * iw / ih; }
+    var x = (pw - imgW) / 2, y = 0;
+    pdf.addImage(_exportCanvas.toDataURL('image/png'), 'PNG', x, y, imgW, imgH);
+    pdf.save(exportName() + '.pdf');
+}
+// click outside the box closes the preview
+document.getElementById('exportModal').addEventListener('click', function(e){
+    if(e.target === this) closeExport();
+});
+
+// seed with a couple of sessions so the tool is immediately usable
+addRow(); addRow();
+onLayoutChange();
+// paint the "Saved timetables" badge/list from the server's first-paint data
+try{ renderSavedList(INITIAL_SAVED||[]); }catch(e){}
+</script>
+{% endblock %}

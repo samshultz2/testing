@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}{{ subject }} — Mock WAEC Analysis{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('mock_waec.index') }}">Mock WAEC</a>
+  <a href="{{ url_for('mock_waec.analytics', exam_id=exam.id) }}">{{ exam.display_name }}</a>
+  <span>{{ subject }}</span>{% endblock %}
+
+{% block extra_css %}{% include "results/_subject_style.html" %}{% endblock %}
+
+{% block content %}
+<div class="sa-wrap">
+  <div class="sa-head">
+    <h1><span class="ic"><i class="fas fa-book"></i></span> {{ subject }}
+      <span class="sub">· {{ exam.display_name }}</span></h1>
+  </div>
+
+  {% if data %}
+  <div class="sa-kpis">
+    <div class="sa-kpi"><div class="l">Candidates</div><div class="v">{{ data.total }}</div></div>
+    <div class="sa-kpi good"><div class="l">A1</div><div class="v">{{ data.a1_count }}</div></div>
+    <div class="sa-kpi good"><div class="l">Distinctions</div><div class="v">{{ data.distinction_count }} <small>{{ data.distinction_rate }}%</small></div></div>
+    <div class="sa-kpi"><div class="l">Credits</div><div class="v">{{ data.credit_count }} <small>{{ data.credit_rate }}%</small></div></div>
+    <div class="sa-kpi {{ 'good' if data.pass_rate >= 50 else 'warn' }}"><div class="l">Pass rate</div><div class="v">{{ data.pass_rate }}<small>%</small></div></div>
+    <div class="sa-kpi bad"><div class="l">Fails</div><div class="v">{{ data.fail_count }} <small>{{ data.fail_rate }}%</small></div></div>
+    <div class="sa-kpi"><div class="l">Avg. grade points</div><div class="v">{{ data.average_points }}<small>/{{ data.max_points }}</small></div></div>
+    {% if data.avg_score is not none %}<div class="sa-kpi"><div class="l">Avg. score</div><div class="v">{{ data.avg_score }}<small>/100 · {{ data.min_score }}–{{ data.max_score }}</small></div></div>{% endif %}
+  </div>
+
+  <div class="sa-grid">
+    <div class="sa-card">
+      <h3><i class="fas fa-chart-column"></i> Grade distribution</h3>
+      <div class="sa-chart"><canvas id="saGradeChart"></canvas></div>
+    </div>
+    <div class="sa-card">
+      <h3><i class="fas fa-list-ol"></i> Breakdown</h3>
+      <div class="sa-dist">
+        {% set mx = data.total or 1 %}
+        {% for d in data.distribution %}
+        <div class="sa-drow">
+          <span class="g gc gc-{{ d.grade|lower }}" style="color:var(--gc);background:color-mix(in srgb,var(--gc) 15%,transparent)">{{ d.grade }}</span>
+          <span class="bar"><span class="gc gc-{{ d.grade|lower }}" style="width:{{ (d.count / mx * 100)|round(1) }}%;background:var(--gc)"></span></span>
+          <span class="n"><b>{{ d.count }}</b> · {{ d.pct }}%</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="sa-card">
+    <h3><i class="fas fa-users"></i> Candidates by grade</h3>
+    <div class="sa-tablewrap">
+      <table class="sa-table">
+        <thead><tr><th>Grade</th><th>Count</th><th>Students (score)</th></tr></thead>
+        <tbody>
+          {% for g in grades %}
+          {% if data.by_grade[g] %}
+          <tr>
+            <td><span class="badge-g gc gc-{{ g|lower }}">{{ g }}</span></td>
+            <td>{{ data.by_grade[g]|length }}</td>
+            <td class="names">
+              {% for s in data.by_grade[g] %}{{ s.name }}{% if s.score is not none %} <span class="sc {{ 'hi' if s.score >= 70 else 'mid' if s.score >= 50 else 'lo' }}">({{ s.score }})</span>{% endif %}{% if not loop.last %}, {% endif %}{% endfor %}
+            </td>
+          </tr>
+          {% endif %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script id="saData" type="application/json">{{ data.distribution|tojson }}</script>
+  {% else %}
+  <div class="sa-card"><div class="sa-empty"><i class="fas fa-inbox"></i>No results recorded for {{ subject }} in this Mock WAEC exam.</div></div>
+  {% endif %}
+
+  <a class="sa-back" href="{{ url_for('mock_waec.analytics', exam_id=exam.id) }}"><i class="fas fa-arrow-left"></i> Back to exam analytics</a>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script nonce="{{ csp_nonce }}">
+{% include "results/_grade_chart.js" %}
+</script>
+{% endblock %}

@@ -10,6 +10,7 @@
     <div class="card-header"><h3>School Information (for printing)</h3></div>
     <div class="card-body">
         <form method="POST" action="{{ url_for('generator.save_generator_settings') }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
                 <label class="form-label">School Name</label>
                 <input type="text" name="school_name" class="form-control" value="{{ school_name }}" placeholder="e.g., Greenfield Secondary School">
@@ -21,11 +22,21 @@
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Academic Year</label>
-                    <input type="text" name="academic_year" class="form-control" value="{{ academic_year }}" placeholder="e.g., 2024/2025">
+                    <select name="academic_year" class="form-control">
+                        {% if not sessions %}<option value="">— No sessions set up yet —</option>{% endif %}
+                        {% for s in sessions %}
+                        <option value="{{ s }}" {{ 'selected' if s == academic_year else '' }}>{{ s }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
                 <div class="form-group">
                     <label class="form-label">Term</label>
-                    <input type="text" name="term_name" class="form-control" value="{{ term_name }}" placeholder="e.g., First Term">
+                    <select name="term_name" class="form-control">
+                        {% if not terms %}<option value="">— No terms set up yet —</option>{% endif %}
+                        {% for t in terms %}
+                        <option value="{{ t }}" {{ 'selected' if t == term_name else '' }}>{{ t }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
             </div>
             <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Settings</button>

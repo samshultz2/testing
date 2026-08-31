@@ -18,6 +18,7 @@ class CBTExam(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     title = db.Column(db.String(150), nullable=False)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))
     subject_id = db.Column(db.Integer, db.ForeignKey('subjects.id'))
     class_id = db.Column(db.Integer, db.ForeignKey('school_classes.id'))
     arm_id = db.Column(db.Integer, db.ForeignKey('class_arms.id'))      # optional
@@ -121,6 +122,8 @@ class CBTQuestion(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     exam_id = db.Column(db.Integer, db.ForeignKey('cbt_exams.id'), nullable=False)
     question_text = db.Column(db.Text, nullable=False)
+    topic = db.Column(db.String(100))            # syllabus topic (for topic-mastery analytics)
+    subtopic = db.Column(db.String(120))         # syllabus sub-topic (finer-grained mastery)
     image_url = db.Column(db.String(300))        # optional figure (e.g. a diagram)
     option_a = db.Column(db.String(300))
     option_b = db.Column(db.String(300))
@@ -129,6 +132,10 @@ class CBTQuestion(db.Model):
     correct_option = db.Column(db.String(1))     # 'A'/'B'/'C'/'D'
     marks = db.Column(db.Float, default=1)
     order = db.Column(db.Integer, default=0)
+
+    # exam_id is indexed via the central perf-index registry in models/__init__
+    # (ix_cbt_question_exam) — the exam runtime loads a whole exam's questions on
+    # every take/answer/submit, so a mass sitting must not full-table scan.
 
     @property
     def options(self):
@@ -272,6 +279,7 @@ class QuestionBank(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     subject_id = db.Column(db.Integer, db.ForeignKey('subjects.id'))
     topic = db.Column(db.String(100))
+    subtopic = db.Column(db.String(120))
     difficulty = db.Column(db.String(10), default='Medium')   # Easy/Medium/Hard
     question_text = db.Column(db.Text, nullable=False)
     image_url = db.Column(db.String(300))        # optional figure
@@ -294,6 +302,39 @@ class QuestionBank(db.Model):
 
     def __repr__(self):
         return f'<QuestionBank {self.id}>'
+
+
+class SyllabusTopic(db.Model):
+    """A curriculum topic (or sub-topic) for a subject, tagged by exam body
+    (WAEC / JAMB / Both). Sub-topics point to their parent topic via
+    ``parent_id``. These power the topic drop-downs when authoring CBT / Mock
+    JAMB questions and the topic/sub-topic mastery analytics."""
+    __tablename__ = 'syllabus_topics'
+
+    id = db.Column(db.Integer, primary_key=True)
+    subject_id = db.Column(db.Integer, db.ForeignKey('subjects.id'), nullable=False)
+    parent_id = db.Column(db.Integer, db.ForeignKey('syllabus_topics.id'))   # NULL = top-level topic
+    title = db.Column(db.String(120), nullable=False)
+    exam_body = db.Column(db.String(10), default='Both')   # WAEC / JAMB / Both
+    order = db.Column(db.Integer, default=0)
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=local_now)
+
+    subject = db.relationship('Subject')
+    children = db.relationship('SyllabusTopic', backref=db.backref('parent', remote_side=[id]),
+                               cascade='all, delete-orphan', lazy='dynamic',
+                               order_by='SyllabusTopic.order, SyllabusTopic.title')
+
+    __table_args__ = (
+        db.UniqueConstraint('subject_id', 'parent_id', 'title', name='uq_syllabus_topic'),
+    )
+
+    @property
+    def is_subtopic(self):
+        return self.parent_id is not None
+
+    def __repr__(self):
+        return f'<SyllabusTopic {self.title} subj{self.subject_id}>'
 
 
 class CBTViolation(db.Model):

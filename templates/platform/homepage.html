@@ -1,0 +1,124 @@
+{% extends "platform/_layout.html" %}
+{% block title %}Edit homepage{% endblock %}
+{% block heading %}Edit homepage{% endblock %}
+{% block subheading %}Change the public marketing homepage — saved changes are live immediately, no deploy.{% endblock %}
+{% block topbar_right %}
+  <a class="btn" href="{{ marketing_url }}" target="_blank" rel="noopener"><i class="fas fa-arrow-up-right-from-square"></i> Preview</a>
+{% endblock %}
+
+{% block head %}
+<style>
+  .grid{display:grid;grid-template-columns:1fr;gap:0;max-width:760px}
+  .sect{padding:18px 20px}
+  .sect + .sect{border-top:1px solid var(--line-2)}
+  .sect h3{font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);margin:0 0 12px;font-weight:700}
+  label{display:block;font-size:12.5px;font-weight:600;margin:12px 0 5px} label:first-of-type{margin-top:0}
+  input[type=text],input[type=number],input[type=email],input[type=tel],input[type=url],textarea{
+    width:100%;padding:10px 12px;border:1px solid var(--line);
+    border-radius:9px;background:transparent;color:var(--ink);font-size:14.5px;font-family:inherit}
+  input:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:1px;border-color:var(--accent)}
+  textarea{min-height:118px;resize:vertical;line-height:1.5}
+  .hint{font-size:12px;color:var(--faint);margin-top:5px}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:14px} @media(max-width:560px){.row2{grid-template-columns:1fr}}
+  .save{display:flex;gap:12px;align-items:center;padding:16px 20px;border-top:1px solid var(--line-2)}
+  code{background:var(--surface-2);padding:1px 5px;border-radius:5px;font-size:12px}
+</style>
+{% endblock %}
+
+{% block content %}
+<form method="post" action="{{ url_for('platform.homepage') }}">
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+  <div class="panel grid">
+    <div class="sect">
+      <h3>Hero</h3>
+      <label>Brand name</label>
+      <input type="text" name="brand" value="{{ content.brand }}">
+      <label>Headline</label>
+      <input type="text" name="hero_title" value="{{ content.hero_title }}">
+      <label>Sub-headline</label>
+      <textarea name="hero_subtitle" style="min-height:70px">{{ content.hero_subtitle }}</textarea>
+      <div class="row2">
+        <div><label>Call-to-action button</label><input type="text" name="hero_cta" value="{{ content.hero_cta }}"></div>
+        <div><label>Trial note / badge</label><input type="text" name="trial_note" value="{{ content.trial_note }}"></div>
+      </div>
+    </div>
+
+    <div class="sect">
+      <h3>Pricing</h3>
+      <label>Billing period word</label>
+      <input type="text" name="price_period" value="{{ content.price_period }}">
+      <div class="hint">e.g. month, term, year. The <strong>price</strong> and plans are set on the
+        <a href="{{ url_for('platform.pricing') }}">Pricing</a> page — the homepage shows your live Monthly price automatically.</div>
+    </div>
+
+    <div class="sect">
+      <h3>Features</h3>
+      <label>One per line — <code>Title | description</code></label>
+      <textarea name="features">{{ features_text }}</textarea>
+      <div class="hint">Example: <code>Your own private portal | A dedicated subdomain and isolated database.</code></div>
+    </div>
+
+    <div class="sect">
+      <h3>How it works (steps)</h3>
+      <label>One per line — <code>Title | description</code></label>
+      <textarea name="steps" style="min-height:90px">{{ steps_text }}</textarea>
+    </div>
+
+    <div class="sect">
+      <h3>FAQ</h3>
+      <label>One per line — <code>Question | Answer</code></label>
+      <textarea name="faqs">{{ faqs_text }}</textarea>
+    </div>
+
+    <div class="sect">
+      <h3>Testimonials</h3>
+      <label>One per line — <code>Name, School | Quote</code></label>
+      <textarea name="testimonials">{{ testimonials_text }}</textarea>
+    </div>
+
+    <div class="sect">
+      <h3>Contact</h3>
+      <p class="hint">Shown in the homepage “Talk to us” cards and the footer. Leave a field blank to hide that option.</p>
+      <div class="row2">
+        <div><label>Email</label>
+          <input type="email" name="contact_email" value="{{ content.contact.email if content.contact else '' }}" placeholder="hello@edusyncra.site"></div>
+        <div><label>Phone</label>
+          <input type="tel" name="contact_phone" value="{{ content.contact.phone if content.contact else '' }}" placeholder="+234 800 000 0000"></div>
+      </div>
+      <label>WhatsApp number</label>
+      <input type="tel" name="contact_whatsapp" value="{{ content.contact.whatsapp if content.contact else '' }}" placeholder="2348000000000">
+      <p class="hint">Include the country code (e.g. 234…). Spaces and “+” are fine — we clean it for the WhatsApp link.</p>
+    </div>
+
+    <div class="sect">
+      <h3>Legal</h3>
+      <p class="hint">Used across the Privacy Policy, Terms of Service and Cookie Policy pages. Leave a field blank to fall back to a sensible default.</p>
+      <div class="row2">
+        <div><label>Registered company name</label>
+          <input type="text" name="legal_entity" value="{{ content.legal_entity or '' }}" placeholder="e.g. EduSyncra Technologies Ltd">
+          <div class="hint">Shown as “Issued by …”. Blank uses the brand name.</div></div>
+        <div><label>Effective date</label>
+          <input type="text" name="legal_effective" value="{{ content.legal_effective or '' }}" placeholder="e.g. 1 August 2026">
+          <div class="hint">Blank uses today’s date.</div></div>
+      </div>
+      <label>Data Protection Officer / privacy contact email</label>
+      <input type="email" name="dpo_email" value="{{ content.dpo_email or '' }}" placeholder="dpo@edusyncra.site">
+      <div class="hint">Shown in the Privacy Policy contact block. Blank uses your main contact email.</div>
+      <label style="margin-top:12px">Sub-processors — one per line, <code>Name | What they process</code></label>
+      <textarea name="subprocessors" style="min-height:110px">{{ subprocessors_text }}</textarea>
+      <div class="hint">The third parties that process data to run the service (hosting, payments, messaging). Listed in the Privacy Policy.</div>
+    </div>
+
+    <div class="sect">
+      <h3>Footer</h3>
+      <label>Footer text</label>
+      <input type="text" name="footer" value="{{ content.footer }}">
+    </div>
+
+    <div class="save">
+      <button type="submit" class="btn primary"><i class="fas fa-floppy-disk"></i> Save changes</button>
+      <a class="btn" href="{{ marketing_url }}" target="_blank" rel="noopener">Preview homepage ↗</a>
+    </div>
+  </div>
+</form>
+{% endblock %}

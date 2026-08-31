@@ -100,7 +100,7 @@
     </div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('weeklyForm');
     document.getElementById('assignmentSelect').addEventListener('change', function() { if (this.value && document.getElementById('weekSelect').value) form.submit(); });
@@ -144,6 +144,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 </thead>
                 <tbody>
                     {% for s in summary.students %}
+                    {% if loop.changed(s.gender) %}
+                    {% if not loop.first %}<tr class="roster-group-gap" aria-hidden="true"><td colspan="{{ summary.school_days|length + 4 }}" style="height:1.1rem;border:none;padding:0;"></td></tr>{% endif %}
+                    <tr class="roster-group-head"><td colspan="{{ summary.school_days|length + 4 }}" style="font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.03em;font-size:.75rem;border-bottom:2px solid var(--border-color);">{% if s.gender == 'Male' %}Boys{% elif s.gender == 'Female' %}Girls{% else %}{{ s.gender or 'Other' }}{% endif %}</td></tr>
+                    {% endif %}
                     <tr>
                         <td>{{ s.student_name }}<br><small class="text-muted">{{ s.gender }}</small></td>
                         {% for d in s.daily %}<td><div class="att-mark"><span class="{% if d.morning %}present{% else %}absent{% endif %}">{{ '✓' if d.morning else '✗' }}</span><span class="{% if d.afternoon %}present{% else %}absent{% endif %}">{{ '✓' if d.afternoon else '✗' }}</span></div></td>{% endfor %}

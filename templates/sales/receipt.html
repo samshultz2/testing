@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Receipt {{ sale.receipt_no }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('sales.history') }}">Sales</a> / <span>{{ sale.receipt_no }}</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1><i class="fas fa-receipt"></i> Receipt {{ sale.receipt_no }}</h1>
+    <div class="page-header-actions"><button data-print class="btn btn-primary"><i class="fas fa-print"></i> Print</button></div>
+</div>
+<div class="card" style="max-width:560px;">
+    <div class="card-body">
+        {% if sale.branch %}<h3 style="margin:0 0 .2rem;">{{ sale.branch.name }} Branch</h3>
+        {% if sale.branch.address %}<p class="text-muted text-sm" style="margin:0;">{{ sale.branch.address }}{% if sale.branch.phone %} · {{ sale.branch.phone }}{% endif %}</p>{% endif %}{% endif %}
+        <p class="text-muted text-sm">{{ sale.created_at.strftime('%d %b %Y, %I:%M %p') if sale.created_at }} · {{ sale.payment_method }}</p>
+        <p><strong>Buyer:</strong> {{ sale.buyer }}{% if sale.sold_by %} &middot; <span class="text-muted">by {{ sale.sold_by }}</span>{% endif %}</p>
+        <table class="data-table no-mobile-scroll" style="width:100%;">
+            <thead><tr><th>Item</th><th class="text-right">Qty</th><th class="text-right">Price</th><th class="text-right">Total</th></tr></thead>
+            <tbody>
+            {% for it in items %}
+            <tr><td>{{ it.description }}</td><td class="text-right">{{ it.quantity }}</td>
+                <td class="text-right">{{ it.unit_price|naira }}</td>
+                <td class="text-right">{{ it.line_total|naira }}</td></tr>
+            {% endfor %}
+            </tbody>
+            <tfoot>
+                <tr><th colspan="3" class="text-right">Total</th><th class="text-right">{{ sale.total|naira }}</th></tr>
+                {% if sale.amount_paid %}<tr><td colspan="3" class="text-right">Paid</td><td class="text-right">{{ sale.amount_paid|naira }}</td></tr>
+                <tr><td colspan="3" class="text-right">Change</td><td class="text-right">{{ sale.change|naira }}</td></tr>{% endif %}
+            </tfoot>
+        </table>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,4462 @@
+[
+{
+"name": "A.D Rufa'i College for Legal and Islamic Studies (AFFL TO BAYERO UNI. KANO)",
+"ownership": "Private"
+},
+{
+"name": "Abdulkadir Kure University, Minna",
+"ownership": "Private"
+},
+{
+"name": "Abdulrasaq Abubakar Toyin University",
+"ownership": "Private"
+},
+{
+"name": "Abubakar Tafawa Balewa University",
+"ownership": "Private"
+},
+{
+"name": "Abubakar Tatari Ali Polytechnic- DEG (Affliated to ATBU Bauchi State)",
+"ownership": "Private"
+},
+{
+"name": "Achievers University",
+"ownership": "Private"
+},
+{
+"name": "Adamawa State Polytechnic, Yola (Affliated to University Of Maiduguri)",
+"ownership": "State"
+},
+{
+"name": "Adamawa State University",
+"ownership": "State"
+},
+{
+"name": "Adams Igbudu Christian Institute, Emevor, (Affiliated to Uniport)",
+"ownership": "Private"
+},
+{
+"name": "Adekunle Ajasin University",
+"ownership": "Private"
+},
+{
+"name": "Adeyemi Federal University of Education",
+"ownership": "Federal"
+},
+{
+"name": "Admiralty University of Nigeria",
+"ownership": "Private"
+},
+{
+"name": "African Aviation and Aerospace University",
+"ownership": "Private"
+},
+{
+"name": "African School of Economics",
+"ownership": "Private"
+},
+{
+"name": "African University of Science and Technology Abuja",
+"ownership": "Private"
+},
+{
+"name": "Ahman Pategi University, Patigi.",
+"ownership": "Private"
+},
+{
+"name": "Air Force Institute Of Technology - DEG",
+"ownership": "Private"
+},
+{
+"name": "Al-Ansar University Maiduguri",
+"ownership": "Private"
+},
+{
+"name": "Al-Hikmah University",
+"ownership": "Private"
+},
+{
+"name": "Al-Istiqama University, Sumaila",
+"ownership": "Private"
+},
+{
+"name": "Al-Muhibbah Open University",
+"ownership": "Private"
+},
+{
+"name": "Aletheia University",
+"ownership": "Private"
+},
+{
+"name": "Alvan Ikoku University Of Education",
+"ownership": "Private"
+},
+{
+"name": "Amadeus University Amizi",
+"ownership": "Private"
+},
+{
+"name": "Anchor University",
+"ownership": "Private"
+},
+{
+"name": "Archbishop Vining College of Theology (Affiliated to University of Ibadan)",
+"ownership": "Private"
+},
+{
+"name": "Arthur Jarvis University",
+"ownership": "Private"
+},
+{
+"name": "Assemblies of God Divinity School of Nigeria",
+"ownership": "Private"
+},
+{
+"name": "Auchi Polytechnic, Edo State (Affiliated to Nnamdi Azikiwe University, Awka)",
+"ownership": "State"
+},
+{
+"name": "Augustinian Institute, Makurdi, (Affiliated to Benue State University)",
+"ownership": "State"
+},
+{
+"name": "Ave Maria University",
+"ownership": "Private"
+},
+{
+"name": "Ave Maria University Piyanko",
+"ownership": "Private"
+},
+{
+"name": "Azman University, Kano",
+"ownership": "Private"
+},
+{
+"name": "Baba Ahmed University Kano",
+"ownership": "Private"
+},
+{
+"name": "Baptist College of Theology, Benin (Affiliated to Ambrose Alli University)",
+"ownership": "Private"
+},
+{
+"name": "Baptist College of Theology, Obinze, Owerri (Affiliated to University of Por-Harcourt)",
+"ownership": "Private"
+},
+{
+"name": "Bauchi State University",
+"ownership": "State"
+},
+{
+"name": "Bayelsa Medical University",
+"ownership": "Private"
+},
+{
+"name": "Bigard Memorial Seminary, Enugu (Affiliated to University of Ibadan)",
+"ownership": "Private"
+},
+{
+"name": "British Canadian University",
+"ownership": "Private"
+},
+{
+"name": "Bukar Abba Ibrahim University",
+"ownership": "Private"
+},
+{
+"name": "Caleb University",
+"ownership": "Private"
+},
+{
+"name": "Calvary College of Theology",
+"ownership": "Private"
+},
+{
+"name": "Calvary College of Theology, Port Harcourt (Affiliated to University of Calaba",
+"ownership": "Private"
+},
+{
+"name": "Canadian University of Nigeria",
+"ownership": "Private"
+},
+{
+"name": "Capital City University, Warawa, Kano",
+"ownership": "Private"
+},
+{
+"name": "Caritas University",
+"ownership": "Private"
+},
+{
+"name": "Catholic Institute of West Africa, Port Harcourt (Affiliated to University of Calabar)",
+"ownership": "Private"
+},
+{
+"name": "Catholic University of Nigeria",
+"ownership": "Private"
+},
+{
+"name": "Cetep University",
+"ownership": "Private"
+},
+{
+"name": "Christopher University",
+"ownership": "Private"
+},
+{
+"name": "Chukwuemeka Odumegwu Ojukwu University (former ANSU)",
+"ownership": "Private"
+},
+{
+"name": "Claretian University Nekede, Imo State (Formerly Claretain Institute of Philosophy)",
+"ownership": "State"
+},
+{
+"name": "Clifford University",
+"ownership": "Private"
+},
+{
+"name": "Coal City University",
+"ownership": "Private"
+},
+{
+"name": "College of Arabic and Islamic Legal Studies, Ilorin (Affiliated to Bayero University)",
+"ownership": "Private"
+},
+{
+"name": "College of Seminary and Theology, Irri (Affiliated to Niger Delta University, Wilberforce Island)",
+"ownership": "Private"
+},
+{
+"name": "Confluence University Of Science and Technology",
+"ownership": "Private"
+},
+{
+"name": "Cosmopolitan University Abuja",
+"ownership": "Private"
+},
+{
+"name": "Covenant Polytechnic (Affiliated to University Of Calabar)",
+"ownership": "Private"
+},
+{
+"name": "Crescent University",
+"ownership": "Private"
+},
+{
+"name": "David Nweze Umahi University of Medical Sciences",
+"ownership": "Private"
+},
+{
+"name": "Delta State College Of Physical Education (Affiliated to University of Benin)",
+"ownership": "State"
+},
+{
+"name": "Delta State University Of Science And Technology",
+"ownership": "State"
+},
+{
+"name": "Dennis Osadebay University, Anwai (formely Delta State University Anwai campus)",
+"ownership": "State"
+},
+{
+"name": "Distance Learning Centre, Ahmadu Bello University",
+"ownership": "Private"
+},
+{
+"name": "Dominion University",
+"ownership": "Private"
+},
+{
+"name": "E-LEARNING UDUSOK",
+"ownership": "Private"
+},
+{
+"name": "E-LEARNING UNILAG",
+"ownership": "Private"
+},
+{
+"name": "E-Learning UNIMAID",
+"ownership": "Private"
+},
+{
+"name": "E-LEARNING UNIUYO",
+"ownership": "Private"
+},
+{
+"name": "Eastern Palm University",
+"ownership": "Private"
+},
+{
+"name": "Ebonyi State University of ICT Science and Technology, Oferekpe",
+"ownership": "State"
+},
+{
+"name": "ECWA Theological Seminary, Igbaja (Affiliated to University of Ibadan)",
+"ownership": "Private"
+},
+{
+"name": "ECWA Theological Seminary, Jos (Affiliated to UNIJOS)",
+"ownership": "Private"
+},
+{
+"name": "Edo State University Uzairue (Formerly Edo University Iyamho)",
+"ownership": "State"
+},
+{
+"name": "Edusoko University Bida",
+"ownership": "Private"
+},
+{
+"name": "Edwin Clark University",
+"ownership": "Private"
+},
+{
+"name": "El-amin University Minna",
+"ownership": "Private"
+},
+{
+"name": "Elrazi Medical University, Kano",
+"ownership": "Private"
+},
+{
+"name": "Emirates College Of Health Science And Technology (Affiliated to KWASU)",
+"ownership": "Private"
+},
+{
+"name": "Eranova University",
+"ownership": "Private"
+},
+{
+"name": "Essien Ukpabia Presbyterian Theological College, Itu, Akwa Ibom State",
+"ownership": "State"
+},
+{
+"name": "European University of Nigeria",
+"ownership": "Private"
+},
+{
+"name": "Evangel University",
+"ownership": "Private"
+},
+{
+"name": "Federal College Of Animal Health & Production Tech, Vom (Affiliated to Abubakar Tafawa Balewa Uni)",
+"ownership": "Federal"
+},
+{
+"name": "Federal College of Dental Technology and Therapy (Affiliated to FUTO)",
+"ownership": "Federal"
+},
+{
+"name": "Federal College Of Education (Special), Oyo- DEG",
+"ownership": "Federal"
+},
+{
+"name": "Federal College Of Education (Technical) Umunze - DEG",
+"ownership": "Federal"
+},
+{
+"name": "Federal Polytechnic Ado-Ekiti (Affiliated to FUTMINNA)",
+"ownership": "Federal"
+},
+{
+"name": "Federal Polytechnic Bauchi (Affiliated to Abubakar Tafawa Balewa University)",
+"ownership": "Federal"
+},
+{
+"name": "Federal Polytechnic, Bauchi, (Affiliated to Atbu, Bauchi)",
+"ownership": "Federal"
+},
+{
+"name": "Federal Polytechnic, Bida (Affiliated to FUTMINNA)",
+"ownership": "Federal"
+},
+{
+"name": "Federal Polytechnic, Offa, Kwara (Affiliated to FUTMINNA)",
+"ownership": "Federal"
+},
+{
+"name": "Federal University of Agriculture and Development Studies, Iragbiji",
+"ownership": "Federal"
+},
+{
+"name": "Federal University of Agriculture and Technology, Okeho",
+"ownership": "Federal"
+},
+{
+"name": "Federal University of Agriculture, Bassambiri",
+"ownership": "Federal"
+},
+{
+"name": "Federal University Of Agriculture, Makurdi",
+"ownership": "Federal"
+},
+{
+"name": "Federal University of Agriculture, Mubi",
+"ownership": "Federal"
+},
+{
+"name": "Federal University Of Agriculture, Zuru, Kebbi",
+"ownership": "Federal"
+},
+{
+"name": "Federal University of Applied Sciences, Kachia",
+"ownership": "Federal"
+},
+{
+"name": "Federal University of Education, Kontagora",
+"ownership": "Federal"
+},
+{
+"name": "Federal University of Education, Pankshin",
+"ownership": "Federal"
+},
+{
+"name": "Federal University of Education, Zaria",
+"ownership": "Federal"
+},
+{
+"name": "Federal University of Environment and Technology,Koroma/Sakpenwa",
+"ownership": "Federal"
+},
+{
+"name": "Federal University of Health Sciences, Ila - Orangun",
+"ownership": "Federal"
+},
+{
+"name": "Federal University of Medical and Health Sciences, Funtua",
+"ownership": "Federal"
+},
+{
+"name": "Federal University of Medical and Health Sciences, Kwale",
+"ownership": "Federal"
+},
+{
+"name": "Federal University of Medicine and Medical Sciences, Abeokuta",
+"ownership": "Federal"
+},
+{
+"name": "Federal University of Petroleum Resource",
+"ownership": "Federal"
+},
+{
+"name": "Federal University of Science and Technology Kabo",
+"ownership": "Federal"
+},
+{
+"name": "Federal University of Technology, Babura",
+"ownership": "Federal"
+},
+{
+"name": "Federal University of Technology, Ikot - Abasi",
+"ownership": "Federal"
+},
+{
+"name": "Federal University, Ndufu-alike",
+"ownership": "Federal"
+},
+{
+"name": "First Technical University, Ibadan",
+"ownership": "Private"
+},
+{
+"name": "Fountain University",
+"ownership": "Private"
+},
+{
+"name": "Franco British International University",
+"ownership": "Federal"
+},
+{
+"name": "Garu Islamic College of Health Technology",
+"ownership": "Private"
+},
+{
+"name": "Gerar University of Medical Sciences",
+"ownership": "Private"
+},
+{
+"name": "Gindiri Theological Seminary (Affiliated to UNIJOS)",
+"ownership": "Private"
+},
+{
+"name": "Glorious Vision University",
+"ownership": "Private"
+},
+{
+"name": "Godfrey Okoye University",
+"ownership": "Private"
+},
+{
+"name": "Gombe State University of Science and Technology",
+"ownership": "State"
+},
+{
+"name": "Greenfield University, Kaduna",
+"ownership": "Private"
+},
+{
+"name": "Hassan Usman Katsina Polytechnic (Affiliated to FUTMINNA)",
+"ownership": "Private"
+},
+{
+"name": "Havilla University, Nde-Ikom, Cross River",
+"ownership": "Private"
+},
+{
+"name": "Hensard University",
+"ownership": "Private"
+},
+{
+"name": "Hezekiah University",
+"ownership": "Private"
+},
+{
+"name": "Hillside University of Science and Technology",
+"ownership": "Private"
+},
+{
+"name": "Huda University Gusau",
+"ownership": "Private"
+},
+{
+"name": "Ibrahim Badamasi Babangida University",
+"ownership": "Private"
+},
+{
+"name": "Iconic University",
+"ownership": "Private"
+},
+{
+"name": "Igbinedion University",
+"ownership": "Private"
+},
+{
+"name": "Ignatius Ajuru University",
+"ownership": "Private"
+},
+{
+"name": "Immanuel College of Technology and Christian Education , Samonda, Ibadan",
+"ownership": "Private"
+},
+{
+"name": "Immanuel College of Technology and Christian Education , Samonda, Ibadan (Affiliated to University o",
+"ownership": "Private"
+},
+{
+"name": "Institute of Management and Technology Enugu (Affiliated to University of Nigeria)",
+"ownership": "Private"
+},
+{
+"name": "Isaac Balami University of Aeronautics and Management",
+"ownership": "Private"
+},
+{
+"name": "Jefap University",
+"ownership": "Private"
+},
+{
+"name": "Jewel University, Gombe",
+"ownership": "Private"
+},
+{
+"name": "Jimoh Babalola University",
+"ownership": "Private"
+},
+{
+"name": "Kaduna Polytechnic (Affiliated to University of Tech, Minna)",
+"ownership": "Private"
+},
+{
+"name": "Kaduna Polytechnic, Tunda (Affiliated to Ahmadu Bello University)",
+"ownership": "Private"
+},
+{
+"name": "Kano University Of Science And Technology",
+"ownership": "Private"
+},
+{
+"name": "Karl Kumm University, Vom, Plateau State",
+"ownership": "State"
+},
+{
+"name": "Katsina University",
+"ownership": "Private"
+},
+{
+"name": "Kebbi State University Of Science And Technology",
+"ownership": "State"
+},
+{
+"name": "Kevin Eze University",
+"ownership": "Private"
+},
+{
+"name": "Khadija University, Majia, Jigawa State",
+"ownership": "State"
+},
+{
+"name": "Khalifa Isyaku Rabiu University",
+"ownership": "Private"
+},
+{
+"name": "Kings University",
+"ownership": "Private"
+},
+{
+"name": "Kingsley Ozumba Mbadiwe University",
+"ownership": "Private"
+},
+{
+"name": "kogi State University",
+"ownership": "State"
+},
+{
+"name": "KolaDaisi University",
+"ownership": "Private"
+},
+{
+"name": "Kwara State College of Education, Ilorin",
+"ownership": "State"
+},
+{
+"name": "Kwara State University of Education",
+"ownership": "State"
+},
+{
+"name": "Kwararafa University",
+"ownership": "Private"
+},
+{
+"name": "Lagos State University of Education (Formerly, Adeniran Ogunsanya College of Education)",
+"ownership": "State"
+},
+{
+"name": "Lagos State University of Education (Formerly, Michael Otedola College Of Primary Education)",
+"ownership": "State"
+},
+{
+"name": "Lagos State University of Science and Technology (Formerly, Lagos State Polytechnic)",
+"ownership": "State"
+},
+{
+"name": "Land Mark Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Leadership University, Kuje",
+"ownership": "Private"
+},
+{
+"name": "Legacy University",
+"ownership": "Private"
+},
+{
+"name": "Lens University",
+"ownership": "Private"
+},
+{
+"name": "Life Theological Seminary",
+"ownership": "Private"
+},
+{
+"name": "Lighthouse University",
+"ownership": "Private"
+},
+{
+"name": "Lux Mundi University",
+"ownership": "Private"
+},
+{
+"name": "Madonna University",
+"ownership": "Private"
+},
+{
+"name": "Maduka University",
+"ownership": "Private"
+},
+{
+"name": "Maranatha University",
+"ownership": "Private"
+},
+{
+"name": "Margaret Lawrence University",
+"ownership": "Private"
+},
+{
+"name": "Mercy Medical University Iwo",
+"ownership": "Private"
+},
+{
+"name": "Methodist Theological Institute, Umuahia",
+"ownership": "Private"
+},
+{
+"name": "Mewar University Nigeria",
+"ownership": "Private"
+},
+{
+"name": "Michael Imodu National Institute for Labour Studies (Affiliated to University of Ilorin",
+"ownership": "Federal"
+},
+{
+"name": "Michael Otedola College Of Primary Education, Moforiji (Affiliated to University of Ibadan)",
+"ownership": "Private"
+},
+{
+"name": "Minaret University Ikirun",
+"ownership": "Private"
+},
+{
+"name": "Miva Open University",
+"ownership": "Private"
+},
+{
+"name": "Modibbo Adama University of Technology",
+"ownership": "Private"
+},
+{
+"name": "Monarch University",
+"ownership": "Private"
+},
+{
+"name": "Mudiame University",
+"ownership": "Private"
+},
+{
+"name": "Muhammad Kamalud-deen University, Ilorin",
+"ownership": "Private"
+},
+{
+"name": "Nasarawa State University",
+"ownership": "State"
+},
+{
+"name": "National Film Institute (Affiliated to University of Jos)",
+"ownership": "Federal"
+},
+{
+"name": "National Missionary Seminary of St-Paul, Gwagwalada",
+"ownership": "Federal"
+},
+{
+"name": "National Open University of Nigeria (E-learning)",
+"ownership": "Federal"
+},
+{
+"name": "National Teachers Institute, Kaduna",
+"ownership": "Federal"
+},
+{
+"name": "New City University",
+"ownership": "Private"
+},
+{
+"name": "Newgate University Minna",
+"ownership": "Private"
+},
+{
+"name": "Nigeria Baptist Theological Seminary, Ogbomosho",
+"ownership": "Private"
+},
+{
+"name": "Nigeria Police Academy",
+"ownership": "Private"
+},
+{
+"name": "Nigerian Army School of Education (Affiliated to Tai Solarin University of Education)",
+"ownership": "Private"
+},
+{
+"name": "Nigerian Army University, Borno",
+"ownership": "Private"
+},
+{
+"name": "Nigerian British University",
+"ownership": "Private"
+},
+{
+"name": "Nigerian Christian Bible College, Ukpom",
+"ownership": "Private"
+},
+{
+"name": "Nigerian Maritime University",
+"ownership": "Private"
+},
+{
+"name": "Nigerian Police Academy, Wudil, Kano State",
+"ownership": "State"
+},
+{
+"name": "Nigerian University of Technology and Management",
+"ownership": "Private"
+},
+{
+"name": "Nok University, Kachia, Kaduna State",
+"ownership": "State"
+},
+{
+"name": "North-Eastern University",
+"ownership": "Private"
+},
+{
+"name": "Northwest University, Kano (Now Yusuf Maitama Sule University)",
+"ownership": "Private"
+},
+{
+"name": "Novena University",
+"ownership": "Private"
+},
+{
+"name": "Nwafor Orizu College Of Education, Nsugbe ( University of Nigeria Nsukka)",
+"ownership": "Private"
+},
+{
+"name": "Obong University",
+"ownership": "Private"
+},
+{
+"name": "Oduduwa University",
+"ownership": "Private"
+},
+{
+"name": "Ogun State Polytechnic of Health and Allied Sciences, Ilese (Affiliated to Kwara State Univ, Ilorin)",
+"ownership": "State"
+},
+{
+"name": "Ojaja University",
+"ownership": "Private"
+},
+{
+"name": "Olusegun Agagu University of Science and Technology (Formerly Ondo State University of Science and T",
+"ownership": "State"
+},
+{
+"name": "Paul University",
+"ownership": "Private"
+},
+{
+"name": "Peaceland University",
+"ownership": "Private"
+},
+{
+"name": "Peter University Achina/Onneh",
+"ownership": "Private"
+},
+{
+"name": "Philomath University, Kuje",
+"ownership": "Private"
+},
+{
+"name": "Phoenix University Agwada",
+"ownership": "Private"
+},
+{
+"name": "Plateau State University",
+"ownership": "State"
+},
+{
+"name": "Pope John Major Seminary, Okpun, Awka",
+"ownership": "Private"
+},
+{
+"name": "Precious Cornerstone University",
+"ownership": "Private"
+},
+{
+"name": "Prime University, Abuja",
+"ownership": "Private"
+},
+{
+"name": "Raindrops Institute of Management and Technology (Affiliated to IMSU)",
+"ownership": "Private"
+},
+{
+"name": "Rayhaan University Birnin Kebbi",
+"ownership": "Private"
+},
+{
+"name": "Renaissance University",
+"ownership": "Private"
+},
+{
+"name": "Rhema University",
+"ownership": "Private"
+},
+{
+"name": "Ritman University",
+"ownership": "Private"
+},
+{
+"name": "Sa'adatu Rimi University of Education",
+"ownership": "Private"
+},
+{
+"name": "SAF Polytechnic Iseyin",
+"ownership": "Private"
+},
+{
+"name": "Saisa University of Medical Sciences and Technology, Sokoto",
+"ownership": "Private"
+},
+{
+"name": "Salem University",
+"ownership": "Private"
+},
+{
+"name": "Sam Maris University",
+"ownership": "Private"
+},
+{
+"name": "Samuel Adegboyega University",
+"ownership": "Private"
+},
+{
+"name": "Savannah Institute Of Technology (Affiliated to Federal University, Wukari)",
+"ownership": "Federal"
+},
+{
+"name": "School of Biblical Studies Jos (Affiliated to UNIJOS)",
+"ownership": "Private"
+},
+{
+"name": "Seat of Wisdom Seminary, Owerri (Affiliated to IMSU)",
+"ownership": "Private"
+},
+{
+"name": "Seminary of All Saints, Uhiele, Ekpoma (Affiliated to UNIBEN)",
+"ownership": "Private"
+},
+{
+"name": "Shanahan University, Onitsha",
+"ownership": "Private"
+},
+{
+"name": "Shehu Shagari University of Education, Sokoto",
+"ownership": "Private"
+},
+{
+"name": "Sheik Ibrahim El-Tayeb Institute, Kano (Affiliated to Bayero University)",
+"ownership": "Private"
+},
+{
+"name": "Skyline University, Kano",
+"ownership": "Private"
+},
+{
+"name": "SouthWestern University",
+"ownership": "Private"
+},
+{
+"name": "Spiritan International School of Theology, Attakwu (Affiliated to University of Nigeria Nsukka)",
+"ownership": "Federal"
+},
+{
+"name": "Spiritan School of Philosophy, Issienu Nsukka (Affiliated to University of Nigeria Nsukka)",
+"ownership": "Private"
+},
+{
+"name": "Spiritan University",
+"ownership": "Private"
+},
+{
+"name": "Sports University of Nigeria",
+"ownership": "Private"
+},
+{
+"name": "St-Joseph Major Seminary, Ikot-Ekpene (Affiliated to University of Calabar)",
+"ownership": "Private"
+},
+{
+"name": "St. Albert Institute, Kafanchan (Affiliated to University of Jos)",
+"ownership": "Private"
+},
+{
+"name": "ST. Albert the Great Major Seminary, Abeokuta (Affiliated to University of Benin)",
+"ownership": "Private"
+},
+{
+"name": "St. Augustine's Major Seminary (Affiliated to UNIJOS)",
+"ownership": "Private"
+},
+{
+"name": "St. Peter and Paul Seminary Bodija, Ibadan",
+"ownership": "Private"
+},
+{
+"name": "State University of Medical and Applied Sciences, Igbo Eno, Enugu State",
+"ownership": "State"
+},
+{
+"name": "Sule Lamido University (Former Jigawa State University)",
+"ownership": "State"
+},
+{
+"name": "Tansian University",
+"ownership": "Private"
+},
+{
+"name": "Taraba State University",
+"ownership": "State"
+},
+{
+"name": "Tazkiyah University Kaduna",
+"ownership": "Private"
+},
+{
+"name": "The Apostolic Church Theological Seminary, Amumara",
+"ownership": "Private"
+},
+{
+"name": "The Federal University of Health Sciences , Otukpo",
+"ownership": "Federal"
+},
+{
+"name": "The Federal University of Technology and Environmental Sciences, Iyin-Ekiti",
+"ownership": "Federal"
+},
+{
+"name": "The Global Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "The Samuel Bill Theological College, Abak",
+"ownership": "Private"
+},
+{
+"name": "The University of Africa, Toru-Orua",
+"ownership": "Private"
+},
+{
+"name": "The University of Agriculture and Environmental Sciences, Umuagwo",
+"ownership": "Private"
+},
+{
+"name": "The University Of Education, Ikere-Ekiti",
+"ownership": "Private"
+},
+{
+"name": "Theological College of Northern Nigeria (Affiliated to UNIJOS)",
+"ownership": "Private"
+},
+{
+"name": "Thomas Adewumi University, Oko-Irese,",
+"ownership": "Private"
+},
+{
+"name": "Tonnie Iredia University Of Communication",
+"ownership": "Private"
+},
+{
+"name": "Topfaith University, Mkpatak,",
+"ownership": "Private"
+},
+{
+"name": "Trinity University",
+"ownership": "Private"
+},
+{
+"name": "Uma Ukpai School of Theology, Uyo (Affiliated to University of Uyo)",
+"ownership": "Private"
+},
+{
+"name": "UMCA Theological College, Ilorin",
+"ownership": "Private"
+},
+{
+"name": "Unique Open University",
+"ownership": "Private"
+},
+{
+"name": "UNIVERSITY OF AFRICA,",
+"ownership": "Private"
+},
+{
+"name": "University of Agriculture, Science and Technology, Ihugh",
+"ownership": "Private"
+},
+{
+"name": "University of Cross River State (Formerly CRUTECH)",
+"ownership": "State"
+},
+{
+"name": "University of Delta State Agbor",
+"ownership": "State"
+},
+{
+"name": "University of Education and Entrepreneurship, Akamkpa",
+"ownership": "Private"
+},
+{
+"name": "University of Fortune, Igbotako",
+"ownership": "Private"
+},
+{
+"name": "University of Ilesa, Ilesa Osun State",
+"ownership": "State"
+},
+{
+"name": "University of Maiduguri Sandwich",
+"ownership": "Private"
+},
+{
+"name": "University of Medical Sciences, Ondo State",
+"ownership": "State"
+},
+{
+"name": "University Of Offa",
+"ownership": "Private"
+},
+{
+"name": "University Of Science And Technology, Ifaki-ekiti",
+"ownership": "Private"
+},
+{
+"name": "University on The Niger",
+"ownership": "Private"
+},
+{
+"name": "Usman Dan Fodio University",
+"ownership": "Private"
+},
+{
+"name": "Venite University",
+"ownership": "Private"
+},
+{
+"name": "Vision University",
+"ownership": "Private"
+},
+{
+"name": "Wellspring University",
+"ownership": "Private"
+},
+{
+"name": "Wesley University Of Science And Technology",
+"ownership": "Private"
+},
+{
+"name": "West Africa Theological Seminary, Ipaja, Lagos",
+"ownership": "Private"
+},
+{
+"name": "West Midlands Open University",
+"ownership": "Private"
+},
+{
+"name": "Western Delta University",
+"ownership": "Private"
+},
+{
+"name": "Westland University",
+"ownership": "Private"
+},
+{
+"name": "Wigwe University",
+"ownership": "Private"
+},
+{
+"name": "World Harvest Bible College and Seminary, Calabar (Affiliated to Unical)",
+"ownership": "Private"
+},
+{
+"name": "Yaba College of Technology (Affiliated to University of Nigeria Nsukka)",
+"ownership": "Private"
+},
+{
+"name": "Yusuf Maitama Sule University Kano",
+"ownership": "Private"
+},
+{
+"name": "Zamfara State University, Talata Mafara",
+"ownership": "State"
+},
+{
+"name": "A.D Rufa'i College of Education, Legal & General Studies (ND)",
+"ownership": "Private"
+},
+{
+"name": "Abdu-gusau Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Abia State College of Health Sciences and Management Technology",
+"ownership": "State"
+},
+{
+"name": "Abia State polytechnic",
+"ownership": "State"
+},
+{
+"name": "Abraham Adesanya Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Abubakar Tatari Ali Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Abuja School of Pension and Requirement Planning",
+"ownership": "Private"
+},
+{
+"name": "Adamawa State College of Agriculture, Science & Technology",
+"ownership": "State"
+},
+{
+"name": "Adamawa State polytechnic",
+"ownership": "State"
+},
+{
+"name": "Adeseun Ogundoyin Polytechnic Formely The Ibarapa Polytechnic, Eruwa",
+"ownership": "Private"
+},
+{
+"name": "Aflon Digital Institute",
+"ownership": "Private"
+},
+{
+"name": "African College of Agriculture, Vocational and Technical Studies",
+"ownership": "Private"
+},
+{
+"name": "Afrihub Ict Institute",
+"ownership": "Private"
+},
+{
+"name": "Ahmadu Bello University Teaching Hospital",
+"ownership": "Private"
+},
+{
+"name": "Ajayi Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Akanu Ibiam Federal polytechnic",
+"ownership": "Federal"
+},
+{
+"name": "Akawe Torkula Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Akperan Orshi College Of Agriculture",
+"ownership": "Private"
+},
+{
+"name": "Akwa Ibom State College Of Arts And Science",
+"ownership": "State"
+},
+{
+"name": "Akwa Ibom State polytechnic",
+"ownership": "State"
+},
+{
+"name": "Al-Hikma Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Alhassan Ibrahim Dawanau College of Health Sciences and Technology",
+"ownership": "Private"
+},
+{
+"name": "Allover central polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Ambassador College Of Management And Technology",
+"ownership": "Private"
+},
+{
+"name": "Ambassador College Of Technology And Paralegal Studies",
+"ownership": "Private"
+},
+{
+"name": "American Polytechnic of Nigeria",
+"ownership": "Private"
+},
+{
+"name": "Aminu Kano Teaching Hospital",
+"ownership": "Private"
+},
+{
+"name": "Anambra State College of Agriculture",
+"ownership": "State"
+},
+{
+"name": "Anambra State College of Health Technology, Obosi",
+"ownership": "State"
+},
+{
+"name": "Anambra state polytechnic",
+"ownership": "State"
+},
+{
+"name": "Arewa Paralegal Innovation Enterprise",
+"ownership": "Private"
+},
+{
+"name": "Ashi Polytechnic, Anyiin",
+"ownership": "Private"
+},
+{
+"name": "Assam College of Health Sciences and Technology",
+"ownership": "Private"
+},
+{
+"name": "Auchi polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Autan-Bawo College of Health and Social Science, Rano",
+"ownership": "Private"
+},
+{
+"name": "Bauchi College of Agriculture",
+"ownership": "Private"
+},
+{
+"name": "Bauchi Oil and Gas Academy",
+"ownership": "Private"
+},
+{
+"name": "Bauchi State Institute of Education, Kangere",
+"ownership": "State"
+},
+{
+"name": "Bayelsa State College of Arts and Science",
+"ownership": "State"
+},
+{
+"name": "Bayelsa State Polytechnic, Aleibiri",
+"ownership": "State"
+},
+{
+"name": "Bellarks Polytechnic Kwale",
+"ownership": "Private"
+},
+{
+"name": "Benue State Poly",
+"ownership": "State"
+},
+{
+"name": "Best solution polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Bichi Academy College of Science and Health Technology",
+"ownership": "Private"
+},
+{
+"name": "Binyaminu Usman College of Agriculture",
+"ownership": "Private"
+},
+{
+"name": "Bolmor Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Bonny Vocational Centre (ND)",
+"ownership": "Private"
+},
+{
+"name": "Brainfill Polytechnic, Ikot Ekpene, Akwa Ibom State",
+"ownership": "State"
+},
+{
+"name": "British Transatlantic Polytechnic, Akure, Ondo State",
+"ownership": "State"
+},
+{
+"name": "Buckingham Academy Of Management And Technology",
+"ownership": "Private"
+},
+{
+"name": "Business Education Examination Council",
+"ownership": "Private"
+},
+{
+"name": "Calvary Foundation Institute of Technology",
+"ownership": "Private"
+},
+{
+"name": "calvary polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Centre For Creative Arts Education",
+"ownership": "Private"
+},
+{
+"name": "Certified Institute of Shipping of Nigeria (ND)",
+"ownership": "Private"
+},
+{
+"name": "Citi Polytechnic, Abuja",
+"ownership": "Private"
+},
+{
+"name": "City Gate Institute Of Innovation And Technology",
+"ownership": "Private"
+},
+{
+"name": "Coastal Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "College Of Administrative And Business Studies",
+"ownership": "Private"
+},
+{
+"name": "College Of Agriculture, Hadijia",
+"ownership": "Private"
+},
+{
+"name": "College of Business and Management Studies, Konduga",
+"ownership": "Private"
+},
+{
+"name": "College Of Health Sciences And Technology",
+"ownership": "Private"
+},
+{
+"name": "College of Health Technology and Medical Sciences",
+"ownership": "Private"
+},
+{
+"name": "College Of Health Technology Ningi",
+"ownership": "Private"
+},
+{
+"name": "College of Health Technology, Calabar",
+"ownership": "Private"
+},
+{
+"name": "College of Health Technology, Zawan",
+"ownership": "Private"
+},
+{
+"name": "College of Technology, Iresi",
+"ownership": "Private"
+},
+{
+"name": "College of Vocational Science and Technology, Damaturu, Yobe State",
+"ownership": "State"
+},
+{
+"name": "Commonwealth College Of Technology, Gboko, Benue State",
+"ownership": "State"
+},
+{
+"name": "Complete Computers College of Management and Technology, Benin",
+"ownership": "Private"
+},
+{
+"name": "Conarina Maritime Academy (ND)",
+"ownership": "Private"
+},
+{
+"name": "Covenant Polytechnic, Aba",
+"ownership": "Private"
+},
+{
+"name": "Crestfield College of Health Sciences and Management Technology",
+"ownership": "Private"
+},
+{
+"name": "Cross River State Institute of Tech. and Management, Ugep",
+"ownership": "State"
+},
+{
+"name": "Crown Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "D.S Adegbenro ICT Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Daboss Polytechnic, Idominosi",
+"ownership": "Private"
+},
+{
+"name": "Dalewares Institute Of Technology",
+"ownership": "Private"
+},
+{
+"name": "Delta Central College Of Business And Management Studies, Ughelli, Delta State",
+"ownership": "State"
+},
+{
+"name": "Delta State College Of Agriculture",
+"ownership": "State"
+},
+{
+"name": "Delta state Polytechnic Of Science And Technology, Ozoro",
+"ownership": "State"
+},
+{
+"name": "Delta State Polytechnic, Otefe-Oghara",
+"ownership": "State"
+},
+{
+"name": "Delta State School of Marine Technology, Burutu",
+"ownership": "State"
+},
+{
+"name": "Diabo Paralegal Training Institute",
+"ownership": "Private"
+},
+{
+"name": "Distinct Polytechnic, Ekosin, Osun State",
+"ownership": "State"
+},
+{
+"name": "Dorben polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Eastern Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Ebonyi State College of Health Sciences and Technology",
+"ownership": "State"
+},
+{
+"name": "Eco-African College of Health Tech & Medical Sciences",
+"ownership": "Private"
+},
+{
+"name": "Edo State Institute Of Technology And Management",
+"ownership": "State"
+},
+{
+"name": "Edo State Poly Usen",
+"ownership": "State"
+},
+{
+"name": "Edward Olaseni Polytechnic, Ajowa-Akoko",
+"ownership": "Private"
+},
+{
+"name": "Efon Alaaye College Of Management And Technology",
+"ownership": "Private"
+},
+{
+"name": "Ekiti City Polytechnic, Omuooke-Ekiti, Ekiti State",
+"ownership": "State"
+},
+{
+"name": "Ekiti State College Of Agriculture And Technology, Isan-Ekiti",
+"ownership": "State"
+},
+{
+"name": "Eko College Of Management And Technology",
+"ownership": "Private"
+},
+{
+"name": "El-Thomp Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Elechi Amadi Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Elerinmosa Institute Of Technology (ND)",
+"ownership": "Private"
+},
+{
+"name": "Emirates College Of Health Science And Technology",
+"ownership": "Private"
+},
+{
+"name": "Enugu State College of Agriculture",
+"ownership": "State"
+},
+{
+"name": "Enugu state polytechnic",
+"ownership": "State"
+},
+{
+"name": "Enville Institute of Management and Technology Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Excellent College of Sciences and Health Technology, Gboko",
+"ownership": "Private"
+},
+{
+"name": "Famas College of Health Sciences and Technology",
+"ownership": "Private"
+},
+{
+"name": "Farmark Institute Of Employment And Creativity Kaduna",
+"ownership": "Private"
+},
+{
+"name": "Federal College of Agriculture and Technology, Nabanje",
+"ownership": "Federal"
+},
+{
+"name": "Federal College of Agriculture, Ado-Ekiti/Owo",
+"ownership": "Federal"
+},
+{
+"name": "Federal College Of Orthopedic Technology, Igbobi",
+"ownership": "Federal"
+},
+{
+"name": "federal polytechnic bal",
+"ownership": "Federal"
+},
+{
+"name": "Federal Polytechnic Isuochi",
+"ownership": "Federal"
+},
+{
+"name": "Federal Polytechnic Monguno",
+"ownership": "Federal"
+},
+{
+"name": "Federal Polytechnic Nyak Shendam",
+"ownership": "Federal"
+},
+{
+"name": "Federal Polytechnic of Oil and Gas, Bonny",
+"ownership": "Federal"
+},
+{
+"name": "Federal Polytechnic Orogun",
+"ownership": "Federal"
+},
+{
+"name": "Federal Polytechnic Ugep",
+"ownership": "Federal"
+},
+{
+"name": "Federal Polytechnic, Bali",
+"ownership": "Federal"
+},
+{
+"name": "Federal polytechnic, Birnin-Kebbi",
+"ownership": "Federal"
+},
+{
+"name": "Federal School Of Dental Technology And Therapy, Enugu",
+"ownership": "Federal"
+},
+{
+"name": "Federal School Of Social Works",
+"ownership": "Federal"
+},
+{
+"name": "Federal Training Centre Kaduna",
+"ownership": "Federal"
+},
+{
+"name": "Federal Training Centre, Enugu",
+"ownership": "Federal"
+},
+{
+"name": "Fidei Polytechnic, Gboko",
+"ownership": "Private"
+},
+{
+"name": "First City Polytechnic, Abeokuta",
+"ownership": "Private"
+},
+{
+"name": "Firstmark College of Management and Information Technology",
+"ownership": "Private"
+},
+{
+"name": "Flyingdove Institute Of Information Technology, Abuja",
+"ownership": "Private"
+},
+{
+"name": "Foundation Polytechnic, Ikot Ekpene",
+"ownership": "Private"
+},
+{
+"name": "Gateway polytechnic Saapade",
+"ownership": "Private"
+},
+{
+"name": "Gboko Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Gestric Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Gial College of Health Sciences and Environmental Technology, Katsina",
+"ownership": "Private"
+},
+{
+"name": "Global Maritime Academy (ND)",
+"ownership": "Private"
+},
+{
+"name": "Gloryland Polytechnic, Ankpa, Kogi State",
+"ownership": "State"
+},
+{
+"name": "Gofamint College of Technology and Management",
+"ownership": "Private"
+},
+{
+"name": "Gombe State College Of Health Sciences And Technology, Kaltungo",
+"ownership": "State"
+},
+{
+"name": "Gombe State College Of Nursing And Midwifery",
+"ownership": "State"
+},
+{
+"name": "Gombe State Polytechnic",
+"ownership": "State"
+},
+{
+"name": "Gozie Anyachebelu Polytechnic, Anambra State",
+"ownership": "State"
+},
+{
+"name": "Grace Polytechnic, Lagos",
+"ownership": "Private"
+},
+{
+"name": "GraceLand Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Grundtvig Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Hajj Institute of Nigeria (ND)",
+"ownership": "Private"
+},
+{
+"name": "Harry Pass Polytechnic, Tse Usen Mkar",
+"ownership": "Private"
+},
+{
+"name": "Harvard Polytechnic, Ilorin, Kwara State",
+"ownership": "State"
+},
+{
+"name": "HARVARDE COLLEGE OF MANAGEMENT AND BUSINESS STUDIES, ABEOKUTA,",
+"ownership": "Private"
+},
+{
+"name": "Hassan Usman Katsina Poly",
+"ownership": "Private"
+},
+{
+"name": "Heritage Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Hope Polytechnic, Ndon Utibe, Ikono, Akwa Ibom State",
+"ownership": "State"
+},
+{
+"name": "Hussaini Adamu Federal polytechnic",
+"ownership": "Federal"
+},
+{
+"name": "I-Con Universal Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Ibadan City Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "IBOM METROPOLITAN POLYTECHNIC, ATAN OFFOT",
+"ownership": "Private"
+},
+{
+"name": "Ifo College Of Management And Technology",
+"ownership": "Private"
+},
+{
+"name": "Igbajo Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Ihechukwu Madubuike Institute of Technology",
+"ownership": "Private"
+},
+{
+"name": "Ikirun College of Health Sciences and Technology",
+"ownership": "Private"
+},
+{
+"name": "Iman College of Business Technology (ND)",
+"ownership": "Private"
+},
+{
+"name": "Imfi, Ict Academy, Uyo",
+"ownership": "Private"
+},
+{
+"name": "Imo State College Of Nursing And Health Sciences",
+"ownership": "State"
+},
+{
+"name": "Imo State Polytechnic",
+"ownership": "State"
+},
+{
+"name": "Imperial College of Advanced Studies (ND)",
+"ownership": "Private"
+},
+{
+"name": "Innovation Institute Of Technology, Kaduna",
+"ownership": "Private"
+},
+{
+"name": "Inspire Polytechnic Lagos State",
+"ownership": "State"
+},
+{
+"name": "Institute of Health Technology UBTH",
+"ownership": "Private"
+},
+{
+"name": "Institute of Management Technology, Enugu",
+"ownership": "Private"
+},
+{
+"name": "Institute of Technology and Management",
+"ownership": "Private"
+},
+{
+"name": "Institute of Transport and Management Technology (ND), Lagos",
+"ownership": "Private"
+},
+{
+"name": "Interlink Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "International Professional College of Administration Science & Technology",
+"ownership": "Federal"
+},
+{
+"name": "Isa Mustapha Agwai I Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Iwo City Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Jamilu Ibrahim Imperial College of Health Sciences and Technology",
+"ownership": "Private"
+},
+{
+"name": "Jigawa State Polytechnic",
+"ownership": "State"
+},
+{
+"name": "Kaduna Business School",
+"ownership": "Private"
+},
+{
+"name": "Kalac Christal Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Kanmi Alo Interlink Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Kano State College of Health Science and Technology",
+"ownership": "State"
+},
+{
+"name": "Kano State polytechnic",
+"ownership": "State"
+},
+{
+"name": "Karrox-ugrl Computer Education & Training Centre",
+"ownership": "Private"
+},
+{
+"name": "Katsina State College Of Health Sciences Technology",
+"ownership": "State"
+},
+{
+"name": "Katsina State College Of Nursing And Midwifery",
+"ownership": "State"
+},
+{
+"name": "Katsina State Institute of Technology and Management",
+"ownership": "State"
+},
+{
+"name": "Kebbi State Polytechnic",
+"ownership": "State"
+},
+{
+"name": "Ken Saro-Wiwa Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Ken-Idehen College of Science and Technology",
+"ownership": "Private"
+},
+{
+"name": "Kenue Benson Saro-Wiwa Polytechnic, Bori",
+"ownership": "Private"
+},
+{
+"name": "Khemsafe College of Management, Science, and Technology",
+"ownership": "Private"
+},
+{
+"name": "Kings Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Kogi State Polytechnic",
+"ownership": "State"
+},
+{
+"name": "Kwara State polytechnic",
+"ownership": "State"
+},
+{
+"name": "Lagos Aviation and Maritime Business Academy",
+"ownership": "Private"
+},
+{
+"name": "Lagos City Computer College, Lagos",
+"ownership": "Private"
+},
+{
+"name": "Lagos City polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Lagos State College of Health Technology.",
+"ownership": "State"
+},
+{
+"name": "Lagos State College Of Nursing And Midwifery Igando",
+"ownership": "State"
+},
+{
+"name": "Lagos State polytechnic",
+"ownership": "State"
+},
+{
+"name": "Lagos University Teaching Hospital",
+"ownership": "Private"
+},
+{
+"name": "Lani Stephens Music Institute",
+"ownership": "Private"
+},
+{
+"name": "Laser Petroleum Geo-sciences Centre",
+"ownership": "Private"
+},
+{
+"name": "Leadtech School Of Management And Technology Abuja, Fct",
+"ownership": "Private"
+},
+{
+"name": "Lens Polytechnic Offa",
+"ownership": "Private"
+},
+{
+"name": "Light House Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Lincoln College of Science, Management and Technology (ND)",
+"ownership": "Private"
+},
+{
+"name": "Linet Paul Innovative Institute",
+"ownership": "Private"
+},
+{
+"name": "Literacy College Of Management And Technology",
+"ownership": "Private"
+},
+{
+"name": "Loam Polytechnic, Ikono, Akwa Ibom State",
+"ownership": "State"
+},
+{
+"name": "Lufodo Academy Of Performing Arts",
+"ownership": "Private"
+},
+{
+"name": "Mai Idris Alooma Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Mainland College of Technology",
+"ownership": "Private"
+},
+{
+"name": "Mallam Yahaya Hamza Institute Of Advance Studies,",
+"ownership": "Private"
+},
+{
+"name": "Mario Institute of Hospitality Management and Entrepreneurship Education (ND)",
+"ownership": "Private"
+},
+{
+"name": "Marist Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Maritime Academy of Nigeria",
+"ownership": "Private"
+},
+{
+"name": "Master Builder Institute of Media Studies",
+"ownership": "Private"
+},
+{
+"name": "Mater Dei Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Mbara Ozioma College of Technology (ND)",
+"ownership": "Private"
+},
+{
+"name": "Mekaria Institute of Technology and Administration",
+"ownership": "Private"
+},
+{
+"name": "Meteorological Institute of Science and Technology",
+"ownership": "Private"
+},
+{
+"name": "Metropolitan Institute Of Technology",
+"ownership": "Private"
+},
+{
+"name": "Michael Imodu National Institute for Labour Studies",
+"ownership": "Federal"
+},
+{
+"name": "Minna Institute of Technology and Innovation",
+"ownership": "Private"
+},
+{
+"name": "Montgomery Polytechnic, Ikere",
+"ownership": "Private"
+},
+{
+"name": "Moshood Abiola polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Mustibrah Polytechnic, Kano",
+"ownership": "Private"
+},
+{
+"name": "Nacabs Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Nasarawa State Polytechnic",
+"ownership": "State"
+},
+{
+"name": "Nation Builders College of Technology",
+"ownership": "Private"
+},
+{
+"name": "National Institute for Construction Technology, Uromi",
+"ownership": "Federal"
+},
+{
+"name": "National Library of Nigeria",
+"ownership": "Federal"
+},
+{
+"name": "National Water Resources Institute",
+"ownership": "Federal"
+},
+{
+"name": "Newland Polytechnic, Idofian, Kwara State",
+"ownership": "State"
+},
+{
+"name": "Niger State polytechnic",
+"ownership": "State"
+},
+{
+"name": "Nigeria Army College of medical Sciences",
+"ownership": "Private"
+},
+{
+"name": "Nigeria Army Institute of Technology and Environmental Studies",
+"ownership": "Private"
+},
+{
+"name": "Nigeria Army School Of Military Engineering, Makurdi",
+"ownership": "Private"
+},
+{
+"name": "Nigeria College of Natural Medicine Technology (ND)",
+"ownership": "Private"
+},
+{
+"name": "Nigeria Institute of Mining and Geoscience",
+"ownership": "Private"
+},
+{
+"name": "Nigeria Korea Friendship Institute of Vocational and Advanced Technology",
+"ownership": "Private"
+},
+{
+"name": "Nigerian Air Force College of Nursing",
+"ownership": "Private"
+},
+{
+"name": "Nigerian Army College of Environmental Science and Technology",
+"ownership": "Private"
+},
+{
+"name": "Nigerian Army College of Nursing and Midwifery",
+"ownership": "Private"
+},
+{
+"name": "Nigerian Army School Of Finance And Administration",
+"ownership": "Private"
+},
+{
+"name": "Nigerian College of Aviation Technology",
+"ownership": "Private"
+},
+{
+"name": "Nigerian Institution of Leather Technology and Science Technology",
+"ownership": "Private"
+},
+{
+"name": "Nigerian Navy of Finance And Logistics College",
+"ownership": "Private"
+},
+{
+"name": "Nigerian Navy School of Health Science, Offa",
+"ownership": "Private"
+},
+{
+"name": "Nigerian Television Authority Television College",
+"ownership": "Private"
+},
+{
+"name": "NIIT",
+"ownership": "Private"
+},
+{
+"name": "Nnamdi Azikiwe University Teaching Hospital",
+"ownership": "Private"
+},
+{
+"name": "Nogak Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Northbridge College of Science and Technology (ND)",
+"ownership": "Private"
+},
+{
+"name": "Novelty Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Nuhu Bamalli polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Obafemi Awolowo University Teaching Hospital Complex",
+"ownership": "Private"
+},
+{
+"name": "Odaji Agbo Polytechnic, Ayeko-Yala, Cross Rivers State",
+"ownership": "State"
+},
+{
+"name": "Oduduwa Polytechnic, Idumu, Lagos State",
+"ownership": "State"
+},
+{
+"name": "Ogun State Institute of Technology",
+"ownership": "State"
+},
+{
+"name": "Olawoyin Awosika School of Innovative Studies (ND), Isheri",
+"ownership": "Private"
+},
+{
+"name": "Osun College Of Management Science (Nd), Ipetu Ijesha, Osun State",
+"ownership": "State"
+},
+{
+"name": "Osun State College of Technology",
+"ownership": "State"
+},
+{
+"name": "Osun State polytechnic",
+"ownership": "State"
+},
+{
+"name": "Oyo State College Of Agriculture",
+"ownership": "State"
+},
+{
+"name": "Oyo State College Of Health Sciences And Technology, Eleyele Ibadan",
+"ownership": "State"
+},
+{
+"name": "Peace Institute Of Management Technology (ND), Abak",
+"ownership": "Private"
+},
+{
+"name": "Petri Film Institute (ND), Lagos State",
+"ownership": "State"
+},
+{
+"name": "Petroleum Training Institute",
+"ownership": "Private"
+},
+{
+"name": "Plateau State Polytechnic",
+"ownership": "State"
+},
+{
+"name": "Polytechnic Of Sokoto",
+"ownership": "Private"
+},
+{
+"name": "Port Harcourt Polytechnic, Rumuola",
+"ownership": "Private"
+},
+{
+"name": "Prime Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Rahma College of Technology, Science and Management Studies, Suleja",
+"ownership": "Private"
+},
+{
+"name": "Ramat polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Redeemer’s College of Technology and Management",
+"ownership": "Private"
+},
+{
+"name": "Renaissance Modern Polytechnic, Mbaukwu, Anambra State",
+"ownership": "State"
+},
+{
+"name": "Rhema Ijoko College of Health Technology and Management Sciences",
+"ownership": "Private"
+},
+{
+"name": "Rivers State College Of Arts And Science",
+"ownership": "State"
+},
+{
+"name": "Rivers State College Of Health Science And Technology",
+"ownership": "State"
+},
+{
+"name": "Rivers State polytechnic",
+"ownership": "State"
+},
+{
+"name": "Rolof Institute of Management and Technology",
+"ownership": "Private"
+},
+{
+"name": "Ronik Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Rufus Giwa polytechnic",
+"ownership": "Private"
+},
+{
+"name": "School of Health Information Management, University of Uyo Teaching Hospital",
+"ownership": "Private"
+},
+{
+"name": "School Of Agriculture, Bauchi",
+"ownership": "Private"
+},
+{
+"name": "School Of Agriculture, Ikorodu",
+"ownership": "Private"
+},
+{
+"name": "School Of Biomedical Engineering, University of Benin Teaching Hospital",
+"ownership": "Private"
+},
+{
+"name": "School of Biomedical Engineering, University of Lagos Teaching Hospital, Lagos",
+"ownership": "Private"
+},
+{
+"name": "School of Biomedical Engineering, University of Maiduguri Teaching Hospital",
+"ownership": "Private"
+},
+{
+"name": "School of Health Information Management (UCH-Ibadan)",
+"ownership": "Private"
+},
+{
+"name": "School of Health Information Management, Lagos University Teaching Hospital",
+"ownership": "Private"
+},
+{
+"name": "School of Health Information Management, UBTH",
+"ownership": "Private"
+},
+{
+"name": "School Of Nursing, Wesley Guilds Hospital, Oauthc, Ilesa, Osun State",
+"ownership": "State"
+},
+{
+"name": "School Of Orthopedic Cast Technology Hospital Enugu",
+"ownership": "Private"
+},
+{
+"name": "School Of Orthopedic Cast Technology Teaching Hospital Ilorin",
+"ownership": "Private"
+},
+{
+"name": "School of Orthopedic Hospital",
+"ownership": "Private"
+},
+{
+"name": "Shaka Momodu Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Shehu Idris College Of Health Sci & Tech, Makarfi",
+"ownership": "Private"
+},
+{
+"name": "Shehu Sule College Of Nursing And Midwifery Damaturu Yobe State",
+"ownership": "State"
+},
+{
+"name": "Soteria Business School (ND), Oke-Ado",
+"ownership": "Private"
+},
+{
+"name": "Southern Atlantic Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Southern-nigeria Institute Of Innovative Technology",
+"ownership": "Private"
+},
+{
+"name": "Speedway Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "SQI College of ICT",
+"ownership": "Private"
+},
+{
+"name": "Stars Maritime Academy (Merchant Navy Institute), Ayobo",
+"ownership": "Private"
+},
+{
+"name": "Stars Polytechnic, Agbedi-Atan",
+"ownership": "Private"
+},
+{
+"name": "State College of Basic and Remedial Studies",
+"ownership": "State"
+},
+{
+"name": "Sure Foundation Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Taraba State Polytechnic",
+"ownership": "State"
+},
+{
+"name": "Temple-gate Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "The Innovation and Vocational Enterprise Institute (EVT)(ND)",
+"ownership": "Private"
+},
+{
+"name": "The Mbanza Kongo Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "The Oke-Ogun Polytechnic, Saki",
+"ownership": "Private"
+},
+{
+"name": "The Polytechnic Adoka",
+"ownership": "Private"
+},
+{
+"name": "The Polytechnic Igbo-Owu",
+"ownership": "Private"
+},
+{
+"name": "The Polytechnic, Aran-Orin, Kwara State",
+"ownership": "State"
+},
+{
+"name": "The Polytechnic, Ile-Ife",
+"ownership": "Private"
+},
+{
+"name": "The Polytechnic, Imesi-Ile",
+"ownership": "Private"
+},
+{
+"name": "The Polytechnic, Iresi",
+"ownership": "Private"
+},
+{
+"name": "The Polytechnic, Ojoku",
+"ownership": "Private"
+},
+{
+"name": "The Polytechnic, Omuo-Ekiti",
+"ownership": "Private"
+},
+{
+"name": "The School Of Information And Media Technology",
+"ownership": "Private"
+},
+{
+"name": "The West African Polytechnic, Ijoko",
+"ownership": "Private"
+},
+{
+"name": "Thomas McGettrick Institute of Technology",
+"ownership": "Private"
+},
+{
+"name": "TimeOn Kairos Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Tower Polytechnic, Ibadan",
+"ownership": "Private"
+},
+{
+"name": "Trinity Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "UA College of Science and Technology",
+"ownership": "Private"
+},
+{
+"name": "Ultra-Excellence College Of Technology",
+"ownership": "Private"
+},
+{
+"name": "UMA UKPAI POLYTECHNIC, ASAGA",
+"ownership": "Private"
+},
+{
+"name": "Umar Ali Shinkafi Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Unique College of Management and Technology",
+"ownership": "Private"
+},
+{
+"name": "United Polytechnic, Jos, Plateau State",
+"ownership": "State"
+},
+{
+"name": "University College Hospital, Ibadan",
+"ownership": "Private"
+},
+{
+"name": "University Of Calabar Teaching Hospital",
+"ownership": "Private"
+},
+{
+"name": "University of Ilorin Teaching Hospital",
+"ownership": "Private"
+},
+{
+"name": "University of Maiduguri Teaching Hospital",
+"ownership": "Private"
+},
+{
+"name": "University of Port Harcourt Teaching Hospital,",
+"ownership": "Private"
+},
+{
+"name": "Usmanu Danfodiyo University Teaching Hospital",
+"ownership": "Private"
+},
+{
+"name": "Uyo City Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Valley View Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Vineyard Polytechnic, Karu",
+"ownership": "Private"
+},
+{
+"name": "Waziri Umaru Federal Polytechnic (NCE AWARDING)",
+"ownership": "Federal"
+},
+{
+"name": "Westland Polytechnic Ilobu",
+"ownership": "Private"
+},
+{
+"name": "Winifred School of Management and Technology",
+"ownership": "Private"
+},
+{
+"name": "Wolex Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Yenagoa Polytechnic",
+"ownership": "Private"
+},
+{
+"name": "Zamaki College of Health Sciences and Technology",
+"ownership": "Private"
+},
+{
+"name": "Zamfara State College of Arts and Science",
+"ownership": "State"
+},
+{
+"name": "A.D Rufa'i College for Legal and Islamic Studies",
+"ownership": "Private"
+},
+{
+"name": "Abdullahi Maikano College of Education Wase",
+"ownership": "Private"
+},
+{
+"name": "Abia State College Of Education",
+"ownership": "State"
+},
+{
+"name": "Abia State College of Education (Technical)",
+"ownership": "State"
+},
+{
+"name": "Abubakar Ali Polytechnic, Bauchi (NCE Awarding)",
+"ownership": "Private"
+},
+{
+"name": "Abubakar Garba Zagada-Zagada College of Education",
+"ownership": "Private"
+},
+{
+"name": "Adamu Augie College Of Education",
+"ownership": "Private"
+},
+{
+"name": "Adamu Garkuwa College of Education",
+"ownership": "Private"
+},
+{
+"name": "Adamu Tafawa Balewa College of Education, Kangere",
+"ownership": "Private"
+},
+{
+"name": "Adeshina College of Education",
+"ownership": "Private"
+},
+{
+"name": "Adeyemi College of Education",
+"ownership": "Private"
+},
+{
+"name": "Adigrace College of Education",
+"ownership": "Private"
+},
+{
+"name": "African Thinkers Community Of Inquiry College Of Education",
+"ownership": "Private"
+},
+{
+"name": "Ahlus-Suffah College of Education",
+"ownership": "Private"
+},
+{
+"name": "Ajetunmobi College of Education",
+"ownership": "Private"
+},
+{
+"name": "Akwa Ibom State College of Education, Afaha-Nsit",
+"ownership": "State"
+},
+{
+"name": "Akwa-ibom State College Of Education",
+"ownership": "State"
+},
+{
+"name": "Al-Fajr College Of Education Kano",
+"ownership": "Private"
+},
+{
+"name": "Al-Ibadan College of Education",
+"ownership": "Private"
+},
+{
+"name": "Al-Iman College of Education",
+"ownership": "Private"
+},
+{
+"name": "Al-Medinah College of Education",
+"ownership": "Private"
+},
+{
+"name": "Al-Mustafa College of Education",
+"ownership": "Private"
+},
+{
+"name": "Al-Ummah College of Education",
+"ownership": "Private"
+},
+{
+"name": "Alhikma College Of Education",
+"ownership": "Private"
+},
+{
+"name": "Ameenuddeen College of Education, Kano",
+"ownership": "Private"
+},
+{
+"name": "Ameer Shehu Idris College of Advance Studies",
+"ownership": "Private"
+},
+{
+"name": "Aminu Kano College of Education",
+"ownership": "Private"
+},
+{
+"name": "Aminu Kano College of Islamic and Legal Studies",
+"ownership": "Private"
+},
+{
+"name": "Angel Crown College Of Education",
+"ownership": "Private"
+},
+{
+"name": "Annur Institute for Islamic Education",
+"ownership": "Private"
+},
+{
+"name": "Ansar-ud-deen College Of Education",
+"ownership": "Private"
+},
+{
+"name": "Apa College Of Education",
+"ownership": "Private"
+},
+{
+"name": "Arabic And Islamic College Of Education",
+"ownership": "Private"
+},
+{
+"name": "Archbishop Alexander Ibezim College of Education",
+"ownership": "Private"
+},
+{
+"name": "Archbishop Vining College of Theology",
+"ownership": "Private"
+},
+{
+"name": "Assanusiyah College Of Education",
+"ownership": "Private"
+},
+{
+"name": "Atiku Abubakar College of Legal and Islamic Studies",
+"ownership": "Private"
+},
+{
+"name": "Awori District College Of Education",
+"ownership": "Private"
+},
+{
+"name": "Baba Mayaki College of Education",
+"ownership": "Private"
+},
+{
+"name": "Bauchi institute for Arabic & islamic studies",
+"ownership": "Private"
+},
+{
+"name": "Bayelsa State College Of Education",
+"ownership": "State"
+},
+{
+"name": "Bayelsa State College of Health Technology",
+"ownership": "State"
+},
+{
+"name": "Bayotijani College Of Education",
+"ownership": "Private"
+},
+{
+"name": "Benjamin Uwajumogu College of Education, Ihitte-Uboma",
+"ownership": "Private"
+},
+{
+"name": "Best Legacy College Of Education",
+"ownership": "Private"
+},
+{
+"name": "Bethel College of Education,",
+"ownership": "Private"
+},
+{
+"name": "Biga College of Education",
+"ownership": "Private"
+},
+{
+"name": "Bilyaminu Othman College of Education",
+"ownership": "Private"
+},
+{
+"name": "Bogoro College of Education",
+"ownership": "Private"
+},
+{
+"name": "Calvin Foundation College Of Education",
+"ownership": "Private"
+},
+{
+"name": "Christian Chukwuma Onoh College of Education",
+"ownership": "Private"
+},
+{
+"name": "City College Of Education",
+"ownership": "Private"
+},
+{
+"name": "Climax College of Education",
+"ownership": "Private"
+},
+{
+"name": "Coastline College of Education",
+"ownership": "Private"
+},
+{
+"name": "College of Agriculture Kabba",
+"ownership": "Private"
+},
+{
+"name": "College of Education and Legal Studies, Nguru",
+"ownership": "Private"
+},
+{
+"name": "College of Education Darazo",
+"ownership": "Private"
+},
+{
+"name": "College of Education Dutsen-Tanshi",
+"ownership": "Private"
+},
+{
+"name": "College Of Education, Agbor",
+"ownership": "Private"
+},
+{
+"name": "College of Education, Akamkpa",
+"ownership": "Private"
+},
+{
+"name": "College Of Education, Akwanga",
+"ownership": "Private"
+},
+{
+"name": "College Of Education, Ankpa",
+"ownership": "Private"
+},
+{
+"name": "College Of Education, Azare",
+"ownership": "Private"
+},
+{
+"name": "College of Education, Billiri",
+"ownership": "Private"
+},
+{
+"name": "College Of Education, Ekiadolor",
+"ownership": "Private"
+},
+{
+"name": "College of Education, Ero-Akure",
+"ownership": "Private"
+},
+{
+"name": "College Of Education, Foreign Links Campus Moro",
+"ownership": "Private"
+},
+{
+"name": "College Of Education, Gidan-waya, Kafanchan",
+"ownership": "Private"
+},
+{
+"name": "College Of Education, Gindiri",
+"ownership": "Private"
+},
+{
+"name": "College Of Education, Hong",
+"ownership": "Private"
+},
+{
+"name": "College Of Education, Igueben",
+"ownership": "Private"
+},
+{
+"name": "College Of Education, Ikere",
+"ownership": "Private"
+},
+{
+"name": "College Of Education, Ilemona",
+"ownership": "Private"
+},
+{
+"name": "College Of Education, Ilesa",
+"ownership": "Private"
+},
+{
+"name": "College Of Education, Ilorin",
+"ownership": "Private"
+},
+{
+"name": "College Of Education, Jalingo",
+"ownership": "Private"
+},
+{
+"name": "College Of Education, Katsina-ala",
+"ownership": "Private"
+},
+{
+"name": "College of Education, Kura",
+"ownership": "Private"
+},
+{
+"name": "College Of Education, Maru",
+"ownership": "Private"
+},
+{
+"name": "College Of Education, Moro-ife",
+"ownership": "Private"
+},
+{
+"name": "College Of Education, Oju",
+"ownership": "Private"
+},
+{
+"name": "College Of Education, Oro",
+"ownership": "Private"
+},
+{
+"name": "College Of Education, Port Harcourt",
+"ownership": "Private"
+},
+{
+"name": "College Of Education, Waka-biu",
+"ownership": "Private"
+},
+{
+"name": "College Of Education, Warri",
+"ownership": "Private"
+},
+{
+"name": "College of Education, Zing",
+"ownership": "Private"
+},
+{
+"name": "College of Health and Technology, Ile-Ife",
+"ownership": "Private"
+},
+{
+"name": "College of Seminary and Theology, Irri",
+"ownership": "Private"
+},
+{
+"name": "Cornerstone College Of Education, Lagos",
+"ownership": "Private"
+},
+{
+"name": "Corona College of Education, Lekki",
+"ownership": "Private"
+},
+{
+"name": "Covenant College Of Education",
+"ownership": "Private"
+},
+{
+"name": "Crescent Pearls Technical College of Education",
+"ownership": "Private"
+},
+{
+"name": "Crestfield College of Education, Erin Osun",
+"ownership": "Private"
+},
+{
+"name": "Cross River State College Of Education",
+"ownership": "State"
+},
+{
+"name": "Da'awah College of Education",
+"ownership": "Private"
+},
+{
+"name": "Danyaya College of Education",
+"ownership": "Private"
+},
+{
+"name": "Delar College Of Education",
+"ownership": "Private"
+},
+{
+"name": "Delta State College Of Physical Education, Mosogar",
+"ownership": "State"
+},
+{
+"name": "Diamond College of Education",
+"ownership": "Private"
+},
+{
+"name": "Doviana College of Education",
+"ownership": "Private"
+},
+{
+"name": "Eagle Mounting College of Science, Education and Technology",
+"ownership": "Private"
+},
+{
+"name": "Ebenezer College Of Education",
+"ownership": "Private"
+},
+{
+"name": "Ebonyi State College Of Education, Ikwo",
+"ownership": "State"
+},
+{
+"name": "ECWA College of Education, Bauchi",
+"ownership": "Private"
+},
+{
+"name": "ECWA College of Education, Igbaja",
+"ownership": "Private"
+},
+{
+"name": "ECWA College of Education, Jos",
+"ownership": "Private"
+},
+{
+"name": "Edo State College of Education",
+"ownership": "State"
+},
+{
+"name": "Elder Oyama Memorial College Of Education",
+"ownership": "Private"
+},
+{
+"name": "Elibest College of Education",
+"ownership": "Private"
+},
+{
+"name": "Elizabeth Memorial College of Education",
+"ownership": "Private"
+},
+{
+"name": "Emamor College of Education",
+"ownership": "Private"
+},
+{
+"name": "Emmanuel Alayande College Of Education",
+"ownership": "Private"
+},
+{
+"name": "Emmanuel Ebije Ikwue College of Education",
+"ownership": "Private"
+},
+{
+"name": "Enugu State College Of Education, Technical",
+"ownership": "State"
+},
+{
+"name": "FCT College Of Education, Zuba",
+"ownership": "Private"
+},
+{
+"name": "Federal College Of Education (Technical) Umunze",
+"ownership": "Federal"
+},
+{
+"name": "Federal College Of Education (Technical), Gombe",
+"ownership": "Federal"
+},
+{
+"name": "Federal College of Education (Technical), Keana",
+"ownership": "Federal"
+},
+{
+"name": "Federal College of Education (Technical), Yauri",
+"ownership": "Federal"
+},
+{
+"name": "Federal College Of Education Abeokuta",
+"ownership": "Federal"
+},
+{
+"name": "Federal College Of Education Asaba",
+"ownership": "Federal"
+},
+{
+"name": "Federal College of Education Gidan Madi",
+"ownership": "Federal"
+},
+{
+"name": "Federal College of Education Gusua, Zaria",
+"ownership": "Federal"
+},
+{
+"name": "Federal College Of Education Katsina",
+"ownership": "Federal"
+},
+{
+"name": "Federal college of Education Kontagora",
+"ownership": "Federal"
+},
+{
+"name": "Federal College Of Education Obudu",
+"ownership": "Federal"
+},
+{
+"name": "Federal College Of Education Okene",
+"ownership": "Federal"
+},
+{
+"name": "Federal College Of Education Potiskum",
+"ownership": "Federal"
+},
+{
+"name": "Federal College Of Education Yola",
+"ownership": "Federal"
+},
+{
+"name": "Federal College Of Education Zaria",
+"ownership": "Federal"
+},
+{
+"name": "Federal College Of Education, Eha-amufu",
+"ownership": "Federal"
+},
+{
+"name": "Federal College of Education, Ekiadolor",
+"ownership": "Federal"
+},
+{
+"name": "Federal College of Education, Gwoza",
+"ownership": "Federal"
+},
+{
+"name": "Federal College of Education, Ididep Ibiono",
+"ownership": "Federal"
+},
+{
+"name": "Federal College of Education, Ilawe Ekiti",
+"ownership": "Federal"
+},
+{
+"name": "Federal College of Education, Isu",
+"ownership": "Federal"
+},
+{
+"name": "Federal College of Education, Iwo",
+"ownership": "Federal"
+},
+{
+"name": "Federal College of Education, Jama'are",
+"ownership": "Federal"
+},
+{
+"name": "Federal College Of Education, Kano",
+"ownership": "Federal"
+},
+{
+"name": "Federal College of Education, Odugbo",
+"ownership": "Federal"
+},
+{
+"name": "Federal College of Education, Ofeme Ohuhu",
+"ownership": "Federal"
+},
+{
+"name": "Federal College of Education, Pankshin",
+"ownership": "Federal"
+},
+{
+"name": "Festmed College of Education",
+"ownership": "Private"
+},
+{
+"name": "Gboko College of Education",
+"ownership": "Private"
+},
+{
+"name": "Global College of Education",
+"ownership": "Private"
+},
+{
+"name": "God's Power International College of Education",
+"ownership": "Federal"
+},
+{
+"name": "GOMBE STATE COLLEGE OF EDUCATION AND LEGAL STUDIES",
+"ownership": "State"
+},
+{
+"name": "Good Shepherd College of Education",
+"ownership": "Private"
+},
+{
+"name": "Grace College of Education, Osogbo, Osun State",
+"ownership": "State"
+},
+{
+"name": "Grand-Plus College of Education",
+"ownership": "Private"
+},
+{
+"name": "Hamzainab College Of Education, Osogbo",
+"ownership": "Private"
+},
+{
+"name": "Havard Wilson College Of Education, Aba",
+"ownership": "Private"
+},
+{
+"name": "Hill College Of Education",
+"ownership": "Private"
+},
+{
+"name": "His Grace Independent College of Education",
+"ownership": "Private"
+},
+{
+"name": "Hope and Anchor College of Education",
+"ownership": "Private"
+},
+{
+"name": "Ikeduru College of Education",
+"ownership": "Private"
+},
+{
+"name": "Ilori College of Education",
+"ownership": "Private"
+},
+{
+"name": "Imam Saidu College of Education",
+"ownership": "Private"
+},
+{
+"name": "Imo State College of Education",
+"ownership": "State"
+},
+{
+"name": "Innovative College of Education",
+"ownership": "Private"
+},
+{
+"name": "Institute of Ecumenical Education, Thinker Corner, Enugu",
+"ownership": "Private"
+},
+{
+"name": "International College of Education",
+"ownership": "Federal"
+},
+{
+"name": "Ipere College of Education",
+"ownership": "Private"
+},
+{
+"name": "Isa Kaita College Of Education",
+"ownership": "Private"
+},
+{
+"name": "Isaac Jasper Boro College of Education",
+"ownership": "Private"
+},
+{
+"name": "Jibwis College Of Arabic And Islamic Education, Gombe",
+"ownership": "Private"
+},
+{
+"name": "Jibwis College of Education Bauchi",
+"ownership": "Private"
+},
+{
+"name": "Jibwis College of Education Potiskum",
+"ownership": "Private"
+},
+{
+"name": "Jibwis College of Education, Jos",
+"ownership": "Private"
+},
+{
+"name": "Jibwis College of Education, Keffi",
+"ownership": "Private"
+},
+{
+"name": "Jibwis College of Education, Zuru",
+"ownership": "Private"
+},
+{
+"name": "Jigawa State College of Education and Legal Studies",
+"ownership": "State"
+},
+{
+"name": "Jigawa State College Of Education, Gumel",
+"ownership": "State"
+},
+{
+"name": "Jigawa State College of Islamic and Legal Studies",
+"ownership": "State"
+},
+{
+"name": "Kano State College of Education & Preliminary Studies",
+"ownership": "State"
+},
+{
+"name": "Kano State Polytechnic, (NCE)",
+"ownership": "State"
+},
+{
+"name": "Kashim-ibrahim College Of Education, Maiduguri",
+"ownership": "Private"
+},
+{
+"name": "Kazaure College of Education",
+"ownership": "Private"
+},
+{
+"name": "Kebbi State College Of Education, Argungu",
+"ownership": "State"
+},
+{
+"name": "Kinsey College Of Education, Ilorin",
+"ownership": "Private"
+},
+{
+"name": "Kogi State College of Health Sciences & Technology Idah",
+"ownership": "State"
+},
+{
+"name": "Kwaine College of Education",
+"ownership": "Private"
+},
+{
+"name": "Kwara State College of Arabic and Islamic Legal Studies, Ilorin",
+"ownership": "State"
+},
+{
+"name": "Kwara State College Of Education (Technical), Lafiagi",
+"ownership": "State"
+},
+{
+"name": "Kwara State College of Education, Ilorin, Kwara State",
+"ownership": "State"
+},
+{
+"name": "Kwara State College of Education, Oro",
+"ownership": "State"
+},
+{
+"name": "Kwararafa College Of Education, Otukpo",
+"ownership": "Private"
+},
+{
+"name": "Lakeview College of Education",
+"ownership": "Private"
+},
+{
+"name": "Lessel College of Education",
+"ownership": "Private"
+},
+{
+"name": "LifeGate College Of Education",
+"ownership": "Private"
+},
+{
+"name": "Meadow Hall College of Education",
+"ownership": "Private"
+},
+{
+"name": "Metro College of Education Adogi-Lafia",
+"ownership": "Private"
+},
+{
+"name": "Michael & Cecilia Foundation College of Education",
+"ownership": "Private"
+},
+{
+"name": "Mohammed Goni College Of Legal And Islamic Studies",
+"ownership": "Private"
+},
+{
+"name": "Moje College of Education",
+"ownership": "Private"
+},
+{
+"name": "Muhyideen College Of Education, Ilorin",
+"ownership": "Private"
+},
+{
+"name": "Muritadha College Of Education (Institute Of Arabic And Islamic Studies, Olodo)",
+"ownership": "Private"
+},
+{
+"name": "Mus'ab Ibn Umair Community College of Education",
+"ownership": "Private"
+},
+{
+"name": "Nana Aishat Memorial College Of Education",
+"ownership": "Private"
+},
+{
+"name": "Nasarawa State College of Health Science and Technology, Keffi",
+"ownership": "State"
+},
+{
+"name": "National Institute for Nigeria Languages",
+"ownership": "Federal"
+},
+{
+"name": "Niger State College of Education, Minna, Niger State",
+"ownership": "State"
+},
+{
+"name": "Nigerian Army School of Education",
+"ownership": "Private"
+},
+{
+"name": "Nosakhare College of Education",
+"ownership": "Private"
+},
+{
+"name": "Nuhu Bamalli Polytechnic, Zaria, Kaduna (NCE Awarding)",
+"ownership": "Private"
+},
+{
+"name": "Nwafor Orizu College Of Education, Nsugbe",
+"ownership": "Private"
+},
+{
+"name": "Olekamba College of Education",
+"ownership": "Private"
+},
+{
+"name": "Omaga Ejigbo College of Education",
+"ownership": "Private"
+},
+{
+"name": "Onit College Of Education Abagana",
+"ownership": "Private"
+},
+{
+"name": "Osan Ekiti College of Education",
+"ownership": "Private"
+},
+{
+"name": "Osun State College Of Education, Ila-orangun",
+"ownership": "State"
+},
+{
+"name": "Osun State Polytechnic, Iree, Osun State (NCE Awarding)",
+"ownership": "State"
+},
+{
+"name": "Oswald Waller College of Education",
+"ownership": "Private"
+},
+{
+"name": "Owu College of Education",
+"ownership": "Private"
+},
+{
+"name": "Oyo State College Of Education",
+"ownership": "State"
+},
+{
+"name": "Pan Africa Entrepreneurship and Vocational College of Education",
+"ownership": "Private"
+},
+{
+"name": "Pan African College of Education",
+"ownership": "Private"
+},
+{
+"name": "Pan-African Institute of Paralegal Studies",
+"ownership": "Private"
+},
+{
+"name": "Peace College of Education, Enokpoli",
+"ownership": "Private"
+},
+{
+"name": "Peace land College of Education",
+"ownership": "Private"
+},
+{
+"name": "Peacock College of Education, Jalingo",
+"ownership": "Private"
+},
+{
+"name": "Peter Achimugu College of Theology, Ankpa.",
+"ownership": "Private"
+},
+{
+"name": "Piaget College of Education",
+"ownership": "Private"
+},
+{
+"name": "Premier College of Education",
+"ownership": "Private"
+},
+{
+"name": "Pristine College of Education and Technology",
+"ownership": "Private"
+},
+{
+"name": "Raphat College of Education Obaagun",
+"ownership": "Private"
+},
+{
+"name": "Redeemed Christian Bible College",
+"ownership": "Private"
+},
+{
+"name": "Royal City College Of Education",
+"ownership": "Private"
+},
+{
+"name": "S-Light College of Education",
+"ownership": "Private"
+},
+{
+"name": "Saadatu Rimi College of Education, Kumbotso",
+"ownership": "Private"
+},
+{
+"name": "SACAS College of Education",
+"ownership": "Private"
+},
+{
+"name": "sarkin yamma community college of education",
+"ownership": "Private"
+},
+{
+"name": "Sharifat College of Education and Islamic Legal Studies",
+"ownership": "Private"
+},
+{
+"name": "Shehu Shagari College Of Education, Sokoto",
+"ownership": "Private"
+},
+{
+"name": "Sinai College Of Education",
+"ownership": "Private"
+},
+{
+"name": "St Paul's College of Education Nnewi",
+"ownership": "Private"
+},
+{
+"name": "St. Francis of Assisi College",
+"ownership": "Private"
+},
+{
+"name": "Steady Flow College of Education",
+"ownership": "Private"
+},
+{
+"name": "Sunnah College of Education, Kofar Bauchi",
+"ownership": "Private"
+},
+{
+"name": "Tai Solarin College of Education, Ijebu-Ode",
+"ownership": "Private"
+},
+{
+"name": "Talent Finders College of Education",
+"ownership": "Private"
+},
+{
+"name": "Tamic College of Education",
+"ownership": "Private"
+},
+{
+"name": "The African Church College Of Education",
+"ownership": "Private"
+},
+{
+"name": "The Christian College of Education",
+"ownership": "Private"
+},
+{
+"name": "The College of Education, Lanlate",
+"ownership": "Private"
+},
+{
+"name": "The College Of Education, Nsukka",
+"ownership": "Private"
+},
+{
+"name": "Tijjani Ibrahim College of Education",
+"ownership": "Private"
+},
+{
+"name": "Top Sprout College of Education",
+"ownership": "Private"
+},
+{
+"name": "Topmost College Of Education",
+"ownership": "Private"
+},
+{
+"name": "Trinity Theological College, Umuahia",
+"ownership": "Private"
+},
+{
+"name": "Turath College of Islamic College",
+"ownership": "Private"
+},
+{
+"name": "Uli College of Education",
+"ownership": "Private"
+},
+{
+"name": "Umar Bun Khatab College of Education, Kaduna State",
+"ownership": "State"
+},
+{
+"name": "Umar Bun Khattab College of Education",
+"ownership": "Private"
+},
+{
+"name": "Umar Ibn Ibrahim El-Kanemi College Of Education, Science and Technology, Bama",
+"ownership": "Private"
+},
+{
+"name": "Umar Suleiman College Of Education, Gashua",
+"ownership": "Private"
+},
+{
+"name": "Umar-Ibn Ei-Kanemi College of Education",
+"ownership": "Private"
+},
+{
+"name": "Unity College Of Education, Aukpa-adoka",
+"ownership": "Private"
+},
+{
+"name": "Upland College Of Education",
+"ownership": "Private"
+},
+{
+"name": "Waterside College of Education",
+"ownership": "Private"
+},
+{
+"name": "Yefmadec Institute of Science and Technology, Mosogar",
+"ownership": "Private"
+},
+{
+"name": "Yewa Central College Of Education",
+"ownership": "Private"
+},
+{
+"name": "Yusuf Bala Usman College Of Legal And General Studies",
+"ownership": "Private"
+},
+{
+"name": "Ab Na'ibi College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Abia State College of Nursing Sciences, Aba",
+"ownership": "State"
+},
+{
+"name": "Abia State College of Nursing Sciences, Amachara",
+"ownership": "State"
+},
+{
+"name": "Adamu Fura College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Adecom College of Business and Managemet",
+"ownership": "Private"
+},
+{
+"name": "Adewale Ibrahim College of Health Sciences and Technology",
+"ownership": "Private"
+},
+{
+"name": "Akperan Orshi Polytechnic, Yandev",
+"ownership": "Private"
+},
+{
+"name": "Al-Haroon College of Health Science and Technology",
+"ownership": "Private"
+},
+{
+"name": "Al-Huda College of Nusing Science",
+"ownership": "Private"
+},
+{
+"name": "Al-Ikhlas College of Health Sciences and Technology",
+"ownership": "Private"
+},
+{
+"name": "Al-Kausar College of Health Technology Foundation",
+"ownership": "Private"
+},
+{
+"name": "Aliko Dangote College of Nursing Science, Bauchi",
+"ownership": "Private"
+},
+{
+"name": "All Nations Institute of Marine and Technology",
+"ownership": "Private"
+},
+{
+"name": "Alma'Arif College of Health Sciences and Technology, Potiskum",
+"ownership": "Private"
+},
+{
+"name": "Almadina College on Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "American College Of Technology, Ibadan",
+"ownership": "Private"
+},
+{
+"name": "Aminu Dabo College of Health Sciences and Technology",
+"ownership": "Private"
+},
+{
+"name": "Apex College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Ar-rahamaniyya College Of Health Technology",
+"ownership": "Private"
+},
+{
+"name": "Arabic and Islamic Training Centre, Markaz",
+"ownership": "Private"
+},
+{
+"name": "Archbishop Charles Heerey Memorial College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Armed Forces Electrical And Mech. Eng. Mechat. Sch.(nd)",
+"ownership": "Private"
+},
+{
+"name": "Arosurge College of Survey and Geo-Informatics",
+"ownership": "Private"
+},
+{
+"name": "Asteven Energy Institute",
+"ownership": "Private"
+},
+{
+"name": "Audu Bako College Of Agriculture Danbatta",
+"ownership": "Private"
+},
+{
+"name": "Babalola Academy College of Health Technology",
+"ownership": "Private"
+},
+{
+"name": "Baiilla College Of Nursing Sciences, Kaura Namoda",
+"ownership": "Private"
+},
+{
+"name": "Bartholomew College of Health Technology",
+"ownership": "Private"
+},
+{
+"name": "Bartholomew College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Bauchi State College Of Agriculture",
+"ownership": "State"
+},
+{
+"name": "Bawo College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Belba Collegee Of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Benson Idahosa School of Basic and Applied Studies",
+"ownership": "Private"
+},
+{
+"name": "Best College of Health Technology",
+"ownership": "Private"
+},
+{
+"name": "Bill and Melinda Gates College of Health, Ningi",
+"ownership": "Private"
+},
+{
+"name": "Blessed Martins College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Broadcast Arts Institute",
+"ownership": "Private"
+},
+{
+"name": "CAI College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Caliphate College of Health Sciences and Technology",
+"ownership": "Private"
+},
+{
+"name": "Caribbean College of Health Technology",
+"ownership": "Private"
+},
+{
+"name": "Centenary College of Health Science and Technology, Emohua",
+"ownership": "Private"
+},
+{
+"name": "Central Washington College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Charkin Maritime Academy, Port Harcourt",
+"ownership": "Private"
+},
+{
+"name": "Chep College Of Nursing Sciences, Ota, Ogun State",
+"ownership": "State"
+},
+{
+"name": "Cherish College Of Health Sciences And Technology, Katsina",
+"ownership": "Private"
+},
+{
+"name": "Colegio Real College of Nursing Science",
+"ownership": "Private"
+},
+{
+"name": "College Of Agriculture and Animal Science",
+"ownership": "Private"
+},
+{
+"name": "College of Agriculture and Animal Science, Bakura",
+"ownership": "Private"
+},
+{
+"name": "College Of Agriculture, Jalingo",
+"ownership": "Private"
+},
+{
+"name": "College Of Agriculture, Lafia",
+"ownership": "Private"
+},
+{
+"name": "College Of Agriculture, Zuru",
+"ownership": "Private"
+},
+{
+"name": "College of Health and Environmental Sciences",
+"ownership": "Private"
+},
+{
+"name": "College Of Health Sciences And Technology, Hadejia",
+"ownership": "Private"
+},
+{
+"name": "College of Health Sciences, Baptist Medical Center",
+"ownership": "Private"
+},
+{
+"name": "College of Health Technology Aliade",
+"ownership": "Private"
+},
+{
+"name": "College Of Health Technology, Etinan",
+"ownership": "Private"
+},
+{
+"name": "College of Nursing and Midwifery",
+"ownership": "Private"
+},
+{
+"name": "College of Nursing and Sciences Emekuku",
+"ownership": "Private"
+},
+{
+"name": "College of Nursing Science, Obohia-Ndoki",
+"ownership": "Private"
+},
+{
+"name": "College of Nursing Science, ST Charles Borromeo Specialist Hospital, Onitsha",
+"ownership": "Private"
+},
+{
+"name": "College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "College Of Nursing Sciences, Bishop Shanahan Specialist Hospital",
+"ownership": "Private"
+},
+{
+"name": "College Of Nursing Sciences, Bowen University Teaching Hospital",
+"ownership": "Private"
+},
+{
+"name": "College of Nursing Sciences, Gwoza",
+"ownership": "Private"
+},
+{
+"name": "College of Nursing Sciences, Igbinedion University Teaching Hospital",
+"ownership": "Private"
+},
+{
+"name": "College of Nursing Sciences, Jahi",
+"ownership": "Private"
+},
+{
+"name": "College of Nursing Sciences, Mongonu",
+"ownership": "Private"
+},
+{
+"name": "College of Nursing Sciences, Muslim Medical Foundation",
+"ownership": "Private"
+},
+{
+"name": "Dako College of Nursing",
+"ownership": "Private"
+},
+{
+"name": "Dansharif College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "De-galaxy College Of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Dee Perfect Class College of Health Sciences and Technology",
+"ownership": "Private"
+},
+{
+"name": "Delight College of Health Sciences and Technology",
+"ownership": "Private"
+},
+{
+"name": "Delta State College Of Health Technology Ofuoma Ughelli",
+"ownership": "State"
+},
+{
+"name": "Dr John Adah College of Health Technology",
+"ownership": "Private"
+},
+{
+"name": "Eastern Oak College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "ECWA College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Ed-John School Of Management, Ikorodu",
+"ownership": "Private"
+},
+{
+"name": "Edo State College of Agriculture and Natural Resources",
+"ownership": "State"
+},
+{
+"name": "Ezeala College Of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Fabotas College of Health Sciences and Technology, Ado-Ekiti",
+"ownership": "Private"
+},
+{
+"name": "Favour College Of Health Science And Technology",
+"ownership": "Private"
+},
+{
+"name": "Federal College of Agricultural Produce Technology",
+"ownership": "Federal"
+},
+{
+"name": "Federal College Of Agriculture, Akure",
+"ownership": "Federal"
+},
+{
+"name": "Federal College Of Agriculture, Ishiagu",
+"ownership": "Federal"
+},
+{
+"name": "Federal College Of Agriculture, Moor Plantation",
+"ownership": "Federal"
+},
+{
+"name": "Federal College Of Animal Health & Production Tech, Ibadan",
+"ownership": "Federal"
+},
+{
+"name": "Federal College Of Animal Health & Production Tech, Vom",
+"ownership": "Federal"
+},
+{
+"name": "Federal College of Fisheries and Marine Technology",
+"ownership": "Federal"
+},
+{
+"name": "Federal College of Forest Resources Management Fugar",
+"ownership": "Federal"
+},
+{
+"name": "Federal College Of Forestry Technology, Ibadan",
+"ownership": "Federal"
+},
+{
+"name": "Federal College Of Forestry, Jos",
+"ownership": "Federal"
+},
+{
+"name": "Federal College Of Forestry, Mechanisation, Afaka",
+"ownership": "Federal"
+},
+{
+"name": "Federal College Of Freshwater Fisheries Tech, Baga",
+"ownership": "Federal"
+},
+{
+"name": "Federal College Of Freshwater Fisheries Tech, New Bussa",
+"ownership": "Federal"
+},
+{
+"name": "Federal College of Horticulture, Dadin Kowa",
+"ownership": "Federal"
+},
+{
+"name": "Federal College Of Land Resources Technology, Kuru",
+"ownership": "Federal"
+},
+{
+"name": "Federal College Of Land Resources Technology, Owerri",
+"ownership": "Federal"
+},
+{
+"name": "Federal College of Wildlife Management, New Bussa",
+"ownership": "Federal"
+},
+{
+"name": "Federal Cooperative College, Ibadan",
+"ownership": "Federal"
+},
+{
+"name": "Federal Cooperative College, Kaduna",
+"ownership": "Federal"
+},
+{
+"name": "Federal Cooperative College, Oji River",
+"ownership": "Federal"
+},
+{
+"name": "Federal School of Statistics, Ibadan",
+"ownership": "Federal"
+},
+{
+"name": "Federal School of Statistics, Manchok",
+"ownership": "Federal"
+},
+{
+"name": "Federal School Of Surveying, Oyo",
+"ownership": "Federal"
+},
+{
+"name": "Federal Training Centre Ikoyi",
+"ownership": "Federal"
+},
+{
+"name": "Flagship College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Foreign Links College of Health and Management Science",
+"ownership": "Private"
+},
+{
+"name": "Galtima Mai-Kyari College of Health Sciences and Technology",
+"ownership": "Private"
+},
+{
+"name": "Gateway Industrial And Petro-gas Institute(nd)",
+"ownership": "Private"
+},
+{
+"name": "GCity College of Health Sciences and Technology",
+"ownership": "Private"
+},
+{
+"name": "Grimard Catholic College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Hamdala College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Havilah College Of Health Science And Technology",
+"ownership": "Private"
+},
+{
+"name": "Heritage Global School Of Health Technology",
+"ownership": "Private"
+},
+{
+"name": "Hon. Justice L. O. Aremu's Academy For Basics Studies",
+"ownership": "Private"
+},
+{
+"name": "Horizon College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Ibadan College Of Health Technology",
+"ownership": "Private"
+},
+{
+"name": "Imam Hamzat College of Education",
+"ownership": "Private"
+},
+{
+"name": "Institute of Administration Kongo",
+"ownership": "Private"
+},
+{
+"name": "Institute Of Corporate Security And Intelligence Studies",
+"ownership": "Private"
+},
+{
+"name": "Institute of Maritime and Safety",
+"ownership": "Private"
+},
+{
+"name": "International Institute Of Tourism And Hospitality, Yenagoa",
+"ownership": "Federal"
+},
+{
+"name": "Iseyin College of Science and Health Technology",
+"ownership": "Private"
+},
+{
+"name": "Jafad College of Nursing Science",
+"ownership": "Private"
+},
+{
+"name": "Jameel Chiroma College of Health Science and Technology",
+"ownership": "Private"
+},
+{
+"name": "JaSaCompton Christian College of Health Technology",
+"ownership": "Private"
+},
+{
+"name": "Jewel College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Jibape Memorial College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Jigawa State Institute Of Information Technology",
+"ownership": "State"
+},
+{
+"name": "Joemarine Institute of Nautical Studies and Research",
+"ownership": "Private"
+},
+{
+"name": "Johtech College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Jubilation College of Health Sciences and Technology",
+"ownership": "Private"
+},
+{
+"name": "Kariyoma College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Kauran Gwandu College Of Nursing & Midwifery Sciences, Ambursa",
+"ownership": "Private"
+},
+{
+"name": "Kazaure College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Khuddam College of Health Science and Technology",
+"ownership": "Private"
+},
+{
+"name": "Kwara State College of Health Technology",
+"ownership": "State"
+},
+{
+"name": "Lapo Institute For Microfinance and Enterprise Development, Benin",
+"ownership": "Private"
+},
+{
+"name": "Living Spring College Of Technology And Innovation, Oshogbo",
+"ownership": "Private"
+},
+{
+"name": "Lowland College of Health Science and Technology",
+"ownership": "Private"
+},
+{
+"name": "Lufem College of Technology",
+"ownership": "Private"
+},
+{
+"name": "Madonna College of Health",
+"ownership": "Private"
+},
+{
+"name": "Mahdi Adamu College Of Science And Health Technology, Wara",
+"ownership": "Private"
+},
+{
+"name": "Makurdi College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Malikiya College of Health and Social Sciences",
+"ownership": "Private"
+},
+{
+"name": "Mama Yalwa College Of Nursing Sciences, Federal Medical Centre, Misau",
+"ownership": "Federal"
+},
+{
+"name": "Margeret College Of Nursing Sciences, Amichi",
+"ownership": "Private"
+},
+{
+"name": "Maurid College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Medical Laboratory Technician, Our Lady Of Loudes Hospital",
+"ownership": "Private"
+},
+{
+"name": "Merit College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Metallurgical Training Institute, Onitsha",
+"ownership": "Private"
+},
+{
+"name": "Millennium College of Health Technology",
+"ownership": "Private"
+},
+{
+"name": "Millennium College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Mohammed Lawan College Of Agriculture, Maiduguri",
+"ownership": "Private"
+},
+{
+"name": "Mother Of Mercy College Of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Muh'd Ibn El Barau College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Musical Society of Nigeria",
+"ownership": "Private"
+},
+{
+"name": "Mwaghavul College Of Health Technology, Pushit-mangu",
+"ownership": "Private"
+},
+{
+"name": "Nafisatu College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Nana Fatima Umar College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "National Film Institute",
+"ownership": "Federal"
+},
+{
+"name": "Nazareth Institute of Health Science and Technology",
+"ownership": "Private"
+},
+{
+"name": "New Gate College of Health Technology",
+"ownership": "Private"
+},
+{
+"name": "Nexus College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Niger State College Of Agriculture, Mokwa",
+"ownership": "State"
+},
+{
+"name": "Nigerian Institute Of Journalism, Ikeja",
+"ownership": "Private"
+},
+{
+"name": "NKST College of Health Technology",
+"ownership": "Private"
+},
+{
+"name": "OAK Business School",
+"ownership": "Private"
+},
+{
+"name": "Oasis College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Obudu College Of Health Technology",
+"ownership": "Private"
+},
+{
+"name": "Ogun State College of Health Technology",
+"ownership": "State"
+},
+{
+"name": "Okunland College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Ondo State School of Health Technology",
+"ownership": "State"
+},
+{
+"name": "Osi College of Health Technology",
+"ownership": "Private"
+},
+{
+"name": "Osun State School Of Health Technology",
+"ownership": "State"
+},
+{
+"name": "Pafric College of Health Management and Technology",
+"ownership": "Private"
+},
+{
+"name": "Paradise College of Health Sciences, Technology and Administration",
+"ownership": "Private"
+},
+{
+"name": "Pathfinder College Of Health Technology",
+"ownership": "Private"
+},
+{
+"name": "Peaceland College of Health Technology, Enugu",
+"ownership": "Private"
+},
+{
+"name": "Peaceland College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "PEMGO College of Business and Management Studies",
+"ownership": "Private"
+},
+{
+"name": "Plateau State College Of Agriculture, Garkawa",
+"ownership": "State"
+},
+{
+"name": "POGIL College of Health Technology",
+"ownership": "Private"
+},
+{
+"name": "Right Steps Institute of Management and Technology",
+"ownership": "Private"
+},
+{
+"name": "Royal College of Nursing",
+"ownership": "Private"
+},
+{
+"name": "Royal Institute of Health Technology",
+"ownership": "Private"
+},
+{
+"name": "Royal Mira College Of Nursing Sciences, Owa-Oyibu",
+"ownership": "Private"
+},
+{
+"name": "Sacred Heart College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Samaru College Of Agriculture",
+"ownership": "Private"
+},
+{
+"name": "Sancta Maria Catholic College of Nursing Science",
+"ownership": "Private"
+},
+{
+"name": "School of Health Technology, Suleja",
+"ownership": "Private"
+},
+{
+"name": "School Of Orthopaedic Cast Technology, National Orthopaedic Hospital",
+"ownership": "Federal"
+},
+{
+"name": "Seventh Day Aventist College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Skyward College Of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Soarstar College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "St Mary's Joint Hospital College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Standard College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Tashiba Institute of Information Technology",
+"ownership": "Private"
+},
+{
+"name": "Throneroom College Of Nursing Sciences, Kafanchan",
+"ownership": "Private"
+},
+{
+"name": "TNM Media Academy",
+"ownership": "Private"
+},
+{
+"name": "Tropical College Of Health Sciences & Technology",
+"ownership": "Private"
+},
+{
+"name": "U.E.C College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Umar Bin Khaddabi College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Umuebe Farms College(nd)",
+"ownership": "Private"
+},
+{
+"name": "Unity College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Vision College of Medical Sciences and Health Technology",
+"ownership": "Private"
+},
+{
+"name": "Wavecrest College of Hospitality",
+"ownership": "Private"
+},
+{
+"name": "Western Coast Maritime Academy",
+"ownership": "Private"
+},
+{
+"name": "Yagongwo College of Nursing Sciences",
+"ownership": "Private"
+},
+{
+"name": "Yobe State College of Agriculture",
+"ownership": "State"
+},
+{
+"name": "Yusjib College Of Health Technology",
+"ownership": "Private"
+}
+]

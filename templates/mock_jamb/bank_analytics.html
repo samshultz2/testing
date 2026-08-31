@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% block title %}Bank Analytics - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ index_url }}">Mock JAMB</a> / <a href="{{ bank_url }}">Question Bank</a> / <span>Topic analytics</span>{% endblock %}
+{% block extra_css %}
+<style>
+.ba-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.7rem;margin-bottom:1rem}
+.ba-kpi{border:1px solid var(--border-color);border-radius:var(--radius-md);padding:.7rem .9rem;background:var(--gray-50)}
+.ba-kpi .v{font-size:1.5rem;font-weight:800;line-height:1}
+.ba-kpi .l{font-size:.74rem;color:var(--text-muted);margin-top:.25rem}
+.ba-table{width:100%;border-collapse:collapse;font-size:.85rem}
+.ba-table th,.ba-table td{padding:.4rem .5rem;text-align:left;border-bottom:1px solid var(--border-color);vertical-align:middle}
+.ba-table th{font-size:.72rem;text-transform:uppercase;letter-spacing:.02em;color:var(--text-muted)}
+.ba-table td.num,.ba-table th.num{text-align:right;white-space:nowrap}
+.ba-bar{position:relative;background:var(--gray-100);border-radius:var(--radius-full);height:16px;min-width:60px;overflow:hidden}
+.ba-bar > i{display:block;height:100%;background:#2563eb;border-radius:var(--radius-full)}
+.ba-scroll{overflow-x:auto}
+.pill{font-size:.68rem;font-weight:700;padding:.06rem .45rem;border-radius:var(--radius-full)}
+.pill-cold{background:rgba(37,99,235,.12);color:#2563eb}
+.pill-gap{background:rgba(220,38,38,.1);color:#dc2626}
+.pill-yr{background:var(--gray-100);color:var(--text-muted);font-weight:600}
+.ba-two{display:grid;grid-template-columns:1fr 1fr;gap:1rem}@media(max-width:760px){.ba-two{grid-template-columns:1fr}}
+.ba-chip{display:inline-block;background:var(--gray-100);border-radius:var(--radius-sm);padding:.12rem .5rem;margin:.15rem;font-size:.78rem}
+.ba-chip.gap{background:rgba(220,38,38,.08);color:#b91c1c}
+details.ba > summary{cursor:pointer;font-weight:700;padding:.3rem 0}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Topic analytics</h1>
+        <p class="text-muted text-sm">Where your banked past questions cluster — by topic, sub-topic, year and exam type — and the syllabus areas that are thin, <strong>cold</strong> (not tested in recent years) or <strong>never</strong> tested, so you know what to drill with students.</p>
+    </div>
+    <div class="page-header-actions">
+        <a href="{{ bank_url }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back to bank</a>
+    </div>
+</div>
+
+<form method="get" class="card" style="margin-bottom:1rem;">
+    <div class="card-body" style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;">
+        <label class="form-label mb-0">Subject</label>
+        <select name="subject_id" class="form-control" style="max-width:260px;" data-autosubmit>
+            {% for s in subjects %}<option value="{{ s.id }}" {{ 'selected' if s.id == subject_id else '' }}>{{ s.name }}</option>{% endfor %}
+        </select>
+    </div>
+</form>
+
+{% if not subject %}
+<div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-book"></i><h3>No subject</h3><p>Add subjects first.</p></div></div></div>
+{% elif not data or data.total == 0 %}
+<div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-chart-pie"></i><h3>No questions banked for {{ subject.name }}</h3><p>Download or add questions first, then come back for the breakdown.</p></div></div></div>
+{% else %}
+
+<div class="ba-kpis">
+    <div class="ba-kpi"><div class="v">{{ data.total }}</div><div class="l">Questions banked</div></div>
+    <div class="ba-kpi"><div class="v">{{ data.topics|length }}</div><div class="l">Topics with questions</div></div>
+    <div class="ba-kpi"><div class="v">{{ data.gaps.topics|length }}</div><div class="l">Syllabus topics never tested</div></div>
+    <div class="ba-kpi"><div class="v">{{ data.cold_topics|length }}</div><div class="l">Cold topics{% if data.recent_years %} (not in {{ data.recent_years|join(', ') }}){% endif %}</div></div>
+    {% if data.untagged %}<div class="ba-kpi"><div class="v" style="color:#b45309;">{{ data.untagged }}</div><div class="l">Untagged (no topic)</div></div>{% endif %}
+</div>
+
+<div class="card" style="margin-bottom:1rem;border-left:4px solid #7c3aed;">
+    <div class="card-header"><h3><i class="fas fa-wand-magic-sparkles"></i> Auto-tag with the syllabus classifier</h3></div>
+    <div class="card-body">
+        <p class="text-sm text-muted" style="margin-top:0;">Runs the keyword classifier over {{ subject.name }}'s bank and fills topic/sub-topic (and a missing section) on a confident match. {% if data.untagged %}<strong>{{ data.untagged }}</strong> question(s) currently have no topic.{% else %}Every question currently has a topic.{% endif %}</p>
+        <form method="post" action="{{ url_for('mock_jamb.bank_retag') }}" style="display:flex;gap:.7rem;align-items:flex-end;flex-wrap:wrap;">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="subject_id" value="{{ subject_id }}">
+            <div class="form-group mb-0"><label class="form-label">Scope</label>
+                <select name="mode" class="form-control" style="max-width:320px;">
+                    <option value="untagged">Untagged only — fill in the blanks (safe)</option>
+                    <option value="all">Re-classify all — upgrade existing tags with improved keywords</option>
+                </select></div>
+            <label class="text-sm" style="display:inline-flex;align-items:center;gap:.4rem;padding-bottom:.5rem;">
+                <input type="checkbox" name="ensure_section" value="1"> Make still-unmatched questions drawable (assign a section)</label>
+            <button class="btn btn-primary btn-sm"><i class="fas fa-wand-magic-sparkles"></i> Run auto-tag</button>
+        </form>
+        <p class="text-xs text-muted" style="margin:.5rem 0 0;"><i class="fas fa-circle-info"></i> The classifier never invents a topic. Notation-only, figure-only or out-of-syllabus questions may stay untagged; ticking “make drawable” still lets them be used in exams (they just won't carry a topic label).</p>
+    </div>
+</div>
+
+{# ---- Topic breakdown ---- #}
+<div class="card" style="margin-bottom:1rem;">
+    <div class="card-header"><h3><i class="fas fa-layer-group"></i> By topic <span class="text-muted text-sm">— share of the bank &amp; when last set</span></h3></div>
+    <div class="card-body ba-scroll">
+        <table class="ba-table">
+            <thead><tr><th>Topic</th><th class="num">Questions</th><th class="num">Share</th><th style="width:32%;">Share of bank</th><th class="num">Last year</th><th>Years covered</th></tr></thead>
+            <tbody>
+                {% for t in data.topics %}
+                <tr>
+                    <td>{{ t.topic }}{% if t.cold %} <span class="pill pill-cold" title="No questions from the recent years">cold</span>{% endif %}</td>
+                    <td class="num">{{ t.count }}</td>
+                    <td class="num">{{ t.pct }}%</td>
+                    <td><div class="ba-bar"><i style="width:{{ t.pct }}%;{% if t.cold %}background:#93b4f5;{% endif %}"></i></div></td>
+                    <td class="num">{{ t.recent_year or '—' }}</td>
+                    <td>{% for y in t.years[:8] %}<span class="pill pill-yr">{{ y }}</span> {% endfor %}{% if t.years|length > 8 %}+{{ t.years|length - 8 }}{% endif %}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="ba-two">
+    {# ---- Year distribution ---- #}
+    <div class="card">
+        <div class="card-header"><h3><i class="fas fa-calendar"></i> By year</h3></div>
+        <div class="card-body ba-scroll">
+            <table class="ba-table">
+                <thead><tr><th>Year</th><th class="num">Questions</th><th style="width:45%;"></th></tr></thead>
+                <tbody>
+                    {% set ymax = (data.by_year|map(attribute='count')|max) if data.by_year else 1 %}
+                    {% for r in data.by_year %}
+                    <tr><td>{{ r.year or 'Unspecified' }}</td><td class="num">{{ r.count }}</td>
+                        <td><div class="ba-bar"><i style="width:{{ (100 * r.count / ymax)|round(0, 'floor') }}%;background:#7c3aed;"></i></div></td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {# ---- Exam body distribution ---- #}
+    <div class="card">
+        <div class="card-header"><h3><i class="fas fa-scroll"></i> By exam type</h3></div>
+        <div class="card-body ba-scroll">
+            <table class="ba-table">
+                <thead><tr><th>Exam</th><th class="num">Questions</th><th class="num">Share</th></tr></thead>
+                <tbody>
+                    {% for r in data.by_exam_body %}
+                    <tr><td>{{ r.body }}</td><td class="num">{{ r.count }}</td>
+                        <td class="num">{{ (100 * r.count / data.total)|round(1) }}%</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+{# ---- Focus areas: cold + never-tested ---- #}
+<div class="card" style="margin:1rem 0;border-left:4px solid #dc2626;">
+    <div class="card-header"><h3><i class="fas fa-bullseye"></i> Focus areas <span class="text-muted text-sm">— what to drill with students</span></h3></div>
+    <div class="card-body">
+        {% if data.cold_topics %}
+        <p class="text-sm" style="margin:0 0 .3rem;"><strong>Cold topics</strong> — banked, but no question from the recent years ({{ data.recent_years|join(', ') }}). Due to come round again:</p>
+        <div style="margin-bottom:.8rem;">{% for t in data.cold_topics %}<span class="ba-chip">{{ t.topic }} <span class="text-muted">· last {{ t.recent_year }}</span></span>{% endfor %}</div>
+        {% endif %}
+        {% if data.gaps.topics %}
+        <p class="text-sm" style="margin:0 0 .3rem;"><strong>Never tested</strong> — syllabus topics with no banked question at all:</p>
+        <div style="margin-bottom:.5rem;">{% for t in data.gaps.topics %}<span class="ba-chip gap">{{ t }}</span>{% endfor %}</div>
+        {% endif %}
+        {% if not data.cold_topics and not data.gaps.topics %}
+        <p class="text-sm text-muted" style="margin:0;">No cold or never-tested topics — the bank covers this subject's syllabus well.</p>
+        {% endif %}
+        {% if data.gaps.subtopics %}
+        <details class="ba" style="margin-top:.6rem;"><summary class="text-sm">{{ data.gaps.subtopics|length }} sub-topic(s) never tested</summary>
+            <div style="margin-top:.4rem;">{% for s in data.gaps.subtopics %}<span class="ba-chip gap">{{ s.topic }} › {{ s.subtopic }}</span>{% endfor %}</div>
+        </details>
+        {% endif %}
+    </div>
+</div>
+
+{# ---- Sub-topic breakdown (collapsible; can be long) ---- #}
+{% if data.subtopics %}
+<div class="card" style="margin-bottom:1rem;">
+    <div class="card-header"><h3><i class="fas fa-diagram-project"></i> By sub-topic ({{ data.subtopics|length }})</h3></div>
+    <div class="card-body ba-scroll">
+        <table class="ba-table">
+            <thead><tr><th>Topic</th><th>Sub-topic</th><th class="num">Questions</th><th class="num">Share</th><th class="num">Last year</th></tr></thead>
+            <tbody>
+                {% for s in data.subtopics %}
+                <tr>
+                    <td class="text-muted">{{ s.topic or '—' }}</td>
+                    <td>{{ s.subtopic }}{% if s.cold %} <span class="pill pill-cold">cold</span>{% endif %}</td>
+                    <td class="num">{{ s.count }}</td>
+                    <td class="num">{{ s.pct }}%</td>
+                    <td class="num">{{ s.recent_year or '—' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% endif %}
+{% endblock %}

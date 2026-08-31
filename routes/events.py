@@ -2,15 +2,18 @@
 import calendar as _cal
 from datetime import datetime, date, timedelta
 
-from flask import (Blueprint, render_template, request, redirect, url_for, flash)
+from flask import (Blueprint, render_template, request, redirect, url_for, flash, jsonify)
 
 from models import db, SchoolEvent, Term
 from utils.access_control import login_required
+from utils.helpers import session_terms
 
 events_bp = Blueprint('events', __name__, url_prefix='/events')
 
 CATEGORIES = ['General', 'Holiday', 'Exam', 'Meeting', 'Activity', 'Sport']
 AUDIENCES = ['All', 'Staff', 'Students', 'Parents']
+CATEGORY_COLORS = {'Holiday': '#e74a3b', 'Exam': '#7e6cf0', 'Meeting': '#4e73df',
+                   'Activity': '#1cc88a', 'Sport': '#fd7e14', 'General': '#11998e'}
 
 
 def _d(value, default=None):
@@ -23,6 +26,39 @@ def _d(value, default=None):
 def _current_user():
     from flask import session
     return session.get('username') or session.get('user') or 'Admin'
+
+
+def _wants_json():
+    return request.headers.get('X-Requested-With') == 'fetch' or request.is_json
+
+
+def _ok(message, redirect_url=None):
+    if _wants_json():
+        return jsonify({'ok': True, 'message': message, 'redirect': redirect_url})
+    flash(message, 'success')
+    return redirect(redirect_url or url_for('events.calendar'))
+
+
+def _err(message, redirect_url=None, tone='error'):
+    if _wants_json():
+        return jsonify({'ok': False, 'error': message}), 400
+    flash(message, tone)
+    return redirect(redirect_url or url_for('events.calendar'))
+
+
+def _render(payload):
+    from utils.spa import render_or_json
+    return render_or_json('events/app.html', 'events_json', payload)
+
+
+def _event_json(e):
+    return {
+        'id': e.id, 'title': e.title, 'category': e.category, 'color': e.color,
+        'audience': e.audience, 'location': e.location,
+        'start_time': e.start_time, 'end_time': e.end_time, 'all_day': bool(e.all_day),
+        'edit_url': url_for('events.edit_event', event_id=e.id),
+        'delete_url': url_for('events.delete_event', event_id=e.id),
+    }
 
 
 @events_bp.route('/')
@@ -58,12 +94,21 @@ def calendar():
 
     prev_m = (first - timedelta(days=1))
     next_m = (last + timedelta(days=1))
-    return render_template('events/calendar.html',
-        year=year, month=month, month_name=_cal.month_name[month],
-        weeks=weeks, by_day=by_day, today=today, first=first,
-        prev_year=prev_m.year, prev_month=prev_m.month,
-        next_year=next_m.year, next_month=next_m.month,
-        categories=CATEGORIES)
+    weeks_json = [[{
+        'day': day.day, 'iso': day.isoformat(),
+        'in_month': day.month == month, 'is_today': day == today,
+        'add_url': url_for('events.add_event', date=day.isoformat()),
+        'events': [_event_json(e) for e in by_day.get(day, [])],
+    } for day in week] for week in weeks]
+    return _render({
+        'page': 'calendar', 'year': year, 'month': month, 'month_name': _cal.month_name[month],
+        'weeks': weeks_json, 'categories': CATEGORIES, 'category_colors': CATEGORY_COLORS,
+        'nav': {'prev_url': url_for('events.calendar', year=prev_m.year, month=prev_m.month),
+                'next_url': url_for('events.calendar', year=next_m.year, month=next_m.month),
+                'today_url': url_for('events.calendar')},
+        'urls': {'import': url_for('events.import_calendar'), 'agenda': url_for('events.agenda'),
+                 'add_event': url_for('events.add_event')},
+    })
 
 
 @events_bp.route('/list')
@@ -77,8 +122,22 @@ def agenda():
     if upcoming == '1':
         q = q.filter(db.func.coalesce(SchoolEvent.end_date, SchoolEvent.start_date) >= date.today())
     events = q.order_by(SchoolEvent.start_date, SchoolEvent.start_time).all()
-    return render_template('events/agenda.html', events=events,
-        category=category, upcoming=upcoming, categories=CATEGORIES)
+
+    def row(e):
+        date_label = e.start_date.strftime('%a, %d %b %Y')
+        if e.end_date:
+            date_label += ' – ' + e.end_date.strftime('%d %b')
+        time_label = ''
+        if e.start_time and not e.all_day:
+            time_label = e.start_time + (('–' + e.end_time) if e.end_time else '')
+        return {**_event_json(e), 'date_label': date_label, 'time_label': time_label,
+                'description': e.description}
+    return _render({
+        'page': 'agenda', 'events': [row(e) for e in events],
+        'category': category or '', 'upcoming': upcoming, 'categories': CATEGORIES,
+        'urls': {'calendar': url_for('events.calendar'), 'add_event': url_for('events.add_event'),
+                 'self': url_for('events.agenda')},
+    })
 
 
 def _read(e):
@@ -102,42 +161,56 @@ def _read(e):
 def add_event():
     if request.method == 'POST':
         if not request.form.get('title'):
-            flash('Title is required.', 'error')
-            return redirect(url_for('events.add_event'))
+            return _err('Title is required.', url_for('events.add_event'))
         e = SchoolEvent(created_by=_current_user())
         _read(e)
         db.session.add(e)
         db.session.commit()
-        flash('Event added.', 'success')
-        return redirect(url_for('events.calendar', year=e.start_date.year, month=e.start_date.month))
+        return _ok('Event added.',
+                   url_for('events.calendar', year=e.start_date.year, month=e.start_date.month))
     preset = _d(request.args.get('date'))
-    return render_template('events/event_form.html', event=None, preset=preset,
-        terms=Term.query.order_by(Term.id.desc()).all(),
-        categories=CATEGORIES, audiences=AUDIENCES)
+    return _render(_form_payload(None, preset.isoformat() if preset else ''))
+
+
+def _form_payload(e, preset=''):
+    return {
+        'page': 'event_form',
+        'event': ({
+            'id': e.id, 'title': e.title, 'category': e.category, 'audience': e.audience,
+            'start_date': e.start_date.isoformat() if e.start_date else '',
+            'end_date': e.end_date.isoformat() if e.end_date else '',
+            'all_day': bool(e.all_day), 'start_time': e.start_time or '', 'end_time': e.end_time or '',
+            'location': e.location or '', 'term_id': e.term_id or '', 'description': e.description or '',
+        } if e else None),
+        'preset': preset,
+        'terms': [{'id': t.id, 'label': t.full_name} for t in session_terms()],
+        'categories': CATEGORIES, 'audiences': AUDIENCES,
+        'submit_url': url_for('events.edit_event', event_id=e.id) if e else url_for('events.add_event'),
+        'delete_url': url_for('events.delete_event', event_id=e.id) if e else None,
+        'urls': {'agenda': url_for('events.agenda'), 'calendar': url_for('events.calendar')},
+    }
 
 
 @events_bp.route('/<int:event_id>/edit', methods=['GET', 'POST'])
 @login_required
 def edit_event(event_id):
-    e = SchoolEvent.query.get_or_404(event_id)
+    e = db.get_or_404(SchoolEvent, event_id)
     if request.method == 'POST':
         _read(e)
         db.session.commit()
-        flash('Event updated.', 'success')
-        return redirect(url_for('events.agenda'))
-    return render_template('events/event_form.html', event=e, preset=None,
-        terms=Term.query.order_by(Term.id.desc()).all(),
-        categories=CATEGORIES, audiences=AUDIENCES)
+        return _ok('Event updated.', url_for('events.agenda'))
+    return _render(_form_payload(e))
 
 
 @events_bp.route('/<int:event_id>/delete', methods=['POST'])
 @login_required
 def delete_event(event_id):
-    e = SchoolEvent.query.get_or_404(event_id)
+    e = db.get_or_404(SchoolEvent, event_id)
+    from utils.audit import log_action
+    log_action('events.event_delete', detail=getattr(e, 'title', None), target=e)
     db.session.delete(e)
     db.session.commit()
-    flash('Event deleted.', 'success')
-    return redirect(url_for('events.agenda'))
+    return _ok('Event deleted.', url_for('events.agenda'))
 
 
 # ============================================================================
@@ -151,8 +224,7 @@ def import_calendar():
     if request.method == 'POST':
         f = request.files.get('file')
         if not f or not f.filename:
-            flash('Choose a Word document or image to scan.', 'error')
-            return redirect(url_for('events.import_calendar'))
+            return _err('Choose a Word document or image to scan.', url_for('events.import_calendar'))
         data = f.read()
         name = f.filename.lower()
         try:
@@ -161,17 +233,23 @@ def import_calendar():
             elif name.endswith(('.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.tif', '.tiff', '.pdf')):
                 parsed = calendar_import.parse_image(data, f.filename)
             else:
-                flash('Unsupported file. Upload a .docx, image, or PDF.', 'error')
-                return redirect(url_for('events.import_calendar'))
+                return _err('Unsupported file. Upload a .docx, image, or PDF.', url_for('events.import_calendar'))
         except Exception as e:
-            flash(f'Could not read the file: {e}', 'error')
-            return redirect(url_for('events.import_calendar'))
+            return _err(f'Could not read the file: {e}', url_for('events.import_calendar'))
         if not parsed:
-            flash('No dated activities were detected. Try a clearer scan or add events manually.', 'warning')
-            return redirect(url_for('events.import_calendar'))
+            return _err('No dated activities were detected. Try a clearer scan or add events manually.',
+                        url_for('events.import_calendar'), tone='warning')
+        rows = [{'start_date': r['start_date'].isoformat() if r.get('start_date') else '',
+                 'end_date': r['end_date'].isoformat() if r.get('end_date') else '',
+                 'title': r.get('title') or '', 'category': r.get('category') or 'General'} for r in parsed]
+        if _wants_json():
+            return jsonify({'ok': True, 'rows': rows, 'categories': CATEGORIES,
+                            'terms': [{'id': t.id, 'label': t.full_name} for t in session_terms()],
+                            'save_url': url_for('events.import_save')})
         return render_template('events/import_review.html', rows=parsed,
-            categories=CATEGORIES, terms=Term.query.order_by(Term.id.desc()).all())
-    return render_template('events/import.html')
+            categories=CATEGORIES, terms=session_terms())
+    return _render({'page': 'import', 'upload_url': url_for('events.import_calendar'),
+                    'urls': {'calendar': url_for('events.calendar')}})
 
 
 @events_bp.route('/import/save', methods=['POST'])
@@ -196,5 +274,4 @@ def import_save():
             all_day=True, audience='All', term_id=term_id, created_by=user))
         saved += 1
     db.session.commit()
-    flash(f'Imported {saved} event(s) into the calendar.', 'success')
-    return redirect(url_for('events.agenda'))
+    return _ok(f'Imported {saved} event(s) into the calendar.', url_for('events.agenda'))

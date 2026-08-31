@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% set _t = {'sessions':'Academic Sessions','add_session':'Add Session','edit_session':'Edit Session','terms':'Terms','add_term':'Add Term','edit_term':'Edit Term','setup':'Term Setup','view_term':'Term','classes':'Classes','arms':'Class Arms','assignments':'Class Setup','view_assignment':'Class Roster','copy_term_setup':'Copy Term Setup'} %}
+{% block title %}{{ _t.get(acad_json.page,'Academics') }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>{{ _t.get(acad_json.page,'Academics') }}</span>{% endblock %}
+{% block extra_css %}
+<style>
+.enroll-toolbar{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:.75rem;}
+.enroll-search{position:relative;flex:1 1 220px;}
+.enroll-search i{position:absolute;left:.6rem;top:50%;transform:translateY(-50%);color:var(--text-muted,#888);font-size:.8rem;}
+.enroll-search input{padding-left:1.9rem;}
+.enroll-toolbar-actions{display:flex;gap:.4rem;}
+.student-picker{max-height:340px;overflow-y:auto;border:1px solid var(--border-color,#e3e3e3);border-radius:8px;}
+.student-option{display:flex;align-items:center;gap:.7rem;padding:.6rem .8rem;border-bottom:1px solid var(--border-color,var(--border-color));cursor:pointer;margin:0;user-select:none;}
+.student-option:last-of-type{border-bottom:none;}
+.student-option:hover{background:var(--hover-bg,#f6f8fa);}
+.student-option input{width:18px;height:18px;flex:0 0 auto;cursor:pointer;}
+.student-option-body{display:flex;align-items:center;justify-content:space-between;gap:.5rem;flex:1;}
+.student-option-name{font-weight:500;}
+.student-option.checked{background:var(--primary-light,#eef4ff);}
+.enroll-footer{display:flex;align-items:center;justify-content:space-between;gap:.75rem;margin-top:.85rem;}
+.badge-light{background:var(--badge-light-bg,#eef1f5);color:var(--text,#444);}
+</style>
+{% endblock %}
+{% block content %}
+<div id="acad-app"><p class="text-muted" style="padding:2rem 0">Loading…</p></div>
+<script type="application/json" id="acad-data">{{ acad_json|tojson }}</script>
+<script src="{{ bundle_url('js/react/academics-app.js') }}" defer></script>
+{% endblock %}

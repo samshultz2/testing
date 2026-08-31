@@ -33,7 +33,7 @@
 .top-performer{display:flex;align-items:center;gap:.75rem;padding:.5rem;border-radius:var(--radius-sm);background:var(--gray-50);margin-bottom:.5rem}
 .top-rank{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.8rem;color:white}
 .top-rank.gold{background:linear-gradient(135deg,#f5af19,#f12711)}
-.top-rank.silver{background:linear-gradient(135deg,#bdc3c7,#606060)}
+.top-rank.silver{background:linear-gradient(135deg,#e0e0e0,#606060)}
 .top-rank.bronze{background:linear-gradient(135deg,#cd7f32,#8b4513)}
 .top-rank.other{background:var(--primary)}
 .top-info{flex:1}
@@ -50,7 +50,7 @@
         <p class="text-muted">Comprehensive analysis of WAEC performance</p>
     </div>
     <form method="GET" class="d-flex gap-2">
-        <select name="year" class="form-control" onchange="this.form.submit()" style="width:auto">
+        <select name="year" class="form-control" data-autosubmit style="width:auto">
             {% for y in years %}
             <option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>
             {% endfor %}
@@ -189,9 +189,9 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
+<script nonce="{{ csp_nonce }}">
 {% if year_comparison and year_comparison|length > 1 %}
-const yoyCtx = document.getElementById('yoyChart').getContext('2d');
+var yoyCtx = document.getElementById('yoyChart').getContext('2d');
 new Chart(yoyCtx, {
     type: 'line',
     data: {

@@ -5,9 +5,10 @@
 {% block extra_css %}
 <style>
 @media print {
-    .sidebar, .top-header, .page-header-actions, .no-print { display: none !important; }
-    .main-content { margin: 0 !important; padding: 0 !important; }
-    .card { border: 2px solid #000 !important; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .sidebar, .top-header, .bottom-nav, .page-header-actions, .no-print, .sidebar-overlay { display: none !important; }
+    .main-content, .page-content { margin: 0 !important; padding: 0 !important; background: #fff !important; }
+    .card { border: 2px solid #000 !important; box-shadow: none !important; page-break-inside: avoid; }
     body { font-size: 11px; }
     .timetable-header { text-align: center; margin-bottom: 1rem; }
 }
@@ -19,7 +20,7 @@
 {% block content %}
 <div class="page-header no-print">
     <h1>Print Timetable</h1>
-    <button onclick="window.print()" class="btn btn-primary"><i class="fas fa-print"></i> Print</button>
+    <button data-print class="btn btn-primary"><i class="fas fa-print"></i> Print</button>
 </div>
 
 <div class="card">

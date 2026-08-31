@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}{{ subject.name }} rules - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.subjects_config') }}">Timetable subjects</a> / <span>{{ subject.name }}</span>{% endblock %}
+{% block extra_css %}
+<style>
+.sr-card{max-width:900px}
+.sr-row{display:flex;gap:.8rem;align-items:center;flex-wrap:wrap;padding:.55rem 0;border-bottom:1px dashed var(--border-color)}
+.sr-row:last-child{border-bottom:0}
+.sr-lbl{flex:1;min-width:200px}.sr-lbl b{display:block}.sr-lbl span{font-size:.8rem;color:var(--text-muted)}
+.sr-toggle{display:inline-flex;align-items:center;gap:.4rem;font-size:.9rem}
+.ctab{width:100%;border-collapse:collapse;font-size:.88rem}
+.ctab th,.ctab td{padding:.45rem .5rem;border-bottom:1px solid var(--border-color);text-align:left}
+.ctab th{font-size:.72rem;text-transform:uppercase;color:var(--text-muted)}
+.ctab input[type=number]{width:64px;padding:.25rem .35rem;border:1px solid var(--border-color);border-radius:6px}
+.crow.usedef .ov{opacity:.4;pointer-events:none}
+.pill{font-size:.66rem;font-weight:700;padding:.06rem .45rem;border-radius:999px;background:var(--gray-100);color:var(--text-muted)}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ subject.name }} <span class="pill">{{ level|upper }}</span></h1>
+        <p class="text-muted text-sm">Everything about how <strong>{{ subject.name }}</strong> is scheduled — in one place. Set the defaults once; only override the classes that differ.</p>
+    </div>
+    <div class="page-header-actions">
+        <a href="{{ url_for('generator.subjects_config') }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> All subjects</a>
+    </div>
+</div>
+
+<form method="post" action="{{ url_for('generator.save_subject_rules', subject_id=subject.id) }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
+    {# ---- Defaults (all classes) ---- #}
+    <div class="card sr-card" style="margin-bottom:1rem;">
+        <div class="card-header"><h3><i class="fas fa-sliders"></i> Default rules <span class="text-muted text-sm">— apply to every class unless overridden below</span></h3></div>
+        <div class="card-body">
+            <div class="sr-row">
+                <div class="sr-lbl"><b>Periods per week</b><span>How many lessons of {{ subject.name }} each week.</span></div>
+                <input type="number" name="periods" min="0" max="20" value="{{ default_periods }}" style="width:80px;padding:.35rem;border:1px solid var(--border-color);border-radius:6px;">
+            </div>
+            <div class="sr-row">
+                <div class="sr-lbl"><b>Double periods</b><span>Schedule some lessons as back-to-back pairs (e.g. for practicals).</span></div>
+                <label class="sr-toggle"><input type="checkbox" name="double" id="dblChk" {{ 'checked' if cfg and cfg.needs_double_period else '' }}> Use doubles</label>
+                <span class="text-sm text-muted">how many:</span>
+                <input type="number" name="double_count" min="0" max="10" value="{{ cfg.double_period_count if cfg else 0 }}" style="width:64px;padding:.3rem;border:1px solid var(--border-color);border-radius:6px;">
+            </div>
+            <div class="sr-row">
+                <div class="sr-lbl"><b>Avoid first period</b><span>Never place {{ subject.name }} in the first period of the day.</span></div>
+                <label class="sr-toggle"><input type="checkbox" name="not_first" {{ 'checked' if cfg and cfg.not_first_period else '' }}> Not first period</label>
+            </div>
+            <div class="sr-row">
+                <div class="sr-lbl"><b>Avoid last period</b><span>Never place {{ subject.name }} in the last period of the day.</span></div>
+                <label class="sr-toggle"><input type="checkbox" name="not_last" {{ 'checked' if cfg and cfg.not_last_period else '' }}> Not last period</label>
+            </div>
+            <div class="sr-row">
+                <div class="sr-lbl"><b>Preferred time of day</b><span>Bias {{ subject.name }} towards a part of the day.</span></div>
+                <select name="preferred" class="form-control" style="max-width:180px;">
+                    {% set pt = cfg.preferred_time if cfg else 'any' %}
+                    <option value="any" {{ 'selected' if pt=='any' else '' }}>Any time</option>
+                    <option value="morning" {{ 'selected' if pt=='morning' else '' }}>Mornings</option>
+                    <option value="afternoon" {{ 'selected' if pt=='afternoon' else '' }}>Afternoons</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    {# ---- Back-to-back (whole timetable) ---- #}
+    <div class="card sr-card" style="margin-bottom:1rem;border-left:4px solid #6366f1;">
+        <div class="card-body sr-row" style="border:0;">
+            <div class="sr-lbl"><b>Back-to-back limit <span class="pill">whole timetable</span></b>
+                <span>The most consecutive periods of the <em>same</em> subject allowed — applies to every subject, not just this one. Set to <strong>1</strong> to forbid back-to-back entirely.</span></div>
+            <input type="number" name="max_consecutive" min="1" max="6" value="{{ max_consecutive }}" style="width:64px;padding:.35rem;border:1px solid var(--border-color);border-radius:6px;">
+        </div>
+    </div>
+
+    {# ---- Per-class overrides ---- #}
+    <div class="card sr-card" style="margin-bottom:1rem;">
+        <div class="card-header"><h3><i class="fas fa-layer-group"></i> Per-class overrides <span class="text-muted text-sm">— tick “use default” unless a class differs</span></h3></div>
+        <div class="card-body" style="overflow-x:auto;">
+            {% if class_rows %}
+            <table class="ctab">
+                <thead><tr><th>Class</th><th>Use default</th><th>Takes it?</th><th>Periods/wk</th><th>Doubles</th></tr></thead>
+                <tbody>
+                    {% for r in class_rows %}
+                    <tr class="crow {{ 'usedef' if not r.has_override else '' }}" data-cid="{{ r.cc.id }}">
+                        <input type="hidden" name="class_id[]" value="{{ r.cc.id }}">
+                        <td><strong>{{ r.cc.class_name }}</strong>{% if r.arms %}<div class="text-sm text-muted">arms: {{ r.arms|join(', ') }}</div>{% endif %}</td>
+                        <td><input type="checkbox" name="default_{{ r.cc.id }}" class="usedef-chk" {{ 'checked' if not r.has_override else '' }}></td>
+                        <td class="ov"><input type="checkbox" name="enabled_{{ r.cc.id }}" {{ 'checked' if r.enabled else '' }}></td>
+                        <td class="ov"><input type="number" name="periods_{{ r.cc.id }}" min="0" max="20" value="{{ r.periods }}"></td>
+                        <td class="ov"><label class="sr-toggle"><input type="checkbox" name="double_{{ r.cc.id }}" {{ 'checked' if r.double else '' }}> <input type="number" name="double_count_{{ r.cc.id }}" min="0" max="10" value="{{ r.double_count }}"></label></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <p class="text-sm text-muted" style="margin-top:.6rem;"><i class="fas fa-circle-info"></i> Arms of a class share its settings. Different Science/Arts streams are handled on each class's stream page.</p>
+            {% else %}
+            <p class="text-muted text-sm" style="margin:0;">No classes set up for {{ level|upper }} yet — add classes first and they'll appear here.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <div style="max-width:900px;text-align:right;">
+        <button class="btn btn-primary"><i class="fas fa-save"></i> Save {{ subject.name }} rules</button>
+    </div>
+</form>
+
+<script nonce="{{ csp_nonce }}">
+// "Use default" greys out a class's override inputs (visual only; the server
+// treats a ticked row as "inherit the defaults").
+document.querySelectorAll('.usedef-chk').forEach(function(chk){
+    chk.addEventListener('change', function(){
+        chk.closest('.crow').classList.toggle('usedef', chk.checked);
+    });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,84 @@
+{% extends "base.html" %}
+{% set _t = {'dashboard':'Staff & HR','staff':'Staff Directory','staff_form':'Staff','staff_detail':'Staff Profile','departments':'Departments','leave':'Leave Management','payroll':'Payroll','payroll_detail':'Payroll','attendance':'Staff Attendance','settings':'HR Settings'} %}
+{% block title %}{{ _t.get(hr_json.page,'Staff / HR') }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}
+{% if hr_json.page == 'dashboard' %}<span>Staff / HR</span>
+{% else %}<a href="{{ url_for('hr.dashboard') }}">HR</a> / <span>{{ _t.get(hr_json.page,'') }}</span>{% endif %}
+{% endblock %}
+{% block extra_css %}
+<style>
+.fin-tabs{display:flex;gap:.35rem;overflow-x:auto;margin-bottom:1rem;border-bottom:1px solid var(--border-color);padding-bottom:.1rem;-webkit-overflow-scrolling:touch}
+.fin-tab{display:inline-flex;align-items:center;gap:.45rem;padding:.6rem .9rem;white-space:nowrap;font-size:.85rem;font-weight:600;color:var(--text-secondary);border-bottom:2px solid transparent;text-decoration:none;border-radius:var(--radius-sm) var(--radius-sm) 0 0}
+.fin-tab i{font-size:.85rem;opacity:.8}
+.fin-tab:hover{color:var(--primary);background:var(--gray-50)}
+.fin-tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+/* dashboard */
+.kpi-row{display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem;margin-bottom:1.1rem}
+@media(min-width:768px){.kpi-row{grid-template-columns:repeat(4,1fr)}}
+.kpi{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);padding:1rem;display:flex;align-items:center;gap:.85rem}
+.kpi .v{font-size:1.5rem;font-weight:700;line-height:1;font-family:var(--font-display)}
+.kpi .l{font-size:.72rem;color:var(--text-muted);margin-top:.25rem;text-transform:uppercase;letter-spacing:.03em}
+.hr-grid{display:grid;grid-template-columns:1fr;gap:1rem;margin-bottom:1rem}
+@media(min-width:992px){.hr-grid.c2{grid-template-columns:1fr 1fr}}
+.widget{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);overflow:hidden}
+.widget .wh{display:flex;justify-content:space-between;align-items:center;padding:.8rem 1rem;border-bottom:1px solid var(--border-light)}
+.widget .wh h3{margin:0;font-size:.85rem;font-weight:600;display:flex;align-items:center;gap:.45rem}
+.widget .wh h3 i{color:var(--primary)}
+.widget .wb{padding:1rem}
+.chart-box{position:relative;height:230px}
+/* staff detail */
+.profile-head{display:flex;gap:1rem;align-items:center;flex-wrap:wrap}
+.avatar{width:64px;height:64px;border-radius:50%;background:linear-gradient(135deg,var(--primary),#11998e);color:#fff;display:flex;align-items:center;justify-content:center;font-size:1.5rem;font-weight:700;flex-shrink:0;object-fit:cover}
+/* profile hub (cross-module snapshot) */
+.hr-hub-grid{display:grid;grid-template-columns:1fr;gap:1rem}
+@media(min-width:768px){.hr-hub-grid{grid-template-columns:repeat(2,1fr)}}
+@media(min-width:1200px){.hr-hub-grid{grid-template-columns:repeat(3,1fr)}}
+.hr-hub-grid .card-header{display:flex;justify-content:space-between;align-items:center}
+.hub-stat-row{display:flex;gap:1rem;flex-wrap:wrap}
+.hub-stat{flex:1;min-width:64px;text-align:center}
+.hub-stat .v{font-size:1.5rem;font-weight:700;line-height:1;font-family:var(--font-display)}
+.hub-stat .l{font-size:.68rem;color:var(--text-muted);margin-top:.25rem;text-transform:uppercase;letter-spacing:.03em}
+.chip-wrap{display:flex;flex-wrap:wrap;gap:.35rem}
+/* lifecycle quick-action forms + timeline */
+.hr-hub-grid + .hr-2col{margin-top:0}
+.lc-form{display:flex;gap:.75rem;align-items:flex-end;flex-wrap:wrap;background:var(--gray-50);border:1px solid var(--border-light);border-radius:var(--radius);padding:.85rem;margin-bottom:1rem}
+.hr-timeline{list-style:none;margin:0;padding:0;position:relative}
+.hr-timeline::before{content:'';position:absolute;left:15px;top:6px;bottom:6px;width:2px;background:var(--border-color)}
+.hr-timeline li{position:relative;display:flex;gap:.85rem;padding:.35rem 0 .8rem 0}
+.hr-timeline .tl-dot{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-size:.8rem;flex-shrink:0;z-index:1}
+.hr-timeline .tl-body{flex:1;min-width:0;padding-top:.25rem}
+.hr-timeline .tl-top{display:flex;justify-content:space-between;gap:1rem;align-items:baseline}
+.hr-timeline .tl-date{color:var(--text-muted);font-size:.78rem;white-space:nowrap}
+/* leave calendar */
+.leave-cal{display:grid;grid-template-columns:repeat(7,1fr);gap:2px;background:var(--border-color);border:1px solid var(--border-color);border-radius:var(--radius);overflow:hidden}
+.leave-cal .lc-head{background:var(--gray-50);text-align:center;font-size:.72rem;font-weight:600;color:var(--text-muted);padding:.4rem 0;text-transform:uppercase}
+.lc-cell{background:var(--bg-card);min-height:78px;padding:.3rem;font-size:.75rem}
+.lc-cell.lc-empty{background:var(--gray-50);opacity:.5}
+.lc-cell.lc-today{outline:2px solid var(--primary);outline-offset:-2px}
+.lc-day{font-weight:600;color:var(--text-secondary);margin-bottom:.2rem}
+.lc-item{display:flex;align-items:center;gap:.25rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.4}
+.lc-dot{width:8px;height:8px;border-radius:50%;display:inline-block;flex-shrink:0}
+.lc-more{color:var(--text-muted);font-size:.7rem}
+@media(max-width:640px){.lc-cell{min-height:56px;font-size:.68rem}.lc-item span:last-child{display:none}}
+/* performance reviews */
+.review-item{border:1px solid var(--border-light);border-radius:var(--radius);padding:.75rem .9rem;margin-bottom:.6rem}
+.review-item:last-child{margin-bottom:0}
+.info-grid{display:grid;grid-template-columns:1fr;gap:.1rem}
+@media(min-width:640px){.info-grid{grid-template-columns:1fr 1fr}}
+.info-row{display:flex;justify-content:space-between;gap:1rem;padding:.5rem 0;border-bottom:1px solid var(--border-light)}
+.info-row .k{color:var(--text-muted);font-size:.85rem}
+.info-row .v{font-weight:600;text-align:right}
+.hr-2col{display:grid;grid-template-columns:1fr;gap:1rem}
+@media(min-width:992px){.hr-2col{grid-template-columns:1fr 1fr}}
+/* attendance */
+.att-status select{min-width:120px}
+.sum-chips{display:flex;flex-wrap:wrap;gap:.5rem}
+.sum-chips .chip{background:var(--gray-100);border-radius:var(--radius-full);padding:.35rem .8rem;font-size:.82rem;font-weight:600}
+</style>
+{% endblock %}
+{% block content %}
+<div id="hr-app"><p class="text-muted" style="padding:2rem 0">Loading…</p></div>
+<script type="application/json" id="hr-data">{{ hr_json|tojson }}</script>
+<script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
+<script src="{{ bundle_url('js/react/hr-app.js') }}" defer></script>
+{% endblock %}

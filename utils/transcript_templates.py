@@ -1,0 +1,1051 @@
+"""Transcript design templates (Phase 2 — document design).
+
+Each template is a faithful layout inspired by real Nigerian secondary-school
+transcripts. All designs are driven by the SAME data — the school's stored
+internal per-term results (from ``utils.graduate_record.build_record``) — so a
+school only chooses how the transcript LOOKS; the numbers are always their own.
+
+A template's ``render(ctx)`` returns a list of reportlab flowables (the full
+transcript body: letterhead, header fields, results grid, grading key,
+signatures). The shared verification footer (QR + code) is appended by
+``utils.graduate_docs.render`` so every design stays verifiable.
+
+Register a new design by adding an entry to ``TRANSCRIPT_TEMPLATES``.
+"""
+from reportlab.lib import colors
+from reportlab.lib.units import mm
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_CENTER, TA_JUSTIFY, TA_LEFT
+from reportlab.platypus import Paragraph, Spacer, Table, TableStyle, HRFlowable
+
+USABLE_W = 170 * mm            # A4 (210mm) minus 20mm margins each side
+
+
+def _esc(v):
+    from utils.web_exports import pdf_escape
+    return pdf_escape(str(v if v is not None else ''))
+
+
+def _grade(score):
+    if score is None:
+        return ''
+    try:
+        s = float(score)
+    except (TypeError, ValueError):
+        return ''
+    return 'A' if s >= 70 else 'B' if s >= 60 else 'C' if s >= 50 else 'D' if s >= 40 else 'F'
+
+
+def _fmt(v):
+    if v is None:
+        return '—'
+    if isinstance(v, float) and v.is_integer():
+        return str(int(v))
+    return str(v)
+
+
+def _styles():
+    ss = getSampleStyleSheet()
+    return {
+        'body': ParagraphStyle('b', parent=ss['Normal'], fontSize=11.5, leading=17,
+                               alignment=TA_JUSTIFY, spaceAfter=6),
+        'left': ParagraphStyle('l', parent=ss['Normal'], fontSize=11, leading=16),
+        'center': ParagraphStyle('c', parent=ss['Normal'], alignment=TA_CENTER, fontSize=11),
+        'small': ParagraphStyle('s', parent=ss['Normal'], fontSize=8.5, textColor=colors.HexColor('#64748b')),
+        'cell': ParagraphStyle('cell', parent=ss['Normal'], fontSize=8.5, leading=10.5),
+        'cellc': ParagraphStyle('cellc', parent=ss['Normal'], fontSize=8.5, leading=10.5, alignment=TA_CENTER),
+    }
+
+
+# ---------------------------------------------------------------------------
+# data shaping — one pivot shared by every design
+# ---------------------------------------------------------------------------
+def _is_senior(klass):
+    """True for senior-secondary classes (SS1/SSS1…), False for JSS/primary."""
+    n = (klass or '').upper().replace(' ', '')
+    return ('SS' in n) and ('JS' not in n)
+
+
+def _matrix(academic):
+    """Pivot per-term results into subject × (session, term) with per-session
+    aggregates. Scoped to the senior-secondary years (SSS1–SSS3) when the class
+    of each term is known, so a transcript shows SSS1, SSS2 and the SSS3 terms
+    (up to the competence exam) rather than the whole JSS+SSS history."""
+    terms = (academic or {}).get('terms') or []
+    # class per session (used to pick senior years + label the groups)
+    klass_by_session = {}
+    for t in terms:
+        if t.get('session') and t.get('klass') and t['session'] not in klass_by_session:
+            klass_by_session[t['session']] = t['klass']
+    senior_sessions = {s for s, k in klass_by_session.items() if _is_senior(k)}
+    # If we can identify senior years, restrict to them; otherwise show everything
+    # (schools that don't use SSS class names still get a full transcript).
+    if senior_sessions:
+        terms = [t for t in terms if t.get('session') in senior_sessions]
+    sessions = []
+    for t in terms:
+        if t.get('session') and t['session'] not in sessions:
+            sessions.append(t['session'])
+    sessions.sort()
+    term_nums = sorted({t.get('term_number') or 0 for t in terms if t.get('term_number')}) or [1, 2, 3]
+    # SS3 competence (Mock WAEC) results shown as their own column
+    comp = (academic or {}).get('competence') or {}
+    comp_subjects = comp.get('subjects') or {}
+    subjects = []
+    grid = {}
+    for t in terms:
+        for s in t.get('subjects') or []:
+            name = s.get('subject') or 'Subject'
+            if name not in subjects:
+                subjects.append(name)
+            grid.setdefault(name, {})[(t['session'], t.get('term_number') or 0)] = s
+    for name in comp_subjects:                       # include competence-only subjects
+        if name not in subjects:
+            subjects.append(name)
+    subjects.sort()
+    # per (subject, session) average across that session's terms
+    sess_scores = {}
+    for name in subjects:
+        for sess in sessions:
+            vals = [grid[name][(sess, tn)].get('score') for tn in term_nums
+                    if (sess, tn) in grid.get(name, {}) and grid[name][(sess, tn)].get('score') is not None]
+            if vals:
+                sess_scores[(name, sess)] = round(sum(vals) / len(vals), 1)
+    def _norm(k):
+        return (k or '').upper().replace(' ', '')
+    ss_labels = {sess: (_norm(klass_by_session.get(sess)) or f'SS {i + 1}')
+                 for i, sess in enumerate(sessions)}
+    return {
+        'sessions': sessions, 'ss_labels': ss_labels, 'term_nums': term_nums,
+        'subjects': subjects, 'grid': grid, 'sess_scores': sess_scores,
+        'cumulative': (academic or {}).get('cumulative'),
+        'competence': comp_subjects, 'competence_label': comp.get('label') or 'Competence',
+    }
+
+
+def _header_lines(school):
+    """(name, address, contact) tuple for a letterhead."""
+    contact = ' · '.join([x for x in [school.get('phone'), school.get('email')] if x])
+    return school.get('name') or 'School', school.get('address') or '', contact
+
+
+def _logo():
+    try:
+        from utils.school import logo_flowable
+        return logo_flowable(max_h_mm=18, max_w_mm=28)
+    except Exception:
+        return None
+
+
+def _logo_center(max_h=15, max_w=40):
+    """Centred logo for designs that don't use ``_letterhead``. Every document must
+    show the school logo when one has been uploaded."""
+    try:
+        from utils.school import logo_flowable
+        img = logo_flowable(max_h_mm=max_h, max_w_mm=max_w)
+    except Exception:
+        img = None
+    if img is None:
+        return []
+    img.hAlign = 'CENTER'
+    return [img, Spacer(1, 4)]
+
+
+def _letterhead(ctx, accent, centered=True):
+    """A logo + school name/address band used by several designs."""
+    S = _styles()
+    name, addr, contact = _header_lines(ctx['school'])
+    nm = ParagraphStyle('nm', parent=S['center'] if centered else S['left'],
+                        fontSize=16, leading=19, textColor=accent, fontName='Helvetica-Bold')
+    sub = ParagraphStyle('sub', parent=S['center'] if centered else S['left'],
+                         fontSize=8.5, textColor=colors.HexColor('#475569'))
+    lines = [Paragraph(_esc(name), nm)]
+    if addr:
+        lines.append(Paragraph(_esc(addr), sub))
+    if contact:
+        lines.append(Paragraph(_esc('Tel: ' + contact), sub))
+    logo = _logo()
+    if logo is not None:
+        t = Table([[logo, lines]], colWidths=[30 * mm, USABLE_W - 30 * mm])
+        t.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                               ('LEFTPADDING', (0, 0), (-1, -1), 0)]))
+        return [t]
+    return lines
+
+
+def _header_fields(pairs, S, label_w=42 * mm, total_w=None):
+    """A two-column 'Label: value' block."""
+    rows = [[Paragraph(f'<b>{_esc(k)}</b>', S['left']), Paragraph(_esc(v), S['left'])]
+            for k, v in pairs if v]
+    if not rows:
+        return []
+    tw = total_w if total_w is not None else USABLE_W
+    t = Table(rows, colWidths=[label_w, tw - label_w])
+    t.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                           ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+                           ('LEFTPADDING', (0, 0), (-1, -1), 0)]))
+    return [t]
+
+
+def _grade_key(S, style='mark'):
+    data = [['MARK', 'GRADE', 'REMARK'],
+            ['70 – 100', 'A', 'Distinction'], ['60 – 69', 'B', 'Very good'],
+            ['50 – 59', 'C', 'Good'], ['40 – 49', 'D', 'Pass'], ['0 – 39', 'F', 'Fail']]
+    t = Table(data, colWidths=[30 * mm, 20 * mm, 40 * mm])
+    t.setStyle(TableStyle([
+        ('FONTSIZE', (0, 0), (-1, -1), 8),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#cbd5e1')),
+        ('TOPPADDING', (0, 0), (-1, -1), 2), ('BOTTOMPADDING', (0, 0), (-1, -1), 2)]))
+    return [Paragraph('<b>Key to grading</b>', S['small']), Spacer(1, 3), t]
+
+
+def _signatures(S, labels=('Principal', 'Registrar')):
+    cells, subs = [], []
+    for lab in labels:
+        cells.append('_' * 24)
+        subs.append(Paragraph(f'<b>{_esc(lab)}</b>', S['small']))
+    gap = (USABLE_W - len(labels) * 55 * mm)
+    widths = [55 * mm] * len(labels)
+    t = Table([cells, subs], colWidths=widths, hAlign='LEFT')
+    t.setStyle(TableStyle([('ALIGN', (0, 0), (-1, -1), 'CENTER'), ('TOPPADDING', (0, 1), (-1, 1), 2)]))
+    return [Spacer(1, 22), t]
+
+
+def _term_grid(m, S, accent, two_line_group=False):
+    """Wide grid: SUBJECT × (each session grouped into its terms), plus a
+    Competence (Mock WAEC) column when available. Includes an Average row.
+    ``two_line_group`` stacks the session name over its SS label."""
+    sessions, tnums = m['sessions'], m['term_nums']
+    comp = m.get('competence') or {}
+    has_comp = bool(comp)
+    ncols = len(sessions) * len(tnums)
+    total_cols = ncols + (1 if has_comp else 0)
+    subj_w = 38 * mm
+    col_w = max(9 * mm, (USABLE_W - subj_w) / max(1, total_cols))
+    grp = ParagraphStyle('grp', parent=S['cellc'], textColor=colors.white,
+                         fontName='Helvetica-Bold', fontSize=8)
+    comp_col = 1 + ncols                              # index of the competence column
+    # header rows
+    top = ['SUBJECT']
+    for sess in sessions:
+        label = (Paragraph(f'{_esc(sess)}<br/>{_esc(m["ss_labels"][sess])}', grp)
+                 if two_line_group else m['ss_labels'][sess])
+        top += [label] + [''] * (len(tnums) - 1)
+    sub = ['']
+    tlabels = {1: '1st', 2: '2nd', 3: '3rd'}
+    for _ in sessions:
+        for tn in tnums:
+            sub.append(tlabels.get(tn, f'T{tn}'))
+    if has_comp:
+        top.append(Paragraph(_esc(m.get('competence_label') or 'Competence'), grp))
+        sub.append('')
+    rows = [top, sub]
+    for name in m['subjects']:
+        r = [Paragraph(_esc(name), S['cell'])]
+        for sess in sessions:
+            for tn in tnums:
+                cell = m['grid'].get(name, {}).get((sess, tn))
+                r.append(_fmt(cell.get('score')) if cell else '—')
+        if has_comp:
+            cc = comp.get(name)
+            r.append((cc.get('grade') or _fmt(cc.get('score'))) if cc else '—')
+        rows.append(r)
+    # average row
+    avg_row = ['Average']
+    for sess in sessions:
+        for tn in tnums:
+            vals = [m['grid'][s2][(sess, tn)].get('score') for s2 in m['subjects']
+                    if (sess, tn) in m['grid'].get(s2, {}) and m['grid'][s2][(sess, tn)].get('score') is not None]
+            avg_row.append(str(round(sum(vals) / len(vals), 1)) if vals else '—')
+    if has_comp:
+        avg_row.append('—')
+    rows.append(avg_row)
+
+    t = Table(rows, colWidths=[subj_w] + [col_w] * total_cols, repeatRows=2)
+    style = [
+        ('FONTSIZE', (0, 0), (-1, -1), 8.5),
+        ('FONTNAME', (0, 0), (-1, 1), 'Helvetica-Bold'),
+        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+        ('BACKGROUND', (0, 0), (-1, 1), accent), ('TEXTCOLOR', (0, 0), (-1, 1), colors.white),
+        ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#94a3b8')),
+        ('ALIGN', (1, 0), (-1, -1), 'CENTER'), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 2.5), ('BOTTOMPADDING', (0, 0), (-1, -1), 2.5),
+        ('BACKGROUND', (0, -1), (-1, -1), colors.HexColor('#e2e8f0')),
+    ]
+    # span the session group headers across their term columns
+    c = 1
+    for _ in sessions:
+        if len(tnums) > 1:
+            style.append(('SPAN', (c, 0), (c + len(tnums) - 1, 0)))
+        c += len(tnums)
+    # merge the SUBJECT header cell down two rows
+    style.append(('SPAN', (0, 0), (0, 1)))
+    if has_comp:                                       # competence header spans both rows
+        style.append(('SPAN', (comp_col, 0), (comp_col, 1)))
+    t.setStyle(TableStyle(style))
+    return t
+
+
+def _year_grid(m, S, accent):
+    """Compact grid: S/N · SUBJECT × per-session (Score + Grade), plus a
+    Competence (Mock WAEC) grade column when available."""
+    sessions = m['sessions']
+    comp = m.get('competence') or {}
+    has_comp = bool(comp)
+    head1 = ['S/N', 'SUBJECT']
+    for sess in sessions:
+        head1 += [m['ss_labels'].get(sess, sess)] + ['']
+    head2 = ['', '']
+    for _ in sessions:
+        head2 += ['Score', 'Grade']
+    if has_comp:
+        head1.append(Paragraph(_esc(m.get('competence_label') or 'Competence'),
+                               ParagraphStyle('ch', parent=S['cellc'], textColor=colors.white,
+                                              fontName='Helvetica-Bold', fontSize=8)))
+        head2.append('')
+    rows = [head1, head2]
+    for i, name in enumerate(m['subjects'], 1):
+        r = [str(i), Paragraph(_esc(name), S['cell'])]
+        for sess in sessions:
+            sc = m['sess_scores'].get((name, sess))
+            r += [_fmt(sc), _grade(sc)]
+        if has_comp:
+            cc = comp.get(name)
+            r.append((cc.get('grade') or _fmt(cc.get('score'))) if cc else '—')
+        rows.append(r)
+    sn_w, subj_w = 10 * mm, 46 * mm
+    comp_w = 18 * mm if has_comp else 0
+    pair_w = (USABLE_W - sn_w - subj_w - comp_w) / max(1, len(sessions))
+    widths = [sn_w, subj_w] + [pair_w / 2, pair_w / 2] * len(sessions) + ([comp_w] if has_comp else [])
+    comp_col = 2 + 2 * len(sessions)
+    t = Table(rows, colWidths=widths, repeatRows=2)
+    style = [
+        ('FONTSIZE', (0, 0), (-1, -1), 7.5),
+        ('FONTNAME', (0, 0), (-1, 1), 'Helvetica-Bold'),
+        ('BACKGROUND', (0, 0), (-1, 1), accent), ('TEXTCOLOR', (0, 0), (-1, 1), colors.white),
+        ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#94a3b8')),
+        ('ALIGN', (0, 0), (0, -1), 'CENTER'), ('ALIGN', (2, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('TOPPADDING', (0, 0), (-1, -1), 2.5), ('BOTTOMPADDING', (0, 0), (-1, -1), 2.5),
+    ]
+    style.append(('SPAN', (0, 0), (0, 1)))
+    style.append(('SPAN', (1, 0), (1, 1)))
+    c = 2
+    for _ in sessions:
+        style.append(('SPAN', (c, 0), (c + 1, 0)))
+        c += 2
+    if has_comp:
+        style.append(('SPAN', (comp_col, 0), (comp_col, 1)))
+    t.setStyle(TableStyle(style))
+    return t
+
+
+def _no_results(S):
+    return [Paragraph('No internal academic results are on record for this student.', S['body'])]
+
+
+# ---------------------------------------------------------------------------
+# templates
+# ---------------------------------------------------------------------------
+def _t_classic(ctx):
+    """Clean, modern default — accent title band + per-year score/grade grid."""
+    S = _styles()
+    accent = colors.HexColor('#0e8a64')
+    m = _matrix(ctx['academic'])
+    el = _letterhead(ctx, colors.HexColor('#0e3a2f'))
+    el += [Spacer(1, 4), HRFlowable(width='100%', thickness=1, color=accent)]
+    title = ParagraphStyle('ti', parent=S['center'], fontSize=14, textColor=accent,
+                           fontName='Helvetica-Bold', spaceBefore=6, spaceAfter=8)
+    el.append(Paragraph('ACADEMIC TRANSCRIPT', title))
+    el += _header_fields([
+        ('Name', ctx['student'].full_name), ('Admission No.', ctx['student'].student_id),
+        ('Sex', ctx['student'].gender), ('Graduation', ctx['grad_when']),
+        ('Cumulative Average', f"{m['cumulative']}%" if m['cumulative'] is not None else None),
+    ], S)
+    el.append(Spacer(1, 8))
+    el.append(_year_grid(m, S, accent) if m['subjects'] else Paragraph('No internal results are on record.', S['body']))
+    el.append(Spacer(1, 10))
+    el += _grade_key(S)
+    el += _signatures(S)
+    return el
+
+
+def _t_verbins(ctx):
+    """'To Whom It May Concern' letter + wide cumulative per-term grid."""
+    S = _styles()
+    accent = colors.HexColor('#b91c1c')
+    m = _matrix(ctx['academic'])
+    el = _letterhead(ctx, colors.HexColor('#1e3a8a'))
+    el += [Spacer(1, 4), HRFlowable(width='100%', thickness=1.4, color=accent), Spacer(1, 8)]
+    title = ParagraphStyle('ti', parent=S['center'], fontSize=13, fontName='Helvetica-Bold', spaceAfter=8)
+    el.append(Paragraph('TO WHOM IT MAY CONCERN', title))
+    name = ctx['student'].full_name
+    el.append(Paragraph(
+        f"This is to certify that <b>{_esc(name)}</b> (Admission No. {_esc(ctx['student'].student_id)}) "
+        f"was a student of <b>{_esc(ctx['school'].get('name') or 'this school')}</b>. Below is "
+        f"{'his' if (ctx['student'].gender or '').lower().startswith('m') else 'her' if (ctx['student'].gender or '').lower().startswith('f') else 'their'} "
+        f"transcript for senior secondary school (SS1 – SS3).", S['body']))
+    el.append(Spacer(1, 6))
+    hd = ParagraphStyle('hd', parent=S['center'], fontSize=10, fontName='Helvetica-Bold',
+                        textColor=colors.white, backColor=accent, spaceAfter=0)
+    el.append(Table([[Paragraph('CUMULATIVE SENIOR SECONDARY RESULT', hd)]], colWidths=[USABLE_W],
+                    style=TableStyle([('BACKGROUND', (0, 0), (-1, -1), accent),
+                                      ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3)])))
+    el.append(_term_grid(m, S, accent) if m['subjects'] else Paragraph('No internal results are on record.', S['body']))
+    if m['cumulative'] is not None:
+        el.append(Spacer(1, 4))
+        el.append(Paragraph(f"<b>Cumulative Average:</b> {m['cumulative']}%", S['left']))
+    el.append(Spacer(1, 10))
+    el += _grade_key(S)
+    el += _signatures(S, labels=('Exam Officer', 'Principal'))
+    return el
+
+
+def _t_nawair(ctx):
+    """Recipient-addressed transcript with a per-term SUBJECT grid."""
+    S = _styles()
+    accent = colors.HexColor('#166534')
+    m = _matrix(ctx['academic'])
+    el = _letterhead(ctx, accent)
+    el += [Spacer(1, 4), HRFlowable(width='100%', thickness=1.2, color=accent), Spacer(1, 6)]
+    from datetime import date
+    issued = (ctx['doc'].created_at.strftime('%d/%m/%Y') if ctx.get('doc') and ctx['doc'].created_at
+              else date.today().strftime('%d/%m/%Y'))
+    el.append(Paragraph(f"Date: {issued}", S['left']))
+    el.append(Paragraph("To Whom It May Concern,", S['left']))
+    el.append(Spacer(1, 6))
+    title = ParagraphStyle('ti', parent=S['center'], fontSize=13, fontName='Helvetica-Bold', spaceAfter=8)
+    el.append(Paragraph('SCHOOL TRANSCRIPT', title))
+    el += _header_fields([
+        ('Name', ctx['student'].full_name), ('Registration No.', ctx['student'].student_id),
+        ('Sex', ctx['student'].gender),
+        ('Admission', ctx.get('admission_session')), ('Graduation Date', ctx['grad_when']),
+        ('Date Issued', issued),
+    ], S)
+    el.append(Spacer(1, 8))
+    el.append(_term_grid(m, S, accent) if m['subjects'] else Paragraph('No internal results are on record.', S['body']))
+    el.append(Spacer(1, 8))
+    el.append(Paragraph("This is to certify that the above-mentioned information is true and correct.", S['body']))
+    el += _signatures(S, labels=('Principal',))
+    return el
+
+
+def _t_ohis(ctx):
+    """'RE: name' summary with an S/N score+grade year grid and grading key."""
+    S = _styles()
+    accent = colors.HexColor('#0f766e')
+    m = _matrix(ctx['academic'])
+    el = _letterhead(ctx, accent)
+    el += [Spacer(1, 4), HRFlowable(width='100%', thickness=1.2, color=accent), Spacer(1, 6)]
+    title = ParagraphStyle('ti', parent=S['center'], fontSize=13, fontName='Helvetica-Bold', spaceAfter=4)
+    el.append(Paragraph('SCHOOL TRANSCRIPT', title))
+    el.append(Paragraph(f"RE: <b>{_esc(ctx['student'].full_name)}</b>", S['center']))
+    el.append(Spacer(1, 6))
+    el += _header_fields([
+        ('Admission No.', ctx['student'].student_id), ('Sex', ctx['student'].gender),
+        ('Graduation', ctx['grad_when']),
+    ], S)
+    el.append(Paragraph(
+        f"Find below the summary of the academic performance of the above-named student of "
+        f"<b>{_esc(ctx['school'].get('name') or 'this school')}</b>.", S['body']))
+    el.append(Spacer(1, 6))
+    el.append(_year_grid(m, S, accent) if m['subjects'] else Paragraph('No internal results are on record.', S['body']))
+    el.append(Spacer(1, 8))
+    el += _grade_key(S)
+    el.append(Spacer(1, 6))
+    el.append(Paragraph("I affirm that the above record is a true reflection of the student's performance.", S['body']))
+    el += _signatures(S, labels=('Principal',))
+    return el
+
+
+def _t_govsci(ctx):
+    """'Official High School Transcript' — boxed student/school panels + a
+    per-session academic record."""
+    S = _styles()
+    accent = colors.HexColor('#1f2937')
+    m = _matrix(ctx['academic'])
+    hdr = ParagraphStyle('h', parent=S['center'], fontSize=12, fontName='Helvetica-Bold')
+    el = _logo_center() + [Table([[Paragraph('OFFICIAL HIGH SCHOOL TRANSCRIPT', hdr)]], colWidths=[USABLE_W],
+                style=TableStyle([('BOX', (0, 0), (-1, -1), 1, accent),
+                                  ('TOPPADDING', (0, 0), (-1, -1), 5), ('BOTTOMPADDING', (0, 0), (-1, -1), 5)]))]
+    el.append(Spacer(1, 6))
+    stu = [Paragraph('<b>STUDENT INFORMATION</b>', S['small']),
+           Paragraph(f"<b>Name:</b> {_esc(ctx['student'].full_name)}", S['left']),
+           Paragraph(f"<b>Admission No.:</b> {_esc(ctx['student'].student_id)}", S['left']),
+           Paragraph(f"<b>Sex:</b> {_esc(ctx['student'].gender)}", S['left']),
+           Paragraph(f"<b>Graduation:</b> {_esc(ctx['grad_when'])}", S['left'])]
+    name, addr, contact = _header_lines(ctx['school'])
+    sch = [Paragraph('<b>SCHOOL INFORMATION</b>', S['small']),
+           Paragraph(f"<b>Name:</b> {_esc(name)}", S['left'])]
+    if addr:
+        sch.append(Paragraph(f"<b>Address:</b> {_esc(addr)}", S['left']))
+    if contact:
+        sch.append(Paragraph(f"<b>Contact:</b> {_esc(contact)}", S['left']))
+    panels = Table([[stu, sch]], colWidths=[USABLE_W / 2, USABLE_W / 2])
+    panels.setStyle(TableStyle([('BOX', (0, 0), (-1, -1), 0.6, accent),
+                                ('INNERGRID', (0, 0), (-1, -1), 0.6, accent),
+                                ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+                                ('TOPPADDING', (0, 0), (-1, -1), 6), ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+                                ('LEFTPADDING', (0, 0), (-1, -1), 8)]))
+    el += [panels, Spacer(1, 8),
+           Table([[Paragraph('ACADEMIC RECORD', hdr)]], colWidths=[USABLE_W],
+                 style=TableStyle([('BOX', (0, 0), (-1, -1), 0.8, accent),
+                                   ('TOPPADDING', (0, 0), (-1, -1), 4), ('BOTTOMPADDING', (0, 0), (-1, -1), 4)])),
+           Spacer(1, 6)]
+    if not m['subjects']:
+        return el + _no_results(S) + _signatures(S, labels=('Principal',))
+    # one block per session
+    for sess in m['sessions']:
+        cap = ParagraphStyle('cap', parent=S['small'], fontName='Helvetica-Bold', textColor=accent)
+        el.append(Paragraph(f"{m['ss_labels'].get(sess, sess)} — {_esc(sess)}", cap))
+        rows = [['Course Title', 'Score', 'Grade', 'Remark']]
+        for name2 in m['subjects']:
+            sc = m['sess_scores'].get((name2, sess))
+            if sc is None:
+                continue
+            g = _grade(sc)
+            remark = {'A': 'Excellent', 'B': 'Very good', 'C': 'Good', 'D': 'Pass', 'F': 'Fail'}.get(g, '')
+            rows.append([Paragraph(_esc(name2), S['cell']), _fmt(sc), g, remark])
+        t = Table(rows, colWidths=[80 * mm, 25 * mm, 25 * mm, 40 * mm], repeatRows=1)
+        t.setStyle(TableStyle([
+            ('FONTSIZE', (0, 0), (-1, -1), 8), ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#94a3b8')),
+            ('ALIGN', (1, 0), (2, -1), 'CENTER'),
+            ('TOPPADDING', (0, 0), (-1, -1), 2), ('BOTTOMPADDING', (0, 0), (-1, -1), 2)]))
+        el += [t, Spacer(1, 6)]
+    # competence (Mock WAEC) block
+    comp = m.get('competence') or {}
+    if comp:
+        cap = ParagraphStyle('cap', parent=S['small'], fontName='Helvetica-Bold', textColor=accent)
+        el.append(Paragraph(_esc(m.get('competence_label') or 'Competence (Mock WAEC)'), cap))
+        rows = [['Course Title', 'Score', 'Grade']]
+        for name2 in m['subjects']:
+            cc = comp.get(name2)
+            if cc:
+                rows.append([Paragraph(_esc(name2), S['cell']), _fmt(cc.get('score')), cc.get('grade') or '—'])
+        t = Table(rows, colWidths=[100 * mm, 30 * mm, 40 * mm], repeatRows=1)
+        t.setStyle(TableStyle([
+            ('FONTSIZE', (0, 0), (-1, -1), 8), ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#94a3b8')),
+            ('ALIGN', (1, 0), (2, -1), 'CENTER'),
+            ('TOPPADDING', (0, 0), (-1, -1), 2), ('BOTTOMPADDING', (0, 0), (-1, -1), 2)]))
+        el += [t, Spacer(1, 6)]
+    el += _signatures(S, labels=('Principal',))
+    return el
+
+
+def _t_modern(ctx):
+    """A contemporary card layout: accent header bar, KPI line, per-term grid."""
+    S = _styles()
+    accent = colors.HexColor('#4338ca')
+    m = _matrix(ctx['academic'])
+    name, addr, contact = _header_lines(ctx['school'])
+    bar_name = ParagraphStyle('bn', parent=S['left'], fontSize=15, fontName='Helvetica-Bold', textColor=colors.white)
+    bar_sub = ParagraphStyle('bs', parent=S['left'], fontSize=8, textColor=colors.HexColor('#e0e7ff'))
+    bar_inner = [Paragraph(_esc(name), bar_name)]
+    if addr:
+        bar_inner.append(Paragraph(_esc(addr), bar_sub))
+    if contact:
+        bar_inner.append(Paragraph(_esc(contact), bar_sub))
+    title_cell = Paragraph('ACADEMIC<br/>TRANSCRIPT', ParagraphStyle(
+        'bt', parent=S['left'], fontSize=12, fontName='Helvetica-Bold', textColor=colors.white, alignment=2))
+    logo = None
+    try:
+        from utils.school import logo_flowable
+        logo = logo_flowable(max_h_mm=14, max_w_mm=20)
+    except Exception:
+        logo = None
+    if logo is not None:
+        bar = Table([[logo, bar_inner, title_cell]], colWidths=[24 * mm, USABLE_W - 69 * mm, 45 * mm])
+    else:
+        bar = Table([[bar_inner, title_cell]], colWidths=[USABLE_W - 45 * mm, 45 * mm])
+    bar.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, -1), accent),
+                             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                             ('TOPPADDING', (0, 0), (-1, -1), 8), ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+                             ('LEFTPADDING', (0, 0), (0, 0), 10), ('RIGHTPADDING', (-1, -1), (-1, -1), 10)]))
+    el = [bar, Spacer(1, 8)]
+    el += _header_fields([
+        ('Name', ctx['student'].full_name), ('Admission No.', ctx['student'].student_id),
+        ('Sex', ctx['student'].gender), ('Graduation', ctx['grad_when']),
+        ('Cumulative Average', f"{m['cumulative']}%" if m['cumulative'] is not None else None),
+    ], S)
+    el.append(Spacer(1, 8))
+    el.append(_term_grid(m, S, accent) if m['subjects'] else Paragraph('No internal results are on record.', S['body']))
+    el.append(Spacer(1, 10))
+    el += _grade_key(S)
+    el += _signatures(S)
+    return el
+
+
+def _pioneer_border(canvas, doc):
+    """A decorative double frame with corner diamonds (drawn on the page)."""
+    from reportlab.lib.pagesizes import A4
+    w, h = A4
+    navy = colors.HexColor('#1e293b')
+    gold = colors.HexColor('#b45309')
+    canvas.saveState()
+    m = 9 * mm
+    canvas.setStrokeColor(navy)
+    canvas.setLineWidth(5)
+    canvas.roundRect(m, m, w - 2 * m, h - 2 * m, 6, stroke=1, fill=0)
+    canvas.setStrokeColor(gold)
+    canvas.setLineWidth(1.2)
+    inset = m + 3 * mm
+    canvas.roundRect(inset, inset, w - 2 * inset, h - 2 * inset, 4, stroke=1, fill=0)
+    canvas.setFillColor(gold)
+    for x, y in [(m, m), (w - m, m), (m, h - m), (w - m, h - m)]:
+        canvas.saveState()
+        canvas.translate(x, y)
+        canvas.rotate(45)
+        canvas.rect(-2.2 * mm, -2.2 * mm, 4.4 * mm, 4.4 * mm, fill=1, stroke=0)
+        canvas.restoreState()
+    canvas.restoreState()
+
+
+def _t_pioneer(ctx):
+    """Ornamental bordered certificate: centred letterhead, underlined TRANSCRIPT
+    / FOR <name>, Reg-No fields, and a per-term SS1–SS3 grid."""
+    S = _styles()
+    accent = colors.HexColor('#1e293b')
+    m = _matrix(ctx['academic'])
+    el = _letterhead(ctx, accent)
+    el.append(Spacer(1, 10))
+    tstyle = ParagraphStyle('ti', parent=S['center'], fontSize=14, fontName='Helvetica-Bold',
+                            spaceAfter=4)
+    el.append(Paragraph('<u>TRANSCRIPT</u>', tstyle))
+    el.append(Paragraph(f"<u>FOR {_esc((ctx['student'].full_name or '').upper())}</u>",
+                        ParagraphStyle('fn', parent=S['center'], fontSize=12,
+                                       fontName='Helvetica-Bold', spaceAfter=8)))
+    el += _header_fields([
+        ('Reg. No.', ctx['student'].student_id),
+        ('PIN', (ctx.get('bio') or {}).get('jamb_profile_code') or (ctx.get('bio') or {}).get('jamb_reg_number')),
+        ('Graduation', ctx['grad_when']),
+    ], S)
+    el.append(Spacer(1, 8))
+    el.append(_term_grid(m, S, accent, two_line_group=True) if m['subjects']
+              else Paragraph('No internal results are on record.', S['body']))
+    if m['cumulative'] is not None:
+        el.append(Spacer(1, 4))
+        el.append(Paragraph(f"<b>Cumulative Average:</b> {m['cumulative']}%", S['left']))
+    el += _signatures(S, labels=('HOD', 'Principal'))
+    return el
+
+
+# ---------------------------------------------------------------------------
+# registry
+# ---------------------------------------------------------------------------
+def _gold_frame(canvas, doc):
+    from reportlab.lib.pagesizes import A4
+    w, h = A4
+    canvas.saveState()
+    canvas.setStrokeColor(colors.HexColor('#b7791f')); canvas.setLineWidth(4)
+    canvas.rect(9 * mm, 9 * mm, w - 18 * mm, h - 18 * mm, stroke=1, fill=0)
+    canvas.setLineWidth(1)
+    canvas.rect(12 * mm, 12 * mm, w - 24 * mm, h - 24 * mm, stroke=1, fill=0)
+    canvas.restoreState()
+
+
+def _lagos_frame(canvas, doc):
+    """Cream paper + engraved double frame (the Lagos International look)."""
+    from reportlab.lib.pagesizes import A4
+    w, h = A4
+    maroon = colors.HexColor('#7c2d12')
+    canvas.saveState()
+    canvas.setFillColor(colors.HexColor('#f7f1e0')); canvas.rect(0, 0, w, h, fill=1, stroke=0)
+    canvas.setStrokeColor(maroon); canvas.setLineWidth(3.5)
+    canvas.rect(8 * mm, 8 * mm, w - 16 * mm, h - 16 * mm, stroke=1, fill=0)
+    canvas.setLineWidth(0.8)
+    canvas.rect(11 * mm, 11 * mm, w - 22 * mm, h - 22 * mm, stroke=1, fill=0)
+    canvas.restoreState()
+
+
+def _photo_box(w=24 * mm, h=30 * mm):
+    """A labelled passport-photo placeholder (no student photo field yet)."""
+    t = Table([[Paragraph('PHOTOGRAPH', ParagraphStyle('ph', fontSize=6,
+               textColor=colors.HexColor('#94a3b8'), alignment=1))]], colWidths=[w], rowHeights=[h])
+    t.setStyle(TableStyle([('BOX', (0, 0), (-1, -1), 0.8, colors.HexColor('#94a3b8')),
+                           ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#eef2f7')),
+                           ('VALIGN', (0, 0), (-1, -1), 'MIDDLE')]))
+    return t
+
+
+def _boxed_info(title, pairs, S, accent, width):
+    """A titled, tinted, boxed label/value panel (PERSONAL INFORMATION etc.)."""
+    data = [[Paragraph(f'<b>{_esc(title)}</b>', ParagraphStyle('bt', parent=S['left'],
+             fontSize=8.5, textColor=colors.white)), '']]
+    for k, v in pairs:
+        data.append([Paragraph(f'<b>{_esc(k)}:</b>', S['left']), Paragraph(_esc(v), S['left'])])
+    t = Table(data, colWidths=[width * 0.42, width * 0.58])
+    t.setStyle(TableStyle([('SPAN', (0, 0), (1, 0)), ('BACKGROUND', (0, 0), (1, 0), accent),
+                           ('BOX', (0, 0), (-1, -1), 0.6, accent),
+                           ('LINEBELOW', (0, 0), (-1, -2), 0.3, colors.HexColor('#cbd5e1')),
+                           ('FONTSIZE', (0, 0), (-1, -1), 8.5),
+                           ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+                           ('LEFTPADDING', (0, 0), (-1, -1), 5)]))
+    return t
+
+
+def _t_lagos(ctx):
+    """Faithful 'Lagos International' replica: cream engraved frame, boxed
+    PERSONAL INFORMATION / ACADEMIC SUMMARY panels, SS1–SS3 term grid, grading
+    key, CGPA and an OFFICIAL AUTHENTICATION block."""
+    from datetime import date
+    S = _styles()
+    accent = colors.HexColor('#7c2d12')
+    m = _matrix(ctx['academic'])
+    name, addr, contact = _header_lines(ctx['school'])
+    logo = _logo()
+    nm = Paragraph(_esc(name), ParagraphStyle('nm', parent=S['left'], fontSize=17, leading=20,
+                   fontName='Times-Bold', textColor=accent))
+    head = Table([[logo or '', nm]], colWidths=[26 * mm, USABLE_W - 26 * mm]) if logo is not None \
+        else Table([[nm]], colWidths=[USABLE_W])
+    head.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('LEFTPADDING', (0, 0), (-1, -1), 0)]))
+    el = [head, Spacer(1, 4),
+          Paragraph('<u>STUDENT ACADEMIC TRANSCRIPT</u>', ParagraphStyle('ti', parent=S['center'],
+                    fontSize=13, fontName='Helvetica-Bold', spaceBefore=2, spaceAfter=8))]
+    issued = date.today().strftime('%d/%m/%Y')
+    hw = USABLE_W / 2 - 3 * mm
+    left = _boxed_info('PERSONAL INFORMATION', [
+        ('Student Name', ctx['student'].full_name), ('Student ID', ctx['student'].student_id),
+        ('Date of Birth', (ctx.get('bio') or {}).get('date_of_birth')), ('Sex', ctx['student'].gender)],
+        S, accent, hw)
+    right = _boxed_info('ACADEMIC SUMMARY', [
+        ('Date Issued', issued), ('Entrance', ctx.get('admission_session') or '—'),
+        ('Graduation', ctx.get('grad_when') or '—'),
+        ('CGPA', f"{m['cumulative']}%" if m['cumulative'] is not None else '—')], S, accent, hw)
+    panels = Table([[left, right]], colWidths=[hw + 3 * mm, hw + 3 * mm])
+    panels.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'), ('LEFTPADDING', (0, 0), (0, 0), 0),
+                               ('RIGHTPADDING', (-1, 0), (-1, 0), 0)]))
+    el += [panels, Spacer(1, 8),
+           Table([[Paragraph('ACADEMIC RECORD: SENIOR SECONDARY (SS1 – SS3)',
+                   ParagraphStyle('rb', parent=S['center'], fontSize=9.5, fontName='Helvetica-Bold'))]],
+                 colWidths=[USABLE_W], style=TableStyle([
+                     ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#efe3cf')),
+                     ('BOX', (0, 0), (-1, -1), 0.5, accent),
+                     ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3)])),
+           Spacer(1, 4)]
+    el.append(_term_grid(m, S, accent) if m['subjects'] else Paragraph('No internal results are on record.', S['body']))
+    el.append(Spacer(1, 8))
+    key = _grade_key(S)
+    cgpa = [Paragraph(f"<b>CUMULATIVE AVERAGE:</b> {m['cumulative']}%" if m['cumulative'] is not None
+                      else '<b>CUMULATIVE AVERAGE:</b> —', S['left'])]
+    foot = Table([[key, cgpa]], colWidths=[USABLE_W * 0.55, USABLE_W * 0.45])
+    foot.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP')]))
+    el += [foot, Spacer(1, 6),
+           Table([[Paragraph('OFFICIAL AUTHENTICATION', ParagraphStyle('au', parent=S['center'],
+                   fontSize=9, fontName='Helvetica-Bold'))]], colWidths=[USABLE_W],
+                 style=TableStyle([('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#efe3cf')),
+                                   ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3)]))]
+    el += _signatures(S, labels=("Registrar's Signature", 'Date'))
+    return el
+
+
+def _kpi_strip(m, S, accent):
+    cells = [(f"{m['cumulative']}%" if m['cumulative'] is not None else '—', 'Cumulative Avg'),
+             (str(len(m['sessions'])), 'Sessions'),
+             (str(len(m['subjects'])), 'Subjects'),
+             (_grade(m['cumulative']) if m['cumulative'] is not None else '—', 'Classification')]
+    row = [Paragraph(f"<b>{v}</b><br/><font size=7>{k}</font>",
+                     ParagraphStyle('k', parent=S['center'], fontSize=11, leading=13)) for v, k in cells]
+    t = Table([row], colWidths=[USABLE_W / 4] * 4)
+    t.setStyle(TableStyle([('BOX', (0, 0), (-1, -1), 0.6, accent),
+                           ('INNERGRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#e2e8f0')),
+                           ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#f8fafc')),
+                           ('TOPPADDING', (0, 0), (-1, -1), 6), ('BOTTOMPADDING', (0, 0), (-1, -1), 6)]))
+    return t
+
+
+def _t_sapphire(ctx):
+    """Sapphire masthead + a KPI strip over the per-year grid."""
+    S = _styles()
+    accent = colors.HexColor('#172554')
+    m = _matrix(ctx['academic'])
+    name, addr, contact = _header_lines(ctx['school'])
+    logo = _logo()
+    inner = [Paragraph(_esc(name), ParagraphStyle('n', parent=S['left'], fontSize=16,
+             fontName='Helvetica-Bold', textColor=colors.white, leading=19)),
+             Paragraph('ACADEMIC TRANSCRIPT', ParagraphStyle('t', parent=S['left'], fontSize=11,
+             fontName='Helvetica-Bold', textColor=colors.HexColor('#c7d2fe')))]
+    band = Table([[logo or '', inner]], colWidths=[26 * mm, USABLE_W - 26 * mm]) if logo is not None \
+        else Table([[inner]], colWidths=[USABLE_W])
+    band.setStyle(TableStyle([('BACKGROUND', (0, 0), (-1, -1), accent), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+                              ('LEFTPADDING', (0, 0), (0, 0), 8), ('TOPPADDING', (0, 0), (-1, -1), 8),
+                              ('BOTTOMPADDING', (0, 0), (-1, -1), 8)]))
+    el = [band, Spacer(1, 8)]
+    el += _header_fields([('Name', ctx['student'].full_name), ('Admission No.', ctx['student'].student_id),
+                          ('Sex', ctx['student'].gender), ('Graduation', ctx['grad_when'])], S)
+    el += [Spacer(1, 6), _kpi_strip(m, S, accent), Spacer(1, 8)]
+    el.append(_year_grid(m, S, accent) if m['subjects'] else Paragraph('No internal results are on record.', S['body']))
+    el += [Spacer(1, 10)] + _grade_key(S) + _signatures(S)
+    return el
+
+
+def _t_heritage(ctx):
+    """Centred crested transcript inside a gold double border."""
+    S = _styles()
+    accent = colors.HexColor('#713f12')
+    m = _matrix(ctx['academic'])
+    el = _letterhead(ctx, accent)
+    el += [Spacer(1, 4), HRFlowable(width='60%', thickness=1, color=colors.HexColor('#b7791f')),
+           Paragraph('ACADEMIC TRANSCRIPT', ParagraphStyle('ti', parent=S['center'], fontSize=15,
+                     fontName='Times-Bold', textColor=accent, spaceBefore=6, spaceAfter=8))]
+    el += _header_fields([('Name', ctx['student'].full_name), ('Admission No.', ctx['student'].student_id),
+                          ('Sex', ctx['student'].gender), ('Graduation', ctx['grad_when']),
+                          ('Cumulative Average', f"{m['cumulative']}%" if m['cumulative'] is not None else None)], S)
+    el.append(Spacer(1, 8))
+    el.append(_term_grid(m, S, accent) if m['subjects'] else Paragraph('No internal results are on record.', S['body']))
+    el += [Spacer(1, 10)] + _grade_key(S) + _signatures(S)
+    return el
+
+
+def _t_chancellor(ctx):
+    """Two boxed panels (student info | performance KPIs) over the record grid."""
+    S = _styles()
+    accent = colors.HexColor('#0f766e')
+    m = _matrix(ctx['academic'])
+    el = _letterhead(ctx, accent)
+    el += [Spacer(1, 4), HRFlowable(width='100%', thickness=1.2, color=accent),
+           Paragraph('OFFICIAL ACADEMIC TRANSCRIPT', ParagraphStyle('ti', parent=S['center'], fontSize=14,
+                     fontName='Helvetica-Bold', textColor=accent, spaceBefore=6, spaceAfter=8))]
+    stu = [Paragraph('<b>STUDENT</b>', S['small']),
+           Paragraph(f"<b>Name:</b> {_esc(ctx['student'].full_name)}", S['left']),
+           Paragraph(f"<b>Admission No.:</b> {_esc(ctx['student'].student_id)}", S['left']),
+           Paragraph(f"<b>Sex:</b> {_esc(ctx['student'].gender)}", S['left']),
+           Paragraph(f"<b>Graduation:</b> {_esc(ctx['grad_when'])}", S['left'])]
+    perf = [Paragraph('<b>PERFORMANCE</b>', S['small']),
+            Paragraph(f"<b>Cumulative Average:</b> {m['cumulative']}%" if m['cumulative'] is not None
+                      else '<b>Cumulative Average:</b> —', S['left']),
+            Paragraph(f"<b>Classification:</b> "
+                      f"{_grade(m['cumulative']) if m['cumulative'] is not None else '—'}", S['left']),
+            Paragraph(f"<b>Sessions:</b> {len(m['sessions'])}", S['left']),
+            Paragraph(f"<b>Subjects:</b> {len(m['subjects'])}", S['left'])]
+    panels = Table([[stu, perf]], colWidths=[USABLE_W / 2, USABLE_W / 2])
+    panels.setStyle(TableStyle([('BOX', (0, 0), (-1, -1), 0.6, accent), ('INNERGRID', (0, 0), (-1, -1), 0.6, accent),
+                                ('VALIGN', (0, 0), (-1, -1), 'TOP'), ('LEFTPADDING', (0, 0), (-1, -1), 8),
+                                ('TOPPADDING', (0, 0), (-1, -1), 6), ('BOTTOMPADDING', (0, 0), (-1, -1), 6)]))
+    el += [panels, Spacer(1, 8)]
+    el.append(_year_grid(m, S, accent) if m['subjects'] else Paragraph('No internal results are on record.', S['body']))
+    el += [Spacer(1, 10)] + _grade_key(S) + _signatures(S)
+    return el
+
+
+def _bishop_frame(canvas, doc):
+    """Microtext-style security double frame (the Bishop-Adelakun look)."""
+    from reportlab.lib.pagesizes import A4
+    w, h = A4
+    navy = colors.HexColor('#0f2f5f')
+    canvas.saveState()
+    canvas.setStrokeColor(navy); canvas.setLineWidth(2.4)
+    canvas.rect(8 * mm, 8 * mm, w - 16 * mm, h - 16 * mm, stroke=1, fill=0)
+    canvas.setLineWidth(0.6)
+    canvas.rect(10.5 * mm, 10.5 * mm, w - 21 * mm, h - 21 * mm, stroke=1, fill=0)
+    canvas.setFillColor(colors.Color(*navy.rgb(), alpha=0.32))
+    canvas.setFont('Helvetica', 3.1)
+    micro = ('TRANSCRIPT OF ACADEMIC RECORD  ') * 40
+    canvas.drawString(12 * mm, h - 10 * mm, micro[:150])
+    canvas.drawString(12 * mm, 8.6 * mm, micro[:150])
+    canvas.restoreState()
+
+
+def _t_bishop(ctx):
+    """Faithful 'Bishop Adelakun' replica: microtext security frame, red serial,
+    crest + motto masthead, passport + bio, a multi-session grid, a performance
+    summary block, Principal's Remarks and a QR authentication row."""
+    from datetime import date
+    from utils import doc_themes as _dth
+    S = _styles()
+    navy = colors.HexColor('#0f2f5f')
+    m = _matrix(ctx['academic'])
+    name, addr, contact = _header_lines(ctx['school'])
+    st = ctx['student']
+    doc = ctx.get('doc')
+    serial = (doc.document_number if doc and getattr(doc, 'document_number', None) else 'BAMHS/TR/0000')
+    el = [Table([[Paragraph('', S['left']),
+                  Paragraph(f"<b>{_esc(serial)}</b>", ParagraphStyle('sn', parent=S['left'],
+                            fontSize=11, alignment=2, textColor=colors.HexColor('#b91c1c')))]],
+                colWidths=[P_WHALF := USABLE_W - 40 * mm, 40 * mm],
+                style=TableStyle([('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0)]))]
+    logo = _logo()
+    hdr = [Paragraph(_esc(name).upper(), ParagraphStyle('nm', parent=S['center'], fontSize=16, leading=19,
+                     fontName='Helvetica-Bold', textColor=navy))]
+    if ctx['school'].get('motto'):
+        hdr.append(Paragraph(_esc(ctx['school'].get('motto')), ParagraphStyle('mt', parent=S['center'],
+                   fontSize=8, textColor=colors.HexColor('#15803d'))))
+    if addr:
+        hdr.append(Paragraph(_esc(addr), S['small']))
+    band = Table([[logo or '', hdr]], colWidths=[24 * mm, USABLE_W - 24 * mm]) if logo is not None \
+        else Table([[hdr]], colWidths=[USABLE_W])
+    band.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('LEFTPADDING', (0, 0), (-1, -1), 0)]))
+    ss_span = ''
+    if m['sessions']:
+        ss_span = f" ({_esc(m['sessions'][0])} – {_esc(m['sessions'][-1])})"
+    el += [band, Spacer(1, 2),
+           Paragraph('OFFICIAL ACADEMIC TRANSCRIPT', ParagraphStyle('ti', parent=S['center'], fontSize=13,
+                     fontName='Helvetica-Bold', textColor=navy, spaceBefore=4, spaceAfter=1)),
+           Paragraph('SENIOR SECONDARY SCHOOL (SSS) 1 – 3' + ss_span,
+                     ParagraphStyle('ti2', parent=S['center'], fontSize=9, spaceAfter=6))]
+    biod = ctx.get('bio') or {}
+    half = (USABLE_W - 30 * mm) / 2
+    bio = _header_fields([('Full Name', st.full_name), ('Admission No.', st.student_id),
+                          ('Gender', st.gender), ('Date of Birth', biod.get('date_of_birth')),
+                          ('WAEC Reg. No.', biod.get('waec_reg_number')),
+                          ('Serial No.', biod.get('serial_number'))],
+                         S, label_w=28 * mm, total_w=half)
+    bio2 = _header_fields([('Admitted', ctx.get('admission_session')),
+                           ('Graduated', ctx.get('grad_when')), ('Status', 'Graduated'),
+                           ('Class', 'SSS3'),
+                           ('JAMB Reg. No.', biod.get('jamb_reg_number'))],
+                          S, label_w=28 * mm, total_w=half)
+    idrow = Table([[_photo_box(), bio, bio2]], colWidths=[30 * mm, half, half])
+    idrow.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP'), ('ALIGN', (0, 0), (0, 0), 'LEFT'),
+                               ('RIGHTPADDING', (1, 0), (1, 0), 6)]))
+    el += [idrow, Spacer(1, 6)]
+    el.append(_term_grid(m, S, navy, two_line_group=True) if m['subjects']
+              else Paragraph('No internal results are on record.', S['body']))
+    el.append(Spacer(1, 6))
+    cls = _grade(m['cumulative']) if m['cumulative'] is not None else '—'
+    gpa = round(m['cumulative'] / 20.0, 2) if m['cumulative'] is not None else None
+    classification = ('First Class' if (gpa or 0) >= 4.5 else 'Second Class Upper' if (gpa or 0) >= 3.5
+                      else 'Second Class Lower' if (gpa or 0) >= 2.5 else 'Pass') if gpa else '—'
+    summ_l = _boxed_info('PERFORMANCE SUMMARY', [
+        ('Overall GPA', f"{gpa} / 5.00" if gpa else '—'),
+        ('Overall Average', f"{m['cumulative']}%" if m['cumulative'] is not None else '—'),
+        ('Classification', classification), ('Total Credits', str(len(m['subjects'])))],
+        S, navy, USABLE_W / 2 - 3 * mm)
+    summ_r = _boxed_info('STANDING', [
+        ('Class Position', '—'), ('Attendance', '—'), ('Conduct Rating', 'Exemplary (A)'),
+        ('Graduation Status', 'Graduated')], S, navy, USABLE_W / 2 - 3 * mm)
+    panels = Table([[summ_l, summ_r]], colWidths=[USABLE_W / 2, USABLE_W / 2])
+    panels.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'TOP')]))
+    el += [panels, Spacer(1, 6)]
+    pr = 'his' if (st.gender or '').lower().startswith('m') else 'her' if (st.gender or '').lower().startswith('f') else 'their'
+    el.append(Paragraph(f"<b>Principal's Remarks:</b> <i>{_esc((st.full_name or '').split(' ')[0])} is a "
+                        f"diligent student who maintained good conduct throughout {pr} studies and is "
+                        f"recommended for higher education.</i>", S['body']))
+    # authentication row: QR + verification + signatures
+    qr = _dth.qr(serial, size=20)
+    auth_left = [Paragraph(f"<b>Transcript No.:</b> {_esc(serial)}", S['small']),
+                 Paragraph(f"<b>Date Issued:</b> {date.today().strftime('%d %B %Y')}", S['small']),
+                 Paragraph("Verify at the school portal.", S['small'])]
+    authrow = Table([[qr or '', auth_left]], colWidths=[24 * mm, USABLE_W - 24 * mm]) if qr is not None \
+        else Table([[auth_left]], colWidths=[USABLE_W])
+    authrow.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE'), ('LEFTPADDING', (0, 0), (0, 0), 0)]))
+    el += [Spacer(1, 6), authrow]
+    el += _signatures(S, labels=('Principal', 'Registrar'))
+    return el
+
+
+def _overall_pairs(m):
+    out = []
+    for subj in m['subjects']:
+        cells = m['grid'].get(subj, {})
+        scores = [c.get('score') for c in cells.values() if c.get('score') is not None]
+        if scores:
+            out.append(subj)
+    return out
+
+
+TRANSCRIPT_TEMPLATES = {
+    'classic': {'name': 'Classic (default)', 'render': _t_classic,
+                'description': 'Clean modern layout with a per-year score & grade grid and grading key.'},
+    'verbins': {'name': 'Formal Letter', 'render': _t_verbins,
+                'description': '“To Whom It May Concern” letter with a wide cumulative SS1–SS3 per-term grid.'},
+    'nawair': {'name': 'Addressed Transcript', 'render': _t_nawair,
+               'description': 'Recipient-dated transcript with header fields and a per-term subject grid.'},
+    'ohis': {'name': 'Summary Sheet', 'render': _t_ohis,
+             'description': '“RE:” summary with a numbered subject list, per-year score/grade and grading key.'},
+    'govsci': {'name': 'Official (Boxed)', 'render': _t_govsci,
+               'description': 'Boxed student & school panels with a per-session academic record.'},
+    'modern': {'name': 'Modern Banner', 'render': _t_modern,
+               'description': 'Contemporary coloured header bar with a per-term results grid.'},
+    'pioneer': {'name': 'Bordered Certificate', 'render': _t_pioneer, 'decorator': _pioneer_border,
+                'description': 'Ornamental full-page border, centred letterhead, per-term SS1–SS3 grid with year + SS labels.'},
+    'sapphire': {'name': 'Sapphire Masthead', 'render': _t_sapphire,
+                 'description': 'Sapphire masthead with a KPI strip (average, sessions, subjects) over the per-year grid.'},
+    'heritage': {'name': 'Heritage (gold border)', 'render': _t_heritage, 'decorator': _gold_frame,
+                 'description': 'Centred crested transcript inside a gold double border with a per-term grid.'},
+    'chancellor': {'name': 'Chancellor Panels', 'render': _t_chancellor,
+                   'description': 'Two boxed panels (student & performance) over the academic record grid.'},
+    'lagos': {'name': 'Engraved (cream)', 'render': _t_lagos, 'decorator': _lagos_frame,
+              'description': 'Cream engraved-frame transcript with boxed information panels, an SS1–SS3 '
+                             'record grid, grading key and an official authentication block.'},
+    'bishop': {'name': 'Secured (microtext)', 'render': _t_bishop, 'decorator': _bishop_frame,
+               'description': 'Microtext security frame with a red serial, crest + motto masthead, '
+                              'passport + bio, a multi-session grid, a performance summary and a QR '
+                              'authentication row.'},
+}
+
+TEMPLATES = TRANSCRIPT_TEMPLATES
+DEFAULT_TEMPLATE = 'classic'
+
+
+def page_decorator(key):
+    """Optional per-design canvas decorator (e.g. a printed border)."""
+    return resolve(key).get('decorator')
+
+
+def is_landscape(key):
+    return bool(resolve(key).get('landscape'))
+
+
+def list_templates():
+    return [{'key': k, 'name': v['name'], 'description': v['description']}
+            for k, v in TRANSCRIPT_TEMPLATES.items()]
+
+
+def resolve(key):
+    return TRANSCRIPT_TEMPLATES.get(key) or TRANSCRIPT_TEMPLATES[DEFAULT_TEMPLATE]
+
+
+def build_flowables(key, ctx):
+    return resolve(key)['render'](ctx)
+
+
+def sample_ctx(school):
+    """A believable sample student + results so a design can be previewed even
+    when the school has no graduate records yet."""
+    from types import SimpleNamespace
+    from datetime import date
+    subjects = ['English Language', 'Mathematics', 'Biology', 'Chemistry', 'Physics',
+                'Economics', 'Civic Education']
+    # SSS1 & SSS2 have all three terms; SSS3 runs to the 2nd (competence) term.
+    year_plan = [('2021/2022', 'SSS1', (1, 2, 3)), ('2022/2023', 'SSS2', (1, 2, 3)),
+                 ('2023/2024', 'SSS3', (1, 2))]
+    terms = []
+    base = 62
+    for si, (sess, klass, tns) in enumerate(year_plan):
+        for tn in tns:
+            subs = []
+            for i, sub in enumerate(subjects):
+                score = min(98, base + si * 4 + tn + (i % 5) * 3)
+                subs.append({'subject': sub, 'score': score, 'grade': _grade(score),
+                             'position': None, 'remark': None})
+            avg = round(sum(s['score'] for s in subs) / len(subs), 1)
+            terms.append({'term': f'Term {tn}', 'term_number': tn, 'session': sess,
+                          'klass': klass, 'average': avg, 'subjects': subs})
+    allscores = [s['score'] for t in terms for s in t['subjects']]
+    # SS3 competence (Mock WAEC) grades per subject
+    def _waec_grade(sc):
+        return ('A1' if sc >= 75 else 'B2' if sc >= 70 else 'B3' if sc >= 65 else 'C4'
+                if sc >= 60 else 'C6' if sc >= 50 else 'D7' if sc >= 45 else 'F9')
+    competence = {'label': 'Second Mock WAEC',
+                  'subjects': {sub: {'score': min(96, 68 + (i % 5) * 4),
+                                     'grade': _waec_grade(min(96, 68 + (i % 5) * 4))}
+                               for i, sub in enumerate(subjects)}}
+    academic = {'cumulative': round(sum(allscores) / len(allscores), 1),
+                'terms_count': len(terms), 'terms': terms, 'competence': competence}
+    waec = {'year': 2024, 'subjects': [{'subject': s, 'grade': g} for s, g in [
+        ('English Language', 'B3'), ('Mathematics', 'C4'), ('Biology', 'B2'),
+        ('Chemistry', 'C5'), ('Physics', 'B3'), ('Economics', 'A1'), ('Civic Education', 'B2')]]}
+    student = SimpleNamespace(full_name='Adaeze N. Okoro (SAMPLE)', student_id='STU-SAMPLE',
+                              gender='Female', graduation_date=date(2024, 7, 1),
+                              jamb_reg_number='202412345AB', waec_reg_number='4250101023',
+                              serial_number='WRN-0489217')
+    return {'student': student, 'academic': academic,
+            'bio': {'date_of_birth': '14 May 2007', 'nationality': 'Nigerian',
+                    'jamb_reg_number': '202412345AB', 'waec_reg_number': '4250101023',
+                    'serial_number': 'WRN-0489217'},
+            'school': school,
+            'grad_when': 'July 2024', 'grad_session': '2023/2024',
+            'admission_session': '2021/2022', 'doc': None, 'waec': waec}

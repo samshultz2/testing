@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}Installment Plans · {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ nav.dashboard }}">Finance</a> <span>/ Installments</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+  .in-wrap{max-width:1050px}
+  .in-pick{display:flex;gap:10px;align-items:flex-end;margin-bottom:16px;flex-wrap:wrap}
+  .in-pick label{font-size:12px;font-weight:600;color:var(--text-secondary,#667)}
+  .in-pick select{padding:8px 10px;border:1px solid var(--border,#d7dde5);border-radius:8px;background:var(--surface,#fff);color:inherit}
+  .card2{background:var(--surface,#fff);border:1px solid var(--border,#e5e7eb);border-radius:12px;margin-bottom:16px}
+  .card2 h3{margin:0;padding:12px 16px;font-size:14px;border-bottom:1px solid var(--border,#eef1f5);display:flex;align-items:center;gap:8px}
+  .card2 .bd{padding:14px 16px}
+  table.sch{width:100%;border-collapse:collapse;font-size:13px}
+  table.sch th,table.sch td{padding:6px;border-bottom:1px solid var(--border,#f0f2f6);text-align:left}
+  table.sch input{width:100%;padding:7px 9px;border:1px solid var(--border,#d7dde5);border-radius:7px;background:var(--surface,#fff);color:inherit}
+  table.sch td.pct{width:110px}table.sch td.due{width:170px}table.sch td.del{width:36px;text-align:center}
+  .tot{font-size:12.5px;color:var(--text-secondary,#778);margin-top:8px}
+  .tot b{color:var(--text-primary,#334)}
+  table.ro{width:100%;border-collapse:collapse;font-size:13px}
+  table.ro th,table.ro td{padding:8px 6px;border-bottom:1px solid var(--border,#f0f2f6);text-align:left}
+  table.ro td.num{text-align:right;font-variant-numeric:tabular-nums}
+  .pill{font-size:11px;font-weight:700;padding:2px 9px;border-radius:99px}
+  .pill.ok{background:#d1e7dd;color:#14603f}.pill.behind{background:#fde2e4;color:#b0263a}
+  .empty{padding:20px;text-align:center;color:var(--text-secondary,#889)}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="in-wrap">
+  {% set fin_active = 'installments' %}{% include 'finance/_header.html' %}
+  <div class="page-header"><h1>Installment plans</h1></div>
+
+  <form method="get" action="{{ url_for('finance.installments') }}" class="in-pick">
+    <div><label>Term</label><br><select name="term_id" onchange="this.form.submit()">
+      {% for t in terms %}<option value="{{ t.id }}" {{ 'selected' if t.id == term_id }}>{{ t.full_name }}</option>{% endfor %}</select></div>
+    <div><label>Schedule for</label><br><select name="class_id" onchange="this.form.submit()">
+      <option value="">Whole term (all classes)</option>
+      {% for c in classes %}<option value="{{ c.id }}" {{ 'selected' if c.id|string == class_id|string }}>{{ c.name }} only</option>{% endfor %}</select></div>
+  </form>
+
+  {% if term_id %}
+  <div class="in-actions" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:16px">
+    <span style="font-size:12px;color:var(--text-secondary,#889);margin-right:2px">Follow up on students owing:</span>
+    <form method="post" action="{{ url_for('finance.draft_reminders') }}"
+          title="Draft a fee reminder to defaulters' parents for review in Communication"
+          onsubmit="return confirm('Draft fee reminders to the parents of students who are owing? Nothing is sent until you review and send it in Communication.');"
+          style="display:flex;gap:6px;align-items:center">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="term_id" value="{{ term_id }}">
+      <input type="hidden" name="class_id" value="{{ class_id }}">
+      <select name="channel" title="Delivery channel" style="padding:6px 8px;border:1px solid var(--border,#d7dde5);border-radius:7px;background:var(--surface,#fff);color:inherit;font-size:12px">
+        <option value="SMS">SMS</option>
+        <option value="Email">Email</option>
+      </select>
+      <button type="submit" class="btn btn-secondary btn-sm"><i aria-hidden="true" class="fas fa-paper-plane"></i> Message parents</button>
+    </form>
+    <form method="post" action="{{ url_for('finance.notify_overdue') }}">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="term_id" value="{{ term_id }}">
+      <button type="submit" class="btn btn-secondary btn-sm" title="Send an in-app alert to admins about students behind"><i aria-hidden="true" class="fas fa-bell"></i> Alert admins</button>
+    </form>
+  </div>
+  {% endif %}
+
+  <div class="card2"><h3>Schedule <span style="font-weight:400;color:var(--text-secondary,#889);font-size:12px">— each row is a % of the student's payable, due by a date</span></h3><div class="bd">
+    <form method="post" action="{{ url_for('finance.installments_save') }}" id="schForm">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="term_id" value="{{ term_id }}">
+      <input type="hidden" name="class_id" value="{{ class_id }}">
+      <table class="sch"><thead><tr><th>Installment</th><th class="pct">Percent</th><th class="due">Due date</th><th class="del"></th></tr></thead>
+        <tbody id="rows">
+          {% for r in plan_rows %}
+          <tr><td><input type="text" name="label" value="{{ r.label }}" placeholder="e.g. 1st Installment"></td>
+            <td class="pct"><input type="number" name="percent" min="0" max="100" step="1" value="{{ r.percent }}" placeholder="%"></td>
+            <td class="due"><input type="date" name="due" value="{{ r.due }}"></td>
+            <td class="del"><button type="button" class="btn btn-link btn-sm delrow" title="Remove"><i aria-hidden="true" class="fas fa-times"></i></button></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <div style="margin-top:10px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <button type="button" class="btn btn-secondary btn-sm" id="addRow"><i aria-hidden="true" class="fas fa-plus"></i> Add installment</button>
+        <button type="submit" class="btn btn-primary btn-sm"><i aria-hidden="true" class="fas fa-save"></i> Save schedule</button>
+        {% if plan_rows and plan_rows[0].label %}
+        <button type="submit" class="btn btn-link btn-sm" formaction="{{ url_for('finance.installments_clear') }}">Clear schedule</button>{% endif %}
+        <span class="tot" id="totBox">Total: <b><span id="tot">{{ total_pct }}</span>%</b></span>
+      </div>
+    </form>
+  </div></div>
+
+  {% if roster %}
+  <div class="card2"><h3>Student progress ({{ roster|length }})</h3><div class="bd" style="padding:0;overflow-x:auto">
+    <table class="ro"><thead><tr><th>Student</th><th>ID</th><th class="num">Payable</th><th class="num">Paid</th><th class="num">Expected by now</th><th class="num">Behind</th><th>Next due</th><th>Status</th></tr></thead>
+      <tbody>
+        {% for r in roster %}
+        <tr><td>{{ r.name }}</td><td>{{ r.sid }}</td>
+          <td class="num">₦{{ '{:,.0f}'.format(r.payable) }}</td>
+          <td class="num">₦{{ '{:,.0f}'.format(r.paid) }}</td>
+          <td class="num">₦{{ '{:,.0f}'.format(r.expected) }}</td>
+          <td class="num">{{ '₦{:,.0f}'.format(r.behind) if r.behind > 0 else '—' }}</td>
+          <td>{{ r.next_due }}</td>
+          <td><span class="pill {{ 'ok' if r.on_track else 'behind' }}">{{ 'On track' if r.on_track else 'Behind' }}</span></td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div></div>
+  {% elif term_id %}
+  <div class="card2"><div class="bd"><div class="empty">Save a schedule above to see each student's on-track / behind status.</div></div></div>
+  {% endif %}
+</div>
+
+<script nonce="{{ csp_nonce }}">
+  (function(){
+    var rows = document.getElementById('rows');
+    function recompute(){
+      var t = 0; rows.querySelectorAll('input[name="percent"]').forEach(function(i){ t += parseFloat(i.value)||0; });
+      var el = document.getElementById('tot'); if (el) el.textContent = (Math.round(t*100)/100);
+    }
+    var add = document.getElementById('addRow');
+    if (add) add.addEventListener('click', function(){
+      var tr = rows.rows[0];
+      var clone = tr ? tr.cloneNode(true) : null;
+      if (!clone) return;
+      clone.querySelectorAll('input').forEach(function(i){ i.value=''; });
+      rows.appendChild(clone);
+    });
+    document.addEventListener('input', function(e){ if (e.target.name==='percent') recompute(); });
+    document.addEventListener('click', function(e){
+      var b = e.target.closest && e.target.closest('.delrow');
+      if (b){ var tr=b.closest('tr'); if (rows.rows.length>1) tr.remove(); else b.closest('tr').querySelectorAll('input').forEach(function(i){i.value='';}); recompute(); }
+    });
+  })();
+</script>
+{% endblock %}

@@ -1,12 +1,19 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="{{ current_theme }}">
 <head>
     <meta charset="UTF-8">
+    <meta name="robots" content="noindex, nofollow"><!-- internal app: never index -->
+    <meta name="user-theme" content="{{ current_theme }}">
+    {% if session.get('logged_in') %}<meta name="user-authed" content="1">{% endif %}
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
     <meta name="theme-color" content="#0d6a4e">
     <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-title" content="PosyHub">
+    <meta name="apple-mobile-web-app-title" content="EduSyncra">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <!-- This page's CSP nonce, readable by JS. Soft-nav (spa-nav.js) stamps it
+         onto re-executed inline scripts; a <meta> is not subject to the nonce-
+         hiding that blanks a <script>'s nonce attribute after load. -->
+    <meta name="csp-nonce" content="{{ csp_nonce }}">
     <meta name="mobile-web-app-capable" content="yes">
     <link rel="manifest" href="{{ url_for('static', filename='manifest.webmanifest') }}">
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/favicon.svg') }}">
@@ -14,23 +21,57 @@
     <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='icons/favicon-16.png') }}">
     <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" sizes="any">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}">
+    {% include 'components/_ios_splash.html' %}
     <title>{% block title %}{{ app_name }}{% endblock %}</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
+    <link rel="stylesheet" href="{{ bundle_url('css/style.css') }}">
+    <meta name="spa-css-marker" content=""><!-- soft-nav swaps page CSS after this -->
     {% block extra_css %}{% endblock %}
 </head>
 <body>
+    {% if impersonation %}
+    <div style="position:sticky;top:0;z-index:9999;display:flex;align-items:center;gap:10px;flex-wrap:wrap;
+                background:#b91c1c;color:#fff;padding:8px 14px;font-size:13.5px;font-weight:600;
+                box-shadow:0 2px 8px rgba(0,0,0,.25)">
+      <i class="fas fa-user-secret"></i>
+      <span>Support view — you are viewing <b>{{ impersonation.school }}</b> as {{ impersonation.actor }} · read-only · ends in {{ impersonation.minutes_left }} min</span>
+      <a href="{{ url_for('impersonation.stop') }}" style="margin-left:auto;background:#fff;color:#b91c1c;
+         padding:4px 12px;border-radius:99px;font-weight:700;text-decoration:none">End session</a>
+    </div>
+    {% endif %}
+    {% if platform_broadcasts %}
+    {% for b in platform_broadcasts %}
+    <div style="padding:9px 16px;font-size:13.5px;font-weight:500;display:flex;align-items:center;gap:9px;
+      {% if b.level == 'critical' %}background:#b91c1c;color:#fff{% elif b.level == 'warning' %}background:#f6bf50;color:#3a2c00{% else %}background:#0d6a4e;color:#fff{% endif %}">
+      <i class="fas {{ 'fa-triangle-exclamation' if b.level != 'info' else 'fa-bullhorn' }}"></i>
+      <span>{{ b.message }}</span>
+    </div>
+    {% endfor %}
+    {% endif %}
+    {% if session.get('logged_in') %}<a href="#mainContent" class="skip-link">Skip to content</a>{% endif %}
+    <div id="navProgress" aria-hidden="true"></div>
+    {% if session.get('logged_in') %}<nav class="bottom-nav" id="bottomNav" aria-label="Quick navigation"></nav>{% endif %}
     <div class="app-container">
         <div class="sidebar-overlay" id="sidebarOverlay"></div>
         
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <div class="logo">
-                    <img src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="PosyHub" class="logo-mark">
-                    <span>PosyHub</span>
+                    {% if school_brand.logged_in and school_brand.logo_url %}
+                    <img src="{{ school_brand.logo_url }}" alt="{{ school_brand.name }}" class="logo-mark">
+                    {% else %}
+                    <img src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt="{{ school_brand.name if school_brand.logged_in else app_name }}" class="logo-mark">
+                    {% endif %}
+                    <div class="brand-text">
+                        <span class="brand-name">{{ school_brand.name if school_brand.logged_in else app_name }}</span>
+                        {% if school_brand.logged_in %}
+                        <span class="brand-sub">{{ school_brand.user }}{% if school_brand.role_label %} · {{ school_brand.role_label }}{% endif %}</span>
+                        {% if school_brand.branch %}<span class="brand-branch">{{ school_brand.branch }}</span>{% endif %}
+                        {% endif %}
+                    </div>
                 </div>
                 <button class="sidebar-toggle" id="sidebarToggle">
                     <i class="fas fa-times"></i>
@@ -44,18 +85,30 @@
                             <i class="fas fa-home"></i><span>Dashboard</span>
                         </a>
                     </li>
-                    
+                    {% if branch_ctx.is_central %}
+                    <li class="nav-item">
+                        <a href="{{ url_for('main.branch_overview') }}" class="nav-link {% if request.endpoint == 'main.branch_overview' %}active{% endif %}">
+                            <i class="fas fa-code-compare"></i><span>Branch Overview</span>
+                        </a>
+                    </li>
+                    {% endif %}
+
                     {% if can_access_module('students') or can_access_module('admissions') %}
                     <li class="nav-section">Students</li>
                     {% if can_access_module('students') %}
                     <li class="nav-item">
-                        <a href="{{ url_for('main.students_list') }}" class="nav-link {% if 'students' in request.endpoint %}active{% endif %}">
+                        <a href="{{ url_for('main.students_list') }}" class="nav-link {% if 'students' in request.endpoint and request.endpoint not in ['main.students_trash', 'main.add_student'] %}active{% endif %}">
                             <i class="fas fa-users"></i><span>All Students</span>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="{{ url_for('main.add_student') }}" class="nav-link">
+                        <a href="{{ url_for('main.add_student') }}" class="nav-link {% if request.endpoint == 'main.add_student' %}active{% endif %}">
                             <i class="fas fa-user-plus"></i><span>Add Student</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('main.students_trash') }}" class="nav-link {% if request.endpoint == 'main.students_trash' %}active{% endif %}">
+                            <i class="fas fa-trash-can"></i><span>Deleted Students</span>
                         </a>
                     </li>
                     {% endif %}
@@ -78,6 +131,11 @@
                     </li>
                     {% endif %}
                     {% if can_access_module('academics') %}
+                    <li class="nav-item">
+                        <a href="{{ url_for('academics.term_setup') }}" class="nav-link {% if request.endpoint == 'academics.term_setup' %}active{% endif %}">
+                            <i class="fas fa-list-check"></i><span>Term Setup</span>
+                        </a>
+                    </li>
                     <li class="nav-item">
                         <a href="{{ url_for('academics.sessions_list') }}" class="nav-link">
                             <i class="fas fa-calendar-alt"></i><span>Sessions</span>
@@ -114,28 +172,23 @@
                     {% if can_access_module('attendance') %}
                     <li class="nav-section">Attendance</li>
                     <li class="nav-item">
-                        <a href="{{ url_for('attendance.mark_attendance_page') }}" class="nav-link">
-                            <i class="fas fa-clipboard-check"></i><span>Mark</span>
+                        <a href="{{ url_for('attendance.attendance_app') }}" class="nav-link">
+                            <i class="fas fa-clipboard-user"></i><span>Attendance</span>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="{{ url_for('attendance.daily_summary') }}" class="nav-link">
-                            <i class="fas fa-calendar-day"></i><span>Daily</span>
+                        <a href="{{ url_for('attendance.attendance_app') }}?tab=analytics" class="nav-link">
+                            <i class="fas fa-chart-line"></i><span>Attendance Analytics</span>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="{{ url_for('attendance.weekly_summary') }}" class="nav-link">
-                            <i class="fas fa-calendar-week"></i><span>Weekly</span>
+                        <a href="{{ url_for('attendance.attendance_app') }}?tab=interventions" class="nav-link">
+                            <i class="fas fa-hand-holding-heart"></i><span>Interventions</span>
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="{{ url_for('attendance.termly_summary') }}" class="nav-link">
-                            <i class="fas fa-chart-bar"></i><span>Termly</span>
-                        </a>
-                    </li>
-                    <li class="nav-item">
-                        <a href="{{ url_for('attendance.attendance_alerts') }}" class="nav-link">
-                            <i class="fas fa-exclamation-triangle"></i><span>Alerts</span>
+                        <a href="{{ url_for('attendance.attendance_app') }}?tab=student" class="nav-link">
+                            <i class="fas fa-user-magnifying-glass"></i><span>Student Profile</span>
                         </a>
                     </li>
                     <li class="nav-item">
@@ -143,16 +196,26 @@
                             <i class="fas fa-print"></i><span>Print Register</span>
                         </a>
                     </li>
-                    
+
                     {% endif %}
                     {% if can_access_module('timetable') %}
                     <li class="nav-section">Timetable</li>
                     <li class="nav-item">
-                        <a href="{{ url_for('timetable.index') }}" class="nav-link">
+                        <a href="{{ url_for('timetable.index') }}" class="nav-link {% if request.endpoint == 'timetable.index' %}active{% endif %}">
                             <i class="fas fa-calendar-alt"></i><span>View/Edit</span>
                         </a>
                     </li>
-                    
+                    <li class="nav-item">
+                        <a href="{{ url_for('timetable.my_timetable') }}" class="nav-link {% if request.endpoint == 'timetable.my_timetable' %}active{% endif %}">
+                            <i class="fas fa-user-clock"></i><span>My Timetable</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('timetable.designer') }}" class="nav-link {% if request.endpoint == 'timetable.designer' %}active{% endif %}">
+                            <i class="fas fa-drafting-compass"></i><span>Designer</span>
+                        </a>
+                    </li>
+
                     {% endif %}
                     {% if can_access_module('promotion') %}
                     <li class="nav-section">Promotion</li>
@@ -172,6 +235,15 @@
                         </a>
                     </li>
                     
+                    {% elif can_access_graduates %}
+                    {# SSS3 form teachers can view graduates / the SSS3 comparison even
+                       without the full Promotion module. #}
+                    <li class="nav-section">Graduates</li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('promotion.graduates_list') }}" class="nav-link">
+                            <i class="fas fa-graduation-cap"></i><span>Graduates</span>
+                        </a>
+                    </li>
                     {% endif %}
                     {% if can_access_module('cbt') %}
                     <li class="nav-section">CBT / Tests</li>
@@ -180,15 +252,22 @@
                             <i class="fas fa-laptop-code"></i><span>Online Tests</span>
                         </a>
                     </li>
+                    {% if branch_ctx.is_central or user_permissions.is_admin %}
                     <li class="nav-item">
                         <a href="{{ url_for('cbt.passwords') }}" class="nav-link {% if request.endpoint == 'cbt.passwords' %}active{% endif %}">
                             <i class="fas fa-key"></i><span>Student Passwords</span>
                         </a>
                     </li>
+                    {% endif %}
 
                     {% endif %}
                     {% if can_access_module('results') %}
                     <li class="nav-section">Results</li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('subjects.workflow') }}" class="nav-link {% if request.endpoint == 'subjects.workflow' %}active{% endif %}">
+                            <i class="fas fa-list-check"></i><span>Results Workflow</span>
+                        </a>
+                    </li>
                     <li class="nav-item">
                         <a href="{{ url_for('subjects.subjects_list') }}" class="nav-link">
                             <i class="fas fa-book"></i><span>Subjects</span>
@@ -210,8 +289,23 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a href="{{ url_for('settings.term_assessments') }}" class="nav-link {% if request.endpoint in ['settings.term_assessments','settings.term_assessment_edit'] %}active{% endif %}">
+                            <i class="fas fa-sliders"></i><span>Termly Assessment Setup</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="{{ url_for('subjects.broadsheet') }}" class="nav-link">
                             <i class="fas fa-table"></i><span>Broadsheet</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('subjects.analytics_dashboard') }}" class="nav-link {% if request.endpoint == 'subjects.analytics_dashboard' %}active{% endif %}">
+                            <i class="fas fa-chart-column"></i><span>Class Analytics</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('subjects.institution_analytics') }}" class="nav-link {% if request.endpoint == 'subjects.institution_analytics' %}active{% endif %}">
+                            <i class="fas fa-building-columns"></i><span>Institution Analytics</span>
                         </a>
                     </li>
                     <li class="nav-item">
@@ -231,6 +325,26 @@
                     <li class="nav-item">
                         <a href="{{ url_for('finance.dashboard') }}" class="nav-link {% if request.endpoint == 'finance.dashboard' %}active{% endif %}">
                             <i class="fas fa-chart-pie"></i><span>Overview</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('finance.overview') }}" class="nav-link {% if request.endpoint == 'finance.overview' %}active{% endif %}">
+                            <i class="fas fa-scale-balanced"></i><span>Reports &amp; Ledger</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('finance.accounting') }}" class="nav-link {% if request.endpoint == 'finance.accounting' %}active{% endif %}">
+                            <i class="fas fa-book"></i><span>Accounting</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('finance.billing_tools') }}" class="nav-link {% if request.endpoint == 'finance.billing_tools' %}active{% endif %}">
+                            <i class="fas fa-wand-magic-sparkles"></i><span>Billing Tools</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('finance.installments') }}" class="nav-link {% if request.endpoint == 'finance.installments' %}active{% endif %}">
+                            <i class="fas fa-calendar-check"></i><span>Installments</span>
                         </a>
                     </li>
                     <li class="nav-item">
@@ -260,6 +374,29 @@
                     </li>
 
                     {% endif %}
+                    {% if can_access_module('sales') %}
+                    <li class="nav-section">Sales &amp; Inventory</li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('sales.dashboard') }}" class="nav-link {% if request.endpoint == 'sales.dashboard' %}active{% endif %}">
+                            <i class="fas fa-cart-shopping"></i><span>Overview</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('sales.new_sale') }}" class="nav-link {% if request.endpoint == 'sales.new_sale' %}active{% endif %}">
+                            <i class="fas fa-cart-plus"></i><span>New Sale</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('sales.products') }}" class="nav-link {% if request.endpoint == 'sales.products' %}active{% endif %}">
+                            <i class="fas fa-boxes-stacked"></i><span>Products</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('sales.history') }}" class="nav-link {% if request.endpoint == 'sales.history' %}active{% endif %}">
+                            <i class="fas fa-clock-rotate-left"></i><span>History</span>
+                        </a>
+                    </li>
+                    {% endif %}
                     {% if can_access_module('communication') %}
                     <li class="nav-section">Communication</li>
                     <li class="nav-item">
@@ -278,8 +415,33 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a href="{{ url_for('comms.announcements') }}" class="nav-link {% if request.endpoint == 'comms.announcements' %}active{% endif %}">
+                            <i class="fas fa-bullhorn"></i><span>Announcements</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('comms.inbox') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('comms.inbox') %}active{% endif %}">
+                            <i class="fas fa-inbox"></i><span>Inbox</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('comms.messages_list') }}" class="nav-link {% if request.endpoint in ['comms.messages_list','comms.message_detail'] %}active{% endif %}">
+                            <i class="fas fa-clock-rotate-left"></i><span>History</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('comms.templates_list') }}" class="nav-link {% if request.endpoint == 'comms.templates_list' %}active{% endif %}">
+                            <i class="fas fa-file-lines"></i><span>Templates</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="{{ url_for('comms.contacts') }}" class="nav-link {% if request.endpoint == 'comms.contacts' %}active{% endif %}">
                             <i class="fas fa-address-book"></i><span>Contacts</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('comms.reports') }}" class="nav-link {% if request.endpoint == 'comms.reports' %}active{% endif %}">
+                            <i class="fas fa-chart-line"></i><span>Reports</span>
                         </a>
                     </li>
 
@@ -301,6 +463,26 @@
                             <i class="fas fa-hand-holding"></i><span>Loans</span>
                         </a>
                     </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('library.reservations') }}" class="nav-link {% if request.endpoint == 'library.reservations' %}active{% endif %}">
+                            <i class="fas fa-bookmark"></i><span>Reservations</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('library.reading_lists') }}" class="nav-link {% if request.endpoint == 'library.reading_lists' %}active{% endif %}">
+                            <i class="fas fa-list-check"></i><span>Reading Lists</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('library.borrowers') }}" class="nav-link {% if request.endpoint in ['library.borrowers','library.borrower_history'] %}active{% endif %}">
+                            <i class="fas fa-user-group"></i><span>Borrowers</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('library.reports') }}" class="nav-link {% if request.endpoint == 'library.reports' %}active{% endif %}">
+                            <i class="fas fa-chart-line"></i><span>Reports</span>
+                        </a>
+                    </li>
 
                     {% endif %}
                     {% if can_access_module('hr') %}
@@ -316,8 +498,13 @@
                         </a>
                     </li>
                     <li class="nav-item">
-                        <a href="{{ url_for('hr.attendance') }}" class="nav-link {% if request.endpoint == 'hr.attendance' %}active{% endif %}">
+                        <a href="{{ url_for('hr.attendance') }}" class="nav-link {% if request.endpoint in ['hr.attendance','hr.checkin_qr'] %}active{% endif %}">
                             <i class="fas fa-user-clock"></i><span>Staff Attendance</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('hr.checkin') }}" class="nav-link {% if request.endpoint == 'hr.checkin' %}active{% endif %}">
+                            <i class="fas fa-location-crosshairs"></i><span>Check In</span>
                         </a>
                     </li>
                     <li class="nav-item">
@@ -328,6 +515,26 @@
                     <li class="nav-item">
                         <a href="{{ url_for('hr.payroll_list') }}" class="nav-link {% if request.endpoint in ['hr.payroll_list','hr.payroll_detail'] %}active{% endif %}">
                             <i class="fas fa-money-check-dollar"></i><span>Payroll</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('hr.loans_list') }}" class="nav-link {% if request.endpoint in ['hr.loans_list','hr.loan_new','hr.loan_detail'] %}active{% endif %}">
+                            <i class="fas fa-hand-holding-dollar"></i><span>Staff Loans</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('hr.departments') }}" class="nav-link {% if request.endpoint == 'hr.departments' %}active{% endif %}">
+                            <i class="fas fa-sitemap"></i><span>Departments</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('hr.recruitment') }}" class="nav-link {% if request.endpoint in ['hr.recruitment','hr.vacancy_detail'] %}active{% endif %}">
+                            <i class="fas fa-user-plus"></i><span>Recruitment</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('hr.reports') }}" class="nav-link {% if request.endpoint == 'hr.reports' %}active{% endif %}">
+                            <i class="fas fa-chart-line"></i><span>HR Reports</span>
                         </a>
                     </li>
 
@@ -347,6 +554,11 @@
                     <li class="nav-item">
                         <a href="{{ url_for('mock_jamb.index') }}" class="nav-link {% if 'mock_jamb' in request.endpoint %}active{% endif %}">
                             <i class="fas fa-clipboard-list"></i><span>Mock JAMB</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('mock_waec.index') }}" class="nav-link {% if 'mock_waec' in request.endpoint %}active{% endif %}">
+                            <i class="fas fa-clipboard-check"></i><span>Mock WAEC</span>
                         </a>
                     </li>
                     <li class="nav-item">
@@ -374,7 +586,30 @@
                             <i class="fas fa-crystal-ball"></i><span>Predictions</span>
                         </a>
                     </li>
-                    
+
+                    {% elif has_sss3_exam_access %}
+                    {# SSS3 arm teacher: WAEC/JAMB for their own arm only. #}
+                    <li class="nav-section">External Exams (my class)</li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('results.waec_list') }}" class="nav-link {% if request.endpoint == 'results.waec_list' %}active{% endif %}">
+                            <i class="fas fa-file-alt"></i><span>WAEC</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('results.jamb_list') }}" class="nav-link {% if request.endpoint == 'results.jamb_list' %}active{% endif %}">
+                            <i class="fas fa-file-contract"></i><span>JAMB</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('mock_jamb.index') }}" class="nav-link {% if 'mock_jamb' in request.endpoint %}active{% endif %}">
+                            <i class="fas fa-clipboard-list"></i><span>Mock JAMB</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('mock_waec.index') }}" class="nav-link {% if 'mock_waec' in request.endpoint %}active{% endif %}">
+                            <i class="fas fa-clipboard-check"></i><span>Mock WAEC</span>
+                        </a>
+                    </li>
                     {% endif %}
                     {% if can_access_module('reports') %}
                     <li class="nav-section">Reports</li>
@@ -400,8 +635,28 @@
                     </li>
                     
                     {% endif %}
-                    {% if session.get('role') in ('super_admin', 'admin') %}
+                    {% if can_manage_users and session.get('role') not in ('super_admin', 'admin') %}
+                    <li class="nav-section">Administration</li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('users.index') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('users.') %}active{% endif %}">
+                            <i class="fas fa-users-cog"></i><span>Manage Users</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('staff_onboarding.invites') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('staff_onboarding.') %}active{% endif %}">
+                            <i class="fas fa-user-plus"></i><span>Staff invites</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('support.index') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('support.') %}active{% endif %}">
+                            <i class="fas fa-life-ring"></i><span>Support</span>
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% set _show_generator = session.get('role') in ('super_admin', 'admin') or can_generate_timetable %}
+                    {% if _show_generator or can_access_module('website') %}
                     <li class="nav-section">Tools</li>
+                    {% if _show_generator %}
                     <li class="nav-item has-submenu">
                         <a href="#" class="nav-link submenu-toggle">
                             <i class="fas fa-magic"></i><span>Timetable Generator</span>
@@ -409,6 +664,7 @@
                         </a>
                         <ul class="submenu">
                             <li><a href="{{ url_for('generator.index') }}"><i class="fas fa-home"></i> Dashboard</a></li>
+                            <li><a href="{{ url_for('generator.setup_guide') }}"><i class="fas fa-list-check"></i> Setup Guide</a></li>
                             <li><a href="{{ url_for('generator.teachers_list') }}"><i class="fas fa-chalkboard-teacher"></i> Teachers</a></li>
                             <li><a href="{{ url_for('generator.subjects_config') }}"><i class="fas fa-book"></i> Subjects</a></li>
                             <li><a href="{{ url_for('generator.streams_list') }}"><i class="fas fa-layer-group"></i> Streams</a></li>
@@ -423,11 +679,47 @@
                             <li><a href="{{ url_for('generator.generator_settings') }}"><i class="fas fa-cog"></i> Settings</a></li>
                         </ul>
                     </li>
+                    {% endif %}
+                    {% if can_access_module('website') %}
+                    <li class="nav-item">
+                        <a href="{{ url_for('website_admin.index') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('website_admin.') %}active{% endif %}">
+                            <i class="fas fa-globe"></i><span>Website Builder</span>
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% endif %}
 
+                    {% if session.get('role') not in ('super_admin', 'admin') and can_access_module('settings') %}
+                    <li class="nav-item">
+                        <a href="{{ url_for('settings.index') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('settings.') %}active{% endif %}">
+                            <i class="fas fa-cog"></i><span>Settings</span>
+                        </a>
+                    </li>
+                    {% endif %}
+
+                    {% if session.get('role') in ('super_admin', 'admin') %}
                     <li class="nav-section">Settings</li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('setup.wizard') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('setup.') %}active{% endif %}">
+                            <i class="fas fa-wand-magic-sparkles"></i><span>Setup wizard</span>
+                        </a>
+                    </li>
+                    {% if can_manage_users %}
                     <li class="nav-item">
                         <a href="{{ url_for('users.index') }}" class="nav-link">
                             <i class="fas fa-users-cog"></i><span>Users</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('staff_onboarding.invites') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('staff_onboarding.') %}active{% endif %}">
+                            <i class="fas fa-user-plus"></i><span>Staff invites</span>
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% if branch_ctx.is_central %}
+                    <li class="nav-item">
+                        <a href="{{ url_for('settings.branches') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('settings.') and 'branch' in request.endpoint %}active{% endif %}">
+                            <i class="fas fa-code-branch"></i><span>Branches</span>
                         </a>
                     </li>
                     <li class="nav-item">
@@ -436,13 +728,37 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a href="{{ url_for('main.error_log') }}" class="nav-link {% if request.endpoint == 'main.error_log' %}active{% endif %}">
+                            <i class="fas fa-triangle-exclamation"></i><span>Error Log</span>
+                        </a>
+                    </li>
+                    {% endif %}
+                    {% if billing_nav.show %}
+                    <li class="nav-item">
+                        <a href="{{ url_for('billing.index') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('billing.') %}active{% endif %}">
+                            <i class="fas fa-credit-card"></i><span>Subscription</span>
+                            {% if billing_nav.days_left is not none and billing_nav.days_left <= 7 %}<span class="nav-badge">{{ billing_nav.days_left }}d</span>{% endif %}
+                        </a>
+                    </li>
+                    {% endif %}
+                    <li class="nav-item">
                         <a href="{{ url_for('settings.index') }}" class="nav-link">
                             <i class="fas fa-cog"></i><span>Settings</span>
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a href="{{ url_for('settings.payments_settings') }}" class="nav-link {% if request.endpoint == 'settings.payments_settings' %}active{% endif %}">
+                            <i class="fas fa-money-bill-wave"></i><span>Online Payments</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="{{ url_for('settings.backup_page') }}" class="nav-link">
                             <i class="fas fa-database"></i><span>Backup</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('main.share_app') }}" class="nav-link {% if request.endpoint == 'main.share_app' %}active{% endif %}">
+                            <i class="fas fa-qrcode"></i><span>Share App</span>
                         </a>
                     </li>
                     {% endif %}
@@ -457,39 +773,129 @@
         <main class="main-content">
             <header class="top-header">
                 <div class="header-left">
-                    <button class="mobile-menu-btn" id="mobileMenuBtn">
+                    <button class="mobile-menu-btn" id="mobileMenuBtn" aria-label="Open menu">
                         <i class="fas fa-bars"></i>
                     </button>
-                    <div class="breadcrumb">{% block breadcrumb %}Dashboard{% endblock %}</div>
+                    <nav class="breadcrumb" aria-label="Breadcrumb">
+                        <a href="{{ url_for('main.dashboard') }}" class="crumb-home" aria-label="Home"><i class="fas fa-house"></i></a>
+                        <span class="crumb-sep" aria-hidden="true">/</span>
+                        {% block breadcrumb %}<span>Dashboard</span>{% endblock %}
+                    </nav>
                 </div>
                 <form class="header-search" method="GET" action="{{ url_for('main.global_search') }}" role="search">
                     <i class="fas fa-search"></i>
                     <input type="text" name="q" placeholder="Search…" aria-label="Search" autocomplete="off">
+                    <button type="button" class="cmdk-hint" title="Open command palette" aria-label="Open command palette (Ctrl/Cmd K)">⌘K</button>
                 </form>
                 <div class="header-right">
+                    {% if branch_ctx.is_central %}
+                    <div class="branch-switch">
+                        <button type="button" class="branch-switch-btn" id="branchSwitchBtn" title="Switch branch">
+                            <i class="fas fa-code-branch"></i>
+                            <span>{{ branch_ctx.current.name if branch_ctx.current else 'All branches' }}</span>
+                            <i class="fas fa-chevron-down" style="font-size:.65rem;"></i>
+                        </button>
+                        <div class="branch-switch-menu" id="branchSwitchMenu">
+                            <a href="{{ url_for('main.set_view_branch', branch_id='all') }}" class="{% if not branch_ctx.current %}active{% endif %}"><i class="fas fa-layer-group"></i> All branches</a>
+                            {% for b in branch_ctx.branches %}
+                            <a href="{{ url_for('main.set_view_branch', branch_id=b.id) }}" class="{% if branch_ctx.current and branch_ctx.current.id == b.id %}active{% endif %}"><i class="fas fa-code-branch"></i> {{ b.name }}</a>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% elif branch_ctx.current %}
+                    <div class="current-term" title="Your branch"><i class="fas fa-code-branch"></i> <span>{{ branch_ctx.current.name }}</span></div>
+                    {% endif %}
                     {% if get_active_term() %}
                     <div class="current-term">
                         <i class="fas fa-calendar"></i>
                         <span>{{ get_active_term().name }}</span>
                     </div>
                     {% endif %}
-                    <button class="theme-toggle" id="themeToggle" title="Toggle dark mode"></button>
-                    <button class="header-icon-btn header-install-btn" id="installBtn" title="Install app" style="display:none;">
-                        <i class="fas fa-circle-down"></i>
+                    <button type="button" class="header-icon-btn header-search-btn" id="mobileSearchBtn" title="Search" aria-label="Search">
+                        <i class="fas fa-search"></i>
                     </button>
-                    <button class="header-icon-btn" id="clearCacheBtn" title="Clear cache & reload (use if changes aren't showing)">
-                        <i class="fas fa-rotate"></i>
-                    </button>
-                    <a href="{{ url_for('auth.logout') }}" class="header-logout-btn" title="Logout">
-                        <i class="fas fa-sign-out-alt"></i>
-                    </a>
-                    <div class="user-info">
-                        <i class="fas fa-user-circle"></i>
-                        <span>{{ session.get('username', 'Admin') }}</span>
+                    <div class="notif-wrap">
+                        <button type="button" class="header-icon-btn" id="notifBtn" title="Notifications" aria-haspopup="true" aria-expanded="false">
+                            <i class="fas fa-bell"></i>
+                            <span class="notif-badge" id="notifBadge" hidden>0</span>
+                        </button>
+                        <div class="notif-menu" id="notifMenu" role="menu" aria-label="Notifications">
+                            <div class="notif-head"><span>Notifications</span><button type="button" id="notifReadAll" class="notif-readall">Mark all read</button></div>
+                            <div class="notif-list" id="notifList"><div class="notif-empty">No notifications</div></div>
+                        </div>
+                    </div>
+                    <div class="theme-picker-wrap">
+                        <button type="button" class="header-icon-btn" id="themeBtn" title="Choose theme" aria-haspopup="true" aria-expanded="false">
+                            <i class="fas fa-palette"></i>
+                        </button>
+                        <div class="theme-menu" id="themeMenu" role="menu" aria-label="Theme">
+                            <div class="theme-menu-title">Theme</div>
+                            <div class="theme-swatches">
+                                {% for t in themes %}
+                                <button type="button" class="theme-swatch{% if t.dark %} is-dark{% endif %}" data-theme-key="{{ t.key }}" role="menuitemradio" title="{{ t.label }}" aria-checked="false">
+                                    <span class="theme-dot" style="background: {{ t.swatch }};"></span>
+                                    <span class="theme-name">{{ t.label }}</span>
+                                    <i class="fas fa-check theme-check"></i>
+                                </button>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="profile-wrap">
+                        <button type="button" class="header-icon-btn profile-btn" id="profileBtn" title="Account" aria-haspopup="true" aria-expanded="false">
+                            <i class="fas fa-user-circle"></i>
+                            <span class="profile-name">{{ session.get('user', 'Admin') }}</span>
+                            <i class="fas fa-chevron-down profile-caret" aria-hidden="true"></i>
+                        </button>
+                        <div class="profile-menu" id="profileMenu" role="menu" aria-label="Account">
+                            <div class="profile-head">
+                                <div class="profile-head-name">{{ session.get('user', 'Admin') }}</div>
+                                {% if school_brand.logged_in and (school_brand.role_label or school_brand.branch) %}
+                                <div class="profile-head-sub">{{ school_brand.role_label }}{% if school_brand.branch %} · {{ school_brand.branch }}{% endif %}</div>
+                                {% endif %}
+                            </div>
+                            {% if session.get('user_id') %}
+                            <a href="{{ url_for('auth.profile') }}" class="profile-item" role="menuitem">
+                                <i class="fas fa-user-pen"></i> My profile
+                            </a>
+                            <a href="{{ url_for('auth.security_settings') }}" class="profile-item" role="menuitem">
+                                <i class="fas fa-shield-halved"></i> Security &amp; 2FA
+                            </a>
+                            {% endif %}
+                            <button type="button" class="profile-item header-install-btn" id="installBtn" role="menuitem" style="display:none;">
+                                <i class="fas fa-circle-down"></i> Install app
+                            </button>
+                            <button type="button" class="profile-item" id="clearCacheBtn" role="menuitem">
+                                <i class="fas fa-rotate"></i> Clear cache &amp; reload
+                            </button>
+                            <a href="{{ url_for('auth.logout') }}" class="profile-item profile-logout" role="menuitem">
+                                <i class="fas fa-sign-out-alt"></i> Log out
+                            </a>
+                        </div>
                     </div>
                 </div>
             </header>
-            
+
+            {% set tt = time_travel() %}
+            {% if tt.sessions and tt.sessions|length > 1 %}
+            <div class="time-travel-bar{% if tt.viewing %} active{% endif %}">
+                <form method="post" action="{{ url_for('main.set_view_session') }}" style="display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin:0;">
+                    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                    {% if tt.viewing %}
+                    <span><i class="fas fa-clock-rotate-left"></i> Viewing <strong>{{ tt.viewing.name }}</strong> (read-only) — not the current session.</span>
+                    {% else %}
+                    <span class="text-muted"><i class="fas fa-clock-rotate-left"></i> View a past session:</span>
+                    {% endif %}
+                    <select name="session_id" class="form-control" style="width:auto;" data-autosubmit>
+                        {% for s in tt.sessions %}
+                        <option value="{{ s.id }}" {% if (tt.viewing and tt.viewing.id == s.id) or (not tt.viewing and tt.live and tt.live.id == s.id) %}selected{% endif %}>{{ s.name }}{% if tt.live and tt.live.id == s.id %} (current){% endif %}</option>
+                        {% endfor %}
+                    </select>
+                    {% if tt.viewing %}<button type="submit" name="session_id" value="{{ tt.live.id if tt.live else 0 }}" class="btn btn-sm btn-light">Return to current</button>{% endif %}
+                </form>
+            </div>
+            {% endif %}
+
             {% with messages = get_flashed_messages(with_categories=true) %}
             {% if messages %}
             <div class="flash-messages">
@@ -497,14 +903,33 @@
                 <div class="flash-message flash-{{ category }}">
                     <i class="fas {% if category == 'success' %}fa-check-circle{% elif category == 'error' %}fa-exclamation-circle{% else %}fa-info-circle{% endif %}"></i>
                     <span>{{ message }}</span>
-                    <button class="flash-close" onclick="this.parentElement.remove()"><i class="fas fa-times"></i></button>
+                    <button class="flash-close" data-remove-parent><i class="fas fa-times"></i></button>
                 </div>
                 {% endfor %}
             </div>
             {% endif %}
             {% endwith %}
             
-            <div class="page-content">
+            <style>
+              .sub-banner { display:flex; align-items:center; gap:10px; margin:0 0 14px; padding:11px 16px;
+                            border-radius:12px; text-decoration:none; font-size:13.5px; font-weight:600; }
+              .sub-banner .sub-cta { margin-left:auto; white-space:nowrap; font-weight:700; }
+              .sub-ok   { background:color-mix(in srgb, #3f57c8 12%, transparent); color:#3f57c8; }
+              .sub-warn { background:color-mix(in srgb, #c8384a 13%, transparent); color:#c8384a; }
+              @media (prefers-color-scheme: dark){ .sub-ok{ color:#8496f2; } .sub-warn{ color:#ef6b7c; } }
+            </style>
+            {% if subscription %}
+            <a href="{{ subscription.url }}" class="sub-banner {{ 'sub-warn' if (not subscription.active or (subscription.days_left is not none and subscription.days_left <= 3)) else 'sub-ok' }}">
+                <i class="fas fa-{{ 'exclamation-circle' if not subscription.active else 'crown' }}"></i>
+                <span>
+                {%- if not subscription.active %}Your subscription has ended — click to renew and restore access.
+                {%- elif subscription.on_trial %}Free trial · {{ subscription.days_left }} day{{ '' if subscription.days_left == 1 else 's' }} left — subscribe to keep access.
+                {%- else %}Subscription active · {{ subscription.days_left }} day{{ '' if subscription.days_left == 1 else 's' }} remaining — manage or renew.{% endif %}
+                </span>
+                <span class="sub-cta">Manage subscription →</span>
+            </a>
+            {% endif %}
+            <div class="page-content" id="mainContent" tabindex="-1"{% if not page_can_write %} data-readonly="1"{% endif %}>
                 {% block content %}{% endblock %}
             </div>
         </main>
@@ -514,13 +939,13 @@
         <div class="modal-content">
             <div class="modal-header">
                 <h3>Confirm</h3>
-                <button class="modal-close" onclick="closeModal('confirmModal')"><i class="fas fa-times"></i></button>
+                <button class="modal-close" data-call="closeModal" data-args="'confirmModal'"><i class="fas fa-times"></i></button>
             </div>
             <div class="modal-body">
                 <p id="confirmMessage">Are you sure?</p>
             </div>
             <div class="modal-footer">
-                <button class="btn btn-secondary" onclick="closeModal('confirmModal')">Cancel</button>
+                <button class="btn btn-secondary" data-call="closeModal" data-args="'confirmModal'">Cancel</button>
                 <button class="btn btn-danger" id="confirmBtn">Confirm</button>
             </div>
         </div>
@@ -528,7 +953,7 @@
     
     <style>
     /* Global header search */
-    .header-search{display:flex;align-items:center;gap:.45rem;background:var(--gray-100);border-radius:999px;padding:.35rem .8rem;max-width:240px;flex:1;margin:0 .5rem}
+    .header-search{display:flex;align-items:center;gap:.45rem;background:var(--gray-100);border-radius:999px;padding:.5rem .85rem;min-height:40px;max-width:240px;flex:1;margin:0 .5rem}
     .header-search i{color:var(--text-muted);font-size:.85rem}
     .header-search input{border:none;background:transparent;outline:none;width:100%;font-size:.85rem;color:var(--text-primary)}
     @media(max-width:768px){.header-search{display:none}}
@@ -537,8 +962,9 @@
         display: flex;
         align-items: center;
         justify-content: center;
-        width: 36px;
-        height: 36px;
+        width: 40px;
+        height: 40px;
+        flex-shrink: 0;
         border-radius: 50%;
         border: none;
         cursor: pointer;
@@ -547,6 +973,7 @@
         transition: all 0.2s ease;
     }
     .header-icon-btn:hover { background: var(--primary); color: #fff; }
+    .header-icon-btn:focus-visible { outline: none; box-shadow: var(--ring); }
     .header-install-btn { background: var(--primary); color: #fff; }
     .header-install-btn:hover { filter: brightness(1.08); background: var(--primary); color: #fff; }
     .header-icon-btn.spinning i { animation: hib-spin 0.8s linear infinite; }
@@ -581,9 +1008,95 @@
     .sidebar-footer-padding {
         height: 60px;
     }
+    .branch-switch { position: relative; }
+    .branch-switch-btn {
+        display: inline-flex; align-items: center; gap: .4rem;
+        padding: .4rem .7rem; min-height: 40px; border: 1px solid var(--border-color);
+        background: var(--bg-card); color: var(--text-primary);
+        border-radius: 8px; cursor: pointer; font-size: .85rem; font-weight: 600;
+    }
+    .branch-switch-btn:hover { border-color: var(--primary); }
+    .branch-switch-menu {
+        position: absolute; top: 110%; right: 0; z-index: 50; min-width: 190px;
+        background: var(--bg-card); border: 1px solid var(--border-color);
+        border-radius: 10px; box-shadow: 0 12px 30px rgba(0,0,0,.18);
+        padding: .3rem; display: none;
+    }
+    .branch-switch-menu.open { display: block; }
+    .branch-switch-menu a {
+        display: flex; align-items: center; gap: .55rem; padding: .55rem .7rem;
+        border-radius: 7px; color: var(--text-primary); text-decoration: none;
+        font-size: .85rem;
+    }
+    .branch-switch-menu a:hover { background: var(--gray-50); }
+    .branch-switch-menu a.active { background: var(--primary); color: #fff; }
+    /* Mobile: never let the branch switcher overrun / cover the hamburger.
+       The right cluster is allowed to shrink and the branch name truncates,
+       so the menu button always keeps space and stays tappable. */
+    @media (max-width: 768px) {
+        .header-right { min-width: 0; flex-shrink: 1; }
+        .branch-switch { position: relative; min-width: 0; }
+        .branch-switch-btn { max-width: 40vw; }
+        .branch-switch-btn span {
+            overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+        }
+        .mobile-menu-btn { position: relative; z-index: 2; }
+    }
+
+    /* Breadcrumb as a real trail with a clickable home crumb */
+    .breadcrumb { display: flex; align-items: center; gap: .4rem; }
+    .breadcrumb a { color: var(--text-muted); font-weight: 600; text-decoration: none; }
+    .breadcrumb a:hover { color: var(--primary); }
+    .breadcrumb .crumb-home { display: inline-flex; align-items: center; }
+    .breadcrumb .crumb-sep { color: var(--text-muted); font-weight: 400; opacity: .6; }
+    .breadcrumb > span:last-child { color: var(--text-primary); }
+
+    /* Mobile search: an icon that expands the search bar into a full-width row */
+    .header-search-btn { display: none; }
+    @media (max-width: 768px) {
+        .header-search-btn { display: flex; }
+        .top-header.search-open { flex-wrap: wrap; }
+        .top-header.search-open .header-search {
+            display: flex; order: 9; flex-basis: 100%; max-width: none; margin: .4rem 0 .15rem;
+        }
+    }
+
+    /* Account dropdown — consolidates install / clear-cache / logout / identity */
+    .profile-wrap { position: relative; }
+    .profile-btn {
+        width: auto; min-width: 40px; height: 40px; gap: .45rem;
+        padding: 0 .6rem; border-radius: var(--radius-full);
+    }
+    .profile-btn .profile-name {
+        font-size: var(--text-sm); font-weight: 600; max-width: 9rem;
+        overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .profile-btn .profile-caret { font-size: .6rem; opacity: .7; }
+    @media (max-width: 575px) { .profile-btn .profile-name { display: none; } }
+    .profile-menu {
+        position: absolute; right: 0; top: calc(100% + 8px); min-width: 220px;
+        background: var(--bg-card); border: 1px solid var(--border-color);
+        border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
+        padding: .35rem; display: none; z-index: var(--z-dropdown);
+    }
+    .profile-menu.open { display: block; }
+    .profile-head { padding: .55rem .65rem; border-bottom: 1px solid var(--border-light); margin-bottom: .25rem; }
+    .profile-head-name { font-weight: 700; font-size: var(--text-sm); color: var(--text-primary); }
+    .profile-head-sub { font-size: var(--text-xs); color: var(--text-muted); margin-top: 1px; }
+    .profile-item {
+        display: flex; align-items: center; gap: .6rem; width: 100%;
+        padding: .6rem .65rem; border: none; background: transparent;
+        color: var(--text-primary); font-size: var(--text-sm); font-family: inherit;
+        text-align: left; border-radius: var(--radius-md); cursor: pointer; text-decoration: none;
+    }
+    .profile-item:hover { background: var(--gray-50); }
+    .profile-item i { width: 18px; text-align: center; color: var(--text-muted); }
+    .profile-logout { color: var(--danger); }
+    .profile-logout:hover { background: var(--danger-light); }
+    .profile-logout i { color: var(--danger); }
     </style>
     
-    <script>
+    <script nonce="{{ csp_nonce }}">
     // CSRF: attach the session token to every form submit and same-origin fetch.
     (function () {
         var meta = document.querySelector('meta[name="csrf-token"]');
@@ -592,7 +1105,12 @@
 
         document.addEventListener('submit', function (e) {
             var form = e.target;
-            if (!form || form.method && form.method.toLowerCase() === 'get') return;
+            if (!form) return;
+            // Use the method ATTRIBUTE, not form.method: a control named "method"
+            // (e.g. the generator's fast/ortools radios) shadows the property with
+            // the element, so form.method.toLowerCase() would throw. Default is GET.
+            var method = (form.getAttribute('method') || 'get').toLowerCase();
+            if (method === 'get') return;
             if (!form.querySelector('input[name="_csrf_token"]')) {
                 var input = document.createElement('input');
                 input.type = 'hidden';
@@ -612,19 +1130,79 @@
                 init.headers = new Headers(init.headers || {});
                 if (!init.headers.has('X-CSRFToken')) init.headers.set('X-CSRFToken', token);
             }
-            return origFetch(input, init);
+            return origFetch(input, init).then(function (resp) {
+                // Detect an expired session without changing request headers:
+                // fetch answers 401 to XHR-flagged callers, and transparently
+                // follows the redirect to /login for the rest (resp.redirected).
+                if (resp && sameOrigin && (resp.status === 401 ||
+                    (resp.redirected && /\/login(\?|$)/.test(resp.url || '')))) {
+                    window.__sessionExpired();
+                }
+                return resp;
+            });
         };
     })();
+
+    // Session-expiry re-auth prompt: when an in-page request comes back 401
+    // (idle timeout or a device signed out elsewhere), don't fail silently —
+    // tell the user and offer to sign back in, returning them to this page.
+    window.__sessionExpired = (function () {
+        var shown = false;
+        return function () {
+            if (shown) return;
+            shown = true;
+            var back = window.location.pathname + window.location.search;
+            var login = '{{ url_for("auth.login") }}?next=' + encodeURIComponent(back);
+            var ov = document.createElement('div');
+            ov.setAttribute('role', 'alertdialog');
+            ov.setAttribute('aria-modal', 'true');
+            ov.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(15,23,42,.55);display:flex;align-items:center;justify-content:center;padding:1rem';
+            ov.innerHTML =
+                '<div style="background:var(--bg-card,#fff);color:var(--text,#1e293b);max-width:400px;width:100%;border-radius:14px;padding:1.6rem;box-shadow:0 20px 40px rgba(0,0,0,.3);text-align:center">' +
+                '<div style="width:54px;height:54px;margin:0 auto .9rem;border-radius:14px;display:flex;align-items:center;justify-content:center;background:#fef9c3;color:#a16207;font-size:1.4rem"><i class="fas fa-hourglass-end"></i></div>' +
+                '<h3 style="margin:0 0 .4rem;font-size:1.15rem">Your session has ended</h3>' +
+                '<p style="margin:0 0 1.1rem;font-size:.9rem;color:var(--text-muted,#64748b)">For your security you\'ve been signed out. Log in again to pick up where you left off — any unsaved work on this page will be lost.</p>' +
+                '<a href="' + login + '" style="display:inline-block;width:100%;padding:.8rem;background:linear-gradient(135deg,#0d6a4e,#11998e);color:#fff;border-radius:8px;font-weight:600;text-decoration:none"><i class="fas fa-right-to-bracket"></i> Log in again</a>' +
+                '</div>';
+            document.body.appendChild(ov);
+            ov.querySelector('a').focus();
+        };
+    })();
+
+    // Branch switcher dropdown (central users).
+    (function () {
+        var btn = document.getElementById('branchSwitchBtn');
+        var menu = document.getElementById('branchSwitchMenu');
+        if (!btn || !menu) return;
+        btn.addEventListener('click', function (e) {
+            e.stopPropagation();
+            menu.classList.toggle('open');
+        });
+        document.addEventListener('click', function (e) {
+            if (!menu.contains(e.target) && e.target !== btn) menu.classList.remove('open');
+        });
+    })();
     </script>
-    <script>
+    <script nonce="{{ csp_nonce }}">
     // Register the PWA service worker (installable + offline page caching).
     if ('serviceWorker' in navigator) {
+        // If a NEW service worker takes control (e.g. after a deploy bumps the
+        // cache version), reload once so the page and its CSS/JS come from the
+        // fresh caches instead of the previous version's stale copies. Guarded so
+        // it never loops, and skipped on the very first install (no prior worker).
+        var swHadController = !!navigator.serviceWorker.controller;
+        var swReloaded = false;
+        navigator.serviceWorker.addEventListener('controllerchange', function () {
+            if (swReloaded || !swHadController) return;
+            swReloaded = true;
+            window.location.reload();
+        });
         window.addEventListener('load', function () {
             navigator.serviceWorker.register('/sw.js').catch(function () {});
         });
         // Clear cached pages on logout so they aren't left on the device.
         document.addEventListener('click', function (e) {
-            var link = e.target.closest && e.target.closest('a.header-logout-btn');
+            var link = e.target.closest && e.target.closest('a.profile-logout, a.header-logout-btn');
             if (link && navigator.serviceWorker.controller) {
                 navigator.serviceWorker.controller.postMessage('clear-runtime');
             }
@@ -658,9 +1236,9 @@
                 deferred.prompt();
                 deferred.userChoice.finally(function () { deferred = null; btn.style.display = 'none'; });
             } else if (isIOS) {
-                alert('To install PosyHub:\n\n1. Tap the Share button (the square with an up-arrow).\n2. Choose "Add to Home Screen".\n3. Tap Add.');
+                alert('To install EduSyncra:\n\n1. Tap the Share button (the square with an up-arrow).\n2. Choose "Add to Home Screen".\n3. Tap Add.');
             } else {
-                alert('To install PosyHub:\n\nOpen your browser menu (⋮) and choose "Install app" or "Add to Home screen".\n\nIf you don\'t see it yet, reload this page and try again.');
+                alert('To install EduSyncra:\n\nOpen your browser menu (⋮) and choose "Install app" or "Add to Home screen".\n\nIf you don\'t see it yet, reload this page and try again.');
             }
         });
     })();
@@ -692,8 +1270,85 @@
         });
     })();
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <style>
+    .notif-wrap{position:relative;}
+    .notif-badge{position:absolute;top:-2px;right:-2px;min-width:16px;height:16px;padding:0 4px;border-radius:8px;background:#dc2626;color:#fff;font-size:.65rem;line-height:16px;text-align:center;font-weight:700;}
+    .notif-menu{position:absolute;right:0;top:calc(100% + 8px);width:330px;max-width:88vw;background:var(--bg-card,#fff);border:1px solid var(--border-color,#e5e7eb);border-radius:12px;box-shadow:0 12px 32px rgba(0,0,0,.18);z-index:1200;display:none;overflow:hidden;}
+    .notif-menu.open{display:block;}
+    .notif-head{display:flex;align-items:center;justify-content:space-between;padding:.6rem .8rem;border-bottom:1px solid var(--border-color,#eef0f2);font-weight:600;font-size:.85rem;}
+    .notif-readall{background:none;border:none;color:var(--primary,#0d6a4e);font-size:.75rem;cursor:pointer;}
+    .notif-list{max-height:60vh;overflow-y:auto;}
+    .notif-item{display:block;padding:.6rem .8rem;border-bottom:1px solid var(--border-color,#f1f3f5);text-decoration:none;color:inherit;cursor:pointer;}
+    .notif-item:hover{background:var(--hover-bg,#f6f8fa);}
+    .notif-item.unread{background:rgba(13,106,78,.06);}
+    .notif-item .nt{font-weight:600;font-size:.85rem;}
+    .notif-item .nb{font-size:.78rem;color:var(--text-muted,#6b7280);margin-top:.15rem;}
+    .notif-item .nw{font-size:.68rem;color:var(--text-muted,#9ca3af);margin-top:.2rem;}
+    .notif-empty{padding:1.4rem .8rem;text-align:center;color:var(--text-muted,#9ca3af);font-size:.85rem;}
+    /* On phones the bell isn't at the screen edge (theme/menu icons follow it),
+       so an absolutely-positioned 330px box overflows. Drop the menu to a fixed,
+       near-full-width sheet pinned just under the sticky header instead. */
+    @media (max-width:640px){
+      .notif-menu{position:fixed;top:calc(var(--header-height,60px) + 6px);left:8px;right:8px;width:auto;max-width:none;}
+      .notif-list{max-height:calc(100vh - var(--header-height,60px) - 64px);}
+    }
+    #navProgress{position:fixed;top:0;left:0;height:3px;width:0;
+        background:linear-gradient(90deg,var(--primary),var(--accent));
+        z-index:9999;opacity:0;transition:width .25s ease,opacity .25s ease;
+        box-shadow:0 0 10px var(--primary);border-top-right-radius:3px;border-bottom-right-radius:3px;}
+    .nav-badge{margin-left:auto;font-size:.62rem;font-weight:700;padding:1px 7px;border-radius:999px;
+        background:var(--warning,#e67e22);color:#fff;line-height:1.6;}
+    .nav-section-toggle{cursor:pointer;display:flex !important;align-items:center;justify-content:space-between;}
+    .nav-sec-chev{font-size:.65rem;opacity:.55;transition:transform .2s ease;}
+    .nav-section-toggle:not(.open) .nav-sec-chev{transform:rotate(-90deg);}
+    .bottom-nav{display:none;}
+    @media (max-width:1023px){
+        .bottom-nav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:900;
+            background:var(--bg-card);border-top:1px solid var(--border-color);
+            box-shadow:0 -2px 12px rgba(0,0,0,.08);padding-bottom:env(safe-area-inset-bottom);}
+        .bottom-nav .bn-item{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;
+            gap:.18rem;padding:.5rem .15rem;color:var(--text-muted);font-size:.72rem;text-decoration:none;
+            background:none;border:none;cursor:pointer;text-align:center;}
+        .bottom-nav .bn-item i{font-size:1.25rem;}
+        .bottom-nav .bn-item span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+        .bottom-nav .bn-item.active{color:var(--primary);}
+        .time-travel-bar{padding:.5rem .9rem;font-size:.85rem;border-bottom:1px solid var(--border-color);background:var(--bg-card);}
+        .time-travel-bar.active{background:#fff6e5;color:#92400e;border-bottom:2px solid #f59e0b;}
+        [data-theme="dark"] .time-travel-bar.active{background:#3a2e12;color:#fcd34d;}
+        .page-content{padding-bottom:4.6rem !important;}
+    }
+    </style>
+    <script nonce="{{ csp_nonce }}">
+    // Lightweight navigation progress bar — better perceived speed on slow networks.
+    (function(){
+        var bar=document.getElementById('navProgress'); if(!bar) return;
+        var timer;
+        function start(){ bar.style.opacity='1'; bar.style.width='30%';
+            clearTimeout(timer); timer=setTimeout(function(){bar.style.width='70%';},220); }
+        document.addEventListener('click', function(e){
+            var a=e.target.closest && e.target.closest('a'); if(!a||!a.href) return;
+            if(a.target==='_blank'||a.hasAttribute('download')||a.getAttribute('href').indexOf('#')===0) return;
+            try{ if(new URL(a.href).origin===location.origin) start(); }catch(_){}
+        });
+        document.addEventListener('submit', function(e){
+            if((e.target.getAttribute('method')||'get').toLowerCase()!=='get') start(); });
+        window.addEventListener('pageshow', function(){ bar.style.width='100%';
+            setTimeout(function(){bar.style.opacity='0';bar.style.width='0';},200); });
+    })();
+    </script>
+    <!-- Shared React runtime: loaded once here (cached across the whole app) so
+         the per-page React bundles no longer each embed their own copy of React. -->
+    <script src="{{ url_for('static', filename='vendor/react.production.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='vendor/react-dom.production.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
+    <script src="{{ bundle_url('js/app.js') }}"></script>
+    <script src="{{ bundle_url('js/command-palette.js') }}"></script>
+    <script src="{{ bundle_url('js/offline-queue.js') }}"></script>
+    <script src="{{ bundle_url('js/spa-nav.js') }}"></script>
+    <!-- CSP-safe declarative behaviours: replaces inline on* handlers so the
+         Content-Security-Policy can drop 'unsafe-inline'. Data-attribute driven,
+         event-delegated, so it also covers dynamically-inserted elements. -->
+    <script nonce="{{ csp_nonce }}" src="{{ bundle_url('js/csp-behaviors.js') }}"></script>
     {% block extra_js %}{% endblock %}
 </body>
 </html>

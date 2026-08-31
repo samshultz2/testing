@@ -1,0 +1,5 @@
+{% extends "website/public_base.html" %}
+{% from "website/blocks.html" import render_block %}
+{% block body %}
+{% for b in blocks %}{{ render_block(b, ctx, nav) }}{% endfor %}
+{% endblock %}

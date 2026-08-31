@@ -1,0 +1,104 @@
+{% extends "base.html" %}
+{% block title %}New staff loan - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('hr.loans_list') }}">Staff Loans</a> / <span>New</span>{% endblock %}
+{% block content %}
+<div class="page-header"><h1><i class="fas fa-plus"></i> New staff loan</h1></div>
+
+<form method="POST" action="{{ url_for('hr.loan_new') }}">
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+  <div class="card"><div class="card-body">
+
+    <label class="form-check" style="display:flex;gap:.5rem;align-items:flex-start;margin-bottom:1rem">
+      <input type="checkbox" name="opening" id="opening-toggle" style="margin-top:.25rem">
+      <span><strong>This is an existing loan</strong> — one already running before we started using the platform.
+        It needs no guarantors and is recorded as active straight away; tell us how many months have already been paid.</span>
+    </label>
+
+    <p class="text-muted text-sm" id="new-loan-note">Interest: <strong>{{ cfg.rate }}% {{ cfg.method }}</strong>. The loan must be cleared by
+      <strong>November</strong> of the year it is taken — the monthly deduction is raised automatically if what you
+      enter is too small. It becomes active once all {{ cfg.guarantors_required }} guarantors approve.</p>
+
+    <div class="form-row">
+      <div class="form-group" style="flex:1;min-width:220px"><label class="form-label">Staff member (borrower)</label>
+        <select name="staff_id" class="form-control" required>
+          <option value="">— Select —</option>
+          {% for s in staff %}<option value="{{ s.id }}">{{ s.full_name }}</option>{% endfor %}
+        </select></div>
+      <div class="form-group"><label class="form-label"><span class="lbl-principal">Loan amount</span></label>
+        <input type="number" step="0.01" min="1" name="principal" class="form-control" required style="max-width:180px"></div>
+      <div class="form-group"><label class="form-label"><span class="lbl-monthly">Preferred monthly <span class="text-muted">(optional)</span></span></label>
+        <input type="number" step="0.01" min="0" name="monthly_amount" id="monthly-amount" class="form-control" style="max-width:180px" placeholder="auto"></div>
+    </div>
+    <div class="form-group"><label class="form-label">Purpose <span class="text-muted">(optional)</span></label>
+      <input type="text" name="purpose" class="form-control" maxlength="200"></div>
+
+    <!-- Existing-loan (migration) fields — shown only when the toggle is on -->
+    <div id="opening-fields" style="display:none">
+      <h3 style="margin-top:1rem">Existing loan details</h3>
+      <div class="form-row" style="flex-wrap:wrap">
+        <div class="form-group"><label class="form-label">Date originally taken</label>
+          <input type="date" name="date_taken" id="opening-date" class="form-control" style="max-width:190px"></div>
+        <div class="form-group"><label class="form-label">Total months (original term)</label>
+          <input type="number" step="1" min="1" name="months" id="opening-months" class="form-control" style="max-width:160px" placeholder="e.g. 12"></div>
+        <div class="form-group"><label class="form-label">Months already paid</label>
+          <input type="number" step="1" min="0" name="months_paid" id="opening-paid" class="form-control" style="max-width:160px" placeholder="e.g. 4"></div>
+        <div class="form-group"><label class="form-label">Total repayable <span class="text-muted">(optional)</span></label>
+          <input type="number" step="0.01" min="0" name="total_repayable" class="form-control" style="max-width:180px" placeholder="auto from interest"></div>
+      </div>
+      <p class="text-muted text-sm">Leave <em>Total repayable</em> blank to compute it from the school's interest terms.
+        The outstanding balance is the total minus (months already paid × monthly). Payroll continues the deduction from here.</p>
+    </div>
+
+    <!-- Guarantors — required only for a brand-new loan -->
+    <div id="guarantor-fields">
+      <h3 style="margin-top:1rem">Guarantors ({{ cfg.guarantors_required }} required)</h3>
+      <p class="text-muted text-sm">Each must be a different staff member and cannot be the borrower. The loan is not
+        disbursed until every guarantor approves.</p>
+      <div class="form-row" style="flex-wrap:wrap">
+        {% for i in range(cfg.guarantors_required) %}
+        <div class="form-group"><label class="form-label">Guarantor {{ i + 1 }}</label>
+          <select name="guarantor_ids" class="form-control guarantor-select" required style="min-width:200px">
+            <option value="">— Select —</option>
+            {% for s in staff %}<option value="{{ s.id }}">{{ s.full_name }}</option>{% endfor %}
+          </select></div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <div style="margin-top:.6rem"><button class="btn btn-primary"><i class="fas fa-check"></i> <span id="submit-label">Create loan</span></button>
+      <a href="{{ url_for('hr.loans_list') }}" class="btn btn-secondary">Cancel</a></div>
+  </div></div>
+</form>
+
+<script>
+(function () {
+  var toggle = document.getElementById('opening-toggle');
+  var openingFields = document.getElementById('opening-fields');
+  var guarantorFields = document.getElementById('guarantor-fields');
+  var newNote = document.getElementById('new-loan-note');
+  var monthly = document.getElementById('monthly-amount');
+  var lblMonthly = document.querySelector('.lbl-monthly');
+  var lblPrincipal = document.querySelector('.lbl-principal');
+  var submitLabel = document.getElementById('submit-label');
+  var openingInputs = ['opening-date', 'opening-months', 'opening-paid'].map(function (id) { return document.getElementById(id); });
+  var guarantors = Array.prototype.slice.call(document.querySelectorAll('.guarantor-select'));
+
+  function apply() {
+    var on = toggle.checked;
+    openingFields.style.display = on ? '' : 'none';
+    guarantorFields.style.display = on ? 'none' : '';
+    newNote.style.display = on ? 'none' : '';
+    // Guarantors are only required for a fresh loan.
+    guarantors.forEach(function (g) { g.required = !on; });
+    // For an existing loan the monthly deduction and migration fields are required.
+    monthly.required = on;
+    openingInputs.forEach(function (el) { if (el) el.required = on; });
+    lblMonthly.innerHTML = on ? 'Monthly repayment' : 'Preferred monthly <span class="text-muted">(optional)</span>';
+    lblPrincipal.textContent = on ? 'Original loan amount' : 'Loan amount';
+    submitLabel.textContent = on ? 'Record existing loan' : 'Create loan';
+  }
+  toggle.addEventListener('change', apply);
+  apply();
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% set _t = {'dashboard':'CBT / Online Tests','settings':'CBT Settings','lab_setup':'Lab / Kiosk Setup','exam_form':'Exam','results':'Results','item_analysis':'Item Analysis','subject_topics':'Subject Topics'} %}
+{% block title %}{{ _t.get(cbt_json.page,'CBT') }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}
+{% if cbt_json.page == 'dashboard' %}<span>CBT</span>
+{% else %}<a href="{{ url_for('cbt.dashboard') }}">CBT</a> / <span>{{ _t.get(cbt_json.page,'') }}</span>{% endif %}
+{% endblock %}
+{% block extra_css %}
+<style>
+.fin-tabs{display:flex;gap:.35rem;overflow-x:auto;margin-bottom:1rem;border-bottom:1px solid var(--border-color);padding-bottom:.1rem;-webkit-overflow-scrolling:touch}
+.fin-tab{display:inline-flex;align-items:center;gap:.45rem;padding:.6rem .9rem;white-space:nowrap;font-size:.85rem;font-weight:600;color:var(--text-secondary);border-bottom:2px solid transparent;text-decoration:none;border-radius:var(--radius-sm) var(--radius-sm) 0 0}
+.fin-tab i{font-size:.85rem;opacity:.8}
+.fin-tab:hover{color:var(--primary);background:var(--gray-50)}
+.fin-tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+.kpi-row{display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem;margin-bottom:1.1rem}
+@media(min-width:768px){.kpi-row{grid-template-columns:repeat(4,1fr)}}
+.kpi{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);padding:1rem;display:flex;align-items:center;gap:.85rem}
+.kpi .v{font-size:1.5rem;font-weight:700;line-height:1;font-family:var(--font-display)}
+.kpi .l{font-size:.72rem;color:var(--text-muted);margin-top:.25rem;text-transform:uppercase;letter-spacing:.03em}
+.cmd{position:relative;background:#0f172a;color:#e2e8f0;border-radius:10px;padding:.9rem 2.6rem .9rem 1rem;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:.82rem;white-space:pre-wrap;word-break:break-all;margin:.4rem 0}
+.cmd .copy{position:absolute;top:.5rem;right:.5rem;background:#334155;color:#fff;border:none;border-radius:6px;padding:.25rem .5rem;font-size:.72rem;cursor:pointer}
+.cmd .copy:hover{background:#475569}
+.step{display:flex;gap:.8rem;margin-bottom:1rem}
+.step .n{flex-shrink:0;width:28px;height:28px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700}
+.os-tabs{display:flex;gap:.3rem;margin-bottom:.6rem;flex-wrap:wrap}
+.os-tab{padding:.4rem .8rem;border:1px solid var(--border-color);border-radius:var(--radius-full);cursor:pointer;font-size:.82rem;font-weight:600}
+.os-tab.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+kbd{background:var(--gray-100);border:1px solid var(--border-color);border-radius:4px;padding:.05rem .35rem;font-size:.78rem}
+</style>
+{% endblock %}
+{% block content %}
+<div id="cbt-app"><p class="text-muted" style="padding:2rem 0">Loading…</p></div>
+<script type="application/json" id="cbt-data">{{ cbt_json|tojson }}</script>
+<script src="{{ bundle_url('js/react/cbt-app.js') }}" defer></script>
+{% endblock %}

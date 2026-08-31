@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}Questions needing images — Mock JAMB - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ index_url }}">Mock JAMB</a> / <a href="{{ bank_url }}">Question bank</a> / <span>Needs images</span>{% endblock %}
+{% block extra_css %}<style>
+.ni-q{border:1px solid var(--border-color);border-left:4px solid #b45309;border-radius:var(--radius-md);padding:.8rem 1rem;margin-bottom:.8rem}
+.ni-meta{display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;font-size:.72rem;margin-bottom:.4rem}
+.ni-badge{background:var(--gray-100);border-radius:999px;padding:.12rem .5rem}
+.ni-opt{font-size:.85rem;color:var(--text-secondary);margin:.1rem 0}
+.ni-opt.c{color:var(--success);font-weight:600}
+.ni-act{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;margin-top:.6rem}
+.ni-check-lbl{float:right;display:inline-flex;gap:.3rem;align-items:center;font-size:.72rem;color:var(--text-muted);cursor:pointer;user-select:none}
+.ni-check{width:17px;height:17px;accent-color:var(--primary,#0d6a4e)}
+</style>{% endblock %}
+{% block content %}
+<div class="page-header"><h1>Questions needing images <span class="text-muted" style="font-weight:400;font-size:1rem;">— {{ total }} flagged</span></h1>
+    <div class="page-header-actions"><a href="{{ bank_url }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back to bank</a></div>
+</div>
+
+<div class="card mb-3"><div class="card-body">
+    <p class="text-sm text-muted" style="margin:0 0 .6rem;">These questions refer to a diagram/figure that couldn't be fetched automatically, so they're <strong>held out of exams</strong> until you add the image. Upload the figure (or mark “no image needed” if it was a false alarm) and the question re-enters the pool.</p>
+    <form method="get" class="filter-form" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:flex-end;">
+        <div class="form-group"><label class="form-label">Subject</label>
+            <select name="subject_id" class="form-control" data-autosubmit><option value="">All</option>
+                {% for s in subjects %}<option value="{{ s.id }}" {{ 'selected' if s.id == subject_id else '' }}>{{ s.name }}</option>{% endfor %}</select></div>
+        <div class="form-group"><label class="form-label">Year</label>
+            <select name="year" class="form-control" data-autosubmit><option value="">All</option>
+                {% for y in years %}<option value="{{ y }}" {{ 'selected' if y == year else '' }}>{{ y }}</option>{% endfor %}</select></div>
+        <div class="form-group"><label class="form-label">Exam body</label>
+            <select name="exam_body" class="form-control" data-autosubmit><option value="">All</option>
+                {% for e in ['JAMB','WAEC','Both'] %}<option value="{{ e }}" {{ 'selected' if e == exam_body else '' }}>{{ e }}</option>{% endfor %}</select></div>
+        <div class="form-group"><button class="btn btn-secondary"><i class="fas fa-filter"></i> Filter</button></div>
+    </form>
+</div></div>
+
+{% if questions %}
+<div class="card mb-3"><div class="card-body" style="display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;">
+    <label style="display:flex;align-items:center;gap:.4rem;font-weight:600;font-size:.85rem;cursor:pointer;">
+        <input type="checkbox" id="niSelectAll"> Select all on this page</label>
+    <span id="niCount" class="text-muted text-sm">0 selected</span>
+    <span style="flex:1;min-width:8px;"></span>
+    <form method="post" id="niBulkForm" action="{{ url_for('mock_jamb.bank_needs_images_bulk') }}"
+          style="display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin:0;">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" id="niAction" value="dismiss">
+        <input type="hidden" name="question_ids" id="niIds" value="">
+        <input type="hidden" name="subject_id" value="{{ subject_id or '' }}">
+        <input type="hidden" name="year" value="{{ year or '' }}">
+        <input type="hidden" name="exam_body" value="{{ exam_body or '' }}">
+        <button type="button" class="btn btn-primary btn-sm" data-bulk="dismiss"><i class="fas fa-check-double"></i> Selected: no image needed</button>
+        <button type="button" class="btn btn-danger btn-sm" data-bulk="delete"><i class="fas fa-trash"></i> Delete selected</button>
+        <button type="button" class="btn btn-secondary btn-sm" data-bulk="dismiss_all"><i class="fas fa-check-double"></i> All {{ total }} matching: no image</button>
+    </form>
+</div></div>
+{% endif %}
+
+{% for q in questions %}
+<div class="ni-q">
+    <label class="ni-check-lbl"><input type="checkbox" class="ni-check" value="{{ q.id }}"> select</label>
+    <div class="ni-meta">
+        <span class="ni-badge">{{ subj_name.get(q.subject_id, 'Subject') }}</span>
+        {% if q.exam_year %}<span class="ni-badge">{{ q.exam_year }}</span>{% endif %}
+        {% if q.exam_body %}<span class="ni-badge">{{ q.exam_body }}</span>{% endif %}
+        {% if q.section %}<span class="ni-badge">{{ q.section|replace('_',' ')|title }}</span>{% endif %}
+        {% if q.topic %}<span class="ni-badge">{{ q.topic }}{% if q.subtopic %} › {{ q.subtopic }}{% endif %}</span>{% endif %}
+    </div>
+    <div style="font-weight:600;">{{ q.question_text | question_html }}</div>
+    {% for opt, val in q.options %}{% if val %}<div class="ni-opt {{ 'c' if q.correct_option == opt else '' }}">{{ opt }}. {{ val }}{% if q.correct_option == opt %} <i class="fas fa-check"></i>{% endif %}</div>{% endif %}{% endfor %}
+    <div class="ni-act">
+        <form method="post" action="{{ url_for('mock_jamb.bank_set_question_image', question_id=q.id) }}" enctype="multipart/form-data" style="display:flex;gap:.4rem;align-items:center;">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <input type="file" name="image" accept="image/*" class="form-control" required style="max-width:240px;">
+            <button class="btn btn-primary btn-sm"><i class="fas fa-image"></i> Add image</button>
+        </form>
+        <form method="post" action="{{ url_for('mock_jamb.bank_set_question_image', question_id=q.id) }}" data-confirm="Mark this question as not needing an image? It will be usable in exams.">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="dismiss" value="1">
+            <button class="btn btn-secondary btn-sm"><i class="fas fa-check"></i> No image needed</button>
+        </form>
+        <a href="{{ url_for('mock_jamb.bank_edit_question', question_id=q.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-pen"></i> Edit</a>
+    </div>
+</div>
+{% else %}
+<div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-circle-check" style="color:#059669;"></i>
+    <h3>Nothing to review</h3><p>No questions are waiting for an image{{ ' with these filters' if (subject_id or year or exam_body) else '' }}.</p></div></div></div>
+{% endfor %}
+
+{% if pagination and pagination.pages > 1 %}
+<div style="display:flex;gap:.4rem;align-items:center;justify-content:center;flex-wrap:wrap;padding:.7rem;">
+    {% set args = {'subject_id': subject_id or none, 'year': year or none, 'exam_body': exam_body or none} %}
+    {% if pagination.has_prev %}<a class="btn btn-secondary btn-sm" href="{{ url_for('mock_jamb.bank_needs_images', page=pagination.prev_num, **args) }}"><i class="fas fa-chevron-left"></i> Prev</a>{% endif %}
+    <span class="text-sm text-muted">Page {{ pagination.page }} of {{ pagination.pages }}</span>
+    {% if pagination.has_next %}<a class="btn btn-secondary btn-sm" href="{{ url_for('mock_jamb.bank_needs_images', page=pagination.next_num, **args) }}">Next <i class="fas fa-chevron-right"></i></a>{% endif %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}{% include "mock_jamb/_mathjax.html" %}
+<script nonce="{{ csp_nonce }}">
+(function(){
+    var form = document.getElementById('niBulkForm'); if(!form) return;
+    var selectAll = document.getElementById('niSelectAll');
+    var countEl = document.getElementById('niCount');
+    function boxes(){ return Array.prototype.slice.call(document.querySelectorAll('.ni-check')); }
+    function selected(){ return boxes().filter(function(c){ return c.checked; }); }
+    function update(){
+        var n = selected().length;
+        countEl.textContent = n + ' selected';
+        if(selectAll){ var all = boxes(); selectAll.checked = all.length > 0 && n === all.length; }
+    }
+    document.addEventListener('change', function(e){
+        if(e.target && e.target.classList && e.target.classList.contains('ni-check')) update();
+    });
+    if(selectAll) selectAll.addEventListener('change', function(){
+        boxes().forEach(function(c){ c.checked = selectAll.checked; }); update();
+    });
+    form.querySelectorAll('[data-bulk]').forEach(function(btn){
+        btn.addEventListener('click', function(){
+            var action = btn.getAttribute('data-bulk');
+            if(action === 'dismiss_all'){
+                if(!window.confirm('Mark ALL {{ total }} flagged question(s) matching the current filters as not needing an image?')) return;
+            } else {
+                var ids = selected().map(function(c){ return c.value; });
+                if(!ids.length){ window.alert('Select at least one question first.'); return; }
+                if(action === 'delete' && !window.confirm('Delete ' + ids.length + ' selected question(s)? This cannot be undone.')) return;
+                document.getElementById('niIds').value = ids.join(',');
+            }
+            document.getElementById('niAction').value = action;
+            form.submit();
+        });
+    });
+    update();
+})();
+</script>
+{% endblock %}

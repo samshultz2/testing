@@ -1,0 +1,26 @@
+#!/bin/sh
+# Pre-commit: keep the built React bundles and the service-worker cache version
+# in sync with source. When any frontend source or app-controlled static asset is
+# staged, rebuild (frontend/build.mjs also stamps static/js/sw.js's CACHE_VERSION
+# from a content hash of the built assets) and re-stage whatever the build changed.
+#
+# Install once per clone:  git config core.hooksPath .githooks
+set -e
+
+# Only do work when something that affects the bundles/SW is staged.
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+echo "$staged" | grep -Eq '^(frontend/src/|frontend/build\.mjs|static/css/|static/js/)' || exit 0
+
+if ! command -v node >/dev/null 2>&1; then
+  echo "pre-commit: node not found — skipping frontend build (SW version may be stale)." >&2
+  exit 0
+fi
+
+echo "pre-commit: rebuilding frontend bundles + stamping service worker…"
+( cd frontend && node build.mjs >/dev/null )
+
+# Re-stage anything the build produced or changed (bundles + the SW stamp). Only
+# files already tracked or newly built under these paths are added.
+git add static/js/react static/js/sw.js 2>/dev/null || true
+
+exit 0

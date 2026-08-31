@@ -1,0 +1,286 @@
+"""SSS3 bulk-graduation: an enrolled SSS3 student gets marked graduated."""
+import re
+
+import pytest
+from config import Config
+from models import (db, AcademicSession, Term, SchoolClass, ClassArm,
+                    ClassArmAssignment, StudentEnrollment, Student)
+from tests.conftest import login_token
+
+
+def _admin(app):
+    c = app.test_client()
+    tok = login_token(c)
+    c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': tok})
+    return c
+
+
+def test_graduate_sss3_marks_enrolled_student(app):
+    with app.app_context():
+        sess = AcademicSession.query.filter_by(name='GRAD24/25').first()
+        if not sess:
+            sess = AcademicSession(name='GRAD24/25', is_active=True)
+            db.session.add(sess); db.session.flush()
+        term = Term.query.filter_by(session_id=sess.id, term_number=1).first()
+        if not term:
+            term = Term(session_id=sess.id, term_number=1, name='First Term', is_active=True)
+            db.session.add(term); db.session.flush()
+        # active flags must be the ones get_active_* returns
+        AcademicSession.query.update({AcademicSession.is_active: False})
+        Term.query.update({Term.is_active: False})
+        sess.is_active = True; term.is_active = True
+
+        sss3 = SchoolClass.query.filter_by(name='SSS3').first()
+        if not sss3:
+            sss3 = SchoolClass(name='SSS3', level=6); db.session.add(sss3); db.session.flush()
+        arm = ClassArm.query.first()
+        if not arm:
+            arm = ClassArm(name='A', is_active=True); db.session.add(arm); db.session.flush()
+        caa = ClassArmAssignment.query.filter_by(
+            class_id=sss3.id, arm_id=arm.id, term_id=term.id).first()
+        if not caa:
+            caa = ClassArmAssignment(class_id=sss3.id, arm_id=arm.id, term_id=term.id)
+            db.session.add(caa); db.session.flush()
+        s = Student(student_id='GRADME', first_name='Grad', surname='Uate',
+                    gender='Male', is_active=True)
+        db.session.add(s); db.session.flush()
+        db.session.add(StudentEnrollment(student_id=s.id, class_arm_assignment_id=caa.id,
+                                         is_active=True))
+        db.session.commit()
+        sid = s.id
+
+    c = _admin(app)
+    tok = re.search(r'name="csrf-token" content="([0-9a-f]+)"',
+                    c.get('/students').get_data(as_text=True)).group(1)
+    c.post('/promotion/graduate-sss3', data={'_csrf_token': tok})
+
+    with app.app_context():
+        g = db.session.get(Student, sid)
+        assert g.is_graduated is True
+        assert g.graduation_date is not None
+
+
+def _csrf(c):
+    return re.search(r'name="csrf-token" content="([0-9a-f]+)"',
+                     c.get('/students').get_data(as_text=True)).group(1)
+
+
+def test_graduate_status_lifecycle_and_audit(app):
+    from models import GraduateAudit
+    with app.app_context():
+        s = Student(student_id='GSTAT1', first_name='Sta', surname='Tus',
+                    gender='Female', is_active=True, is_graduated=True,
+                    graduate_status='Graduated')
+        db.session.add(s); db.session.commit()
+        sid = s.id
+
+    c = _admin(app)
+    tok = _csrf(c)
+    # advance the lifecycle status with a reason -> writes an audit row
+    r = c.post(f'/promotion/graduates/{sid}/status',
+               data={'status': 'Certificate Issued', 'reason': 'Collected 12 Aug',
+                     '_csrf_token': tok}, headers={'X-Requested-With': 'fetch'})
+    assert r.status_code == 200 and r.get_json()['ok'] is True
+
+    with app.app_context():
+        g = db.session.get(Student, sid)
+        assert g.graduate_status == 'Certificate Issued'
+        a = GraduateAudit.query.filter_by(student_id=sid).order_by(GraduateAudit.id.desc()).first()
+        assert a and a.old_value == 'Graduated' and a.new_value == 'Certificate Issued'
+        assert a.reason == 'Collected 12 Aug' and a.actor
+
+    # an invalid status is rejected
+    r = c.post(f'/promotion/graduates/{sid}/status',
+               data={'status': 'Nonsense', '_csrf_token': tok},
+               headers={'X-Requested-With': 'fetch'})
+    assert r.status_code == 400
+
+    # un-graduate returns JSON (redirect to the graduates list) and clears the flag
+    r = c.post(f'/promotion/ungraduate/{sid}', data={'_csrf_token': tok},
+               headers={'X-Requested-With': 'fetch'})
+    assert r.status_code == 200 and r.get_json()['ok'] is True
+    with app.app_context():
+        assert db.session.get(Student, sid).is_graduated is False
+
+
+def test_graduate_profile_includes_permanent_record(app):
+    with app.app_context():
+        s = Student(student_id='GREC1', first_name='Per', surname='Manent',
+                    gender='Male', is_active=True, is_graduated=True,
+                    graduate_status='Graduated', house='Green', blood_group='AB+')
+        db.session.add(s); db.session.commit()
+        sid = s.id
+    c = _admin(app)
+    r = c.get(f'/promotion/graduates/{sid}', headers={'X-Requested-With': 'fetch'})
+    assert r.status_code == 200
+    j = r.get_json()
+    assert 'record' in j and 'bio' in j['record']
+    assert j['record']['bio']['house'] == 'Green'
+    assert 'academic' in j['record'] and 'attendance' in j['record']
+
+
+def test_graduate_profile_with_waec_and_jamb_results(app):
+    """Regression: the profile must not crash on external-exam fields that live on
+    the Student (jamb_reg_number) rather than the result rows."""
+    from models import WAECResult, JAMBResult
+    with app.app_context():
+        s = Student(student_id='GEXT1', first_name='Ext', surname='Ernal',
+                    gender='Male', is_active=True, is_graduated=True,
+                    graduate_status='Graduated', jamb_reg_number='2024123ABC')
+        db.session.add(s); db.session.flush()
+        db.session.add(WAECResult(student_id=s.id, exam_year=2024, subject='Mathematics', grade='B3'))
+        db.session.add(JAMBResult(student_id=s.id, exam_year=2024, total_score=250,
+                                  subject1='English', subject1_score=70))
+        db.session.commit()
+        sid = s.id
+    c = _admin(app)
+    r = c.get(f'/promotion/graduates/{sid}', headers={'X-Requested-With': 'fetch'})
+    assert r.status_code == 200
+    j = r.get_json()
+    assert j['jamb_results'][0]['registration_number'] == '2024123ABC'
+    assert j['waec_by_year'][0]['subjects'][0]['grade'] == 'B3'
+
+
+def test_transcript_fills_from_student_scores_senior_only(app):
+    """The transcript/record must draw real results from StudentScore, and scope
+    to the senior-secondary years."""
+    from models import (db, Branch, AcademicSession, Term, SchoolClass, ClassArm,
+                        ClassArmAssignment, StudentEnrollment, Subject, ClassSubject,
+                        AssessmentType, StudentScore, GradeScale)
+    from utils.graduate_record import build_record
+    with app.app_context():
+        if not GradeScale.query.first():
+            db.session.add_all([
+                GradeScale(grade='A', min_score=70, max_score=100, remark='Excellent'),
+                GradeScale(grade='C', min_score=50, max_score=69, remark='Credit'),
+                GradeScale(grade='F', min_score=0, max_score=49, remark='Fail')])
+        bid = Branch.get_default().id
+        sess = AcademicSession(name='TRSESS'); db.session.add(sess); db.session.flush()
+        term = Term(session_id=sess.id, term_number=1, name='TR-T1'); db.session.add(term); db.session.flush()
+        sss1 = SchoolClass.query.filter_by(name='SSS1').first() or SchoolClass(name='SSS1', level=4)
+        jss3 = SchoolClass.query.filter_by(name='JSS3').first() or SchoolClass(name='JSS3', level=3)
+        for k in (sss1, jss3):
+            if k.id is None:
+                db.session.add(k)
+        db.session.flush()
+        arm = ClassArm.query.first() or ClassArm(name='A', is_active=True)
+        if arm.id is None:
+            db.session.add(arm); db.session.flush()
+        subj = Subject(name='TR-Maths', is_active=True); db.session.add(subj); db.session.flush()
+        at = AssessmentType.query.filter_by(is_active=True).first() or \
+            AssessmentType(name='TR-Exam', max_score=100, order=1, is_active=True)
+        if at.id is None:
+            db.session.add(at); db.session.flush()
+        s = Student(student_id='TRSTU', first_name='Tra', surname='Nscript', gender='Male',
+                    is_active=True, is_graduated=True, graduate_status='Graduated', branch_id=bid)
+        db.session.add(s); db.session.flush()
+        for klass in (sss1, jss3):
+            cs = ClassSubject(subject_id=subj.id, class_id=klass.id, arm_id=arm.id,
+                              term_id=term.id, is_active=True)
+            db.session.add(cs); db.session.flush()
+            db.session.add(StudentScore(student_id=s.id, class_subject_id=cs.id,
+                                        assessment_type_id=at.id, score=82))
+        db.session.commit()
+        # a Mock WAEC (competence) result for this student
+        from models import MockWAECExam, MockWAECResult
+        mex = MockWAECExam(name='2nd Mock', exam_number=2, session_id=sess.id,
+                           exam_date=__import__('datetime').date(2024, 3, 1), branch_id=bid,
+                           is_active=True)
+        db.session.add(mex); db.session.flush()
+        db.session.add(MockWAECResult(student_id=s.id, mock_exam_id=mex.id,
+                                      subject='TR-Maths', score=78, grade='A1'))
+        db.session.commit()
+        rec = build_record(s)
+        terms = rec['academic']['terms']
+        assert terms, 'academic terms should be populated from StudentScore'
+        assert any(t['subjects'] and t['subjects'][0]['score'] == 82 for t in terms)
+        # competence (Mock WAEC) is attached
+        comp = rec['academic'].get('competence')
+        assert comp and comp['subjects'].get('TR-Maths', {}).get('grade') == 'A1'
+        # transcript matrix keeps only the senior (SSS1) class, not JSS3, and exposes competence
+        from utils import transcript_templates as tt
+        m = tt._matrix(rec['academic'])
+        assert 'SSS1' in m['ss_labels'].values()
+        assert not any('JSS' in v for v in m['ss_labels'].values())
+        assert m['competence'].get('TR-Maths', {}).get('grade') == 'A1'
+
+
+def test_graduate_document_issue_and_public_verify(app):
+    from models import db, GraduateDocument
+    with app.app_context():
+        s = Student(student_id='GDOC1', first_name='Cert', surname='Holder',
+                    gender='Female', is_active=True, is_graduated=True,
+                    graduate_status='Graduated')
+        db.session.add(s); db.session.commit()
+        sid = s.id
+    c = _admin(app)
+    # issue + download the School Leaving Certificate (PDF)
+    r = c.get(f'/promotion/graduates/{sid}/document/slc')
+    assert r.status_code == 200 and r.data[:4] == b'%PDF'
+    with app.app_context():
+        doc = GraduateDocument.query.filter_by(student_id=sid, doc_type='slc').first()
+        assert doc and doc.document_number and doc.verification_code
+        code = doc.verification_code
+    # public verify (no login) confirms it's genuine
+    pub = app.test_client()
+    v = pub.get(f'/verify/{code}')
+    assert v.status_code == 200 and b'Genuine' in v.data
+    # a bad code reports could-not-verify, not an error
+    v2 = pub.get('/verify/NOPENOPE00')
+    assert v2.status_code == 200 and b'Could not verify' in v2.data
+    # unknown doc type -> 404
+    assert c.get(f'/promotion/graduates/{sid}/document/bogus').status_code == 404
+
+
+def test_graduate_document_revoke_and_reinstate(app):
+    from models import db, GraduateDocument
+    with app.app_context():
+        s = Student(student_id='GREV1', first_name='Rev', surname='Oke',
+                    gender='Male', is_active=True, is_graduated=True,
+                    graduate_status='Graduated')
+        db.session.add(s); db.session.commit()
+        sid = s.id
+    c = _admin(app)
+    tok = _csrf(c)
+    # issue first, then grab the verification code
+    assert c.get(f'/promotion/graduates/{sid}/document/testimonial').status_code == 200
+    with app.app_context():
+        code = GraduateDocument.query.filter_by(
+            student_id=sid, doc_type='testimonial').first().verification_code
+    pub = app.test_client()
+    assert b'Genuine' in pub.get(f'/verify/{code}').data
+    # revoke -> verifies as invalid
+    r = c.post(f'/promotion/graduates/{sid}/document/testimonial/revoke',
+               data={'_csrf_token': tok}, headers={'X-Requested-With': 'fetch'})
+    assert r.status_code == 200 and r.get_json()['ok'] is True
+    with app.app_context():
+        assert GraduateDocument.query.filter_by(
+            student_id=sid, doc_type='testimonial').first().revoked is True
+    assert b'Document revoked' in pub.get(f'/verify/{code}').data
+    # reinstate -> genuine again
+    r = c.post(f'/promotion/graduates/{sid}/document/testimonial/revoke',
+               data={'_csrf_token': tok}, headers={'X-Requested-With': 'fetch'})
+    assert r.status_code == 200
+    assert b'Genuine' in pub.get(f'/verify/{code}').data
+    # revoking a not-yet-issued doc reports an error, not a crash
+    r = c.post(f'/promotion/graduates/{sid}/document/conduct/revoke',
+               data={'_csrf_token': tok}, headers={'X-Requested-With': 'fetch'})
+    assert r.status_code == 400 and r.get_json()['ok'] is False
+
+
+def test_graduate_bulk_documents_zip(app):
+    import io, zipfile
+    with app.app_context():
+        for i in range(3):
+            db.session.add(Student(student_id=f'GBULK{i}', first_name=f'Bulk{i}',
+                                   surname='Grad', gender='Male', is_active=True,
+                                   is_graduated=True, graduate_status='Graduated'))
+        db.session.commit()
+    c = _admin(app)
+    r = c.get('/promotion/graduates/documents/bulk?doc_type=slc')
+    assert r.status_code == 200 and r.mimetype == 'application/zip'
+    z = zipfile.ZipFile(io.BytesIO(r.data))
+    assert len(z.namelist()) >= 3
+    assert all(z.read(n)[:4] == b'%PDF' for n in z.namelist())
+    # unknown doc type -> 404
+    assert c.get('/promotion/graduates/documents/bulk?doc_type=bogus').status_code == 404

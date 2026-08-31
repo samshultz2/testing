@@ -1,0 +1,192 @@
+{% extends "base.html" %}
+{% block title %}Attendance - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Attendance</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ---- attendance SPA (scoped .att-*) ---- */
+#attendance-spa { font-size: 15px; }
+.att-spinner { width: 18px; height: 18px; border: 3px solid var(--gray-200, #e5e7eb);
+  border-top-color: var(--primary, #2563eb); border-radius: 50%; animation: att-spin .7s linear infinite; }
+@keyframes att-spin { to { transform: rotate(360deg); } }
+.att-x { background: none; border: none; font-size: 18px; line-height: 1; cursor: pointer; color: inherit; opacity: .6; }
+.att-x:hover { opacity: 1; }
+
+.att-tabs { display: flex; gap: 4px; flex-wrap: wrap; align-items: center;
+  border-bottom: 1px solid var(--border-color); padding-bottom: 0; }
+.att-tab { display: inline-flex; align-items: center; gap: 6px; padding: .55rem .9rem;
+  text-decoration: none; color: var(--text-secondary); border-bottom: 2px solid transparent;
+  border-radius: var(--radius-md) var(--radius-md) 0 0; font-weight: 600; font-size: 14px; }
+.att-tab:hover { background: var(--gray-50); }
+.att-tab.is-active { color: var(--primary); border-bottom-color: var(--primary);
+  background: color-mix(in srgb, var(--primary) 8%, var(--bg-card)); }
+.att-tabs-status { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+
+.att-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.att-list li { border: 1px solid var(--gray-200, #e5e7eb); border-radius: 12px; background: var(--bg-card);
+  transition: border-color .15s, box-shadow .15s, background .15s; }
+.att-list li:hover { border-color: var(--gray-300, #cbd5e1); box-shadow: 0 1px 4px rgba(0,0,0,.06); }
+.att-list label { display: flex; align-items: center; gap: 12px; padding: 10px 14px; cursor: pointer; margin: 0; }
+.att-list li.is-present { border-color: color-mix(in srgb, var(--success) 45%, var(--border-color));
+  background: color-mix(in srgb, var(--success) 7%, var(--bg-card)); }
+.att-list li.is-absent { border-color: color-mix(in srgb, var(--danger) 38%, var(--border-color));
+  background: color-mix(in srgb, var(--danger) 6%, var(--bg-card)); }
+.att-list input[type=checkbox] { width: 22px; height: 22px; flex: none; accent-color: var(--success); cursor: pointer; }
+.att-av { flex: none; width: 38px; height: 38px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 13px; color: #fff; background: var(--gray-400); letter-spacing: .5px; }
+.att-av[data-g="Male"] { background: #3b82f6; }
+.att-av[data-g="Female"] { background: #f43f5e; }
+.att-name { flex: 1; min-width: 0; display: flex; flex-direction: column; line-height: 1.3; font-weight: 600; }
+.att-sub { font-size: 12px; color: var(--text-muted, #6b7280); font-weight: 400; }
+.att-flag { font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; white-space: nowrap; }
+.att-list li.is-present .att-flag { color: var(--success); background: color-mix(in srgb, var(--success) 15%, var(--bg-card)); }
+.att-list li.is-absent .att-flag { color: var(--danger); background: color-mix(in srgb, var(--danger) 12%, var(--bg-card)); }
+
+.att-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 12px; }
+/* On phones the register can be long — float the actions (incl. Save) as a
+   sticky bar so marking never requires scrolling to the bottom to save. */
+@media (max-width: 640px) {
+  .att-actions { position: sticky; bottom: 8px; z-index: 5; background: var(--bg-card);
+    border: 1px solid var(--border-color); border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md); padding: 10px; }
+}
+
+.att-grid-wrap { overflow-x: auto; border: 1px solid var(--gray-200, #e5e7eb); border-radius: 8px; }
+.att-grid { border-collapse: collapse; width: 100%; min-width: 100%; font-size: 14px; }
+.att-grid th, .att-grid td { border: 1px solid var(--gray-100, #f1f5f9); padding: 6px 8px; text-align: center; }
+.att-grid thead th { background: var(--gray-50, #f8fafc); position: sticky; top: 0; white-space: nowrap; }
+.att-grid .att-grid-name { text-align: left; white-space: nowrap; position: sticky; left: 0;
+  background: var(--bg-card); z-index: 1; font-weight: 600; }
+.att-grid input[type=checkbox] { width: 18px; height: 18px; }
+/* Narrow summary tables (gender / session) never scroll horizontally, so the
+   sticky first column is unneeded — and on Android Chrome a sticky cell in a
+   width:100% table collapses it to content width, leaving a blank strip on the
+   right. Fixed layout + a static first column makes them fill the card. */
+.att-grid--summary { table-layout: fixed; }
+.att-grid--summary .att-grid-name { position: static; background: transparent; width: 38%; }
+.att-ampm { display: inline-flex; gap: 8px; }
+.att-ampm label { display: inline-flex; flex-direction: column; align-items: center; font-size: 10px; color: var(--text-muted, #6b7280); gap: 2px; cursor: pointer; }
+
+/* ---- report stat cards / info grids / performance bands ---- */
+.att-stats { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin: 12px 0; }
+@media (min-width: 768px) { .att-stats { grid-template-columns: repeat(4, 1fr); } }
+.att-stat { background: var(--bg-card); border: 1px solid var(--gray-200, #e5e7eb); border-radius: 10px; padding: 14px; text-align: center; }
+.att-stat.is-primary { background: var(--primary, #2563eb); color: #fff; border: none; }
+.att-stat-value { font-size: 1.6rem; font-weight: 700; line-height: 1.1; }
+.att-stat-label { font-size: 12px; opacity: .85; margin-top: 4px; }
+
+.att-info { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+@media (min-width: 576px) { .att-info { grid-template-columns: repeat(3, 1fr); } }
+.att-info-item { display: flex; justify-content: space-between; gap: 8px; padding: 8px 12px; background: var(--gray-50, #f8fafc); border-radius: 6px; }
+.att-info-item .k { color: var(--text-muted, #6b7280); font-size: 13px; }
+.att-info-item .v { font-weight: 600; }
+
+.att-section-title { font-weight: 700; font-size: 15px; margin: 18px 0 8px; display: flex; align-items: center; gap: 8px; color: var(--text-primary, #111827); }
+
+.att-perf { display: grid; grid-template-columns: 1fr; gap: 10px; }
+@media (min-width: 576px) { .att-perf { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 992px) { .att-perf { grid-template-columns: repeat(4, 1fr); } }
+.att-perf-card { padding: 12px; border-radius: 8px; border-left: 4px solid; }
+.att-perf-card .t { font-weight: 600; font-size: 14px; margin-bottom: 4px; }
+.att-perf-card .c { font-size: 1.5rem; font-weight: 700; }
+.att-perf-card .r { font-size: 12px; color: var(--text-muted, #6b7280); }
+
+.att-mark { display: inline-flex; gap: 3px; font-size: 13px; }
+.att-mark .ok { color: var(--success); }
+.att-mark .no { color: var(--danger); }
+.att-grid tfoot td { font-weight: 700; background: var(--gray-50, #f8fafc); }
+.att-sub { color: var(--text-muted, #6b7280); font-size: 11px; font-weight: 400; }
+.att-legend { font-size: 12px; color: var(--text-muted, #6b7280); margin-top: 10px; }
+.att-linkbtn { background: none; border: none; padding: 0; margin: 0; cursor: pointer; color: inherit;
+  font: inherit; text-align: inherit; text-decoration: underline dotted; text-underline-offset: 2px; }
+.att-linkbtn:hover { color: var(--primary, #2563eb); }
+
+@media (max-width: 560px) {
+  /* Keep the label beside every icon (icons alone are ambiguous); just tighten
+     spacing and let the tabs wrap onto multiple rows on small screens. */
+  .att-tab { padding: .5rem .6rem; font-size: 13px; gap: 5px; }
+}
+
+/* ---- student attendance profile ---- */
+.att-profile-head { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; margin: 8px 0 4px; }
+.att-avatar { width: 60px; height: 60px; border-radius: 50%; object-fit: cover; flex-shrink: 0;
+  background: color-mix(in srgb, var(--primary) 16%, var(--bg-card)); color: var(--primary);
+  display: flex; align-items: center; justify-content: center; font-size: 1.3rem; font-weight: 700; }
+.att-sub { font-size: 12px; color: var(--text-muted, #6b7280); }
+.att-warn { background: color-mix(in srgb, var(--danger) 9%, var(--bg-card)); border: 1px solid color-mix(in srgb, var(--danger) 35%, var(--bg-card)); color: var(--text-primary);
+  border-radius: var(--radius-md); padding: 10px 12px; margin: 10px 0; font-size: 14px; }
+.att-warn i { color: var(--danger); margin-right: 6px; }
+.att-trend { display: flex; align-items: flex-end; gap: 8px; height: 120px; padding: 8px 4px 0;
+  border-bottom: 1px solid var(--gray-200, #e5e7eb); }
+.att-trend-col { flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%; justify-content: flex-end; }
+.att-trend-bar { width: 70%; max-width: 44px; border-radius: 4px 4px 0 0; min-height: 4px; }
+.att-trend-lbl { font-size: 10px; color: var(--text-muted, #6b7280); margin-top: 4px; text-align: center;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.att-cal-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--text-muted, #6b7280); margin: 4px 0 10px; }
+.att-cal-dot { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: middle; }
+.att-cal-months { display: grid; grid-template-columns: 1fr; gap: 14px; }
+@media (min-width: 620px) { .att-cal-months { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 992px) { .att-cal-months { grid-template-columns: repeat(3, 1fr); } }
+.att-cal { border: 1px solid var(--gray-200, #e5e7eb); border-radius: 8px; padding: 8px; }
+.att-cal-title { font-weight: 600; font-size: 13px; margin-bottom: 6px; text-align: center; }
+.att-cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.att-cal-h { font-size: 10px; color: var(--text-muted, #6b7280); text-align: center; }
+.att-cal-c { aspect-ratio: 1; display: flex; align-items: center; justify-content: center; font-size: 11px;
+  border-radius: 4px; background: var(--gray-50, #f8fafc); }
+.att-cal-empty { background: transparent; }
+.att-cal-off { color: var(--gray-300, #cbd5e1); }
+@media print {
+  .att-tabs, .no-print, .att-tabs-status { display: none !important; }
+}
+
+/* ---- analytics dashboard ---- */
+.att-inline-field { font-size: 13px; color: var(--text-muted, #6b7280); }
+.att-bars { display: flex; flex-direction: column; gap: 6px; }
+.att-bar-row { display: grid; grid-template-columns: minmax(90px, 30%) 1fr 46px; gap: 8px; align-items: center; }
+.att-bar-lbl { font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.att-bar-track { background: var(--gray-100, #f1f5f9); border-radius: 6px; height: 16px; overflow: hidden; }
+.att-bar-fill { height: 100%; border-radius: 6px; min-width: 2px; }
+.att-bar-val { font-size: 13px; font-weight: 600; text-align: right; }
+.att-heat { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+.att-heat-cell { border-radius: 8px; padding: 12px 4px; text-align: center; background: var(--gray-100, #f1f5f9); }
+.att-heat-day { font-size: 12px; font-weight: 600; }
+.att-heat-pct { font-size: 15px; font-weight: 700; margin-top: 2px; }
+
+/* ---- interventions ---- */
+.iv-case { border: 1px solid var(--gray-200, #e5e7eb); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+.iv-case-head { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; align-items: center; }
+.iv-case-metrics { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.iv-notes { margin: 8px 0 0; padding-left: 18px; font-size: 13px; }
+.iv-notes li { margin-bottom: 3px; }
+.iv-case-actions { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; }
+.iv-noteform { display: flex; gap: 6px; margin-top: 8px; flex-wrap: wrap; align-items: center; }
+.iv-noteform .form-control { flex: 1; min-width: 140px; }
+
+/* ---- recent-class quick pick ---- */
+.att-recent { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin: -4px 0 10px; }
+.att-chip { border: 1px solid var(--gray-200, #e5e7eb); background: var(--bg-card); border-radius: 999px;
+  padding: 3px 12px; font-size: 12px; cursor: pointer; color: var(--text-primary, #111827); }
+.att-chip:hover { border-color: var(--primary, #2563eb); }
+.att-chip.is-active { background: var(--primary, #2563eb); color: #fff; border-color: var(--primary, #2563eb); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1><i class="fas fa-clipboard-user"></i> Attendance</h1>
+        <p class="text-muted text-sm">Mark and review attendance — works offline; marks sync when you reconnect.</p>
+    </div>
+    <div class="page-header-actions">
+        <a href="{{ url_for('attendance.index') }}" class="btn btn-secondary btn-sm">
+            <i class="fas fa-table-list"></i> Classic view
+        </a>
+    </div>
+</div>
+
+<div class="card"><div class="card-body">
+    <div id="attendance-spa"><div class="att-spinner" aria-label="Loading"></div></div>
+</div></div>
+
+<script src="{{ bundle_url('js/react/attendance-app.js') }}" defer></script>
+{% endblock %}

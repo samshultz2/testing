@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Customize Dashboard — {{ app_name }}{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Customize Dashboard</h1>
+    <p class="text-muted text-sm">Choose which widgets appear on your dashboard.</p>
+</div>
+<div class="card"><div class="card-body">
+    <form method="POST" action="{{ url_for('main.dashboard_customize') }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        {% set cats = [] %}
+        {% for k, label, cat, default in widgets %}{% if cat not in cats %}{% set _ = cats.append(cat) %}{% endif %}{% endfor %}
+        {% for cat in cats %}
+        <h3 style="margin-top:1rem;">{{ cat }}</h3>
+        <div class="permission-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:.4rem;">
+            {% for k, label, c, default in widgets %}{% if c == cat %}
+            <label class="permission-item" style="display:flex;gap:.6rem;align-items:center;padding:.5rem;border:1px solid var(--border-color);border-radius:8px;">
+                <input type="checkbox" name="w_{{ k }}" {% if k in enabled %}checked{% endif %}> <span>{{ label }}</span>
+            </label>
+            {% endif %}{% endfor %}
+        </div>
+        {% endfor %}
+        <div style="margin-top:1.2rem;display:flex;gap:.6rem;">
+            <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save dashboard</button>
+            <a href="{{ url_for('main.dashboard') }}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div></div>
+{% endblock %}

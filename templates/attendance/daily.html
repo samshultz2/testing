@@ -7,11 +7,37 @@
 <div class="card mb-3">
     <div class="card-body">
         <form method="GET" class="filter-form">
-            <div class="form-group"><label class="form-label">Class</label><select name="assignment_id" class="form-control" onchange="this.form.submit()"><option value="">Select</option>{% for a in assignments %}<option value="{{ a.id }}" {% if selected_assignment and a.id == selected_assignment.id %}selected{% endif %}>{{ a.display_name }}</option>{% endfor %}</select></div>
-            <div class="form-group"><label class="form-label">Date</label><input type="date" name="date" class="form-control" value="{{ target_date.strftime('%Y-%m-%d') }}" onchange="this.form.submit()"></div>
+            <div class="form-group"><label class="form-label">Class</label><select name="assignment_id" class="form-control" data-autosubmit><option value="">Select</option>{% for a in assignments %}<option value="{{ a.id }}" {% if selected_assignment and a.id == selected_assignment.id %}selected{% endif %}>{{ a.display_name }}</option>{% endfor %}</select></div>
+            <div class="form-group"><label class="form-label">Date</label><input type="date" name="date" class="form-control" value="{{ target_date.strftime('%Y-%m-%d') }}" data-autosubmit></div>
         </form>
     </div>
 </div>
+
+{% if selected_assignment and week_days %}
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-calendar-week"></i> This week at a glance{% if week %} — Week {{ week.week_number }}{% endif %}</h3></div>
+    <div class="card-body" style="padding:0;overflow-x:auto;">
+        <table class="data-table table-stack no-mobile-scroll">
+            <thead><tr><th>Day</th><th>Present (AM)</th><th>Absent (AM)</th><th>Present (PM)</th><th>Absent (PM)</th><th>AM %</th><th></th></tr></thead>
+            <tbody>
+            {% for wd in week_days %}
+            {% set s = wd.summary %}
+            {% set pct = (s.morning_present / s.total_students * 100) if s.total_students else 0 %}
+            <tr {% if wd.date == target_date %}style="background:var(--gray-50);font-weight:600;"{% endif %}>
+                <td data-label="Day"><strong>{{ wd.date.strftime('%a') }}</strong> <span class="text-muted">{{ wd.date.strftime('%d %b') }}</span></td>
+                <td data-label="Present (AM)" class="text-success">{{ s.morning_present }}</td>
+                <td data-label="Absent (AM)" class="text-danger">{{ s.morning_absent }}</td>
+                <td data-label="Present (PM)" class="text-success">{{ s.afternoon_present }}</td>
+                <td data-label="Absent (PM)" class="text-danger">{{ s.afternoon_absent }}</td>
+                <td data-label="AM %"><span class="badge {% if pct >= 75 %}badge-success{% elif pct >= 50 %}badge-warning{% else %}badge-danger{% endif %}">{{ '%.0f'|format(pct) }}%</span></td>
+                <td data-label=""><a class="btn btn-sm btn-secondary" href="{{ url_for('attendance.daily_summary', assignment_id=selected_assignment.id, date=wd.date.strftime('%Y-%m-%d')) }}"><i class="fas fa-eye"></i></a></td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
 
 {% if summary %}
 <div class="stats-grid mb-3">
@@ -25,6 +51,9 @@
     <div class="card-body" style="padding: 0;">
         <div class="data-cards" style="padding: 1rem;">
             {% for s in summary.students %}
+            {% if loop.changed(s.gender) %}
+            <div class="roster-group-head" style="grid-column:1/-1;width:100%;flex-basis:100%;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.03em;font-size:.75rem;padding:.4rem .25rem;border-bottom:2px solid var(--border-color);{% if not loop.first %}margin-top:1rem;{% endif %}">{% if s.gender == 'Male' %}Boys{% elif s.gender == 'Female' %}Girls{% else %}{{ s.gender or 'Other' }}{% endif %}</div>
+            {% endif %}
             <div class="data-card">
                 <div class="data-card-header"><div class="data-card-title">{{ s.student_name }}</div><span class="badge {% if s.gender == 'Male' %}badge-info{% else %}badge-warning{% endif %}">{{ s.gender }}</span></div>
                 <div class="data-card-row"><span class="data-card-label">Morning</span><span>{% if s.morning_present %}<i class="fas fa-check text-success"></i>{% elif s.morning_present == False %}<i class="fas fa-times text-danger"></i>{% else %}-{% endif %}</span></div>

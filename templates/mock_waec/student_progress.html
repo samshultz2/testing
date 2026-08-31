@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}{{ student.full_name }} — Mock WAEC Progress - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('mock_waec.index') }}">Mock WAEC</a> / <span>{{ student.full_name }}</span>{% endblock %}
+
+{% block content %}
+<div class="page-header"><div>
+    <h1>{{ student.full_name }}</h1>
+    <p class="text-muted text-sm">Mock WAEC progression &middot; {{ student.student_id }}</p>
+</div></div>
+
+{% if not progress %}
+<div class="card"><div class="card-body"><div class="empty-state">
+    <i class="fas fa-clipboard-check"></i><h3>No Mock WAEC results</h3>
+    <p>This student has no recorded Mock WAEC sittings yet.</p>
+</div></div></div>
+{% else %}
+
+{% if prediction %}
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-crystal-ball"></i> Real-WAEC projection</h3></div>
+    <div class="card-body d-flex gap-4" style="flex-wrap:wrap;">
+        <div><div class="text-muted text-sm">Predicted credits</div><div style="font-size:2rem;font-weight:700;">{{ prediction.predicted_credits }}</div></div>
+        <div><div class="text-muted text-sm">Outlook</div><div style="font-size:1.2rem;font-weight:600;">{{ prediction.quality }}</div>
+            <span class="badge badge-{{ 'success' if prediction.meets_minimum else 'danger' }}">{{ 'Meets 5-credit minimum' if prediction.meets_minimum else 'Below 5-credit minimum' }}</span></div>
+        <div><div class="text-muted text-sm">Trend</div><div style="font-size:1.2rem;">{{ prediction.trend|capitalize }}</div></div>
+        <div><div class="text-muted text-sm">Confidence</div><div style="font-size:1.2rem;">{{ prediction.confidence }}%</div>
+            <div class="text-sm text-muted">from {{ prediction.based_on_exams }} mock(s)</div></div>
+    </div>
+</div>
+{% endif %}
+
+<div class="card">
+    <div class="card-header"><h3>Sitting-by-sitting</h3></div>
+    <div class="table-responsive"><table class="data-table">
+        <thead><tr><th>Mock</th><th>Date</th><th>Credits</th><th>Distinctions</th><th>Avg score</th><th>5 credits?</th></tr></thead>
+        <tbody>
+            {% for p in progress.progress %}
+            <tr>
+                <td><strong>{{ p.exam }}</strong></td>
+                <td>{{ p.exam_date.strftime('%d %b %Y') if p.exam_date else '—' }}</td>
+                <td>{{ p.credits }}</td>
+                <td>{{ p.distinctions }}</td>
+                <td>{{ p.average_score if p.average_score is not none else '—' }}</td>
+                <td>{% if p.has_5_credits %}<span class="badge badge-success">Yes</span>{% else %}<span class="badge badge-warning">No</span>{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table></div>
+    <div class="card-body text-sm text-muted">
+        Trend: <strong>{{ progress.trend|capitalize }}</strong> ({{ progress.credit_change }} credit change) &middot;
+        best {{ progress.best_credits }} credits across {{ progress.exam_count }} sitting(s).
+    </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,21 @@
+# One-shot daily database backup for EduSyncra, triggered by the matching
+# .timer. Use this when you do NOT run the jobs worker (edusyncra-jobs.service),
+# which already takes a daily backup. Don't enable both for the same database.
+#
+#   sudo cp deploy/edusyncra-backup.service deploy/edusyncra-backup.timer /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now edusyncra-backup.timer
+#
+# Adjust User, WorkingDirectory, and the venv path to your install.
+
+[Unit]
+Description=EduSyncra daily database backup
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=edusyncra
+WorkingDirectory=/opt/edusyncra
+EnvironmentFile=/opt/edusyncra/.env
+ExecStart=/opt/edusyncra/.venv/bin/python scripts/backup.py

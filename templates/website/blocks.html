@@ -1,0 +1,383 @@
+{# Renders one component instance. All values are school-authored and pass
+   through Jinja autoescaping. `ctx` is the PII-safe live data bundle. #}
+{% macro render_block(b, ctx, nav) %}
+{% set p = b.props or {} %}
+{% set v = b.variant %}
+{% set br = ctx.branding %}
+{% if b.type == 'topbar' %}
+  <div class="wb-topbar {{ v }}">
+    <div class="wb-topbar-inner wb-wrap">
+      <div class="wb-topbar-contact">
+        {% if br.phone %}<a href="tel:{{ br.phone }}"><i class="fas fa-phone"></i> {{ br.phone }}</a>{% endif %}
+        {% if br.email %}<a href="mailto:{{ br.email }}"><i class="fas fa-envelope"></i> {{ br.email }}</a>{% endif %}
+        {% if p.message %}<span class="wb-topbar-msg">{{ p.message }}</span>{% endif %}
+      </div>
+      <div class="wb-topbar-social">
+        {% for net, icon in [('facebook','fa-facebook-f'),('instagram','fa-instagram'),('twitter','fa-x-twitter'),('youtube','fa-youtube'),('linkedin','fa-linkedin-in')] %}
+          {% if p[net] %}<a href="{{ p[net] }}" target="_blank" rel="noopener" aria-label="{{ net }}"><i class="fab {{ icon }}"></i></a>{% endif %}
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+{% elif b.type == 'nav' %}
+  <nav class="wb-nav {{ 'floating' if v=='floating' else '' }} {{ 'centered' if v=='centered' else '' }}">
+    <div class="wb-nav-inner">
+      <a class="wb-brand" href="/site">{% if br.logo_url %}<img src="{{ br.logo_url }}" alt="{{ br.name }} logo">{% endif %}{{ br.name }}</a>
+      <button type="button" class="wb-nav-burger" aria-label="Toggle menu" aria-expanded="false" data-wb-nav-toggle>
+        <i class="fas fa-bars"></i></button>
+      <div class="wb-nav-links">
+        {% for link in nav %}<a href="{{ link.href }}">{{ link.label }}</a>{% endfor %}
+        {% if p.cta_label and v != 'minimal' %}<a class="wb-btn wb-btn-primary" href="{{ p.cta_href }}">{{ p.cta_label }}</a>{% endif %}
+      </div>
+    </div>
+  </nav>
+
+{% elif b.type == 'hero' %}
+  {% if v == 'slider' %}
+  <header class="wb-hero image-bg wb-slider" data-wb-slider>
+    <div class="wb-slides">
+      {% for s in p['slides'] or [] %}<div class="wb-slide{{ ' is-active' if loop.first else '' }}" style="background-image:url('{{ s }}')"></div>{% endfor %}
+      {% if not p['slides'] %}<div class="wb-slide is-active" style="background:var(--wb-primary)"></div>{% endif %}
+    </div>
+    <div class="wb-wrap wb-center">
+      {% if p.eyebrow %}<div class="wb-eyebrow">{{ p.eyebrow }} {{ br.name if not p.heading }}</div>{% endif %}
+      <h1>{{ p.heading or br.name }}</h1>
+      <p class="wb-lead">{{ p.subheading }}</p>
+      {{ _hero_ctas(p) }}
+    </div>
+  </header>
+  {% elif v == 'image-bg' %}
+  <header class="wb-hero image-bg" {% if p.bg_image %}style="background-image:url('{{ p.bg_image }}')"{% endif %}>
+    <div class="wb-wrap wb-center">
+      {% if p.eyebrow %}<div class="wb-eyebrow">{{ p.eyebrow }} {{ br.name if not p.heading }}</div>{% endif %}
+      <h1>{{ p.heading or br.name }}</h1>
+      <p class="wb-lead">{{ p.subheading }}</p>
+      {{ _hero_ctas(p) }}
+    </div>
+  </header>
+  {% else %}
+  <header class="wb-hero {{ v }}">
+    <div class="wb-wrap">
+      {% if v == 'split' or v == 'image-right' %}
+      <div class="wb-hero-split">
+        <div class="{{ 'wb-order-2' if v=='image-right' else '' }}">
+          {% if p.eyebrow %}<div class="wb-eyebrow">{{ p.eyebrow }} {{ br.name if not p.heading }}</div>{% endif %}
+          <h1>{{ p.heading or br.name }}</h1>
+          <p class="wb-lead">{{ p.subheading }}</p>
+          {{ _hero_ctas(p) }}
+        </div>
+        <div>{% if p.image %}<img class="wb-hero-img" src="{{ p.image }}" alt="">{% else %}<div class="wb-hero-img" style="background:color-mix(in srgb,var(--wb-primary) 12%,transparent)"></div>{% endif %}</div>
+      </div>
+      {% else %}
+      <div class="wb-center">
+        {% if p.eyebrow %}<div class="wb-eyebrow">{{ p.eyebrow }} {{ br.name if not p.heading }}</div>{% endif %}
+        <h1>{{ p.heading or br.name }}</h1>
+        <p class="wb-lead">{{ p.subheading }}</p>
+        {{ _hero_ctas(p) }}
+      </div>
+      {% endif %}
+    </div>
+  </header>
+  {% endif %}
+
+{% elif b.type == 'about' %}
+  <section class="wb-sec">
+    <div class="wb-wrap">
+      {% if v == 'split-image' %}
+      <div class="wb-grid wb-g2" style="align-items:center">
+        <div>{% if p.image %}<img class="wb-hero-img" src="{{ p.image }}" alt="">{% else %}<div class="wb-hero-img" style="background:var(--wb-muted)"></div>{% endif %}</div>
+        <div><h2 class="wb-h2">{{ p.heading }}</h2><p class="wb-lead">{{ p.body }}</p>
+          {% if p.points %}<ul>{% for pt in p.points %}<li>{{ pt }}</li>{% endfor %}</ul>{% endif %}
+        </div>
+      </div>
+      {% elif v == 'cards' %}
+      <div class="wb-center"><h2 class="wb-h2">{{ p.heading }}</h2><p class="wb-lead">{{ p.body }}</p></div>
+      {% if p.points %}<div class="wb-grid wb-g3" style="margin-top:2rem">{% for pt in p.points %}<div class="wb-card">{{ pt }}</div>{% endfor %}</div>{% endif %}
+      {% else %}
+      <div style="max-width:760px"><h2 class="wb-h2">{{ p.heading }}</h2><p class="wb-lead">{{ p.body }}</p></div>
+      {% endif %}
+    </div>
+  </section>
+
+{% elif b.type == 'welcome' %}
+  <section class="wb-sec alt">
+    <div class="wb-wrap wb-grid wb-g2" style="align-items:center">
+      <div class="{{ 'wb-order-2' if v=='portrait-right' else '' }}">
+        {% if p.image %}<img class="wb-hero-img" src="{{ p.image }}" alt="{{ p.name }}">{% else %}<div class="wb-hero-img" style="background:color-mix(in srgb,var(--wb-primary) 12%,transparent)"></div>{% endif %}
+      </div>
+      <div>
+        <div class="wb-eyebrow">{{ p.heading }}</div>
+        <p class="wb-lead" style="font-size:1.15rem">“{{ p.message }}”</p>
+        <p><strong>{{ p.name }}</strong>{% if p.role %} · {{ p.role }}{% endif %}</p>
+      </div>
+    </div>
+  </section>
+
+{% elif b.type == 'values' %}
+  <section class="wb-sec">
+    <div class="wb-wrap wb-center"><h2 class="wb-h2">{{ p.heading }}</h2></div>
+    <div class="wb-wrap wb-grid {{ 'wb-g3' if v!='stacked' else '' }}" style="margin-top:2rem">
+      {% for it in p['items'] or [] %}<div class="wb-card"><h3>{{ it.title }}</h3><p class="wb-muted">{{ it.body }}</p></div>{% endfor %}
+    </div>
+  </section>
+
+{% elif b.type == 'stats' %}
+  <section class="wb-sec {{ 'alt' if v=='cards' else '' }}">
+    <div class="wb-wrap">
+      {% if p.heading %}<div class="wb-center" style="margin-bottom:2rem"><h2 class="wb-h2">{{ p.heading }}</h2></div>{% endif %}
+      <div class="{{ 'wb-statbar' if v=='bar' else '' }}">
+        <div class="wb-grid wb-g4">
+          <div class="wb-stat"><div class="v">{{ ctx.stats.students }}+</div><div class="l">Students</div></div>
+          <div class="wb-stat"><div class="v">{{ ctx.stats.staff }}+</div><div class="l">Staff</div></div>
+          <div class="wb-stat"><div class="v">{{ ctx.stats.classes }}</div><div class="l">Classes</div></div>
+          <div class="wb-stat"><div class="v">{{ br.established or '—' }}</div><div class="l">{{ p.established_label }}</div></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+{% elif b.type == 'programmes' or b.type == 'features' %}
+  <section class="wb-sec {{ 'alt' if b.type=='features' else '' }}">
+    <div class="wb-wrap wb-center"><h2 class="wb-h2">{{ p.heading }}</h2></div>
+    <div class="wb-wrap wb-grid {{ 'wb-g3' if v!='list' else '' }}" style="margin-top:2rem">
+      {% for it in p['items'] or [] %}
+      <div class="wb-card"><div class="wb-ic"><i class="fas {{ it.icon or 'fa-star' }}"></i></div>
+        <h3>{{ it.title }}</h3><p class="wb-muted">{{ it.body }}</p></div>
+      {% endfor %}
+    </div>
+  </section>
+
+{% elif b.type == 'events' %}
+  <section class="wb-sec">
+    <div class="wb-wrap"><h2 class="wb-h2">{{ p.heading }}</h2>
+      {% if not ctx.events %}<p class="wb-muted">{{ p.empty }}</p>{% endif %}
+      <div class="wb-grid {{ 'wb-g3' if v=='cards' else '' }}" style="margin-top:1.5rem">
+        {% for e in ctx.events %}
+        <div class="{{ 'wb-card' if v=='cards' else '' }} wb-row" style="{{ 'padding:.6rem 0' if v!='cards' else '' }}">
+          <div class="wb-date"><span class="d">{{ e.start.strftime('%d') }}</span><span class="m">{{ e.start.strftime('%b') }}</span></div>
+          <div><span class="wb-pill" style="background:{{ e.color }}">{{ e.category }}</span>
+            <h3 style="margin:.3rem 0 .2rem;font-size:1.1rem">{{ e.title }}</h3>
+            {% if e.location %}<div class="wb-muted" style="font-size:.9rem"><i class="fas fa-location-dot"></i> {{ e.location }}</div>{% endif %}
+            {% if v!='list' and e.description %}<p class="wb-muted" style="font-size:.9rem">{{ e.description }}</p>{% endif %}
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+{% elif b.type == 'news' %}
+  <section class="wb-sec alt">
+    <div class="wb-wrap"><h2 class="wb-h2">{{ p.heading }}</h2>
+      <div class="wb-grid {{ 'wb-g3' if v=='cards' else '' }}" style="margin-top:1.5rem">
+        {% for n in p['items'] or [] %}
+        <div class="{{ 'wb-card' if v=='cards' else '' }}">
+          {% if n.date %}<div class="wb-eyebrow">{{ n.date }}</div>{% endif %}
+          <h3 style="font-size:1.15rem">{{ n.title }}</h3><p class="wb-muted">{{ n.body }}</p>
+          {% if n.href %}<a href="{{ n.href }}">Read more →</a>{% endif %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+{% elif b.type == 'blog' %}
+  <section class="wb-sec">
+    <div class="wb-wrap">
+      <div class="wb-center"><h2 class="wb-h2">{{ p.heading }}</h2>
+        {% if p.intro %}<p class="wb-lead">{{ p.intro }}</p>{% endif %}</div>
+      {% if not ctx.posts %}
+        <p class="wb-muted wb-center" style="margin-top:1.5rem">{{ p.empty }}</p>
+      {% else %}
+      <div class="wb-grid {{ 'wb-g3' if v!='list' else '' }}" style="margin-top:2rem">
+        {% for post in ctx.posts %}
+        <article class="wb-card wb-post">
+          {% if post.cover %}<a href="{{ post.url }}"><img class="wb-post-cover" src="{{ post.cover }}" alt="" loading="lazy"></a>{% endif %}
+          <div class="wb-post-body">
+            {% if post.category %}<div class="wb-eyebrow">{{ post.category }}</div>{% endif %}
+            <h3 style="font-size:1.15rem;margin:.2rem 0"><a href="{{ post.url }}" style="color:var(--wb-ink)">{{ post.title }}</a></h3>
+            {% if post.date %}<div class="wb-muted" style="font-size:.82rem">{{ post.date.strftime('%d %b %Y') }}{% if post.author %} · {{ post.author }}{% endif %}</div>{% endif %}
+            {% if post.excerpt %}<p class="wb-muted" style="margin:.5rem 0 .3rem">{{ post.excerpt }}</p>{% endif %}
+            <a href="{{ post.url }}">Read more →</a>
+          </div>
+        </article>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+  </section>
+
+{% elif b.type == 'gallery' %}
+  <section class="wb-sec">
+    <div class="wb-wrap"><h2 class="wb-h2 wb-center">{{ p.heading }}</h2>
+      {% if not p['images'] %}<p class="wb-muted wb-center">Add photos to this gallery from the section’s “Edit content”.</p>{% endif %}
+      <div class="wb-gal {{ v }}" style="margin-top:1.5rem">
+        {% for img in p['images'] or [] %}<img src="{{ img }}" alt="" loading="lazy">{% endfor %}
+      </div>
+    </div>
+  </section>
+
+{% elif b.type == 'staff' %}
+  <section class="wb-sec {{ 'alt' if v=='cards' else '' }}">
+    <div class="wb-wrap wb-center"><h2 class="wb-h2">{{ p.heading }}</h2>
+      {% if p.intro %}<p class="wb-lead">{{ p.intro }}</p>{% endif %}</div>
+    <div class="wb-wrap wb-grid wb-g3" style="margin-top:2rem">
+      {% for m in p['items'] or [] %}
+      <div class="wb-staff-card">
+        {% if m.image %}<img class="wb-staff-photo" src="{{ m.image }}" alt="{{ m.name }}" loading="lazy">
+        {% else %}<div class="wb-staff-photo wb-staff-ph"><i class="fas fa-user"></i></div>{% endif %}
+        <h3 style="margin:.2rem 0 0">{{ m.name }}</h3>
+        <div class="wb-eyebrow" style="margin-bottom:.4rem">{{ m.role }}</div>
+        {% if m.bio %}<p class="wb-muted" style="font-size:.92rem">{{ m.bio }}</p>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+  </section>
+
+{% elif b.type == 'fees' %}
+  <section class="wb-sec {{ 'alt' if v=='cards' else '' }}">
+    <div class="wb-wrap">
+      <div class="wb-center"><h2 class="wb-h2">{{ p.heading }}</h2>
+        {% if p.intro %}<p class="wb-lead">{{ p.intro }}</p>{% endif %}</div>
+      {% if v == 'cards' %}
+      <div class="wb-grid wb-g4" style="margin-top:2rem">
+        {% for it in p['items'] or [] %}
+        <div class="wb-card wb-center"><div class="wb-eyebrow">{{ it.level }}</div>
+          <div class="wb-fee-amt">{{ it.amount }}</div>
+          {% if it.note %}<div class="wb-muted" style="font-size:.85rem">{{ it.note }}</div>{% endif %}</div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <div style="overflow-x:auto;margin-top:2rem">
+        <table class="wb-fee-table">
+          <thead><tr><th>Level</th><th>Fee</th><th>Notes</th></tr></thead>
+          <tbody>
+            {% for it in p['items'] or [] %}
+            <tr><td>{{ it.level }}</td><td class="wb-fee-amt">{{ it.amount }}</td><td class="wb-muted">{{ it.note }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+      {% if p.note %}<p class="wb-muted wb-center" style="margin-top:1.2rem;font-size:.9rem">{{ p.note }}</p>{% endif %}
+    </div>
+  </section>
+
+{% elif b.type == 'assignments' %}
+  <section class="wb-sec" id="assignments">
+    <div class="wb-wrap">
+      <div class="wb-center"><h2 class="wb-h2">{{ p.heading }}</h2>
+        {% if p.intro %}<p class="wb-lead">{{ p.intro }}</p>{% endif %}</div>
+      {% if not ctx.assignments %}
+        <p class="wb-muted wb-center" style="margin-top:1.5rem">{{ p.empty }}</p>
+      {% else %}
+      <div class="wb-assign {{ 'wb-grid wb-g2' if v=='by-class' else '' }}" style="margin-top:2rem">
+        {% for grp in ctx.assignments %}
+        <div class="wb-assign-group">
+          {% if v == 'by-class' %}<h3 class="wb-assign-class">{{ grp.class_label }}</h3>{% endif %}
+          {% for a in grp['items'] %}
+          <a class="wb-assign-row" href="{{ a.url }}">
+            <span class="wb-assign-ic"><i class="fas {{ a.icon }}"></i></span>
+            <span class="wb-assign-meta">
+              <span class="wb-assign-title">{{ a.title }}</span>
+              <span class="wb-assign-sub">{% if v!='by-class' %}{{ grp.class_label }} · {% endif %}{{ a.ext|upper }}{% if a.size %} · {{ a.size }}{% endif %}{% if a.session %} · {{ a.session }}{% endif %}</span>
+            </span>
+            <span class="wb-assign-dl"><i class="fas fa-download"></i></span>
+          </a>
+          {% endfor %}
+        </div>
+        {% endfor %}
+      </div>
+      {% endif %}
+    </div>
+  </section>
+
+{% elif b.type == 'testimonials' %}
+  <section class="wb-sec alt">
+    <div class="wb-wrap wb-center"><h2 class="wb-h2">{{ p.heading }}</h2></div>
+    <div class="wb-wrap wb-grid {{ 'wb-g3' if v=='cards' else '' }}" style="margin-top:2rem">
+      {% for it in p['items'] or [] %}
+      <div class="wb-card"><p style="font-size:1.05rem">“{{ it.quote }}”</p><p class="wb-muted"><strong>{{ it.name }}</strong>{% if it.role %} · {{ it.role }}{% endif %}</p></div>
+      {% endfor %}
+    </div>
+  </section>
+
+{% elif b.type == 'cta' %}
+  <section class="wb-sec"><div class="wb-wrap">
+    {% if v == 'image' %}
+    <div class="wb-cta-img" {% if p.bg_image %}style="background-image:url('{{ p.bg_image }}')"{% endif %}>
+      <h2 class="wb-h2">{{ p.heading }}</h2><p class="wb-lead wb-center" style="color:rgba(255,255,255,.92)">{{ p.subheading }}</p>
+      <div class="wb-cta-row wb-center"><a class="wb-btn wb-btn-ghost" href="{{ p.button_href }}">{{ p.button_label }}</a></div>
+    </div>
+    {% else %}
+    <div class="{{ 'wb-band' if v!='boxed' else 'wb-card' }}" style="{{ 'text-align:center' if v!='split' else '' }}">
+      <h2 class="wb-h2">{{ p.heading }}</h2><p class="wb-lead {{ 'wb-center' if v!='split' else '' }}" style="{{ 'color:rgba(255,255,255,.9)' if v=='band' else '' }}">{{ p.subheading }}</p>
+      <div class="wb-cta-row {{ 'wb-center' if v!='split' else '' }}"><a class="wb-btn {{ 'wb-btn-ghost' if v=='band' else 'wb-btn-primary' }}" href="{{ p.button_href }}">{{ p.button_label }}</a></div>
+    </div>
+    {% endif %}
+  </div></section>
+
+{% elif b.type == 'logos' %}
+  <section class="wb-sec {{ 'alt' if v=='boxed' else '' }}">
+    <div class="wb-wrap wb-center">
+      {% if p.heading %}<div class="wb-eyebrow">{{ p.heading }}</div>{% endif %}
+      {% if p['logos'] %}
+      <div class="wb-logos {{ v }}" style="margin-top:1.2rem">
+        {% for logo in p['logos'] %}<img src="{{ logo }}" alt="" loading="lazy">{% endfor %}
+      </div>
+      {% else %}<p class="wb-muted">Add accreditation or partner logos in this section’s “Edit content”.</p>{% endif %}
+    </div>
+  </section>
+
+{% elif b.type == 'faq' %}
+  <section class="wb-sec">
+    <div class="wb-wrap">
+      <div class="wb-center"><h2 class="wb-h2">{{ p.heading }}</h2></div>
+      <div class="wb-faq {{ 'two-col' if v=='two-col' else '' }}">
+        {% for it in p['items'] or [] %}
+        <details class="wb-faq-item"><summary>{{ it.q }}</summary><div class="wb-faq-a">{{ it.a }}</div></details>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+{% elif b.type == 'contact' %}
+  <section class="wb-sec" id="contact">
+    <div class="wb-wrap wb-grid wb-g2">
+      <div><h2 class="wb-h2">{{ p.heading }}</h2>
+        {% if br.address %}<p class="wb-row"><span class="wb-ic"><i class="fas fa-location-dot"></i></span> {{ br.address }}</p>{% endif %}
+        {% if br.phone %}<p class="wb-row"><span class="wb-ic"><i class="fas fa-phone"></i></span> <a href="tel:{{ br.phone }}">{{ br.phone }}</a></p>{% endif %}
+        {% if br.email %}<p class="wb-row"><span class="wb-ic"><i class="fas fa-envelope"></i></span> <a href="mailto:{{ br.email }}">{{ br.email }}</a></p>{% endif %}
+      </div>
+      <div>{% if p.map_embed %}<iframe src="{{ p.map_embed }}" style="width:100%;height:320px;border:0;border-radius:var(--wb-radius)" loading="lazy" title="Map"></iframe>
+        {% else %}<div class="wb-card" style="height:100%">Add a Google Maps embed URL to show your location here.</div>{% endif %}</div>
+    </div>
+  </section>
+
+{% elif b.type == 'footer' %}
+  <footer class="wb-footer">
+    <div class="wb-wrap">
+      <div class="wb-grid wb-g3">
+        <div><h4>{{ br.name }}</h4><p style="color:rgba(255,255,255,.75)">{{ p.tagline or br.motto }}</p></div>
+        <div><h4>Explore</h4>{% for link in nav %}<div><a href="{{ link.href }}">{{ link.label }}</a></div>{% endfor %}</div>
+        <div><h4>Contact</h4>
+          {% if br.address %}<div>{{ br.address }}</div>{% endif %}
+          {% if br.phone %}<div><a href="tel:{{ br.phone }}">{{ br.phone }}</a></div>{% endif %}
+          {% if br.email %}<div><a href="mailto:{{ br.email }}">{{ br.email }}</a></div>{% endif %}
+        </div>
+      </div>
+      <div class="wb-foot-bottom"><span>© {{ now_year }} {{ br.name }}. All rights reserved.</span><span>Powered by EduSyncra</span></div>
+    </div>
+  </footer>
+{% endif %}
+{% endmacro %}
+
+{% macro _hero_ctas(p) %}
+  {% if p.primary_label or p.secondary_label %}
+  <div class="wb-cta-row">
+    {% if p.primary_label %}<a class="wb-btn wb-btn-primary" href="{{ p.primary_href }}">{{ p.primary_label }}</a>{% endif %}
+    {% if p.secondary_label %}<a class="wb-btn wb-btn-outline" href="{{ p.secondary_href }}">{{ p.secondary_label }}</a>{% endif %}
+  </div>
+  {% endif %}
+{% endmacro %}

@@ -12,6 +12,7 @@
 <div class="card">
     <div class="card-body">
         <form method="POST">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
                 <label class="form-label">Rule Name *</label>
                 <input type="text" name="name" class="form-control" required placeholder="e.g., Literature teacher shadows Geography SSS3 Iris">
@@ -110,7 +111,7 @@
 @media (max-width: 768px) { .col-md-6 { flex: 0 0 100%; max-width: 100%; } }
 </style>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 function setupClassArmSync(classId, armId) {
     document.getElementById(classId).addEventListener('change', function() {
         const arms = this.options[this.selectedIndex].dataset.arms;
@@ -118,7 +119,9 @@ function setupClassArmSync(classId, armId) {
         armSelect.innerHTML = '<option value="">All Arms</option>';
         if (arms) {
             arms.split(',').forEach(arm => {
-                armSelect.innerHTML += `<option value="${arm.trim()}">${arm.trim()}</option>`;
+                // new Option() sets value/text via properties (textContent), so an
+                // arm name can never inject markup into the select.
+                armSelect.add(new Option(arm.trim(), arm.trim()));
             });
         }
     });

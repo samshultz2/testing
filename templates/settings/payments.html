@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}Online Payments · {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ back_url }}">Settings</a> <span>/ Online Payments</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+  .pay-wrap{max-width:760px}
+  .pay-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+  .pay-head h2{margin:0;font-size:20px}
+  .st{font-size:12.5px;font-weight:700;padding:4px 12px;border-radius:999px}
+  .st.on{background:#d1e7dd;color:#14603f}
+  .st.off{background:#fef3cd;color:#7a5310}
+  .lead{color:var(--text-secondary,#556);font-size:14px;margin:2px 0 18px}
+  .note{background:#eef6ff;border:1px solid #d6e6fb;color:#22405f;border-radius:12px;
+        padding:13px 15px;font-size:13.5px;margin-bottom:18px}
+  .note b{font-weight:700}
+  .steps{margin:8px 0 0 18px;padding:0} .steps li{margin:4px 0}
+  .hook{display:flex;gap:8px;align-items:center;margin-top:8px}
+  .hook code{background:#0f172a;color:#e2e8f0;padding:7px 10px;border-radius:8px;font-size:12.5px;
+             overflow-x:auto;white-space:nowrap;flex:1}
+  .hook button{white-space:nowrap}
+  .form-hint{font-size:12px;color:var(--text-secondary,#667);margin-top:4px}
+  .danger-row{margin-top:18px;padding-top:16px;border-top:1px solid var(--border,#e5e7eb)}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="pay-wrap">
+  <div class="pay-head">
+    <h2>Online fee payments</h2>
+    {% if configured %}<span class="st on">Active</span>{% else %}<span class="st off">Not set up</span>{% endif %}
+  </div>
+  <p class="lead">Collect school fees, books and other charges online. Payments go
+    <b>directly into your school’s own account</b> — the platform never touches the
+    money. Choose your provider and paste that provider’s keys.</p>
+
+  <div class="note" id="note-paystack">
+    <b>Paystack:</b> create a free account at <b>paystack.com</b>, add your bank account, then
+    <b>Settings → API Keys &amp; Webhooks</b> → copy your <b>Public Key</b> (<code>pk_…</code>)
+    and <b>Secret Key</b> (<code>sk_…</code>). Set the Webhook URL (below) there too.
+  </div>
+  <div class="note" id="note-flutterwave" style="display:none">
+    <b>Flutterwave:</b> from your dashboard <b>Settings → API</b> copy your <b>Public Key</b>
+    (<code>FLWPUBK…</code>) and <b>Secret Key</b> (<code>FLWSECK…</code>). Put your
+    <b>Secret Hash</b> (Settings → Webhooks) in the third box, and set the Webhook URL below.
+  </div>
+  <div class="note" id="note-monnify" style="display:none">
+    <b>Monnify:</b> from your dashboard copy your <b>API Key</b> (public box), <b>Secret Key</b>,
+    and <b>Contract Code</b> (third box). Set the Webhook URL below in Monnify → Settings → Webhooks.
+  </div>
+
+  <div class="card"><div class="card-body">
+    <form method="post" action="{{ url_for('settings.payments_settings') }}">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
+      <div class="form-group">
+        <label class="form-label">Payment provider</label>
+        <select class="form-control" name="provider" id="provider">
+          {% for p in providers %}<option value="{{ p.id }}" {{ 'selected' if p.id == provider }}>{{ p.name }}</option>{% endfor %}
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" id="lbl-public">Public / API Key</label>
+        <input class="form-control" type="text" name="public_key" value="{{ public_key }}"
+               id="pub" autocomplete="off">
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" id="lbl-secret">Secret Key</label>
+        <input class="form-control" type="password" name="secret_key" value=""
+               placeholder="{{ '•••••••• (saved — leave blank to keep)' if configured else 'Secret key' }}"
+               autocomplete="new-password">
+        <div class="form-hint">Stored <b>encrypted</b>. Leave blank to keep the key you already saved.</div>
+      </div>
+
+      <div class="form-group" id="grp-extra">
+        <label class="form-label" id="lbl-extra">Secret Hash / Contract Code</label>
+        <input class="form-control" type="password" name="extra" value=""
+               placeholder="{{ '•••••••• (saved — leave blank to keep)' if has_extra else 'Only for Flutterwave / Monnify' }}"
+               autocomplete="new-password">
+        <div class="form-hint" id="hint-extra">Flutterwave: your Secret Hash. Monnify: your Contract Code. Not needed for Paystack.</div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label">Your Webhook URL</label>
+        <div class="hook">
+          <code id="hook">{{ webhook_url }}</code>
+          <button type="button" class="btn btn-secondary" id="copyHook">Copy</button>
+        </div>
+        <div class="form-hint">Paste this into your provider's dashboard so payments are confirmed automatically.</div>
+      </div>
+
+      <button type="submit" class="btn btn-primary">Save payment settings</button>
+    </form>
+
+    {% if configured %}
+    <div class="danger-row">
+      <form method="post" action="{{ url_for('settings.payments_settings') }}"
+            onsubmit="return confirm('Remove your payment keys? Online fee payment will stop.');">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="action" value="clear">
+        <button type="submit" class="btn btn-secondary">Remove keys &amp; turn off online payment</button>
+      </form>
+    </div>
+    {% endif %}
+  </div></div>
+
+  <div class="note" style="margin-top:18px;background:#f7f8fa;border-color:#e9edf3;color:#334">
+    <b>How parents pay once this is on:</b>
+    <ul class="steps">
+      <li><b>Parents</b> log into the parent portal, open their child’s fee bill, and tap <b>Pay</b> → they’re taken to Paystack to pay by card/transfer.</li>
+      <li><b>Bursars/finance staff</b> can open a student’s statement and <b>generate a payment link</b> to send a parent (WhatsApp/SMS/email).</li>
+      <li>Every successful payment is recorded against the student automatically and shows up in Finance.</li>
+    </ul>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script nonce="{{ csp_nonce }}">
+  (function(){
+    var b=document.getElementById('copyHook');
+    if(b) b.addEventListener('click', function(){
+      var t=document.getElementById('hook').textContent;
+      (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject())
+        .then(function(){ b.textContent='Copied'; setTimeout(function(){b.textContent='Copy';},1500); })
+        .catch(function(){});
+    });
+    // adapt labels + notes to the chosen provider
+    var sel = document.getElementById('provider');
+    function apply(){
+      var p = sel ? sel.value : 'paystack';
+      ['paystack','flutterwave','monnify'].forEach(function(n){
+        var el = document.getElementById('note-'+n); if (el) el.style.display = (n===p?'':'none');
+      });
+      var pub = {paystack:'Public Key', flutterwave:'Public Key (FLWPUBK…)', monnify:'API Key'}[p];
+      var extra = {paystack:'Not needed for Paystack', flutterwave:'Secret Hash', monnify:'Contract Code'}[p];
+      var lp=document.getElementById('lbl-public'); if(lp) lp.textContent=pub;
+      var le=document.getElementById('lbl-extra'); if(le) le.textContent=extra;
+      var ge=document.getElementById('grp-extra'); if(ge) ge.style.display=(p==='paystack'?'none':'');
+    }
+    if (sel){ sel.addEventListener('change', apply); apply(); }
+  })();
+</script>
+{% endblock %}

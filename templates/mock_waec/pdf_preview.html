@@ -1,0 +1,115 @@
+{% extends "base.html" %}
+{% block title %}{{ title }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('mock_waec.index') }}">Mock WAEC</a> / <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}">{{ exam.display_name }}</a> / <span>{{ title }}</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div><h1>{{ title }}</h1>
+        <p class="text-muted text-sm">{{ exam.display_name }}{% if exam.session %} · {{ exam.session.name }}{% endif %} — a server-generated PDF you can preview, download or print. School details come from Settings → School.</p></div>
+    <div class="page-header-actions">
+        <a id="openTab" href="#" target="_blank" rel="noopener" class="btn btn-primary btn-sm"><i class="fas fa-up-right-from-square"></i> Open in new tab</a>
+        <a id="dl" href="#" class="btn btn-success btn-sm"><i class="fas fa-download"></i> Download</a>
+        <a href="{{ back_url }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>
+    </div>
+</div>
+
+<div class="card mb-2"><div class="card-body">
+    <div style="font-weight:600;margin-bottom:.5rem;">Include in the PDF</div>
+    <div style="display:flex;flex-wrap:wrap;gap:.6rem 1.4rem;align-items:center;">
+        {% for param, label in (options or [('title', '“COMPETENCE RESULT” heading')]) %}
+        <label style="display:flex;align-items:center;gap:.4rem;margin:0;">
+            <input type="checkbox" class="pdf-opt" data-param="{{ param }}" checked> {{ label }}
+        </label>
+        {% endfor %}
+        {% if show_signers %}
+        <label style="display:flex;align-items:center;gap:.4rem;margin:0;">Signature:
+            <select id="signersSel" class="form-control" style="width:auto;">
+                <option value="both">Class teacher &amp; Principal</option>
+                <option value="principal">Principal only</option>
+                <option value="teacher">Class teacher only</option>
+                <option value="none">None</option>
+            </select>
+        </label>
+        {% endif %}
+        {% if show_orient %}
+        <label style="display:flex;align-items:center;gap:.4rem;margin:0;">Orientation:
+            <select id="orientSel" class="form-control" style="width:auto;">
+                <option value="landscape">Landscape</option>
+                <option value="portrait">Portrait</option>
+            </select>
+        </label>
+        {% endif %}
+        {% if show_cols %}
+        <label style="display:flex;align-items:center;gap:.4rem;margin:0;">Layout:
+            <select id="colsSel" class="form-control" style="width:auto;">
+                <option value="">Split across sheets</option>
+                <option value="0">One wide page</option>
+            </select>
+        </label>
+        {% endif %}
+    </div>
+</div></div>
+
+<div id="pdfHost" style="position:relative;">
+    <iframe id="pdf" title="PDF preview" style="width:100%;height:76vh;border:1px solid var(--border-color);border-radius:var(--radius-md);background:#fff;"></iframe>
+    <div id="pdfFallback" class="text-muted text-sm" style="display:none;padding:1rem;text-align:center;">
+        Preview couldn’t load inline. <a id="openTab2" href="#" target="_blank" rel="noopener"><strong>Open the PDF in a new tab</strong></a>,
+        or <strong>refresh this page</strong> if your session may have timed out.
+    </div>
+</div>
+
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var base = "{{ pdf_url }}";
+  var iframe = document.getElementById('pdf');
+  var dl = document.getElementById('dl');
+  var openTab = document.getElementById('openTab');
+  var openTab2 = document.getElementById('openTab2');
+  var fallback = document.getElementById('pdfFallback');
+  var colsSel = document.getElementById('colsSel');
+  var orientSel = document.getElementById('orientSel');
+  var signersSel = document.getElementById('signersSel');
+  var opts = Array.prototype.slice.call(document.querySelectorAll('.pdf-opt'));
+  var lastBlob = null;
+
+  function build(extra) {
+    var p = [];
+    opts.forEach(function (o) { if (!o.checked) p.push(o.dataset.param + '=0'); });
+    if (orientSel) p.push('orient=' + orientSel.value);
+    if (signersSel) p.push('signers=' + signersSel.value);
+    if (colsSel && colsSel.value !== '') p.push('cols=' + colsSel.value);
+    if (extra) p.push(extra);
+    return base + (p.length ? ('?' + p.join('&')) : '');
+  }
+  function refresh() {
+    var url = build('');
+    dl.href = build('download=1');
+    openTab.href = url;
+    if (openTab2) openTab2.href = url;
+    // Load via blob so X-Frame-Options on the PDF response can't block the embed.
+    // Send X-Requested-With so an expired session returns 401 instead of a login
+    // redirect (which would otherwise be fetched as 200 HTML and rendered as a
+    // broken "PDF"); verify the body really is a PDF before framing it.
+    fetch(url, { credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } })
+      .then(function (r) {
+        var ct = r.headers.get('Content-Type') || '';
+        if (!r.ok || ct.indexOf('application/pdf') === -1) throw new Error('not a pdf (http ' + r.status + ')');
+        return r.blob();
+      })
+      .then(function (b) {
+        if (lastBlob) URL.revokeObjectURL(lastBlob);
+        lastBlob = URL.createObjectURL(b);
+        iframe.style.display = '';
+        fallback.style.display = 'none';
+        iframe.src = lastBlob;
+      })
+      .catch(function () { iframe.style.display = 'none'; fallback.style.display = ''; });
+  }
+  opts.forEach(function (o) { o.addEventListener('change', refresh); });
+  if (colsSel) colsSel.addEventListener('change', refresh);
+  if (orientSel) orientSel.addEventListener('change', refresh);
+  if (signersSel) signersSel.addEventListener('change', refresh);
+  refresh();
+})();
+</script>
+{% endblock %}

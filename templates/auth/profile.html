@@ -1,0 +1,356 @@
+{% extends "base.html" %}
+{% block title %}My profile - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>My profile</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+  .prof-grid{display:grid;grid-template-columns:1fr;gap:1rem}
+  @media(min-width:900px){.prof-grid{grid-template-columns:1.4fr 1fr}}
+  .ro-list{display:grid;grid-template-columns:1fr 1fr;gap:.6rem .9rem}
+  .ro-list .k{font-size:.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px}
+  .ro-list .v{font-weight:600}
+  .prof-actions{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.5rem}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div><h1>My profile</h1><p class="text-muted text-sm">Update your own details. Role, permissions, branch and pay are managed by an administrator.</p></div>
+</div>
+
+<form method="POST" action="{{ url_for('auth.profile') }}">
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+  <div class="prof-grid">
+    <div>
+      <div class="card mb-3">
+        <div class="card-header"><h3><i class="fas fa-id-card"></i> Basic details</h3></div>
+        <div class="card-body">
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Full name</label>
+              <input type="text" name="full_name" class="form-control" value="{{ user.full_name or '' }}" autocomplete="name"></div>
+            <div class="form-group"><label class="form-label">Phone</label>
+              <input type="tel" name="phone" class="form-control" value="{{ user.phone or '' }}" autocomplete="tel"></div>
+          </div>
+          <div class="form-group"><label class="form-label">Email</label>
+            <input type="email" name="email" class="form-control" value="{{ user.email or '' }}" autocomplete="email"></div>
+          <div class="form-group"><label class="form-label">Interface theme</label>
+            <select name="theme" class="form-control">
+              {% for key, label in themes %}<option value="{{ key }}" {% if user.theme == key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+            </select></div>
+        </div>
+      </div>
+
+      {% if staff %}
+      <div class="card mb-3">
+        <div class="card-header"><h3><i class="fas fa-address-book"></i> Emergency &amp; personal (your HR record)</h3></div>
+        <div class="card-body">
+          <div class="form-group"><label class="form-label">Home address</label>
+            <input type="text" name="address" class="form-control" value="{{ staff.address or '' }}"></div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Next of kin — name</label>
+              <input type="text" name="nok_name" class="form-control" value="{{ staff.nok_name or '' }}"></div>
+            <div class="form-group"><label class="form-label">Next of kin — phone</label>
+              <input type="tel" name="nok_phone" class="form-control" value="{{ staff.nok_phone or '' }}"></div>
+            <div class="form-group"><label class="form-label">Relationship</label>
+              <input type="text" name="nok_relationship" class="form-control" value="{{ staff.nok_relationship or '' }}"></div>
+          </div>
+          <div class="form-row">
+            <div class="form-group"><label class="form-label">Emergency contact — name</label>
+              <input type="text" name="emergency_name" class="form-control" value="{{ staff.emergency_name or '' }}"></div>
+            <div class="form-group"><label class="form-label">Emergency contact — phone</label>
+              <input type="tel" name="emergency_phone" class="form-control" value="{{ staff.emergency_phone or '' }}"></div>
+            <div class="form-group"><label class="form-label">Blood group</label>
+              <input type="text" name="blood_group" class="form-control" value="{{ staff.blood_group or '' }}" maxlength="6"></div>
+          </div>
+          <div class="form-group"><label class="form-label">Medical notes <span class="text-muted">(confidential)</span></label>
+            <input type="text" name="medical_notes" class="form-control" value="{{ staff.medical_notes or '' }}" placeholder="Allergies, conditions"></div>
+        </div>
+      </div>
+      {% endif %}
+
+      <button type="submit" class="btn btn-primary"><i class="fas fa-floppy-disk"></i> Save changes</button>
+    </div>
+
+    <div>
+      <div class="card mb-3">
+        <div class="card-header"><h3><i class="fas fa-user-shield"></i> Account</h3></div>
+        <div class="card-body">
+          <div class="ro-list">
+            <div><div class="k">Username</div><div class="v">{{ user.username }}</div></div>
+            <div><div class="k">Role</div><div class="v">{{ (user.role or '').replace('_',' ').title() }}</div></div>
+            {% if staff %}<div><div class="k">Staff ID</div><div class="v">{{ staff.staff_id }}</div></div>
+            <div><div class="k">Designation</div><div class="v">{{ staff.designation or '—' }}</div></div>{% endif %}
+          </div>
+          <div class="prof-actions">
+            <a href="{{ url_for('auth.change_password') }}" class="btn btn-secondary btn-sm"><i class="fas fa-key"></i> Change password</a>
+            <a href="{{ url_for('auth.security_settings') }}" class="btn btn-secondary btn-sm"><i class="fas fa-shield-halved"></i> Security &amp; 2FA</a>
+            <a href="{{ url_for('auth.sessions') }}" class="btn btn-secondary btn-sm"><i class="fas fa-laptop"></i> Active devices</a>
+          </div>
+          <p class="text-muted text-sm" style="margin-top:.6rem">Need your role, branch or salary changed? Contact an administrator.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</form>
+
+{% if hr_self %}
+<div class="selfservice" style="margin-top:.4rem">
+  {% if hr_self.attendance is not none %}
+  <div class="card mb-3">
+    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;gap:.6rem;flex-wrap:wrap">
+      <h3><i class="fas fa-user-clock"></i> My attendance</h3>
+      {% if hr_self.can_clock %}
+      <form method="post" action="{{ clock_url }}" style="margin:0">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        {% if hr_self.clock_action == 'out' %}
+          <button type="submit" class="btn btn-warning btn-sm"><i class="fas fa-right-from-bracket"></i> Clock out now</button>
+        {% elif hr_self.clock_action == 'done' %}
+          <button type="button" class="btn btn-secondary btn-sm" disabled><i class="fas fa-check"></i> Clocked out {{ hr_self.today.clock_out }}</button>
+        {% else %}
+          <button type="submit" class="btn btn-success btn-sm"><i class="fas fa-fingerprint"></i> Clock in now</button>
+        {% endif %}
+      </form>
+      {% endif %}
+    </div>
+    <div class="card-body">
+      {% if hr_self.today %}
+        <p class="text-muted text-sm" style="margin-top:0">Today: <strong>{{ hr_self.today.status }}</strong>{% if hr_self.today.clock_in %} · in {{ hr_self.today.clock_in }}{% endif %}{% if hr_self.today.clock_out %} · out {{ hr_self.today.clock_out }}{% endif %}.</p>
+      {% elif hr_self.can_clock %}
+        <p class="text-muted text-sm" style="margin-top:0">You haven't clocked in today.</p>
+      {% endif %}
+      {% if hr_self.attendance %}
+      <div style="overflow-x:auto">
+        <table class="data-table" style="margin:0;min-width:460px">
+          <thead><tr><th>Date</th><th>Status</th><th>In</th><th>Out</th><th style="text-align:right">Late (min)</th></tr></thead>
+          <tbody>
+            {% for r in hr_self.attendance %}
+            <tr><td>{{ r.date }}</td><td>{{ r.status }}</td><td>{{ r.clock_in }}</td><td>{{ r.clock_out }}</td><td style="text-align:right">{{ r.minutes_late }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}<p class="text-muted text-sm" style="margin:0">No attendance recorded yet.</p>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if hr_self.payslips is not none %}
+  <div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-money-check-dollar"></i> My payslips</h3></div>
+    <div class="card-body">
+      {% if hr_self.payslips %}
+      <div style="overflow-x:auto">
+        <table class="data-table" style="margin:0;min-width:520px">
+          <thead><tr><th>Period</th><th>Status</th><th style="text-align:right">Basic</th><th style="text-align:right">Allowances</th><th style="text-align:right">Deductions</th><th style="text-align:right">Net</th></tr></thead>
+          <tbody>
+            {% for s in hr_self.payslips %}
+            <tr>
+              <td>{{ s.period }}</td><td>{{ s.status }}</td>
+              <td style="text-align:right">₦{{ '{:,.2f}'.format(s.basic) }}</td>
+              <td style="text-align:right">₦{{ '{:,.2f}'.format(s.allowances) }}</td>
+              <td style="text-align:right">₦{{ '{:,.2f}'.format(s.deductions) }}</td>
+              <td style="text-align:right"><strong>₦{{ '{:,.2f}'.format(s.net) }}</strong></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}<p class="text-muted text-sm" style="margin:0">No finalized payslips yet.</p>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if hr_self.deductions is not none %}
+  <div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-scissors"></i> My deductions</h3></div>
+    <div class="card-body">
+      <p class="text-muted text-sm" style="margin-top:0">Deductions applied to your salary. View only — contact HR about any query.</p>
+      {% if hr_self.deductions %}
+      <div style="overflow-x:auto">
+        <table class="data-table" style="margin:0;min-width:420px">
+          <thead><tr><th>Period</th><th>Deduction</th><th style="text-align:right">Amount</th></tr></thead>
+          <tbody>
+            {% for d in hr_self.deductions %}
+            <tr><td>{{ d.period }}</td><td>{{ d.name }}</td><td style="text-align:right">₦{{ '{:,.2f}'.format(d.amount) }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}<p class="text-muted text-sm" style="margin:0">No deductions on record.</p>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if hr_self.contributions and hr_self.contributions.items %}
+  <div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-hand-holding-dollar"></i> My contributions</h3></div>
+    <div class="card-body">
+      <p class="text-muted text-sm" style="margin-top:0">What you contribute each month and how much has been deducted so far — e.g. your Welfare total to date.</p>
+      <div style="overflow-x:auto">
+        <table class="data-table" style="margin:0;min-width:420px">
+          <thead><tr><th>Item</th><th style="text-align:right">Monthly</th><th style="text-align:right">Total so far</th><th>Last</th></tr></thead>
+          <tbody>
+            {% for c in hr_self.contributions.items %}
+            <tr>
+              <td>{{ c.name }}</td>
+              <td style="text-align:right">{% if c.monthly %}₦{{ '{:,.2f}'.format(c.monthly) }}{% else %}—{% endif %}</td>
+              <td style="text-align:right"><strong>₦{{ '{:,.2f}'.format(c.contributed) }}</strong>{% if c.months %} <span class="text-muted text-sm">· {{ c.months }} mo</span>{% endif %}</td>
+              <td>{{ c.last or '—' }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot>
+            <tr>
+              <th>Total</th>
+              <th style="text-align:right">₦{{ '{:,.2f}'.format(hr_self.contributions.total_monthly) }}<span class="text-muted text-sm">/mo</span></th>
+              <th style="text-align:right">₦{{ '{:,.2f}'.format(hr_self.contributions.total_contributed) }}</th>
+              <th></th>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  {% if hr_self.leave is not none %}
+  <div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-plane-departure"></i> My leave</h3></div>
+    <div class="card-body">
+      {% if hr_self.leave_balances %}
+      <div style="overflow-x:auto;margin-bottom:.7rem">
+        <table class="data-table" style="margin:0;min-width:420px">
+          <thead><tr><th>Type</th><th style="text-align:right">Allowance</th><th style="text-align:right">Taken</th><th style="text-align:right">Remaining</th></tr></thead>
+          <tbody>
+            {% for b in hr_self.leave_balances %}
+            <tr><td>{{ b.type }}</td><td style="text-align:right">{{ b.allowance }}</td><td style="text-align:right">{{ b.taken }}</td><td style="text-align:right"><strong>{{ b.remaining }}</strong></td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% endif %}
+      {% if hr_self.leave %}
+      <div style="overflow-x:auto">
+        <table class="data-table" style="margin:0;min-width:460px">
+          <thead><tr><th>Type</th><th>From</th><th>To</th><th style="text-align:right">Days</th><th>Status</th></tr></thead>
+          <tbody>
+            {% for r in hr_self.leave %}
+            <tr><td>{{ r.type }}</td><td>{{ r.start }}</td><td>{{ r.end }}</td><td style="text-align:right">{{ r.days }}</td><td>{{ r.status }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}<p class="text-muted text-sm" style="margin:0">No leave requests on record.</p>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if hr_self.loans is not none %}
+  <div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-hand-holding-dollar"></i> My staff loans</h3></div>
+    <div class="card-body">
+      <p class="text-muted text-sm" style="margin-top:0">Your loan balances and repayment progress. View only — contact HR about any query.</p>
+      {% if hr_self.loans %}
+      <div style="overflow-x:auto">
+        <table class="data-table" style="margin:0;min-width:640px">
+          <thead><tr><th>Taken</th><th>Status</th><th style="text-align:right">Principal</th><th style="text-align:right">Repayable</th><th style="text-align:right">Repaid</th><th style="text-align:right">Outstanding</th><th style="text-align:right">Monthly</th><th>Deadline</th></tr></thead>
+          <tbody>
+            {% for l in hr_self.loans %}
+            <tr>
+              <td>{{ l.taken }}</td><td>{{ l.status }}</td>
+              <td style="text-align:right">₦{{ '{:,.2f}'.format(l.principal) }}</td>
+              <td style="text-align:right">₦{{ '{:,.2f}'.format(l.repayable) }}</td>
+              <td style="text-align:right">₦{{ '{:,.2f}'.format(l.repaid) }}</td>
+              <td style="text-align:right"><strong>₦{{ '{:,.2f}'.format(l.outstanding) }}</strong></td>
+              <td style="text-align:right">₦{{ '{:,.2f}'.format(l.monthly) }}</td>
+              <td>{{ l.deadline }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}<p class="text-muted text-sm" style="margin:0">You have no staff loans on record.</p>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+
+  {% if hr_self.documents is not none %}
+  <div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-folder-open"></i> My documents</h3></div>
+    <div class="card-body">
+      {% if hr_self.documents %}
+      <div style="overflow-x:auto">
+        <table class="data-table" style="margin:0;min-width:480px">
+          <thead><tr><th>Title</th><th>Type</th><th>Version</th><th>Expires</th><th></th></tr></thead>
+          <tbody>
+            {% for dcm in hr_self.documents %}
+            <tr>
+              <td>{{ dcm.title }}</td><td>{{ dcm.type }}</td><td>v{{ dcm.version }}</td>
+              <td>{% if dcm.expires %}{{ dcm.expires }}{% if dcm.expired %} <span class="badge badge-danger">Expired</span>{% endif %}{% else %}—{% endif %}</td>
+              <td style="text-align:right">{% if dcm.has_file %}<a href="{{ dcm.url }}" class="btn btn-secondary btn-sm"><i class="fas fa-download"></i> Download</a>{% else %}<span class="text-muted text-sm">No file</span>{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}<p class="text-muted text-sm" style="margin:0">No documents on file.</p>{% endif %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+
+{% if lib_self %}
+<div class="selfservice">
+  <div class="card mb-3">
+    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;gap:.6rem;flex-wrap:wrap">
+      <h3><i class="fas fa-book-open-reader"></i> My library loans</h3>
+      {% if lib_self.overdue %}<span class="badge badge-danger">{{ lib_self.overdue }} overdue</span>{% endif %}
+    </div>
+    <div class="card-body">
+      {% if lib_self.loans %}
+      <div style="overflow-x:auto">
+        <table class="data-table" style="margin:0;min-width:480px">
+          <thead><tr><th>Title</th><th>Borrowed</th><th>Due</th><th>Renewals</th><th>Status</th></tr></thead>
+          <tbody>
+            {% for l in lib_self.loans %}
+            <tr>
+              <td>{{ l.title }}</td><td>{{ l.borrowed }}</td><td>{{ l.due }}</td><td>{{ l.renewals }}</td>
+              <td>{% if l.overdue %}<span class="badge badge-danger">Overdue {{ l.days_overdue }}d</span>{% else %}<span class="badge badge-success">On loan</span>{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}<p class="text-muted text-sm" style="margin:0">You have no books on loan.</p>{% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% if sales_self %}
+<div class="selfservice">
+  <div class="card mb-3">
+    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;gap:.6rem;flex-wrap:wrap">
+      <h3><i class="fas fa-cash-register"></i> My sales</h3>
+      <span class="badge badge-success">Today: {{ sales_self.today_count }} · ₦{{ '{:,.2f}'.format(sales_self.today_total) }}</span>
+    </div>
+    <div class="card-body">
+      <p class="text-muted text-sm" style="margin-top:0">Sales you recorded. View only.</p>
+      {% if sales_self.recent %}
+      <div style="overflow-x:auto">
+        <table class="data-table" style="margin:0;min-width:420px">
+          <thead><tr><th>When</th><th>Method</th><th style="text-align:right">Total</th></tr></thead>
+          <tbody>
+            {% for s in sales_self.recent %}
+            <tr><td>{{ s.when }}</td><td>{{ s.method }}</td><td style="text-align:right">₦{{ '{:,.2f}'.format(s.total) }}</td></tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}<p class="text-muted text-sm" style="margin:0">You haven't recorded any sales yet.</p>{% endif %}
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

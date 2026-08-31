@@ -19,8 +19,8 @@
         <div class="kpi"><div class="v">{{ report_data.subjects_failed }}</div><div class="l">Failed</div></div>
     </div>
 
-    {% if report_data.term_summary and report_data.term_summary.position_in_class %}
-    <p style="margin:.2rem 0;"><strong>Position in class:</strong> {{ report_data.term_summary.position_in_class }}</p>
+    {% if report_data.term_summary and (report_data.term_summary.position_in_arm or report_data.term_summary.position_in_class) %}
+    <p style="margin:.2rem 0;"><strong>Position in class:</strong> {{ report_data.term_summary.position_in_arm or report_data.term_summary.position_in_class }}</p>
     {% endif %}
 
     <div style="overflow-x:auto;">
@@ -53,7 +53,7 @@
 
     <div style="margin-top:1.2rem;display:flex;gap:.5rem;">
         <a href="{{ url_for('result_portal.check') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Check another</a>
-        <button onclick="window.print()" class="btn btn-primary"><i class="fas fa-print"></i> Print</button>
+        <button data-print class="btn btn-primary"><i class="fas fa-print"></i> Print</button>
     </div>
 </div>
 <style>

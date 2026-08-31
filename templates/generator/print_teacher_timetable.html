@@ -5,8 +5,10 @@
 {% block content %}
 <style>
 @media print {
-    .no-print { display: none !important; }
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .sidebar, .top-header, .bottom-nav, .no-print, .sidebar-overlay { display: none !important; }
     .print-only { display: block !important; }
+    .main-content, .page-content { margin: 0 !important; padding: 0 !important; background: #fff !important; }
     body { font-size: 12pt; }
     .timetable-container { page-break-inside: avoid; }
 }
@@ -95,7 +97,7 @@
 </style>
 
 <div class="action-buttons no-print">
-    <button onclick="window.print()" class="btn btn-primary"><i class="fas fa-print"></i> Print</button>
+    <button data-print class="btn btn-primary"><i class="fas fa-print"></i> Print</button>
     <a href="{{ url_for('generator.export_teacher_image', batch_id=batch_id, teacher_id=teacher.id) }}" class="btn btn-success"><i class="fas fa-image"></i> Download Image</a>
     <a href="{{ url_for('generator.teacher_timetable', batch_id=batch_id) }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
 </div>

@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Edit results — {{ student.full_name }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('mock_waec.index') }}">Mock WAEC</a> / <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}">{{ exam.display_name }}</a> / <span>{{ student.full_name }}</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>{{ student.full_name }}</h1>
+        <p class="text-muted text-sm">{{ student.student_id }} &middot; {{ exam.display_name }} — edit, add or remove subjects</p>
+    </div>
+    <div class="page-header-actions">
+        <a href="{{ url_for('mock_waec.result_slip', exam_id=exam.id, student_id=student.id) }}" class="btn btn-info btn-sm"><i class="fas fa-print"></i> Print result</a>
+        <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>
+    </div>
+</div>
+
+{% if summary %}
+<div class="kpi-row d-flex gap-2 mb-3" style="flex-wrap:wrap;">
+    <div class="kpi"><div class="kpi-value">{{ summary.subjects }}</div><div class="kpi-label">Subjects</div></div>
+    <div class="kpi"><div class="kpi-value">{{ summary.credits }}</div><div class="kpi-label">Credits (C6+)</div></div>
+    <div class="kpi"><div class="kpi-value">{{ summary.average_score if summary.average_score is not none else '—' }}</div><div class="kpi-label">Average %</div></div>
+    <div class="kpi"><div class="kpi-value">{{ 'Yes' if summary.has_5_incl_core else 'No' }}</div><div class="kpi-label">5 credits incl. Eng &amp; Maths</div></div>
+</div>
+{% endif %}
+
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-pen"></i> Subjects</h3></div>
+    <div class="card-body">
+        {% if results %}
+        <form method="post" action="{{ url_for('mock_waec.edit_student_results', exam_id=exam.id, student_id=student.id) }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <div class="table-responsive"><table class="data-table">
+                <thead><tr><th>Subject</th><th style="width:120px;">Score</th><th style="width:160px;">Grade</th><th style="width:90px;"></th></tr></thead>
+                <tbody>
+                    {% for r in results %}
+                    <tr>
+                        <td><strong>{{ r.subject }}</strong></td>
+                        <td><input type="number" min="0" max="100" inputmode="numeric" class="form-control" name="score_{{ r.id }}" value="{{ r.score if r.score is not none else '' }}"></td>
+                        <td>
+                            <select class="form-control" name="grade_{{ r.id }}">
+                                <option value="">Auto ({{ r.grade or '—' }})</option>
+                                {% for g in grades %}<option value="{{ g }}">{{ g }}</option>{% endfor %}
+                            </select>
+                        </td>
+                        <td><button type="submit" name="delete_id" value="{{ r.id }}" class="btn btn-danger btn-sm" title="Remove subject" data-confirm="Remove {{ r.subject }}?"><i class="fas fa-trash"></i></button></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table></div>
+            <div class="mt-2"><button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save changes</button>
+                <span class="text-muted text-sm">Leave "Grade" on Auto to derive it from the score.</span></div>
+        </form>
+        {% else %}
+        <p class="text-muted">No subjects recorded yet for this student — add them below.</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h3><i class="fas fa-plus"></i> Add a subject</h3></div>
+    <div class="card-body">
+        {% if available %}
+        <form method="post" action="{{ url_for('mock_waec.edit_student_results', exam_id=exam.id, student_id=student.id) }}" class="filter-form" style="align-items:flex-end;">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="add" value="1">
+            <div class="form-group" style="flex:2;min-width:220px;"><label class="form-label">Subject</label>
+                <select class="form-control" name="subject" required>
+                    <option value="">Select subject…</option>
+                    {% for s in available %}<option value="{{ s }}">{{ s }}</option>{% endfor %}
+                </select></div>
+            <div class="form-group"><label class="form-label">Score</label>
+                <input type="number" min="0" max="100" inputmode="numeric" class="form-control" name="score" placeholder="0–100" required></div>
+            <div class="form-group"><label class="form-label">Grade</label>
+                <select class="form-control" name="grade"><option value="">Auto</option>{% for g in grades %}<option value="{{ g }}">{{ g }}</option>{% endfor %}</select></div>
+            <div class="filter-actions"><button type="submit" class="btn btn-success"><i class="fas fa-plus"></i> Add subject</button></div>
+        </form>
+        {% else %}
+        <p class="text-muted">Every WAEC subject is already recorded for this student.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

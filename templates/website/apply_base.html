@@ -1,0 +1,47 @@
+{% extends "website/public_base.html" %}
+{# Standalone admissions pages. Reuses the site's theme, brand nav and footer so
+   the application flow feels part of the school's own website. #}
+{% block extra_css %}
+  .wb-apply{padding:3rem 0 4rem;min-height:60vh}
+  .wb-apply .wb-wrap{max-width:760px}
+  .wb-form{display:grid;gap:1.1rem}
+  .wb-fgrid{display:grid;gap:1.1rem}
+  @media(min-width:640px){.wb-fgrid.two{grid-template-columns:1fr 1fr}}
+  .wb-field label{display:block;font-weight:600;font-size:.9rem;margin-bottom:.35rem}
+  .wb-field .req{color:#dc2626}
+  .wb-field input,.wb-field select,.wb-field textarea{width:100%;padding:.7rem .85rem;border:1px solid color-mix(in srgb,var(--wb-ink) 22%,transparent);border-radius:var(--wb-radius);font:inherit;background:var(--wb-surface);color:var(--wb-ink)}
+  .wb-field input:focus,.wb-field select:focus,.wb-field textarea:focus{outline:2px solid var(--wb-primary);outline-offset:1px;border-color:var(--wb-primary)}
+  .wb-field .err{color:#dc2626;font-size:.82rem;margin-top:.3rem}
+  .wb-field.has-err input,.wb-field.has-err select{border-color:#dc2626}
+  .wb-hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+  .wb-note{background:color-mix(in srgb,var(--wb-primary) 8%,transparent);border:1px solid color-mix(in srgb,var(--wb-primary) 22%,transparent);border-radius:var(--wb-radius);padding:1rem 1.2rem;font-size:.92rem}
+  .wb-alert{border-radius:var(--wb-radius);padding:1rem 1.2rem;font-size:.92rem;margin-bottom:1.2rem}
+  .wb-alert.err{background:#fef2f2;border:1px solid #fecaca;color:#991b1b}
+  .wb-alert.ok{background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46}
+  .wb-appno{font-family:var(--wb-font-head);font-size:1.6rem;font-weight:800;letter-spacing:.03em;color:var(--wb-primary)}
+  .wb-fee{font-weight:800;color:var(--wb-primary)}
+{% endblock %}
+{% block body %}
+<nav class="wb-nav">
+  <div class="wb-nav-inner">
+    <a class="wb-brand" href="{{ url_for('website.home') }}">{% if branding.logo_url %}<img src="{{ branding.logo_url }}" alt="{{ branding.name }} logo">{% endif %}{{ branding.name }}</a>
+    <button type="button" class="wb-nav-burger" aria-label="Toggle menu" aria-expanded="false" data-wb-nav-toggle><i class="fas fa-bars"></i></button>
+    <div class="wb-nav-links">
+      {% for link in nav %}<a href="{{ link.href }}">{{ link.label }}</a>{% endfor %}
+    </div>
+  </div>
+</nav>
+<main class="wb-apply">
+  <div class="wb-wrap">
+    {% block apply_content %}{% endblock %}
+  </div>
+</main>
+<footer class="wb-footer">
+  <div class="wb-wrap">
+    <div class="wb-foot-bottom">
+      <span>© {{ now_year }} {{ branding.name }}. All rights reserved.</span>
+      <span><a href="{{ url_for('website.home') }}">Home</a> · <a href="{{ url_for('website.apply_track') }}">Track application</a></span>
+    </div>
+  </div>
+</footer>
+{% endblock %}

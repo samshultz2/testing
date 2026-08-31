@@ -65,7 +65,7 @@
                         <option value="{{ g }}" {% if results_dict.get(subject) == g %}selected{% endif %}>{{ g }}</option>
                         {% endfor %}
                     </select>
-                    <button type="button" class="remove-btn" onclick="removeSubject(this)">
+                    <button type="button" class="remove-btn" data-call="removeSubject" data-args="this">
                         <i class="fas fa-times"></i>
                     </button>
                 </div>
@@ -90,7 +90,7 @@
                         <option value="{{ g }}">{{ g }}</option>
                         {% endfor %}
                     </select>
-                    <button type="button" class="btn btn-secondary" onclick="addSubject()">
+                    <button type="button" class="btn btn-secondary" data-call="addSubject">
                         <i class="fas fa-plus"></i> Add
                     </button>
                 </div>
@@ -117,7 +117,7 @@
         Permanently delete all WAEC results for {{ student.full_name }} ({{ year }}). This action cannot be undone.
     </p>
     <form method="POST" action="{{ url_for('results.delete_waec', student_id=student.id, year=year) }}" 
-          onsubmit="return confirm('Are you sure you want to delete ALL WAEC results for this student in {{ year }}? This cannot be undone.');">
+          data-confirm="Are you sure you want to delete ALL WAEC results for this student in {{ year }}? This cannot be undone.">
         <button type="submit" class="btn btn-danger btn-sm">
             <i class="fas fa-trash"></i> Delete All Results ({{ year }})
         </button>
@@ -126,9 +126,9 @@
 {% endblock %}
 
 {% block extra_js %}
-<script>
-const allSubjects = {{ subjects|tojson }};
-const grades = {{ grades|tojson }};
+<script nonce="{{ csp_nonce }}">
+var allSubjects = {{ subjects|tojson }};
+var grades = {{ grades|tojson }};
 
 function addSubject() {
     const subjectSelect = document.getElementById('newSubject');
@@ -144,15 +144,16 @@ function addSubject() {
     const container = document.getElementById('subjectsContainer');
     const row = document.createElement('div');
     row.className = 'subject-row';
+    const eSubject = window.escapeHtml(subject);
     row.innerHTML = `
         <div class="subject-name">
-            <input type="hidden" name="subject[]" value="${subject}">
-            ${subject}
+            <input type="hidden" name="subject[]" value="${eSubject}">
+            ${eSubject}
         </div>
         <select name="grade[]" class="grade-select">
-            ${grades.map(g => `<option value="${g}" ${g === grade ? 'selected' : ''}>${g}</option>`).join('')}
+            ${grades.map(g => `<option value="${window.escapeHtml(g)}" ${g === grade ? 'selected' : ''}>${window.escapeHtml(g)}</option>`).join('')}
         </select>
-        <button type="button" class="remove-btn" onclick="removeSubject(this)">
+        <button type="button" class="remove-btn" data-call="removeSubject" data-args="this">
             <i class="fas fa-times"></i>
         </button>
     `;

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}React Spike - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>React Spike</span>{% endblock %}
+
+{% block content %}
+<div class="page-header"><h1><i class="fas fa-vial"></i> React integration spike</h1></div>
+
+<div class="card">
+    <div class="card-body">
+        <p class="text-muted">One React-rendered widget, fed by the existing
+            <code>/api/dashboard/stats</code> endpoint (session cookie + CSRF
+            header), and precached by the service worker so this page still works
+            offline once visited.</p>
+
+        <h3 style="margin-top:1rem">Active students by gender</h3>
+        <div id="react-spike" style="min-height:60px">Loading React…</div>
+    </div>
+</div>
+
+<!-- self-contained bundle (React + component), built by frontend/ via esbuild -->
+<script src="{{ bundle_url('js/react/spike.js') }}" defer></script>
+{% endblock %}

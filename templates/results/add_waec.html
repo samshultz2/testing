@@ -82,7 +82,7 @@
     </div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 (function () {
     const SUBJECT_MAP = {{ subject_map | tojson }};
     const DEFAULTS = {{ default_subjects | tojson }};

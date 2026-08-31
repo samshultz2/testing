@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en" data-theme="{{ current_theme }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>{% block title %}Platform{% endblock %} · EduSyncra</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
+  <style>
+    :root{
+      --bg:#f7f8fa; --surface:#ffffff; --surface-2:#f8fafc; --ink:#0f172a; --soft:#475569;
+      --faint:#5b6675; --line:#e9edf3; --line-2:#eef2f7;
+      --accent:#0d6a4e; --accent-ink:#0a5640; --accent-soft:#e8f5f1; --accent-2:#11998e;
+      --ok:#198754; --ok-soft:#d1e7dd; --warn:#e67e22; --warn-soft:#fef3cd;
+      --bad:#dc2626; --bad-soft:#fee2e2; --sidebar:#0c5d44; --sidebar-2:#0a4f3a; --sidebar-ink:#d3e6de; --sidebar-faint:#8fb5a7;
+      --radius:14px; --shadow:0 1px 2px rgba(15,23,42,.04), 0 12px 30px -18px rgba(15,23,42,.16);
+      --font-sans:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+      --font-display:'Space Grotesk',var(--font-sans);
+    }
+    [data-theme="dark"]{
+      --bg:#0b1120; --surface:#131c2e; --surface-2:#1b2436; --ink:#f1f5f9; --soft:#cbd5e1;
+      --faint:#94a3b8; --line:#243049; --line-2:#1e2942;
+      --accent:#10b981; --accent-ink:#34d399; --accent-soft:rgba(16,185,129,.15); --accent-2:#0ea5a0;
+      --ok:#34d399; --ok-soft:#12271f; --warn:#e6ad4a; --warn-soft:#2a2212;
+      --bad:#f0697c; --bad-soft:#2c151a; --sidebar:#0f1830; --sidebar-2:#0b1120; --sidebar-ink:#c4d3e0; --sidebar-faint:#6b7f95;
+      --shadow:0 1px 2px rgba(0,0,0,.4), 0 16px 40px -22px rgba(0,0,0,.7);
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:var(--ink);line-height:1.55;-webkit-font-smoothing:antialiased;
+         font-family:var(--font-sans);}
+    h1,h2,h3{font-family:var(--font-display);letter-spacing:-.02em}
+    a{color:inherit;text-decoration:none}
+    .app{display:grid;grid-template-columns:250px 1fr;min-height:100vh}
+
+    /* sidebar */
+    .side{background:linear-gradient(180deg,var(--sidebar) 0%,var(--sidebar-2) 100%);color:var(--sidebar-ink);display:flex;flex-direction:column;
+          position:sticky;top:0;height:100vh;padding:18px 14px}
+    .side .logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:17px;color:#fff;padding:6px 8px 18px}
+    .side .logo .dot{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;
+                     background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;font-size:15px}
+    .side .grp{font-size:10.5px;text-transform:uppercase;letter-spacing:.12em;color:var(--sidebar-faint);
+               padding:16px 10px 6px;font-weight:700}
+    .side nav a{display:flex;align-items:center;gap:11px;padding:10px 11px;border-radius:10px;
+                color:var(--sidebar-ink);font-size:14px;font-weight:500;margin-bottom:2px;transition:.12s}
+    .side nav a i{width:18px;text-align:center;font-size:14px;color:var(--sidebar-faint)}
+    .side nav a:hover{background:rgba(255,255,255,.06);color:#fff}
+    .side nav a.on{background:linear-gradient(135deg,var(--accent),var(--accent-2));color:#fff;box-shadow:0 6px 16px -8px var(--accent)}
+    .side nav a.on i{color:#fff}
+    .side .foot{margin-top:auto;padding-top:14px;border-top:1px solid rgba(255,255,255,.08);font-size:13px}
+    .side .foot a{display:flex;align-items:center;gap:9px;padding:9px 11px;border-radius:9px;color:var(--sidebar-faint)}
+    .side .foot a:hover{background:rgba(255,255,255,.06);color:#fff}
+
+    /* main */
+    .main{min-width:0;display:flex;flex-direction:column}
+    .topbar{display:flex;align-items:center;gap:14px;padding:20px 30px 6px}
+    .topbar .burger{display:none;background:transparent;border:0;color:var(--ink);font-size:20px;cursor:pointer}
+    .topbar h1{font-size:22px;margin:0;letter-spacing:-.02em;font-weight:800}
+    .topbar .sub{color:var(--soft);font-size:13.5px;margin:1px 0 0}
+    .topbar .spacer{margin-left:auto}
+    .who{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--soft);background:var(--surface);
+         border:1px solid var(--line);border-radius:99px;padding:5px 6px 5px 13px}
+    .who .av{width:26px;height:26px;border-radius:50%;background:var(--accent-soft);color:var(--accent-ink);
+             display:grid;place-items:center;font-weight:800;font-size:12px}
+    .content{padding:14px 30px 48px}
+    @media (max-width:860px){
+      .app{grid-template-columns:1fr}
+      .side{position:fixed;left:0;top:0;z-index:60;width:250px;transform:translateX(-100%);transition:.2s;box-shadow:var(--shadow)}
+      body.nav-open .side{transform:none}
+      .scrim{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:50}
+      body.nav-open .scrim{display:block}
+      .topbar .burger{display:block}
+      .topbar,.content{padding-left:18px;padding-right:18px}
+    }
+
+    /* shared components */
+    .flash{padding:11px 14px;border-radius:11px;font-size:13.5px;margin-bottom:14px;display:flex;gap:9px;align-items:center}
+    .flash::before{font-family:"Font Awesome 6 Free";font-weight:900}
+    .flash.success{background:var(--ok-soft);color:var(--ok)} .flash.success::before{content:"\f058"}
+    .flash.error{background:var(--bad-soft);color:var(--bad)} .flash.error::before{content:"\f06a"}
+    .flash.info{background:var(--accent-soft);color:var(--accent-ink)} .flash.info::before{content:"\f05a"}
+    .cards{display:grid;gap:14px;margin-bottom:20px}
+    .kpi{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;box-shadow:var(--shadow)}
+    .kpi .lab{font-size:12px;color:var(--faint);font-weight:600;display:flex;align-items:center;gap:7px}
+    .kpi .lab i{font-size:12px}
+    .kpi .num{font-size:26px;font-weight:800;letter-spacing:-.02em;margin-top:6px}
+    .kpi.hero{background:linear-gradient(140deg,var(--accent),var(--accent-2));color:#fff;border:0}
+    .kpi.hero .lab,.kpi.hero .lab i{color:rgba(255,255,255,.85)} .kpi.hero .num{font-size:30px}
+    .panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:20px}
+    .panel > h2{font-size:14px;margin:0;padding:16px 18px;border-bottom:1px solid var(--line-2);
+                display:flex;align-items:center;gap:9px;font-weight:700}
+    .panel > h2 .tag{margin-left:auto;font-size:12px;color:var(--faint);font-weight:500}
+    .tablewrap{overflow-x:auto}
+    table{width:100%;border-collapse:collapse;font-size:13.5px}
+    th,td{padding:12px 16px;text-align:left;white-space:nowrap}
+    th{font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--faint);border-bottom:1px solid var(--line-2);font-weight:700}
+    tbody tr+tr td{border-top:1px solid var(--line-2)}
+    tbody tr:hover td{background:var(--surface-2)}
+    .school{display:flex;align-items:center;gap:10px}
+    .school .ic{width:30px;height:30px;border-radius:8px;background:var(--accent-soft);color:var(--accent-ink);
+                display:grid;place-items:center;font-weight:800;font-size:12px;flex:0 0 auto}
+    .school .sub{font-size:12px;color:var(--faint)}
+    .pill{font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px;display:inline-flex;align-items:center;gap:5px}
+    .p-owner{color:var(--accent-ink);background:var(--accent-soft)}
+    .p-paying,.p-active{color:var(--ok);background:var(--ok-soft)}
+    .p-trial{color:var(--warn);background:var(--warn-soft)}
+    .p-unpaid{color:var(--bad);background:var(--bad-soft)}
+    .p-suspended,.p-archived{color:var(--faint);background:var(--line)}
+    .btn{font-size:12.5px;font-weight:600;padding:7px 12px;border-radius:9px;border:1px solid var(--line);
+         background:var(--surface);color:var(--ink);cursor:pointer;display:inline-flex;align-items:center;gap:7px;transition:.12s}
+    .btn:hover{border-color:var(--accent);color:var(--accent-ink)}
+    .btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+    .btn.primary:hover{filter:brightness(1.06);color:#fff}
+    .btn.danger{color:var(--bad);border-color:color-mix(in srgb,var(--bad) 35%,var(--line))}
+    .btn.danger:hover{background:var(--bad-soft);color:var(--bad)}
+    .btn.sm{padding:5px 9px;font-size:12px}
+    form.inline{display:inline}
+    .muted{color:var(--faint)}
+    .field{padding:7px 9px;border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--ink);font-size:13px;font-family:inherit}
+    .empty{padding:34px;text-align:center;color:var(--faint);font-size:14px}
+    .empty i{font-size:26px;display:block;margin-bottom:8px;opacity:.6}
+
+    /* command palette */
+    .cmd-trigger{display:flex;align-items:center;gap:9px;background:var(--surface);border:1px solid var(--line);
+      border-radius:99px;padding:7px 9px 7px 14px;color:var(--faint);font-size:13px;cursor:pointer;
+      font-family:inherit;transition:.12s;min-width:210px}
+    .cmd-trigger:hover{border-color:var(--accent);color:var(--soft)}
+    .cmd-trigger .kbd{margin-left:auto;font-size:11px;font-weight:700;background:var(--surface-2);
+      border:1px solid var(--line);border-radius:6px;padding:2px 6px;color:var(--faint)}
+    @media (max-width:860px){ .cmd-trigger{min-width:0} .cmd-trigger .txt,.cmd-trigger .kbd{display:none} }
+    .cmd-scrim{position:fixed;inset:0;background:rgba(8,13,28,.55);backdrop-filter:blur(2px);
+      z-index:120;display:none;align-items:flex-start;justify-content:center;padding:14vh 16px 16px}
+    .cmd-scrim.open{display:flex}
+    .cmd{width:100%;max-width:600px;background:var(--surface);border:1px solid var(--line);
+      border-radius:16px;box-shadow:0 30px 80px -30px rgba(0,0,0,.6);overflow:hidden}
+    .cmd-in{display:flex;align-items:center;gap:11px;padding:15px 18px;border-bottom:1px solid var(--line-2)}
+    .cmd-in i{color:var(--faint)}
+    .cmd-in input{flex:1;border:0;background:transparent;color:var(--ink);font-size:16px;font-family:inherit;outline:none}
+    .cmd-list{max-height:52vh;overflow-y:auto;padding:6px}
+    .cmd-sec{font-size:10.5px;text-transform:uppercase;letter-spacing:.1em;color:var(--faint);
+      font-weight:700;padding:10px 12px 4px}
+    .cmd-item{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:10px;cursor:pointer;color:var(--ink)}
+    .cmd-item .ci{width:30px;height:30px;border-radius:8px;background:var(--accent-soft);color:var(--accent-ink);
+      display:grid;place-items:center;font-size:13px;flex:0 0 auto}
+    .cmd-item .cl{font-size:14px;font-weight:600} .cmd-item .cs{font-size:12px;color:var(--faint)}
+    .cmd-item.sel,.cmd-item:hover{background:var(--surface-2)}
+    .cmd-item.sel .ci{background:var(--accent);color:#fff}
+    .cmd-empty{padding:26px;text-align:center;color:var(--faint);font-size:13.5px}
+    .cmd-foot{display:flex;gap:16px;padding:9px 16px;border-top:1px solid var(--line-2);font-size:11px;color:var(--faint)}
+    .cmd-foot b{background:var(--surface-2);border:1px solid var(--line);border-radius:5px;padding:1px 5px;font-weight:700}
+    @media (prefers-reduced-motion:no-preference){.cmd{animation:cmdin .14s ease}}
+    @keyframes cmdin{from{transform:translateY(-8px);opacity:0}to{transform:none;opacity:1}}
+  </style>
+  {% block head %}{% endblock %}
+</head>
+<body>
+  <div class="app">
+    <aside class="side">
+      <div class="logo"><span class="dot">✦</span> EduSyncra</div>
+      <div class="grp">Platform</div>
+      <nav>
+        <a href="{{ url_for('platform.dashboard') }}" class="{{ 'on' if active=='overview' }}"><i class="fas fa-gauge-high"></i> Overview</a>
+        <a href="{{ url_for('platform.schools') }}" class="{{ 'on' if active=='schools' }}"><i class="fas fa-school"></i> Schools</a>
+        {% if platform_can('view_revenue') %}<a href="{{ url_for('platform.subscriptions') }}" class="{{ 'on' if active=='subscriptions' }}"><i class="fas fa-credit-card"></i> Subscriptions</a>{% endif %}
+        {% if platform_can('manage_plans') %}<a href="{{ url_for('platform.pricing') }}" class="{{ 'on' if active=='pricing' }}"><i class="fas fa-tags"></i> Pricing</a>{% endif %}
+        {% if platform_can('manage_plans') %}<a href="{{ url_for('platform.features') }}" class="{{ 'on' if active=='features' }}"><i class="fas fa-toggle-on"></i> Plans &amp; features</a>{% endif %}
+        {% if platform_can('view_analytics') %}<a href="{{ url_for('platform.analytics') }}" class="{{ 'on' if active=='analytics' }}"><i class="fas fa-chart-line"></i> Analytics</a>{% endif %}
+        <a href="{{ url_for('platform.audit') }}" class="{{ 'on' if active=='audit' }}"><i class="fas fa-clock-rotate-left"></i> Audit log</a>
+        {% if platform_can('manage_tenants') %}<a href="{{ url_for('platform.impersonation_log') }}" class="{{ 'on' if active=='impersonation' }}"><i class="fas fa-user-secret"></i> Support sessions</a>{% endif %}
+        <a href="{{ url_for('platform.tickets') }}" class="{{ 'on' if active=='tickets' }}"><i class="fas fa-life-ring"></i> Support tickets{% if open_tickets %} <span style="margin-left:auto;background:var(--bad);color:#fff;font-size:11px;font-weight:800;border-radius:99px;padding:1px 7px">{{ open_tickets }}</span>{% endif %}</a>
+        <a href="{{ url_for('platform.health') }}" class="{{ 'on' if active=='health' }}"><i class="fas fa-heart-pulse"></i> Health</a>
+        {% if session.get('role') == 'super_admin' %}<a href="{{ url_for('platform.team') }}" class="{{ 'on' if active=='team' }}"><i class="fas fa-user-shield"></i> Team &amp; roles</a>{% endif %}
+      </nav>
+      {% if platform_can('manage_settings') %}
+      <div class="grp">Website</div>
+      <nav>
+        <a href="{{ url_for('platform.homepage') }}" class="{{ 'on' if active=='homepage' }}"><i class="fas fa-pen-ruler"></i> Homepage</a>
+        <a href="{{ url_for('platform.broadcasts') }}" class="{{ 'on' if active=='broadcasts' }}"><i class="fas fa-bullhorn"></i> Broadcasts</a>
+        <a href="{{ url_for('platform.settings_page') }}" class="{{ 'on' if active=='settings' }}"><i class="fas fa-sliders"></i> Settings</a>
+      </nav>
+      {% endif %}
+      <div class="foot">
+        <a href="/" target="_blank" rel="noopener"><i class="fas fa-arrow-up-right-from-square"></i> View my school</a>
+        <a href="{{ url_for('auth.logout') }}"><i class="fas fa-right-from-bracket"></i> Sign out</a>
+      </div>
+    </aside>
+    <div class="scrim" id="scrim"></div>
+
+    <div class="main">
+      <div class="topbar">
+        <button class="burger" id="burger" aria-label="Menu"><i class="fas fa-bars"></i></button>
+        <div>
+          <h1>{% block heading %}Platform{% endblock %}</h1>
+          <p class="sub">{% block subheading %}{% endblock %}</p>
+        </div>
+        <div class="spacer"></div>
+        <button class="cmd-trigger" id="cmdTrigger" type="button" aria-label="Search (Command K)">
+          <i class="fas fa-magnifying-glass"></i><span class="txt">Search schools, pages…</span><span class="kbd">⌘K</span>
+        </button>
+        {% block topbar_right %}
+        <div class="who"><span class="av">{{ (session.get('username') or 'A')[0]|upper }}</span> {{ session.get('username') or 'Admin' }}</div>
+        {% endblock %}
+      </div>
+      <div class="content">
+        {% with msgs = get_flashed_messages(with_categories=true) %}
+          {% for cat, msg in msgs %}<div class="flash {{ cat }}">{{ msg }}</div>{% endfor %}
+        {% endwith %}
+        {% block content %}{% endblock %}
+      </div>
+    </div>
+  </div>
+  <div class="cmd-scrim" id="cmdScrim" role="dialog" aria-modal="true" aria-label="Command palette">
+    <div class="cmd">
+      <div class="cmd-in"><i class="fas fa-magnifying-glass"></i>
+        <input id="cmdInput" type="text" placeholder="Search schools, pages and actions…" autocomplete="off" spellcheck="false">
+      </div>
+      <div class="cmd-list" id="cmdList"></div>
+      <div class="cmd-foot"><span><b>↑↓</b> navigate</span><span><b>↵</b> open</span><span><b>esc</b> close</span></div>
+    </div>
+  </div>
+
+  <script nonce="{{ csp_nonce }}">
+    (function(){
+      var b=document.getElementById('burger'), s=document.getElementById('scrim');
+      function close(){document.body.classList.remove('nav-open');}
+      if(b) b.addEventListener('click',function(){document.body.classList.toggle('nav-open');});
+      if(s) s.addEventListener('click',close);
+    })();
+
+    /* ---- command palette (⌘K) ---- */
+    (function(){
+      var scrim=document.getElementById('cmdScrim'), input=document.getElementById('cmdInput'),
+          list=document.getElementById('cmdList'), trigger=document.getElementById('cmdTrigger'),
+          searchUrl={{ url_for('platform.search') | tojson }}, RK='es-recent-tenants';
+      var items=[], sel=0, timer=null, seq=0;
+      function recents(){ try{return JSON.parse(localStorage.getItem(RK)||'[]');}catch(e){return [];} }
+      function pushRecent(it){
+        if(it.type!=='school') return;
+        var r=recents().filter(function(x){return x.href!==it.href;});
+        r.unshift({label:it.label,sub:it.sub,href:it.href,icon:it.icon});
+        localStorage.setItem(RK, JSON.stringify(r.slice(0,6)));
+      }
+      function esc(t){var d=document.createElement('div');d.textContent=t==null?'':t;return d.innerHTML;}
+      function render(groups){
+        items=[]; var html='';
+        groups.forEach(function(gp){
+          if(!gp.rows.length) return;
+          html+='<div class="cmd-sec">'+esc(gp.title)+'</div>';
+          gp.rows.forEach(function(it){
+            var i=items.length; items.push(it);
+            html+='<a class="cmd-item" data-i="'+i+'" href="'+esc(it.href)+'">'+
+              '<span class="ci"><i class="fas '+esc(it.icon||'fa-arrow-right')+'"></i></span>'+
+              '<span><span class="cl">'+esc(it.label)+'</span><br><span class="cs">'+esc(it.sub||'')+'</span></span></a>';
+          });
+        });
+        if(!items.length) html='<div class="cmd-empty">No matches. Try a school name or subdomain.</div>';
+        list.innerHTML=html; sel=0; paint();
+        [].forEach.call(list.querySelectorAll('.cmd-item'),function(el){
+          el.addEventListener('mouseenter',function(){sel=+el.dataset.i;paint();});
+          el.addEventListener('click',function(e){e.preventDefault();go(+el.dataset.i);});
+        });
+      }
+      function paint(){
+        [].forEach.call(list.querySelectorAll('.cmd-item'),function(el){
+          var on=(+el.dataset.i===sel); el.classList.toggle('sel',on);
+          if(on&&el.scrollIntoView) el.scrollIntoView({block:'nearest'});
+        });
+      }
+      function go(i){ var it=items[i]; if(!it) return; pushRecent(it); window.location=it.href; }
+      function fetchResults(q){
+        var mine=++seq;
+        fetch(searchUrl+'?q='+encodeURIComponent(q),{headers:{'Accept':'application/json'}})
+          .then(function(r){return r.json();})
+          .then(function(d){ if(mine!==seq) return;
+            var res=d.results||[], pages=res.filter(function(r){return r.type==='page';}),
+                schools=res.filter(function(r){return r.type==='school';});
+            render([{title:'Schools',rows:schools},{title:'Console',rows:pages}]);
+          }).catch(function(){});
+      }
+      function showRecents(){
+        var r=recents();
+        render([{title:'Recently viewed',rows:r},
+          {title:'Console',rows:[
+            {type:'page',label:'Overview',sub:'Console',icon:'fa-gauge-high',href:{{ url_for('platform.dashboard')|tojson }}},
+            {type:'page',label:'Schools',sub:'Console',icon:'fa-school',href:{{ url_for('platform.schools')|tojson }}}
+          ]}]);
+      }
+      function open(){ scrim.classList.add('open'); input.value=''; showRecents();
+        setTimeout(function(){input.focus();},20); }
+      function close(){ scrim.classList.remove('open'); }
+      if(trigger) trigger.addEventListener('click',open);
+      document.addEventListener('keydown',function(e){
+        if((e.metaKey||e.ctrlKey)&&(e.key==='k'||e.key==='K')){e.preventDefault();
+          scrim.classList.contains('open')?close():open(); return;}
+        if(!scrim.classList.contains('open')) return;
+        if(e.key==='Escape'){close();}
+        else if(e.key==='ArrowDown'){e.preventDefault();sel=Math.min(sel+1,items.length-1);paint();}
+        else if(e.key==='ArrowUp'){e.preventDefault();sel=Math.max(sel-1,0);paint();}
+        else if(e.key==='Enter'){e.preventDefault();go(sel);}
+      });
+      input.addEventListener('input',function(){
+        var q=input.value.trim(); clearTimeout(timer);
+        if(!q){ showRecents(); return; }
+        timer=setTimeout(function(){fetchResults(q);},160);
+      });
+      scrim.addEventListener('click',function(e){ if(e.target===scrim) close(); });
+    })();
+  </script>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

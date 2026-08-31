@@ -1,0 +1,22 @@
+# Reference systemd unit — the installer writes the real one to
+# /etc/systemd/system/edusyncra.service with your paths/user filled in.
+# Manual install:
+#   sudo cp deploy/edusyncra.service.example /etc/systemd/system/edusyncra.service
+#   sudo nano /etc/systemd/system/edusyncra.service     # set User + paths
+#   sudo systemctl daemon-reload && sudo systemctl enable --now edusyncra
+[Unit]
+Description=EduSyncra (multi-tenant school management)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=REPLACE_USER
+WorkingDirectory=REPLACE_ROOT
+ExecStart=REPLACE_ROOT/.venv/bin/python app_production.py
+Restart=always
+RestartSec=3
+# app_production.py reads .env itself; nothing else needed here
+
+[Install]
+WantedBy=multi-user.target

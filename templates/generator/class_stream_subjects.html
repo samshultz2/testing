@@ -20,6 +20,7 @@
     </div>
     <div class="card-body">
         <form method="POST" action="{{ url_for('generator.save_class_stream_subjects', class_id=class_config.id) }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="stream_id" value="{{ data.stream.id }}">
             
             <table class="data-table">
@@ -39,7 +40,7 @@
                             <input type="hidden" name="subject_ids[]" value="{{ subj.id }}">
                             <input type="checkbox" name="enabled_{{ subj.id }}" value="1"
                                    {% if subj.is_enabled %}checked{% endif %}
-                                   onchange="toggleRow({{ subj.id }}, this.checked, '{{ data.stream.id }}')">
+                                   data-call="toggleRow" data-args="{{ subj.id }}|this.checked|'{{ data.stream.id }}'" data-on="change">
                         </td>
                         <td>{{ subj.name }}</td>
                         <td>
@@ -49,7 +50,7 @@
                                    min="1" max="10" style="width: 70px;"
                                    value="{{ subj.periods }}"
                                    {% if not subj.is_enabled %}disabled{% endif %}
-                                   onchange="updateTotal('{{ data.stream.id }}')">
+                                   data-call="updateTotal" data-args="'{{ data.stream.id }}'" data-on="change">
                         </td>
                         <td style="text-align: center;">
                             <input type="checkbox" name="double_{{ subj.id }}" value="1"
@@ -86,7 +87,7 @@
 </div>
 {% endfor %}
 
-<script>
+<script nonce="{{ csp_nonce }}">
 function toggleRow(subjectId, enabled, streamId) {
     document.getElementById('periods_' + streamId + '_' + subjectId).disabled = !enabled;
     document.getElementById('double_' + streamId + '_' + subjectId).disabled = !enabled;

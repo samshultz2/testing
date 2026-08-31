@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}Accounting · {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ nav.dashboard }}">Finance</a> <span>/ Accounting</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+  .ac-wrap{max-width:1100px}
+  .ac-filters{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:16px;
+              padding:14px;background:var(--surface-2,#f4f6f9);border:1px solid var(--border,#e5e7eb);border-radius:12px}
+  .ac-filters .fg{display:flex;flex-direction:column;gap:3px}
+  .ac-filters label{font-size:11.5px;font-weight:600;color:var(--text-secondary,#667)}
+  .ac-filters select,.ac-filters input{padding:7px 9px;border:1px solid var(--border,#d7dde5);border-radius:8px;font-size:13px;background:var(--surface,#fff);color:inherit}
+  .ac-actions{margin-left:auto;display:flex;gap:8px;align-items:flex-end}
+  .ac-note{font-size:12.5px;color:var(--text-secondary,#778);margin:-6px 0 16px}
+  .stmts{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  @media(max-width:820px){.stmts{grid-template-columns:1fr}}
+  .stmt{background:var(--surface,#fff);border:1px solid var(--border,#e5e7eb);border-radius:12px;margin-bottom:16px}
+  .stmt h3{margin:0;padding:12px 16px;font-size:14px;border-bottom:1px solid var(--border,#eef1f5);display:flex;align-items:center;gap:8px}
+  .stmt .bd{padding:6px 16px 14px}
+  table.acct{width:100%;border-collapse:collapse;font-size:13px}
+  table.acct td,table.acct th{padding:7px 6px;border-bottom:1px solid var(--border,#f0f2f6);text-align:left}
+  table.acct th{font-size:11px;text-transform:uppercase;color:var(--text-secondary,#889);letter-spacing:.04em}
+  table.acct td.num,table.acct th.num{text-align:right;font-variant-numeric:tabular-nums}
+  table.acct tr.total td{font-weight:800;border-top:2px solid var(--border,#d7dde5);border-bottom:none}
+  .bal{font-size:12px;font-weight:700;padding:3px 10px;border-radius:99px;margin-left:auto}
+  .bal.ok{background:#d1e7dd;color:#14603f}.bal.bad{background:#fde2e4;color:#b0263a}
+  .net{font-weight:800}.net.pos{color:#14603f}.net.neg{color:#b0263a}
+  .sub{font-size:11.5px;color:var(--text-secondary,#889)}
+  .coa td .t{font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:99px;background:var(--surface-2,#eef1f5);color:#556}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="ac-wrap">
+  {% set fin_active = 'accounting' %}{% include 'finance/_header.html' %}
+  <div class="page-header"><h1>Accounting</h1>
+    <div class="page-header-actions">
+      <a href="{{ export_url }}?{{ request.query_string.decode() }}" class="btn btn-secondary" data-native><i aria-hidden="true" class="fas fa-file-excel"></i> Export statements</a>
+    </div>
+  </div>
+  <p class="ac-note"><i aria-hidden="true" class="fas fa-circle-info"></i> These statements are generated automatically from every recorded payment, sale and expense — no manual bookkeeping. Cash-basis.</p>
+
+  <form method="get" action="{{ url_for('finance.accounting') }}" class="ac-filters">
+    {% if is_central and opts.branches %}
+    <div class="fg"><label>Branch(es)</label>
+      <select name="branch" multiple size="1" style="min-width:150px">
+        {% for b in opts.branches %}<option value="{{ b.id }}" {{ 'selected' if b.id in selected_branches }}>{{ b.name }}</option>{% endfor %}
+      </select></div>
+    {% endif %}
+    <div class="fg"><label>Session</label><select name="session_id"><option value="">All</option>{% for s in opts.sessions %}<option value="{{ s.id }}" {{ 'selected' if sel.get('session_id')|string == s.id|string }}>{{ s.name }}</option>{% endfor %}</select></div>
+    <div class="fg"><label>Term</label><select name="term_id"><option value="">All</option>{% for t in opts.terms %}<option value="{{ t.id }}" {{ 'selected' if sel.get('term_id')|string == t.id|string }}>{{ t.name }}</option>{% endfor %}</select></div>
+    <div class="fg"><label>From</label><input type="date" name="from" value="{{ sel.get('from','') }}"></div>
+    <div class="fg"><label>To</label><input type="date" name="to" value="{{ sel.get('to','') }}"></div>
+    {% set views_key = 'accounting' %}{% set views_base = url_for('finance.accounting') %}
+    {% include 'finance/_saved_filters.html' %}
+    <div class="ac-actions">
+      <button type="submit" class="btn btn-primary btn-sm"><i aria-hidden="true" class="fas fa-filter"></i> Apply</button>
+      <a href="{{ url_for('finance.accounting') }}" class="btn btn-link btn-sm">Reset</a>
+    </div>
+  </form>
+
+  <div class="stmts">
+    <div class="stmt"><h3>Income Statement (P&amp;L)</h3><div class="bd">
+      <table class="acct">
+        <tr><th colspan="2">Income</th></tr>
+        {% for r in s.income_statement.income %}<tr><td>{{ r.name }}</td><td class="num">₦{{ '{:,.0f}'.format(r.amount) }}</td></tr>{% else %}<tr><td class="sub">No income</td><td></td></tr>{% endfor %}
+        <tr class="total"><td>Total Income</td><td class="num">₦{{ '{:,.0f}'.format(s.income_statement.total_income) }}</td></tr>
+        {% if s.income_statement.cogs %}
+        <tr><td>Cost of Goods Sold</td><td class="num">₦{{ '{:,.0f}'.format(s.income_statement.cogs) }}</td></tr>
+        <tr class="total"><td>Gross Profit</td>
+          <td class="num net {{ 'pos' if s.income_statement.gross_profit >= 0 else 'neg' }}">₦{{ '{:,.0f}'.format(s.income_statement.gross_profit) }}</td></tr>
+        {% endif %}
+        <tr><th colspan="2" style="padding-top:12px">{{ 'Operating Expenses' if s.income_statement.cogs else 'Expenses' }}</th></tr>
+        {% for r in (s.income_statement.operating_expense if s.income_statement.cogs else s.income_statement.expense) %}<tr><td>{{ r.name }}</td><td class="num">₦{{ '{:,.0f}'.format(r.amount) }}</td></tr>{% else %}<tr><td class="sub">No expenses</td><td></td></tr>{% endfor %}
+        <tr class="total"><td>Total Expenses</td><td class="num">₦{{ '{:,.0f}'.format(s.income_statement.total_expense) }}</td></tr>
+        <tr class="total"><td>Net {{ 'Surplus' if s.income_statement.net >= 0 else 'Deficit' }}</td>
+          <td class="num net {{ 'pos' if s.income_statement.net >= 0 else 'neg' }}">₦{{ '{:,.0f}'.format(s.income_statement.net) }}</td></tr>
+      </table>
+    </div></div>
+
+    <div class="stmt"><h3>Balance Sheet
+      <span class="bal {{ 'ok' if s.balance_sheet.balanced else 'bad' }}">{{ 'Balanced' if s.balance_sheet.balanced else 'Check' }}</span></h3><div class="bd">
+      <table class="acct">
+        <tr><th colspan="2">Assets</th></tr>
+        {% for r in s.balance_sheet.assets %}<tr><td>{{ r.name }}</td><td class="num">₦{{ '{:,.0f}'.format(r.amount) }}</td></tr>{% else %}<tr><td class="sub">No cash/bank yet</td><td></td></tr>{% endfor %}
+        <tr class="total"><td>Total Assets</td><td class="num">₦{{ '{:,.0f}'.format(s.balance_sheet.total_assets) }}</td></tr>
+        <tr><th colspan="2" style="padding-top:12px">Equity</th></tr>
+        {% for r in s.balance_sheet.equity %}<tr><td>{{ r.name }}</td><td class="num">₦{{ '{:,.0f}'.format(r.amount) }}</td></tr>{% endfor %}
+        <tr class="total"><td>Total Equity</td><td class="num">₦{{ '{:,.0f}'.format(s.balance_sheet.total_equity) }}</td></tr>
+      </table>
+    </div></div>
+  </div>
+
+  <div class="stmts">
+    <div class="stmt"><h3>Trial Balance
+      <span class="bal {{ 'ok' if s.trial_balance.balanced else 'bad' }}">{{ 'Balanced' if s.trial_balance.balanced else 'Check' }}</span></h3><div class="bd">
+      <table class="acct">
+        <thead><tr><th>Code</th><th>Account</th><th class="num">Debit</th><th class="num">Credit</th></tr></thead>
+        <tbody>
+          {% for a in s.trial_balance.accounts %}<tr><td class="sub">{{ a.code }}</td><td>{{ a.name }}</td>
+            <td class="num">{{ '₦{:,.0f}'.format(a.debit) if a.debit else '' }}</td>
+            <td class="num">{{ '₦{:,.0f}'.format(a.credit) if a.credit else '' }}</td></tr>
+          {% else %}<tr><td colspan="4" class="sub">No entries for this period.</td></tr>{% endfor %}
+          <tr class="total"><td></td><td>TOTAL</td><td class="num">₦{{ '{:,.0f}'.format(s.trial_balance.total_debit) }}</td><td class="num">₦{{ '{:,.0f}'.format(s.trial_balance.total_credit) }}</td></tr>
+        </tbody>
+      </table>
+    </div></div>
+
+    <div class="stmt"><h3>Cash Flow</h3><div class="bd">
+      <table class="acct">
+        <tr><th colspan="2">Cash in</th></tr>
+        {% for r in s.cash_flow.inflows %}<tr><td>{{ r.name }}</td><td class="num">₦{{ '{:,.0f}'.format(r.amount) }}</td></tr>{% else %}<tr><td class="sub">—</td><td></td></tr>{% endfor %}
+        <tr class="total"><td>Total in</td><td class="num">₦{{ '{:,.0f}'.format(s.cash_flow.total_in) }}</td></tr>
+        <tr><th colspan="2" style="padding-top:12px">Cash out</th></tr>
+        {% for r in s.cash_flow.outflows %}<tr><td>{{ r.name }}</td><td class="num">₦{{ '{:,.0f}'.format(r.amount) }}</td></tr>{% else %}<tr><td class="sub">—</td><td></td></tr>{% endfor %}
+        <tr class="total"><td>Total out</td><td class="num">₦{{ '{:,.0f}'.format(s.cash_flow.total_out) }}</td></tr>
+        <tr class="total"><td>Net cash movement</td><td class="num net {{ 'pos' if s.cash_flow.net_change >= 0 else 'neg' }}">₦{{ '{:,.0f}'.format(s.cash_flow.net_change) }}</td></tr>
+      </table>
+    </div></div>
+  </div>
+
+  <div class="stmt"><h3>Chart of Accounts</h3><div class="bd">
+    <table class="acct coa">
+      <thead><tr><th>Code</th><th>Account</th><th>Type</th></tr></thead>
+      <tbody>{% for a in s.chart_of_accounts %}<tr><td class="sub">{{ a.code }}</td><td>{{ a.name }}</td><td><span class="t">{{ a.type }}</span></td></tr>{% endfor %}</tbody>
+    </table>
+  </div></div>
+</div>
+{% endblock %}

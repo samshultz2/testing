@@ -1,0 +1,28 @@
+{% extends "website/public_base.html" %}
+{% block body %}
+<nav class="wb-nav">
+  <div class="wb-nav-inner">
+    <a class="wb-brand" href="{{ url_for('website.home') }}">{% if branding.logo_url %}<img src="{{ branding.logo_url }}" alt="{{ branding.name }} logo">{% endif %}{{ branding.name }}</a>
+    <button type="button" class="wb-nav-burger" aria-label="Toggle menu" aria-expanded="false" data-wb-nav-toggle><i class="fas fa-bars"></i></button>
+    <div class="wb-nav-links">
+      {% for link in nav %}<a href="{{ link.href }}">{{ link.label }}</a>{% endfor %}
+    </div>
+  </div>
+</nav>
+<main>
+  <article class="wb-article wb-wrap">
+    {% if post.category %}<div class="wb-eyebrow">{{ post.category }}</div>{% endif %}
+    <h1>{{ post.title }}</h1>
+    <div class="wb-article-meta">{% if post.published_at %}{{ post.published_at.strftime('%d %B %Y') }}{% endif %}{% if post.author %} · {{ post.author }}{% endif %}</div>
+    {% if post.cover_image %}<img class="wb-article-cover" src="{{ post.cover_image }}" alt="">{% endif %}
+    {% for para in post.paragraphs %}<p>{{ para }}</p>{% endfor %}
+    <p style="margin-top:2rem"><a href="{{ url_for('website.home') }}" class="wb-btn wb-btn-outline">← Back to home</a></p>
+  </article>
+</main>
+<footer class="wb-footer">
+  <div class="wb-wrap"><div class="wb-foot-bottom">
+    <span>© {{ now_year }} {{ branding.name }}. All rights reserved.</span>
+    <span>{% for link in nav %}<a href="{{ link.href }}">{{ link.label }}</a>{% if not loop.last %} · {% endif %}{% endfor %}</span>
+  </div></div>
+</footer>
+{% endblock %}

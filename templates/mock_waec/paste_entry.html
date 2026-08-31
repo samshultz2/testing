@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}Paste Mock WAEC Results - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('mock_waec.index') }}">Mock WAEC</a> / <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}">{{ exam.display_name }}</a> / <span>Paste import</span>{% endblock %}
+
+{% block content %}
+<div class="page-header"><div><h1>Paste import &mdash; {{ exam.display_name }}</h1></div></div>
+
+<div class="card mb-3">
+    <div class="card-header"><h3>Step 1: Turn a score sheet into rows with an AI</h3></div>
+    <div class="card-body">
+        <p class="text-muted text-sm">Take a photo of the marked score sheet (or recording sheet), upload it to any chatbot (Claude, Gemini, ChatGPT…) with this prompt, then paste its answer into Step&nbsp;2. No OCR, no API key.</p>
+        <pre id="ai-prompt" style="white-space:pre-wrap;background:var(--bg-muted,var(--gray-50));border:1px solid var(--border-color);border-radius:8px;padding:.75rem;font-size:.85rem;">Read this Mock WAEC score sheet. Output one line per student-and-subject that has a score, as comma-separated values in EXACTLY this order:
+
+student, subject, score
+
+- "student" is the admission number if shown, otherwise the student's full name.
+- "subject" is the subject name exactly as written.
+- "score" is the number out of 100.
+- One line per subject per student. Skip blank/un-scored cells.
+- Output only the rows. No headings, no totals, no extra text, no code block.
+
+Example:
+STU001, Mathematics, 72
+STU001, English Language, 65</pre>
+        <button type="button" class="btn btn-secondary btn-sm mt-2" data-copy="ai-prompt"><i class="fas fa-copy"></i> Copy prompt</button>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header"><h3>Step 2: Paste the rows</h3></div>
+    <div class="card-body">
+    <div class="entry-hint" style="background:var(--primary-light);color:var(--primary);border-radius:8px;padding:.75rem 1rem;font-size:.85rem;margin-bottom:1rem;">
+        <i class="fas fa-circle-info"></i>
+        Paste <strong>one result per line</strong>: <code>student, subject, score</code> &mdash; optionally a 4th <code>grade</code> column.
+        <em>student</em> is an admission number or name (middle names optional/shortened), <em>subject</em> may be an abbreviation (Eng, Maths, CRS…), and <em>grade</em> is auto-calculated from the score when omitted. Check the preview &mdash; admission numbers are the most reliable when names clash.
+        <div class="text-sm mt-1" style="opacity:.85;">Example: <code>STU001, Maths, 72</code> &nbsp;or&nbsp; <code>Jane Doe, Eng, 64</code></div>
+    </div>
+
+    <form method="POST">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <textarea name="data" class="form-control" rows="10" style="font-family:monospace;" placeholder="STU001, Mathematics, 72&#10;STU001, English Language, 65&#10;Jane Doe, Biology, 58">{{ text }}</textarea>
+        <div class="d-flex gap-2 mt-2">
+            <button type="submit" name="action" value="preview" class="btn btn-primary"><i class="fas fa-eye"></i> Preview</button>
+            <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}" class="btn btn-secondary">Cancel</a>
+        </div>
+    </form>
+</div></div>
+
+{% if preview %}
+<div class="card">
+    <div class="card-header d-flex justify-between align-center">
+        <h3>Preview</h3>
+        <div class="text-sm">
+            <span class="badge badge-success">{{ preview.ok }} ready</span>
+            {% if preview.errors %}<span class="badge badge-danger">{{ preview.errors }} error(s)</span>{% endif %}
+        </div>
+    </div>
+    <div class="table-responsive"><table class="data-table">
+        <thead><tr><th>#</th><th>Student</th><th>Subject</th><th>Score</th><th>Grade</th><th>Status</th></tr></thead>
+        <tbody>
+            {% for r in preview.rows %}
+            <tr class="{{ 'row-error' if r.status == 'error' else '' }}" style="{{ 'opacity:.6;' if r.status == 'error' else '' }}">
+                <td>{{ r.lineno }}</td>
+                <td>{% if r.student %}<strong>{{ r.student_name }}</strong>{% else %}<span class="text-danger">{{ r.student_name }}</span>{% endif %}</td>
+                <td>{{ r.subject or '—' }}</td>
+                <td>{{ r.score if r.score is not none else '—' }}</td>
+                <td>{% if r.grade %}<strong>{{ r.grade }}</strong>{% else %}—{% endif %}</td>
+                <td>
+                    {% if r.status == 'ok' %}<span class="badge badge-success">ready</span>
+                    {% elif r.status == 'warning' %}<span class="badge badge-warning" title="{{ r.message }}">{{ r.message }}</span>
+                    {% else %}<span class="badge badge-danger" title="{{ r.message }}">{{ r.message }}</span>{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table></div>
+    <div class="card-body">
+        {% if preview.ok %}
+        <form method="POST" data-confirm="Import {{ preview.ok }} result(s)? Existing scores for the same student & subject will be overwritten.">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <textarea name="data" style="display:none;">{{ text }}</textarea>
+            <button type="submit" name="action" value="confirm" class="btn btn-success"><i class="fas fa-check"></i> Confirm &amp; import {{ preview.ok }} result(s)</button>
+        </form>
+        {% else %}
+        <p class="text-muted mb-0">Nothing to import &mdash; fix the errors above and preview again.</p>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}

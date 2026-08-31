@@ -1,0 +1,30 @@
+# Automated dependency-update PRs so known CVEs surface without a manual audit.
+# Grouped weekly to keep noise low. After a Python bump merges, remember to
+# regenerate requirements.lock (see the header in requirements.txt).
+version: 2
+updates:
+  # Direct Python dependencies (requirements.txt).
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      python-deps:
+        patterns: ["*"]
+
+  # React build toolchain (frontend/package.json + package-lock.json).
+  - package-ecosystem: npm
+    directory: "/frontend"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      frontend-deps:
+        patterns: ["*"]
+
+  # The GitHub Actions themselves (keeps the SHA pins in ci.yml current).
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly

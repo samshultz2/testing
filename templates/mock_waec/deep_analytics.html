@@ -1,0 +1,245 @@
+{% extends "base.html" %}
+{% block title %}Deep Analytics — {{ exam.display_name }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('mock_waec.index') }}">Mock WAEC</a> / <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}">{{ exam.display_name }}</a> / <span>Deep Analytics</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.da-kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem;margin-bottom:1.1rem}
+@media(min-width:900px){.da-kpis{grid-template-columns:repeat(5,1fr)}}
+.da-kpi{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);padding:.9rem 1rem}
+.da-kpi .v{font-size:1.5rem;font-weight:800;line-height:1;font-family:var(--font-display)}
+.da-kpi .l{font-size:.72rem;color:var(--text-secondary);margin-top:.35rem;font-weight:700;text-transform:uppercase;letter-spacing:.03em}
+.da-kpi .s{font-size:.7rem;color:var(--text-muted);margin-top:.15rem}
+.da-kpi.blue{border-top:3px solid #2563eb}.da-kpi.teal{border-top:3px solid #0d9488}
+.da-kpi.green{border-top:3px solid #047857}.da-kpi.amber{border-top:3px solid #b45309}
+.da-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:1rem;margin-bottom:1rem}
+.da-note{font-size:.78rem;color:var(--text-muted);margin-top:.6rem;line-height:1.45;border-left:3px solid var(--border-color);padding-left:.6rem}
+.chart-wrap{position:relative;height:230px}
+.band-critical{color:#dc2626;font-weight:700}.band-weak{color:#b45309;font-weight:700}
+.band-fair{color:#0d9488;font-weight:700}.band-strong{color:#047857;font-weight:700}
+.flag-badge{display:inline-block;font-size:.68rem;font-weight:700;padding:.15rem .5rem;border-radius:var(--radius-full);white-space:nowrap}
+.flag-strong{background:rgba(4,120,87,.14);color:#047857}.flag-solid{background:rgba(13,148,136,.14);color:#0d9488}
+.flag-watch{background:rgba(180,83,9,.14);color:#b45309}.flag-support{background:rgba(220,38,38,.14);color:#dc2626}
+.flag-insufficient,.flag-unassigned{background:rgba(107,122,116,.16);color:var(--text-secondary)}
+.reco-cols{display:grid;grid-template-columns:1fr;gap:1rem}
+@media(min-width:900px){.reco-cols{grid-template-columns:repeat(3,1fr)}}
+.reco-card{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);padding:1rem}
+.reco-card h4{margin:0 0 .6rem;font-size:.95rem;display:flex;align-items:center;gap:.4rem}
+.reco-item{border-left:3px solid var(--border-color);padding:.35rem 0 .55rem .65rem;margin-bottom:.55rem}
+.reco-item .t{font-weight:700;font-size:.82rem}
+.reco-item .x{font-size:.78rem;color:var(--text-secondary);line-height:1.45}
+.reco-positive{border-left-color:#047857}.reco-negative{border-left-color:#dc2626}
+.reco-warning{border-left-color:#b45309}.reco-insight{border-left-color:#2563eb}
+.seg-list{max-height:340px;overflow:auto}
+.seg-row{display:flex;justify-content:space-between;gap:.6rem;padding:.4rem 0;border-bottom:1px solid var(--border-color)}
+.seg-row .nm{font-weight:600;font-size:.84rem}
+.seg-row .nt{font-size:.74rem;color:var(--text-muted)}
+.seg-row .mt{font-weight:700;white-space:nowrap;font-size:.8rem}
+.subj-reco{font-size:.75rem;color:var(--text-muted);line-height:1.4}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Deep Analytics — {{ exam.display_name }}</h1>
+        <p class="text-muted text-sm">{{ exam.name }} &middot; {{ exam.exam_date.strftime('%d %B %Y') if exam.exam_date else '' }} &middot; per subject · per teacher · per class arm</p>
+    </div>
+    <div class="page-header-actions">
+        <a href="{{ url_for('mock_waec.deep_export', exam_id=exam.id, format='pdf') }}" class="btn btn-danger btn-sm"><i class="fas fa-file-pdf"></i> PDF</a>
+        <a href="{{ url_for('mock_waec.deep_export', exam_id=exam.id, format='excel') }}" class="btn btn-success btn-sm"><i class="fas fa-file-excel"></i> Excel</a>
+        <a href="{{ url_for('mock_waec.deep_export', exam_id=exam.id, format='image') }}" class="btn btn-info btn-sm"><i class="fas fa-image"></i> HD image</a>
+        <a href="{{ url_for('mock_waec.trends', session_id=exam.session_id) }}" class="btn btn-primary btn-sm"><i class="fas fa-chart-line"></i> Progress trends</a>
+        <a href="{{ url_for('mock_waec.analytics', exam_id=exam.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-chart-column"></i> Analytics</a>
+        <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>
+    </div>
+</div>
+
+{% if not d or d.meta.empty %}
+<div class="card"><div class="card-body"><div class="empty-state">
+    <i class="fas fa-brain"></i><h3>No results yet</h3>
+    <p>Enter scores to unlock per-subject, per-teacher and per-arm deep analytics.</p>
+    <a href="{{ url_for('mock_waec.grid_entry', exam_id=exam.id) }}" class="btn btn-primary"><i class="fas fa-table-cells"></i> Grid entry</a>
+</div></div></div>
+{% else %}
+
+<div class="da-kpis">
+    {% for k in d.kpis %}
+    <div class="da-kpi {{ k.tone }}"><div class="v">{{ k.value }}</div><div class="l">{{ k.label }}</div><div class="s">{{ k.sub }}</div></div>
+    {% endfor %}
+</div>
+
+<div class="da-grid">
+    <div class="card"><div class="card-header"><h3>Grade distribution</h3></div>
+        <div class="card-body"><div class="chart-wrap"><canvas id="gradeChart"></canvas></div>
+        <div class="da-note">Where the cohort sits on the A1–F9 scale. A right-heavy shape (D7–F9) flags subjects and teaching that need urgent attention.</div></div>
+    </div>
+    <div class="card"><div class="card-header"><h3>Subject credit rate</h3></div>
+        <div class="card-body"><div class="chart-wrap"><canvas id="subjChart"></canvas></div>
+        <div class="da-note">Percentage of candidates earning a credit (C6+) in each subject, weakest first — your intervention priority list.</div></div>
+    </div>
+    <div class="card"><div class="card-header"><h3>Class-arm comparison</h3></div>
+        <div class="card-body"><div class="chart-wrap"><canvas id="armChart"></canvas></div>
+        <div class="da-note">Average credits per candidate by arm. A wide gap means strong teaching or streaming is unevenly spread — level it up.</div></div>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header"><h3>Subject league <span class="text-muted text-sm">— weakest first, with what to do</span></h3></div>
+    <div class="table-responsive"><table class="data-table">
+        <thead><tr><th>Subject</th><th>N</th><th>Mean</th><th>SD</th><th>Credit %</th><th>Distinction %</th><th>Verdict</th><th>Recommended action</th></tr></thead>
+        <tbody>
+            {% for s in d.subjects %}
+            <tr>
+                <td><strong>{{ s.subject }}</strong></td>
+                <td>{{ s.n }}</td>
+                <td>{{ s.mean if s.mean is not none else '—' }}</td>
+                <td>{{ s.sd }}</td>
+                <td class="band-{{ s.band }}">{{ s.pass_rate if s.pass_rate is not none else '—' }}%</td>
+                <td>{{ s.distinction_rate if s.distinction_rate is not none else '—' }}%</td>
+                <td><span class="band-{{ s.band }}">{{ s.band_label }}</span></td>
+                <td class="subj-reco">{{ s.recommendation }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table></div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header"><h3>Teacher effectiveness <span class="text-muted text-sm">— evidence-based, one mock (read as a trend, not a verdict)</span></h3></div>
+    <div class="table-responsive"><table class="data-table">
+        <thead><tr><th>Teacher</th><th>Subjects</th><th>Students</th><th>Mean</th><th>Credit %</th><th>Δ vs cohort</th><th>Verdict &amp; action</th><th></th></tr></thead>
+        <tbody>
+            {% for t in d.teachers %}
+            <tr>
+                <td><strong>{{ t.teacher }}</strong></td>
+                <td class="text-sm">{{ t.subjects|join(', ') }}</td>
+                <td>{{ t.students }}</td>
+                <td>{{ t.mean if t.mean is not none else '—' }}</td>
+                <td>{{ t.pass_rate if t.pass_rate is not none else '—' }}%</td>
+                <td>{% if t.delta is not none %}<span class="{{ 'band-strong' if t.delta >= 0 else 'band-critical' }}">{{ '%+g'|format(t.delta) }}</span>{% else %}—{% endif %}</td>
+                <td><span class="flag-badge flag-{{ t.flag }}">{{ t.verdict }}</span><div class="subj-reco" style="margin-top:.3rem;">{{ t.recommendation }}</div></td>
+                <td style="white-space:nowrap;">
+                    {% if t.staff_id %}
+                    <a href="{{ compose_base }}?to=staff&staff_ids={{ t.staff_id }}" class="btn btn-sm btn-outline" title="Message this teacher"><i class="fas fa-paper-plane"></i></a>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table></div>
+    <div class="card-body" style="padding-top:0;"><div class="da-note">Subject results are attributed to the SSS3 subject teacher for each candidate's arm. Verdicts weigh mean, credit rate, spread <em>and</em> sample size. No HR decision should rest on a single mock — confirm across sittings and against intake ability.</div></div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header"><h3>Class-arm league <span class="text-muted text-sm">— best first</span></h3></div>
+    <div class="table-responsive"><table class="data-table">
+        <thead><tr><th>#</th><th>Class arm</th><th>Students</th><th>Avg credits</th><th>Subject credit rate</th></tr></thead>
+        <tbody>
+            {% for a in d.arms %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td><strong>{{ a.arm }}</strong></td>
+                <td>{{ a.students }}</td>
+                <td>{{ a.avg_credits if a.avg_credits is not none else '—' }}</td>
+                <td>{{ a.pass_rate if a.pass_rate is not none else '—' }}%</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table></div>
+</div>
+
+<div class="da-grid">
+    <div class="card"><div class="card-header"><h3 class="band-critical">Critical — urgent intervention</h3></div>
+        <div class="card-body seg-list">
+            {% for x in d.segments.critical %}
+            <div class="seg-row"><div><div class="nm">{{ x.name }}</div><div class="nt">{{ x.note }}</div></div><div class="mt band-critical">{{ x.metric }}</div></div>
+            {% else %}<p class="text-muted text-sm">None — no candidate is in the danger zone.</p>{% endfor %}
+        </div>
+    </div>
+    <div class="card"><div class="card-header"><h3 class="band-weak">At risk — near the threshold</h3></div>
+        <div class="card-body seg-list">
+            {% for x in d.segments.at_risk %}
+            <div class="seg-row"><div><div class="nm">{{ x.name }}</div><div class="nt">{{ x.note }}</div></div><div class="mt band-weak">{{ x.metric }}</div></div>
+            {% else %}<p class="text-muted text-sm">None near the borderline.</p>{% endfor %}
+        </div>
+    </div>
+    <div class="card"><div class="card-header"><h3 class="band-strong">Honour roll — stretch these</h3></div>
+        <div class="card-body seg-list">
+            {% for x in d.segments.honour %}
+            <div class="seg-row"><div><div class="nm">{{ x.name }}</div><div class="nt">{{ x.note }}</div></div><div class="mt band-strong">{{ x.metric }}</div></div>
+            {% else %}<p class="text-muted text-sm">No candidate at the honour threshold yet.</p>{% endfor %}
+        </div>
+    </div>
+</div>
+
+<h3 style="margin:1.2rem 0 .6rem;">Recommendations</h3>
+<div class="reco-cols">
+    <div class="reco-card"><h4><i class="fas fa-user-graduate" style="color:#2563eb;"></i> Students</h4>
+        {% for r in d.recommendations.students %}
+        <div class="reco-item reco-{{ r.tone }}"><div class="t">{{ r.title }}</div><div class="x">{{ r.text }}</div></div>
+        {% else %}<p class="text-muted text-sm">No student actions flagged.</p>{% endfor %}
+    </div>
+    <div class="reco-card"><h4><i class="fas fa-chalkboard-teacher" style="color:#0d9488;"></i> Teachers</h4>
+        {% for r in d.recommendations.teachers %}
+        <div class="reco-item reco-{{ r.tone }}"><div class="t">{{ r.title }}</div><div class="x">{{ r.text }}</div></div>
+        {% else %}<p class="text-muted text-sm">No teacher actions flagged.</p>{% endfor %}
+    </div>
+    <div class="reco-card"><h4><i class="fas fa-briefcase" style="color:#b45309;"></i> Management</h4>
+        {% for r in d.recommendations.management %}
+        <div class="reco-item reco-{{ r.tone }}"><div class="t">{{ r.title }}</div><div class="x">{{ r.text }}</div></div>
+        {% else %}<p class="text-muted text-sm">No management actions flagged.</p>{% endfor %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if d and not d.meta.empty %}
+<script nonce="{{ csp_nonce }}" id="da-data" type="application/json">{{ {'distribution': d.distribution, 'subjects': d.subjects, 'arms': d.arms}|tojson }}</script>
+<script nonce="{{ csp_nonce }}">
+(function(){
+    function draw(){
+        if(!window.Chart){return;}
+        var dataEl=document.getElementById('da-data');
+        if(!dataEl){return;}   // node absent after an SPA swap to another page
+        var payload=JSON.parse(dataEl.textContent);
+        var cs=getComputedStyle(document.documentElement);
+        var grid=cs.getPropertyValue('--border-color')||'rgba(140,140,140,.2)';
+        try{Chart.defaults.color=cs.getPropertyValue('--text-secondary')||'#667';}catch(e){}
+        var noLeg={legend:{display:false}};
+
+        var gd=payload.distribution||[];
+        var gColors={A1:'#047857',B2:'#0d9488',B3:'#0d9488',C4:'#2563eb',C5:'#2563eb',C6:'#2563eb',D7:'#b45309',E8:'#c2410c',F9:'#dc2626'};
+        var gEl=document.getElementById('gradeChart');
+        if(gEl){new Chart(gEl,{type:'bar',
+            data:{labels:gd.map(function(x){return x.grade;}),
+                datasets:[{data:gd.map(function(x){return x.count;}),
+                    backgroundColor:gd.map(function(x){return gColors[x.grade]||'#64748b';}),borderRadius:4}]},
+            options:{responsive:true,maintainAspectRatio:false,plugins:noLeg,
+                scales:{y:{beginAtZero:true,grid:{color:grid}},x:{grid:{display:false}}}}});}
+
+        var subj=payload.subjects||[];
+        var sColor=function(b){return b==='critical'?'#dc2626':b==='weak'?'#b45309':b==='fair'?'#0d9488':'#047857';};
+        var sEl=document.getElementById('subjChart');
+        if(sEl){new Chart(sEl,{type:'bar',
+            data:{labels:subj.map(function(x){return x.subject;}),
+                datasets:[{data:subj.map(function(x){return x.pass_rate;}),
+                    backgroundColor:subj.map(function(x){return sColor(x.band);}),borderRadius:4}]},
+            options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:noLeg,
+                scales:{x:{beginAtZero:true,max:100,grid:{color:grid}},y:{grid:{display:false}}}}});}
+
+        var arms=payload.arms||[];
+        var aEl=document.getElementById('armChart');
+        if(aEl){new Chart(aEl,{type:'bar',
+            data:{labels:arms.map(function(x){return x.arm;}),
+                datasets:[{label:'Avg credits',data:arms.map(function(x){return x.avg_credits;}),
+                    backgroundColor:'#2563eb',borderRadius:4}]},
+            options:{responsive:true,maintainAspectRatio:false,plugins:noLeg,
+                scales:{y:{beginAtZero:true,grid:{color:grid}},x:{grid:{display:false}}}}});}
+    }
+    if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',draw);}else{draw();}
+})();
+</script>
+{% endif %}
+{% endblock %}

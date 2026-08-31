@@ -50,9 +50,14 @@
         <h1>{{ level_name }}</h1>
         <p>Configure teachers, subjects, classes and generate timetables</p>
     </div>
-    <a href="{{ url_for('generator.level_dashboard', level='sss' if level == 'jss' else 'jss') }}" class="level-switch">
-        <i class="fas fa-exchange-alt"></i> Switch to {{ 'SSS' if level == 'jss' else 'JSS' }}
-    </a>
+    <div style="margin-left:auto;display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;">
+        <a href="{{ url_for('generator.setup_guide') }}" class="level-switch" title="Step-by-step checklist">
+            <i class="fas fa-list-check"></i> Setup guide
+        </a>
+        <a href="{{ url_for('generator.level_dashboard', level='sss' if level == 'jss' else 'jss') }}" class="level-switch">
+            <i class="fas fa-exchange-alt"></i> Switch to {{ 'SSS' if level == 'jss' else 'JSS' }}
+        </a>
+    </div>
 </div>
 
 <!-- Configuration Cards -->
@@ -94,9 +99,9 @@
     </div>
 </div>
 
-{% if level == 'sss' %}
-<!-- SSS-specific: Streams -->
-<div class="config-grid" style="grid-template-columns:repeat(2,1fr);max-width:500px;margin:0 auto 1.5rem">
+<!-- Rules, rooms (+ streams for SSS) -->
+<div class="config-grid" style="grid-template-columns:repeat({{ 3 if level == 'sss' else 2 }},1fr);max-width:{{ 760 if level == 'sss' else 500 }}px;margin:0 auto 1.5rem">
+    {% if level == 'sss' %}
     <div class="config-card">
         <a href="{{ url_for('generator.streams_list') }}">
             <div class="config-icon streams"><i class="fas fa-layer-group"></i></div>
@@ -105,29 +110,24 @@
             <div class="config-link">Science/Arts/Commercial →</div>
         </a>
     </div>
-    
+    {% endif %}
     <div class="config-card">
         <a href="{{ url_for('generator.rules_config') }}">
             <div class="config-icon rules"><i class="fas fa-cogs"></i></div>
             <div class="config-title">Rules</div>
             <div class="config-count">-</div>
-            <div class="config-link">Periods/Break →</div>
+            <div class="config-link">Periods, break, constraints →</div>
         </a>
     </div>
-</div>
-{% else %}
-<!-- JSS-specific: No streams, just rules -->
-<div class="config-grid" style="grid-template-columns:1fr;max-width:250px;margin:0 auto 1.5rem">
     <div class="config-card">
-        <a href="{{ url_for('generator.rules_config') }}">
-            <div class="config-icon rules"><i class="fas fa-cogs"></i></div>
-            <div class="config-title">Rules</div>
-            <div class="config-count">-</div>
-            <div class="config-link">Periods/Break →</div>
+        <a href="{{ url_for('generator.rooms_list') }}">
+            <div class="config-icon streams" style="background:linear-gradient(135deg,#30cfd0,#330867)"><i class="fas fa-door-closed"></i></div>
+            <div class="config-title">Rooms</div>
+            <div class="config-count">{{ rooms_count }}</div>
+            <div class="config-link">Venues (optional) →</div>
         </a>
     </div>
 </div>
-{% endif %}
 
 <!-- Generate Section -->
 <div class="action-section">
@@ -164,12 +164,27 @@
     </div>
 </div>
 
-<!-- Quick Links -->
-<div class="quick-links">
-    <a href="{{ url_for('generator.results_list') }}" class="quick-link"><i class="fas fa-history"></i> Past Timetables</a>
-    <a href="{{ url_for('generator.class_subjects_list') }}" class="quick-link"><i class="fas fa-sliders-h"></i> Per-Class Subjects</a>
-    {% if level == 'sss' %}
-    <a href="{{ url_for('generator.streams_list') }}" class="quick-link"><i class="fas fa-stream"></i> Stream Subjects</a>
-    {% endif %}
+<!-- Every other setting, one click away -->
+<div style="margin-top:2rem;">
+    <h3 style="font-size:1rem;margin-bottom:.4rem;"><i class="fas fa-sliders-h"></i> Configuration &amp; rules</h3>
+    <p class="text-muted text-sm" style="margin-top:0;margin-bottom:.7rem;">Fine-tune how the timetable is built. Sensible defaults apply where you leave these untouched.</p>
+    <div class="quick-links" style="justify-content:flex-start;">
+        <a href="{{ url_for('generator.rules_config') }}" class="quick-link" title="Periods per day, break, no-repeat, even spread, max consecutive"><i class="fas fa-cogs"></i> Generation rules</a>
+        <a href="{{ url_for('generator.class_subjects_list') }}" class="quick-link" title="How many periods each subject gets per week, per class"><i class="fas fa-sliders-h"></i> Per-class subjects &amp; periods</a>
+        {% if level == 'sss' %}
+        <a href="{{ url_for('generator.streams_list') }}" class="quick-link"><i class="fas fa-stream"></i> Stream subjects</a>
+        {% endif %}
+        <a href="{{ url_for('generator.clash_rules_list') }}" class="quick-link" title="Subjects that must not clash, and combined-class rules"><i class="fas fa-ban"></i> Clash &amp; combined-class rules</a>
+        <a href="{{ url_for('generator.rooms_list') }}" class="quick-link"><i class="fas fa-door-closed"></i> Rooms / venues</a>
+        <a href="{{ url_for('settings.timetable_slots') }}" class="quick-link" title="The teaching periods and their times (shared timetable)"><i class="fas fa-clock"></i> Periods &amp; times</a>
+        <a href="{{ url_for('generator.generator_settings') }}" class="quick-link" title="School name, address, session &amp; term printed on exports"><i class="fas fa-print"></i> Print / header details</a>
+    </div>
+
+    <h3 style="font-size:1rem;margin:1.4rem 0 .4rem;"><i class="fas fa-chart-bar"></i> Results &amp; checks</h3>
+    <div class="quick-links" style="justify-content:flex-start;">
+        <a href="{{ url_for('generator.results_list') }}" class="quick-link"><i class="fas fa-history"></i> Past timetables</a>
+        <a href="{{ url_for('generator.reports_index') }}" class="quick-link" title="Teacher workload, clashes, unassigned subjects"><i class="fas fa-clipboard-check"></i> Reports &amp; validation</a>
+        <a href="{{ url_for('generator.setup_guide') }}" class="quick-link"><i class="fas fa-list-check"></i> Setup checklist</a>
+    </div>
 </div>
 {% endblock %}

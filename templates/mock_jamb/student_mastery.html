@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}{{ data.meta.student_name }} — Topic Mastery - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ urls.index }}">Mock JAMB</a> / <a href="{{ urls.mastery }}">Topic mastery</a> / <span>{{ data.meta.student_name }}</span>{% endblock %}
+{% block extra_css %}<style>
+.mrow{display:flex;align-items:center;gap:.6rem;padding:.35rem 0;border-bottom:1px solid var(--border-color)}
+.mrow:last-child{border-bottom:0}.mrow .n{flex:1;font-size:.86rem}
+.mrow .bar{width:110px;height:8px;border-radius:4px;background:var(--gray-100);overflow:hidden;flex-shrink:0}
+.mrow .bar i{display:block;height:100%}.mrow .p{width:44px;text-align:right;font-weight:600;font-size:.82rem}
+.b-strong i{background:#059669}.b-fair i{background:#d97706}.b-weak i{background:#dc2626}
+.b-strong .p{color:#059669}.b-fair .p{color:#b45309}.b-weak .p{color:#dc2626}
+.chips{display:flex;flex-wrap:wrap;gap:.4rem}
+.chip{padding:.3rem .6rem;border-radius:999px;font-size:.8rem;font-weight:600}
+.chip.w{background:#fee2e2;color:#b91c1c}.chip.s{background:#d1fae5;color:#065f46}
+.dir{display:inline-flex;align-items:center;gap:.4rem;padding:.3rem .7rem;border-radius:999px;font-weight:600;font-size:.85rem}
+.dir.improving{background:#d1fae5;color:#065f46}.dir.declining{background:#fee2e2;color:#b91c1c}.dir.steady{background:var(--gray-100);color:var(--text-secondary)}
+.tcol{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem}
+.trend-t td,.trend-t th{padding:.4rem .6rem;text-align:center}.trend-t th:first-child,.trend-t td:first-child{text-align:left}
+</style>{% endblock %}
+{% macro bar(row) -%}
+<div class="mrow b-{{ row.band }}">
+    <span class="n">{{ row.topic }}{% if row.subtopic %} <span class="text-muted">/ {{ row.subtopic }}</span>{% endif %}</span>
+    <span class="bar"><i style="width:{{ row.rate or 0 }}%;"></i></span>
+    <span class="p">{{ row.rate if row.rate is not none else '—' }}%</span>
+    <span class="text-muted text-sm" style="width:64px;text-align:right;">{{ row.correct }}/{{ row.total }}</span>
+</div>
+{%- endmacro %}
+{% block content %}
+<div class="page-header"><h1>{{ data.meta.student_name }} <span class="text-muted" style="font-weight:400;font-size:1rem;">— topic mastery</span></h1>
+    <div class="page-header-actions"><a href="{{ urls.mastery }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> All students</a></div>
+</div>
+
+{% if data.has_data %}
+<div class="card mb-3"><div class="card-body" style="display:flex;gap:1.4rem;flex-wrap:wrap;align-items:center;">
+    <div><strong style="font-size:1.3rem;">{{ data.meta.mocks }}</strong> <span class="text-muted text-sm">mock(s) sat online</span></div>
+    {% if data.direction %}<div class="dir {{ data.direction.label }}">
+        <i class="fas fa-{{ 'arrow-trend-up' if data.direction.label=='improving' else 'arrow-trend-down' if data.direction.label=='declining' else 'minus' }}"></i>
+        {{ data.direction.label|title }} ({{ '+' if data.direction.delta > 0 else '' }}{{ data.direction.delta }} pts first→last)</div>{% endif %}
+    {% if data.focus_topic %}<div class="text-sm text-muted">Focus area: <strong>{{ data.focus_topic }}</strong></div>{% endif %}
+</div></div>
+
+<div class="tcol">
+    <div class="card"><div class="card-header"><h3><i class="fas fa-triangle-exclamation" style="color:#dc2626;"></i> Needs work</h3></div>
+        <div class="card-body">
+            {% for r in data.weaknesses %}{{ bar(r) }}{% else %}<p class="text-muted text-sm">No consistent weak topics — nice.</p>{% endfor %}
+        </div>
+    </div>
+    <div class="card"><div class="card-header"><h3><i class="fas fa-award" style="color:#059669;"></i> Excels at</h3></div>
+        <div class="card-body">
+            {% for r in data.strengths %}{{ bar(r) }}{% else %}<p class="text-muted text-sm">No standout strengths yet.</p>{% endfor %}
+        </div>
+    </div>
+</div>
+
+{% if data.trend %}
+<div class="card mt-3"><div class="card-header"><h3><i class="fas fa-chart-line"></i> Progress across mocks</h3></div>
+    <div class="card-body table-responsive">
+        <table class="data-table trend-t">
+            <thead><tr><th>Mock</th><th>Score /400</th><th>Correct-rate</th>{% if data.focus_topic %}<th>{{ data.focus_topic|truncate(24) }}</th>{% endif %}</tr></thead>
+            <tbody>
+                {% for t in data.trend %}
+                <tr><td>{{ t.mock }}{% if t.date %} <span class="text-muted text-sm">({{ t.date }})</span>{% endif %}</td>
+                    <td>{{ t.score }}</td>
+                    <td>{{ t.overall_rate if t.overall_rate is not none else '—' }}%</td>
+                    {% if data.focus_topic %}<td>{{ t.focus_rate if t.focus_rate is not none else '—' }}{% if t.focus_rate is not none %}%{% endif %}</td>{% endif %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% for subj in data.subjects %}
+<div class="card mt-3"><div class="card-header"><h3>{{ subj.subject }} <span class="text-muted text-sm">— {{ subj.correct }}/{{ subj.total }} correct ({{ subj.rate if subj.rate is not none else '—' }}%)</span></h3></div>
+    <div class="card-body">
+        {% for r in subj.topics %}{{ bar(r) }}{% endfor %}
+    </div>
+</div>
+{% endfor %}
+
+{% if data.subtopics %}
+<div class="card mt-3"><div class="card-header"><h3><i class="fas fa-magnifying-glass-chart"></i> Sub-topic detail <span class="text-muted text-sm">— weakest first</span></h3></div>
+    <div class="card-body">{% for r in data.subtopics %}{{ bar(r) }}{% endfor %}</div>
+</div>
+{% endif %}
+{% else %}
+<div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-chart-simple"></i>
+    <h3>No online mocks yet</h3><p>{{ data.meta.student_name }} hasn't submitted a Mock JAMB online. Their topic mastery appears here once they do.</p></div></div></div>
+{% endif %}
+{% endblock %}

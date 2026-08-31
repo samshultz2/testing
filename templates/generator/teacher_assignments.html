@@ -13,6 +13,7 @@
     <div class="card-header"><h3>Add Assignment</h3></div>
     <div class="card-body">
         <form method="POST" action="{{ url_for('generator.add_teacher_assignment') }}" class="filter-form">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
                 <label class="form-label">Teacher</label>
                 <select name="teacher_id" id="teacherSelect" class="form-control" required>
@@ -80,6 +81,7 @@
                     <td>{{ assignment.arm_name or 'All Arms' }}</td>
                     <td>
                         <form method="POST" action="{{ url_for('generator.delete_teacher_assignment', assignment_id=assignment.id) }}" style="display: inline;">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="btn btn-danger btn-sm" title="Remove"><i class="fas fa-times"></i></button>
                         </form>
                     </td>
@@ -109,7 +111,7 @@
 </div>
 {% endif %}
 
-<script>
+<script nonce="{{ csp_nonce }}">
 document.getElementById('classSelect').addEventListener('change', function() {
     const classId = this.value;
     const armSelect = document.getElementById('armSelect');

@@ -1,0 +1,169 @@
+"""
+AES-256-GCM field encryption for sensitive columns at rest.
+
+Active only when ``FIELD_ENCRYPTION_KEY`` is configured. When it is absent the
+:class:`EncryptedString` type passes values through unchanged (plaintext), so
+the application works out of the box and encryption is purely opt-in — set the
+key and run ``scripts/encrypt_portal_passwords.py`` to turn it on.
+
+Format of an encrypted value:  ``enc:gcm1:<base64(nonce(12) + ciphertext + tag)>``
+Anything without that prefix is treated as legacy plaintext and returned as-is,
+so mixed (partly-migrated) data reads correctly.
+"""
+import base64
+import hashlib
+import os
+
+_PREFIX = 'enc:gcm1:'
+
+
+def _key():
+    """Return a 32-byte key, or None when encryption is disabled."""
+    raw = ''
+    try:
+        from config import Config
+        raw = getattr(Config, 'FIELD_ENCRYPTION_KEY', '') or ''
+    except Exception:
+        raw = ''
+    raw = raw or os.environ.get('FIELD_ENCRYPTION_KEY', '')
+    if not raw:
+        return None
+    # Prefer a base64-encoded 32-byte key; otherwise derive 32 bytes from the
+    # provided secret so any sufficiently strong passphrase also works.
+    try:
+        decoded = base64.b64decode(raw, validate=True)
+        if len(decoded) == 32:
+            return decoded
+    except Exception:
+        pass
+    return hashlib.sha256(raw.encode('utf-8')).digest()
+
+
+def is_enabled():
+    return _key() is not None
+
+
+def _strict():
+    """Opt-in: refuse to store a 'would-be-encrypted' field in plaintext.
+
+    Off by default so deployments that don't use field encryption keep working;
+    set REQUIRE_FIELD_ENCRYPTION=1 (or Config.REQUIRE_FIELD_ENCRYPTION) to fail
+    closed when the key is missing.
+    """
+    try:
+        from config import Config
+        if getattr(Config, 'REQUIRE_FIELD_ENCRYPTION', False):
+            return True
+    except Exception:
+        pass
+    return os.environ.get('REQUIRE_FIELD_ENCRYPTION') in ('1', 'true', 'True')
+
+
+def encrypt(plaintext):
+    """Encrypt a string. Returns the token, or the input unchanged if disabled."""
+    if plaintext is None:
+        return None
+    key = _key()
+    if key is None:
+        # The value would be stored in PLAINTEXT. Make that visible (it was
+        # silent before); fail closed when strict mode is enabled.
+        if _strict():
+            raise RuntimeError('FIELD_ENCRYPTION_KEY is required '
+                               '(REQUIRE_FIELD_ENCRYPTION) but is not configured.')
+        _log().warning('Encrypting a field but FIELD_ENCRYPTION_KEY is not set — '
+                       'value stored in PLAINTEXT.')
+        return plaintext
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    nonce = os.urandom(12)
+    ct = AESGCM(key).encrypt(nonce, str(plaintext).encode('utf-8'), None)
+    return _PREFIX + base64.b64encode(nonce + ct).decode('ascii')
+
+
+def decrypt(token):
+    """Decrypt a token. Plaintext (non-prefixed) input is returned unchanged."""
+    if token is None:
+        return None
+    if not isinstance(token, str) or not token.startswith(_PREFIX):
+        return token
+    key = _key()
+    if key is None:
+        # Encrypted data but no key — unrecoverable. Warn loudly rather than
+        # silently returning None (which looks like "no password set").
+        _log().warning('Encrypted field present but FIELD_ENCRYPTION_KEY is not '
+                       'set — value cannot be decrypted.')
+        return None
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    try:
+        blob = base64.b64decode(token[len(_PREFIX):])
+        nonce, ct = blob[:12], blob[12:]
+        return AESGCM(key).decrypt(nonce, ct, None).decode('utf-8')
+    except Exception:
+        # Wrong key or corrupt data — likely the key changed since this was
+        # written. Log the key fingerprint so a mismatch is diagnosable.
+        _log().warning('Failed to decrypt a field (key fingerprint %s). The '
+                       'FIELD_ENCRYPTION_KEY may have changed.', key_fingerprint())
+        return None
+
+
+def looks_encrypted(value):
+    return isinstance(value, str) and value.startswith(_PREFIX)
+
+
+# --- Binary helpers for at-rest backup encryption -------------------------
+# Backups are whole files (SQLite .db / Postgres .sql dumps), so they need raw
+# AES-256-GCM over bytes rather than the base64/string path above. A magic
+# header lets restore tell an encrypted backup from a legacy plaintext one, so
+# old backups keep restoring after this lands.
+_FILE_MAGIC = b'ENCBAK1\x00'
+
+
+def bytes_look_encrypted(data):
+    return isinstance(data, (bytes, bytearray)) and bytes(data[:len(_FILE_MAGIC)]) == _FILE_MAGIC
+
+
+def encrypt_bytes(data):
+    """Encrypt raw bytes for backup storage. Returns magic-headed ciphertext, or
+    the input unchanged when encryption is disabled (unless strict mode)."""
+    if data is None:
+        return None
+    key = _key()
+    if key is None:
+        if _strict():
+            raise RuntimeError('FIELD_ENCRYPTION_KEY is required '
+                               '(REQUIRE_FIELD_ENCRYPTION) but is not configured.')
+        return data
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    nonce = os.urandom(12)
+    ct = AESGCM(key).encrypt(nonce, bytes(data), None)
+    return _FILE_MAGIC + nonce + ct
+
+
+def decrypt_bytes(data):
+    """Decrypt backup bytes. Legacy (non-magic) input is returned unchanged so
+    plaintext backups taken before encryption was enabled still restore."""
+    if data is None:
+        return None
+    if not bytes_look_encrypted(data):
+        return data
+    key = _key()
+    if key is None:
+        raise RuntimeError('This backup is encrypted but FIELD_ENCRYPTION_KEY '
+                           'is not configured — cannot restore.')
+    from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+    blob = bytes(data)[len(_FILE_MAGIC):]
+    nonce, ct = blob[:12], blob[12:]
+    return AESGCM(key).decrypt(nonce, ct, None)
+
+
+def key_fingerprint():
+    """Short, non-secret fingerprint of the active key, for ops to confirm the
+    same key is configured across deployments. Returns '' when disabled."""
+    key = _key()
+    if key is None:
+        return ''
+    return hashlib.sha256(b'fp:' + key).hexdigest()[:8]
+
+
+def _log():
+    import logging
+    return logging.getLogger('posyhub.crypto')

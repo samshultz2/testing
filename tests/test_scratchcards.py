@@ -68,7 +68,7 @@ def test_invalid_pin_rejected(app):
     resp = client.post('/check-result/',
                        data={'student_id': 'STU90002', 'pin': 'WRONGPIN0000',
                              '_csrf_token': tok}, follow_redirects=True)
-    assert b'Invalid card PIN' in resp.data
+    assert b'Student ID or card PIN is incorrect' in resp.data
 
 
 def test_valid_card_not_consumed_without_result(app):
@@ -91,3 +91,27 @@ def test_valid_card_not_consumed_without_result(app):
     with app.app_context():
         c = ScratchCard.query.filter_by(pin=pin).first()
         assert c.used_count == 0  # not consumed on a failed lookup
+
+
+def test_bound_card_rejects_other_student(app):
+    """Security: once a card is bound to a student it cannot read another
+    student's result — this is what the trust-on-first-use binding guarantees,
+    so a valid PIN can't walk the (guessable, sequential) Student-ID range."""
+    _published_term(app)
+    bound = _student(app, 'STU90020')
+    _student(app, 'STU90021')
+    with app.app_context():
+        card = ScratchCard.generate_unique(max_uses=5, student_id=bound)
+        db.session.add(card)
+        db.session.commit()
+        pin = card.pin
+
+    client = app.test_client()
+    html = client.get('/check-result/').get_data(as_text=True)
+    tok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"', html).group(1)
+    resp = client.post('/check-result/',
+                       data={'student_id': 'STU90021', 'pin': pin, '_csrf_token': tok},
+                       follow_redirects=True)
+    assert b'Student ID or card PIN is incorrect' in resp.data
+    with app.app_context():
+        assert ScratchCard.query.filter_by(pin=pin).first().used_count == 0

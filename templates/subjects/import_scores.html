@@ -15,7 +15,7 @@
         <form method="GET" class="filter-form">
             <div class="form-group">
                 <label class="form-label">Term</label>
-                <select name="term_id" class="form-control" onchange="this.form.submit()">
+                <select name="term_id" class="form-control" data-autosubmit>
                     <option value="">Select Term</option>
                     {% for term in terms %}
                     <option value="{{ term.id }}" {% if term_id == term.id %}selected{% endif %}>{{ term.full_name }}</option>
@@ -24,7 +24,7 @@
             </div>
             <div class="form-group">
                 <label class="form-label">Class</label>
-                <select name="assignment_id" class="form-control" onchange="this.form.submit()">
+                <select name="assignment_id" class="form-control" data-autosubmit>
                     <option value="">Select Class</option>
                     {% for a in assignments %}
                     <option value="{{ a.id }}" {% if assignment_id == a.id %}selected{% endif %}>{{ a.display_name }}</option>
@@ -33,7 +33,7 @@
             </div>
             <div class="form-group">
                 <label class="form-label">Subject</label>
-                <select name="class_subject_id" class="form-control" onchange="this.form.submit()">
+                <select name="class_subject_id" class="form-control" data-autosubmit>
                     <option value="">Select Subject</option>
                     {% for cs in class_subjects %}
                     <option value="{{ cs.id }}" {% if class_subject_id == cs.id %}selected{% endif %}>{{ cs.subject.name }}</option>

@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Submitted — awaiting approval</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
+  <style>
+    body{background:#f6f7fb;font-family:system-ui,-apple-system,'Segoe UI',sans-serif;margin:0}
+    .wrap{max-width:480px;margin:3rem auto;padding:0 1rem;text-align:center}
+    .card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:2rem 1.5rem;box-shadow:0 8px 30px rgba(0,0,0,.06)}
+    .tick{width:64px;height:64px;border-radius:50%;background:#ecfdf5;color:#059669;display:flex;align-items:center;justify-content:center;font-size:1.8rem;margin:0 auto 1rem}
+    h1{font-size:1.3rem;margin:.2rem 0}
+    p{color:#4b5563;line-height:1.5}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="card">
+      <div class="tick"><i class="fas fa-check"></i></div>
+      <h1>Thanks, {{ signup.full_name or signup.username }}!</h1>
+      <p>Your sign-up has been submitted. An administrator will review and approve it shortly — once approved, you can log in with the username <strong>{{ signup.username }}</strong> and the password you chose.</p>
+    </div>
+    <p style="color:#9ca3af;text-align:center;margin-top:1rem;">Powered by EduSyncra</p>
+  </div>
+</body>
+</html>

@@ -117,3 +117,35 @@ def _send_twilio(to, message, cfg):
     if resp.status_code in (200, 201) and data.get('sid'):
         return True, data['sid']
     return False, str(data.get('message') or f'HTTP {resp.status_code}')
+
+
+def get_balance(cfg=None):
+    """Return (ok, text) — the provider's account balance, for the comms UI.
+
+    Best-effort: network/credential issues return (False, reason). Termii exposes
+    a balance endpoint; Twilio exposes account balance.
+    """
+    cfg = cfg or get_config()
+    if not is_configured(cfg):
+        return False, 'Not configured'
+    try:
+        if cfg['provider'] == 'termii':
+            import requests
+            r = requests.get('https://api.ng.termii.com/api/get-balance',
+                             params={'api_key': cfg['termii_key']}, timeout=15)
+            d = r.json()
+            if r.status_code == 200 and 'balance' in d:
+                return True, f"{d.get('currency', '')} {d['balance']}".strip()
+            return False, str(d.get('message') or f'HTTP {r.status_code}')
+        if cfg['provider'] == 'twilio':
+            import requests
+            sid = cfg['twilio_sid']
+            r = requests.get(f'https://api.twilio.com/2010-04-01/Accounts/{sid}/Balance.json',
+                             auth=(sid, cfg['twilio_token']), timeout=15)
+            d = r.json()
+            if r.status_code == 200 and 'balance' in d:
+                return True, f"{d.get('currency', '')} {d['balance']}".strip()
+            return False, str(d.get('message') or f'HTTP {r.status_code}')
+    except Exception as e:
+        return False, str(e)
+    return False, 'Unsupported provider'

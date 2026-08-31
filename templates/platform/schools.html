@@ -1,0 +1,138 @@
+{% extends "platform/_layout.html" %}
+{% block title %}Schools{% endblock %}
+{% block heading %}Schools{% endblock %}
+{% block subheading %}Every school on the platform, with billing status and controls.{% endblock %}
+
+{% block head %}
+<style>
+  .toolbar{display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap}
+  .search{flex:1;min-width:200px;display:flex;align-items:center;gap:9px;background:var(--surface);
+          border:1px solid var(--line);border-radius:10px;padding:9px 13px;box-shadow:var(--shadow)}
+  .search i{color:var(--faint)} .search input{border:0;background:transparent;color:var(--ink);font-size:14px;width:100%;outline:none;font-family:inherit}
+  .actbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .acts form{display:inline}
+  .acts .btn{margin:0 2px 2px 0}
+  .conf{width:120px}
+  .no-match{display:none}
+</style>
+{% endblock %}
+
+{% block content %}
+  <div class="cards" style="grid-template-columns:repeat(5,1fr)">
+    <div class="kpi"><div class="lab">Total</div><div class="num">{{ summary.total }}</div></div>
+    <div class="kpi"><div class="lab">Paying</div><div class="num">{{ summary.paying }}</div></div>
+    <div class="kpi"><div class="lab">Trial</div><div class="num">{{ summary.trial }}</div></div>
+    <div class="kpi"><div class="lab">Unpaid</div><div class="num">{{ summary.blocked }}</div></div>
+    <div class="kpi"><div class="lab">Suspended</div><div class="num">{{ summary.suspended }}</div></div>
+  </div>
+
+  <div class="toolbar">
+    <label class="search"><i class="fas fa-magnifying-glass"></i>
+      <input id="q" type="search" placeholder="Search schools by name, subdomain or email…" autocomplete="off"></label>
+    {% if segment %}<a class="btn sm" href="{{ url_for('platform.schools') }}" title="Clear filter">
+      <i class="fas fa-filter"></i> {{ segment|replace('_',' ')|capitalize }} · clear ✕</a>{% endif %}
+    <a class="btn sm" href="{{ url_for('platform.schools_export', filter=segment) }}"><i class="fas fa-file-csv"></i> Export CSV</a>
+  </div>
+  <div id="recent" class="recent-tenants" style="display:none;gap:6px;align-items:center;flex-wrap:wrap;margin:-4px 0 12px">
+    <span class="muted" style="font-size:12.5px"><i class="fas fa-clock-rotate-left"></i> Recent:</span>
+  </div>
+
+  <div class="panel">
+    <div class="tablewrap">
+      <table id="tbl">
+        <thead><tr>
+          <th style="width:26px"></th><th>School</th><th>Status</th><th>Access until</th>
+          <th>Admin email</th><th>Created</th><th>Actions</th>
+        </tr></thead>
+        <tbody>
+        {% for r in rows %}
+          <tr data-name="{{ r.name|lower }}" data-sub="{{ r.subdomain }}" data-email="{{ (r.admin_email or '')|lower }}">
+            <td>{% if not r.owner %}<input type="checkbox" name="subdomains" value="{{ r.subdomain }}" form="bulkform">{% endif %}</td>
+            <td><a class="school" href="{{ url_for('platform.tenant_profile', subdomain=r.subdomain) }}" title="Open profile"><span class="ic">{{ r.name[0]|upper }}</span>
+              <span><b>{{ r.name }}</b><br><span class="sub">{{ r.subdomain }}</span></span></a></td>
+            <td>
+              {% if r.owner %}<span class="pill p-owner"><i class="fas fa-crown"></i> Owner · free</span>
+              {% elif r.status == 'suspended' %}<span class="pill p-suspended">Suspended</span>
+              {% elif r.on_trial %}<span class="pill p-trial">Trial · {{ r.days_left }}d</span>
+              {% elif r.active %}<span class="pill p-active">Active · {{ r.days_left }}d</span>
+              {% else %}<span class="pill p-unpaid">Unpaid</span>{% endif %}
+            </td>
+            <td class="muted">{{ r.access_until }}</td>
+            <td class="muted">{{ r.admin_email }}</td>
+            <td class="muted">{{ r.created }}</td>
+            <td class="acts">
+              {% if not r.owner %}
+                <form method="post" action="{{ url_for('platform.grant', subdomain=r.subdomain) }}">
+                  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                  <input class="field" style="width:52px" name="days" type="number" value="{{ plan_days }}" min="1" title="days to grant">
+                  <button class="btn sm"><i class="fas fa-plus"></i> days</button>
+                </form>
+                <form method="post" action="{{ url_for('platform.suspend', subdomain=r.subdomain) }}">
+                  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                  <button class="btn sm">{{ 'Reactivate' if r.status == 'suspended' else 'Suspend' }}</button>
+                </form>
+                <form method="post" action="{{ url_for('platform.delete', subdomain=r.subdomain) }}">
+                  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                  <input class="field conf" name="confirm" placeholder="type {{ r.subdomain }}" title="type the subdomain to confirm">
+                  <button class="btn sm danger"><i class="fas fa-trash"></i></button>
+                </form>
+              {% else %}<span class="muted">—</span>{% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+          <tr class="no-match" id="nomatch"><td colspan="7"><div class="empty"><i class="fas fa-magnifying-glass"></i>No schools match your search.</div></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <form id="bulkform" method="post" action="{{ url_for('platform.bulk') }}" class="panel" style="padding:16px 18px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <strong style="font-size:13px;"><i class="fas fa-layer-group"></i> With selected:</strong>
+    <select name="action" class="field" required>
+      <option value="suspend">Suspend</option>
+      <option value="reactivate">Reactivate</option>
+      <option value="grant">Grant days</option>
+      <option value="delete">Delete (database + all data)</option>
+    </select>
+    <input class="field" name="days" type="number" min="1" value="{{ plan_days }}" style="width:64px" title="days (for Grant days)">
+
+    <label style="font-size:12.5px;color:var(--bad);display:flex;align-items:center;gap:6px;">
+      <input type="checkbox" name="confirm_delete" value="yes"> confirm delete
+    </label>
+    <button class="btn danger" type="submit">Apply</button>
+    <span class="muted" style="font-size:12px;margin-left:auto;">The owner school is never affected.</span>
+  </form>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+  (function(){
+    var q=document.getElementById('q'), rows=[].slice.call(document.querySelectorAll('#tbl tbody tr[data-name]')),
+        nomatch=document.getElementById('nomatch');
+    q.addEventListener('input',function(){
+      var v=q.value.trim().toLowerCase(), shown=0;
+      rows.forEach(function(tr){
+        var hit=!v || tr.getAttribute('data-name').indexOf(v)>-1 || tr.getAttribute('data-sub').indexOf(v)>-1
+                || tr.getAttribute('data-email').indexOf(v)>-1;
+        tr.style.display=hit?'':'none'; if(hit) shown++;
+      });
+      nomatch.style.display=shown?'none':'table-row';
+    });
+    // recently-viewed tenant chips (from the profile page)
+    try {
+      var box=document.getElementById('recent'),
+          list=JSON.parse(localStorage.getItem('platform:recentTenants')||'[]');
+      if(list.length){
+        list.slice(0,8).forEach(function(x){
+          var a=document.createElement('a');
+          a.href='/platform/tenant/'+encodeURIComponent(x.sub);
+          a.className='btn sm'; a.textContent=x.name||x.sub;
+          box.appendChild(a);
+        });
+        box.style.display='flex';
+      }
+    } catch(e){}
+  })();
+</script>
+{% endblock %}

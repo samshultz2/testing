@@ -6,28 +6,86 @@
 {% block extra_css %}
 <style>
 /* ===== Modern dashboard ===== */
-.dash-hero{display:flex;justify-content:space-between;align-items:center;gap:1rem;flex-wrap:wrap;
-    background:linear-gradient(135deg,var(--primary),#064e36);color:#fff;border-radius:var(--radius-lg);
-    padding:1.25rem 1.5rem;margin-bottom:1.1rem;box-shadow:var(--shadow-md);position:relative;overflow:hidden}
-.dash-hero::after{content:"";position:absolute;right:-40px;top:-40px;width:180px;height:180px;border-radius:50%;background:rgba(255,255,255,.08)}
-.dash-hero h1{margin:0;font-size:1.4rem;font-family:var(--font-display)}
-.dash-hero p{margin:.2rem 0 0;opacity:.9;font-size:.9rem}
-.dash-hero .term-chip{background:rgba(255,255,255,.18);padding:.5rem .9rem;border-radius:var(--radius-full);font-size:.85rem;font-weight:600;backdrop-filter:blur(4px);z-index:1}
+.dash-hero{position:relative;overflow:hidden;display:flex;justify-content:space-between;align-items:stretch;gap:1rem;
+    /* Theme-aware: derived from the active theme's --primary so the hero recolours
+       when the theme changes (green by default, blue/plum/etc. in other themes).
+       Flat fallback first for browsers without color-mix(). */
+    background:var(--primary);
+    background:linear-gradient(135deg,var(--primary) 0%,color-mix(in srgb,var(--primary) 74%,#000) 60%,color-mix(in srgb,var(--primary) 58%,#000) 100%);
+    color:#fff;border-radius:var(--radius-xl);
+    padding:1.6rem 1.75rem;margin-bottom:1.25rem;
+    box-shadow:0 14px 34px -20px rgba(15,23,42,.5);
+    box-shadow:0 14px 34px -20px color-mix(in srgb,var(--primary) 60%,#000)}
+.dash-hero-main{position:relative;z-index:2;display:flex;flex-direction:column;gap:.1rem;min-width:0}
+.dash-hero-eyebrow{display:flex;align-items:center;gap:.5rem;font-size:.95rem;opacity:.9;font-weight:500}
+.dash-hero h1{margin:.15rem 0 0;font-size:2.1rem;line-height:1.08;font-weight:800;letter-spacing:-.02em;font-family:var(--font-display)}
+.dash-wave{display:inline-block;transform-origin:70% 70%;animation:dash-wave 2.6s ease-in-out infinite}
+.dash-hero p{margin:.55rem 0 0;opacity:.85;font-size:1rem}
+.dash-hero-actions{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;margin-top:1.2rem}
+.term-pill{display:inline-flex;align-items:center;gap:.5rem;background:#fff;color:var(--primary);font-weight:700;
+    padding:.62rem 1.1rem;border-radius:14px;font-size:.95rem;box-shadow:0 8px 18px -10px rgba(0,0,0,.5)}
+.hero-btn{display:inline-flex;align-items:center;gap:.5rem;background:rgba(255,255,255,.12);color:#fff;border:0;
+    padding:.62rem 1.05rem;border-radius:14px;font-size:.95rem;font-weight:600;cursor:pointer;
+    -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);transition:background .15s ease,transform .1s ease}
+.hero-btn:hover{background:rgba(255,255,255,.22)}
+.hero-btn:active{transform:translateY(1px)}
+.hero-btn.active{background:#fff;color:var(--primary)}
+.hero-btn:disabled{opacity:.7;cursor:default}
+.dash-hero-art{position:relative;z-index:1;width:230px;max-width:40%;align-self:flex-end;flex-shrink:0}
+.dash-hero-dots{position:absolute;top:20px;right:24px;width:66px;height:44px;z-index:1;opacity:.5;pointer-events:none;
+    background-image:radial-gradient(rgba(255,255,255,.6) 1.4px,transparent 1.6px);background-size:11px 11px}
+@keyframes dash-wave{0%,60%,100%{transform:rotate(0)}10%{transform:rotate(14deg)}20%{transform:rotate(-8deg)}30%{transform:rotate(14deg)}40%{transform:rotate(-4deg)}50%{transform:rotate(10deg)}}
+@media(max-width:640px){.dash-hero{padding:1.3rem 1.25rem}.dash-hero h1{font-size:2rem}.dash-hero-art{width:120px}}
+@media(max-width:420px){.dash-hero-art{display:none}}
 
-.kpi-row{display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem;margin-bottom:1.1rem}
-@media(min-width:768px){.kpi-row{grid-template-columns:repeat(4,1fr)}}
+.kpi-row{display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;margin-bottom:1.25rem}
+@media(min-width:1100px){.kpi-row{grid-template-columns:repeat(4,1fr)}}
 .kpi{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);
-    padding:1rem;display:flex;align-items:center;gap:.85rem;transition:transform var(--transition),box-shadow var(--transition)}
-.kpi:hover{transform:translateY(-3px);box-shadow:var(--shadow-md)}
-.kpi .ic{width:46px;height:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;font-size:1.2rem;color:#fff;flex-shrink:0}
-.kpi .ic.blue{background:linear-gradient(135deg,#4e73df,#224abe)}
-.kpi .ic.green{background:linear-gradient(135deg,#1cc88a,#13855c)}
-.kpi .ic.amber{background:linear-gradient(135deg,#f6c23e,#dda20a)}
-.kpi .ic.red{background:linear-gradient(135deg,#e74a3b,#be2617)}
-.kpi .ic.purple{background:linear-gradient(135deg,#7e6cf0,#5a48c9)}
-.kpi .ic.teal{background:linear-gradient(135deg,#11998e,#38ef7d)}
-.kpi .v{font-size:1.55rem;font-weight:700;line-height:1;font-family:var(--font-display)}
+    padding:1.1rem;display:flex;align-items:center;gap:.85rem;overflow:hidden;
+    box-shadow:var(--shadow-xs);
+    transition:transform var(--transition),box-shadow var(--transition),border-color var(--transition)}
+.kpi>div:last-child{min-width:0}
+.kpi:hover{transform:translateY(-2px);box-shadow:var(--shadow-sm);border-color:var(--gray-300)}
+/* Icon tiles — flat, tinted, theme-aware (no gradients/glow), per the design system.
+   A soft tint of the tone colour over the card surface + the tone as the glyph. */
+.kpi .ic,.kc-ic{--tone-c:var(--primary);flex-shrink:0;display:flex;align-items:center;justify-content:center;
+    color:var(--tone-c);background:color-mix(in srgb,var(--tone-c) 16%,var(--bg-card));box-shadow:none}
+.kpi .ic{width:46px;height:46px;border-radius:12px;font-size:1.15rem}
+.kpi .ic.blue,.kc-ic.blue{--tone-c:#3b82f6}
+.kpi .ic.green,.kc-ic.green{--tone-c:#16a34a}
+.kpi .ic.amber,.kpi .ic.orange,.kc-ic.orange{--tone-c:#c2760a}
+.kpi .ic.red,.kc-ic.red{--tone-c:#ef4444}
+.kpi .ic.purple,.kc-ic.purple{--tone-c:#8b5cf6}
+.kpi .ic.teal,.kc-ic.teal{--tone-c:#0d9488}
+.kpi .v{font-size:1.55rem;font-weight:700;line-height:1.05;letter-spacing:-.01em;font-family:var(--font-display);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .kpi .l{font-size:.72rem;color:var(--text-muted);margin-top:.25rem;text-transform:uppercase;letter-spacing:.03em}
+/* Delta reads as a subtle chip (bg/padding aren't set inline, so this applies). */
+.kpi .kpi-delta{width:fit-content;padding:2px 8px;margin-top:.4rem !important;border-radius:var(--radius-full);background:var(--gray-100)}
+
+/* ── Redesigned headline KPI cards (icon tile + trend badge + big number +
+   sub-label + sparkline). Used by the `kpi` block via <KpiCard>. ── */
+.kpicard{position:relative;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);
+    padding:1.15rem 1.15rem .35rem;display:flex;flex-direction:column;overflow:hidden;
+    box-shadow:var(--shadow-xs);
+    transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}
+.kpicard:hover{transform:translateY(-2px);box-shadow:var(--shadow-sm);border-color:var(--gray-300)}
+.kc-top{display:flex;align-items:flex-start;justify-content:space-between;gap:.5rem}
+.kc-ic{width:50px;height:50px;border-radius:14px;font-size:1.3rem}
+.kc-trend{display:flex;flex-direction:column;align-items:flex-end;gap:.2rem;text-align:right}
+.kc-badge{display:inline-flex;align-items:center;gap:.28rem;font-size:.82rem;font-weight:700;padding:.2rem .55rem;border-radius:999px;line-height:1.2}
+.kc-badge.up{color:var(--success);background:color-mix(in srgb,var(--success) 14%,var(--bg-card))}
+.kc-badge.down{color:var(--danger);background:color-mix(in srgb,var(--danger) 14%,var(--bg-card))}
+.kc-badge.flat{color:var(--text-secondary);background:var(--gray-100)}
+.kc-trendlabel{font-size:.75rem;color:var(--text-muted)}
+.kc-value{font-size:2.4rem;font-weight:800;line-height:1.05;letter-spacing:-.02em;margin-top:.95rem;
+    font-family:var(--font-display);font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.kc-label{font-size:1.05rem;font-weight:700;margin-top:.15rem}
+.kc-sub{font-size:.85rem;color:var(--text-muted);margin-top:.1rem}
+.kc-spark{margin:.55rem -1.15rem -.35rem;height:46px}
+@keyframes spark-draw{to{stroke-dashoffset:0}}
+@keyframes spark-dot{from{opacity:0;transform:scale(0)}to{opacity:1;transform:scale(1)}}
+@media(prefers-reduced-motion:reduce){.dash-wave{animation:none}.kc-spark path,.kc-spark circle{animation:none !important;stroke-dashoffset:0 !important;opacity:1 !important;transform:none !important}}
+@media(max-width:640px){.kc-value{font-size:2rem}.kc-ic{width:46px;height:46px;font-size:1.2rem}}
 
 .dash-grid{display:grid;grid-template-columns:1fr;gap:1rem;margin-bottom:1rem}
 @media(min-width:992px){.dash-grid.c3{grid-template-columns:repeat(3,1fr)}.dash-grid.c2{grid-template-columns:repeat(2,1fr)}
@@ -39,23 +97,12 @@
 .widget .wb{padding:1rem;flex:1}
 .chart-box{position:relative;height:210px}
 
-/* exam snapshot cards */
-.exam-card{padding:1.1rem;border-radius:var(--radius-lg);color:#fff;display:flex;flex-direction:column;justify-content:space-between;min-height:150px}
-.exam-card.jamb{background:linear-gradient(135deg,#667eea,#764ba2)}
-.exam-card.waec{background:linear-gradient(135deg,#0891b2,#0e7490)}
-.exam-card.mock{background:linear-gradient(135deg,#11998e,#38ef7d)}
-.exam-card .top{display:flex;justify-content:space-between;align-items:center;font-size:.8rem;opacity:.9}
-.exam-card .big{font-size:2.5rem;font-weight:700;line-height:1;font-family:var(--font-display)}
-.exam-card .sub{font-size:.8rem;opacity:.9}
-.exam-card .chips{display:flex;gap:.4rem;flex-wrap:wrap;margin-top:.5rem}
-.exam-card .chip{background:rgba(255,255,255,.2);border-radius:var(--radius-full);padding:.12rem .55rem;font-size:.72rem}
-
 .lead-list{display:flex;flex-direction:column}
 .lead-item{display:flex;align-items:center;gap:.7rem;padding:.55rem .15rem;border-bottom:1px solid var(--border-light)}
 .lead-item:last-child{border-bottom:none}
 .lead-rank{width:26px;height:26px;border-radius:50%;background:var(--gray-100);color:var(--text-secondary);display:flex;align-items:center;justify-content:center;font-size:.75rem;font-weight:700;flex-shrink:0}
 .lead-rank.g1{background:linear-gradient(135deg,#f5af19,#f12711);color:#fff}
-.lead-rank.g2{background:linear-gradient(135deg,#bdc3c7,#808b96);color:#fff}
+.lead-rank.g2{background:linear-gradient(135deg,#e0e0e0,#808b96);color:#fff}
 .lead-rank.g3{background:linear-gradient(135deg,#cd7f32,#8b4513);color:#fff}
 .lead-name{flex:1;font-size:.85rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .lead-score{font-weight:700;font-size:.9rem}
@@ -65,7 +112,7 @@
 .recent-item{border-bottom:1px solid var(--border-light)}
 .recent-item:hover{background:var(--gray-50)}
 .recent-avatar{width:38px;height:38px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;flex-shrink:0}
-.recent-avatar.male{background:#4e73df}.recent-avatar.female{background:#e74a3b}
+.recent-avatar.male{background:#3b82f6}.recent-avatar.female{background:#f43f5e}
 .recent-name,.birthday-name{font-weight:600;font-size:.85rem}
 .recent-id,.birthday-date{font-size:.72rem;color:var(--text-muted)}
 .birthday-item.highlight{background:var(--warning-light)}
@@ -76,198 +123,14 @@
 .relig-bar{display:flex;align-items:center;gap:.5rem;margin-bottom:.5rem}
 .relig-bar .lab{width:78px;font-size:.8rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .relig-bar .track{flex:1;height:8px;background:var(--gray-100);border-radius:var(--radius-full);overflow:hidden}
-.relig-bar .fill{height:100%;border-radius:var(--radius-full);background:linear-gradient(90deg,var(--primary),#38ef7d)}
+.relig-bar .fill{height:100%;border-radius:var(--radius-full);background:var(--primary)}
 .relig-bar .num{width:28px;text-align:right;font-weight:700;font-size:.8rem}
 </style>
 {% endblock %}
 
 {% block content %}
-<!-- Hero -->
-<div class="dash-hero">
-    <div>
-        <h1>Welcome back{% if session.get('user') %}, {{ session.get('user').split()[0] }}{% endif %} 👋</h1>
-        <p>{{ today.strftime('%A, %d %B %Y') }}{% if active_session %} · {{ active_session.name }}{% endif %}</p>
-    </div>
-    {% if active_term %}<div class="term-chip"><i class="fas fa-calendar-day"></i> {{ active_term.name }}</div>{% endif %}
-</div>
-
-{% if announcements %}
-<div style="display:flex;flex-direction:column;gap:.5rem;margin-bottom:1.1rem;">
-    {% for a in announcements %}
-    <div style="display:flex;gap:.6rem;align-items:flex-start;background:var(--bg-card);border:1px solid var(--border-color);border-left:4px solid {{ '#e74a3b' if a.category=='Important' else '#f6c23e' if a.category=='Event' else 'var(--primary)' }};border-radius:var(--radius-md);padding:.7rem .9rem;">
-        <i class="fas {{ 'fa-triangle-exclamation' if a.category=='Important' else 'fa-calendar-day' if a.category=='Event' else 'fa-bullhorn' }}" style="color:{{ '#e74a3b' if a.category=='Important' else '#f6c23e' if a.category=='Event' else 'var(--primary)' }};margin-top:.2rem;"></i>
-        <div style="flex:1;"><strong>{{ a.title }}</strong>{% if a.body %}<div class="text-muted text-sm">{{ a.body }}</div>{% endif %}</div>
-        {% if a.is_pinned %}<i class="fas fa-thumbtack text-muted" title="Pinned"></i>{% endif %}
-    </div>
-    {% endfor %}
-</div>
-{% endif %}
-
-<!-- KPI strip -->
-<div class="kpi-row">
-    <div class="kpi"><div class="ic blue"><i class="fas fa-users"></i></div><div><div class="v">{{ total_students }}</div><div class="l">Students</div></div></div>
-    <div class="kpi"><div class="ic green"><i class="fas fa-user-check"></i></div><div><div class="v">{{ active_enrollments }}</div><div class="l">Enrolled</div></div></div>
-    <div class="kpi"><div class="ic teal"><i class="fas fa-percent"></i></div><div><div class="v">{{ attendance_stats.today_percentage }}%</div><div class="l">Attendance today</div></div></div>
-    <div class="kpi"><div class="ic purple"><i class="fas fa-user-graduate"></i></div><div><div class="v">{{ graduates_count }}</div><div class="l">Graduates</div></div></div>
-</div>
-
-<!-- Exam snapshots -->
-<div class="dash-grid c3">
-    <div class="exam-card jamb">
-        <div class="top"><span><i class="fas fa-file-contract"></i> JAMB {% if jamb_snapshot %}{{ jamb_snapshot.year }}{% endif %}</span>{% if jamb_snapshot %}<a href="{{ url_for('results.jamb_list') }}" style="color:#fff;opacity:.85;"><i class="fas fa-arrow-right"></i></a>{% endif %}</div>
-        {% if jamb_snapshot %}
-        <div><div class="big">{{ jamb_snapshot.mean }}</div><div class="sub">mean across {{ jamb_snapshot.count }} candidates</div></div>
-        <div class="chips"><span class="chip">Top {{ jamb_snapshot.max }}</span><span class="chip">≥200: {{ jamb_snapshot.above_200 }} ({{ jamb_snapshot.above_200_pct }}%)</span></div>
-        {% else %}<div class="big">—</div><div class="sub">No JAMB results yet</div>{% endif %}
-    </div>
-    <div class="exam-card waec">
-        <div class="top"><span><i class="fas fa-file-alt"></i> WAEC {% if waec_snapshot %}{{ waec_snapshot.year }}{% endif %}</span>{% if waec_snapshot %}<a href="{{ url_for('results.waec_list') }}" style="color:#fff;opacity:.85;"><i class="fas fa-arrow-right"></i></a>{% endif %}</div>
-        {% if waec_snapshot %}
-        <div><div class="big">{{ waec_snapshot.pass_rate }}%</div><div class="sub">credit pass rate</div></div>
-        <div class="chips"><span class="chip">{{ waec_snapshot.students }} students</span><span class="chip">{{ waec_snapshot.entries }} entries</span></div>
-        {% else %}<div class="big">—</div><div class="sub">No WAEC results yet</div>{% endif %}
-    </div>
-    <div class="exam-card mock">
-        <div class="top"><span><i class="fas fa-clipboard-list"></i> Latest Mock</span><a href="{{ url_for('mock_jamb.index') }}" style="color:#fff;opacity:.85;"><i class="fas fa-arrow-right"></i></a></div>
-        {% if mock_snapshot %}
-        <div><div class="big">{{ mock_snapshot.mean }}</div><div class="sub">{{ mock_snapshot.name }} · {{ mock_snapshot.count }} sat</div></div>
-        <div class="chips"><span class="chip">Top {{ mock_snapshot.max }}</span></div>
-        {% else %}<div class="big">—</div><div class="sub">No mock exams yet</div>{% endif %}
-    </div>
-</div>
-
-<!-- Charts row -->
-<div class="dash-grid c3">
-    <div class="widget"><div class="wh"><h3><i class="fas fa-venus-mars"></i> Gender</h3></div><div class="wb"><div class="chart-box"><canvas id="genderChart"></canvas></div></div></div>
-    <div class="widget"><div class="wh"><h3><i class="fas fa-route"></i> Streams</h3></div><div class="wb"><div class="chart-box"><canvas id="streamChart"></canvas></div></div></div>
-    <div class="widget"><div class="wh"><h3><i class="fas fa-birthday-cake"></i> Age groups</h3></div><div class="wb"><div class="chart-box"><canvas id="ageChart"></canvas></div></div></div>
-</div>
-
-<!-- Attendance trend + JAMB distribution -->
-<div class="dash-grid split">
-    <div class="widget">
-        <div class="wh"><h3><i class="fas fa-chart-line"></i> Attendance trend</h3><a href="{{ url_for('attendance.weekly_summary') }}" class="btn btn-secondary btn-sm">Details</a></div>
-        <div class="wb"><div class="chart-box">{% if attendance_trend %}<canvas id="attChart"></canvas>{% else %}<div class="empty-state"><i class="fas fa-chart-line"></i><p>No attendance recorded yet</p></div>{% endif %}</div></div>
-    </div>
-    <div class="widget">
-        <div class="wh"><h3><i class="fas fa-trophy"></i> Top JAMB</h3></div>
-        <div class="wb">
-            {% if jamb_snapshot and jamb_snapshot.top %}
-            <div class="lead-list">
-                {% for t in jamb_snapshot.top %}
-                <div class="lead-item"><span class="lead-rank {% if loop.index==1 %}g1{% elif loop.index==2 %}g2{% elif loop.index==3 %}g3{% endif %}">{{ loop.index }}</span><span class="lead-name">{{ t.name }}</span><span class="lead-score">{{ t.score }}</span></div>
-                {% endfor %}
-            </div>
-            {% else %}<div class="empty-state"><i class="fas fa-trophy"></i><p>No JAMB results</p></div>{% endif %}
-        </div>
-    </div>
-</div>
-
-<!-- Class enrollment + religion -->
-<div class="dash-grid split">
-    <div class="widget">
-        <div class="wh"><h3><i class="fas fa-school"></i> Class enrollment</h3><a href="{{ url_for('academics.classes_list') }}" class="btn btn-secondary btn-sm">Manage</a></div>
-        <div class="wb"><div class="chart-box" style="height:240px;">{% if class_stats %}<canvas id="classChart"></canvas>{% else %}<div class="empty-state"><i class="fas fa-school"></i><p>No class enrollment</p></div>{% endif %}</div></div>
-    </div>
-    <div class="widget">
-        <div class="wh"><h3><i class="fas fa-pray"></i> Religion</h3></div>
-        <div class="wb">
-            {% if religion_stats %}
-            {% for religion, count in religion_stats.items() %}
-            <div class="relig-bar"><span class="lab">{{ religion }}</span><span class="track"><span class="fill" style="width:{{ (count/total_students*100)|round(1) if total_students else 0 }}%"></span></span><span class="num">{{ count }}</span></div>
-            {% endfor %}
-            {% else %}<div class="empty-state"><i class="fas fa-chart-bar"></i><p>No data</p></div>{% endif %}
-        </div>
-    </div>
-</div>
-
-<!-- Birthdays + Recent students + Activity -->
-<div class="dash-grid {% if recent_activity %}c3{% else %}c2{% endif %}">
-    <div class="widget">
-        <div class="wh"><h3><i class="fas fa-gift"></i> Birthdays</h3></div>
-        <div class="wb">
-            {% if birthdays_today %}
-            {% for s in birthdays_today %}
-            <div class="birthday-item highlight"><span class="birthday-avatar">🎂</span><div><div class="birthday-name">{{ s.full_name }}</div><div class="birthday-date">Today · {{ s.age }} yrs</div></div></div>
-            {% endfor %}{% endif %}
-            {% for s in birthdays_week[:5] %}
-            <div class="birthday-item"><span class="birthday-avatar">🎈</span><div><div class="birthday-name">{{ s.full_name }}</div><div class="birthday-date">{{ s.date_of_birth.strftime('%d %b') }}</div></div></div>
-            {% endfor %}
-            {% if not birthdays_today and not birthdays_week %}<div class="empty-state"><i class="fas fa-calendar-day"></i><p>No birthdays this week</p></div>{% endif %}
-        </div>
-    </div>
-    <div class="widget">
-        <div class="wh"><h3><i class="fas fa-user-clock"></i> Recent students</h3><a href="{{ url_for('main.students_list') }}" class="btn btn-secondary btn-sm">All</a></div>
-        <div class="wb" style="padding:.4rem 1rem;">
-            {% if recent_students %}
-            {% for s in recent_students %}
-            <a href="{{ url_for('main.view_student', student_id=s.id) }}" class="recent-item">
-                <div class="recent-avatar {{ 'male' if s.gender=='Male' else 'female' }}"><i class="fas fa-{{ 'male' if s.gender=='Male' else 'female' }}"></i></div>
-                <div style="flex:1;"><div class="recent-name">{{ s.full_name }}</div><div class="recent-id">{{ s.student_id }}</div></div>
-                <i class="fas fa-chevron-right text-muted"></i>
-            </a>
-            {% endfor %}
-            {% else %}<div class="empty-state"><i class="fas fa-users"></i><p>No students yet</p></div>{% endif %}
-        </div>
-    </div>
-    {% if recent_activity %}
-    <div class="widget">
-        <div class="wh"><h3><i class="fas fa-clipboard-list"></i> Recent activity</h3><a href="{{ url_for('main.audit_log') }}" class="btn btn-secondary btn-sm">Log</a></div>
-        <div class="wb">
-            {% for a in recent_activity %}
-            <div class="act-item"><span class="badge badge-primary">{{ a.action }}</span><div><div>{{ a.detail or '' }}</div><div class="text-muted" style="font-size:.7rem;">{{ a.user }} · {{ a.created_at.strftime('%d %b %H:%M') }}</div></div></div>
-            {% endfor %}
-        </div>
-    </div>
-    {% endif %}
-</div>
-
-<!-- Quick actions -->
-<div class="widget">
-    <div class="wh"><h3><i class="fas fa-bolt"></i> Quick actions</h3></div>
-    <div class="wb">
-        <div class="quick-actions">
-            <a href="{{ url_for('main.add_student') }}" class="btn btn-primary"><i class="fas fa-user-plus"></i> Add Student</a>
-            <a href="{{ url_for('attendance.mark_attendance_page') }}" class="btn btn-success"><i class="fas fa-clipboard-check"></i> Mark Attendance</a>
-            <a href="{{ url_for('subjects.scores_entry') }}" class="btn btn-info"><i class="fas fa-edit"></i> Enter Scores</a>
-            <a href="{{ url_for('results.scan_waec') }}" class="btn btn-secondary"><i class="fas fa-camera"></i> Scan Result</a>
-            <a href="{{ url_for('results.analytics_hub') }}" class="btn btn-outline"><i class="fas fa-chart-pie"></i> Analytics</a>
-            <a href="{{ url_for('results.readiness') }}" class="btn btn-outline"><i class="fas fa-clipboard-check"></i> Readiness</a>
-        </div>
-    </div>
-</div>
-
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-(function(){
-    const isDark = document.documentElement.getAttribute('data-theme')==='dark';
-    const grid = isDark ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.06)';
-    const tick = isDark ? '#9ca3af' : '#6b7280';
-    Chart.defaults.color = tick;
-    const noLegend = {responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}}};
-
-    const g=document.getElementById('genderChart');
-    if(g) new Chart(g,{type:'doughnut',data:{labels:['Male','Female'],datasets:[{data:[{{ male_students }},{{ female_students }}],backgroundColor:['#4e73df','#e74a3b'],borderWidth:0}]},options:{...noLegend,cutout:'62%',plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}}}}});
-
-    const sd={{ stream_dist|tojson }};
-    const s=document.getElementById('streamChart');
-    if(s) new Chart(s,{type:'doughnut',data:{labels:Object.keys(sd),datasets:[{data:Object.values(sd),backgroundColor:['#11998e','#667eea','#f6c23e','#cbd5e1'],borderWidth:0}]},options:{...noLegend,cutout:'62%',plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}}}}});
-
-    const a=document.getElementById('ageChart');
-    if(a) new Chart(a,{type:'bar',data:{labels:['0-10','11-13','14-16','17-19','20+'],datasets:[{data:[{{ age_distribution['0-10'] }},{{ age_distribution['11-13'] }},{{ age_distribution['14-16'] }},{{ age_distribution['17-19'] }},{{ age_distribution['20+'] }}],backgroundColor:'#4e73df',borderRadius:6}]},options:{...noLegend,scales:{y:{beginAtZero:true,ticks:{stepSize:1,precision:0},grid:{color:grid}},x:{grid:{display:false}}}}});
-
-    {% if attendance_trend %}
-    const at=document.getElementById('attChart');
-    if(at) new Chart(at,{type:'line',data:{labels:{{ attendance_trend|map(attribute='label')|list|tojson }},datasets:[{data:{{ attendance_trend|map(attribute='pct')|list|tojson }},borderColor:'#11998e',backgroundColor:'rgba(17,153,142,.12)',fill:true,tension:.35,pointRadius:4,pointBackgroundColor:'#11998e',borderWidth:3}]},options:{...noLegend,scales:{y:{beginAtZero:true,max:100,grid:{color:grid}},x:{grid:{display:false}}}}});
-    {% endif %}
-
-    {% if class_stats %}
-    const cc=document.getElementById('classChart');
-    if(cc) new Chart(cc,{type:'bar',data:{labels:{{ class_stats|map(attribute='name')|list|tojson }},datasets:[
-        {label:'Male',data:{{ class_stats|map(attribute='male')|list|tojson }},backgroundColor:'#4e73df',borderRadius:4},
-        {label:'Female',data:{{ class_stats|map(attribute='female')|list|tojson }},backgroundColor:'#e74a3b',borderRadius:4}]},
-        options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{boxWidth:12,font:{size:11}}}},scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,beginAtZero:true,ticks:{precision:0},grid:{color:grid}}}}});
-    {% endif %}
-})();
-</script>
+<div id="dashboard-app"><p class="text-muted" style="padding:2rem 0">Loading dashboard…</p></div>
+<script type="application/json" id="dash-data">{{ dash_json|tojson }}</script>
+<script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
+<script src="{{ bundle_url('js/react/dashboard-app.js') }}" defer></script>
 {% endblock %}

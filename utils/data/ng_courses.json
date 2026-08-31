@@ -1,0 +1,4594 @@
+[
+{
+"name": "Anatomy",
+"department": "Medical & Health Sciences",
+"base_cutoff": 220,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Bio-medical Technology",
+"department": "Medical & Health Sciences",
+"base_cutoff": 220,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Dentistry And Dental Surgery",
+"department": "Medical & Health Sciences",
+"base_cutoff": 220,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Dentistry and Dental Technology",
+"department": "Medical & Health Sciences",
+"base_cutoff": 220,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Doctor of Pharmacy",
+"department": "Medical & Health Sciences",
+"base_cutoff": 220,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Health Care Administration and Hospital Management",
+"department": "Medical & Health Sciences",
+"base_cutoff": 220,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Human Nutrition and Dietetics",
+"department": "Medical & Health Sciences",
+"base_cutoff": 220,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Medical Biochemistry",
+"department": "Medical & Health Sciences",
+"base_cutoff": 220,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Medical Radiography And Radiological Science",
+"department": "Medical & Health Sciences",
+"base_cutoff": 220,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Medical Rehabilitation",
+"department": "Medical & Health Sciences",
+"base_cutoff": 220,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Nursing / Nursing Science",
+"department": "Medical & Health Sciences",
+"base_cutoff": 220,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Nutrition and Dietetics",
+"department": "Medical & Health Sciences",
+"base_cutoff": 220,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Pharmacology And Therapeutics",
+"department": "Medical & Health Sciences",
+"base_cutoff": 220,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Physiology",
+"department": "Medical & Health Sciences",
+"base_cutoff": 220,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Prosthesis and Orthopaedic Technology",
+"department": "Medical & Health Sciences",
+"base_cutoff": 220,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Public and Community Health",
+"department": "Medical & Health Sciences",
+"base_cutoff": 220,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Public Health Science",
+"department": "Medical & Health Sciences",
+"base_cutoff": 220,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Public Health Technology",
+"department": "Medical & Health Sciences",
+"base_cutoff": 220,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Radiography And Radiation Science",
+"department": "Medical & Health Sciences",
+"base_cutoff": 220,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Administration",
+"department": "Medical & Health Sciences",
+"base_cutoff": 220,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Agriculture",
+"department": "Medical & Health Sciences",
+"base_cutoff": 220,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Engineering, Environment & Technology",
+"department": "Medical & Health Sciences",
+"base_cutoff": 220,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Education",
+"department": "Medical & Health Sciences",
+"base_cutoff": 220,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Arts & Humanities",
+"department": "Medical & Health Sciences",
+"base_cutoff": 220,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Sciences",
+"department": "Medical & Health Sciences",
+"base_cutoff": 220,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Social & Management Sciences",
+"department": "Medical & Health Sciences",
+"base_cutoff": 220,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Civil Law",
+"department": "Law",
+"base_cutoff": 250,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Economics"
+},
+{
+"name": "Common and Islamic Law",
+"department": "Law",
+"base_cutoff": 250,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Economics"
+},
+{
+"name": "Common Law",
+"department": "Law",
+"base_cutoff": 250,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Economics"
+},
+{
+"name": "Islamic / Sharia Law",
+"department": "Law",
+"base_cutoff": 250,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Economics"
+},
+{
+"name": "Private and Islamic Law",
+"department": "Law",
+"base_cutoff": 250,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Economics"
+},
+{
+"name": "Public and Private International Law",
+"department": "Law",
+"base_cutoff": 250,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Economics"
+},
+{
+"name": "Medical, Pharmaceutical & Health Sciences",
+"department": "Law",
+"base_cutoff": 250,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Economics"
+},
+{
+"name": "Accounting Technology",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Aeronautic and Astronautic Engineering",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Agricultural and Bio-Resources Engineering",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Agricultural And Biosystems Engineering",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Agricultural and Environmental Engineering",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Agricultural And Management Engineering",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Automobile Engineering",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Building",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Business Management",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Chemical / Petrochemical Engineering",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Chemical And Polymer Engineering",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Communication Technology",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Communication Technology And Wireless Technology",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Computer And Communication Engineering",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Computer Science with (Economics) (Mathematics)",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Electrical / Electronics Engineering",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Electrical And Computer Engineering",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Electrical And Information Engineering",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Electrical Engineering",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Electronics And Computer Engineering",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Entrepreneurship And Business Studies",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Entrepreneurship Management Technology",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Environmental Management",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Environmental Management Technology",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Environmental Resources Management",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Environmental Science Resource Management",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Environmental Technology",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Financial Management Technology",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Fine / Applied Art",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Fine And Industrial Arts",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Fine Art",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Fine Arts And Design",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Food Engineering",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Food Science and Engineering",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Food Science with Business",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Food Technology",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Geography and Environmental Science",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Geography and Meteorology",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Geography and Planning",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Geography and Regional Planning",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Glass Technology",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Home Economics And Food Management",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Hotel Management and Tourism",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Industrial Engineering",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Industrial Maintenance Engineering Technology",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Industrial Production Engineering",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Information And Communication Engineering",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Information And Communication Technology Engineering",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Information And Media Technology Engineering",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Information Management Technology",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Information Systems",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Irrigation Engineering",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Land Survey",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Land Surveying",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Land Surveying And Geo-Informatics",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Landscape Architecture",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Management Technology",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Marine Economics and Finance",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Maritime Management Technology",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Material Engineering",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Mechanical and Metallurgical Engineering",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Mechatronics And System Engineering",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Metallurgical and Material Engineering",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Metallurgical Engineering",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Meteorology",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Meteorology and Climate Change",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Petrochemical Engineering",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Petroleum and Gas Engineering",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Polymer Engineering",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Port Management",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Project Management Technology",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Remote Sensing And Geosciences Information System",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Shipping And Maritime Technology",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Technological Management",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Telecommunication And Wireless Technology",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Telecommuniction Engineering",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Textile Science and Technology",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Transport Management Technology",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Visual Arts and Technology",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Water Resources and Environmental Engr.",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Wood Product Engineering",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Wood Production Engineering",
+"department": "Engineering / Environmental",
+"base_cutoff": 230,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Animal and Environmental Biology",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Animal Biology and Environment",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Anthropology (Biological)",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Applied Microbiology",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Applied Biochemistry",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Applied Biology and Biotechnology",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Applied Biology and Genetics",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Applied Botany",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Applied Ecology",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Applied Geology",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Applied Geophysics",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Applied Mathematics with Statistics",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Applied Microbiology and Brewing",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Applied statistics",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Applied Zoology",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Aquaculture and Fisheries Management",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Archaeology (Single Honour)",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Bio-Informatics",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Biochemistry and Molecular Biology",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Biological Science(s)",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Botany And Ecological Studies",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Botany and Microbiology",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Cell Biology and Genetics",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Chemical Sciences",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Chemical and Industrial Chemistry",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Chemistry and Applied Chemistry",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Chemistry and Industrial Chemistry",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Communication And Wireless Technology",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Communications Technology",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Computer Information And Communication Science",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Computer Science And Informatics",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Computer Science And Information Science",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Computer Science and Information Technology",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Computer Science And Mathematics",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Computer Science With Economics",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Computer Science with Mathematics",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Computer Sciences and Information Technology",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Computer With Electronics",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Computer with Statistics",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Conservation Biology",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Cyber Security Science",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Data Management",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Doctor Of Physiotherapy",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Earth Science",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Ecology",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Ecology And Environmental Studies",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Electronics",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Electronics and Computer Technology",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Electrons",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Energy and Petroleum Studies",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Energy Studies",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Engineering Physics",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Environmental Biology",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Environmental Biology and Fisheries",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Environmental Management And Toxicology",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Environmental Science And Technology",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Fisheries",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Forensic Science",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Genetics and Bio-Technology",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Geography and Environmental Management",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Geography And Geosciences",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Geological Sciences",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Geology / Regional Planning",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Geology and Exploration Geophysics",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Geology and Geo-Physics",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Geology and Mineral Science",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Geology And Mineral Sciences",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Geology and minning",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Geology and Petroleum Studies",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Geosciences",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Human Biology",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Industrial And Environmental Chemistry",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Industrial Mathematics",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Industrial Mathematics / Applied Statistics",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Industrial Mathematics / Computer",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Industrial Microbiology",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Industrial Physics",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Industrial Physics / Applied Geophysics",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Industrial Physics / Electronics / IT Application",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Industrial Physics / Renewable Energy",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Information And Communication Science",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Information and Communication Tech.",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Information And Media Technology",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Information Science And Media Studies",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Laboratory Technology",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Management Information System",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Marine Biology and Fishery",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Marine Geology",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Marine Science And Technology",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Mathematical Sciences",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Mathematics / Computer Science",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Mathematics / Statistics",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Mathematics and Economics",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Mathematics And Statistics",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Mathematics with Computer Science",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Mathematics with Statistics",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Microbiology And Biotechnology",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Microbiology and Industrial Biotechnology",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Molecular Biology",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Natural and Environmental Science",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Natural and Environmental Studies",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Nautical Science",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Oceanography",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Operations Research",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Parastitology and Entomology",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Petroleum Chemistry",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Physical Sciences",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Physics / Astrology",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Physics / Industrial Physics",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Physics / Material Science",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Physics and Applied Physics",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Physics And Computer Electronics",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Physics And Energy Studies",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Physics Electronics",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Physics With Computational Modeling",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Physics with Electronics",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Physics With Solar Energy",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Plant Biology",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Plant Biology and Biotechnology",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Plant Science",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Plant Science and Biotechnology",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Plant Science and Forestry",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Plant Science and Microbiology",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Pure / Applied Biology",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Pure / Applied Chemistry",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Pure / Applied Mathematics",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Pure And Applied Physics",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Pure and Industrial Chemistry",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Pure And Industrial Physics",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Pure Chemistry",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Pure Physics",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Sport Science",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Statistics / Demography",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Statistics and Computer Science",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Mathematics, Physics, Chemistry",
+"waec_subjects": "English Language, Mathematics, Physics, Chemistry, Further Mathematics"
+},
+{
+"name": "Telecommunication Management",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Telecommunication Science",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Zoology and Aquaculture",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Zoology and Environmental Biology",
+"department": "Sciences",
+"base_cutoff": 190,
+"jamb_subjects": "English Language, Biology, Chemistry, Physics",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Physics"
+},
+{
+"name": "Agric- Business",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Agricultural Administration",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Agricultural Co-operative Management",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Agricultural Economics and Extension",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Agricultural Economics and Farm Management",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Agricultural Extension and Communication Technology",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Agricultural Extension and Management",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Agricultural Extension and Rural Sociology",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Agricultural Extension Services",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Agricultural Extention",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Agricultural Marketing and Cooperative",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Agricultural Resource Extension",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Agriculture and Resource Economics",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Agriculture Cooperative Management",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Agronomy",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Animal Breeding and Genetics",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Animal Nutrition",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Animal Nutrition and Biotechnology",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Animal Physiology",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Animal Production",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Animal Production and Fisheries",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Animal Production and Health",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Animal Production and Health Service",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Animal Science and Fisheries",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Animal Science and Fisheries Management",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Animal Science and Range Management",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Animal Science and Technology",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Crop And Environmental Protection",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Crop Production",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Crop Production And Horticulture",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Crop Production and Landscape Management",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Crop Production And Protection",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Crop Production And Soil Science",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Crop Production Technology",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Crop Protection",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Crop Science And Biotechnology",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Crop Science And Horticulture",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Crop Science And Production",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Crop Science And Technology",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Crop, Soil And Environmental Science",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Crop, Soil And Pest Management",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Eco-Tourism and Wildlife Management",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Economics/Extention Services",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Enivronmental Management and Pollution Control",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Family, Nutrition and Consumer Sciences",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Fisheries And Aquaculture Technology",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Fisheries And Aquatic Environment Management",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Fisheries And Aquatic Resources Management",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Fisheries and Wildlife Management",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Fisheries Management",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Fisheries Technology",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Food Science",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Food Science And Nutrition",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Forestry",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Forestry / Forest Resources Management",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Forestry and Environmental Management",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Forestry and Environmental Technology",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Forestry And Wildlife Management",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Forestry And Wildlife Technology",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Forestry and Wood Technology",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Forestry Wildlife And Fisheries",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Home And Hotel Management",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Home Economics",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Home Economics And Management/Economics",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Home Science",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Home Science, Nutrition and Dietetics",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Hotel and Catering Management",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Livestock Production Technology",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Nutrition And Consumer Services",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Pasture and Range Management",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Plant Breeding And Seed Science",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Plant Breeding and Seed Technology",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Plant Physiology and Crop Production",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Plant Science and Crop Production",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Soil Science and Environmental Management",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Soil Science And Land Agro-Climatology",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Soil Science and Land Management",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Soil Science And Technology",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Soil Science Management",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Veterinary Science",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Water Resources And Agrometeorology",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Water Resources Management and Agrometeorology",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Water Resources, Aquaculture and Fisheries Technology",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Wildlife Management",
+"department": "Agriculture",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Biology, Chemistry, Geography",
+"waec_subjects": "English Language, Mathematics, Biology, Chemistry, Agricultural Science"
+},
+{
+"name": "Accountancy / Accounting",
+"department": "Management Sciences",
+"base_cutoff": 200,
+"jamb_subjects": "English Language, Mathematics, Economics, Commerce",
+"waec_subjects": "English Language, Mathematics, Economics, Commerce|Financial Accounting, Government"
+},
+{
+"name": "Actuarial Science and Insurance",
+"department": "Management Sciences",
+"base_cutoff": 200,
+"jamb_subjects": "English Language, Mathematics, Economics, Commerce",
+"waec_subjects": "English Language, Mathematics, Economics, Commerce|Financial Accounting, Government"
+},
+{
+"name": "Cooperative and Rural Development",
+"department": "Management Sciences",
+"base_cutoff": 200,
+"jamb_subjects": "English Language, Mathematics, Economics, Commerce",
+"waec_subjects": "English Language, Mathematics, Economics, Commerce|Financial Accounting, Government"
+},
+{
+"name": "Cooperative Management",
+"department": "Management Sciences",
+"base_cutoff": 200,
+"jamb_subjects": "English Language, Mathematics, Economics, Commerce",
+"waec_subjects": "English Language, Mathematics, Economics, Commerce|Financial Accounting, Government"
+},
+{
+"name": "Entrepreneurship and Business Management",
+"department": "Management Sciences",
+"base_cutoff": 200,
+"jamb_subjects": "English Language, Mathematics, Economics, Commerce",
+"waec_subjects": "English Language, Mathematics, Economics, Commerce|Financial Accounting, Government"
+},
+{
+"name": "Film and Video Studies",
+"department": "Management Sciences",
+"base_cutoff": 200,
+"jamb_subjects": "English Language, Mathematics, Economics, Commerce",
+"waec_subjects": "English Language, Mathematics, Economics, Commerce|Financial Accounting, Government"
+},
+{
+"name": "Finance",
+"department": "Management Sciences",
+"base_cutoff": 200,
+"jamb_subjects": "English Language, Mathematics, Economics, Commerce",
+"waec_subjects": "English Language, Mathematics, Economics, Commerce|Financial Accounting, Government"
+},
+{
+"name": "Hotel And Tourism Management",
+"department": "Management Sciences",
+"base_cutoff": 200,
+"jamb_subjects": "English Language, Mathematics, Economics, Commerce",
+"waec_subjects": "English Language, Mathematics, Economics, Commerce|Financial Accounting, Government"
+},
+{
+"name": "Human Resources Management",
+"department": "Management Sciences",
+"base_cutoff": 200,
+"jamb_subjects": "English Language, Mathematics, Economics, Commerce",
+"waec_subjects": "English Language, Mathematics, Economics, Commerce|Financial Accounting, Government"
+},
+{
+"name": "Industrial Relations And Human Resources Management",
+"department": "Management Sciences",
+"base_cutoff": 200,
+"jamb_subjects": "English Language, Mathematics, Economics, Commerce",
+"waec_subjects": "English Language, Mathematics, Economics, Commerce|Financial Accounting, Government"
+},
+{
+"name": "Industrial Relations and Personnel Management",
+"department": "Management Sciences",
+"base_cutoff": 200,
+"jamb_subjects": "English Language, Mathematics, Economics, Commerce",
+"waec_subjects": "English Language, Mathematics, Economics, Commerce|Financial Accounting, Government"
+},
+{
+"name": "Information Resource Management",
+"department": "Management Sciences",
+"base_cutoff": 200,
+"jamb_subjects": "English Language, Mathematics, Economics, Commerce",
+"waec_subjects": "English Language, Mathematics, Economics, Commerce|Financial Accounting, Government"
+},
+{
+"name": "Insurance and Actuarial Science",
+"department": "Management Sciences",
+"base_cutoff": 200,
+"jamb_subjects": "English Language, Mathematics, Economics, Commerce",
+"waec_subjects": "English Language, Mathematics, Economics, Commerce|Financial Accounting, Government"
+},
+{
+"name": "Insurance and Risk Management",
+"department": "Management Sciences",
+"base_cutoff": 200,
+"jamb_subjects": "English Language, Mathematics, Economics, Commerce",
+"waec_subjects": "English Language, Mathematics, Economics, Commerce|Financial Accounting, Government"
+},
+{
+"name": "International Relations and Strategic Studies",
+"department": "Management Sciences",
+"base_cutoff": 200,
+"jamb_subjects": "English Language, Mathematics, Economics, Commerce",
+"waec_subjects": "English Language, Mathematics, Economics, Commerce|Financial Accounting, Government"
+},
+{
+"name": "International Studies and Diplomacy",
+"department": "Management Sciences",
+"base_cutoff": 200,
+"jamb_subjects": "English Language, Mathematics, Economics, Commerce",
+"waec_subjects": "English Language, Mathematics, Economics, Commerce|Financial Accounting, Government"
+},
+{
+"name": "Local Government Administration",
+"department": "Management Sciences",
+"base_cutoff": 200,
+"jamb_subjects": "English Language, Mathematics, Economics, Commerce",
+"waec_subjects": "English Language, Mathematics, Economics, Commerce|Financial Accounting, Government"
+},
+{
+"name": "Local Government Studies",
+"department": "Management Sciences",
+"base_cutoff": 200,
+"jamb_subjects": "English Language, Mathematics, Economics, Commerce",
+"waec_subjects": "English Language, Mathematics, Economics, Commerce|Financial Accounting, Government"
+},
+{
+"name": "Management",
+"department": "Management Sciences",
+"base_cutoff": 200,
+"jamb_subjects": "English Language, Mathematics, Economics, Commerce",
+"waec_subjects": "English Language, Mathematics, Economics, Commerce|Financial Accounting, Government"
+},
+{
+"name": "Management Studies",
+"department": "Management Sciences",
+"base_cutoff": 200,
+"jamb_subjects": "English Language, Mathematics, Economics, Commerce",
+"waec_subjects": "English Language, Mathematics, Economics, Commerce|Financial Accounting, Government"
+},
+{
+"name": "Personnel Management",
+"department": "Management Sciences",
+"base_cutoff": 200,
+"jamb_subjects": "English Language, Mathematics, Economics, Commerce",
+"waec_subjects": "English Language, Mathematics, Economics, Commerce|Financial Accounting, Government"
+},
+{
+"name": "Public Administration And Local Government",
+"department": "Management Sciences",
+"base_cutoff": 200,
+"jamb_subjects": "English Language, Mathematics, Economics, Commerce",
+"waec_subjects": "English Language, Mathematics, Economics, Commerce|Financial Accounting, Government"
+},
+{
+"name": "Secretarial Administration",
+"department": "Management Sciences",
+"base_cutoff": 200,
+"jamb_subjects": "English Language, Mathematics, Economics, Commerce",
+"waec_subjects": "English Language, Mathematics, Economics, Commerce|Financial Accounting, Government"
+},
+{
+"name": "Tourism and Event Management",
+"department": "Management Sciences",
+"base_cutoff": 200,
+"jamb_subjects": "English Language, Mathematics, Economics, Commerce",
+"waec_subjects": "English Language, Mathematics, Economics, Commerce|Financial Accounting, Government"
+},
+{
+"name": "Tourism Studies",
+"department": "Management Sciences",
+"base_cutoff": 200,
+"jamb_subjects": "English Language, Mathematics, Economics, Commerce",
+"waec_subjects": "English Language, Mathematics, Economics, Commerce|Financial Accounting, Government"
+},
+{
+"name": "Transport And Planning",
+"department": "Management Sciences",
+"base_cutoff": 200,
+"jamb_subjects": "English Language, Mathematics, Economics, Commerce",
+"waec_subjects": "English Language, Mathematics, Economics, Commerce|Financial Accounting, Government"
+},
+{
+"name": "Transport and Tourism",
+"department": "Management Sciences",
+"base_cutoff": 200,
+"jamb_subjects": "English Language, Mathematics, Economics, Commerce",
+"waec_subjects": "English Language, Mathematics, Economics, Commerce|Financial Accounting, Government"
+},
+{
+"name": "Accountancy / Finance / Accounting",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Accounting and Finance",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Advertising",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Broadcasting",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Business Administration / Marketing",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Business And Entrepreneurship Studies",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Business Enterprise Management",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Business Management / Management Science",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Conflict And Peace Resolution",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Criminology",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Criminology and Penology",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Demography and Statistics",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Economics and Development Studies",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Economics and Statistics",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Economics With Operative Research",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Entrepreneurial Studies",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Entrepreneurship Studies And Innovation",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Environmental Protection And Resources Management",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Environmental Science and Management Education",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Environmental Sustainability",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Finance and Investment Management",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Geography and Planning Science",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Government And Public Administration",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "History And International Relations",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Hospitality And Tourism",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Industrial And Labour Relations",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Industrial Relations",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Intelligence and Security Studies",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "International and Comparative Politics",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "International Relations and Diplomacy",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "International Relations And Human Resource Management",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "International Relationship and Strategic Studies",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "International Studies",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Journalism And Media Studies",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Library Science",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Logistics And Supply Chain Management",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Management And Entrepreneurship",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Marketing And Advertising",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Mass Communication And Media Technology",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Media And Communication Studies",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Peace and Development Studies",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Peace Studies And Conflict Resolution",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Policy and Administrative Studies",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Policy And Strategic Studies",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Political and Administrative Studies",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Political Science / International Law and Diplomacy",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Political Science and Conflict Resolution",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Political Science and Defence Studies",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Political Science and Diplomacy",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Political Science and International Relations",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Political Science and International Studies",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Political Science and Public Administration",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Population Studies",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Public Administration and Local Govt",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Public Relation and Advertising",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Public Relations",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Social Justice",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Social Works",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Sociology and Anthropology",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Sustainable Social Development",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Transport Management",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "Transport Planning and Management",
+"department": "Social & Management Sciences",
+"base_cutoff": 195,
+"jamb_subjects": "English Language, Economics, Government, Mathematics",
+"waec_subjects": "English Language, Mathematics, Economics, Government, Commerce"
+},
+{
+"name": "African and Asian Studies",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Arabic and Islamic Studies",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Arabic Language",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Arabic Language and Literature",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Arts (Combined Honours)",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Chinese Studies",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Christian Studies",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Christian Religious Knowledge / Studies",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Christian Religious Studies (CRS)",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Christian Theology",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Classical Studies",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Communication Arts",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Communication Studies",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Comparative Religious Studies",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Creative And Visual Arts",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Creative Arts",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Drama / Dramatic / Performing Arts",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Efik-Ibibio",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "English and International Studies",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "English Language and Communication Studies",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "English Language and Literature",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "English Literature and Language",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "English Studies",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "European and Nigerian Languages",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Film Arts",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Fine Art / Fine and Applied Arts",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "French and International Relations",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "French and International Studies",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "French with German / Russian",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Fulfulde",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "German",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "German Combined with French, Russian",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "History",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "History / Sociology",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "History and Archaology",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "History and Archeology",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "History and Diplomacy",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "History and Diplomatic Studies",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "History and International Relation",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "History and Strategic Studies",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Igbo / Linguistics",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Kanuri",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Language and Literature",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Languages and Linguistics",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Languages and Literature",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Linguistic / Urhobo",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Linguistics / Edo",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Linguistics / Yoruba",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Linguistics / Arabic",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Linguistics / English",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Linguistics / French",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Linguistics / Hausa",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Linguistics / Igbo",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Linguistics and African Language",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Linguistics and African Languages",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Linguistics and Communication Studies",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Linguistics and Fulfulde",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Linguistics and Kanuri",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Linguistics and Nigerian Languages",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Linguistics with Igbo / Yoruba",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Linguistics, Igbo and other African Languages",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Literature in English",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Military History",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Modern and European Language",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Modern Languages B.A. (Single and Combined Hons)",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Music Technology",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Nigerian Languages",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Peace Studies",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Performing Arts",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Performing Arts and Culture",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Philosophy and Religious Studies",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Portuguese",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Portuguese / English",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Religions and African Culture",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Religious and Cultural Studies",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Religious and Human Relations",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Russian",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Russian with French / German",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Theatre And Film Studies",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Theatre And Media Arts",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Theatre And Performing Arts",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Theology",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Visual and Applied Arts",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Yoruba and Communication Arts",
+"department": "Arts",
+"base_cutoff": 180,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Adult and Community Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Adult and Continuous Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Adult and Non-Formal Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Adult Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Adult Education / Economics and Statistics",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Adult Education / English Literature",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Adult Education / Geography and Regional Planning",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Adult Education / Political Science and Public Administration",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Adult Education and Community Development",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Agricultural Production and Management Science and Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Agricultural Science and Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Agricultural Technology and Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Auto and Mechanical Technology Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Automobile Technology Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Building and Woodwork Technology Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Building Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Building Technology Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Communication And Language Arts Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Computer Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Construction Technology Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Counsellor Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Curriculum and Instruction",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Curriculum Studies",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Early Childhood and Primary Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Economics / English",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Economics / Geography",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Economics / History",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Economics / Igbo",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Economics / Mathematics",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Economics / Physics",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Economics / Political Science",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Economics / Geography / Physics",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Economics / Social Studies",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Economics and Fine and Applied Arts",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education / Construction Technology",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education / Fine Art",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education / Language / English",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education / Mechanical Technology",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education Accounting",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education and Accountancy",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education and Arabic",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education and Business Administration",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education and Chemistry",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education and Christian Religious Studies",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education and Computer Science",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education and Economics",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education and Edo Language",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education and Efik / Ibibio",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education and English and Literary Studies",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education and English Language and Literature",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education and French",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education and Geography",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education and Geography / Physics",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education and Government",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education and Hausa",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education and History",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education and Igbo",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education and Integrated Science",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education and Islamic Studies",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education and Language Arts",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education and Mass Communication",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education and Mechanical and Automechanic Technology",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education and Music",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education and Physics",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education and Political Science",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education and Religious Studies",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education and Science",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education and Social Science",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education and Social Studies",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education and Sociology",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education and Yoruba",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education Arts",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education Fine and Applied Arts",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education Foundation and Management",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education Psychology and Curriculum Studies",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education Technology",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Education, Language and French",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Educational / Psychology, Guidance and Counseling",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Educational Administration",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Educational Administration and Planning",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Educational Administration and Supervision",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Educational Foundation",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Educational Foundations and Administration",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Educational Management and Planning",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Educational Management and Policy",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Educational Technology",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Educational Technology / Introductory Technology",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Electrical / Electronics Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Electrical / Electronics Technology Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Elementary Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "English (Double Major)",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "English / Geography",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "English / History",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "English / Igbo",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "English / Integrated Science",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "English And Fine And Applied Arts",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Environmental Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Exercise and Sport Science",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Guidance and Counseling",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Health Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Health and Safety Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Home Economics and Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Home Economics and Hotel Management and Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Human Kinetics",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Human Physical and Health Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Industrial Education Technology",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Industrial Technical Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Industrial Technology Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Integrated Science / Mathematics Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Library and Information Management",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Library and Information Studies",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Library and Information Technology",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Management And Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Marketing Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Mathematics / Computer Science Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Mathematics / Statistics Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Mathematics and Education Technology",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Mechanical / Automobile Technology Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Mechanical Metalwork Technology Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Metalwork / Woodwork Technology Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Metalwork Technology Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Nursery and Primary Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Physical Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Physical and Health Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Physical Education and Recreation",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Pre-Primary and Primary Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Primary and Elementary Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Primary Education Studies",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Psychology Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Science Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Secretarial Administration and Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Secretarial Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Sport Science and Health Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Statistics / Computer Science Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Statistics Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Teacher Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Teacher Education Science",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Technical Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Technology and Vocational Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Technology Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Transport Planning and Management Education (TPM)",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Vocational and Technical Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Vocational Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Vocational Industrial Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Woodwork / Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+},
+{
+"name": "Woodwork Technology Education",
+"department": "Education",
+"base_cutoff": 170,
+"jamb_subjects": "English Language, Literature in English, Government, Christian Religious Studies",
+"waec_subjects": "English Language, Mathematics, Literature in English, Government, Christian Religious Studies"
+}
+]

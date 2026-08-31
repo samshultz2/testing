@@ -1,0 +1,342 @@
+{% extends "platform/_layout.html" %}
+{% block title %}{{ t.name }}{% endblock %}
+{% block heading %}{{ t.name }}{% endblock %}
+{% block subheading %}{{ t.subdomain }} · tenant profile{% endblock %}
+
+{% block head %}
+<style>
+  .profile-grid{display:grid;grid-template-columns:1.6fr 1fr;gap:16px;align-items:start}
+  .info-row{display:flex;justify-content:space-between;gap:12px;padding:9px 0;border-top:1px solid var(--line-2);font-size:13.5px}
+  .info-row:first-child{border-top:0}
+  .info-row .k{color:var(--faint)} .info-row .v{font-weight:600;text-align:right}
+  .usage{display:grid;grid-template-columns:repeat(auto-fit,minmax(96px,1fr));gap:10px}
+  .usage .u{background:var(--surface-2);border:1px solid var(--line);border-radius:11px;padding:12px 10px;text-align:center}
+  .usage .u .n{font-family:var(--font-display);font-size:20px;font-weight:700}
+  .usage .u .l{color:var(--faint);font-size:11.5px;text-transform:uppercase;letter-spacing:.05em}
+  .tagrow{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+  .tag{background:var(--accent-soft);color:var(--accent-ink);border-radius:99px;padding:3px 11px;font-size:12px;font-weight:600}
+  .act-grid{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end}
+  .act-grid form{display:flex;gap:6px;align-items:flex-end;margin:0}
+  .paylist{list-style:none;margin:0;padding:0}
+  .paylist li{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--line-2);font-size:13px}
+  .paylist li:first-child{border-top:0}
+  .backlink{display:inline-flex;align-items:center;gap:7px;color:var(--accent-ink);font-size:13.5px;margin-bottom:10px}
+  @media (max-width:860px){ .profile-grid{grid-template-columns:1fr} }
+  .p-archived{color:var(--faint);background:var(--line)}
+  .badge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:99px;display:inline-flex;align-items:center;gap:5px}
+  .b-vip{color:#8a5a00;background:#fdeecb} .b-high{color:var(--accent-ink);background:var(--accent-soft)}
+  .b-risk-high{color:var(--bad);background:var(--bad-soft)} .b-risk-watch{color:var(--warn);background:var(--warn-soft)}
+  .b-am{color:var(--soft);background:var(--surface-2);border:1px solid var(--line)}
+  [data-theme="dark"] .b-vip{color:#f0c064;background:#2c2210}
+  .hdr-badges{display:flex;flex-wrap:wrap;gap:6px;width:100%;margin-top:2px}
+  /* timeline */
+  .tl{list-style:none;margin:0;padding:4px 4px 4px 6px;position:relative}
+  .tl li{position:relative;padding:0 0 16px 30px}
+  .tl li::before{content:"";position:absolute;left:9px;top:20px;bottom:-2px;width:2px;background:var(--line)}
+  .tl li:last-child{padding-bottom:2px} .tl li:last-child::before{display:none}
+  .tl .dot{position:absolute;left:0;top:2px;width:20px;height:20px;border-radius:50%;display:grid;
+    place-items:center;font-size:9px;color:#fff}
+  .tl .dot.signup{background:var(--accent-2)} .tl .dot.verify{background:var(--ok)}
+  .tl .dot.activate{background:var(--accent)} .tl .dot.payment{background:#2e7d32}
+  .tl .dot.admin{background:var(--warn)}
+  .tl .tl-l{font-size:13.5px;font-weight:600} .tl .tl-d{font-size:12px;color:var(--faint);word-break:break-word}
+  .tl .tl-w{font-size:11.5px;color:var(--faint);float:right}
+  .crm-form label{display:block;font-size:12px;color:var(--faint);margin:10px 0 4px}
+  .crm-form select.field{width:100%}
+  /* entitlements */
+  .feat-chips{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0 12px}
+  .fchip{font-size:11.5px;font-weight:600;padding:3px 10px;border-radius:99px;display:inline-flex;align-items:center;gap:5px}
+  .fchip.on{color:var(--ok);background:var(--ok-soft)} .fchip.off{color:var(--faint);background:var(--line)}
+  .fchip.ovr{outline:2px dotted var(--warn);outline-offset:1px}
+  .lim{margin:9px 0}
+  .lim .top{display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:4px}
+  .lim .top .u{font-variant-numeric:tabular-nums;font-weight:600}
+  .lim .bar{height:7px;border-radius:99px;background:var(--line-2);overflow:hidden}
+  .lim .bar > span{display:block;height:100%;background:var(--accent)}
+  .lim.over .bar > span{background:var(--bad)} .lim.over .top .u{color:var(--bad)}
+  .ovr-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px;margin:8px 0 4px;font-size:12.5px}
+  .ovr-grid label{display:flex;align-items:center;gap:7px;color:var(--soft);margin:0}
+  .ovr-grid input{accent-color:var(--accent)}
+  /* customer success */
+  .cs-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+  @media (max-width:860px){ .cs-grid{grid-template-columns:1fr} }
+  .hs{display:flex;align-items:center;gap:16px;padding:16px 18px}
+  .gauge{--v:0;--c:var(--ok);width:66px;height:66px;border-radius:50%;flex:none;display:grid;place-items:center;
+    background:conic-gradient(var(--c) calc(var(--v)*1%), var(--line-2) 0)}
+  .gauge b{width:50px;height:50px;border-radius:50%;background:var(--surface);display:grid;place-items:center;
+    font-size:17px;font-weight:800;font-variant-numeric:tabular-nums}
+  .hs .band{font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.05em}
+  .band.healthy{color:var(--ok)} .band.watch{color:var(--warn)} .band.at_risk{color:var(--bad)}
+  .hs .reasons{font-size:12.5px;color:var(--faint);margin-top:3px;line-height:1.5}
+  .ob .top{display:flex;justify-content:space-between;font-size:13px;margin:0 0 8px}
+  .ob-bar{height:7px;border-radius:99px;background:var(--line-2);overflow:hidden;margin-bottom:10px}
+  .ob-bar > span{display:block;height:100%;background:var(--accent)}
+  .ob-step{display:flex;align-items:center;gap:9px;font-size:13px;padding:3px 0;color:var(--soft)}
+  .ob-step i{width:16px;text-align:center}
+  .ob-step .done{color:var(--ok)} .ob-step .todo{color:var(--faint)}
+</style>
+{% endblock %}
+
+{% block content %}
+<a class="backlink" href="{{ url_for('platform.schools') }}"><i class="fas fa-arrow-left"></i> All schools</a>
+
+<div class="panel" style="padding:16px 18px;margin-bottom:16px;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+  <span class="school"><span class="ic">{{ t.name[0]|upper }}</span>
+    <span><b style="font-size:16px">{{ t.name }}</b><br>
+      <a class="sub" href="{{ portal_url }}" target="_blank" rel="noopener">{{ t.subdomain }} <i class="fas fa-arrow-up-right-from-square" style="font-size:10px"></i></a></span></span>
+  <span style="margin-left:auto">
+    {% if row.owner %}<span class="pill p-owner"><i class="fas fa-crown"></i> Owner · free</span>
+    {% elif t.status == 'archived' %}<span class="pill p-archived"><i class="fas fa-box-archive"></i> Archived</span>
+    {% elif t.status == 'suspended' %}<span class="pill p-suspended">Suspended</span>
+    {% elif row.on_trial %}<span class="pill p-trial">Trial · {{ row.days_left }}d left</span>
+    {% elif row.active %}<span class="pill p-active">Active · {{ row.days_left }}d left</span>
+    {% else %}<span class="pill p-unpaid">Unpaid</span>{% endif %}
+  </span>
+  {% if not row.owner and t.status == 'active' %}
+  <a class="btn sm" href="#support-access"><i class="fas fa-user-secret"></i> View as support</a>
+  {% endif %}
+  {% if t.priority in ('vip','high') or t.risk in ('watch','high') or t.account_manager %}
+  <div class="hdr-badges">
+    {% if t.priority == 'vip' %}<span class="badge b-vip"><i class="fas fa-star"></i> VIP</span>
+    {% elif t.priority == 'high' %}<span class="badge b-high"><i class="fas fa-arrow-up"></i> High priority</span>{% endif %}
+    {% if t.risk == 'high' %}<span class="badge b-risk-high"><i class="fas fa-triangle-exclamation"></i> High churn risk</span>
+    {% elif t.risk == 'watch' %}<span class="badge b-risk-watch"><i class="fas fa-eye"></i> Watch</span>{% endif %}
+    {% if t.account_manager %}<span class="badge b-am"><i class="fas fa-user-tie"></i> {{ t.account_manager }}</span>{% endif %}
+  </div>
+  {% endif %}
+</div>
+
+<!-- Customer success: health score + onboarding -->
+<div class="cs-grid">
+  <div class="panel">
+    <h3 style="font-size:15px;margin:0;padding:14px 18px 0">Customer health</h3>
+    {% set bandcol = {'healthy':'var(--ok)','watch':'var(--warn)','at_risk':'var(--bad)'} %}
+    <div class="hs">
+      <div class="gauge" style="--v:{{ health.score }};--c:{{ bandcol[health.band] }}"><b>{{ health.score }}</b></div>
+      <div>
+        <div class="band {{ health.band }}">{{ health.band|replace('_',' ')|title }}</div>
+        <div class="reasons">{{ health.reasons | join(' · ') }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="panel ob" style="padding:16px 18px">
+    <h3 style="font-size:15px;margin:0 0 8px">Onboarding progress</h3>
+    {% if onboarding %}
+    <div class="top"><span class="muted">{{ onboarding.done }} of {{ onboarding.total }} steps</span><b>{{ onboarding.pct }}%</b></div>
+    <div class="ob-bar"><span style="width:{{ onboarding.pct }}%"></span></div>
+    {% for s in onboarding.steps %}
+    <div class="ob-step"><i class="fas {{ 'fa-circle-check done' if s.done else 'fa-circle todo' }}"></i>
+      <span>{{ s.label }}</span>{% if s.count %}<span class="muted" style="margin-left:auto">{{ s.count }}</span>{% endif %}</div>
+    {% endfor %}
+    {% else %}<p class="muted" style="font-size:13px">Onboarding progress appears once the school is active.</p>{% endif %}
+  </div>
+</div>
+
+<div class="profile-grid">
+  <div>
+    <!-- General -->
+    <div class="panel" style="padding:16px 18px;margin-bottom:16px">
+      <h3 style="font-size:15px;margin:0 0 8px">General information</h3>
+      <div class="info-row"><span class="k">School name</span><span class="v">{{ t.name }}</span></div>
+      <div class="info-row"><span class="k">Subdomain</span><span class="v">{{ t.subdomain }}</span></div>
+      <div class="info-row"><span class="k">Admin email</span><span class="v">{{ t.admin_email or '—' }}</span></div>
+      <div class="info-row"><span class="k">Status</span><span class="v">{{ t.status|title }}</span></div>
+      <div class="info-row"><span class="k">Plan</span><span class="v">{{ row.plan|title }}</span></div>
+      <div class="info-row"><span class="k">Registered</span><span class="v">{{ t.created_at.strftime('%d %b %Y') if t.created_at else '—' }}</span></div>
+      <div class="info-row"><span class="k">Email verified</span><span class="v">{{ t.verified_at.strftime('%d %b %Y') if t.verified_at else 'Not verified' }}</span></div>
+      <div class="info-row"><span class="k">Activated</span><span class="v">{{ t.activated_at.strftime('%d %b %Y') if t.activated_at else '—' }}</span></div>
+    </div>
+
+    <!-- Usage -->
+    <div class="panel" style="padding:16px 18px;margin-bottom:16px">
+      <h3 style="font-size:15px;margin:0 0 10px">Live usage</h3>
+      {% if t.status == 'active' %}
+      <div class="usage">
+        {% for key, label in [('students','Students'),('staff','Staff'),('branches','Branches'),('users','Users'),('parents','Parents')] %}
+        <div class="u"><div class="n">{{ usage.get(key) if usage.get(key) is not none else '—' }}</div><div class="l">{{ label }}</div></div>
+        {% endfor %}
+      </div>
+      <p class="muted" style="font-size:11.5px;margin-top:8px">Read live from the school's database.</p>
+      {% else %}<p class="muted" style="font-size:13px">Usage is available once the school is active.</p>{% endif %}
+    </div>
+
+    <!-- CRM: account manager, priority, risk, notes & tags -->
+    <div class="panel crm-form" style="padding:16px 18px">
+      <h3 style="font-size:15px;margin:0 0 8px">Account management</h3>
+      {% if tags %}<div class="tagrow">{% for tg in tags %}<span class="tag">{{ tg }}</span>{% endfor %}</div>{% endif %}
+      <form method="post" action="{{ url_for('platform.save_notes', subdomain=t.subdomain) }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          <div>
+            <label>Priority</label>
+            <select class="field" name="priority">
+              <option value="normal" {{ 'selected' if (t.priority or 'normal')=='normal' }}>Normal</option>
+              <option value="high" {{ 'selected' if t.priority=='high' }}>High</option>
+              <option value="vip" {{ 'selected' if t.priority=='vip' }}>VIP</option>
+            </select>
+          </div>
+          <div>
+            <label>Churn risk</label>
+            <select class="field" name="risk">
+              <option value="none" {{ 'selected' if (t.risk or 'none')=='none' }}>None</option>
+              <option value="watch" {{ 'selected' if t.risk=='watch' }}>Watch</option>
+              <option value="high" {{ 'selected' if t.risk=='high' }}>High</option>
+            </select>
+          </div>
+        </div>
+        <label>Account manager</label>
+        <input class="field" name="account_manager" value="{{ t.account_manager or '' }}" placeholder="Assigned success manager">
+        <label>Tags (comma-separated)</label>
+        <input class="field" name="tags" value="{{ t.tags or '' }}" placeholder="e.g. multi-branch, needs-follow-up">
+        <label>Notes</label>
+        <textarea class="field" style="min-height:90px" name="notes" placeholder="Internal notes about this school…">{{ t.notes or '' }}</textarea>
+        <button class="btn sm" style="margin-top:10px"><i class="fas fa-floppy-disk"></i> Save details</button>
+      </form>
+    </div>
+
+    <!-- Timeline -->
+    <div class="panel" style="padding:16px 18px;margin-top:16px">
+      <h3 style="font-size:15px;margin:0 0 10px">Activity timeline</h3>
+      {% if timeline %}
+      <ul class="tl">
+        {% for e in timeline %}
+        <li>
+          <span class="dot {{ e.kind }}"><i class="fas {{ {'signup':'fa-user-plus','verify':'fa-envelope-circle-check','activate':'fa-rocket','payment':'fa-naira-sign','admin':'fa-user-shield'}[e.kind] }}"></i></span>
+          <span class="tl-w">{{ e.when.strftime('%d %b %Y') if e.when else '' }}</span>
+          <div class="tl-l">{{ e.label }}</div>
+          {% if e.detail %}<div class="tl-d">{{ e.detail }}</div>{% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}<p class="muted" style="font-size:13px">No recorded activity yet.</p>{% endif %}
+    </div>
+  </div>
+
+  <div>
+    <!-- Subscription -->
+    <div class="panel" style="padding:16px 18px;margin-bottom:16px">
+      <h3 style="font-size:15px;margin:0 0 8px">Subscription &amp; billing</h3>
+      <div class="info-row"><span class="k">Trial ends</span><span class="v">{{ t.trial_ends_at.strftime('%d %b %Y') if t.trial_ends_at else '—' }}</span></div>
+      <div class="info-row"><span class="k">Paid until</span><span class="v">{{ t.paid_until.strftime('%d %b %Y') if t.paid_until else '—' }}</span></div>
+      <div class="info-row"><span class="k">Access until</span><span class="v">{{ row.access_until }}</span></div>
+      <div class="info-row"><span class="k">Days left</span><span class="v">{{ row.days_left if row.days_left is not none else '—' }}</span></div>
+      <div class="info-row"><span class="k">Auto-renew</span><span class="v">{{ 'On' if t.auto_renew else 'Off' }}</span></div>
+      {% if t.card_last4 %}<div class="info-row"><span class="k">Card</span><span class="v">{{ t.card_brand }} ···· {{ t.card_last4 }}</span></div>{% endif %}
+    </div>
+
+    <!-- Plan & entitlements -->
+    <div class="panel" style="padding:16px 18px;margin-bottom:16px">
+      <h3 style="font-size:15px;margin:0 0 4px">Plan &amp; entitlements</h3>
+      <p class="muted" style="font-size:12px;margin:0 0 8px">Current plan: <b style="color:var(--ink)">{{ ent.tier_label }}</b></p>
+      <div class="feat-chips">
+        {% for fk, flabel in feature_defs %}
+        <span class="fchip {{ 'on' if ent.features.get(fk) else 'off' }} {{ 'ovr' if fk in ent.overridden.features }}"
+              title="{{ flabel }}{{ ' · per-tenant override' if fk in ent.overridden.features }}">
+          <i class="fas {{ 'fa-check' if ent.features.get(fk) else 'fa-lock' }}"></i> {{ flabel }}</span>
+        {% endfor %}
+      </div>
+      {% if usage_limits %}
+      {% for l in usage_limits %}
+      <div class="lim {{ 'over' if l.over }}">
+        <div class="top"><span>{{ l.label }}</span>
+          <span class="u">{% if l.used is not none %}{{ l.used }}{% else %}—{% endif %} / {{ 'Unlimited' if l.unlimited else l.cap }}{{ ' ' ~ l.unit if l.unit and not l.unlimited }}</span></div>
+        {% if not l.unlimited %}<div class="bar"><span style="width:{{ l.pct or 0 }}%"></span></div>{% endif %}
+      </div>
+      {% endfor %}
+      {% else %}<p class="muted" style="font-size:12.5px">Usage limits appear once the school is active.</p>{% endif %}
+
+      {% if not row.owner %}
+      <form method="post" action="{{ url_for('platform.set_tier', subdomain=t.subdomain) }}" style="margin-top:12px">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <label style="font-size:12px;color:var(--faint);display:block;margin-bottom:4px">Change plan</label>
+        <div style="display:flex;gap:8px">
+          <select class="field" name="tier" style="flex:1">
+            {% for tid in tier_ids %}<option value="{{ tid }}" {{ 'selected' if ent.tier == tid }}>{{ tier_labels[tid] }}</option>{% endfor %}
+          </select>
+          <button class="btn sm primary"><i class="fas fa-arrow-rotate-right"></i> Apply</button>
+        </div>
+        <div class="muted" style="font-size:12px;margin:10px 0 4px">Per-tenant overrides <span style="font-size:11px">(differ from plan)</span></div>
+        <div class="ovr-grid">
+          {% for fk, flabel in feature_defs %}
+          <label><input type="checkbox" name="ov__{{ fk }}" {{ 'checked' if ent.features.get(fk) }}> {{ flabel }}</label>
+          {% endfor %}
+        </div>
+      </form>
+      {% endif %}
+    </div>
+
+    <!-- Actions -->
+    {% if not row.owner %}
+    <div class="panel" style="padding:16px 18px;margin-bottom:16px">
+      <h3 style="font-size:15px;margin:0 0 10px">Quick actions</h3>
+      <div class="act-grid">
+        <form method="post" action="{{ url_for('platform.grant', subdomain=t.subdomain) }}">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <input class="field" style="width:60px" name="days" type="number" value="{{ plan_days }}" min="1" title="days to grant">
+          <select class="field" name="tier" title="plan they paid for">
+            <option value="">Keep plan</option>
+            {% for tid in tier_ids %}<option value="{{ tid }}" {{ 'selected' if ent.tier == tid }}>{{ tier_labels[tid] }}</option>{% endfor %}
+          </select>
+          <button class="btn sm"><i class="fas fa-plus"></i> Record payment</button>
+        </form>
+        <form method="post" action="{{ url_for('platform.suspend', subdomain=t.subdomain) }}">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <button class="btn sm">{{ 'Reactivate' if t.status == 'suspended' else 'Suspend' }}</button>
+        </form>
+        <form method="post" action="{{ url_for('platform.archive', subdomain=t.subdomain) }}">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <button class="btn sm" title="{{ 'Bring the portal back online' if t.status == 'archived' else 'Take offline but keep all data — restorable' }}">
+            <i class="fas fa-box-archive"></i> {{ 'Restore' if t.status == 'archived' else 'Archive' }}</button>
+        </form>
+      </div>
+      <form method="post" action="{{ url_for('platform.delete', subdomain=t.subdomain) }}" style="display:flex;gap:6px;align-items:flex-end;margin-top:12px">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <input class="field" name="confirm" placeholder="type {{ t.subdomain }} to delete" style="flex:1">
+        <button class="btn sm danger"><i class="fas fa-trash"></i> Delete</button>
+      </form>
+    </div>
+
+    <!-- Support access (impersonation) -->
+    <div class="panel" id="support-access" style="padding:16px 18px;margin-bottom:16px">
+      <h3 style="font-size:15px;margin:0 0 4px"><i class="fas fa-user-secret" style="color:var(--warn)"></i> Support access</h3>
+      {% if t.status == 'active' %}
+      <p class="muted" style="font-size:12.5px;margin:0 0 10px">Open a <b>read-only</b>, time-boxed session that views this school's portal as its admin. Every session is audited and shows a banner to the school.</p>
+      <form method="post" action="{{ url_for('platform.impersonate', subdomain=t.subdomain) }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <input class="field" name="reason" placeholder="Reason / ticket ref (required)" style="width:100%;margin-bottom:8px" required>
+        <div style="display:flex;gap:8px;align-items:center">
+          <label class="muted" style="font-size:12px;display:flex;align-items:center;gap:6px">Minutes
+            <input class="field" name="minutes" type="number" value="30" min="5" max="120" style="width:64px"></label>
+          <button class="btn primary" style="margin-left:auto"><i class="fas fa-user-secret"></i> View as support</button>
+        </div>
+      </form>
+      {% else %}
+      <p class="muted" style="font-size:13px;margin:0">Support view is available only while the school is <b>active</b> — its portal is currently {{ t.status }}.</p>
+      {% endif %}
+    </div>
+    {% endif %}
+    <div class="panel" style="padding:16px 18px">
+      <h3 style="font-size:15px;margin:0 0 8px">Recent payments</h3>
+      {% if payments %}
+      <ul class="paylist">
+        {% for p in payments %}
+        <li><span class="muted">{{ p.at.strftime('%d %b %Y') if p.at else '' }}</span><span style="font-family:ui-monospace,Menlo,monospace;font-size:12px">{{ p.reference[:18] }}</span></li>
+        {% endfor %}
+      </ul>
+      {% else %}<p class="muted" style="font-size:13px">No recorded payments yet.</p>{% endif %}
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+  // Remember recently-viewed tenants (platform-admin convenience).
+  try {
+    var key='platform:recentTenants',
+        list=JSON.parse(localStorage.getItem(key)||'[]').filter(function(x){return x && x.sub!=={{ t.subdomain|tojson }};});
+    list.unshift({sub:{{ t.subdomain|tojson }}, name:{{ t.name|tojson }}});
+    localStorage.setItem(key, JSON.stringify(list.slice(0,8)));
+  } catch(e){}
+</script>
+{% endblock %}

@@ -1,0 +1,245 @@
+{% extends "base.html" %}
+{% block title %}Admissions data — {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('settings.index') }}">Settings</a> / <span>Admissions data</span>{% endblock %}
+
+{% macro csrf() %}<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">{% endmacro %}
+
+{% block content %}
+<style>
+.adm-tabs { display:flex; flex-wrap:wrap; gap:.4rem; border-bottom:1px solid var(--border-color); margin-bottom:1rem; }
+.adm-tab { padding:.55rem .9rem; border:none; background:none; cursor:pointer; color:var(--text-muted);
+           border-bottom:2px solid transparent; font-size:.9rem; font-weight:600; }
+.adm-tab.active { color:var(--primary); border-bottom-color:var(--primary); }
+.adm-panel { display:none; }
+.adm-panel.active { display:block; }
+.adm-chips { display:flex; flex-wrap:wrap; gap:.4rem; margin-bottom:.75rem; }
+.adm-chip { padding:.3rem .7rem; border:1px solid var(--border-color); border-radius:999px; font-size:.8rem;
+            text-decoration:none; color:var(--text-muted); background:var(--bg-card); }
+.adm-chip.active { background:var(--primary); color:#fff; border-color:var(--primary); }
+.adm-pager { display:flex; align-items:center; gap:.75rem; justify-content:center; margin-top:.75rem; }
+.adm-toolbar { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; margin-bottom:.75rem; }
+.adm-toolbar input, .adm-toolbar select { padding:.45rem .6rem; border:1px solid var(--border-color);
+            border-radius:var(--radius-md,8px); background:var(--bg-input,var(--bg-card)); color:inherit; }
+</style>
+
+<div class="page-header">
+    <div>
+        <h1>Admissions data</h1>
+        <p class="text-muted text-sm">Institutions, courses and competitive JAMB cut-offs that power students' university-choice dropdowns and the auto-filled JAMB target. Lists are grouped, searchable and paginated.</p>
+    </div>
+    <form method="post" style="margin-left:auto;">
+        {{ csrf() }}<input type="hidden" name="action" value="seed">
+        <button type="submit" class="btn btn-secondary btn-sm"><i class="fas fa-seedling"></i> Seed starter data</button>
+    </form>
+</div>
+
+<div class="adm-tabs" role="tablist">
+    <button type="button" class="adm-tab" data-tab="institutions"><i class="fas fa-building-columns"></i> Institutions <span class="text-muted">({{ type_counts.All }})</span></button>
+    <button type="button" class="adm-tab" data-tab="courses"><i class="fas fa-book"></i> Courses <span class="text-muted">({{ course_total }})</span></button>
+    <button type="button" class="adm-tab" data-tab="cutoffs"><i class="fas fa-sliders"></i> Cut-offs <span class="text-muted">({{ override_total }})</span></button>
+    <button type="button" class="adm-tab" data-tab="import"><i class="fas fa-file-import"></i> Import</button>
+</div>
+
+<!-- ================= INSTITUTIONS ================= -->
+<div class="adm-panel" data-panel="institutions">
+    <div class="card">
+        <div class="card-header"><h3>Institutions <span class="text-muted text-sm">({{ uni_total }} match)</span></h3></div>
+        <div class="card-body" style="overflow-x:auto;">
+            <div class="adm-chips">
+                {% for label, count in [('All', type_counts.All), ('University', type_counts.University), ('Polytechnic', type_counts.Polytechnic), ('College', type_counts.College), ('Other', type_counts.Other)] %}
+                {% set val = '' if label == 'All' else label %}
+                <a class="adm-chip {% if filters.itype == val %}active{% endif %}"
+                   href="{{ url_for('settings.admissions_data', tab='institutions', itype=val, q=filters.q, ownership=filters.ownership) }}">{{ label }} ({{ count }})</a>
+                {% endfor %}
+            </div>
+            <form method="get" class="adm-toolbar">
+                <input type="hidden" name="tab" value="institutions">
+                <input type="hidden" name="itype" value="{{ filters.itype }}">
+                <input type="text" name="q" value="{{ filters.q }}" placeholder="Search name, abbr or state…" style="min-width:220px;">
+                <select name="ownership">
+                    <option value="">All ownership</option>
+                    {% for o in ['Federal','State','Private'] %}<option value="{{ o }}" {% if filters.ownership==o %}selected{% endif %}>{{ o }}</option>{% endfor %}
+                </select>
+                <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-search"></i> Search</button>
+                {% if filters.q or filters.ownership or filters.itype %}<a class="btn btn-secondary btn-sm" href="{{ url_for('settings.admissions_data', tab='institutions') }}">Clear</a>{% endif %}
+            </form>
+            <p class="text-muted text-sm">The <strong>cut-off bump</strong> is added to a course's base cut-off for this institution (competitive schools run higher).</p>
+            <table class="table" style="width:100%;min-width:640px;">
+                <thead><tr><th>Name</th><th>Abbr.</th><th>State</th><th>Ownership</th><th>Bump</th><th></th></tr></thead>
+                <tbody>
+                {% for u in universities %}
+                <tr>
+                    <form method="post">{{ csrf() }}<input type="hidden" name="action" value="save_university"><input type="hidden" name="id" value="{{ u.id }}">
+                    <td><input name="name" value="{{ u.name }}" style="width:100%;min-width:180px;"></td>
+                    <td><input name="abbreviation" value="{{ u.abbreviation or '' }}" style="width:80px;"></td>
+                    <td><input name="state" value="{{ u.state or '' }}" style="width:90px;"></td>
+                    <td><select name="ownership">{% for o in ['Federal','State','Private'] %}<option {% if u.ownership==o %}selected{% endif %}>{{ o }}</option>{% endfor %}</select></td>
+                    <td><input name="cutoff_bump" type="number" value="{{ u.cutoff_bump or 0 }}" style="width:64px;"></td>
+                    <td style="white-space:nowrap;"><button class="btn btn-primary btn-sm">Save</button></form>
+                        <form method="post" style="display:inline;" onsubmit="return confirm('Delete {{ u.name }}?');">{{ csrf() }}<input type="hidden" name="action" value="delete_university"><input type="hidden" name="id" value="{{ u.id }}"><button class="btn btn-secondary btn-sm" title="Delete"><i class="fas fa-trash"></i></button></form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="6" class="text-muted text-center" style="padding:1rem;">No institutions match.</td></tr>
+                {% endfor %}
+                <tr>
+                    <form method="post">{{ csrf() }}<input type="hidden" name="action" value="save_university">
+                    <td><input name="name" placeholder="New institution" style="width:100%;min-width:180px;"></td>
+                    <td><input name="abbreviation" placeholder="Abbr" style="width:80px;"></td>
+                    <td><input name="state" placeholder="State" style="width:90px;"></td>
+                    <td><select name="ownership"><option>Federal</option><option>State</option><option>Private</option></select></td>
+                    <td><input name="cutoff_bump" type="number" value="0" style="width:64px;"></td>
+                    <td><button class="btn btn-success btn-sm"><i class="fas fa-plus"></i> Add</button></form></td>
+                </tr>
+                </tbody>
+            </table>
+            {% if uni_pages > 1 %}
+            <div class="adm-pager">
+                {% if upage > 1 %}<a class="btn btn-secondary btn-sm" href="{{ url_for('settings.admissions_data', tab='institutions', q=filters.q, itype=filters.itype, ownership=filters.ownership, page=upage-1) }}">‹ Prev</a>{% endif %}
+                <span class="text-muted text-sm">Page {{ upage }} of {{ uni_pages }}</span>
+                {% if upage < uni_pages %}<a class="btn btn-secondary btn-sm" href="{{ url_for('settings.admissions_data', tab='institutions', q=filters.q, itype=filters.itype, ownership=filters.ownership, page=upage+1) }}">Next ›</a>{% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- ================= COURSES ================= -->
+<div class="adm-panel" data-panel="courses">
+    <div class="card">
+        <div class="card-header"><h3>Courses <span class="text-muted text-sm">({{ course_total }} match)</span></h3></div>
+        <div class="card-body" style="overflow-x:auto;">
+            <form method="get" class="adm-toolbar">
+                <input type="hidden" name="tab" value="courses">
+                <input type="text" name="cq" value="{{ filters.cq }}" placeholder="Search course or department…" style="min-width:220px;">
+                <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-search"></i> Search</button>
+                {% if filters.cq %}<a class="btn btn-secondary btn-sm" href="{{ url_for('settings.admissions_data', tab='courses') }}">Clear</a>{% endif %}
+            </form>
+            <p class="text-muted text-sm"><strong>Base cut-off</strong> is the competitive JAMB score nationally; subjects are comma-separated (JAMB is English + 3 others). Use <code>|</code> for interchangeable options in one slot — e.g. <code>Commerce|Financial Accounting</code> is satisfied by either.</p>
+            <table class="table" style="width:100%;min-width:820px;">
+                <thead><tr><th>Course</th><th>Department</th><th>Base</th><th>JAMB subjects</th><th>WAEC subjects</th><th></th></tr></thead>
+                <tbody>
+                {% for c in courses %}
+                <tr>
+                    <form method="post">{{ csrf() }}<input type="hidden" name="action" value="save_course"><input type="hidden" name="id" value="{{ c.id }}">
+                    <td><input name="name" value="{{ c.name }}" style="width:100%;min-width:150px;"></td>
+                    <td><input name="department" value="{{ c.department or '' }}" style="width:130px;"></td>
+                    <td><input name="base_cutoff" type="number" value="{{ c.base_cutoff or 180 }}" style="width:64px;"></td>
+                    <td><input name="jamb_subjects" value="{{ c.jamb_subjects or '' }}" style="width:100%;min-width:200px;"></td>
+                    <td><input name="waec_subjects" value="{{ c.waec_subjects or '' }}" style="width:100%;min-width:200px;"></td>
+                    <td style="white-space:nowrap;"><button class="btn btn-primary btn-sm">Save</button></form>
+                        <form method="post" style="display:inline;" onsubmit="return confirm('Delete {{ c.name }}?');">{{ csrf() }}<input type="hidden" name="action" value="delete_course"><input type="hidden" name="id" value="{{ c.id }}"><button class="btn btn-secondary btn-sm" title="Delete"><i class="fas fa-trash"></i></button></form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="6" class="text-muted text-center" style="padding:1rem;">No courses match.</td></tr>
+                {% endfor %}
+                <tr>
+                    <form method="post">{{ csrf() }}<input type="hidden" name="action" value="save_course">
+                    <td><input name="name" placeholder="New course" style="width:100%;min-width:150px;"></td>
+                    <td><input name="department" placeholder="Department" style="width:130px;"></td>
+                    <td><input name="base_cutoff" type="number" value="200" style="width:64px;"></td>
+                    <td><input name="jamb_subjects" placeholder="English Language, ..." style="width:100%;min-width:200px;"></td>
+                    <td><input name="waec_subjects" placeholder="English Language, Mathematics, ..." style="width:100%;min-width:200px;"></td>
+                    <td><button class="btn btn-success btn-sm"><i class="fas fa-plus"></i> Add</button></form></td>
+                </tr>
+                </tbody>
+            </table>
+            {% if course_pages > 1 %}
+            <div class="adm-pager">
+                {% if cpage > 1 %}<a class="btn btn-secondary btn-sm" href="{{ url_for('settings.admissions_data', tab='courses', cq=filters.cq, cpage=cpage-1) }}">‹ Prev</a>{% endif %}
+                <span class="text-muted text-sm">Page {{ cpage }} of {{ course_pages }}</span>
+                {% if cpage < course_pages %}<a class="btn btn-secondary btn-sm" href="{{ url_for('settings.admissions_data', tab='courses', cq=filters.cq, cpage=cpage+1) }}">Next ›</a>{% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- ================= CUT-OFFS ================= -->
+<div class="adm-panel" data-panel="cutoffs">
+    <div class="card">
+        <div class="card-header"><h3>Course cut-offs by institution <span class="text-muted text-sm">({{ override_total }})</span></h3></div>
+        <div class="card-body" style="overflow-x:auto;">
+            <p class="text-muted text-sm">The real competitive score an institution uses for a specific department — overrides the course base + the institution's bump. To add one, type the institution (name or abbreviation) and course.</p>
+            <datalist id="courseList">{% for name in course_names %}<option value="{{ name }}">{% endfor %}</datalist>
+            <table class="table" style="width:100%;min-width:560px;">
+                <thead><tr><th>Institution</th><th>Course</th><th>Cut-off</th><th></th></tr></thead>
+                <tbody>
+                <tr>
+                    <form method="post">{{ csrf() }}<input type="hidden" name="action" value="save_override">
+                    <td><input name="university" list="" placeholder="Institution name or abbr" style="width:100%;min-width:200px;" required></td>
+                    <td><input name="course" list="courseList" placeholder="Course" style="width:100%;min-width:180px;" required></td>
+                    <td><input name="jamb_cutoff" type="number" min="0" max="400" placeholder="e.g. 250" style="width:74px;"></td>
+                    <td><button class="btn btn-success btn-sm"><i class="fas fa-plus"></i> Add</button></form></td>
+                </tr>
+                {% for o in overrides %}
+                <tr>
+                    <form method="post">{{ csrf() }}<input type="hidden" name="action" value="save_override">
+                    <input type="hidden" name="university_id" value="{{ o.university_id }}"><input type="hidden" name="course_id" value="{{ o.course_id }}">
+                    <td>{{ o.university.name }}{% if o.university.abbreviation %} <span class="text-muted text-sm">({{ o.university.abbreviation }})</span>{% endif %}</td>
+                    <td>{{ o.course.name }}{% if o.course.department %} <span class="text-muted text-sm">· {{ o.course.department }}</span>{% endif %}</td>
+                    <td><input name="jamb_cutoff" type="number" min="0" max="400" value="{{ o.jamb_cutoff }}" style="width:74px;"></td>
+                    <td style="white-space:nowrap;"><button class="btn btn-primary btn-sm">Save</button></form>
+                        <form method="post" style="display:inline;" onsubmit="return confirm('Remove this cut-off?');">{{ csrf() }}<input type="hidden" name="action" value="delete_override"><input type="hidden" name="id" value="{{ o.id }}"><button class="btn btn-secondary btn-sm" title="Remove"><i class="fas fa-trash"></i></button></form>
+                    </td>
+                </tr>
+                {% else %}
+                <tr><td colspan="4" class="text-muted text-center" style="padding:1rem;">No per-course cut-offs set yet.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+            {% if override_pages > 1 %}
+            <div class="adm-pager">
+                {% if opage > 1 %}<a class="btn btn-secondary btn-sm" href="{{ url_for('settings.admissions_data', tab='cutoffs', opage=opage-1) }}">‹ Prev</a>{% endif %}
+                <span class="text-muted text-sm">Page {{ opage }} of {{ override_pages }}</span>
+                {% if opage < override_pages %}<a class="btn btn-secondary btn-sm" href="{{ url_for('settings.admissions_data', tab='cutoffs', opage=opage+1) }}">Next ›</a>{% endif %}
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- ================= IMPORT ================= -->
+<div class="adm-panel" data-panel="import">
+    <div class="card">
+        <div class="card-header"><h3>Import cut-offs</h3></div>
+        <div class="card-body">
+            <p class="text-muted text-sm">Paste real figures from a source you trust — one row per line as
+                <code>Institution, Course, Cut-off</code> (comma, tab or pipe separated). Institutions and courses
+                are matched by name or abbreviation. This is the reliable way to load actual values: authoritative
+                <em>departmental</em> cut-offs aren't published as structured data, so scraping the blogs mostly
+                returns the school's flat institutional number.</p>
+            <form method="post">{{ csrf() }}<input type="hidden" name="action" value="import_overrides">
+                <textarea name="import_text" rows="6" style="width:100%;font-family:monospace;font-size:.85rem;"
+                    placeholder="UNIBEN, Medicine and Surgery, 220&#10;UNILAG, Law, 280&#10;UI, Pharmacy, 282"></textarea>
+                <label class="d-flex align-center gap-2 text-sm" style="margin:.5rem 0;">
+                    <input type="checkbox" name="create_missing" value="1"> Create courses that don't exist yet
+                </label>
+                <button type="submit" class="btn btn-primary btn-sm"><i class="fas fa-file-import"></i> Import</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script nonce="{{ csp_nonce }}">
+(function () {
+    var active = {{ active_tab|tojson }};
+    var valid = ['institutions', 'courses', 'cutoffs', 'import'];
+    if (valid.indexOf(active) === -1) active = 'institutions';
+    function show(tab) {
+        document.querySelectorAll('.adm-tab').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-tab') === tab); });
+        document.querySelectorAll('.adm-panel').forEach(function (p) { p.classList.toggle('active', p.getAttribute('data-panel') === tab); });
+    }
+    document.querySelectorAll('.adm-tab').forEach(function (b) {
+        b.addEventListener('click', function () {
+            var t = b.getAttribute('data-tab');
+            show(t);
+            // Reflect the tab in the URL without reloading, so pagination stays consistent.
+            try { var u = new URL(window.location); u.searchParams.set('tab', t); history.replaceState(null, '', u); } catch (e) {}
+        });
+    });
+    show(active);
+})();
+</script>
+{% endblock %}

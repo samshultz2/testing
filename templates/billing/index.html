@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>Subscription — {{ t.name }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/marketing.css') }}">
+  <style>
+    .bill{width:100%;max-width:760px}
+    .bill .head{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-lg);
+                box-shadow:var(--shadow-sm);padding:26px 28px;margin-bottom:20px}
+    .bill h1{font-size:23px;margin:0 0 6px}
+    .state{display:inline-flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600;padding:5px 13px;border-radius:var(--radius-full)}
+    .state.ok{color:var(--success);background:#d1e7dd} .state.warn{color:#7a5310;background:#fef3cd}
+    .state.gap{color:var(--danger);background:var(--danger-light)}
+    .bill .head p{color:var(--text-secondary);font-size:14.5px;margin-top:12px}
+    .plan-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+    @media (max-width:680px){ .plan-grid{grid-template-columns:1fr} }
+    .plan-opt{background:var(--surface);border:1.5px solid var(--line);border-radius:var(--radius-lg);padding:22px;
+              box-shadow:var(--shadow-sm);display:flex;flex-direction:column;position:relative;transition:border-color .15s, transform .15s, box-shadow .15s}
+    .plan-opt:hover{transform:translateY(-3px);box-shadow:var(--shadow-md);border-color:var(--primary-light)}
+    .plan-opt.feat{border-color:var(--primary)}
+    .plan-opt .badge{position:absolute;top:-11px;left:50%;transform:translateX(-50%);background:var(--primary);color:#fff;
+                     font-size:11px;font-weight:700;padding:4px 12px;border-radius:var(--radius-full)}
+    .plan-opt .lab{font-family:var(--font-display);font-weight:600;font-size:17px}
+    .plan-opt .amt{font-family:var(--font-display);font-weight:700;font-size:30px;letter-spacing:-.02em;margin:10px 0 2px}
+    .plan-opt .amt small{font-size:14px;font-weight:500;color:var(--faint)}
+    .plan-opt .save{font-size:12.5px;font-weight:700;color:var(--success);min-height:18px}
+    .plan-opt .days{font-size:13px;color:var(--text-secondary);margin:6px 0 12px}
+    .plan-opt form{margin-top:auto}
+    .plan-opt .pfeats{list-style:none;margin:0 0 16px;padding:12px 0 0;border-top:1px solid var(--line);
+                      display:grid;gap:6px;text-align:left}
+    .plan-opt .pfeats li{font-size:12.5px;color:var(--text-secondary);display:flex;align-items:center;gap:8px;line-height:1.3}
+    .plan-opt .pfeats li i{width:12px;font-size:10px;color:var(--primary);flex:0 0 auto}
+    .plan-opt .pfeats li.off{color:var(--faint)} .plan-opt .pfeats li.off i{color:var(--faint)}
+    .plan-opt .btn{margin-top:auto}
+    .cyc-toggle{display:inline-flex;gap:2px;background:var(--primary-light);border:1px solid var(--line);
+                border-radius:var(--radius-full);padding:4px;margin:0 0 18px}
+    .cyc-toggle .cyc{cursor:pointer;border:0;background:transparent;padding:8px 18px;font-size:13.5px;font-weight:600;
+                     color:var(--text-secondary);border-radius:var(--radius-full);font-family:inherit}
+    .cyc-toggle .cyc em{font-style:normal;font-size:10.5px;font-weight:700;color:var(--success);margin-left:2px}
+    .cyc-toggle .cyc.on{background:var(--surface);color:var(--ink);box-shadow:var(--shadow-sm)}
+    .flash{width:100%;max-width:760px}
+    .foot-links{max-width:760px;width:100%;text-align:center;margin-top:20px;font-size:13px;color:var(--text-secondary)}
+    .foot-links a{color:var(--primary);font-weight:600}
+    .renew{background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-lg);
+           box-shadow:var(--shadow-sm);padding:18px 20px;margin-bottom:20px;display:flex;gap:16px;
+           align-items:center;justify-content:space-between;flex-wrap:wrap}
+    .renew.on{border-color:var(--primary);background:linear-gradient(0deg,rgba(13,106,78,.04),rgba(13,106,78,.04)),var(--surface)}
+    .renew-main{display:flex;gap:14px;align-items:flex-start;min-width:0}
+    .renew-icon{width:38px;height:38px;border-radius:10px;display:grid;place-items:center;flex:0 0 auto;
+                background:var(--danger-light);color:var(--faint)}
+    .renew.on .renew-icon{background:#d1e7dd;color:var(--success)}
+    .renew-title{font-family:var(--font-display);font-weight:600;font-size:15.5px}
+    .renew-sub{font-size:13px;color:var(--text-secondary);margin-top:3px}
+    .renew-err{font-size:12.5px;color:var(--danger);margin-top:7px}
+    .optin{display:flex;gap:10px;align-items:flex-start;margin-top:18px;padding:14px 16px;
+           background:var(--surface);border:1px solid var(--line);border-radius:var(--radius-lg);
+           font-size:13px;color:var(--text-secondary);cursor:pointer}
+    .optin input{margin-top:2px;width:16px;height:16px;flex:0 0 auto;accent-color:var(--primary)}
+    .optin strong{color:var(--text-primary)}
+    .notpay{display:flex;gap:11px;align-items:flex-start;margin-bottom:20px;padding:14px 16px;
+            background:#fef3cd;color:#7a5310;border:1px solid #f2d98a;border-radius:var(--radius-lg);font-size:13.5px}
+    .notpay i{margin-top:2px}
+    .notpay strong{font-weight:700}
+  </style>
+</head>
+<body>
+  <div class="auth" style="align-content:center">
+    <div style="display:flex;flex-direction:column;align-items:center;width:100%;max-width:760px">
+      {% with msgs = get_flashed_messages(with_categories=true) %}
+        {% for cat, msg in msgs %}<div class="flash" style="margin-bottom:14px;padding:12px 14px;border-radius:12px;
+          background:{{ '#d1e7dd' if cat=='success' else '#fef3cd' if cat=='warning' else '#fee2e2' }};
+          color:{{ '#14603f' if cat=='success' else '#7a5310' if cat=='warning' else '#b0263a' }};font-size:14px">{{ msg }}</div>{% endfor %}
+      {% endwith %}
+
+      <div class="bill">
+        <div class="head">
+          <h1>{{ t.name }} — Subscription</h1>
+          {% if st.active and st.on_trial %}
+            <span class="state ok"><i class="fas fa-hourglass-half"></i> Free trial · {{ st.days_left }} day(s) left</span>
+            <p>Your trial ends soon. Choose a plan below to keep access without interruption.</p>
+          {% elif st.active %}
+            <span class="state ok"><i class="fas fa-circle-check"></i> Active · {{ st.days_left }} day(s) remaining</span>
+            <p>Your subscription is active. Renew any time to add another period.</p>
+          {% elif not st.locked_out %}
+            <span class="state warn"><i class="fas fa-clock"></i> Expired — renew before you’re locked out</span>
+            <p>Your trial or subscription has ended. The portal still works for a short grace period — renew now to avoid any interruption.</p>
+          {% else %}
+            <span class="state gap"><i class="fas fa-triangle-exclamation"></i> Access paused — payment required</span>
+            <p>Your subscription has ended and {{ t.name }} is now locked. Choose a plan to restore access. If left unpaid, the school’s data is permanently removed after the grace period.</p>
+          {% endif %}
+        </div>
+
+        {% if is_admin %}
+          {% if not payable %}
+          <div class="notpay">
+            <i class="fas fa-triangle-exclamation"></i>
+            <span>Online payments aren’t fully set up yet — the payment provider keys or plan prices are missing,
+            so the buttons below won’t start a checkout. If you’re the platform owner, set your keys in the
+            server config and your prices at <strong>/platform → Pricing</strong>.</span>
+          </div>
+          {% endif %}
+          {% if st.card_on_file %}
+          <div class="renew {{ 'on' if st.auto_renew else 'off' }}">
+            <div class="renew-main">
+              <div class="renew-icon"><i class="fas fa-{{ 'repeat' if st.auto_renew else 'rotate' }}"></i></div>
+              <div>
+                <div class="renew-title">
+                  Automatic renewal is {{ 'ON' if st.auto_renew else 'off' }}
+                </div>
+                <div class="renew-sub">
+                  Card on file: {{ (st.card_brand or 'card')|capitalize }} ending {{ st.card_last4 or '••••' }}{% if st.card_exp %} · exp {{ st.card_exp }}{% endif %}.
+                  {% if st.auto_renew %}
+                    We’ll charge it on the <strong>{{ st.renew_plan or 'monthly' }}</strong> plan about {{ lead_days }} day(s) before
+                    {% if st.access_until %}{{ st.access_until.strftime('%d %b %Y') }}{% else %}your access ends{% endif %}.
+                  {% else %}
+                    Turn it on and we’ll renew this subscription for you.
+                  {% endif %}
+                </div>
+                {% if st.auto_renew_error %}
+                  <div class="renew-err"><i class="fas fa-triangle-exclamation"></i> Last attempt failed: {{ st.auto_renew_error }}. We’ll retry; you can also pay manually below.</div>
+                {% endif %}
+              </div>
+            </div>
+            <form method="post" action="{{ url_for('billing.autorenew_toggle') }}">
+              <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+              <input type="hidden" name="enabled" value="{{ 'off' if st.auto_renew else 'on' }}">
+              <button class="btn {{ 'btn-ghost' if st.auto_renew else 'btn-primary' }}" type="submit">
+                {{ 'Turn off' if st.auto_renew else 'Turn on' }}
+              </button>
+            </form>
+          </div>
+          {% endif %}
+
+          <form method="post" action="{{ url_for('billing.start_payment') }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <input type="hidden" name="cycle" id="billCycle" value="{{ sel_cycle }}">
+            <div class="cyc-toggle">
+              {% for cid, clabel in [('monthly','Monthly'),('termly','Termly'),('annual','Annual')] %}
+              <button type="button" class="cyc {{ 'on' if cid == sel_cycle }}" data-cycle="{{ cid }}">{{ clabel }}{% if cid == 'annual' %} <em>save more</em>{% endif %}</button>
+              {% endfor %}
+            </div>
+            <div class="plan-grid">
+              {% for row in grid %}
+              {% set p = row.plans[sel_cycle] %}
+              <div class="plan-opt {{ 'feat' if row.popular }}" data-tier="{{ row.tier }}">
+                {% if row.popular %}<span class="badge">Popular</span>{% endif %}
+                <div class="lab">{{ row.label }}</div>
+                <div class="amt">₦<span class="pnum">{{ '{:,.0f}'.format(p.price_naira) }}</span><small> / <span class="pper">{{ p.per }}</span></small></div>
+                <div class="save"><span class="psave">{% if p.savings > 0 %}Save {{ p.savings }}%{% endif %}</span></div>
+                <div class="days"><span class="pdays">{{ p.days }}</span> days of access</div>
+                <ul class="pfeats">
+                  <li><i class="fas fa-user-group"></i> {{ 'Unlimited students' if row.limits.students == -1 else '{:,} students'.format(row.limits.students) }}</li>
+                  <li><i class="fas fa-code-branch"></i> {{ 'Unlimited branches' if row.limits.branches == -1 else (row.limits.branches ~ ' branches' if row.limits.branches > 1 else 'Single branch') }}</li>
+                  <li class="{{ '' if row.features.mock_exams else 'off' }}"><i class="fas {{ 'fa-check' if row.features.mock_exams else 'fa-xmark' }}"></i> Mock JAMB / WAEC &amp; CBT</li>
+                  <li class="{{ '' if row.features.predictive_analytics else 'off' }}"><i class="fas {{ 'fa-check' if row.features.predictive_analytics else 'fa-xmark' }}"></i> Predictive analytics</li>
+                  <li class="{{ '' if row.features.website_builder else 'off' }}"><i class="fas {{ 'fa-check' if row.features.website_builder else 'fa-xmark' }}"></i> Website builder</li>
+                </ul>
+                <button class="btn {{ 'btn-primary' if row.popular else 'btn-ghost' }} btn-block" type="submit" name="tier" value="{{ row.tier }}">
+                  {% if test_mode %}Apply test payment{% else %}Choose {{ row.label }}{% endif %}
+                </button>
+              </div>
+              {% endfor %}
+            </div>
+            {% if not st.auto_renew %}
+            <label class="optin">
+              <input type="checkbox" name="auto_renew" checked>
+              <span>Keep my card for <strong>automatic renewal</strong> — we’ll charge it each period so your portal never lapses. Cancel anytime from this page.</span>
+            </label>
+            {% endif %}
+          </form>
+          <script type="application/json" id="billPrice">{{ price_json|tojson }}</script>
+          <script nonce="{{ csp_nonce }}">
+            (function () {
+              var node = document.getElementById('billPrice');
+              if (!node) return;
+              var prices; try { prices = JSON.parse(node.textContent || '{}'); } catch (e) { return; }
+              var hidden = document.getElementById('billCycle');
+              var fmt = function (n) { return Number(n || 0).toLocaleString('en-NG'); };
+              function paint(cyc) {
+                hidden.value = cyc;
+                document.querySelectorAll('.cyc-toggle .cyc').forEach(function (b) {
+                  b.classList.toggle('on', b.getAttribute('data-cycle') === cyc);
+                });
+                document.querySelectorAll('.plan-opt').forEach(function (card) {
+                  var p = (prices[card.getAttribute('data-tier')] || {})[cyc];
+                  if (!p) return;
+                  var q = function (s) { return card.querySelector(s); };
+                  if (q('.pnum')) q('.pnum').textContent = fmt(p.naira);
+                  if (q('.pper')) q('.pper').textContent = p.per;
+                  if (q('.psave')) q('.psave').textContent = p.savings > 0 ? ('Save ' + p.savings + '%') : '';
+                  if (q('.pdays')) q('.pdays').textContent = p.days;
+                });
+              }
+              document.querySelectorAll('.cyc-toggle .cyc').forEach(function (b) {
+                b.addEventListener('click', function () { paint(b.getAttribute('data-cycle')); });
+              });
+            })();
+          </script>
+        {% else %}
+          <div class="head"><p style="margin:0"><strong>Please ask your school administrator</strong> to renew the subscription.</p></div>
+        {% endif %}
+      </div>
+
+      <div class="foot-links"><a href="{{ url_for('auth.logout') }}">Sign out</a></div>
+    </div>
+  </div>
+</body>
+</html>

@@ -32,6 +32,18 @@ COURSE_CATEGORIES = [
 ]
 
 
+def best_year_credits(by_year):
+    """Given ``{exam_year: {subject: grade}}``, return ``(credited, year)`` for the
+    sitting with the most credit passes, where ``credited`` is ``{subject: grade}``
+    limited to credit grades. ``({}, None)`` when there's nothing."""
+    best, best_year = {}, None
+    for year, subs in by_year.items():
+        credited = {s: g for s, g in subs.items() if g in PASS_GRADES}
+        if len(credited) > len(best):
+            best, best_year = credited, year
+    return best, best_year
+
+
 def assess_admission(student):
     """Return an admission-readiness assessment for a student."""
     # Best WAEC year = the sitting with the most credit passes.
@@ -39,12 +51,8 @@ def assess_admission(student):
     for r in student.waec_results.all():
         by_year[r.exam_year][r.subject] = r.grade
 
-    best_credits = set()
-    best_year = None
-    for year, subs in by_year.items():
-        credits = {s for s, g in subs.items() if g in PASS_GRADES}
-        if len(credits) > len(best_credits):
-            best_credits, best_year = credits, year
+    credited, best_year = best_year_credits(by_year)
+    best_credits = set(credited)
 
     jamb_scores = [r.total_score for r in student.jamb_results.all()]
     jamb_best = max(jamb_scores) if jamb_scores else 0

@@ -12,7 +12,8 @@ def login_required(f):
     def decorated_function(*args, **kwargs):
         if not session.get('logged_in'):
             flash('Please log in to access this page.', 'warning')
-            return redirect(url_for('auth.login'))
+            from utils.nav import login_url
+            return redirect(login_url())
         return f(*args, **kwargs)
     return decorated_function
 
@@ -281,20 +282,38 @@ def infer_stream_from_jamb(student):
     return None
 
 
+def get_sss3_class():
+    """The graduating class (SSS3) — the only class that sits WAEC, JAMB, Mock
+    JAMB and Mock WAEC. Matched by the canonical name first, then tolerant of
+    common spellings (SS3, 'SSS 3', 'Senior Secondary 3'), so a slightly
+    different class name never silently widens these exams to the whole school.
+    """
+    import re
+    from models import SchoolClass
+    cls = SchoolClass.query.filter_by(name='SSS3').first()
+    if cls:
+        return cls
+    for c in SchoolClass.query.all():
+        norm = re.sub(r'[^a-z0-9]', '', (c.name or '').lower())
+        if norm in ('sss3', 'ss3', 'seniorsecondary3', 'seniorsecondaryschool3'):
+            return c
+    return None
+
+
 def _sss3_enrolled_map():
     """Return {id: Student} for active SSS3 students enrolled in the active term."""
     from models import (
-        Student, SchoolClass, ClassArmAssignment, StudentEnrollment, Term
+        Student, ClassArmAssignment, StudentEnrollment
     )
 
-    active_term = Term.query.filter_by(is_active=True).first()
-    sss3 = SchoolClass.query.filter_by(name='SSS3').first()
+    active_term = get_active_term()
+    sss3 = get_sss3_class()
 
     students = {}
     if sss3 and active_term:
-        assignments = ClassArmAssignment.query.filter_by(
-            class_id=sss3.id, term_id=active_term.id
-        ).all()
+        from utils.branch_scope import scope_query
+        assignments = scope_query(ClassArmAssignment.query.filter_by(
+            class_id=sss3.id, term_id=active_term.id), ClassArmAssignment).all()
         for assignment in assignments:
             enrollments = StudentEnrollment.query.filter_by(
                 class_arm_assignment_id=assignment.id,
@@ -322,25 +341,41 @@ def get_sss3_students():
     the SSS3 class / active term has not been set up yet, so result entry never
     becomes impossible.
     """
-    from models import Student, AcademicSession
+    from models import Student
+    from utils.branch_scope import scope_query
 
     students = _sss3_enrolled_map()
 
     # Include this session's graduates (former SSS3) so results can still be added.
-    active_session = AcademicSession.query.filter_by(is_active=True).first()
+    active_session = get_active_session()
     if active_session:
-        graduates = Student.query.filter_by(
+        graduates = scope_query(Student.query.filter_by(
             is_active=True, is_graduated=True,
-            graduation_session_id=active_session.id
-        ).all()
+            graduation_session_id=active_session.id), Student).all()
         for g in graduates:
             students.setdefault(g.id, g)
+
+    # An SSS3 arm teacher with only derived External-Exams access sees just their
+    # own arm's students, never the whole SSS3 cohort.
+    try:
+        from utils.access_control import exam_student_scope
+        scope = exam_student_scope()
+    except Exception:
+        scope = None
+    if scope is not None:
+        students = {sid: s for sid, s in students.items() if sid in scope}
 
     if students:
         return sorted(students.values(), key=lambda s: (s.surname or '', s.first_name or ''))
 
-    # Fallback: SSS3/active term not configured yet.
-    return Student.query.filter_by(is_active=True).order_by(Student.surname).all()
+    # Nobody resolved. Only WAEC/JAMB/Mock students are SSS3, so once the school
+    # is configured (an SSS3 class exists *and* a term is active) we must NOT
+    # widen to the whole school — an empty list correctly says "no SSS3 enrolled
+    # for this term yet". The all-students fallback is reserved for a brand-new
+    # setup where SSS3 or the active term hasn't been created at all.
+    if get_sss3_class() is not None and get_active_term() is not None:
+        return []
+    return scope_query(Student.query.filter_by(is_active=True), Student).order_by(Student.surname).all()
 
 
 def student_subject_map(students):
@@ -365,3 +400,197 @@ RELIGIONS = [
     'Traditional',
     'Others'
 ]
+
+
+def view_session_override():
+    """The AcademicSession an *admin* has chosen to view instead of the live one
+    (a personal, cookie-stored 'time-travel'), or None. Only honoured for admins,
+    so it never changes anything for other users or the database itself."""
+    from flask import session as flask_session, g, has_request_context
+    if not has_request_context():
+        return None
+    if '_view_override' in g.__dict__:
+        return g._view_override
+    val = None
+    sid = flask_session.get('view_session_id')
+    if sid:
+        try:
+            from utils.access_control import is_admin
+            if is_admin():
+                from models import AcademicSession
+                val = db_get_session(int(sid))
+        except Exception:
+            val = None
+    g._view_override = val
+    return val
+
+
+def db_get_session(sid):
+    from models import db, AcademicSession
+    return db.session.get(AcademicSession, sid)
+
+
+def get_active_term():
+    """The currently active Term (or None). Single source of truth for the
+    common active-term lookup. When an admin is viewing a past session, returns
+    that session's latest term instead.
+
+    Memoised for the lifetime of a request (the context processor and templates
+    call this repeatedly per render): within one request the active term is
+    constant. Outside a request context (scripts/tests) it always re-queries.
+    """
+    from flask import g, has_request_context
+    if has_request_context():
+        if '_active_term' in g.__dict__:
+            return g._active_term
+    from models import Term, AcademicSession
+    ov = view_session_override()
+    if ov is not None:
+        val = (Term.query.filter_by(session_id=ov.id)
+               .order_by(Term.term_number.desc()).first())
+    else:
+        sess = AcademicSession.query.filter_by(is_active=True).first()
+        val = Term.query.filter_by(is_active=True).first()
+        # Keep the active TERM consistent with the active SESSION. After a new
+        # session is activated, the flagged-active term can still belong to the
+        # OLD session (or none is flagged) — in that case fall back to the active
+        # session's current term. This is what makes every term-scoped page
+        # follow a session switch, not just the session-level ones.
+        if sess is not None and (val is None or val.session_id != sess.id):
+            # The flagged-active term belongs to a different (or no) session than
+            # the active one — an inconsistent state that can arise after a botched
+            # session switch. We follow the active session (below), but surface the
+            # mismatch so it can be spotted rather than silently masked.
+            if val is not None and val.session_id != sess.id:
+                try:
+                    from flask import current_app
+                    current_app.logger.debug(
+                        'active-term/session mismatch: term %s (session %s) but active '
+                        'session is %s — using the active session\'s current term',
+                        val.id, val.session_id, sess.id)
+                except Exception:
+                    pass
+            val = _session_current_term(sess.id)
+    if has_request_context():
+        g._active_term = val
+    return val
+
+
+def _session_current_term(session_id):
+    """The 'current' term of a session: the one whose date range covers today,
+    else the latest by term number. None if the session has no terms."""
+    from datetime import date
+    from models import Term
+    terms = Term.query.filter_by(session_id=session_id).all()
+    if not terms:
+        return None
+    today = date.today()
+    for t in terms:
+        if t.start_date and t.end_date and t.start_date <= today <= t.end_date:
+            return t
+    return max(terms, key=lambda t: (t.term_number or 0))
+
+
+def get_active_session():
+    """The currently active AcademicSession (or None) — or the past session an
+    admin is viewing. Request-memoised; see :func:`get_active_term`."""
+    from flask import g, has_request_context
+    if has_request_context():
+        if '_active_session' in g.__dict__:
+            return g._active_session
+    from models import AcademicSession
+    ov = view_session_override()
+    val = ov if ov is not None else AcademicSession.query.filter_by(is_active=True).first()
+    if has_request_context():
+        g._active_session = val
+    return val
+
+
+def session_terms(session=None):
+    """Terms of the active (or admin-time-travelled) academic session, newest
+    term first — the correct population for any term-picker dropdown.
+
+    Switching the active session changes what every term dropdown offers, so a
+    user can only pick terms that belong to the session they're viewing. Falls
+    back to *all* terms only when there is genuinely no active session (a fresh
+    or misconfigured install), so dropdowns never come up empty there."""
+    from models import Term
+    s = session if session is not None else get_active_session()
+    if s is None:
+        return Term.query.order_by(Term.id.desc()).all()
+    return (Term.query.filter_by(session_id=s.id)
+            .order_by(Term.term_number.desc()).all())
+
+
+def session_exam_year(session=None):
+    """The external-exam (calendar) year for an academic session — e.g. the
+    session ``2025/2026`` sits its WAEC/JAMB in **2026** (the second year). Falls
+    back to the session's end/start-date year. Returns None if it can't be told.
+
+    Used to scope external-exam pages to the active (or time-travelled) session."""
+    import re
+    s = session if session is not None else get_active_session()
+    if s is None:
+        return None
+    nums = re.findall(r'\d{4}', (s.name or ''))
+    if len(nums) >= 2:
+        return int(nums[1])
+    if len(nums) == 1:
+        return int(nums[0])
+    if getattr(s, 'end_date', None):
+        return s.end_date.year
+    if getattr(s, 'start_date', None):
+        return s.start_date.year
+    return None
+
+
+def resolve_exam_year(requested, years):
+    """Pick the external-exam year to show, honouring the active/viewed session.
+
+    * Time-travelling (admin viewing a past session): locked to that session's
+      exam year, so external-exam pages show only that session.
+    * Live session: an explicit ?year wins (deliberate exploration); otherwise
+      lock to the live session's own exam year — *even when that year has no data
+      yet*. Switching to a fresh session must show that session (empty), not
+      silently fall back to the previous session's results.
+
+    Only when the session's exam year can't be determined at all (an unnamed
+    session, or none active) do we fall back to the most recent year with data.
+    ``years`` is the list of years present in the data (newest first)."""
+    ov = view_session_override()
+    sy = session_exam_year(get_active_session())
+    if ov is not None:
+        return sy if sy is not None else (requested or (years[0] if years else None))
+    if requested:
+        return requested
+    if sy is not None:
+        return sy
+    return years[0] if years else None
+
+
+def safe_redirect(fallback):
+    """Redirect to the page the user came from, but only if it is same-origin.
+
+    ``redirect(request.referrer or fallback)`` is an open-redirect surface — the
+    Referer is attacker-influenceable. This restricts it to our own host and
+    falls back otherwise. Behaviour is unchanged for normal same-site use.
+    """
+    from flask import request, redirect
+    ref = request.referrer
+    if ref and ref.startswith(request.host_url):
+        return redirect(ref)
+    return redirect(fallback)
+
+
+def pick_current_week(weeks, on=None):
+    """The Week to pre-select: the one containing `on` (default today), else the
+    most recently started week, else the first. `weeks` is an ordered list of
+    Week objects. Returns None for an empty list."""
+    if not weeks:
+        return None
+    on = on or date.today()
+    for w in weeks:
+        if w.start_date and w.end_date and w.start_date <= on <= w.end_date:
+            return w
+    started = [w for w in weeks if w.start_date and w.start_date <= on]
+    return started[-1] if started else weeks[0]

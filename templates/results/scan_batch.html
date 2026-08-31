@@ -44,7 +44,7 @@
     </form>
 </div></div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 (function () {
     var input = document.getElementById('files');
     var list = document.getElementById('fileList');
@@ -53,7 +53,7 @@
         list.innerHTML = '';
         Array.prototype.forEach.call(input.files, function (f) {
             var d = document.createElement('div');
-            d.innerHTML = '<i class="fas fa-file"></i> ' + f.name;
+            d.innerHTML = '<i class="fas fa-file"></i> ' + window.escapeHtml(f.name);
             list.appendChild(d);
         });
     });

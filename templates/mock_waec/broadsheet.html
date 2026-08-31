@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Broadsheet — {{ exam.display_name }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('mock_waec.index') }}">Mock WAEC</a> / <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}">{{ exam.display_name }}</a> / <span>Broadsheet</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.bs-wrap { overflow-x: auto; }
+.bs-table { border-collapse: collapse; width: 100%; font-size: .8rem; }
+.bs-table th, .bs-table td { border: 1px solid var(--border-color); padding: 3px 6px; text-align: center; white-space: nowrap; }
+.bs-table thead th { background: var(--bg-card); position: sticky; top: 0; z-index: 2; }
+.bs-table th.name, .bs-table td.name { text-align: left; min-width: 150px; position: sticky; left: 0; background: var(--bg-card); z-index: 1; }
+.bs-table th.subj { height: 130px; vertical-align: bottom; padding-bottom: 8px; }
+.bs-table th.subj span { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; font-weight: 600; }
+.bs-table tbody tr:nth-child(even) td { background: rgba(135,135,135,.06); }
+.bs-table .g { font-weight: 700; padding: 0 3px; border-radius: 3px; font-size: .72rem; }
+.g-a1 { color: #047857; } .g-b { color: #0d9488; } .g-c { color: #2563eb; }
+.g-d { color: #b45309; } .g-e { color: #c2410c; } .g-f { color: #dc2626; }
+.bs-table tfoot td { font-weight: 600; background: var(--bg-card); }
+.bs-table tfoot td.lab { text-align: right; }
+.bs-num { font-weight: 600; }
+.bs-dist th, .bs-dist td { border: 1px solid var(--border-color); padding: 5px 12px; text-align: center; }
+.bs-note { font-size: .78rem; color: var(--text-muted); margin-top: .5rem; }
+
+@media print {
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .sidebar, .top-header, .bottom-nav, .page-header-actions, .breadcrumb, .btn, .no-print, .sidebar-overlay { display: none !important; }
+  .main-content, .page-content { margin: 0 !important; padding: 0 !important; background: #fff !important; }
+  .card { box-shadow: none !important; border: none !important; }
+  .bs-table { font-size: 8.5px; }
+  .bs-table th, .bs-table td { padding: 1px 3px; }
+  .bs-table th.subj { height: 100px; }
+  .bs-table thead th, .bs-table th.name, .bs-table td.name { position: static; }
+  @page { size: A4 landscape; margin: 8mm; }
+  .bs-wrap { overflow: visible; }
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Broadsheet — {{ exam.display_name }}</h1>
+        <p class="text-muted text-sm">{{ exam.name }} &middot; {{ exam.exam_date.strftime('%d %B %Y') if exam.exam_date else '' }}</p>
+    </div>
+    <div class="page-header-actions">
+        <a href="{{ url_for('mock_waec.broadsheet_print', exam_id=exam.id) }}" class="btn btn-primary btn-sm"><i class="fas fa-print"></i> Print (A4)</a>
+        <a href="{{ url_for('mock_waec.broadsheet_blank', exam_id=exam.id) }}" class="btn btn-outline btn-sm" title="Empty sheet to fill in by hand"><i class="fas fa-table-list"></i> Blank sheet</a>
+        <a href="{{ url_for('mock_waec.broadsheet_export', exam_id=exam.id) }}" class="btn btn-success btn-sm"><i class="fas fa-file-excel"></i> Excel</a>
+        <a href="{{ url_for('mock_waec.analytics', exam_id=exam.id) }}" class="btn btn-info btn-sm no-print"><i class="fas fa-chart-column"></i> Analytics</a>
+        <a href="{{ url_for('mock_waec.grid_entry', exam_id=exam.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-table-cells"></i> Grid entry</a>
+        <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>
+    </div>
+</div>
+
+{% if not bs or not bs.rows %}
+<div class="card"><div class="card-body"><div class="empty-state">
+    <i class="fas fa-table"></i><h3>No results recorded</h3>
+    <p>Enter scores via the grid or paste importer, then the broadsheet builds itself.</p>
+    <div class="d-flex gap-2 justify-center">
+        <a href="{{ url_for('mock_waec.grid_entry', exam_id=exam.id) }}" class="btn btn-primary"><i class="fas fa-table-cells"></i> Grid entry</a>
+        <a href="{{ url_for('mock_waec.paste_entry', exam_id=exam.id) }}" class="btn btn-secondary"><i class="fas fa-paste"></i> Paste import</a>
+    </div>
+</div></div></div>
+{% else %}
+
+<div class="kpi-row d-flex gap-2 mb-3" style="flex-wrap:wrap;">
+    <div class="kpi"><div class="kpi-value">{{ bs.school.students }}</div><div class="kpi-label">Students</div></div>
+    <div class="kpi"><div class="kpi-value">{{ bs.school.avg_credits }}</div><div class="kpi-label">Avg credits</div></div>
+    <div class="kpi"><div class="kpi-value">{{ bs.school.with_5_incl_core }}</div><div class="kpi-label">5 credits incl. Eng & Maths</div></div>
+    <div class="kpi"><div class="kpi-value">{{ bs.school.with_5_incl_core_pct }}%</div><div class="kpi-label">Admission-grade rate</div></div>
+</div>
+
+<div class="card">
+    <div class="bs-wrap"><table class="bs-table">
+        <thead>
+            <tr>
+                <th>S/N</th><th class="name">Name of Student</th>
+                {% for subj in bs.subjects %}<th class="subj"><span>{{ subj }}</span></th>{% endfor %}
+                <th>Cr</th><th>Avg%</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in bs.rows %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td class="name">{{ row.student.full_name }}</td>
+                {% for subj in bs.subjects %}
+                    {% set r = row.cells.get(subj) %}
+                    <td>{% if r and r.score is not none %}{{ r.score }}&nbsp;<span class="g g-{{ grade_classes.get(r.grade, '') }}">{{ r.grade }}</span>{% endif %}</td>
+                {% endfor %}
+                <td><span class="bs-num">{{ row.credits }}</span></td>
+                <td>{{ row.average_score if row.average_score is not none else '' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr><td class="lab" colspan="2">No. who offered</td>{% for subj in bs.subjects %}<td>{{ bs.subject_summary[subj].offered }}</td>{% endfor %}<td colspan="2"></td></tr>
+            <tr><td class="lab" colspan="2">No. passed (C6+)</td>{% for subj in bs.subjects %}<td>{{ bs.subject_summary[subj].passed }}</td>{% endfor %}<td colspan="2"></td></tr>
+            <tr><td class="lab" colspan="2">No. failed</td>{% for subj in bs.subjects %}<td>{{ bs.subject_summary[subj].failed }}</td>{% endfor %}<td colspan="2"></td></tr>
+            <tr><td class="lab" colspan="2">Average score %</td>{% for subj in bs.subjects %}<td>{{ bs.subject_summary[subj].avg_score if bs.subject_summary[subj].avg_score is not none else '—' }}</td>{% endfor %}<td colspan="2"></td></tr>
+            <tr><td class="lab" colspan="2">Average grade</td>{% for subj in bs.subjects %}<td><span class="g g-{{ grade_classes.get(bs.subject_summary[subj].avg_grade, '') }}">{{ bs.subject_summary[subj].avg_grade }}</span></td>{% endfor %}<td colspan="2"></td></tr>
+        </tfoot>
+    </table></div>
+</div>
+
+<div class="grid-2 mt-3" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem;">
+    <div class="card">
+        <div class="card-header"><h3>Grade distribution (whole exam)</h3></div>
+        <div class="card-body" style="overflow-x:auto;">
+            <table class="bs-dist" style="margin:0 auto;">
+                <thead><tr><th>Grade</th>{% for g in bs.grade_order %}<th><span class="g g-{{ grade_classes.get(g, '') }}">{{ g }}</span></th>{% endfor %}</tr></thead>
+                <tbody>
+                    <tr><td><strong>Count</strong></td>{% for g in bs.grade_order %}<td>{{ bs.grade_distribution[g] }}</td>{% endfor %}</tr>
+                    <tr><td><strong>%</strong></td>{% for g in bs.grade_order %}<td>{{ bs.grade_distribution_pct[g] }}</td>{% endfor %}</tr>
+                </tbody>
+            </table>
+            <p class="bs-note">{{ bs.school.subject_entries }} subject entries across {{ bs.school.students }} students.</p>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header"><h3>School summary</h3></div>
+        <div class="card-body">
+            <div class="info-row"><span class="text-muted">Students sat</span><strong>{{ bs.school.students }}</strong></div>
+            <div class="info-row"><span class="text-muted">Average credits / student</span><strong>{{ bs.school.avg_credits }}</strong></div>
+            <div class="info-row"><span class="text-muted">5+ credits</span><strong>{{ bs.school.with_5_credits }}</strong></div>
+            <div class="info-row"><span class="text-muted">5+ credits incl. English &amp; Maths</span><strong>{{ bs.school.with_5_incl_core }} ({{ bs.school.with_5_incl_core_pct }}%)</strong></div>
+            <p class="bs-note">Average score for a subject = sum of scores ÷ number who offered it. Pass = grade C6 or better.</p>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

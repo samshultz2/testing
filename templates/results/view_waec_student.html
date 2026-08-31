@@ -54,7 +54,7 @@
     background: var(--bg-card);
     border-radius: 8px;
     padding: 0.75rem;
-    border: 1px solid #e0e0e0;
+    border: 1px solid var(--border-color);
     text-align: center;
 }
 
@@ -73,7 +73,7 @@
 .card {
     background: var(--bg-card);
     border-radius: 8px;
-    border: 1px solid #e0e0e0;
+    border: 1px solid var(--border-color);
     margin-bottom: 1rem;
     overflow: hidden;
 }
@@ -276,9 +276,14 @@
     <div class="card">
         <div class="card-header">
             <h3>Results ({{ latest_year }})</h3>
-            <a href="{{ url_for('results.edit_waec', student_id=student.id, year=latest_year) }}" class="btn btn-secondary btn-sm">
-                <i class="fas fa-edit"></i>
-            </a>
+            <div style="display:flex;gap:6px">
+              <a href="{{ url_for('results.waec_cert_generator', student_id=student.id, year=latest_year) }}" class="btn btn-secondary btn-sm" title="Generate result image / PDF">
+                  <i class="fas fa-id-card"></i> Generate
+              </a>
+              <a href="{{ url_for('results.edit_waec', student_id=student.id, year=latest_year) }}" class="btn btn-secondary btn-sm" title="Edit results">
+                  <i class="fas fa-edit"></i>
+              </a>
+            </div>
         </div>
         <div class="card-body" style="padding: 0;">
             <table class="results-table">
@@ -354,7 +359,7 @@
                     <span>Risk Score</span>
                     <strong>{{ risk_assessment.overall_risk_score }}/100</strong>
                 </div>
-                <div style="background: #e9ecef; border-radius: 4px; height: 8px;">
+                <div style="background: var(--border-color); border-radius: 4px; height: 8px;">
                     <div style="width: {{ risk_assessment.overall_risk_score }}%; height: 100%; border-radius: 4px; background: {% if risk_assessment.risk_level == 'GREEN' %}#28a745{% elif risk_assessment.risk_level == 'AMBER' %}#ffc107{% else %}#dc3545{% endif %};"></div>
                 </div>
             </div>
@@ -471,8 +476,8 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
+<script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
+<script nonce="{{ csp_nonce }}">
 {% if waec_summary %}
 {% set years_list = waec_summary.keys()|list|sort(reverse=true) %}
 {% set latest_year = years_list[0] %}

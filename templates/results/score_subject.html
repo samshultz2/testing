@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}{{ subject }} — {{ exam_label }} Analysis{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('results.index') }}">Results</a>
+  <a href="{{ back_url }}">{{ exam_label }}</a> <span>{{ subject }}</span>{% endblock %}
+
+{% block extra_css %}{% include "results/_subject_style.html" %}{% endblock %}
+
+{% block content %}
+<div class="sa-wrap">
+  <div class="sa-head">
+    <h1><span class="ic"><i class="fas fa-book"></i></span> {{ subject }}
+      <span class="sub">· {{ exam_label }}{% if selected_year %} {{ selected_year }}{% endif %}</span></h1>
+    {% if years %}
+    <form method="get">
+      <select name="year" onchange="this.form.submit()" aria-label="Exam year">
+        {% for y in years %}<option value="{{ y }}" {{ 'selected' if y == selected_year }}>{{ y }}</option>{% endfor %}
+      </select>
+    </form>
+    {% endif %}
+  </div>
+
+  {% if data %}
+  <div class="sa-kpis">
+    <div class="sa-kpi"><div class="l">Candidates</div><div class="v">{{ data.total }}</div></div>
+    <div class="sa-kpi"><div class="l">Average score</div><div class="v">{{ data.avg_score }}<small>/100</small></div></div>
+    <div class="sa-kpi good"><div class="l">Highest</div><div class="v">{{ data.max_score }}</div></div>
+    <div class="sa-kpi bad"><div class="l">Lowest</div><div class="v">{{ data.min_score }}</div></div>
+    <div class="sa-kpi good"><div class="l">Scored ≥ 70</div><div class="v">{{ data.above_70 }} <small>{{ data.above_70_pct }}%</small></div></div>
+    <div class="sa-kpi {{ 'good' if data.above_50_pct >= 50 else 'warn' }}"><div class="l">Scored ≥ 50</div><div class="v">{{ data.above_50 }} <small>{{ data.above_50_pct }}%</small></div></div>
+  </div>
+
+  <div class="sa-grid">
+    <div class="sa-card">
+      <h3><i class="fas fa-chart-bar"></i> Score distribution</h3>
+      <div class="sa-chart"><canvas id="saScoreChart"></canvas></div>
+    </div>
+    <div class="sa-card">
+      <h3><i class="fas fa-list-ol"></i> Bands</h3>
+      <div class="sa-dist">
+        {% set mx = data.total or 1 %}
+        {% for d in data.distribution %}
+        <div class="sa-drow">
+          <span class="lbl">{{ d.label }}</span>
+          <span class="bar"><span style="width:{{ (d.count / mx * 100)|round(1) }}%;background:var(--primary)"></span></span>
+          <span class="n"><b>{{ d.count }}</b> · {{ d.pct }}%</span>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="sa-card">
+    <h3><i class="fas fa-ranking-star"></i> Candidates (ranked by score)</h3>
+    <div class="sa-tablewrap">
+      <table class="sa-table">
+        <thead><tr><th>#</th><th>Student</th><th>Score</th></tr></thead>
+        <tbody>
+          {% for s in data.candidates %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td class="names">{% if search_endpoint %}<a href="{{ url_for(search_endpoint, year=selected_year, search=s.admission_no) }}">{{ s.name }}</a>{% else %}{{ s.name }}{% endif %}</td>
+            <td><span class="sc {{ 'hi' if s.score >= 70 else 'mid' if s.score >= 50 else 'lo' }}">{{ s.score }}</span></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script id="saData" type="application/json">{{ data.distribution|tojson }}</script>
+  {% else %}
+  <div class="sa-card"><div class="sa-empty"><i class="fas fa-inbox"></i>No {{ exam_label }} results recorded for {{ subject }}{% if selected_year %} in {{ selected_year }}{% endif %}.</div></div>
+  {% endif %}
+
+  <a class="sa-back" href="{{ back_url }}"><i class="fas fa-arrow-left"></i> Back to {{ exam_label }} subjects</a>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script nonce="{{ csp_nonce }}">
+{% include "results/_score_chart.js" %}
+</script>
+{% endblock %}

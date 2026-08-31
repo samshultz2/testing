@@ -1,0 +1,75 @@
+{% extends "platform/_layout.html" %}
+{% block title %}Broadcasts{% endblock %}
+{% block heading %}Broadcasts{% endblock %}
+{% block subheading %}Announce maintenance, launches or notices to schools' admins — targeted by segment, shown in-portal.{% endblock %}
+
+{% block head %}
+<style>
+  .compose{display:grid;gap:12px;max-width:760px}
+  .compose label{font-size:12.5px;font-weight:600;color:var(--faint);display:block;margin-bottom:4px}
+  .compose textarea,.compose input,.compose select{width:100%;padding:10px 12px;border:1px solid var(--line);
+    border-radius:9px;background:transparent;color:var(--ink);font-size:14px;font-family:inherit}
+  .compose textarea{min-height:70px;resize:vertical}
+  .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px} @media(max-width:640px){.row3{grid-template-columns:1fr}}
+  .lvl{font-size:11px;font-weight:700;padding:2px 9px;border-radius:99px;text-transform:capitalize}
+  .lvl.info{background:var(--accent-soft);color:var(--accent-ink)}
+  .lvl.warning{background:var(--warn-soft);color:var(--warn)}
+  .lvl.critical{background:var(--bad-soft);color:var(--bad)}
+  .seg{font-size:12px;color:var(--soft)}
+  .st.live{color:var(--ok);font-weight:700} .st.ended{color:var(--faint)}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="panel" style="padding:18px 20px;margin-bottom:20px">
+  <h2 style="font-size:15px;margin:0 0 14px"><i class="fas fa-bullhorn"></i> New broadcast</h2>
+  <form method="post" class="compose">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <div><label>Message</label>
+      <textarea name="message" required placeholder="e.g. Scheduled maintenance on Sunday 2–4am WAT — the portal may be briefly unavailable."></textarea></div>
+    <div class="row3">
+      <div><label>Audience</label>
+        <select name="segment">
+          <option value="all">All schools</option>
+          <option value="paying">Paying only</option>
+          <option value="trial">Trial only</option>
+          <option value="unpaid">Unpaid / lapsed</option>
+          <option value="tier:free">Tier · Free</option>
+          <option value="tier:basic">Tier · Basic</option>
+          <option value="tier:premium">Tier · Premium</option>
+          <option value="tier:enterprise">Tier · Enterprise</option>
+        </select></div>
+      <div><label>Level</label>
+        <select name="level"><option value="info">Info</option><option value="warning">Warning</option><option value="critical">Critical</option></select></div>
+      <div><label>Auto-expire (days, optional)</label>
+        <input type="number" name="days" min="1" max="90" placeholder="never"></div>
+    </div>
+    <div><button class="btn primary"><i class="fas fa-paper-plane"></i> Publish broadcast</button></div>
+  </form>
+</div>
+
+<div class="panel">
+  <h2 style="font-size:14px;margin:0;padding:16px 18px;border-bottom:1px solid var(--line-2)">History</h2>
+  {% if rows %}
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>When</th><th>Message</th><th>Audience</th><th>Level</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        {% for b, live in rows %}
+        <tr>
+          <td class="muted" style="white-space:nowrap">{{ b.created_at.strftime('%d %b %H:%M') if b.created_at else '—' }}</td>
+          <td>{{ b.message }}</td>
+          <td class="seg">{{ b.segment }}</td>
+          <td><span class="lvl {{ b.level }}">{{ b.level }}</span></td>
+          <td><span class="st {{ 'live' if live else 'ended' }}">{{ 'Live' if live else 'Ended' }}</span></td>
+          <td>{% if live %}<form class="inline" method="post" action="{{ url_for('platform.broadcast_end', bid=b.id) }}">
+              <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+              <button class="btn sm danger"><i class="fas fa-stop"></i> End</button></form>{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}<div class="empty"><i class="fas fa-bullhorn"></i>No broadcasts yet.</div>{% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% set _t = {'calendar':'Calendar','agenda':'Events','event_form':'Event','import':'Import Calendar'} %}
+{% block title %}{{ _t.get(events_json.page,'Calendar') }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}
+{% if events_json.page == 'calendar' %}<span>Calendar</span>
+{% else %}<a href="{{ url_for('events.calendar') }}">Calendar</a> / <span>{{ _t.get(events_json.page,'') }}</span>{% endif %}
+{% endblock %}
+{% block extra_css %}
+<style>
+.cal-head{display:flex;justify-content:space-between;align-items:center;gap:.5rem;flex-wrap:wrap;margin-bottom:.75rem}
+.cal-nav{display:flex;gap:.4rem;align-items:center}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cal-dow{font-size:.7rem;text-transform:uppercase;letter-spacing:.03em;color:var(--text-muted);text-align:center;padding:.3rem 0;font-weight:600}
+.cal-cell{min-height:92px;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-sm);padding:.3rem;display:flex;flex-direction:column;gap:2px;overflow:hidden}
+.cal-cell.out{opacity:.4}
+.cal-cell.today{border-color:var(--primary);box-shadow:inset 0 0 0 1px var(--primary)}
+.cal-daynum{font-size:.78rem;font-weight:600;display:flex;justify-content:space-between;align-items:center}
+.cal-daynum a{color:var(--text-muted);text-decoration:none;font-weight:400}
+.ev{font-size:.68rem;color:#fff;border-radius:4px;padding:1px 5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-decoration:none;display:block}
+.legend{display:flex;flex-wrap:wrap;gap:.6rem;margin-top:.75rem;font-size:.78rem}
+.legend span{display:inline-flex;align-items:center;gap:.3rem}
+.legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
+@media(max-width:640px){.cal-cell{min-height:64px}.ev{font-size:.6rem}}
+</style>
+{% endblock %}
+{% block content %}
+<div id="events-app"><p class="text-muted" style="padding:2rem 0">Loading…</p></div>
+<script type="application/json" id="events-data">{{ events_json|tojson }}</script>
+<script src="{{ bundle_url('js/react/events-app.js') }}" defer></script>
+{% endblock %}

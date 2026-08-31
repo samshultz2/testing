@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}Paper Blueprint — {{ exam.display_name }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('mock_jamb.index') }}">Mock JAMB</a> / <a href="{{ urls.view }}">{{ exam.display_name }}</a> / <span>Blueprint</span>{% endblock %}
+{% block extra_css %}
+<style>
+.bp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem}
+.bp-card{border:1px solid var(--border-color);border-radius:var(--radius-lg);overflow:hidden}
+.bp-head{display:flex;align-items:center;gap:.5rem;padding:.7rem .9rem;background:var(--gray-50)}
+.bp-head .t{font-weight:700;flex:1}
+.bp-total{font-size:.75rem;font-weight:700;background:rgba(13,106,78,.12);color:#0d6a4e;padding:.1rem .5rem;border-radius:var(--radius-full)}
+.bp-cust{font-size:.68rem;font-weight:700;background:rgba(180,83,9,.14);color:#b45309;padding:.1rem .45rem;border-radius:var(--radius-full)}
+.bp-sec{display:flex;align-items:center;gap:.5rem;padding:.4rem .9rem;border-top:1px solid var(--border-light)}
+.bp-sec .l{flex:1;font-size:.86rem}
+.bp-sec input{width:64px;text-align:center}
+.bp-sec .def{font-size:.68rem;color:var(--text-muted);width:58px;text-align:right}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Paper Blueprint — {{ exam.display_name }}</h1>
+        <p class="text-muted text-sm">How many questions each subject draws from each JAMB section for this mock. Defaults follow the real UTME structure (English 60, others 40). Change any count to override; match the default to keep it.</p>
+    </div>
+    <div class="page-header-actions">
+        <a href="{{ urls.bank }}" class="btn btn-secondary btn-sm"><i class="fas fa-database"></i> Question Bank</a>
+        <a href="{{ urls.view }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back to exam</a>
+    </div>
+</div>
+
+<form method="post" action="{{ urls.self }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+
+    <div class="bp-card" style="margin-bottom:1rem;">
+        <div class="bp-head"><span class="t"><i class="fas fa-database"></i> Question source</span></div>
+        <div style="padding:.7rem .9rem;">
+            <label style="display:block;margin-bottom:.5rem;"><input type="radio" name="source_mode" value="bank" {{ 'checked' if source_mode != 'manual' else '' }}>
+                <strong>Draw from the central question bank</strong> — every student gets a completely different, JAMB-shaped paper for the subjects on their profile, drawn at random per attempt. (Recommended)</label>
+            <label style="display:block;"><input type="radio" name="source_mode" value="manual" {{ 'checked' if source_mode == 'manual' else '' }}>
+                <strong>Use this mock's own questions</strong> — everyone sits the exact questions you author into this mock under “Manage questions”.</label>
+            <p class="text-muted text-sm" style="margin:.5rem 0 0;">A mock that already has its own authored questions always serves those; “Draw from the bank” applies when the mock has none of its own.</p>
+        </div>
+    </div>
+
+    <div class="bp-card" style="margin-bottom:1rem;">
+        <div class="bp-head"><span class="t"><i class="fas fa-user-graduate"></i> Who can sit this mock</span></div>
+        <div style="padding:.7rem .9rem;">
+            <p class="text-muted text-sm" style="margin:0 0 .5rem;">By default only <strong>{{ default_level }}</strong> (the JAMB cohort) can sit online. Tick classes to override — leave all unticked for {{ default_level }}-only.</p>
+            <div style="display:flex;flex-wrap:wrap;gap:.4rem .9rem;">
+                {% for c in all_classes %}
+                <label class="text-sm" style="display:inline-flex;align-items:center;gap:.3rem;"><input type="checkbox" name="eligible_levels" value="{{ c.name }}" {{ 'checked' if c.name in selected_levels else '' }}> {{ c.name }}</label>
+                {% endfor %}
+            </div>
+            <p class="text-muted text-sm" style="margin:.6rem 0 0;"><i class="fas fa-circle-info"></i> <strong>Where students sit it:</strong> once you publish the online sitting, eligible students log in at the student CBT portal (<code>{{ url_for('cbt_portal.login', _external=True) }}</code>) with their Student ID &amp; portal password, then open <strong>Mock JAMB</strong> to see and take any open mock for their class.</p>
+        </div>
+    </div>
+
+    <div class="bp-card" style="margin-bottom:1rem;">
+        <div class="bp-head"><span class="t"><i class="fas fa-book"></i> Recommended Novel (English)</span></div>
+        <div style="padding:.7rem .9rem;">
+            <input type="text" name="novel_title" list="novelList" value="{{ novel_title }}" class="form-control"
+                   placeholder="e.g. The Life Changer — Khadija Abubakar Jalli">
+            <datalist id="novelList">{% for n in known_novels %}<option value="{{ n }}"></option>{% endfor %}</datalist>
+            <p class="text-muted text-sm" style="margin:.4rem 0 0;">The JAMB-approved novel for this mock. The English paper's Novel section will draw <strong>only</strong> from bank questions tagged with this exact title (a novel question's tag is its <em>topic</em>). Leave blank to allow any novel question. Set the same title on the questions in the Question Bank (filter the Novel section → “Assign novel”).</p>
+        </div>
+    </div>
+
+    <div class="bp-grid">
+        {% for s in subjects %}
+        <div class="bp-card">
+            <div class="bp-head">
+                <span class="t">{{ s.name }}</span>
+                {% if s.customised %}<span class="bp-cust">custom</span>{% endif %}
+                <span class="bp-total" title="Total questions drawn">{{ s.total }} Q</span>
+            </div>
+            {% for sec in s.sections %}
+            <div class="bp-sec">
+                <span class="l">{{ sec.label }}{% if sec.passage %} <i class="fas fa-align-left text-muted" title="passage section"></i>{% endif %}</span>
+                <input type="number" min="0" max="100" name="{{ s.key }}__{{ sec.section }}" value="{{ sec.count }}" class="form-control">
+                <span class="def">def {{ sec.default }}</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+    <div style="margin-top:1rem;display:flex;gap:.6rem;flex-wrap:wrap;">
+        <button class="btn btn-primary"><i class="fas fa-save"></i> Save blueprint</button>
+        <button class="btn btn-secondary" type="reset">Reset form</button>
+        <span class="text-muted text-sm" style="align-self:center;">Tip: set every count back to its default and save to fully restore the JAMB blueprint.</span>
+    </div>
+</form>
+{% endblock %}

@@ -1,0 +1,83 @@
+{% extends "base.html" %}
+{% block title %}Website analytics - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('website_admin.index') }}">Website Builder</a> / <span>Analytics</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div><h1><i class="fas fa-chart-line"></i> Website analytics</h1>
+    <p class="text-muted text-sm">Privacy-friendly, first-party traffic for your public site — no cookies, no third-party trackers, no personal data. {{ data.start.strftime('%d %b') }} – {{ data.end.strftime('%d %b %Y') }}.</p></div>
+  <div class="page-header-actions">
+    <div class="btn-group" role="group" aria-label="Date range">
+      {% for d in [7, 30, 90] %}
+      <a href="{{ url_for('website_admin.analytics', days=d) }}" class="btn btn-sm {{ 'btn-primary' if days == d else 'btn-secondary' }}">{{ d }}d</a>
+      {% endfor %}
+    </div>
+    <a href="{{ url_for('website_admin.analytics_export', days=days) }}" class="btn btn-secondary"><i class="fas fa-download"></i> CSV</a>
+    <a href="{{ url_for('website_admin.index') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-md-4"><div class="card mb-3"><div class="card-body">
+    <div class="text-muted text-sm">Page views</div>
+    <div style="font-size:2rem;font-weight:800">{{ '{:,}'.format(data.total_views) }}</div>
+    <div class="text-muted text-sm">over {{ days }} days</div>
+  </div></div></div>
+  <div class="col-md-4"><div class="card mb-3"><div class="card-body">
+    <div class="text-muted text-sm">Unique visitors</div>
+    <div style="font-size:2rem;font-weight:800">{{ '{:,}'.format(data.unique_visitors) }}</div>
+    <div class="text-muted text-sm">counted without identifying anyone</div>
+  </div></div></div>
+  <div class="col-md-4"><div class="card mb-3"><div class="card-body">
+    <div class="text-muted text-sm">Busiest day</div>
+    <div style="font-size:2rem;font-weight:800">{{ '{:,}'.format(peak) }}</div>
+    <div class="text-muted text-sm">views in a single day</div>
+  </div></div></div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header"><h3><i class="fas fa-chart-column"></i> Daily page views</h3></div>
+  <div class="card-body">
+    {% if data.total_views %}
+    <div style="display:flex;align-items:flex-end;gap:2px;height:160px;overflow-x:auto" role="img"
+         aria-label="Daily page views bar chart from {{ data.start.strftime('%d %b') }} to {{ data.end.strftime('%d %b') }}">
+      {% for p in data.series %}
+      <div title="{{ p.day.strftime('%a %d %b') }}: {{ p.views }} views"
+           style="flex:1 0 8px;min-width:8px;display:flex;flex-direction:column;justify-content:flex-end;height:100%">
+        <div style="background:var(--primary, #0d6a4e);border-radius:3px 3px 0 0;height:{{ ((p.views / peak * 100) if peak else 0)|round(1) }}%;min-height:{{ 2 if p.views else 0 }}px"></div>
+      </div>
+      {% endfor %}
+    </div>
+    <div class="d-flex" style="justify-content:space-between;margin-top:.4rem">
+      <span class="text-muted text-sm">{{ data.start.strftime('%d %b') }}</span>
+      <span class="text-muted text-sm">{{ data.end.strftime('%d %b') }}</span>
+    </div>
+    {% else %}
+    <div class="empty-state"><i class="fas fa-chart-line"></i><p>No visits recorded yet. Once your site is public and people visit, traffic will appear here.</p></div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-md-6"><div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-file-lines"></i> Top pages</h3></div>
+    <div class="card-body">
+      {% if data.top_pages %}
+      <table class="table table-sm"><thead><tr><th>Page</th><th class="text-right">Views</th></tr></thead>
+        <tbody>{% for p in data.top_pages %}<tr><td><code>{{ p.path }}</code></td><td class="text-right">{{ '{:,}'.format(p.views) }}</td></tr>{% endfor %}</tbody>
+      </table>
+      {% else %}<p class="text-muted text-sm">No data yet.</p>{% endif %}
+    </div>
+  </div></div>
+  <div class="col-md-6"><div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-arrow-right-to-bracket"></i> Where visitors came from</h3></div>
+    <div class="card-body">
+      {% if data.top_referrers %}
+      <table class="table table-sm"><thead><tr><th>Source</th><th class="text-right">Views</th></tr></thead>
+        <tbody>{% for r in data.top_referrers %}<tr><td>{{ 'Direct / bookmarked' if r.source == 'direct' else r.source }}</td><td class="text-right">{{ '{:,}'.format(r.views) }}</td></tr>{% endfor %}</tbody>
+      </table>
+      {% else %}<p class="text-muted text-sm">No data yet.</p>{% endif %}
+    </div>
+  </div></div>
+</div>
+{% endblock %}

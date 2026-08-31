@@ -5,7 +5,12 @@
 {% block extra_css %}
 <style>
 @media print {
+    * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .sidebar, .top-header, .bottom-nav, .no-print, .sidebar-overlay { display: none !important; }
+    .main-content, .page-content { margin: 0 !important; padding: 0 !important; background: #fff !important; }
+    .card { box-shadow: none !important; border: none !important; }
     body { font-size: 10pt; }
+    .register-container { overflow: visible !important; }
     .register-table { width: 100%; border-collapse: collapse; }
     .register-table th, .register-table td { 
         border: 1px solid #000; 
@@ -38,7 +43,7 @@
 {% block content %}
 <div class="page-header no-print">
     <h1>Print Attendance Register</h1>
-    <button onclick="window.print()" class="btn btn-primary"><i class="fas fa-print"></i> Print</button>
+    <button data-print class="btn btn-primary"><i class="fas fa-print"></i> Print</button>
 </div>
 
 <div class="card mb-3 no-print">
@@ -46,7 +51,7 @@
         <form method="GET" class="filter-form">
             <div class="form-group">
                 <label class="form-label">Term</label>
-                <select name="term_id" class="form-control" onchange="this.form.submit()">
+                <select name="term_id" class="form-control" data-autosubmit>
                     <option value="">Select Term</option>
                     {% for term in terms %}
                     <option value="{{ term.id }}" {% if term_id == term.id %}selected{% endif %}>{{ term.full_name }}</option>
@@ -55,7 +60,7 @@
             </div>
             <div class="form-group">
                 <label class="form-label">Class</label>
-                <select name="assignment_id" class="form-control" onchange="this.form.submit()">
+                <select name="assignment_id" class="form-control" data-autosubmit>
                     <option value="">Select Class</option>
                     {% for a in assignments %}
                     <option value="{{ a.id }}" {% if assignment_id == a.id %}selected{% endif %}>{{ a.display_name }}</option>
@@ -64,7 +69,7 @@
             </div>
             <div class="form-group">
                 <label class="form-label">Week</label>
-                <select name="week_id" class="form-control" onchange="this.form.submit()">
+                <select name="week_id" class="form-control" data-autosubmit>
                     <option value="">Select Week</option>
                     {% for week in weeks %}
                     <option value="{{ week.id }}" {% if week_id == week.id %}selected{% endif %}>Week {{ week.week_number }}</option>
@@ -108,6 +113,12 @@
                 </thead>
                 <tbody>
                     {% for row in register_data %}
+                    {% if loop.changed(row.student.gender) %}
+                    {% if not loop.first %}<tr class="roster-group-gap" aria-hidden="true"><td colspan="{{ school_days|length * 2 + 3 }}" style="height:0.9rem;border:none;padding:0;"></td></tr>{% endif %}
+                    <tr class="roster-group-head">
+                        <td colspan="{{ school_days|length * 2 + 3 }}" style="font-weight:700;text-align:left;text-transform:uppercase;letter-spacing:.03em;">{% if row.student.gender == 'Male' %}Boys{% elif row.student.gender == 'Female' %}Girls{% else %}{{ row.student.gender or 'Other' }}{% endif %}</td>
+                    </tr>
+                    {% endif %}
                     <tr>
                         <td>{{ loop.index }}</td>
                         <td class="student-name">{{ row.student.full_name }}</td>

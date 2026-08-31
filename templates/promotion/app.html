@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% set _t = {'index':'Promotion','rules':'Rules','add_rule':'Add Rule','process':'Process','graduates':'Graduates','graduate_preview':'Graduate SSS3','graduate_profile':'Graduate Profile','graduate_compare':'Compare with SSS3','history':'History'} %}
+{% block title %}{{ _t.get(promo_json.page,'Promotion') }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}
+{% if promo_json.page == 'index' %}<span>Promotion</span>
+{% else %}<a href="{{ url_for('promotion.index') }}">Promotion</a> / <span>{{ _t.get(promo_json.page,'') }}</span>{% endif %}
+{% endblock %}
+{% block extra_css %}
+<style>
+/* Profile info rows: the React <InfoRow> renders a muted label + a bold value;
+   give them a real two-column layout so label and value are clearly separated
+   (they otherwise butt together) with a hairline divider per row. */
+.info-grid{display:flex;flex-direction:column}
+.info-row{display:flex;justify-content:space-between;align-items:baseline;gap:1.5rem;padding:.6rem 0;border-bottom:1px solid var(--border-light)}
+.info-row:last-child{border-bottom:none}
+.info-row>.text-muted{flex:none}
+.info-row>strong{text-align:right;min-width:0;overflow-wrap:anywhere}
+.profile-header{display:flex;align-items:center;gap:1.5rem;padding:1.5rem;background:linear-gradient(135deg,var(--primary) 0%,var(--primary-dark) 100%);color:#fff;border-radius:var(--border-radius);margin-bottom:1.5rem}
+.profile-avatar{width:80px;height:80px;background:rgba(255,255,255,0.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:2rem}
+.profile-info h1{margin:0 0 .25rem;font-size:1.5rem}.profile-info p{margin:0;opacity:.9}
+.subjects-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.5rem}
+.subject-item{display:flex;justify-content:space-between;padding:.5rem;background:var(--bg-tertiary);border-radius:var(--radius-sm)}
+.grade-badge{font-weight:bold;padding:.25rem .5rem;border-radius:4px}
+.grade-A1,.grade-B2,.grade-B3{background:#c8e6c9;color:#2e7d32}
+.grade-C4,.grade-C5,.grade-C6{background:#fff9c4;color:#f57f17}
+.grade-D7,.grade-E8,.grade-F9{background:#ffcdd2;color:#c62828}
+.jamb-subjects{display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem}
+@media(max-width:600px){.jamb-subjects{grid-template-columns:1fr}}
+</style>
+{% endblock %}
+{% block content %}
+<div id="promo-app"><p class="text-muted" style="padding:2rem 0">Loading…</p></div>
+<script type="application/json" id="promo-data">{{ promo_json|tojson }}</script>
+<script src="{{ bundle_url('js/react/promotion-app.js') }}" defer></script>
+{% endblock %}

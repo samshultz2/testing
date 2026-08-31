@@ -1,0 +1,30 @@
+{% extends "cbt/portal_base.html" %}
+{% block title %}Mock JAMB{% endblock %}
+{% block content %}
+<div class="portal-card">
+    <h1><i class="fas fa-file-contract"></i> Mock JAMB</h1>
+    <p class="text-muted text-sm">Sit your registered subjects in one timed session, just like the real JAMB.</p>
+    <p style="margin:.4rem 0 1rem;"><a href="{{ url_for('cbt_portal.home') }}" class="text-sm"><i class="fas fa-arrow-left"></i> Back to my tests</a></p>
+
+    {% if rows %}
+    {% for r in rows %}
+    <div style="border:1px solid var(--border-color);border-radius:12px;padding:1rem;margin-bottom:.7rem;display:flex;align-items:center;gap:.8rem;flex-wrap:wrap;">
+        <div style="flex:1;min-width:180px;">
+            <div style="font-weight:700;">{{ r.exam.display_name }}</div>
+            <div class="text-muted text-sm">{{ r.subjects }} subject{{ '' if r.subjects == 1 else 's' }} · {{ r.exam.duration_minutes }} min{% if r.exam.exam_date %} · {{ r.exam.exam_date.strftime('%d %b %Y') }}{% endif %}</div>
+        </div>
+        {% if r.submitted %}
+        <span class="badge badge-success">Submitted · {{ r.score }}/400</span>
+        <a href="{{ url_for('mock_jamb_portal.portal_done', exam_id=r.exam.id) }}" class="btn btn-secondary btn-sm">View result</a>
+        {% elif r.in_progress %}
+        <a href="{{ url_for('mock_jamb_portal.portal_sit', exam_id=r.exam.id) }}" class="btn btn-warning btn-sm"><i class="fas fa-play"></i> Resume</a>
+        {% else %}
+        <a href="{{ url_for('mock_jamb_portal.portal_sit', exam_id=r.exam.id) }}" class="btn btn-primary btn-sm"><i class="fas fa-play"></i> Start</a>
+        {% endif %}
+    </div>
+    {% endfor %}
+    {% else %}
+    <div class="empty-state"><i class="fas fa-inbox"></i><p>No Mock JAMB is open for you right now. Check back when your school publishes one.</p></div>
+    {% endif %}
+</div>
+{% endblock %}

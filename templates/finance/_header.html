@@ -1,0 +1,118 @@
+{# Shared finance module header: identity + quick actions + section tabs.
+   Include with a `fin_active` variable set to the current section key. #}
+<div class="fin-shell">
+  <div class="fin-bar">
+    <div class="fin-id"><i aria-hidden="true" class="fas fa-coins"></i> Finance</div>
+    <form class="fin-search" method="get" action="{{ url_for('finance.search') }}" role="search">
+      <i aria-hidden="true" class="fas fa-magnifying-glass"></i>
+      <input type="search" name="q" placeholder="Search finance…  ( / )" aria-label="Search finance"
+             value="{{ q if fin_active == 'search' else '' }}" data-fin-search autocomplete="off">
+    </form>
+    <div class="fin-quick">
+      <a href="{{ url_for('finance.record_payment') }}" data-native class="btn btn-primary btn-sm"><i aria-hidden="true" class="fas fa-cash-register"></i> Collect payment</a>
+      <a href="{{ url_for('finance.expenses_list') }}" data-native class="btn btn-secondary btn-sm"><i aria-hidden="true" class="fas fa-money-bill-wave"></i> Record expense</a>
+      <a href="{{ url_for('finance.billing_tools') }}" class="btn btn-secondary btn-sm"><i aria-hidden="true" class="fas fa-wand-magic-sparkles"></i> Bill / charge</a>
+      <a href="{{ url_for('finance.defaulters') }}" data-native class="btn btn-secondary btn-sm"><i aria-hidden="true" class="fas fa-triangle-exclamation"></i> Defaulters</a>
+    </div>
+  </div>
+  <nav class="fin-tabs" aria-label="Finance sections">
+    <a href="{{ url_for('finance.dashboard') }}" data-native class="{{ 'on' if fin_active == 'dashboard' }}">Dashboard</a>
+    <a href="{{ url_for('finance.overview') }}" class="{{ 'on' if fin_active == 'overview' }}">Reports &amp; Ledger</a>
+    <a href="{{ url_for('finance.accounting') }}" class="{{ 'on' if fin_active == 'accounting' }}">Accounting</a>
+    <a href="{{ url_for('finance.billing_tools') }}" class="{{ 'on' if fin_active == 'billing' }}">Billing Tools</a>
+    <a href="{{ url_for('finance.installments') }}" class="{{ 'on' if fin_active == 'installments' }}">Installments</a>
+  </nav>
+</div>
+<style>
+  .fin-shell{margin-bottom:18px}
+  .fin-bar{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:10px}
+  .fin-id{font-family:var(--font-display,inherit);font-weight:800;font-size:20px;display:flex;align-items:center;gap:9px;letter-spacing:-.01em}
+  .fin-id i{color:var(--primary,#0d6a4e)}
+  .fin-search{position:relative;display:flex;align-items:center;min-width:220px;flex:0 1 300px}
+  .fin-search i{position:absolute;left:11px;font-size:12px;color:var(--text-secondary,#889);pointer-events:none}
+  .fin-search input{width:100%;padding:8px 12px 8px 30px;border:1px solid var(--border,#d7dde5);
+                    border-radius:9px;font-size:13px;background:var(--surface,#fff);color:inherit}
+  .fin-quick{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
+  .fin-tabs{display:flex;gap:2px;flex-wrap:wrap;border-bottom:1px solid var(--border,#e5e7eb)}
+  .fin-tabs a{padding:9px 14px;font-size:13.5px;font-weight:600;color:var(--text-secondary,#667);
+              text-decoration:none;border-bottom:2px solid transparent;margin-bottom:-1px;white-space:nowrap}
+  .fin-tabs a:hover{color:var(--text-primary,#223)}
+  .fin-tabs a.on{color:var(--primary,#0d6a4e);border-bottom-color:var(--primary,#0d6a4e)}
+  @media (max-width:640px){
+    .fin-search{order:3;flex-basis:100%;min-width:0}
+    .fin-quick{width:100%;margin-left:0}
+    .fin-tabs{overflow-x:auto}
+  }
+  .fin-kbd-help{position:fixed;inset:0;background:rgba(15,23,42,.5);display:none;z-index:1000;
+                align-items:center;justify-content:center}
+  .fin-kbd-help.on{display:flex}
+  .fin-kbd-card{background:var(--surface,#fff);color:inherit;border-radius:14px;padding:20px 24px;
+                max-width:380px;width:90%;box-shadow:0 18px 50px rgba(0,0,0,.3)}
+  .fin-kbd-card h4{margin:0 0 12px;font-size:15px}
+  .fin-kbd-card table{width:100%;border-collapse:collapse;font-size:13.5px}
+  .fin-kbd-card td{padding:5px 4px;border-bottom:1px solid var(--border,#f0f2f6)}
+  .fin-kbd-card kbd{font-family:ui-monospace,monospace;background:var(--surface-2,#eef1f5);color:#334;
+                    border-radius:5px;padding:1px 7px;font-size:12px;font-weight:700}
+  .fin-kbd-card .cls{margin-top:14px;font-size:12px;color:var(--text-secondary,#889);text-align:right}
+</style>
+
+<div class="fin-kbd-help" id="finKbdHelp" aria-hidden="true">
+  <div class="fin-kbd-card">
+    <h4>Finance keyboard shortcuts</h4>
+    <table><tbody>
+      <tr><td><kbd>/</kbd></td><td>Focus search</td></tr>
+      <tr><td><kbd>g</kbd> <kbd>d</kbd></td><td>Dashboard</td></tr>
+      <tr><td><kbd>g</kbd> <kbd>r</kbd></td><td>Reports &amp; Ledger</td></tr>
+      <tr><td><kbd>g</kbd> <kbd>a</kbd></td><td>Accounting</td></tr>
+      <tr><td><kbd>g</kbd> <kbd>b</kbd></td><td>Billing Tools</td></tr>
+      <tr><td><kbd>g</kbd> <kbd>i</kbd></td><td>Installments</td></tr>
+      <tr><td><kbd>n</kbd> <kbd>p</kbd></td><td>New payment</td></tr>
+      <tr><td><kbd>n</kbd> <kbd>e</kbd></td><td>New expense</td></tr>
+      <tr><td><kbd>?</kbd></td><td>Show this help</td></tr>
+    </tbody></table>
+    <div class="cls">Press <kbd>Esc</kbd> to close</div>
+  </div>
+</div>
+
+<script nonce="{{ csp_nonce }}" type="application/json" id="fin-nav-urls">{{ {
+  'dashboard': url_for('finance.dashboard'),
+  'overview': url_for('finance.overview'),
+  'accounting': url_for('finance.accounting'),
+  'billing': url_for('finance.billing_tools'),
+  'installments': url_for('finance.installments'),
+  'payment': url_for('finance.record_payment'),
+  'expense': url_for('finance.expenses_list')
+}|tojson }}</script>
+<script nonce="{{ csp_nonce }}">
+(function(){
+  if (window.__finKbd) return; window.__finKbd = true;
+  var el = document.getElementById('fin-nav-urls');
+  var U = {}; try { U = JSON.parse(el.textContent); } catch(e){}
+  var go = function(u){ if (u) window.location.assign(u); };
+  var help = document.getElementById('finKbdHelp');
+  var pending = null, timer = null;
+  var typing = function(t){ return t && (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || t.isContentEditable); };
+  document.addEventListener('keydown', function(e){
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    // '/' focuses search from anywhere but inside a field
+    if (e.key === '/' && !typing(e.target)){
+      var box = document.querySelector('[data-fin-search]');
+      if (box){ e.preventDefault(); box.focus(); box.select && box.select(); }
+      return;
+    }
+    if (e.key === 'Escape'){ if (help) help.classList.remove('on'); return; }
+    if (typing(e.target)) return;
+    if (e.key === '?'){ if (help) help.classList.toggle('on'); return; }
+    var k = e.key.toLowerCase();
+    if (k === 'g' || k === 'n'){ pending = k; clearTimeout(timer); timer = setTimeout(function(){ pending = null; }, 900); return; }
+    if (pending === 'g'){
+      var m = {d:U.dashboard, r:U.overview, a:U.accounting, b:U.billing, i:U.installments};
+      if (m[k]){ e.preventDefault(); go(m[k]); } pending = null; return;
+    }
+    if (pending === 'n'){
+      var mn = {p:U.payment, e:U.expense};
+      if (mn[k]){ e.preventDefault(); go(mn[k]); } pending = null; return;
+    }
+  });
+})();
+</script>

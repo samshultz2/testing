@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Paste WAEC Result - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('results.waec_list') }}">WAEC</a> / <span>Paste Result</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Paste WAEC Result</h1>
+        <p class="text-muted text-sm">Read a result screenshot with any chatbot (Claude, Gemini, ChatGPT…), paste its answer here, then review &amp; save. No OCR, no API key.</p>
+    </div>
+    <div class="page-header-actions">
+        <a href="{{ url_for('results.scan_waec') }}" class="btn btn-secondary btn-sm"><i class="fas fa-camera"></i> Scan image instead</a>
+        <a href="{{ url_for('results.add_waec') }}" class="btn btn-secondary btn-sm"><i class="fas fa-keyboard"></i> Enter manually</a>
+    </div>
+</div>
+
+<div class="card mb-3" style="max-width:760px;">
+    <div class="card-header"><h3>Step 1: Get the result as text from an AI</h3></div>
+    <div class="card-body">
+        <p class="text-muted">Upload the WAEC result screenshot to a chatbot with this prompt, then copy its answer into Step&nbsp;2.</p>
+        <pre id="ai-prompt" style="white-space:pre-wrap;background:var(--bg-muted,var(--gray-50));border:1px solid var(--border-color);border-radius:8px;padding:.75rem;font-size:.85rem;">Read this WAEC result. Output the candidate's full name on the first line, then one line per subject as "Subject, Grade" (e.g. English Language, B3). Use the grades exactly (A1–F9). No extra text, no totals.</pre>
+        <button type="button" class="btn btn-secondary btn-sm mt-2" data-copy="ai-prompt"><i class="fas fa-copy"></i> Copy prompt</button>
+    </div>
+</div>
+
+<div class="card" style="max-width:760px;">
+    <div class="card-header"><h3>Step 2: Paste the result</h3></div>
+    <div class="card-body">
+        <form method="POST">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group" style="max-width:180px;">
+                <label class="form-label">Exam year</label>
+                <input type="number" name="exam_year" class="form-control" min="2000" max="2100" value="{{ current_year or '' }}" placeholder="e.g. 2024">
+            </div>
+            <div class="form-group">
+                <label class="form-label">Pasted result <span class="required">*</span></label>
+                <textarea name="data" class="form-control" rows="12" required
+                    placeholder="ASIA-EDO EGHOSASERE EL-DORADO&#10;English Language, B3&#10;Mathematics, C4&#10;Economics, B2&#10;Biology, B2&#10;Physics, A1">{{ pasted or '' }}</textarea>
+                <span class="form-hint d-block">First line = candidate name (helps match the student). Then one "Subject, Grade" per line. You'll pick the student &amp; confirm everything next.</span>
+            </div>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-eye"></i> Preview</button>
+        </form>
+    </div>
+</div>
+{% endblock %}

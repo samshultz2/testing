@@ -5,6 +5,7 @@
 <div class="page-header">
     <h1>Scan Score Sheet</h1>
     <div class="page-header-actions">
+        <a href="{{ url_for('subjects.scoresheet_paste', term_id=term_id, assignment_id=assignment_id, class_subject_id=class_subject_id) }}" class="btn btn-secondary"><i class="fas fa-clipboard"></i> Paste CSV / AI</a>
         <a href="{{ url_for('subjects.scores_entry', term_id=term_id, assignment_id=assignment_id, class_subject_id=class_subject_id) }}" class="btn btn-secondary"><i class="fas fa-keyboard"></i> Manual Entry</a>
     </div>
 </div>
@@ -15,7 +16,7 @@
         <form method="GET" class="filter-form">
             <div class="form-group">
                 <label class="form-label">Term</label>
-                <select name="term_id" class="form-control" onchange="this.form.submit()">
+                <select name="term_id" class="form-control" data-autosubmit>
                     <option value="">Select Term</option>
                     {% for term in terms %}
                     <option value="{{ term.id }}" {% if term_id == term.id %}selected{% endif %}>{{ term.full_name }}</option>
@@ -24,7 +25,7 @@
             </div>
             <div class="form-group">
                 <label class="form-label">Class</label>
-                <select name="assignment_id" class="form-control" onchange="this.form.submit()">
+                <select name="assignment_id" class="form-control" data-autosubmit>
                     <option value="">Select Class</option>
                     {% for a in assignments %}
                     <option value="{{ a.id }}" {% if assignment_id == a.id %}selected{% endif %}>{{ a.display_name }}</option>
@@ -33,7 +34,7 @@
             </div>
             <div class="form-group">
                 <label class="form-label">Subject</label>
-                <select name="class_subject_id" class="form-control" onchange="this.form.submit()">
+                <select name="class_subject_id" class="form-control" data-autosubmit>
                     <option value="">Select Subject</option>
                     {% for cs in class_subjects %}
                     <option value="{{ cs.id }}" {% if class_subject_id == cs.id %}selected{% endif %}>{{ cs.subject.name }}</option>
@@ -52,6 +53,11 @@
         student numbers, names and each assessment column (1st/2nd/3rd CA, Holiday Assignment, Midterm/Practical,
         CBT and Theory). You can review and correct everything before saving — the Exam&nbsp;Total and Grand&nbsp;Total
         are calculated automatically, so you don't need those columns.</p>
+        {% if vision_on %}
+        <p style="color:#137333;font-size:.85rem;margin:-.3rem 0 .6rem;"><i class="fas fa-robot"></i> AI Vision is on — handwritten scores will be read. Always review before saving.</p>
+        {% else %}
+        <p class="text-muted" style="font-size:.82rem;margin:-.3rem 0 .6rem;">Tip: handwritten sheets read poorly with the free engine. Turn on AI Vision in <a href="{{ url_for('settings.ocr_settings') }}">Settings → AI Vision OCR</a>, or use <a href="{{ url_for('subjects.scoresheet_paste', term_id=term_id, assignment_id=assignment_id, class_subject_id=class_subject_id) }}">Paste CSV</a>.</p>
+        {% endif %}
         <form method="POST" enctype="multipart/form-data">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="term_id" value="{{ term_id }}">

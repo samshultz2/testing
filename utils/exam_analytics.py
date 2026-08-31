@@ -5,8 +5,12 @@ Includes predictive analytics for Mock JAMB -> Real JAMB/WAEC correlation
 """
 from collections import defaultdict
 import math
+from sqlalchemy.orm import joinedload
 from models import db, Student, WAECResult, JAMBResult
 from models.mock_jamb import MockJAMBResult, MockJAMBExam
+# Analytics run inside request handlers, so these scope to the branch in view
+# (a no-op for central users seeing all branches).
+from utils.branch_scope import scope_by_student
 
 
 class ExamAnalytics:
@@ -77,8 +81,9 @@ class JAMBAnalytics(ExamAnalytics):
     @staticmethod
     def get_year_statistics(year):
         """Get comprehensive statistics for a JAMB year"""
-        results = JAMBResult.query.filter_by(exam_year=year).all()
-        
+        results = scope_by_student(JAMBResult.query.filter_by(exam_year=year), JAMBResult).options(
+            joinedload(JAMBResult.student)).all()
+
         if not results:
             return None
         
@@ -502,7 +507,7 @@ class MockJAMBAnalytics(ExamAnalytics):
         if not results:
             return None
         
-        student = Student.query.get(student_id)
+        student = db.session.get(Student, student_id)
         
         progress = {
             'student_id': student_id,
@@ -547,7 +552,7 @@ class WAECAnalytics(ExamAnalytics):
     @staticmethod
     def get_year_statistics(year):
         """Get comprehensive statistics for a WAEC year"""
-        results = WAECResult.query.filter_by(exam_year=year).all()
+        results = scope_by_student(WAECResult.query.filter_by(exam_year=year), WAECResult).all()
         
         if not results:
             return None
@@ -591,7 +596,7 @@ class WAECAnalytics(ExamAnalytics):
         student_stats = []
         for sid in student_ids:
             student_results = [r for r in results if r.student_id == sid]
-            student = Student.query.get(sid)
+            student = db.session.get(Student, sid)
             
             grades = [r.grade for r in student_results]
             points = [ExamAnalytics.WAEC_GRADE_POINTS.get(g, 9) for g in grades]
@@ -657,7 +662,7 @@ class WAECAnalytics(ExamAnalytics):
         if not results:
             return None
         
-        student = Student.query.get(student_id)
+        student = db.session.get(Student, student_id)
         
         # Group by year
         by_year = defaultdict(list)
@@ -765,7 +770,7 @@ class WAECJAMBCorrelation(ExamAnalytics):
         if not results:
             return None
         
-        student = Student.query.get(student_id)
+        student = db.session.get(Student, student_id)
         
         # Aggregate scores by subject
         subject_scores = defaultdict(list)
@@ -921,7 +926,7 @@ class WAECJAMBCorrelation(ExamAnalytics):
         if not results:
             return None
         
-        student = Student.query.get(student_id)
+        student = db.session.get(Student, student_id)
         
         # Group by subject
         subject_grades = {}
@@ -981,6 +986,32 @@ class WAECJAMBCorrelation(ExamAnalytics):
     
     @staticmethod
     def get_correlation_analysis(year=None):
+        """Branch-scoped Mock-JAMB↔WAEC correlation, cached ~10 min.
+
+        This is a full-scan analytics insight (a trend, not a live operational
+        number), so short staleness is harmless and avoids recomputing on every
+        predictions-dashboard hit. Keyed by viewing branch + year so branches and
+        the all-branches view don't share results."""
+        from models.analytics_models import AnalyticsCache
+        try:
+            from utils.branch_scope import viewing_branch_id
+            key = f'waec_jamb_corr:{viewing_branch_id()}:{year or "all"}'
+        except Exception:
+            key = None
+        if key:
+            cached = AnalyticsCache.get(key)
+            if cached is not None:
+                return cached
+        result = WAECJAMBCorrelation._correlation_analysis_uncached(year)
+        if key and result is not None:
+            try:
+                AnalyticsCache.set(key, result, ttl_seconds=600)
+            except Exception:
+                pass
+        return result
+
+    @staticmethod
+    def _correlation_analysis_uncached(year=None):
         """
         Analyze correlation between Mock JAMB and actual WAEC results for students who have both.
         This helps validate and improve predictions.
@@ -989,7 +1020,8 @@ class WAECJAMBCorrelation(ExamAnalytics):
         mock_students = db.session.query(MockJAMBResult.student_id).distinct().all()
         mock_student_ids = [s[0] for s in mock_students]
         
-        waec_query = WAECResult.query.filter(WAECResult.student_id.in_(mock_student_ids))
+        waec_query = scope_by_student(
+            WAECResult.query.filter(WAECResult.student_id.in_(mock_student_ids)), WAECResult)
         if year:
             waec_query = waec_query.filter_by(exam_year=year)
         

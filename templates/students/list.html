@@ -8,919 +8,160 @@
 
 {% block extra_css %}
 <style>
-/* ========== MOBILE FIRST STYLES ========== */
+/* ---- students list (React, scoped .stu-*) ---- */
+.stu-toolbar { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; }
 
-/* Filters */
-.filters-container {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-}
-.filter-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.5rem;
-}
-.filter-row.single {
-    grid-template-columns: 1fr;
-}
-.form-group {
-    margin-bottom: 0;
-}
-.form-group label {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    margin-bottom: 0.25rem;
-    display: block;
-}
-.form-control {
-    font-size: 0.875rem;
-    padding: 0.5rem;
+/* Two-pane shell: main list + a right rail on wide screens. */
+.stu-shell { display:grid; grid-template-columns:minmax(0,1fr); gap:1rem; align-items:start; }
+.stu-main { min-width:0; }
+.stu-rail { display:none; }
+@media(min-width:1200px){
+  .stu-shell { grid-template-columns:minmax(0,1fr) 316px; }
+  .stu-rail { display:flex; flex-direction:column; gap:1rem; position:sticky; top:calc(var(--header-height) + .75rem); }
 }
 
-/* Selection bar */
-.selection-bar {
-    display: flex;
-    align-items: center;
-    padding: 0.75rem 1rem;
-    background: var(--gray-50);
-    border-bottom: 1px solid #dee2e6;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-}
-.selection-bar .checkbox-wrapper {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-}
-.selection-bar label {
-    margin: 0;
-    font-size: 0.875rem;
-    font-weight: 500;
-}
-.selection-info {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-    margin-left: auto;
-}
-.student-checkbox {
-    width: 20px;
-    height: 20px;
-    cursor: pointer;
-    accent-color: #007bff;
-}
+/* Filters card */
+.stu-filters-head { display:flex; align-items:center; justify-content:space-between; gap:.5rem; }
+.stu-filters-title { font-weight:600; font-size:var(--text-sm); display:inline-flex; align-items:center; gap:.45rem; }
+.stu-filters-title i { color:var(--primary); }
+.stu-clear-link { background:none; border:0; cursor:pointer; color:var(--primary); font-weight:600;
+  font-size:var(--text-sm); display:inline-flex; align-items:center; gap:.35rem; padding:.2rem .3rem; border-radius:var(--radius-sm); }
+.stu-clear-link:hover { background:var(--primary-light); }
+.stu-filters { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:.5rem; margin:.75rem 0 0; }
+@media(min-width:768px){ .stu-filters{ grid-template-columns:repeat(4,minmax(0,1fr)); } }
+.stu-filters .full { grid-column:1/-1; }
+.stu-field-wrap { display:flex; flex-direction:column; gap:4px; margin:0; min-width:0; }
+.stu-field-wrap .form-control { width:100%; max-width:100%; }
+.stu-field-wrap.full { grid-column:1/-1; }
+.stu-field-label { font-size:12px; font-weight:600; color:var(--text-secondary); }
 
-/* Export button */
-.btn-export {
-    display: flex;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 0.5rem 1rem;
-    background: #28a745;
-    color: white;
-    border: none;
-    border-radius: 6px;
-    font-size: 0.875rem;
-    font-weight: 500;
-    cursor: pointer;
-    margin-left: auto;
-}
-.btn-export:hover {
-    background: #218838;
-}
+/* Search field with an inset magnifier (matches the reference) */
+.stu-search { position:relative; display:block; }
+.stu-search-ic { position:absolute; left:.85rem; top:50%; transform:translateY(-50%);
+  color:var(--text-muted); pointer-events:none; font-size:.9rem; }
+.stu-search-input { padding-left:2.3rem; }
 
-/* Student Cards - Mobile First */
-.students-list {
-    padding: 0.75rem;
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-}
-.student-card {
-    background: var(--bg-card);
-    border: 1px solid #e0e0e0;
-    border-radius: 8px;
-    padding: 0.75rem;
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 0.75rem;
-    align-items: start;
-}
-.student-card-checkbox {
-    padding-top: 0.25rem;
-}
-.student-card-content {
-    min-width: 0;
-}
-.student-card-header {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 0.5rem;
-}
-.student-name {
-    font-weight: 600;
-    font-size: 0.95rem;
-    color: var(--text-primary);
-}
-.student-id-badge {
-    font-size: 0.7rem;
-    padding: 0.2rem 0.5rem;
-    background: #e3f2fd;
-    color: #1976d2;
-    border-radius: 4px;
-    font-weight: 500;
-}
-.student-card-details {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.35rem 1rem;
-    font-size: 0.8rem;
-}
-.detail-item {
-    display: flex;
-    gap: 0.35rem;
-}
-.detail-label {
-    color: var(--text-muted);
-}
-.detail-value {
-    color: var(--text-primary);
-    font-weight: 500;
-}
-.student-card-actions {
-    display: flex;
-    gap: 0.5rem;
-    margin-top: 0.75rem;
-    padding-top: 0.75rem;
-    border-top: 1px solid #eee;
-}
-.student-card-actions .btn {
-    flex: 1;
-    padding: 0.4rem;
-    font-size: 0.75rem;
-    text-align: center;
-}
+/* Row actions — subtle outlined buttons; View carries the theme accent, the
+   overflow is a dropdown caret. */
+.stu-act { display:inline-flex; align-items:center; gap:.4rem; border:1px solid var(--border-color);
+  background:var(--bg-card); color:var(--text-secondary); border-radius:var(--radius-md);
+  padding:.34rem .65rem; font-size:.8rem; font-weight:600; line-height:1.2; cursor:pointer;
+  text-decoration:none; white-space:nowrap;
+  transition:border-color var(--transition),color var(--transition),background var(--transition); }
+.stu-act:hover { border-color:var(--gray-300); background:var(--gray-50); color:var(--text-primary); }
+.stu-act i { font-size:.85em; }
+.stu-act-view { color:var(--primary); border-color:color-mix(in srgb,var(--primary) 32%,var(--border-color)); }
+.stu-act-view:hover { color:var(--primary); background:var(--primary-light); border-color:var(--primary); }
+.stu-act-caret { padding:.34rem .5rem; }
+.stu-act-caret[aria-expanded="true"] { color:var(--primary); border-color:var(--primary); background:var(--primary-light); }
+.stu-count { color:var(--text-muted); font-size:.85rem; }
+.stu-bulkbar { display:flex; flex-wrap:wrap; gap:.5rem; align-items:center; padding:.5rem .7rem;
+  background:var(--gray-50); border:1px solid var(--border-color); border-radius:var(--radius-md); margin-bottom:.75rem; }
+.stu-bulkbar .form-control { max-width:100%; }
 
-/* Gender badges */
-.badge-male {
-    background: #e3f2fd;
-    color: #1565c0;
-}
-.badge-female {
-    background: #fce4ec;
-    color: #c2185b;
-}
+/* Avatar (photo or initials) */
+.stu-av { border-radius:var(--radius-full); object-fit:cover; flex-shrink:0; display:block;
+  background:var(--gray-100); border:1px solid var(--border-color); }
+.stu-av-ph { display:inline-flex; align-items:center; justify-content:center; font-weight:700;
+  font-size:.78rem; color:var(--primary); background:color-mix(in srgb,var(--primary) 14%,var(--bg-card));
+  border-color:transparent; letter-spacing:.02em; }
 
-/* Loading */
-.loading-overlay {
-    position: absolute;
-    inset: 0;
-    background: rgba(255,255,255,0.85);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 10;
-}
-.loading-overlay.hidden { display: none; }
-.spinner {
-    width: 36px;
-    height: 36px;
-    border: 3px solid #e9ecef;
-    border-top-color: #007bff;
-    border-radius: 50%;
-    animation: spin 0.7s linear infinite;
-}
-@keyframes spin { to { transform: rotate(360deg); } }
+/* Graduate marker badge next to a name */
+.stu-grad { margin-left:.4rem; padding:.05rem .35rem; }
 
-/* Results container */
-.results-container {
-    position: relative;
-    min-height: 150px;
-}
+/* Desktop table */
+.stu-tablecard { padding:0; overflow:hidden; }
+.stu-table-wrap { overflow-x:auto; }
+.stu-table { margin:0; }
+.stu-table td { vertical-align:middle; }
+.stu-check-col { width:36px; text-align:center; }
+.stu-act-col { width:1%; white-space:nowrap; text-align:right; }
+.stu-row-student { display:inline-flex; align-items:center; gap:.6rem; text-decoration:none; color:inherit; min-width:0; }
+.stu-row-name { font-weight:600; color:var(--text-primary); display:inline-flex; align-items:center; }
+.stu-row-student:hover .stu-row-name { color:var(--primary); }
+.stu-row-actions { display:inline-flex; gap:.3rem; justify-content:flex-end; }
+tr.is-sel td { background:var(--primary-light); }
+@media(max-width:991px){ .stu-tablecard { display:none; } }
 
-/* Pagination */
-.pagination {
-    display: flex;
-    justify-content: center;
-    gap: 0.25rem;
-    padding: 1rem;
-    flex-wrap: wrap;
-}
-.pagination a, .pagination span {
-    padding: 0.4rem 0.7rem;
-    font-size: 0.8rem;
-}
+/* Mobile cards */
+.stu-cards { display:grid; grid-template-columns:minmax(0,1fr); gap:.6rem; }
+@media(min-width:640px){ .stu-cards{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
+@media(min-width:992px){ .stu-cards{ display:none; } }
+.stu-card { display:flex; gap:.7rem; padding:.8rem; background:var(--bg-card);
+  border:1px solid var(--border-color); border-radius:var(--radius-lg); box-shadow:var(--shadow-xs); }
+.stu-card.is-sel { outline:2px solid var(--primary); outline-offset:-1px; }
+.stu-card > .stu-av { width:44px; height:44px; }
+.stu-card-main { flex:1; min-width:0; }
+.stu-card-head { display:flex; justify-content:space-between; gap:.5rem; align-items:baseline; }
+a.stu-name { font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; text-decoration:none; color:var(--text-primary); display:inline-flex; align-items:center; }
+a.stu-name:hover { color:var(--primary); }
+.stu-sid { font-size:.72rem; color:var(--text-muted); white-space:nowrap; }
+.stu-meta { display:flex; flex-wrap:wrap; gap:.35rem .5rem; margin:.5rem 0; font-size:.8rem; align-items:center; }
+.stu-meta-dim { color:var(--text-muted); }
+.stu-actions { display:flex; gap:.4rem; align-items:center; margin-top:.55rem; }
+.stu-actions .stu-act { flex:1; justify-content:center; }
+.stu-actions .stu-menu-wrap { flex:0 0 auto; }
 
-/* Empty state */
-.empty-state {
-    text-align: center;
-    padding: 2rem 1rem;
-    color: var(--text-muted);
-}
-.empty-state i {
-    font-size: 2.5rem;
-    color: #ccc;
-    margin-bottom: 0.75rem;
-}
-.empty-state h3 {
-    font-size: 1.1rem;
-    margin-bottom: 0.5rem;
-}
+/* Gender badges — tinted, theme-aware (categorical accents) */
+.badge-male{ background:color-mix(in srgb,#3b82f6 14%,var(--bg-card)); color:#2563eb; }
+.badge-female{ background:color-mix(in srgb,#f43f5e 14%,var(--bg-card)); color:#e11d64; }
 
-/* ========== EXPORT MODAL ========== */
-.modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.5);
-    display: flex;
-    align-items: flex-end;
-    justify-content: center;
-    z-index: 1000;
-    opacity: 0;
-    visibility: hidden;
-    transition: all 0.2s;
-}
-.modal-overlay.active {
-    opacity: 1;
-    visibility: visible;
-}
-.export-modal {
-    background: var(--bg-card);
-    width: 100%;
-    max-height: 85vh;
-    border-radius: 16px 16px 0 0;
-    display: flex;
-    flex-direction: column;
-    transform: translateY(100%);
-    transition: transform 0.3s ease-out;
-}
-.modal-overlay.active .export-modal {
-    transform: translateY(0);
-}
-.modal-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 1rem;
-    border-bottom: 1px solid #eee;
-}
-.modal-header h3 {
-    margin: 0;
-    font-size: 1.1rem;
-}
-.modal-close {
-    background: none;
-    border: none;
-    font-size: 1.5rem;
-    color: var(--text-muted);
-    cursor: pointer;
-    padding: 0.25rem;
-    line-height: 1;
-}
-.modal-body {
-    padding: 1rem;
-    overflow-y: auto;
-    flex: 1;
-}
-.modal-footer {
-    padding: 1rem;
-    border-top: 1px solid #eee;
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-}
+/* Recently-viewed strip (shown until the rail takes over ≥1200px) */
+.stu-recent-mobile { margin-bottom:1rem; }
+@media(min-width:1200px){ .stu-recent-mobile { display:none; } }
+.stu-recent-head { font-size:var(--text-xs); font-weight:600; color:var(--text-muted); text-transform:uppercase;
+  letter-spacing:.03em; margin-bottom:.5rem; display:flex; align-items:center; gap:.4rem; }
+.stu-recent-strip { display:flex; gap:.75rem; overflow-x:auto; padding-bottom:.25rem; }
+.stu-recent-chip { flex:0 0 auto; width:76px; display:flex; flex-direction:column; align-items:center; gap:.25rem;
+  text-decoration:none; color:inherit; text-align:center; }
+.stu-recent-chip .stu-av-ph { width:48px; height:48px; font-size:.95rem; }
+.stu-recent-name { font-size:.72rem; font-weight:600; max-width:76px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.stu-recent-id { font-size:.66rem; color:var(--text-muted); }
 
-/* Field selection */
-.field-section {
-    margin-bottom: 1rem;
-}
-.field-section-title {
-    font-size: 0.8rem;
-    color: var(--text-muted);
-    margin-bottom: 0.5rem;
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
-}
-.field-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.5rem;
-}
-.field-option {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.6rem 0.75rem;
-    background: var(--gray-50);
-    border: 1px solid #dee2e6;
-    border-radius: 6px;
-    cursor: pointer;
-    transition: all 0.15s;
-}
-.field-option:has(input:checked) {
-    background: #e3f2fd;
-    border-color: #2196f3;
-}
-.field-option input {
-    width: 16px;
-    height: 16px;
-    accent-color: #2196f3;
-}
-.field-option span {
-    font-size: 0.85rem;
-}
+/* Right rail cards */
+.stu-rail-card .card-header h3 { font-size:var(--text-sm); }
+.stu-rail-recent { display:flex; flex-direction:column; gap:.05rem; padding:.4rem .5rem; }
+.stu-rr-item { display:flex; align-items:baseline; justify-content:space-between; gap:.6rem;
+  padding:.45rem .5rem; border-radius:var(--radius-md); text-decoration:none; color:inherit; }
+.stu-rr-item:hover { background:var(--gray-50); }
+.stu-rr-name { font-size:.82rem; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.stu-rr-item:hover .stu-rr-name { color:var(--primary); }
+.stu-rr-id { font-size:.7rem; color:var(--text-muted); white-space:nowrap; flex-shrink:0; }
+.stu-sum-grid { display:grid; grid-template-columns:1fr 1fr; gap:.6rem; }
+.stu-sum { border:1px solid var(--border-color); border-radius:var(--radius-md); padding:.65rem .7rem; background:var(--gray-50); }
+.stu-sum-v { display:block; font-size:1.55rem; font-weight:800; font-family:var(--font-display); line-height:1; font-variant-numeric:tabular-nums; color:var(--text-primary); }
+.stu-sum-l { display:block; font-size:.72rem; color:var(--text-muted); margin-top:.25rem; }
+.stu-sum-total { background:color-mix(in srgb,var(--primary) 8%,var(--bg-card)); border-color:color-mix(in srgb,var(--primary) 30%,var(--border-color)); }
+.stu-sum-total .stu-sum-v { color:var(--primary); }
 
-/* Format selection */
-.format-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.5rem;
-}
-.format-btn {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 0.35rem;
-    padding: 0.75rem;
-    border: 2px solid #dee2e6;
-    border-radius: 8px;
-    background: var(--bg-card);
-    cursor: pointer;
-    transition: all 0.15s;
-}
-.format-btn:hover {
-    border-color: #adb5bd;
-}
-.format-btn.selected {
-    border-color: #2196f3;
-    background: #e3f2fd;
-}
-.format-btn i {
-    font-size: 1.5rem;
-}
-.format-btn span {
-    font-size: 0.75rem;
-    font-weight: 500;
-}
-.format-btn.excel i { color: #217346; }
-.format-btn.word i { color: #2b579a; }
-.format-btn.pdf i { color: #d32f2f; }
-.format-btn.image i { color: #ff9800; }
+/* Gender cell — coloured mars/venus glyph + label (matches the reference) */
+.stu-gender { display:inline-flex; align-items:center; gap:.35rem; font-weight:600; white-space:nowrap; }
+.stu-gender.is-m { color:#2563eb; } .stu-gender.is-f { color:#e11d64; }
 
-/* Export info */
-.export-info {
-    background: #fff3cd;
-    padding: 0.75rem;
-    border-radius: 6px;
-    font-size: 0.8rem;
-    color: #856404;
-    margin-bottom: 1rem;
-}
-
-/* ========== TABLET & DESKTOP ========== */
-@media (min-width: 576px) {
-    .filter-row {
-        grid-template-columns: repeat(3, 1fr);
-    }
-    .field-grid {
-        grid-template-columns: repeat(3, 1fr);
-    }
-    .format-grid {
-        grid-template-columns: repeat(4, 1fr);
-    }
-    .modal-footer {
-        flex-direction: row;
-        justify-content: flex-end;
-    }
-    .modal-footer .btn {
-        width: auto;
-    }
-}
-
-@media (min-width: 768px) {
-    .filters-container {
-        flex-direction: row;
-        flex-wrap: wrap;
-        align-items: flex-end;
-    }
-    .filter-row {
-        display: contents;
-    }
-    .form-group {
-        flex: 1;
-        min-width: 140px;
-    }
-    .form-group.search-group {
-        flex: 2;
-        min-width: 200px;
-    }
-    
-    .export-modal {
-        max-width: 500px;
-        border-radius: 12px;
-        margin: auto;
-    }
-    .modal-overlay {
-        align-items: center;
-    }
-    
-    .student-card-details {
-        grid-template-columns: repeat(4, auto);
-    }
-}
-
-@media (min-width: 992px) {
-    .field-grid {
-        grid-template-columns: repeat(4, 1fr);
-    }
-}
+/* File-type accents on the quick-export buttons (universally recognised) */
+.stu-x-excel { color:#16a34a; } .stu-x-pdf { color:#dc2626; }
+.stu-quick-export { display:flex; flex-direction:column; gap:.45rem; }
+.stu-quick-export .btn { width:100%; justify-content:center; }
+.stu-tips .card-body { background:color-mix(in srgb,var(--accent) 8%,var(--bg-card)); border-radius:var(--radius-lg); }
+.stu-tips-head { font-weight:600; font-size:var(--text-sm); display:flex; align-items:center; gap:.45rem; margin-bottom:.35rem; }
+.stu-tips-head i { color:var(--accent); }
+.stu-modal-bg { position:fixed; inset:0; background:rgba(0,0,0,.45); z-index:1000; display:flex;
+  align-items:flex-start; justify-content:center; padding:5vh 1rem; overflow-y:auto; }
+.stu-modal { background:var(--bg-card,#fff); border-radius:12px; width:100%; max-width:560px; box-shadow:0 20px 60px rgba(0,0,0,.3); }
+.stu-modal h3 { margin:0; font-size:1.05rem; }
+.stu-modal-sec { padding:.5rem 1.25rem; }
+.stu-field-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:.35rem; }
+.stu-field { display:flex; gap:.5rem; align-items:center; padding:.4rem .5rem; border:1px solid var(--border-color); border-radius:6px; font-size:.85rem; }
+.stu-fmt { display:grid; grid-template-columns:repeat(4,1fr); gap:.5rem; }
+.stu-fmt button { padding:.6rem; border:2px solid var(--border-color); border-radius:8px; background:var(--bg-card); cursor:pointer; display:flex; flex-direction:column; align-items:center; gap:.25rem; font-size:.75rem; }
+.stu-fmt button.sel { border-color:var(--primary); }
+.stu-spinner { width:18px; height:18px; border:3px solid var(--gray-200,var(--border-color)); border-top-color:var(--primary,#2563eb); border-radius:50%; animation:stu-spin .7s linear infinite; display:inline-block; }
+@keyframes stu-spin { to { transform:rotate(360deg); } }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <h1>All Students</h1>
-    <div class="page-header-actions">
-        <a href="{{ url_for('main.add_student') }}" class="btn btn-primary">
-            <i class="fas fa-plus"></i> Add
-        </a>
-        <form method="POST" action="{{ url_for('main.apply_stream_waec') }}" style="display:inline;"
-              data-confirm="Fill WAEC subjects from stream for students who don't have them set?">
-            <button type="submit" class="btn btn-outline btn-sm" title="Fill WAEC subjects from each student's stream"><i class="fas fa-wand-magic-sparkles"></i> WAEC by stream</button>
-        </form>
-        <a href="{{ url_for('main.students_trash') }}" class="btn btn-secondary btn-sm" title="Deleted students"><i class="fas fa-trash"></i></a>
-    </div>
-</div>
-
-<!-- Filters Card -->
-<div class="card mb-3">
-    <div class="card-body">
-        <div class="filters-container">
-            <div class="filter-row single">
-                <div class="form-group search-group">
-                    <label>Search</label>
-                    <input type="text" id="searchInput" class="form-control" placeholder="Name or Student ID..." value="{{ search }}">
-                </div>
-            </div>
-            <div class="filter-row">
-                <div class="form-group">
-                    <label>Class</label>
-                    <select id="classFilter" class="form-control">
-                        <option value="">All Classes</option>
-                        {% for cls in classes %}
-                        <option value="{{ cls.id }}" {% if class_id == cls.id %}selected{% endif %}>{{ cls.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Arm</label>
-                    <select id="armFilter" class="form-control">
-                        <option value="">All Arms</option>
-                        {% for arm in arms %}
-                        <option value="{{ arm.id }}" {% if arm_id == arm.id %}selected{% endif %}>{{ arm.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Gender</label>
-                    <select id="genderFilter" class="form-control">
-                        <option value="">All</option>
-                        <option value="Male" {% if gender == 'Male' %}selected{% endif %}>Male</option>
-                        <option value="Female" {% if gender == 'Female' %}selected{% endif %}>Female</option>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Religion</label>
-                    <select id="religionFilter" class="form-control">
-                        <option value="">All</option>
-                        {% for r in religions %}
-                        <option value="{{ r }}" {% if religion == r %}selected{% endif %}>{{ r }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>Stream</label>
-                    <select id="streamFilter" class="form-control">
-                        <option value="">All</option>
-                        {% for st in streams %}
-                        <option value="{{ st }}" {% if stream == st %}selected{% endif %}>{{ st }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>WAEC Subject <span class="text-muted" style="font-size:.72rem;">(SSS3)</span></label>
-                    <select id="subjectFilter" class="form-control">
-                        <option value="">All</option>
-                        {% for sub in subject_options %}
-                        <option value="{{ sub }}" {% if subject == sub %}selected{% endif %}>{{ sub }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- Results Card -->
-<div class="card">
-    <div class="card-header" style="flex-wrap: wrap; gap: 0.5rem;">
-        <h3>Students (<span id="totalCount">{{ students.total }}</span>)</h3>
-        <button type="button" class="btn-export" onclick="openExportModal()">
-            <i class="fas fa-download"></i> Export
-        </button>
-    </div>
-    
-    <!-- Selection Bar -->
-    <div class="selection-bar" style="flex-wrap:wrap; gap:0.5rem;">
-        <div class="checkbox-wrapper">
-            <input type="checkbox" id="selectAll" class="student-checkbox">
-            <label for="selectAll">Select All</label>
-        </div>
-        <span class="selection-info"><span id="selectedCount">0</span> selected</span>
-        <div class="bulk-stream" style="display:flex; gap:0.4rem; align-items:center; margin-left:auto; flex-wrap:wrap;">
-            <select id="bulkStream" class="form-control" style="width:auto; min-width:130px;">
-                <option value="">Set stream to…</option>
-                {% for st in streams %}<option value="{{ st }}">{{ st }}</option>{% endfor %}
-            </select>
-            <button type="button" id="applyBulkStream" class="btn btn-primary btn-sm"><i class="fas fa-check"></i> Apply</button>
-            <select id="bulkSubject" class="form-control" style="width:auto; min-width:150px;">
-                <option value="">Add WAEC subject…</option>
-                {% for sub in subject_options %}<option value="{{ sub }}">{{ sub }}</option>{% endfor %}
-            </select>
-            <button type="button" id="applyBulkSubject" class="btn btn-primary btn-sm" title="SSS3 students only"><i class="fas fa-plus"></i> Add (SSS3)</button>
-        </div>
-    </div>
-    
-    <div class="results-container">
-        <div id="loadingOverlay" class="loading-overlay hidden">
-            <div class="spinner"></div>
-        </div>
-        
-        <div id="resultsContent">
-            {% include 'students/_list_content.html' %}
-        </div>
-    </div>
-</div>
-
-<!-- Export Modal -->
-<div id="exportModal" class="modal-overlay" onclick="closeExportModal(event)">
-    <div class="export-modal" onclick="event.stopPropagation()">
-        <div class="modal-header">
-            <h3>Export Students</h3>
-            <button type="button" class="modal-close" onclick="closeExportModal()">&times;</button>
-        </div>
-        <div class="modal-body">
-            <div class="export-info">
-                <i class="fas fa-info-circle"></i>
-                <span id="exportInfoText">Exporting all <strong>{{ students.total }}</strong> students</span>
-            </div>
-            
-            <!-- Field Selection -->
-            <div class="field-section">
-                <div class="field-section-title">Select Fields to Export</div>
-                <div class="field-grid">
-                    <label class="field-option">
-                        <input type="checkbox" name="export_field" value="student_id" checked>
-                        <span>Student ID</span>
-                    </label>
-                    <label class="field-option">
-                        <input type="checkbox" name="export_field" value="surname" checked>
-                        <span>Surname</span>
-                    </label>
-                    <label class="field-option">
-                        <input type="checkbox" name="export_field" value="first_name" checked>
-                        <span>First Name</span>
-                    </label>
-                    <label class="field-option">
-                        <input type="checkbox" name="export_field" value="middle_name">
-                        <span>Middle Name</span>
-                    </label>
-                    <label class="field-option">
-                        <input type="checkbox" name="export_field" value="gender" checked>
-                        <span>Gender</span>
-                    </label>
-                    <label class="field-option">
-                        <input type="checkbox" name="export_field" value="current_class" checked>
-                        <span>Class</span>
-                    </label>
-                    <label class="field-option">
-                        <input type="checkbox" name="export_field" value="date_of_birth">
-                        <span>Date of Birth</span>
-                    </label>
-                    <label class="field-option">
-                        <input type="checkbox" name="export_field" value="age">
-                        <span>Age</span>
-                    </label>
-                    <label class="field-option">
-                        <input type="checkbox" name="export_field" value="religion">
-                        <span>Religion</span>
-                    </label>
-                    <label class="field-option">
-                        <input type="checkbox" name="export_field" value="home_address">
-                        <span>Home Address</span>
-                    </label>
-                    <label class="field-option">
-                        <input type="checkbox" name="export_field" value="hobbies">
-                        <span>Hobbies</span>
-                    </label>
-                    <label class="field-option">
-                        <input type="checkbox" name="export_field" value="parent_phone">
-                        <span>Parent Phone</span>
-                    </label>
-                </div>
-            </div>
-            
-            <!-- Format Selection -->
-            <div class="field-section">
-                <div class="field-section-title">Export Format</div>
-                <div class="format-grid">
-                    <button type="button" class="format-btn excel selected" data-format="excel">
-                        <i class="fas fa-file-excel"></i>
-                        <span>Excel</span>
-                    </button>
-                    <button type="button" class="format-btn word" data-format="word">
-                        <i class="fas fa-file-word"></i>
-                        <span>Word</span>
-                    </button>
-                    <button type="button" class="format-btn pdf" data-format="pdf">
-                        <i class="fas fa-file-pdf"></i>
-                        <span>PDF</span>
-                    </button>
-                    <button type="button" class="format-btn image" data-format="image">
-                        <i class="fas fa-file-image"></i>
-                        <span>Image</span>
-                    </button>
-                </div>
-            </div>
-        </div>
-        <div class="modal-footer">
-            <button type="button" class="btn btn-secondary" onclick="closeExportModal()">Cancel</button>
-            <button type="button" class="btn btn-primary" onclick="doExport()">
-                <i class="fas fa-download"></i> Export
-            </button>
-        </div>
-    </div>
-</div>
-{% endblock %}
-
-{% block extra_js %}
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const searchInput = document.getElementById('searchInput');
-    const classFilter = document.getElementById('classFilter');
-    const armFilter = document.getElementById('armFilter');
-    const genderFilter = document.getElementById('genderFilter');
-    const religionFilter = document.getElementById('religionFilter');
-    const streamFilter = document.getElementById('streamFilter');
-    const subjectFilter = document.getElementById('subjectFilter');
-    const selectAllCheckbox = document.getElementById('selectAll');
-    const selectedCountEl = document.getElementById('selectedCount');
-    const totalCountEl = document.getElementById('totalCount');
-    const loadingOverlay = document.getElementById('loadingOverlay');
-    const resultsContent = document.getElementById('resultsContent');
-    
-    let debounceTimer;
-    window.selectedStudents = new Set();
-    window.totalStudents = {{ students.total }};
-    
-    // Real-time filtering
-    function applyFilters() {
-        clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(fetchStudents, 300);
-    }
-    
-    function fetchStudents(page = 1) {
-        loadingOverlay.classList.remove('hidden');
-        
-        const params = new URLSearchParams({
-            search: searchInput.value,
-            class_id: classFilter.value,
-            arm_id: armFilter.value,
-            gender: genderFilter.value,
-            religion: religionFilter.value,
-            stream: streamFilter.value,
-            subject: subjectFilter ? subjectFilter.value : '',
-            page: page,
-            ajax: '1'
-        });
-        
-        fetch(`{{ url_for('main.students_list') }}?${params}`)
-            .then(r => r.text())
-            .then(html => {
-                resultsContent.innerHTML = html;
-                loadingOverlay.classList.add('hidden');
-                
-                const container = resultsContent.querySelector('[data-total]');
-                if (container) {
-                    totalCountEl.textContent = container.dataset.total;
-                    window.totalStudents = parseInt(container.dataset.total);
-                }
-                
-                bindCheckboxes();
-                updateSelectionUI();
-                bindPaginationLinks();
-            })
-            .catch(err => {
-                console.error('Error:', err);
-                loadingOverlay.classList.add('hidden');
-            });
-    }
-    
-    // Filter events
-    searchInput.addEventListener('input', applyFilters);
-    if (subjectFilter) subjectFilter.addEventListener('change', applyFilters);
-    classFilter.addEventListener('change', applyFilters);
-    armFilter.addEventListener('change', applyFilters);
-    genderFilter.addEventListener('change', applyFilters);
-    religionFilter.addEventListener('change', applyFilters);
-    streamFilter.addEventListener('change', applyFilters);
-
-    // Bulk set stream for selected students
-    const applyBulkStreamBtn = document.getElementById('applyBulkStream');
-    if (applyBulkStreamBtn) {
-        applyBulkStreamBtn.addEventListener('click', function () {
-            const stream = document.getElementById('bulkStream').value;
-            const ids = Array.from(window.selectedStudents);
-            if (!stream) { alert('Choose a stream first.'); return; }
-            if (!ids.length) { alert('Select at least one student.'); return; }
-            if (!confirm(`Set stream to ${stream} for ${ids.length} student(s)?`)) return;
-
-            const body = new URLSearchParams();
-            ids.forEach(id => body.append('student_ids', id));
-            body.append('stream', stream);
-
-            applyBulkStreamBtn.disabled = true;
-            fetch("{{ url_for('main.bulk_set_stream') }}", {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: body
-            })
-                .then(r => r.json())
-                .then(d => {
-                    window.selectedStudents.clear();
-                    document.getElementById('selectAll').checked = false;
-                    document.getElementById('bulkStream').value = '';
-                    fetchStudents();
-                })
-                .catch(err => console.error('Bulk stream error:', err))
-                .finally(() => { applyBulkStreamBtn.disabled = false; });
-        });
-    }
-
-    // Bulk add a WAEC subject to selected SSS3 students
-    const applyBulkSubjectBtn = document.getElementById('applyBulkSubject');
-    if (applyBulkSubjectBtn) {
-        applyBulkSubjectBtn.addEventListener('click', function () {
-            const subject = document.getElementById('bulkSubject').value;
-            const ids = Array.from(window.selectedStudents);
-            if (!subject) { alert('Choose a subject first.'); return; }
-            if (!ids.length) { alert('Select at least one student.'); return; }
-            if (!confirm(`Add "${subject}" to the WAEC subjects of ${ids.length} selected SSS3 student(s)?`)) return;
-
-            const body = new URLSearchParams();
-            ids.forEach(id => body.append('student_ids', id));
-            body.append('subject', subject);
-
-            applyBulkSubjectBtn.disabled = true;
-            fetch("{{ url_for('main.bulk_add_subject') }}", {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                body: body
-            })
-                .then(r => r.json())
-                .then(d => {
-                    let msg = `Added "${subject}" to ${d.updated} student(s).`;
-                    if (d.skipped) msg += ` ${d.skipped} skipped (not SSS3 or already had it).`;
-                    alert(msg);
-                    window.selectedStudents.clear();
-                    document.getElementById('selectAll').checked = false;
-                    document.getElementById('bulkSubject').value = '';
-                    fetchStudents();
-                })
-                .catch(err => console.error('Bulk subject error:', err))
-                .finally(() => { applyBulkSubjectBtn.disabled = false; });
-        });
-    }
-
-    // Select All
-    selectAllCheckbox.addEventListener('change', function() {
-        document.querySelectorAll('.student-select').forEach(cb => {
-            cb.checked = this.checked;
-            if (this.checked) {
-                window.selectedStudents.add(cb.dataset.studentId);
-            } else {
-                window.selectedStudents.delete(cb.dataset.studentId);
-            }
-        });
-        updateSelectionUI();
-    });
-    
-    function bindCheckboxes() {
-        document.querySelectorAll('.student-select').forEach(cb => {
-            if (window.selectedStudents.has(cb.dataset.studentId)) {
-                cb.checked = true;
-            }
-            cb.addEventListener('change', function() {
-                if (this.checked) {
-                    window.selectedStudents.add(this.dataset.studentId);
-                } else {
-                    window.selectedStudents.delete(this.dataset.studentId);
-                }
-                updateSelectionUI();
-            });
-        });
-    }
-    
-    function updateSelectionUI() {
-        const count = window.selectedStudents.size;
-        selectedCountEl.textContent = count;
-        
-        const checkboxes = document.querySelectorAll('.student-select');
-        selectAllCheckbox.checked = checkboxes.length > 0 && Array.from(checkboxes).every(cb => cb.checked);
-    }
-    
-    function bindPaginationLinks() {
-        document.querySelectorAll('.pagination a').forEach(link => {
-            link.addEventListener('click', function(e) {
-                e.preventDefault();
-                const url = new URL(this.href);
-                fetchStudents(url.searchParams.get('page') || 1);
-            });
-        });
-    }
-    
-    // Initial setup
-    bindCheckboxes();
-    bindPaginationLinks();
-    
-    // Format selection
-    document.querySelectorAll('.format-btn').forEach(btn => {
-        btn.addEventListener('click', function() {
-            document.querySelectorAll('.format-btn').forEach(b => b.classList.remove('selected'));
-            this.classList.add('selected');
-        });
-    });
-});
-
-// Export Modal functions
-function openExportModal() {
-    const count = window.selectedStudents.size;
-    const infoText = document.getElementById('exportInfoText');
-    
-    if (count > 0) {
-        infoText.innerHTML = `Exporting <strong>${count}</strong> selected student${count > 1 ? 's' : ''}`;
-    } else {
-        infoText.innerHTML = `Exporting all <strong>${window.totalStudents}</strong> students (none selected)`;
-    }
-    
-    document.getElementById('exportModal').classList.add('active');
-    document.body.style.overflow = 'hidden';
-}
-
-function closeExportModal(event) {
-    if (event && event.target !== event.currentTarget) return;
-    document.getElementById('exportModal').classList.remove('active');
-    document.body.style.overflow = '';
-}
-
-function doExport() {
-    // Get selected fields
-    const fields = Array.from(document.querySelectorAll('input[name="export_field"]:checked'))
-        .map(cb => cb.value);
-    
-    if (fields.length === 0) {
-        alert('Please select at least one field to export.');
-        return;
-    }
-    
-    // Get format
-    const formatBtn = document.querySelector('.format-btn.selected');
-    const format = formatBtn ? formatBtn.dataset.format : 'excel';
-    
-    // Get student IDs (empty array = all students)
-    const studentIds = Array.from(window.selectedStudents);
-    
-    // Build URL
-    const params = new URLSearchParams({
-        format: format,
-        fields: JSON.stringify(fields),
-        student_ids: JSON.stringify(studentIds)
-    });
-    
-    // Add current filters if exporting all
-    if (studentIds.length === 0) {
-        params.append('search', document.getElementById('searchInput').value);
-        params.append('class_id', document.getElementById('classFilter').value);
-        params.append('arm_id', document.getElementById('armFilter').value);
-        params.append('gender', document.getElementById('genderFilter').value);
-        params.append('religion', document.getElementById('religionFilter').value);
-        params.append('stream', document.getElementById('streamFilter').value);
-    }
-    
-    closeExportModal();
-    window.location.href = `{{ url_for('main.export_students_data') }}?${params}`;
-}
-</script>
+<div id="students-app"><p class="text-muted" style="padding:2rem 0"><span class="stu-spinner"></span> Loading students…</p></div>
+<script type="application/json" id="students-data">{{ students_json|tojson }}</script>
+<script src="{{ bundle_url('js/react/students-app.js') }}" defer></script>
 {% endblock %}

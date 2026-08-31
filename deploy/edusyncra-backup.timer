@@ -1,0 +1,15 @@
+# Runs edusyncra-backup.service daily at 02:00 (with catch-up if the machine was
+# off). Enable with:
+#
+#   sudo systemctl enable --now edusyncra-backup.timer
+#   systemctl list-timers edusyncra-backup.timer   # confirm next run
+
+[Unit]
+Description=Daily EduSyncra database backup
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target

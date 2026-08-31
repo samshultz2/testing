@@ -1,0 +1,72 @@
+{% extends "platform/_layout.html" %}
+{% block title %}Settings{% endblock %}
+{% block heading %}Platform settings{% endblock %}
+{% block subheading %}Global operational settings and integration status.{% endblock %}
+
+{% block head %}
+<style>
+  .fld{margin-bottom:14px;max-width:520px}
+  .fld label{display:block;font-size:12.5px;font-weight:600;margin-bottom:5px}
+  .fld input[type=text],.fld input[type=email],.fld input[type=tel],.fld textarea{width:100%;padding:10px 12px;
+    border:1px solid var(--line);border-radius:9px;background:transparent;color:var(--ink);font-size:14px;font-family:inherit}
+  .fld textarea{min-height:70px;resize:vertical}
+  .switch{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:600}
+  .switch input{width:18px;height:18px;accent-color:var(--bad)}
+  .hint{font-size:12px;color:var(--faint);margin-top:4px}
+  .diag{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px}
+  .diag .d{display:flex;align-items:center;gap:10px;padding:11px 14px;border:1px solid var(--line);border-radius:11px;background:var(--surface)}
+  .dot{width:9px;height:9px;border-radius:50%;flex:none}
+  .dot.ok{background:var(--ok)} .dot.warn{background:var(--warn)} .dot.bad{background:var(--bad)}
+  .d .lab{font-size:13px;font-weight:600} .d .sub{font-size:11.5px;color:var(--faint)}
+</style>
+{% endblock %}
+
+{% block content %}
+<form method="post" action="{{ url_for('platform.settings_page') }}">
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+  <div class="panel" style="padding:18px 20px;margin-bottom:20px">
+    <h2 style="font-size:15px;margin:0 0 14px"><i class="fas fa-headset"></i> Support contact</h2>
+    <p class="hint" style="margin:-6px 0 14px">Shown to schools on their in-portal support page.</p>
+    <div class="fld"><label>Support email</label>
+      <input type="email" name="support_email" value="{{ s.support_email }}" placeholder="support@edusyncra.site"></div>
+    <div class="fld"><label>Support phone</label>
+      <input type="tel" name="support_phone" value="{{ s.support_phone }}" placeholder="+234 800 000 0000"></div>
+  </div>
+
+  <div class="panel" style="padding:18px 20px;margin-bottom:20px">
+    <h2 style="font-size:15px;margin:0 0 14px"><i class="fas fa-layer-group"></i> Plans</h2>
+    <div class="fld"><label>Default plan for paying schools</label>
+      <select name="default_paid_tier" style="width:100%;max-width:520px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:transparent;color:var(--ink);font-size:14px">
+        {% for tid in ['free','basic','premium','enterprise'] %}
+        <option value="{{ tid }}" {{ 'selected' if s.default_paid_tier == tid }}>{{ tid|capitalize }}</option>
+        {% endfor %}
+      </select>
+      <div class="hint">Assigned automatically the first time a school pays (untiered schools stay grandfathered until then). <strong>Premium</strong> keeps every feature on — pick a stricter plan to enforce paywalls on new paying customers.</div>
+    </div>
+  </div>
+
+  <div class="panel" style="padding:18px 20px;margin-bottom:20px">
+    <h2 style="font-size:15px;margin:0 0 14px"><i class="fas fa-triangle-exclamation"></i> Maintenance mode</h2>
+    <label class="switch"><input type="checkbox" name="maintenance_mode" {{ 'checked' if s.maintenance_mode }}>
+      Show a maintenance banner on every school's portal</label>
+    <div class="fld" style="margin-top:12px"><label>Maintenance message</label>
+      <textarea name="maintenance_message" placeholder="e.g. We’re performing scheduled maintenance until 4am WAT.">{{ s.maintenance_message }}</textarea>
+      <div class="hint">Displayed as a critical banner to all tenant admins while maintenance mode is on.</div></div>
+  </div>
+
+  <button class="btn primary"><i class="fas fa-floppy-disk"></i> Save settings</button>
+</form>
+
+<div class="panel" style="padding:18px 20px;margin-top:22px">
+  <h2 style="font-size:15px;margin:0 0 14px"><i class="fas fa-plug"></i> Integrations &amp; diagnostics</h2>
+  <div class="diag">
+    {% for chk in checks %}
+    <div class="d">
+      <span class="dot {{ chk.status }}"></span>
+      <span><span class="lab">{{ chk.name }}</span><br><span class="sub">{{ chk.detail }}</span></span>
+    </div>
+    {% endfor %}
+  </div>
+  <p class="hint" style="margin-top:12px">Full operational view on the <a href="{{ url_for('platform.health') }}">Health</a> page.</p>
+</div>
+{% endblock %}

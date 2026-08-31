@@ -15,6 +15,11 @@ from flask import session, request, abort, g
 
 _SESSION_KEY = '_csrf_token'
 _SAFE_METHODS = {'GET', 'HEAD', 'OPTIONS', 'TRACE'}
+# Endpoints called by external services or device-side scripts (no usable
+# CSRF token). `parent.pay_webhook` is Paystack; `main.client_error` is the
+# diagnostic JS error reporter (rate-limited, no state change).
+_EXEMPT_ENDPOINTS = {'parent.pay_webhook', 'main.client_error', 'billing.webhook',
+                     'hr.device_punch'}
 
 
 def generate_csrf_token():
@@ -23,6 +28,14 @@ def generate_csrf_token():
     if not token:
         token = secrets.token_hex(32)
         session[_SESSION_KEY] = token
+    return token
+
+
+def rotate_csrf_token():
+    """Issue a brand-new CSRF token. Call on login/logout so a token captured
+    before authentication can't be reused against the new session."""
+    token = secrets.token_hex(32)
+    session[_SESSION_KEY] = token
     return token
 
 
@@ -60,7 +73,7 @@ def init_csrf(app):
     def _csrf_before_request():
         if request.method in _SAFE_METHODS:
             return
-        if getattr(g, '_csrf_exempt', False):
+        if request.endpoint in _EXEMPT_ENDPOINTS or getattr(g, '_csrf_exempt', False):
             return
         if not validate_csrf():
             abort(400, description='Invalid or missing CSRF token. Please reload the page and try again.')

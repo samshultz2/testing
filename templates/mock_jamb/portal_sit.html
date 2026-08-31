@@ -1,0 +1,388 @@
+{% extends "cbt/portal_base.html" %}
+{% block title %}{{ exam.display_name }}{% endblock %}
+{% block head_extra %}
+<style>
+.mjs-bar{position:sticky;top:0;z-index:20;background:#0d6a4e;color:#fff;border-radius:12px;padding:.7rem 1rem;display:flex;align-items:center;gap:.8rem;flex-wrap:wrap;margin-bottom:.8rem}
+.mjs-bar .timer{font-family:'Space Grotesk',monospace;font-weight:700;font-size:1.15rem;background:rgba(255,255,255,.16);padding:.2rem .6rem;border-radius:8px}
+.mjs-bar .timer.warn{background:#c0392b}
+.mjs-tabs{display:flex;gap:.4rem;overflow-x:auto;margin-bottom:.8rem;-webkit-overflow-scrolling:touch}
+.mjs-tab{white-space:nowrap;padding:.5rem .9rem;border-radius:999px;border:1px solid var(--border-color);background:var(--bg-card);cursor:pointer;font-weight:600;font-size:.85rem}
+.mjs-tab.active{background:#0d6a4e;color:#fff;border-color:#0d6a4e}
+.mjs-tab .cnt{opacity:.7;font-weight:400;font-size:.75rem}
+.mjs-subject{display:none}.mjs-subject.active{display:block}
+.mjs-passage{background:#f4f7f5;border-left:4px solid #7c3aed;border-radius:10px;padding:.8rem 1rem;margin:.7rem 0;white-space:pre-wrap;line-height:1.55;font-size:.92rem}
+.mjs-passage .ptitle{font-weight:700;color:#7c3aed;margin-bottom:.3rem}
+.mjs-q{border:1px solid var(--border-color);border-radius:12px;padding:.9rem 1rem;margin-bottom:.7rem}
+.mjs-q .qh{font-weight:600;margin-bottom:.5rem}
+.mjs-opt{display:flex;align-items:center;gap:.6rem;padding:.5rem .7rem;border:1px solid var(--border-color);border-radius:8px;margin-bottom:.4rem;cursor:pointer}
+.mjs-opt:hover{background:#f0fbf6}
+.mjs-opt input{accent-color:#0d6a4e;width:18px;height:18px}
+.mjs-opt.chosen{border-color:#0d6a4e;background:#eafaf3}
+.mjs-q img{max-height:180px;border-radius:8px;margin:.3rem 0;pointer-events:none;-webkit-user-drag:none;user-drag:none}
+.mjs-answered{font-size:.85rem}
+/* Discourage copying exam content (best-effort; screenshots can't be blocked). */
+.mjs-subject,.mjs-passage,.mjs-q,.mjs-tabs,.mjs-bar{-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none}
+.mjs-opt input{user-select:auto}
+/* On-screen basic (JAMB-style) calculator: draggable, toggled, no sci functions. */
+.mjcalc{position:fixed;right:18px;bottom:18px;z-index:60;width:236px;background:var(--bg-card,#fff);border:1px solid var(--border-color,#cbd5e1);border-radius:14px;box-shadow:0 16px 40px rgba(0,0,0,.28);display:none;user-select:none}
+.mjcalc.open{display:block}
+.mjcalc-head{display:flex;justify-content:space-between;align-items:center;padding:.45rem .7rem;background:#0d6a4e;color:#fff;border-radius:14px 14px 0 0;cursor:move;font-size:.82rem;font-weight:600}
+.mjcalc-head button{background:none;border:none;color:#fff;font-size:1.2rem;line-height:1;cursor:pointer;padding:0 .2rem}
+.mjcalc-scr{font-family:'Space Grotesk',monospace;text-align:right;font-size:1.5rem;padding:.55rem .7rem;background:var(--gray-50,#f4f7f5);border-bottom:1px solid var(--border-color,#e5e7eb);min-height:2.4rem;overflow:hidden;word-break:break-all}
+.mjcalc-keys{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;padding:7px}
+.mjcalc-keys button{padding:.75rem 0;font-size:1.02rem;border:1px solid var(--border-color,#e5e7eb);border-radius:9px;background:#fff;cursor:pointer;font-weight:700;color:#14211c}
+.mjcalc-keys button:active{transform:translateY(1px)}
+.mjcalc-keys .op{background:#eef7f3;color:#0d6a4e}
+.mjcalc-keys .fn{background:#fdecea;color:#b43a2e}
+.mjcalc-keys .eq{background:#0d6a4e;color:#fff}
+.mjcalc-keys .zero{grid-column:span 2}
+</style>
+{% endblock %}
+{% block content %}
+<div class="portal-card">
+    <div class="mjs-bar">
+        <div style="flex:1;min-width:130px;"><strong>{{ exam.display_name }}</strong><div class="mjs-answered"><span id="ansCount">0</span> answered</div></div>
+        <div class="timer" id="timer" data-remaining="{{ remaining }}">--:--</div>
+        {% if show_calc %}<button type="button" class="btn btn-secondary btn-sm" id="calcToggle"><i class="fas fa-calculator"></i> Calculator</button>{% endif %}
+    </div>
+
+    <div class="mjs-tabs" id="tabs">
+        {% for s in subjects %}
+        <button type="button" class="mjs-tab {{ 'active' if loop.first else '' }}" data-subject="s{{ s.subject.id }}">{{ s.subject.name }} <span class="cnt" data-total="{{ s.count }}">(0/{{ s.count }})</span></button>
+        {% endfor %}
+    </div>
+    <p class="text-muted text-sm" style="margin:-.3rem 0 .7rem;"><i class="fas fa-arrows-left-right"></i> Switch subjects any time using the tabs — your answers are saved as you go.</p>
+
+    {% for s in subjects %}
+    <div class="mjs-subject {{ 'active' if loop.first else '' }}" id="s{{ s.subject.id }}" data-subject-tab="s{{ s.subject.id }}">
+        {% for g in s.groups %}
+        <div class="mjs-passage">
+            {% if g.passage.title %}<div class="ptitle">{{ g.passage.title }} <span style="font-weight:400;font-size:.75rem;">({{ g.passage.kind_label }})</span></div>{% endif %}
+            {% if g.passage.image_url %}<img src="{{ g.passage.image_url }}" alt="passage figure" style="max-height:180px;border-radius:8px;display:block;margin-bottom:.4rem;">{% endif %}
+            {{ g.passage.body | question_html }}
+        </div>
+        {% for qd in g.questions %}{% include 'mock_jamb/_sit_question.html' %}{% endfor %}
+        {% endfor %}
+        {% for qd in s.standalone %}{% include 'mock_jamb/_sit_question.html' %}{% endfor %}
+
+        {# JAMB flow: advance through subjects; Submit appears only on the last one #}
+        <div style="text-align:center;margin-top:1.2rem;">
+        {% if loop.last %}
+            <button type="button" class="btn btn-primary mjs-submit" id="submitBtn2"><i class="fas fa-paper-plane"></i> Submit my answers</button>
+        {% else %}
+            <button type="button" class="btn btn-primary mjs-next" data-next="s{{ subjects[loop.index].subject.id }}">Next: {{ subjects[loop.index].subject.name }} <i class="fas fa-arrow-right"></i></button>
+        {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<form method="post" id="submitForm" action="{{ url_for('mock_jamb_portal.portal_submit', exam_id=exam.id) }}" style="display:none;">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+</form>
+
+{% if show_calc %}
+<div class="mjcalc" id="mjCalc" aria-label="Calculator">
+    <div class="mjcalc-head" id="mjCalcHead"><span><i class="fas fa-calculator"></i> Calculator</span>
+        <button type="button" id="mjCalcClose" aria-label="Hide calculator">&times;</button></div>
+    <div class="mjcalc-scr" id="mjCalcScr">0</div>
+    <div class="mjcalc-keys">
+        <button type="button" class="fn" data-k="ac">AC</button>
+        <button type="button" class="fn" data-k="back">&#9003;</button>
+        <button type="button" class="op" data-k="pm">&plusmn;</button>
+        <button type="button" class="op" data-k="/">&divide;</button>
+        <button type="button" data-k="7">7</button>
+        <button type="button" data-k="8">8</button>
+        <button type="button" data-k="9">9</button>
+        <button type="button" class="op" data-k="*">&times;</button>
+        <button type="button" data-k="4">4</button>
+        <button type="button" data-k="5">5</button>
+        <button type="button" data-k="6">6</button>
+        <button type="button" class="op" data-k="-">&minus;</button>
+        <button type="button" data-k="1">1</button>
+        <button type="button" data-k="2">2</button>
+        <button type="button" data-k="3">3</button>
+        <button type="button" class="op" data-k="+">+</button>
+        <button type="button" class="zero" data-k="0">0</button>
+        <button type="button" data-k=".">.</button>
+        <button type="button" class="eq" data-k="=">=</button>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+{% block scripts %}
+{% include 'mock_jamb/_mathjax.html' %}
+<script nonce="{{ csp_nonce }}">
+(function(){
+    var SAVE_URL = '{{ url_for("mock_jamb_portal.portal_save", exam_id=exam.id) }}';
+    var BATCH_URL = '{{ url_for("mock_jamb_portal.portal_save_batch", exam_id=exam.id) }}';
+    var CSRF = document.querySelector('meta[name=csrf-token]').content;
+    var answered = new Set();
+
+    // tabs
+    var tabs = document.getElementById('tabs');
+    tabs.addEventListener('click', function(e){
+        var b = e.target.closest('.mjs-tab'); if(!b) return;
+        tabs.querySelectorAll('.mjs-tab').forEach(function(x){ x.classList.remove('active'); });
+        document.querySelectorAll('.mjs-subject').forEach(function(x){ x.classList.remove('active'); });
+        b.classList.add('active');
+        var el = document.getElementById(b.dataset.subject); if(el) el.classList.add('active');
+        window.scrollTo(0,0);
+    });
+
+    // pre-mark saved answers + count
+    document.querySelectorAll('.mjs-q').forEach(function(q){
+        var checked = q.querySelector('input[type=radio]:checked');
+        if(checked){ answered.add(q.dataset.qid); markChosen(q); }
+    });
+    updateCount();
+
+    function markChosen(q){
+        q.querySelectorAll('.mjs-opt').forEach(function(o){
+            o.classList.toggle('chosen', !!o.querySelector('input:checked')); });
+    }
+    function updateCount(){
+        document.getElementById('ansCount').textContent = answered.size;
+        // per-subject progress on each tab
+        document.querySelectorAll('.mjs-subject').forEach(function(sec){
+            var ansd = sec.querySelectorAll('.mjs-q input[type=radio]:checked').length;
+            var tab = document.querySelector('.mjs-tab[data-subject="' + sec.id + '"] .cnt');
+            if(tab){ tab.textContent = '(' + ansd + '/' + tab.dataset.total + ')'; }
+        });
+    }
+
+    // ---- resilient autosave: a retry queue + a localStorage mirror, so a network
+    // blip (or a refresh) never loses an answer. Each choice saves to the server;
+    // if that fails it stays queued and is retried on a timer and on reconnect,
+    // and it's also written to localStorage and re-synced on the next load. ----
+    var ATTEMPT = '{{ attempt.id }}';
+    var LSKEY = 'mjmock:' + ATTEMPT;
+    var queue = {};                 // qid -> option awaiting a confirmed save
+    var saving = false;
+    function lsGet(){ try { return JSON.parse(localStorage.getItem(LSKEY) || '{}'); } catch(_){ return {}; } }
+    function lsSet(m){ try { localStorage.setItem(LSKEY, JSON.stringify(m)); } catch(_){} }
+
+    var pill = document.createElement('span');
+    pill.style.cssText = 'font-size:.78rem;font-weight:600;color:#fff;opacity:.85;';
+    var bar = document.querySelector('.mjs-bar'); if(bar) bar.appendChild(pill);
+    function status(s){
+        var map = {saving:'Saving…', saved:'✓ All answers saved', offline:'Offline — will keep retrying'};
+        pill.textContent = map[s] || ''; pill.style.opacity = (s === 'saved') ? '.85' : '1';
+    }
+    var flushTimer = null;
+    function enqueue(qid, opt){
+        queue[qid] = opt;
+        var m = lsGet(); m[qid] = opt; lsSet(m);
+        status('saving');
+        // debounce: batch a burst of quick answers into one request.
+        if(flushTimer) clearTimeout(flushTimer);
+        flushTimer = setTimeout(flush, 800);
+    }
+    function flush(){
+        if(flushTimer){ clearTimeout(flushTimer); flushTimer = null; }
+        var ids = Object.keys(queue);
+        if(!ids.length){ status('saved'); return; }
+        if(saving) return;
+        saving = true; status(navigator.onLine === false ? 'offline' : 'saving');
+        var batch = {};
+        var answers = ids.map(function(qid){ batch[qid] = queue[qid]; return qid + ':' + queue[qid]; }).join(',');
+        fetch(BATCH_URL, {method:'POST', body: new URLSearchParams({_csrf_token: CSRF, answers: answers})})
+            .then(function(r){ return r.ok ? r.json() : null; })
+            .then(function(j){
+                saving = false;
+                if(j && j.ok){
+                    ids.forEach(function(qid){ if(queue[qid] === batch[qid]) delete queue[qid]; });
+                    flush();
+                } else { status('offline'); setTimeout(flush, 3000); }
+            })
+            .catch(function(){ saving = false; status('offline'); setTimeout(flush, 3000); });
+    }
+    window.addEventListener('online', flush);
+    setInterval(flush, 5000);       // safety-net retry
+
+    document.addEventListener('change', function(e){
+        var r = e.target; if(r.type !== 'radio' || !r.name.startsWith('q')) return;
+        var q = r.closest('.mjs-q'); markChosen(q);
+        answered.add(q.dataset.qid); updateCount();
+        enqueue(q.dataset.qid, r.value);
+    });
+
+    // On load, re-apply any answer that was buffered locally but never confirmed
+    // saved to the server (e.g. a save that failed before a refresh).
+    (function reconcile(){
+        var m = lsGet();
+        Object.keys(m).forEach(function(qid){
+            var q = document.querySelector('.mjs-q[data-qid="' + qid + '"]');
+            if(!q) return;
+            var input = q.querySelector('input[type=radio][value="' + m[qid] + '"]');
+            if(input && !input.checked){
+                input.checked = true; markChosen(q); answered.add(qid); enqueue(qid, m[qid]);
+            }
+        });
+        updateCount();
+    })();
+
+    // timer — driven by a wall-clock deadline, not a decrementing counter, so it
+    // stays accurate even if the tab is backgrounded (setInterval/Timeout throttles
+    // while hidden). The moment real time elapses, the paper submits itself.
+    var timer = document.getElementById('timer');
+    var deadline = Date.now() + (parseInt(timer.dataset.remaining, 10) || 0) * 1000;
+    function tick(){
+        var remaining = Math.round((deadline - Date.now()) / 1000);
+        if(remaining <= 0){ timer.textContent = '00:00'; doSubmit(true); return; }
+        var m = Math.floor(remaining/60), s = remaining%60;
+        timer.textContent = (m<10?'0':'')+m+':'+(s<10?'0':'')+s;
+        if(remaining <= 60) timer.classList.add('warn');
+    }
+    tick();
+    var timerInt = setInterval(tick, 1000);
+    // when the tab regains focus after being hidden, re-check immediately (a
+    // throttled background timer may not have fired at the true deadline)
+    document.addEventListener('visibilitychange', function(){ if(!document.hidden) tick(); });
+
+    var submitted = false;
+    function doSubmit(auto){
+        if(submitted) return;
+        if(!auto && !window.confirm('Submit your answers? You will not be able to change them.')) return;
+        submitted = true;
+        try { clearInterval(timerInt); } catch(_){}
+        // Best-effort final flush of anything still queued, as ONE batch via
+        // sendBeacon so it survives the navigation that submitting triggers.
+        try {
+            var ids = Object.keys(queue);
+            if(ids.length && navigator.sendBeacon){
+                var answers = ids.map(function(qid){ return qid + ':' + queue[qid]; }).join(',');
+                navigator.sendBeacon(BATCH_URL, new URLSearchParams({_csrf_token: CSRF, answers: answers}));
+            }
+        } catch(_){}
+        try { localStorage.removeItem(LSKEY); } catch(_){}
+        document.getElementById('submitForm').submit();
+    }
+    var sb2 = document.getElementById('submitBtn2');
+    if(sb2) sb2.addEventListener('click', function(){ doSubmit(false); });
+    // "Next subject" buttons advance the active tab (Submit shows only on the last)
+    function activateTab(id){
+        var t = document.querySelector('.mjs-tab[data-subject="' + id + '"]');
+        if(t) t.click();
+    }
+    document.querySelectorAll('.mjs-next').forEach(function(b){
+        b.addEventListener('click', function(){ activateTab(b.dataset.next); });
+    });
+
+    // ---- discourage copying during the exam (best-effort — cannot stop a
+    // screenshot, but blocks copy/cut/paste, right-click and text selection so a
+    // candidate can't lift the question text). ----
+    var examRoot = document.querySelector('.portal-card') || document;
+    ['copy','cut','paste','contextmenu','selectstart','dragstart'].forEach(function(ev){
+        examRoot.addEventListener(ev, function(e){ e.preventDefault(); return false; });
+    });
+    document.addEventListener('keydown', function(e){
+        var k = (e.key || '').toLowerCase();
+        if((e.ctrlKey || e.metaKey) && ['c','x','v','a','s','p','u'].indexOf(k) !== -1){
+            e.preventDefault(); return false;
+        }
+    });
+})();
+</script>
+{% if show_calc %}
+<script nonce="{{ csp_nonce }}">
+(function(){
+    // Basic JAMB-style calculator: digits, + - * /, =, clear, backspace, sign.
+    // No square-root, trig, memory or scientific functions by design.
+    var el = document.getElementById('mjCalc'); if(!el) return;
+    var toggle = document.getElementById('calcToggle');
+    var scr = document.getElementById('mjCalcScr');
+    var cur = '0', prev = null, op = null, fresh = true;
+
+    function show(){ scr.textContent = cur; }
+    function clearAll(){ cur='0'; prev=null; op=null; fresh=true; show(); }
+    function num(d){
+        if(cur==='Error'){ cur='0'; fresh=true; }
+        if(fresh || cur==='0'){ cur = (d==='.' ? '0.' : d); fresh=false; }
+        else { if(d==='.' && cur.indexOf('.')>=0) return; cur += d; }
+        show();
+    }
+    function compute(a,b,o){
+        a=parseFloat(a); b=parseFloat(b); var r;
+        if(o==='+') r=a+b; else if(o==='-') r=a-b; else if(o==='*') r=a*b;
+        else if(o==='/') r=(b===0?NaN:a/b); else return b;
+        if(!isFinite(r)) return 'Error';
+        return String(Math.round((r+Number.EPSILON)*1e10)/1e10);
+    }
+    function setOp(o){
+        if(cur==='Error') return;
+        if(op!==null && !fresh){ cur = compute(prev,cur,op); show(); if(cur==='Error'){ op=null; prev=null; return; } }
+        prev = cur; op = o; fresh = true;
+    }
+    function equals(){
+        if(op===null || cur==='Error') return;
+        cur = compute(prev,cur,op); op=null; prev=null; fresh=true; show();
+    }
+    function back(){
+        if(fresh || cur==='Error') return;
+        cur = (cur.length>1) ? cur.slice(0,-1) : '0';
+        if(cur==='-' || cur===''){ cur='0'; }
+        show();
+    }
+    function sign(){
+        if(cur==='0' || cur==='Error') return;
+        cur = (cur.charAt(0)==='-') ? cur.slice(1) : '-'+cur; show();
+    }
+    el.querySelectorAll('button[data-k]').forEach(function(b){
+        b.addEventListener('click', function(){
+            var k = b.getAttribute('data-k');
+            if(k==='ac') clearAll();
+            else if(k==='back') back();
+            else if(k==='pm') sign();
+            else if(k==='=') equals();
+            else if(k==='+'||k==='-'||k==='*'||k==='/') setOp(k);
+            else num(k);
+        });
+    });
+
+    // Remember the panel's open-state and position, so a refresh (or leaving and
+    // returning to the exam) restores the calculator exactly where the student
+    // left it. (Subject-tab switches don't reload, so it already persists there.)
+    var PREF = 'mjcalc:pref';
+    function savePref(){
+        try {
+            var r = el.getBoundingClientRect();
+            localStorage.setItem(PREF, JSON.stringify({
+                open: el.classList.contains('open'), left: Math.round(r.left), top: Math.round(r.top) }));
+        } catch(_){}
+    }
+    (function restore(){
+        try {
+            var p = JSON.parse(localStorage.getItem(PREF) || 'null');
+            if(!p) return;
+            if(typeof p.left === 'number' && typeof p.top === 'number'){
+                var w = el.offsetWidth || 236, h = el.offsetHeight || 330;
+                var L = Math.max(0, Math.min(window.innerWidth - w, p.left));
+                var T = Math.max(0, Math.min(window.innerHeight - h, p.top));
+                el.style.right='auto'; el.style.bottom='auto'; el.style.left=L+'px'; el.style.top=T+'px';
+            }
+            if(p.open) el.classList.add('open');
+        } catch(_){}
+    })();
+
+    if(toggle) toggle.addEventListener('click', function(){ el.classList.toggle('open'); savePref(); });
+    document.getElementById('mjCalcClose').addEventListener('click', function(){ el.classList.remove('open'); savePref(); });
+
+    // draggable by its header (mouse + touch)
+    var head = document.getElementById('mjCalcHead'), drag=false, dx=0, dy=0;
+    function begin(x,y){ var r=el.getBoundingClientRect(); drag=true; dx=x-r.left; dy=y-r.top;
+        el.style.right='auto'; el.style.bottom='auto'; el.style.left=r.left+'px'; el.style.top=r.top+'px'; }
+    function move(x,y){ if(!drag) return;
+        el.style.left=Math.max(0,Math.min(window.innerWidth-el.offsetWidth, x-dx))+'px';
+        el.style.top=Math.max(0,Math.min(window.innerHeight-el.offsetHeight, y-dy))+'px'; }
+    function end(){ if(drag){ drag=false; savePref(); } }
+    head.addEventListener('mousedown', function(e){ if(e.target.tagName==='BUTTON') return; begin(e.clientX,e.clientY); e.preventDefault(); });
+    document.addEventListener('mousemove', function(e){ move(e.clientX,e.clientY); });
+    document.addEventListener('mouseup', end);
+    head.addEventListener('touchstart', function(e){ if(e.target.tagName==='BUTTON') return; var t=e.touches[0]; begin(t.clientX,t.clientY); }, {passive:true});
+    document.addEventListener('touchmove', function(e){ if(drag){ var t=e.touches[0]; move(t.clientX,t.clientY); } }, {passive:true});
+    document.addEventListener('touchend', end);
+})();
+</script>
+{% endif %}
+{% endblock %}

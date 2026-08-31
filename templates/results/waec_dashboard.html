@@ -21,8 +21,10 @@
 
 .page-actions {
     display: flex;
+    flex-wrap: wrap;          /* wrap on narrow screens instead of overflowing */
     gap: 0.25rem;
 }
+.page-actions .btn { flex: 0 1 auto; }
 
 /* Stats Grid */
 .stats-grid {
@@ -36,7 +38,7 @@
     background: var(--bg-card);
     border-radius: 8px;
     padding: 0.75rem;
-    border: 1px solid #e0e0e0;
+    border: 1px solid var(--border-color);
     text-align: center;
 }
 
@@ -64,7 +66,7 @@
 .tab {
     padding: 0.5rem 0.75rem;
     background: var(--bg-card);
-    border: 1px solid #e0e0e0;
+    border: 1px solid var(--border-color);
     border-radius: 6px;
     font-size: 0.8rem;
     font-weight: 500;
@@ -83,7 +85,7 @@
 .card {
     background: var(--bg-card);
     border-radius: 8px;
-    border: 1px solid #e0e0e0;
+    border: 1px solid var(--border-color);
     margin-bottom: 1rem;
     overflow: hidden;
 }
@@ -111,7 +113,7 @@
     background: var(--bg-card);
     border-radius: 8px;
     padding: 0.75rem;
-    border: 1px solid #e0e0e0;
+    border: 1px solid var(--border-color);
     margin-bottom: 1rem;
 }
 
@@ -205,7 +207,7 @@
 }
 
 .top-rank.gold { background: linear-gradient(135deg, #f5af19, #f12711); }
-.top-rank.silver { background: linear-gradient(135deg, #bdc3c7, #606060); }
+.top-rank.silver { background: linear-gradient(135deg, #e0e0e0, #606060); }
 .top-rank.bronze { background: linear-gradient(135deg, #cd7f32, #8b4513); }
 
 .top-name {
@@ -252,7 +254,7 @@
 }
 
 .subject-table .sortable:hover {
-    background: #e9ecef;
+    background: var(--border-color);
 }
 
 /* Student Cards (Mobile) */
@@ -264,7 +266,7 @@
 
 .student-card {
     background: var(--bg-card);
-    border: 1px solid #e0e0e0;
+    border: 1px solid var(--border-color);
     border-radius: 8px;
     padding: 0.75rem;
 }
@@ -420,11 +422,14 @@
     <h1>WAEC Results</h1>
     <div class="page-actions">
         <a href="{{ url_for('results.waec_analytics') }}" class="btn btn-info btn-sm" title="Analytics"><i class="fas fa-chart-bar"></i></a>
+        <a href="{{ url_for('results.waec_broadsheet', year=selected_year) }}" class="btn btn-secondary btn-sm" title="Full grade matrix — print / download"><i class="fas fa-table-cells"></i> Broadsheet</a>
+        <a href="{{ url_for('results.waec_cert_generator') }}" class="btn btn-secondary btn-sm" title="Design & download result images/PDF"><i class="fas fa-id-card"></i> Result Generator</a>
         <a href="{{ url_for('results.add_waec') }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add</a>
         <a href="{{ url_for('results.scan_waec') }}" class="btn btn-info btn-sm" title="Scan result image"><i class="fas fa-camera"></i> Scan</a>
+        <a href="{{ url_for('results.paste_waec') }}" class="btn btn-secondary btn-sm" title="Paste result text (from an AI) — no OCR"><i class="fas fa-clipboard"></i> Paste</a>
         {% if selected_year %}
         <a href="{{ url_for('results.export_waec', year=selected_year) }}" class="btn btn-secondary btn-sm" title="Export Excel"><i class="fas fa-file-excel"></i></a>
-        <button type="button" onclick="openExportModal()" class="btn btn-secondary btn-sm" title="Export HD Image"><i class="fas fa-image"></i></button>
+        <button type="button" data-call="openExportModal" class="btn btn-secondary btn-sm" title="Export image or PDF"><i class="fas fa-file-export"></i></button>
         {% endif %}
     </div>
 </div>
@@ -470,12 +475,15 @@
         <input type="hidden" name="view" value="{{ view_mode }}">
         <div class="filter-group filter-search">
             <label>Search by name or ID</label>
-            <input type="text" name="search" value="{{ search or '' }}" placeholder="Type a student name or ID...">
+            <input type="text" name="search" id="waecLiveSearch" value="{{ search or '' }}"
+                   placeholder="Type a student name or ID..." autocomplete="off"
+                   data-live-search="waecStudentList" data-live-count="waecSearchCount">
+            <span id="waecSearchCount" class="text-muted" style="font-size:.75rem;"></span>
         </div>
         <div class="filters-grid">
             <div class="filter-group">
                 <label>Year</label>
-                <select name="year" onchange="this.form.submit()">
+                <select name="year" data-autosubmit>
                     {% for year in years %}
                     <option value="{{ year }}" {% if year == selected_year %}selected{% endif %}>{{ year }}</option>
                     {% endfor %}
@@ -525,7 +533,7 @@
         <!-- Grade Tabs -->
         <div class="tabs" style="margin-bottom: 1rem;">
             {% for g in ['A1', 'B2', 'B3', 'C4', 'C5', 'C6'] %}
-            <a href="#grade-{{ g }}" class="tab" onclick="showGradeTab('{{ g }}')">{{ g }} ({{ grade_distribution.get(g, 0) }})</a>
+            <a href="#grade-{{ g }}" class="tab" data-call="showGradeTab" data-args="'{{ g }}'">{{ g }} ({{ grade_distribution.get(g, 0) }})</a>
             {% endfor %}
         </div>
         
@@ -645,7 +653,8 @@
             <tbody>
                 {% for subj in subjects_by_grade %}
                 <tr>
-                    <td>{{ subj.subject[:15] }}</td>
+                    <td><a href="{{ url_for('results.waec_subject', subject=subj.subject, year=selected_year) }}"
+                           style="color:#0d6a4e;font-weight:600" title="Full analysis for {{ subj.subject }}">{{ subj.subject[:15] }} <i class="fas fa-arrow-up-right-from-square" style="font-size:.7em;opacity:.6"></i></a></td>
                     {% for g in grades %}
                     <td><span class="grade-badge grade-{{ g|lower }}">{{ subj.grades[g] }}</span></td>
                     {% endfor %}
@@ -676,7 +685,7 @@
     </div>
 </div>
 
-<div class="card">
+<div class="card" id="waecStudentList">
     <div class="card-header">
         <span class="card-title">Students ({{ students|length }})</span>
         <div class="sort-btns">
@@ -689,10 +698,11 @@
     </div>
     
     {% if students %}
+    <div class="cap-list">
     <!-- Mobile: Card View -->
     <div class="students-list" style="padding: 0.5rem;">
         {% for s in students %}
-        <div class="student-card">
+        <div class="student-card" data-search="{{ (s.name ~ ' ' ~ s.student_id)|lower }}">
             <div class="student-card-header">
                 <div>
                     <div class="student-name">{{ s.name }}</div>
@@ -723,7 +733,7 @@
             <div class="student-actions">
                 <a href="{{ url_for('results.view_waec_student', student_id=s.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-eye"></i></a>
                 <a href="{{ url_for('results.edit_waec', student_id=s.id, year=selected_year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-edit"></i></a>
-                <form method="POST" action="{{ url_for('results.delete_waec', student_id=s.id, year=selected_year) }}" style="display: inline;" onsubmit="return confirm('Delete all WAEC results for {{ s.name }}?');">
+                <form method="POST" action="{{ url_for('results.delete_waec', student_id=s.id, year=selected_year) }}" style="display: inline;" data-confirm="Delete all WAEC results for {{ s.name }}?">
                     <button type="submit" class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button>
                 </form>
             </div>
@@ -749,7 +759,7 @@
             </thead>
             <tbody>
                 {% for s in students %}
-                <tr>
+                <tr data-search="{{ (s.name ~ ' ' ~ s.student_id)|lower }}">
                     <td>{{ loop.index }}</td>
                     <td><strong>{{ s.name }}</strong><br><small style="color:#666;">{{ s.student_id }}</small></td>
                     <td><span class="grade-badge grade-a1">{{ s.a1_count }}</span></td>
@@ -762,7 +772,7 @@
                         <div style="display: flex; gap: 0.25rem;">
                             <a href="{{ url_for('results.view_waec_student', student_id=s.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-eye"></i></a>
                             <a href="{{ url_for('results.edit_waec', student_id=s.id, year=selected_year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-edit"></i></a>
-                            <form method="POST" action="{{ url_for('results.delete_waec', student_id=s.id, year=selected_year) }}" style="display: inline;" onsubmit="return confirm('Delete?');">
+                            <form method="POST" action="{{ url_for('results.delete_waec', student_id=s.id, year=selected_year) }}" style="display: inline;" data-confirm="Delete?">
                                 <button type="submit" class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button>
                             </form>
                         </div>
@@ -772,6 +782,13 @@
             </tbody>
         </table>
     </div>
+    </div>{# /.cap-list #}
+    {% if students|length > 12 %}
+    <button type="button" class="btn btn-secondary btn-sm cap-toggle" data-cap-toggle aria-label="Show all results"
+            data-more="Show all {{ students|length }} students" data-less="Show fewer">
+        <i class="fas fa-chevron-down" aria-hidden="true"></i> <span class="cap-label">Show all {{ students|length }} students</span>
+    </button>
+    {% endif %}
     {% else %}
     <div style="text-align: center; padding: 2rem; color: #666;">
         <i class="fas fa-file-alt" style="font-size: 2rem; margin-bottom: 0.5rem;"></i>
@@ -800,20 +817,35 @@
 <div id="exportModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999; padding: 0.5rem; overflow-y: auto;">
     <div style="background: white; border-radius: 12px; max-width: 500px; margin: 1rem auto; max-height: calc(100vh - 2rem); overflow-y: auto;">
         <div style="padding: 1rem; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; background: white; z-index: 1;">
-            <h3 style="margin: 0; font-size: 1rem;"><i class="fas fa-image"></i> Export WAEC as Image</h3>
-            <button onclick="closeExportModal()" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #666;">&times;</button>
+            <h3 style="margin: 0; font-size: 1rem;"><i class="fas fa-file-export"></i> Export WAEC Results</h3>
+            <button data-call="closeExportModal" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #666;">&times;</button>
         </div>
         <div style="padding: 1rem;">
+            <!-- Format -->
+            <div style="margin-bottom: 1rem;">
+                <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.5rem;">Format:</label>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
+                    <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem; background: #e3f2fd; border: 2px solid #2196f3; border-radius: 8px; cursor: pointer;">
+                        <input type="radio" name="exportFormat" value="image" checked>
+                        <span style="font-size: 0.85rem; font-weight: 500;"><i class="fas fa-image"></i> Image (PNG)</span>
+                    </label>
+                    <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem; background: #f8f9fa; border: 2px solid #ddd; border-radius: 8px; cursor: pointer;">
+                        <input type="radio" name="exportFormat" value="pdf">
+                        <span style="font-size: 0.85rem; font-weight: 500;"><i class="fas fa-file-pdf"></i> PDF</span>
+                    </label>
+                </div>
+            </div>
+
             <!-- Export Type -->
             <div style="margin-bottom: 1rem;">
                 <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.5rem;">Export Type:</label>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
                     <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem; background: #e3f2fd; border: 2px solid #2196f3; border-radius: 8px; cursor: pointer;">
-                        <input type="radio" name="exportType" value="students" checked onchange="toggleExportOptions()">
+                        <input type="radio" name="exportType" value="students" checked data-call="toggleExportOptions" data-on="change">
                         <span style="font-size: 0.85rem; font-weight: 500;">Students List</span>
                     </label>
                     <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem; background: #f8f9fa; border: 2px solid #ddd; border-radius: 8px; cursor: pointer;">
-                        <input type="radio" name="exportType" value="subjects" onchange="toggleExportOptions()">
+                        <input type="radio" name="exportType" value="subjects" data-call="toggleExportOptions" data-on="change">
                         <span style="font-size: 0.85rem; font-weight: 500;">Subjects Analysis</span>
                     </label>
                 </div>
@@ -873,8 +905,8 @@
             
             <!-- Buttons -->
             <div style="display: flex; gap: 0.5rem;">
-                <button onclick="closeExportModal()" class="btn btn-secondary" style="flex: 1;">Cancel</button>
-                <button onclick="generateWAECExport()" class="btn btn-primary" style="flex: 1;"><i class="fas fa-download"></i> Export</button>
+                <button data-call="closeExportModal" class="btn btn-secondary" style="flex: 1;">Cancel</button>
+                <button data-call="generateWAECExport" class="btn btn-primary" style="flex: 1;"><i class="fas fa-download"></i> Export</button>
             </div>
         </div>
     </div>
@@ -891,14 +923,15 @@
     cursor: pointer;
     font-size: 0.8rem;
 }
-.exp-check:hover { background: #e9ecef; }
+.exp-check:hover { background: var(--border-color); }
 .exp-check input { margin: 0; }
 </style>
 {% endblock %}
 
 {% block extra_js %}
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script>
+<script src="{{ url_for('static', filename='vendor/html2canvas.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/jspdf.umd.min.js') }}"></script>
+<script nonce="{{ csp_nonce }}">
 // Data for export
 var studentsData = [];
 var subjectsByGrade = [];
@@ -947,8 +980,32 @@ document.getElementById('exportModal').onclick = function(e) {
     if (e.target === this) closeExportModal();
 };
 
+// Slice a tall canvas across A4 pages and download as a PDF.
+function saveCanvasAsPdf(canvas, filename) {
+    var jsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
+    var pdf = new jsPDF('p', 'mm', 'a4');
+    var pageW = pdf.internal.pageSize.getWidth();
+    var pageH = pdf.internal.pageSize.getHeight();
+    var imgW = pageW;
+    var imgH = canvas.height * imgW / canvas.width;
+    if (imgH <= pageH) {
+        pdf.addImage(canvas.toDataURL('image/png', 1.0), 'PNG', 0, 0, imgW, imgH);
+    } else {
+        // Paginate: draw the full image shifted up each page.
+        var remaining = imgH, pos = 0;
+        while (remaining > 0) {
+            pdf.addImage(canvas.toDataURL('image/png', 1.0), 'PNG', 0, pos, imgW, imgH);
+            remaining -= pageH;
+            pos -= pageH;
+            if (remaining > 0) pdf.addPage();
+        }
+    }
+    pdf.save(filename);
+}
+
 function generateWAECExport() {
     var exportType = document.querySelector('input[name="exportType"]:checked').value;
+    var exportFormat = document.querySelector('input[name="exportFormat"]:checked').value;
     var quality = parseInt(document.getElementById('expQuality').value);
     var showSummary = document.getElementById('expSummary').checked;
     var showGradeCount = document.getElementById('expGradeCount').checked;
@@ -1001,7 +1058,7 @@ function generateWAECExport() {
     var loadingDiv = document.createElement('div');
     loadingDiv.id = 'exportLoading';
     loadingDiv.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;color:white;';
-    loadingDiv.innerHTML = '<div style="font-size:18px;margin-bottom:10px;">Generating image...</div><div style="font-size:14px;">Please wait</div>';
+    loadingDiv.innerHTML = '<div style="font-size:18px;margin-bottom:10px;">Generating ' + (exportFormat === 'pdf' ? 'PDF' : 'image') + '...</div><div style="font-size:14px;">Please wait</div>';
     document.body.appendChild(loadingDiv);
     
     // Generate image - compact width for mobile viewing
@@ -1023,10 +1080,20 @@ function generateWAECExport() {
         }).then(function(canvas) {
             container.style.position = 'absolute';
             container.style.left = '-9999px';
-            
+
             // Remove loading
             document.getElementById('exportLoading').remove();
-            
+
+            // PDF: build and download directly.
+            if (exportFormat === 'pdf') {
+                try {
+                    saveCanvasAsPdf(canvas, 'WAEC_Results_' + selectedYear + '.pdf');
+                } catch (e) {
+                    alert('Error generating PDF: ' + e.message);
+                }
+                return;
+            }
+
             // Create modal to show image for manual save (mobile-friendly)
             var imgData = canvas.toDataURL('image/png', 1.0);
             var saveModal = document.createElement('div');
@@ -1035,7 +1102,7 @@ function generateWAECExport() {
             saveModal.innerHTML = 
                 '<div style="text-align:center;margin-bottom:10px;">' +
                 '<p style="color:white;margin:0 0 10px 0;font-size:14px;">Long-press the image below to save</p>' +
-                '<button onclick="document.getElementById(\'saveImageModal\').remove()" style="padding:8px 20px;background:#dc3545;color:white;border:none;border-radius:6px;font-size:14px;">Close</button>' +
+                '<button data-remove-target="saveImageModal" style="padding:8px 20px;background:#dc3545;color:white;border:none;border-radius:6px;font-size:14px;">Close</button>' +
                 '</div>' +
                 '<img src="' + imgData + '" style="width:100%;border-radius:8px;display:block;" alt="WAEC Results Export">';
             document.body.appendChild(saveModal);
@@ -1090,8 +1157,8 @@ function generateStudentsExport() {
         var rowBg = idx % 2 === 0 ? '#ffffff' : '#f9f9f9';
         bodyHtml += '<tr style="background:' + rowBg + '">';
         if (showRank) bodyHtml += '<td style="' + tdStyle + 'text-align:center;font-weight:600;">' + (idx + 1) + '</td>';
-        bodyHtml += '<td style="' + tdStyle + '">' + s.name + '</td>';
-        if (showStudentId) bodyHtml += '<td style="' + tdStyle + 'font-size:9px;">' + s.student_id + '</td>';
+        bodyHtml += '<td style="' + tdStyle + '">' + window.escapeHtml(s.name) + '</td>';
+        if (showStudentId) bodyHtml += '<td style="' + tdStyle + 'font-size:9px;">' + window.escapeHtml(s.student_id) + '</td>';
         if (showA1) bodyHtml += '<td style="' + tdStyle + 'text-align:center;color:#28a745;font-weight:600;">' + s.a1_count + '</td>';
         if (showB2) bodyHtml += '<td style="' + tdStyle + 'text-align:center;color:#17a2b8;font-weight:600;">' + s.b2_count + '</td>';
         if (showB3) bodyHtml += '<td style="' + tdStyle + 'text-align:center;color:#17a2b8;">' + s.b3_count + '</td>';
@@ -1103,14 +1170,14 @@ function generateStudentsExport() {
         }
         if (showCredits) bodyHtml += '<td style="' + tdStyle + 'text-align:center;font-weight:600;">' + s.credit_count + '</td>';
         if (showAvgPts) {
-            var color = s.avg_points <= 3 ? '#28a745' : s.avg_points <= 5 ? '#ffc107' : '#dc3545';
+            var color = s.avg_points >= 7 ? '#28a745' : s.avg_points >= 5 ? '#ffc107' : '#dc3545';
             bodyHtml += '<td style="' + tdStyle + 'text-align:center;color:' + color + ';font-weight:600;">' + s.avg_points + '</td>';
         }
         if (showSubjectGrades && s.results) {
             var grades = '';
             for (var k = 0; k < s.results.length; k++) {
                 var r = s.results[k];
-                grades += r.subject.substring(0, 3) + ':' + r.grade + ' ';
+                grades += window.escapeHtml(String(r.subject).substring(0, 3) + ':' + r.grade) + ' ';
             }
             bodyHtml += '<td style="' + tdStyle + 'font-size:8px;">' + grades + '</td>';
         }

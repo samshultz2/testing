@@ -1,0 +1,601 @@
+"""Forward-looking exam insights that combine WAEC + JAMB and their mocks.
+
+Where :func:`utils.admission.assess_admission` judges a student on *actual*
+results, these helpers project the likely outcome from the Mock WAEC / Mock JAMB
+trajectory, so SSS3 students get an actionable readiness picture *before* they
+sit the real exams. Everything prefers actual results when they exist (a real
+sitting beats a mock) and degrades gracefully when a signal is missing.
+"""
+from models.mock_waec import CORE_SUBJECTS          # single source of truth
+from utils.admission import COURSE_CATEGORIES, PASS_GRADES, best_year_credits
+
+JAMB_BASELINE = 180          # the cut-off many courses accept as a floor
+MIN_CALIBRATION_SAMPLE = 8   # need a real history before trusting the measured bias
+
+
+def calibrate_jamb(raw, calibration):
+    """Adjust a raw mock-based JAMB prediction by the historically measured bias
+    (mean predicted − actual). Over-prediction (+ve bias) is subtracted off.
+
+    Only applied once there's a meaningful sample and a bias worth correcting.
+    Returns ``(score, applied_bias_or_None)`` where ``applied_bias`` is None when
+    no correction was made."""
+    if raw is None or not calibration:
+        return raw, None
+    bias, n = calibration.get('bias'), calibration.get('n')
+    if not bias or not n or n < MIN_CALIBRATION_SAMPLE or abs(bias) < 1:
+        return raw, None
+    return max(0, min(400, round(raw - bias))), round(bias, 1)
+
+# O'level grade -> points for a typical 50/50 post-UTME aggregate (A1=6 … C6=1).
+OLEVEL_POINTS = {'A1': 6, 'B2': 5, 'B3': 4, 'C4': 3, 'C5': 2, 'C6': 1}
+
+
+def _split_subjects(raw):
+    """Parse a stored comma-joined subject string into a clean list."""
+    if not raw:
+        return []
+    return [s.strip() for s in raw.split(',') if s.strip()]
+
+
+def _jamb_band(score):
+    if score >= 250:
+        return 'Highly competitive'
+    if score >= 200:
+        return 'Competitive'
+    if score >= JAMB_BASELINE:
+        return 'Eligible for many courses'
+    if score > 0:
+        return 'Below common cut-offs'
+    return 'No score yet'
+
+
+# --------------------------------------------------------------------------- #
+# Per-student outlooks
+# --------------------------------------------------------------------------- #
+def projected_waec(student, session_id=None):
+    """Best available WAEC outlook for a student.
+
+    Prefers actual WAEC (best year by credit count); otherwise projects from the
+    Mock WAEC trajectory. Returns a dict with ``credits``, ``credited_subjects``,
+    ``credited_grades``, ``missing_core``, ``meets_ssc`` and ``source`` — or
+    ``None`` when there is no WAEC signal at all."""
+    by_year = {}
+    for r in student.waec_results.all():
+        by_year.setdefault(r.exam_year, {})[r.subject] = r.grade
+    if by_year:
+        credited, _ = best_year_credits(by_year)
+        missing_core = [s for s in CORE_SUBJECTS if s not in credited]
+        return {
+            'source': 'actual',
+            'credits': len(credited),
+            'credited_subjects': sorted(credited),
+            'credited_grades': list(credited.values()),
+            'missing_core': missing_core,
+            'meets_ssc': len(credited) >= 5 and not missing_core,
+            'confidence': 100,
+        }
+
+    # Fall back to the Mock WAEC projection + the latest sitting's subject grades.
+    from models.mock_waec import (MockWAECAnalytics, MockWAECExam, MockWAECResult,
+                                  PASS_GRADES as W_PASS)
+    pred = MockWAECAnalytics.predict_waec(student.id, session_id)
+    if not pred:
+        return None
+    q = MockWAECResult.query.filter_by(student_id=student.id).join(MockWAECExam)
+    if session_id:
+        q = q.filter(MockWAECExam.session_id == session_id)
+    latest = q.order_by(MockWAECExam.exam_number.desc(), MockWAECResult.id.desc()).all()
+    seen, credited = set(), {}
+    for r in latest:                       # rows are newest-first; keep the latest per subject
+        if r.subject in seen:
+            continue
+        seen.add(r.subject)
+        if r.grade in W_PASS:
+            credited[r.subject] = r.grade
+    return {
+        'source': 'mock',
+        'credits': pred['predicted_credits'],
+        'credited_subjects': sorted(credited),
+        'credited_grades': list(credited.values()),
+        'missing_core': pred['missing_core'],
+        'meets_ssc': pred['meets_minimum_incl_core'],
+        'quality': pred['quality'],
+        'confidence': pred['confidence'],
+    }
+
+
+def projected_jamb(student, session_id=None, calibration=None):
+    """Best available JAMB outlook. Prefers the best actual JAMB score; otherwise
+    the Mock JAMB prediction, optionally corrected by the historically measured
+    mock→real bias (see :func:`calibrate_jamb`). Returns a dict with
+    ``score``/``band`` or None."""
+    actual = [r.total_score for r in student.jamb_results.all() if r.total_score is not None]
+    if actual:
+        score = max(actual)
+        return {'source': 'actual', 'score': score, 'confidence': 100,
+                'band': _jamb_band(score)}
+    if not session_id:
+        return None
+    from models.mock_jamb import MockJAMBAnalytics
+    pred = MockJAMBAnalytics.predict_real_jamb(student.id, session_id)
+    if not pred:
+        return None
+    return _mock_jamb_dict(pred, calibration)
+
+
+def _mock_jamb_dict(pred, calibration):
+    """Build the mock-source projected_jamb dict, applying calibration if available."""
+    raw = pred['predicted_score']
+    score, applied = calibrate_jamb(raw, calibration)
+    out = {'source': 'mock', 'score': score,
+           'confidence': pred.get('confidence_level'),
+           'range': pred.get('predicted_range'), 'band': _jamb_band(score)}
+    if applied is not None:
+        out['calibrated_by'] = applied      # bias subtracted (predicted − actual)
+        out['raw_score'] = raw
+    return out
+
+
+def post_utme_aggregate(jamb_score, grades):
+    """A representative 50/50 post-UTME aggregate (out of 100).
+
+    Schemes vary by institution; this is the widely-used model: UTME scaled to 50
+    (score/400×50) plus O'level best-five grade points scaled to 50 (A1=6 … C6=1,
+    max 30 → ×50/30). Returns the two components and the total."""
+    utme = round((jamb_score or 0) / 400 * 50, 1)
+    pts = sorted((OLEVEL_POINTS.get(g, 0) for g in (grades or [])), reverse=True)[:5]
+    olevel = round(sum(pts) / 30 * 50, 1)
+    return {'utme_component': utme, 'olevel_component': olevel,
+            'aggregate': round(utme + olevel, 1), 'scheme': '50/50 UTME+O’level'}
+
+
+_UNSET = object()
+
+
+def admission_readiness(student, session_id=None, waec=_UNSET, jamb=_UNSET, calibration=None):
+    """Combine the projected WAEC + JAMB outlook into a single readiness verdict
+    with specific, actionable blockers.
+
+    ``status`` is one of READY / CONDITIONAL / AT_RISK / NOT_READY / NO_DATA.
+    Also returns the broad course categories the student is projected to qualify
+    for (5 credits incl. English & Maths, the category's required subject credits,
+    and the category JAMB cut-off all met).
+
+    ``waec`` / ``jamb`` may be passed pre-computed (e.g. from a batched cohort
+    pass) to avoid per-student queries; omit them for the single-student path."""
+    if waec is _UNSET:
+        waec = projected_waec(student, session_id)
+    if jamb is _UNSET:
+        jamb = projected_jamb(student, session_id, calibration)
+    if not waec and not jamb:
+        return {'status': 'NO_DATA', 'blockers': [], 'waec': None, 'jamb': None,
+                'eligible_categories': [], 'aggregate': None, 'source': None}
+
+    credits = waec['credits'] if waec else 0
+    missing_core = waec['missing_core'] if waec else list(CORE_SUBJECTS)
+    meets_ssc = bool(waec and waec['meets_ssc'])
+    credited = set(waec['credited_subjects']) if waec else set()
+    jamb_score = jamb['score'] if jamb else 0
+
+    # Judge JAMB against the student's own target (their chosen course's
+    # competitive cut-off) when set, else the national baseline.
+    target = getattr(student, 'jamb_target', None)
+    threshold = target if (isinstance(target, int) and target > 0) else JAMB_BASELINE
+
+    blockers = []
+    if waec:
+        if credits < 5:
+            blockers.append(f'Projected {credits} credits — needs 5')
+        for s in missing_core:
+            blockers.append(f'No {s} credit projected')
+    else:
+        blockers.append('No WAEC signal yet (no results or mocks)')
+    if jamb:
+        if jamb_score < threshold:
+            if threshold != JAMB_BASELINE:
+                blockers.append(f'Projected JAMB {jamb_score} below target {threshold}')
+            else:
+                blockers.append(f'Projected JAMB {jamb_score} below {threshold}')
+    else:
+        blockers.append('No JAMB signal yet (no results or mocks)')
+
+    eligible = []
+    for c in COURSE_CATEGORIES:
+        subjects_ok = all(s in credited for s in c['required'])
+        if meets_ssc and subjects_ok and jamb_score >= c['jamb']:
+            eligible.append(c['name'])
+
+    if meets_ssc and jamb_score >= threshold:
+        status = 'READY'
+    elif (meets_ssc and jamb_score >= 150) or \
+         (credits >= 5 and len(missing_core) <= 1 and jamb_score >= threshold):
+        status = 'CONDITIONAL'
+    elif credits >= 4 or jamb_score >= 150:
+        status = 'AT_RISK'
+    else:
+        status = 'NOT_READY'
+
+    aggregate = post_utme_aggregate(jamb_score, waec['credited_grades']) if waec else None
+
+    return {'status': status, 'blockers': blockers, 'waec': waec, 'jamb': jamb,
+            'eligible_categories': eligible, 'aggregate': aggregate,
+            'source': (waec or jamb)['source'],
+            'jamb_threshold': threshold,
+            'target_university': getattr(student, 'target_university_name', None),
+            'target_course': getattr(student, 'target_course_name', None)}
+
+
+# UTME subject combinations differ from O'level requirements (English is the
+# compulsory 4th UTME subject, and e.g. Medicine takes Bio/Chem/Phys — not Maths).
+# These are the non-English UTME subjects typically required per category.
+JAMB_COMBOS = [
+    ('Medicine & Health Sciences', ['Biology', 'Chemistry', 'Physics']),
+    ('Engineering & Technology', ['Mathematics', 'Physics', 'Chemistry']),
+    ('Physical & Computer Sciences', ['Mathematics', 'Physics']),
+    ('Agricultural & Biological Sciences', ['Biology', 'Chemistry']),
+    ('Law', ['Literature in English', 'Government']),
+    ('Social Sciences & Management', ['Economics', 'Mathematics']),
+    ('Arts & Humanities', ['Literature in English', 'Government']),
+    ('Education', ['Mathematics']),
+]
+
+
+def jamb_subject_combo_check(student):
+    """Validate the student's intended JAMB subjects against typical UTME
+    combinations. English is compulsory in the UTME, so only the other
+    (science/arts) requirements are checked. Returns a per-category fit list —
+    useful for catching a wrong subject combination early, while it can still be
+    changed."""
+    intended = set(_split_subjects(student.jamb_subjects))
+    if not intended:
+        return {'intended': [], 'categories': []}
+    out = []
+    for name, needed in JAMB_COMBOS:
+        missing = [s for s in needed if s not in intended]
+        out.append({'name': name, 'missing': missing, 'fits': not missing})
+    out.sort(key=lambda x: (not x['fits'], x['name']))
+    return {'intended': sorted(intended), 'categories': out}
+
+
+# --------------------------------------------------------------------------- #
+# Cohort funnel
+# --------------------------------------------------------------------------- #
+STATUSES = ('READY', 'CONDITIONAL', 'AT_RISK', 'NOT_READY', 'NO_DATA')
+
+
+def cohort_readiness(students, session_id=None, calibration=None):
+    """Aggregate :func:`admission_readiness` across an iterable of students into a
+    funnel: status counts, plus how many are projected to get 5 credits incl.
+    core, to clear the JAMB baseline, and to clear *both* (admission-ready).
+
+    ``calibration`` (a :func:`jamb_calibration` result) is injected by the caller
+    so the bias is computed/cached once, keeping this function's query count
+    bounded regardless of cohort size."""
+    students = list(students)
+    ids = [s.id for s in students]
+    # Project the whole cohort with a fixed handful of bulk queries, then build
+    # each verdict from the pre-computed projections (no per-student queries).
+    waec_map = _batch_projected_waec(ids, session_id)
+    jamb_map = _batch_projected_jamb(ids, session_id, calibration)
+
+    counts = {k: 0 for k in STATUSES}
+    proj_core = proj_jamb = proj_both = assessed = 0
+    rows = []
+    for st in students:
+        r = admission_readiness(st, session_id,
+                                waec=waec_map.get(st.id), jamb=jamb_map.get(st.id))
+        counts[r['status']] += 1
+        meets_ssc = bool(r['waec'] and r['waec']['meets_ssc'])
+        jamb_ok = bool(r['jamb'] and r['jamb']['score'] >= JAMB_BASELINE)
+        if r['status'] != 'NO_DATA':
+            assessed += 1
+        proj_core += meets_ssc
+        proj_jamb += jamb_ok
+        proj_both += meets_ssc and jamb_ok
+        rows.append({'student': st, 'readiness': r})
+    total = len(rows)
+    pct = lambda n: round(n / total * 100, 1) if total else 0.0
+    return {
+        'total': total,
+        'assessed': assessed,
+        'counts': counts,
+        'projected_5_incl_core': proj_core,
+        'projected_5_incl_core_pct': pct(proj_core),
+        'projected_jamb_ok': proj_jamb,
+        'projected_jamb_ok_pct': pct(proj_jamb),
+        'projected_both': proj_both,
+        'projected_both_pct': pct(proj_both),
+        'rows': rows,
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Cohort JAMB outlook (projected mean ± uncertainty, confidence, distribution)
+# --------------------------------------------------------------------------- #
+# JAMB score bands used by the outlook distribution (below the common floor, the
+# 180-199 near-miss band, the admissible band, and the competitive band).
+JAMB_OUTLOOK_BANDS = [
+    ('below_180', 'Below 180', lambda s: s < 180),
+    ('180_199', '180–199', lambda s: 180 <= s < 200),
+    ('200_249', '200–249', lambda s: 200 <= s < 250),
+    ('250_plus', '250+', lambda s: s >= 250),
+]
+
+
+def cohort_jamb_outlook(students, session_id=None, calibration=None, mae=None):
+    """Aggregate the cohort's projected JAMB into an executive outlook.
+
+    Reuses the batched projection (:func:`_batch_projected_jamb`) — which prefers
+    an actual JAMB score, else the calibrated Mock JAMB prediction — and rolls it
+    up into:
+
+      * ``projected_mean`` with an uncertainty band (± the historically measured
+        mock→real MAE, when known), so the forecast is stated with its error;
+      * a ``confidence`` breakdown (high ≥80 / medium 40–79 / low <40) from each
+        prediction's confidence level, so leaders know how much to trust it;
+      * the predicted-score ``bands`` distribution.
+
+    ``calibration`` is the bias dict (from :func:`get_jamb_bias`) applied to the
+    projections; ``mae`` is the mean absolute error half-width for the band.
+    """
+    students = list(students)
+    jmap = _batch_projected_jamb([s.id for s in students], session_id, calibration)
+    projected = [d for d in jmap.values() if d.get('score') is not None]
+    n = len(projected)
+    empty_conf = {'high': 0, 'medium': 0, 'low': 0}
+    if not n:
+        return {'assessed': 0, 'projected_mean': None, 'band_low': None,
+                'band_high': None, 'mae': mae, 'confidence': empty_conf,
+                'confidence_pct': dict(empty_conf), 'mean_confidence': None,
+                'bands': [{'key': k, 'label': lbl, 'count': 0, 'pct': 0.0}
+                          for k, lbl, _ in JAMB_OUTLOOK_BANDS]}
+
+    scores = [d['score'] for d in projected]
+    mean = round(sum(scores) / n, 1)
+    confs = [d.get('confidence') or 0 for d in projected]
+
+    conf = dict(empty_conf)
+    for c in confs:
+        conf['high' if c >= 80 else 'medium' if c >= 40 else 'low'] += 1
+    pct = lambda x: round(x / n * 100, 1)
+
+    bands = [{'key': k, 'label': lbl, 'count': sum(1 for s in scores if test(s)),
+              'pct': pct(sum(1 for s in scores if test(s)))}
+             for k, lbl, test in JAMB_OUTLOOK_BANDS]
+
+    half = round(mae) if mae else None
+    return {
+        'assessed': n,
+        'projected_mean': mean,
+        'mae': mae,
+        'band_low': max(0, round(mean - half)) if half else None,
+        'band_high': min(400, round(mean + half)) if half else None,
+        'confidence': conf,
+        'confidence_pct': {k: pct(v) for k, v in conf.items()},
+        'mean_confidence': round(sum(confs) / n),
+        'bands': bands,
+    }
+
+
+# --------------------------------------------------------------------------- #
+# Batched projections (one set of bulk queries for a whole cohort)
+# --------------------------------------------------------------------------- #
+def _batch_projected_jamb(ids, session_id, calibration=None):
+    """{student_id -> projected_jamb dict} for the cohort, mirroring
+    :func:`projected_jamb`. Prefers actual JAMB; else the calibrated Mock JAMB
+    prediction. Two queries (actual + mocks) regardless of cohort size."""
+    from collections import defaultdict
+    from sqlalchemy.orm import contains_eager
+    from models import db, JAMBResult
+    from models.mock_jamb import MockJAMBAnalytics, MockJAMBResult, MockJAMBExam
+    out = {}
+    if not ids:
+        return out
+    actual = {}
+    for sid, score in (db.session.query(JAMBResult.student_id, JAMBResult.total_score)
+                       .filter(JAMBResult.student_id.in_(ids),
+                               JAMBResult.total_score.isnot(None)).all()):
+        actual[sid] = max(actual.get(sid, score), score)
+    for sid, score in actual.items():
+        out[sid] = {'source': 'actual', 'score': score, 'confidence': 100,
+                    'band': _jamb_band(score)}
+
+    remaining = [i for i in ids if i not in actual]
+    if remaining and session_id:
+        by_student = defaultdict(list)
+        rows = (MockJAMBResult.query.join(MockJAMBExam)
+                .options(contains_eager(MockJAMBResult.exam))
+                .filter(MockJAMBResult.student_id.in_(remaining),
+                        MockJAMBExam.session_id == session_id)
+                .order_by(MockJAMBResult.student_id, MockJAMBExam.exam_number).all())
+        for r in rows:
+            by_student[r.student_id].append(r)
+        for sid, srows in by_student.items():
+            pred = MockJAMBAnalytics._predict_from_progress(
+                MockJAMBAnalytics._progress_from_results(sid, srows))
+            if pred:
+                out[sid] = _mock_jamb_dict(pred, calibration)
+    return out
+
+
+def _batch_projected_waec(ids, session_id):
+    """{student_id -> projected_waec dict} for the cohort, mirroring
+    :func:`projected_waec`. Prefers actual WAEC; else the Mock WAEC projection."""
+    from collections import defaultdict
+    from sqlalchemy.orm import contains_eager
+    from models import db, WAECResult
+    from models.mock_waec import (MockWAECAnalytics, MockWAECResult, MockWAECExam,
+                                  PASS_GRADES as W_PASS)
+    out = {}
+    if not ids:
+        return out
+
+    # Actual WAEC — best year by credit count.
+    by_student_year = defaultdict(lambda: defaultdict(dict))    # sid -> year -> {subject: grade}
+    for sid, year, subj, grade in (db.session.query(
+            WAECResult.student_id, WAECResult.exam_year, WAECResult.subject, WAECResult.grade)
+            .filter(WAECResult.student_id.in_(ids)).all()):
+        by_student_year[sid][year][subj] = grade
+    for sid, years in by_student_year.items():
+        credited, _ = best_year_credits(years)
+        missing_core = [s for s in CORE_SUBJECTS if s not in credited]
+        out[sid] = {'source': 'actual', 'credits': len(credited),
+                    'credited_subjects': sorted(credited),
+                    'credited_grades': list(credited.values()),
+                    'missing_core': missing_core,
+                    'meets_ssc': len(credited) >= 5 and not missing_core, 'confidence': 100}
+
+    remaining = [i for i in ids if i not in out]
+    if remaining and session_id:
+        by_student = defaultdict(list)
+        rows = (MockWAECResult.query.join(MockWAECExam)
+                .options(contains_eager(MockWAECResult.exam))
+                .filter(MockWAECResult.student_id.in_(remaining),
+                        MockWAECExam.session_id == session_id)
+                .order_by(MockWAECResult.student_id, MockWAECExam.exam_number).all())
+        for r in rows:
+            by_student[r.student_id].append(r)
+        for sid, srows in by_student.items():
+            pred = MockWAECAnalytics._predict_from_progress(
+                MockWAECAnalytics._progress_from_rows(sid, srows))
+            if not pred:
+                continue
+            # Most recent grade per subject across the student's sittings.
+            seen, credited = set(), {}
+            for r in sorted(srows, key=lambda r: (r.exam.exam_number, r.id), reverse=True):
+                if r.subject in seen:
+                    continue
+                seen.add(r.subject)
+                if r.grade in W_PASS:
+                    credited[r.subject] = r.grade
+            out[sid] = {'source': 'mock', 'credits': pred['predicted_credits'],
+                        'credited_subjects': sorted(credited),
+                        'credited_grades': list(credited.values()),
+                        'missing_core': pred['missing_core'],
+                        'meets_ssc': pred['meets_minimum_incl_core'],
+                        'quality': pred['quality'], 'confidence': pred['confidence']}
+    return out
+
+
+# --------------------------------------------------------------------------- #
+# Mock -> real calibration
+# --------------------------------------------------------------------------- #
+def _student_ids(students):
+    if students is not None:
+        return [s.id for s in students]
+    from models import db, Student
+    return [sid for (sid,) in db.session.query(Student.id).all()]
+
+
+def _latest_mock_session(model_result, model_exam, ids):
+    """Map student_id -> session_id of their highest-numbered mock sitting, via one
+    bulk query (so we don't probe per student)."""
+    from models import db
+    best = {}
+    for sid, session_id, num in (db.session.query(
+            model_result.student_id, model_exam.session_id, model_exam.exam_number)
+            .join(model_exam, model_result.mock_exam_id == model_exam.id)
+            .filter(model_result.student_id.in_(ids)).all()):
+        if sid not in best or num > best[sid][0]:
+            best[sid] = (num, session_id)
+    return {sid: v[1] for sid, v in best.items()}
+
+
+def jamb_calibration(students=None):
+    """Measure how well the Mock JAMB predictor matched reality for students who
+    have both mocks and an actual JAMB score. Returns ``n``, ``mae`` (mean
+    absolute error), ``bias`` (mean predicted − actual; +ve = over-predicts) and
+    ``within_tol_pct``. A consistent bias is the signal to recalibrate.
+
+    Bulk-loads actual scores and each student's latest mock session up front, so
+    the (expensive) per-student prediction runs only for students who have both."""
+    from models import db, JAMBResult
+    from models.mock_jamb import MockJAMBAnalytics, MockJAMBResult, MockJAMBExam
+    ids = _student_ids(students)
+    if not ids:
+        return _error_summary([], 0, tol=20)
+    actual = {}
+    for sid, score in (db.session.query(JAMBResult.student_id, JAMBResult.total_score)
+                       .filter(JAMBResult.student_id.in_(ids),
+                               JAMBResult.total_score.isnot(None)).all()):
+        actual[sid] = max(actual.get(sid, score), score)
+    latest_session = _latest_mock_session(MockJAMBResult, MockJAMBExam, ids)
+    errors, n = [], 0
+    for sid in ids:
+        if sid not in actual or sid not in latest_session:
+            continue
+        pred = MockJAMBAnalytics.predict_real_jamb(sid, latest_session[sid])
+        if not pred:
+            continue
+        errors.append(pred['predicted_score'] - actual[sid])
+        n += 1
+    return _error_summary(errors, n, tol=20)
+
+
+def waec_calibration(students=None):
+    """As :func:`jamb_calibration` but for predicted vs actual WAEC *credit count*
+    (error tolerance ±1 credit). Same bulk-load-then-predict-valid-pairs shape."""
+    from models import db, WAECResult
+    from models.mock_waec import (MockWAECAnalytics, MockWAECResult, MockWAECExam,
+                                  PASS_GRADES as W_PASS)
+    from collections import defaultdict
+    ids = _student_ids(students)
+    if not ids:
+        return _error_summary([], 0, tol=1)
+    by_year = defaultdict(lambda: defaultdict(set))        # sid -> year -> credited subjects
+    for sid, year, subj, grade in (db.session.query(
+            WAECResult.student_id, WAECResult.exam_year, WAECResult.subject, WAECResult.grade)
+            .filter(WAECResult.student_id.in_(ids)).all()):
+        if grade in W_PASS:
+            by_year[sid][year].add(subj)
+    actual = {sid: max(len(s) for s in years.values()) for sid, years in by_year.items()}
+    latest_session = _latest_mock_session(MockWAECResult, MockWAECExam, ids)
+    errors, n = [], 0
+    for sid in ids:
+        if sid not in actual or sid not in latest_session:
+            continue
+        pred = MockWAECAnalytics.predict_waec(sid, latest_session[sid])
+        if not pred:
+            continue
+        errors.append(pred['predicted_credits'] - actual[sid])
+        n += 1
+    return _error_summary(errors, n, tol=1)
+
+
+def _error_summary(errors, n, tol):
+    if not n:
+        return {'n': 0}
+    mae = round(sum(abs(e) for e in errors) / n, 2)
+    bias = round(sum(errors) / n, 2)
+    within = round(sum(1 for e in errors if abs(e) <= tol) / n * 100, 1)
+    return {'n': n, 'mae': mae, 'bias': bias, 'tolerance': tol, 'within_tol_pct': within}
+
+
+def calibration_summary(students=None):
+    """Both calibration views for the predictions dashboard."""
+    return {'jamb': jamb_calibration(students), 'waec': waec_calibration(students)}
+
+
+JAMB_BIAS_CACHE_KEY = 'jamb_calibration_bias'
+
+
+def get_jamb_bias(ttl_seconds=43200, refresh=False):
+    """Historical mock→real JAMB bias ({'bias','n'}), cached in AnalyticsCache.
+
+    Computed from the whole student pool (graduates with both mocks and a real
+    score), so current-cohort predictions can be corrected by it without paying
+    the cost on every page load. Recomputed when the cache is cold/stale or
+    ``refresh`` is set. Best-effort — never raises into the caller."""
+    from models.analytics_models import AnalyticsCache
+    try:
+        if not refresh:
+            cached = AnalyticsCache.get(JAMB_BIAS_CACHE_KEY)
+            if cached is not None:
+                return cached
+        cal = jamb_calibration()
+        data = {'bias': cal.get('bias'), 'n': cal.get('n')}
+        AnalyticsCache.set(JAMB_BIAS_CACHE_KEY, data, ttl_seconds)
+        return data
+    except Exception:
+        return {'bias': None, 'n': 0}

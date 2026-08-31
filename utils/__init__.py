@@ -34,4 +34,4 @@ __all__ = [
     'import_students_from_excel', 'export_attendance_to_excel',
     'export_waec_results_to_excel'
 ]
-from utils.security import login_required, csrf_protect, sanitize_string
+from utils.security import login_required, csrf_protect, sanitize_string, strip_tags

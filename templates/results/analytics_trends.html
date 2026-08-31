@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Exam Trends — {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('results.analytics_hub') }}">Analytics</a> / <span>Trends</span>{% endblock %}
+
+{% macro bars(points, key, label, suffix='%', scale=1.0) %}
+<div class="card mb-3">
+    <div class="card-header"><h3>{{ label }}</h3></div>
+    <div class="card-body">
+        {% if points %}
+        <div style="display:flex;flex-direction:column;gap:.5rem;">
+        {% for p in points %}
+            {% set val = p[key] %}
+            {% set width = (val * scale) if (val * scale) <= 100 else 100 %}
+            <div style="display:flex;align-items:center;gap:.75rem;">
+                <div style="width:3.5rem;text-align:right;font-variant-numeric:tabular-nums;" class="text-muted text-sm">{{ p.year }}</div>
+                <div style="flex:1;background:var(--border-light);border-radius:6px;overflow:hidden;height:1.25rem;">
+                    <div style="width:{{ width }}%;height:100%;background:var(--primary,#2563eb);"></div>
+                </div>
+                <div style="width:4.5rem;font-variant-numeric:tabular-nums;"><strong>{{ val }}{{ suffix }}</strong></div>
+            </div>
+        {% endfor %}
+        </div>
+        {% else %}
+        <p class="text-muted">No data yet.</p>
+        {% endif %}
+    </div>
+</div>
+{% endmacro %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Exam Trends</h1>
+        <p class="text-muted text-sm">How external-exam performance has moved across years for the branch you're viewing.</p>
+    </div>
+    <a href="{{ url_for('results.analytics_hub') }}" class="btn btn-secondary" style="margin-left:auto;">Back to Analytics</a>
+</div>
+
+<h2 class="section-title">WAEC / WASSCE</h2>
+{% if waec.points %}
+    {{ bars(waec.points, 'with_5_incl_core_pct', 'Candidates with 5 credits incl. English & Maths', '%') }}
+    {{ bars(waec.points, 'credit_rate', 'Overall credit rate (C6 and above)', '%') }}
+    {{ bars(waec.points, 'f9_rate', 'F9 (fail) rate', '%') }}
+    <div class="card mb-4"><div class="card-body" style="overflow-x:auto;">
+        <table class="table" style="width:100%;">
+            <thead><tr><th>Year</th><th>Candidates</th><th>5 credits incl. core</th><th>Credit rate</th><th>F9 rate</th><th>Avg credits</th></tr></thead>
+            <tbody>
+            {% for p in waec.points %}
+                <tr><td>{{ p.year }}</td><td>{{ p.students }}</td>
+                    <td>{{ p.with_5_incl_core }} ({{ p.with_5_incl_core_pct }}%)</td>
+                    <td>{{ p.credit_rate }}%</td><td>{{ p.f9_rate }}%</td><td>{{ p.avg_credits }}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div></div>
+{% else %}
+    <div class="card mb-4"><div class="card-body text-muted">No WAEC results recorded yet.</div></div>
+{% endif %}
+
+<h2 class="section-title">JAMB / UTME</h2>
+{% if jamb.points %}
+    {{ bars(jamb.points, 'avg_score', 'Average UTME total score (out of 400)', '', 0.25) }}
+    {{ bars(jamb.points, 'above_200_pct', 'Candidates scoring 200 and above', '%') }}
+    <div class="card mb-4"><div class="card-body" style="overflow-x:auto;">
+        <table class="table" style="width:100%;">
+            <thead><tr><th>Year</th><th>Candidates</th><th>Average score</th><th>≥ 200</th><th>Best score</th></tr></thead>
+            <tbody>
+            {% for p in jamb.points %}
+                <tr><td>{{ p.year }}</td><td>{{ p.candidates }}</td><td>{{ p.avg_score }}</td>
+                    <td>{{ p.above_200 }} ({{ p.above_200_pct }}%)</td><td>{{ p.max_score }}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div></div>
+{% else %}
+    <div class="card mb-4"><div class="card-body text-muted">No JAMB results recorded yet.</div></div>
+{% endif %}
+{% endblock %}

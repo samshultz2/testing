@@ -29,6 +29,7 @@
                     <td>{{ room.capacity or '-' }}</td>
                     <td>
                         <form method="POST" action="{{ url_for('generator.delete_room', room_id=room.id) }}" style="display:inline;">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button>
                         </form>
                     </td>

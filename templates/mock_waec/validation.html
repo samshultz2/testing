@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Mock Validation — {{ exam.display_name }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('mock_waec.index') }}">Mock WAEC</a> / <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}">{{ exam.display_name }}</a> / <span>Validation</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.mv-kpis { display:flex; gap:.75rem; flex-wrap:wrap; margin-bottom:1rem; }
+.mv-kpis .kpi { flex:1 1 130px; }
+.mv-rec { border-left:4px solid var(--primary); background:var(--bg-secondary); border-radius:6px; padding:.6rem .8rem; margin-bottom:.5rem; }
+.mv-rec.negative { border-color:#b43a2e; } .mv-rec.watch { border-color:#c9a227; } .mv-rec.positive { border-color:var(--success); }
+.mv-rec h4 { margin:0 0 .2rem; font-size:.95rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Mock → Actual Validation</h1>
+        <p class="text-muted text-sm">{{ exam.display_name }} vs actual WAEC grades</p>
+    </div>
+    <div class="page-header-actions">
+        {% if v and not v.meta.insufficient %}
+        <a href="{{ url_for('mock_waec.validation_export', exam_id=exam.id, format='pdf', year=selected_year) }}" class="btn btn-success btn-sm"><i class="fas fa-file-pdf"></i> PDF</a>
+        <a href="{{ url_for('mock_waec.validation_export', exam_id=exam.id, format='excel', year=selected_year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-file-excel"></i> Excel</a>
+        {% endif %}
+        <a href="{{ url_for('mock_waec.analytics', exam_id=exam.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-chart-column"></i> Analytics</a>
+    </div>
+</div>
+
+{% if years %}
+<form method="get" class="filter-bar mb-3">
+    <div class="form-group mb-0">
+        <label class="form-label">Actual WAEC year</label>
+        <select name="year" class="form-control" onchange="this.form.submit()">
+            <option value="">Latest available</option>
+            {% for y in years %}<option value="{{ y }}" {% if selected_year == y %}selected{% endif %}>{{ y }}</option>{% endfor %}
+        </select>
+    </div>
+</form>
+{% endif %}
+
+{% if not v or v.meta.insufficient %}
+<div class="card"><div class="card-body"><div class="empty-state">
+    <i class="fas fa-bullseye"></i><h3>Not enough matched grades</h3>
+    <p>{{ v.meta.reason if v and v.meta.reason else 'Validation needs students with both a Mock WAEC grade and an actual WAEC grade in the same subject. Record actual WAEC results to unlock it.' }}</p>
+</div></div></div>
+{% else %}
+{% set s = v.summary %}
+<div class="mv-kpis">
+    <div class="kpi"><div class="kpi-value">{{ s.exact_pct }}%</div><div class="kpi-label">Exact grade match</div></div>
+    <div class="kpi"><div class="kpi-value">{{ s.within1_pct }}%</div><div class="kpi-label">Within one grade</div></div>
+    <div class="kpi"><div class="kpi-value">{{ s.correlation if s.correlation is not none else '—' }}</div><div class="kpi-label">Grade correlation</div></div>
+    <div class="kpi"><div class="kpi-value">{{ s.grade_bias }}</div><div class="kpi-label">Grade bias</div></div>
+    <div class="kpi"><div class="kpi-value">{{ s.credit_accuracy if s.credit_accuracy is not none else '—' }}%</div><div class="kpi-label">Credit call accuracy</div></div>
+    <div class="kpi"><div class="kpi-value">{{ s.matched }}</div><div class="kpi-label">Matched grades</div></div>
+</div>
+<p class="text-muted text-sm mb-3">Calibration: <strong>{{ s.bias_direction }}</strong>
+    {% if s.grade_bias > 0.3 %}(mock over-grades — actual came out worse){% elif s.grade_bias < -0.3 %}(mock under-grades — actual came out better){% else %}(mock grades mirror WAEC){% endif %}</p>
+
+{% if v.recommendations %}
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-lightbulb"></i> Findings &amp; recommendations</h3></div>
+    <div class="card-body">
+        {% for r in v.recommendations %}
+        <div class="mv-rec {{ r.tone }}"><h4>{{ r.title }}</h4><div class="text-sm text-secondary">{{ r.text }}</div></div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<div class="card">
+    <div class="card-header"><h3>Per-subject grade agreement</h3><span class="text-muted text-sm">weakest first</span></div>
+    <div class="card-body" style="padding:0; overflow-x:auto;">
+        <table class="data-table">
+            <thead><tr><th>Subject</th><th class="text-right">Matched</th><th class="text-right">Exact</th>
+                <th class="text-right">Within 1</th><th class="text-right">Correlation</th>
+                <th class="text-right">Grade bias</th><th class="text-right">Credit acc.</th></tr></thead>
+            <tbody>
+                {% for x in v.subjects %}
+                <tr>
+                    <td><strong>{{ x.subject }}</strong></td>
+                    <td class="text-right">{{ x.matched }}</td>
+                    <td class="text-right" style="font-weight:600; color:{{ 'var(--success)' if x.exact_pct and x.exact_pct >= 60 else ('#e74a3b' if x.exact_pct is not none and x.exact_pct < 40 else 'var(--text-primary)') }};">{{ x.exact_pct }}%</td>
+                    <td class="text-right">{{ x.within1_pct }}%</td>
+                    <td class="text-right">{{ x.correlation if x.correlation is not none else '—' }}</td>
+                    <td class="text-right">{{ x.grade_bias }}</td>
+                    <td class="text-right">{{ x.credit_accuracy if x.credit_accuracy is not none else '—' }}%</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

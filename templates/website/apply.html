@@ -1,0 +1,109 @@
+{% extends "website/apply_base.html" %}
+{% block apply_content %}
+<div class="wb-eyebrow">Admissions</div>
+<h1 class="wb-h2">Apply to {{ branding.name }}</h1>
+{% if cfg.intro %}<p class="wb-lead">{{ cfg.intro }}</p>{% endif %}
+
+{% if not cfg.open %}
+  <div class="wb-alert err" style="margin-top:1.5rem">
+    Admissions are currently closed. Please check back later or contact the school.
+  </div>
+{% else %}
+  {% if errors._ %}<div class="wb-alert err">{{ errors._ }}</div>{% endif %}
+  {% if fee and fee > 0 %}
+    <div class="wb-note" style="margin:1.2rem 0">
+      {% if pay_configured %}
+        A non-refundable application fee of <span class="wb-fee">₦{{ '{:,.2f}'.format(fee) }}</span>
+        is payable online. You'll be taken to a secure payment page after you submit.
+      {% else %}
+        An application fee of <span class="wb-fee">₦{{ '{:,.2f}'.format(fee) }}</span> applies —
+        the school will advise how to pay once your application is received.
+      {% endif %}
+    </div>
+  {% endif %}
+
+  <form method="POST" action="{{ url_for('website.apply') }}" class="wb-form" style="margin-top:1.2rem" novalidate>
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    {# honeypot — real people never see or fill this #}
+    <div class="wb-hp" aria-hidden="true"><label>Leave this empty<input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>
+
+    <h3 style="margin-top:.5rem">Student</h3>
+    <div class="wb-fgrid two">
+      <div class="wb-field {{ 'has-err' if errors.first_name }}">
+        <label>First name <span class="req">*</span></label>
+        <input name="first_name" value="{{ form.first_name or '' }}" required>
+        {% if errors.first_name %}<div class="err">{{ errors.first_name }}</div>{% endif %}
+      </div>
+      <div class="wb-field {{ 'has-err' if errors.surname }}">
+        <label>Surname <span class="req">*</span></label>
+        <input name="surname" value="{{ form.surname or '' }}" required>
+        {% if errors.surname %}<div class="err">{{ errors.surname }}</div>{% endif %}
+      </div>
+    </div>
+    <div class="wb-fgrid two">
+      <div class="wb-field">
+        <label>Middle name</label>
+        <input name="middle_name" value="{{ form.middle_name or '' }}">
+      </div>
+      <div class="wb-field">
+        <label>Gender</label>
+        <select name="gender">
+          <option value="">—</option>
+          <option value="Male" {{ 'selected' if form.gender == 'Male' }}>Male</option>
+          <option value="Female" {{ 'selected' if form.gender == 'Female' }}>Female</option>
+        </select>
+      </div>
+    </div>
+    <div class="wb-fgrid two">
+      <div class="wb-field {{ 'has-err' if errors.date_of_birth }}">
+        <label>Date of birth</label>
+        <input type="date" name="date_of_birth" value="{{ form.date_of_birth or '' }}">
+        {% if errors.date_of_birth %}<div class="err">{{ errors.date_of_birth }}</div>{% endif %}
+      </div>
+      <div class="wb-field">
+        <label>Class applying for</label>
+        <select name="intended_class_id">
+          <option value="">— No preference —</option>
+          {% for cid, cname in classes %}
+          <option value="{{ cid }}" {{ 'selected' if form.intended_class_id and form.intended_class_id|string == cid|string }}>{{ cname }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="wb-field">
+      <label>Previous school</label>
+      <input name="previous_school" value="{{ form.previous_school or '' }}">
+    </div>
+
+    <h3 style="margin-top:1rem">Parent / Guardian</h3>
+    <div class="wb-field {{ 'has-err' if errors.parent_name }}">
+      <label>Full name <span class="req">*</span></label>
+      <input name="parent_name" value="{{ form.parent_name or '' }}" required>
+      {% if errors.parent_name %}<div class="err">{{ errors.parent_name }}</div>{% endif %}
+    </div>
+    <div class="wb-fgrid two">
+      <div class="wb-field {{ 'has-err' if errors.parent_phone }}">
+        <label>Phone</label>
+        <input name="parent_phone" value="{{ form.parent_phone or '' }}">
+        {% if errors.parent_phone %}<div class="err">{{ errors.parent_phone }}</div>{% endif %}
+      </div>
+      <div class="wb-field {{ 'has-err' if errors.parent_email }}">
+        <label>Email</label>
+        <input type="email" name="parent_email" value="{{ form.parent_email or '' }}">
+        {% if errors.parent_email %}<div class="err">{{ errors.parent_email }}</div>{% endif %}
+      </div>
+    </div>
+    <div class="wb-field">
+      <label>Home address</label>
+      <textarea name="address" rows="2">{{ form.address or '' }}</textarea>
+    </div>
+
+    <div style="margin-top:.5rem">
+      <button type="submit" class="wb-btn wb-btn-primary">
+        {% if fee and fee > 0 and pay_configured %}Continue to payment{% else %}Submit application{% endif %}
+      </button>
+      <a href="{{ url_for('website.apply_track') }}" class="wb-btn wb-btn-outline" style="margin-left:.5rem">Track an application</a>
+    </div>
+  </form>
+{% endif %}
+{% endblock %}

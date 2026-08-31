@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Fill from JAMB bank - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('cbt.exam_detail', exam_id=e.id) }}">{{ e.title|truncate(24) }}</a> / <span>Fill from bank</span>{% endblock %}
+{% block extra_css %}<style>
+.tp{display:flex;align-items:center;gap:.5rem;padding:.5rem .7rem;border:1px solid var(--border-color);border-radius:var(--radius-md);margin-bottom:.4rem;cursor:pointer}
+.tp:hover{background:var(--gray-50)}
+.tp .n{flex:1}.tp .c{font-size:.8rem;color:var(--text-secondary);white-space:nowrap}
+</style>{% endblock %}
+{% block content %}
+<div class="page-header"><h1>Fill this test from the question bank</h1></div>
+
+<div class="card mb-3"><div class="card-body">
+    <p class="text-muted text-sm" style="margin:0;">Draws a random set of questions for <strong>{{ e.subject.name if e.subject else 'this subject' }}</strong> from the central Mock&nbsp;JAMB question bank (all your imported/scraped past questions) and copies them into this CBT test. Pick the topics you want, choose how many, and go — duplicates already in the test are skipped.</p>
+</div></div>
+
+{% if total %}
+<form method="POST" action="{{ url_for('cbt.fill_from_jamb_bank', exam_id=e.id) }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <div class="card">
+        <div class="card-header"><h3>Topics <span class="text-muted text-sm">— {{ total }} bank question(s) for this subject</span></h3>
+            <label class="text-sm"><input type="checkbox" id="selAll" checked> All topics</label></div>
+        <div class="card-body">
+            {% for t in topics %}
+            <label class="tp">
+                <input type="checkbox" class="tbox" name="topics" value="{{ t.value }}" checked>
+                <span class="n">{{ t.topic }}</span>
+                <span class="c">{{ t.count }} question(s)</span>
+            </label>
+            {% endfor %}
+        </div>
+    </div>
+    <div class="card mt-3"><div class="card-body">
+        <div class="form-row">
+            <div class="form-group"><label class="form-label">How many questions</label>
+                <input type="number" name="count" class="form-control" value="20" min="1" max="200" style="max-width:140px;"></div>
+            <div class="form-group"><label class="form-label">Marks each</label>
+                <input type="number" name="marks" class="form-control" value="1" step="0.5" min="0.5" style="max-width:120px;"></div>
+        </div>
+        <p class="text-muted text-sm">A random sample is drawn across the ticked topics. Run it again any time to top up — questions already in the test are never added twice.</p>
+    </div></div>
+    <div class="page-header-actions mt-3">
+        <button type="submit" class="btn btn-primary"><i class="fas fa-wand-magic-sparkles"></i> Fill test from bank</button>
+        <a href="{{ url_for('cbt.exam_detail', exam_id=e.id) }}" class="btn btn-secondary">Cancel</a>
+    </div>
+</form>
+<script nonce="{{ csp_nonce }}">document.getElementById('selAll')&&document.getElementById('selAll').addEventListener('change',function(){document.querySelectorAll('.tbox').forEach(b=>b.checked=this.checked);});</script>
+{% else %}
+<div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-layer-group"></i>
+    <h3>No bank questions for this subject yet</h3>
+    <p>Import past questions for {{ e.subject.name if e.subject else 'this subject' }} into the Mock&nbsp;JAMB question bank first (paste import or the scraper), then come back here.</p>
+</div></div></div>
+{% endif %}
+{% endblock %}

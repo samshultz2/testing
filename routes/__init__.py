@@ -12,10 +12,13 @@ from .subjects import subjects_bp
 from .timetable import timetable_bp
 from .promotion import promotion_bp
 from .users import users_bp
+from .staff_onboarding import staff_onb_bp
+from .setup import setup_bp
+from .graduate_verify import graduate_verify_bp
 
 __all__ = [
-    'auth_bp', 'main_bp', 'academics_bp', 
+    'auth_bp', 'main_bp', 'academics_bp',
     'attendance_bp', 'results_bp', 'reports_bp',
     'settings_bp', 'subjects_bp', 'timetable_bp', 'promotion_bp',
-    'users_bp'
+    'users_bp', 'staff_onb_bp', 'setup_bp', 'graduate_verify_bp'
 ]

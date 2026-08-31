@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Edit bank question - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('mock_jamb.index') }}">Mock JAMB</a> / <a href="{{ back_url }}">Question Bank</a> / <span>Edit</span>{% endblock %}
+{% block extra_css %}<style>.opt-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem}@media(max-width:560px){.opt-grid{grid-template-columns:1fr}}</style>{% endblock %}
+{% block content %}
+<div class="page-header"><h1>Edit bank question <span class="text-muted text-sm">— {{ subject.name }}</span></h1>
+    <div class="page-header-actions"><a href="{{ back_url }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a></div>
+</div>
+<div class="card"><div class="card-body">
+<form method="post" action="{{ url_for('mock_jamb.bank_edit_question', question_id=q.id) }}" enctype="multipart/form-data">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    {% if q.passage %}<p class="text-muted text-sm"><i class="fas fa-align-left"></i> Attached to passage: <strong>{{ q.passage.title or q.passage.kind_label }}</strong> (section inherited)</p>{% endif %}
+    <div class="form-group"><label class="form-label">Question <span class="required">*</span></label>
+        <textarea name="question_text" class="form-control" rows="3" required>{{ q.question_text }}</textarea></div>
+    <div class="opt-grid">
+        <input type="text" name="option_a" class="form-control" placeholder="Option A" value="{{ q.option_a or '' }}">
+        <input type="text" name="option_b" class="form-control" placeholder="Option B" value="{{ q.option_b or '' }}">
+        <input type="text" name="option_c" class="form-control" placeholder="Option C" value="{{ q.option_c or '' }}">
+        <input type="text" name="option_d" class="form-control" placeholder="Option D" value="{{ q.option_d or '' }}">
+    </div>
+    <div class="form-row" style="margin-top:.5rem;">
+        <div class="form-group"><label class="form-label">Correct <span class="required">*</span></label>
+            <select name="correct_option" class="form-control" required>
+                {% for o in ['A','B','C','D'] %}<option {{ 'selected' if q.correct_option == o else '' }}>{{ o }}</option>{% endfor %}
+            </select></div>
+        {% if not q.passage_id %}
+        <div class="form-group"><label class="form-label">Section <span class="required">*</span></label>
+            <select name="section" class="form-control" required><option value="">— Section —</option>
+                {% for s in sections %}<option value="{{ s.section }}" {{ 'selected' if q.section == s.section else '' }}>{{ s.label }}</option>{% endfor %}
+            </select></div>
+        {% endif %}
+        <div class="form-group"><label class="form-label">Exam</label>
+            <select name="exam_body" class="form-control">{% for e in ['JAMB','WAEC','Both'] %}<option {{ 'selected' if q.exam_body == e else '' }}>{{ e }}</option>{% endfor %}</select></div>
+        <div class="form-group"><label class="form-label">Difficulty</label>
+            <select name="difficulty" class="form-control"><option value="">—</option>
+                {% for d in ['easy','medium','hard'] %}<option value="{{ d }}" {{ 'selected' if q.difficulty == d else '' }}>{{ d|title }}</option>{% endfor %}</select></div>
+        <div class="form-group"><label class="form-label">Year</label><input type="text" name="exam_year" value="{{ q.exam_year or '' }}" placeholder="e.g. 2019" maxlength="8" class="form-control"></div>
+        <div class="form-group"><label class="form-label">Marks</label><input type="number" name="marks" step="0.5" value="{{ q.marks }}" class="form-control"></div>
+        <div class="form-group"><label class="form-label">Topic</label>
+            <select name="topic" id="etopic" class="form-control"><option value="">— Topic —</option>
+                {% for t in topic_tree %}<option value="{{ t.title }}" {{ 'selected' if q.topic == t.title else '' }}>{{ t.title }}</option>{% endfor %}
+                {% if q.topic and q.topic not in topic_tree|map(attribute='title')|list %}<option value="{{ q.topic }}" selected>{{ q.topic }} (custom)</option>{% endif %}
+            </select></div>
+        <div class="form-group"><label class="form-label">Sub-topic</label>
+            <select name="subtopic" id="esubtopic" class="form-control"><option value="">— None —</option>
+                {% if q.subtopic %}<option value="{{ q.subtopic }}" selected>{{ q.subtopic }}</option>{% endif %}
+            </select></div>
+    </div>
+    {% if q.image_url %}<div class="form-group"><label class="form-label">Current figure</label><br><img src="{{ q.image_url }}" alt="figure" style="max-height:140px;border-radius:var(--radius-sm);"></div>{% endif %}
+    <div class="form-group"><label class="form-label">Replace figure (optional)</label><input type="file" name="image" accept="image/*" class="form-control"></div>
+    <button class="btn btn-primary"><i class="fas fa-save"></i> Save changes</button>
+    <a href="{{ back_url }}" class="btn btn-secondary">Cancel</a>
+</form>
+</div></div>
+<script type="application/json" id="etopics">{{ topic_tree|tojson }}</script>
+<script nonce="{{ csp_nonce }}">
+(function(){
+    var tree = JSON.parse(document.getElementById('etopics').textContent);
+    var byTitle = {}; tree.forEach(function(t){ byTitle[t.title] = t.subtopics || []; });
+    var topic = document.getElementById('etopic'), sub = document.getElementById('esubtopic');
+    var current = {{ (q.subtopic or '')|tojson }};
+    function fill(){
+        var subs = byTitle[topic.value] || [];
+        sub.innerHTML = '<option value="">— None —</option>' + subs.map(function(s){
+            var sel = s.title === current ? ' selected' : '';
+            return '<option value="'+s.title.replace(/"/g,'&quot;')+'"'+sel+'>'+s.title+'</option>'; }).join('');
+        sub.disabled = subs.length === 0 && !current;
+    }
+    if(topic.value) fill();
+    topic.addEventListener('change', function(){ current=''; fill(); });
+})();
+</script>
+{% endblock %}

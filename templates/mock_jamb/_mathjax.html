@@ -1,0 +1,7 @@
+{# MathJax + question-table rendering for Mock JAMB question text, options and
+   passages. All logic lives in an external 'self' script so it survives the
+   admin's soft-navigation SPA (an inline <script nonce> re-added after a
+   .page-content swap loses its nonce and is CSP-blocked). The script is
+   idempotent, loads the library once, and re-typesets on every `spa:loaded`.
+   See static/js/mathjax-setup.js. #}
+<script src="{{ url_for('static', filename='js/mathjax-setup.js') }}"></script>

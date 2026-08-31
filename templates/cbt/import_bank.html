@@ -8,7 +8,7 @@
 <div class="card mb-3"><div class="card-body">
     <form method="GET" class="filter-form">
         <div class="form-group"><label class="form-label">Subject</label>
-            <select name="subject_id" class="form-control" onchange="this.form.submit()"><option value="">All</option>{% for s in subjects %}<option value="{{ s.id }}" {% if subject_id==s.id %}selected{% endif %}>{{ s.name }}</option>{% endfor %}</select></div>
+            <select name="subject_id" class="form-control" data-autosubmit><option value="">All</option>{% for s in subjects %}<option value="{{ s.id }}" {% if subject_id==s.id %}selected{% endif %}>{{ s.name }}</option>{% endfor %}</select></div>
         <div class="form-group"><label class="form-label">Topic</label><input type="text" name="topic" class="form-control" value="{{ topic }}"></div>
         <div class="form-group" style="align-self:flex-end;"><button class="btn btn-secondary"><i class="fas fa-search"></i></button></div>
     </form>
@@ -37,5 +37,5 @@
     </div>
     {% if questions %}<div class="page-header-actions mt-3"><button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Add selected to exam</button><a href="{{ url_for('cbt.exam_detail', exam_id=e.id) }}" class="btn btn-secondary">Cancel</a></div>{% endif %}
 </form>
-<script>document.getElementById('selAll')&&document.getElementById('selAll').addEventListener('change',function(){document.querySelectorAll('.qbox').forEach(b=>b.checked=this.checked);});</script>
+<script nonce="{{ csp_nonce }}">document.getElementById('selAll')&&document.getElementById('selAll').addEventListener('change',function(){document.querySelectorAll('.qbox').forEach(b=>b.checked=this.checked);});</script>
 {% endblock %}

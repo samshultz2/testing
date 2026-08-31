@@ -1,0 +1,48 @@
+{% extends "platform/_layout.html" %}
+{% block title %}Audit log{% endblock %}
+{% block heading %}Audit log{% endblock %}
+{% block subheading %}Every platform-admin action against the control plane.{% endblock %}
+
+{% block content %}
+  {% if chain %}
+  <div style="display:inline-flex;align-items:center;gap:9px;margin-bottom:14px;padding:8px 14px;border-radius:10px;font-size:13px;font-weight:600;
+    {% if chain.ok %}background:var(--ok-soft);color:var(--ok){% else %}background:var(--bad-soft);color:var(--bad){% endif %}">
+    <i class="fas {{ 'fa-shield-halved' if chain.ok else 'fa-triangle-exclamation' }}"></i>
+    {% if chain.ok %}Tamper-evident chain verified · {{ chain.checked }} entries sealed{% else %}Integrity check FAILED — chain broken at entry #{{ chain.broken_at }}{% endif %}
+  </div>
+  {% endif %}
+  <form method="get" class="toolbar" style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+    <label class="search" style="flex:1;min-width:200px;display:flex;align-items:center;gap:9px;background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:9px 13px;box-shadow:var(--shadow)">
+      <i class="fas fa-magnifying-glass" style="color:var(--faint)"></i>
+      <input name="q" value="{{ f.q }}" placeholder="Search school, actor or detail…" autocomplete="off"
+             style="border:0;background:transparent;color:var(--ink);font-size:14px;width:100%;outline:none;font-family:inherit"></label>
+    <select name="action" class="field">
+      <option value="">All actions</option>
+      {% for a in actions %}<option value="{{ a }}" {{ 'selected' if f.action == a }}>{{ a }}</option>{% endfor %}
+    </select>
+    <input name="subdomain" class="field" value="{{ f.subdomain }}" placeholder="subdomain" style="width:140px">
+    <button class="btn sm"><i class="fas fa-filter"></i> Filter</button>
+    {% if f.q or f.action or f.subdomain %}<a class="btn sm" href="{{ url_for('platform.audit') }}">Clear</a>{% endif %}
+  </form>
+
+  <div class="panel">
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>When (UTC)</th><th>Action</th><th>School</th><th>Detail</th><th>Admin</th></tr></thead>
+        <tbody>
+          {% for r in rows %}
+          <tr>
+            <td class="muted" style="white-space:nowrap">{{ r.at.strftime('%d %b %Y %H:%M') if r.at else '—' }}</td>
+            <td><span class="pill p-active" style="text-transform:none">{{ r.action }}</span></td>
+            <td>{% if r.subdomain %}<a href="{{ url_for('platform.tenant_profile', subdomain=r.subdomain) }}">{{ r.subdomain }}</a>{% else %}<span class="muted">—</span>{% endif %}</td>
+            <td class="muted">{{ r.detail or '' }}</td>
+            <td class="muted">{{ r.actor or '—' }}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="5"><div class="empty"><i class="fas fa-clock-rotate-left"></i> No audit entries{{ ' match your filter' if (f.q or f.action or f.subdomain) }} yet.</div></td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+{% endblock %}

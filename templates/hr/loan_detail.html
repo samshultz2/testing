@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Loan · {{ loan.staff.full_name if loan.staff else '' }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('hr.loans_list') }}">Staff Loans</a> / <span>{{ loan.staff.full_name if loan.staff else 'Loan' }}</span>{% endblock %}
+{% block content %}
+{% set badge = {'pending':'badge-warning','active':'badge-info','paid':'badge-success','rejected':'badge-danger','cancelled':'badge-secondary'} %}
+<div class="page-header">
+  <div><h1><i class="fas fa-hand-holding-dollar"></i> {{ loan.staff.full_name if loan.staff else 'Loan' }}
+    <span class="badge {{ badge.get(loan.status,'badge-secondary') }}">{{ loan.status|title }}</span></h1>
+    <p class="text-muted text-sm">{{ loan.branch.name if loan.branch else 'All branches' }} · taken {{ loan.date_taken.strftime('%d %b %Y') if loan.date_taken }} · due by {{ loan.deadline.strftime('%d %b %Y') if loan.deadline }}</p></div>
+  <div class="page-header-actions"><a href="{{ url_for('hr.loans_list') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a></div>
+</div>
+
+<div class="row">
+  <div class="col-md-7"><div class="card mb-3"><div class="card-header"><h3>Terms</h3></div><div class="card-body">
+    <table class="table table-sm">
+      <tr><td>Principal</td><td class="text-right">{{ '{:,.2f}'.format(loan.principal) }}</td></tr>
+      <tr><td>Interest ({{ loan.interest_rate }}% {{ loan.interest_method }})</td><td class="text-right">{{ '{:,.2f}'.format(loan.total_interest) }}</td></tr>
+      <tr><td><strong>Total repayable</strong></td><td class="text-right"><strong>{{ '{:,.2f}'.format(loan.total_repayable) }}</strong></td></tr>
+      <tr><td>Monthly deduction</td><td class="text-right">{{ '{:,.2f}'.format(loan.monthly_amount) }} × {{ loan.months }} month(s)</td></tr>
+      <tr><td>Repaid so far</td><td class="text-right">{{ '{:,.2f}'.format(loan.amount_repaid or 0) }}</td></tr>
+      <tr><td><strong>Outstanding</strong></td><td class="text-right"><strong>{{ '{:,.2f}'.format(loan.outstanding) }}</strong></td></tr>
+    </table>
+    {% if loan.purpose %}<p class="text-muted text-sm">Purpose: {{ loan.purpose }}</p>{% endif %}
+    {% if loan.status in ('pending','active') and not loan.amount_repaid %}
+    <form method="POST" action="{{ url_for('hr.loan_cancel', loan_id=loan.id) }}" data-confirm="Cancel this loan?" style="margin-top:.5rem">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <button class="btn btn-sm btn-danger"><i class="fas fa-ban"></i> Cancel loan</button>
+    </form>{% endif %}
+  </div></div>
+
+  {% if loan.status == 'active' %}
+  <div class="card mb-3"><div class="card-header"><h3>Record a repayment</h3></div><div class="card-body">
+    <p class="text-muted text-sm">Salary deductions are booked automatically when payroll is finalized. Use this only for
+      an extra/manual repayment.</p>
+    <form method="POST" action="{{ url_for('hr.loan_repay', loan_id=loan.id) }}" class="d-flex gap-2" style="align-items:flex-end;flex-wrap:wrap">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <div class="form-group"><label class="form-label">Amount</label>
+        <input type="number" step="0.01" min="0.01" name="amount" class="form-control" style="max-width:160px" required></div>
+      <div class="form-group"><label class="form-label">Note</label><input type="text" name="note" class="form-control"></div>
+      <div class="form-group"><button class="btn btn-primary">Record</button></div>
+    </form>
+  </div></div>
+  {% endif %}
+  </div>
+
+  <div class="col-md-5">
+    <div class="card mb-3"><div class="card-header"><h3>Guarantors</h3></div><div class="card-body">
+      {% for g in loan.guarantors %}
+      <div class="d-flex" style="justify-content:space-between;align-items:center;padding:.5rem 0;border-bottom:1px solid var(--border-color)">
+        <div>{{ g.staff.full_name if g.staff else '—' }}
+          <div class="text-muted text-sm">
+            {% if g.status == 'approved' %}<i class="fas fa-check-circle" style="color:var(--success)"></i> Approved{% if g.acted_by %} by {{ g.acted_by }}{% endif %}
+            {% elif g.status == 'declined' %}<i class="fas fa-times-circle" style="color:var(--danger)"></i> Declined
+            {% else %}Awaiting approval{% endif %}</div></div>
+        {% if loan.status == 'pending' and g.status == 'pending' %}
+        <div class="d-flex gap-2">
+          <form method="POST" action="{{ url_for('hr.loan_guarantor_act', loan_id=loan.id, staff_id=g.staff_id) }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="approve">
+            <button class="btn btn-sm btn-success" title="Approve"><i class="fas fa-check"></i></button></form>
+          <form method="POST" action="{{ url_for('hr.loan_guarantor_act', loan_id=loan.id, staff_id=g.staff_id) }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="decline">
+            <button class="btn btn-sm btn-danger" title="Decline"><i class="fas fa-times"></i></button></form>
+        </div>{% endif %}
+      </div>
+      {% endfor %}
+      {% if not loan.guarantors %}<p class="text-muted text-sm" style="margin:0"><i class="fas fa-circle-info"></i> No guarantors — this is an existing loan carried over from before go-live.</p>{% endif %}
+      {% if loan.status == 'pending' %}<p class="text-muted text-sm" style="margin-top:.6rem">Loan disburses once all guarantors approve.</p>{% endif %}
+    </div></div>
+
+    <div class="card"><div class="card-header"><h3>Repayment history</h3></div><div class="card-body">
+      {% if loan.repayments %}
+      <table class="table table-sm"><tbody>
+        {% for r in loan.repayments|sort(attribute='date') %}
+        <tr><td>{{ r.date.strftime('%d %b %Y') if r.date }}<div class="text-muted text-sm">{{ r.source }}{% if r.note %} · {{ r.note }}{% endif %}</div></td>
+          <td class="text-right">{{ '{:,.2f}'.format(r.amount) }}</td></tr>
+        {% endfor %}
+      </tbody></table>
+      {% else %}<p class="text-muted text-sm">No repayments yet.</p>{% endif %}
+    </div></div>
+  </div>
+</div>
+{% endblock %}

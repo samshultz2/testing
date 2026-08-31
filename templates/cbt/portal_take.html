@@ -7,7 +7,7 @@
 <title>{{ exam.title }} — Exam</title>
 <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/favicon.svg') }}">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
 <style>
 :root{--ex:#4f46e5;--ex-dark:#3730a3;--ok:#16a34a;--bg:#0f172a;--panel:#fff;--ink:#1e293b;--muted:#64748b;--line:#e2e8f0}
 *{box-sizing:border-box}
@@ -101,11 +101,46 @@ body{margin:0;font-family:'Inter',system-ui,sans-serif;background:#eef2f7;color:
     <i class="fas fa-user-shield"></i> Supervisor pause active — <span id="pauseLeft"></span>s remaining. <button id="resumeBtn" style="background:#fff;color:#0b3a2b;border:none;border-radius:6px;padding:.2rem .7rem;font-weight:700;cursor:pointer;margin-left:.5rem;">Resume exam</button>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 (function(){
     var remaining={{ remaining }}, el=document.getElementById('timer'), box=document.getElementById('timerBox');
     var form=document.getElementById('examForm'), submitted=false;
-    function doSubmit(){ if(submitted)return; submitted=true; form.submit(); }
+    function lockInputs(){ document.querySelectorAll('.opt input').forEach(function(i){ i.disabled=true; }); }
+    // Offline-safe submit: a plain form.submit() with no network would land on a
+    // browser error page and strand the attempt. Instead we keep the exam page
+    // alive, show a banner, and auto-submit the moment the connection returns
+    // (syncing any device-only answers first). The server holds a grace window
+    // before force-grading, so nothing is lost.
+    function showWaitBanner(){
+        if(document.getElementById('netWait'))return;
+        var b=document.createElement('div');
+        b.id='netWait';
+        b.style.cssText='position:fixed;top:0;left:0;right:0;z-index:10000;background:#b45309;color:#fff;'
+            +'padding:.7rem 1rem;text-align:center;font-weight:600;box-shadow:0 2px 8px rgba(0,0,0,.3);';
+        b.textContent='No connection — your answers are saved on this device. '
+            +'The exam will submit automatically as soon as the network returns. Do not close this page.';
+        document.body.appendChild(b);
+    }
+    function flushThenSubmit(){
+        try{ flushAnswers(); }catch(e){}
+        // small head start for the batch sync; the form itself carries every
+        // ticked answer anyway, so this is belt-and-braces, not load-bearing.
+        setTimeout(function(){ form.submit(); }, 800);
+    }
+    function queueSubmit(){
+        lockInputs(); showWaitBanner();
+        var t=setInterval(function(){
+            if(navigator.onLine!==false){ clearInterval(t); flushThenSubmit(); }
+        }, 5000);
+        window.addEventListener('online', function once(){
+            window.removeEventListener('online', once); clearInterval(t); flushThenSubmit();
+        });
+    }
+    function doSubmit(){
+        if(submitted)return; submitted=true; lockInputs();
+        if(navigator.onLine===false){ queueSubmit(); return; }
+        form.submit();
+    }
     function tick(){
         if(remaining<=0){el.textContent='00:00';doSubmit();return;}
         var m=Math.floor(remaining/60),s=remaining%60;
@@ -113,7 +148,6 @@ body{margin:0;font-family:'Inter',system-ui,sans-serif;background:#eef2f7;color:
         if(remaining<=60)box.classList.add('warn');
         remaining--;
     }
-    tick(); setInterval(tick,1000);
 
     // option selection styling + answered tracking
     function refresh(){
@@ -126,17 +160,87 @@ body{margin:0;font-family:'Inter',system-ui,sans-serif;background:#eef2f7;color:
         });
         document.getElementById('answered').textContent=done;
     }
-    // Autosave each answer immediately so a refresh / disconnect resumes here.
+    // Autosave answers in batches (one request per few seconds) so 800 students
+    // don't hammer the DB with a write per click. The final submit posts every
+    // answer from the form, so a missed/late batch never loses progress.
     var token=document.querySelector('meta[name=csrf-token]').content;
-    var ANSWER_URL="{{ url_for('cbt_portal.answer', exam_id=exam.id) }}";
-    function autosave(inp){
-        var body=new URLSearchParams({question_id:inp.dataset.qid, option:inp.value, _csrf_token:token});
-        fetch(ANSWER_URL,{method:'POST',headers:{'X-CSRFToken':token,'Content-Type':'application/x-www-form-urlencoded'},body:body}).catch(function(){});
+    var ANSWERS_URL="{{ url_for('cbt_portal.answers_batch', exam_id=exam.id) }}";
+    var pendingAns={}, flushTimer=null;
+    // Local (on-device) copy of every chosen answer, so a reload, crash, or a
+    // network drop mid-exam never loses progress. Keyed per exam.
+    var STORE_KEY='cbt_ans_{{ exam.id }}';
+    var localAns={};
+    function loadLocal(){ try{ return JSON.parse(localStorage.getItem(STORE_KEY)||'{}'); }catch(e){ return {}; } }
+    function saveLocal(){ try{ localStorage.setItem(STORE_KEY, JSON.stringify(localAns)); }catch(e){} }
+    function queueAnswer(inp){
+        localAns[inp.dataset.qid]=inp.value; saveLocal();          // persist on device first
+        pendingAns['q_'+inp.dataset.qid]=inp.value;                // then sync to server
+        if(!flushTimer) flushTimer=setTimeout(flushAnswers, 3000);
+    }
+    function _ansBody(batch){
+        var b='_csrf_token='+encodeURIComponent(token);
+        Object.keys(batch).forEach(function(k){ b+='&'+encodeURIComponent(k)+'='+encodeURIComponent(batch[k]); });
+        return b;
+    }
+    function flushAnswers(){
+        if(flushTimer){clearTimeout(flushTimer); flushTimer=null;}
+        var keys=Object.keys(pendingAns); if(!keys.length) return;
+        var batch=pendingAns; pendingAns={};
+        fetch(ANSWERS_URL,{method:'POST',headers:{'X-CSRFToken':token,'Content-Type':'application/x-www-form-urlencoded'},body:_ansBody(batch)})
+            .catch(function(){ // network blip: requeue and retry on the next tick
+                Object.keys(batch).forEach(function(k){ if(!(k in pendingAns)) pendingAns[k]=batch[k]; });
+                if(!flushTimer) flushTimer=setTimeout(flushAnswers, 3000);
+            });
+    }
+    // Best-effort flush that survives the page being hidden/closed.
+    function flushBeacon(){
+        var keys=Object.keys(pendingAns); if(!keys.length) return;
+        var batch=pendingAns; pendingAns={};
+        try{
+            if(navigator.sendBeacon){
+                navigator.sendBeacon(ANSWERS_URL, new Blob([_ansBody(batch)],
+                    {type:'application/x-www-form-urlencoded'}));
+                return;
+            }
+        }catch(e){}
+        // Fallback: requeue so a normal flush picks it up.
+        Object.keys(batch).forEach(function(k){ if(!(k in pendingAns)) pendingAns[k]=batch[k]; });
+        flushAnswers();
     }
     document.querySelectorAll('.opt input').forEach(function(inp){
-        inp.addEventListener('change',function(){refresh();autosave(inp);});
+        inp.addEventListener('change',function(){refresh();queueAnswer(inp);});
     });
+    document.addEventListener('visibilitychange',function(){ if(document.hidden) flushBeacon(); });
+
+    // On load: merge server-saved + on-device answers (device wins, it's newest),
+    // re-tick the radios, then push everything to the server so it catches up.
+    (function restoreAnswers(){
+        localAns=loadLocal();
+        document.querySelectorAll('.opt input:checked').forEach(function(inp){
+            if(!(inp.dataset.qid in localAns)) localAns[inp.dataset.qid]=inp.value;
+        });
+        Object.keys(localAns).forEach(function(qid){
+            var r=document.querySelector('.opt input[data-qid="'+qid+'"][value="'+localAns[qid]+'"]');
+            if(r){ r.checked=true; pendingAns['q_'+qid]=localAns[qid]; }
+        });
+        saveLocal();
+        if(Object.keys(pendingAns).length && !flushTimer) flushTimer=setTimeout(flushAnswers, 1500);
+    })();
+    // Retry syncing whenever the connection comes back.
+    window.addEventListener('online', function(){ Object.keys(localAns).forEach(function(qid){ pendingAns['q_'+qid]=localAns[qid]; }); flushAnswers(); });
+    // Periodic autosave safety net (~45s): re-push the full on-device answer set so
+    // a batch lost to a flaky connection is reconciled even without a new change.
+    // Idempotent server-side; skipped when the tab is hidden (beacon covers that).
+    setInterval(function(){
+        if(submitted || document.hidden) return;
+        var qids=Object.keys(localAns); if(!qids.length) return;
+        qids.forEach(function(qid){ pendingAns['q_'+qid]=localAns[qid]; });
+        flushAnswers();
+    }, 45000);
     refresh();
+    // Start the timer only after answers are restored, so a page that loads at
+    // 00:00 (e.g. reconnecting after an outage) submits WITH the device answers.
+    tick(); setInterval(tick,1000);
 
     var STRICT={{ 'true' if strict else 'false' }};
     var FLAG_URL="{{ url_for('cbt_portal.flag', exam_id=exam.id) }}";
@@ -223,8 +327,8 @@ body{margin:0;font-family:'Inter',system-ui,sans-serif;background:#eef2f7;color:
         }
         {% endif %}
 
-        // heartbeat so admins can spot disconnects
-        setInterval(function(){ if(!submitted) fetch(PING_URL,{method:'POST',headers:{'X-CSRFToken':token,'Content-Type':'application/x-www-form-urlencoded'},body:'_csrf_token='+token+'&client_token='+encodeURIComponent(window.__cbtDevTok||'')}).catch(function(){}); }, 20000);
+        // heartbeat so admins can spot disconnects (every 30s; server coalesces writes)
+        setInterval(function(){ if(!submitted) fetch(PING_URL,{method:'POST',headers:{'X-CSRFToken':token,'Content-Type':'application/x-www-form-urlencoded'},body:'_csrf_token='+token+'&client_token='+encodeURIComponent(window.__cbtDevTok||'')}).catch(function(){}); }, 30000);
     }
 
     form.addEventListener('submit',function(e){
@@ -233,6 +337,7 @@ body{margin:0;font-family:'Inter',system-ui,sans-serif;background:#eef2f7;color:
             var done=document.querySelectorAll('.q-card input:checked').length;
             if(done<total && !confirm('You answered '+done+' of '+total+' questions. Submit now?')){ e.preventDefault(); return; }
         }
+        if(navigator.onLine===false){ e.preventDefault(); submitted=true; queueSubmit(); return; }
         submitted=true;
     });
     if(window.innerWidth<=860){document.querySelector('.mini-submit').style.display='block';}

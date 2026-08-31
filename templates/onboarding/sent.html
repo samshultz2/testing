@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Check your email — EduSyncra</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/marketing.css') }}">
+</head>
+<body>
+  <div class="auth">
+    <div class="status-card">
+      <div class="icon mail"><i class="fas fa-envelope-open-text"></i></div>
+      <h1>Almost there — check your email</h1>
+      <p>We’ve sent a confirmation link to <strong>{{ email }}</strong>. Click it to finish setting up your school; your portal and login are created automatically the moment you confirm.</p>
+      {% if dev_link %}
+        <div class="dev-note">
+          <b>Dev mode — no mail configured</b>
+          <p style="margin:6px 0 0"><a href="{{ dev_link }}">{{ dev_link }}</a></p>
+        </div>
+      {% endif %}
+    </div>
+  </div>
+</body>
+</html>

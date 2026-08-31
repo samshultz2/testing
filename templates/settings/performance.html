@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Performance — {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('settings.index') }}">Settings</a> / <span>Performance</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Performance</h1>
+        <p class="text-muted text-sm">
+            Recent slow requests and SQL queries seen by this worker. Thresholds:
+            requests &ge; <strong>{{ req_ms }}ms</strong>, queries &ge; <strong>{{ query_ms }}ms</strong>
+            (set <code>SLOW_REQUEST_MS</code> / <code>SLOW_QUERY_MS</code>).
+        </p>
+    </div>
+    <form method="post" style="margin-left:auto;">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn btn-secondary btn-sm"><i class="fas fa-eraser"></i> Clear samples</button>
+    </form>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header"><h3>Slow requests <span class="text-muted text-sm">({{ slow_requests|length }})</span></h3></div>
+    <div class="card-body" style="overflow-x:auto;">
+        {% if slow_requests %}
+        <table class="table" style="width:100%;">
+            <thead><tr><th>When</th><th>Duration</th><th>Method</th><th>Path</th><th>Status</th><th>User</th></tr></thead>
+            <tbody>
+            {% for r in slow_requests %}
+                <tr>
+                    <td class="text-muted text-sm">{{ r.at }}</td>
+                    <td><strong>{{ r.ms }}ms</strong></td>
+                    <td>{{ r.method }}</td>
+                    <td style="max-width:340px;word-break:break-all;">{{ r.path }}</td>
+                    <td>{{ r.status }}</td>
+                    <td class="text-sm">{{ r.user }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted">No slow requests recorded since the last restart. That's a good sign.</p>
+        {% endif %}
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><h3>Slow queries <span class="text-muted text-sm">({{ slow_queries|length }})</span></h3></div>
+    <div class="card-body" style="overflow-x:auto;">
+        {% if slow_queries %}
+        <table class="table" style="width:100%;">
+            <thead><tr><th>When</th><th>Duration</th><th>SQL (truncated)</th></tr></thead>
+            <tbody>
+            {% for q in slow_queries %}
+                <tr>
+                    <td class="text-muted text-sm">{{ q.at }}</td>
+                    <td><strong>{{ q.ms }}ms</strong></td>
+                    <td><code class="text-sm" style="word-break:break-all;">{{ q.sql }}</code></td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted">No slow queries recorded since the last restart.</p>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

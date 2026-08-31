@@ -25,6 +25,39 @@
 .insight{display:flex;gap:.6rem;align-items:flex-start;background:var(--primary-light);color:var(--primary);border-radius:var(--radius-md);padding:.75rem 1rem;font-size:.85rem;line-height:1.45;margin-bottom:.6rem}
 .proj-card{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border-radius:var(--radius-lg);padding:1.25rem;text-align:center}
 .proj-card .big{font-size:2.5rem;font-weight:700}
+.insights-grid{display:grid;grid-template-columns:1fr;gap:.6rem}
+@media(min-width:768px){.insights-grid{grid-template-columns:1fr 1fr}}
+.ins{display:flex;gap:.7rem;align-items:flex-start;border:1px solid var(--border-color);border-left-width:4px;border-radius:var(--radius-md);padding:.75rem .9rem;background:var(--bg-card)}
+.ins .ic{width:1.9rem;height:1.9rem;flex:0 0 auto;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.8rem;color:#fff}
+.ins .ttl{font-weight:700;font-size:.86rem;line-height:1.3}
+.ins .dtl{font-size:.8rem;color:var(--text-muted);margin-top:.15rem;line-height:1.4}
+.ins .act{display:inline-block;margin-top:.4rem;font-size:.78rem;font-weight:600}
+.ins.critical{border-left-color:#dc2626}.ins.critical .ic{background:#dc2626}
+.ins.warn{border-left-color:#f59e0b}.ins.warn .ic{background:#f59e0b}
+.ins.good{border-left-color:#16a34a}.ins.good .ic{background:#16a34a}
+.ins.info{border-left-color:#6366f1}.ins.info .ic{background:#6366f1}
+.exec-band{display:grid;grid-template-columns:repeat(2,1fr);gap:.6rem;margin-bottom:1rem}
+@media(min-width:768px){.exec-band{grid-template-columns:repeat(5,1fr)}}
+.exec{position:relative;display:block;text-align:left;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-md);padding:.8rem .9rem;color:inherit;text-decoration:none;transition:transform .12s,box-shadow .12s}
+a.exec:hover{transform:translateY(-2px);box-shadow:var(--shadow-md);border-color:var(--primary)}
+.exec .ev{font-size:1.5rem;font-weight:800;line-height:1.05}
+.exec .el{font-size:.72rem;color:var(--text-muted);margin-top:.15rem;display:flex;align-items:center;gap:.35rem}
+.exec .go{position:absolute;top:.6rem;right:.7rem;font-size:.7rem;color:var(--text-muted);opacity:0}
+a.exec:hover .go{opacity:1}
+.exec.tone-red .ev{color:#dc2626}.exec.tone-amber .ev{color:#d97706}.exec.tone-green .ev{color:#16a34a}.exec.tone-blue .ev{color:#4f46e5}
+.scroll-mt{scroll-margin-top:80px}
+.cmp-table{width:100%;border-collapse:collapse;font-size:.82rem}
+.cmp-table th,.cmp-table td{padding:.5rem .6rem;border-bottom:1px solid var(--border-light);text-align:right}
+.cmp-table th:first-child,.cmp-table td:first-child{text-align:left}
+.cmp-table thead th{background:var(--gray-50);font-weight:700;white-space:nowrap}
+.cmp-table td.lead{font-weight:700}
+.cmp-table tr.top td{background:rgba(22,163,74,.08)}
+.delta{display:inline-block;min-width:52px;padding:.1rem .4rem;border-radius:var(--radius-full);font-weight:700;font-size:.75rem}
+.delta.up{background:rgba(22,163,74,.14);color:#16a34a}
+.delta.down{background:rgba(220,38,38,.12);color:#dc2626}
+.delta.flat{background:var(--gray-100);color:var(--text-muted)}
+.rankdot{display:inline-flex;width:1.4rem;height:1.4rem;border-radius:50%;background:var(--gray-100);color:var(--text-muted);font-size:.72rem;font-weight:700;align-items:center;justify-content:center;margin-right:.4rem}
+.cmp-table tr.top .rankdot{background:#16a34a;color:#fff}
 @media print{
     .no-print{display:none !important}
     .two-col{grid-template-columns:1fr 1fr !important}
@@ -43,15 +76,192 @@
     <div class="page-header-actions no-print">
         <form method="GET" class="d-flex gap-2 align-center">
             <label class="form-label mb-0">Year</label>
-            <select name="year" class="form-control" style="max-width:140px;" onchange="this.form.submit()">
+            <select name="year" class="form-control" style="max-width:130px;" data-autosubmit>
                 {% for y in years %}<option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>{% endfor %}
             </select>
+            {% if years|length > 1 %}
+            <label class="form-label mb-0">vs</label>
+            <select name="compare" class="form-control" style="max-width:130px;" data-autosubmit title="Compare with another year">
+                <option value="">— compare —</option>
+                {% for y in years %}{% if y != selected_year %}<option value="{{ y }}" {% if y == compare_year %}selected{% endif %}>{{ y }}</option>{% endif %}{% endfor %}
+            </select>
+            {% endif %}
         </form>
+        <a href="{{ url_for('results.waec_broadsheet', year=selected_year) }}" class="btn btn-secondary btn-sm" title="Full WAEC grade matrix — print / download"><i class="fas fa-table-cells"></i> WAEC broadsheet</a>
+        <a href="{{ url_for('results.analytics_trends') }}" class="btn btn-secondary btn-sm" title="Cross-year WAEC & JAMB trends"><i class="fas fa-chart-line"></i> Trends</a>
+        <a href="{{ url_for('results.at_risk_watchlist') }}" class="btn btn-secondary btn-sm" title="Live at-risk SSS3 watchlist, by class"><i class="fas fa-triangle-exclamation"></i> Watchlist</a>
+        <a href="{{ url_for('results.aspiration_hub') }}" class="btn btn-secondary btn-sm" title="University aspirations, eligibility & admission funnel"><i class="fas fa-graduation-cap"></i> Aspirations</a>
+        <a href="{{ url_for('results.readiness_funnel') }}" class="btn btn-secondary btn-sm" title="Cohort admission-readiness funnel"><i class="fas fa-graduation-cap"></i> Readiness</a>
         <a href="{{ url_for('results.cutoffs_list') }}" class="btn btn-secondary btn-sm" title="Manage admission cut-offs"><i class="fas fa-sliders"></i> Cut-offs</a>
+        <form method="POST" action="{{ recompute_url }}" class="d-inline" title="Recompute risk &amp; JAMB predictions for all students in view">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-secondary btn-sm"><i class="fas fa-sync"></i> Recompute</button>
+        </form>
+        <a href="{{ url_for('results.tasks') }}" class="btn btn-secondary btn-sm" title="Background task status"><i class="fas fa-list-check"></i> Tasks</a>
+        {% if analytics_refreshed_at %}
+        <span class="text-muted text-sm" title="Analytics auto-refresh once a day in the background"><i class="fas fa-clock"></i> Refreshed {{ analytics_refreshed_at[:16]|replace('T', ' ') }}</span>
+        {% endif %}
         {% if selected_year %}
+        <a href="{{ url_for('results.analytics_board_pack', year=selected_year) }}" target="_blank" rel="noopener" class="btn btn-primary btn-sm" title="Executive board pack (PDF)"><i class="fas fa-file-invoice"></i> Board pack</a>
+        <a href="{{ url_for('results.analytics_deck', year=selected_year) }}" class="btn btn-primary btn-sm" title="PowerPoint deck for meetings"><i class="fas fa-file-powerpoint"></i> Slides</a>
         <a href="{{ url_for('results.analytics_export', year=selected_year) }}" class="btn btn-success btn-sm" title="Excel"><i class="fas fa-file-excel"></i></a>
-        <button type="button" onclick="exportAnalyticsImage()" class="btn btn-secondary btn-sm" title="Image"><i class="fas fa-image"></i></button>
-        <button type="button" onclick="window.print()" class="btn btn-secondary btn-sm" title="Print / Save as PDF"><i class="fas fa-file-pdf"></i></button>
+        <a href="{{ url_for('results.analytics_export_csv', year=selected_year) }}" class="btn btn-secondary btn-sm" title="CSV"><i class="fas fa-file-csv"></i></a>
+        <button type="button" data-call="exportAnalyticsImage" class="btn btn-secondary btn-sm" title="Image"><i class="fas fa-image"></i></button>
+        <button type="button" data-print class="btn btn-secondary btn-sm" title="Print / Save as PDF"><i class="fas fa-file-pdf"></i></button>
+        {% endif %}
+    </div>
+</div>
+
+<script nonce="{{ csp_nonce }}">
+// Remembered year filter — restore the last year viewed and persist changes,
+// so returning to the hub reopens where you left off (per-browser).
+(function(){
+    var KEY='exam_hub_year', years={{ years|tojson }}.map(String);
+    var params=new URLSearchParams(location.search);
+    try{
+        if(!params.has('year')){
+            var saved=localStorage.getItem(KEY);
+            if(saved && years.indexOf(saved)!==-1 && saved!=='{{ selected_year }}'){
+                params.set('year',saved);
+                location.replace(location.pathname+'?'+params.toString());
+                return;
+            }
+        } else { localStorage.setItem(KEY, params.get('year')); }
+        var sel=document.querySelector('select[name="year"]');
+        if(sel){ sel.addEventListener('change',function(){ try{localStorage.setItem(KEY,sel.value);}catch(e){} }); }
+    }catch(e){}
+})();
+</script>
+
+{% if years and selected_year %}
+{% set uni_pct = cutoff.eligible_200_pct if cutoff else None %}
+{% set corr_r = correlation.correlation_coefficient if (correlation and not correlation.error) else None %}
+<div class="exec-band">
+    <a class="exec scroll-mt tone-{{ 'green' if jamb_stats and jamb_stats.mean_score >= 200 else 'amber' if jamb_stats and jamb_stats.mean_score >= 150 else 'red' if jamb_stats else 'blue' }}"
+       href="#sec-jamb" title="Jump to JAMB performance">
+        <div class="ev">{{ jamb_stats.mean_score if jamb_stats else '—' }}</div>
+        <div class="el"><i class="fas fa-gauge-high"></i> JAMB mean score</div>
+        <span class="go"><i class="fas fa-arrow-down"></i></span>
+    </a>
+    <a class="exec scroll-mt tone-{{ 'green' if uni_pct is not none and uni_pct >= 65 else 'amber' if uni_pct is not none and uni_pct >= 40 else 'red' if uni_pct is not none else 'blue' }}"
+       href="{{ url_for('results.readiness_funnel') }}" title="Open the admission-readiness funnel">
+        <div class="ev">{{ uni_pct ~ '%' if uni_pct is not none else '—' }}</div>
+        <div class="el"><i class="fas fa-graduation-cap"></i> University-ready (≥200)</div>
+        <span class="go"><i class="fas fa-arrow-right"></i></span>
+    </a>
+    <a class="exec scroll-mt tone-{{ 'green' if waec_stats and waec_stats.overall_pass_rate >= 75 else 'amber' if waec_stats and waec_stats.overall_pass_rate >= 60 else 'red' if waec_stats else 'blue' }}"
+       href="#sec-waec" title="Jump to WAEC performance">
+        <div class="ev">{{ waec_stats.overall_pass_rate ~ '%' if waec_stats else '—' }}</div>
+        <div class="el"><i class="fas fa-book"></i> WAEC pass rate</div>
+        <span class="go"><i class="fas fa-arrow-down"></i></span>
+    </a>
+    <a class="exec scroll-mt tone-{{ 'red' if at_risk|length else 'green' }}"
+       href="#sec-atrisk" title="Jump to the at-risk register">
+        <div class="ev">{{ at_risk|length }}</div>
+        <div class="el"><i class="fas fa-user-clock"></i> At-risk students</div>
+        <span class="go"><i class="fas fa-arrow-up"></i></span>
+    </a>
+    <a class="exec scroll-mt tone-{{ 'green' if corr_r is not none and corr_r >= 0.5 else 'amber' if corr_r is not none and corr_r >= 0.3 else 'red' if corr_r is not none else 'blue' }}"
+       href="#sec-corr" title="Jump to WAEC↔JAMB correlation">
+        <div class="ev">{{ corr_r if corr_r is not none else '—' }}</div>
+        <div class="el"><i class="fas fa-link"></i> WAEC↔JAMB link</div>
+        <span class="go"><i class="fas fa-arrow-down"></i></span>
+    </a>
+</div>
+{% endif %}
+
+{% if insights %}
+<div class="card" style="margin-bottom:1rem;">
+    <div class="card-header"><h3><i class="fas fa-lightbulb"></i> Executive Summary &mdash; Smart Insights</h3>
+        <span class="text-muted text-sm">What is happening, why it matters, and what to do next</span></div>
+    <div class="card-body">
+        <div class="insights-grid">
+            {% for i in insights %}
+            <div class="ins {{ i.level }}">
+                <span class="ic"><i class="fas {{ i.icon }}"></i></span>
+                <div>
+                    <div class="ttl">{{ i.title }}</div>
+                    <div class="dtl">{{ i.detail }}</div>
+                    {% if i.action and i.action.url %}
+                    <a class="act" href="{{ i.action.url }}"><i class="fas fa-arrow-right"></i> {{ i.action.label }}</a>
+                    {% endif %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if year_compare %}
+<div id="sec-compare-year" class="card scroll-mt" style="margin-bottom:1rem;">
+    <div class="card-header"><h3><i class="fas fa-code-compare"></i> Cohort comparison &mdash; {{ year_compare.year }} vs {{ year_compare.compare_year }}</h3></div>
+    <div class="card-body" style="padding:0;overflow-x:auto;">
+        <table class="cmp-table no-mobile-scroll">
+            <thead><tr><th>Metric</th><th>{{ year_compare.year }}</th><th>{{ year_compare.compare_year }}</th><th>Change</th></tr></thead>
+            <tbody>
+            {% for m in year_compare.metrics %}
+            <tr>
+                <td>{{ m.label }}</td>
+                <td class="lead">{% if m.a is not none %}{{ m.a }}{{ m.suffix }}{% else %}—{% endif %}</td>
+                <td>{% if m.b is not none %}{{ m.b }}{{ m.suffix }}{% else %}—{% endif %}</td>
+                <td>{% if m.delta is none %}<span class="delta flat">n/a</span>
+                    {% elif m.improved %}<span class="delta up"><i class="fas fa-arrow-up"></i> {{ '%+g'|format(m.delta) }}{{ m.suffix }}</span>
+                    {% elif m.improved == false %}<span class="delta down"><i class="fas fa-arrow-down"></i> {{ '%+g'|format(m.delta) }}{{ m.suffix }}</span>
+                    {% else %}<span class="delta flat">no change</span>{% endif %}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% if branch_compare %}
+<div id="sec-compare-branch" class="card scroll-mt" style="margin-bottom:1rem;">
+    <div class="card-header"><h3><i class="fas fa-code-branch"></i> Branch comparison &mdash; {{ selected_year }}</h3>
+        <span class="text-muted text-sm">Ranked by JAMB mean · switch branch from the header to drill in</span></div>
+    <div class="card-body" style="padding:0;overflow-x:auto;">
+        <table class="cmp-table no-mobile-scroll">
+            <thead><tr><th>Branch</th><th>JAMB candidates</th><th>JAMB mean</th><th>≥200</th><th>WAEC students</th><th>WAEC pass</th><th>Distinction</th></tr></thead>
+            <tbody>
+            {% for r in branch_compare %}
+            <tr class="{{ 'top' if loop.first }}">
+                <td><span class="rankdot">{{ loop.index }}</span><a href="{{ url_for('main.set_view_branch', branch_id=r.id) }}" title="View this branch">{{ r.label }}</a></td>
+                <td>{{ r.metrics.jamb_candidates }}</td>
+                <td class="lead">{% if r.metrics.jamb_mean is not none %}{{ r.metrics.jamb_mean }}{% else %}—{% endif %}</td>
+                <td>{% if r.metrics.above_200_pct is not none %}{{ r.metrics.above_200_pct }}%{% else %}—{% endif %}</td>
+                <td>{{ r.metrics.waec_students }}</td>
+                <td>{% if r.metrics.waec_pass_rate is not none %}{{ r.metrics.waec_pass_rate }}%{% else %}—{% endif %}</td>
+                <td>{% if r.metrics.waec_distinction_rate is not none %}{{ r.metrics.waec_distinction_rate }}%{% else %}—{% endif %}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<div id="sec-atrisk" class="card no-print scroll-mt" style="margin-bottom:1rem;">
+    <div class="card-header"><h3><i class="fas fa-triangle-exclamation"></i> At-Risk Register {% if at_risk %}<span class="badge badge-danger">{{ at_risk|length }}</span>{% endif %}</h3></div>
+    <div class="card-body" style="padding:0;">
+        {% if at_risk %}
+        <div class="table-responsive"><table class="data-table">
+            <thead><tr><th>Student</th><th>Risk</th><th>Score</th><th>Key factors</th><th></th></tr></thead>
+            <tbody>
+                {% for s in at_risk %}
+                <tr>
+                    <td><strong>{{ s.student_name }}</strong></td>
+                    <td><span class="badge badge-{{ 'danger' if s.risk_level == 'RED' else 'warning' }}">{{ s.risk_level }}</span></td>
+                    <td>{{ s.overall_risk_score }}</td>
+                    <td class="text-sm">{{ s.risk_factors[:2]|join('; ') }}{% if s.risk_factors|length > 2 %} …{% endif %}</td>
+                    <td><a href="{{ url_for('results.view_waec_student', student_id=s.student_id) }}" class="btn btn-sm btn-info" title="View student"><i class="fas fa-eye"></i></a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table></div>
+        {% else %}
+        <div class="empty-state" style="padding:1.5rem;"><i class="fas fa-shield-heart"></i><p>No at-risk students on record. If you've just imported results, click <strong>Recompute</strong> to build the register.</p></div>
         {% endif %}
     </div>
 </div>
@@ -64,7 +274,7 @@
 
 <!-- ============ JAMB ============ -->
 {% if jamb_stats %}
-<div class="section-title"><span class="tag jamb">JAMB</span> Performance Overview &mdash; {{ selected_year }}</div>
+<div id="sec-jamb" class="section-title scroll-mt"><span class="tag jamb">JAMB</span> Performance Overview &mdash; {{ selected_year }}</div>
 <div class="kpi-grid mb-2">
     <div class="kpi lead"><div class="v">{{ jamb_stats.mean_score }}</div><div class="l">Mean Score</div></div>
     <div class="kpi"><div class="v">{{ jamb_stats.total_students }}</div><div class="l">Candidates</div></div>
@@ -93,7 +303,7 @@
     <div class="card">
         <div class="card-header"><h3><i class="fas fa-trophy"></i> Top 10 Candidates</h3></div>
         <div class="card-body" style="padding:0;">
-            <table class="mini-table">
+            <table class="mini-table no-mobile-scroll">
                 <thead><tr><th>#</th><th>Student</th><th class="num">Score</th></tr></thead>
                 <tbody>
                 {% for r in jamb_stats.top_10 %}
@@ -125,7 +335,7 @@
 
 <!-- ============ WAEC ============ -->
 {% if waec_stats %}
-<div class="section-title"><span class="tag waec">WAEC</span> Performance Overview &mdash; {{ selected_year }}</div>
+<div id="sec-waec" class="section-title scroll-mt"><span class="tag waec">WAEC</span> Performance Overview &mdash; {{ selected_year }}</div>
 <div class="kpi-grid mb-3">
     <div class="kpi lead"><div class="v">{{ waec_stats.overall_pass_rate }}%</div><div class="l">Pass Rate (credit+)</div></div>
     <div class="kpi"><div class="v">{{ waec_stats.unique_students }}</div><div class="l">Students</div></div>
@@ -148,7 +358,7 @@
     <div class="card">
         <div class="card-header"><h3 class="text-success"><i class="fas fa-arrow-up"></i> Strongest Subjects (A1 rate)</h3></div>
         <div class="card-body" style="padding:0;">
-            <table class="mini-table">
+            <table class="mini-table no-mobile-scroll">
                 <thead><tr><th>Subject</th><th class="num">A1 %</th><th class="num">Pass %</th></tr></thead>
                 <tbody>
                 {% for s in waec_stats.top_subjects_by_a1 %}
@@ -161,11 +371,13 @@
     <div class="card">
         <div class="card-header"><h3 class="text-danger"><i class="fas fa-arrow-down"></i> Most Failed Subjects</h3></div>
         <div class="card-body" style="padding:0;">
-            <table class="mini-table">
-                <thead><tr><th>Subject</th><th class="num">Fail %</th><th class="num">Entries</th></tr></thead>
+            <table class="mini-table no-mobile-scroll">
+                <thead><tr><th>Subject</th><th class="num">Below credit % (D7–F9)</th><th class="num">Fail % (F9)</th><th class="num">Entries</th></tr></thead>
                 <tbody>
                 {% for s in waec_stats.most_failed_subjects %}
-                <tr><td>{{ s.subject }}</td><td class="num" style="color:#dc3545">{{ s.fail_rate }}%</td><td class="num">{{ s.total_entries }}</td></tr>
+                <tr><td>{{ s.subject }}</td><td class="num" style="color:#dc3545">{{ s.below_credit_rate }}%</td><td class="num" style="color:#dc3545">{{ s.fail_rate }}%</td><td class="num">{{ s.total_entries }}</td></tr>
+                {% else %}
+                <tr><td colspan="4" class="text-muted" style="padding:16px;">No sub-credit grades (D7–F9) recorded for {{ selected_year }}.</td></tr>
                 {% endfor %}
                 </tbody>
             </table>
@@ -186,7 +398,7 @@
         <div class="card-header"><h3><span class="tag jamb">JAMB</span> Mean Score &amp; ≥200 by Gender</h3></div>
         <div class="chart-wrap"><canvas id="jambGenderCmp"></canvas></div>
         <div class="card-body" style="padding:0;">
-            <table class="mini-table">
+            <table class="mini-table no-mobile-scroll">
                 <thead><tr><th>Gender</th><th class="num">Candidates</th><th class="num">Mean</th><th class="num">≥200</th><th class="num">≥200 %</th><th class="num">Top</th></tr></thead>
                 <tbody>
                 {% for g in jamb_gender_stats %}
@@ -202,7 +414,7 @@
         <div class="card-header"><h3><span class="tag waec">WAEC</span> Pass &amp; Distinction by Gender</h3></div>
         <div class="chart-wrap"><canvas id="waecGenderCmp"></canvas></div>
         <div class="card-body" style="padding:0;">
-            <table class="mini-table">
+            <table class="mini-table no-mobile-scroll">
                 <thead><tr><th>Gender</th><th class="num">Entries</th><th class="num">Pass %</th><th class="num">Distinction %</th><th class="num">Mean Pts</th></tr></thead>
                 <tbody>
                 {% for g in waec_gender_stats %}
@@ -217,7 +429,7 @@
 {% endif %}
 
 <!-- ============ CORRELATION ============ -->
-<div class="section-title"><i class="fas fa-link"></i> WAEC ↔ JAMB Correlation</div>
+<div id="sec-corr" class="section-title scroll-mt"><i class="fas fa-link"></i> WAEC ↔ JAMB Correlation</div>
 <div class="card mb-3"><div class="card-body">
     {% if correlation and not correlation.error %}
     <div class="insight"><i class="fas fa-lightbulb"></i><span>{{ correlation.interpretation }}</span></div>
@@ -238,9 +450,10 @@
 <div class="two-col mb-3">
     {% if class_compare %}
     <div class="card">
-        <div class="card-header"><h3><i class="fas fa-layer-group"></i> Performance by Arm</h3></div>
+        <div class="card-header"><h3><i class="fas fa-layer-group"></i> Performance by Arm</h3>
+            <a href="{{ url_for('results.analytics_by_class', year=selected_year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-up-right-from-square"></i> Full class league</a></div>
         <div class="card-body" style="padding:0;">
-            <table class="mini-table">
+            <table class="mini-table no-mobile-scroll">
                 <thead><tr><th>Arm</th><th class="num">JAMB n</th><th class="num">JAMB mean</th><th class="num">WAEC pass %</th></tr></thead>
                 <tbody>
                 {% for c in class_compare %}
@@ -275,7 +488,11 @@
 <div class="two-col mb-3">
     <div class="card">
         <div class="card-header"><h3><i class="fas fa-wave-square"></i> Year-over-Year</h3></div>
+        {% if yoy and (yoy.jamb_trends or yoy.waec_trends) %}
         <div class="chart-wrap"><canvas id="yoyChart"></canvas></div>
+        {% else %}
+        <div class="card-body text-muted"><i class="fas fa-info-circle"></i> Need at least two years of WAEC/JAMB data to chart a year-over-year trend.</div>
+        {% endif %}
     </div>
     {% if projection %}
     <div class="proj-card">
@@ -292,30 +509,146 @@
     {% endif %}
 </div>
 
+<!-- ============ MOCK JAMB PROGRESSION ============ -->
+<div class="section-title"><i class="fas fa-flask"></i> Mock JAMB Progression <span class="text-muted text-sm">(active session)</span></div>
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-chart-line"></i> Cohort mock-score trajectory</h3></div>
+    {% if mock_trend %}
+    <div class="chart-wrap"><canvas id="mockTrendChart"></canvas></div>
+    <div class="table-responsive"><table class="data-table">
+        <thead><tr><th>Mock</th><th>Students</th><th>Average</th><th>&ge;200</th></tr></thead>
+        <tbody>
+            {% for m in mock_trend %}
+            <tr><td>{{ m.label }}</td><td>{{ m.students }}</td><td><strong>{{ m.average }}</strong></td><td>{{ m.above_200_pct }}%</td></tr>
+            {% endfor %}
+        </tbody>
+    </table></div>
+    {% else %}
+    <div class="card-body text-muted"><i class="fas fa-info-circle"></i> No Mock JAMB results recorded for the active session yet. <a href="{{ url_for('mock_jamb.index') }}">Set up a mock exam &rarr;</a></div>
+    {% endif %}
+</div>
+
+<!-- ============ MOCK WAEC PROGRESSION ============ -->
+<div class="section-title"><i class="fas fa-clipboard-check"></i> Mock WAEC Progression <span class="text-muted text-sm">(active session)</span></div>
+<div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-chart-line"></i> Cohort credit trajectory</h3></div>
+    {% if mock_waec_trend %}
+    <div class="chart-wrap"><canvas id="mockWaecTrendChart"></canvas></div>
+    <div class="table-responsive"><table class="data-table">
+        <thead><tr><th>Mock</th><th>Students</th><th>Avg credits</th><th>&ge;5 credits</th></tr></thead>
+        <tbody>
+            {% for m in mock_waec_trend %}
+            <tr><td>{{ m.label }}</td><td>{{ m.students }}</td><td><strong>{{ m.avg_credits }}</strong></td><td>{{ m.with_5_credits_pct }}%</td></tr>
+            {% endfor %}
+        </tbody>
+    </table></div>
+    {% else %}
+    <div class="card-body text-muted"><i class="fas fa-info-circle"></i> No Mock WAEC results recorded for the active session yet. <a href="{{ url_for('mock_waec.index') }}">Set up a mock exam &rarr;</a></div>
+    {% endif %}
+</div>
+
+{% endif %}
+
+<!-- Unified subject scorecard: WAEC pass + JAMB mean + teacher, worst-first -->
+{% if subject_scorecard %}
+<div id="sec-subjects" class="section-title scroll-mt"><i class="fas fa-clipboard-list"></i> Subject Performance Scorecard &mdash; {{ selected_year }}</div>
+<p class="text-muted text-sm" style="margin:0 0 .5rem;">
+    WAEC pass rate and JAMB mean for each subject in one view, with the SSS3 teacher who owns it. Weakest first.
+    {% if scorecard_summary.weak %}<span class="pill" style="background:rgba(220,38,38,.12);color:#dc2626;">{{ scorecard_summary.weak }} needing action</span>{% endif %}
+    {% if scorecard_summary.watch %}<span class="pill" style="background:rgba(217,119,6,.14);color:#d97706;">{{ scorecard_summary.watch }} to watch</span>{% endif %}
+    {% if scorecard_summary.strong %}<span class="pill" style="background:rgba(22,163,74,.14);color:#16a34a;">{{ scorecard_summary.strong }} strong</span>{% endif %}
+</p>
+<div class="card" style="padding:0;overflow-x:auto;">
+<table class="cmp-table no-mobile-scroll">
+    <thead><tr><th>Subject</th><th>Status</th><th>WAEC pass</th><th>WAEC A1</th><th>JAMB mean</th><th>JAMB ≥50</th><th>Teacher(s)</th></tr></thead>
+    <tbody>
+    {% for r in subject_scorecard %}
+    <tr class="{{ 'top' if r.flag == 'weak' }}">
+        <td class="lead">{{ r.subject }}
+            {% if r.waec_entries or r.jamb_count %}<span class="text-muted text-sm">({{ r.waec_entries }}W / {{ r.jamb_count }}J)</span>{% endif %}</td>
+        <td>{% if r.flag == 'weak' %}<span class="delta down">Action</span>
+            {% elif r.flag == 'watch' %}<span class="pill" style="background:rgba(217,119,6,.14);color:#d97706;">Watch</span>
+            {% elif r.flag == 'strong' %}<span class="delta up">Strong</span>
+            {% else %}<span class="delta flat">OK</span>{% endif %}</td>
+        <td>{% if r.waec_pass_rate is not none %}{{ r.waec_pass_rate }}%{% else %}<span class="text-muted">—</span>{% endif %}</td>
+        <td>{% if r.waec_a1_rate is not none %}{{ r.waec_a1_rate }}%{% else %}<span class="text-muted">—</span>{% endif %}</td>
+        <td>{% if r.jamb_mean is not none %}{{ r.jamb_mean }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
+        <td>{% if r.jamb_above_50_pct is not none %}{{ r.jamb_above_50_pct }}%{% else %}<span class="text-muted">—</span>{% endif %}</td>
+        <td class="text-sm">{% if r.teachers %}{{ r.teachers|join(', ') }}{% else %}<span class="text-muted">Unassigned</span>{% endif %}</td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% if not scorecard_summary.with_teacher %}
+<p class="text-muted text-sm" style="margin:.4rem 0 0;"><i class="fas fa-circle-info"></i> Assign subject teachers to the SSS3 class (in the active term) to attribute each subject to a teacher.</p>
+{% endif %}
+{% endif %}
+
+<!-- Subject-level JAMB performance (captured but previously unused) -->
+{% if jamb_subjects %}
+<div class="section-title"><i class="fas fa-list-ol"></i> JAMB subject performance <span class="tag jamb">JAMB</span></div>
+<div class="card" style="padding:0;overflow-x:auto;">
+<table class="table no-mobile-scroll" style="font-size:.85rem;margin:0;">
+    <thead><tr><th>Subject</th><th>Sat</th><th>Average</th><th>Best</th><th>Lowest</th></tr></thead>
+    <tbody>
+    {% for r in jamb_subjects %}
+    <tr><td>{{ r.subject }}</td><td>{{ r.count }}</td><td><strong>{{ r.average }}</strong></td><td>{{ r.max }}</td><td>{{ r.min }}</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endif %}
+
+<!-- Mock WAEC subject value-added across the term -->
+{% if waec_subject_gains and waec_subject_gains.subjects %}
+<div class="section-title"><i class="fas fa-arrow-trend-up"></i> Mock WAEC subject value-added <span class="tag waec">WAEC</span></div>
+<p class="text-muted text-sm" style="margin:0 0 .5rem;">Average score change from {{ waec_subject_gains.first_exam }} to {{ waec_subject_gains.latest_exam }} (weakest movers first).</p>
+<div class="card" style="padding:0;overflow-x:auto;">
+<table class="table no-mobile-scroll" style="font-size:.85rem;margin:0;">
+    <thead><tr><th>Subject</th><th>First</th><th>Latest</th><th>Gain</th></tr></thead>
+    <tbody>
+    {% for r in waec_subject_gains.subjects %}
+    <tr><td>{{ r.subject }}</td><td>{{ r.first }}</td><td>{{ r.latest }}</td>
+        <td style="color:{{ '#137333' if r.gain > 0 else '#b3261e' if r.gain < 0 else 'inherit' }};font-weight:700;">{{ '%+.1f'|format(r.gain) }}</td></tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% endif %}
+
+<!-- Attendance <-> results correlation -->
+{% if attendance_corr and attendance_corr.coefficient is not none %}
+<div class="section-title"><i class="fas fa-user-check"></i> Attendance ↔ JAMB</div>
+<div class="card"><div class="card-body" style="font-size:.9rem;">
+    Across <strong>{{ attendance_corr.n }}</strong> SSS3 students with both attendance and a JAMB score, the correlation between attendance rate and JAMB score is
+    <strong>{{ attendance_corr.coefficient }}</strong> — <strong>{{ attendance_corr.strength }}</strong>.
+    <span class="text-muted">Higher attendance tends to track {{ 'higher' if attendance_corr.coefficient > 0 else 'lower' }} scores.</span>
+</div></div>
 {% endif %}
 </div><!-- /#analyticsContent -->
 
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script>
-const baseOpts = { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}} };
+<script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
+<script src="{{ url_for('static', filename='vendor/html2canvas.min.js') }}"></script>
+<script nonce="{{ csp_nonce }}">
+var baseOpts = { responsive:true, maintainAspectRatio:false, plugins:{legend:{display:false}} };
 
 {% if jamb_stats %}
-const jd = {{ jamb_stats.distribution | tojson }};
+var jd = {{ jamb_stats.distribution | tojson }};
 new Chart(document.getElementById('jambDist'), {
     type:'bar',
     data:{ labels:Object.keys(jd), datasets:[{ data:Object.values(jd),
         backgroundColor:['#dc3545','#fd7e14','#ffc107','#20c997','#17a2b8','#007bff','#28a745'], borderRadius:5 }] },
     options:{ ...baseOpts, scales:{ y:{ beginAtZero:true, ticks:{precision:0} } } }
 });
-const js = {{ jamb_stats.subject_analysis[:10] | tojson }};
+var js = {{ jamb_stats.subject_analysis[:10] | tojson }};
 new Chart(document.getElementById('jambSubj'), {
     type:'bar',
     data:{ labels:js.map(s=>s.subject.slice(0,12)), datasets:[{ data:js.map(s=>s.mean_score),
         backgroundColor:js.map(s=>s.mean_score>=70?'#28a745':s.mean_score>=50?'#ffc107':'#dc3545'), borderRadius:5 }] },
     options:{ ...baseOpts, indexAxis:'y', scales:{ x:{ beginAtZero:true, max:100 } } }
 });
-const jg = {{ jamb_gender | tojson }};
+var jg = {{ jamb_gender | tojson }};
 new Chart(document.getElementById('jambGender'), {
     type:'doughnut',
     data:{ labels:Object.keys(jg), datasets:[{ data:Object.values(jg), backgroundColor:['#667eea','#f56991','#bdc3c7'] }] },
@@ -324,14 +657,14 @@ new Chart(document.getElementById('jambGender'), {
 {% endif %}
 
 {% if waec_stats %}
-const wg = {{ waec_stats.grade_distribution | tojson }};
+var wg = {{ waec_stats.grade_distribution | tojson }};
 new Chart(document.getElementById('waecGrades'), {
     type:'bar',
     data:{ labels:Object.keys(wg), datasets:[{ data:Object.values(wg),
         backgroundColor:['#28a745','#20c997','#17a2b8','#007bff','#6f42c1','#ffc107','#fd7e14','#e83e8c','#dc3545'], borderRadius:5 }] },
     options:{ ...baseOpts, scales:{ y:{ beginAtZero:true, ticks:{precision:0} } } }
 });
-const wgen = {{ waec_gender | tojson }};
+var wgen = {{ waec_gender | tojson }};
 new Chart(document.getElementById('waecGender'), {
     type:'doughnut',
     data:{ labels:Object.keys(wgen), datasets:[{ data:Object.values(wgen), backgroundColor:['#0891b2','#f56991','#bdc3c7'] }] },
@@ -339,8 +672,8 @@ new Chart(document.getElementById('waecGender'), {
 });
 {% endif %}
 
-const yoyJamb = {{ yoy.jamb_trends | tojson }};
-const yoyWaec = {{ yoy.waec_trends | tojson }};
+var yoyJamb = {{ (yoy.jamb_trends if yoy else []) | tojson }};
+var yoyWaec = {{ (yoy.waec_trends if yoy else []) | tojson }};
 if (document.getElementById('yoyChart')) {
     const yearsSet = [...new Set([...yoyJamb.map(t=>t.year), ...yoyWaec.map(t=>t.year)])].sort();
     new Chart(document.getElementById('yoyChart'), {
@@ -354,9 +687,37 @@ if (document.getElementById('yoyChart')) {
     });
 }
 
+// Mock JAMB cohort trajectory across the session's mocks.
+var mockTrend = {{ mock_trend | tojson }};
+if (document.getElementById('mockTrendChart') && mockTrend.length) {
+    new Chart(document.getElementById('mockTrendChart'), {
+        type:'line',
+        data:{ labels:mockTrend.map(m=>m.label), datasets:[
+            { label:'Average score', data:mockTrend.map(m=>m.average), borderColor:'#7c3aed', backgroundColor:'rgba(124,58,237,.12)', tension:.3, fill:true, yAxisID:'y' },
+            { label:'% ≥ 200', data:mockTrend.map(m=>m.above_200_pct), borderColor:'#16a34a', backgroundColor:'rgba(22,163,74,.1)', tension:.3, yAxisID:'y1' }
+        ]},
+        options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}},
+            scales:{ y:{ position:'left', suggestedMax:400, title:{display:true,text:'Mean /400'} }, y1:{ position:'right', max:100, grid:{drawOnChartArea:false}, title:{display:true,text:'% ≥ 200'} } } }
+    });
+}
+
+// Mock WAEC cohort trajectory: average credits + % reaching 5 credits per mock.
+var mockWaecTrend = {{ mock_waec_trend | tojson }};
+if (document.getElementById('mockWaecTrendChart') && mockWaecTrend.length) {
+    new Chart(document.getElementById('mockWaecTrendChart'), {
+        type:'line',
+        data:{ labels:mockWaecTrend.map(m=>m.label), datasets:[
+            { label:'Average credits', data:mockWaecTrend.map(m=>m.avg_credits), borderColor:'#0ea5e9', backgroundColor:'rgba(14,165,233,.12)', tension:.3, fill:true, yAxisID:'y' },
+            { label:'% with 5+ credits', data:mockWaecTrend.map(m=>m.with_5_credits_pct), borderColor:'#16a34a', backgroundColor:'rgba(22,163,74,.1)', tension:.3, yAxisID:'y1' }
+        ]},
+        options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}},
+            scales:{ y:{ position:'left', max:9, title:{display:true,text:'Credits /9'} }, y1:{ position:'right', max:100, grid:{drawOnChartArea:false}, title:{display:true,text:'% with 5+'} } } }
+    });
+}
+
 // Gender comparison charts
 {% if jamb_gender_stats %}
-const jgc = {{ jamb_gender_stats | tojson }};
+var jgc = {{ jamb_gender_stats | tojson }};
 new Chart(document.getElementById('jambGenderCmp'), {
     type:'bar',
     data:{ labels:jgc.map(g=>g.gender), datasets:[
@@ -368,7 +729,7 @@ new Chart(document.getElementById('jambGenderCmp'), {
 });
 {% endif %}
 {% if waec_gender_stats %}
-const wgc = {{ waec_gender_stats | tojson }};
+var wgc = {{ waec_gender_stats | tojson }};
 new Chart(document.getElementById('waecGenderCmp'), {
     type:'bar',
     data:{ labels:wgc.map(g=>g.gender), datasets:[

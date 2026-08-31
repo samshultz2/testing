@@ -9,7 +9,7 @@ from models import (
     db, Student, ParentContact, StudentEnrollment, ClassArmAssignment, SchoolSettings,
 )
 
-PLACEHOLDERS = ['{student}', '{first_name}', '{surname}', '{class}', '{arm}',
+PLACEHOLDERS = ['{name}', '{student}', '{first_name}', '{surname}', '{class}', '{arm}',
                 '{term}', '{balance}', '{parent}', '{school}']
 
 SMS_SEGMENT = 160
@@ -50,7 +50,7 @@ def student_placement_label(student_id, term_id):
         return '', ''
     asg = enr.class_arm_assignment
     return (asg.school_class.name if asg.school_class else '',
-            asg.arm.name if asg.arm else '')
+            asg.arm_label)
 
 
 def build_context(student, term, parent_name='Parent', balance=None):
@@ -60,6 +60,7 @@ def build_context(student, term, parent_name='Parent', balance=None):
     if balance is not None:
         bal = '₦{:,.2f}'.format(balance)
     return {
+        '{name}': parent_name or 'Parent',
         '{student}': student.full_name,
         '{first_name}': student.first_name or student.full_name,
         '{surname}': student.surname or '',
@@ -68,6 +69,20 @@ def build_context(student, term, parent_name='Parent', balance=None):
         '{term}': term.full_name if term else '',
         '{balance}': bal,
         '{parent}': parent_name or 'Parent',
+        '{school}': school_name(),
+    }
+
+
+def build_staff_context(staff):
+    """Placeholder values for a staff recipient (no student-specific fields)."""
+    name = staff.display_name or staff.full_name
+    return {
+        '{name}': name,
+        '{student}': '',
+        '{first_name}': staff.first_name or name,
+        '{surname}': staff.surname or '',
+        '{class}': '', '{arm}': '', '{term}': '', '{balance}': '',
+        '{parent}': name,
         '{school}': school_name(),
     }
 
@@ -121,6 +136,128 @@ def dispatch_campaign(msg, cfg=None):
     msg.sent_count = msg.recipients.filter_by(status='Sent').count()
     db.session.commit()
     return sent, failed
+
+
+def dispatch_campaign_async(app, message_id, cfg=None):
+    """Send a campaign in a background thread so the request returns at once.
+
+    Each SMS gateway call can take seconds; sending a large batch inline blocks a
+    web worker for minutes. The campaign should already be claimed ('Sending')
+    before calling this. Marks the message 'Sent' when done.
+    """
+    import threading
+
+    def _run():
+        with app.app_context():
+            from models import db, Message
+            try:
+                msg = db.session.get(Message, message_id)
+                if msg is None:
+                    return
+                dispatch_campaign(msg, cfg)
+                msg.status = 'Sent'
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+                app.logger.exception('Background SMS dispatch failed for message %s',
+                                     message_id)
+
+    threading.Thread(target=_run, daemon=True).start()
+
+
+# --- email open-tracking tokens ---------------------------------------------
+def _open_serializer():
+    from flask import current_app
+    from itsdangerous import URLSafeSerializer
+    return URLSafeSerializer(current_app.config['SECRET_KEY'], salt='comm-open')
+
+
+def open_token(recipient_id):
+    return _open_serializer().dumps(int(recipient_id))
+
+
+def read_open_token(token):
+    """Recipient id from an open-tracking token, or None if invalid."""
+    from itsdangerous import BadData
+    try:
+        return int(_open_serializer().loads(token))
+    except (BadData, ValueError, TypeError):
+        return None
+
+
+def _tracking_html(body, pixel_url):
+    """A minimal HTML alternative that embeds a 1x1 open-tracking pixel."""
+    from markupsafe import escape
+    safe = str(escape(body or '')).replace('\n', '<br>')
+    return (f'<div style="white-space:pre-wrap;font-family:sans-serif">{safe}</div>'
+            f'<img src="{pixel_url}" width="1" height="1" alt="" style="display:none">')
+
+
+def dispatch_campaign_email(msg, base_url=None):
+    """Send every pending recipient of an Email-channel campaign via SMTP.
+
+    Mirrors :func:`dispatch_campaign` (per-recipient commit so an interruption
+    never resends) but delivers over email. The campaign title is the subject and
+    each recipient's personalised body is the plain-text content. When ``base_url``
+    is given, each email also carries a per-recipient open-tracking pixel so opens
+    become read-receipts. Requires a configured mailer. Returns (sent, failed)."""
+    from datetime import datetime
+    from models import MessageRecipient
+    from utils import mailer
+    subject = msg.title or 'Message from your school'
+    base = (base_url or '').rstrip('/')
+    # Resolve an attached file once for the whole campaign.
+    attachments = None
+    if getattr(msg, 'attachment_id', None):
+        from utils import comm_attachments as CA
+        from models import CommAttachment, db as _db
+        att = _db.session.get(CommAttachment, msg.attachment_id)
+        path = CA.fs_path(att) if att else None
+        if path:
+            attachments = [(path, att.original_name, att.content_type)]
+    sent = failed = 0
+    for r in msg.recipients.filter(MessageRecipient.status != 'Sent').all():
+        html = None
+        if base and r.id:
+            pixel = f'{base}/communication/track/open?t={open_token(r.id)}'
+            html = _tracking_html(r.body, pixel)
+        if r.email and mailer.send_email(r.email, subject, r.body, html=html,
+                                         attachments=attachments):
+            r.status, r.sent_at, r.error = 'Sent', datetime.now(), None
+            sent += 1
+        else:
+            r.status = 'Failed'
+            r.error = 'No email address' if not r.email else 'Email delivery failed'
+            failed += 1
+        db.session.commit()
+    msg.sent_count = msg.recipients.filter_by(status='Sent').count()
+    db.session.commit()
+    return sent, failed
+
+
+def dispatch_campaign_email_async(app, message_id, base_url=None):
+    """Send an email campaign in a background thread so the request returns at once.
+    The campaign should already be claimed ('Sending'). Marks it 'Sent' when done.
+    ``base_url`` (the tenant's external URL, captured in the request) enables the
+    open-tracking pixel."""
+    import threading
+
+    def _run():
+        with app.app_context():
+            from models import db as _db, Message
+            try:
+                msg = _db.session.get(Message, message_id)
+                if msg is None:
+                    return
+                dispatch_campaign_email(msg, base_url=base_url)
+                msg.status = 'Sent'
+                _db.session.commit()
+            except Exception:
+                _db.session.rollback()
+                app.logger.exception('Background email dispatch failed for message %s',
+                                     message_id)
+
+    threading.Thread(target=_run, daemon=True).start()
 
 
 def _claim_message(message_id, from_status='Scheduled'):
@@ -178,15 +315,20 @@ def resolve_audience(audience, term, class_id=None, arm_id=None, student_ids=Non
     """
     students = []
     balances = {}
+    # Branch users only message their own branch's parents.
+    from utils.branch_scope import scope_query
 
     if audience == 'all':
-        students = Student.query.filter_by(is_active=True).order_by(Student.surname).all()
+        students = scope_query(Student.query.filter_by(is_active=True),
+                               Student).order_by(Student.surname).all()
 
     elif audience in ('class', 'arm'):
-        q = (StudentEnrollment.query
-             .join(ClassArmAssignment,
-                   StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
-             .filter(StudentEnrollment.is_active == True))
+        q = scope_query(
+            StudentEnrollment.query
+            .join(ClassArmAssignment,
+                  StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+            .filter(StudentEnrollment.is_active == True),
+            ClassArmAssignment)
         if term:
             q = q.filter(ClassArmAssignment.term_id == term.id)
         if class_id:
@@ -197,16 +339,19 @@ def resolve_audience(audience, term, class_id=None, arm_id=None, student_ids=Non
 
     elif audience == 'students':
         if student_ids:
-            students = Student.query.filter(Student.id.in_(student_ids)).all()
+            students = scope_query(
+                Student.query.filter(Student.id.in_(student_ids)), Student).all()
 
     elif audience == 'defaulters':
         from utils.finance import student_bill
         if term:
-            enr = (StudentEnrollment.query
-                   .join(ClassArmAssignment,
-                         StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
-                   .filter(StudentEnrollment.is_active == True,
-                           ClassArmAssignment.term_id == term.id))
+            enr = scope_query(
+                StudentEnrollment.query
+                .join(ClassArmAssignment,
+                      StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+                .filter(StudentEnrollment.is_active == True,
+                        ClassArmAssignment.term_id == term.id),
+                ClassArmAssignment)
             if class_id:
                 enr = enr.filter(ClassArmAssignment.class_id == class_id)
             for e in enr.all():
@@ -216,6 +361,12 @@ def resolve_audience(audience, term, class_id=None, arm_id=None, student_ids=Non
                 if bill['balance'] > 0.005:
                     students.append(e.student)
                     balances[e.student_id] = bill['balance']
+
+    # Teachers may only message parents of their own form-class students.
+    from utils.access_control import teacher_form_student_ids
+    form_ids = teacher_form_student_ids()
+    if form_ids is not None:
+        students = [s for s in students if s.id in form_ids]
 
     # De-duplicate, attach the best contact.
     seen = set()
@@ -229,6 +380,189 @@ def resolve_audience(audience, term, class_id=None, arm_id=None, student_ids=Non
             'student': s,
             'parent_name': (c.name if c and c.name else 'Parent'),
             'phone': (c.phone_number if c else ''),
+            'email': ((getattr(c, 'email', '') or '') if c else ''),
             'balance': balances.get(s.id),
         })
     return out
+
+
+# --- unified recipient engine (Phase 2) -------------------------------------
+# A recipient "spec" is a plain dict, so it round-trips cleanly through form
+# fields and saved groups. It targets either parents (of students) or staff, with
+# optional filters and exclusions layered on top of the base audience.
+STAFF_SCOPES = ['all', 'teaching', 'non-teaching', 'department']
+
+
+def resolve_recipients(spec, term=None):
+    """Resolve a recipient spec into a list of targets (the same shape used by
+    :func:`build_campaign`). ``spec['to']`` selects 'parents' (default) or 'staff'.
+
+    Parents accept the legacy audience (all/class/arm/students/defaulters) plus
+    optional ``gender`` / ``stream`` filters and an ``exclude_ids`` list of student
+    ids. Staff accept a ``staff_scope`` (all/teaching/non-teaching/department) and
+    optional ``department_id`` / ``exclude_ids`` (staff ids). Kept branch-scoped.
+    """
+    spec = spec or {}
+    if (spec.get('to') or 'parents').lower() == 'staff':
+        return _resolve_staff(spec)
+    return _resolve_parents(spec, term)
+
+
+def _resolve_parents(spec, term):
+    targets = resolve_audience(
+        spec.get('audience') or 'all', term,
+        class_id=spec.get('class_id'), arm_id=spec.get('arm_id'),
+        student_ids=spec.get('student_ids') or [])
+    gender = (spec.get('gender') or '').strip()
+    stream = (spec.get('stream') or '').strip()
+    exclude = {int(x) for x in (spec.get('exclude_ids') or []) if str(x).strip()}
+    out = []
+    for t in targets:
+        s = t['student']
+        if gender and (s.gender or '') != gender:
+            continue
+        if stream and (s.stream or '') != stream:
+            continue
+        if s.id in exclude:
+            continue
+        out.append(t)
+    return out
+
+
+def _resolve_staff(spec):
+    from models import StaffMember
+    from utils.branch_scope import scope_query
+    q = scope_query(StaffMember.query.filter(StaffMember.is_active.is_(True)), StaffMember)
+    # An explicit id list (e.g. a filtered HR directory selection) takes priority
+    # over the coarse staff_scope filters.
+    ids = [int(x) for x in (spec.get('staff_ids') or []) if str(x).strip()]
+    if ids:
+        q = q.filter(StaffMember.id.in_(ids))
+    scope = (spec.get('staff_scope') or 'all').lower()
+    if scope == 'teaching':
+        q = q.filter(StaffMember.staff_type == 'Teaching')
+    elif scope in ('non-teaching', 'nonteaching'):
+        q = q.filter(StaffMember.staff_type == 'Non-teaching')
+    elif scope == 'department' and spec.get('department_id'):
+        q = q.filter(StaffMember.department_id == int(spec['department_id']))
+    exclude = {int(x) for x in (spec.get('exclude_ids') or []) if str(x).strip()}
+    out = []
+    for st in q.order_by(StaffMember.surname, StaffMember.first_name).all():
+        if st.id in exclude:
+            continue
+        name = st.display_name or st.full_name
+        out.append({
+            'student': None, 'staff': st, 'name': name, 'parent_name': name,
+            'phone': st.phone or '', 'email': st.email or '', 'balance': None,
+            'user_id': st.user_id,      # for in-app (bell) delivery
+        })
+    return out
+
+
+def channel_is_email(channel):
+    return (channel or '').lower() == 'email'
+
+
+def channel_is_inapp(channel):
+    return (channel or '').lower() in ('in-app', 'inapp', 'in_app')
+
+
+def reachable_targets(targets, channel):
+    """Filter resolved audience targets to those actually reachable on ``channel``
+    — an email address for Email, a linked user account for In-app, else a phone
+    number for SMS/WhatsApp."""
+    if channel_is_inapp(channel):
+        return [t for t in targets if t.get('user_id')]
+    by_email = channel_is_email(channel)
+    return [t for t in targets if (t.get('email') if by_email else t.get('phone'))]
+
+
+def campaign_context(target, term):
+    """Personalisation context for a target, staff- or parent-aware."""
+    if target.get('staff') is not None:
+        return build_staff_context(target['staff'])
+    return build_context(target['student'], term,
+                         target.get('parent_name') or target.get('name'),
+                         target.get('balance'))
+
+
+def build_campaign(body, *, channel='SMS', audience='all', term=None, title=None,
+                   audience_label=None, class_id=None, arm_id=None, student_ids=None,
+                   created_by='system', status='Draft', scheduled_at=None,
+                   branch_id=None, spec=None, attachment_id=None):
+    """The single campaign builder used by every entry point (the composer UI and
+    automated triggers alike). Resolves recipients, keeps only those reachable on
+    the chosen channel, persists the Message + one personalised MessageRecipient
+    each, and returns the Message — or None when the body is empty or nobody is
+    reachable.
+
+    Pass ``spec`` (a recipient dict, see :func:`resolve_recipients`) for the full
+    parents/staff + filters engine; omit it to use the legacy ``audience`` args.
+    Reachability is channel-aware (phone for SMS/WhatsApp, email for Email). A
+    'Draft'/'Scheduled' status controls whether the scheduler may auto-send it.
+    """
+    from models import Message, MessageRecipient
+    from utils.branch_scope import branch_for_new
+
+    body = (body or '').strip()
+    if not body:
+        return None
+    if spec is not None:
+        targets = resolve_recipients(spec, term)
+        audience = spec.get('audience') or (spec.get('to') or 'parents')
+    else:
+        targets = resolve_audience(audience, term, class_id=class_id, arm_id=arm_id,
+                                   student_ids=student_ids or [])
+    reachable = reachable_targets(targets, channel)
+    if not reachable:
+        return None
+
+    # In-app (bell) notifications are instant and gateway-free, so they're
+    # delivered on creation and the campaign is recorded as already Sent.
+    inapp = channel_is_inapp(channel)
+    if inapp:
+        status = 'Sent'
+    label = audience_label or title or f'{str(audience).title()} ({len(reachable)})'
+    msg = Message(title=title or label, body=body, channel=channel,
+                  audience=str(audience), audience_label=label,
+                  term_id=term.id if term else None,
+                  branch_id=(branch_id if branch_id is not None else branch_for_new()),
+                  created_by=created_by, recipient_count=len(reachable),
+                  status=status, scheduled_at=scheduled_at,
+                  attachment_id=(attachment_id if channel_is_email(channel) else None),
+                  sent_count=(len(reachable) if inapp else 0))
+    db.session.add(msg)
+    db.session.flush()
+    from datetime import datetime as _now
+    for t in reachable:
+        ctx = campaign_context(t, term)
+        rendered = render(body, ctx)
+        rec = MessageRecipient(
+            message_id=msg.id,
+            student_id=(t['student'].id if t.get('student') is not None else None),
+            parent_name=(t.get('parent_name') or t.get('name')),
+            phone=t['phone'], email=t.get('email') or None,
+            body=rendered,
+            status=('Sent' if inapp else 'Pending'),
+            sent_at=(_now.now() if inapp else None))
+        db.session.add(rec)
+        if inapp and t.get('user_id'):
+            db.session.flush()            # need rec.id to link the bell for read-receipts
+            from models import Notification
+            db.session.add(Notification(
+                user_id=t['user_id'], title=(title or 'Notice'), body=rendered,
+                category='info', origin_recipient_id=rec.id))
+    db.session.commit()
+    return msg
+
+
+def create_draft_campaign(body, *, audience='all', term=None, title=None,
+                          channel='SMS', class_id=None, arm_id=None,
+                          student_ids=None, created_by='system'):
+    """Create a *Draft* campaign (never auto-dispatched) for a human to review and
+    send — the safe entry point for automated triggers. Thin wrapper over
+    :func:`build_campaign`; see it for reachability semantics."""
+    return build_campaign(body, channel=channel, audience=audience, term=term,
+                          title=title, class_id=class_id, arm_id=arm_id,
+                          student_ids=student_ids, created_by=created_by,
+                          status='Draft', scheduled_at=None)

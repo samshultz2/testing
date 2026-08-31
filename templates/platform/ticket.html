@@ -1,0 +1,41 @@
+{% extends "platform/_layout.html" %}
+{% block title %}{{ ticket.subject }}{% endblock %}
+{% block heading %}{{ ticket.subject }}{% endblock %}
+{% block subheading %}{{ ticket.subdomain }} · {{ ticket.status|capitalize }} · {{ ticket.priority }} priority{% endblock %}
+
+{% block head %}
+<style>
+  .msg{padding:12px 16px;border-radius:12px;margin-bottom:10px;max-width:80%}
+  .msg.school{background:var(--surface-2);border:1px solid var(--line)}
+  .msg.staff{background:var(--accent-soft);margin-left:auto}
+  .msg .who{font-size:11.5px;color:var(--faint);font-weight:600;margin-bottom:4px}
+  .msg .body{font-size:14px;line-height:1.55;white-space:pre-wrap}
+  .thread{display:flex;flex-direction:column}
+  .reply textarea{width:100%;min-height:90px;padding:11px 13px;border:1px solid var(--line);
+    border-radius:10px;background:transparent;color:var(--ink);font-family:inherit;font-size:14px}
+</style>
+{% endblock %}
+
+{% block content %}
+<a class="backlink" href="{{ url_for('platform.tickets') }}" style="display:inline-flex;gap:7px;align-items:center;color:var(--accent-ink);font-size:13.5px;margin-bottom:12px"><i class="fas fa-arrow-left"></i> All tickets</a>
+<div class="panel" style="padding:18px 20px">
+  <div class="thread">
+    {% for m in messages %}
+    <div class="msg {{ 'staff' if m.is_staff else 'school' }}">
+      <div class="who">{{ 'Platform' if m.is_staff else 'School' }} · {{ m.author or '—' }} · {{ m.at.strftime('%d %b %H:%M') if m.at else '' }}</div>
+      <div class="body">{{ m.body }}</div>
+    </div>
+    {% endfor %}
+  </div>
+  <form method="post" class="reply" style="margin-top:14px">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <textarea name="body" placeholder="Write a reply to the school…"></textarea>
+    <div style="display:flex;gap:10px;margin-top:10px">
+      <button class="btn primary" name="action" value="reply"><i class="fas fa-paper-plane"></i> Send reply</button>
+      {% if ticket.status == 'open' %}
+      <button class="btn" name="action" value="close" style="margin-left:auto"><i class="fas fa-check"></i> Close ticket</button>
+      {% endif %}
+    </div>
+  </form>
+</div>
+{% endblock %}

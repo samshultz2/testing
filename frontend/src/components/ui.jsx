@@ -1,0 +1,891 @@
+/* Reusable, accessible UI primitives for the attendance SPA.
+   Styling leans on the app's existing .btn/.form-control classes plus a few
+   scoped .att-* classes defined in the host template, so it matches the theme. */
+import React, { useState, useRef, useEffect, useId, useCallback } from 'react';
+import { createPortal } from 'react-dom';
+import { createRoot } from 'react-dom/client';
+import { useNav } from '../lib/section';
+import { useCountUp } from '../lib/hooks';
+
+// Elements that can hold keyboard focus — used by the modal focus trap.
+const FOCUSABLE =
+  'a[href],button:not([disabled]),textarea:not([disabled]),input:not([disabled]),' +
+  'select:not([disabled]),[tabindex]:not([tabindex="-1"])';
+
+// Catches render/runtime errors in a section so a crash shows a friendly panel
+// (with a reload + go-home option) instead of a blank screen, and reports the
+// error so it appears in the admin Error Log.
+export class ErrorBoundary extends React.Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(error) { return { error }; }
+  componentDidCatch(error, info) {
+    try {
+      if (window.reportClientError) {
+        window.reportClientError((error && error.message) || 'React error',
+          window.location.href, (error && error.stack) || (info && info.componentStack));
+      }
+    } catch (e) { /* never throw from the boundary */ }
+  }
+  render() {
+    if (!this.state.error) return this.props.children;
+    return (
+      <div className="card" style={{ margin: '1rem 0' }}>
+        <div className="card-body" style={{ textAlign: 'center', padding: '2rem 1rem' }}>
+          <i aria-hidden="true" className="fas fa-triangle-exclamation" style={{ fontSize: 'var(--text-2xl)', color: 'var(--danger)' }} />
+          <h3 style={{ marginTop: 12 }}>This section hit an error</h3>
+          <p className="text-muted">It’s been logged. Your other work is safe — try reloading this page.</p>
+          <div style={{ marginTop: 12, display: 'flex', gap: 8, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button className="btn btn-primary" onClick={() => window.location.reload()}>
+              <i aria-hidden="true" className="fas fa-rotate" /> Reload
+            </button>
+            <a className="btn btn-secondary" href="/">Go to Dashboard</a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+}
+
+// Wrap a section's content: intercepts clicks on internal <a href="/…"> links and
+// navigates with no reload (go() falls back to a real navigation for downloads /
+// cross-section / non-JSON targets). External, target=_blank, download and
+// data-native links are left alone, as are links that already handled the click.
+export function SectionShell({ go, children }) {
+  const ref = useRef();
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const onClick = (e) => {
+      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.shiftKey || e.button) return;
+      const a = e.target.closest('a');
+      if (!a || a.target === '_blank' || a.hasAttribute('download') || a.dataset.native) return;
+      const href = a.getAttribute('href');
+      if (!href || !href.startsWith('/')) return;   // external / tel: / mailto: / #
+      e.preventDefault();
+      go(href);
+    };
+    el.addEventListener('click', onClick);
+    return () => el.removeEventListener('click', onClick);
+  }, [go]);
+  return <div ref={ref}><ErrorBoundary>{children}</ErrorBoundary></div>;
+}
+
+// Context-aware in-section link (no reload) — pulls `go` from NavCtx so callers
+// don't thread it. Use for links that target another React page in the same
+// section; keep a plain <a> for downloads / cross-section / external links.
+export function L(props) {
+  const { go } = useNav();
+  return <Nav go={go} {...props} />;
+}
+
+// In-section link that navigates with no reload (via useSection's `go`), while
+// still being a real <a href> (middle-click / ctrl-click open a new tab).
+export function Nav({ go, href, className, children, title, style }) {
+  return (
+    <a href={href} className={className} title={title} style={style}
+       onClick={(e) => {
+         if (e.metaKey || e.ctrlKey || e.shiftKey || e.button) return;
+         e.preventDefault(); go(href);
+       }}>
+      {children}
+    </a>
+  );
+}
+
+// Standard page header (title + optional icon + right-aligned actions). Mirrors
+// the classic .page-header markup so React pages match the Jinja ones.
+export function PageHeader({ title, icon, actions }) {
+  return (
+    <div className="page-header">
+      <h1>{icon && <i className={'fas ' + icon} aria-hidden="true" />} {title}</h1>
+      {actions && <div className="page-header-actions">{actions}</div>}
+    </div>
+  );
+}
+
+// Classic .empty-state block (icon + heading + optional body), shared by every
+// converted list/section page.
+export function Empty({ icon = 'fa-inbox', title, children, actions, style }) {
+  return (
+    <div className="empty-state" style={style}>
+      <i className={'fas ' + icon} aria-hidden="true" /><h3>{title}</h3>{children}
+      {actions && <div className="empty-state-actions">{actions}</div>}
+    </div>
+  );
+}
+
+// Placeholder rows for a loading table body — pairs with the existing Skeleton
+// (.sk-bar) primitives: <tbody><SkeletonRows rows={5} cols={4} /></tbody>
+export function SkeletonRows({ rows = 6, cols = 4 }) {
+  return Array.from({ length: rows }).map((_, r) => (
+    <tr key={r} aria-hidden="true">
+      {Array.from({ length: cols }).map((_, c) => (
+        <td key={c}><div className={'sk-bar' + (c === 0 ? '' : ' short')} /></td>
+      ))}
+    </tr>
+  ));
+}
+
+// Section sub-navigation (the .fin-tabs row). `tabs` = [[key, icon, label], …];
+// `urls` maps key->href; `active` is the current key (a page may map to a tab).
+export function SectionTabs({ tabs, urls, active, go }) {
+  return (
+    <div className="fin-tabs">
+      {tabs.map(([key, icon, label]) => {
+        const cls = 'fin-tab' + (active === key ? ' active' : '');
+        const inner = <><i className={'fas ' + icon} aria-hidden="true" /> {label}</>;
+        return go
+          ? <Nav key={key} go={go} href={urls[key]} className={cls}>{inner}</Nav>
+          : <a key={key} href={urls[key]} className={cls}>{inner}</a>;
+      })}
+    </div>
+  );
+}
+
+// Type-ahead picker backed by a JSON search endpoint that returns
+// [{id, label}, …]. Calls onPick(id) ('' when cleared). Reused by issue forms,
+// student/parent pickers, etc.
+export function Autocomplete({ label, required, url, initialText, onPick, placeholder, minChars = 2 }) {
+  const [text, setText] = useState(initialText || '');
+  const [picked, setPicked] = useState(!!initialText);
+  const [list, setList] = useState([]);
+  const [open, setOpen] = useState(false);
+  const [active, setActive] = useState(-1);   // keyboard-highlighted option index
+  const tRef = useRef();
+  const listId = useId();
+  const labelId = useId();
+
+  const onInput = (v) => {
+    setText(v); setPicked(false); onPick(''); setActive(-1);
+    clearTimeout(tRef.current);
+    if (v.trim().length < minChars) { setList([]); setOpen(false); return; }
+    tRef.current = setTimeout(async () => {
+      try {
+        const r = await fetch(url + '?q=' + encodeURIComponent(v.trim()), { credentials: 'same-origin' });
+        const rows = await r.json();
+        setList(rows); setOpen(rows.length > 0); setActive(rows.length ? 0 : -1);
+      } catch (_) { /* ignore */ }
+    }, 220);
+  };
+  const pick = (o) => { setText(o.label); setPicked(true); onPick(o.id); setOpen(false); setActive(-1); };
+
+  const onKeyDown = (e) => {
+    if (!open || !list.length) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); setActive((i) => (i + 1) % list.length); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setActive((i) => (i - 1 + list.length) % list.length); }
+    else if (e.key === 'Enter') { if (active >= 0) { e.preventDefault(); pick(list[active]); } }
+    else if (e.key === 'Escape') { setOpen(false); setActive(-1); }
+  };
+
+  return (
+    <div className="form-group ac-wrap">
+      <label className="form-label" id={labelId}>{label}{required && <span className="required" aria-hidden="true"> *</span>}</label>
+      <input type="text" className={'form-control' + (picked ? ' picked' : '')} value={text} placeholder={placeholder}
+             autoComplete="off" role="combobox" aria-expanded={open} aria-controls={listId}
+             aria-autocomplete="list" aria-labelledby={labelId} aria-required={required || undefined}
+             aria-activedescendant={open && active >= 0 ? listId + '-' + active : undefined}
+             onChange={(e) => onInput(e.target.value)} onKeyDown={onKeyDown}
+             onBlur={() => setTimeout(() => setOpen(false), 150)} />
+      {open && (
+        <div className="ac-list" role="listbox" id={listId} aria-labelledby={labelId}>
+          {list.map((o, i) => (
+            <div key={o.id} id={listId + '-' + i} role="option" aria-selected={i === active}
+                 className={i === active ? 'active' : undefined}
+                 onMouseDown={() => pick(o)} onMouseEnter={() => setActive(i)}>
+              {o.label}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function Spinner({ label = 'Loading…' }) {
+  return (
+    <div role="status" aria-live="polite" style={{ display: 'flex', gap: 8, alignItems: 'center', color: 'var(--text-muted, var(--text-muted))', padding: '1.25rem' }}>
+      <span className="att-spinner" aria-hidden="true" />
+      <span>{label}</span>
+    </div>
+  );
+}
+
+// Skeleton placeholders for screens that fetch their own data (use while the
+// first load is in flight). Reuses the shimmer styles injected by section.js.
+export function Skeleton({ width = '100%', height = 14, style }) {
+  return <div className="sk-bar" style={{ width, height, margin: 0, ...style }} aria-hidden="true" />;
+}
+
+export function SkeletonCards({ count = 5 }) {
+  return (
+    <div aria-busy="true" aria-live="polite">
+      <span className="sr-only">Loading…</span>
+      <div className="sk-bar sk-title" aria-hidden="true" />
+      {Array.from({ length: count }).map((_, i) => (
+        <div className="sk-card" key={i}>
+          <div className="sk-bar" aria-hidden="true" />
+          <div className="sk-bar short" aria-hidden="true" />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function EmptyState({ icon = 'fa-inbox', title, hint, action }) {
+  return (
+    <div style={{ textAlign: 'center', padding: '2rem 1rem', color: 'var(--text-muted, var(--text-muted))' }}>
+      <i className={'fas ' + icon} style={{ fontSize: 'var(--text-2xl)', opacity: 0.45 }} aria-hidden="true" />
+      <p style={{ marginTop: 10, fontWeight: 600, color: 'var(--text-secondary, var(--text-primary))' }}>{title}</p>
+      {hint && <p style={{ fontSize: 'var(--text-sm)', maxWidth: 420, margin: '4px auto 0' }}>{hint}</p>}
+      {action && <div style={{ marginTop: 12 }}>{action}</div>}
+    </div>
+  );
+}
+
+export function ErrorState({ title = 'Something went wrong', detail, onRetry }) {
+  return (
+    <div role="alert" style={{ textAlign: 'center', padding: '1.5rem', color: '#991b1b' }}>
+      <i className="fas fa-triangle-exclamation" style={{ fontSize: 'var(--text-2xl)' }} aria-hidden="true" />
+      <p style={{ marginTop: 8, fontWeight: 600 }}>{title}</p>
+      {detail && <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted, var(--text-muted))' }}>{String(detail)}</p>}
+      {onRetry && <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: 10 }} onClick={onRetry}>Try again</button>}
+    </div>
+  );
+}
+
+// Shown when a screen genuinely needs the network (e.g. server-computed reports).
+export function OfflineRequired({ what = 'this' }) {
+  return (
+    <div role="status" style={{ textAlign: 'center', padding: '2rem 1rem', color: '#92400e' }}>
+      <i className="fas fa-wifi" style={{ fontSize: 'var(--text-2xl)', opacity: 0.6 }} aria-hidden="true" />
+      <p style={{ marginTop: 10, fontWeight: 600 }}>You’re offline</p>
+      <p style={{ fontSize: 'var(--text-sm)', maxWidth: 420, margin: '4px auto 0' }}>
+        {what} needs an internet connection. Reconnect and try again — your saved marks
+        will sync automatically in the meantime.
+      </p>
+    </div>
+  );
+}
+
+export function Banner({ tone = 'info', children, onClose, autoDismiss }) {
+  const tones = {
+    info: ['#eff6ff', '#1e40af', '#bfdbfe', 'fa-circle-info'],
+    success: ['#f0fdf4', '#166534', '#bbf7d0', 'fa-circle-check'],
+    warn: ['#fffbeb', '#92400e', '#fde68a', 'fa-triangle-exclamation'],
+    error: ['#fef2f2', '#991b1b', '#fecaca', 'fa-circle-xmark'],
+  };
+  const [bg, fg, bd, icon] = tones[tone] || tones.info;
+  // Success reads as "done" — let it clear itself so it doesn't linger; errors
+  // and warnings stay until the user acknowledges them. Opt in elsewhere via
+  // `autoDismiss`.
+  const dismissMs = autoDismiss != null ? autoDismiss : (tone === 'success' ? 4500 : 0);
+  useEffect(() => {
+    if (!onClose || !dismissMs) return undefined;
+    const t = setTimeout(onClose, dismissMs);
+    return () => clearTimeout(t);
+  }, [onClose, dismissMs]);
+  // Errors/warnings interrupt (assertive alert); success/info wait politely.
+  const urgent = tone === 'error' || tone === 'warn';
+  return (
+    <div role={urgent ? 'alert' : 'status'} aria-live={urgent ? 'assertive' : 'polite'} style={{ background: bg, color: fg, border: '1px solid ' + bd, borderRadius: 8, padding: '.55rem .8rem', display: 'flex', gap: 8, alignItems: 'center', fontSize: 'var(--text-sm)', margin: '6px 0', animation: 'banner-in 280ms cubic-bezier(0.16,1,0.3,1) both' }}>
+      <i className={'fas ' + icon} aria-hidden="true" style={{ color: fg }} />
+      <span style={{ flex: 1 }}>{children}</span>
+      {onClose && <button type="button" aria-label="Dismiss" className="att-x" onClick={onClose}>×</button>}
+    </div>
+  );
+}
+
+// Floating, auto-dismissing confirmation pinned to the bottom of the viewport —
+// so feedback for an action (e.g. Save) is visible right where the button is,
+// no scrolling up to find it. Auto-closes after a few seconds.
+// A single toast. When `stacked` it drops the fixed positioning and lets the
+// parent <ToastStack> place it; otherwise it positions itself bottom-centre
+// (back-compat for the many screens that render a lone <Toast>). A thin
+// progress bar drains over `duration` so the auto-dismiss feels intentional.
+export function Toast({ tone = 'success', children, onClose, duration = 4000, stacked = false }) {
+  useEffect(() => {
+    if (!onClose) return undefined;
+    const t = setTimeout(onClose, duration);
+    return () => clearTimeout(t);
+  }, [onClose, duration]);
+  const tones = {
+    info: ['#1e40af', '#eff6ff'], success: ['#166534', '#f0fdf4'],
+    warn: ['#92400e', '#fffbeb'], error: ['#991b1b', '#fef2f2'],
+  };
+  const [fg, bg] = tones[tone] || tones.success;
+  const icon = { success: 'fa-circle-check', warn: 'fa-triangle-exclamation', error: 'fa-circle-xmark', info: 'fa-circle-info' }[tone] || 'fa-circle-check';
+  // Errors/warnings interrupt (assertive alert); success/info wait politely.
+  const urgent = tone === 'error' || tone === 'warn';
+  const pos = stacked ? {} : {
+    position: 'fixed', left: '50%', bottom: 'max(20px, env(safe-area-inset-bottom))',
+    transform: 'translateX(-50%)', zIndex: 3000,
+  };
+  return (
+    <div className="toast-pop" role={urgent ? 'alert' : 'status'} aria-live={urgent ? 'assertive' : 'polite'} style={{
+      ...pos, position: stacked ? 'relative' : pos.position, background: bg, color: fg,
+      border: '1px solid ' + fg + '33', borderRadius: 10, padding: '.7rem 1rem',
+      boxShadow: '0 8px 28px rgba(0,0,0,.18)', display: 'flex', gap: 10, alignItems: 'center',
+      fontSize: 'var(--text-sm)', fontWeight: 600, maxWidth: '92vw', overflow: 'hidden' }}>
+      <i className={'fas ' + icon} aria-hidden="true" />
+      <span>{children}</span>
+      {onClose && <button type="button" aria-label="Dismiss" onClick={onClose}
+        style={{ background: 'none', border: 'none', color: fg, cursor: 'pointer', fontSize: 'var(--text-lg)', lineHeight: 1 }}>×</button>}
+      {onClose && <span className="toast-progress" aria-hidden="true" style={{ animationDuration: duration + 'ms' }} />}
+    </div>
+  );
+}
+
+// Bottom-centre host that stacks multiple toasts. `items` = [{id, tone, text,
+// duration}, …]; `onDismiss(id)` removes one. Screens that only ever show one
+// message can keep using a bare <Toast>.
+export function ToastStack({ items, onDismiss }) {
+  if (!items || !items.length) return null;
+  return (
+    <div className="toast-stack">
+      {items.map((t) => (
+        <Toast key={t.id} stacked tone={t.tone} duration={t.duration || 4000}
+               onClose={() => onDismiss(t.id)}>{t.text}</Toast>
+      ))}
+    </div>
+  );
+}
+
+// Submit/action button that resolves an async handler into a spinner and then a
+// brief green ✓ before resetting — gives every save a visible "it worked".
+// Drop-in for <button className="btn …">; pass the async work as `onAction`.
+export function SubmitButton({ onAction, children, className = 'btn btn-primary',
+                              doneLabel = 'Saved', successMs = 950, disabled, type = 'button', ...rest }) {
+  const [phase, setPhase] = useState('idle'); // idle | loading | success
+  const click = useCallback(async (e) => {
+    if (phase !== 'idle') return;
+    setPhase('loading');
+    try {
+      const ok = await onAction(e);
+      if (ok === false) { setPhase('idle'); return; }
+      setPhase('success');
+      setTimeout(() => setPhase('idle'), successMs);
+    } catch (_) { setPhase('idle'); }
+  }, [onAction, phase, successMs]);
+  const cls = className + (phase === 'loading' ? ' is-loading' : '') + (phase === 'success' ? ' is-success' : '');
+  return (
+    <button type={type} className={cls} onClick={click}
+            disabled={disabled || phase !== 'idle'} aria-busy={phase === 'loading'} {...rest}>
+      {phase === 'loading' && <><i className="fas fa-circle-notch fa-spin" aria-hidden="true" /> </>}
+      {phase === 'success'
+        ? <span className="btn-success-check"><i className="fas fa-check" aria-hidden="true" /> {doneLabel}</span>
+        : children}
+    </button>
+  );
+}
+
+// Milestone celebration banner — a calm, professional "you did the big thing"
+// summary (no confetti). `title` is the headline, `summary` the one-line recap,
+// `onDismiss` (optional) shows a × .
+export function SuccessBanner({ title = 'Done!', summary, onDismiss, icon = 'fa-check' }) {
+  return (
+    <div className="success-banner" role="status" aria-live="polite">
+      <span className="sb-icon" aria-hidden="true"><i className={'fas ' + icon} /></span>
+      <div className="sb-body">
+        <p className="sb-title">{title}</p>
+        {summary && <p className="sb-summary">{summary}</p>}
+      </div>
+      {onDismiss && <button type="button" className="sb-dismiss" aria-label="Dismiss" onClick={onDismiss}>×</button>}
+    </div>
+  );
+}
+
+// Animated count-up for dashboard stats. `value` may be a number or a
+// pre-formatted string with digits (e.g. "₦1,200"); non-digit prefixes/suffixes
+// are preserved. Honours prefers-reduced-motion (jumps straight to the value).
+export function Counter({ value, ms = 900, className, style }) {
+  const text = String(value == null ? '' : value);
+  const m = text.match(/-?[\d,]*\.?\d+/);
+  const target = m ? parseFloat(m[0].replace(/,/g, '')) : null;
+  const animated = useCountUp(target, { ms });
+  if (target == null) return <span className={className} style={style}>{text}</span>;
+  const decimals = (m[0].split('.')[1] || '').length;
+  const grouped = animated.toLocaleString(undefined, { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  return <span className={className} style={style}>{text.replace(m[0], grouped)}</span>;
+}
+
+// First-run guidance — a friendly "get started" card shown when a school has no
+// data yet, so the first screen offers a path instead of a wall of zeros.
+// `steps` = [{label, hint, href, done}, …]; done steps render checked.
+export function SetupChecklist({ title = 'Welcome — let’s set up your school', subtitle, steps }) {
+  return (
+    <div className="card setup-checklist">
+      <div className="sc-head">
+        <h2>{title}</h2>
+        <p>{subtitle || 'A few quick steps and you’re ready to go.'}</p>
+      </div>
+      <div className="setup-steps">
+        {steps.map((s, i) => {
+          const Tag = s.done || !s.href ? 'div' : 'a';
+          return (
+            <Tag key={i} className={'setup-step' + (s.done ? ' done' : '')} href={s.done ? undefined : s.href}>
+              <span className="sc-num" aria-hidden="true">{s.done ? <i className="fas fa-check" /> : i + 1}</span>
+              <span className="sc-label"><strong>{s.label}</strong>{s.hint && <span>{s.hint}</span>}</span>
+              {!s.done && s.href && <span className="sc-go" aria-hidden="true"><i className="fas fa-arrow-right" /></span>}
+            </Tag>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Accessible modal dialog. Renders into a portal at <body> so it's never
+// clipped by an ancestor's overflow/transform. Handles the things every modal
+// needs and which the hand-rolled ones kept getting wrong:
+//   • focus is moved into the dialog on open and restored to the trigger on close
+//   • Tab/Shift+Tab are trapped inside the dialog
+//   • Escape closes; background scroll is locked while open
+//   • clicking the backdrop closes (a drag that starts inside the panel does not)
+// Props: title, icon, onClose, footer, size ('sm'|'md'|'lg'|'xl'), labelledBy,
+// closeOnBackdrop (default true), initialFocusRef (element to focus first).
+export function Modal({ title, icon, onClose, children, footer, size = 'md',
+                       closeOnBackdrop = true, initialFocusRef, ariaLabel }) {
+  const panelRef = useRef(null);
+  const titleId = useId();
+  // Keep the latest onClose without re-running the mount effect (callers usually
+  // pass an inline arrow, which would otherwise steal focus on every render).
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+
+  useEffect(() => {
+    const prevFocus = document.activeElement;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    // Move focus into the dialog (caller's choice, else first focusable, else panel).
+    const panel = panelRef.current;
+    const first = (initialFocusRef && initialFocusRef.current) ||
+      (panel && panel.querySelector(FOCUSABLE)) || panel;
+    if (first && first.focus) first.focus();
+
+    const onKey = (e) => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); closeRef.current && closeRef.current(); return; }
+      if (e.key !== 'Tab' || !panelRef.current) return;
+      const f = Array.from(panelRef.current.querySelectorAll(FOCUSABLE))
+        .filter((el) => el.offsetParent !== null || el === document.activeElement);
+      if (!f.length) { e.preventDefault(); return; }
+      const lo = f[0], hi = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === lo) { e.preventDefault(); hi.focus(); }
+      else if (!e.shiftKey && document.activeElement === hi) { e.preventDefault(); lo.focus(); }
+    };
+    document.addEventListener('keydown', onKey, true);
+    return () => {
+      document.removeEventListener('keydown', onKey, true);
+      document.body.style.overflow = prevOverflow;
+      if (prevFocus && prevFocus.focus) prevFocus.focus();   // restore to trigger
+    };
+  }, []);   // eslint-disable-line react-hooks/exhaustive-deps -- mount/unmount only
+
+  const maxWidth = { sm: 420, md: 560, lg: 760, xl: 960 }[size] || 560;
+  // mousedown target check: a click that *starts* on the backdrop closes; a drag
+  // that starts inside the panel and releases on the backdrop does not.
+  const onBackdrop = (e) => { if (closeOnBackdrop && e.target === e.currentTarget) closeRef.current && closeRef.current(); };
+
+  return createPortal(
+    <div role="presentation" onMouseDown={onBackdrop}
+         style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 3000,
+                  display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+                  padding: '5vh 1rem', overflowY: 'auto' }}>
+      <div ref={panelRef} role="dialog" aria-modal="true" tabIndex={-1}
+           aria-labelledby={title ? titleId : undefined}
+           aria-label={!title ? ariaLabel : undefined}
+           style={{ background: 'var(--bg-card, #fff)', color: 'inherit', borderRadius: 12,
+                    width: '100%', maxWidth, boxShadow: '0 20px 60px rgba(0,0,0,.3)',
+                    overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}>
+        {title && (
+          <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                           gap: 12, padding: '1rem 1.25rem', borderBottom: '1px solid var(--border-color, var(--border-color))' }}>
+            <h3 id={titleId} style={{ margin: 0, fontSize: 'var(--text-lg)' }}>
+              {icon && <i className={'fas ' + icon} aria-hidden="true" />} {title}
+            </h3>
+            <button type="button" aria-label="Close" onClick={() => closeRef.current && closeRef.current()}
+                    style={{ background: 'none', border: 'none', fontSize: 'var(--text-xl)', lineHeight: 1,
+                             cursor: 'pointer', color: 'inherit', opacity: .6 }}>×</button>
+          </header>
+        )}
+        <div style={{ padding: '1.1rem 1.25rem', overflowY: 'auto' }}>{children}</div>
+        {footer && (
+          <footer style={{ display: 'flex', gap: '.6rem', justifyContent: 'flex-end',
+                           padding: '.85rem 1.25rem', borderTop: '1px solid var(--border-color, var(--border-color))' }}>
+            {footer}
+          </footer>
+        )}
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+// Themed, accessible confirmation dialog used imperatively via confirm() below.
+function ConfirmDialog({ title = 'Please confirm', message, confirmText = 'Confirm',
+                        cancelText = 'Cancel', tone = 'primary', icon, onResolve }) {
+  const okRef = useRef(null);
+  // Destructive confirms get a clear warning icon by default.
+  if (!icon) icon = tone === 'danger' ? 'fa-triangle-exclamation' : 'fa-circle-question';
+  return (
+    <Modal title={title} icon={icon} size="sm" onClose={() => onResolve(false)} initialFocusRef={okRef}
+           footer={<>
+             <Button variant="light" onClick={() => onResolve(false)}>{cancelText}</Button>
+             <Button ref={okRef} variant={tone === 'danger' ? 'danger' : 'primary'}
+                     onClick={() => onResolve(true)}>{confirmText}</Button>
+           </>}>
+      <p style={{ margin: 0, lineHeight: 1.5 }}>{message}</p>
+    </Modal>
+  );
+}
+
+// Promise-based replacement for window.confirm(): themed, accessible, non-blocking.
+// Usage:  if (await confirm('Delete this student?')) doDelete();
+//   or:   if (await confirm({ title, message, confirmText: 'Delete', tone: 'danger' })) …
+// Resolves true on confirm, false on cancel / Escape / backdrop.
+export function confirm(opts) {
+  const o = typeof opts === 'string' ? { message: opts } : (opts || {});
+  return new Promise((resolve) => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const done = (val) => { root.unmount(); host.remove(); resolve(val); };
+    root.render(<ConfirmDialog {...o} onResolve={done} />);
+  });
+}
+
+// Themed, accessible single-value input dialog used imperatively via promptDialog().
+function PromptDialog({ title = 'Enter a value', message, label, placeholder = '',
+                       defaultValue = '', confirmText = 'OK', cancelText = 'Cancel',
+                       inputType = 'text', required = true, onResolve }) {
+  const [value, setValue] = useState(defaultValue);
+  const inputRef = useRef(null);
+  const submit = (e) => {
+    if (e) e.preventDefault();
+    const v = value == null ? '' : String(value).trim();
+    if (required && !v) { if (inputRef.current) inputRef.current.focus(); return; }
+    onResolve(v);
+  };
+  return (
+    <Modal title={title} icon="fa-keyboard" size="sm" onClose={() => onResolve(null)}
+           initialFocusRef={inputRef}
+           footer={<>
+             <Button variant="light" onClick={() => onResolve(null)}>{cancelText}</Button>
+             <Button variant="primary" onClick={() => submit()}>{confirmText}</Button>
+           </>}>
+      <form onSubmit={submit}>
+        {message && <p style={{ margin: '0 0 .7rem', lineHeight: 1.5 }}>{message}</p>}
+        {label && <label className="form-label" htmlFor="prompt-input">{label}</label>}
+        <input ref={inputRef} id="prompt-input" className="form-control" type={inputType}
+               value={value} placeholder={placeholder} autoFocus
+               onChange={(e) => setValue(e.target.value)} />
+      </form>
+    </Modal>
+  );
+}
+
+// Promise-based replacement for window.prompt(): themed, accessible, non-blocking.
+// Usage:  const name = await promptDialog('Name this filter'); if (name) …
+//   or:   await promptDialog({ title, label, inputType: 'number', defaultValue: '1' })
+// Resolves the trimmed string on OK, or null on cancel / Escape / backdrop.
+export function promptDialog(opts) {
+  const o = typeof opts === 'string' ? { message: opts } : (opts || {});
+  return new Promise((resolve) => {
+    const host = document.createElement('div');
+    document.body.appendChild(host);
+    const root = createRoot(host);
+    const done = (val) => { root.unmount(); host.remove(); resolve(val); };
+    root.render(<PromptDialog {...o} onResolve={done} />);
+  });
+}
+
+// Status badge mapped onto the app's existing .badge-* theme classes, so a tone
+// name ('success'/'danger'/…) is the single way to label state across modules.
+export function Badge({ tone = 'secondary', icon, children, title }) {
+  const cls = { success: 'success', danger: 'danger', error: 'danger', warn: 'warning',
+                warning: 'warning', info: 'info', primary: 'primary', secondary: 'secondary',
+                gray: 'secondary' }[tone] || 'secondary';
+  return (
+    <span className={'badge badge-' + cls} title={title}>
+      {icon && <i className={'fas ' + icon} aria-hidden="true" />}{icon && children ? ' ' : ''}{children}
+    </span>
+  );
+}
+
+export function Pill({ tone = 'gray', children }) {
+  const t = {
+    green: ['#dcfce7', '#166534'], red: ['#fee2e2', '#991b1b'],
+    amber: ['#fef3c7', '#92400e'], gray: ['#f1f5f9', 'var(--text-secondary)'],
+  }[tone] || ['#f1f5f9', 'var(--text-secondary)'];
+  return <span style={{ background: t[0], color: t[1], borderRadius: 999, padding: '2px 10px', fontSize: 'var(--text-xs)', fontWeight: 600, whiteSpace: 'nowrap' }}>{children}</span>;
+}
+
+export function Field({ label, htmlFor, children, grow }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, flex: grow ? 1 : undefined, minWidth: 180 }}>
+      <label htmlFor={htmlFor} style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--text-secondary, var(--text-primary))' }}>{label}</label>
+      {children}
+    </div>
+  );
+}
+
+export function Select({ id, value, onChange, options, placeholder, disabled }) {
+  return (
+    <select id={id} className="form-control" value={value == null ? '' : value} disabled={disabled}
+            onChange={(e) => onChange(e.target.value)}>
+      {placeholder && <option value="">{placeholder}</option>}
+      {options.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+    </select>
+  );
+}
+
+export function Toolbar({ children }) {
+  return <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 12 }}>{children}</div>;
+}
+
+// Horizontal-scroll container for wide tables on narrow screens. Unlike a plain
+// overflow:auto <div>, this is a labelled, keyboard-focusable region: keyboard
+// users can Tab to it and scroll with the arrow keys, and screen readers
+// announce it (WAI-ARIA "scrollable region" pattern). Pass `maxHeight` to also
+// cap vertical height with a sticky-friendly scroll area.
+export function TableWrap({ label = 'Table', children, maxHeight }) {
+  return (
+    <div className="table-responsive" role="region" aria-label={label} tabIndex={0}
+         style={maxHeight ? { maxHeight, overflow: 'auto' } : undefined}>
+      {children}
+    </div>
+  );
+}
+
+export const Button = React.forwardRef(function Button(
+  { variant = 'primary', size, loading, disabled, icon, children, ...rest }, ref) {
+  const cls = ['btn', 'btn-' + variant, size === 'sm' ? 'btn-sm' : '', loading ? 'is-loading' : '']
+    .filter(Boolean).join(' ');
+  return (
+    <button ref={ref} type="button" className={cls} disabled={disabled || loading}
+            aria-busy={loading || undefined} {...rest}>
+      {loading && <i className="fas fa-spinner fa-spin" aria-hidden="true" />}
+      {!loading && icon && <i className={'fas ' + icon} aria-hidden="true" />}
+      {children}
+    </button>
+  );
+});
+
+// Headline stat cards (e.g. attendance rate / students / school days).
+export function StatCards({ items }) {
+  return (
+    <div className="att-stats">
+      {items.map((it, i) => (
+        <div key={i} className={'att-stat' + (it.primary ? ' is-primary' : '')}>
+          <div className="att-stat-value">{it.value}</div>
+          <div className="att-stat-label">{it.label}</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// Compact label/value grid for secondary totals.
+export function InfoGrid({ items }) {
+  return (
+    <div className="att-info">
+      {items.map((it, i) => (
+        <div key={i} className="att-info-item">
+          <span className="k">{it.label}</span>
+          <span className="v" style={it.tone === 'primary' ? { color: 'var(--primary, #2563eb)' } : undefined}>{it.value}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function SectionTitle({ icon, children }) {
+  return <h3 className="att-section-title">{icon && <i className={'fas ' + icon} aria-hidden="true" />}{children}</h3>;
+}
+
+// Performance bands (Excellent / Good / Fair / Poor).
+export function PerfBands({ bands }) {
+  const tones = {
+    excellent: ['rgba(76,175,80,.1)', '#4caf50'],
+    good: ['rgba(33,150,243,.1)', '#2196f3'],
+    fair: ['rgba(255,193,7,.1)', 'var(--warning)'],
+    poor: ['rgba(244,67,54,.1)', '#f44336'],
+  };
+  return (
+    <div className="att-perf">
+      {bands.map((b) => {
+        const [bg, bd] = tones[b.tone] || tones.good;
+        return (
+          <div key={b.tone} className="att-perf-card" style={{ background: bg, borderLeftColor: bd }}>
+            <div className="t">{b.title}</div>
+            <div className="c">{b.count}</div>
+            <div className="r">{b.range}</div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// AM/PM tick marks for a single day (✓ present / ✗ absent).
+export function AmPm({ am, pm }) {
+  return (
+    <span className="att-mark" aria-label={`AM ${am ? 'present' : 'absent'}, PM ${pm ? 'present' : 'absent'}`}>
+      <span className={am ? 'ok' : 'no'}>{am ? '✓' : '✗'}</span>
+      <span className={pm ? 'ok' : 'no'}>{pm ? '✓' : '✗'}</span>
+    </span>
+  );
+}
+
+// Shared data table. `columns` = [{ key, label, align, width, render(row),
+//   sortable, sortValue(row) }].
+// Renders a responsive .data-table that stacks into labelled cards on mobile.
+// Opt-in scaling features so big lists stay usable:
+//   - pageSize: paginate client-side (caps the DOM at pageSize rows — the fix for
+//     1000+ record screens that aren't server-paginated).
+//   - sticky + maxHeight: sticky header inside a capped scroll region.
+//   - sortable columns: click the header to sort (sortValue(row) or row[key]).
+export function Table({ columns, rows, rowKey, empty, sticky, stack = true, className = '',
+                       pageSize, maxHeight, initialSort }) {
+  const [sort, setSort] = useState(initialSort || null);  // {key, dir:'asc'|'desc'}
+  const [page, setPage] = useState(1);
+  const anySortable = columns.some((c) => c.sortable);
+
+  if (!rows || !rows.length) {
+    return empty !== undefined ? empty : <Empty title="Nothing to show" />;
+  }
+
+  // Sort (client-side) when a sortable header is active.
+  let view = rows;
+  if (sort) {
+    const col = columns.find((c) => c.key === sort.key);
+    if (col) {
+      const val = col.sortValue || ((r) => r[col.key]);
+      const dir = sort.dir === 'desc' ? -1 : 1;
+      view = rows.slice().sort((a, b) => {
+        const x = val(a), y = val(b);
+        if (x == null && y == null) return 0;
+        if (x == null) return 1; if (y == null) return -1;
+        if (typeof x === 'number' && typeof y === 'number') return (x - y) * dir;
+        return String(x).localeCompare(String(y), undefined, { numeric: true }) * dir;
+      });
+    }
+  }
+
+  const pages = pageSize ? Math.max(1, Math.ceil(view.length / pageSize)) : 1;
+  const cur = Math.min(page, pages);
+  const pageRows = pageSize ? view.slice((cur - 1) * pageSize, cur * pageSize) : view;
+
+  const cls = ['data-table', stack ? 'table-stack' : '',
+    (sticky || maxHeight) ? 'table-sticky' : '', className].filter(Boolean).join(' ');
+  const key = rowKey || ((r, i) => r.id ?? i);
+  const toggleSort = (c) => {
+    if (!c.sortable) return;
+    setPage(1);
+    setSort((s) => (s && s.key === c.key
+      ? { key: c.key, dir: s.dir === 'asc' ? 'desc' : 'asc' }
+      : { key: c.key, dir: 'asc' }));
+  };
+
+  return (
+    <>
+      <TableWrap label="Data table" maxHeight={maxHeight}>
+        <table className={cls}>
+          <thead>
+            <tr>{columns.map((c) => {
+              const active = sort && sort.key === c.key;
+              return (
+                <th key={c.key} style={{ textAlign: c.align || 'left', width: c.width,
+                  cursor: c.sortable ? 'pointer' : undefined, userSelect: c.sortable ? 'none' : undefined }}
+                    onClick={c.sortable ? () => toggleSort(c) : undefined}
+                    aria-sort={active ? (sort.dir === 'asc' ? 'ascending' : 'descending') : undefined}>
+                  {c.label}
+                  {c.sortable && <i aria-hidden="true" className={'fas ' + (active ? (sort.dir === 'asc' ? 'fa-sort-up' : 'fa-sort-down') : 'fa-sort')} style={{ marginLeft: 6, opacity: active ? 0.9 : 0.35, fontSize: '.8em' }} />}
+                </th>
+              );
+            })}</tr>
+          </thead>
+          <tbody>
+            {pageRows.map((row, i) => (
+              <tr key={key(row, i)}>
+                {columns.map((c) => (
+                  <td key={c.key} data-label={typeof c.label === 'string' ? c.label : undefined}
+                      style={{ textAlign: c.align || 'left' }}>
+                    {c.render ? c.render(row, i) : row[c.key]}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </TableWrap>
+      {pageSize && pages > 1 && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--sp-2)', padding: 'var(--sp-2) var(--sp-1) 0' }}>
+          <span className="text-muted text-sm">{view.length} record{view.length === 1 ? '' : 's'}{anySortable ? '' : ''}</span>
+          <Pagination page={cur} pages={pages} onPage={setPage} />
+        </div>
+      )}
+    </>
+  );
+}
+
+// Shared pager — was hand-rolled in 3+ screens. `onPage(n)` is called with the
+// target page; prev/next are disabled at the ends.
+export function Pagination({ page, pages, onPage }) {
+  if (!pages || pages <= 1) return null;
+  return (
+    <div className="pagination" role="navigation" aria-label="Pagination">
+      <button type="button" className="btn btn-light btn-sm" disabled={page <= 1}
+              onClick={() => onPage(page - 1)} aria-label="Previous page">
+        <i className="fas fa-chevron-left" aria-hidden="true" /> Prev
+      </button>
+      <span className="pagination-status">Page {page} of {pages}</span>
+      <button type="button" className="btn btn-light btn-sm" disabled={page >= pages}
+              onClick={() => onPage(page + 1)} aria-label="Next page">
+        Next <i className="fas fa-chevron-right" aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
+
+// File picker with a button + current-file preview/clear, wrapping postFile-style
+// uploads. `onPick(file)` receives the chosen File; `busy` disables it.
+export function FileUpload({ label = 'Upload file', accept, onPick, busy, hint, currentUrl, onClear }) {
+  const id = useId();
+  return (
+    <div className="form-group">
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-3)', flexWrap: 'wrap' }}>
+        <label className="btn btn-secondary" htmlFor={id} style={{ marginBottom: 0, cursor: busy ? 'wait' : 'pointer' }}>
+          <i className="fas fa-upload" aria-hidden="true" /> {label}
+        </label>
+        <input id={id} type="file" accept={accept} disabled={busy} style={{ display: 'none' }}
+               onChange={(e) => { const f = e.target.files && e.target.files[0]; e.target.value = ''; if (f) onPick(f); }} />
+        {currentUrl && <img src={currentUrl} alt="" style={{ height: 40, borderRadius: 6, objectFit: 'contain' }} />}
+        {currentUrl && onClear && (
+          <button type="button" className="btn btn-light btn-sm" disabled={busy} onClick={onClear}>
+            <i className="fas fa-trash" aria-hidden="true" /> Remove
+          </button>
+        )}
+      </div>
+      {hint && <div className="form-hint">{hint}</div>}
+    </div>
+  );
+}
+
+// Global panel for marks that were permanently rejected by the server.
+export function FailedMarks({ items, onRetry, onDiscard }) {
+  if (!items || !items.length) return null;
+  return (
+    <div className="alert alert-danger" role="alert" style={{ marginTop: 12 }}>
+      <b>{items.length} saved mark(s) couldn’t sync</b> (the server rejected them):
+      <ul style={{ margin: '6px 0 0', paddingLeft: 18 }}>
+        {items.map((f) => (
+          <li key={f.id} style={{ fontSize: 'var(--text-sm)', margin: '4px 0' }}>
+            {(f.payload && f.payload.date) || '—'} — {f.reason}
+            <button type="button" className="btn btn-light btn-sm" style={{ marginLeft: 8 }} onClick={() => onRetry(f)}>Retry</button>
+            <button type="button" className="btn btn-light btn-sm" style={{ marginLeft: 4 }} onClick={() => onDiscard(f)}>Discard</button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}

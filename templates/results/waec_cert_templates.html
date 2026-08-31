@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+{% block title %}WAEC Result Templates{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('results.index') }}">Results</a>
+  <a href="{{ url_for('results.waec_cert_generator') }}">Result Generator</a> <span>Templates</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+  .tm-wrap{max-width:1080px;margin:0 auto;padding:2px 2px 44px}
+  .tm-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 18px}
+  .tm-head h1{margin:0;font-size:1.25rem;font-weight:800;color:var(--text-primary)}
+  .tm-head .sp{margin-left:auto;display:flex;gap:8px}
+  .btn{display:inline-flex;align-items:center;gap:6px;padding:8px 13px;border-radius:var(--radius-md);
+    font-weight:600;font-size:.85rem;text-decoration:none;cursor:pointer;border:1px solid var(--border-color);
+    background:var(--bg-card);color:var(--text-primary)}
+  .btn.primary{background:var(--primary);color:#fff;border-color:var(--primary)}
+  .btn.sm{padding:5px 9px;font-size:.78rem}
+  .btn.danger{color:var(--danger);border-color:color-mix(in srgb,var(--danger) 40%,transparent)}
+  .card{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);
+    box-shadow:var(--shadow-xs);margin-bottom:20px}
+  .card h3{font-size:.9rem;font-weight:800;margin:0;padding:13px 16px;border-bottom:1px solid var(--border-light)}
+  .card .bd{padding:16px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  @media(max-width:640px){ .grid{grid-template-columns:1fr} }
+  label{display:block;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.03em;
+    color:var(--text-muted);margin:0 0 5px}
+  input[type=text],select{width:100%;padding:9px 11px;border:1px solid var(--border-color);border-radius:var(--radius-md);
+    background:var(--bg-body);color:var(--text-primary);font-size:.9rem}
+  .chk{display:flex;align-items:center;gap:8px;font-size:.85rem;font-weight:600;color:var(--text-primary)}
+  .chk input{width:16px;height:16px;accent-color:var(--primary)}
+  table{width:100%;border-collapse:collapse;font-size:13.5px}
+  th,td{padding:11px 14px;border-bottom:1px solid var(--border-light);text-align:left;vertical-align:middle}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);font-weight:700}
+  tr.arch{opacity:.55}
+  .tag{display:inline-block;font-size:11px;font-weight:700;padding:2px 8px;border-radius:99px}
+  .tag.def{background:var(--primary-light);color:var(--primary)}
+  .tag.act{background:#dcfce7;color:#166534} .tag.ar{background:#f1f5f9;color:#64748b}
+  .acts{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end}
+  .tablewrap{overflow-x:auto}
+  .muted{color:var(--text-muted);font-size:.82rem}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="tm-wrap">
+  <div class="tm-head">
+    <h1><i class="fas fa-layer-group" style="color:var(--primary)"></i> WAEC Result Templates</h1>
+    <div class="sp">
+      <a class="btn" href="{{ url_for('results.waec_cert_generator') }}"><i class="fas fa-id-card"></i> Generator</a>
+      <a class="btn" href="{{ url_for('results.waec_cert_bulk') }}"><i class="fas fa-layer-group"></i> Bulk</a>
+    </div>
+  </div>
+
+  {% with msgs = get_flashed_messages(with_categories=true) %}
+    {% for cat, m in msgs %}<div class="card"><div class="bd" style="padding:10px 16px">{{ m }}</div></div>{% endfor %}
+  {% endwith %}
+
+  <div class="card">
+    <h3>{{ 'Edit template' if edit_row else 'Create a template' }}</h3>
+    <div class="bd">
+      <p class="muted" style="margin:0 0 12px">Bind a design to an exam year and/or branch. When generating, the best-matching
+        template is pre-selected automatically — historical years keep their own design.</p>
+      <form method="post" action="{{ url_for('results.waec_cert_edit_template', tpl_id=edit_row.id) if edit_row else url_for('results.waec_cert_create_template') }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <div class="grid">
+          <div><label>Template name</label><input type="text" name="name" required value="{{ edit_row.name if edit_row else '' }}" placeholder="e.g. WAEC 2026 Prestige"></div>
+          <div><label>Base design</label>
+            <select name="base_layout">
+              {% for l in layouts %}<option value="{{ l.key }}" {{ 'selected' if edit_row and edit_row.base_layout == l.key }}>{{ l.name }}</option>{% endfor %}
+            </select></div>
+          <div><label>Exam year</label>
+            <select name="year">
+              <option value="">Any year</option>
+              {% for y in years %}<option value="{{ y }}" {{ 'selected' if edit_row and edit_row.year == y }}>{{ y }}</option>{% endfor %}
+            </select></div>
+          <div><label>Branch</label>
+            <select name="branch_id">
+              <option value="">All branches</option>
+              {% for b in branches %}<option value="{{ b.id }}" {{ 'selected' if edit_row and edit_row.branch_id == b.id }}>{{ b.name }}</option>{% endfor %}
+            </select></div>
+          <div><label>Default component preset</label>
+            <select name="preset">
+              <option value="">Template default</option>
+              {% for p in presets %}<option value="{{ p.key }}" {{ 'selected' if edit_row and (edit_row.options().get('preset') == p.key) }}>{{ p.label }}</option>{% endfor %}
+            </select></div>
+          <div><label>Description</label><input type="text" name="description" value="{{ edit_row.description if edit_row and edit_row.description else '' }}" placeholder="Optional note"></div>
+        </div>
+        <label class="chk" style="margin-top:12px"><input type="checkbox" name="is_default" {{ 'checked' if edit_row and edit_row.is_default }}> Make this the default for its year/branch scope</label>
+        <div style="margin-top:14px;display:flex;gap:8px">
+          <button class="btn primary" type="submit"><i class="fas fa-floppy-disk"></i> {{ 'Save changes' if edit_row else 'Create template' }}</button>
+          {% if edit_row %}<a class="btn" href="{{ url_for('results.waec_cert_templates') }}">Cancel</a>{% endif %}
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="card">
+    <h3>Templates</h3>
+    <div class="tablewrap">
+      <table>
+        <thead><tr><th>Name</th><th>Design</th><th>Scope</th><th>Status</th><th>Ver</th><th></th></tr></thead>
+        <tbody>
+          {% for t in rows %}
+          <tr class="{{ 'arch' if t.status == 'archived' }}">
+            <td><strong>{{ t.name }}</strong>{% if t.is_default %} <span class="tag def">Default</span>{% endif %}
+              {% if t.description %}<div class="muted">{{ t.description }}</div>{% endif %}</td>
+            <td>{{ (layouts | selectattr('key','equalto',t.base_layout) | map(attribute='name') | first) or t.base_layout }}</td>
+            <td>{{ t.year or 'Any year' }}{% if t.branch_id %} · {{ (branches | selectattr('id','equalto',t.branch_id) | map(attribute='name') | first) or 'Branch' }}{% else %} · All branches{% endif %}</td>
+            <td>{% if t.status == 'active' %}<span class="tag act">Active</span>{% else %}<span class="tag ar">Archived</span>{% endif %}</td>
+            <td>v{{ t.version }}</td>
+            <td>
+              <div class="acts">
+                <a class="btn sm" href="{{ url_for('results.waec_cert_templates', edit=t.id) }}">Edit</a>
+                {% if not t.is_default and t.status == 'active' %}
+                <form method="post" action="{{ url_for('results.waec_cert_template_default', tpl_id=t.id) }}" style="display:inline">
+                  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn sm" type="submit">Set default</button></form>
+                {% endif %}
+                <form method="post" action="{{ url_for('results.waec_cert_duplicate_template', tpl_id=t.id) }}" style="display:inline">
+                  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn sm" type="submit">Duplicate</button></form>
+                <form method="post" action="{{ url_for('results.waec_cert_template_status', tpl_id=t.id) }}" style="display:inline">
+                  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn sm" type="submit">{{ 'Archive' if t.status == 'active' else 'Activate' }}</button></form>
+                <form method="post" action="{{ url_for('results.waec_cert_delete_template', tpl_id=t.id) }}" style="display:inline" onsubmit="return confirm('Delete this template?')">
+                  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn sm danger" type="submit">Delete</button></form>
+              </div>
+            </td>
+          </tr>
+          {% else %}
+          <tr><td colspan="6" class="muted" style="padding:24px;text-align:center">No templates yet — create one above. Until then the generator uses the built-in designs.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {% if db_presets %}
+  <div class="card">
+    <h3>Saved component presets</h3>
+    <div class="bd">
+      {% for p in db_presets %}
+      <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border-light)">
+        <strong>{{ p.name }}</strong><span class="muted">{{ p.components()|length }} components</span>
+        <form method="post" action="{{ url_for('results.waec_cert_delete_preset', preset_id=p.id) }}" style="margin-left:auto">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn sm danger" type="submit">Delete</button></form>
+      </div>
+      {% endfor %}
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,33 @@
+{% extends "website/apply_base.html" %}
+{% block apply_content %}
+<div class="wb-eyebrow">Admissions</div>
+<h1 class="wb-h2">Track your application</h1>
+<p class="wb-lead">Enter your application number and the student's surname to see the current status.</p>
+
+<form method="POST" action="{{ url_for('website.apply_track') }}" class="wb-form" style="margin-top:1.4rem;max-width:440px">
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+  <div class="wb-field">
+    <label>Application number</label>
+    <input name="application_no" required>
+  </div>
+  <div class="wb-field">
+    <label>Student surname</label>
+    <input name="surname" required>
+  </div>
+  <div><button type="submit" class="wb-btn wb-btn-primary">Check status</button></div>
+</form>
+
+{% if searched %}
+  <div style="margin-top:1.8rem">
+    {% if result %}
+      <div class="wb-card">
+        <div class="wb-muted" style="font-size:.85rem">Application {{ result.application_no }}</div>
+        <h3 style="margin:.3rem 0 .6rem">{{ result.full_name }}</h3>
+        <p style="margin:0">Status: <span class="wb-pill" style="background:var(--wb-primary)">{{ result.status }}</span></p>
+      </div>
+    {% else %}
+      <div class="wb-alert err">We couldn't find an application matching that number and surname. Please check both and try again.</div>
+    {% endif %}
+  </div>
+{% endif %}
+{% endblock %}

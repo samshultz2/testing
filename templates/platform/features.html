@@ -1,0 +1,64 @@
+{% extends "platform/_layout.html" %}
+{% block title %}Plans &amp; features{% endblock %}
+{% block heading %}Plans &amp; features{% endblock %}
+{% block subheading %}What each plan tier unlocks — features and numeric limits. Changes are live everywhere.{% endblock %}
+
+{% block head %}
+<style>
+  .matrix{overflow-x:auto}
+  table.mx{width:100%;border-collapse:collapse;font-size:13.5px;min-width:640px}
+  table.mx th,table.mx td{padding:11px 14px;border-bottom:1px solid var(--line-2);text-align:center}
+  table.mx thead th{background:var(--surface-2);font-size:11px;text-transform:uppercase;letter-spacing:.05em;
+    color:var(--faint);font-weight:700}
+  table.mx tbody th{text-align:left;font-weight:600;color:var(--ink);white-space:nowrap}
+  .grp-row td,.grp-row th{background:var(--surface-2);font-size:11px;text-transform:uppercase;letter-spacing:.08em;
+    color:var(--faint);font-weight:700;text-align:left}
+  table.mx input[type=number]{width:82px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;
+    background:transparent;color:var(--ink);font-size:13px;text-align:right;font-variant-numeric:tabular-nums}
+  .chk{width:20px;height:20px;accent-color:var(--accent);cursor:pointer}
+  .tier-h .lab{font-size:14px;color:var(--ink);font-weight:800;letter-spacing:-.01em;text-transform:none}
+  .save{display:flex;gap:12px;align-items:center;margin-top:18px}
+  .hint{font-size:12.5px;color:var(--faint);margin:2px 2px 14px}
+</style>
+{% endblock %}
+
+{% block content %}
+<p class="hint"><i class="fas fa-circle-info"></i> Numeric limits: use <code>-1</code> for unlimited. These entitlements resolve per-tenant (a school's tier plus any per-tenant overrides on its profile).</p>
+<form method="post" action="{{ url_for('platform.features') }}">
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+  <div class="panel matrix">
+    <table class="mx">
+      <thead>
+        <tr class="tier-h"><th style="text-align:left">Capability</th>
+          {% for tid in tier_ids %}<th><span class="lab">{{ tier_labels[tid] }}</span></th>{% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="grp-row"><th colspan="{{ tier_ids|length + 1 }}">Features</th></tr>
+        {% for fk, flabel in feature_defs %}
+        <tr>
+          <th>{{ flabel }}</th>
+          {% for tid in tier_ids %}
+          <td><input class="chk" type="checkbox" name="{{ tid }}__f__{{ fk }}"
+                {{ 'checked' if tiers[tid]['features'].get(fk) }}></td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+        <tr class="grp-row"><th colspan="{{ tier_ids|length + 1 }}">Limits <span style="text-transform:none;font-weight:500">(-1 = unlimited)</span></th></tr>
+        {% for lk, llabel, unit in limit_defs %}
+        <tr>
+          <th>{{ llabel }}{% if unit %} <span class="muted">({{ unit }})</span>{% endif %}</th>
+          {% for tid in tier_ids %}
+          <td><input type="number" name="{{ tid }}__l__{{ lk }}" value="{{ tiers[tid]['limits'].get(lk, 0) }}" min="-1" step="1"></td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <div class="save">
+    <button class="btn primary"><i class="fas fa-floppy-disk"></i> Save plan matrix</button>
+    <span class="muted" style="font-size:12.5px">Assign a plan to each school from its profile.</span>
+  </div>
+</form>
+{% endblock %}

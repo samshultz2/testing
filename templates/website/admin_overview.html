@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}Website Builder - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Website Builder</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div><h1><i class="fas fa-globe"></i> Website Builder</h1>
+    <p class="text-muted text-sm">Build your school’s public website from reusable components. It stays in sync with your school data — update once, it shows everywhere.</p></div>
+  <div class="page-header-actions">
+    <a href="{{ url_for('website_admin.news') }}" class="btn btn-secondary"><i class="fas fa-newspaper"></i> News</a>
+    <a href="{{ url_for('website_admin.assignments') }}" class="btn btn-secondary"><i class="fas fa-file-arrow-down"></i> Assignments</a>
+    <a href="{{ url_for('website_admin.analytics') }}" class="btn btn-secondary"><i class="fas fa-chart-line"></i> Analytics</a>
+    <a href="{{ url_for('website_admin.media_library') }}" class="btn btn-secondary"><i class="fas fa-images"></i> Media</a>
+    <a href="{{ public_home }}" target="_blank" class="btn btn-secondary"><i class="fas fa-external-link-alt"></i> {{ 'View live site' if settings.published else 'Preview draft' }}</a>
+  </div>
+</div>
+
+<div class="card mb-3" style="border:1px solid color-mix(in srgb,var(--primary,#0d6a4e) 30%,transparent)">
+  <div class="card-body" style="display:flex;gap:1rem;flex-wrap:wrap;align-items:center;justify-content:space-between">
+    <div style="max-width:640px">
+      <h3 style="margin:0 0 .3rem"><i class="fas fa-wand-magic-sparkles"></i> Build my website automatically</h3>
+      <p class="text-muted text-sm" style="margin:0">Not a designer? Let us build a complete, ready-to-edit website for
+        <strong>{{ settings.seo_title or 'your school' }}</strong> in one click — a home page plus About, Academics,
+        Admissions and Contact, with a design chosen to suit your school. You can change anything afterwards.</p>
+    </div>
+    <form method="POST" action="{{ url_for('website_admin.generate_site') }}"
+          data-confirm="This builds a fresh website and replaces any pages you already have. Continue?">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      {% if ai_available %}
+      <label class="text-sm" style="display:block;margin-bottom:.4rem"><input type="checkbox" name="use_ai" checked> Write the copy with AI</label>
+      {% endif %}
+      <button class="btn btn-primary"><i class="fas fa-bolt"></i> Build my website</button>
+    </form>
+  </div>
+</div>
+{% if pages and pages|length > 1 %}
+<div class="card mb-3"><div class="card-body" style="display:flex;gap:1rem;flex-wrap:wrap;align-items:center;justify-content:space-between">
+  <span class="text-muted text-sm"><i class="fas fa-shuffle"></i> Want a different look? Generate a fresh design — your content sections stay the same types, restyled and re-arranged.</span>
+  <form method="POST" action="{{ url_for('website_admin.generate_site') }}"
+        data-confirm="Generate a different design? This replaces your current pages. Continue?">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="salt" value="{{ range(100000)|random }}">
+    {% if ai_available %}<input type="hidden" name="use_ai" value="on">{% endif %}
+    <button class="btn btn-secondary btn-sm"><i class="fas fa-shuffle"></i> Try another design</button>
+  </form>
+</div></div>
+{% endif %}
+
+<div class="row">
+  <div class="col-md-6"><div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-rocket"></i> Publish</h3></div>
+    <div class="card-body">
+      <p>Status:
+        {% if settings.published %}<span class="badge badge-success">Live</span> — your site is public.
+        {% else %}<span class="badge badge-warning">Draft</span> — only you can preview it.{% endif %}
+      </p>
+      <form method="POST" action="{{ url_for('website_admin.publish') }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <label class="permission-item" style="display:inline-flex;gap:.5rem">
+          <input type="checkbox" name="published" {% if settings.published %}checked{% endif %}>
+          <span>Make my website public</span></label>
+        <div style="margin-top:.7rem"><button class="btn btn-primary btn-sm"><i class="fas fa-save"></i> Save</button></div>
+      </form>
+    </div>
+  </div></div>
+
+  <div class="col-md-6"><div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-palette"></i> Theme &amp; SEO</h3></div>
+    <div class="card-body">
+      <form method="POST" action="{{ url_for('website_admin.theme') }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <div class="form-group"><label class="form-label">Style preset</label>
+          <select name="preset" class="form-control">
+            {% for key, label in presets %}<option value="{{ key }}" {% if (settings.theme or {}).get('preset','emerald')==key %}selected{% endif %}>{{ label }}</option>{% endfor %}
+          </select></div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Primary colour</label>
+            <input type="color" name="primary" class="form-control" value="{{ (settings.theme or {}).get('primary','#0d6a4e') }}"></div>
+          <div class="form-group"><label class="form-label">Accent colour</label>
+            <input type="color" name="accent" class="form-control" value="{{ (settings.theme or {}).get('accent','#f2b705') }}"></div>
+        </div>
+        <div class="form-group"><label class="form-label">SEO title</label>
+          <input type="text" name="seo_title" class="form-control" maxlength="70" value="{{ settings.seo_title or '' }}" placeholder="Your School Name — tagline"></div>
+        <div class="form-group"><label class="form-label">SEO description</label>
+          <input type="text" name="seo_description" class="form-control" maxlength="180" value="{{ settings.seo_description or '' }}" placeholder="A short description for Google &amp; social shares"></div>
+        <button class="btn btn-primary btn-sm"><i class="fas fa-save"></i> Save theme</button>
+      </form>
+    </div>
+  </div></div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header"><h3><i class="fas fa-user-graduate"></i> Online admissions</h3></div>
+  <div class="card-body">
+    <p class="text-muted text-sm">Let prospective parents apply directly from your website. Applications land in your existing
+      Admissions module (marked “Website”). Public form: <a href="{{ apply_url }}" target="_blank">{{ apply_url }}</a></p>
+    <form method="POST" action="{{ url_for('website_admin.admissions_settings') }}">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <label class="permission-item" style="display:inline-flex;gap:.5rem;margin-bottom:.6rem">
+        <input type="checkbox" name="web_admissions_open" {% if adm.open %}checked{% endif %}>
+        <span>Accept applications from the website</span></label>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Intended session</label>
+          <select name="session_id" class="form-control">
+            <option value="">— None —</option>
+            {% for s in sessions %}<option value="{{ s.id }}" {% if adm.session_id == s.id %}selected{% endif %}>{{ s.name }}</option>{% endfor %}
+          </select></div>
+        <div class="form-group"><label class="form-label">Application fee (₦)</label>
+          <input type="number" step="0.01" min="0" name="fee" class="form-control" value="{{ '%.2f'|format(adm.fee) }}"></div>
+      </div>
+      {% if adm.fee and adm.fee > 0 %}
+        <p class="text-sm {{ 'text-muted' if pay_configured else 'text-warning' }}">
+          {% if pay_configured %}<i class="fas fa-check-circle"></i> Online payment is set up — applicants pay the fee before their application is created.
+          {% else %}<i class="fas fa-triangle-exclamation"></i> Online payment isn’t configured, so the fee is shown as information only. Set up a payment provider to collect it online.{% endif %}
+        </p>
+      {% endif %}
+      <div class="form-group"><label class="form-label">Intro message (shown above the form)</label>
+        <textarea name="intro" class="form-control" rows="2" maxlength="600" placeholder="e.g. We’re delighted you’re considering our school…">{{ adm.intro }}</textarea></div>
+      <button class="btn btn-primary btn-sm"><i class="fas fa-save"></i> Save admissions settings</button>
+    </form>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header"><h3><i class="fas fa-file-lines"></i> Pages</h3></div>
+  <div class="card-body">
+    <div class="data-cards">
+      {% for p in pages %}
+      <div class="data-card">
+        <div class="data-card-header"><div class="data-card-title">{{ p.title }}
+          {% if p.slug == 'home' %}<span class="badge badge-info">Home</span>{% endif %}
+          {% if not p.is_published %}<span class="badge badge-warning">Hidden</span>{% endif %}</div></div>
+        <div class="data-card-row"><span class="data-card-label">Address</span><span>/site{{ '' if p.slug=='home' else '/' + p.slug }}</span></div>
+        <div class="data-card-actions">
+          <a href="{{ url_for('website_admin.edit_page', page_id=p.id) }}" class="btn btn-sm btn-primary"><i class="fas fa-pen"></i> Edit</a>
+        </div>
+      </div>
+      {% endfor %}
+    </div>
+    <form method="POST" action="{{ url_for('website_admin.new_page') }}" class="d-flex gap-2" style="margin-top:1rem;flex-wrap:wrap">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="text" name="title" class="form-control" placeholder="New page title (e.g. Admissions)" style="max-width:280px" required>
+      <button class="btn btn-secondary"><i class="fas fa-plus"></i> Add page</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

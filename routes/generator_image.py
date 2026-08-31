@@ -9,6 +9,34 @@ from PIL import Image, ImageDraw, ImageFont
 from io import BytesIO
 
 
+def _load_logo():
+    """The uploaded school logo as an RGBA PIL image, or None if none is set."""
+    try:
+        from utils.school import logo_path
+        p = logo_path()
+        if not p:
+            return None
+        return Image.open(p).convert('RGBA')
+    except Exception:
+        return None
+
+
+def _paste_logo_left(img, logo, text_x, top_y, target_h, gap):
+    """Paste ``logo`` (RGBA) scaled to height ``target_h`` just left of ``text_x``,
+    aligned to ``top_y``. Returns the pasted width (0 if nothing pasted)."""
+    if logo is None:
+        return 0
+    try:
+        h = max(1, int(target_h))
+        w = max(1, int(logo.width * (h / logo.height)))
+        scaled = logo.resize((w, h))
+        lx = max(0, int(text_x) - w - int(gap))
+        img.paste(scaled, (lx, int(top_y)), scaled)
+        return w
+    except Exception:
+        return 0
+
+
 def get_font(size, bold=False):
     """Get a font, trying system fonts first"""
     font_paths = [
@@ -19,11 +47,11 @@ def get_font(size, bold=False):
     for path in font_paths:
         try:
             return ImageFont.truetype(path, size)
-        except Exception:
+        except (OSError, IOError):
             continue
     try:
         return ImageFont.load_default()
-    except Exception:
+    except (OSError, IOError):
         return None
 
 
@@ -197,12 +225,15 @@ def generate_timetable_image(batch_id, layout='by_day', quality='ultra'):
     color_white = (255, 255, 255)
     color_day_bg = (68, 114, 196)  # Blue for day header
     
-    # School name header
+    # School name header (with the uploaded logo to its left, if any)
+    logo_img = _load_logo()
     y_pos = margin
     if font_title:
         bbox = draw.textbbox((0, 0), school_name.upper(), font=font_title)
         text_width = bbox[2] - bbox[0]
+        text_height = bbox[3] - bbox[1]
         text_x = (img_width - text_width) // 2
+        _paste_logo_left(img, logo_img, text_x, y_pos, text_height + 14 * scale, 16 * scale)
         draw.text((text_x, y_pos), school_name.upper(), fill=color_black, font=font_title)
         y_pos += 40 * scale
     
@@ -466,18 +497,21 @@ def generate_teacher_timetable_image(batch_id, teacher_id):
     color_watermark = (200, 200, 200)
     
     # School name
+    logo_img = _load_logo()
     if font_school:
         bbox = draw.textbbox((0, 0), school_name.upper(), font=font_school)
         text_width = bbox[2] - bbox[0]
         text_x = (img_width - text_width) // 2
         draw.text((text_x, margin - 10 * scale), school_name.upper(), fill=color_gray, font=font_school)
-    
-    # Teacher name
+
+    # Teacher name (with the uploaded logo to its left, if any)
     title = teacher.name
     if font_title:
         bbox = draw.textbbox((0, 0), title, font=font_title)
         text_width = bbox[2] - bbox[0]
+        text_height = bbox[3] - bbox[1]
         text_x = (img_width - text_width) // 2
+        _paste_logo_left(img, logo_img, text_x, margin + 20 * scale, text_height + 30 * scale, 16 * scale)
         draw.text((text_x, margin + 20 * scale), title, fill=color_black, font=font_title)
     
     # Subtitle

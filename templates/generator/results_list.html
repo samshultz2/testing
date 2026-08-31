@@ -12,9 +12,12 @@
     <div class="card-body" style="padding: 0;">
         <div class="data-cards" style="padding: 1rem;">
             {% for batch in batches %}
-            <div class="data-card">
+            {% set is_active = (batch.batch_id == active_batch_id) %}
+            <div class="data-card" {% if is_active %}style="border:2px solid var(--success, #16a34a);"{% endif %}>
                 <div class="data-card-header">
-                    <div class="data-card-title">Batch #{{ batch.batch_id }}</div>
+                    <div class="data-card-title">Batch #{{ batch.batch_id }}
+                        {% if is_active %}<span class="badge badge-success"><i class="fas fa-check-circle"></i> In use</span>{% endif %}
+                    </div>
                     <span class="badge badge-primary">{{ batch.class_count }} classes</span>
                 </div>
                 <div class="data-card-row">
@@ -25,6 +28,13 @@
                     <a href="{{ url_for('generator.view_results', batch_id=batch.batch_id) }}" class="btn btn-primary btn-sm">
                         <i class="fas fa-eye"></i> View
                     </a>
+                    {% if can_publish and not is_active %}
+                    <form method="POST" action="{{ url_for('generator.set_in_use', batch_id=batch.batch_id) }}" style="display:inline;"
+                          data-confirm="Publish this timetable live and set it as the one in use? It replaces the currently published timetable (a backup is saved first).">
+                        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-success btn-sm"><i class="fas fa-circle-check"></i> Set as in use</button>
+                    </form>
+                    {% endif %}
                     <a href="{{ url_for('generator.print_results', batch_id=batch.batch_id) }}" class="btn btn-success btn-sm">
                         <i class="fas fa-print"></i> Print All
                     </a>

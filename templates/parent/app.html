@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
+    <title>Parent Portal — {{ app_name }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
+    <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+               background:#f5f7fa; color:#1f2937; padding-bottom:2rem; }
+        .top { background:linear-gradient(135deg,#0d6a4e,#064e36); color:#fff; padding:1.2rem 1rem; }
+        .wrap { max-width:860px; margin:0 auto; padding:0 1rem; }
+        .top .wrap { display:flex; align-items:center; justify-content:space-between; gap:1rem; }
+        .top h1 { font-size:1.2rem; } .top p { opacity:.85; font-size:.85rem; }
+        .logout { color:#fff; background:rgba(255,255,255,.15); padding:.5rem .8rem; border-radius:8px;
+                  text-decoration:none; font-size:.85rem; cursor:pointer; border:none; }
+        .termbar { margin:1rem auto; display:flex; gap:.5rem; align-items:center; flex-wrap:wrap; }
+        select { padding:.5rem; border:1px solid #e5e7eb; border-radius:8px; }
+        .cards { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:1rem; margin-top:1rem; }
+        .card { background:#fff; border-radius:12px; padding:1.2rem; box-shadow:0 1px 3px rgba(0,0,0,.08); }
+        .card h3 { font-size:.8rem; text-transform:uppercase; color:#6b7280; letter-spacing:.04em; margin-bottom:.5rem; }
+        .big { font-size:1.6rem; font-weight:700; }
+        .pos { color:#0d6a4e; } .owe { color:#dc2626; } .ok { color:#16a34a; }
+        table { width:100%; border-collapse:collapse; margin-top:.5rem; font-size:.9rem; }
+        th,td { padding:.55rem .5rem; border-bottom:1px solid #eef0f2; text-align:left; }
+        th { font-size:.75rem; text-transform:uppercase; color:#6b7280; }
+        .sec { background:#fff; border-radius:12px; padding:1.2rem; box-shadow:0 1px 3px rgba(0,0,0,.08); margin-top:1rem; }
+        .sec h2 { font-size:1.05rem; margin-bottom:.4rem; }
+        .muted { color:#6b7280; } .ann { padding:.6rem 0; border-bottom:1px solid #eef0f2; }
+        .ann:last-child { border-bottom:none; } .badge { background:#e8f5f1; color:#0d6a4e; padding:.15rem .5rem; border-radius:999px; font-size:.75rem; }
+        .form-control { padding:.45rem; border:1px solid #e5e7eb; border-radius:8px; width:100%; }
+        .pay-btn { width:100%; padding:.6rem; background:#0d6a4e; color:#fff; border:none; border-radius:8px; font-weight:600; cursor:pointer; }
+        .pdf-link { font-size:.8rem; background:#0d6a4e; color:#fff; padding:.35rem .7rem; border-radius:8px; text-decoration:none; }
+        .flash { padding:.7rem 1rem; border-radius:8px; margin:1rem 0; font-size:.9rem; }
+        .flash-error { background:#fee2e2; color:#dc2626; } .flash-info { background:#dbeafe; color:#2563eb; }
+        .flash-success { background:#dcfce7; color:#16a34a; } .flash-warning { background:#fef9c3; color:#a16207; }
+        .hub-links { display:flex; flex-direction:column; gap:.6rem; margin-top:.5rem; }
+        .hub-link { display:flex; align-items:center; gap:.8rem; padding:.8rem 1rem; border:1px solid #e5e7eb; border-radius:10px; text-decoration:none; color:#111827; transition:border-color .15s, box-shadow .15s, transform .15s; }
+        .hub-link:hover { border-color:#0d6a4e; box-shadow:0 2px 8px rgba(13,106,78,.12); transform:translateY(-1px); }
+        .hub-ic { flex:none; width:38px; height:38px; display:inline-flex; align-items:center; justify-content:center; border-radius:999px; background:#e8f5f1; color:#0d6a4e; font-size:1rem; }
+        .hub-body { flex:1; min-width:0; display:flex; flex-direction:column; }
+        .hub-body strong { font-weight:600; } .hub-body span { color:#6b7280; font-size:.82rem; }
+        .hub-go { color:#9ca3af; }
+    </style>
+</head>
+<body>
+    <div id="parent-app"><p class="muted" style="padding:2rem;text-align:center;">Loading…</p></div>
+    <script type="application/json" id="parent-data">{{ parent_json|tojson }}</script>
+    <!-- Shared React runtime (externalised out of the app bundle). -->
+    <script src="{{ url_for('static', filename='vendor/react.production.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='vendor/react-dom.production.min.js') }}"></script>
+    <script src="{{ bundle_url('js/react/parent-app.js') }}" defer></script>
+</body>
+</html>

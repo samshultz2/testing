@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% set _titles = {'dashboard': 'Sales & Inventory', 'products': 'Products', 'new_sale': 'New Sale', 'history': 'Sales History'} %}
+{% block title %}{{ _titles.get(sales_json.page, 'Sales') }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}
+{% if sales_json.page == 'dashboard' %}<span>Sales &amp; Inventory</span>
+{% else %}<a href="{{ url_for('sales.dashboard') }}">Sales</a> / <span>{{ _titles.get(sales_json.page, '') }}</span>{% endif %}
+{% endblock %}
+{% block content %}
+<div id="sales-app"><p class="text-muted" style="padding:2rem 0">Loading…</p></div>
+<script type="application/json" id="sales-data">{{ sales_json|tojson }}</script>
+<script src="{{ bundle_url('js/react/sales-app.js') }}" defer></script>
+{% endblock %}

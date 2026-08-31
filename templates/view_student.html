@@ -116,7 +116,7 @@
                         <td>{{ e.class_arm_assignment.term.session.name if e.class_arm_assignment.term.session else '-' }}</td>
                         <td>{{ e.class_arm_assignment.term.name }}</td>
                         <td><strong>{{ e.class_arm_assignment.school_class.name }}</strong></td>
-                        <td>{{ e.class_arm_assignment.arm.name }}</td>
+                        <td>{{ e.class_arm_assignment.arm_label or '-' }}</td>
                     </tr>
                     {% endfor %}
                 </tbody>

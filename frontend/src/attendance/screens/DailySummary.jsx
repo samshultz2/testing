@@ -1,0 +1,175 @@
+import React, { useState } from 'react';
+import { apiGet, apiPost } from '../../lib/api';
+import { useAsync } from '../../lib/hooks';
+import { useCtx } from '../App';
+import { Toolbar, Field, Select, Spinner, EmptyState, ErrorState, OfflineRequired, Pill, StatCards, Banner } from '../../components/ui';
+import { withGroups, GroupHeadRow } from '../roster';
+import { lastClass, recentClasses, rememberClass } from '../../lib/attprefs';
+
+// Read-only daily attendance summary (server-computed → needs the network).
+export default function DailySummary() {
+  const { classes = [], today, online, sync = {}, default_class, can_mark } = useCtx();
+  // A form teacher lands on their own class; otherwise fall back to the last one
+  // this user looked at (if it's still one they can access).
+  const classIds = new Set(classes.map((c) => String(c.id)));
+  const initClass = default_class ? String(default_class)
+    : (classIds.has(lastClass()) ? lastClass() : '');
+  const [assignmentId, setAssignmentId] = useState(initClass);
+  const pickClass = (id) => {
+    setAssignmentId(id);
+    const c = classes.find((x) => String(x.id) === String(id));
+    if (c) rememberClass(id, c.name);
+  };
+  const recents = recentClasses().filter((r) => classIds.has(String(r.id)));
+  const [date, setDate] = useState(today || '');
+  const [notifying, setNotifying] = useState(false);
+  const notifyAbsentees = async () => {
+    setNotifying(true);
+    try {
+      const r = await apiPost('/attendance/api/notify/absentees', { assignment_id: assignmentId, date });
+      if (r && r.ok && r.redirect) window.location.href = r.redirect;
+      else alert((r && r.error) || 'Could not draft the notice.');
+    } catch (e) { alert(e.message || 'Could not draft the notice.'); }
+    setNotifying(false);
+  };
+
+  // Wait for queued offline marks to flush before computing the summary.
+  const pending = sync.pending || 0;
+  const syncing = online && pending > 0;
+  const ready = online && !syncing && assignmentId && date;
+  const [state] = useAsync(
+    () => (ready
+      ? apiGet(`/attendance/api/daily-summary?assignment_id=${assignmentId}&date=${encodeURIComponent(date)}`)
+      : Promise.resolve(null)),
+    [assignmentId, date, online, syncing]
+  );
+
+  // Whole-week breakdown: every school day at a glance (no date-by-date picking).
+  const [week] = useAsync(
+    () => (ready
+      ? apiGet(`/attendance/api/report/week-totals?assignment_id=${assignmentId}&date=${encodeURIComponent(date)}`)
+      : Promise.resolve(null)),
+    [assignmentId, date, online, syncing]
+  );
+
+  const pct = (present, total) => (total ? Math.round(present / total * 100) : 0);
+  const d = state.data;
+  const flag = (v) => v == null ? <Pill tone="gray">—</Pill>
+    : v ? <Pill tone="green">Present</Pill> : <Pill tone="red">Absent</Pill>;
+
+  return (
+    <div>
+      <Toolbar>
+        <Field label="Class" htmlFor="ds-class" grow>
+          <Select id="ds-class" value={assignmentId} onChange={pickClass}
+                  placeholder={classes.length ? '— Select class —' : 'No classes available'}
+                  options={classes.map((c) => ({ value: String(c.id), label: c.name }))} />
+        </Field>
+        <Field label="Date" htmlFor="ds-date">
+          <input id="ds-date" type="date" className="form-control" value={date} onChange={(e) => setDate(e.target.value)} />
+        </Field>
+      </Toolbar>
+      {recents.length > 1 && (
+        <div className="att-recent" role="group" aria-label="Recent classes">
+          <span className="att-sub">Recent:</span>
+          {recents.map((r) => (
+            <button key={r.id} type="button" className={'att-chip' + (String(r.id) === String(assignmentId) ? ' is-active' : '')}
+                    onClick={() => pickClass(String(r.id))}>{r.label}</button>))}
+        </div>)}
+
+      {!online ? <OfflineRequired what="The daily summary" />
+        : syncing ? <Spinner label={`Syncing your saved marks… (${pending} left) — the summary will update once they reach the server.`} />
+        : !assignmentId ? <EmptyState icon="fa-hand-pointer" title="Pick a class" hint="Choose a class and date to see who was present." />
+        : state.loading ? <Spinner label="Loading summary…" />
+        : state.error ? <ErrorState detail={state.error.message} />
+        : d && (
+          <>
+            {week.data && week.data.days && week.data.days.length > 0 && (
+              <div className="att-grid-wrap" style={{ marginBottom: 14 }}>
+                <table className="att-grid" aria-label="This week at a glance">
+                  <thead>
+                    <tr>
+                      <th scope="col" colSpan="6" style={{ textAlign: 'left' }}>
+                        <i className="fas fa-calendar-week" aria-hidden="true" /> This week at a glance{week.data.week_number ? ` — Week ${week.data.week_number}` : ''}
+                      </th>
+                    </tr>
+                    <tr>
+                      <th scope="col">Day</th><th scope="col">AM present</th><th scope="col">AM absent</th>
+                      <th scope="col">PM present</th><th scope="col">PM absent</th><th scope="col">AM %</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {week.data.days.map((wd) => (
+                      <tr key={wd.date} className={wd.date === date ? 'is-active' : ''}>
+                        <td><button type="button" onClick={() => setDate(wd.date)}
+                          style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary)', fontWeight: 600, cursor: 'pointer' }}>
+                          {new Date(wd.date).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}
+                        </button></td>
+                        <td>{wd.am_present}</td><td>{wd.am_absent}</td>
+                        <td>{wd.pm_present}</td><td>{wd.pm_absent}</td>
+                        <td><Pill tone={pct(wd.am_present, wd.total) >= 75 ? 'green' : pct(wd.am_present, wd.total) >= 50 ? 'amber' : 'red'}>{pct(wd.am_present, wd.total)}%</Pill></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 4 }}>
+              <strong>{d.class_name}</strong>
+              <span style={{ color: 'var(--text-muted)' }}>{new Date(d.date).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
+              {can_mark !== false && (d.morning_absent > 0 || d.afternoon_absent > 0) && (
+                <button className="btn btn-primary btn-sm no-print" style={{ marginLeft: 'auto' }}
+                        disabled={notifying} onClick={notifyAbsentees}>
+                  <i className="fas fa-comment-sms" aria-hidden="true" /> Notify absentees’ parents</button>)}
+            </div>
+
+            {d.school_day === false && (
+              <Banner tone="warn">
+                {d.holiday ? `Holiday — ${d.holiday.reason}${d.holiday.type ? ' (' + d.holiday.type + ')' : ''}.`
+                  : d.weekend ? 'This date is a weekend.' : 'This date is not a school day.'}
+                {' '}Marks aren’t expected on this day.
+              </Banner>
+            )}
+
+            <StatCards items={[
+              { value: d.total_students, label: 'Total students' },
+              { value: d.morning_present, label: 'AM present' },
+              { value: d.morning_absent, label: 'AM absent' },
+              { value: d.afternoon_present, label: 'PM present' },
+              { value: d.afternoon_absent, label: 'PM absent' },
+            ]} />
+
+            {d.students.length === 0 ? (
+              <EmptyState icon="fa-users-slash" title="No students enrolled" hint="This class has no active enrolments for the term." />
+            ) : (
+              <div className="att-grid-wrap">
+                <table className="att-grid" aria-label={'Daily summary for ' + d.class_name}>
+                  <thead>
+                    <tr>
+                      <th scope="col" className="att-grid-name">Student</th>
+                      <th scope="col">Gender</th>
+                      <th scope="col">Morning</th>
+                      <th scope="col">Afternoon</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {withGroups(d.students,
+                      (gender, first, key) => <GroupHeadRow key={key} gender={gender} first={first} colSpan={4} />,
+                      (s) => (
+                      <tr key={s.student_id}>
+                        <td className="att-grid-name">{s.student_name}</td>
+                        <td>{s.gender}</td>
+                        <td>{flag(s.morning_present)}</td>
+                        <td>{flag(s.afternoon_present)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
+        )}
+    </div>
+  );
+}

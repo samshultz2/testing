@@ -1,0 +1,36 @@
+# EduSyncra — Redis hardening for the optional cache/queue tier.
+#
+# Redis holds ONLY recomputable cache + transient state (answer-key cache,
+# heartbeat gate, the async grading/analytics queue). Candidate answers live in
+# Postgres + the device's localStorage — never Redis-only — so a Redis flush or
+# crash never loses exam data; the app degrades to its DB/inline paths.
+#
+# Apply these on top of the distro default /etc/redis/redis.conf (append or edit):
+#   sudo apt install redis-server
+#   # merge the lines below into /etc/redis/redis.conf, then:
+#   sudo systemctl enable --now redis-server
+# Then in the app .env:
+#   REDIS_URL=redis://:YOUR_STRONG_PASSWORD@127.0.0.1:6379/0
+
+# 1. NEVER expose Redis to the internet. Bind to loopback only.
+bind 127.0.0.1 -::1
+protected-mode yes
+port 6379
+
+# 2. Require a password (must match REDIS_URL). Use a long random string.
+requirepass CHANGE_ME_TO_A_LONG_RANDOM_SECRET
+
+# 3. Cap memory so Redis can never eat the 8 GB box, and evict cache under
+#    pressure (this is a cache — evicting the least-recently-used key is fine).
+#    ~512 MB is ample for the cache/queue on this workload; raise if needed.
+maxmemory 512mb
+maxmemory-policy allkeys-lru
+
+# 4. Durability: this is a cache/queue, not the system of record. Light
+#    persistence is fine; the app never depends on Redis surviving a restart.
+#    (Keep the default RDB snapshotting, or disable with `save ""` for pure cache.)
+appendonly no
+
+# 5. Optional: rename/disable dangerous admin commands in a shared environment.
+# rename-command FLUSHALL ""
+# rename-command CONFIG ""

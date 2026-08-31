@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Notification Preferences — {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('settings.index') }}">Settings</a> / <span>Notifications</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Notification Preferences</h1>
+        <p class="text-muted text-sm">Choose which channels you receive notifications on.</p>
+    </div>
+</div>
+
+{% if not has_user %}
+<div class="card"><div class="card-body text-muted">
+    Sign in with a staff account to manage personal notification preferences.
+</div></div>
+{% else %}
+{% if not flag_on %}
+<div class="card mb-3"><div class="card-body text-muted">
+    Your <strong>web-push</strong> choices — including the category filters below — apply immediately.
+    In-app, email and SMS enforcement turns on with the <code>NOTIFY_PREFS</code> flag (currently off);
+    those choices are saved and take effect once it's enabled.
+</div></div>
+{% endif %}
+<div class="card">
+    <div class="card-body">
+        <form method="post">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            {% for ch in channels %}
+            <label class="d-flex align-center gap-2" style="padding:.5rem 0;border-bottom:1px solid var(--border-light);">
+                <input type="checkbox" name="ch_{{ ch }}" {% if prefs.get(ch) %}checked{% endif %}>
+                <span>{{ labels.get(ch, ch) }}</span>
+                {% if ch == 'inapp' %}<span class="text-muted text-sm">(on by default)</span>
+                {% elif ch == 'push' %}<span class="text-muted text-sm">(on by default once enabled on a device)</span>
+                {% else %}<span class="text-muted text-sm">(off by default; needs the {{ ch|upper }} gateway configured)</span>{% endif %}
+            </label>
+            {% endfor %}
+
+            {% if push_topics %}
+            <div class="mt-3" style="padding-top:.75rem;">
+                <div class="text-sm" style="font-weight:600;">Web push categories</div>
+                <p class="text-muted text-sm" style="margin:.15rem 0 .5rem;">
+                    Choose which kinds of alerts push to your devices. Unchecked categories still show in the bell.
+                </p>
+                {% for t in push_topics %}
+                <label class="d-flex align-center gap-2" style="padding:.35rem 0 .35rem 1rem;">
+                    <input type="checkbox" name="pushcat_{{ t }}" {% if push_topic_prefs.get(t) %}checked{% endif %}
+                           {% if not prefs.get('push') %}disabled{% endif %}>
+                    <span>{{ push_topic_labels.get(t, t) }}</span>
+                </label>
+                {% endfor %}
+                {% if not prefs.get('push') %}
+                <p class="text-muted text-sm" style="padding-left:1rem;">Turn on <strong>Web push</strong> above to use category filters.</p>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <div class="mt-3"><button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save preferences</button></div>
+        </form>
+        <div id="push-setup" class="mt-3" style="display:none;border-top:1px solid var(--border-light);padding-top:1rem;">
+            <p class="text-muted text-sm">Web push lets this browser receive alerts even when EduSyncra isn't open.</p>
+            <button type="button" id="push-enable" class="btn btn-secondary btn-sm"><i class="fas fa-bell"></i> Enable on this device</button>
+            <button type="button" id="push-disable" class="btn btn-secondary btn-sm" style="display:none;"><i class="fas fa-bell-slash"></i> Disable on this device</button>
+            <span id="push-status" class="text-muted text-sm" style="margin-left:.5rem;"></span>
+        </div>
+    </div>
+</div>
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var box = document.getElementById('push-setup');
+  if (!box || !('serviceWorker' in navigator) || !('PushManager' in window)) return;
+  var enableBtn = document.getElementById('push-enable');
+  var disableBtn = document.getElementById('push-disable');
+  var status = document.getElementById('push-status');
+  var csrf = (document.querySelector('input[name="_csrf_token"]') || {}).value || '';
+  function post(url, body) {
+    return fetch(url, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf },
+      body: JSON.stringify(body || {}),
+    });
+  }
+  function b64ToU8(base64) {
+    var pad = '='.repeat((4 - base64.length % 4) % 4);
+    var b = (base64 + pad).replace(/-/g, '+').replace(/_/g, '/');
+    var raw = atob(b); var out = new Uint8Array(raw.length);
+    for (var i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+    return out;
+  }
+  function refresh(sub) {
+    enableBtn.style.display = sub ? 'none' : '';
+    disableBtn.style.display = sub ? '' : 'none';
+    status.textContent = sub ? 'Enabled on this device.' : '';
+  }
+  fetch('/api/push/public-key').then(function (r) { return r.json(); }).then(function (cfg) {
+    if (!cfg.enabled || !cfg.key) return;         // web push not configured on the server
+    box.style.display = '';
+    navigator.serviceWorker.ready.then(function (reg) {
+      reg.pushManager.getSubscription().then(refresh);
+      enableBtn.addEventListener('click', function () {
+        status.textContent = 'Requesting permission…';
+        reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(cfg.key) })
+          .then(function (sub) { return post('/api/push/subscribe', sub.toJSON()).then(function () { refresh(sub); }); })
+          .catch(function () { status.textContent = 'Could not enable push.'; });
+      });
+      disableBtn.addEventListener('click', function () {
+        reg.pushManager.getSubscription().then(function (sub) {
+          if (!sub) { refresh(null); return; }
+          var ep = sub.endpoint;
+          sub.unsubscribe().then(function () { return post('/api/push/unsubscribe', { endpoint: ep }); })
+            .then(function () { refresh(null); });
+        });
+      });
+    });
+  }).catch(function () {});
+})();
+</script>
+{% endif %}
+{% endblock %}

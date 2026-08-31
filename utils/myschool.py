@@ -1,0 +1,1249 @@
+"""Shared myschool.ng past-questions scraper — used by both the standalone
+``waec_scraper.py`` CLI and the in-app one-click harvest.
+
+Everything here is pure/importable (no Flask or DB dependency): it fetches a
+question's detail page, parses the stem / four options / correct answer, detects
+figure-dependent and table questions, captures a stem image URL when one is
+actually present, and keyword-maps each question to the app's own
+section / topic / sub-topic taxonomy (the seeded syllabus + a topic→blueprint
+section map).
+
+The taxonomy is imported from ``utils.syllabus_data`` so there is a single
+source of truth; the section map and keyword boosts live here.
+"""
+from __future__ import annotations
+
+import html as _html
+import re
+import time
+
+try:
+    from utils.syllabus_data import FULL_SYLLABUS
+except Exception:                       # pragma: no cover - detached use
+    FULL_SYLLABUS = {}
+
+
+BASE = "https://myschool.ng/classroom"
+HEADERS = {
+    "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                   "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "en-US,en;q=0.9",
+}
+
+
+# --- subject name -> myschool slug ----------------------------------------
+SUBJECT_SLUGS = {
+    "mathematics": "mathematics", "maths": "mathematics", "math": "mathematics",
+    "english": "english-language", "english language": "english-language",
+    "use of english": "english-language",
+    "physics": "physics", "chemistry": "chemistry", "biology": "biology",
+    "economics": "economics", "commerce": "commerce", "government": "government",
+    # myschool spells these with the subject abbreviation in the slug.
+    "accounting": "accounts-principles-of-accounts",
+    "principles of accounts": "accounts-principles-of-accounts",
+    "financial accounting": "accounts-principles-of-accounts",
+    "literature": "literature-in-english", "literature in english": "literature-in-english",
+    "geography": "geography", "agricultural science": "agricultural-science",
+    "agriculture": "agricultural-science", "agric": "agricultural-science",
+    "christian religious studies": "christian-religious-knowledge-crk",
+    "christian religious knowledge": "christian-religious-knowledge-crk",
+    "crs": "christian-religious-knowledge-crk", "crk": "christian-religious-knowledge-crk",
+    "islamic studies": "islamic-religious-knowledge-irk",
+    "islamic religious studies": "islamic-religious-knowledge-irk",
+    "islamic religious knowledge": "islamic-religious-knowledge-irk",
+    "irs": "islamic-religious-knowledge-irk", "irk": "islamic-religious-knowledge-irk",
+    "civic education": "civic-education", "civics": "civic-education",
+    "further mathematics": "further-mathematics",
+    "computer studies": "computer-studies", "computer science": "computer-studies",
+    "data processing": "data-processing", "history": "history",
+    "fine art": "fine-arts", "fine arts": "fine-arts",
+    "home economics": "home-economics", "physical education": "physical-education",
+    "marketing": "marketing", "insurance": "insurance",
+    "book keeping": "book-keeping", "office practice": "office-practice",
+}
+
+
+def subject_slug(name):
+    key = re.sub(r"\s+", " ", (name or "").strip().lower())
+    if key in SUBJECT_SLUGS:
+        return SUBJECT_SLUGS[key]
+    return re.sub(r"[^a-z0-9]+", "-", key).strip("-")
+
+
+# Subjects myschool actually carries under JAMB/UTME (normalised names), verified
+# against the live site. Used to flag subjects that would download nothing under
+# JAMB — Civic Education, Further Maths, Data Processing and the trade subjects
+# (Insurance, Book-keeping, Office Practice, Marketing, …) are WAEC-only on
+# myschool, or not there at all.
+JAMB_SUBJECTS = {
+    "english language", "mathematics", "physics", "chemistry", "biology",
+    "agricultural science", "economics", "commerce", "government", "geography",
+    "literature in english", "history",
+    "accounting", "principles of accounts",
+    "christian religious studies", "christian religious knowledge",
+    "islamic religious studies", "islamic studies", "islamic religious knowledge",
+    "computer studies", "home economics", "physical education", "fine art",
+    "music", "french", "hausa", "igbo", "yoruba",
+}
+
+
+def on_jamb(subject_name):
+    """Whether myschool offers this subject under JAMB (best-effort, by name)."""
+    return norm_subject(subject_name) in JAMB_SUBJECTS
+
+
+# JAMB's recommended English novel rotates by year. myschool DOES label the text
+# on each year's listing page (a badge — see ``scrape_novel_title``), which is the
+# authoritative source; this table is only a fallback for years whose badge is
+# absent (e.g. older papers). (title — author, matching the blueprint editor's
+# suggestions.) Edit/extend as JAMB announces new texts.
+JAMB_ENGLISH_NOVELS = [
+    ((2016, 2020), "The Last Days at Forcados High School — A.H. Mohammed"),
+    ((2021, 2024), "The Life Changer — Khadija Abubakar Jalli"),
+    ((2025, 2025), "The Lekki Headmaster"),
+]
+
+
+def novel_for_year(year):
+    """The JAMB-recommended English novel for a UTME year, or None if unknown."""
+    try:
+        y = int(str(year)[:4])
+    except (TypeError, ValueError):
+        return None
+    for (lo, hi), title in JAMB_ENGLISH_NOVELS:
+        if lo <= y <= hi:
+            return title
+    return None
+
+
+# myschool renders a per-question instruction block (a ``div.prevent-copy``) above
+# the stem: for a Novel question it reads "…based on <author>'s novel, <title>";
+# for Comprehension/Cloze it holds the shared reading passage. Both let us tag and
+# group English questions faithfully, server-side.
+_NOVEL_NOTE = re.compile(r"based on .*\bnovel\b|from the novel|recommended (?:novel|text)", re.I)
+_CLOZE_GAP = re.compile(r"_{3,}|\(\s*\d{1,2}\s*\)")
+
+
+def _novel_title_from_note(text):
+    """Pull the book title out of a novel instruction note, preferring the quoted
+    title (``…novel, "The Life Changer"``)."""
+    m = re.search(r'[\"“”]([^\"“”]{2,140}?)[\"“”]', text or "")
+    if m:
+        return clean(m.group(1))
+    m = re.search(r"novel[,;:]?\s+(.{2,80})$", text or "", re.I)
+    return clean(m.group(1)) if m else None
+
+
+def passage_kind(passage_text, stem=""):
+    """Classify a reading stimulus as a JAMB ``cloze`` passage (gaps to fill) or
+    ordinary ``comprehension``. A cloze question's stem is itself a sentence with
+    a blank, so a blank in the stem is the surest per-question signal; a passage
+    body dense with numbered gaps counts too."""
+    if re.search(r"_{3,}|\.\.\.\.+", stem or ""):
+        return "cloze"
+    gaps = len(_CLOZE_GAP.findall(passage_text or ""))
+    return "cloze" if gaps >= 3 else "comprehension"
+
+
+_PASSAGE_LEADIN = re.compile(
+    r"^\s*(?:use the (?:passage|following)[^:]*?below\b[:.]?\s*"
+    r"|read the (?:passage|following)[^:]*?follows?\b[:.]?\s*)", re.I)
+
+
+def _clean_passage(text):
+    """Drop the repeated instructional lead-in ("Use the passage… Read the passage
+    carefully and answer the questions that follow:") so the stored passage is the
+    text itself and dedupes cleanly."""
+    t = clean(text or "")
+    for _ in range(3):
+        new = _PASSAGE_LEADIN.sub("", t)
+        if new == t:
+            break
+        t = new.strip()
+    return t
+
+
+def _novel_from_listing_html(html):
+    """The JAMB recommended-novel name off a myschool listing page: it renders the
+    year's set text in a badge — ``<div class="… bg-primary_accent …"><strong>Title
+    </strong></div>``. Returns the title, or None when the badge isn't present
+    (e.g. older years, or a non-English subject)."""
+    if not html:
+        return None
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(html, "html.parser")
+    for div in soup.select("div.bg-primary_accent"):
+        strong = div.find("strong")
+        if strong:
+            txt = clean(strong.get_text(" ", strip=True))
+            if txt:
+                return txt
+    return None
+
+
+def scrape_novel_title(subject, exam, year, session=None):
+    """Read the recommended-novel badge off the English listing page for a year,
+    so novel-section questions can be tagged with the actual set text even when
+    the hardcoded ``JAMB_ENGLISH_NOVELS`` map is stale (e.g. 2025 → "The Lekki
+    Headmaster"). Only meaningful for English; returns None for other subjects or
+    when the badge is absent."""
+    if norm_subject(subject) != "english language":
+        return None
+    sess = session or _session()
+    slug = subject_slug(subject)
+    html = fetch(f"{BASE}/{slug}?exam_type={exam}&exam_year={year}&page=1", sess)
+    return _novel_from_listing_html(html)
+
+
+def norm_subject(name):
+    """Casefold + de-alias to the taxonomy keys (mirror of
+    utils.jamb_blueprint.norm_subject, duplicated so this stays importable
+    without the app)."""
+    key = re.sub(r"[^a-z0-9]", "", (name or "").lower())
+    aliases = {
+        "maths": "mathematics", "math": "mathematics",
+        "english": "english language", "useofenglish": "english language",
+        "englishlanguage": "english language",
+        "bio": "biology", "chem": "chemistry", "phy": "physics", "physic": "physics",
+        "econs": "economics", "econ": "economics", "govt": "government", "gov": "government",
+        "lit": "literature in english", "literature": "literature in english",
+        "literatureinenglish": "literature in english",
+        "crs": "christian religious studies", "crk": "christian religious studies",
+        "geo": "geography", "accounts": "accounting", "principlesofaccounts": "accounting",
+        "financialaccounting": "accounting", "agric": "agricultural science",
+        "agriculture": "agricultural science", "civic": "civic education",
+        "civics": "civic education", "furthermaths": "further mathematics",
+    }
+    if key in aliases:
+        return aliases[key]
+    return " ".join(re.findall(r"[a-z]+|[0-9]+", (name or "").lower())).strip()
+
+
+# topic -> blueprint section key, per subject.
+TOPIC_SECTION = {
+    "mathematics": {
+        "Number and Numeration": "number", "Algebra": "algebra",
+        "Geometry and Trigonometry": "geometry", "Calculus": "calculus",
+        "Statistics": "statistics",
+    },
+    "physics": {
+        "Measurement and Units": "measurement", "Scalars and Vectors": "mechanics",
+        "Motion": "mechanics", "Work, Energy and Power": "mechanics",
+        "Momentum & Gravitation": "mechanics", "Fields, Fluids & Elasticity": "mechanics",
+        "Heat and Thermal Physics": "thermal", "Waves": "waves_optics",
+        "Optics (Light)": "waves_optics", "Electricity and Magnetism": "electromagnetism",
+        "Modern Physics & Electronics": "modern",
+    },
+    "chemistry": {
+        "Separation of Mixtures & Purification": "separation",
+        "Chemical Combination & Stoichiometry": "stoichiometry",
+        "States of Matter & Gas Laws": "states_gas",
+        "Atomic Structure & Bonding": "atomic_bonding",
+        "Air, Water & Solubility": "states_gas",
+        "Acids, Bases and Salts": "acids_bases_salts",
+        "Oxidation-Reduction & Electrochemistry": "redox_electro",
+        "Energetics, Rates & Equilibrium": "energetics_rates",
+        "Non-metals and Their Compounds": "periodic_metals",
+        "Metals and Their Compounds": "periodic_metals",
+        "Organic Chemistry": "organic", "Chemistry and Industry": "periodic_metals",
+    },
+    "biology": {
+        "Living Organisms & Cells": "cell", "Nutrition": "nutrition",
+        "Transport": "transport_respiration", "Respiration": "transport_respiration",
+        "Excretion": "excretion_regulation", "Support and Movement": "support_movement",
+        "Coordination and Regulation": "excretion_regulation",
+        "Reproduction, Growth & Development": "reproduction", "Ecology": "ecology",
+        "Heredity and Evolution": "genetics_evolution",
+        "Micro-organisms & Diseases": "ecology",
+    },
+    "english language": {
+        "Comprehension": "comprehension", "Summary": "summary",
+        "Lexis and Structure": "lexis_structure",
+        "Oral English (Test of Orals)": "oral", "Registers": "registers",
+        "Recommended Novel": "novel",
+    },
+    "economics": {
+        "Basic Economic Concepts": "micro", "Production": "micro",
+        "Demand, Supply & Price": "micro", "Market Structures": "micro",
+        "Money and Finance": "macro", "Public Finance": "development",
+        "National Income": "macro",
+        "Development & International Economics": "international",
+    },
+    "government": {
+        "Basic Concepts": "concepts", "Political Ideas & Systems": "concepts",
+        "Structures of Government": "constitution", "Political Processes": "constitution",
+        "Nigerian Government & Politics": "nigeria",
+        "International Relations": "international",
+    },
+    "commerce": {
+        "Introduction to Commerce": "trade", "Trade": "trade", "Aids to Trade": "trade",
+        "Business Organisations": "business",
+        "Business Finance & Institutions": "finance",
+        "Business Environment": "business",
+    },
+    "accounting": {
+        "Nature & Principles of Accounting": "principles",
+        "Double Entry & Books of Account": "principles",
+        "Final Accounts": "final", "Adjustments & Corrections": "final",
+        "Specialised Accounts": "specialised", "Interpretation & Public Sector": "specialised",
+    },
+    "geography": {
+        "Practical Geography": "practical", "Physical Geography": "physical",
+        "Human Geography": "human", "Regional Geography of Nigeria": "regional",
+    },
+    "literature in english": {
+        # Prose covers the recommended novels; Drama the plays; Poetry the poems.
+        "Literary Terms & Appreciation": "appreciation",
+        "Drama": "drama", "Prose": "prose", "Poetry": "poetry",
+    },
+}
+
+ENGLISH_SUBTOPIC_SECTION = {
+    "Synonyms": "synonyms", "Antonyms": "antonyms",
+    "Sentence interpretation / nearest in meaning": "sentence_interpretation",
+}
+
+KEYWORD_BOOSTS = {
+    "mathematics": {
+        "Number bases: conversion & operations in different bases":
+            ["base", "binary", "octal", "denary", "convert to base", "in base"],
+        "Indices, logarithms & standard form": ["log", "antilog", "index", "exponent", "standard form"],
+        "Sets: notation, operations, Venn diagrams & applications":
+            ["set", "venn", "union", "intersection", "subset", "complement", "universal set",
+             "offered", "class of", "at least", "neither", "how many students"],
+        "Surds (radicals)": ["surd", "rationalize", "rationalise", "sqrt", "root of"],
+        "Binary operations": ["binary operation", "defined by", "otimes", "oplus", "ast"],
+        "Fractions, decimals, approximations & percentages":
+            ["percentage", "percent", "fraction", "decimal", "ratio of",
+             "significant figure", "correct to", "decimal place", "approximate", "nearest"],
+        "Quadratic equations & expressions": ["quadratic", "roots", "x^2", "completing the square",
+                                              "maximum value", "minimum value", "turning point"],
+        "Progressions: arithmetic (AP) & geometric (GP)":
+            ["arithmetic progression", "geometric progression", "common difference", "common ratio",
+             "nth term", "first term", "last term", "the sequence", "series"],
+        "Matrices & determinants": ["matrix", "matrices", "determinant"],
+        "Circle theorems": ["circle", "chord", "tangent", "cyclic", "arc", "sector"],
+        "Mensuration: perimeter, area & volume": ["area", "volume", "perimeter", "surface area", "cylinder", "cone", "sphere"],
+        "Coordinate geometry of straight lines": ["gradient", "midpoint", "coordinate", "straight line", "slope"],
+        "Trigonometric ratios & identities": ["sin", "cos", "tan", "trig", "angle"],
+        "Bearings": ["bearing", "due north", "due east"],
+        "Sine & cosine rules": ["sine rule", "cosine rule"],
+        "Measures of central tendency (mean, median, mode)": ["mean", "median", "mode", "average"],
+        "Measures of dispersion (range, variance, standard deviation)":
+            ["variance", "standard deviation", "range", "mean deviation"],
+        "Permutations & combinations": ["permutation", "combination", "arrange", "arranged",
+                                        "arrangement", "ways can", "nPr", "nCr", "selected"],
+        "Probability: single & combined events": ["probability", "dice", "coin", "at random", "chance"],
+        "Differentiation of algebraic & trigonometric functions": ["differentiate", "derivative", "dy/dx"],
+        "Integration of algebraic & trigonometric functions": ["integrate", "integral", "with respect to"],
+        "Polynomials: factorisation, remainder & factor theorem":
+            ["factorize", "factorise", "factor theorem", "remainder theorem", "polynomial", "expand"],
+        "Change of subject of formula": ["subject of the formula", "subject of formula", "make", "in terms of"],
+        "Simultaneous linear/quadratic equations": ["simultaneous", "simultaneously"],
+        "Variation: direct, inverse, joint & partial":
+            ["varies", "variation", "proportional", "directly proportional", "inversely proportional",
+             "jointly", "partly"],
+        "Inequalities: linear & quadratic":
+            ["inequality", "inequalities", "greater than or equal", "less than or equal", "shaded region"],
+        "Angles, triangles & polygons":
+            ["polygon", "triangle", "interior angle", "exterior angle", "isosceles", "quadrilateral",
+             "parallelogram", "trapezium", "sum of angles", "pentagon", "hexagon"],
+        "Similarity & congruence": ["similar triangles", "congruent", "similar figures"],
+        "Loci": ["locus", "loci", "equidistant"],
+        "Angles of elevation & depression": ["elevation", "depression", "angle of elevation", "angle of depression"],
+        "Ratio, proportion & rates":
+            ["ratio", "proportion", "in the ratio", "divided in the ratio", "shared", "rate"],
+        "Number sequences": ["sequence", "next term", "the pattern"],
+        "Collection, tabulation & representation of data":
+            ["pie chart", "bar chart", "histogram", "frequency table", "pictogram", "frequency distribution"],
+        "Cumulative frequency & percentiles":
+            ["cumulative frequency", "percentile", "quartile", "ogive", "interquartile"],
+        "Application of differentiation: rate, maxima & minima":
+            ["maximum value", "minimum value", "rate of change", "stationary point", "maxima", "minima"],
+        "Application of integration: area under a curve": ["area under", "area bounded", "under the curve"],
+    },
+    "commerce": {
+        "Meaning & scope of commerce": ["commerce", "commercial", "auxiliaries", "aids to trade"],
+        "Occupations & production": ["production", "extractive", "manufacturing", "primary production",
+                                     "secondary production", "tertiary", "occupation"],
+        "Home trade: retail & wholesale": ["retail", "wholesale", "retailer", "wholesaler", "home trade",
+                                           "middlemen", "chain store", "supermarket", "hire purchase"],
+        "Foreign trade: import, export & documents":
+            ["import", "export", "foreign trade", "balance of trade", "balance of payment", "bill of lading",
+             "invoice", "indent", "customs", "tariff", "entrepot", "quota", "letter of credit"],
+        "Transportation": ["transport", "transportation", "carriage", "haulage", "pipeline", "containerisation",
+                           "containerization"],
+        "Communication": ["postal", "telecommunication", "courier", "e-mail", "telephone"],
+        "Warehousing": ["warehouse", "warehousing", "storage", "bonded"],
+        "Advertising & sales promotion": ["advertising", "advertisement", "sales promotion", "publicity",
+                                          "branding", "trademark"],
+        "Insurance": ["insurance", "premium", "policy", "underwriter", "indemnity", "assurance", "actuary",
+                     "utmost good faith", "subrogation", "insurable interest"],
+        "Banking & finance": ["bank", "banking", "cheque", "overdraft", "current account", "savings account",
+                             "central bank", "clearing"],
+        "Sole proprietorship & partnership": ["sole proprietor", "sole trader", "partnership", "partner",
+                                              "one-man business"],
+        "Limited liability companies": ["limited liability", "shareholder", "dividend", "shares", "debenture",
+                                        "prospectus", "annual general meeting", "board of directors"],
+        "Co-operatives & public enterprises": ["co-operative", "cooperative", "public enterprise",
+                                               "public corporation", "nationalisation", "privatisation"],
+        "Sources of business finance": ["capital", "loan", "equity", "trade credit", "retained profit",
+                                        "working capital"],
+        "Money & capital markets": ["money market", "capital market", "treasury bill", "treasury certificate"],
+        "Stock exchange": ["stock exchange", "stockbroker", "securities", "bull", "bear", "speculator"],
+        "Trade associations & chambers of commerce": ["chamber of commerce", "trade association"],
+        "Business ethics & social responsibility": ["business ethics", "social responsibility"],
+        "Government & business": ["subsidy", "subvention", "nationalised", "regulation of business"],
+    },
+    "physics": {
+        "Newton's laws of motion": ["newton", "force", "acceleration", "f = ma"],
+        "Projectile motion": ["projectile", "range", "trajectory"],
+        "Simple harmonic motion": ["harmonic", "oscillation", "amplitude", "period", "pendulum"],
+        "Gas laws & the ideal gas equation": ["boyle", "charles", "pressure", "gas law", "volume of gas"],
+        "Current, potential difference & Ohm's law": ["ohm", "resistance", "current", "voltage", "e.m.f", "resistor"],
+        "Radioactivity": ["radioactive", "half-life", "decay", "alpha", "beta", "gamma"],
+        "Reflection at plane & curved mirrors": ["mirror", "reflection", "image"],
+        "Refraction through media & prisms": ["refraction", "refractive index", "prism"],
+        "Lenses & optical instruments": ["lens", "focal length", "magnification"],
+        "Latent heat & change of state": ["latent heat", "melting", "boiling", "fusion", "vaporisation"],
+        "Quantity of heat: heat capacity & specific heat": ["specific heat", "heat capacity", "calorimeter"],
+        "Resistance & networks of resistors": ["resistor", "parallel", "series", "network", "combination"],
+        "Electrical energy & power": ["domestic lighting", "power rating", "kilowatt", "watt",
+                                      "consumption", "mains", "fuse", "electrical energy"],
+        "Machines (levers, pulleys, inclined plane)": ["machine", "lever", "pulley", "mechanical advantage",
+                                                       "velocity ratio", "efficiency", "inclined plane"],
+        "Work done & energy": ["work done", "kinetic energy", "potential energy", "joule"],
+        "Types & properties of waves": ["wavelength", "frequency", "amplitude", "transverse", "longitudinal"],
+        "Semiconductors, diodes & transistors": ["semiconductor", "diode", "transistor", "doping",
+                                                 "n-type", "p-type", "rectifier"],
+        "Energy quantisation & the photoelectric effect": ["photoelectric", "photon", "work function", "threshold"],
+        "Magnets & magnetic fields": ["magnet", "magnetic field", "flux", "magnetic pole"],
+        "Electromagnetic induction & generators": ["induction", "generator", "dynamo", "lenz", "induced e.m.f"],
+        "Electrostatics & capacitors": ["charge", "capacitor", "capacitance", "electrostatic", "coulomb"],
+        "Archimedes’ principle & floatation": ["archimedes", "upthrust", "floatation", "buoyancy", "density"],
+        "Pressure in solids, liquids & gases": ["pressure", "pascal", "barometer", "manometer"],
+        "Types of motion & rectilinear motion (equations)": ["velocity", "acceleration", "displacement",
+                                                             "uniform motion", "retardation"],
+        "Elasticity & Hooke’s law": ["hooke", "elastic", "extension", "spring", "elastic limit"],
+        "Models of the atom": ["electron", "proton", "neutron", "discovered by", "cathode ray",
+                               "thomson", "rutherford", "millikan", "bohr", "atomic model"],
+        "Dispersion & the electromagnetic spectrum": ["dispersion", "spectrum", "primary colour",
+                                                      "secondary colour", "pigment", "colour", "wavelength"],
+        "Radioactivity": ["radioactive", "half-life", "decay", "alpha", "beta", "gamma", "isotope"],
+    },
+    "chemistry": {
+        "Mole concept & Avogadro's number": ["mole", "avogadro", "molar mass", "moles"],
+        "Electrolysis & Faraday's laws": ["electrolysis", "faraday", "cathode", "anode", "electrode"],
+        "pH, indicators & neutralisation": ["ph", "indicator", "litmus", "neutralise"],
+        "Titration & acid-base calculations": ["titration", "titre", "burette", "pipette"],
+        "The periodic table & periodicity": ["periodic table", "group", "period", "periodicity"],
+        "Chemical bonding: ionic, covalent & metallic": ["ionic", "covalent", "metallic bond", "bonding"],
+        "Alkanes, alkenes & alkynes": ["alkane", "alkene", "alkyne", "hydrocarbon", "saturated",
+                                       "unsaturated", "isomer", "isomerism", "structural isomer"],
+        "Atomic models & sub-atomic particles": ["electron", "proton", "neutron", "discovered by",
+                                                 "chadwick", "thomson", "rutherford", "cathode ray",
+                                                 "sub-atomic", "nucleus"],
+        "Alkanols (alcohols) & alkanoic acids": ["alcohol", "alkanol", "ethanol", "carboxylic", "alkanoic"],
+        "Rates of chemical reaction & factors": ["rate of reaction", "catalyst", "collision"],
+        "Esters, fats & oils": ["ester", "iupac", "esterification", "fat", "oil", "saponification", "-oate"],
+        "Polymers & petrochemicals": ["polymer", "polymerisation", "polymerization", "rubber", "monomer",
+                                      "nylon", "plastic", "petrochemical", "condensation polymer", "addition polymer"],
+        "Properties of acids, bases & salts": ["precipitate", "acid", "base", "salt", "alkali", "soluble"],
+        "Preparation of salts": ["precipitate", "preparation of salt", "insoluble salt", "double decomposition"],
+        "Oxidation numbers & redox reactions": ["oxidation number", "redox", "oxidising agent",
+                                                "reducing agent", "oxidation state"],
+        "Electrochemical cells & the reactivity series": ["reactivity series", "electrochemical cell",
+                                                          "galvanic", "half cell", "electrode potential"],
+        "Nitrogen & its compounds": ["nitrogen", "ammonia", "nitrate", "nitric acid", "haber process"],
+        "Oxygen & sulphur": ["oxygen", "sulphur", "sulphuric acid", "sulphur dioxide", "contact process"],
+        "Halogens": ["halogen", "chlorine", "chloride", "bromine", "iodine", "fluorine"],
+        "Carbon & its oxides": ["carbon", "carbon dioxide", "carbon monoxide", "allotrope"],
+        "Iron & the transition metals": ["iron", "transition metal", "rust", "complex ion", "coloured ion"],
+        "Extraction of metals & alloys": ["extraction", "alloy", "ore", "smelting", "blast furnace"],
+        "Environmental pollution & control": ["pollution", "pollutant", "acid rain", "greenhouse", "effluent"],
+        "Chemical bonding: ionic, covalent & metallic": ["ionic", "covalent", "metallic bond", "bonding",
+                                                         "dative", "coordinate bond", "electrovalent"],
+        "Solubility & solubility curves": ["solubility", "saturated solution", "solubility curve", "solute"],
+        "Chemical equilibrium & Le Chatelier’s principle": ["equilibrium", "le chatelier", "reversible",
+                                                            "forward reaction", "backward reaction"],
+    },
+    "biology": {
+        "Autotrophic nutrition & photosynthesis": ["photosynthesis", "chlorophyll", "chloroplast"],
+        "Mendelian genetics & inheritance": ["gene", "allele", "genotype", "phenotype", "dominant", "recessive", "mendel"],
+        "The kidney & osmoregulation": ["kidney", "nephron", "osmoregulation", "urine"],
+        "Circulatory system & blood": ["blood", "heart", "artery", "vein", "circulation"],
+        "Energy flow & food chains/webs": ["food chain", "food web", "trophic", "producer", "consumer"],
+        "Classification of living organisms": ["classification", "kingdom", "phylum", "taxonomy", "species",
+                                               "mollusc", "snail", "arthropod", "invertebrate", "vertebrate",
+                                               "annelid", "coelenterate", "nematode", "protozoa"],
+        "Asexual & sexual reproduction": ["mitosis", "meiosis", "cell division", "chromosome", "equator",
+                                          "asexual", "sexual reproduction", "binary fission"],
+        "Sex determination & applications of genetics": ["sex determination", "chromosome", "xx", "xy",
+                                                         "genetics application"],
+        "Pollution & conservation of natural resources": ["pollution", "pollutant", "air pollution",
+                                                          "conservation", "sewage", "deforestation"],
+        "Ecological factors & the ecosystem": ["ecosystem", "habitat", "succession", "biome", "savanna",
+                                               "vegetation zone", "rainforest", "ecological factor"],
+        "Excretory products & organs": ["excretion", "skin", "sweat", "metabolic waste", "urea", "excretory"],
+        "The skeleton & types": ["skeleton", "bone", "exoskeleton", "endoskeleton", "vertebral column"],
+        "Digestion in mammals": ["digestion", "enzyme", "alimentary canal", "intestine", "absorption"],
+        "Circulatory system & blood": ["blood", "heart", "artery", "vein", "circulation", "haemoglobin"],
+        "Reproduction in plants (flowers, pollination, fertilisation)": ["pollination", "flower", "stamen",
+                                                                        "pistil", "fertilisation", "ovule", "pollen"],
+        "Reproduction in mammals": ["implantation", "embryo", "uterus", "placenta", "gestation",
+                                    "ovulation", "menstrual", "zygote"],
+        "Metamorphosis & development": ["metamorphosis", "larva", "pupa", "nymph", "termite", "caste"],
+        "Transport in plants": ["xylem", "phloem", "transpiration", "translocation", "root pressure"],
+        "Nervous coordination": ["nerve", "neurone", "reflex", "synapse", "central nervous"],
+        "Hormonal coordination": ["hormone", "endocrine", "insulin", "adrenaline", "gland"],
+        "Carriers & vectors of disease": ["vector", "mosquito", "tsetse", "housefly", "carrier of disease"],
+        "Common diseases & their control": ["disease", "malaria", "cholera", "tuberculosis", "pathogen", "infection"],
+        "Micro-organisms in action": ["micro-organism", "bacteria", "fungi", "virus", "microbe", "decay"],
+        "Variation in populations": ["variation", "continuous variation", "discontinuous", "phenotype"],
+        "Theories of evolution & evidence": ["evolution", "darwin", "lamarck", "natural selection", "adaptation"],
+        "Aerobic & anaerobic respiration": ["respiration", "aerobic", "anaerobic", "fermentation", "glycolysis"],
+        "Autotrophic nutrition & photosynthesis": ["photosynthesis", "chlorophyll", "chloroplast", "autotrophic"],
+    },
+    "commerce": {
+        "Banking & finance": ["bank", "cheque", "overdraft", "central bank", "loan"],
+        "Insurance": ["insurance", "premium", "policy", "indemnity", "underwriter"],
+        "Advertising & sales promotion": ["advert", "advertising", "sales promotion", "publicity"],
+        "Warehousing": ["warehouse", "warehousing", "storage"],
+        "Transportation": ["transport", "haulage", "carrier", "freight"],
+        "Communication": ["communication", "postal", "telecommunication"],
+        "Stock exchange": ["stock exchange", "shares", "stockbroker", "securities"],
+        "Occupations & production": ["occupation", "extractive", "construction", "manufacturing",
+                                     "primary production", "secondary production", "industry"],
+        "Meaning & scope of commerce": ["commerce", "trade", "aids to trade", "buying and selling"],
+        "Home trade: retail & wholesale": ["retail", "wholesale", "retailer", "wholesaler", "middlemen"],
+        "Foreign trade: import, export & documents": ["import", "export", "foreign trade",
+                                                       "balance of trade", "bill of lading", "invoice"],
+        "Sole proprietorship & partnership": ["sole proprietor", "partnership", "sole trader"],
+        "Limited liability companies": ["limited liability", "shareholder", "public company", "private company"],
+        "Co-operatives & public enterprises": ["cooperative", "co-operative", "public corporation", "parastatal"],
+    },
+    "economics": {
+        "Elasticity of demand & supply": ["elasticity", "elastic", "inelastic"],
+        "Theory of demand & supply": ["demand", "supply", "demand curve"],
+        "Money: functions & value": ["money", "medium of exchange", "legal tender"],
+        "Inflation & deflation": ["inflation", "deflation"],
+        "Government revenue & taxation": ["tax", "taxation", "revenue", "tariff"],
+        "Concepts & measurement of national income": ["gross domestic product", "gdp", "gnp",
+                                                       "national income", "per capita", "net national product"],
+        "Wants, scarcity, choice & opportunity cost": ["scarcity", "opportunity cost", "wants", "choice"],
+        "Factors of production & their rewards": ["land", "labour", "capital", "entrepreneur",
+                                                  "factors of production", "rent", "wages", "interest", "profit"],
+        "Division of labour & scale of production": ["division of labour", "specialisation", "scale of production"],
+        "Perfect competition": ["perfect competition", "price taker"],
+        "Monopoly & monopolistic competition": ["monopoly", "monopolistic"],
+        "Financial institutions & the central bank": ["central bank", "commercial bank", "financial institution"],
+        "International trade & balance of payments": ["balance of payments", "balance of trade",
+                                                      "international trade", "exchange rate", "tariff"],
+        "Population & labour": ["population", "labour force", "birth rate", "death rate", "census"],
+    },
+    "agricultural science": {
+        "Meaning & importance of agriculture": ["agriculture", "farming", "agrarian", "importance of agriculture"],
+        "Branches & systems of agriculture": ["horticulture", "agronomy", "mixed farming", "shifting cultivation",
+                                              "nomadic", "pastoral", "crop husbandry", "branches of agriculture"],
+        "Problems of agricultural development": ["land tenure", "problems of agriculture", "inadequate capital",
+                                                 "poor storage", "agricultural development"],
+        "Agricultural ecology & environment": ["ecology", "ecosystem", "habitat", "biotic", "abiotic", "environment"],
+        "Soil formation, types & properties": ["soil", "weathering", "loam", "clay", "sandy soil", "soil texture",
+                                               "soil structure", "soil profile", "humus", "porosity", "loamy"],
+        "Soil fertility & conservation": ["soil fertility", "erosion", "leaching", "cover crop", "crop rotation",
+                                          "mulching", "terracing", "conservation"],
+        "Fertilisers & manures": ["fertiliser", "fertilizer", "manure", "npk", "compost", "green manure",
+                                  "organic manure", "nitrogen", "phosphorus", "potassium"],
+        "Classification of crops": ["cereal", "legume", "tuber", "arable", "perennial crop", "annual crop",
+                                    "cash crop", "food crop", "classification of crops"],
+        "Land preparation & cultural practices": ["germination", "seed", "seedling", "seedbed", "nursery",
+                                                  "sowing", "drilling", "broadcasting", "transplanting", "thinning",
+                                                  "spacing", "planting", "weeding", "staking", "pruning", "harvesting",
+                                                  "land preparation", "tillage", "ploughing", "harrowing", "ridging",
+                                                  "clearing", "supplying", "pricking out", "cultural practice"],
+        "Cropping systems": ["cropping system", "monocropping", "mono cropping", "mixed cropping",
+                             "intercropping", "sole cropping"],
+        "Pests & diseases of crops": ["pest", "insecticide", "pesticide", "fungicide", "weevil", "aphid",
+                                      "nematode", "fungus", "blight", "rot", "disease of crop"],
+        "Weeds & their control": ["weed", "herbicide", "weeding", "weed control"],
+        "Farm animals & their characteristics": ["livestock", "cattle", "poultry", "goat", "sheep", "pig",
+                                                 "ruminant", "monogastric", "farm animal"],
+        "Animal nutrition & feeds": ["feed", "ration", "roughage", "concentrate", "forage", "silage", "hay",
+                                     "animal nutrition"],
+        "Animal reproduction & breeding": ["breeding", "gestation", "mating", "crossbreeding",
+                                           "artificial insemination", "oestrus", "heat period", "incubation"],
+        "Pests & diseases of livestock": ["tick", "parasite", "vaccination", "anthrax", "newcastle",
+                                          "foot and mouth", "rinderpest", "tsetse", "trypanosomiasis"],
+        "Farm records & accounts": ["farm record", "farm account", "inventory", "farm inventory"],
+        "Marketing of agricultural produce": ["marketing board", "middlemen", "agricultural produce", "commodity"],
+        "Agricultural finance & insurance": ["agricultural finance", "farm credit", "agricultural insurance",
+                                             "cooperative society"],
+        "Agricultural extension & rural development": ["extension", "extension agent", "rural development", "adoption"],
+        "Farm tools, machinery & implements": ["cutlass", "hoe", "plough", "harrow", "farm tool", "implement", "machinery"],
+        "Farm mechanisation": ["mechanisation", "mechanization", "tractor"],
+        "Irrigation & drainage": ["irrigation", "drainage"],
+    },
+    "geography": {
+        "Population: growth, distribution & migration": ["birth rate", "death rate", "fertility", "mortality",
+                                                         "population growth", "census", "migration", "immigration",
+                                                         "emigration", "population density"],
+        "Economic activities & resources": ["lumbering", "forestry", "timber", "mining", "fishing", "quarrying",
+                                            "farming", "manufacturing"],
+        "Rocks & the earth’s crust": ["igneous", "sedimentary", "metamorphic", "rock", "crust"],
+        "Landforms & denudation processes": ["erosion", "weathering", "denudation", "deposition", "landform",
+                                             "plateau", "valley", "escarpment"],
+        "Weather, climate & climatic elements": ["weather", "climate", "rainfall", "temperature", "humidity",
+                                                 "pressure", "wind"],
+        "The earth as a planet & its motions": ["rotation", "revolution", "equinox", "solstice", "latitude", "longitude"],
+        "Settlement types & patterns": ["settlement", "rural", "urban", "nucleated", "dispersed"],
+        "Map reading & interpretation": ["map", "contour", "gradient", "scale", "bearing"],
+        "Scale, distance & direction": ["scale", "distance", "direction", "representative fraction"],
+    },
+    "accounting": {
+        "Accounting concepts & conventions": ["capital expenditure", "revenue expenditure", "capitalised",
+                                              "going concern", "accrual", "prudence", "consistency", "matching"],
+        "The accounting equation": ["accounting equation", "assets", "liabilities", "capital", "owner's equity"],
+        "Ledger & double entry": ["ledger", "double entry", "debit", "credit", "posting"],
+        "Source documents & subsidiary books": ["invoice", "receipt", "voucher", "day book", "subsidiary book",
+                                                "sales journal", "purchases journal"],
+        "The trial balance": ["trial balance"],
+        "Cash book & bank reconciliation": ["cash book", "bank reconciliation", "petty cash", "contra"],
+        "Trading, profit & loss account": ["carriage inwards", "carriage outwards", "gross profit", "net profit",
+                                           "cost of goods sold", "trading account", "purchases", "sales"],
+        "Balance sheet": ["balance sheet", "fixed asset", "current asset", "current liability"],
+        "Adjustments: accruals, prepayments & depreciation": ["depreciation", "accrual", "prepayment",
+                                                              "straight line", "reducing balance"],
+        "Bad & doubtful debts": ["bad debt", "doubtful debt", "provision for doubtful"],
+        "Correction of errors & suspense account": ["suspense account", "correction of error", "error of omission",
+                                                    "error of commission"],
+        "Control accounts": ["control account", "debtors control", "creditors control"],
+        "Partnership accounts": ["partnership", "appropriation account", "goodwill", "current account"],
+        "Company accounts": ["company account", "shares", "debenture", "dividend"],
+        "Manufacturing accounts": ["manufacturing account", "prime cost", "work in progress"],
+        "Not-for-profit organisations": ["not-for-profit", "receipts and payments", "income and expenditure",
+                                         "accumulated fund", "subscription"],
+        "Accounting ratios & interpretation": ["ratio", "current ratio", "gross profit margin", "mark-up",
+                                               "working capital"],
+    },
+    "christian religious studies": {
+        "Creation & the fall": ["creation", "garden of eden", "adam", "eve", "the fall", "serpent"],
+        "The call of Abraham & the covenant": ["abraham", "covenant", "isaac", "sacrifice", "canaan"],
+        "The Exodus & the Passover": ["exodus", "passover", "plague", "egypt", "pharaoh", "moses", "red sea"],
+        "The Ten Commandments & the covenant at Sinai": ["ten commandments", "sinai", "commandment", "law of moses"],
+        "Joshua & the conquest": ["joshua", "jericho", "conquest", "promised land"],
+        "The judges": ["judge", "gideon", "samson", "deborah"],
+        "Samuel, Saul, David & Solomon": ["samuel", "saul", "david", "solomon", "goliath", "temple"],
+        "Amos & social justice": ["amos", "social justice", "injustice"],
+        "Hosea & God’s love": ["hosea", "unfaithful", "gomer"],
+        "Isaiah & Jeremiah": ["isaiah", "jeremiah", "prophecy"],
+        "The teachings & parables of Jesus": ["parable", "sermon on the mount", "beatitudes", "kingdom of god"],
+        "Miracles of Jesus": ["miracle", "healed", "raised", "lazarus", "feeding"],
+        "Passion, death & resurrection": ["crucifixion", "resurrection", "calvary", "golgotha", "last supper",
+                                          "betrayal", "judas"],
+        "Pentecost & the birth of the Church": ["pentecost", "holy spirit", "apostles", "tongues of fire"],
+        "The ministry of Peter & Paul": ["peter", "paul", "saul of tarsus", "damascus", "conversion", "missionary"],
+    },
+    "government": {
+        "Meaning & scope of government": ["government", "governance", "the state"],
+        "Power, authority & legitimacy": ["power", "authority", "legitimacy"],
+        "Political culture & socialisation": ["political culture", "political socialisation"],
+        "State, nation & sovereignty": ["sovereignty", "nation", "nation-state"],
+        "Democracy & rule of law": ["democracy", "rule of law", "democratic"],
+        "Fundamental human rights": ["human rights", "fundamental rights", "civil liberties"],
+        "Ideologies: capitalism, socialism, communism": ["capitalism", "socialism", "communism", "ideology"],
+        "Separation of powers & checks and balances": ["separation of powers", "checks and balances"],
+        "The legislature, executive & judiciary": ["legislature", "executive", "judiciary", "bill",
+                                                   "second reading", "parliament", "assembly", "veto", "bicameral"],
+        "Federalism, unitarism & confederalism": ["federalism", "unitary", "confederal", "federation", "devolution"],
+        "Constitutions & constitutionalism": ["constitution", "constitutionalism", "rigid constitution"],
+        "Public opinion & political parties": ["public opinion", "political party", "one-party", "multi-party"],
+        "Electoral systems & suffrage": ["electoral", "suffrage", "franchise", "ballot", "constituency",
+                                         "proportional representation", "electoral commission"],
+        "Pressure groups": ["pressure group", "interest group", "lobby", "trade union"],
+        "Public administration & the civil service": ["civil service", "bureaucracy", "public administration",
+                                                      "civil servant", "public corporation"],
+        "Colonial administration & nationalism": ["colonial", "nationalism", "indirect rule", "colonialism"],
+        "Constitutional development in Nigeria": ["clifford constitution", "richards constitution",
+                                                  "macpherson", "lyttleton", "independence constitution"],
+        "Political parties & elections in Nigeria": ["npc", "ncnc", "action group", "political party", "election"],
+        "Foreign policy & Nigeria’s foreign relations": ["foreign policy", "diplomacy", "non-aligned",
+                                                         "foreign relations"],
+        "Organisations: OAU/AU, ECOWAS, UNO, Commonwealth": ["ecowas", "united nations", "commonwealth",
+                                                             "african union", "oau", "uno", "security council"],
+    },
+    "civic education": {
+        "Meaning & types of citizenship": ["citizenship", "citizen", "naturalisation", "naturalization"],
+        "Rights & duties of citizens": ["rights", "duties", "obligation", "civic responsibility"],
+        "Fundamental human rights": ["human rights", "fundamental rights"],
+        "National values & symbols": ["national value", "national symbol", "coat of arms", "national flag",
+                                      "national anthem", "national pledge"],
+        "Honesty, integrity & discipline": ["honesty", "integrity", "discipline"],
+        "Patriotism & national unity": ["patriotism", "national unity", "loyalty"],
+        "Meaning & pillars of democracy": ["democracy", "pillars of democracy"],
+        "Rule of law & constitutional democracy": ["rule of law", "constitutional democracy"],
+        "Arms of government & their functions": ["arms of government", "legislature", "executive", "judiciary"],
+        "Civil society & community relationships": ["civil society", "community", "non-governmental", "ngo"],
+        "Public opinion & political participation": ["public opinion", "political participation"],
+        "Elections & responsible citizenship": ["election", "voting", "responsible citizenship", "electorate"],
+        "Drug abuse & trafficking": ["drug abuse", "drug trafficking", "narcotic", "substance abuse", "hard drug"],
+        "Human trafficking": ["human trafficking", "trafficking in persons", "child trafficking"],
+        "Cultism & its effects": ["cultism", "secret cult", "cult"],
+        "HIV/AIDS awareness": ["hiv", "aids", "hiv/aids", "sexually transmitted"],
+        "Corruption & its consequences": ["corruption", "bribery", "embezzlement", "fraud", "nepotism"],
+    },
+    "literature in english": {
+        "Figures of speech & literary devices": ["figure of speech", "metaphor", "simile", "personification",
+                                                 "hyperbole", "irony", "alliteration", "onomatopoeia", "oxymoron",
+                                                 "euphemism", "litotes", "metonymy", "synecdoche", "apostrophe",
+                                                 "assonance", "consonance", "literary device", "pun", "paradox"],
+        "Elements of drama, prose & poetry": ["playwright", "novelist", "poet", "protagonist", "antagonist",
+                                              "prologue", "epilogue", "soliloquy", "aside", "act", "scene",
+                                              "stanza", "muse", "genre", "dialogue", "monologue", "chorus"],
+        "Literary appreciation & criticism": ["appreciation", "criticism", "tone", "mood", "diction",
+                                              "odd item", "odd one", "theme of", "figurative"],
+        "Tragedy, comedy & tragicomedy": ["tragedy", "comedy", "tragicomedy", "tragic hero", "catharsis", "farce"],
+        "Plot, character & theme in drama": ["plot", "climax", "denouement", "conflict", "flashback", "dramatic irony"],
+        "African & non-African drama": ["drama", "play", "stage", "dramatist"],
+        "Types of the novel": ["novel", "novella", "picaresque", "epistolary", "bildungsroman", "fiction"],
+        "Narrative technique & point of view": ["narrator", "point of view", "first person", "third person",
+                                                "omniscient", "flashback", "narrative technique"],
+        "Characterisation & setting": ["characterisation", "characterization", "character", "setting", "foil"],
+        "African & non-African prose": ["prose", "novelist", "prose fiction"],
+        "Forms & structure of poems": ["sonnet", "ode", "elegy", "ballad", "epic", "lyric", "couplet",
+                                       "quatrain", "verse", "stanza", "limerick"],
+        "Sound devices: rhythm, rhyme & meter": ["rhythm", "rhyme", "meter", "metre", "refrain", "onomatopoeia",
+                                                 "sound device", "rhyme scheme"],
+        "Imagery & symbolism": ["imagery", "symbolism", "symbol", "image", "figurative", "vanity"],
+        "African & non-African poetry": ["poem", "poet", "poetry", "poetic"],
+    },
+    "english language": {
+        "Sports register": ["sports", "football", "referee", "athlete", "goalkeeper", "pitch", "tournament",
+                            "penalty", "striker"],
+        "Medical register": ["doctor", "patient", "diagnosis", "surgery", "symptom", "prescription",
+                            "clinic", "nurse", "medication"],
+        "Legal register": ["court", "judge", "plaintiff", "defendant", "verdict", "litigation", "lawyer",
+                          "plea", "witness", "bail", "jury"],
+        "Commerce & finance register": ["invoice", "dividend", "shares", "creditor", "debtor", "ledger",
+                                       "overdraft", "collateral"],
+        "Religious register": ["worship", "congregation", "sermon", "pilgrimage", "liturgy", "sacrament"],
+        "Motor/automobile register": ["engine", "clutch", "gear", "brake", "accelerator", "carburettor",
+                                     "mechanic", "ignition", "windscreen"],
+        "Idioms & figurative expressions": ["idiom", "figurative", "expression means", "figuratively",
+                                           "as used in", "means that", "this means"],
+        "Synonyms": ["synonym", "nearest in meaning", "similar in meaning", "closest in meaning",
+                     "same meaning"],
+        "Antonyms": ["antonym", "opposite in meaning", "opposite", "contrary", "most nearly opposite"],
+        "Sentence interpretation / nearest in meaning": ["nearest in meaning", "interpretation",
+                                                        "best interpretation", "which of the following means"],
+        "Sentence completion": ["complete the", "best completes", "fill the gap", "fills the gap",
+                               "gap in the sentence", "completes the sentence"],
+        "Concord (subject-verb agreement)": ["concord", "subject-verb agreement", "agrees with"],
+        "Word stress": ["stress", "stressed syllable", "primary stress"],
+        "Intonation": ["intonation", "rising tone", "falling tone"],
+        "Vowels: monophthongs & diphthongs": ["vowel", "monophthong", "diphthong"],
+        "Consonants & consonant clusters": ["consonant", "consonant cluster"],
+        "Rhymes & homophones": ["rhyme with", "homophone", "same sound", "same vowel"],
+        "Silent letters": ["silent letter", "silent consonant"],
+    },
+}
+
+
+_STOP = set("""a an the of and or to in for with without by on at from into as is are be was
+were being been this that these those it its their his her our your my not no nor etc within
+different single combined simple types type kind nature basic concept concepts meaning scope
+application applications their they them use uses using various value values general which
+what when where who whom whose why how find given following above below shown show table figure
+diagram evaluate simplify solve calculate correct nearest whole number numbers answer result
+expression equation equations term terms set sets real means mean nil none each every all both
+one two three four five six seven eight nine ten first second third last next figure fig
+statement statements true false option options if then than more most less least many much
+some any other others another such same only also just even still very more question if
+""".split())
+
+
+def _strip_latex(text):
+    return re.sub(r"[{}\\^_$]", " ", text or "")
+
+
+def _stem(word):
+    for suf in ("ies", "es", "s"):
+        if len(word) > 4 and word.endswith(suf):
+            return word[: -len(suf)] + ("y" if suf == "ies" else "")
+    return word
+
+
+def _tokens(text):
+    out = []
+    for w in re.findall(r"[a-z]+", _strip_latex(text).lower()):
+        if len(w) > 2 and w not in _STOP:
+            out.append(_stem(w))
+    return out
+
+
+from functools import lru_cache
+
+
+@lru_cache(maxsize=64)
+def _build_index(subject):
+    key = norm_subject(subject)
+    syl = FULL_SYLLABUS.get(key)
+    if not syl:
+        return []
+    tsec = TOPIC_SECTION.get(key, {})
+    # normalise curly/straight apostrophes so a boost keyed "Ohm's law" still matches
+    # the syllabus's "Ohm’s law" (and vice-versa) — otherwise the boost silently
+    # never applies and that sub-topic's recall quietly drops.
+    boosts = {_norm_apos(k): v for k, v in KEYWORD_BOOSTS.get(key, {}).items()}
+    index = []
+    for topic, subs in syl:
+        for sub in subs:
+            section = tsec.get(topic)
+            if key == "english language":
+                section = ENGLISH_SUBTOPIC_SECTION.get(sub, section)
+            kws = set(_tokens(sub)) | set(_tokens(topic))
+            for phrase in boosts.get(_norm_apos(sub), []):
+                kws.add(phrase.lower())
+                kws.update(_tokens(phrase))
+            index.append((section, topic, sub, kws))
+    return index
+
+
+def _norm_apos(s):
+    """Fold curly apostrophes/quotes to straight so boost keys match syllabus
+    strings regardless of which style either was typed with."""
+    return (s or "").replace("’", "'").replace("‘", "'")
+
+
+def classify(subject, text, year=None, novel_title=None):
+    """Keyword-match a question to (section, topic, subtopic).
+
+    For English, a question confidently classified into the Novel section has its
+    ``topic`` set to the JAMB-recommended novel, so it lines up with a mock that
+    names that novel — the app serves Novel questions whose topic matches the
+    mock's ``novel_title``. The novel is taken from ``novel_title`` when supplied
+    (the name scraped off the listing page, authoritative), else from the
+    hardcoded ``year`` map."""
+    index = _build_index(subject)
+    if not index:
+        return (None, None, None)
+    low = (text or "").lower()
+    toks = set(_tokens(text))
+    best, best_score = None, 0
+    for section, topic, sub, kws in index:
+        score = 0
+        for kw in kws:
+            if " " in kw:
+                if kw in low:
+                    score += 3
+            elif kw in toks:
+                score += 1
+        if score > best_score:
+            best_score, best = score, (section, topic, sub)
+    if best and best_score > 0:
+        section, topic, sub = best
+        # tag the actual novel (only on a genuine novel match): prefer the name
+        # scraped off the listing page, fall back to the year map.
+        if section == "novel" and topic == "Recommended Novel":
+            nv = (novel_title or "").strip() or novel_for_year(year)
+            if nv:
+                topic = nv
+        return (section, topic, sub)
+    sections = []
+    for section, _t, _s, _k in index:
+        if section and section not in sections:
+            sections.append(section)
+    if not sections:
+        return (None, None, None)
+    return (sections[sum(ord(c) for c in (text or "")) % len(sections)], None, None)
+
+
+def classify_confident(subject, text, year=None, novel_title=None):
+    """Like ``classify`` but returns a match ONLY on a genuine keyword hit — no
+    hash-based section fallback. Returns ``(section, topic, subtopic)`` or
+    ``(None, None, None)`` when nothing matched. Used by the bank auto-tagger so a
+    question is never given a made-up topic/section it doesn't actually belong to."""
+    index = _build_index(subject)
+    if not index:
+        return (None, None, None)
+    low = (text or "").lower()
+    toks = set(_tokens(text))
+    best, best_score = None, 0
+    for section, topic, sub, kws in index:
+        score = 0
+        for kw in kws:
+            if " " in kw:
+                if kw in low:
+                    score += 3
+            elif kw in toks:
+                score += 1
+        if score > best_score:
+            best_score, best = score, (section, topic, sub)
+    if not (best and best_score > 0):
+        return (None, None, None)
+    section, topic, sub = best
+    if section == "novel" and topic == "Recommended Novel":
+        nv = (novel_title or "").strip() or novel_for_year(year)
+        if nv:
+            topic = nv
+    return (section, topic, sub)
+
+
+def english_vocab_fallback(question_text, options):
+    """A truthful umbrella tag for the bare English *vocabulary* items that carry
+    no directive text.
+
+    JAMB's antonym / synonym / lexis sections are scraped as a short headword plus
+    four one-word options, while the "choose the word opposite/nearest in meaning"
+    instruction sits in a section header that isn't repeated on each row. With no
+    directive, antonym vs synonym is genuinely indistinguishable — but the item is
+    unambiguously an English *Lexis and Structure* (vocabulary) question, so we can
+    file it there confidently. That makes it both drawable and no-longer-"untagged"
+    without inventing a precise sub-type it doesn't state.
+
+    Returns ``("lexis_structure", "Lexis and Structure", None)`` for a vocabulary-
+    shaped item, else ``None`` (so a normal sentence-length question is left to the
+    keyword classifier / ensure-section fallback).
+    """
+    words = (question_text or "").split()
+    if not words or len(words) > 6:              # sentence-length -> not a bare headword
+        return None
+    opts = [o.strip() for o in (options or []) if o and o.strip()]
+    if len(opts) < 3:                            # need a real option set to be a lexis item
+        return None
+    # options are short words/phrases (the shape of a synonym/antonym choice list)
+    shortish = sum(1 for o in opts if len(o.split()) <= 3)
+    if shortish < 3:
+        return None
+    return ("lexis_structure", "Lexis and Structure", None)
+
+
+# ===========================================================================
+# HTTP + parsing
+# ===========================================================================
+def _session():
+    import requests
+    return requests.Session()
+
+
+def fetch(url, session, retries=3):
+    import requests
+    for attempt in range(retries):
+        try:
+            r = session.get(url, headers=HEADERS, timeout=25)
+            if r.status_code == 200:
+                return r.text
+            if r.status_code == 404:
+                return None
+        except requests.RequestException:
+            pass
+        time.sleep(1.5 * (attempt + 1))
+    return None
+
+
+def clean(text):
+    t = _html.unescape(text or "")
+    t = t.replace("\t", " ").replace("\r", " ").replace("\n", " ")
+    return re.sub(r"\s+", " ", t).strip()
+
+
+# figure-reference words: a stem that leans on a picture we couldn't capture.
+_FIGURE_WORDS = re.compile(
+    r"\b(diagram|figure|fig\.?|graph|the (?:sketch|drawing|circuit|structure)|"
+    r"shown (?:above|below)|in the (?:figure|diagram|graph)|from the graph|"
+    r"the (?:map|chart) (?:above|below))\b", re.I)
+
+
+_IMG_REJECT = ("placeholder", "emojione", "emoji", "/members/", "/comments/",
+               "avatar", "logo", "/icons/", "sprite", "gravatar", "flag")
+
+
+def _real_image_src(src):
+    """True for a genuine question figure, not an avatar / placeholder / emoji /
+    comment attachment / logo."""
+    s = (src or "").strip().lower()
+    if not s or s.startswith("data:"):
+        return False
+    if any(bad in s for bad in _IMG_REJECT):
+        return False
+    # a myschool question figure lives under /storage/… (but not the rejected
+    # sub-folders above); otherwise accept any real image URL.
+    base = s.split("?", 1)[0].split(" ", 1)[0]
+    return base.endswith((".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"))
+
+
+def _img_candidates(im):
+    """Every URL an <img> exposes — eager/lazy attributes plus each srcset entry —
+    so a real hosted figure can be preferred over a base64 placeholder that a
+    NuxtImg often carries in ``src`` while the real image sits in ``srcset``."""
+    out = []
+    for attr in ("src", "data-src", "data-original", "data-lazy", "data-echo",
+                 "data-lazy-src", "data-image"):
+        v = (im.get(attr) or "").strip()
+        if v:
+            out.append(v)
+    for key in ("srcset", "data-srcset"):
+        ss = (im.get(key) or "").strip()
+        if ss:
+            for part in ss.split(","):
+                u = part.strip().split(" ")[0]
+                if u:
+                    out.append(u)
+    return out
+
+
+def _img_src(im):
+    """The best single URL from an <img> (compat shim over _img_candidates)."""
+    cands = _img_candidates(im)
+    return cands[0] if cands else ""
+
+
+def _real_data_uri(src):
+    """True for an inline base64 raster that is an actual figure — myschool embeds
+    some diagrams straight into the HTML as ``data:image/…;base64,…``. Tiny blur /
+    LQIP placeholders and 1×1 spacers are excluded by payload size."""
+    s = (src or "").strip()
+    if not s.lower().startswith("data:image/"):
+        return False
+    payload = s.split(",", 1)[1] if "," in s else ""
+    return len(payload) > 3000                # ~2KB+ decoded → a genuine figure
+
+
+def _serialize_table(table):
+    """Render a myschool <table> as readable text: rows joined by ' | ',
+    rows separated by ' ; ' — keeps the data legible in a plain-text stem."""
+    rows = []
+    for tr in table.select("tr"):
+        cells = [clean(td.get_text(" ", strip=True)) for td in tr.select("th,td")]
+        cells = [c for c in cells if c]
+        if cells:
+            rows.append(" | ".join(cells))
+    return " ; ".join(rows)
+
+
+def parse_detail(html):
+    """Parse a question detail page into a dict:
+
+    ``{stem, options[4], correct, image_url, has_table, needs_review, flags}``
+    or ``None`` if the essentials (stem / 4 options / correct) can't be read.
+    """
+    from bs4 import BeautifulSoup
+    soup = BeautifulSoup(html, "html.parser")
+
+    options = {}
+    for sp in soup.select("span.uppercase"):
+        letter = sp.get_text(strip=True).lower()
+        if letter in ("a", "b", "c", "d") and letter not in options:
+            p = sp.find_next("p")
+            if p:
+                options[letter] = clean(p.get_text(" ", strip=True))
+    if len(options) < 2:
+        return None
+
+    # locate the stem <h1> and its container (so we can inspect it for a figure
+    # image or a data table).
+    stem, container = "", None
+    first_opt = next((sp for sp in soup.select("span.uppercase")
+                      if sp.get_text(strip=True).lower() == "a"), None)
+    h1 = None
+    if first_opt:
+        block = first_opt
+        for _ in range(6):
+            block = block.find_parent() if block else None
+            if not block:
+                break
+            cand = block.find_previous("h1")
+            if cand and cand.get_text(strip=True):
+                h1 = cand
+                break
+    if h1 is None:
+        h1 = soup.find("h1")
+    if h1 is not None:
+        stem = clean(h1.get_text(" ", strip=True))
+        container = h1.parent
+
+    # a data table inside the stem → serialise it, remove it from the stem (so its
+    # cells don't leak in as flattened run-on text), and append a structured
+    # ``[table: …]`` marker the UI renders as a real table.
+    has_table = False
+    if container is not None:
+        table = container.find("table")
+        if table is not None:
+            has_table = True
+            table_text = _serialize_table(table)
+            table.extract()                                  # drop the table node…
+            if h1 is not None:                               # …then re-read a clean stem
+                stem = clean(h1.get_text(" ", strip=True))
+            if table_text:
+                stem = (stem + " [table: " + table_text + "]").strip()
+    if not stem:
+        return None
+
+    # a genuine figure image in the stem, if any. myschool server-renders these as
+    # a NuxtImg (``<img data-nuxt-img srcset/src>``) pointing at /storage/classroom/…,
+    # or embeds the diagram inline as a base64 data URI. Prefer a real hosted URL;
+    # fall back to a substantial inline image (re-hosted at save time).
+    image_url, data_uri = None, None
+    if container is not None:
+        for im in container.find_all("img"):
+            for cand in _img_candidates(im):
+                if cand.startswith("data:"):
+                    if data_uri is None and _real_data_uri(cand):
+                        data_uri = cand
+                elif _real_image_src(cand):
+                    image_url = cand
+                    break
+            if image_url:
+                break
+    if image_url and image_url.startswith("/"):        # absolutise site-relative
+        image_url = "https://myschool.ng" + image_url
+    if not image_url:                                  # inline base64 figure
+        image_url = data_uri
+
+    # correct answer badge.
+    correct = ""
+    node = soup.find(string=re.compile(r"Correct Option", re.I))
+    if node:
+        el = node.parent
+        for _ in range(5):
+            if el is None:
+                break
+            sp = el.select_one("span.uppercase") if hasattr(el, "select_one") else None
+            if sp and sp.get_text(strip=True).lower() in ("a", "b", "c", "d"):
+                correct = sp.get_text(strip=True).upper()
+                break
+            el = el.parent
+    if correct not in ("A", "B", "C", "D"):
+        return None
+
+    ordered = [options.get(k, "") for k in ("a", "b", "c", "d")]
+    if any(not o for o in ordered):
+        return None
+
+    # instruction / reading passage / recommended-novel note — the shared stimulus
+    # myschool renders in a ``prevent-copy`` block (never the stem or an option row).
+    instruction, passage_text, novel_title, is_novel = "", "", None, False
+    for d in soup.select("div.prevent-copy"):
+        if d.select_one("span.uppercase"):       # an option row → not an instruction
+            continue
+        t = clean(d.get_text(" ", strip=True))
+        if not t or t == stem:
+            continue
+        if _NOVEL_NOTE.search(t):
+            is_novel = True
+            instruction = instruction or t
+            novel_title = novel_title or _novel_title_from_note(t)
+        elif len(t) > len(passage_text):
+            passage_text = t                     # keep the longest = the passage
+    if len(passage_text) < 120:                  # too short to be a real passage
+        passage_text = ""
+    else:
+        passage_text = _clean_passage(passage_text)
+    instruction = instruction or passage_text
+
+    flags = []
+    if has_table:
+        flags.append("table")
+    # figure-dependent but we captured no image → needs a human to add the figure.
+    figure_dependent = bool(_FIGURE_WORDS.search(stem)) and not image_url
+    if figure_dependent:
+        flags.append("figure")
+    if image_url:
+        flags.append("image")
+    if is_novel:
+        flags.append("novel")
+    if passage_text:
+        flags.append("passage")
+
+    return {
+        "stem": stem, "options": ordered, "correct": correct,
+        "image_url": image_url, "has_table": has_table,
+        "figure_dependent": figure_dependent,
+        "needs_review": figure_dependent, "flags": flags,
+        "instruction": instruction, "passage_text": passage_text,
+        "is_novel": is_novel, "novel_title": novel_title,
+    }
+
+
+def list_question_ids(slug, exam, year, session, max_pages=60, delay=0.6):
+    """Every question detail-page id for one subject/exam/year (paginated)."""
+    ids, seen = [], set()
+    for page in range(1, max_pages + 1):
+        html = fetch(f"{BASE}/{slug}?exam_type={exam}&exam_year={year}&page={page}", session)
+        if not html:
+            break
+        found = re.findall(rf"/classroom/{re.escape(slug)}/(\d+)\?exam_type={exam}", html)
+        new = [i for i in found if i not in seen]
+        if not new:
+            break
+        for i in new:
+            seen.add(i)
+            ids.append(i)
+        time.sleep(delay)
+    return ids
+
+
+def list_ids_and_texts(slug, exam, year, session, max_pages=60, delay=0.6):
+    """Like ``list_question_ids`` but also returns ``{qid: recommended-text}`` — the
+    set-text name shown in the listing badge on each page. English has one novel a
+    year (the same badge on every page); Literature's badge is the specific
+    prose/drama/poetry text for that page, so the map is per-question."""
+    ids, seen, texts = [], set(), {}
+    for page in range(1, max_pages + 1):
+        html = fetch(f"{BASE}/{slug}?exam_type={exam}&exam_year={year}&page={page}", session)
+        if not html:
+            break
+        badge = _novel_from_listing_html(html)
+        found = re.findall(rf"/classroom/{re.escape(slug)}/(\d+)\?exam_type={exam}", html)
+        new = [i for i in found if i not in seen]
+        if not new:
+            break
+        for i in new:
+            seen.add(i)
+            ids.append(i)
+            if badge:
+                texts[i] = badge
+        time.sleep(delay)
+    return ids, texts
+
+
+def question_url(slug, exam, year, qid):
+    return f"{BASE}/{slug}/{qid}?exam_type={exam}&exam_year={year}"
+
+
+def scrape_year(subject, exam, year, session=None, max_pages=60, delay=0.6,
+                detail_fetch=None):
+    """Yield parsed question dicts for one subject/exam/year, each augmented with
+    ``subject``, ``year`` and the classified ``section/topic/subtopic``. Skips
+    unparseable pages. The caller de-duplicates and decides what to store.
+
+    ``detail_fetch(url) -> html`` overrides how detail pages are fetched (e.g. a
+    Playwright renderer that also exposes JS-injected figure images)."""
+    sess = session or _session()
+    slug = subject_slug(subject)
+    novel_title = scrape_novel_title(subject, exam, year, sess)   # English only
+    for qid in list_question_ids(slug, exam, year, sess, max_pages, delay):
+        html = (detail_fetch(question_url(slug, exam, year, qid)) if detail_fetch
+                else fetch(question_url(slug, exam, year, qid), sess))
+        if not html:
+            continue
+        parsed = parse_detail(html)
+        time.sleep(delay)
+        if not parsed:
+            continue
+        # trust myschool's own instruction block (novel note / reading passage)
+        # over keyword classification, exactly as the in-app harvest does.
+        if parsed.get("is_novel"):
+            section, topic, subtopic = "novel", (
+                parsed.get("novel_title") or novel_title or novel_for_year(year)
+                or "Recommended Novel"), None
+        elif parsed.get("passage_text"):
+            section = passage_kind(parsed["passage_text"], parsed["stem"])
+            topic, subtopic = None, None
+        else:
+            section, topic, subtopic = classify(
+                subject, parsed["stem"] + " " + " ".join(parsed["options"]),
+                year=year, novel_title=novel_title)
+        parsed.update(subject=subject, year=str(year), qid=qid,
+                      section=section, topic=topic, subtopic=subtopic)
+        yield parsed

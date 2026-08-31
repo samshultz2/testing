@@ -1,0 +1,210 @@
+# PostgreSQL on Termux + proot Ubuntu
+
+How to get a working PostgreSQL 16 server running for PosyHub inside a
+**proot Ubuntu** distro on Termux (Android). This setup has no systemd, and
+`sudo` does not work, so the standard Debian/Ubuntu instructions need a couple
+of adjustments. These are the exact steps that worked.
+
+## 0. Make sure you are inside proot Ubuntu
+
+The biggest source of confusion is running these commands in Termux's *native*
+environment instead of the proot distro. In native Termux, `/var` is read-only
+and `pg_ctlcluster` does not exist.
+
+```bash
+proot-distro login ubuntu
+```
+
+Confirm you're in the right place:
+
+```bash
+echo $PREFIX          # should be EMPTY inside proot (not a /data/data/... path)
+cat /etc/os-release   # should say Ubuntu
+```
+
+Your prompt should look like `root@localhost`.
+
+## 1. Install PostgreSQL
+
+```bash
+apt update && apt install -y postgresql postgresql-contrib
+ls /usr/lib/postgresql/   # the folder name is your version (e.g. 16)
+```
+
+## 2. Create the socket directory proot often misses
+
+```bash
+mkdir -p /var/run/postgresql
+chown postgres:postgres /var/run/postgresql
+```
+
+## 3. Initialize and start the cluster (the part that needs the workaround)
+
+`pg_createcluster` / `pg_ctlcluster` **fail under proot** with:
+
+```
+FATAL:  data directory ".../16/main" has wrong ownership
+HINT:   The server must be started by the user that owns the data directory.
+```
+
+This is because the wrapper switches users in a way proot doesn't fully
+emulate, so the bootstrap backend's UID doesn't match the (faked) directory
+ownership. `sudo` also fails here ("No superuser binary detected. Are you
+rooted?").
+
+**The fix: become the `postgres` user with `su` (not `sudo`) and run `initdb`
+/ `pg_ctl` directly.** When everything runs *as* postgres, owner and process
+UIDs match.
+
+```bash
+# clean slate + correct ownership
+rm -rf /var/lib/postgresql/16/main
+mkdir -p /var/lib/postgresql/16/main
+chown -R postgres:postgres /var/lib/postgresql
+
+# switch INTO the postgres user (su, NOT sudo)
+su postgres
+```
+
+Now, **as the `postgres` user** (prompt shows `postgres@localhost`):
+
+```bash
+# initialize the data dir
+/usr/lib/postgresql/16/bin/initdb -D /var/lib/postgresql/16/main
+
+# start the server
+/usr/lib/postgresql/16/bin/pg_ctl -D /var/lib/postgresql/16/main -l /tmp/pg.log start
+```
+
+## 4. Create the app database and user
+
+Still as the `postgres` user:
+
+```bash
+psql -c "CREATE USER posyhub WITH PASSWORD 'posyhub';"
+psql -c "CREATE DATABASE posyhub OWNER posyhub;"
+```
+
+Then return to root:
+
+```bash
+exit
+```
+
+## 5. Point PosyHub at the database
+
+`DATABASE_URL` set inside the `postgres` shell does **not** survive `exit`.
+Set it in the shell where you actually run the app:
+
+```bash
+export DATABASE_URL="postgresql+psycopg://posyhub:posyhub@localhost:5432/posyhub"
+```
+
+Sanity check the connection:
+
+```bash
+psql "postgresql://posyhub@localhost:5432/posyhub" -c "\conninfo"
+```
+
+> `initdb` defaults to `trust` auth for local connections, so the password may
+> not be checked locally — fine for local dev.
+
+## One-command startup (recommended)
+
+After the **first-time** setup above (steps 1–3: install, socket dir, cluster
+created once), you don't need to run any of it by hand again. Use the bundled
+launcher, which runs every step automatically:
+
+```bash
+./scripts/start.sh
+```
+
+It will, in order:
+
+1. start the PostgreSQL cluster if it isn't already running,
+2. wait until Postgres accepts connections,
+3. create the `posyhub` role + database if they don't exist (idempotent),
+4. export `DATABASE_URL`,
+5. migrate your SQLite data **the first time only** (no-op on later runs),
+6. launch the Flask app on port 5000.
+
+Override defaults from the environment if needed:
+
+```bash
+PORT=8000 DB_PASSWORD=secret PG_VERSION=16 ./scripts/start.sh
+```
+
+If a `.env` already defines `DATABASE_URL`, the script respects it instead of
+building the default.
+
+## Every session afterwards (manual equivalent)
+
+There is no systemd, so Postgres does **not** auto-start. Each time you
+re-enter proot:
+
+```bash
+su postgres -c "/usr/lib/postgresql/16/bin/pg_ctl -D /var/lib/postgresql/16/main -l /tmp/pg.log start"
+```
+
+Make `DATABASE_URL` persistent so you don't re-export it each time:
+
+```bash
+echo 'export DATABASE_URL="postgresql+psycopg://posyhub:posyhub@localhost:5432/posyhub"' >> ~/.bashrc
+```
+
+To stop the server:
+
+```bash
+su postgres -c "/usr/lib/postgresql/16/bin/pg_ctl -D /var/lib/postgresql/16/main stop"
+```
+
+## Optional: a start-db.sh helper
+
+```bash
+cat > ~/start-db.sh <<'EOF'
+#!/usr/bin/env bash
+su postgres -c "/usr/lib/postgresql/16/bin/pg_ctl -D /var/lib/postgresql/16/main -l /tmp/pg.log start"
+EOF
+chmod +x ~/start-db.sh
+```
+
+## Migrating existing SQLite data into Postgres
+
+Once the Postgres server is running and `DATABASE_URL` is set, copy your
+existing data across with the bundled script. It drives off the app's models,
+so it covers every table, converts types correctly, and resets sequences.
+
+```bash
+# from the repo root, with the venv active and Postgres running
+pip install -r requirements.txt          # pulls in psycopg
+export DATABASE_URL="postgresql+psycopg://posyhub:posyhub@localhost:5432/posyhub"
+
+# 1. preview row counts (no writes)
+python scripts/sqlite_to_postgres.py --dry-run
+
+# 2. do the migration (source defaults to instance/school.db)
+python scripts/sqlite_to_postgres.py
+```
+
+Notes:
+
+- The script **refuses to run if the target already has data** — re-run with
+  `--force` to `TRUNCATE` the target tables first.
+- It creates the schema in Postgres automatically (`create_all`), so you do
+  not need to run the app first.
+- After copying it resets all integer-PK sequences, so the next insert won't
+  collide on primary keys.
+- Use `--sqlite <path>` / `--postgres <url>` to override source/target.
+
+After migrating, start the app with `DATABASE_URL` set and confirm your data
+is present. You can then keep `instance/school.db` as a backup.
+
+## Troubleshooting
+
+- **`has wrong ownership` even as postgres** → proot UID emulation issue; relaunch
+  the distro with `proot-distro login ubuntu --link2symlink` and retry step 3.
+- **`pg_ctlcluster: command not found`** → you're in native Termux, not proot. Go
+  back to step 0.
+- **`/var` read-only** → same as above, you're not inside proot.
+- **`No superuser binary detected. Are you rooted?`** → you used `sudo`; use `su`
+  instead.

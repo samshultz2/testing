@@ -3,7 +3,8 @@ Global Timetable Generator - Based on manual scheduling approach
 Key insight: Schedule ALL class-arms simultaneously, not one by one
 """
 from collections import defaultdict
-from random import seed as random_seed
+from random import shuffle, seed as random_seed
+import uuid
 
 
 def generate_global_timetable(class_ids, periods_per_day, break_after, db_session):
@@ -14,7 +15,7 @@ def generate_global_timetable(class_ids, periods_per_day, break_after, db_sessio
     from models import (
         GenClassConfig, GenClassArmStream, GenStreamSubject, GenSubjectConfig,
         GenClassSubjectConfig, GenClassStreamSubject, GenTeacher, GenTeacherAssignment,
-        GenTeacherAvailability, GenTimetableRule
+        GenTeacherAvailability, GenTimetableRule, GenTimetableResult, Subject
     )
     
     # Get rules
@@ -431,7 +432,7 @@ def run_global_generation(class_ids, periods_per_day, break_after, num_attempts=
     """
     Run multiple attempts and return the best result
     """
-    from models import db
+    from models import db, GenTimetableResult
     
     best_result = None
     best_empty = float('inf')

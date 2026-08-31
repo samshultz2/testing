@@ -75,18 +75,95 @@ def student_bill(student_id, term_id):
     paid = (db.session.query(func.coalesce(func.sum(FeePayment.amount), 0.0))
             .filter(FeePayment.student_id == student_id,
                     FeePayment.term_id == term_id).scalar()) or 0.0
+    charges, credits = student_charges(student_id, term_id)
 
-    payable = max(billed - discount, 0)
+    payable = max(billed + charges - discount - credits, 0)
     return {
         'class_id': class_id,
         'arm_id': arm_id,
         'lines': lines,
         'billed': billed,
+        'charges': charges,           # ad-hoc extra charges (penalties, extras)
+        'credits': credits,           # credit notes
         'discount': discount,
         'paid': paid,
         'payable': payable,
         'balance': payable - paid,
     }
+
+
+def student_charges(student_id, term_id):
+    """(extra charges, credit notes) for one student in a term."""
+    from models import AdditionalCharge
+    rows = (db.session.query(AdditionalCharge.kind, func.coalesce(func.sum(AdditionalCharge.amount), 0.0))
+            .filter(AdditionalCharge.student_id == student_id,
+                    AdditionalCharge.term_id == term_id)
+            .group_by(AdditionalCharge.kind).all())
+    m = {k: float(v or 0) for k, v in rows}
+    return m.get('charge', 0.0), m.get('credit', 0.0)
+
+
+def charges_map(term_id):
+    """{student_id: net extra (charges - credits)} for a term — for bulk reports."""
+    from models import AdditionalCharge
+    rows = (db.session.query(AdditionalCharge.student_id, AdditionalCharge.kind,
+                             func.coalesce(func.sum(AdditionalCharge.amount), 0.0))
+            .filter(AdditionalCharge.term_id == term_id)
+            .group_by(AdditionalCharge.student_id, AdditionalCharge.kind).all())
+    out = {}
+    for sid, kind, total in rows:
+        out[sid] = out.get(sid, 0.0) + float(total or 0) * (1 if kind == 'charge' else -1)
+    return out
+
+
+def defaulters_summary(term_id, class_id=None):
+    """Aggregate fee defaulters for a term as {count, balance} — the same math as
+    the Defaulters page, branch-scoped, but summarised (no per-student rows) so
+    the dashboard can surface "N students owe ₦X" cheaply. Payments/discounts are
+    restricted to the branch-scoped enrolment set, so no cross-branch leakage."""
+    from utils.branch_scope import scope_query
+    if not term_id:
+        return {'count': 0, 'balance': 0.0}
+    enr_q = scope_query(
+        StudentEnrollment.query
+        .join(ClassArmAssignment,
+              StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+        .filter(StudentEnrollment.is_active == True,
+                ClassArmAssignment.term_id == term_id),
+        ClassArmAssignment)
+    if class_id:
+        enr_q = enr_q.filter(ClassArmAssignment.class_id == class_id)
+    enrollments = enr_q.all()
+    if not enrollments:
+        return {'count': 0, 'balance': 0.0}
+    student_ids = [e.student_id for e in enrollments]
+    paid_map = dict(db.session.query(FeePayment.student_id, func.sum(FeePayment.amount))
+                    .filter(FeePayment.term_id == term_id,
+                            FeePayment.student_id.in_(student_ids))
+                    .group_by(FeePayment.student_id).all())
+    try:
+        disc_map = dict(db.session.query(FeeDiscount.student_id, func.sum(FeeDiscount.amount))
+                        .filter(FeeDiscount.term_id == term_id,
+                                FeeDiscount.student_id.in_(student_ids))
+                        .group_by(FeeDiscount.student_id).all())
+    except Exception:
+        disc_map = {}
+    extra_map = charges_map(term_id)
+    total_cache = {}
+    count = 0
+    balance = 0.0
+    for e in enrollments:
+        asg = e.class_arm_assignment
+        key = (asg.class_id, asg.arm_id)
+        if key not in total_cache:
+            total_cache[key] = class_fee_total(term_id, asg.class_id, asg.arm_id)
+        payable = max(total_cache[key] + (extra_map.get(e.student_id) or 0.0)
+                      - (disc_map.get(e.student_id) or 0.0), 0)
+        bal = payable - (paid_map.get(e.student_id) or 0.0)
+        if bal > 0.005:
+            count += 1
+            balance += bal
+    return {'count': count, 'balance': round(balance, 2)}
 
 
 def next_receipt_no():

@@ -24,7 +24,7 @@
     <div>
         <span class="badge {{ 'badge-success' if e.is_published else 'badge-secondary' }}">{{ 'Published' if e.is_published else 'Draft' }}</span>
         <span class="badge badge-info">{{ e.subject.name if e.subject else 'No subject' }}</span>
-        <span class="badge badge-secondary">{{ e.school_class.name if e.school_class else 'No class' }}{% if e.arm %} {{ e.arm.name }}{% endif %}</span>
+        <span class="badge badge-secondary">{{ e.school_class.name if e.school_class else 'No class' }}{% if e.arm and not e.arm.is_default %} {{ e.arm.name }}{% endif %}</span>
         <span class="text-muted text-sm">· {{ e.exam_date.strftime('%d %b %Y') if e.exam_date }} · {{ e.window_label }} · {{ e.duration_minutes }} min</span>
     </div>
     <div class="text-sm"><i class="fas fa-key text-muted"></i> Access password: <strong>{{ e.access_password }}</strong> · {{ e.question_count }} Q · {{ e.total_marks }} marks</div>
@@ -34,6 +34,7 @@
     <div class="card-header"><h3><i class="fas fa-plus"></i> Add Question</h3>
         <div class="d-flex gap-1">
             <a href="{{ url_for('cbt.import_from_bank', exam_id=e.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-layer-group"></i> From bank</a>
+            <a href="{{ url_for('cbt.fill_from_jamb_bank', exam_id=e.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-wand-magic-sparkles"></i> Fill from JAMB bank</a>
             <form method="POST" action="{{ url_for('cbt.import_questions_file', exam_id=e.id) }}" enctype="multipart/form-data" style="display:inline-flex;gap:.3rem;align-items:center;">
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                 <input type="file" name="file" accept=".xlsx,.xlsm,.csv" required style="max-width:160px;font-size:.8rem;">
@@ -57,7 +58,40 @@
             <div class="form-row">
                 <div class="form-group"><label class="form-label">Correct option <span class="required">*</span></label><select name="correct_option" class="form-control" required><option value="">—</option><option>A</option><option>B</option><option>C</option><option>D</option></select></div>
                 <div class="form-group"><label class="form-label">Marks</label><input type="number" name="marks" class="form-control" step="0.5" value="1"></div>
+                <div class="form-group"><label class="form-label">Topic</label>
+                    <select name="topic" id="qtopic" class="form-control">
+                        <option value="">— Select topic —</option>
+                        {% for t in topic_tree %}<option value="{{ t.title }}">{{ t.title }}{% if t.exam_body != 'Both' %} ({{ t.exam_body }}){% endif %}</option>{% endfor %}
+                    </select>
+                </div>
+                <div class="form-group"><label class="form-label">Sub-topic</label>
+                    <select name="subtopic" id="qsubtopic" class="form-control" disabled>
+                        <option value="">— Select topic first —</option>
+                    </select>
+                </div>
             </div>
+            {% if not topic_tree %}
+            <p class="text-muted text-sm" style="margin-top:-.4rem;"><i class="fas fa-circle-info"></i> No syllabus topics for this subject yet. <a href="{{ syllabus_url }}">Add WAEC/JAMB topics</a> to tag questions by topic &amp; sub-topic.</p>
+            {% else %}
+            <p class="text-muted text-sm" style="margin-top:-.4rem;"><a href="{{ syllabus_url }}">Manage syllabus topics</a> for this subject.</p>
+            <script type="application/json" id="topic-tree-data">{{ topic_tree|tojson }}</script>
+            <script nonce="{{ csp_nonce }}">
+            (function(){
+                var treeEl = document.getElementById('topic-tree-data');
+                if(!treeEl) return;   // node absent after an SPA swap to another page
+                var tree = JSON.parse(treeEl.textContent);
+                var byTitle = {}; tree.forEach(function(t){ byTitle[t.title] = t.subtopics || []; });
+                var topic = document.getElementById('qtopic'), sub = document.getElementById('qsubtopic');
+                if(!topic || !sub) return;
+                topic.addEventListener('change', function(){
+                    var subs = byTitle[topic.value] || [];
+                    sub.innerHTML = '<option value="">— None —</option>' +
+                        subs.map(function(s){ return '<option value="'+s.title.replace(/"/g,'&quot;')+'">'+s.title+'</option>'; }).join('');
+                    sub.disabled = subs.length === 0;
+                });
+            })();
+            </script>
+            {% endif %}
             <button class="btn btn-primary"><i class="fas fa-plus"></i> Add Question</button>
         </form>
     </div>
@@ -73,9 +107,9 @@
                     <strong>{{ loop.index }}. {{ q.question_text }}</strong>
                     <form method="POST" action="{{ url_for('cbt.delete_question', question_id=q.id) }}" data-confirm="Delete this question?"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button></form>
                 </div>
-                {% if q.image_url %}<div style="margin:.4rem 0"><img src="{{ q.image_url }}" alt="figure" style="max-width:260px;max-height:180px;border:1px solid var(--border-color);border-radius:6px"></div>{% endif %}
+                {% if q.image_url %}<div style="margin:.4rem 0"><img src="{{ q.image_url }}" alt="Question figure" style="max-width:260px;max-height:180px;border:1px solid var(--border-color);border-radius:6px"></div>{% endif %}
                 {% for letter, text in q.options %}{% if text %}<div class="qopt {% if q.correct_option==letter %}correct{% endif %}">{{ letter }}. {{ text }}{% if q.correct_option==letter %} <i class="fas fa-check"></i>{% endif %}</div>{% endif %}{% endfor %}
-                <div class="text-muted text-sm mt-1">{{ q.marks }} mark(s)</div>
+                <div class="text-muted text-sm mt-1">{{ q.marks }} mark(s){% if q.topic %} · <span class="badge badge-secondary">{{ q.topic }}</span>{% endif %}</div>
             </div>
             {% endfor %}
         {% else %}<div class="empty-state"><i class="fas fa-circle-question"></i><h3>No questions yet</h3><p>Add questions above. You can publish once there's at least one.</p></div>{% endif %}

@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
+    <meta name="robots" content="noindex, nofollow">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="theme-color" content="#0d6a4e">
     <meta name="csrf-token" content="{{ csrf_token() }}">
@@ -9,7 +10,7 @@
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/favicon.svg') }}">
     <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
     <style>
         body{background:linear-gradient(135deg,#0d6a4e,#0a5236);min-height:100vh;margin:0;font-family:'DM Sans',sans-serif}
         .portal-wrap{max-width:820px;margin:0 auto;padding:1rem}
@@ -35,7 +36,7 @@
 <body>
     <div class="portal-wrap">
         <div class="portal-top">
-            <div class="brand"><img src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt=""> PosyHub CBT</div>
+            <div class="brand"><img src="{{ url_for('static', filename='img/logo-mark.svg') }}" alt=""> EduSyncra CBT</div>
             {% if student is defined and student %}
             <div>{{ student.full_name }} ({{ student.student_id }}) · <a href="{{ url_for('cbt_portal.logout') }}">Logout</a></div>
             {% else %}
@@ -57,7 +58,7 @@
         {% block content %}{% endblock %}
     </div>
     {% block scripts %}{% endblock %}
-    <script>
+    <script nonce="{{ csp_nonce }}">
     (function(){
         var b=document.getElementById('pmenuBtn'), p=document.getElementById('pmenuPanel');
         if(!b||!p) return;
@@ -68,7 +69,7 @@
     })();
     </script>
     {% if session.get('cbt_student_id') %}
-    <script>
+    <script nonce="{{ csp_nonce }}">
     // Best-effort device fingerprint for exam-integrity investigations.
     (function(){
         var token=document.querySelector('meta[name=csrf-token]').content;

@@ -3,12 +3,13 @@ Comprehensive Analytics Service
 Provides all statistical calculations, metrics, and ML predictions
 """
 import math
+from utils.helpers import get_active_term
 from collections import defaultdict
 from typing import Dict, List, Tuple
 from sqlalchemy import func
 from models.models import (
-    db, Student, WAECResult, JAMBResult, Term, StudentEnrollment,
-    ClassArmAssignment, Attendance
+    db, Student, WAECResult, JAMBResult, StudentEnrollment, ClassArmAssignment,
+    Attendance
 )
 
 
@@ -18,6 +19,10 @@ class AcademicAnalytics:
     # Grade constants
     WAEC_GRADES = ['A1', 'B2', 'B3', 'C4', 'C5', 'C6', 'D7', 'E8', 'F9']
     GRADE_POINTS = {'A1': 1, 'B2': 2, 'B3': 3, 'C4': 4, 'C5': 5, 'C6': 6, 'D7': 7, 'E8': 8, 'F9': 9}
+    # Averages use a "higher is better" scale (A1 = 9 … F9 = 1) so a bigger
+    # average grade-point means stronger performance. GRADE_POINTS (A1 = 1) stays
+    # the WAEC ordinal used for ranking/prediction where lower = better.
+    GRADE_AVERAGE_POINTS = {'A1': 9, 'B2': 8, 'B3': 7, 'C4': 6, 'C5': 5, 'C6': 4, 'D7': 3, 'E8': 2, 'F9': 1}
     PASS_GRADES = ['A1', 'B2', 'B3', 'C4', 'C5', 'C6']
     DISTINCTION_GRADES = ['A1', 'B2', 'B3']
     
@@ -44,8 +49,9 @@ class AcademicAnalytics:
         summaries = {}
         for year, year_results in by_year.items():
             grades = [r.grade for r in year_results]
-            points = [AcademicAnalytics.GRADE_POINTS.get(g, 9) for g in grades]
-            
+            # Average on the "higher is better" scale (A1 = 9 … F9 = 1).
+            points = [AcademicAnalytics.GRADE_AVERAGE_POINTS.get(g, 0) for g in grades]
+
             summaries[year] = {
                 'total_subjects': len(year_results),
                 'results': [{'subject': r.subject, 'grade': r.grade} for r in year_results],
@@ -109,7 +115,7 @@ class AcademicAnalytics:
     @staticmethod
     def calculate_student_risk_score(student_id: int) -> Dict:
         """Calculate comprehensive risk assessment for a student"""
-        student = Student.query.get(student_id)
+        student = db.session.get(Student, student_id)
         if not student:
             return None
         
@@ -142,7 +148,7 @@ class AcademicAnalytics:
                     risk_factors.append(f"Poor performance in {subj}")
         
         # Attendance risk
-        active_term = Term.query.filter_by(is_active=True).first()
+        active_term = get_active_term()
         if active_term:
             enrollment = StudentEnrollment.query.join(ClassArmAssignment).filter(
                 StudentEnrollment.student_id == student_id,
@@ -220,9 +226,132 @@ class AcademicAnalytics:
     # ========================================================================
     
     @staticmethod
-    def get_waec_school_statistics(exam_year: int) -> Dict:
+    def _by_branch(query, model, branch_id):
+        """Restrict a WAEC/JAMB result query to one branch (None = all branches)."""
+        if branch_id is not None:
+            sub = db.session.query(Student.id).filter(Student.branch_id == branch_id)
+            return query.filter(model.student_id.in_(sub))
+        return query
+
+    @staticmethod
+    def get_waec_subject_analysis(subject, exam_year, branch_id=None, student_ids=None):
+        """Full analysis of one WAEC subject in a year: grade distribution
+        (A1…F9 counts + %), credit/distinction/pass/fail rates, average grade
+        points (A1 = 9 … F9 = 1) and the candidate list per grade. Branch/arm
+        scoped. Returns None when there are no results."""
+        q = WAECResult.query.filter_by(exam_year=exam_year, subject=subject)
+        q = AcademicAnalytics._by_branch(q, WAECResult, branch_id)
+        if student_ids is not None:
+            q = q.filter(WAECResult.student_id.in_(student_ids or [-1]))
+        results = q.all()
+        if not results:
+            return None
+
+        total = len(results)
+        counts = {g: sum(1 for r in results if r.grade == g) for g in AcademicAnalytics.WAEC_GRADES}
+        dist = [{'grade': g, 'count': counts[g],
+                 'pct': round(counts[g] / total * 100, 1) if total else 0}
+                for g in AcademicAnalytics.WAEC_GRADES]
+        credit = sum(counts[g] for g in AcademicAnalytics.PASS_GRADES)
+        distinction = sum(counts[g] for g in AcademicAnalytics.DISTINCTION_GRADES)
+        fail = counts['E8'] + counts['F9']
+        avg_points = round(
+            sum(AcademicAnalytics.GRADE_AVERAGE_POINTS.get(r.grade, 0) for r in results) / total, 2)
+
+        # Candidates grouped by grade (best → worst), with names.
+        sids = list({r.student_id for r in results})
+        students = {s.id: s for s in Student.query.filter(Student.id.in_(sids or [-1])).all()}
+        by_grade = {g: [] for g in AcademicAnalytics.WAEC_GRADES}
+        for r in results:
+            st = students.get(r.student_id)
+            if st:
+                by_grade[r.grade].append({
+                    'student_id': st.id, 'name': f'{st.surname} {st.first_name}',
+                    'admission_no': st.student_id})
+        for g in by_grade:
+            by_grade[g].sort(key=lambda x: x['name'])
+
+        return {
+            'subject': subject, 'exam_year': exam_year, 'total': total,
+            'distribution': dist, 'counts': counts,
+            'credit_count': credit, 'credit_rate': round(credit / total * 100, 1) if total else 0,
+            'distinction_count': distinction,
+            'distinction_rate': round(distinction / total * 100, 1) if total else 0,
+            'pass_count': credit, 'pass_rate': round(credit / total * 100, 1) if total else 0,
+            'fail_count': fail, 'fail_rate': round(fail / total * 100, 1) if total else 0,
+            'a1_count': counts['A1'],
+            'average_points': avg_points, 'max_points': 9,
+            'by_grade': by_grade,
+        }
+
+    # Score bands (out of 100) for per-subject JAMB / Mock-JAMB / Mock-WAEC score
+    # distributions — highest band first.
+    SCORE_BANDS = [(70, 100, 'Excellent (70–100)'), (50, 69, 'Good (50–69)'),
+                   (40, 49, 'Fair (40–49)'), (25, 39, 'Weak (25–39)'),
+                   (0, 24, 'Poor (0–24)')]
+
+    @staticmethod
+    def score_distribution(scores):
+        """Band a list of 0–100 scores into SCORE_BANDS with counts + percentages."""
+        n = len(scores) or 1
+        out = []
+        for lo, hi, label in AcademicAnalytics.SCORE_BANDS:
+            c = sum(1 for s in scores if lo <= s <= hi)
+            out.append({'label': label, 'lo': lo, 'hi': hi, 'count': c,
+                        'pct': round(c / n * 100, 1)})
+        return out
+
+    @staticmethod
+    def _score_subject_payload(subject, pairs):
+        """Shared per-subject score analysis from (student_id, score) pairs."""
+        if not pairs:
+            return None
+        scores = [s for _, s in pairs]
+        total = len(scores)
+        above_50 = sum(1 for s in scores if s >= 50)
+        above_70 = sum(1 for s in scores if s >= 70)
+        sids = list({sid for sid, _ in pairs})
+        students = {s.id: s for s in Student.query.filter(Student.id.in_(sids or [-1])).all()}
+        candidates = sorted(
+            [{'student_id': sid, 'score': sc,
+              'name': (f'{students[sid].surname} {students[sid].first_name}'
+                       if sid in students else '—'),
+              'admission_no': (students[sid].student_id if sid in students else '')}
+             for sid, sc in pairs],
+            key=lambda x: x['score'], reverse=True)
+        return {
+            'subject': subject, 'total': total,
+            'avg_score': round(sum(scores) / total, 1),
+            'max_score': max(scores), 'min_score': min(scores),
+            'above_50': above_50, 'above_50_pct': round(above_50 / total * 100, 1),
+            'above_70': above_70, 'above_70_pct': round(above_70 / total * 100, 1),
+            'distribution': AcademicAnalytics.score_distribution(scores),
+            'candidates': candidates,
+        }
+
+    @staticmethod
+    def get_jamb_subject_analysis(subject, exam_year, branch_id=None, student_ids=None):
+        """Per-subject JAMB score analysis for a year — score-band distribution,
+        average, ≥50/≥70 rates and the ranked candidate list. Branch/arm scoped."""
+        q = AcademicAnalytics._by_branch(
+            JAMBResult.query.filter_by(exam_year=exam_year), JAMBResult, branch_id)
+        if student_ids is not None:
+            q = q.filter(JAMBResult.student_id.in_(student_ids or [-1]))
+        pairs = []
+        for r in q.all():
+            for i in (1, 2, 3, 4):
+                if getattr(r, f'subject{i}') == subject and getattr(r, f'subject{i}_score') is not None:
+                    pairs.append((r.student_id, getattr(r, f'subject{i}_score')))
+        payload = AcademicAnalytics._score_subject_payload(subject, pairs)
+        if payload is not None:
+            payload['exam_year'] = exam_year
+        return payload
+
+    @staticmethod
+    def get_waec_school_statistics(exam_year: int, branch_id=None) -> Dict:
         """Get comprehensive school-wide WAEC statistics"""
-        results = WAECResult.query.filter_by(exam_year=exam_year).all()
+        results = AcademicAnalytics._by_branch(
+            WAECResult.query.filter_by(exam_year=exam_year), WAECResult, branch_id).all()
         if not results:
             return None
         
@@ -248,8 +377,12 @@ class AcademicAnalytics:
             total = stats['total']
             a1_count = stats['grades'].get('A1', 0)
             pass_count_subj = sum(stats['grades'].get(g, 0) for g in AcademicAnalytics.PASS_GRADES)
-            fail_count_subj = sum(stats['grades'].get(g, 0) for g in ['E8', 'F9'])
-            
+            # Two fail measures are reported side by side:
+            #   fail (F9)          — the strict WAEC fail (D7 and E8 are Pass grades)
+            #   below-credit       — anything short of a credit (D7 + E8 + F9)
+            fail_count_subj = stats['grades'].get('F9', 0)
+            below_credit_subj = sum(stats['grades'].get(g, 0) for g in ['D7', 'E8', 'F9'])
+
             subject_analysis.append({
                 'subject': subject,
                 'total_entries': total,
@@ -259,13 +392,17 @@ class AcademicAnalytics:
                 'pass_rate': round(pass_count_subj / total * 100, 1) if total > 0 else 0,
                 'fail_count': fail_count_subj,
                 'fail_rate': round(fail_count_subj / total * 100, 1) if total > 0 else 0,
+                'below_credit_count': below_credit_subj,
+                'below_credit_rate': round(below_credit_subj / total * 100, 1) if total > 0 else 0,
                 'grade_distribution': dict(stats['grades'])
             })
-        
+
         # Sort subjects by various metrics
         subjects_by_a1_rate = sorted(subject_analysis, key=lambda x: x['a1_rate'], reverse=True)
         subjects_by_pass_rate = sorted(subject_analysis, key=lambda x: x['pass_rate'], reverse=True)
-        subjects_by_fail_rate = sorted(subject_analysis, key=lambda x: x['fail_rate'], reverse=True)
+        # rank "most failed" by the broader below-credit rate, then by strict F9
+        subjects_by_fail_rate = sorted(
+            subject_analysis, key=lambda x: (x['below_credit_rate'], x['fail_rate']), reverse=True)
         
         # Student rankings
         student_aggregates = defaultdict(lambda: {'a1_count': 0, 'credit_count': 0, 'total_points': 0, 'subjects': 0})
@@ -292,14 +429,207 @@ class AcademicAnalytics:
             'subject_analysis': subject_analysis,
             'top_subjects_by_a1': subjects_by_a1_rate[:5],
             'bottom_subjects_by_pass': subjects_by_pass_rate[-5:],
-            'most_failed_subjects': subjects_by_fail_rate[:5],
+            # only subjects short of a credit in at least one entry — never pad
+            # the list with 0%-fail subjects
+            'most_failed_subjects': [s for s in subjects_by_fail_rate if s['below_credit_count'] > 0][:5],
             'top_performers': [{'student_id': s[0], **s[1]} for s in top_by_a1]
         }
-    
+
     @staticmethod
-    def get_jamb_school_statistics(exam_year: int) -> Dict:
+    def get_waec_multiyear_trends(branch_id=None, limit_years=8):
+        """Per-year WAEC cohort trend: how the 5-credits-incl-core rate, the
+        credit rate and the F9 (fail) rate move across years. One point per year
+        that has results, oldest→newest, capped to the most recent ``limit_years``.
+        Branch-scoped when a branch is given."""
+        from collections import defaultdict
+        q = WAECResult.query.with_entities(
+            WAECResult.exam_year, WAECResult.student_id, WAECResult.subject, WAECResult.grade)
+        if branch_id is not None:
+            q = q.join(Student, WAECResult.student_id == Student.id).filter(
+                Student.branch_id == branch_id)
+        rows = q.all()
+        if not rows:
+            return {'years': [], 'points': []}
+        credit = lambda g: g in AcademicAnalytics.PASS_GRADES
+        per_year = defaultdict(lambda: defaultdict(dict))     # year -> student -> {subject: grade}
+        for yr, sid, subj, g in rows:
+            per_year[yr][sid][subj] = g
+
+        points = []
+        for yr in sorted(per_year):
+            students = per_year[yr]
+            n = len(students)
+            with_core = total_credits = entries = credit_entries = f9 = 0
+            for gmap in students.values():
+                credited = {s.lower() for s, g in gmap.items() if credit(g)}
+                has_core = (any('english' in s for s in credited)
+                            and any('math' in s for s in credited))
+                creds = len(credited)
+                if creds >= 5 and has_core:
+                    with_core += 1
+                total_credits += creds
+                for g in gmap.values():
+                    entries += 1
+                    credit_entries += 1 if credit(g) else 0
+                    f9 += 1 if g == 'F9' else 0
+            points.append({
+                'year': yr, 'students': n,
+                'with_5_incl_core': with_core,
+                'with_5_incl_core_pct': round(with_core / n * 100, 1) if n else 0,
+                'credit_rate': round(credit_entries / entries * 100, 1) if entries else 0,
+                'f9_rate': round(f9 / entries * 100, 1) if entries else 0,
+                'avg_credits': round(total_credits / n, 1) if n else 0,
+            })
+        points = points[-limit_years:]
+        return {'years': [p['year'] for p in points], 'points': points}
+
+    @staticmethod
+    def get_jamb_multiyear_trends(branch_id=None, limit_years=8):
+        """Per-year JAMB trend: average total score and the ≥200 rate across
+        years. One point per year with candidates, oldest→newest, capped to the
+        most recent ``limit_years``. Branch-scoped when a branch is given."""
+        from collections import defaultdict
+        q = JAMBResult.query.with_entities(JAMBResult.exam_year, JAMBResult.total_score)
+        if branch_id is not None:
+            q = q.join(Student, JAMBResult.student_id == Student.id).filter(
+                Student.branch_id == branch_id)
+        per = defaultdict(list)
+        for yr, sc in q.all():
+            if sc is not None:
+                per[yr].append(sc)
+        if not per:
+            return {'years': [], 'points': []}
+        points = []
+        for yr in sorted(per):
+            scores = per[yr]
+            n = len(scores)
+            above = sum(1 for s in scores if s >= 200)
+            points.append({
+                'year': yr, 'candidates': n,
+                'avg_score': round(sum(scores) / n, 1) if n else 0,
+                'above_200': above,
+                'above_200_pct': round(above / n * 100, 1) if n else 0,
+                'max_score': max(scores) if scores else 0,
+            })
+        points = points[-limit_years:]
+        return {'years': [p['year'] for p in points], 'points': points}
+
+    @staticmethod
+    def _ordered_waec_subjects(present):
+        """WAEC subjects in canonical order (core first), extras appended A–Z."""
+        try:
+            from utils.helpers import WAEC_SUBJECTS
+            order = {name: i for i, name in enumerate(WAEC_SUBJECTS)}
+        except Exception:
+            order = {}
+        return sorted(present, key=lambda s: (order.get(s, len(order)), s))
+
+    @staticmethod
+    def get_waec_broadsheet(exam_year, branch_id=None):
+        """The full grade matrix for a WAEC exam year — one row per student, one
+        column per subject (grade only; WAEC reports no scores) — plus the
+        per-subject and whole-cohort summaries, mirroring the mock-WAEC
+        broadsheet. Scoped to a branch when given. Returns ``None`` when there
+        are no results for the year."""
+        from models import Student, WAECResult
+        q = WAECResult.query.filter_by(exam_year=exam_year).join(Student)
+        if branch_id is not None:
+            q = q.filter(Student.branch_id == branch_id)
+        results = q.all()
+        if not results:
+            return None
+
+        grade_order = AcademicAnalytics.WAEC_GRADES
+        pts = AcademicAnalytics.GRADE_POINTS               # A1=1 … F9=9 (lower = better)
+        pt_to_grade = {v: k for k, v in pts.items()}
+        credit = lambda g: g in AcademicAnalytics.PASS_GRADES
+
+        cells, students, present = {}, {}, set()
+        for r in results:
+            present.add(r.subject)
+            cells.setdefault(r.student_id, {})[r.subject] = r.grade
+            students[r.student_id] = r.student
+        subjects = AcademicAnalytics._ordered_waec_subjects(present)
+
+        rows = []
+        for sid, student in students.items():
+            gmap = cells[sid]
+            grades = list(gmap.values())
+            credits = sum(1 for g in grades if credit(g))
+            credited = {s.lower() for s, g in gmap.items() if credit(g)}
+            has_core = any('english' in s for s in credited) and any('math' in s for s in credited)
+            avg_pt = sum(pts.get(g, 9) for g in grades) / len(grades) if grades else None
+            rows.append({
+                # plain dict (not the ORM object) so the whole broadsheet is
+                # JSON-serialisable and can be memoised in AnalyticsCache
+                'student': {'id': student.id, 'full_name': student.full_name,
+                            'surname': student.surname or '', 'first_name': student.first_name or ''},
+                'cells': gmap,                                 # {subject: grade}
+                'credits': credits,
+                'distinctions': sum(1 for g in grades if g in AcademicAnalytics.DISTINCTION_GRADES),
+                'has_5_incl_core': credits >= 5 and has_core,
+                'has_5_credits': credits >= 5,
+                'avg_grade': pt_to_grade.get(round(avg_pt), '—') if avg_pt is not None else '—',
+                'subject_count': len(grades),
+            })
+        rows.sort(key=lambda x: (x['student']['surname'].lower(),
+                                 x['student']['first_name'].lower()))
+
+        subject_summary = {}
+        for subj in subjects:
+            sgrades = [cells[sid][subj] for sid in cells if subj in cells[sid]]
+            offered = len(sgrades)
+            passed = sum(1 for g in sgrades if credit(g))
+            avg_pt = sum(pts.get(g, 9) for g in sgrades) / offered if offered else None
+            dist = {g: 0 for g in grade_order}
+            for g in sgrades:
+                if g in dist:
+                    dist[g] += 1
+            subject_summary[subj] = {
+                'offered': offered,
+                'passed': passed,
+                'failed': offered - passed,                    # short of a credit (D7–F9)
+                'f9': dist['F9'],
+                'avg_grade': pt_to_grade.get(round(avg_pt), '—') if avg_pt is not None else '—',
+                'pass_rate': round(passed / offered * 100, 1) if offered else 0,
+                'distribution': dist,
+            }
+
+        total_entries = len(results)
+        overall_dist = {g: 0 for g in grade_order}
+        for r in results:
+            if r.grade in overall_dist:
+                overall_dist[r.grade] += 1
+        overall_pct = {g: (round(overall_dist[g] / total_entries * 100, 1) if total_entries else 0)
+                       for g in grade_order}
+
+        n = len(rows)
+        with_core = sum(1 for r in rows if r['has_5_incl_core'])
+        school = {
+            'students': n,
+            'subject_entries': total_entries,
+            'with_5_credits': sum(1 for r in rows if r['has_5_credits']),
+            'with_5_incl_core': with_core,
+            'with_5_incl_core_pct': round(with_core / n * 100, 1) if n else 0,
+            'avg_credits': round(sum(r['credits'] for r in rows) / n, 1) if n else 0,
+        }
+
+        return {
+            'exam_year': exam_year,
+            'subjects': subjects,
+            'rows': rows,
+            'subject_summary': subject_summary,
+            'grade_order': grade_order,
+            'grade_distribution': overall_dist,
+            'grade_distribution_pct': overall_pct,
+            'school': school,
+        }
+
+    @staticmethod
+    def get_jamb_school_statistics(exam_year: int, branch_id=None) -> Dict:
         """Get comprehensive school-wide JAMB statistics"""
-        results = JAMBResult.query.filter_by(exam_year=exam_year).all()
+        results = AcademicAnalytics._by_branch(
+            JAMBResult.query.filter_by(exam_year=exam_year), JAMBResult, branch_id).all()
         if not results:
             return None
         
@@ -380,17 +710,20 @@ class AcademicAnalytics:
     # ========================================================================
     
     @staticmethod
-    def calculate_waec_jamb_correlation(exam_year: int) -> Dict:
+    def calculate_waec_jamb_correlation(exam_year: int, branch_id=None) -> Dict:
         """Calculate correlation between WAEC and JAMB performance"""
         # Get students with both WAEC and JAMB results for the year
-        students_with_both = db.session.query(Student).join(
+        q = db.session.query(Student).join(
             WAECResult, Student.id == WAECResult.student_id
         ).join(
             JAMBResult, Student.id == JAMBResult.student_id
         ).filter(
             WAECResult.exam_year == exam_year,
             JAMBResult.exam_year == exam_year
-        ).distinct().all()
+        )
+        if branch_id is not None:
+            q = q.filter(Student.branch_id == branch_id)
+        students_with_both = q.distinct().all()
         
         if len(students_with_both) < 5:
             return {'error': 'Insufficient data for correlation analysis', 'sample_size': len(students_with_both)}
@@ -463,17 +796,18 @@ class AcademicAnalytics:
     # ========================================================================
     
     @staticmethod
-    def get_year_over_year_comparison() -> Dict:
+    def get_year_over_year_comparison(branch_id=None) -> Dict:
         """Compare performance metrics across years"""
         years = db.session.query(WAECResult.exam_year).distinct().order_by(WAECResult.exam_year.desc()).all()
         years = [y[0] for y in years][:5]  # Last 5 years
-        
+
         waec_trends = []
         jamb_trends = []
-        
+
         for year in years:
             # WAEC metrics
-            waec_results = WAECResult.query.filter_by(exam_year=year).all()
+            waec_results = AcademicAnalytics._by_branch(
+                WAECResult.query.filter_by(exam_year=year), WAECResult, branch_id).all()
             if waec_results:
                 total = len(waec_results)
                 pass_count = sum(1 for r in waec_results if r.grade in AcademicAnalytics.PASS_GRADES)
@@ -488,7 +822,8 @@ class AcademicAnalytics:
                 })
             
             # JAMB metrics
-            jamb_results = JAMBResult.query.filter_by(exam_year=year).all()
+            jamb_results = AcademicAnalytics._by_branch(
+                JAMBResult.query.filter_by(exam_year=year), JAMBResult, branch_id).all()
             if jamb_results:
                 scores = [r.total_score for r in jamb_results]
                 jamb_trends.append({
@@ -559,7 +894,7 @@ class AcademicAnalytics:
         
         # Class filter
         if class_id:
-            active_term = Term.query.filter_by(is_active=True).first()
+            active_term = get_active_term()
             if active_term:
                 query = query.join(StudentEnrollment).join(ClassArmAssignment).filter(
                     ClassArmAssignment.term_id == active_term.id,
@@ -598,7 +933,7 @@ class AcademicAnalytics:
     @staticmethod
     def predict_jamb_score(student_id: int) -> Dict:
         """Predict JAMB score based on WAEC performance"""
-        student = Student.query.get(student_id)
+        student = db.session.get(Student, student_id)
         if not student:
             return None
         

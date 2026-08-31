@@ -2,13 +2,30 @@
 Timetable Management routes
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify
+from utils.helpers import get_active_term, session_terms
 from models import (
     db, TimetableSlot, ClassTimetable, ClassArmAssignment, Subject,
     Term, ClassSubject
 )
 from utils.helpers import login_required
+from utils.branch_scope import (
+    require_branch_access, scope_query, branch_for_new,
+)
+from utils.access_control import is_admin, can_write_module, get_teacher_profile
 
 timetable_bp = Blueprint('timetable', __name__, url_prefix='/timetable')
+
+
+def _timetable_form_scope():
+    """Class-arm-assignment ids a non-editing teacher may view, or ``None`` when
+    the user has full access (admin, or anyone with timetable edit permission).
+
+    A plain teacher with view-only timetable access sees just the class(es) they
+    are the *form teacher* of; edit access lifts the restriction entirely."""
+    if is_admin() or can_write_module('timetable'):
+        return None
+    teacher = get_teacher_profile()
+    return teacher.form_class_ids if teacher else set()
 
 DAYS_OF_WEEK = [
     (0, 'Monday'),
@@ -19,6 +36,202 @@ DAYS_OF_WEEK = [
 ]
 
 
+# --- SPA helpers (no-reload React shell + JSON-aware action responses) -------
+from utils.spa import section_responders
+_wants_json, _render, _ok, _err = section_responders(
+    'timetable/app.html', 'tt_json', 'timetable.index')
+
+
+def _slot_dict(s):
+    return {'id': s.id, 'name': s.name, 'is_break': s.is_break,
+            'start': s.start_time.strftime('%H:%M') if s.start_time else '',
+            'end': s.end_time.strftime('%H:%M') if s.end_time else ''}
+
+
+@timetable_bp.route('/designer')
+@login_required
+def designer():
+    """Stand-alone designer for special, one-off timetables (Saturday classes,
+    holiday lessons, exams, or a blank custom grid). Everything is entered and
+    rendered in the browser and printed/saved as PDF. Designs can also be saved
+    with a name (see the ``/designer/save`` family) and reloaded later."""
+    from models import SchoolSettings
+    from utils.school import logo_url
+    school_name = SchoolSettings.get('school_name', '') or ''
+    subjects = [s.name for s in
+                Subject.query.filter_by(is_active=True).order_by(Subject.name).all()]
+    return render_template('timetable/designer.html',
+                           school_name=school_name, school_logo_url=logo_url(),
+                           subjects=subjects, saved_designs=_saved_designs_list())
+
+
+# --- Saved designer timetables ---------------------------------------------
+# A saved design is the full client-side designer state (sessions, options,
+# theme, layout, and the Saturday lesson-free plan) stored as one JSON blob.
+# Branch-scoped exactly like the rest of the app.
+
+def _saved_designs_list():
+    """[{id, name, layout, updated_at}] for the branch(es) in view."""
+    from models import DesignerTimetable
+    rows = scope_query(DesignerTimetable.query, DesignerTimetable) \
+        .order_by(DesignerTimetable.updated_at.desc()).all()
+    return [{'id': r.id, 'name': r.name, 'layout': r.layout or '',
+             'updated_at': r.updated_at.strftime('%Y-%m-%d %H:%M') if r.updated_at else ''}
+            for r in rows]
+
+
+@timetable_bp.route('/designer/saved')
+@login_required
+def designer_saved():
+    """JSON list of this branch's saved designer timetables."""
+    return jsonify(_saved_designs_list())
+
+
+@timetable_bp.route('/designer/save', methods=['POST'])
+@login_required
+def designer_save():
+    """Create a new saved design, or update an existing one by ``id``.
+
+    Body (JSON or form): ``id`` (optional), ``name``, ``layout``, ``data``
+    (the designer-state JSON, sent as a string or object)."""
+    import json as _json
+    from flask import session as _session
+    from models import DesignerTimetable
+    payload = request.get_json(silent=True) or request.form
+    name = (payload.get('name') or '').strip()
+    if not name:
+        return jsonify({'error': 'A name is required.'}), 400
+    if len(name) > 150:
+        name = name[:150]
+    layout = (payload.get('layout') or '')[:30]
+    data = payload.get('data')
+    if not isinstance(data, str):
+        data = _json.dumps(data or {})
+    if len(data) > 2_000_000:            # ~2MB guard against runaway payloads
+        return jsonify({'error': 'Design is too large to save.'}), 400
+
+    design_id = payload.get('id')
+    if design_id:
+        design = db.session.get(DesignerTimetable, int(design_id))
+        if not design:
+            return jsonify({'error': 'not found'}), 404
+        require_branch_access(design.branch_id)   # no cross-branch overwrite
+        design.name = name
+        design.layout = layout
+        design.data = data
+    else:
+        design = DesignerTimetable(
+            name=name, layout=layout, data=data,
+            branch_id=branch_for_new(),
+            created_by_id=_session.get('user_id'))
+        db.session.add(design)
+    db.session.commit()
+    return jsonify({'id': design.id, 'name': design.name})
+
+
+@timetable_bp.route('/designer/load/<int:design_id>')
+@login_required
+def designer_load(design_id):
+    """Return a saved design's name/layout/data (branch-checked)."""
+    from models import DesignerTimetable
+    design = db.session.get(DesignerTimetable, design_id)
+    if not design:
+        return jsonify({'error': 'not found'}), 404
+    require_branch_access(design.branch_id)
+    return jsonify({'id': design.id, 'name': design.name,
+                    'layout': design.layout or '', 'data': design.data or '{}'})
+
+
+@timetable_bp.route('/designer/delete/<int:design_id>', methods=['POST'])
+@login_required
+def designer_delete(design_id):
+    """Delete a saved design (branch-checked)."""
+    from models import DesignerTimetable
+    design = db.session.get(DesignerTimetable, design_id)
+    if not design:
+        return jsonify({'error': 'not found'}), 404
+    require_branch_access(design.branch_id)
+    db.session.delete(design)
+    db.session.commit()
+    return jsonify({'ok': True})
+
+
+@timetable_bp.route('/backups')
+@login_required
+def backups():
+    """List timetable backups so a previous (e.g. replaced) timetable can be
+    restored."""
+    from models import TimetableBackup
+    term_id = request.args.get('term_id', type=int)
+    if not term_id:
+        active = get_active_term()
+        term_id = active.id if active else None
+    terms = session_terms()
+    q = TimetableBackup.query
+    if term_id:
+        q = q.filter_by(term_id=term_id)
+    backups = q.order_by(TimetableBackup.created_at.desc()).all()
+    return _render({
+        'page': 'backups',
+        'term_id': term_id,
+        'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
+        'backups': [{'id': b.id,
+                     'when': b.created_at.strftime('%d %b %Y, %H:%M') if b.created_at else '',
+                     'label': b.label, 'entry_count': b.entry_count,
+                     'restore_url': url_for('timetable.restore_backup_route', backup_id=b.id),
+                     'delete_url': url_for('timetable.delete_backup', backup_id=b.id)}
+                    for b in backups],
+        'create_url': url_for('timetable.create_backup'),
+        'self_url': url_for('timetable.backups'),
+        'index_url': url_for('timetable.index'),
+    })
+
+
+@timetable_bp.route('/backups/create', methods=['POST'])
+@login_required
+def create_backup():
+    """Manually snapshot the current timetable for a term."""
+    from utils.timetable_backup import snapshot_term
+    term_id = request.form.get('term_id', type=int)
+    active = get_active_term()
+    term_id = term_id or (active.id if active else None)
+    if not term_id:
+        return _err('Pick a term to back up.', url_for('timetable.backups'))
+    label = (request.form.get('label') or '').strip() or 'Manual backup'
+    backup = snapshot_term(term_id, label, skip_if_empty=False)
+    db.session.commit()
+    return _ok(f'Backed up {backup.entry_count} timetable entr(y/ies).',
+               url_for('timetable.backups', term_id=term_id))
+
+
+@timetable_bp.route('/backups/<int:backup_id>/restore', methods=['POST'])
+@login_required
+def restore_backup_route(backup_id):
+    """Restore a backup. The current timetable is itself backed up first, so the
+    restore can be undone."""
+    from models import TimetableBackup
+    from utils.timetable_backup import snapshot_term, restore_backup
+    backup = db.get_or_404(TimetableBackup, backup_id)
+    if backup.term_id:
+        snapshot_term(backup.term_id,
+                      f'Auto-backup before restoring "{backup.label}"')
+    n = restore_backup(backup)
+    db.session.commit()
+    return _ok(f'Restored {n} timetable entr(y/ies) from "{backup.label}".',
+               url_for('timetable.backups', term_id=backup.term_id))
+
+
+@timetable_bp.route('/backups/<int:backup_id>/delete', methods=['POST'])
+@login_required
+def delete_backup(backup_id):
+    from models import TimetableBackup
+    backup = db.get_or_404(TimetableBackup, backup_id)
+    term_id = backup.term_id
+    db.session.delete(backup)
+    db.session.commit()
+    return _ok('Backup deleted.', url_for('timetable.backups', term_id=term_id))
+
+
 @timetable_bp.route('/')
 @login_required
 def index():
@@ -26,22 +239,33 @@ def index():
     term_id = request.args.get('term_id', type=int)
     assignment_id = request.args.get('assignment_id', type=int)
     
-    terms = Term.query.order_by(Term.id.desc()).all()
+    terms = session_terms()
     
     # Get active term if not specified
     if not term_id:
-        active_term = Term.query.filter_by(is_active=True).first()
+        active_term = get_active_term()
         if active_term:
             term_id = active_term.id
     
     selected_term = Term.query.get(term_id) if term_id else None
     
-    # Get class assignments for selected term
+    # Get class assignments for selected term (branch-scoped picker)
+    from utils.branch_scope import scope_query, can_access_branch
     assignments = []
     if term_id:
-        assignments = ClassArmAssignment.query.filter_by(term_id=term_id).all()
-    
+        assignments = scope_query(
+            ClassArmAssignment.query.filter_by(term_id=term_id), ClassArmAssignment).all()
+
+    # A view-only teacher is limited to the class(es) they are form teacher of.
+    form_scope = _timetable_form_scope()
+    if form_scope is not None:
+        assignments = [a for a in assignments if a.id in form_scope]
+
     selected_assignment = ClassArmAssignment.query.get(assignment_id) if assignment_id else None
+    if selected_assignment and not can_access_branch(selected_assignment.branch_id):
+        selected_assignment = None   # no peeking at another branch's timetable by id
+    if selected_assignment and form_scope is not None and selected_assignment.id not in form_scope:
+        selected_assignment = None   # not this teacher's form class
     
     # Get timetable slots
     slots = TimetableSlot.query.filter_by(is_active=True).order_by(TimetableSlot.order).all()
@@ -75,13 +299,106 @@ def index():
         for entry in entries:
             if entry.day_of_week in timetable_grid and entry.slot_id in timetable_grid[entry.day_of_week]:
                 timetable_grid[entry.day_of_week][entry.slot_id] = entry
-    
-    return render_template('timetable/index.html',
-        terms=terms, term_id=term_id, selected_term=selected_term,
-        assignments=assignments, assignment_id=assignment_id, selected_assignment=selected_assignment,
-        slots=slots, days=DAYS_OF_WEEK, timetable_grid=timetable_grid,
-        subjects_for_class=subjects_for_class
-    )
+
+    grid = {}
+    if selected_assignment and slots:
+        for day_num, _name in DAYS_OF_WEEK:
+            for slot in slots:
+                e = timetable_grid.get(day_num, {}).get(slot.id)
+                if e and e.subject:
+                    grid[f'{day_num}_{slot.id}'] = {
+                        'subject': e.subject.short_name or e.subject.name,
+                        'teacher': e.teacher_name or ''}
+
+    return _render({
+        'page': 'index',
+        'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
+        'term_id': term_id, 'assignment_id': assignment_id,
+        'has_term': selected_term is not None,
+        'assignments': [{'id': a.id, 'display_name': a.display_name} for a in assignments],
+        'selected_assignment': ({'id': selected_assignment.id,
+                                 'display_name': selected_assignment.display_name}
+                                if (selected_assignment and slots) else None),
+        'days': DAYS_OF_WEEK,
+        'slots': [_slot_dict(s) for s in slots],
+        'grid': grid,
+        'legend': [{'short': cs.subject.short_name or cs.subject.name[:3],
+                    'name': cs.subject.name} for cs in subjects_for_class],
+        'urls': {
+            'self': url_for('timetable.index'),
+            'backups': url_for('timetable.backups'),
+            'designer': url_for('timetable.designer'),
+            'edit': (url_for('timetable.edit_timetable', assignment_id=selected_assignment.id)
+                     if selected_assignment else None),
+            'pdf': (url_for('timetable.print_timetable', assignment_id=selected_assignment.id)
+                    if selected_assignment else None),
+            'pdf_teachers': (url_for('timetable.print_timetable',
+                                     assignment_id=selected_assignment.id, teachers=1)
+                             if selected_assignment else None),
+        },
+    })
+
+
+@timetable_bp.route('/mine')
+@login_required
+def my_timetable():
+    """A teacher's PERSONAL timetable — every period they personally teach, across
+    all classes, laid out by day and slot. Complements the per-class view (which a
+    form teacher uses for their class). Matches the teacher's name against the
+    name recorded on each timetable entry."""
+    from sqlalchemy import func
+    from utils.access_control import get_current_user
+    from utils.branch_scope import can_access_branch
+
+    from utils.name_match import normalize_person_name
+    from utils.teacher_identity import timetable_name_keys
+
+    user = get_current_user()
+    name = ((user.full_name if user and user.full_name else (user.username if user else '')) or '').strip()
+    # The names this user's periods may be published under (own name/username +
+    # any linked generator-teacher), matched tolerantly so slight formatting or
+    # word-order differences (e.g. "Mr John Doe" vs "Doe John") still resolve.
+    name_keys = timetable_name_keys(user)
+
+    term_id = request.args.get('term_id', type=int)
+    if not term_id:
+        at = get_active_term()
+        term_id = at.id if at else None
+
+    terms = session_terms()
+    slots = TimetableSlot.query.filter_by(is_active=True).order_by(TimetableSlot.order).all()
+
+    grid = {}                       # 'day_slot' -> {subject, klass}
+    if term_id and name_keys:
+        entries = (ClassTimetable.query
+                   .join(ClassArmAssignment,
+                         ClassTimetable.class_arm_assignment_id == ClassArmAssignment.id)
+                   .filter(ClassArmAssignment.term_id == term_id,
+                           ClassTimetable.is_active.is_(True),
+                           ClassTimetable.subject_id.isnot(None),
+                           ClassTimetable.teacher_name.isnot(None))
+                   .all())
+        for e in entries:
+            if normalize_person_name(e.teacher_name) not in name_keys:
+                continue
+            caa = e.class_arm_assignment
+            if caa is None or not can_access_branch(caa.branch_id):
+                continue
+            if e.subject:
+                grid[f'{e.day_of_week}_{e.slot_id}'] = {
+                    'subject': e.subject.short_name or e.subject.name,
+                    'klass': caa.display_name}
+
+    return render_template('timetable/mine.html',
+                           teacher_name=name,
+                           terms=[{'id': t.id, 'full_name': t.full_name} for t in terms],
+                           term_id=term_id,
+                           days=DAYS_OF_WEEK,
+                           slots=[_slot_dict(s) for s in slots],
+                           grid=grid, period_count=len(grid),
+                           self_url=url_for('timetable.my_timetable'),
+                           class_view_url=url_for('timetable.index', term_id=term_id) if term_id
+                           else url_for('timetable.index'))
 
 
 @timetable_bp.route('/edit/<int:assignment_id>')
@@ -89,9 +406,15 @@ def index():
 def edit_timetable(assignment_id):
     """Edit timetable for a class"""
     assignment = ClassArmAssignment.query.get_or_404(assignment_id)
-    
+    require_branch_access(assignment.branch_id)   # no cross-branch timetables
+    # Editing requires timetable edit access; view-only teachers are blocked even
+    # for their own form class.
+    if not is_admin() and not can_write_module('timetable'):
+        flash('You do not have permission to edit timetables.', 'error')
+        return redirect(url_for('timetable.index'))
+
     slots = TimetableSlot.query.filter_by(is_active=True).order_by(TimetableSlot.order).all()
-    
+
     # Get subjects for this class
     subjects = ClassSubject.query.filter_by(
         term_id=assignment.term_id,
@@ -109,11 +432,22 @@ def edit_timetable(assignment_id):
     
     # Build lookup: {(day, slot_id): entry}
     entries_lookup = {(e.day_of_week, e.slot_id): e for e in entries}
-    
-    return render_template('timetable/edit.html',
-        assignment=assignment, slots=slots, days=DAYS_OF_WEEK,
-        subjects=subjects, entries_lookup=entries_lookup
-    )
+    grid = {f'{d}_{sid}': {'subject_id': e.subject_id, 'teacher': e.teacher_name or ''}
+            for (d, sid), e in entries_lookup.items()}
+
+    return _render({
+        'page': 'edit',
+        'assignment': {'id': assignment.id, 'display_name': assignment.display_name,
+                       'term_id': assignment.term_id},
+        'days': DAYS_OF_WEEK,
+        'slots': [_slot_dict(s) for s in slots],
+        'subjects': [{'subject_id': cs.subject_id,
+                      'label': cs.subject.short_name or cs.subject.name} for cs in subjects],
+        'entries': grid,
+        'save_url': url_for('timetable.save_timetable', assignment_id=assignment.id),
+        'cancel_url': url_for('timetable.index', term_id=assignment.term_id,
+                              assignment_id=assignment.id),
+    })
 
 
 @timetable_bp.route('/save/<int:assignment_id>', methods=['POST'])
@@ -121,7 +455,10 @@ def edit_timetable(assignment_id):
 def save_timetable(assignment_id):
     """Save timetable entries"""
     assignment = ClassArmAssignment.query.get_or_404(assignment_id)
-    
+    require_branch_access(assignment.branch_id)   # no cross-branch writes
+    if not is_admin() and not can_write_module('timetable'):
+        return jsonify({'success': False, 'error': 'You cannot edit timetables.'}), 403
+
     try:
         slots = TimetableSlot.query.filter_by(is_active=True).all()
         
@@ -161,13 +498,13 @@ def save_timetable(assignment_id):
                         entry.is_active = False
         
         db.session.commit()
-        flash('Timetable saved!', 'success')
     except Exception as e:
         db.session.rollback()
-        flash(f'Error: {str(e)}', 'error')
-    
-    return redirect(url_for('timetable.index', 
-        term_id=assignment.term_id, assignment_id=assignment_id))
+        return _err(f'Error: {str(e)}',
+                    url_for('timetable.edit_timetable', assignment_id=assignment_id))
+
+    return _ok('Timetable saved!', url_for('timetable.index',
+               term_id=assignment.term_id, assignment_id=assignment_id))
 
 
 @timetable_bp.route('/copy', methods=['POST'])
@@ -188,7 +525,9 @@ def copy_timetable():
         if not from_assignment or not to_assignment:
             flash('Invalid class selection.', 'error')
             return redirect(url_for('timetable.index'))
-        
+        require_branch_access(from_assignment.branch_id)   # no cross-branch copy
+        require_branch_access(to_assignment.branch_id)
+
         # Get source entries
         source_entries = ClassTimetable.query.filter_by(
             class_arm_assignment_id=from_assignment_id,
@@ -226,31 +565,159 @@ def copy_timetable():
 @timetable_bp.route('/print/<int:assignment_id>')
 @login_required
 def print_timetable(assignment_id):
-    """Print-friendly timetable view"""
+    """Generate the per-class timetable as a horizontal PDF (days as rows, time
+    periods as columns) with ReportLab. Teacher names are excluded by default;
+    pass ?teachers=1 to include them."""
+    from io import BytesIO
+    from flask import send_file
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.units import mm
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from models import SchoolSettings
+
     assignment = ClassArmAssignment.query.get_or_404(assignment_id)
-    
+    require_branch_access(assignment.branch_id)   # no cross-branch timetable PDF
+    include_teachers = request.args.get('teachers') == '1'
+
     slots = TimetableSlot.query.filter_by(is_active=True).order_by(TimetableSlot.order).all()
-    
     entries = ClassTimetable.query.filter_by(
-        class_arm_assignment_id=assignment_id,
-        is_active=True
-    ).all()
-    
-    # Build grid
-    timetable_grid = {}
-    for day_num, day_name in DAYS_OF_WEEK:
-        timetable_grid[day_num] = {}
-        for slot in slots:
-            timetable_grid[day_num][slot.id] = None
-    
-    for entry in entries:
-        if entry.day_of_week in timetable_grid:
-            timetable_grid[entry.day_of_week][entry.slot_id] = entry
-    
-    return render_template('timetable/print.html',
-        assignment=assignment, slots=slots, days=DAYS_OF_WEEK,
-        timetable_grid=timetable_grid
-    )
+        class_arm_assignment_id=assignment_id, is_active=True).all()
+    # grid[(day, slot_id)] = entry
+    grid = {(e.day_of_week, e.slot_id): e for e in entries}
+
+    def hhmm(t):
+        return t.strftime('%-H:%M') if t else ''
+
+    cell = ParagraphStyle('cell', fontName='Helvetica', fontSize=12,
+                          alignment=TA_CENTER, leading=13)
+    cell_b = ParagraphStyle('cellb', parent=cell, fontName='Helvetica-Bold')
+    head = ParagraphStyle('head', parent=cell_b, fontSize=11, leading=12,
+                          textColor=colors.white)
+    # One huge bold capital letter per cell, used to spell BREAK down a column.
+    brk = ParagraphStyle('brk', fontName='Helvetica-Bold', fontSize=42,
+                         leading=44, alignment=TA_CENTER,
+                         textColor=colors.HexColor('#9a3412'))
+
+    days = list(DAYS_OF_WEEK)
+    n_days = len(days)
+    BREAK_WORD = 'BREAK'
+
+    def break_letter(row_idx):
+        """Letter of BREAK for body row ``row_idx`` (spread top→bottom)."""
+        if n_days == len(BREAK_WORD):
+            return BREAK_WORD[row_idx]
+        # distribute as evenly as possible if there aren't exactly 5 day rows
+        pos = int(round(row_idx * (len(BREAK_WORD) - 1) / max(n_days - 1, 1)))
+        return BREAK_WORD[pos] if 0 <= row_idx < n_days else ''
+
+    # Header row: Day + each slot. Break columns get a blank header (the column
+    # itself spells BREAK), teaching columns show name + time range.
+    header = [Paragraph('Day', head)]
+    for s in slots:
+        if s.is_break:
+            header.append(Paragraph('', head))
+            continue
+        label = f'{s.name}'
+        if s.start_time and s.end_time:
+            label += f'<br/>{hhmm(s.start_time)}–{hhmm(s.end_time)}'
+        header.append(Paragraph(label, head))
+
+    table_data = [header]
+    break_cols = [i + 1 for i, s in enumerate(slots) if s.is_break]
+    for r, (day_num, day_name) in enumerate(days):
+        row = [Paragraph(day_name, cell_b)]
+        for s in slots:
+            if s.is_break:
+                row.append(Paragraph(break_letter(r), brk))
+                continue
+            e = grid.get((day_num, s.id))
+            if not e or not e.subject:
+                row.append(Paragraph('', cell))
+                continue
+            txt = e.subject.short_name or e.subject.name
+            if include_teachers and e.teacher_name:
+                txt += f'<br/><font size=9 color="#555555">{e.teacher_name}</font>'
+            row.append(Paragraph(txt, cell_b))
+        table_data.append(row)
+
+    # ---- size everything to fill the A4 page with tiny margins ----
+    page_w, page_h = landscape(A4)
+    m_side, m_top, m_bottom = 6 * mm, 7 * mm, 6 * mm
+    content_w = page_w - 2 * m_side
+    content_h = page_h - m_top - m_bottom
+
+    n_break = len(break_cols)
+    n_teach = len(slots) - n_break
+    day_w = 28 * mm
+    break_w = 13 * mm
+    teach_w = (content_w - day_w - n_break * break_w) / max(n_teach, 1)
+    col_widths = [day_w] + [(break_w if s.is_break else teach_w) for s in slots]
+
+    header_reserve = 56            # space for school/class/term block
+    header_row_h = 26
+    body_row_h = (content_h - header_reserve - header_row_h) / max(n_days, 1)
+    row_heights = [header_row_h] + [body_row_h] * n_days
+
+    style = [
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0f766e')),
+        ('BACKGROUND', (0, 1), (0, -1), colors.HexColor('#e2e8f0')),
+        ('GRID', (0, 0), (-1, -1), 0.75, colors.HexColor('#475569')),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('LEFTPADDING', (0, 0), (-1, -1), 2),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+        ('TOPPADDING', (0, 0), (-1, -1), 1),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 1),
+    ]
+    for c in break_cols:
+        style.append(('BACKGROUND', (c, 0), (c, -1), colors.HexColor('#ffedd5')))
+
+    buf = BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=landscape(A4),
+                            leftMargin=m_side, rightMargin=m_side,
+                            topMargin=m_top, bottomMargin=m_bottom)
+    title_style = ParagraphStyle('title', fontName='Helvetica-Bold', fontSize=14,
+                                 alignment=TA_CENTER, leading=16)
+    sub_style = ParagraphStyle('sub', fontName='Helvetica', fontSize=9,
+                               alignment=TA_CENTER, leading=11,
+                               textColor=colors.HexColor('#475569'))
+    school = SchoolSettings.get('school_name', '') or ''
+    term = assignment.term.full_name if assignment.term else ''
+    from utils.school import logo_flowable, logo_header_flowable
+    logo = logo_flowable(max_h_mm=15, max_w_mm=26)
+    elems = []
+    sub = f'{assignment.display_name} — Class Timetable'
+    sub_plain = f'{assignment.display_name} — Class Timetable' + (f'  •  {term}' if term else '')
+    if term:
+        sub += f' &nbsp;•&nbsp; {term}'
+    items = []
+    if school:
+        items.append((Paragraph(school, title_style), school, 'Helvetica-Bold', 14))
+    items.append((Paragraph(sub, sub_style), sub_plain, 'Helvetica', 9))
+    header = logo_header_flowable(logo, items) if logo is not None else None
+    if header is not None:
+        elems.append(header)
+    else:
+        elems.extend(it[0] for it in items)
+    elems.append(Spacer(1, 4))
+    t = Table(table_data, colWidths=col_widths, rowHeights=row_heights, repeatRows=1)
+    t.setStyle(TableStyle(style))
+    elems.append(t)
+    doc.build(elems)
+    buf.seek(0)
+
+    suffix = 'with-teachers' if include_teachers else 'no-teachers'
+    fname = f'timetable_{assignment.display_name.replace(" ", "_")}_{suffix}.pdf'
+    resp = send_file(buf, mimetype='application/pdf', as_attachment=False,
+                     download_name=fname)
+    # Always regenerate from current data — never let the browser or service
+    # worker serve a stale copy (an old cached no-teachers PDF was being shown
+    # instead of the current design).
+    resp.headers['Cache-Control'] = 'no-store'
+    return resp
 
 
 # ============================================================================
@@ -261,6 +728,7 @@ def print_timetable(assignment_id):
 @login_required
 def api_get_entries(assignment_id):
     """Get timetable entries for a class"""
+    require_branch_access(db.get_or_404(ClassArmAssignment, assignment_id).branch_id)
     entries = ClassTimetable.query.filter_by(
         class_arm_assignment_id=assignment_id,
         is_active=True

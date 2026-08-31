@@ -77,7 +77,8 @@
 </div>
 
 <!-- Generate Form -->
-<form method="POST" action="{{ url_for('generator.run_generation') }}">
+<form method="POST" action="{{ url_for('generator.run_generation') }}" id="generate-form">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
     <div class="card mb-3">
         <div class="card-header"><h3>Select Classes to Generate</h3></div>
         <div class="card-body">
@@ -98,8 +99,8 @@
             </div>
             
             <div class="page-header-actions mt-3">
-                <button type="button" class="btn btn-secondary btn-sm" onclick="selectAll(true)">Select All</button>
-                <button type="button" class="btn btn-secondary btn-sm" onclick="selectAll(false)">Deselect All</button>
+                <button type="button" class="btn btn-secondary btn-sm" data-call="selectAll" data-args="true">Select All</button>
+                <button type="button" class="btn btn-secondary btn-sm" data-call="selectAll" data-args="false">Deselect All</button>
             </div>
             {% else %}
             <div class="empty-state">
@@ -118,14 +119,14 @@
         <div class="card-body">
             <div class="form-group">
                 <label class="checkbox-label" style="padding: 1rem; background: var(--bg-tertiary); border-radius: var(--border-radius-sm); margin-bottom: 0.5rem; display: block;">
-                    <input type="radio" name="method" value="fast" checked onchange="updateFormAction(this)">
+                    <input type="radio" name="method" value="fast" checked data-call="updateFormAction" data-args="this" data-on="change">
                     <span>
                         <strong>Fast Generation</strong> (Default)
                         <br><small class="text-muted">Quick generation using greedy algorithm. Good for most cases.</small>
                     </span>
                 </label>
                 <label class="checkbox-label" style="padding: 1rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: var(--border-radius-sm); display: block;">
-                    <input type="radio" name="method" value="ortools" onchange="updateFormAction(this)">
+                    <input type="radio" name="method" value="ortools" data-call="updateFormAction" data-args="this" data-on="change">
                     <span>
                         <strong>⭐ Optimal Generation (OR-Tools)</strong>
                         <br><small style="opacity: 0.9;">Uses Google's constraint solver for best possible result. May take longer.</small>
@@ -162,13 +163,13 @@
     {% endif %}
 </form>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 function selectAll(checked) {
     document.querySelectorAll('input[name="class_ids[]"]').forEach(cb => cb.checked = checked);
 }
 
 function updateFormAction(radio) {
-    const form = document.querySelector('form');
+    const form = document.getElementById('generate-form');
     const ortoolsOptions = document.getElementById('ortools-options');
     const btn = document.getElementById('generate-btn');
     
@@ -186,5 +187,18 @@ function updateFormAction(radio) {
         btn.classList.add('btn-primary');
     }
 }
+
+// Sync the form action with whatever method is actually selected, so a
+// browser-restored radio (which does not fire onchange) can't post to the
+// wrong endpoint. Runs on load and again right before submit.
+function syncSelectedMethod() {
+    const checked = document.querySelector('input[name="method"]:checked');
+    if (checked) updateFormAction(checked);
+}
+document.addEventListener('DOMContentLoaded', syncSelectedMethod);
+(function () {
+    const form = document.getElementById('generate-form');
+    if (form) form.addEventListener('submit', syncSelectedMethod);
+})();
 </script>
 {% endblock %}

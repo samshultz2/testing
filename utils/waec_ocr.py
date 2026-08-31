@@ -6,10 +6,33 @@ list of {subject, grade} pairs. OCR is never perfect, so the result is always
 shown to the user for review/correction before anything is saved.
 """
 import io
+import os
 import re
 import difflib
 
 from utils.helpers import WAEC_SUBJECTS, WAEC_GRADES
+
+# Auto-orientation (OSD) is a second Tesseract pass — roughly 40% of a scan's
+# time. It only helps sideways/upside-down photos; if you always upload upright
+# images or screenshots, set WAEC_OCR_AUTO_ORIENT=0 to skip it and (almost) halve
+# scan time on a slow CPU.
+_AUTO_ORIENT = os.environ.get('WAEC_OCR_AUTO_ORIENT', '1').strip().lower() not in ('0', 'false', 'no')
+
+# Resource limits for OCR on untrusted uploads (DoS hardening).
+_MAX_IMAGE_PIXELS = 50_000_000       # ~50 MP — reject decompression bombs
+_OCR_TIMEOUT_SECONDS = 60            # per Tesseract pass (generous for slow CPUs)
+_MAX_PDF_OCR_PAGES = 25              # cap pages rendered+OCR'd from a scanned PDF
+# Tesseract cost grows ~quadratically with pixels, so a full-resolution phone
+# photo (often 12-20 MP) can blow the time budget on a slow CPU. Shrinking the
+# longest edge to this before OCR is the single biggest speed-up and does not
+# change the recognition engine. Tiny images are still upscaled (below).
+_MAX_OCR_DIM = 1800
+# Orientation detection (OSD) is a separate full Tesseract pass and is often the
+# bigger cost — it doesn't need full resolution, so run it on a small thumbnail.
+_OSD_MAX_DIM = 800
+# Only upscale genuinely small images (tiny photos benefit); an image already at
+# least this wide is left at native size so we don't OCR more pixels than needed.
+_MIN_OCR_DIM = 1300
 
 # Valid WAEC grade tokens.
 _GRADE_SET = set(WAEC_GRADES)
@@ -75,9 +98,16 @@ def tesseract_available():
 
 
 def _auto_orient(img, pytesseract):
-    """Use Tesseract OSD to fix a sideways/upside-down photo (best effort)."""
+    """Use Tesseract OSD to fix a sideways/upside-down photo (best effort).
+
+    OSD runs on a small thumbnail — orientation doesn't need full resolution and
+    a full-size OSD pass is often the single biggest cost of a scan."""
     try:
-        osd = pytesseract.image_to_osd(img)
+        probe = img
+        if max(img.size) > _OSD_MAX_DIM:
+            s = _OSD_MAX_DIM / max(img.size)
+            probe = img.resize((max(1, int(img.width * s)), max(1, int(img.height * s))))
+        osd = pytesseract.image_to_osd(probe)
         m = re.search(r'Rotate:\s*(\d+)', osd)
         if m:
             angle = int(m.group(1))
@@ -94,17 +124,29 @@ def extract_text(image_bytes):
     import pytesseract
     from PIL import Image, ImageOps
 
+    # Decompression-bomb / resource-exhaustion guard: cap how big an image we
+    # will decode and OCR (a small file can expand to billions of pixels).
+    Image.MAX_IMAGE_PIXELS = _MAX_IMAGE_PIXELS
     img = Image.open(io.BytesIO(image_bytes))
+    if img.width * img.height > _MAX_IMAGE_PIXELS:
+        raise ValueError('Image is too large to process.')
     # Preprocess: orient via EXIF + OSD, grayscale, autocontrast and upscale a
     # little — this noticeably improves OCR on photographed slips.
     img = ImageOps.exif_transpose(img)
-    img = _auto_orient(img, pytesseract)
+    # Downscale a large photo BEFORE orientation + OCR so a big phone photo can't
+    # exceed the Tesseract time budget (this is the fix for "process timeout").
+    if max(img.size) > _MAX_OCR_DIM:
+        scale = _MAX_OCR_DIM / max(img.size)
+        img = img.resize((max(1, int(img.width * scale)), max(1, int(img.height * scale))))
+    if _AUTO_ORIENT:
+        img = _auto_orient(img, pytesseract)
     img = ImageOps.grayscale(img)
     img = ImageOps.autocontrast(img)
-    if max(img.size) < 1600:
-        scale = 1600 / max(img.size)
+    if max(img.size) < _MIN_OCR_DIM:
+        scale = _MIN_OCR_DIM / max(img.size)
         img = img.resize((int(img.width * scale), int(img.height * scale)))
-    return pytesseract.image_to_string(img)
+    # Bound a single OCR pass so a crafted image can't hang a worker.
+    return pytesseract.image_to_string(img, timeout=_OCR_TIMEOUT_SECONDS)
 
 
 def pdf_available():
@@ -132,8 +174,10 @@ def extract_text_from_pdf(pdf_bytes):
         # Sparse/empty text layer -> the PDF is almost certainly scanned images.
         if len(combined) < 40 and tesseract_available():
             ocr_parts = []
-            for page in doc:
-                pix = page.get_pixmap(dpi=200)
+            # Cap the number of rendered+OCR'd pages so a huge PDF can't pin a
+            # worker for minutes.
+            for i in range(min(doc.page_count, _MAX_PDF_OCR_PAGES)):
+                pix = doc[i].get_pixmap(dpi=200)
                 ocr_parts.append(extract_text(pix.tobytes('png')))
             combined = '\n'.join(ocr_parts).strip()
         return combined
@@ -446,19 +490,52 @@ def parse_jamb_result(text):
     }
 
 
-def vision_available():
-    """True if the optional Claude-vision fallback is configured and usable."""
+def _vision_config():
+    """Resolve the vision-OCR config from the Settings page (DB) first, then env /
+    Config. Never returns the raw key to callers that only need status — it does
+    include ``key`` for the extractor, plus a masked form and presence flags for
+    the settings UI."""
     import os
     from config import Config
-    if not getattr(Config, 'OCR_VISION_FALLBACK', False):
-        return False
-    if not os.environ.get('ANTHROPIC_API_KEY'):
-        return False
+    enabled = bool(getattr(Config, 'OCR_VISION_FALLBACK', False))
+    model = getattr(Config, 'OCR_VISION_MODEL', 'claude-haiku-4-5')
+    key = os.environ.get('ANTHROPIC_API_KEY', '') or ''
+    env_key = bool(key)
+    key_source = 'env' if key else None
+    try:                                  # DB settings override env/Config when present
+        from models import SchoolSettings
+        from utils.crypto import decrypt
+        ev = SchoolSettings.get('ocr_vision_enabled', None)
+        if ev is not None:
+            enabled = bool(ev)
+        mv = (SchoolSettings.get('ocr_vision_model', '') or '').strip()
+        if mv:
+            model = mv
+        kv = (SchoolSettings.get('ocr_vision_api_key', '') or '').strip()
+        if kv:
+            dec = decrypt(kv)
+            if dec:
+                key, key_source = dec, 'settings'
+    except Exception:
+        pass
     try:
         import anthropic  # noqa: F401
-        return True
+        installed = True
     except Exception:
-        return False
+        installed = False
+    masked = ''
+    if key:
+        masked = (key[:7] + '…' + key[-4:]) if len(key) > 14 else '••••••'
+    return {'enabled': enabled, 'model': model, 'key': key, 'has_key': bool(key),
+            'key_masked': masked, 'env_key': env_key, 'key_source': key_source,
+            'installed': installed}
+
+
+def vision_available():
+    """True if the optional Claude-vision OCR is enabled, has a key, and the
+    ``anthropic`` package is importable."""
+    cfg = _vision_config()
+    return bool(cfg['enabled'] and cfg['has_key'] and cfg['installed'])
 
 
 def vision_extract(image_bytes, exam='waec', media_type='image/png'):
@@ -467,15 +544,15 @@ def vision_extract(image_bytes, exam='waec', media_type='image/png'):
     same dict shape as parse_waec_result / parse_jamb_result, or None on any
     failure (so callers can fall back to Tesseract).
     """
-    if not vision_available():
+    cfg = _vision_config()
+    if not (cfg['enabled'] and cfg['has_key'] and cfg['installed']):
         return None
     try:
         import base64
         import json
         import anthropic
-        from config import Config
 
-        client = anthropic.Anthropic()
+        client = anthropic.Anthropic(api_key=cfg['key'])
         data = base64.standard_b64encode(image_bytes).decode('utf-8')
 
         if exam == 'jamb':
@@ -497,7 +574,7 @@ def vision_extract(image_bytes, exam='waec', media_type='image/png'):
             )
 
         message = client.messages.create(
-            model=getattr(Config, 'OCR_VISION_MODEL', 'claude-opus-4-8'),
+            model=cfg['model'],
             max_tokens=2000,
             messages=[{
                 "role": "user",
@@ -532,31 +609,187 @@ def vision_extract(image_bytes, exam='waec', media_type='image/png'):
         return None
 
 
+# Tokens a cell can hold that mean "no score".
+_SHEET_BLANKS = {'', '-', '--', '–', 'nil', 'absent', 'a', 'x', 'na', 'n/a'}
+
+
+def vision_extract_scoresheet(image_bytes, column_labels, media_type='image/png'):
+    """Read a handwritten class broadsheet image with Claude vision.
+
+    ``column_labels`` is the ordered list of assessment-column names the scores
+    map to (e.g. ['1st CA', '2nd CA', 'H.A', '3rd CA', 'P/ME', 'CBT', 'PBT']).
+    Returns ``[{'student_num': str, 'name': str, 'cells': [str, ...]}]`` (same
+    shape as parse_score_sheet) or None on any failure, so the caller falls back
+    to Tesseract. The result is always shown in the review grid before saving."""
+    cfg = _vision_config()
+    if not (cfg['enabled'] and cfg['has_key'] and cfg['installed']):
+        return None
+    try:
+        import base64
+        import json
+        import anthropic
+
+        client = anthropic.Anthropic(api_key=cfg['key'])
+        data = base64.standard_b64encode(image_bytes).decode('utf-8')
+        ncol = len(column_labels)
+        # Column labels come from admin-defined assessment names. Sanitise before
+        # interpolating into the LLM prompt so a crafted name (newlines / fake
+        # instructions) can't steer the model: strip control chars, cap length,
+        # and quote each label so it reads as data, not a directive.
+        import re as _re
+        def _clean_label(s):
+            s = _re.sub(r'[^\x20-\x7e]', ' ', str(s))   # printable ASCII, no newlines
+            return s.strip()[:40]
+        cols = ', '.join('"' + _clean_label(c) + '"' for c in column_labels)
+        instruction = (
+            "This is a Nigerian school class broadsheet (score sheet). Every row is "
+            "one student — read ALL rows top to bottom. For each student give their "
+            "printed admission/student number (empty string if none), their full "
+            "name, and the handwritten scores in EXACTLY this column order:\n"
+            f"{cols}\n"
+            "Scores are small numbers; use \"\" for any blank, dash, or absent cell. "
+            "Ignore the printed Exam-Total and Grand-Total columns. Do not invent "
+            'rows. Return ONLY JSON: {"rows": [{"student_num": str, "name": str, '
+            '"scores": [str, ...]}]} with one entry per student.'
+        )
+        message = client.messages.create(
+            model=cfg['model'],
+            max_tokens=8000,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": data}},
+                    {"type": "text", "text": instruction},
+                ],
+            }],
+        )
+        text = next((b.text for b in message.content if b.type == "text"), "").strip()
+        if text.startswith("```"):
+            text = text.strip("`")
+            text = text[text.find("{"):text.rfind("}") + 1]
+        parsed = json.loads(text)
+
+        rows = []
+        for r in parsed.get('rows', []):
+            name = (r.get('name') or '').strip()
+            if not name:
+                continue
+            cells = []
+            for v in (r.get('scores') or [])[:ncol]:
+                v = '' if v is None else str(v).strip()
+                cells.append('' if v.lower() in _SHEET_BLANKS else v)
+            cells += [''] * (ncol - len(cells))            # pad short rows
+            rows.append({'student_num': (r.get('student_num') or '').strip(),
+                         'name': name, 'cells': cells})
+        return rows or None
+    except Exception:
+        return None
+
+
+def _name_tokens(*parts):
+    """Alphabetic name tokens (length >= 2), lower-cased. Drops punctuation,
+    numbers and lone initials so ordering and middle names don't defeat matching."""
+    out = set()
+    for p in parts:
+        for t in re.findall(r'[a-z]+', (p or '').lower()):
+            if len(t) >= 2:
+                out.add(t)
+    return out
+
+
+MATCH_THRESHOLD = 0.6
+
+
+def _score_pair(name_l, q, student):
+    """Similarity in [0, 1] between a scanned/pasted name and one roster student.
+
+    ``name_l`` is the lower-cased name and ``q`` its ``_name_tokens`` set (computed
+    once by the caller so batch matching stays O(names x students) not worse)."""
+    full = (student.full_name or '').lower()
+    alt = f"{(student.first_name or '').lower()} {(student.surname or '').lower()}".strip()
+    # order-sensitive similarity (handles spelling/spacing wobble)
+    seq = max(
+        difflib.SequenceMatcher(None, name_l, full).ratio(),
+        difflib.SequenceMatcher(None, name_l, alt).ratio(),
+    )
+    # order-independent, subset-aware token similarity
+    c = _name_tokens(student.full_name, student.first_name, student.surname,
+                     getattr(student, 'middle_name', ''))
+    tset = 0.0
+    if q and c:
+        inter = q & c
+        smaller = q if len(q) <= len(c) else c
+        if q <= c or c <= q:                       # one name fully contains the other
+            tset = 0.97 if len(smaller) >= 2 else 0.55
+        elif len(inter) >= 2:                      # e.g. first + surname both shared
+            tset = 0.9
+        else:
+            tset = len(inter) / len(q | c)         # single shared token -> low
+        tset = max(tset, difflib.SequenceMatcher(
+            None, ' '.join(sorted(q)), ' '.join(sorted(c))).ratio())
+    return max(seq, tset)
+
+
 def match_student(name, students):
-    """
-    Auto-match the extracted name to a student. Returns (student_or_None, score).
-    `students` is a list of Student objects.
-    """
+    """Auto-match an extracted/pasted name to a student. Returns (student|None, score).
+
+    Robust to the ways real name lists differ from the register: word order
+    ("Surname Firstname" vs "Firstname Surname"), an extra/absent middle name, and
+    minor spelling/spacing. Matching is token-based so "Ada Obi" still matches
+    "Obi Ada Chidinma"; a single shared token is deliberately NOT enough to match,
+    to avoid linking the wrong pupil."""
     if not name or not students:
         return None, 0.0
     name_l = name.lower().strip()
-
-    best = None
-    best_score = 0.0
+    q = _name_tokens(name)
+    best, best_score = None, 0.0
     for s in students:
-        full = (s.full_name or '').lower()
-        # also try "first surname" ordering since slips vary
-        alt = f"{(s.first_name or '').lower()} {(s.surname or '').lower()}".strip()
-        score = max(
-            difflib.SequenceMatcher(None, name_l, full).ratio(),
-            difflib.SequenceMatcher(None, name_l, alt).ratio(),
-        )
+        score = _score_pair(name_l, q, s)
         if score > best_score:
             best_score, best = score, s
-    # Only treat as a confident match above a threshold.
-    if best_score >= 0.6:
+    if best_score >= MATCH_THRESHOLD:
         return best, round(best_score, 2)
     return None, round(best_score, 2)
+
+
+def match_students_unique(names, students):
+    """Match a batch of names to a roster so each student is used at most once.
+
+    Independent best-match (``match_student`` per row) silently collapses several
+    pasted rows onto the same pupil when the roster is missing some of the pasted
+    students — the duplicate then overwrites the first at save time, so only a
+    handful of scores survive. This assigns greedily by confidence: the most
+    certain (row, student) pairs are locked first, and once a student is taken no
+    other row can claim them. Rows that can't win a confident, unclaimed student
+    are returned unmatched (to be picked manually) rather than colliding.
+
+    ``names`` is a list of strings; returns a list aligned with it of
+    ``(student|None, score)``."""
+    n = len(names)
+    result = [(None, 0.0)] * n
+    if not students or not names:
+        return result
+    # Score every (row, student) pair once.
+    triples = []                                   # (score, row_idx, student)
+    for i, nm in enumerate(names):
+        if not nm:
+            continue
+        name_l = nm.lower().strip()
+        q = _name_tokens(nm)
+        for s in students:
+            sc = _score_pair(name_l, q, s)
+            if sc >= MATCH_THRESHOLD:
+                triples.append((sc, i, s))
+    # Lock the most confident pairs first; each row and each student used once.
+    triples.sort(key=lambda t: t[0], reverse=True)
+    used_rows, used_students = set(), set()
+    for sc, i, s in triples:
+        if i in used_rows or s.id in used_students:
+            continue
+        result[i] = (s, round(sc, 2))
+        used_rows.add(i)
+        used_students.add(s.id)
+    return result
 
 
 # ---------------------------------------------------------------------------

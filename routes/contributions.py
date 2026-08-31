@@ -3,34 +3,94 @@ Student Contributions Module - SSS3 Graduation Fund Tracking
 Hidden module accessible only with special access code
 """
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session
+from utils.helpers import get_active_term, get_active_session
 from models import (
-    db, Student, StudentEnrollment, ClassArmAssignment, SchoolClass, Term, ContributionSettings,
-    ContributionPayment, ContributionExpense, AcademicSession
+    db, Student, StudentEnrollment, ClassArmAssignment, SchoolClass, ContributionSettings, ContributionPayment,
+    ContributionExpense
 )
 from functools import wraps
 from datetime import datetime, date, timedelta
 from sqlalchemy import func
+from utils.branch_scope import scope_query, can_access_branch
 
 contributions_bp = Blueprint('contributions', __name__, url_prefix='/contributions')
 
-ACCESS_CODE = "64665842"
 SESSION_KEY = "contributions_access"
+
+
+def _access_code():
+    """The configured access code, or None if an administrator has not set one.
+
+    There is deliberately NO built-in default: a shared, source-visible code is
+    no protection. Until an admin sets one, only admins can enter the module
+    (to configure it)."""
+    code = ContributionSettings.get('access_code', None)
+    return code.strip() if isinstance(code, str) and code.strip() else None
 
 
 def contributions_access_required(f):
     @wraps(f)
     def decorated_function(*args, **kwargs):
+        # Two gates: the user must be a logged-in staff member first (so this
+        # hidden module is never reachable anonymously), THEN hold the access
+        # code. The code is a second factor, never the only protection.
+        if not session.get('logged_in'):
+            return redirect(url_for('auth.login'))
         if not session.get(SESSION_KEY):
             return redirect(url_for('contributions.access_page'))
         return f(*args, **kwargs)
     return decorated_function
 
 
+# --- SPA helpers (no-reload React shell + JSON-aware action responses) -------
+from utils.spa import section_responders
+_wants_json, _render, _ok, _err = section_responders(
+    'contributions/app.html', 'contrib_json', 'contributions.dashboard',
+    enrich=lambda p: p.setdefault('urls', _urls()))
+
+
+def _urls():
+    """Section-wide links used across the React shell."""
+    return {
+        'dashboard': url_for('contributions.dashboard'),
+        'quick_entry': url_for('contributions.quick_entry'),
+        'add_payment': url_for('contributions.add_payment'),
+        'payments': url_for('contributions.payments_list'),
+        'expenses': url_for('contributions.expenses_list'),
+        'add_expense': url_for('contributions.add_expense'),
+        'report': url_for('contributions.report'),
+        'defaulters': url_for('contributions.defaulters'),
+        'daily_summary': url_for('contributions.daily_summary'),
+        'history': url_for('contributions.session_history'),
+        'settings': url_for('contributions.settings'),
+        'import': url_for('contributions.import_excel'),
+        'export': url_for('contributions.export_excel'),
+        'export_defaulters': url_for('contributions.export_defaulters'),
+        'clear_all': url_for('contributions.clear_all_data'),
+        'logout': url_for('contributions.logout_contributions'),
+    }
+
+
+
 @contributions_bp.route('/access', methods=['GET', 'POST'])
 def access_page():
+    if not session.get('logged_in'):
+        return redirect(url_for('auth.login'))
     if request.method == 'POST':
+        import secrets
+        from utils.access_control import is_admin
+        configured = _access_code()
         code = request.form.get('access_code', '').strip()
-        if code == ACCESS_CODE:
+        if configured is None:
+            # Not configured yet: let an admin in to bootstrap a code; others wait.
+            if is_admin():
+                session[SESSION_KEY] = True
+                flash('Access granted. Please set an access code in Settings so '
+                      'other staff can use this module.', 'success')
+                return redirect(url_for('contributions.settings'))
+            flash('This module has not been set up yet. Please ask an '
+                  'administrator to configure an access code.', 'error')
+        elif code and secrets.compare_digest(code, configured):
             session[SESSION_KEY] = True
             flash('Access granted!', 'success')
             return redirect(url_for('contributions.dashboard'))
@@ -50,7 +110,7 @@ def logout_contributions():
 @contributions_access_required
 def dashboard():
     """Main contributions dashboard with enhanced stats"""
-    active_term = Term.query.filter_by(is_active=True).first()
+    active_term = get_active_term()
     if not active_term:
         flash('No active term found', 'error')
         return redirect(url_for('main.dashboard'))
@@ -61,12 +121,12 @@ def dashboard():
         return redirect(url_for('main.dashboard'))
     
     # Get active session
-    active_session = AcademicSession.query.filter_by(is_active=True).first()
+    active_session = get_active_session()
     if not active_session:
         flash('No active session found', 'error')
         return redirect(url_for('main.dashboard'))
     
-    sss3_assignments = ClassArmAssignment.query.filter_by(class_id=sss3_class.id, term_id=active_term.id).all()
+    sss3_assignments = scope_query(ClassArmAssignment.query.filter_by(class_id=sss3_class.id, term_id=active_term.id), ClassArmAssignment).all()
     assignment_ids = [a.id for a in sss3_assignments]
     enrollments = StudentEnrollment.query.filter(StudentEnrollment.class_arm_assignment_id.in_(assignment_ids), StudentEnrollment.is_active == True).all()
     
@@ -77,16 +137,17 @@ def dashboard():
     total_received = 0
     fully_paid_count = 0
     arms_summary = {}
-    
+
+    # One batched query for every student's total (was a SUM per student → N+1).
+    from utils.services.contributions import paid_by_student
+    paid_map = paid_by_student(active_session.id, [e.student_id for e in enrollments])
+
     for enrollment in enrollments:
         student = enrollment.student
         assignment = enrollment.class_arm_assignment
-        arm_name = assignment.arm.name
-        
-        total_paid = db.session.query(func.sum(ContributionPayment.amount)).filter(
-            ContributionPayment.student_id == student.id,
-            ContributionPayment.session_id == active_session.id
-        ).scalar() or 0
+        arm_name = assignment.arm_label
+
+        total_paid = paid_map.get(student.id, 0)
         remaining = max_due - total_paid
         status = 'Paid' if remaining <= 0 else 'Ongoing'
         
@@ -148,43 +209,64 @@ def dashboard():
     
     # Top contributors
     top_contributors = sorted(students_data, key=lambda x: x['total_paid'], reverse=True)[:10]
-    
-    return render_template('contributions/dashboard.html',
-        students=students_data, total_expected=total_expected, total_received=total_received,
-        total_expenses=total_expenses, net_balance=total_received - total_expenses,
-        fully_paid_count=fully_paid_count, total_students=len(students_data),
-        max_due=max_due, recent_payments=recent_payments, active_term=active_term,
-        total_outstanding=total_outstanding, avg_paid=avg_paid, total_payments=total_payments,
-        today_collections=today_collections, week_collections=week_collections,
-        collection_rate=collection_rate, expense_count=expense_count,
-        arms_summary=arms_summary, top_contributors=top_contributors
-    )
+
+    def _student_url(sid):
+        return url_for('contributions.student_detail', student_id=sid)
+
+    for s in students_data:
+        s['detail_url'] = _student_url(s['id'])
+        s['add_payment_url'] = url_for('contributions.add_payment', student_id=s['id'])
+
+    arms_list = [{'name': name, 'paid': v['paid'], 'total': v['total'],
+                  'collected': v['collected'], 'percentage': v['percentage']}
+                 for name, v in sorted(arms_summary.items())]
+
+    return _render({
+        'page': 'dashboard',
+        'stats': {
+            'total_students': len(students_data), 'total_expected': total_expected,
+            'total_received': total_received, 'total_expenses': total_expenses,
+            'net_balance': total_received - total_expenses, 'fully_paid_count': fully_paid_count,
+            'total_outstanding': total_outstanding, 'avg_paid': avg_paid,
+            'total_payments': total_payments, 'today_collections': today_collections,
+            'week_collections': week_collections, 'collection_rate': collection_rate,
+            'expense_count': expense_count, 'max_due': max_due,
+        },
+        'students': students_data,
+        'arms_summary': arms_list,
+        'recent_payments': [{'student_name': p.student.full_name, 'amount': p.amount,
+                             'date_short': p.payment_date.strftime('%d %b'),
+                             'detail_url': _student_url(p.student_id)}
+                            for p in recent_payments[:7]],
+        'top_contributors': [{'name': s['name'], 'total_paid': s['total_paid'],
+                              'detail_url': _student_url(s['id'])}
+                             for s in top_contributors[:7]],
+    })
 
 
 @contributions_bp.route('/quick-entry', methods=['GET', 'POST'])
 @contributions_access_required
 def quick_entry():
-    active_term = Term.query.filter_by(is_active=True).first()
+    active_term = get_active_term()
     sss3_class = SchoolClass.query.filter_by(name='SSS3').first()
-    active_session = AcademicSession.query.filter_by(is_active=True).first()
+    active_session = get_active_session()
     if not active_term or not sss3_class or not active_session:
         flash('Configuration error', 'error')
         return redirect(url_for('contributions.dashboard'))
     
-    sss3_assignments = ClassArmAssignment.query.filter_by(class_id=sss3_class.id, term_id=active_term.id).all()
+    sss3_assignments = scope_query(ClassArmAssignment.query.filter_by(class_id=sss3_class.id, term_id=active_term.id), ClassArmAssignment).all()
     assignment_ids = [a.id for a in sss3_assignments]
     enrollments = StudentEnrollment.query.filter(StudentEnrollment.class_arm_assignment_id.in_(assignment_ids), StudentEnrollment.is_active == True).all()
     max_due = float(ContributionSettings.get('max_due', 20000))
     
+    from utils.services.contributions import paid_by_student
+    paid_map = paid_by_student(active_session.id, [e.student_id for e in enrollments])
     students_list = []
     for enrollment in enrollments:
         student = enrollment.student
         assignment = enrollment.class_arm_assignment
-        total_paid = db.session.query(func.sum(ContributionPayment.amount)).filter(
-            ContributionPayment.student_id == student.id,
-            ContributionPayment.session_id == active_session.id
-        ).scalar() or 0
-        students_list.append({'id': student.id, 'name': student.full_name, 'arm': assignment.arm.name, 'total_paid': total_paid, 'remaining': max(0, max_due - total_paid)})
+        total_paid = paid_map.get(student.id, 0)
+        students_list.append({'id': student.id, 'name': student.full_name, 'arm': assignment.arm_label, 'total_paid': total_paid, 'remaining': max(0, max_due - total_paid)})
     students_list.sort(key=lambda x: (x['arm'], x['name']))
     
     if request.method == 'POST':
@@ -192,14 +274,18 @@ def quick_entry():
             payment_date_str = request.form.get('payment_date')
             received_by = request.form.get('received_by', '').strip()
             if not payment_date_str:
-                flash('Payment date is required', 'error')
-                return redirect(url_for('contributions.quick_entry'))
+                return _err('Payment date is required', url_for('contributions.quick_entry'))
             payment_date = datetime.strptime(payment_date_str, '%Y-%m-%d').date()
             count = 0
             total_amount = 0
+            # Only students on the (branch-scoped) roster may be collected for —
+            # a crafted amount_<id> for another branch's student is ignored.
+            allowed_ids = {s['id'] for s in students_list}
             for key, value in request.form.items():
                 if key.startswith('amount_') and value.strip():
                     student_id = int(key.replace('amount_', ''))
+                    if student_id not in allowed_ids:
+                        continue
                     amount = float(value.strip())
                     if amount > 0:
                         payment = ContributionPayment(session_id=active_session.id, student_id=student_id, amount=amount, payment_date=payment_date, received_by=received_by)
@@ -208,36 +294,45 @@ def quick_entry():
                         total_amount += amount
             if count > 0:
                 db.session.commit()
-                flash(f'Added {count} payment(s) totaling ₦{total_amount:,.0f}', 'success')
-            else:
-                flash('No payments entered', 'warning')
-            return redirect(url_for('contributions.quick_entry'))
+                return _ok(f'Added {count} payment(s) totaling ₦{total_amount:,.0f}',
+                           url_for('contributions.quick_entry'))
+            return _err('No payments entered', url_for('contributions.quick_entry'))
         except Exception as e:
             db.session.rollback()
-            flash(f'Error: {str(e)}', 'error')
-    
-    return render_template('contributions/quick_entry.html', students=students_list, today=date.today().strftime('%Y-%m-%d'), max_due=max_due)
+            return _err(f'Error: {str(e)}', url_for('contributions.quick_entry'))
+
+    return _render({
+        'page': 'quick_entry',
+        'students': students_list,
+        'today': date.today().strftime('%Y-%m-%d'),
+        'max_due': max_due,
+        'submit_url': url_for('contributions.quick_entry'),
+    })
 
 
 @contributions_bp.route('/add-payment', methods=['GET', 'POST'])
 @contributions_access_required
 def add_payment():
-    active_term = Term.query.filter_by(is_active=True).first()
+    active_term = get_active_term()
     sss3_class = SchoolClass.query.filter_by(name='SSS3').first()
-    active_session = AcademicSession.query.filter_by(is_active=True).first()
+    active_session = get_active_session()
     if not active_term or not sss3_class or not active_session:
         flash('Configuration error', 'error')
         return redirect(url_for('contributions.dashboard'))
     
-    sss3_assignments = ClassArmAssignment.query.filter_by(class_id=sss3_class.id, term_id=active_term.id).all()
+    sss3_assignments = scope_query(ClassArmAssignment.query.filter_by(class_id=sss3_class.id, term_id=active_term.id), ClassArmAssignment).all()
     assignment_ids = [a.id for a in sss3_assignments]
     enrollments = StudentEnrollment.query.filter(StudentEnrollment.class_arm_assignment_id.in_(assignment_ids), StudentEnrollment.is_active == True).all()
-    students_list = [{'id': e.student.id, 'name': f"{e.student.full_name} ({e.class_arm_assignment.arm.name})"} for e in enrollments]
+    students_list = [{'id': e.student.id, 'name': (f"{e.student.full_name} ({e.class_arm_assignment.arm_label})" if e.class_arm_assignment.arm_label else e.student.full_name)} for e in enrollments]
     students_list.sort(key=lambda x: x['name'])
     
     if request.method == 'POST':
         try:
             student_id = int(request.form.get('student_id'))
+            # Reject a payment posted against a student outside the user's branch.
+            _stu = db.session.get(Student, student_id)
+            if not _stu or not can_access_branch(_stu.branch_id):
+                return _err('That student is not in your branch.', url_for('contributions.add_payment'))
             amount = float(request.form.get('amount'))
             payment_date = datetime.strptime(request.form.get('payment_date'), '%Y-%m-%d').date()
             received_by = request.form.get('received_by', '').strip()
@@ -245,20 +340,27 @@ def add_payment():
             payment = ContributionPayment(session_id=active_session.id, student_id=student_id, amount=amount, payment_date=payment_date, received_by=received_by, notes=notes)
             db.session.add(payment)
             db.session.commit()
-            student = Student.query.get(student_id)
-            flash(f'Payment of ₦{amount:,.0f} added for {student.full_name}', 'success')
-            return redirect(url_for('contributions.dashboard'))
+            student = db.session.get(Student, student_id)
+            return _ok(f'Payment of ₦{amount:,.0f} added for {student.full_name}',
+                       url_for('contributions.dashboard'))
         except Exception as e:
             db.session.rollback()
-            flash(f'Error: {str(e)}', 'error')
-    
-    return render_template('contributions/add_payment.html', students=students_list, today=date.today().strftime('%Y-%m-%d'))
+            return _err(f'Error: {str(e)}', url_for('contributions.add_payment'))
+
+    return _render({
+        'page': 'add_payment',
+        'students': students_list,
+        'today': date.today().strftime('%Y-%m-%d'),
+        'preselect': request.args.get('student_id', type=int),
+        'submit_url': url_for('contributions.add_payment'),
+        'info_url_base': url_for('contributions.api_student_info', student_id=0),
+    })
 
 
 @contributions_bp.route('/payments')
 @contributions_access_required
 def payments_list():
-    active_session = AcademicSession.query.filter_by(is_active=True).first()
+    active_session = get_active_session()
     filter_date = request.args.get('date')
     query = ContributionPayment.query.filter_by(session_id=active_session.id if active_session else None)
     if filter_date:
@@ -269,26 +371,41 @@ def payments_list():
             pass
     payments = query.order_by(ContributionPayment.payment_date.desc(), ContributionPayment.created_at.desc()).all()
     unique_dates = db.session.query(ContributionPayment.payment_date).distinct().order_by(ContributionPayment.payment_date.desc()).all()
-    return render_template('contributions/payments_list.html', payments=payments, unique_dates=[d[0] for d in unique_dates], filter_date=filter_date, filter_student=None)
+    return _render({
+        'page': 'payments',
+        'filter_date': filter_date,
+        'unique_dates': [{'value': d[0].strftime('%Y-%m-%d'),
+                          'label': d[0].strftime('%a, %d %b %Y')} for d in unique_dates if d[0]],
+        'payments': [{'id': p.id, 'date': p.payment_date.strftime('%a, %d %b %Y'),
+                      'student_name': p.student.full_name, 'amount': p.amount,
+                      'received_by': p.received_by or '-', 'notes': p.notes or '-',
+                      'detail_url': url_for('contributions.student_detail', student_id=p.student_id),
+                      'delete_url': url_for('contributions.delete_payment', payment_id=p.id)}
+                     for p in payments],
+    })
 
 
 @contributions_bp.route('/payments/<int:payment_id>/delete', methods=['POST'])
 @contributions_access_required
 def delete_payment(payment_id):
-    payment = ContributionPayment.query.get_or_404(payment_id)
+    from utils.branch_scope import require_branch_access
+    payment = db.get_or_404(ContributionPayment, payment_id)
+    require_branch_access(payment.student.branch_id)   # no cross-branch deletes by guessed id
     student_name = payment.student.full_name
     amount = payment.amount
     db.session.delete(payment)
     db.session.commit()
-    flash(f'Deleted payment of ₦{amount:,.0f} from {student_name}', 'success')
-    return redirect(url_for('contributions.payments_list'))
+    return _ok(f'Deleted payment of ₦{amount:,.0f} from {student_name}',
+               url_for('contributions.payments_list'))
 
 
 @contributions_bp.route('/student/<int:student_id>')
 @contributions_access_required
 def student_detail(student_id):
-    student = Student.query.get_or_404(student_id)
-    active_session = AcademicSession.query.filter_by(is_active=True).first()
+    from utils.branch_scope import require_branch_access
+    student = db.get_or_404(Student, student_id)
+    require_branch_access(student.branch_id)   # no cross-branch reads by guessed id
+    active_session = get_active_session()
     max_due = float(ContributionSettings.get('max_due', 20000))
     payments = ContributionPayment.query.filter_by(student_id=student_id, session_id=active_session.id if active_session else None).order_by(ContributionPayment.payment_date.desc()).all()
     total_paid = sum(p.amount for p in payments)
@@ -305,15 +422,25 @@ def student_detail(student_id):
         week_payments = [p for p in payments if week_start <= p.payment_date <= week_end]
         week_total = sum(p.amount for p in week_payments)
         if week_total > 0 or week_start <= date.today():
-            weekly_data.append({'week': week_num, 'start': week_start, 'end': week_end, 'amount': week_total})
-    return render_template('contributions/student_detail.html', student=student, payments=payments, total_paid=total_paid, remaining=remaining, max_due=max_due, status='Paid' if remaining <= 0 else 'Ongoing', weekly_data=weekly_data)
+            weekly_data.append({'week': week_num,
+                                'period': f"{week_start.strftime('%d %b')} - {week_end.strftime('%d %b')}",
+                                'amount': week_total})
+    return _render({
+        'page': 'student_detail',
+        'student': {'id': student.id, 'name': student.full_name},
+        'total_paid': total_paid, 'remaining': remaining, 'max_due': max_due,
+        'status': 'Paid' if remaining <= 0 else 'Ongoing',
+        'payments': [{'date': p.payment_date.strftime('%d %b %Y'), 'amount': p.amount,
+                      'received_by': p.received_by or '-'} for p in payments],
+        'weekly_data': weekly_data,
+    })
 
 
 @contributions_bp.route('/expenses')
 @contributions_access_required
 def expenses_list():
     """View all expenses with financial summary"""
-    active_session = AcademicSession.query.filter_by(is_active=True).first()
+    active_session = get_active_session()
     expenses = ContributionExpense.query.filter_by(session_id=active_session.id if active_session else None).order_by(ContributionExpense.expense_date.desc()).all()
     total_expenses = sum(e.amount for e in expenses)
     
@@ -335,15 +462,18 @@ def expenses_list():
         category_summary[category] = category_summary.get(category, 0) + expense.amount
     
     category_summary = dict(sorted(category_summary.items(), key=lambda x: x[1], reverse=True))
-    
-    return render_template('contributions/expenses_list.html',
-        expenses=expenses,
-        total_expenses=total_expenses,
-        total_collected=total_collected,
-        available_balance=available_balance,
-        expense_rate=expense_rate,
-        category_summary=category_summary if len(category_summary) > 1 else {}
-    )
+
+    return _render({
+        'page': 'expenses',
+        'total_expenses': total_expenses, 'total_collected': total_collected,
+        'available_balance': available_balance, 'expense_rate': expense_rate,
+        'category_summary': ([{'name': k, 'amount': v} for k, v in category_summary.items()]
+                             if len(category_summary) > 1 else []),
+        'expenses': [{'id': e.id, 'date': e.expense_date.strftime('%a, %d %b %Y'),
+                      'description': e.description, 'amount': e.amount, 'notes': e.notes or '-',
+                      'delete_url': url_for('contributions.delete_expense', expense_id=e.id)}
+                     for e in expenses],
+    })
 
 
 
@@ -356,26 +486,29 @@ def add_expense():
             description = request.form.get('description', '').strip()
             amount = float(request.form.get('amount'))
             notes = request.form.get('notes', '').strip()
-            active_session = AcademicSession.query.filter_by(is_active=True).first()
+            active_session = get_active_session()
             expense = ContributionExpense(session_id=active_session.id if active_session else None, expense_date=expense_date, description=description, amount=amount, notes=notes)
             db.session.add(expense)
             db.session.commit()
-            flash(f'Expense of ₦{amount:,.0f} added', 'success')
-            return redirect(url_for('contributions.expenses_list'))
+            return _ok(f'Expense of ₦{amount:,.0f} added', url_for('contributions.expenses_list'))
         except Exception as e:
             db.session.rollback()
-            flash(f'Error: {str(e)}', 'error')
-    return render_template('contributions/add_expense.html', today=date.today().strftime('%Y-%m-%d'))
+            return _err(f'Error: {str(e)}', url_for('contributions.add_expense'))
+    return _render({
+        'page': 'add_expense',
+        'today': date.today().strftime('%Y-%m-%d'),
+        'submit_url': url_for('contributions.add_expense'),
+        'back_url': url_for('contributions.expenses_list'),
+    })
 
 
 @contributions_bp.route('/expenses/<int:expense_id>/delete', methods=['POST'])
 @contributions_access_required
 def delete_expense(expense_id):
-    expense = ContributionExpense.query.get_or_404(expense_id)
+    expense = db.get_or_404(ContributionExpense, expense_id)
     db.session.delete(expense)
     db.session.commit()
-    flash('Expense deleted', 'success')
-    return redirect(url_for('contributions.expenses_list'))
+    return _ok('Expense deleted', url_for('contributions.expenses_list'))
 
 
 @contributions_bp.route('/settings', methods=['GET', 'POST'])
@@ -387,39 +520,46 @@ def settings():
             start_date = request.form.get('start_date', '2025-01-06')
             ContributionSettings.set('max_due', max_due)
             ContributionSettings.set('start_date', start_date)
-            flash('Settings updated', 'success')
+            # Optional: change the access password. Blank = keep the current one.
+            new_code = (request.form.get('access_code') or '').strip()
+            if new_code:
+                ContributionSettings.set('access_code', new_code)
         except Exception as e:
-            flash(f'Error: {str(e)}', 'error')
-        return redirect(url_for('contributions.settings'))
+            return _err(f'Error: {str(e)}', url_for('contributions.settings'))
+        return _ok('Settings updated', url_for('contributions.settings'))
     max_due = ContributionSettings.get('max_due', '20000')
     start_date = ContributionSettings.get('start_date', '2025-01-06')
-    return render_template('contributions/settings.html', max_due=max_due, start_date=start_date)
+    return _render({
+        'page': 'settings', 'max_due': max_due, 'start_date': start_date,
+        'has_custom_code': ContributionSettings.get('access_code') is not None,
+        'submit_url': url_for('contributions.settings'),
+        'back_url': url_for('contributions.dashboard'),
+    })
 
 
 @contributions_bp.route('/report')
 @contributions_access_required
 def report():
-    active_term = Term.query.filter_by(is_active=True).first()
+    active_term = get_active_term()
     sss3_class = SchoolClass.query.filter_by(name='SSS3').first()
-    active_session = AcademicSession.query.filter_by(is_active=True).first()
+    active_session = get_active_session()
     if not active_term or not sss3_class or not active_session:
         flash('Configuration error', 'error')
         return redirect(url_for('contributions.dashboard'))
     max_due = float(ContributionSettings.get('max_due', 20000))
     arms_data = {}
-    sss3_assignments = ClassArmAssignment.query.filter_by(class_id=sss3_class.id, term_id=active_term.id).all()
+    from utils.services.contributions import paid_by_student
+    paid_map = paid_by_student(active_session.id)   # one query for the whole session
+    sss3_assignments = scope_query(ClassArmAssignment.query.filter_by(class_id=sss3_class.id, term_id=active_term.id), ClassArmAssignment).all()
     for assignment in sss3_assignments:
-        arm_name = assignment.arm.name
+        arm_name = assignment.arm_label
         enrollments = StudentEnrollment.query.filter_by(class_arm_assignment_id=assignment.id, is_active=True).all()
         arm_students = []
         arm_total_paid = 0
         arm_fully_paid = 0
         for enrollment in enrollments:
             student = enrollment.student
-            total_paid = db.session.query(func.sum(ContributionPayment.amount)).filter(
-            ContributionPayment.student_id == student.id,
-            ContributionPayment.session_id == active_session.id
-        ).scalar() or 0
+            total_paid = paid_map.get(student.id, 0)
             remaining = max(0, max_due - total_paid)
             if remaining <= 0:
                 arm_fully_paid += 1
@@ -427,7 +567,11 @@ def report():
             arm_students.append({'name': student.full_name, 'total_paid': total_paid, 'remaining': remaining, 'status': 'Paid' if remaining <= 0 else 'Ongoing'})
         arm_students.sort(key=lambda x: x['name'])
         arms_data[arm_name] = {'students': arm_students, 'total_students': len(arm_students), 'total_expected': len(arm_students) * max_due, 'total_paid': arm_total_paid, 'fully_paid': arm_fully_paid}
-    return render_template('contributions/report.html', arms_data=arms_data, max_due=max_due)
+    return _render({
+        'page': 'report', 'max_due': max_due,
+        'arms': [{'name': name, **data} for name, data in sorted(arms_data.items())],
+        'back_url': url_for('contributions.dashboard'),
+    })
 
 
 @contributions_bp.route('/export')
@@ -438,9 +582,9 @@ def export_excel():
         from openpyxl.styles import Font, Alignment, PatternFill
         from io import BytesIO
         from flask import send_file
-        active_term = Term.query.filter_by(is_active=True).first()
+        active_term = get_active_term()
         sss3_class = SchoolClass.query.filter_by(name='SSS3').first()
-        active_session = AcademicSession.query.filter_by(is_active=True).first()
+        active_session = get_active_session()
         max_due = float(ContributionSettings.get('max_due', 20000))
         wb = Workbook()
         ws_students = wb.active
@@ -453,19 +597,18 @@ def export_excel():
             cell.fill = header_fill
             cell.font = header_font
             cell.alignment = Alignment(horizontal='center')
-        sss3_assignments = ClassArmAssignment.query.filter_by(class_id=sss3_class.id, term_id=active_term.id).all()
+        sss3_assignments = scope_query(ClassArmAssignment.query.filter_by(class_id=sss3_class.id, term_id=active_term.id), ClassArmAssignment).all()
         assignment_ids = [a.id for a in sss3_assignments]
         enrollments = StudentEnrollment.query.filter(StudentEnrollment.class_arm_assignment_id.in_(assignment_ids), StudentEnrollment.is_active == True).all()
+        from utils.services.contributions import paid_by_student
+        paid_map = paid_by_student(active_session.id, [e.student_id for e in enrollments])
         students_data = []
         for enrollment in enrollments:
             student = enrollment.student
             assignment = enrollment.class_arm_assignment
-            total_paid = db.session.query(func.sum(ContributionPayment.amount)).filter(
-            ContributionPayment.student_id == student.id,
-            ContributionPayment.session_id == active_session.id
-        ).scalar() or 0
+            total_paid = paid_map.get(student.id, 0)
             remaining = max(0, max_due - total_paid)
-            students_data.append({'name': student.full_name, 'arm': assignment.arm.name, 'max_due': max_due, 'total_paid': total_paid, 'remaining': remaining, 'status': 'Paid' if remaining <= 0 else 'Ongoing'})
+            students_data.append({'name': student.full_name, 'arm': assignment.arm_label, 'max_due': max_due, 'total_paid': total_paid, 'remaining': remaining, 'status': 'Paid' if remaining <= 0 else 'Ongoing'})
         students_data.sort(key=lambda x: (x['arm'], x['name']))
         for i, s in enumerate(students_data, 1):
             ws_students.append([i, s['name'], s['arm'], s['max_due'], s['total_paid'], s['remaining'], s['status']])
@@ -509,8 +652,10 @@ def export_excel():
 @contributions_bp.route('/api/student/<int:student_id>/info')
 @contributions_access_required
 def api_student_info(student_id):
-    student = Student.query.get_or_404(student_id)
-    active_session = AcademicSession.query.filter_by(is_active=True).first()
+    from utils.branch_scope import require_branch_access
+    student = db.get_or_404(Student, student_id)
+    require_branch_access(student.branch_id)   # no cross-branch lookups by guessed id
+    active_session = get_active_session()
     max_due = float(ContributionSettings.get('max_due', 20000))
     total_paid = db.session.query(func.sum(ContributionPayment.amount)).filter(
         ContributionPayment.student_id == student_id,
@@ -544,16 +689,18 @@ def import_excel():
             
             wb = openpyxl.load_workbook(BytesIO(file.read()), data_only=True)
             
-            active_term = Term.query.filter_by(is_active=True).first()
+            active_term = get_active_term()
             sss3_class = SchoolClass.query.filter_by(name='SSS3').first()
             
             if not active_term or not sss3_class:
                 flash('No active term or SSS3 class found', 'error')
                 return redirect(url_for('contributions.import_excel'))
             
-            sss3_assignments = ClassArmAssignment.query.filter_by(
+            # Branch-scoped: an import only matches names against the current
+            # user's own branch roster, so it can't post to other branches.
+            sss3_assignments = scope_query(ClassArmAssignment.query.filter_by(
                 class_id=sss3_class.id, term_id=active_term.id
-            ).all()
+            ), ClassArmAssignment).all()
             assignment_ids = [a.id for a in sss3_assignments]
             enrollments = StudentEnrollment.query.filter(
                 StudentEnrollment.class_arm_assignment_id.in_(assignment_ids),
@@ -669,7 +816,7 @@ def import_excel():
                         skipped_count += 1
                         continue
                 
-                active_sess = AcademicSession.query.filter_by(is_active=True).first()
+                active_sess = get_active_session()
                 payment = ContributionPayment(
                     session_id=active_sess.id if active_sess else None,
                     student_id=db_student_id,
@@ -695,31 +842,42 @@ def import_excel():
             flash(f'Import error: {str(e)}', 'error')
             return redirect(url_for('contributions.import_excel'))
     
-    return render_template('contributions/import_excel.html')
+    return _render({
+        'page': 'import',
+        'submit_url': url_for('contributions.import_excel'),
+        'clear_url': url_for('contributions.clear_all_data'),
+        'back_url': url_for('contributions.dashboard'),
+    })
 
 
 @contributions_bp.route('/clear-all', methods=['POST'])
 @contributions_access_required
 def clear_all_data():
-    """Clear all contribution data"""
+    """Clear all contribution data — admin only (wholesale destructive op)."""
+    from utils.access_control import is_admin
+    if not is_admin():
+        return _err('Only an administrator can clear all contribution data.',
+                    url_for('contributions.import_excel'), status=403)
     try:
-        ContributionPayment.query.delete()
-        ContributionExpense.query.delete()
+        n_pay = ContributionPayment.query.delete()
+        n_exp = ContributionExpense.query.delete()
         db.session.commit()
-        flash('All contribution data cleared', 'success')
+        from utils.audit import log_action
+        log_action('contributions.clear_all',
+                   f'deleted {n_pay} payment(s), {n_exp} expense(s)')
     except Exception as e:
         db.session.rollback()
-        flash(f'Error: {str(e)}', 'error')
-    return redirect(url_for('contributions.import_excel'))
+        return _err(f'Error: {str(e)}', url_for('contributions.import_excel'))
+    return _ok('All contribution data cleared', url_for('contributions.import_excel'))
 
 
 @contributions_bp.route('/defaulters')
 @contributions_access_required
 def defaulters():
     """List students with outstanding balance"""
-    active_term = Term.query.filter_by(is_active=True).first()
+    active_term = get_active_term()
     sss3_class = SchoolClass.query.filter_by(name='SSS3').first()
-    active_session = AcademicSession.query.filter_by(is_active=True).first()
+    active_session = get_active_session()
     
     if not active_term or not sss3_class or not active_session:
         flash('Configuration error', 'error')
@@ -727,7 +885,7 @@ def defaulters():
     
     max_due = float(ContributionSettings.get('max_due', 20000))
     
-    sss3_assignments = ClassArmAssignment.query.filter_by(class_id=sss3_class.id, term_id=active_term.id).all()
+    sss3_assignments = scope_query(ClassArmAssignment.query.filter_by(class_id=sss3_class.id, term_id=active_term.id), ClassArmAssignment).all()
     assignment_ids = [a.id for a in sss3_assignments]
     enrollments = StudentEnrollment.query.filter(
         StudentEnrollment.class_arm_assignment_id.in_(assignment_ids),
@@ -736,16 +894,16 @@ def defaulters():
     
     defaulters_list = []
     total_outstanding = 0
-    
+
+    from utils.services.contributions import paid_by_student
+    paid_map = paid_by_student(active_session.id, [e.student_id for e in enrollments])
+
     for enrollment in enrollments:
         student = enrollment.student
         assignment = enrollment.class_arm_assignment
-        
-        total_paid = db.session.query(func.sum(ContributionPayment.amount)).filter(
-            ContributionPayment.student_id == student.id,
-            ContributionPayment.session_id == active_session.id
-        ).scalar() or 0
-        
+
+        total_paid = paid_map.get(student.id, 0)
+
         remaining = max_due - total_paid
         
         if remaining > 0:
@@ -756,7 +914,7 @@ def defaulters():
             defaulters_list.append({
                 'id': student.id,
                 'name': student.full_name,
-                'arm': assignment.arm.name,
+                'arm': assignment.arm_label,
                 'total_paid': total_paid,
                 'remaining': remaining,
                 'percentage': (total_paid / max_due * 100) if max_due > 0 else 0,
@@ -766,20 +924,28 @@ def defaulters():
     
     defaulters_list.sort(key=lambda x: x['remaining'], reverse=True)
     avg_outstanding = total_outstanding / len(defaulters_list) if defaulters_list else 0
-    
-    return render_template('contributions/defaulters.html',
-        defaulters=defaulters_list,
-        total_outstanding=total_outstanding,
-        avg_outstanding=avg_outstanding,
-        max_due=max_due
-    )
+
+    for s in defaulters_list:
+        s['last_payment'] = s['last_payment'].strftime('%d %b %Y') if s['last_payment'] else 'Never'
+        s['detail_url'] = url_for('contributions.student_detail', student_id=s['id'])
+        s['add_payment_url'] = url_for('contributions.add_payment', student_id=s['id'])
+
+    return _render({
+        'page': 'defaulters',
+        'defaulters': defaulters_list,
+        'total_outstanding': total_outstanding,
+        'avg_outstanding': avg_outstanding,
+        'max_due': max_due,
+        'export_url': url_for('contributions.export_defaulters'),
+        'back_url': url_for('contributions.dashboard'),
+    })
 
 
 @contributions_bp.route('/daily-summary')
 @contributions_access_required
 def daily_summary():
     """Show collections grouped by date"""
-    active_session = AcademicSession.query.filter_by(is_active=True).first()
+    active_session = get_active_session()
     daily_data = db.session.query(
         ContributionPayment.payment_date,
         func.count(ContributionPayment.id).label('count'),
@@ -807,17 +973,26 @@ def daily_summary():
         }
         result.append(day_data)
         total_amount += day_data['amount']
-        
+
         if not best_day or day_data['amount'] > best_day['amount']:
             best_day = day_data
-    
+
     avg_daily = total_amount / len(result) if result else 0
-    
-    return render_template('contributions/daily_summary.html',
-        daily_data=result,
-        avg_daily=avg_daily,
-        best_day=best_day
-    )
+
+    return _render({
+        'page': 'daily_summary',
+        'avg_daily': avg_daily,
+        'days_count': len(result),
+        'best_day': ({'amount': best_day['amount'], 'date_short': best_day['date'].strftime('%d %b')}
+                     if best_day else None),
+        'daily_data': [{'date': d['date'].strftime('%d %b %Y'),
+                        'day': d['date'].strftime('%A'),
+                        'count': d['count'], 'amount': d['amount'],
+                        'collectors': ', '.join(d['collectors']) if d['collectors'] else '-',
+                        'view_url': url_for('contributions.payments_list', date=d['date'].strftime('%Y-%m-%d'))}
+                       for d in result],
+        'back_url': url_for('contributions.dashboard'),
+    })
 
 
 @contributions_bp.route('/export-defaulters')
@@ -830,12 +1005,12 @@ def export_defaulters():
         from io import BytesIO
         from flask import send_file
         
-        active_term = Term.query.filter_by(is_active=True).first()
+        active_term = get_active_term()
         sss3_class = SchoolClass.query.filter_by(name='SSS3').first()
-        active_session = AcademicSession.query.filter_by(is_active=True).first()
+        active_session = get_active_session()
         max_due = float(ContributionSettings.get('max_due', 20000))
         
-        sss3_assignments = ClassArmAssignment.query.filter_by(class_id=sss3_class.id, term_id=active_term.id).all()
+        sss3_assignments = scope_query(ClassArmAssignment.query.filter_by(class_id=sss3_class.id, term_id=active_term.id), ClassArmAssignment).all()
         assignment_ids = [a.id for a in sss3_assignments]
         enrollments = StudentEnrollment.query.filter(
             StudentEnrollment.class_arm_assignment_id.in_(assignment_ids),
@@ -855,15 +1030,14 @@ def export_defaulters():
             cell.fill = header_fill
             cell.font = header_font
         
+        from utils.services.contributions import paid_by_student
+        paid_map = paid_by_student(active_session.id, [e.student_id for e in enrollments])
         idx = 1
         for enrollment in enrollments:
             student = enrollment.student
             assignment = enrollment.class_arm_assignment
-            
-            total_paid = db.session.query(func.sum(ContributionPayment.amount)).filter(
-                ContributionPayment.student_id == student.id,
-                ContributionPayment.session_id == active_session.id
-            ).scalar() or 0
+
+            total_paid = paid_map.get(student.id, 0)
             
             remaining = max_due - total_paid
             
@@ -871,7 +1045,7 @@ def export_defaulters():
                 ws.append([
                     idx,
                     student.full_name,
-                    assignment.arm.name,
+                    assignment.arm_label,
                     total_paid,
                     remaining,
                     f"{(total_paid/max_due*100):.1f}%"
@@ -925,7 +1099,10 @@ def session_history():
                 'net_balance': (total_collected or 0) - expenses
             })
     
-    return render_template('contributions/session_history.html', sessions=session_data)
+    for s in session_data:
+        s['view_url'] = url_for('contributions.view_session', session_id=s['id'])
+    return _render({'page': 'history', 'sessions': session_data,
+                    'back_url': url_for('contributions.dashboard')})
 
 
 @contributions_bp.route('/session/<int:session_id>')
@@ -934,7 +1111,7 @@ def view_session(session_id):
     """View contributions for a specific session"""
     from models import AcademicSession
     
-    session = AcademicSession.query.get_or_404(session_id)
+    session = db.get_or_404(AcademicSession, session_id)
     
     # Get all payments for this session
     payments = ContributionPayment.query.filter_by(session_id=session_id).order_by(
@@ -961,13 +1138,18 @@ def view_session(session_id):
     
     total_collected = sum(p.amount for p in payments)
     total_expenses = sum(e.amount for e in expenses)
-    
-    return render_template('contributions/view_session.html',
-        contrib_session=session,
-        payments=payments,
-        expenses=expenses,
-        student_totals=sorted(student_totals.values(), key=lambda x: x['total'], reverse=True),
-        total_collected=total_collected,
-        total_expenses=total_expenses,
-        net_balance=total_collected - total_expenses
-    )
+    ordered = sorted(student_totals.values(), key=lambda x: x['total'], reverse=True)
+
+    return _render({
+        'page': 'view_session',
+        'session': {'name': session.name, 'is_active': session.is_active},
+        'payments_count': len(payments),
+        'total_collected': total_collected, 'total_expenses': total_expenses,
+        'net_balance': total_collected - total_expenses,
+        'student_totals': [{'name': it['student'].full_name, 'payment_count': it['payment_count'],
+                            'total': it['total']} for it in ordered],
+        'expenses': [{'description': e.description,
+                      'date': e.expense_date.strftime('%d %b %Y'), 'amount': e.amount}
+                     for e in expenses],
+        'back_url': url_for('contributions.session_history'),
+    })

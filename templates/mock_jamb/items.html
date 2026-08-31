@@ -1,0 +1,333 @@
+{% extends "base.html" %}
+{% block title %}Item Analysis — {{ exam.display_name }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('mock_jamb.index') }}">Mock JAMB</a> / <a href="{{ url_for('mock_jamb.view_exam', exam_id=exam.id) }}">{{ exam.display_name }}</a> / <span>Item Analysis</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.ia-kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem;margin-bottom:1.1rem}
+@media(min-width:900px){.ia-kpis{grid-template-columns:repeat(5,1fr)}}
+.ia-kpi{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);padding:.9rem 1rem}
+.ia-kpi .v{font-size:1.5rem;font-weight:800;line-height:1;font-family:var(--font-display)}
+.ia-kpi .l{font-size:.72rem;color:var(--text-secondary);margin-top:.35rem;font-weight:700;text-transform:uppercase;letter-spacing:.03em}
+.ia-kpi .s{font-size:.7rem;color:var(--text-muted);margin-top:.15rem}
+.ia-kpi.blue{border-top:3px solid #2563eb}.ia-kpi.teal{border-top:3px solid #0d9488}
+.ia-kpi.green{border-top:3px solid #047857}.ia-kpi.amber{border-top:3px solid #b45309}
+.ia-kpi.purple{border-top:3px solid #7c3aed}.ia-kpi.red{border-top:3px solid #dc2626}
+.ia-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem;margin-bottom:1rem}
+.ia-note{font-size:.78rem;color:var(--text-muted);margin-top:.6rem;line-height:1.45;border-left:3px solid var(--border-color);padding-left:.6rem}
+.chart-wrap{position:relative;height:240px}
+.band-critical,.band-negative,.band-hard{color:#dc2626;font-weight:700}
+.band-weak,.band-poor{color:#b45309;font-weight:700}
+.band-fair,.band-marginal{color:#0d9488;font-weight:700}
+.band-good,.band-acceptable,.band-ideal{color:#2563eb;font-weight:700}
+.band-strong,.band-excellent,.band-easy{color:#047857;font-weight:700}
+.mastery-cell{display:flex;align-items:center;gap:.5rem;min-width:120px}
+.mbar{flex:1;height:8px;border-radius:5px;background:var(--gray-100);overflow:hidden;min-width:56px}
+.mbar > i{display:block;height:100%;border-radius:5px}
+.sub-row td{background:var(--gray-50);font-size:.8rem}
+.sub-row .stopic{padding-left:1.4rem;color:var(--text-secondary)}
+.flag-chip{display:inline-block;font-size:.68rem;font-weight:700;padding:.1rem .5rem;border-radius:var(--radius-full);margin:.1rem .15rem 0 0}
+.flag-bad{background:rgba(220,38,38,.14);color:#dc2626}
+.flag-warn{background:rgba(180,83,9,.14);color:#b45309}
+.flag-info{background:rgba(107,122,116,.16);color:var(--text-secondary)}
+.item-card{border:1px solid var(--border-color);border-radius:var(--radius-md);padding:.8rem .9rem;margin-bottom:.7rem}
+.item-card.flagged{border-left:4px solid #dc2626}
+.item-q{font-weight:600;font-size:.9rem;margin-bottom:.5rem}
+.item-meta{display:flex;gap:.5rem;flex-wrap:wrap;font-size:.72rem;color:var(--text-muted);margin-bottom:.5rem;align-items:center}
+.item-meta .tag{background:var(--gray-100);border-radius:var(--radius-sm);padding:.05rem .45rem}
+.distractor{display:flex;align-items:center;gap:.5rem;margin-bottom:.28rem;font-size:.8rem}
+.distractor .lt{width:20px;height:20px;border-radius:5px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.72rem;background:var(--gray-100);flex-shrink:0}
+.distractor.key .lt{background:rgba(4,120,87,.16);color:#047857}
+.distractor .dtxt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.distractor .dbar{width:90px;height:7px;border-radius:5px;background:var(--gray-100);overflow:hidden;flex-shrink:0}
+.distractor .dbar > i{display:block;height:100%}
+.distractor .dpct{width:38px;text-align:right;font-variant-numeric:tabular-nums;color:var(--text-secondary);flex-shrink:0}
+.reco-cols{display:grid;grid-template-columns:1fr;gap:1rem}
+@media(min-width:900px){.reco-cols{grid-template-columns:repeat(3,1fr)}}
+.reco-card{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);padding:1rem}
+.reco-card h4{margin:0 0 .6rem;font-size:.95rem;display:flex;align-items:center;gap:.4rem}
+.reco-item{border-left:3px solid var(--border-color);padding:.35rem 0 .55rem .65rem;margin-bottom:.55rem}
+.reco-item .t{font-weight:700;font-size:.82rem}
+.reco-item .x{font-size:.78rem;color:var(--text-secondary);line-height:1.45}
+.reco-positive{border-left-color:#047857}.reco-negative{border-left-color:#dc2626}
+.reco-warning{border-left-color:#b45309}.reco-insight{border-left-color:#2563eb}
+.ia-filter{display:flex;gap:.4rem;flex-wrap:wrap;margin-bottom:.8rem}
+.ia-filter button{font-size:.78rem;padding:.3rem .7rem;border:1px solid var(--border-color);border-radius:var(--radius-full);background:var(--bg-card);cursor:pointer;font-weight:600}
+.ia-filter button.active{background:#0d6a4e;color:#fff;border-color:#0d6a4e}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Item &amp; Topic Analysis — {{ exam.display_name }}</h1>
+        <p class="text-muted text-sm">{{ exam.name }} &middot; {{ exam.exam_date.strftime('%d %B %Y') if exam.exam_date else '' }} &middot; from the <strong>online sitting</strong> — every question, topic and sub-topic</p>
+    </div>
+    <div class="page-header-actions">
+        <a href="{{ urls.export_pdf }}" class="btn btn-danger btn-sm"><i class="fas fa-file-pdf"></i> PDF</a>
+        <a href="{{ urls.export_excel }}" class="btn btn-success btn-sm"><i class="fas fa-file-excel"></i> Excel</a>
+        <a href="{{ urls.export_image }}" class="btn btn-info btn-sm"><i class="fas fa-image"></i> HD image</a>
+        <a href="{{ urls.weakness_pdf }}" class="btn btn-danger btn-sm" title="Printable report of the questions, topics and sub-topics the cohort failed"><i class="fas fa-triangle-exclamation"></i> Failure report</a>
+        <a href="{{ urls.weakness_excel }}" class="btn btn-success btn-sm" title="Failure report as Excel"><i class="fas fa-file-excel"></i> Failure (xlsx)</a>
+        <a href="{{ urls.questions }}" class="btn btn-secondary btn-sm"><i class="fas fa-pen"></i> Questions</a>
+        <a href="{{ urls.deep }}" class="btn btn-primary btn-sm"><i class="fas fa-brain"></i> Deep analytics</a>
+        <a href="{{ urls.mastery }}" class="btn btn-primary btn-sm"><i class="fas fa-chart-simple"></i> Topic mastery</a>
+        <a href="{{ urls.view }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>
+    </div>
+</div>
+
+{% if not data or data.meta.empty %}
+<div class="card"><div class="card-body"><div class="empty-state">
+    <i class="fas fa-microscope"></i><h3>No online sittings yet</h3>
+    <p>Item analysis reads the students' actual answers. Publish the mock for the online sitting and let students sit it — difficulty, discrimination, distractor and topic-mastery analysis unlock automatically.</p>
+    <a href="{{ urls.questions }}" class="btn btn-primary"><i class="fas fa-pen"></i> Manage questions &amp; publish</a>
+</div></div></div>
+{% else %}
+
+<div class="ia-kpis">
+    {% for k in data.kpis %}
+    <div class="ia-kpi {{ k.tone }}"><div class="v">{{ k.value }}</div><div class="l">{{ k.label }}</div><div class="s">{{ k.sub }}</div></div>
+    {% endfor %}
+</div>
+
+<div class="ia-grid">
+    <div class="card"><div class="card-header"><h3>Difficulty spread</h3></div>
+        <div class="card-body"><div class="chart-wrap"><canvas id="diffChart"></canvas></div>
+        <div class="ia-note">Items by difficulty (p-value = share correct). A healthy paper is mostly <em>well-pitched</em> (30–85%). Too-hard items may be mis-keyed or off-syllabus; too-easy ones add little.</div></div>
+    </div>
+    <div class="card"><div class="card-header"><h3>Discrimination quality</h3></div>
+        <div class="card-body"><div class="chart-wrap"><canvas id="discChart"></canvas></div>
+        <div class="ia-note">How well each item separates strong from weak candidates (upper−lower 27% index). <span class="band-negative">Negative</span>/<span class="band-poor">poor</span> items should be reviewed — often a wrong key.</div></div>
+    </div>
+    <div class="card"><div class="card-header"><h3>Weakest topics</h3></div>
+        <div class="card-body"><div class="chart-wrap"><canvas id="topicChart"></canvas></div>
+        <div class="ia-note">Topic mastery (correct of attempted), weakest first — your re-teaching priority list across the cohort.</div></div>
+    </div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header"><h3>Subject mastery <span class="text-muted text-sm">— weakest first</span></h3></div>
+    <div class="table-responsive"><table class="data-table">
+        <thead><tr><th>Subject</th><th>Items</th><th>Responses</th><th>Correct</th><th>Mastery</th><th>Verdict</th></tr></thead>
+        <tbody>
+            {% for s in data.subject_mastery %}
+            <tr>
+                <td><strong>{{ s.subject }}</strong></td>
+                <td>{{ s["items"] }}</td>
+                <td>{{ s.served }}</td>
+                <td>{{ s.correct }}</td>
+                <td><div class="mastery-cell"><div class="mbar"><i style="width:{{ s.mastery or 0 }}%;background:{{ '#dc2626' if s.band in ('critical','weak') else '#0d9488' if s.band=='fair' else '#047857' }};"></i></div><span class="band-{{ s.band }}">{{ s.mastery if s.mastery is not none else '—' }}%</span></div></td>
+                <td><span class="band-{{ s.band }}">{{ s.band_label }}</span></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table></div>
+</div>
+
+<div class="card mb-3">
+    <div class="card-header"><h3>Topic &amp; sub-topic mastery <span class="text-muted text-sm">— weakest first, with sub-topic drill-down</span></h3></div>
+    <div class="table-responsive"><table class="data-table">
+        <thead><tr><th>Subject</th><th>Topic / sub-topic</th><th>Items</th><th>Responses</th><th>Mastery</th><th>Verdict</th></tr></thead>
+        <tbody>
+            {% for t in data.topics %}
+            <tr>
+                <td>{{ t.subject }}</td>
+                <td><strong>{{ t.topic }}</strong></td>
+                <td>{{ t["items"] }}</td>
+                <td>{{ t.served }}</td>
+                <td><div class="mastery-cell"><div class="mbar"><i style="width:{{ t.mastery or 0 }}%;background:{{ '#dc2626' if t.band in ('critical','weak') else '#0d9488' if t.band=='fair' else '#047857' }};"></i></div><span class="band-{{ t.band }}">{{ t.mastery if t.mastery is not none else '—' }}%</span></div></td>
+                <td><span class="band-{{ t.band }}">{{ t.band_label }}</span></td>
+            </tr>
+            {% for s in t.subtopics %}
+            <tr class="sub-row">
+                <td></td>
+                <td class="stopic"><i class="fas fa-turn-up fa-rotate-90" style="opacity:.5;"></i> {{ s.subtopic }}</td>
+                <td>{{ s["items"] }}</td>
+                <td>{{ s.served }}</td>
+                <td><div class="mastery-cell"><div class="mbar"><i style="width:{{ s.mastery or 0 }}%;background:{{ '#dc2626' if s.band in ('critical','weak') else '#0d9488' if s.band=='fair' else '#047857' }};"></i></div><span class="band-{{ s.band }}">{{ s.mastery if s.mastery is not none else '—' }}%</span></div></td>
+                <td><span class="band-{{ s.band }}">{{ s.band_label }}</span></td>
+            </tr>
+            {% endfor %}
+            {% endfor %}
+        </tbody>
+    </table></div>
+    <div class="card-body" style="padding-top:0;"><div class="ia-note">Mastery is correct answers as a share of attempts on tagged questions. Tag every question with a topic and sub-topic in the question manager to sharpen this breakdown.</div></div>
+</div>
+
+{% if data.flagged %}
+<div class="card mb-3">
+    <div class="card-header"><h3 class="band-negative"><i class="fas fa-triangle-exclamation"></i> Items to review <span class="text-muted text-sm">— flawed, too hard/easy, poor discrimination or a mis-keyed option</span></h3></div>
+    <div class="card-body">
+        {% for it in data.flagged %}
+        <div class="item-card flagged">
+            <div class="item-q">{{ it.text | question_html }}</div>
+            <div class="item-meta">
+                <span class="tag">{{ it.subject }}</span>
+                {% if it.topic %}<span class="tag">{{ it.topic }}</span>{% endif %}
+                {% if it.subtopic %}<span class="tag">{{ it.subtopic }}</span>{% endif %}
+                <span>Difficulty <strong class="band-{{ it.diff_band }}">{{ it.p_value if it.p_value is not none else '—' }}%</strong> ({{ it.diff_label }})</span>
+                <span>Discrimination <strong class="band-{{ it.disc_band }}">{{ it.discrimination if it.discrimination is not none else '—' }}</strong> ({{ it.disc_label }})</span>
+                <span>{{ it.served }} served · {{ it.blank }} blank</span>
+                {% for f in it.flags %}<span class="flag-chip flag-{{ f[0] }}">{{ f[1] }}</span>{% endfor %}
+            </div>
+            {% for o in it.distractors %}
+            <div class="distractor {{ 'key' if o.is_correct else '' }}">
+                <span class="lt">{{ o.letter }}</span>
+                <span class="dtxt">{{ o.text }}{% if o.is_correct %} <i class="fas fa-check" style="color:#047857;"></i>{% endif %}</span>
+                <span class="dbar"><i style="width:{{ o.pct or 0 }}%;background:{{ '#047857' if o.is_correct else '#dc2626' if (o.pct or 0) >= 25 else '#94a3b8' }};"></i></span>
+                <span class="dpct">{{ o.pct if o.pct is not none else 0 }}%</span>
+            </div>
+            {% endfor %}
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<div class="card mb-3">
+    <div class="card-header"><h3>All items <span class="text-muted text-sm">— {{ data['items']|length }} question(s) served</span></h3></div>
+    <div class="card-body">
+        <div class="ia-filter" id="iaFilter">
+            <button data-f="all" class="active">All ({{ data['items']|length }})</button>
+            <button data-f="flagged">Needs review ({{ data.flagged|length }})</button>
+            <button data-f="hard">Too hard</button>
+            <button data-f="easy">Too easy</button>
+        </div>
+        <div class="table-responsive"><table class="data-table" id="itemsTable">
+            <thead><tr><th>#</th><th>Subject</th><th>Topic</th><th>Question</th><th>Key</th><th>Served</th><th>Blank</th><th>Difficulty</th><th>Discrim.</th></tr></thead>
+            <tbody>
+                {% for it in data['items'] %}
+                <tr data-flagged="{{ '1' if it.needs_review else '0' }}" data-diff="{{ it.diff_band }}">
+                    <td>{{ loop.index }}</td>
+                    <td>{{ it.subject }}</td>
+                    <td class="text-sm">{{ it.topic }}{% if it.subtopic %} <span class="text-muted">/ {{ it.subtopic }}</span>{% endif %}</td>
+                    <td class="text-sm">{{ it.text|truncate(90) }}</td>
+                    <td><strong>{{ it.correct_option }}</strong></td>
+                    <td>{{ it.served }}</td>
+                    <td>{{ it.blank }}</td>
+                    <td class="band-{{ it.diff_band }}">{{ it.p_value if it.p_value is not none else '—' }}%</td>
+                    <td class="band-{{ it.disc_band }}">{{ it.discrimination if it.discrimination is not none else '—' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table></div>
+        <div id="iaPager" style="display:flex;align-items:center;justify-content:center;flex-wrap:wrap;padding:.7rem;"></div>
+    </div>
+</div>
+
+<h3 style="margin:1.2rem 0 .6rem;">Recommendations</h3>
+<div class="reco-cols">
+    <div class="reco-card"><h4><i class="fas fa-user-graduate" style="color:#2563eb;"></i> Students</h4>
+        {% for r in data.recommendations.students %}
+        <div class="reco-item reco-{{ r.tone }}"><div class="t">{{ r.title }}</div><div class="x">{{ r.text }}</div></div>
+        {% else %}<p class="text-muted text-sm">No student actions flagged.</p>{% endfor %}
+    </div>
+    <div class="reco-card"><h4><i class="fas fa-chalkboard-teacher" style="color:#0d9488;"></i> Teachers</h4>
+        {% for r in data.recommendations.teachers %}
+        <div class="reco-item reco-{{ r.tone }}"><div class="t">{{ r.title }}</div><div class="x">{{ r.text }}</div></div>
+        {% else %}<p class="text-muted text-sm">No teacher actions flagged.</p>{% endfor %}
+    </div>
+    <div class="reco-card"><h4><i class="fas fa-briefcase" style="color:#b45309;"></i> Management</h4>
+        {% for r in data.recommendations.management %}
+        <div class="reco-item reco-{{ r.tone }}"><div class="t">{{ r.title }}</div><div class="x">{{ r.text }}</div></div>
+        {% else %}<p class="text-muted text-sm">No management actions flagged.</p>{% endfor %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% include 'mock_jamb/_mathjax.html' %}
+{% if data and not data.meta.empty %}
+<script nonce="{{ csp_nonce }}" id="ia-data" type="application/json">{{ {'difficulty': data.distribution.difficulty, 'discrimination': data.distribution.discrimination, 'topics': data.topics[:12]}|tojson }}</script>
+<script nonce="{{ csp_nonce }}">
+(function(){
+    // item table: filter + client-side pagination
+    var filter = document.getElementById('iaFilter');
+    var pager = document.getElementById('iaPager');
+    var rows = Array.prototype.slice.call(document.querySelectorAll('#itemsTable tbody tr'));
+    var PER = 25, curFilter = 'all', curPage = 1;
+    function matches(tr, f){
+        return f === 'all' ||
+            (f === 'flagged' && tr.dataset.flagged === '1') ||
+            (f === 'hard' && tr.dataset.diff === 'hard') ||
+            (f === 'easy' && tr.dataset.diff === 'easy');
+    }
+    function render(){
+        var visible = rows.filter(function(tr){ return matches(tr, curFilter); });
+        var pages = Math.max(1, Math.ceil(visible.length / PER));
+        if(curPage > pages) curPage = pages;
+        var start = (curPage - 1) * PER, end = start + PER;
+        rows.forEach(function(tr){ tr.style.display = 'none'; });
+        visible.slice(start, end).forEach(function(tr){ tr.style.display = ''; });
+        if(pager){
+            if(visible.length <= PER){ pager.innerHTML = ''; return; }
+            pager.innerHTML = '<button type="button" class="btn btn-secondary btn-sm" data-p="prev"'
+                + (curPage <= 1 ? ' disabled' : '') + '>&#8249; Prev</button>'
+                + '<span class="text-sm text-muted" style="margin:0 .6rem;">Page ' + curPage + ' of ' + pages
+                + ' · ' + visible.length + ' item(s)</span>'
+                + '<button type="button" class="btn btn-secondary btn-sm" data-p="next"'
+                + (curPage >= pages ? ' disabled' : '') + '>Next &#8250;</button>';
+        }
+    }
+    if(filter){
+        filter.addEventListener('click', function(e){
+            var b = e.target.closest('button'); if(!b) return;
+            filter.querySelectorAll('button').forEach(function(x){ x.classList.remove('active'); });
+            b.classList.add('active');
+            curFilter = b.dataset.f; curPage = 1; render();
+        });
+    }
+    if(pager){
+        pager.addEventListener('click', function(e){
+            var b = e.target.closest('button'); if(!b || b.disabled) return;
+            curPage += (b.dataset.p === 'next') ? 1 : -1; render();
+        });
+    }
+    if(rows.length) render();
+
+    function draw(){
+        if(!window.Chart){ return; }
+        var dataEl = document.getElementById('ia-data');
+        if(!dataEl){ return; }   // node absent after an SPA swap to another page
+        var payload = JSON.parse(dataEl.textContent);
+        var cs = getComputedStyle(document.documentElement);
+        var grid = cs.getPropertyValue('--border-color') || 'rgba(140,140,140,.2)';
+        try{ Chart.defaults.color = cs.getPropertyValue('--text-secondary') || '#667'; }catch(e){}
+        var noLeg = {legend:{display:false}};
+
+        var dd = payload.difficulty || [];
+        var dColors = {hard:'#dc2626', ideal:'#2563eb', easy:'#047857'};
+        var dEl = document.getElementById('diffChart');
+        if(dEl){ new Chart(dEl,{type:'bar',
+            data:{labels:dd.map(function(x){return x.band;}),
+                datasets:[{data:dd.map(function(x){return x.count;}),
+                    backgroundColor:dd.map(function(x){return dColors[x.key]||'#64748b';}),borderRadius:4}]},
+            options:{responsive:true,maintainAspectRatio:false,plugins:noLeg,
+                scales:{y:{beginAtZero:true,grid:{color:grid}},x:{grid:{display:false}}}}}); }
+
+        var disc = payload.discrimination || [];
+        var qColors = {negative:'#dc2626',poor:'#b45309',marginal:'#0d9488',acceptable:'#2563eb',good:'#059669',excellent:'#047857'};
+        var qEl = document.getElementById('discChart');
+        if(qEl){ new Chart(qEl,{type:'bar',
+            data:{labels:disc.map(function(x){return x.band;}),
+                datasets:[{data:disc.map(function(x){return x.count;}),
+                    backgroundColor:disc.map(function(x){return qColors[x.key]||'#64748b';}),borderRadius:4}]},
+            options:{responsive:true,maintainAspectRatio:false,plugins:noLeg,
+                scales:{y:{beginAtZero:true,grid:{color:grid}},x:{grid:{display:false}}}}}); }
+
+        var tp = payload.topics || [];
+        var tColor = function(b){ return (b==='critical'||b==='weak')?'#dc2626':b==='fair'?'#0d9488':'#047857'; };
+        var tEl = document.getElementById('topicChart');
+        if(tEl){ new Chart(tEl,{type:'bar',
+            data:{labels:tp.map(function(x){return x.topic;}),
+                datasets:[{data:tp.map(function(x){return x.mastery;}),
+                    backgroundColor:tp.map(function(x){return tColor(x.band);}),borderRadius:4}]},
+            options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:noLeg,
+                scales:{x:{beginAtZero:true,max:100,grid:{color:grid}},y:{grid:{display:false}}}}}); }
+    }
+    if(document.readyState==='loading'){ document.addEventListener('DOMContentLoaded',draw); } else { draw(); }
+})();
+</script>
+{% endif %}
+{% endblock %}

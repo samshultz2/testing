@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Per-term assessment settings - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('settings.index') }}">Settings</a> / <span>Termly Assessments</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div><h1><i class="fas fa-sliders"></i> Assessment settings by term</h1>
+    <p class="text-muted text-sm">Most terms use your normal assessment maxes. For a peculiar term — e.g. no CBT/OBJ that
+      term, so Theory carries more — give that term its own settings. Terms without custom settings are unchanged.</p></div>
+  <div class="page-header-actions"><a href="{{ url_for('settings.assessments_list') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Default settings</a></div>
+</div>
+<div class="card"><div class="card-body">
+  {% if rows %}
+  <table class="table">
+    <thead><tr><th>Term</th><th>Assessment settings</th><th></th></tr></thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td><strong>{{ r.term.full_name }}</strong></td>
+        <td>{% if r.custom %}<span class="badge badge-info">Custom for this term</span>{% else %}<span class="badge badge-secondary">Using defaults</span>{% endif %}</td>
+        <td style="text-align:right"><a href="{{ url_for('settings.term_assessment_edit', term_id=r.term.id) }}" class="btn btn-sm btn-primary">Configure</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}<div class="empty-state"><i class="fas fa-sliders"></i><p>No terms found.</p></div>{% endif %}
+</div></div>
+{% endblock %}

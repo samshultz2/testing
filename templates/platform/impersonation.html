@@ -1,0 +1,52 @@
+{% extends "platform/_layout.html" %}
+{% block title %}Support sessions{% endblock %}
+{% block heading %}Support sessions{% endblock %}
+{% block subheading %}Every impersonation grant — who, which school, why, and when. Live sessions can be ended here.{% endblock %}
+
+{% block head %}
+<style>
+  .st{font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px}
+  .st.live{color:var(--ok);background:var(--ok-soft)}
+  .st.ended{color:var(--faint);background:var(--line)}
+  .st.expired{color:var(--warn);background:var(--warn-soft)}
+  td .reason{color:var(--soft)}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="panel">
+  {% if rows %}
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Started</th><th>School</th><th>Operator</th><th>Reason</th><th>Expires</th><th>Status</th><th></th></tr></thead>
+      <tbody>
+        {% for g, live in rows %}
+        <tr>
+          <td class="muted">{{ g.created_at.strftime('%d %b %Y, %H:%M') if g.created_at else '—' }}</td>
+          <td><a href="{{ url_for('platform.tenant_profile', subdomain=g.subdomain) }}">{{ g.subdomain }}</a></td>
+          <td>{{ g.actor }}</td>
+          <td class="reason">{{ g.reason or '—' }}</td>
+          <td class="muted">{{ g.expires_at.strftime('%H:%M, %d %b') if g.expires_at else '—' }}</td>
+          <td>
+            {% if live %}<span class="st live"><i class="fas fa-circle"></i> Live</span>
+            {% elif g.ended_at %}<span class="st ended">Ended</span>
+            {% else %}<span class="st expired">Expired</span>{% endif %}
+          </td>
+          <td>
+            {% if live %}
+            <form class="inline" method="post" action="{{ url_for('platform.impersonation_end', grant_id=g.id) }}">
+              <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+              <button class="btn sm danger"><i class="fas fa-power-off"></i> End</button>
+            </form>
+            {% endif %}
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="empty"><i class="fas fa-user-secret"></i>No support sessions yet. Start one from a school's profile.</div>
+  {% endif %}
+</div>
+{% endblock %}

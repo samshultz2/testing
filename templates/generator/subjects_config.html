@@ -21,9 +21,18 @@
 {% block content %}
 <div class="page-header">
     <h1><i class="fas fa-book"></i> {{ level|upper }} Subjects</h1>
-    <a href="{{ url_for('generator.add_gen_subject') }}" class="btn btn-primary">
-        <i class="fas fa-plus"></i> Add Subject
-    </a>
+    <div style="display:flex;gap:.5rem;flex-wrap:wrap">
+        <form method="POST" action="{{ url_for('generator.sync_gen_subjects') }}" style="display:inline"
+              data-confirm="Import academic subjects not already listed here into {{ level|upper }}? This only adds subjects; it never changes or removes existing ones, their periods, or teachers.">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-secondary" title="Add academic subjects that aren't here yet (one-way, non-destructive)">
+                <i class="fas fa-sync"></i> Sync from Academic Subjects
+            </button>
+        </form>
+        <a href="{{ url_for('generator.add_gen_subject') }}" class="btn btn-primary">
+            <i class="fas fa-plus"></i> Add Subject
+        </a>
+    </div>
 </div>
 
 <p class="text-muted mb-3">Manage {{ level|upper }} subjects. These are separate from {{ 'SSS' if level == 'jss' else 'JSS' }} subjects.</p>
@@ -68,12 +77,17 @@
                     </td>
                     <td>
                         <div class="subject-actions">
-                            <a href="{{ url_for('generator.edit_gen_subject', subject_id=item.subject.id) }}" 
+                            <a href="{{ url_for('generator.subject_rules', subject_id=item.subject.id) }}"
+                               class="btn btn-sm btn-outline-primary" title="Rules (periods, first/last period, doubles, per-class)">
+                                <i class="fas fa-sliders"></i> Rules
+                            </a>
+                            <a href="{{ url_for('generator.edit_gen_subject', subject_id=item.subject.id) }}"
                                class="btn btn-sm btn-outline-primary" title="Edit">
                                 <i class="fas fa-edit"></i>
                             </a>
                             <form method="POST" action="{{ url_for('generator.delete_gen_subject', subject_id=item.subject.id) }}" 
-                                  style="display:inline" onsubmit="return confirm('Delete {{ item.subject.name }}?')">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                                  style="display:inline" data-confirm="Delete {{ item.subject.name }}?">
                                 <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
                                     <i class="fas fa-trash"></i>
                                 </button>
@@ -96,6 +110,7 @@
         <p class="text-muted">Configure how many periods each subject should have per week for timetable generation.</p>
         
         <form method="POST" action="{{ url_for('generator.save_subjects_config') }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <div class="table-responsive">
                 <table class="data-table">
                     <thead>
@@ -124,7 +139,7 @@
                             <td style="text-align:center">
                                 <input type="checkbox" name="double_{{ item.subject.id }}" 
                                        {% if item.config and item.config.needs_double_period %}checked{% endif %}
-                                       onchange="toggleDouble({{ item.subject.id }}, this.checked)">
+                                       data-call="toggleDouble" data-args="{{ item.subject.id }}|this.checked" data-on="change">
                             </td>
                             <td>
                                 <input type="number" name="double_count_{{ item.subject.id }}" 
@@ -163,7 +178,7 @@
     </div>
 </div>
 
-<script>
+<script nonce="{{ csp_nonce }}">
 function toggleDouble(id, enabled) {
     var el = document.getElementById('dc_' + id);
     el.disabled = !enabled;

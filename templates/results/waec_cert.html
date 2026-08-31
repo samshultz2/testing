@@ -1,0 +1,360 @@
+{% extends "base.html" %}
+{% block title %}WAEC Result Generator{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('results.index') }}">Results</a>
+  <a href="{{ url_for('results.waec_list') }}">WAEC</a> <span>Result Generator</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+  .wc-wrap{max-width:1280px;margin:0 auto;padding:2px 2px 40px}
+  .wc-pick{max-width:640px;margin:0 auto}
+  .wc-pick .card{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);
+    box-shadow:var(--shadow-xs);padding:22px}
+  .wc-pick h1{font-size:1.3rem;font-weight:800;margin:0 0 4px;color:var(--text-primary)}
+  .wc-pick .sub{color:var(--text-muted);font-size:.9rem;margin-bottom:16px}
+  .wc-pick input[type=search]{width:100%;padding:11px 14px;border:1px solid var(--border-color);
+    border-radius:var(--radius-md);background:var(--bg-body);color:var(--text-primary);font-size:.95rem}
+  .wc-slist{list-style:none;margin:14px 0 0;padding:0;display:grid;gap:8px}
+  .wc-slist a{display:flex;justify-content:space-between;align-items:center;padding:11px 14px;border:1px solid var(--border-color);
+    border-radius:var(--radius-md);text-decoration:none;color:var(--text-primary);font-weight:600;font-size:.92rem}
+  .wc-slist a:hover{border-color:var(--primary);background:var(--primary-light)}
+  .wc-slist .id{color:var(--text-muted);font-weight:500;font-size:.82rem}
+
+  .wc-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:0 0 16px}
+  .wc-head h1{margin:0;font-size:1.25rem;font-weight:800;color:var(--text-primary)}
+  .wc-head .who{color:var(--text-muted);font-weight:600;font-size:.9rem}
+  .wc-head select{padding:8px 12px;border:1px solid var(--border-color);border-radius:var(--radius-md);
+    background:var(--bg-card);color:var(--text-primary);font-weight:600;margin-left:auto}
+
+  .wc-grid{display:grid;grid-template-columns:380px 1fr;gap:20px;align-items:start}
+  @media(max-width:960px){ .wc-grid{grid-template-columns:1fr} }
+  .wc-panel{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);
+    box-shadow:var(--shadow-xs);overflow:hidden}
+  .wc-panel h3{font-size:.72rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);
+    margin:0;padding:12px 16px;border-bottom:1px solid var(--border-light);background:var(--bg-body)}
+  .wc-sec{padding:14px 16px;border-bottom:1px solid var(--border-light)}
+  .wc-sec:last-child{border-bottom:0}
+
+  .wc-tpls{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .wc-tpl{cursor:pointer;border:1.5px solid var(--border-color);border-radius:var(--radius-md);padding:11px 12px;
+    display:block;transition:border-color .12s,box-shadow .12s}
+  .wc-tpl:hover{border-color:var(--primary-light)}
+  .wc-tpl.on{border-color:var(--primary);box-shadow:0 0 0 3px color-mix(in srgb,var(--primary) 15%,transparent)}
+  .wc-tpl input{position:absolute;opacity:0}
+  .wc-tpl .nm{font-weight:700;font-size:.86rem;color:var(--text-primary)}
+  .wc-tpl .ds{font-size:.72rem;color:var(--text-muted);margin-top:2px;line-height:1.3}
+  .wc-tpl .or{font-size:.65rem;color:var(--primary);font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+
+  .wc-presets{display:flex;flex-wrap:wrap;gap:7px}
+  .wc-presets button{border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-secondary);
+    font-weight:600;font-size:.8rem;padding:6px 12px;border-radius:var(--radius-full);cursor:pointer}
+  .wc-presets button:hover{border-color:var(--primary);color:var(--primary)}
+
+  .wc-grp{margin-bottom:12px}
+  .wc-grp:last-child{margin-bottom:0}
+  .wc-grp .gl{font-size:.72rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--text-muted);margin:0 0 6px}
+  .wc-opt{display:flex;align-items:center;gap:9px;padding:5px 0;font-size:.88rem;color:var(--text-primary)}
+  .wc-opt input{width:16px;height:16px;accent-color:var(--primary);flex:0 0 auto}
+  .wc-opt.disabled{opacity:.45}
+  .wc-opt .cfg{margin-left:auto;display:flex;gap:6px}
+  .wc-opt select,.wc-opt input[type=text]{font-size:.78rem;padding:3px 7px;border:1px solid var(--border-color);
+    border-radius:6px;background:var(--bg-body);color:var(--text-primary)}
+
+  .wc-warn{background:color-mix(in srgb,var(--warning) 12%,transparent);border:1px solid color-mix(in srgb,var(--warning) 35%,transparent);
+    color:var(--text-primary);border-radius:var(--radius-md);padding:10px 12px;font-size:.82rem;margin:0 16px 14px}
+  .wc-warn ul{margin:4px 0 0;padding-left:18px} .wc-warn li{margin:2px 0}
+
+  .wc-preview{position:sticky;top:12px}
+  .wc-pv-bar{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border-light);background:var(--bg-body);flex-wrap:wrap}
+  .wc-pv-bar .zoom{display:flex;gap:4px;margin-left:auto}
+  .wc-pv-bar button{border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-secondary);
+    width:30px;height:30px;border-radius:8px;cursor:pointer;font-size:.85rem}
+  .wc-pv-bar button:hover{border-color:var(--primary);color:var(--primary)}
+  .wc-stage{background:repeating-conic-gradient(var(--border-light) 0% 25%, transparent 0% 50%) 0 0/18px 18px, var(--bg-body);
+    padding:20px;min-height:420px;max-height:75vh;overflow:auto;display:flex;align-items:flex-start;justify-content:center}
+  .wc-stage img{max-width:100%;box-shadow:var(--shadow-lg);border-radius:2px;background:#fff;transition:width .12s}
+  .wc-spin{color:var(--text-muted);font-size:.85rem;padding:40px}
+  .wc-actions{display:flex;gap:10px;padding:14px;flex-wrap:wrap;border-top:1px solid var(--border-light)}
+  .wc-actions .btn{flex:1;min-width:120px;text-align:center}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:10px 16px;border-radius:var(--radius-md);
+    font-weight:700;font-size:.9rem;text-decoration:none;cursor:pointer;border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-primary)}
+  .btn.primary{background:var(--primary);color:#fff;border-color:var(--primary)}
+  .btn:hover{filter:brightness(.97)}
+</style>
+{% endblock %}
+
+{% block content %}
+{% if not student %}
+<div class="wc-wrap wc-pick">
+  <div class="card">
+    <h1><i class="fas fa-id-card" style="color:var(--primary)"></i> WAEC Result Generator</h1>
+    <div class="sub">Choose a student who has WAEC results to design and download their result.</div>
+    <form method="get" action="{{ url_for('results.waec_cert_generator') }}" id="wcPickForm">
+      <input type="search" name="q" id="wcQ" value="{{ q or '' }}" placeholder="Search students by name or ID…" autofocus autocomplete="off">
+    </form>
+    <ul class="wc-slist" id="wcList">
+      {% for s in students %}
+      <li><a href="{{ url_for('results.waec_cert_generator', student_id=s.id) }}">
+        <span>{{ s.full_name }}</span><span class="id">{{ s.student_id }}</span></a></li>
+      {% endfor %}
+    </ul>
+    <p class="sub" id="wcEmpty" style="margin-top:14px;{% if students or not q %}display:none{% endif %}">No students with WAEC results match “<span id="wcEmptyQ">{{ q }}</span>”.</p>
+  </div>
+</div>
+<script nonce="{{ csp_nonce }}">
+  (function () {
+    var input = document.getElementById('wcQ'),
+        list = document.getElementById('wcList'),
+        empty = document.getElementById('wcEmpty'),
+        emptyQ = document.getElementById('wcEmptyQ'),
+        form = document.getElementById('wcPickForm'),
+        base = {{ url_for('results.waec_cert_generator') | tojson }},
+        timer = null, seq = 0;
+    if (!input) return;
+    form.addEventListener('submit', function (e) { e.preventDefault(); });   // live — no reload
+    function render(students, q) {
+      list.innerHTML = '';
+      students.forEach(function (s) {
+        var li = document.createElement('li'), a = document.createElement('a');
+        a.href = s.url;
+        var n = document.createElement('span'); n.textContent = s.full_name;
+        var id = document.createElement('span'); id.className = 'id'; id.textContent = s.student_id;
+        a.appendChild(n); a.appendChild(id); li.appendChild(a); list.appendChild(li);
+      });
+      if (students.length === 0 && q) { emptyQ.textContent = q; empty.style.display = ''; }
+      else { empty.style.display = 'none'; }
+    }
+    function run() {
+      var q = input.value.trim(), mine = ++seq;
+      fetch(base + '?q=' + encodeURIComponent(q), { headers: { 'X-Requested-With': 'fetch', Accept: 'application/json' } })
+        .then(function (r) { return r.json(); })
+        .then(function (d) { if (mine === seq) render(d.students || [], q); })
+        .catch(function () {});
+    }
+    input.addEventListener('input', function () { clearTimeout(timer); timer = setTimeout(run, 200); });
+  })();
+</script>
+{% else %}
+<div class="wc-wrap" id="wcApp"
+     data-preview="{{ preview_url }}" data-generate="{{ generate_url }}"
+     data-student="{{ student.id }}" data-year="{{ year }}">
+  <div class="wc-head">
+    <h1><i class="fas fa-id-card" style="color:var(--primary)"></i> {{ student.full_name }}</h1>
+    <span class="who">WAEC Result Generator</span>
+    <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <a class="btn" style="padding:8px 12px;font-size:.82rem" href="{{ manage_url }}"><i class="fas fa-layer-group"></i> Templates</a>
+      <a class="btn" style="padding:8px 12px;font-size:.82rem" href="{{ bulk_url }}"><i class="fas fa-file-zipper"></i> Bulk</a>
+      <form method="get" action="{{ url_for('results.waec_cert_generator') }}">
+        <input type="hidden" name="student_id" value="{{ student.id }}">
+        <select name="year" onchange="this.form.submit()" aria-label="Exam year" style="margin-left:0">
+          {% for y in years %}<option value="{{ y }}" {{ 'selected' if y == year }}>WAEC {{ y }}</option>{% endfor %}
+        </select>
+      </form>
+    </div>
+  </div>
+  {% if recommended %}
+  <div style="background:var(--primary-light);border:1px solid color-mix(in srgb,var(--primary) 30%,transparent);
+       border-radius:var(--radius-md);padding:9px 14px;font-size:.85rem;color:var(--text-primary);margin-bottom:14px">
+    <i class="fas fa-wand-magic-sparkles" style="color:var(--primary)"></i>
+    Using the assigned template <strong>{{ recommended }}</strong> for this year/branch — you can change it below.
+  </div>
+  {% endif %}
+
+  {% if not year %}
+  <div class="wc-panel"><div class="wc-sec">This student has no WAEC results recorded.</div></div>
+  {% else %}
+  <div class="wc-grid">
+    <!-- CONFIGURATION -->
+    <div class="wc-panel">
+      <h3>Configuration</h3>
+      <div class="wc-sec">
+        <div class="gl" style="font-size:.72rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Template</div>
+        <div class="wc-tpls">
+          {% for t in templates %}
+          <label class="wc-tpl {{ 'on' if t.key == default_template }}" data-tpl="{{ t.key }}">
+            <input type="radio" name="template" value="{{ t.key }}" {{ 'checked' if t.key == default_template }}>
+            <div class="nm">{{ t.name }}</div>
+            <div class="ds">{{ t.desc }}</div>
+            {% if t.landscape %}<div class="or">Landscape</div>{% endif %}
+          </label>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="wc-sec">
+        <div class="gl" style="font-size:.72rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Quick presets</div>
+        <div class="wc-presets">
+          {% for p in presets %}<button type="button" class="wc-preset" data-keys='{{ p["keys"]|tojson }}'>{{ p.label }}</button>{% endfor %}
+          <button type="button" class="wc-preset" data-all="1">Everything available</button>
+        </div>
+        <form method="post" action="{{ save_preset_url }}" id="savePreset" style="display:flex;gap:6px;margin-top:9px">
+          <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+          <input type="hidden" name="c" id="spC">
+          <input type="text" name="name" placeholder="Save current as preset…"
+                 style="flex:1;padding:6px 10px;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-body);color:var(--text-primary);font-size:.8rem">
+          <button type="submit" class="btn" style="padding:6px 12px;font-size:.8rem"><i class="fas fa-bookmark"></i> Save</button>
+        </form>
+      </div>
+      <div class="wc-sec" style="max-height:none">
+        <div class="gl" style="font-size:.72rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Included information</div>
+        {% for group, items in groups %}
+        <div class="wc-grp">
+          <div class="gl">{{ group }}</div>
+          {% for c in items %}
+          <label class="wc-opt {{ 'disabled' if not c.available }}" title="{{ '' if c.available else 'No data available for this student' }}">
+            <input type="checkbox" class="wc-c" data-key="{{ c.key }}"
+                   {{ 'checked' if show.get(c.key) }} {{ 'disabled' if not c.available }}>
+            <span>{{ c.label }}</span>
+            {% if c.config and c.key == 'student_photo' %}
+            <span class="cfg">
+              <select class="wc-cfg" data-key="student_photo" data-field="size">
+                <option value="small">S</option><option value="medium" selected>M</option><option value="large">L</option>
+              </select>
+            </span>
+            {% elif c.config and c.key == 'footer_custom' %}
+            <span class="cfg"><input type="text" class="wc-cfg" data-key="footer_custom" data-field="text" placeholder="Footer text" style="width:120px"></span>
+            {% endif %}
+          </label>
+          {% endfor %}
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+
+    <!-- LIVE PREVIEW -->
+    <div class="wc-panel wc-preview">
+      <h3>Live preview</h3>
+      {% if warnings %}
+      <div class="wc-warn" id="wcWarn"><i class="fas fa-triangle-exclamation"></i> Please note:
+        <ul>{% for w in warnings %}<li>{{ w }}</li>{% endfor %}</ul></div>
+      {% endif %}
+      <div class="wc-pv-bar">
+        <span class="who" style="font-size:.8rem;color:var(--text-muted)">Preview updates as you change settings</span>
+        <span class="zoom">
+          <button type="button" id="zOut" title="Zoom out">−</button>
+          <button type="button" id="zFit" title="Fit">⤢</button>
+          <button type="button" id="zIn" title="Zoom in">+</button>
+        </span>
+      </div>
+      <div class="wc-stage" id="wcStage">
+        <div class="wc-spin" id="wcSpin"><i class="fas fa-spinner fa-spin"></i> Rendering…</div>
+        <img id="wcImg" alt="Result preview" style="display:none">
+      </div>
+      <form class="wc-actions" id="wcGen" method="post" action="{{ generate_url }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <input type="hidden" name="student_id" value="{{ student.id }}">
+        <input type="hidden" name="year" value="{{ year }}">
+        <input type="hidden" name="template" id="genTpl" value="{{ default_template }}">
+        <input type="hidden" name="c" id="genC" value="">
+        <input type="hidden" name="cfg" id="genCfg" value="{}">
+        <input type="hidden" name="format" id="genFmt" value="pdf">
+        <button class="btn primary" type="submit" data-fmt="pdf"><i class="fas fa-file-pdf"></i> PDF</button>
+        <button class="btn" type="submit" data-fmt="png"><i class="fas fa-image"></i> PNG</button>
+        <button class="btn" type="submit" data-fmt="jpg"><i class="fas fa-image"></i> JPEG</button>
+      </form>
+    </div>
+  </div>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if student and year %}
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var app = document.getElementById('wcApp');
+  if (!app) return;
+  var previewUrl = app.dataset.preview;
+  var img = document.getElementById('wcImg'), spin = document.getElementById('wcSpin');
+  var zoom = 1, timer = null;
+
+  function enabledKeys() {
+    return Array.from(document.querySelectorAll('.wc-c'))
+      .filter(function (c) { return c.checked && !c.disabled; })
+      .map(function (c) { return c.dataset.key; });
+  }
+  function cfg() {
+    var out = {};
+    document.querySelectorAll('.wc-cfg').forEach(function (el) {
+      var k = el.dataset.key, f = el.dataset.field, v = el.value;
+      if (v === '' || v == null) return;
+      (out[k] = out[k] || {})[f] = v;
+    });
+    return out;
+  }
+  function template() {
+    var r = document.querySelector('input[name="template"]:checked');
+    return r ? r.value : 'classic';
+  }
+  function syncGen() {
+    document.getElementById('genTpl').value = template();
+    document.getElementById('genC').value = enabledKeys().join(',');
+    document.getElementById('genCfg').value = JSON.stringify(cfg());
+  }
+  function refresh() {
+    syncGen();
+    var qs = new URLSearchParams({ template: template(), c: enabledKeys().join(','),
+      cfg: JSON.stringify(cfg()), _t: Date.now() });
+    spin.style.display = 'block';
+    var probe = new Image();
+    probe.onload = function () {
+      img.src = probe.src; img.style.display = 'block'; spin.style.display = 'none'; applyZoom();
+    };
+    probe.onerror = function () { spin.textContent = 'Could not render preview.'; };
+    probe.src = previewUrl + (previewUrl.indexOf('?') < 0 ? '?' : '&') + qs.toString();
+  }
+  function debounced() { clearTimeout(timer); timer = setTimeout(refresh, 220); }
+
+  function applyZoom() {
+    if (zoom <= 0) { img.style.width = '100%'; }
+    else { img.style.width = Math.round(zoom * 100) + '%'; }
+  }
+  document.getElementById('zIn').addEventListener('click', function () { zoom = (zoom <= 0 ? 1 : zoom) + 0.2; applyZoom(); });
+  document.getElementById('zOut').addEventListener('click', function () { zoom = Math.max(0.4, (zoom <= 0 ? 1 : zoom) - 0.2); applyZoom(); });
+  document.getElementById('zFit').addEventListener('click', function () { zoom = 0; applyZoom(); });
+
+  // component toggles / template / config -> live refresh
+  document.querySelectorAll('.wc-c, .wc-cfg').forEach(function (el) {
+    el.addEventListener('change', debounced);
+  });
+  document.querySelectorAll('input[name="template"]').forEach(function (r) {
+    r.addEventListener('change', function () {
+      document.querySelectorAll('.wc-tpl').forEach(function (l) {
+        l.classList.toggle('on', l.dataset.tpl === template());
+      });
+      debounced();
+    });
+  });
+  // presets — apply client-side by ticking the matching components, then refresh
+  document.querySelectorAll('.wc-preset').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var keys = null;
+      if (b.dataset.all) {
+        document.querySelectorAll('.wc-c').forEach(function (c) { if (!c.disabled) c.checked = true; });
+      } else {
+        try { keys = JSON.parse(b.dataset.keys || '[]'); } catch (e) { keys = []; }
+        var set = {}; keys.forEach(function (k) { set[k] = true; });
+        document.querySelectorAll('.wc-c').forEach(function (c) {
+          c.checked = !c.disabled && !!set[c.dataset.key];
+        });
+      }
+      refresh();
+    });
+  });
+  // keep the "save preset" hidden field in sync with the current selection
+  var sp = document.getElementById('savePreset');
+  if (sp) sp.addEventListener('submit', function () {
+    document.getElementById('spC').value = enabledKeys().join(',');
+  });
+  // format buttons set the hidden format then submit
+  document.querySelectorAll('#wcGen [data-fmt]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      document.getElementById('genFmt').value = b.dataset.fmt;
+      syncGen();
+    });
+  });
+
+  refresh();
+})();
+</script>
+{% endif %}
+{% endblock %}

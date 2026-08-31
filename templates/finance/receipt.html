@@ -16,17 +16,30 @@
 .r-amount .big{font-size:1.8rem;font-weight:800;font-family:var(--font-display);color:var(--success)}
 .r-foot{display:flex;justify-content:space-between;font-size:.8rem;color:var(--text-muted);padding-top:1rem;margin-top:.5rem}
 @media print{
-    .sidebar,.topbar,.page-header,.breadcrumb,.no-print,.sidebar-overlay{display:none !important}
-    .main-content,.content-area,body{margin:0 !important;padding:0 !important;background:#fff !important}
-    .receipt{border:none;box-shadow:none;max-width:100%}
+    *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .sidebar,.top-header,.topbar,.bottom-nav,.page-header,.breadcrumb,.no-print,.sidebar-overlay{display:none !important}
+    .main-content,.content-area,body{margin:0 !important;padding:0 !important;width:100% !important;background:#fff !important}
+    .page-content{padding:0 !important}
+    .receipt{border:1px solid #cbd5e1;box-shadow:none;max-width:520px;margin:8mm auto;break-inside:avoid}
+    .receipt .r-title{background:#f1f5f9 !important}
 }
+/* window.print() is unreliable on mobile/PWA, so only offer the in-page Print
+   button on wider screens; phones use Download PDF (then print/share the file). */
+.print-desktop{display:none}
+@media(min-width:768px){.print-desktop{display:inline-flex}}
 </style>
 {% endblock %}
 {% block content %}
 <div class="page-header no-print">
     <h1>Receipt</h1>
     <div class="page-header-actions">
-        <button onclick="window.print()" class="btn btn-primary"><i class="fas fa-print"></i> Print</button>
+        <a href="{{ url_for('finance.receipt_pdf', payment_id=payment.id) }}" class="btn btn-primary"><i class="fas fa-file-pdf"></i> Download PDF</a>
+        <button data-print class="btn btn-secondary print-desktop"><i class="fas fa-print"></i> Print</button>
+        {% set pc = payment.student.parent_contacts.filter_by(is_primary=True).first() or payment.student.parent_contacts.first() %}
+        {% if pc and pc.phone_number %}
+        {% set wamsg = 'Receipt ' ~ payment.receipt_no ~ ': ' ~ payment.student.full_name ~ ' — ' ~ (payment.amount|naira) ~ ' paid for ' ~ payment.term.full_name ~ '. Outstanding balance: ' ~ (bill.balance|naira) ~ '. — ' ~ school.name %}
+        <a href="https://wa.me/{{ pc.phone_number|wa_intl }}?text={{ wamsg|urlencode }}" target="_blank" rel="noopener" class="btn btn-success"><i class="fab fa-whatsapp"></i> Send to parent</a>
+        {% endif %}
         <a href="{{ url_for('finance.edit_payment', payment_id=payment.id) }}" class="btn btn-secondary"><i class="fas fa-edit"></i> Edit</a>
         <a href="{{ url_for('finance.record_payment', term_id=payment.term_id) }}" class="btn btn-secondary"><i class="fas fa-plus"></i> New Payment</a>
     </div>
@@ -35,8 +48,12 @@
 <div class="receipt">
     <div class="r-head">
         <h2>{{ school.name }}</h2>
+        {% set br = payment.student.branch if payment.student else None %}
+        {% if br %}<div class="branch-name" style="font-weight:600;">{{ br.name }} Branch</div>{% endif %}
         {% if school.motto %}<div class="motto">{{ school.motto }}</div>{% endif %}
-        {% if school.address %}<div class="addr">{{ school.address }}{% if school.phone %} · {{ school.phone }}{% endif %}</div>{% endif %}
+        {% set addr = (br.address if br and br.address else school.address) %}
+        {% set phone = (br.phone if br and br.phone else school.phone) %}
+        {% if addr %}<div class="addr">{{ addr }}{% if phone %} · {{ phone }}{% endif %}</div>{% endif %}
     </div>
     <div class="r-title">Fee Payment Receipt</div>
     <div class="r-body">

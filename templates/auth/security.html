@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Security — {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Security</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <div><h1>Security</h1>
+        <p class="text-muted text-sm">Manage two-factor authentication for your account.</p></div>
+</div>
+
+<div class="card" style="max-width:560px;">
+    <div class="card-header">
+        <h3><i class="fas fa-shield-halved"></i> Two-factor authentication</h3>
+        {% if user.mfa_enabled %}<span class="badge badge-success"><i class="fas fa-check"></i> On</span>
+        {% else %}<span class="badge badge-warning">Off</span>{% endif %}
+    </div>
+    <div class="card-body">
+        {% if user.mfa_enabled %}
+        <p class="text-muted text-sm">A code from your authenticator app is required each time you sign in.
+            Keep your backup codes somewhere safe in case you lose your phone.</p>
+        <div class="d-flex gap-2 flex-wrap mt-3">
+            <form method="POST" action="{{ url_for('auth.mfa_backup_codes') }}" class="d-flex gap-2 align-end">
+                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                <div class="form-group mb-0"><label class="form-label">Password</label>
+                    <input type="password" name="password" class="form-control" required autocomplete="current-password" placeholder="Your password" style="max-width:200px;"></div>
+                <button type="submit" class="btn btn-secondary"><i class="fas fa-rotate"></i> New backup codes</button>
+            </form>
+        </div>
+        <hr style="margin:1.2rem 0;">
+        <form method="POST" action="{{ url_for('auth.mfa_disable') }}" class="d-flex gap-2 align-end"
+              data-confirm="Turn off two-factor authentication for your account?">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group mb-0"><label class="form-label">Password</label>
+                <input type="password" name="password" class="form-control" required autocomplete="current-password" placeholder="Your password" style="max-width:200px;"></div>
+            <button type="submit" class="btn btn-danger"><i class="fas fa-shield-xmark"></i> Turn off 2FA</button>
+        </form>
+        {% else %}
+        <p class="text-muted text-sm">Add a second step at sign-in using an authenticator app
+            (Google Authenticator, Authy, 1Password, …). Even if your password is stolen, your
+            account stays protected.</p>
+        <a href="{{ url_for('auth.mfa_setup') }}" class="btn btn-primary mt-2"><i class="fas fa-shield-halved"></i> Enable 2FA</a>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

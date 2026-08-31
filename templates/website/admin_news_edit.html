@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Edit post - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('website_admin.index') }}">Website Builder</a> / <a href="{{ url_for('website_admin.news') }}">News</a> / <span>{{ p.title }}</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div><h1><i class="fas fa-pen"></i> Edit post</h1><p class="text-muted text-sm">/site/news/{{ p.slug }}</p></div>
+  <div class="page-header-actions">
+    <a href="{{ public_url }}" target="_blank" class="btn btn-secondary"><i class="fas fa-external-link-alt"></i> {{ 'View' if p.is_published else 'Preview' }}</a>
+    <a href="{{ url_for('website_admin.news') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a>
+  </div>
+</div>
+
+<form method="POST" action="{{ url_for('website_admin.news_save', post_id=p.id) }}" enctype="multipart/form-data">
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+  <div class="row">
+    <div class="col-md-8"><div class="card mb-3"><div class="card-body">
+      <div class="form-group"><label class="form-label">Title</label>
+        <input type="text" name="title" class="form-control" value="{{ p.title }}" required></div>
+      <div class="form-group"><label class="form-label">Excerpt <span class="text-muted">(short summary shown in the list)</span></label>
+        <textarea name="excerpt" class="form-control" rows="2" maxlength="400">{{ p.excerpt or '' }}</textarea></div>
+      <div class="form-group"><label class="form-label">Body</label>
+        <textarea name="body" class="form-control" rows="16" placeholder="Write your article here. Leave a blank line between paragraphs.">{{ p.body or '' }}</textarea>
+        <span class="text-muted text-sm">Plain text — separate paragraphs with a blank line.</span></div>
+    </div></div></div>
+
+    <div class="col-md-4"><div class="card mb-3"><div class="card-body">
+      <label class="permission-item" style="display:flex;gap:.5rem;margin-bottom:.8rem">
+        <input type="checkbox" name="is_published" {% if p.is_published %}checked{% endif %}> <span>Published</span></label>
+      <div class="form-group"><label class="form-label">Publish date</label>
+        <input type="date" name="published_at" class="form-control" value="{{ p.published_at.isoformat() if p.published_at else '' }}"></div>
+      <div class="form-group"><label class="form-label">Category</label>
+        <input type="text" name="category" class="form-control" value="{{ p.category or '' }}" placeholder="e.g. Events"></div>
+      <div class="form-group"><label class="form-label">Author</label>
+        <input type="text" name="author" class="form-control" value="{{ p.author or '' }}" placeholder="e.g. The Head Teacher"></div>
+      <div class="form-group"><label class="form-label">Cover image</label>
+        {% if p.cover_image %}<div style="margin-bottom:.4rem"><img src="{{ p.cover_image }}" alt="" style="max-height:110px;border-radius:8px"></div>
+        <label class="text-sm" style="display:inline-flex;gap:.35rem"><input type="checkbox" name="clear_cover"> Remove cover</label>{% endif %}
+        <input type="file" name="cover_file" accept="image/*" class="form-control">
+        <input type="text" name="cover_url" class="form-control" style="margin-top:.4rem" placeholder="…or paste an image URL"></div>
+      <button class="btn btn-primary"><i class="fas fa-save"></i> Save post</button>
+    </div></div></div>
+  </div>
+</form>
+
+<div class="row"><div class="col-md-4" style="margin-left:auto"><div class="card"><div class="card-body">
+  <form method="POST" action="{{ url_for('website_admin.news_delete', post_id=p.id) }}" data-confirm="Delete this post?">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <button class="btn btn-danger btn-sm"><i class="fas fa-trash"></i> Delete post</button>
+  </form>
+</div></div></div></div>
+{% endblock %}

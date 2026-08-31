@@ -29,6 +29,17 @@
 .grade-b2,.grade-b3{background:rgba(23,162,184,.15);color:#17a2b8}
 .grade-c4,.grade-c5,.grade-c6{background:rgba(255,193,7,.15);color:#d39e00}
 .grade-d7,.grade-e8,.grade-f9{background:rgba(220,53,69,.15);color:#dc3545}
+/* Grade-band forecast table */
+.gbf-table{width:100%;border-collapse:collapse;font-size:.85rem}
+.gbf-table th{text-align:left;font-size:.72rem;text-transform:uppercase;color:var(--text-muted);padding:.35rem .5rem;border-bottom:1px solid var(--border-color)}
+.gbf-table td{padding:.4rem .5rem;border-bottom:1px solid var(--border-color);vertical-align:middle}
+.gbf-subj{font-weight:600}
+.gbf-bar{display:flex;height:18px;border-radius:4px;overflow:hidden;min-width:160px;background:var(--gray-100)}
+.gbf-seg{display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700;color:#333;overflow:hidden;white-space:nowrap}
+.gbf-eng{font-size:.68rem;padding:.1rem .4rem;border-radius:8px;white-space:nowrap}
+.eng-prior{background:rgba(108,117,125,.15);color:#6c757d}
+.eng-bins{background:rgba(23,162,184,.15);color:#17a2b8}
+.eng-model{background:rgba(40,167,69,.15);color:#28a745}
 .confidence-badge{font-size:.7rem;padding:.15rem .5rem;border-radius:10px;background:var(--gray-100);color:var(--text-muted)}
 .confidence-high{background:rgba(40,167,69,.1);color:#28a745}
 .confidence-medium{background:rgba(255,193,7,.1);color:#d39e00}
@@ -66,6 +77,7 @@
         <p>{{ student.student_id }} | {{ mock_count }} Mock Exam(s) taken</p>
     </div>
     <div style="margin-left:auto">
+        <a href="{{ url_for('results.student_action_plan', student_id=student.id) }}" class="btn btn-primary btn-sm"><i class="fas fa-list-check"></i> Action plan</a>
         <a href="{{ url_for('main.view_student', student_id=student.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-user"></i> Profile</a>
         {% if has_mock_results %}
         <a href="{{ url_for('mock_jamb.student_progress', student_id=student.id) }}" class="btn btn-info btn-sm"><i class="fas fa-chart-line"></i> Progress</a>
@@ -73,28 +85,124 @@
     </div>
 </div>
 
-{% if not has_mock_results %}
+{% if not has_any_mock %}
 <div class="card">
     <div class="card-body text-center py-5">
         <i class="fas fa-clipboard-list fa-3x text-muted mb-3"></i>
-        <h3>No Mock JAMB Results</h3>
-        <p class="text-muted">This student hasn't taken any Mock JAMB exams yet.</p>
-        <p class="text-muted">Predictions require at least one Mock JAMB result with subject scores.</p>
-        <a href="{{ url_for('mock_jamb.index') }}" class="btn btn-primary mt-2"><i class="fas fa-plus"></i> Add Mock JAMB Result</a>
+        <h3>No mock results yet</h3>
+        <p class="text-muted">Predictions are built from this student's <strong>Mock WAEC</strong> and <strong>Mock JAMB</strong> sittings — there aren't any recorded yet.</p>
+        <div class="d-flex gap-2 justify-center mt-2">
+            <a href="{{ url_for('mock_waec.index') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Mock WAEC</a>
+            <a href="{{ url_for('mock_jamb.index') }}" class="btn btn-secondary"><i class="fas fa-plus"></i> Mock JAMB</a>
+        </div>
     </div>
 </div>
 {% else %}
 
-<!-- Debug info (remove after testing) -->
-{% if debug_info %}
-<div class="debug-box">
-    <strong>Debug: Mock JAMB Data Found ({{ debug_info|length }} results)</strong>
-    {% for d in debug_info %}
-    <div style="margin-top:.5rem;padding:.5rem;background:var(--bg-card);border-radius:4px">
-        <strong>Result #{{ d.id }}:</strong> Total={{ d.total_score }}<br>
-        {{ d.subject1 }}: {{ d.subject1_score }} | {{ d.subject2 }}: {{ d.subject2_score }} | {{ d.subject3 }}: {{ d.subject3_score }} | {{ d.subject4 }}: {{ d.subject4_score }}
+{% if readiness and readiness.status != 'NO_DATA' %}
+{% set st = readiness.status %}
+{% set tone = {'READY':'#16a34a','CONDITIONAL':'#ca8a04','AT_RISK':'#ea580c','NOT_READY':'#dc2626'}.get(st, 'var(--text-muted)') %}
+<div class="card mb-3" style="border-left:5px solid {{ tone }}">
+    <div class="card-body">
+        <div style="display:flex;flex-wrap:wrap;gap:1rem;align-items:center;justify-content:space-between;">
+            <div>
+                <div class="text-muted text-sm">Admission readiness — projected from mocks</div>
+                <h2 style="margin:.1rem 0;color:{{ tone }}">{{ st.replace('_',' ').title() }}</h2>
+                <div class="text-muted text-sm">WAEC from <strong>{{ 'real results' if (readiness.waec and readiness.waec.source=='actual') else 'Mock WAEC' }}</strong>,
+                    JAMB from <strong>{{ 'real results' if (readiness.jamb and readiness.jamb.source=='actual') else 'Mock JAMB' }}</strong></div>
+            </div>
+            <div style="display:flex;gap:1.5rem;flex-wrap:wrap;">
+                <div style="text-align:center">
+                    <div style="font-size:1.6rem;font-weight:800">{{ readiness.waec.credits if readiness.waec else '—' }}</div>
+                    <div class="text-muted text-sm">Projected credits</div>
+                </div>
+                <div style="text-align:center">
+                    <div style="font-size:1.6rem;font-weight:800">{{ readiness.jamb.score if readiness.jamb else '—' }}</div>
+                    <div class="text-muted text-sm">Projected JAMB</div>
+                </div>
+                <div style="text-align:center">
+                    <div style="font-size:1.6rem;font-weight:800">{{ 'YES' if (readiness.waec and readiness.waec.meets_ssc) else 'NO' }}</div>
+                    <div class="text-muted text-sm">5 credits incl. Eng &amp; Maths</div>
+                </div>
+                {% if readiness.aggregate %}
+                <div style="text-align:center">
+                    <div style="font-size:1.6rem;font-weight:800">{{ readiness.aggregate.aggregate }}</div>
+                    <div class="text-muted text-sm">Post-UTME aggregate</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% if readiness.blockers %}
+        <div class="mt-2"><strong class="text-sm">What's standing in the way:</strong>
+            <ul style="margin:.3rem 0 0;padding-left:1.1rem;">
+                {% for b in readiness.blockers %}<li class="text-sm">{{ b }}</li>{% endfor %}
+            </ul>
+        </div>
+        {% endif %}
+        {% if readiness.eligible_categories %}
+        <div class="mt-2 text-sm"><strong>Projected to qualify for:</strong> {{ readiness.eligible_categories|join(', ') }}</div>
+        {% endif %}
+        <div class="mt-2"><a href="{{ url_for('results.readiness_funnel') }}" class="btn btn-sm btn-outline">Whole-class readiness</a></div>
     </div>
-    {% endfor %}
+</div>
+{% endif %}
+
+{% if grade_forecast and grade_forecast.subjects %}
+<div class="prediction-card mb-3">
+    <div class="prediction-header" style="background:linear-gradient(135deg,#2c3e50 0%,#4ca1af 100%)">
+        <h3><i class="fas fa-chart-column"></i> WAEC grade-band forecast</h3>
+        <div class="subtitle">Full A1–F9 probability per subject from the latest mock —
+            {% set eng = grade_forecast.subjects[0].engine %}
+            {% if eng == 'model' %}trained model{% elif eng == 'bins' %}calibrated on past cohorts{% else %}cold-start prior (no graduated cohort yet){% endif %}
+            (setting: {{ grade_forecast.engine_setting }})</div>
+    </div>
+    <div class="prediction-body">
+        <div class="summary-grid mb-3">
+            <div class="summary-item">
+                <div class="summary-value" style="color:#17a2b8">{{ grade_forecast.expected_credits }}</div>
+                <div class="summary-label">Expected credits</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-value">{{ (grade_forecast.p_both_core_credit * 100)|round|int }}%</div>
+                <div class="summary-label">P(Eng &amp; Maths both credit)</div>
+            </div>
+            <div class="summary-item">
+                <div class="summary-value">{{ grade_forecast.n_subjects }}</div>
+                <div class="summary-label">Subjects</div>
+            </div>
+        </div>
+
+        <table class="gbf-table">
+            <thead><tr><th>Subject</th><th>Mock</th><th>Distribution (A1→F9)</th><th>Likely</th><th>P(credit)</th><th>Basis</th></tr></thead>
+            <tbody>
+            {% for s in grade_forecast.subjects %}
+                <tr>
+                    <td class="gbf-subj">{{ s.subject }}</td>
+                    <td>{{ s.mock_score }}</td>
+                    <td>
+                        <div class="gbf-bar" title="{% for g, p in s.distribution.items() %}{{ g }} {{ (p*100)|round|int }}%  {% endfor %}">
+                            {% for g, p in s.distribution.items() %}{% if p > 0.003 %}<span class="gbf-seg grade-{{ g|lower }}" style="width:{{ (p*100)|round(1) }}%">{% if p > 0.12 %}{{ g }}{% endif %}</span>{% endif %}{% endfor %}
+                        </div>
+                    </td>
+                    <td><span class="predicted-grade grade-{{ s.likely_grade|lower }}">{{ s.likely_grade }}</span></td>
+                    <td>{{ (s.p_credit * 100)|round|int }}%</td>
+                    <td>
+                        {% if s.engine == 'model' %}<span class="gbf-eng eng-model">model</span>
+                        {% elif s.engine == 'bins' %}<span class="gbf-eng eng-bins">bins · n={{ s.n }}</span>
+                        {% else %}<span class="gbf-eng eng-prior">prior</span>{% endif %}
+                        {% if s.low_confidence %}<i class="fas fa-triangle-exclamation" title="Low sample size — leaning on the prior" style="color:#fd7e14;margin-left:.25rem"></i>{% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        <p class="text-muted" style="font-size:.78rem;margin-top:.6rem">
+            <i class="fas fa-circle-info"></i> Bars show the probability of each band, not a single guess. “Basis” is the engine behind each row:
+            <strong>prior</strong> = standard WASSCE boundaries (used until this branch has graduated cohorts),
+            <strong>bins</strong> = actual grades of past students who scored similarly (n shown),
+            <strong>model</strong> = trained ordinal model. The aggregate assumes subjects are independent.
+        </p>
+    </div>
 </div>
 {% endif %}
 
@@ -103,8 +211,8 @@
     <div class="col-md-6">
         <div class="prediction-card">
             <div class="prediction-header" style="background:linear-gradient(135deg,#11998e 0%,#38ef7d 100%)">
-                <h3><i class="fas fa-file-alt"></i> Predicted WAEC Performance</h3>
-                <div class="subtitle">Based on Mock JAMB Results</div>
+                <h3><i class="fas fa-file-alt"></i> WAEC subject outlook</h3>
+                <div class="subtitle">Projected from Mock WAEC sittings</div>
             </div>
             <div class="prediction-body">
                 {% if waec_from_mock and waec_from_mock.subject_predictions %}

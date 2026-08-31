@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% block title %}Enable 2FA — {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('auth.security_settings') }}">Security</a> / <span>Enable 2FA</span>{% endblock %}
+{% block content %}
+<div class="page-header"><div><h1>Enable two-factor authentication</h1></div></div>
+
+<div class="card" style="max-width:560px;">
+    <div class="card-body">
+        <ol class="text-sm" style="padding-left:1.1rem; color:var(--text-secondary); line-height:1.7;">
+            <li>Open your authenticator app (Google Authenticator, Authy, 1Password…).</li>
+            <li>Scan this QR code, or enter the key below by hand.</li>
+            <li>Type the 6-digit code it shows to confirm.</li>
+        </ol>
+
+        <div style="text-align:center; margin:1rem 0;">
+            {% if qr_svg %}
+            <div style="width:200px; height:200px; margin:0 auto; padding:8px; background:#fff; border:1px solid var(--border-color); border-radius:12px;">{{ qr_svg|safe }}</div>
+            {% else %}
+            <p class="text-muted text-sm">QR unavailable — enter the key manually.</p>
+            {% endif %}
+            <p class="text-muted text-sm" style="margin-top:.6rem;">Manual key</p>
+            <code style="font-size:1rem; letter-spacing:.08em; word-break:break-all;">{{ secret }}</code>
+        </div>
+
+        <form method="POST" action="{{ url_for('auth.mfa_confirm') }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label class="form-label">6-digit code from your app</label>
+                <input type="text" name="code" class="form-control" inputmode="numeric"
+                       autocomplete="one-time-code" autofocus placeholder="••••••" maxlength="6" style="max-width:200px; letter-spacing:.3em;">
+            </div>
+            <button type="submit" class="btn btn-primary"><i class="fas fa-check"></i> Confirm &amp; turn on</button>
+            <a href="{{ url_for('auth.security_settings') }}" class="btn btn-secondary">Cancel</a>
+        </form>
+    </div>
+</div>
+{% endblock %}

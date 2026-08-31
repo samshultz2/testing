@@ -1,0 +1,140 @@
+{% extends "base.html" %}
+{% block title %}Grid entry — {{ exam.display_name }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('mock_waec.index') }}">Mock WAEC</a> / <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}">{{ exam.display_name }}</a> / <span>Grid entry</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.ge-wrap { overflow: auto; max-height: 70vh; border: 1px solid var(--border-color); border-radius: var(--radius-md); }
+.ge-table { border-collapse: collapse; width: 100%; font-size: .82rem; }
+.ge-table th, .ge-table td { border: 1px solid var(--border-color); padding: 2px 4px; text-align: center; }
+.ge-table thead th { background: var(--bg-card); position: sticky; top: 0; z-index: 3; height: 120px; vertical-align: bottom; }
+.ge-table thead th.name, .ge-table thead th.sn { z-index: 4; }
+.ge-table th.subj span { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; font-weight: 600; }
+.ge-table td.name, .ge-table th.name { text-align: left; min-width: 150px; position: sticky; left: 38px; background: var(--bg-card); z-index: 2; }
+.ge-table td.sn, .ge-table th.sn { position: sticky; left: 0; background: var(--bg-card); z-index: 2; width: 38px; }
+.ge-input { width: 46px; border: 1px solid transparent; background: transparent; text-align: center; padding: 4px 2px; border-radius: 4px; color: var(--text-primary); }
+.ge-input:focus { outline: none; border-color: var(--primary); background: var(--bg-body); }
+.ge-cell { position: relative; }
+.gp { display: block; font-size: .62rem; font-weight: 700; line-height: 1; height: .7rem; }
+.g-a1 { color: #047857; } .g-b { color: #0d9488; } .g-c { color: #2563eb; }
+.g-d { color: #b45309; } .g-e { color: #c2410c; } .g-f { color: #dc2626; }
+.ge-bar { position: sticky; bottom: 0; background: var(--bg-card); border-top: 1px solid var(--border-color); padding: .6rem; display: flex; gap: .6rem; align-items: center; z-index: 5; }
+.ge-cols { display: flex; flex-wrap: wrap; gap: .4rem .9rem; }
+.ge-cols label { font-size: .82rem; display: flex; align-items: center; gap: .3rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Grid entry — {{ exam.display_name }}</h1>
+        <p class="text-muted text-sm">Type a score (0–100); the grade is derived live. Tab or Enter moves down a column.</p>
+    </div>
+    <div class="page-header-actions">
+        <a href="{{ url_for('mock_waec.broadsheet', exam_id=exam.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-table-list"></i> Broadsheet</a>
+        <a href="{{ url_for('mock_waec.paste_entry', exam_id=exam.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-paste"></i> Paste / CSV</a>
+        <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>
+    </div>
+</div>
+
+<details class="card mb-3">
+    <summary class="card-header" style="cursor:pointer;list-style:none;"><h3 style="display:inline;"><i class="fas fa-table-columns"></i> Choose subject columns</h3></summary>
+    <div class="card-body">
+        <form method="get" action="{{ url_for('mock_waec.grid_entry', exam_id=exam.id) }}">
+            <div class="ge-cols mb-2">
+                {% for s in all_subjects %}
+                <label><input type="checkbox" name="col" value="{{ s }}" {% if s in subjects %}checked{% endif %}> {{ s }}</label>
+                {% endfor %}
+            </div>
+            <button class="btn btn-primary btn-sm" type="submit"><i class="fas fa-check"></i> Apply columns</button>
+        </form>
+    </div>
+</details>
+
+{% if not students %}
+<div class="card"><div class="card-body"><div class="empty-state">
+    <i class="fas fa-users"></i><h3>No SSS3 students</h3>
+    <p>Set up the SSS3 class for the active term to enter results.</p>
+</div></div></div>
+{% else %}
+<form method="post" action="{{ url_for('mock_waec.grid_entry', exam_id=exam.id) }}" id="gridForm">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="action" value="save">
+    {% for s in subjects %}<input type="hidden" name="col" value="{{ s }}">{% endfor %}
+
+    <div class="card">
+        <div class="ge-wrap"><table class="ge-table">
+            <thead>
+                <tr>
+                    <th class="sn">#</th><th class="name">Student</th>
+                    {% for subj in subjects %}<th class="subj"><span>{{ subj }}</span></th>{% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for st in students %}
+                <tr>
+                    <td class="sn">{{ loop.index }}</td>
+                    <td class="name">{{ st.full_name }}<div class="text-muted" style="font-size:.7rem;">{{ st.student_id }}</div></td>
+                    {% for subj in subjects %}
+                    <td class="ge-cell">
+                        <input class="ge-input" type="number" min="0" max="100" inputmode="numeric"
+                               data-col="{{ loop.index0 }}"
+                               name="score_{{ st.id }}_{{ slug(subj) }}"
+                               value="{{ score_map.get((st.id, subj), '') }}"
+                               aria-label="{{ st.full_name }} — {{ subj }}">
+                        <span class="gp"></span>
+                    </td>
+                    {% endfor %}
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table></div>
+        <div class="ge-bar">
+            <button class="btn btn-primary" type="submit"><i class="fas fa-save"></i> Save all</button>
+            <span class="text-muted text-sm">{{ students|length }} students · {{ subjects|length }} subjects. Blank cells are left untouched.</span>
+        </div>
+    </div>
+</form>
+
+<script nonce="{{ csp_nonce }}">
+(function () {
+  function gradeFromScore(s) {
+    if (s === '' || s === null || isNaN(s)) return ['', ''];
+    var n = Math.max(0, Math.min(100, Math.round(+s)));
+    if (n >= 75) return ['A1', 'g-a1'];
+    if (n >= 70) return ['B2', 'g-b'];
+    if (n >= 65) return ['B3', 'g-b'];
+    if (n >= 60) return ['C4', 'g-c'];
+    if (n >= 55) return ['C5', 'g-c'];
+    if (n >= 50) return ['C6', 'g-c'];
+    if (n >= 45) return ['D7', 'g-d'];
+    if (n >= 40) return ['E8', 'g-e'];
+    return ['F9', 'g-f'];
+  }
+  function paint(inp) {
+    var g = gradeFromScore(inp.value.trim());
+    var gp = inp.parentNode.querySelector('.gp');
+    if (gp) { gp.textContent = g[0]; gp.className = 'gp ' + g[1]; }
+  }
+  var inputs = Array.prototype.slice.call(document.querySelectorAll('.ge-input'));
+  inputs.forEach(function (inp) {
+    paint(inp);
+    inp.addEventListener('input', function () { paint(inp); });
+    // Enter moves to the same column on the next row (fast vertical entry).
+    inp.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter') return;
+      e.preventDefault();
+      var col = inp.getAttribute('data-col');
+      var row = inp.closest('tr');
+      var next = row && row.nextElementSibling;
+      while (next) {
+        var t = next.querySelector('.ge-input[data-col="' + col + '"]');
+        if (t) { t.focus(); t.select(); return; }
+        next = next.nextElementSibling;
+      }
+    });
+  });
+})();
+</script>
+{% endif %}
+{% endblock %}

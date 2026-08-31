@@ -9,6 +9,7 @@
 <p class="text-muted mb-3">Select which subjects {{ class_config.class_name }} takes and set periods per week for each.</p>
 
 <form method="POST" action="{{ url_for('generator.save_class_subjects_config', class_id=class_config.id) }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
     <div class="card">
         <div class="card-header">
             <h3>Core Subjects</h3>
@@ -32,7 +33,7 @@
                             <input type="hidden" name="subject_id[]" value="{{ item.subject.id }}">
                             <input type="checkbox" name="enabled_{{ item.subject.id }}" 
                                    {% if item.is_enabled %}checked{% endif %}
-                                   onchange="toggleRow(this, {{ item.subject.id }})">
+                                   data-call="toggleRow" data-args="this|{{ item.subject.id }}" data-on="change">
                         </td>
                         <td>
                             <strong>{{ item.subject.name }}</strong>

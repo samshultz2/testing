@@ -1,0 +1,29 @@
+{% extends "cbt/portal_base.html" %}
+{% block title %}Result — {{ exam.display_name }}{% endblock %}
+{% block content %}
+<div class="portal-card" style="text-align:center;">
+    <div style="font-size:3rem;color:#0d6a4e;"><i class="fas fa-circle-check"></i></div>
+    <h1>{{ exam.display_name }} submitted</h1>
+    <p class="text-muted">Well done, {{ student.first_name or student.full_name }}. Here’s how you did.</p>
+
+    <div style="font-size:3rem;font-weight:800;font-family:'Space Grotesk',sans-serif;color:{{ '#047857' if attempt.total_score >= 200 else '#b45309' if attempt.total_score >= 180 else '#dc2626' }};">
+        {{ attempt.total_score }}<span style="font-size:1.2rem;color:var(--text-muted);">/400</span>
+    </div>
+
+    {% if result %}
+    <div style="max-width:420px;margin:1rem auto 0;">
+        {% for s in result.subjects_list %}
+        <div style="display:flex;justify-content:space-between;padding:.5rem .2rem;border-bottom:1px solid var(--border-color);">
+            <span>{{ s.name }}</span>
+            <strong style="color:{{ '#047857' if s.score >= 50 else '#dc2626' }};">{{ s.score }}/100</strong>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <p style="margin-top:1.2rem;">
+        <a href="{{ url_for('mock_jamb_portal.portal_list') }}" class="btn btn-secondary btn-sm"><i class="fas fa-list"></i> More mocks</a>
+        <a href="{{ url_for('cbt_portal.home') }}" class="btn btn-primary btn-sm">My tests</a>
+    </p>
+</div>
+{% endblock %}

@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ 'School ready' if not error else 'Link problem' }} — EduSyncra</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/marketing.css') }}">
+</head>
+<body>
+  <div class="auth">
+    <div class="status-card">
+      {% if error %}
+        <div class="icon err"><i class="fas fa-triangle-exclamation"></i></div>
+        <h1>This link can’t be used</h1>
+        <p>{{ error }}</p>
+        <a class="btn btn-primary btn-lg" href="{{ url_for('onboarding.register') }}" style="margin-top:24px">Register again</a>
+      {% else %}
+        <div class="icon ok"><i class="fas fa-circle-check"></i></div>
+        <h1>{{ tenant.name }} is ready</h1>
+        <p>Your school portal is live{% if trial_days %} with a {{ trial_days }}-day free trial{% endif %}. Sign in with the details below — you’ll set a new password on first login.</p>
+        <div class="creds">
+          <div class="r"><span class="k">Username</span><span class="v">{{ username }}</span></div>
+          {% if password %}<div class="r"><span class="k">Temporary password</span><span class="v">{{ password }}</span></div>
+          {% else %}<div class="r"><span class="k">Password</span><span class="v">sent to your email</span></div>{% endif %}
+        </div>
+        {% if login_url %}<a class="btn btn-primary btn-block btn-lg" href="{{ login_url }}">Go to {{ tenant.subdomain }} <i class="fas fa-arrow-right"></i></a>{% endif %}
+      {% endif %}
+    </div>
+  </div>
+</body>
+</html>

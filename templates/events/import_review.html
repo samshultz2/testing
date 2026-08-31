@@ -50,7 +50,7 @@
         <a href="{{ url_for('events.calendar') }}" class="btn btn-secondary">Cancel</a>
     </div>
 </form>
-<script>
+<script nonce="{{ csp_nonce }}">
 document.getElementById('selAll').addEventListener('change',function(){
     document.querySelectorAll('.usebox').forEach(b=>b.checked=this.checked);
 });

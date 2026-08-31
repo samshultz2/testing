@@ -1,4 +1,4 @@
-{# PosyHub Reusable Template Components #}
+{# EduSyncra Reusable Template Components #}
 
 {# Form Input Field #}
 {% macro form_input(name, label, type='text', value='', placeholder='', required=false, readonly=false, help_text='', min='', max='') %}
@@ -212,7 +212,7 @@
         </div>
     </div>
 </div>
-<script>
+<script nonce="{{ csp_nonce }}">
 document.querySelectorAll('.exam-subjects-clear').forEach(function (link) {
     link.addEventListener('click', function (e) {
         e.preventDefault();

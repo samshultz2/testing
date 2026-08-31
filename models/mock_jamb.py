@@ -18,17 +18,30 @@ class MockJAMBExam(db.Model):
     exam_number = db.Column(db.Integer, nullable=False)
     session_id = db.Column(db.Integer, db.ForeignKey('academic_sessions.id'), nullable=False)
     exam_date = db.Column(db.Date, nullable=False)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))   # owning branch (for scoping)
     is_active = db.Column(db.Boolean, default=True)
     is_completed = db.Column(db.Boolean, default=False)
+    is_published = db.Column(db.Boolean, default=False)   # students may sit it online
+    duration_minutes = db.Column(db.Integer, default=120)  # the in-app sitting timer
+    questions_per_subject = db.Column(db.Integer)  # legacy cap (NULL = use blueprint / all)
+    blueprint = db.Column(db.Text)   # optional JSON {subject_key: {section: count}} per-mock override
+    novel_title = db.Column(db.String(150))  # JAMB-approved novel for this mock's English paper
+    source_mode = db.Column(db.String(10), default='bank')  # 'bank' (draw from bank) | 'manual'
+    # Comma-separated SchoolClass names allowed to sit online. Empty/NULL = the
+    # graduating SSS3 class only (the JAMB cohort) — the default.
+    eligible_levels = db.Column(db.String(200))
     description = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.now)
     updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
-    
+
     session = db.relationship('AcademicSession', backref=db.backref('mock_jamb_exams', lazy='dynamic'))
+    branch = db.relationship('Branch')
     results = db.relationship('MockJAMBResult', backref='exam', lazy='dynamic', cascade='all, delete-orphan')
     
     __table_args__ = (
-        db.UniqueConstraint('session_id', 'exam_number', name='unique_mock_exam_per_session'),
+        # Exam numbers are unique per session *within a branch*, so each branch
+        # can run its own First/Second/... mock for the same session.
+        db.UniqueConstraint('session_id', 'exam_number', 'branch_id', name='unique_mock_exam_per_session'),
     )
     
     @property
@@ -121,10 +134,16 @@ class MockJAMBAnalytics:
         if session_id:
             query = query.filter(MockJAMBExam.session_id == session_id)
         results = query.order_by(MockJAMBExam.exam_number).all()
-        
+        return MockJAMBAnalytics._progress_from_results(student_id, results)
+
+    @staticmethod
+    def _progress_from_results(student_id, results):
+        """Build the progress dict from already-loaded, exam-ordered results (each
+        with its ``.exam`` available). Lets a cohort be computed from one batched
+        query instead of one query per student."""
         if not results:
             return None
-        
+
         progress_data = []
         prev_score = None
         
@@ -165,7 +184,7 @@ class MockJAMBAnalytics:
     
     @staticmethod
     def get_exam_statistics(mock_exam_id):
-        exam = MockJAMBExam.query.get(mock_exam_id)
+        exam = db.session.get(MockJAMBExam, mock_exam_id)
         if not exam:
             return None
         
@@ -240,7 +259,13 @@ class MockJAMBAnalytics:
     
     @staticmethod
     def predict_real_jamb(student_id, session_id):
-        progress = MockJAMBAnalytics.get_student_progress(student_id, session_id)
+        return MockJAMBAnalytics._predict_from_progress(
+            MockJAMBAnalytics.get_student_progress(student_id, session_id))
+
+    @staticmethod
+    def _predict_from_progress(progress):
+        """Pure prediction from a progress dict (so a batched caller can reuse the
+        exact same maths without re-querying)."""
         if not progress or progress['exam_count'] < 2:
             return None
 
@@ -340,3 +365,154 @@ class MockJAMBAnalytics:
         priority_order = {'critical': 0, 'high': 1, 'medium': 2, 'low': 3, 'none': 4}
         recommendations.sort(key=lambda x: priority_order[x['priority']])
         return recommendations
+
+
+# =============================================================================
+# ONLINE MOCK JAMB — question bank (JAMB-standard structures) for the in-app
+# sitting. Questions belong to a mock exam + subject; a question that needs a
+# shared stimulus (a comprehension passage, cloze text, summary passage, oral
+# register instruction) points at a MockJAMBPassage so it can never be served
+# without its passage. Diagrams are supported on both passages and questions.
+# =============================================================================
+
+class MockJAMBPassage(db.Model):
+    """A shared stimulus a group of Mock JAMB questions attach to — a
+    comprehension passage, cloze text, summary passage or oral/register lead-in.
+    JAMB English (and some others) present several questions against one
+    passage."""
+    __tablename__ = 'mock_jamb_passages'
+
+    id = db.Column(db.Integer, primary_key=True)
+    # NULL mock_exam_id => a reusable *bank* passage (drawn into mocks per the
+    # JAMB blueprint). A set id is a legacy per-mock passage (still supported).
+    mock_exam_id = db.Column(db.Integer, db.ForeignKey('mock_jamb_exams.id'), nullable=True)
+    subject_id = db.Column(db.Integer, db.ForeignKey('subjects.id'), nullable=False)
+    section = db.Column(db.String(40))           # JAMB paper section (e.g. comprehension/cloze)
+    kind = db.Column(db.String(20), default='comprehension')   # comprehension/cloze/summary/oral/general
+    title = db.Column(db.String(150))
+    body = db.Column(db.Text)                    # the passage / instruction text
+    image_url = db.Column(db.String(300))        # optional figure
+    order = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+
+    exam = db.relationship('MockJAMBExam', backref=db.backref(
+        'passages', lazy='dynamic', cascade='all, delete-orphan'))
+    subject = db.relationship('Subject')
+
+    # The sitting draws the pool by (subject_id, mock_exam_id); index it so a burst
+    # of students starting an exam does index scans, not full-table scans.
+    __table_args__ = (
+        db.Index('ix_mock_jamb_passages_subject_pool', 'subject_id', 'mock_exam_id'),
+    )
+
+    KINDS = ('comprehension', 'cloze', 'summary', 'oral', 'general')
+
+    @property
+    def kind_label(self):
+        return {'comprehension': 'Comprehension passage', 'cloze': 'Cloze passage',
+                'summary': 'Summary passage', 'oral': 'Oral / register',
+                'general': 'Shared instruction'}.get(self.kind, self.kind)
+
+
+class MockJAMBQuestion(db.Model):
+    """One objective Mock JAMB question (4 options, one correct), tagged by
+    subject + syllabus topic/sub-topic, optionally attached to a passage and/or
+    carrying a diagram image."""
+    __tablename__ = 'mock_jamb_questions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    # NULL mock_exam_id => a reusable *bank* question drawn into mocks per the
+    # JAMB blueprint. A set id is a legacy per-mock question (still supported).
+    mock_exam_id = db.Column(db.Integer, db.ForeignKey('mock_jamb_exams.id'), nullable=True)
+    subject_id = db.Column(db.Integer, db.ForeignKey('subjects.id'), nullable=False)
+    passage_id = db.Column(db.Integer, db.ForeignKey('mock_jamb_passages.id'))   # NULL = stand-alone
+    section = db.Column(db.String(40))           # JAMB paper section (drives the blueprint draw)
+    exam_body = db.Column(db.String(10), default='JAMB')   # JAMB / WAEC / Both
+    difficulty = db.Column(db.String(10))        # optional: easy / medium / hard
+    source = db.Column(db.String(20))            # provenance, e.g. 'paste' / 'manual' / 'import'
+    source_ref = db.Column(db.String(40))        # external id (dedupe imports)
+    exam_year = db.Column(db.String(8))          # the past-question year, when known (e.g. '2018')
+    topic = db.Column(db.String(100))
+    subtopic = db.Column(db.String(120))
+    question_text = db.Column(db.Text, nullable=False)
+    image_url = db.Column(db.String(300))        # optional figure / diagram
+    # True => the question refers to a figure we couldn't fetch; it is held out
+    # of exams until an admin supplies the image (see the "needs images" queue).
+    needs_image = db.Column(db.Boolean, default=False)
+    option_a = db.Column(db.String(400))
+    option_b = db.Column(db.String(400))
+    option_c = db.Column(db.String(400))
+    option_d = db.Column(db.String(400))
+    correct_option = db.Column(db.String(1))     # 'A'/'B'/'C'/'D'
+    marks = db.Column(db.Float, default=1)
+    order = db.Column(db.Integer, default=0)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+
+    exam = db.relationship('MockJAMBExam', backref=db.backref(
+        'questions', lazy='dynamic', cascade='all, delete-orphan'))
+    subject = db.relationship('Subject')
+    passage = db.relationship('MockJAMBPassage', backref=db.backref(
+        'questions', lazy='dynamic'))
+
+    # The sitting draws the pool by (subject_id, mock_exam_id); index it so a burst
+    # of students starting an exam does index scans, not full-table scans of a
+    # multi-thousand-row bank.
+    __table_args__ = (
+        db.Index('ix_mock_jamb_questions_subject_pool', 'subject_id', 'mock_exam_id'),
+    )
+
+    @property
+    def options(self):
+        return [('A', self.option_a), ('B', self.option_b),
+                ('C', self.option_c), ('D', self.option_d)]
+
+
+class MockJAMBAttempt(db.Model):
+    """A student's online sitting of a mock exam — the in-progress state and the
+    graded totals. One per (student, exam); on submit the per-subject scores are
+    also written to MockJAMBResult so all the existing analytics keep working."""
+    __tablename__ = 'mock_jamb_attempts'
+
+    id = db.Column(db.Integer, primary_key=True)
+    mock_exam_id = db.Column(db.Integer, db.ForeignKey('mock_jamb_exams.id'), nullable=False)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
+    started_at = db.Column(db.DateTime, default=datetime.now)
+    submitted_at = db.Column(db.DateTime)
+    status = db.Column(db.String(15), default='In progress')   # In progress / Submitted
+    total_score = db.Column(db.Integer, default=0)             # out of 400
+    duration_minutes = db.Column(db.Integer, default=120)      # snapshot of the exam's timer
+    # The candidate's drawn paper, cached once at first render as JSON
+    # {subject_id: [{"p": passage_id, "q": [qid,...]} | {"q": qid}, ...]}. Reused on
+    # every reload/resume and at grading so the expensive pool draw runs ONCE per
+    # student instead of on every page load — the key to surviving a mass start.
+    paper = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+
+    exam = db.relationship('MockJAMBExam', backref=db.backref(
+        'attempts', lazy='dynamic', cascade='all, delete-orphan'))
+    student = db.relationship('Student')
+    answers = db.relationship('MockJAMBAnswer', backref='attempt', lazy='dynamic',
+                              cascade='all, delete-orphan')
+
+    __table_args__ = (
+        db.UniqueConstraint('mock_exam_id', 'student_id', name='unique_mock_attempt'),
+    )
+
+
+class MockJAMBAnswer(db.Model):
+    """One saved answer within an online sitting."""
+    __tablename__ = 'mock_jamb_answers'
+
+    id = db.Column(db.Integer, primary_key=True)
+    attempt_id = db.Column(db.Integer, db.ForeignKey('mock_jamb_attempts.id'), nullable=False)
+    question_id = db.Column(db.Integer, db.ForeignKey('mock_jamb_questions.id'), nullable=False)
+    selected_option = db.Column(db.String(1))
+    is_correct = db.Column(db.Boolean, default=False)
+
+    question = db.relationship('MockJAMBQuestion')
+
+    __table_args__ = (
+        db.UniqueConstraint('attempt_id', 'question_id', name='unique_mock_answer'),
+    )
+
+
