@@ -473,7 +473,32 @@ class FixedAsset(db.Model):
 
     @property
     def is_disposed(self):
-        return self.status == 'Disposed'
+        """True only once every unit is disposed — a partial disposal (see
+        AssetStatusCount) keeps this False for the remaining units."""
+        return (self.quantity or 0) > 0 and self.active_quantity <= 0
+
+    @property
+    def status_breakdown(self):
+        """How this asset's units split across statuses, largest bucket
+        first — e.g. 30 laptops → [{'status': 'In Use', 'quantity': 25},
+        {'status': 'Under Repair', 'quantity': 3}, {'status': 'Lost', 'quantity': 2}].
+        Falls back to a single bucket using the summary `status` field for
+        assets that have never had a split recorded."""
+        rows = [{'status': c.status, 'quantity': c.quantity}
+                for c in (self.status_counts or []) if c.quantity]
+        if rows:
+            return sorted(rows, key=lambda r: -r['quantity'])
+        return [{'status': self.status, 'quantity': self.quantity or 0}]
+
+    @property
+    def is_split(self):
+        return len(self.status_counts or []) > 0
+
+    @property
+    def active_quantity(self):
+        """Units not in 'Disposed' status — still physically here, whatever
+        condition they're in."""
+        return sum(r['quantity'] for r in self.status_breakdown if r['status'] != 'Disposed')
 
     @property
     def age_years(self):
@@ -548,6 +573,31 @@ class AssetLog(db.Model):
 
     def __repr__(self):
         return f'<AssetLog {self.event_type} asset={self.asset_id}>'
+
+
+class AssetStatusCount(db.Model):
+    """Optional per-status quantity split for a FixedAsset — e.g. of 30
+    laptops, 25 'In Use', 3 'Under Repair', 2 'Lost'. When rows exist here
+    for an asset they're the source of truth for its condition breakdown
+    (FixedAsset.status_breakdown); an asset with no rows here is treated as
+    wholly in its single summary `status`. Every chart/table/filter that
+    slices assets by status reads from here so a partially-repaired batch
+    shows correctly instead of as one lump status."""
+    __tablename__ = 'asset_status_counts'
+
+    id = db.Column(db.Integer, primary_key=True)
+    asset_id = db.Column(db.Integer, db.ForeignKey('fixed_assets.id'), nullable=False, index=True)
+    status = db.Column(db.String(20), nullable=False)
+    quantity = db.Column(db.Integer, nullable=False, default=0)
+
+    asset = db.relationship('FixedAsset',
+                            backref=db.backref('status_counts', lazy='joined',
+                                               cascade='all, delete-orphan'))
+
+    __table_args__ = (db.UniqueConstraint('asset_id', 'status', name='uq_asset_status_counts'),)
+
+    def __repr__(self):
+        return f'<AssetStatusCount asset={self.asset_id} {self.status}={self.quantity}>'
 
 
 class PromoCode(db.Model):
