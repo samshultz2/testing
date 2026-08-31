@@ -11,18 +11,20 @@ from sqlalchemy import func
 from models import (db, Product, Sale, SaleItem, StockMovement, Student,
                     StudentEnrollment, ClassArmAssignment, SchoolClass, ClassArm,
                     Supplier, PurchaseOrder, PurchaseOrderItem, SupplierPayment, PromoCode,
-                    StockAudit, StockAuditItem, FixedAsset, StockBatch)
+                    StockAudit, StockAuditItem, FixedAsset, StockBatch, AssetLog, Teacher)
 from models.models_sales import (PRODUCT_CATEGORIES, SALE_METHODS, CUSTOMER_TYPES,
                                  UNITS, STOCK_IN_REASONS, STOCK_OUT_REASONS,
                                  PO_STATUSES, PURCHASE_METHODS,
-                                 FIXED_ASSET_CATEGORIES, FIXED_ASSET_STATUSES)
+                                 FIXED_ASSET_CATEGORIES, FIXED_ASSET_STATUSES,
+                                 FIXED_ASSET_SECTIONS)
 from utils.access_control import (login_required, filter_classes_for_user,
                                   can_approve_purchase, can_sign_off_count)
 from utils.branch_scope import scope_query, branch_for_new, can_access_branch
 from utils import timeutil
-from utils.helpers import get_active_term, parse_date
+from utils.helpers import get_active_term, get_active_session, parse_date
 from utils.search import like_term
 from utils.web_exports import xlsx_response, csv_response
+from utils.results_analytics_org import SECTION_LABELS, _section_label
 
 sales_bp = Blueprint('sales', __name__, url_prefix='/sales')
 
@@ -1698,6 +1700,16 @@ def audit_export(audit_id):
 # Fixed assets (register + conversion from inventory)
 # ---------------------------------------------------------------------------
 
+def _actor():
+    return session.get('user') or session.get('username') or 'Admin'
+
+
+def _effective_section(a):
+    """The section an asset counts toward for analytics: its own explicit
+    section if set, else the section inherited from its linked class."""
+    return a.section or (a.school_class.section if a.school_class else None)
+
+
 def _asset_dict(a):
     return {
         'id': a.id, 'name': a.name, 'asset_tag': a.asset_tag or '',
@@ -1715,13 +1727,25 @@ def _asset_dict(a):
         'disposed_on': a.disposed_on.isoformat() if a.disposed_on else '',
         'disposal_amount': a.disposal_amount,
         'from_product': bool(a.source_product_id),
+        'class_id': a.class_id, 'class_name': a.school_class.name if a.school_class else '',
+        'arm_id': a.arm_id, 'arm_name': (a.arm.name if a.arm and not a.arm.is_default else ''),
+        'teacher_id': a.teacher_id,
+        'teacher_name': (a.teacher.user.full_name if a.teacher and a.teacher.user else ''),
+        'section': a.section or '', 'effective_section': _effective_section(a) or '',
+        'effective_section_label': (_section_label(_effective_section(a))
+                                    if _effective_section(a) else ''),
         'edit_url': url_for('sales.edit_asset', asset_id=a.id),
         'dispose_url': url_for('sales.dispose_asset', asset_id=a.id),
+        'history_url': url_for('sales.asset_history', asset_id=a.id),
     }
 
 
 def _apply_asset_fields(a, form):
+    """Mutate a FixedAsset from submitted form fields. Returns the
+    before/after quantity and status so the caller can decide what history to
+    log (this function only touches the row, never the ledger)."""
     from utils.security import strip_tags
+    qty_before, status_before = a.quantity, a.status
     a.name = strip_tags(form.get('name') or '').strip() or a.name
     a.asset_tag = (form.get('asset_tag') or '').strip() or None
     cat = (form.get('category') or '').strip()
@@ -1738,10 +1762,59 @@ def _apply_asset_fields(a, form):
     a.location = (form.get('location') or '').strip() or None
     a.custodian = (form.get('custodian') or '').strip() or None
     st = (form.get('status') or '').strip()
-    if st in FIXED_ASSET_STATUSES:
+    if st in FIXED_ASSET_STATUSES and st != 'Disposed':
         a.status = st
     a.useful_life_years = form.get('useful_life_years', type=int)
     a.salvage_value = form.get('salvage_value', type=float) or 0
+    if form.get('quantity') is not None:
+        qty = form.get('quantity', type=int)
+        if qty is not None and qty >= 0:
+            a.quantity = qty
+    # Optional ownership/placement — every one of these may be cleared by
+    # submitting an empty value, since a school may change its mind about
+    # what an asset is assigned to.
+    class_id = form.get('class_id', type=int)
+    a.class_id = class_id or None
+    arm_id = form.get('arm_id', type=int)
+    a.arm_id = arm_id or None
+    teacher_id = form.get('teacher_id', type=int)
+    a.teacher_id = teacher_id or None
+    section = (form.get('section') or '').strip()
+    a.section = section if section in FIXED_ASSET_SECTIONS else None
+    return {'qty_before': qty_before, 'qty_after': a.quantity,
+            'status_before': status_before, 'status_after': a.status}
+
+
+def _log_asset_event(a, event_type, quantity_before=None, quantity_after=None,
+                     status_before=None, status_after=None, note=None):
+    term = get_active_term()
+    sess = get_active_session()
+    log = AssetLog(
+        asset_id=a.id, branch_id=a.branch_id, event_type=event_type,
+        quantity_before=quantity_before, quantity_after=quantity_after,
+        status_before=status_before, status_after=status_after,
+        note=(note or '').strip() or None,
+        session_id=sess.id if sess else None, term_id=term.id if term else None,
+        created_by=_actor())
+    db.session.add(log)
+    return log
+
+
+def _class_options():
+    return [{'id': c.id, 'name': c.name, 'section': c.section}
+            for c in SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all()]
+
+
+def _arm_options():
+    return [{'id': ar.id, 'name': ar.name} for ar in
+            ClassArm.query.filter_by(is_active=True).filter(ClassArm.is_default.isnot(True))
+            .order_by(ClassArm.name).all()]
+
+
+def _teacher_options():
+    teachers = scope_query(Teacher.query, Teacher).filter_by(is_active=True).all()
+    return sorted(({'id': t.id, 'name': t.user.full_name} for t in teachers if t.user),
+                  key=lambda r: r['name'])
 
 
 @sales_bp.route('/assets')
@@ -1750,6 +1823,8 @@ def assets():
     q = (request.args.get('q') or '').strip()
     category = (request.args.get('category') or '').strip()
     status = (request.args.get('status') or '').strip()
+    section = (request.args.get('section') or '').strip()
+    class_id = request.args.get('class_id', type=int)
     query = scope_query(FixedAsset.query, FixedAsset)
     if q:
         query = query.filter(db.or_(FixedAsset.name.ilike(like_term(q), escape='\\'),
@@ -1759,15 +1834,21 @@ def assets():
         query = query.filter(FixedAsset.category == category)
     if status:
         query = query.filter(FixedAsset.status == status)
+    if class_id:
+        query = query.filter(FixedAsset.class_id == class_id)
     rows = query.order_by(FixedAsset.created_at.desc()).all()
+    if section:
+        rows = [a for a in rows if _effective_section(a) == section]
     live = [a for a in rows if not a.is_disposed]
     from collections import defaultdict
-    by_cat = defaultdict(lambda: {'count': 0, 'cost': 0.0, 'book': 0.0})
+    by_cat = defaultdict(lambda: {'count': 0, 'quantity': 0, 'cost': 0.0, 'book': 0.0})
     for a in live:
         b = by_cat[a.category or 'Other']
-        b['count'] += 1; b['cost'] += a.acquisition_cost or 0; b['book'] += a.book_value
+        b['count'] += 1; b['quantity'] += a.quantity or 0
+        b['cost'] += a.acquisition_cost or 0; b['book'] += a.book_value
     summary = {
         'count': len(live),
+        'quantity': sum(a.quantity or 0 for a in live),
         'total_cost': round(sum(a.acquisition_cost or 0 for a in live), 2),
         'total_book': round(sum(a.book_value for a in live), 2),
         'disposed': sum(1 for a in rows if a.is_disposed),
@@ -1778,10 +1859,14 @@ def assets():
     }
     return _render({
         'page': 'assets', 'assets': [_asset_dict(a) for a in rows], 'summary': summary,
-        'q': q, 'category': category, 'status': status,
+        'q': q, 'category': category, 'status': status, 'section': section,
+        'class_id': class_id or '',
         'categories': FIXED_ASSET_CATEGORIES, 'statuses': FIXED_ASSET_STATUSES,
+        'sections': [{'key': k, 'label': lbl} for k, lbl in SECTION_LABELS],
+        'classes': _class_options(), 'arms': _arm_options(), 'teachers': _teacher_options(),
         'add_url': url_for('sales.add_asset'),
         'export_url': url_for('sales.assets_export'),
+        'analytics_url': url_for('sales.assets_analytics'),
         'urls': {'dashboard': url_for('sales.dashboard'), 'products': url_for('sales.products')},
     })
 
@@ -1793,10 +1878,12 @@ def add_asset():
     if not name:
         return _err('Asset name is required.', url_for('sales.assets'))
     a = FixedAsset(branch_id=branch_for_new(), name=name, quantity=1,
-                   acquisition_date=timeutil.today(),
-                   created_by=session.get('user') or session.get('username') or 'Admin')
+                   acquisition_date=timeutil.today(), created_by=_actor())
     _apply_asset_fields(a, request.form)
     db.session.add(a)
+    db.session.flush()
+    _log_asset_event(a, 'created', quantity_after=a.quantity, status_after=a.status,
+                     note=(request.form.get('change_note') or '').strip() or None)
     db.session.commit()
     return _ok(f'Registered "{a.name}".', url_for('sales.assets'))
 
@@ -1807,7 +1894,17 @@ def edit_asset(asset_id):
     a = db.get_or_404(FixedAsset, asset_id)
     if not can_access_branch(a.branch_id):
         return _err('That asset belongs to another branch.', url_for('sales.assets'))
-    _apply_asset_fields(a, request.form)
+    note = (request.form.get('change_note') or '').strip() or None
+    change = _apply_asset_fields(a, request.form)
+    if change['qty_before'] != change['qty_after']:
+        _log_asset_event(a, 'quantity_changed', quantity_before=change['qty_before'],
+                         quantity_after=change['qty_after'], note=note)
+    if change['status_before'] != change['status_after']:
+        _log_asset_event(a, 'status_changed', status_before=change['status_before'],
+                         status_after=change['status_after'], note=note)
+    if (change['qty_before'] == change['qty_after']
+            and change['status_before'] == change['status_after'] and note):
+        _log_asset_event(a, 'updated', note=note)
     db.session.commit()
     return _ok('Asset updated.', url_for('sales.assets'))
 
@@ -1829,6 +1926,7 @@ def convert_to_asset(product_id):
     cost = request.form.get('acquisition_cost', type=float)
     if cost is None:
         cost = round((p.cost_price or 0) * qty, 2)      # default to stock cost
+    section = (request.form.get('section') or '').strip()
     a = FixedAsset(
         branch_id=p.branch_id,
         name=(request.form.get('name') or '').strip() or p.name,
@@ -1841,11 +1939,18 @@ def convert_to_asset(product_id):
         status='In Use', quantity=qty, source_product_id=p.id,
         useful_life_years=request.form.get('useful_life_years', type=int),
         salvage_value=request.form.get('salvage_value', type=float) or 0,
-        created_by=session.get('user') or session.get('username') or 'Admin')
+        class_id=request.form.get('class_id', type=int) or None,
+        arm_id=request.form.get('arm_id', type=int) or None,
+        teacher_id=request.form.get('teacher_id', type=int) or None,
+        section=section if section in FIXED_ASSET_SECTIONS else None,
+        created_by=_actor())
     p.stock_qty = (p.stock_qty or 0) - qty
     _record_movement(p, 'out', qty, 'Converted to Fixed Asset',
                      note=f'Fixed asset: {a.name}', apply=False)
     db.session.add(a)
+    db.session.flush()
+    _log_asset_event(a, 'created', quantity_after=a.quantity, status_after=a.status,
+                     note=f'Converted from stock item "{p.name}"')
     db.session.commit()
     from utils.audit import log_action
     log_action('sales.asset_convert', detail=f'{a.name} x{qty}', target=a)
@@ -1863,10 +1968,14 @@ def dispose_asset(asset_id):
         return _err('That asset belongs to another branch.', url_for('sales.assets'))
     if a.is_disposed:
         return _err('That asset is already disposed.', url_for('sales.assets'))
+    qty_before, status_before = a.quantity, a.status
     a.status = 'Disposed'
     a.disposed_on = parse_date(request.form.get('disposed_on')) or timeutil.today()
     a.disposal_amount = request.form.get('disposal_amount', type=float) or 0
     a.disposal_note = (request.form.get('disposal_note') or '').strip() or None
+    _log_asset_event(a, 'disposed', quantity_before=qty_before, quantity_after=0,
+                     status_before=status_before, status_after='Disposed',
+                     note=a.disposal_note)
     db.session.commit()
     if a.disposal_amount and a.disposal_amount > 0:
         from utils import finance_ledger as _fl
@@ -1875,9 +1984,172 @@ def dispose_asset(asset_id):
                  method=(request.form.get('method') or 'Cash'),
                  origin_type='asset_disposal', origin_id=a.id,
                  reference=a.asset_tag or a.name, description=f'Disposal of {a.name}',
-                 created_by=session.get('user') or session.get('username') or 'Admin')
+                 created_by=_actor())
         db.session.commit()
     return _ok(f'"{a.name}" marked disposed.', url_for('sales.assets'))
+
+
+@sales_bp.route('/assets/<int:asset_id>/history')
+@login_required
+def asset_history(asset_id):
+    a = db.get_or_404(FixedAsset, asset_id)
+    if not can_access_branch(a.branch_id):
+        return jsonify({'ok': False, 'error': 'That asset belongs to another branch.'}), 403
+    logs = a.logs.all()   # already ordered newest-first (see AssetLog relationship)
+    return jsonify({'ok': True, 'asset': {'id': a.id, 'name': a.name}, 'logs': [{
+        'id': l.id, 'event_type': l.event_type,
+        'quantity_before': l.quantity_before, 'quantity_after': l.quantity_after,
+        'quantity_delta': l.quantity_delta,
+        'status_before': l.status_before, 'status_after': l.status_after,
+        'note': l.note or '',
+        'session': l.session.name if l.session else '',
+        'term': l.term.name if l.term else '',
+        'created_by': l.created_by or '',
+        'created_at': l.created_at.strftime('%d %b %Y %H:%M') if l.created_at else '',
+    } for l in logs]})
+
+
+def _previous_term(active_term):
+    from models import Term
+    if not active_term or not active_term.start_date:
+        return None
+    return (Term.query.filter(Term.start_date < active_term.start_date)
+            .order_by(Term.start_date.desc()).first())
+
+
+def _previous_session(active_session):
+    from models import AcademicSession
+    if not active_session or not active_session.start_date:
+        return None
+    return (AcademicSession.query.filter(AcademicSession.start_date < active_session.start_date)
+            .order_by(AcademicSession.start_date.desc()).first())
+
+
+def _asset_qty_at(a, cutoff_dt, logs_by_asset):
+    """Best-effort quantity for one asset at a point in time, from its
+    history ledger. Falls back to the asset's current state for legacy
+    assets registered before this ledger existed, so old registrations still
+    get a sensible comparison line instead of reading as zero."""
+    logs = logs_by_asset.get(a.id)
+    if logs:
+        for log in logs:                       # newest-first
+            if log.created_at <= cutoff_dt:
+                return log.quantity_after or 0
+        return 0                                # asset's first log is after cutoff
+    if a.disposed_on and cutoff_dt.date() >= a.disposed_on:
+        return 0
+    created = a.created_at
+    if created and cutoff_dt < created:
+        return 0
+    return a.quantity or 0
+
+
+@sales_bp.route('/assets/analytics')
+@login_required
+def assets_analytics():
+    from collections import defaultdict
+    from datetime import timedelta
+
+    section_f = (request.args.get('section') or '').strip()
+    category_f = (request.args.get('category') or '').strip()
+    class_id_f = request.args.get('class_id', type=int)
+
+    rows = scope_query(FixedAsset.query, FixedAsset).all()
+    if section_f:
+        rows = [a for a in rows if _effective_section(a) == section_f]
+    if category_f:
+        rows = [a for a in rows if (a.category or 'Other') == category_f]
+    if class_id_f:
+        rows = [a for a in rows if a.class_id == class_id_f]
+    live = [a for a in rows if not a.is_disposed]
+
+    def _bucket(keyfn):
+        b = defaultdict(lambda: {'count': 0, 'quantity': 0, 'cost': 0.0, 'book': 0.0})
+        for a in live:
+            k = keyfn(a)
+            if k is None:
+                continue
+            d = b[k]
+            d['count'] += 1; d['quantity'] += a.quantity or 0
+            d['cost'] += a.acquisition_cost or 0; d['book'] += a.book_value
+        return sorted(
+            [{'label': k, **{kk: (round(vv, 2) if isinstance(vv, float) else vv)
+                            for kk, vv in v.items()}} for k, v in b.items()],
+            key=lambda r: -r['quantity'])
+
+    class_names = {c.id: c.name for c in SchoolClass.query.all()}
+    teacher_names = {t.id: (t.user.full_name if t.user else f'Teacher #{t.id}')
+                     for t in Teacher.query.all()}
+
+    by_category = _bucket(lambda a: a.category or 'Other')
+    by_status = _bucket(lambda a: a.status)
+    by_section = _bucket(lambda a: (_section_label(_effective_section(a))
+                                    if _effective_section(a) else 'Unassigned'))
+    by_class = _bucket(lambda a: class_names.get(a.class_id) if a.class_id else None)
+    by_teacher = _bucket(lambda a: teacher_names.get(a.teacher_id) if a.teacher_id else None)
+
+    overview = {
+        'count': len(live), 'quantity': sum(a.quantity or 0 for a in live),
+        'total_cost': round(sum(a.acquisition_cost or 0 for a in live), 2),
+        'total_book': round(sum(a.book_value for a in live), 2),
+        'disposed': sum(1 for a in rows if a.is_disposed),
+        'unassigned_placement': sum(1 for a in live
+                                    if not (a.class_id or a.teacher_id or _effective_section(a))),
+    }
+
+    # ---- period-over-period comparison (last week / last term / last session) ----
+    active_term = get_active_term()
+    active_session = get_active_session()
+    prev_term = _previous_term(active_term)
+    prev_session = _previous_session(active_session)
+    from models.models import local_now as _local_now
+    now_dt = _local_now()
+    boundaries = {
+        'last_week': {'label': '7 days ago', 'cutoff': now_dt - timedelta(days=7)},
+        'last_term': {'label': (prev_term.full_name if prev_term else None),
+                      'cutoff': (_dt_combine(active_term.start_date) if active_term and active_term.start_date else None)},
+        'last_session': {'label': (prev_session.name if prev_session else None),
+                         'cutoff': (_dt_combine(active_session.start_date) if active_session and active_session.start_date else None)},
+    }
+    asset_ids = [a.id for a in rows]
+    all_logs = (AssetLog.query.filter(AssetLog.asset_id.in_(asset_ids))
+                .order_by(AssetLog.asset_id, AssetLog.created_at.desc()).all()) if asset_ids else []
+    logs_by_asset = defaultdict(list)
+    for l in all_logs:
+        logs_by_asset[l.asset_id].append(l)
+
+    comparison = []
+    categories = sorted({a.category or 'Other' for a in rows})
+    for cat in categories + ['Total']:
+        asset_set = rows if cat == 'Total' else [a for a in rows if (a.category or 'Other') == cat]
+        line = {'category': cat,
+                'now': sum(0 if a.is_disposed else (a.quantity or 0) for a in asset_set)}
+        for key, b in boundaries.items():
+            cutoff = b['cutoff']
+            if cutoff is None:
+                line[key] = None
+                line[f'{key}_label'] = b['label']
+                continue
+            total = sum(_asset_qty_at(a, cutoff, logs_by_asset) for a in asset_set)
+            line[key] = total
+            line[f'{key}_label'] = b['label']
+            line[f'{key}_delta'] = line['now'] - total
+        comparison.append(line)
+
+    return jsonify({
+        'ok': True, 'overview': overview,
+        'by_category': by_category, 'by_status': by_status,
+        'by_section': by_section, 'by_class': by_class, 'by_teacher': by_teacher,
+        'comparison': comparison,
+        'filters': {'section': section_f, 'category': category_f, 'class_id': class_id_f or ''},
+    })
+
+
+def _dt_combine(d):
+    if not d:
+        return None
+    from datetime import datetime, time
+    return datetime.combine(d, time.min)
 
 
 @sales_bp.route('/assets/export')
@@ -1886,15 +2158,23 @@ def assets_export():
     rows = scope_query(FixedAsset.query, FixedAsset).order_by(FixedAsset.category, FixedAsset.name).all()
     from openpyxl import Workbook
     wb = Workbook(); ws = wb.active; ws.title = 'Fixed Assets'
-    ws.append(['Tag', 'Name', 'Category', 'Serial', 'Acquired', 'Cost', 'Life (yrs)',
-               'Accum. Depr.', 'Book Value', 'Custodian', 'Location', 'Status'])
+    ws.append(['Tag', 'Name', 'Category', 'Serial', 'Quantity', 'Acquired', 'Cost', 'Life (yrs)',
+               'Accum. Depr.', 'Book Value', 'Custodian', 'Location', 'Class', 'Arm',
+               'Teacher', 'Section', 'Status'])
     for a in rows:
         ws.append([a.asset_tag or '', a.name, a.category, a.serial_number or '',
+                   a.quantity or 0,
                    a.acquisition_date.isoformat() if a.acquisition_date else '',
                    a.acquisition_cost or 0, a.useful_life_years or '',
                    a.accumulated_depreciation, a.book_value,
-                   a.custodian or '', a.location or '', a.status])
+                   a.custodian or '', a.location or '',
+                   a.school_class.name if a.school_class else '',
+                   (a.arm.name if a.arm and not a.arm.is_default else ''),
+                   (a.teacher.user.full_name if a.teacher and a.teacher.user else ''),
+                   _effective_section(a) or '', a.status])
     return xlsx_response(wb, 'fixed_assets.xlsx')
+
+
 
 
 # ---------------------------------------------------------------------------

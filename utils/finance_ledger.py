@@ -284,6 +284,10 @@ _ADDED_COLUMNS = {
     },
     'sales': {'customer_type': 'VARCHAR(20)', 'subtotal': 'FLOAT',
               'discount': 'FLOAT', 'discount_code': 'VARCHAR(30)'},
+    'fixed_assets': {
+        'class_id': 'INTEGER', 'arm_id': 'INTEGER', 'teacher_id': 'INTEGER',
+        'section': 'VARCHAR(20)',
+    },
 }
 
 # Columns whose NOT NULL constraint must be relaxed on existing databases (a
@@ -394,6 +398,7 @@ def ensure_tables(bind=None):
                         AttendanceIntervention, InterventionNote, StockMovement,
                         Supplier, PurchaseOrder, PurchaseOrderItem, SupplierPayment,
                         PromoCode, StockAudit, StockAuditItem, FixedAsset, StockBatch,
+                        AssetLog,
                         UserSession, SiteSettings, SitePage, SiteMedia,
                         SiteViewDaily, SiteReferrerDaily, SiteVisitorDaily,
                         HolidayAssignment, NewsPost,
@@ -415,7 +420,7 @@ def ensure_tables(bind=None):
               StockMovement.__table__, Supplier.__table__, PurchaseOrder.__table__,
               PurchaseOrderItem.__table__, SupplierPayment.__table__, PromoCode.__table__,
               StockAudit.__table__, StockAuditItem.__table__, FixedAsset.__table__,
-              StockBatch.__table__, UserSession.__table__,
+              StockBatch.__table__, AssetLog.__table__, UserSession.__table__,
               SiteSettings.__table__, SitePage.__table__, SiteMedia.__table__,
               SiteViewDaily.__table__, SiteReferrerDaily.__table__,
               SiteVisitorDaily.__table__, HolidayAssignment.__table__,

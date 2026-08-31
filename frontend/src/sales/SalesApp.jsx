@@ -1463,15 +1463,19 @@ function AuditDetail({ d, notify }) {
 function Assets({ d, notify }) {
   const nav = useNav();
   const s = d.summary || {};
+  const [tab, setTab] = useState('register');
   const [q, setQ] = useState(d.q || '');
   const [cat, setCat] = useState(d.category || '');
   const [status, setStatus] = useState(d.status || '');
+  const [section, setSection] = useState(d.section || '');
   const [editing, setEditing] = useState(null);   // asset being edited, or {} for add
   const [disposing, setDisposing] = useState(null);
+  const [viewingHistory, setViewingHistory] = useState(null);
   const shown = d.assets.filter((a) => {
     if (q && !(`${a.name} ${a.asset_tag} ${a.serial_number}`.toLowerCase().includes(q.toLowerCase()))) return false;
     if (cat && a.category !== cat) return false;
     if (status && a.status !== status) return false;
+    if (section && a.effective_section !== section) return false;
     return true;
   });
   const badge = (st) => {
@@ -1486,41 +1490,63 @@ function Assets({ d, notify }) {
         <a className="btn btn-secondary" href={d.export_url}><i aria-hidden="true" className="fas fa-file-excel" /> Export</a>
         <a href={d.urls.products} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-boxes-stacked" /> Products</a>
       </>} />
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: '.75rem', marginBottom: '1rem' }}>
-        <Tile n={s.count || 0} label="Active assets" />
-        <div className="card"><div className="card-body"><div style={{ fontSize: 'var(--text-xl)', fontWeight: 700 }}>{naira(s.total_cost || 0)}</div><div className="text-muted text-sm">Acquisition cost</div></div></div>
-        <div className="card"><div className="card-body"><div style={{ fontSize: 'var(--text-xl)', fontWeight: 700 }}>{naira(s.total_book || 0)}</div><div className="text-muted text-sm">Net book value</div></div></div>
-        <Tile n={s.disposed || 0} label="Disposed" />
+      <div className="card mb-3" style={{ padding: '.25rem' }}>
+        <div style={{ display: 'flex', gap: '.25rem' }}>
+          <button type="button" className={'btn btn-sm ' + (tab === 'register' ? 'btn-primary' : 'btn-light')} onClick={() => setTab('register')}><i aria-hidden="true" className="fas fa-list" /> Register</button>
+          <button type="button" className={'btn btn-sm ' + (tab === 'analytics' ? 'btn-primary' : 'btn-light')} onClick={() => setTab('analytics')}><i aria-hidden="true" className="fas fa-chart-pie" /> Analytics</button>
+        </div>
       </div>
-      <div className="card mb-3"><div className="card-body" style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-        <input type="search" className="form-control" placeholder="Search name / tag / serial" value={q} onChange={(e) => setQ(e.target.value)} style={{ maxWidth: 240 }} />
-        <select className="form-control" value={cat} onChange={(e) => setCat(e.target.value)} style={{ maxWidth: 200 }}><option value="">All categories</option>{d.categories.map((c) => <option key={c}>{c}</option>)}</select>
-        <select className="form-control" value={status} onChange={(e) => setStatus(e.target.value)} style={{ maxWidth: 160 }}><option value="">All statuses</option>{d.statuses.map((st) => <option key={st}>{st}</option>)}</select>
-      </div></div>
-      <div className="card"><div className="card-header"><h3>Assets ({shown.length})</h3></div>
-        <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
-          {shown.length ? (
-            <table className="data-table"><thead><tr><th>Asset</th><th>Category</th><th className="text-right">Cost</th><th className="text-right">Book value</th><th>Custodian</th><th>Status</th><th /></tr></thead>
-              <tbody>{shown.map((a) => (
-                <tr key={a.id}>
-                  <td><strong>{a.name}</strong>{a.asset_tag && <span className="text-muted text-sm"> · {a.asset_tag}</span>}{a.from_product && <span className="badge badge-light" title="Converted from inventory" style={{ marginLeft: 4 }}>stock</span>}{a.serial_number && <div className="text-muted text-sm">SN {a.serial_number}</div>}</td>
-                  <td>{a.category}</td>
-                  <td className="text-right">{naira(a.acquisition_cost)}</td>
-                  <td className="text-right">{naira(a.book_value)}{a.annual_depreciation > 0 && <div className="text-muted text-sm">−{naira(a.annual_depreciation)}/yr</div>}</td>
-                  <td className="text-muted text-sm">{a.custodian || '—'}{a.location && <div>{a.location}</div>}</td>
-                  <td>{badge(a.status)}</td>
-                  <td><div style={{ display: 'flex', gap: '.3rem' }}>
-                    <button type="button" className="btn btn-sm btn-light" onClick={() => setEditing(a)}><i aria-hidden="true" className="fas fa-pen" /></button>
-                    {!a.is_disposed && <button type="button" className="btn btn-sm btn-light" onClick={() => setDisposing(a)} title="Dispose / retire"><i aria-hidden="true" className="fas fa-box-archive" /></button>}
-                  </div></td>
-                </tr>
-              ))}</tbody></table>
-          ) : <EmptyState icon="fa-building-columns" title="No assets registered">Register one, or convert stock from the Products screen.</EmptyState>}
-        </div></div>
+      {tab === 'analytics' ? (
+        <AssetAnalytics d={d} />
+      ) : (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: '.75rem', marginBottom: '1rem' }}>
+            <Tile n={s.count || 0} label="Active assets" />
+            <Tile n={s.quantity || 0} label="Total units" />
+            <div className="card"><div className="card-body"><div style={{ fontSize: 'var(--text-xl)', fontWeight: 700 }}>{naira(s.total_cost || 0)}</div><div className="text-muted text-sm">Acquisition cost</div></div></div>
+            <div className="card"><div className="card-body"><div style={{ fontSize: 'var(--text-xl)', fontWeight: 700 }}>{naira(s.total_book || 0)}</div><div className="text-muted text-sm">Net book value</div></div></div>
+            <Tile n={s.disposed || 0} label="Disposed" />
+          </div>
+          <div className="card mb-3"><div className="card-body" style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+            <input type="search" className="form-control" placeholder="Search name / tag / serial" value={q} onChange={(e) => setQ(e.target.value)} style={{ maxWidth: 240 }} />
+            <select className="form-control" value={cat} onChange={(e) => setCat(e.target.value)} style={{ maxWidth: 200 }}><option value="">All categories</option>{d.categories.map((c) => <option key={c}>{c}</option>)}</select>
+            <select className="form-control" value={status} onChange={(e) => setStatus(e.target.value)} style={{ maxWidth: 160 }}><option value="">All statuses</option>{d.statuses.map((st) => <option key={st}>{st}</option>)}</select>
+            <select className="form-control" value={section} onChange={(e) => setSection(e.target.value)} style={{ maxWidth: 180 }}><option value="">All sections</option>{d.sections.map((sc) => <option key={sc.key} value={sc.key}>{sc.label}</option>)}</select>
+          </div></div>
+          <div className="card"><div className="card-header"><h3>Assets ({shown.length})</h3></div>
+            <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+              {shown.length ? (
+                <table className="data-table"><thead><tr><th>Asset</th><th>Category</th><th className="text-right">Qty</th><th>Assigned to</th><th className="text-right">Book value</th><th>Custodian</th><th>Status</th><th /></tr></thead>
+                  <tbody>{shown.map((a) => (
+                    <tr key={a.id}>
+                      <td><strong>{a.name}</strong>{a.asset_tag && <span className="text-muted text-sm"> · {a.asset_tag}</span>}{a.from_product && <span className="badge badge-light" title="Converted from inventory" style={{ marginLeft: 4 }}>stock</span>}{a.serial_number && <div className="text-muted text-sm">SN {a.serial_number}</div>}</td>
+                      <td>{a.category}</td>
+                      <td className="text-right"><strong>{a.quantity}</strong></td>
+                      <td className="text-muted text-sm">
+                        {a.class_name && <div>{a.class_name}{a.arm_name ? ` (${a.arm_name})` : ''}</div>}
+                        {a.teacher_name && <div>{a.teacher_name}</div>}
+                        {a.effective_section_label && <div>{a.effective_section_label}</div>}
+                        {!a.class_name && !a.teacher_name && !a.effective_section_label && '—'}
+                      </td>
+                      <td className="text-right">{naira(a.book_value)}{a.annual_depreciation > 0 && <div className="text-muted text-sm">−{naira(a.annual_depreciation)}/yr</div>}</td>
+                      <td className="text-muted text-sm">{a.custodian || '—'}{a.location && <div>{a.location}</div>}</td>
+                      <td>{badge(a.status)}</td>
+                      <td><div style={{ display: 'flex', gap: '.3rem' }}>
+                        <button type="button" className="btn btn-sm btn-light" onClick={() => setViewingHistory(a)} title="History"><i aria-hidden="true" className="fas fa-clock-rotate-left" /></button>
+                        <button type="button" className="btn btn-sm btn-light" onClick={() => setEditing(a)} title="Edit"><i aria-hidden="true" className="fas fa-pen" /></button>
+                        {!a.is_disposed && <button type="button" className="btn btn-sm btn-light" onClick={() => setDisposing(a)} title="Dispose / retire"><i aria-hidden="true" className="fas fa-box-archive" /></button>}
+                      </div></td>
+                    </tr>
+                  ))}</tbody></table>
+              ) : <EmptyState icon="fa-building-columns" title="No assets registered">Register one, or convert stock from the Products screen.</EmptyState>}
+            </div></div>
+        </>
+      )}
       {editing && <AssetForm d={d} asset={editing.id ? editing : null} notify={notify}
                              onClose={() => setEditing(null)} onSaved={() => { setEditing(null); nav.refresh(); }} />}
       {disposing && <DisposeModal asset={disposing} notify={notify}
                                   onClose={() => setDisposing(null)} onSaved={() => { setDisposing(null); nav.refresh(); }} />}
+      {viewingHistory && <AssetHistoryModal asset={viewingHistory} onClose={() => setViewingHistory(null)} />}
     </>
   );
 }
@@ -1533,7 +1559,10 @@ function AssetForm({ d, asset, onClose, onSaved, notify }) {
     acquisition_date: asset?.acquisition_date || '', supplier: asset?.supplier || '',
     location: asset?.location || '', custodian: asset?.custodian || '',
     status: asset?.status || 'In Use', useful_life_years: asset?.useful_life_years ?? '',
-    salvage_value: asset?.salvage_value ?? '',
+    salvage_value: asset?.salvage_value ?? '', quantity: asset?.quantity ?? 1,
+    class_id: asset?.class_id || '', arm_id: asset?.arm_id || '',
+    teacher_id: asset?.teacher_id || '', section: asset?.section || '',
+    change_note: '',
   }));
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
   const save = async () => {
@@ -1548,6 +1577,7 @@ function AssetForm({ d, asset, onClose, onSaved, notify }) {
         <Field label="Name *"><input className="form-control" value={f.name} onChange={(e) => set('name', e.target.value)} /></Field>
         <Field label="Asset tag"><input className="form-control" value={f.asset_tag} onChange={(e) => set('asset_tag', e.target.value)} /></Field>
         <Field label="Category"><select className="form-control" value={f.category} onChange={(e) => set('category', e.target.value)}>{d.categories.map((c) => <option key={c}>{c}</option>)}</select></Field>
+        <Field label="Quantity *"><input type="number" min="0" className="form-control" value={f.quantity} onChange={(e) => set('quantity', e.target.value)} placeholder="e.g. 30 laptops" /></Field>
         <Field label="Serial number"><input className="form-control" value={f.serial_number} onChange={(e) => set('serial_number', e.target.value)} /></Field>
         <Field label="Acquisition cost (₦)"><input type="number" className="form-control" value={f.acquisition_cost} onChange={(e) => set('acquisition_cost', e.target.value)} /></Field>
         <Field label="Acquired on"><input type="date" className="form-control" value={f.acquisition_date} onChange={(e) => set('acquisition_date', e.target.value)} /></Field>
@@ -1558,6 +1588,21 @@ function AssetForm({ d, asset, onClose, onSaved, notify }) {
         <Field label="Useful life (yrs)"><input type="number" className="form-control" value={f.useful_life_years} onChange={(e) => set('useful_life_years', e.target.value)} placeholder="for depreciation" /></Field>
         <Field label="Salvage value (₦)"><input type="number" className="form-control" value={f.salvage_value} onChange={(e) => set('salvage_value', e.target.value)} /></Field>
       </div>
+      <h4 style={{ margin: '1rem 0 .4rem' }}>Optional placement</h4>
+      <p className="text-muted text-sm" style={{ marginTop: 0 }}>Leave any of these blank — an asset can belong to none, one, or several.</p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: '.6rem' }}>
+        <Field label="Class"><select className="form-control" value={f.class_id} onChange={(e) => set('class_id', e.target.value)}>
+          <option value="">— None —</option>{(d.classes || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></Field>
+        <Field label="Arm"><select className="form-control" value={f.arm_id} onChange={(e) => set('arm_id', e.target.value)}>
+          <option value="">— None —</option>{(d.arms || []).map((ar) => <option key={ar.id} value={ar.id}>{ar.name}</option>)}</select></Field>
+        <Field label="Teacher"><select className="form-control" value={f.teacher_id} onChange={(e) => set('teacher_id', e.target.value)}>
+          <option value="">— None —</option>{(d.teachers || []).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}</select></Field>
+        <Field label="Section"><select className="form-control" value={f.section} onChange={(e) => set('section', e.target.value)}>
+          <option value="">— None / inherit from class —</option>{(d.sections || []).map((sc) => <option key={sc.key} value={sc.key}>{sc.label}</option>)}</select></Field>
+      </div>
+      <Field label="What changed? (optional)" wide><input className="form-control" value={f.change_note} onChange={(e) => set('change_note', e.target.value)}
+             placeholder="e.g. 10 more units donated, 5 sent for repair…" /></Field>
+      <p className="text-muted text-sm" style={{ marginTop: '.25rem' }}>Recorded in this asset's history so quantity/status changes can be compared term-to-term.</p>
     </Modal>
   );
 }
@@ -1582,6 +1627,144 @@ function DisposeModal({ asset, onClose, onSaved, notify }) {
     </Modal>
   );
 }
+
+function AssetHistoryModal({ asset, onClose }) {
+  const [logs, setLogs] = useState(null);
+  const [error, setError] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    apiGet(asset.history_url).then((r) => { if (alive) setLogs(r.logs || []); })
+      .catch(() => { if (alive) setError('Could not load history.'); });
+    return () => { alive = false; };
+  }, [asset.history_url]);
+  const EVENT_LABEL = { created: 'Registered', quantity_changed: 'Quantity changed',
+    status_changed: 'Status changed', updated: 'Updated', disposed: 'Disposed', restored: 'Restored' };
+  return (
+    <Modal title={`History — ${asset.name}`} icon="fa-clock-rotate-left" size="lg" onClose={onClose}
+           footer={<Button variant="secondary" onClick={onClose}>Close</Button>}>
+      {error && <p className="text-danger">{error}</p>}
+      {!logs && !error && <p className="text-muted text-sm">Loading…</p>}
+      {logs && (logs.length ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '.6rem' }}>
+          {logs.map((l) => (
+            <div key={l.id} className="card" style={{ padding: '.6rem .8rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '.3rem' }}>
+                <strong>{EVENT_LABEL[l.event_type] || l.event_type}</strong>
+                <span className="text-muted text-sm">{l.created_at}{l.created_by ? ` · ${l.created_by}` : ''}</span>
+              </div>
+              {l.quantity_after !== null && l.quantity_after !== undefined && (
+                <div className="text-sm" style={{ marginTop: 2 }}>
+                  Quantity: {l.quantity_before ?? '—'} → <strong>{l.quantity_after}</strong>
+                  {l.quantity_delta ? <span className={l.quantity_delta > 0 ? 'text-success' : 'text-danger'}> ({l.quantity_delta > 0 ? '+' : ''}{l.quantity_delta})</span> : null}
+                </div>
+              )}
+              {l.status_after && (
+                <div className="text-sm" style={{ marginTop: 2 }}>Status: {l.status_before || '—'} → <strong>{l.status_after}</strong></div>
+              )}
+              {(l.session || l.term) && <div className="text-muted text-sm" style={{ marginTop: 2 }}>{l.term}{l.term && l.session ? ' · ' : ''}{l.session}</div>}
+              {l.note && <div className="text-sm" style={{ marginTop: 2 }}>{l.note}</div>}
+            </div>
+          ))}
+        </div>
+      ) : <EmptyState icon="fa-clock-rotate-left" title="No history yet" />)}
+    </Modal>
+  );
+}
+
+// ---- Fixed asset analytics --------------------------------------------------
+function AssetAnalytics({ d }) {
+  const [filters, setFilters] = useState({ category: '', section: '', class_id: '' });
+  const [data, setData] = useState(null);
+  const [error, setError] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    setData(null);
+    const p = new URLSearchParams();
+    if (filters.category) p.set('category', filters.category);
+    if (filters.section) p.set('section', filters.section);
+    if (filters.class_id) p.set('class_id', filters.class_id);
+    const url = d.analytics_url + (p.toString() ? `?${p}` : '');
+    apiGet(url).then((r) => { if (alive) setData(r); })
+      .catch(() => { if (alive) setError('Could not load analytics.'); });
+    return () => { alive = false; };
+  }, [filters, d.analytics_url]);
+  const setFilter = (k, v) => setFilters((s) => ({ ...s, [k]: v }));
+
+  if (error) return <p className="text-danger">{error}</p>;
+  if (!data) return <p className="text-muted text-sm" style={{ padding: '1rem 0' }}>Loading analytics…</p>;
+  const o = data.overview || {};
+
+  const deltaCell = (now, then, label) => {
+    if (then === null || then === undefined) return <td className="text-right text-muted">—</td>;
+    const delta = now - then;
+    return (
+      <td className="text-right">
+        {then}
+        {delta !== 0 && <span className={delta > 0 ? 'text-success' : 'text-danger'} style={{ marginLeft: 4 }}>({delta > 0 ? '+' : ''}{delta})</span>}
+      </td>
+    );
+  };
+
+  return (
+    <>
+      <div className="card mb-3"><div className="card-body" style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <select className="form-control" value={filters.category} onChange={(e) => setFilter('category', e.target.value)} style={{ maxWidth: 200 }}>
+          <option value="">All categories</option>{d.categories.map((c) => <option key={c}>{c}</option>)}</select>
+        <select className="form-control" value={filters.section} onChange={(e) => setFilter('section', e.target.value)} style={{ maxWidth: 200 }}>
+          <option value="">All sections</option>{d.sections.map((sc) => <option key={sc.key} value={sc.key}>{sc.label}</option>)}</select>
+        <select className="form-control" value={filters.class_id} onChange={(e) => setFilter('class_id', e.target.value)} style={{ maxWidth: 200 }}>
+          <option value="">All classes</option>{(d.classes || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+      </div></div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '.75rem', marginBottom: '1rem' }}>
+        <Tile n={o.count || 0} label="Active assets" />
+        <Tile n={o.quantity || 0} label="Total units" />
+        <div className="card"><div className="card-body"><div style={{ fontSize: 'var(--text-xl)', fontWeight: 700 }}>{naira(o.total_cost || 0)}</div><div className="text-muted text-sm">Acquisition cost</div></div></div>
+        <div className="card"><div className="card-body"><div style={{ fontSize: 'var(--text-xl)', fontWeight: 700 }}>{naira(o.total_book || 0)}</div><div className="text-muted text-sm">Net book value</div></div></div>
+        <Tile n={o.disposed || 0} label="Disposed" />
+        <Tile n={o.unassigned_placement || 0} label="No class/teacher/section" />
+      </div>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: '1rem', marginBottom: '1rem' }}>
+        <div className="card"><div className="card-header"><h3>By category</h3></div><div className="card-body">
+          <BarList rows={data.by_category || []} labelKey="label" valueKey="quantity" fmt={(v) => v} color={chartPalette().green} sub={(r) => `${r.count} record(s)`} /></div></div>
+        <div className="card"><div className="card-header"><h3>By status</h3></div><div className="card-body">
+          <BarList rows={data.by_status || []} labelKey="label" valueKey="quantity" fmt={(v) => v} color={chartPalette().amber} sub={(r) => `${r.count} record(s)`} /></div></div>
+        <div className="card"><div className="card-header"><h3>By section</h3></div><div className="card-body">
+          <BarList rows={data.by_section || []} labelKey="label" valueKey="quantity" fmt={(v) => v} color={chartPalette().indigo} sub={(r) => `${r.count} record(s)`} /></div></div>
+        <div className="card"><div className="card-header"><h3>By class</h3></div><div className="card-body">
+          <BarList rows={data.by_class || []} labelKey="label" valueKey="quantity" fmt={(v) => v} color={chartPalette().cyan} sub={(r) => `${r.count} record(s)`} /></div></div>
+        <div className="card"><div className="card-header"><h3>By teacher</h3></div><div className="card-body">
+          <BarList rows={data.by_teacher || []} labelKey="label" valueKey="quantity" fmt={(v) => v} color={chartPalette().violet} sub={(r) => `${r.count} record(s)`} /></div></div>
+      </div>
+
+      <div className="card">
+        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-scale-balanced" /> Quantity over time, by category</h3></div>
+        <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+          <table className="data-table">
+            <thead><tr>
+              <th>Category</th><th className="text-right">Now</th>
+              <th className="text-right">7 days ago</th>
+              <th className="text-right">{(data.comparison[0] && data.comparison[0].last_term_label) || 'Last term'}</th>
+              <th className="text-right">{(data.comparison[0] && data.comparison[0].last_session_label) || 'Last session'}</th>
+            </tr></thead>
+            <tbody>{(data.comparison || []).map((r) => (
+              <tr key={r.category} style={r.category === 'Total' ? { fontWeight: 700 } : undefined}>
+                <td>{r.category}</td>
+                <td className="text-right">{r.now}</td>
+                {deltaCell(r.now, r.last_week)}
+                {deltaCell(r.now, r.last_term)}
+                {deltaCell(r.now, r.last_session)}
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      </div>
+    </>
+  );
+}
+
+
 
 // ---- Stock batches / lots --------------------------------------------------
 function Batches({ d }) {
