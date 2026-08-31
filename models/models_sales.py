@@ -414,6 +414,15 @@ FIXED_ASSET_CATEGORIES = ['ICT Equipment', 'Furniture & Fittings', 'Laboratory E
                           'Kitchen Equipment', 'Musical Instruments', 'Books & Library',
                           'Other']
 FIXED_ASSET_STATUSES = ['In Use', 'In Store', 'Under Repair', 'Disposed', 'Lost']
+# Optional broad section an asset can be pinned to, independent of a specific
+# class (e.g. a generator serving the whole Primary wing). Uses the same
+# machine keys as SchoolClass.section / utils.results_analytics_org so the
+# two line up for filtering and comparison ('nursery'/'primary'/'junior'/
+# 'senior' — see SECTION_LABELS there for the friendly names).
+FIXED_ASSET_SECTIONS = ['nursery', 'primary', 'junior', 'senior']
+# Kinds of change recorded in an asset's history ledger.
+ASSET_EVENT_TYPES = ['created', 'quantity_changed', 'status_changed', 'updated',
+                     'disposed', 'restored']
 
 
 class FixedAsset(db.Model):
@@ -448,9 +457,19 @@ class FixedAsset(db.Model):
     disposal_note = db.Column(db.String(200))
     created_by = db.Column(db.String(100))
     created_at = db.Column(db.DateTime, default=local_now)
+    # Optional ownership/placement — every one of these may be left blank. A
+    # teacher's desk might carry a class + teacher; a school bus might carry
+    # none of them; a nursery generator might carry only a section.
+    class_id = db.Column(db.Integer, db.ForeignKey('school_classes.id'))
+    arm_id = db.Column(db.Integer, db.ForeignKey('class_arms.id'))
+    teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'))
+    section = db.Column(db.String(20))   # Nursery / Primary / Junior Secondary / Senior Secondary
 
     branch = db.relationship('Branch')
     source_product = db.relationship('Product')
+    school_class = db.relationship('SchoolClass')
+    arm = db.relationship('ClassArm')
+    teacher = db.relationship('Teacher')
 
     @property
     def is_disposed(self):
@@ -488,6 +507,47 @@ class FixedAsset(db.Model):
 
     def __repr__(self):
         return f'<FixedAsset {self.asset_tag or self.name}>'
+
+
+class AssetLog(db.Model):
+    """History ledger for a FixedAsset — one row per meaningful change
+    (registered, quantity changed, status changed, edited, disposed,
+    restored). Tagged with the session/term active at the time so the assets
+    screen can answer "how many did we have last term / last session" by
+    replaying the ledger, and with a plain timestamp so a week-over-week
+    comparison also works without any term being configured."""
+    __tablename__ = 'asset_logs'
+
+    id = db.Column(db.Integer, primary_key=True)
+    asset_id = db.Column(db.Integer, db.ForeignKey('fixed_assets.id'), nullable=False, index=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))
+    event_type = db.Column(db.String(20), nullable=False)
+    quantity_before = db.Column(db.Integer)
+    quantity_after = db.Column(db.Integer)
+    status_before = db.Column(db.String(20))
+    status_after = db.Column(db.String(20))
+    note = db.Column(db.String(255))
+    session_id = db.Column(db.Integer, db.ForeignKey('academic_sessions.id'))
+    term_id = db.Column(db.Integer, db.ForeignKey('terms.id'))
+    created_by = db.Column(db.String(100))
+    created_at = db.Column(db.DateTime, default=local_now, index=True)
+
+    asset = db.relationship('FixedAsset',
+                            backref=db.backref('logs', lazy='dynamic',
+                                               order_by='AssetLog.created_at.desc()',
+                                               cascade='all, delete-orphan'))
+    branch = db.relationship('Branch')
+    session = db.relationship('AcademicSession')
+    term = db.relationship('Term')
+
+    @property
+    def quantity_delta(self):
+        if self.quantity_before is None or self.quantity_after is None:
+            return None
+        return self.quantity_after - self.quantity_before
+
+    def __repr__(self):
+        return f'<AssetLog {self.event_type} asset={self.asset_id}>'
 
 
 class PromoCode(db.Model):
