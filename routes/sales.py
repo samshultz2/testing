@@ -11,7 +11,8 @@ from sqlalchemy import func
 from models import (db, Product, Sale, SaleItem, StockMovement, Student,
                     StudentEnrollment, ClassArmAssignment, SchoolClass, ClassArm,
                     Supplier, PurchaseOrder, PurchaseOrderItem, SupplierPayment, PromoCode,
-                    StockAudit, StockAuditItem, FixedAsset, StockBatch, AssetLog, Teacher)
+                    StockAudit, StockAuditItem, FixedAsset, StockBatch, AssetLog,
+                    AssetStatusCount, Teacher)
 from models.models_sales import (PRODUCT_CATEGORIES, SALE_METHODS, CUSTOMER_TYPES,
                                  UNITS, STOCK_IN_REASONS, STOCK_OUT_REASONS,
                                  PO_STATUSES, PURCHASE_METHODS,
@@ -1721,6 +1722,8 @@ def _asset_dict(a):
         'custodian': a.custodian or '', 'status': a.status,
         'useful_life_years': a.useful_life_years, 'salvage_value': a.salvage_value or 0,
         'quantity': a.quantity or 1,
+        'status_breakdown': a.status_breakdown, 'is_split': a.is_split,
+        'active_quantity': a.active_quantity,
         'annual_depreciation': a.annual_depreciation,
         'accumulated_depreciation': a.accumulated_depreciation,
         'book_value': a.book_value, 'is_disposed': a.is_disposed,
@@ -1736,16 +1739,55 @@ def _asset_dict(a):
                                     if _effective_section(a) else ''),
         'edit_url': url_for('sales.edit_asset', asset_id=a.id),
         'dispose_url': url_for('sales.dispose_asset', asset_id=a.id),
+        'delete_url': url_for('sales.delete_asset', asset_id=a.id),
         'history_url': url_for('sales.asset_history', asset_id=a.id),
     }
 
 
+def _set_status_breakdown(a, breakdown):
+    """Replace an asset's per-status quantity split. `breakdown` is a dict of
+    {status: quantity}; non-positive entries are dropped. Keeps the summary
+    `status` (largest bucket) and `quantity` (the sum) fields in sync so
+    every view that hasn't been taught about splits still shows something
+    sensible. Mutates the ORM relationship collection directly (not raw
+    inserts) so `a.status_counts` — and anything reading it in the same
+    request, like the history log — reflects the change immediately."""
+    a.status_counts.clear()   # cascade='all, delete-orphan' removes the old rows on flush
+    db.session.flush()        # commit the deletes before inserting new rows with the same
+                              # (asset_id, status) key, or the unique constraint can race them
+    total = 0
+    best_status, best_qty = a.status, -1
+    for st, qty in breakdown.items():
+        qty = int(qty or 0)
+        if qty <= 0 or st not in FIXED_ASSET_STATUSES:
+            continue
+        a.status_counts.append(AssetStatusCount(status=st, quantity=qty))
+        total += qty
+        if qty > best_qty:
+            best_status, best_qty = st, qty
+    if total:
+        a.quantity = total
+        a.status = best_status
+
+
+def _breakdown_dict(a):
+    return {r['status']: r['quantity'] for r in a.status_breakdown}
+
+
+def _describe_breakdown(breakdown):
+    return ', '.join(f"{qty} {st}" for st, qty in
+                     sorted(breakdown.items(), key=lambda kv: -kv[1]) if qty)
+
+
 def _apply_asset_fields(a, form):
-    """Mutate a FixedAsset from submitted form fields. Returns the
-    before/after quantity and status so the caller can decide what history to
-    log (this function only touches the row, never the ledger)."""
+    """Mutate a FixedAsset from submitted form fields. Returns before/after
+    quantity, status and status-breakdown so the caller can decide what
+    history to log (this function only touches the row, never the ledger).
+    Requires `a.id` to exist if a status breakdown is submitted — flush new
+    assets first."""
     from utils.security import strip_tags
     qty_before, status_before = a.quantity, a.status
+    breakdown_before = _breakdown_dict(a)
     a.name = strip_tags(form.get('name') or '').strip() or a.name
     a.asset_tag = (form.get('asset_tag') or '').strip() or None
     cat = (form.get('category') or '').strip()
@@ -1761,15 +1803,37 @@ def _apply_asset_fields(a, form):
     a.supplier = (form.get('supplier') or '').strip() or None
     a.location = (form.get('location') or '').strip() or None
     a.custodian = (form.get('custodian') or '').strip() or None
-    st = (form.get('status') or '').strip()
-    if st in FIXED_ASSET_STATUSES and st != 'Disposed':
-        a.status = st
     a.useful_life_years = form.get('useful_life_years', type=int)
     a.salvage_value = form.get('salvage_value', type=float) or 0
-    if form.get('quantity') is not None:
-        qty = form.get('quantity', type=int)
-        if qty is not None and qty >= 0:
-            a.quantity = qty
+
+    breakdown_json = (form.get('status_breakdown') or '').strip()
+    parsed_breakdown = None
+    if breakdown_json:
+        import json
+        try:
+            pairs = json.loads(breakdown_json)
+            parsed_breakdown = {}
+            for item in pairs:
+                st = (item.get('status') or '').strip()
+                qty = int(item.get('quantity') or 0)
+                if st in FIXED_ASSET_STATUSES and qty > 0:
+                    parsed_breakdown[st] = parsed_breakdown.get(st, 0) + qty
+        except (ValueError, TypeError, AttributeError):
+            parsed_breakdown = None
+    if parsed_breakdown:
+        _set_status_breakdown(a, parsed_breakdown)
+    else:
+        # Simple single-status mode — clears any existing split, since the
+        # form is now the single source of truth for this asset's status.
+        st = (form.get('status') or '').strip()
+        if st in FIXED_ASSET_STATUSES and st != 'Disposed':
+            a.status = st
+        if form.get('quantity') is not None:
+            qty = form.get('quantity', type=int)
+            if qty is not None and qty >= 0:
+                a.quantity = qty
+        a.status_counts.clear()
+
     # Optional ownership/placement — every one of these may be cleared by
     # submitting an empty value, since a school may change its mind about
     # what an asset is assigned to.
@@ -1782,7 +1846,8 @@ def _apply_asset_fields(a, form):
     section = (form.get('section') or '').strip()
     a.section = section if section in FIXED_ASSET_SECTIONS else None
     return {'qty_before': qty_before, 'qty_after': a.quantity,
-            'status_before': status_before, 'status_after': a.status}
+            'status_before': status_before, 'status_after': a.status,
+            'breakdown_before': breakdown_before, 'breakdown_after': _breakdown_dict(a)}
 
 
 def _log_asset_event(a, event_type, quantity_before=None, quantity_after=None,
@@ -1832,23 +1897,26 @@ def assets():
                                     FixedAsset.serial_number.ilike(like_term(q), escape='\\')))
     if category:
         query = query.filter(FixedAsset.category == category)
-    if status:
-        query = query.filter(FixedAsset.status == status)
     if class_id:
         query = query.filter(FixedAsset.class_id == class_id)
     rows = query.order_by(FixedAsset.created_at.desc()).all()
     if section:
         rows = [a for a in rows if _effective_section(a) == section]
+    if status:
+        # Breakdown-aware: an asset shows up for any status it has units in,
+        # not just its single dominant/display status.
+        rows = [a for a in rows if any(r['status'] == status and r['quantity'] > 0
+                                       for r in a.status_breakdown)]
     live = [a for a in rows if not a.is_disposed]
     from collections import defaultdict
     by_cat = defaultdict(lambda: {'count': 0, 'quantity': 0, 'cost': 0.0, 'book': 0.0})
     for a in live:
         b = by_cat[a.category or 'Other']
-        b['count'] += 1; b['quantity'] += a.quantity or 0
+        b['count'] += 1; b['quantity'] += a.active_quantity
         b['cost'] += a.acquisition_cost or 0; b['book'] += a.book_value
     summary = {
         'count': len(live),
-        'quantity': sum(a.quantity or 0 for a in live),
+        'quantity': sum(a.active_quantity for a in live),
         'total_cost': round(sum(a.acquisition_cost or 0 for a in live), 2),
         'total_book': round(sum(a.book_value for a in live), 2),
         'disposed': sum(1 for a in rows if a.is_disposed),
@@ -1879,9 +1947,9 @@ def add_asset():
         return _err('Asset name is required.', url_for('sales.assets'))
     a = FixedAsset(branch_id=branch_for_new(), name=name, quantity=1,
                    acquisition_date=timeutil.today(), created_by=_actor())
-    _apply_asset_fields(a, request.form)
     db.session.add(a)
-    db.session.flush()
+    db.session.flush()   # assigns a.id, needed if a status breakdown is submitted
+    _apply_asset_fields(a, request.form)
     _log_asset_event(a, 'created', quantity_after=a.quantity, status_after=a.status,
                      note=(request.form.get('change_note') or '').strip() or None)
     db.session.commit()
@@ -1896,17 +1964,41 @@ def edit_asset(asset_id):
         return _err('That asset belongs to another branch.', url_for('sales.assets'))
     note = (request.form.get('change_note') or '').strip() or None
     change = _apply_asset_fields(a, request.form)
-    if change['qty_before'] != change['qty_after']:
-        _log_asset_event(a, 'quantity_changed', quantity_before=change['qty_before'],
-                         quantity_after=change['qty_after'], note=note)
-    if change['status_before'] != change['status_after']:
-        _log_asset_event(a, 'status_changed', status_before=change['status_before'],
-                         status_after=change['status_after'], note=note)
-    if (change['qty_before'] == change['qty_after']
-            and change['status_before'] == change['status_after'] and note):
-        _log_asset_event(a, 'updated', note=note)
+    if change['breakdown_before'] != change['breakdown_after']:
+        desc = _describe_breakdown(change['breakdown_after'])
+        _log_asset_event(a, 'status_changed', quantity_before=change['qty_before'],
+                         quantity_after=change['qty_after'],
+                         status_before=change['status_before'], status_after=change['status_after'],
+                         note=(f'{note} — {desc}' if note else desc))
+    else:
+        if change['qty_before'] != change['qty_after']:
+            _log_asset_event(a, 'quantity_changed', quantity_before=change['qty_before'],
+                             quantity_after=change['qty_after'], note=note)
+        if change['status_before'] != change['status_after']:
+            _log_asset_event(a, 'status_changed', status_before=change['status_before'],
+                             status_after=change['status_after'], note=note)
+        if (change['qty_before'] == change['qty_after']
+                and change['status_before'] == change['status_after'] and note):
+            _log_asset_event(a, 'updated', note=note)
     db.session.commit()
     return _ok('Asset updated.', url_for('sales.assets'))
+
+
+@sales_bp.route('/assets/<int:asset_id>/delete', methods=['POST'])
+@login_required
+def delete_asset(asset_id):
+    """Permanently remove an asset and its history/status-split rows. Unlike
+    dispose (which retires an asset but keeps its record), this erases it —
+    use for mistaken entries or duplicates, not routine retirement."""
+    a = db.get_or_404(FixedAsset, asset_id)
+    if not can_access_branch(a.branch_id):
+        return _err('That asset belongs to another branch.', url_for('sales.assets'))
+    name, tag = a.name, a.asset_tag
+    from utils.audit import log_action
+    log_action('sales.asset_delete', detail=f'{name} (tag {tag or "—"})', target=a)
+    db.session.delete(a)
+    db.session.commit()
+    return _ok(f'"{name}" deleted.', url_for('sales.assets'))
 
 
 @sales_bp.route('/products/<int:product_id>/convert-asset', methods=['POST'])
@@ -1961,32 +2053,55 @@ def convert_to_asset(product_id):
 @sales_bp.route('/assets/<int:asset_id>/dispose', methods=['POST'])
 @login_required
 def dispose_asset(asset_id):
-    """Retire an asset. Any sale proceeds are posted to the finance ledger as
-    'Asset Disposal' income (idempotent per asset)."""
+    """Retire an asset, in full or in part (e.g. 5 of 30 laptops written
+    off). A partial disposal moves that many units into the 'Disposed'
+    bucket of the status split and leaves the rest active. Any sale proceeds
+    are posted to the finance ledger as 'Asset Disposal' income."""
     a = db.get_or_404(FixedAsset, asset_id)
     if not can_access_branch(a.branch_id):
         return _err('That asset belongs to another branch.', url_for('sales.assets'))
     if a.is_disposed:
         return _err('That asset is already disposed.', url_for('sales.assets'))
-    qty_before, status_before = a.quantity, a.status
-    a.status = 'Disposed'
+    active_before = a.active_quantity
+    status_before = a.status
+    dispose_qty = request.form.get('quantity', type=int)
+    full = dispose_qty is None or dispose_qty >= active_before
+    if full:
+        _set_status_breakdown(a, {'Disposed': a.quantity})
+    else:
+        if dispose_qty <= 0:
+            return _err('Enter how many units to dispose.', url_for('sales.assets'))
+        breakdown = _breakdown_dict(a)
+        remaining = dispose_qty
+        for st, qty in sorted(((s, q) for s, q in breakdown.items() if s != 'Disposed'),
+                              key=lambda kv: -kv[1]):
+            if remaining <= 0:
+                break
+            take = min(qty, remaining)
+            breakdown[st] = qty - take
+            remaining -= take
+        breakdown['Disposed'] = breakdown.get('Disposed', 0) + (dispose_qty - remaining)
+        _set_status_breakdown(a, breakdown)
+    active_after = a.active_quantity
+    proceeds = request.form.get('disposal_amount', type=float) or 0
     a.disposed_on = parse_date(request.form.get('disposed_on')) or timeutil.today()
-    a.disposal_amount = request.form.get('disposal_amount', type=float) or 0
-    a.disposal_note = (request.form.get('disposal_note') or '').strip() or None
-    _log_asset_event(a, 'disposed', quantity_before=qty_before, quantity_after=0,
-                     status_before=status_before, status_after='Disposed',
-                     note=a.disposal_note)
+    a.disposal_amount = (a.disposal_amount or 0) + proceeds
+    a.disposal_note = (request.form.get('disposal_note') or '').strip() or a.disposal_note
+    _log_asset_event(a, 'disposed', quantity_before=active_before, quantity_after=active_after,
+                     status_before=status_before, status_after=a.status,
+                     note=(request.form.get('disposal_note') or '').strip() or None)
     db.session.commit()
-    if a.disposal_amount and a.disposal_amount > 0:
+    if proceeds > 0:
         from utils import finance_ledger as _fl
-        _fl.post(_fl.REVENUE, a.disposal_amount, source_module='assets',
+        _fl.post(_fl.REVENUE, proceeds, source_module='assets',
                  category='Asset Disposal', branch_id=a.branch_id,
                  method=(request.form.get('method') or 'Cash'),
                  origin_type='asset_disposal', origin_id=a.id,
                  reference=a.asset_tag or a.name, description=f'Disposal of {a.name}',
                  created_by=_actor())
         db.session.commit()
-    return _ok(f'"{a.name}" marked disposed.', url_for('sales.assets'))
+    verb = 'marked disposed' if full else f'{dispose_qty} unit(s) marked disposed'
+    return _ok(f'"{a.name}" {verb}.', url_for('sales.assets'))
 
 
 @sales_bp.route('/assets/<int:asset_id>/history')
@@ -2053,6 +2168,7 @@ def assets_analytics():
     section_f = (request.args.get('section') or '').strip()
     category_f = (request.args.get('category') or '').strip()
     class_id_f = request.args.get('class_id', type=int)
+    status_f = (request.args.get('status') or '').strip()
 
     rows = scope_query(FixedAsset.query, FixedAsset).all()
     if section_f:
@@ -2061,7 +2177,15 @@ def assets_analytics():
         rows = [a for a in rows if (a.category or 'Other') == category_f]
     if class_id_f:
         rows = [a for a in rows if a.class_id == class_id_f]
-    live = [a for a in rows if not a.is_disposed]
+
+    def _unit_qty(a):
+        """Units this asset contributes given the active status filter (if
+        any) — otherwise its full active (non-disposed) quantity."""
+        if status_f:
+            return sum(r['quantity'] for r in a.status_breakdown if r['status'] == status_f)
+        return a.active_quantity
+
+    live = [a for a in rows if _unit_qty(a) > 0]
 
     def _bucket(keyfn):
         b = defaultdict(lambda: {'count': 0, 'quantity': 0, 'cost': 0.0, 'book': 0.0})
@@ -2069,9 +2193,30 @@ def assets_analytics():
             k = keyfn(a)
             if k is None:
                 continue
+            qty = _unit_qty(a)
+            frac = qty / a.quantity if a.quantity else 0
             d = b[k]
-            d['count'] += 1; d['quantity'] += a.quantity or 0
-            d['cost'] += a.acquisition_cost or 0; d['book'] += a.book_value
+            d['count'] += 1; d['quantity'] += qty
+            d['cost'] += (a.acquisition_cost or 0) * frac; d['book'] += a.book_value * frac
+        return sorted(
+            [{'label': k, **{kk: (round(vv, 2) if isinstance(vv, float) else vv)
+                            for kk, vv in v.items()}} for k, v in b.items()],
+            key=lambda r: -r['quantity'])
+
+    def _status_bucket(asset_rows):
+        """Full status split across a set of assets — always shows every
+        status a unit is in, regardless of `status_f` (filtering this by
+        itself would be circular)."""
+        b = defaultdict(lambda: {'count': 0, 'quantity': 0, 'cost': 0.0, 'book': 0.0})
+        for a in asset_rows:
+            frac_base = a.quantity or 1
+            for r in a.status_breakdown:
+                if not r['quantity']:
+                    continue
+                d = b[r['status']]
+                d['count'] += 1; d['quantity'] += r['quantity']
+                d['cost'] += (a.acquisition_cost or 0) * (r['quantity'] / frac_base)
+                d['book'] += a.book_value * (r['quantity'] / frac_base)
         return sorted(
             [{'label': k, **{kk: (round(vv, 2) if isinstance(vv, float) else vv)
                             for kk, vv in v.items()}} for k, v in b.items()],
@@ -2082,22 +2227,30 @@ def assets_analytics():
                      for t in Teacher.query.all()}
 
     by_category = _bucket(lambda a: a.category or 'Other')
-    by_status = _bucket(lambda a: a.status)
+    by_status = _status_bucket(rows)
     by_section = _bucket(lambda a: (_section_label(_effective_section(a))
                                     if _effective_section(a) else 'Unassigned'))
     by_class = _bucket(lambda a: class_names.get(a.class_id) if a.class_id else None)
     by_teacher = _bucket(lambda a: teacher_names.get(a.teacher_id) if a.teacher_id else None)
 
+    disposed_units = sum(r['quantity'] for a in rows for r in a.status_breakdown
+                         if r['status'] == 'Disposed')
     overview = {
-        'count': len(live), 'quantity': sum(a.quantity or 0 for a in live),
-        'total_cost': round(sum(a.acquisition_cost or 0 for a in live), 2),
-        'total_book': round(sum(a.book_value for a in live), 2),
-        'disposed': sum(1 for a in rows if a.is_disposed),
+        'count': len(live), 'quantity': sum(_unit_qty(a) for a in live),
+        'total_cost': round(sum((a.acquisition_cost or 0) * (_unit_qty(a) / a.quantity if a.quantity else 0)
+                                for a in live), 2),
+        'total_book': round(sum(a.book_value * (_unit_qty(a) / a.quantity if a.quantity else 0)
+                                for a in live), 2),
+        'disposed_units': disposed_units,
         'unassigned_placement': sum(1 for a in live
                                     if not (a.class_id or a.teacher_id or _effective_section(a))),
     }
 
     # ---- period-over-period comparison (last week / last term / last session) ----
+    # Tracks total quantity per category over time; the history ledger records
+    # overall quantity per change, not a per-status split at each point in
+    # time, so this comparison ignores `status_f` and always reflects total
+    # units (active + disposed at the time) for the category.
     active_term = get_active_term()
     active_session = get_active_session()
     prev_term = _previous_term(active_term)
@@ -2141,7 +2294,8 @@ def assets_analytics():
         'by_category': by_category, 'by_status': by_status,
         'by_section': by_section, 'by_class': by_class, 'by_teacher': by_teacher,
         'comparison': comparison,
-        'filters': {'section': section_f, 'category': category_f, 'class_id': class_id_f or ''},
+        'filters': {'section': section_f, 'category': category_f, 'class_id': class_id_f or '',
+                    'status': status_f},
     })
 
 
@@ -2158,12 +2312,12 @@ def assets_export():
     rows = scope_query(FixedAsset.query, FixedAsset).order_by(FixedAsset.category, FixedAsset.name).all()
     from openpyxl import Workbook
     wb = Workbook(); ws = wb.active; ws.title = 'Fixed Assets'
-    ws.append(['Tag', 'Name', 'Category', 'Serial', 'Quantity', 'Acquired', 'Cost', 'Life (yrs)',
+    ws.append(['Tag', 'Name', 'Category', 'Serial', 'Quantity', 'Status breakdown', 'Acquired', 'Cost', 'Life (yrs)',
                'Accum. Depr.', 'Book Value', 'Custodian', 'Location', 'Class', 'Arm',
                'Teacher', 'Section', 'Status'])
     for a in rows:
         ws.append([a.asset_tag or '', a.name, a.category, a.serial_number or '',
-                   a.quantity or 0,
+                   a.quantity or 0, _describe_breakdown(_breakdown_dict(a)),
                    a.acquisition_date.isoformat() if a.acquisition_date else '',
                    a.acquisition_cost or 0, a.useful_life_years or '',
                    a.accumulated_depreciation, a.book_value,

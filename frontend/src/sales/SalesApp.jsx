@@ -1474,7 +1474,7 @@ function Assets({ d, notify }) {
   const shown = d.assets.filter((a) => {
     if (q && !(`${a.name} ${a.asset_tag} ${a.serial_number}`.toLowerCase().includes(q.toLowerCase()))) return false;
     if (cat && a.category !== cat) return false;
-    if (status && a.status !== status) return false;
+    if (status && !(a.status_breakdown || []).some((r) => r.status === status && r.quantity > 0)) return false;
     if (section && a.effective_section !== section) return false;
     return true;
   });
@@ -1482,6 +1482,13 @@ function Assets({ d, notify }) {
     const tone = st === 'In Use' ? 'badge-success' : st === 'Disposed' ? 'badge-secondary'
       : st === 'Under Repair' ? 'badge-warning' : st === 'Lost' ? 'badge-danger' : 'badge-info';
     return <span className={'badge ' + tone}>{st}</span>;
+  };
+  const doDelete = async (a) => {
+    const ok = await confirm({ title: 'Delete asset', tone: 'danger', confirmText: 'Delete',
+      message: `Permanently delete "${a.name}"? This removes its full history too — this can't be undone. To just retire it and keep the record, use Dispose instead.` });
+    if (!ok) return;
+    const r = await submitJson(a.delete_url, {});
+    if (r.ok) nav.refresh(); else notify('error', r.error || 'Could not delete.');
   };
   return (
     <>
@@ -1505,7 +1512,7 @@ function Assets({ d, notify }) {
             <Tile n={s.quantity || 0} label="Total units" />
             <div className="card"><div className="card-body"><div style={{ fontSize: 'var(--text-xl)', fontWeight: 700 }}>{naira(s.total_cost || 0)}</div><div className="text-muted text-sm">Acquisition cost</div></div></div>
             <div className="card"><div className="card-body"><div style={{ fontSize: 'var(--text-xl)', fontWeight: 700 }}>{naira(s.total_book || 0)}</div><div className="text-muted text-sm">Net book value</div></div></div>
-            <Tile n={s.disposed || 0} label="Disposed" />
+            <Tile n={s.disposed || 0} label="Fully disposed" />
           </div>
           <div className="card mb-3"><div className="card-body" style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
             <input type="search" className="form-control" placeholder="Search name / tag / serial" value={q} onChange={(e) => setQ(e.target.value)} style={{ maxWidth: 240 }} />
@@ -1530,11 +1537,18 @@ function Assets({ d, notify }) {
                       </td>
                       <td className="text-right">{naira(a.book_value)}{a.annual_depreciation > 0 && <div className="text-muted text-sm">−{naira(a.annual_depreciation)}/yr</div>}</td>
                       <td className="text-muted text-sm">{a.custodian || '—'}{a.location && <div>{a.location}</div>}</td>
-                      <td>{badge(a.status)}</td>
+                      <td>
+                        {a.is_split ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            {a.status_breakdown.map((r) => <span key={r.status} style={{ whiteSpace: 'nowrap' }}>{badge(r.status)} <span className="text-muted text-sm">×{r.quantity}</span></span>)}
+                          </div>
+                        ) : badge(a.status)}
+                      </td>
                       <td><div style={{ display: 'flex', gap: '.3rem' }}>
                         <button type="button" className="btn btn-sm btn-light" onClick={() => setViewingHistory(a)} title="History"><i aria-hidden="true" className="fas fa-clock-rotate-left" /></button>
                         <button type="button" className="btn btn-sm btn-light" onClick={() => setEditing(a)} title="Edit"><i aria-hidden="true" className="fas fa-pen" /></button>
                         {!a.is_disposed && <button type="button" className="btn btn-sm btn-light" onClick={() => setDisposing(a)} title="Dispose / retire"><i aria-hidden="true" className="fas fa-box-archive" /></button>}
+                        <button type="button" className="btn btn-sm btn-light" onClick={() => doDelete(a)} title="Delete permanently"><i aria-hidden="true" className="fas fa-trash text-danger" /></button>
                       </div></td>
                     </tr>
                   ))}</tbody></table>
@@ -1564,10 +1578,24 @@ function AssetForm({ d, asset, onClose, onSaved, notify }) {
     teacher_id: asset?.teacher_id || '', section: asset?.section || '',
     change_note: '',
   }));
+  const [useSplit, setUseSplit] = useState(!!asset?.is_split);
+  const [splitRows, setSplitRows] = useState(() => (asset?.is_split
+    ? asset.status_breakdown.map((r) => ({ status: r.status, quantity: String(r.quantity) }))
+    : [{ status: f.status, quantity: String(f.quantity) }]));
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  const setSplitRow = (i, k, v) => setSplitRows((rows) => rows.map((r, idx) => (idx === i ? { ...r, [k]: v } : r)));
+  const addSplitRow = () => setSplitRows((rows) => [...rows, { status: d.statuses.find((s) => !rows.some((r) => r.status === s)) || d.statuses[0], quantity: '' }]);
+  const removeSplitRow = (i) => setSplitRows((rows) => rows.filter((_, idx) => idx !== i));
+  const splitTotal = splitRows.reduce((sum, r) => sum + (parseInt(r.quantity, 10) || 0), 0);
   const save = async () => {
     if (!f.name.trim()) { notify('error', 'Asset name is required.'); return; }
-    const r = await submitJson(asset ? asset.edit_url : d.add_url, f);
+    const payload = { ...f };
+    if (useSplit) {
+      const rows = splitRows.filter((r) => (parseInt(r.quantity, 10) || 0) > 0);
+      if (!rows.length) { notify('error', 'Enter at least one status with a quantity.'); return; }
+      payload.status_breakdown = JSON.stringify(rows.map((r) => ({ status: r.status, quantity: parseInt(r.quantity, 10) || 0 })));
+    }
+    const r = await submitJson(asset ? asset.edit_url : d.add_url, payload);
     if (r.ok) onSaved(); else notify('error', r.error || 'Could not save.');
   };
   return (
@@ -1577,17 +1605,44 @@ function AssetForm({ d, asset, onClose, onSaved, notify }) {
         <Field label="Name *"><input className="form-control" value={f.name} onChange={(e) => set('name', e.target.value)} /></Field>
         <Field label="Asset tag"><input className="form-control" value={f.asset_tag} onChange={(e) => set('asset_tag', e.target.value)} /></Field>
         <Field label="Category"><select className="form-control" value={f.category} onChange={(e) => set('category', e.target.value)}>{d.categories.map((c) => <option key={c}>{c}</option>)}</select></Field>
-        <Field label="Quantity *"><input type="number" min="0" className="form-control" value={f.quantity} onChange={(e) => set('quantity', e.target.value)} placeholder="e.g. 30 laptops" /></Field>
+        {!useSplit && <Field label="Quantity *"><input type="number" min="0" className="form-control" value={f.quantity} onChange={(e) => set('quantity', e.target.value)} placeholder="e.g. 30 laptops" /></Field>}
         <Field label="Serial number"><input className="form-control" value={f.serial_number} onChange={(e) => set('serial_number', e.target.value)} /></Field>
         <Field label="Acquisition cost (₦)"><input type="number" className="form-control" value={f.acquisition_cost} onChange={(e) => set('acquisition_cost', e.target.value)} /></Field>
         <Field label="Acquired on"><input type="date" className="form-control" value={f.acquisition_date} onChange={(e) => set('acquisition_date', e.target.value)} /></Field>
         <Field label="Supplier"><input className="form-control" value={f.supplier} onChange={(e) => set('supplier', e.target.value)} /></Field>
         <Field label="Location"><input className="form-control" value={f.location} onChange={(e) => set('location', e.target.value)} /></Field>
         <Field label="Custodian"><input className="form-control" value={f.custodian} onChange={(e) => set('custodian', e.target.value)} /></Field>
-        <Field label="Status"><select className="form-control" value={f.status} onChange={(e) => set('status', e.target.value)}>{d.statuses.filter((x) => x !== 'Disposed').map((st) => <option key={st}>{st}</option>)}</select></Field>
+        {!useSplit && <Field label="Status"><select className="form-control" value={f.status} onChange={(e) => set('status', e.target.value)}>{d.statuses.filter((x) => x !== 'Disposed').map((st) => <option key={st}>{st}</option>)}</select></Field>}
         <Field label="Useful life (yrs)"><input type="number" className="form-control" value={f.useful_life_years} onChange={(e) => set('useful_life_years', e.target.value)} placeholder="for depreciation" /></Field>
         <Field label="Salvage value (₦)"><input type="number" className="form-control" value={f.salvage_value} onChange={(e) => set('salvage_value', e.target.value)} /></Field>
       </div>
+
+      <div style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '.5rem' }}>
+        <label style={{ display: 'flex', alignItems: 'center', gap: '.4rem', fontWeight: 600, cursor: 'pointer' }}>
+          <input type="checkbox" checked={useSplit} onChange={(e) => setUseSplit(e.target.checked)} />
+          Track quantity by status
+        </label>
+        <span className="text-muted text-sm">e.g. of 30 laptops: 25 In Use, 3 Under Repair, 2 Lost</span>
+      </div>
+      {useSplit && (
+        <div style={{ marginTop: '.5rem', display: 'flex', flexDirection: 'column', gap: '.4rem' }}>
+          {splitRows.map((r, i) => (
+            <div key={i} style={{ display: 'flex', gap: '.4rem', alignItems: 'center' }}>
+              <select className="form-control" style={{ maxWidth: 180 }} value={r.status} onChange={(e) => setSplitRow(i, 'status', e.target.value)}>
+                {d.statuses.map((st) => <option key={st}>{st}</option>)}
+              </select>
+              <input type="number" min="0" className="form-control" style={{ maxWidth: 120 }} value={r.quantity}
+                     onChange={(e) => setSplitRow(i, 'quantity', e.target.value)} placeholder="Qty" />
+              {splitRows.length > 1 && <button type="button" className="btn btn-sm btn-light" onClick={() => removeSplitRow(i)}><i aria-hidden="true" className="fas fa-xmark" /></button>}
+            </div>
+          ))}
+          <div>
+            <button type="button" className="btn btn-sm btn-light" onClick={addSplitRow}><i aria-hidden="true" className="fas fa-plus" /> Add status</button>
+            <span className="text-muted text-sm" style={{ marginLeft: '.75rem' }}>Total: <strong>{splitTotal}</strong></span>
+          </div>
+        </div>
+      )}
+
       <h4 style={{ margin: '1rem 0 .4rem' }}>Optional placement</h4>
       <p className="text-muted text-sm" style={{ marginTop: 0 }}>Leave any of these blank — an asset can belong to none, one, or several.</p>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: '.6rem' }}>
@@ -1608,7 +1663,7 @@ function AssetForm({ d, asset, onClose, onSaved, notify }) {
 }
 
 function DisposeModal({ asset, onClose, onSaved, notify }) {
-  const [f, setF] = useState({ disposed_on: '', disposal_amount: '', method: 'Cash', disposal_note: '' });
+  const [f, setF] = useState({ disposed_on: '', disposal_amount: '', method: 'Cash', disposal_note: '', quantity: '' });
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
   const save = async () => {
     const r = await submitJson(asset.dispose_url, f);
@@ -1617,8 +1672,9 @@ function DisposeModal({ asset, onClose, onSaved, notify }) {
   return (
     <Modal title={`Dispose "${asset.name}"`} icon="fa-box-archive" size="md" onClose={onClose}
            footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button variant="danger" onClick={save}>Dispose</Button></>}>
-      <p className="text-muted text-sm" style={{ marginTop: 0 }}>Current book value: <strong>{naira(asset.book_value)}</strong>. Any proceeds are posted to Finance as disposal income.</p>
+      <p className="text-muted text-sm" style={{ marginTop: 0 }}>Currently active: <strong>{asset.active_quantity}</strong> of {asset.quantity}. Book value: <strong>{naira(asset.book_value)}</strong>. Any proceeds are posted to Finance as disposal income.</p>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: '.6rem' }}>
+        <Field label={`Units to dispose (blank = all ${asset.active_quantity})`}><input type="number" min="1" max={asset.active_quantity} className="form-control" value={f.quantity} onChange={(e) => set('quantity', e.target.value)} /></Field>
         <Field label="Disposed on"><input type="date" className="form-control" value={f.disposed_on} onChange={(e) => set('disposed_on', e.target.value)} /></Field>
         <Field label="Proceeds (₦)"><input type="number" className="form-control" value={f.disposal_amount} onChange={(e) => set('disposal_amount', e.target.value)} /></Field>
         <Field label="Method"><select className="form-control" value={f.method} onChange={(e) => set('method', e.target.value)}><option>Cash</option><option>Transfer</option><option>POS</option></select></Field>
@@ -1673,7 +1729,7 @@ function AssetHistoryModal({ asset, onClose }) {
 
 // ---- Fixed asset analytics --------------------------------------------------
 function AssetAnalytics({ d }) {
-  const [filters, setFilters] = useState({ category: '', section: '', class_id: '' });
+  const [filters, setFilters] = useState({ category: '', section: '', class_id: '', status: '' });
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   useEffect(() => {
@@ -1683,6 +1739,7 @@ function AssetAnalytics({ d }) {
     if (filters.category) p.set('category', filters.category);
     if (filters.section) p.set('section', filters.section);
     if (filters.class_id) p.set('class_id', filters.class_id);
+    if (filters.status) p.set('status', filters.status);
     const url = d.analytics_url + (p.toString() ? `?${p}` : '');
     apiGet(url).then((r) => { if (alive) setData(r); })
       .catch(() => { if (alive) setError('Could not load analytics.'); });
@@ -1710,18 +1767,21 @@ function AssetAnalytics({ d }) {
       <div className="card mb-3"><div className="card-body" style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
         <select className="form-control" value={filters.category} onChange={(e) => setFilter('category', e.target.value)} style={{ maxWidth: 200 }}>
           <option value="">All categories</option>{d.categories.map((c) => <option key={c}>{c}</option>)}</select>
+        <select className="form-control" value={filters.status} onChange={(e) => setFilter('status', e.target.value)} style={{ maxWidth: 180 }}>
+          <option value="">All statuses</option>{d.statuses.map((st) => <option key={st}>{st}</option>)}</select>
         <select className="form-control" value={filters.section} onChange={(e) => setFilter('section', e.target.value)} style={{ maxWidth: 200 }}>
           <option value="">All sections</option>{d.sections.map((sc) => <option key={sc.key} value={sc.key}>{sc.label}</option>)}</select>
         <select className="form-control" value={filters.class_id} onChange={(e) => setFilter('class_id', e.target.value)} style={{ maxWidth: 200 }}>
           <option value="">All classes</option>{(d.classes || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
       </div></div>
+      {filters.status && <p className="text-muted text-sm" style={{ marginTop: '-.5rem', marginBottom: '1rem' }}>Showing only units currently marked "{filters.status}".</p>}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '.75rem', marginBottom: '1rem' }}>
         <Tile n={o.count || 0} label="Active assets" />
         <Tile n={o.quantity || 0} label="Total units" />
         <div className="card"><div className="card-body"><div style={{ fontSize: 'var(--text-xl)', fontWeight: 700 }}>{naira(o.total_cost || 0)}</div><div className="text-muted text-sm">Acquisition cost</div></div></div>
         <div className="card"><div className="card-body"><div style={{ fontSize: 'var(--text-xl)', fontWeight: 700 }}>{naira(o.total_book || 0)}</div><div className="text-muted text-sm">Net book value</div></div></div>
-        <Tile n={o.disposed || 0} label="Disposed" />
+        <Tile n={o.disposed_units || 0} label="Disposed units" />
         <Tile n={o.unassigned_placement || 0} label="No class/teacher/section" />
       </div>
 
