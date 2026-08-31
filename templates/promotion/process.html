@@ -49,6 +49,7 @@
 <form method="POST" action="{{ url_for('promotion.execute_promotion') }}">
     <input type="hidden" name="from_session_id" value="{{ from_session_id }}">
     <input type="hidden" name="to_session_id" value="{{ to_session_id }}">
+    <input type="hidden" name="class_id" value="{{ class_id }}">
     
     <div class="card">
         <div class="card-header">
