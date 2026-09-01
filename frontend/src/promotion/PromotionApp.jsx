@@ -184,6 +184,7 @@ function Process({ d, notify }) {
   const submit = async () => {
     setBusy(true);
     const fields = { from_session_id: d.from_session_id, to_session_id: d.to_session_id,
+      class_id: d.class_id,
       'student_id[]': rows.map((r) => r.id), 'average[]': rows.map((r) => r.average ?? ''),
       'action[]': rows.map((r) => r.action), 'to_class_id[]': rows.map((r) => r.to_class_id || ''),
       'stream[]': rows.map((r) => r.stream) };
