@@ -698,7 +698,7 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
     }
 
 
-def save_ortools_result(result):
+def save_ortools_result(result, school_level):
     if not result.get('success'):
         return None
 
@@ -712,7 +712,8 @@ def save_ortools_result(result):
             for period, entry in periods.items():
                 if entry:
                     db.session.add(GenTimetableResult(
-                        batch_id=batch_id, branch_id=gen_bid(), class_name=class_name, arm_name=arm,
+                        batch_id=batch_id, branch_id=gen_bid(), school_level=school_level,
+                        class_name=class_name, arm_name=arm,
                         day_of_week=day, period_number=period,
                         subject_id=entry['subject_id'], teacher_id=entry['teacher_id'],
                         is_double_period=entry.get('is_double', False)

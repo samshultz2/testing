@@ -2,6 +2,23 @@
 from routes.generator import *  # noqa: F401,F403
 
 
+def _level_for_classes(class_ids):
+    """The school level to generate under, derived from the classes actually
+    selected — not the session's last-viewed level tab. The tab can go stale
+    (two tabs open, or switching levels elsewhere after this page loaded)
+    and silently applying the wrong level's periods_per_day/day_start would
+    reintroduce the exact 'infeasible for no reason' bug this guards
+    against. Returns (level, error_message); error_message is set if the
+    selection spans more than one level or matches no classes at all."""
+    configs = GenClassConfig.query.filter(GenClassConfig.id.in_(class_ids)).all()
+    levels = {c.school_level for c in configs}
+    if len(levels) > 1:
+        return None, 'Selected classes span both JSS and SSS — generate each level separately.'
+    if not levels:
+        return get_current_level(), None   # fall back only if the classes vanished mid-request
+    return levels.pop(), None
+
+
 @generator_bp.route('/assignments')
 @login_required
 def teacher_assignments():
@@ -135,13 +152,17 @@ def run_generation():
     # selected — honour it server-side instead of silently running the fast method.
     if request.form.get('method') == 'ortools':
         return run_ortools_generation()
-    level = get_current_level()
     try:
         class_ids = [int(x) for x in request.form.getlist('class_ids[]') if x]
         if not class_ids:
             flash('Select at least one class.', 'error')
             return redirect(url_for('generator.generate_page'))
-        
+
+        level, level_err = _level_for_classes(class_ids)
+        if level_err:
+            flash(level_err, 'error')
+            return redirect(url_for('generator.generate_page'))
+
         rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).all()}
         periods_per_day = int(rules.get('periods_per_day', 8))
         break_after = int(rules.get('break_after_period', 5))
@@ -207,7 +228,12 @@ def run_ortools_generation():
         if not class_ids:
             flash('Select at least one class.', 'error')
             return redirect(url_for('generator.generate_page'))
-        
+
+        level, level_err = _level_for_classes(class_ids)
+        if level_err:
+            flash(level_err, 'error')
+            return redirect(url_for('generator.generate_page'))
+
         # Check if OR-Tools is available
         from routes.generator_ortools import check_ortools_available, generate_with_ortools, save_ortools_result
         
@@ -216,7 +242,7 @@ def run_ortools_generation():
             return redirect(url_for('generator.generate_page'))
         
         rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(
-            is_active=True, school_level=get_current_level(), branch_id=gen_bid()).all()}
+            is_active=True, school_level=level, branch_id=gen_bid()).all()}
         periods_per_day = int(rules.get('periods_per_day', 8))
         
         # Get time limit from form, but clamp to the configured ceiling so a
@@ -237,7 +263,7 @@ def run_ortools_generation():
             return redirect(url_for('generator.generate_page'))
         
         # Save results
-        batch_id = save_ortools_result(result)
+        batch_id = save_ortools_result(result, level)
         
         empty = result['empty_count']
         assigned = result['assigned_count']
