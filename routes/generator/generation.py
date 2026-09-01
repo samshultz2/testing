@@ -215,7 +215,8 @@ def run_ortools_generation():
             flash('OR-Tools not installed. Run: pip install ortools --break-system-packages', 'error')
             return redirect(url_for('generator.generate_page'))
         
-        rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, branch_id=gen_bid()).all()}
+        rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(
+            is_active=True, school_level=get_current_level(), branch_id=gen_bid()).all()}
         periods_per_day = int(rules.get('periods_per_day', 8))
         
         # Get time limit from form, but clamp to the configured ceiling so a
@@ -241,7 +242,7 @@ def run_ortools_generation():
         empty = result['empty_count']
         assigned = result['assigned_count']
         total = result['total_requirements']
-        total_slots = len(result['class_arms']) * 40
+        total_slots = len(result['class_arms']) * periods_per_day * 5
         filled_pct = ((total_slots - empty) / total_slots) * 100 if total_slots > 0 else 0
         
         if empty > 0:
@@ -493,11 +494,16 @@ def clash_report(batch_id):
 @generator_bp.route('/reports/unassigned/<batch_id>')
 @login_required
 def unassigned_report(batch_id):
-    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, branch_id=gen_bid()).all()}
+    results = GenTimetableResult.query.filter_by(batch_id=batch_id, branch_id=gen_bid()).all()
+    # A batch belongs to one school level — read the rules for that level
+    # specifically (not whichever level tab happens to be open right now),
+    # since periods_per_day/break_after can differ between JSS and SSS.
+    level = results[0].school_level if results else get_current_level()
+    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(
+        is_active=True, school_level=level, branch_id=gen_bid()).all()}
     periods_per_day = int(rules.get('periods_per_day', 8))
     break_after = int(rules.get('break_after_period', 4))
     
-    results = GenTimetableResult.query.filter_by(batch_id=batch_id, branch_id=gen_bid()).all()
     class_arms = set((r.class_name, r.arm_name) for r in results)
     
     empty = []
