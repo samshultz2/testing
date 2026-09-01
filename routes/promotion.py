@@ -13,7 +13,7 @@ from utils.helpers import login_required, get_sss3_enrolled_students, safe_redir
 from utils.access_control import (
     admin_required, graduates_access_required, assert_graduate_access,
 )
-from utils.branch_scope import scope_query, scope_by_student
+from utils.branch_scope import scope_query, scope_by_student, can_access_branch
 from utils.db_tx import safe_transaction
 from utils.audit import log_action
 from utils.security import rate_limited
@@ -1224,36 +1224,61 @@ def process_promotion():
 @promotion_bp.route('/execute', methods=['POST'])
 @login_required
 def execute_promotion():
-    """Execute promotions"""
+    """Execute promotions: records the promotion decision for each student
+    AND immediately enrolls promoted/repeated students into their new class
+    for the destination session's First Term — a single click completes the
+    promotion rather than just noting an intention."""
+    from_session_id = request.form.get('from_session_id', type=int)
+    to_session_id = request.form.get('to_session_id', type=int)
+    class_id = request.form.get('class_id', type=int)
+    arm_id = request.form.get('arm_id', type=int)
+
+    if not from_session_id:
+        return _err('Select a session to promote from.', url_for('promotion.process_promotion'))
+
+    student_ids = request.form.getlist('student_id[]')
+    actions = request.form.getlist('action[]')
+
+    dest = url_for('promotion.process_promotion',
+                   from_session_id=from_session_id, to_session_id=to_session_id,
+                   class_id=class_id, arm_id=arm_id)
+
+    # Students can only be promoted/repeated (not just graduated) if we know
+    # which session/term to enroll them into.
+    needs_session = any((actions[i] if i < len(actions) else 'skip') in ('promoted', 'repeated')
+                        for i in range(len(student_ids)))
+    first_term = None
+    if needs_session:
+        if not to_session_id:
+            return _err('Select the session to promote students into before saving.', dest)
+        first_term = Term.query.filter_by(session_id=to_session_id, term_number=1).first()
+        if not first_term:
+            return _err('The destination session has no First Term set up yet — '
+                       'create its terms first.', dest)
+
     try:
-        from datetime import date
-        
-        from_session_id = request.form.get('from_session_id', type=int)
-        to_session_id = request.form.get('to_session_id', type=int)
-        
-        student_ids = request.form.getlist('student_id[]')
-        actions = request.form.getlist('action[]')
         to_class_ids = request.form.getlist('to_class_id[]')
         streams = request.form.getlist('stream[]')
         averages = request.form.getlist('average[]')
-        
+
         promoted = 0
         repeated = 0
         graduated = 0
-        
+        enrolled = 0
+        not_enrolled = []
+
         for i, student_id in enumerate(student_ids):
             action = actions[i] if i < len(actions) else 'skip'
-            
+
             if action == 'skip':
                 continue
-            
+
             student = db.session.get(Student, int(student_id))
             if not student:
                 continue
             # Never promote/graduate a student outside the user's branch, even if
             # a crafted student_id[] is posted (the single-student routes already
             # guard; the bulk path must match).
-            from utils.branch_scope import can_access_branch
             if not can_access_branch(student.branch_id):
                 continue
 
@@ -1263,21 +1288,21 @@ def execute_promotion():
                 Term.session_id == from_session_id,
                 StudentEnrollment.is_active == True
             ).first()
-            
+
             if not current_enrollment:
                 continue
-            
+
             from_class_id = current_enrollment.class_arm_assignment.class_id
             to_class_id = int(to_class_ids[i]) if i < len(to_class_ids) and to_class_ids[i] else from_class_id
             stream = streams[i] if i < len(streams) else None
             avg = float(averages[i]) if i < len(averages) and averages[i] else None
-            
+
             # Check for existing record
             existing = PromotionRecord.query.filter_by(
                 student_id=int(student_id),
                 from_session_id=from_session_id
             ).first()
-            
+
             if existing:
                 # Update existing
                 existing.to_session_id = to_session_id
@@ -1301,20 +1326,54 @@ def execute_promotion():
                     promoted_by='Admin'
                 )
                 db.session.add(record)
-            
+
             # Handle graduation - update student record
             if action == 'graduated':
                 student.is_graduated = True
                 student.graduation_date = timeutil.today()
                 student.graduation_session_id = from_session_id
                 graduated += 1
-            elif action == 'promoted':
-                promoted += 1
-            elif action == 'repeated':
-                repeated += 1
-        
+            elif action in ('promoted', 'repeated'):
+                # Actually move the student into their new class for the new
+                # session — 'promoted' goes to to_class_id, 'repeated' stays
+                # in from_class_id but still needs a fresh enrollment for the
+                # new session's terms.
+                target_class_id = to_class_id if action == 'promoted' else from_class_id
+                arm_id = current_enrollment.class_arm_assignment.arm_id
+                # If a stream/arm name was typed or chosen, try to place the
+                # student in that named arm for the destination class instead.
+                if stream:
+                    named_arm = ClassArm.query.filter(
+                        db.func.lower(ClassArm.name) == stream.strip().lower()).first()
+                    if named_arm:
+                        arm_id = named_arm.id
+
+                assignment = ClassArmAssignment.query.filter_by(
+                    term_id=first_term.id, class_id=target_class_id, arm_id=arm_id,
+                    branch_id=student.branch_id).first()
+                if not assignment:
+                    # Fall back to any arm of the target class in that term, same branch.
+                    assignment = ClassArmAssignment.query.filter_by(
+                        term_id=first_term.id, class_id=target_class_id,
+                        branch_id=student.branch_id).first()
+
+                if not assignment:
+                    not_enrolled.append(student.full_name)
+                else:
+                    already = StudentEnrollment.query.filter_by(
+                        student_id=int(student_id), class_arm_assignment_id=assignment.id).first()
+                    if not already:
+                        db.session.add(StudentEnrollment(
+                            student_id=int(student_id), class_arm_assignment_id=assignment.id))
+                        enrolled += 1
+
+                if action == 'promoted':
+                    promoted += 1
+                else:
+                    repeated += 1
+
         db.session.commit()
-        
+
         msg_parts = []
         if promoted:
             msg_parts.append(f'{promoted} promoted')
@@ -1322,14 +1381,19 @@ def execute_promotion():
             msg_parts.append(f'{repeated} repeated')
         if graduated:
             msg_parts.append(f'{graduated} graduated')
-        
-        dest = url_for('promotion.process_promotion',
-                       from_session_id=from_session_id, to_session_id=to_session_id)
-        return _ok(f'Processed: {", ".join(msg_parts)}', dest)
+        log_action('promotion_execute', f'{", ".join(msg_parts) if msg_parts else "no changes"}'
+                  f' ({enrolled} enrolled)')
+
+        if not msg_parts:
+            return _ok('No students were changed — everything was left as "Skip".', dest)
+        if not_enrolled:
+            return _err('No matching class/arm found for the new term for: '
+                       + ', '.join(not_enrolled)
+                       + ' — set up that class arm for the destination session, then reprocess.', dest)
+        return _ok(f'Processed: {", ".join(msg_parts)} ({enrolled} enrolled in their new class).', dest)
     except Exception as e:
         db.session.rollback()
-        return _err(f'Error: {str(e)}', url_for('promotion.process_promotion',
-                    from_session_id=from_session_id, to_session_id=to_session_id))
+        return _err(f'Error: {str(e)}', dest)
 
 
 @promotion_bp.route('/enroll-promoted', methods=['POST'])
