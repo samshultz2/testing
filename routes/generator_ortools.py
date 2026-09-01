@@ -51,6 +51,79 @@ def get_class_level(class_name):
     return class_name
 
 
+def diagnose_infeasibility(class_arms, requirements, teachers, teacher_reqs, teacher_unavailable,
+                           subject_info, num_periods, num_slots, num_days, break_after,
+                           valid_double_starts):
+    """Structural (pigeon-hole) checks that PROVE a generation request can
+    never succeed, independent of what the solver does — e.g. asking a class
+    for more periods per week than exist, or a teacher for more periods than
+    they're allowed or available to teach. Returns a list of human-readable
+    reasons; empty if none of these apply (the request could still be
+    infeasible for subtler reasons the caller handles separately)."""
+    reasons = []
+
+    if break_after < 1 or break_after >= num_periods:
+        reasons.append(
+            f"Break-after-period is set to {break_after}, which is out of range for a "
+            f"{num_periods}-period day (it must be between 1 and {num_periods - 1}). "
+            f"Fix this under Timetable Rules before generating.")
+        return reasons   # everything below assumes a sane break position
+
+    # Per class-arm: total periods required vs total weekly slots available.
+    reqs_by_ca = defaultdict(list)
+    for r in requirements:
+        reqs_by_ca[(r['class_name'], r['arm'])].append(r)
+    for ca in class_arms:
+        needed = len(reqs_by_ca.get(ca, []))
+        if needed > num_slots:
+            reasons.append(
+                f"{ca[0]} {ca[1]} needs {needed} periods/week but only {num_slots} slots exist "
+                f"({num_periods}/day × 5 days) — reduce that class's subject periods or increase "
+                f"periods_per_day.")
+
+    # Per teacher: weekly load vs their configured caps and actual availability.
+    for tid, reqs in teacher_reqs.items():
+        t = teachers.get(tid)
+        if not t:
+            continue
+        needed = len(reqs)
+        if t.max_periods_per_week and needed > t.max_periods_per_week:
+            reasons.append(
+                f"{t.name} needs to teach {needed} periods/week but is capped at "
+                f"{t.max_periods_per_week}/week — raise their weekly limit or reassign some classes.")
+        max_possible_by_day = (t.max_periods_per_day or num_periods) * num_days
+        if needed > max_possible_by_day:
+            reasons.append(
+                f"{t.name} needs {needed} periods/week but their {t.max_periods_per_day}/day cap "
+                f"allows at most {max_possible_by_day}/week — raise their daily cap or reassign "
+                f"some classes.")
+        unavailable_count = len(teacher_unavailable.get(tid, set()))
+        available_slots = num_slots - unavailable_count
+        if needed > available_slots:
+            reasons.append(
+                f"{t.name} needs {needed} periods/week but is marked unavailable for "
+                f"{unavailable_count} of the {num_slots} weekly slots, leaving only "
+                f"{available_slots} available — free up some availability or reassign classes.")
+
+    # Double periods: is there anywhere valid to put one, and does the
+    # requested count per subject even fit (at most one double per day)?
+    needs_any_double = any(info['needs_double'] for info in subject_info.values())
+    if needs_any_double and not valid_double_starts:
+        reasons.append(
+            f"Some subjects need double periods, but with periods_per_day={num_periods} and "
+            f"break after period {break_after}, there is no position left where a double period "
+            f"wouldn't span the break — adjust break_after_period or periods_per_day.")
+    elif needs_any_double:
+        for key, info in subject_info.items():
+            if info['needs_double'] and info['double_count'] > num_days:
+                reasons.append(
+                    f"{key[0]} {key[1]} {info['name']} needs {info['double_count']} double periods/"
+                    f"week, but there are only {num_days} school days (at most one double per day) "
+                    f"— reduce the double-period count for this subject.")
+
+    return reasons
+
+
 def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_after=4):
     """
     Generate timetable using OR-Tools constraint programming solver.
@@ -252,6 +325,22 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
     num_periods = periods_per_day
     num_slots = 5 * num_periods
     num_days = 5
+    
+    # ========== PRE-SOLVE DIAGNOSTICS ==========
+    # Several causes of infeasibility are *structural* — no possible
+    # assignment could ever satisfy them, independent of what the solver
+    # does — so we can prove and report them directly instead of making the
+    # user wait through a solve that's doomed from the start.
+    reasons = diagnose_infeasibility(
+        class_arms=class_arms, requirements=requirements, teachers=teachers,
+        teacher_reqs=teacher_reqs, teacher_unavailable=teacher_unavailable,
+        subject_info=subject_info, num_periods=num_periods, num_slots=num_slots,
+        num_days=num_days, break_after=break_after, valid_double_starts=valid_double_starts)
+    if reasons:
+        return {'success': False,
+               'message': f'Cannot generate — {len(reasons)} configuration problem'
+                          f'{"s" if len(reasons) != 1 else ""} would make this infeasible.',
+               'reasons': reasons}
     
     # ========== BUILD MODEL ==========
     logger.debug("Building OR-Tools model...")
@@ -652,7 +741,39 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
     logger.debug(f"Status: {solver.StatusName(status)}")
     
     if status not in [cp_model.OPTIMAL, cp_model.FEASIBLE]:
-        return {'success': False, 'message': f'No solution found. Status: {solver.StatusName(status)}'}
+        # No structural capacity problem was found up front (see
+        # diagnose_infeasibility above), so this comes from how the finer
+        # rules interact together. Name which of those rules are actually
+        # active for this run, since those are the concrete things to try
+        # relaxing first.
+        active_rules = []
+        clash_rule_count = GenSubjectClashRule.query.filter_by(is_active=True, branch_id=gen_bid()).count()
+        combined_rule_count = GenCombinedClassRule.query.filter_by(is_active=True, branch_id=gen_bid()).count()
+        if clash_rule_count:
+            active_rules.append(f'{clash_rule_count} subject clash rule(s)')
+        if combined_rule_count:
+            active_rules.append(f'{combined_rule_count} combined-class rule(s)')
+        if any(info['not_first_period'] or info['not_last_period'] for info in subject_info.values()):
+            active_rules.append('not-first/not-last period restrictions on some subjects')
+        if any(info['needs_double'] for info in subject_info.values()):
+            active_rules.append('double-period placement for some subjects')
+        multi_subject_teachers = sum(1 for reqs in teacher_classarm_reqs.values()
+                                     if len({r['subject_id'] for r in reqs}) > 1)
+        if multi_subject_teachers:
+            active_rules.append('the same-teacher-same-class back-to-back-different-subject rule')
+
+        reason = ('No obvious capacity problem was found — the requested load fits the '
+                 'available slots on paper, so this is almost certainly the finer scheduling '
+                 'rules being too tight together rather than too little time in the week.')
+        if active_rules:
+            reason += ' Rules active in this run that are worth relaxing or disabling one at a ' \
+                      'time to isolate the conflict: ' + '; '.join(active_rules) + '.'
+        else:
+            reason += ' Try increasing periods_per_day, or re-run with a longer time limit in ' \
+                      'case the solver just needs more time to prove a solution exists.'
+
+        return {'success': False, 'message': f'No solution found. Status: {solver.StatusName(status)}',
+               'reasons': [reason]}
     
     # ========== BUILD TIMETABLE ==========
     timetable = {ca: {d: {p: None for p in range(1, num_periods + 1)} for d in range(5)} for ca in class_arms}

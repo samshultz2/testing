@@ -259,7 +259,8 @@ def run_ortools_generation():
         result = generate_with_ortools(class_ids, periods_per_day, time_limit, break_after)
         
         if not result['success']:
-            flash(f'Generation failed: {result["message"]}', 'error')
+            detail = ' '.join(result.get('reasons') or [])
+            flash(f'Generation failed: {result["message"]}' + (f' {detail}' if detail else ''), 'error')
             return redirect(url_for('generator.generate_page'))
         
         # Save results
