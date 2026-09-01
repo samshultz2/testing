@@ -70,11 +70,13 @@ function ClassFilter({ d, extraTerm = false }) {
 // ---- Subjects list ---------------------------------------------------------
 function List({ d, notify }) {
   const nav = useNav();
+  const [tab, setTab] = useState('junior');
   const del = async (url, name) => {
     if (!await confirm(`Delete ${name}?`)) return;
     const r = await submitJson(url, {});
     if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Could not delete.');
   };
+  const categories = tab === 'junior' ? d.junior_categories : d.senior_categories;
   return (
     <>
       <div className="page-header"><h1>Subjects</h1>
@@ -83,7 +85,13 @@ function List({ d, notify }) {
           {canWrite(d) && <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add</a>}
         </div>
       </div>
-      {d.categories.length ? d.categories.map((cat) => (
+      <div className="card mb-3" style={{ padding: '.25rem' }}>
+        <div style={{ display: 'flex', gap: '.25rem' }}>
+          <button type="button" className={'btn btn-sm ' + (tab === 'junior' ? 'btn-primary' : 'btn-light')} onClick={() => setTab('junior')}>Junior Secondary (JSS)</button>
+          <button type="button" className={'btn btn-sm ' + (tab === 'senior' ? 'btn-primary' : 'btn-light')} onClick={() => setTab('senior')}>Senior Secondary (SSS)</button>
+        </div>
+      </div>
+      {categories.length ? categories.map((cat) => (
         <div className="card mb-3" key={cat.name}>
           <div className="card-header"><h3>{cat.name} ({cat.subjects.length})</h3></div>
           <div className="card-body" style={{ padding: 0 }}>
@@ -94,6 +102,7 @@ function List({ d, notify }) {
                     <div className="data-card-title">{s.name}</div>
                     <span className="badge badge-secondary">{s.short_name}</span>
                   </div>
+                  {s.for_junior && s.for_senior && <div className="text-muted text-sm">JSS &amp; SSS</div>}
                   {canWrite(d) && <div className="data-card-actions">
                     <a href={s.edit_url} className="btn btn-secondary btn-sm" aria-label="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>
                     <button type="button" className="btn btn-danger btn-sm w-100" style={{ flex: 1 }} onClick={() => del(s.delete_url, s.name)}><i aria-hidden="true" className="fas fa-trash" /></button>
@@ -103,7 +112,7 @@ function List({ d, notify }) {
           </div>
         </div>
       )) : (
-        <div className="card"><div className="card-body"><Empty icon="fa-book" title="No Subjects"><p>Add your first subject</p>{canWrite(d) && <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Subject</a>}</Empty></div></div>
+        <div className="card"><div className="card-body"><Empty icon="fa-book" title={`No ${tab === 'junior' ? 'JSS' : 'SSS'} Subjects`}><p>Add a subject and mark it for {tab === 'junior' ? 'Junior' : 'Senior'} Secondary</p>{canWrite(d) && <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Subject</a>}</Empty></div></div>
       )}
     </>
   );
@@ -112,8 +121,9 @@ function List({ d, notify }) {
 // ---- Add / edit subject ----------------------------------------------------
 function SubjectForm({ d, notify }) {
   const nav = useNav();
-  const init = d.subject || { name: '', short_name: '', category: d.categories[0], has_practical: true };
-  const [f, setF] = useState({ name: init.name, short_name: init.short_name, category: init.category, has_practical: init.has_practical });
+  const init = d.subject || { name: '', short_name: '', category: d.categories[0], has_practical: true, for_junior: true, for_senior: true };
+  const [f, setF] = useState({ name: init.name, short_name: init.short_name, category: init.category,
+    has_practical: init.has_practical, for_junior: init.for_junior, for_senior: init.for_senior });
   const [busy, setBusy] = useState(false);
   const isEdit = d.page === 'edit';
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
@@ -121,7 +131,8 @@ function SubjectForm({ d, notify }) {
     e.preventDefault();
     if (!f.name.trim()) { notify('error', 'Subject name is required.'); return; }
     setBusy(true);
-    const r = await submitJson(d.submit_url, { ...f, has_practical: f.has_practical ? 'on' : '' });
+    const r = await submitJson(d.submit_url, { ...f, has_practical: f.has_practical ? 'on' : '',
+      for_junior: f.for_junior ? 'on' : '', for_senior: f.for_senior ? 'on' : '' });
     setBusy(false);
     if (r.ok) nav.go(r.redirect); else notify('error', r.error || 'Could not save.');
   };
@@ -136,6 +147,14 @@ function SubjectForm({ d, notify }) {
             <input type="text" className="form-control" placeholder="e.g., MATH" maxLength="10" value={f.short_name} onChange={(e) => set('short_name', e.target.value)} /></div>
           <div className="form-group"><label className="form-label">Category</label>
             <select className="form-control" value={f.category} onChange={(e) => set('category', e.target.value)}>{d.categories.map((c) => <option key={c} value={c}>{c}</option>)}</select></div>
+        </div>
+        <div className="form-group">
+          <label className="form-label">Offered at</label>
+          <div className="d-flex gap-3">
+            <label className="d-flex gap-2 align-center mb-0"><input type="checkbox" checked={f.for_junior} onChange={(e) => set('for_junior', e.target.checked)} /> Junior Secondary (JSS)</label>
+            <label className="d-flex gap-2 align-center mb-0"><input type="checkbox" checked={f.for_senior} onChange={(e) => set('for_senior', e.target.checked)} /> Senior Secondary (SSS)</label>
+          </div>
+          <span className="form-hint d-block">Controls which level's subject list this shows up in when assigning subjects to a class.</span>
         </div>
         <div className="form-check mb-3">
           <input type="checkbox" id="has_practical" className="form-check-input" checked={f.has_practical} onChange={(e) => set('has_practical', e.target.checked)} />
@@ -305,14 +324,21 @@ function Assign({ d, notify }) {
   const [armId, setArmId] = useState('');
   const [rows, setRows] = useState(() => { const m = {}; d.subjects.forEach((s) => { m[s.id] = { checked: false, teacher: '' }; }); return m; });
   const [busy, setBusy] = useState(false);
-  const allChecked = d.subjects.length > 0 && d.subjects.every((s) => rows[s.id].checked);
-  const toggleAll = (v) => setRows((m) => { const n = { ...m }; d.subjects.forEach((s) => { n[s.id] = { ...n[s.id], checked: v }; }); return n; });
+  const selectedClass = d.classes.find((c) => String(c.id) === String(classId));
+  const visibleSubjects = d.subjects.filter((s) => {
+    if (!selectedClass) return true;              // no class picked yet — show everything
+    if (selectedClass.section === 'junior') return s.for_junior;
+    if (selectedClass.section === 'senior') return s.for_senior;
+    return true;                                   // nursery/primary/unset — not level-restricted
+  });
+  const allChecked = visibleSubjects.length > 0 && visibleSubjects.every((s) => rows[s.id].checked);
+  const toggleAll = (v) => setRows((m) => { const n = { ...m }; visibleSubjects.forEach((s) => { n[s.id] = { ...n[s.id], checked: v }; }); return n; });
   const setRow = (id, k, v) => setRows((m) => ({ ...m, [id]: { ...m[id], [k]: v } }));
   const submit = async (e) => {
     e.preventDefault();
     if (!termId || !classId) { notify('error', 'Term and class are required.'); return; }
     const subject_ids = []; const teacher_names = [];
-    d.subjects.forEach((s) => { if (rows[s.id].checked) { subject_ids.push(s.id); teacher_names.push(rows[s.id].teacher); } });
+    visibleSubjects.forEach((s) => { if (rows[s.id].checked) { subject_ids.push(s.id); teacher_names.push(rows[s.id].teacher); } });
     if (!subject_ids.length) { notify('error', 'Select at least one subject.'); return; }
     setBusy(true);
     const r = await submitJson(d.submit_url, { term_id: termId, class_id: classId, arm_id: armId || '',
@@ -337,9 +363,14 @@ function Assign({ d, notify }) {
             <small className="text-muted">Leave blank for all arms in class</small></div>
         </div>
         <h4 style={{ margin: '1.5rem 0 1rem' }}>Select Subjects &amp; Teachers</h4>
+        {selectedClass && (selectedClass.section === 'junior' || selectedClass.section === 'senior') && (
+          <p className="text-muted text-sm" style={{ marginTop: '-.5rem' }}>
+            Showing {selectedClass.section === 'junior' ? 'Junior Secondary' : 'Senior Secondary'} subjects only.
+          </p>
+        )}
         <div className="table-container"><table className="data-table">
           <thead><tr><th style={{ width: 40 }}><input type="checkbox" checked={allChecked} onChange={(e) => toggleAll(e.target.checked)} /></th><th>Subject</th><th>Teacher Name</th></tr></thead>
-          <tbody>{d.subjects.map((s) => (
+          <tbody>{visibleSubjects.map((s) => (
             <tr key={s.id}>
               <td><input type="checkbox" checked={rows[s.id].checked} onChange={(e) => setRow(s.id, 'checked', e.target.checked)} /></td>
               <td>{s.name} <small className="text-muted">({s.category})</small></td>

@@ -46,7 +46,7 @@ def save_settings(*, is_open, intro, fee, session_id):
 def class_choices():
     """Classes an applicant can choose (id, name)."""
     try:
-        return [(c.id, c.name) for c in SchoolClass.query.order_by(SchoolClass.name).all()]
+        return [(c.id, c.name) for c in SchoolClass.query.order_by(SchoolClass.level).all()]
     except Exception:
         return []
 

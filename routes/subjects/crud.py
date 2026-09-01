@@ -5,25 +5,28 @@ from routes.subjects import *  # noqa: F401,F403
 @subjects_bp.route('/')
 @login_required
 def subjects_list():
-    """List all subjects"""
+    """List all subjects, grouped by category within JSS/SSS tabs"""
     from utils.org_scope import scope_subjects
     subjects = scope_subjects(
         Subject.query.filter_by(is_active=True), Subject
     ).order_by(Subject.category, Subject.name).all()
-    
-    # Group by category
-    categories = {}
-    for subject in subjects:
-        cat = subject.category or 'General'
-        categories.setdefault(cat, []).append({
-            'id': subject.id, 'name': subject.name, 'short_name': subject.short_name or '',
-            'edit_url': url_for('subjects.edit_subject', subject_id=subject.id),
-            'delete_url': url_for('subjects.delete_subject', subject_id=subject.id),
-        })
+
+    def _grouped(level_subjects):
+        categories = {}
+        for subject in level_subjects:
+            cat = subject.category or 'General'
+            categories.setdefault(cat, []).append({
+                'id': subject.id, 'name': subject.name, 'short_name': subject.short_name or '',
+                'for_junior': bool(subject.for_junior), 'for_senior': bool(subject.for_senior),
+                'edit_url': url_for('subjects.edit_subject', subject_id=subject.id),
+                'delete_url': url_for('subjects.delete_subject', subject_id=subject.id),
+            })
+        return [{'name': k, 'subjects': v} for k, v in categories.items()]
 
     return _render({
         'page': 'list', 'nav': _nav_urls(),
-        'categories': [{'name': k, 'subjects': v} for k, v in categories.items()],
+        'junior_categories': _grouped([s for s in subjects if s.for_junior]),
+        'senior_categories': _grouped([s for s in subjects if s.for_senior]),
         'urls': {'add': url_for('subjects.add_subject'),
                  'bulk_add': url_for('subjects.bulk_add_subjects')},
     })
@@ -48,7 +51,9 @@ def add_subject():
                 name=name,
                 short_name=short_name or name[:3].upper(),
                 category=category or 'General',
-                has_practical=bool(request.form.get('has_practical'))
+                has_practical=bool(request.form.get('has_practical')),
+                for_junior=bool(request.form.get('for_junior', 'on')),
+                for_senior=bool(request.form.get('for_senior', 'on')),
             )
             db.session.add(subject)
             db.session.flush()
@@ -78,6 +83,8 @@ def edit_subject(subject_id):
             subject.short_name = request.form.get('short_name', '').strip().upper()
             subject.category = request.form.get('category', '').strip()
             subject.has_practical = bool(request.form.get('has_practical'))
+            subject.for_junior = bool(request.form.get('for_junior'))
+            subject.for_senior = bool(request.form.get('for_senior'))
             from utils.assessments import apply_practical
             apply_practical(db, subject)
             db.session.commit()
@@ -89,7 +96,8 @@ def edit_subject(subject_id):
     return _render({
         'page': 'edit', 'nav': _nav_urls(), 'categories': SUBJECT_CATEGORIES,
         'subject': {'id': subject.id, 'name': subject.name, 'short_name': subject.short_name or '',
-                    'category': subject.category or 'General', 'has_practical': bool(subject.has_practical)},
+                    'category': subject.category or 'General', 'has_practical': bool(subject.has_practical),
+                    'for_junior': bool(subject.for_junior), 'for_senior': bool(subject.for_senior)},
         'submit_url': url_for('subjects.edit_subject', subject_id=subject.id),
         'cancel_url': url_for('subjects.subjects_list'),
     })
@@ -287,9 +295,10 @@ def assign_class_subjects():
     return _render({
         'page': 'assign', 'nav': _nav_urls(),
         'terms': [{'id': t.id, 'full_name': t.full_name, 'is_active': bool(t.is_active)} for t in terms],
-        'classes': [{'id': c.id, 'name': c.name} for c in classes],
+        'classes': [{'id': c.id, 'name': c.name, 'section': c.section or ''} for c in classes],
         'arms': [{'id': a.id, 'name': a.name} for a in arms],
-        'subjects': [{'id': s.id, 'name': s.name, 'category': s.category or ''} for s in subjects],
+        'subjects': [{'id': s.id, 'name': s.name, 'category': s.category or '',
+                     'for_junior': bool(s.for_junior), 'for_senior': bool(s.for_senior)} for s in subjects],
         'submit_url': url_for('subjects.assign_class_subjects'),
         'cancel_url': url_for('subjects.class_subjects_list'),
     })

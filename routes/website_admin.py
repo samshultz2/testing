@@ -405,7 +405,7 @@ _ASSIGN_MAX = 20 * 1024 * 1024        # 20 MB per document
 def _class_choices():
     from models import SchoolClass
     try:
-        return [(c.id, c.name) for c in SchoolClass.query.order_by(SchoolClass.name).all()]
+        return [(c.id, c.name) for c in SchoolClass.query.order_by(SchoolClass.level).all()]
     except Exception:
         return []
 

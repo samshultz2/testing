@@ -40,6 +40,56 @@ def teacher_assignments():
     )
 
 
+def _sync_class_subject_teacher(teacher, subject, class_config, arm_name):
+    """Mirror a generator teacher assignment into the main academic
+    ClassSubject.teacher_name for the active term, so the teacher shown on
+    /subjects/class-subjects for this class/subject/arm matches what was just
+    set on the generator's Teacher Assignments page. Best-effort: silently
+    does nothing if there's no active term, or no matching class/subject on
+    the academic side to attach it to (a generator-only setup not yet wired
+    to real classes/subjects) — never blocks the generator assignment itself."""
+    from models import SchoolClass, ClassArm, ClassSubject
+    from utils.helpers import get_active_term
+    import re as _re
+
+    def norm(s):
+        return _re.sub(r'[^a-z0-9]', '', (s or '').lower())
+
+    term = get_active_term()
+    if not term:
+        return
+
+    sc = SchoolClass.query.filter(
+        db.func.lower(SchoolClass.name) == (class_config.class_name or '').lower()).first()
+    if not sc:
+        return
+
+    subj = None
+    target = norm(subject.name)
+    for candidate in Subject.query.filter_by(is_active=True).all():
+        if norm(candidate.name) == target or (candidate.short_name and norm(candidate.short_name) == target):
+            subj = candidate
+            break
+    if not subj:
+        return
+
+    arm_id = None
+    if arm_name:
+        arm = ClassArm.query.filter(db.func.lower(ClassArm.name) == arm_name.lower()).first()
+        if not arm:
+            return   # named an arm that doesn't exist on the academic side — don't guess
+        arm_id = arm.id
+
+    existing = ClassSubject.query.filter_by(
+        subject_id=subj.id, class_id=sc.id, arm_id=arm_id, term_id=term.id).first()
+    if existing:
+        existing.teacher_name = teacher.name
+        existing.is_active = True
+    else:
+        db.session.add(ClassSubject(subject_id=subj.id, class_id=sc.id, arm_id=arm_id,
+                                    term_id=term.id, teacher_name=teacher.name, is_active=True))
+
+
 @generator_bp.route('/assignments/add', methods=['POST'])
 @login_required
 def add_teacher_assignment():
@@ -64,6 +114,13 @@ def add_teacher_assignment():
             teacher_id=teacher_id, subject_id=subject_id,
             class_config_id=class_config_id, arm_name=arm_name, branch_id=gen_bid()
         ))
+
+        teacher = db.session.get(GenTeacher, teacher_id)
+        subject = db.session.get(GenSubject, subject_id)
+        class_config = db.session.get(GenClassConfig, class_config_id)
+        if teacher and subject and class_config:
+            _sync_class_subject_teacher(teacher, subject, class_config, arm_name)
+
         db.session.commit()
         flash('Teacher assignment added!', 'success')
     except Exception as e:

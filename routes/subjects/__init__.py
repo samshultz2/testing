@@ -22,6 +22,14 @@ subjects_bp = Blueprint('subjects', __name__, url_prefix='/subjects')
 SUBJECT_CATEGORIES = ['Science', 'Arts', 'Commercial', 'General', 'Languages', 'Vocational']
 
 
+@subjects_bp.before_request
+def _heal_subjects_schema():
+    """Ensure the current tenant DB has the JSS/SSS subject columns before
+    any subjects query runs (idempotent, cached per engine)."""
+    from utils.subjects_schema import ensure_subjects_schema
+    ensure_subjects_schema()
+
+
 # --- SPA helpers (no-reload React shell + JSON-aware action responses) ---
 from utils.spa import section_responders
 _wants_json, _render, _ok, _err = section_responders(

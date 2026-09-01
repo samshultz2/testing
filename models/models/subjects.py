@@ -64,6 +64,11 @@ class Subject(db.Model):
     # Whether this subject has a Midterm/Practical (P/ME). When false the
     # Midterm column is dropped and the Theory paper is worth 50 instead of 40.
     has_practical = db.Column(db.Boolean, default=True)
+    # Which levels this subject applies to. Both default True so every
+    # existing subject keeps showing everywhere it already did — an admin
+    # narrows a subject to one level explicitly, nothing narrows itself.
+    for_junior = db.Column(db.Boolean, default=True, nullable=False)
+    for_senior = db.Column(db.Boolean, default=True, nullable=False)
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=local_now)
 
