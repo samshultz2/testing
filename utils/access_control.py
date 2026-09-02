@@ -1356,6 +1356,12 @@ def filter_classes_for_user(assignments, form_only=False):
         else:
             allowed = set(get_accessible_class_ids())
         result = [a for a in result if a.id in allowed]
+    # Lowest class to highest (Nursery -> Primary -> JSS -> SSS via
+    # SchoolClass.level), then arms alphabetically within a class — the
+    # display order every class+arm dropdown on the platform should use.
+    result.sort(key=lambda a: (
+        a.school_class.level if a.school_class and a.school_class.level is not None else 999,
+        (a.arm.name if a.arm else '') or ''))
     return result
 
 
