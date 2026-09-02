@@ -487,6 +487,9 @@ function ViewAssignment({ d, notify }) {
   const [search, setSearch] = useState('');
   const [picked, setPicked] = useState(() => new Set());
   const [busy, setBusy] = useState(false);
+  const [moveSel, setMoveSel] = useState(() => new Set());
+  const [moveTo, setMoveTo] = useState({ session_id: a.session_id ? String(a.session_id) : '', class_id: '', arm_id: '' });
+  const [moveBusy, setMoveBusy] = useState(false);
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     return d.available_students.filter((s) => !q || (`${s.full_name} ${s.student_id}`).toLowerCase().includes(q));
@@ -505,6 +508,19 @@ function ViewAssignment({ d, notify }) {
     setBusy(false);
     if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Could not enroll.');
   };
+  const toggleMove = (id) => setMoveSel((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const allMoveSelected = d.enrollments.length > 0 && d.enrollments.every((en) => moveSel.has(en.student_id));
+  const toggleAllMove = () => setMoveSel(() => allMoveSelected ? new Set() : new Set(d.enrollments.map((en) => en.student_id)));
+  const doReassign = async () => {
+    if (!moveSel.size) { notify('error', 'Select at least one student to move.'); return; }
+    if (!moveTo.session_id || !moveTo.class_id || !moveTo.arm_id) { notify('error', 'Select the destination session, class, and arm.'); return; }
+    if (!await confirm(`Move ${moveSel.size} student(s) to the selected class?`)) return;
+    setMoveBusy(true);
+    const r = await submitJson(d.reassign_url, { 'student_ids[]': [...moveSel],
+      to_session_id: moveTo.session_id, to_class_id: moveTo.class_id, to_arm_id: moveTo.arm_id });
+    setMoveBusy(false);
+    if (r.ok) { notify('success', r.message); setMoveSel(new Set()); nav.refresh(); } else notify('error', r.error || 'Could not move students.');
+  };
   return (
     <>
       <div className="page-header">
@@ -516,12 +532,42 @@ function ViewAssignment({ d, notify }) {
           {d.enrollments.length ? (
             <div className="data-cards" style={{ padding: '1rem' }}>{d.enrollments.map((e) => (
               <div className="data-card" key={e.id}>
-                <div className="data-card-header"><div className="data-card-title">{e.full_name}</div><span className="badge badge-primary">{e.student_id}</span></div>
+                <div className="data-card-header">
+                  <div className="data-card-title d-flex gap-2 align-center">
+                    {canWrite(d) && <input type="checkbox" checked={moveSel.has(e.student_id)} onChange={() => toggleMove(e.student_id)} aria-label={`Select ${e.full_name} to move`} />}
+                    {e.full_name}
+                  </div>
+                  <span className="badge badge-primary">{e.student_no}</span></div>
                 <div className="data-card-row"><span className="data-card-label">Gender</span><span>{e.gender}</span></div>
                 {canWrite(d) && <div className="data-card-actions"><button type="button" className="btn btn-danger btn-sm w-100" onClick={() => remove(e.remove_url)}><i aria-hidden="true" className="fas fa-times" /> Remove</button></div>}
               </div>))}</div>
           ) : <Empty icon="fa-user-group" title=""><p>No students enrolled</p></Empty>}
         </div></div>
+
+      {canWrite(d) && d.enrollments.length > 0 && (
+        <div className="card mb-3" style={{ borderColor: 'var(--primary)' }}>
+          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-right-left" /> Move Students to Another Class</h3></div>
+          <div className="card-body">
+            <p className="text-muted text-sm">Tick students above, choose where they're going — any session, class, and arm — and move them there. Like a manual, one-off version of promotion.</p>
+            <div className="d-flex gap-2 align-center flex-wrap mb-2">
+              <label className="d-flex gap-2 align-center mb-0"><input type="checkbox" checked={allMoveSelected} onChange={toggleAllMove} /><span className="text-sm">{moveSel.size ? `${moveSel.size} selected` : 'Select all'}</span></label>
+            </div>
+            <div className="form-row">
+              <div className="form-group"><label className="form-label">To Session</label>
+                <select className="form-control" value={moveTo.session_id} onChange={(e) => setMoveTo((s) => ({ ...s, session_id: e.target.value }))}>
+                  <option value="">Select session</option>{d.sessions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
+              <div className="form-group"><label className="form-label">To Class</label>
+                <select className="form-control" value={moveTo.class_id} onChange={(e) => setMoveTo((s) => ({ ...s, class_id: e.target.value }))}>
+                  <option value="">Select class</option>{d.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+              <div className="form-group"><label className="form-label">To Arm</label>
+                <select className="form-control" value={moveTo.arm_id} onChange={(e) => setMoveTo((s) => ({ ...s, arm_id: e.target.value }))}>
+                  <option value="">Select arm</option>{d.arms.map((ar) => <option key={ar.id} value={ar.id}>{ar.name}</option>)}</select></div>
+            </div>
+            <p className="text-muted text-sm" style={{ marginTop: '-.5rem' }}>Uses the destination session's First Term. If it's the same session as this class, students are removed from here automatically.</p>
+            <button type="button" className="btn btn-primary" disabled={moveBusy || !moveSel.size} onClick={doReassign}>
+              <i aria-hidden="true" className="fas fa-right-left" /> Move {moveSel.size || 0} student(s)</button>
+          </div></div>
+      )}
 
       {canWrite(d) && <div className="card">
         <div className="card-header"><h3>Add Students</h3><span className="text-muted" style={{ fontSize: 'var(--text-sm)' }}>Only students not currently in a class for this term are shown.</span></div>

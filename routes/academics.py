@@ -872,11 +872,14 @@ def view_assignment(assignment_id):
     from utils.branch_scope import require_branch_access
     assignment = db.get_or_404(ClassArmAssignment, assignment_id)
     require_branch_access(assignment.branch_id)   # no cross-branch roster
-    enrollments = assignment.enrollments.filter_by(is_active=True).all()
+    enrollments = (assignment.enrollments.filter_by(is_active=True)
+                  .join(Student, StudentEnrollment.student_id == Student.id)
+                  .filter(Student.is_graduated == False).all())
 
-    # Available = active students NOT already actively enrolled in ANY class
-    # for this term. A student must be removed from their current class before
-    # they can be reassigned, so they only reappear here once freed up.
+    # Available = active, non-graduated students NOT already actively
+    # enrolled in ANY class for this term. A student must be removed from
+    # their current class before they can be reassigned, so they only
+    # reappear here once freed up.
     active_elsewhere = (
         db.session.query(StudentEnrollment.student_id)
         .join(ClassArmAssignment,
@@ -886,6 +889,7 @@ def view_assignment(assignment_id):
     )
     q = Student.query.filter(
         Student.is_active == True,
+        Student.is_graduated == False,
         ~Student.id.in_(active_elsewhere.scalar_subquery()),
     )
     # Keep the list to this class's branch when the assignment is branch-bound.
@@ -893,19 +897,108 @@ def view_assignment(assignment_id):
         q = q.filter(Student.branch_id == assignment.branch_id)
     available_students = q.order_by(Student.surname, Student.first_name).all()
 
+    sessions = AcademicSession.query.order_by(AcademicSession.start_date.desc()).all()
+    classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all()
+    arms = ClassArm.query.filter_by(is_active=True).filter(ClassArm.is_default.isnot(True)).order_by(ClassArm.name).all()
+
     return _render({
         'page': 'view_assignment',
         'assignment': {'id': assignment.id, 'display_name': assignment.display_name,
                        'term': assignment.term.full_name if assignment.term else '',
-                       'term_id': assignment.term_id},
-        'enrollments': [{'id': e.id, 'full_name': e.student.full_name,
-                         'student_id': e.student.student_id, 'gender': e.student.gender or '',
+                       'term_id': assignment.term_id,
+                       'session_id': assignment.term.session_id if assignment.term else None},
+        'enrollments': [{'id': e.id, 'student_id': e.student_id, 'full_name': e.student.full_name,
+                         'student_no': e.student.student_id, 'gender': e.student.gender or '',
                          'remove_url': url_for('academics.remove_enrollment', enrollment_id=e.id)}
                         for e in enrollments],
         'available_students': [{'id': s.id, 'full_name': s.full_name, 'student_id': s.student_id}
                                for s in available_students],
+        'sessions': [{'id': s.id, 'name': s.name} for s in sessions],
+        'classes': [{'id': c.id, 'name': c.name} for c in classes],
+        'arms': [{'id': a.id, 'name': a.name} for a in arms],
         'back_url': url_for('academics.assignments_list', term_id=assignment.term_id),
-        'enroll_url': url_for('academics.enroll_student', assignment_id=assignment.id)})
+        'enroll_url': url_for('academics.enroll_student', assignment_id=assignment.id),
+        'reassign_url': url_for('academics.reassign_students', assignment_id=assignment.id)})
+
+
+@academics_bp.route('/assignments/<int:assignment_id>/reassign', methods=['POST'])
+@login_required
+def reassign_students(assignment_id):
+    """Move selected students from this class-arm to a different class/arm —
+    optionally in a different academic session entirely. Essentially a manual,
+    ad-hoc counterpart to bulk promotion: pick who moves, pick where they go.
+    If the destination is the SAME session, the student's current enrollment
+    for that session is deactivated so they aren't in two classes at once; if
+    it's a different session, the old enrollment is simply left as history."""
+    from utils.branch_scope import require_branch_access
+    assignment = db.get_or_404(ClassArmAssignment, assignment_id)
+    require_branch_access(assignment.branch_id)
+
+    student_ids = (request.form.getlist('student_ids[]') or request.form.getlist('student_ids'))
+    to_session_id = request.form.get('to_session_id', type=int)
+    to_class_id = request.form.get('to_class_id', type=int)
+    to_arm_id = request.form.get('to_arm_id', type=int)
+    back = url_for('academics.view_assignment', assignment_id=assignment_id)
+
+    if not student_ids:
+        return _err('Select at least one student.', back)
+    if not (to_session_id and to_class_id and to_arm_id):
+        return _err('Select the destination session, class, and arm.', back)
+
+    to_term = Term.query.filter_by(session_id=to_session_id, term_number=1).first()
+    if not to_term:
+        return _err('The destination session has no First Term set up yet — create its terms first.', back)
+
+    to_assignment = ClassArmAssignment.query.filter_by(
+        term_id=to_term.id, class_id=to_class_id, arm_id=to_arm_id).first()
+    if not to_assignment:
+        return _err('That class/arm isn\'t set up for the destination session\'s First Term yet.', back)
+    if to_assignment.branch_id != assignment.branch_id:
+        return _err('The destination class belongs to another branch.', back)
+
+    same_session = (to_term.session_id == assignment.term.session_id if assignment.term else False)
+
+    try:
+        moved = 0
+        for raw in student_ids:
+            try:
+                sid = int(raw)
+            except (TypeError, ValueError):
+                continue
+
+            # Don't create a duplicate enrollment for a student already there.
+            existing = StudentEnrollment.query.filter_by(
+                student_id=sid, class_arm_assignment_id=to_assignment.id).first()
+            if existing:
+                if not existing.is_active:
+                    existing.is_active = True
+                    moved += 1
+            else:
+                db.session.add(StudentEnrollment(student_id=sid, class_arm_assignment_id=to_assignment.id))
+                moved += 1
+
+            if same_session:
+                # Deactivate every other active enrollment this student has in
+                # the destination session's terms, so they don't show up in
+                # two classes for the same session at once.
+                other = (StudentEnrollment.query.join(ClassArmAssignment)
+                        .join(Term, ClassArmAssignment.term_id == Term.id)
+                        .filter(StudentEnrollment.student_id == sid,
+                                StudentEnrollment.is_active == True,
+                                Term.session_id == to_session_id,
+                                StudentEnrollment.class_arm_assignment_id != to_assignment.id)
+                        .all())
+                for o in other:
+                    o.is_active = False
+
+        db.session.commit()
+        from utils.audit import log_action
+        log_action('academics.students_reassign',
+                   detail=f'{moved} student(s) -> {to_assignment.display_name} ({to_term.full_name})')
+        return _ok(f'{moved} student(s) moved to {to_assignment.display_name} for {to_term.full_name}.', back)
+    except Exception as e:
+        db.session.rollback()
+        return _err(f'Error: {str(e)}', back)
 
 
 @academics_bp.route('/assignments/<int:assignment_id>/enroll', methods=['POST'])
