@@ -98,7 +98,7 @@ def add_teacher_assignment():
         subject_id = request.form.get('subject_id', type=int)
         class_config_id = request.form.get('class_config_id', type=int)
         # One or more specific arms, or none at all for "all arms" (arm_name=None).
-        arm_names = [a.strip() for a in request.form.getlist('arm_names[]') if a.strip()]
+        arm_names = list(dict.fromkeys(a.strip() for a in request.form.getlist('arm_names[]') if a.strip()))
 
         if not all([teacher_id, subject_id, class_config_id]):
             flash('Teacher, subject, and class are required.', 'error')
@@ -115,17 +115,25 @@ def add_teacher_assignment():
 
         added, skipped = 0, 0
         for arm_name in targets:
-            if GenTeacherAssignment.query.filter_by(
+            # Match on the full unique key regardless of is_active — the DB
+            # constraint doesn't care whether a row is "removed", so a
+            # previously soft-deleted assignment for this exact combo must be
+            # reactivated in place, not inserted as a second row (that's a
+            # duplicate-key error, not a fresh insert).
+            existing = GenTeacherAssignment.query.filter_by(
                 teacher_id=teacher_id, subject_id=subject_id,
-                class_config_id=class_config_id, arm_name=arm_name, is_active=True
-            ).first():
-                skipped += 1
-                continue
-
-            db.session.add(GenTeacherAssignment(
-                teacher_id=teacher_id, subject_id=subject_id,
-                class_config_id=class_config_id, arm_name=arm_name, branch_id=gen_bid()
-            ))
+                class_config_id=class_config_id, arm_name=arm_name
+            ).first()
+            if existing:
+                if existing.is_active:
+                    skipped += 1
+                    continue
+                existing.is_active = True
+            else:
+                db.session.add(GenTeacherAssignment(
+                    teacher_id=teacher_id, subject_id=subject_id,
+                    class_config_id=class_config_id, arm_name=arm_name, branch_id=gen_bid()
+                ))
             if teacher and subject and class_config:
                 _sync_class_subject_teacher(teacher, subject, class_config, arm_name)
             added += 1
