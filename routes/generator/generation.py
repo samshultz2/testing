@@ -97,32 +97,46 @@ def add_teacher_assignment():
         teacher_id = request.form.get('teacher_id', type=int)
         subject_id = request.form.get('subject_id', type=int)
         class_config_id = request.form.get('class_config_id', type=int)
-        arm_name = request.form.get('arm_name', '').strip() or None
-        
+        # One or more specific arms, or none at all for "all arms" (arm_name=None).
+        arm_names = [a.strip() for a in request.form.getlist('arm_names[]') if a.strip()]
+
         if not all([teacher_id, subject_id, class_config_id]):
             flash('Teacher, subject, and class are required.', 'error')
             return redirect(url_for('generator.teacher_assignments'))
-        
-        if GenTeacherAssignment.query.filter_by(
-            teacher_id=teacher_id, subject_id=subject_id,
-            class_config_id=class_config_id, arm_name=arm_name, is_active=True
-        ).first():
-            flash('Assignment exists.', 'warning')
-            return redirect(url_for('generator.teacher_assignments'))
-        
-        db.session.add(GenTeacherAssignment(
-            teacher_id=teacher_id, subject_id=subject_id,
-            class_config_id=class_config_id, arm_name=arm_name, branch_id=gen_bid()
-        ))
 
         teacher = db.session.get(GenTeacher, teacher_id)
         subject = db.session.get(GenSubject, subject_id)
         class_config = db.session.get(GenClassConfig, class_config_id)
-        if teacher and subject and class_config:
-            _sync_class_subject_teacher(teacher, subject, class_config, arm_name)
+
+        # Empty selection means "All Arms" — a single assignment with
+        # arm_name=None, same as before. One or more selected arms means one
+        # assignment per arm, so the teacher is assigned to each of them.
+        targets = arm_names if arm_names else [None]
+
+        added, skipped = 0, 0
+        for arm_name in targets:
+            if GenTeacherAssignment.query.filter_by(
+                teacher_id=teacher_id, subject_id=subject_id,
+                class_config_id=class_config_id, arm_name=arm_name, is_active=True
+            ).first():
+                skipped += 1
+                continue
+
+            db.session.add(GenTeacherAssignment(
+                teacher_id=teacher_id, subject_id=subject_id,
+                class_config_id=class_config_id, arm_name=arm_name, branch_id=gen_bid()
+            ))
+            if teacher and subject and class_config:
+                _sync_class_subject_teacher(teacher, subject, class_config, arm_name)
+            added += 1
 
         db.session.commit()
-        flash('Teacher assignment added!', 'success')
+        if added and skipped:
+            flash(f'{added} assignment(s) added, {skipped} already existed.', 'success')
+        elif added:
+            flash(f'{added} assignment(s) added!' if added > 1 else 'Teacher assignment added!', 'success')
+        else:
+            flash('Assignment(s) already exist.', 'warning')
     except Exception as e:
         db.session.rollback()
         flash(f'Error: {str(e)}', 'error')
