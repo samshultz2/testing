@@ -711,12 +711,12 @@ def students_word(rows, headers, school, total=None, filename='students_export.d
     table.autofit = False
 
     hdr = table.rows[0]
-    hdr.height_rule = WD_ROW_HEIGHT_RULE.AT_LEAST; hdr.height = Pt(24)
+    hdr.height_rule = WD_ROW_HEIGHT_RULE.AT_LEAST; hdr.height = Pt(30)
     for i, h in enumerate(headers):
         cell = hdr.cells[i]; cell.width = widths[i]
         cell.text = short_header(h)
         para = cell.paragraphs[0]; para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run = para.runs[0]; run.bold = True; run.font.size = Pt(10)
+        run = para.runs[0]; run.bold = True; run.font.size = Pt(16)
         run.font.color.rgb = RGBColor(255, 255, 255)
         cell._tc.get_or_add_tcPr().append(parse_xml(f'<w:shd {nsdecls("w")} w:fill="1E2A4A"/>'))
 
@@ -729,7 +729,7 @@ def students_word(rows, headers, school, total=None, filename='students_export.d
             para = cell.paragraphs[0]
             para.alignment = WD_ALIGN_PARAGRAPH.LEFT if (_is_wrap(headers[i]) or i == 1) else WD_ALIGN_PARAGRAPH.CENTER
             if para.runs:
-                para.runs[0].font.size = Pt(9.5)
+                para.runs[0].font.size = Pt(16)
             if idx % 2 == 0:
                 cell._tc.get_or_add_tcPr().append(parse_xml(f'<w:shd {nsdecls("w")} w:fill="F4F6F9"/>'))
 

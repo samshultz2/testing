@@ -2440,51 +2440,64 @@ def _trash_scope(query):
 
 
 def export_students_excel(student_data, fields):
-    """Export students to Excel format with selected fields - wraps text and adjusts row heights"""
+    """Export students to Excel format with selected fields — a responsive,
+    proportionally-weighted column layout (like the Word/PDF/image exports)
+    instead of a fixed per-field width, so a handful of selected fields still
+    spread across the full sheet instead of leaving it mostly blank. 16pt
+    throughout for readability; row heights auto-adjust to fit wrapped text."""
     import openpyxl
     from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
     from openpyxl.utils import get_column_letter
     from io import BytesIO
     from flask import Response
-    
+
+    FONT_SIZE = 16
+
     wb = openpyxl.Workbook()
     ws = wb.active
     ws.title = "Students"
     
     # Styles
-    header_font = Font(bold=True, size=11, color='FFFFFF')
+    header_font = Font(bold=True, size=FONT_SIZE, color='FFFFFF')
     header_fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
-    data_font = Font(size=10)
+    data_font = Font(size=FONT_SIZE)
     border = Border(
         left=Side(style='thin'), right=Side(style='thin'),
         top=Side(style='thin'), bottom=Side(style='thin')
     )
     center_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
     left_align = Alignment(horizontal='left', vertical='top', wrap_text=True)
-    
-    # Column width mapping based on field type
-    col_width_map = {
-        'Student ID': 14,
-        'Surname': 15,
-        'First Name': 15,
-        'Middle Name': 15,
-        'Gender': 10,
-        'Class': 14,
-        'Date of Birth': 14,
-        'Age': 8,
-        'Religion': 12,
-        'Home Address': 35,
-        'Hobbies': 30,
-        'Parent Phone': 15,
-    }
+
+    # Proportional weight per field, same idea as the Word/PDF exports: wide
+    # free-text fields get much more room, short codes/labels get little, and
+    # everything else is roughly even — then it's all scaled to fill a fixed
+    # total-width budget so however many fields are selected, the sheet uses
+    # its full width instead of leaving fixed-width columns with blank space
+    # trailing off to the right.
+    WRAP_FIELDS = {'home address', 'hobbies'}
+    NARROW_FIELDS = {'gender', 'age'}
+
+    def _weight(field_name):
+        k = field_name.lower()
+        if k in WRAP_FIELDS:
+            return 3.0
+        if k in NARROW_FIELDS:
+            return 0.6
+        return 1.4
+
+    SN_WIDTH = 6
+    TOTAL_WIDTH = 190   # character-width units to spread across all data columns
+    weights = [_weight(f) for f in fields]
+    total_weight = sum(weights) or 1
+    col_widths = {f: max(9, round(TOTAL_WIDTH * w / total_weight)) for f, w in zip(fields, weights)}
     
     # Title row
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(fields) + 1)
     title_cell = ws['A1']
     title_cell.value = 'STUDENTS LIST'
-    title_cell.font = Font(bold=True, size=14)
+    title_cell.font = Font(bold=True, size=FONT_SIZE + 2)
     title_cell.alignment = Alignment(horizontal='center', vertical='center')
-    ws.row_dimensions[1].height = 25
+    ws.row_dimensions[1].height = 32
     
     # Empty row
     ws.row_dimensions[2].height = 10
@@ -2496,7 +2509,7 @@ def export_students_excel(student_data, fields):
     ws.cell(row=header_row, column=1).fill = header_fill
     ws.cell(row=header_row, column=1).border = border
     ws.cell(row=header_row, column=1).alignment = center_align
-    ws.column_dimensions['A'].width = 6
+    ws.column_dimensions['A'].width = SN_WIDTH
     
     for col, field in enumerate(fields, 2):
         cell = ws.cell(row=header_row, column=col, value=field)
@@ -2507,9 +2520,9 @@ def export_students_excel(student_data, fields):
         
         # Set column width
         col_letter = get_column_letter(col)
-        ws.column_dimensions[col_letter].width = col_width_map.get(field, 15)
+        ws.column_dimensions[col_letter].width = col_widths[field]
     
-    ws.row_dimensions[header_row].height = 20
+    ws.row_dimensions[header_row].height = 30
     
     # Data rows
     for idx, student in enumerate(student_data, 1):
@@ -2531,23 +2544,25 @@ def export_students_excel(student_data, fields):
             cell.alignment = left_align
             cell.font = data_font
             
-            # Estimate lines needed based on column width and text length
-            col_width = col_width_map.get(field, 15)
-            chars_per_line = int(col_width * 1.2)  # Approximate chars that fit
+            # Estimate lines needed based on column width and text length. At
+            # 16pt roughly 0.8 characters fit per width-unit (vs ~1.2 at the
+            # old 10pt) — fewer, wider characters per line.
+            col_width = col_widths[field]
+            chars_per_line = int(col_width * 0.8)
             if chars_per_line > 0 and len(value) > 0:
                 lines_needed = max(1, -(-len(value) // chars_per_line))  # Ceiling division
                 # Also count actual newlines in the text
                 lines_needed = max(lines_needed, value.count('\n') + 1)
                 max_lines = max(max_lines, lines_needed)
         
-        # Set row height based on content (15 points per line, minimum 20)
-        row_height = max(20, max_lines * 15)
+        # Set row height based on content (22 points per line at 16pt, minimum 26)
+        row_height = max(26, max_lines * 22)
         ws.row_dimensions[row].height = row_height
     
     # Footer row
     footer_row = len(student_data) + 4
     ws.cell(row=footer_row, column=1, value=f'Total: {len(student_data)} students')
-    ws.cell(row=footer_row, column=1).font = Font(bold=True, size=10)
+    ws.cell(row=footer_row, column=1).font = Font(bold=True, size=FONT_SIZE)
     
     return xlsx_response(wb, 'students_export.xlsx')
 

@@ -207,6 +207,10 @@ function ClassSubjects({ d, notify }) {
   const [sel, setSel] = useState(() => new Set());
   const [bulkName, setBulkName] = useState('');
   const [busy, setBusy] = useState(false);
+  const [level, setLevel] = useState('all');
+  const sectionByClassId = {}; d.classes.forEach((c) => { sectionByClassId[c.id] = c.section; });
+  const levelClasses = d.classes.filter((c) => level === 'all' || c.section === level);
+  const levelSubjects = d.class_subjects.filter((cs) => level === 'all' || sectionByClassId[cs.class_id] === level);
   const go = (extra) => navParams(nav.go, d.self_url, { term_id: d.term_id, class_id: d.class_id, ...extra });
   const del = async (url, name) => {
     if (!await confirm(`Remove ${name}?`)) return;
@@ -214,8 +218,8 @@ function ClassSubjects({ d, notify }) {
     if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Could not remove.');
   };
   const toggleSel = (id) => setSel((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
-  const allSelected = d.class_subjects.length > 0 && d.class_subjects.every((cs) => sel.has(cs.id));
-  const toggleAll = () => setSel(() => allSelected ? new Set() : new Set(d.class_subjects.map((cs) => cs.id)));
+  const allSelected = levelSubjects.length > 0 && levelSubjects.every((cs) => sel.has(cs.id));
+  const toggleAll = () => setSel(() => allSelected ? new Set() : new Set(levelSubjects.map((cs) => cs.id)));
   const applyBulk = async () => {
     if (!sel.size) return;
     const name = bulkName.trim();
@@ -243,6 +247,14 @@ function ClassSubjects({ d, notify }) {
         </div>
       </div>
 
+      <div className="card mb-3" style={{ padding: '.25rem' }}>
+        <div style={{ display: 'flex', gap: '.25rem' }}>
+          <button type="button" className={'btn btn-sm ' + (level === 'all' ? 'btn-primary' : 'btn-light')} onClick={() => { setLevel('all'); if (d.class_id && sectionByClassId[d.class_id] && sectionByClassId[d.class_id] !== 'all') go({ class_id: '' }); }}>All</button>
+          <button type="button" className={'btn btn-sm ' + (level === 'junior' ? 'btn-primary' : 'btn-light')} onClick={() => { setLevel('junior'); if (d.class_id && sectionByClassId[d.class_id] !== 'junior') go({ class_id: '' }); }}>Junior Secondary (JSS)</button>
+          <button type="button" className={'btn btn-sm ' + (level === 'senior' ? 'btn-primary' : 'btn-light')} onClick={() => { setLevel('senior'); if (d.class_id && sectionByClassId[d.class_id] !== 'senior') go({ class_id: '' }); }}>Senior Secondary (SSS)</button>
+        </div>
+      </div>
+
       {d.term_id && showCopy && (
         <div className="card mb-3" style={{ borderColor: 'var(--info)' }}>
           <div className="card-header"><h3><i aria-hidden="true" className="fas fa-copy" /> Copy subject assignments into {d.selected_term || 'this term'}</h3></div>
@@ -264,10 +276,10 @@ function ClassSubjects({ d, notify }) {
             <option value="">Select Term</option>{d.terms.map((t) => <option key={t.id} value={t.id}>{t.full_name}</option>)}</select></div>
         <div className="form-group"><label className="form-label">Class</label>
           <select className="form-control" value={d.class_id} onChange={(e) => go({ class_id: e.target.value })}>
-            <option value="">All Classes</option>{d.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+            <option value="">All Classes</option>{levelClasses.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
       </form></div></div>
 
-      {canWrite(d) && d.class_subjects.length > 0 && (
+      {canWrite(d) && levelSubjects.length > 0 && (
         <div className="card mb-3" style={{ borderColor: 'var(--primary)' }}>
           <div className="card-body">
             <div className="d-flex gap-2 align-center flex-wrap">
@@ -286,11 +298,11 @@ function ClassSubjects({ d, notify }) {
           </div></div>
       )}
 
-      {d.class_subjects.length ? (
-        <div className="card"><div className="card-header"><h3>Subjects ({d.class_subjects.length})</h3></div>
+      {levelSubjects.length ? (
+        <div className="card"><div className="card-header"><h3>Subjects ({levelSubjects.length})</h3></div>
           <div className="card-body" style={{ padding: 0 }}>
             <div className="data-cards" style={{ padding: '1rem' }}>
-              {d.class_subjects.map((cs) => (
+              {levelSubjects.map((cs) => (
                 <div className={`data-card${sel.has(cs.id) ? ' selected' : ''}`} key={cs.id} style={sel.has(cs.id) ? { borderColor: 'var(--primary)' } : undefined}>
                   <div className="data-card-header">
                     <div className="data-card-title d-flex gap-2 align-center">
