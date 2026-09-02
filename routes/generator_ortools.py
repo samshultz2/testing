@@ -722,6 +722,39 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
                 day_slots = [day * num_periods + p for p in range(num_periods)]
                 model.Add(sum(x[r['req_id'], slot] for r in reqs for slot in day_slots) <= 1)
     
+    # ========== BALANCE EMPTY SLOTS ACROSS DAYS (soft objective) ==========
+    # Some class-arms have fewer required periods than slots in the week
+    # (e.g. only 40 of 45 periods actually taught) — that's expected, not a
+    # bug. Left alone, the solver has no reason to prefer spreading those
+    # empty slots out, so it's just as likely to dump 3 of them on one day
+    # and leave another day full. This nudges it to spread each class-arm's
+    # empty slots as evenly as possible across the week — for T empty slots
+    # over 5 days, every day gets floor(T/5) or ceil(T/5) of them — WITHOUT
+    # making it a hard requirement, so a genuinely tighter scheduling
+    # constraint elsewhere can still win and the solve stays feasible.
+    logger.debug("Adding empty-slot balance objective...")
+    balance_terms = []
+    for ca in class_arms:
+        ca_reqs = [r for r in requirements if (r['class_name'], r['arm']) == ca]
+        total_empty = num_slots - len(ca_reqs)
+        if total_empty <= 0:
+            continue   # this class-arm's week is already full — nothing to balance
+        floor_empty = total_empty // num_days
+        ceil_empty = floor_empty + (1 if total_empty % num_days else 0)
+        ca_tag = f'{ca[0]}_{ca[1]}'.replace(' ', '_')
+        for day in range(num_days):
+            day_slots = [day * num_periods + p for p in range(num_periods)]
+            filled_today = sum(x[r['req_id'], slot] for r in ca_reqs for slot in day_slots)
+            empty_today = num_periods - filled_today
+            over = model.NewIntVar(0, num_periods, f'emptybal_over_{ca_tag}_{day}')
+            under = model.NewIntVar(0, num_periods, f'emptybal_under_{ca_tag}_{day}')
+            model.Add(empty_today - ceil_empty <= over)
+            model.Add(floor_empty - empty_today <= under)
+            balance_terms.append(over)
+            balance_terms.append(under)
+    if balance_terms:
+        model.Minimize(sum(balance_terms))
+
     # ========== SOLVE WITH RANDOMIZATION ==========
     logger.debug("Solving with randomization...")
     solver = cp_model.CpSolver()
