@@ -712,7 +712,8 @@ def assignments_list():
     selected_term = None
     if term_id:
         selected_term = db.session.get(Term, term_id)
-        assignments = ClassArmAssignment.query.filter_by(term_id=term_id).join(
+        from utils.branch_scope import scope_query
+        assignments = scope_query(ClassArmAssignment.query.filter_by(term_id=term_id), ClassArmAssignment).join(
             SchoolClass
         ).order_by(SchoolClass.level).all()
     
@@ -774,15 +775,16 @@ def add_assignment():
             arm_ids = [ClassArm.default().id]            # arm-less school -> default arm
 
         from utils.branch_scope import branch_for_new
+        bid = branch_for_new()      # no branch picked -> default branch
         created, skipped = 0, 0
         for arm_id in arm_ids:
             if ClassArmAssignment.query.filter_by(
-                    term_id=term_id, class_id=class_id, arm_id=arm_id).first():
+                    term_id=term_id, class_id=class_id, arm_id=arm_id, branch_id=bid).first():
                 skipped += 1
                 continue
             db.session.add(ClassArmAssignment(
                 term_id=term_id, class_id=class_id, arm_id=arm_id,
-                branch_id=branch_for_new(),      # no branch picked -> default branch
+                branch_id=bid,
                 form_teacher_name=form_teacher or None,
                 form_teacher_phone=form_teacher_phone or None))
             created += 1
@@ -831,7 +833,7 @@ def setup_term_classes():
         arm = ClassArm.default()
         bid = branch_for_new()
         existing = {a.class_id for a in ClassArmAssignment.query.filter_by(
-            term_id=term_id, arm_id=arm.id).all()}
+            term_id=term_id, arm_id=arm.id, branch_id=bid).all()}
         created = 0
         for c in SchoolClass.query.filter_by(is_active=True).all():
             if c.id in existing:

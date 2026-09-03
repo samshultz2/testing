@@ -521,8 +521,22 @@ def delete_results(batch_id):
 @generator_bp.route('/reports')
 @login_required
 def reports_index():
-    latest = GenTimetableResult.query.filter_by(branch_id=gen_bid()).order_by(GenTimetableResult.generated_at.desc()).first()
-    return render_template('generator/reports_index.html', latest_batch=latest)
+    """Reports for a specific timetable batch — passed through from wherever
+    the user was (e.g. 'Reports' on a results page), so links here always
+    point at what was actually being viewed, not just whatever generated
+    most recently. Falls back to the latest batch for the current level tab
+    only when landing here with no batch in context at all."""
+    batch_id = (request.args.get('batch_id') or '').strip()
+    if batch_id:
+        batch = GenTimetableResult.query.filter_by(batch_id=batch_id, branch_id=gen_bid()).first()
+        if not batch:
+            flash('That timetable batch was not found.', 'error')
+            return redirect(url_for('generator.results_list'))
+    else:
+        batch = (GenTimetableResult.query.filter_by(
+                    branch_id=gen_bid(), school_level=get_current_level())
+                .order_by(GenTimetableResult.generated_at.desc()).first())
+    return render_template('generator/reports_index.html', batch=batch)
 
 
 @generator_bp.route('/reports/period-count/<batch_id>')

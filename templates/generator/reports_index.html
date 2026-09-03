@@ -6,34 +6,34 @@
     <h1>Timetable Reports</h1>
 </div>
 
-{% if latest_batch %}
-<p class="text-muted mb-3">Reports for latest batch: #{{ latest_batch.batch_id }}</p>
+{% if batch %}
+<p class="text-muted mb-3">Reports for batch: #{{ batch.batch_id }} ({{ batch.class_name }} {{ batch.arm_name }}, {{ batch.school_level|upper }})</p>
 
 <div class="card">
     <div class="card-body">
         <div class="data-cards" style="padding: 0;">
-            <a href="{{ url_for('generator.period_count_report', batch_id=latest_batch.batch_id) }}" class="data-card" style="text-decoration: none; color: inherit;">
+            <a href="{{ url_for('generator.period_count_report', batch_id=batch.batch_id) }}" class="data-card" style="text-decoration: none; color: inherit;">
                 <div class="data-card-header">
                     <div class="data-card-title"><i class="fas fa-calculator"></i> Period Count</div>
                 </div>
                 <div class="data-card-row">Verify periods assigned vs required per subject</div>
             </a>
             
-            <a href="{{ url_for('generator.teacher_workload_report', batch_id=latest_batch.batch_id) }}" class="data-card" style="text-decoration: none; color: inherit;">
+            <a href="{{ url_for('generator.teacher_workload_report', batch_id=batch.batch_id) }}" class="data-card" style="text-decoration: none; color: inherit;">
                 <div class="data-card-header">
                     <div class="data-card-title"><i class="fas fa-user-clock"></i> Teacher Workload</div>
                 </div>
                 <div class="data-card-row">Total periods per teacher, per day breakdown</div>
             </a>
             
-            <a href="{{ url_for('generator.clash_report', batch_id=latest_batch.batch_id) }}" class="data-card" style="text-decoration: none; color: inherit;">
+            <a href="{{ url_for('generator.clash_report', batch_id=batch.batch_id) }}" class="data-card" style="text-decoration: none; color: inherit;">
                 <div class="data-card-header">
                     <div class="data-card-title"><i class="fas fa-exclamation-triangle"></i> Clash Report</div>
                 </div>
                 <div class="data-card-row">Teachers assigned to multiple classes same time</div>
             </a>
             
-            <a href="{{ url_for('generator.unassigned_report', batch_id=latest_batch.batch_id) }}" class="data-card" style="text-decoration: none; color: inherit;">
+            <a href="{{ url_for('generator.unassigned_report', batch_id=batch.batch_id) }}" class="data-card" style="text-decoration: none; color: inherit;">
                 <div class="data-card-header">
                     <div class="data-card-title"><i class="fas fa-calendar-times"></i> Empty Slots</div>
                 </div>

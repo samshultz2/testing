@@ -128,9 +128,15 @@ class ClassArmAssignment(db.Model):
     # Relationships
     enrollments = db.relationship('StudentEnrollment', backref='class_arm_assignment', lazy='dynamic', cascade='all, delete-orphan')
     
-    # Unique constraint: one class-arm combo per term
+    # Unique constraint: one class-arm combo per term, PER BRANCH — each
+    # branch has its own students/teachers/rosters, so branch A and branch B
+    # must each be able to set up their own 'JSS1 Rose' for the same term
+    # without colliding. (Previously this didn't include branch_id, which
+    # meant only the first branch to claim a class+arm+term combination
+    # could ever have one — see db_migrations for the fix.)
     __table_args__ = (
-        db.UniqueConstraint('class_id', 'arm_id', 'term_id', name='unique_class_arm_term'),
+        db.UniqueConstraint('class_id', 'arm_id', 'term_id', 'branch_id',
+                            name='unique_class_arm_term_branch'),
     )
     
     @property

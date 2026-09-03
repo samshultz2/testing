@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Teacher Workload - Generator{% endblock %}
-{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <a href="{{ url_for('generator.reports_index') }}">Reports</a> / <span>Workload</span>{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <a href="{{ url_for('generator.reports_index', batch_id=batch_id) }}">Reports</a> / <span>Workload</span>{% endblock %}
 {% block content %}
 <div class="page-header">
     <h1>Teacher Workload Report</h1>

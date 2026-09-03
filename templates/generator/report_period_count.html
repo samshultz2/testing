@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Period Count Report - Generator{% endblock %}
-{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <a href="{{ url_for('generator.reports_index') }}">Reports</a> / <span>Period Count</span>{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <a href="{{ url_for('generator.reports_index', batch_id=batch_id) }}">Reports</a> / <span>Period Count</span>{% endblock %}
 {% block content %}
 <div class="page-header">
     <h1>Period Count Report</h1>

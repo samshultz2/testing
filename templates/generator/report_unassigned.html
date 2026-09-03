@@ -1,6 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Empty Slots - Generator{% endblock %}
-{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <a href="{{ url_for('generator.reports_index') }}">Reports</a> / <span>Empty Slots</span>{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <a href="{{ url_for('generator.reports_index', batch_id=batch_id) }}">Reports</a> / <span>Empty Slots</span>{% endblock %}
 {% block content %}
 <div class="page-header">
     <h1>Empty/Unassigned Slots</h1>
