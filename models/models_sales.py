@@ -420,9 +420,12 @@ FIXED_ASSET_STATUSES = ['In Use', 'In Store', 'Under Repair', 'Disposed', 'Lost'
 # two line up for filtering and comparison ('nursery'/'primary'/'junior'/
 # 'senior' — see SECTION_LABELS there for the friendly names).
 FIXED_ASSET_SECTIONS = ['nursery', 'primary', 'junior', 'senior']
-# Kinds of change recorded in an asset's history ledger.
-ASSET_EVENT_TYPES = ['created', 'quantity_changed', 'status_changed', 'updated',
-                     'disposed', 'restored']
+# Kinds of change recorded in an asset's history ledger. 'opening_balance' is
+# the one-time backfill event that preserves an asset's state exactly as it
+# stood when this event-sourced model was introduced (see
+# recompute_asset_state) — never written by user action directly.
+ASSET_EVENT_TYPES = ['opening_balance', 'created', 'quantity_changed', 'status_changed',
+                     'updated', 'disposed', 'restored']
 
 
 class FixedAsset(db.Model):
@@ -551,6 +554,16 @@ class AssetLog(db.Model):
     quantity_after = db.Column(db.Integer)
     status_before = db.Column(db.String(20))
     status_after = db.Column(db.String(20))
+    # Full resulting per-status breakdown at this event, as JSON —
+    # {"In Use": 25, "Under Repair": 3, "Lost": 2}. This is what makes
+    # current state genuinely DERIVED rather than independently maintained:
+    # FixedAsset.quantity/.status and AssetStatusCount are a cache rebuilt
+    # from the latest event's snapshot (see recompute_asset_state), never
+    # written on their own. Events written before this column existed have
+    # it NULL; a one-time 'opening_balance' event backfills each such asset
+    # with its state at the time of first write under the new model, so
+    # nothing is lost and nothing is invented (see recompute_asset_state).
+    breakdown_snapshot = db.Column(db.Text)
     note = db.Column(db.String(255))
     session_id = db.Column(db.Integer, db.ForeignKey('academic_sessions.id'))
     term_id = db.Column(db.Integer, db.ForeignKey('terms.id'))

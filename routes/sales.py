@@ -1745,13 +1745,15 @@ def _asset_dict(a):
 
 
 def _set_status_breakdown(a, breakdown):
-    """Replace an asset's per-status quantity split. `breakdown` is a dict of
-    {status: quantity}; non-positive entries are dropped. Keeps the summary
-    `status` (largest bucket) and `quantity` (the sum) fields in sync so
-    every view that hasn't been taught about splits still shows something
-    sensible. Mutates the ORM relationship collection directly (not raw
-    inserts) so `a.status_counts` — and anything reading it in the same
-    request, like the history log — reflects the change immediately."""
+    """Rebuild the CACHED current state — `a.status`/`a.quantity` (the
+    largest bucket / the sum) and the AssetStatusCount rows — from a given
+    breakdown dict. This is a cache-sync helper only: the only caller that
+    should ever invoke it is _record_asset_event, immediately after writing
+    that same breakdown to the ledger as an event's breakdown_snapshot. It
+    must never be called with a breakdown that hasn't also been logged, or
+    the cache stops being a genuine reflection of the event history.
+    Mutates the ORM relationship collection directly (not raw inserts) so
+    `a.status_counts` reflects the change immediately within the request."""
     a.status_counts.clear()   # cascade='all, delete-orphan' removes the old rows on flush
     db.session.flush()        # commit the deletes before inserting new rows with the same
                               # (asset_id, status) key, or the unique constraint can race them
@@ -1765,8 +1767,8 @@ def _set_status_breakdown(a, breakdown):
         total += qty
         if qty > best_qty:
             best_status, best_qty = st, qty
+    a.quantity = total
     if total:
-        a.quantity = total
         a.status = best_status
 
 
@@ -1779,12 +1781,95 @@ def _describe_breakdown(breakdown):
                      sorted(breakdown.items(), key=lambda kv: -kv[1]) if qty)
 
 
+def _backfill_opening_balance_if_needed(a):
+    """The event-sourced model (breakdown_snapshot on every AssetLog row)
+    was introduced after some assets already had history under the old
+    directly-edited-fields model. The first time such an asset is touched
+    again, record its state exactly as it already stood — before anything
+    about to happen changes it — as a one-time 'opening_balance' event, so
+    its snapshot chain becomes unbroken from here on. Invents nothing: the
+    opening balance is whatever the (already-authoritative-until-now) cache
+    says right now. A brand-new asset has no prior log rows at all, so this
+    correctly does nothing for it — its own first event is its true start."""
+    import json
+    if not AssetLog.query.filter_by(asset_id=a.id).first():
+        return
+    if AssetLog.query.filter(AssetLog.asset_id == a.id,
+                             AssetLog.breakdown_snapshot.isnot(None)).first():
+        return
+    opening = _breakdown_dict(a)
+    if not opening:
+        return
+    from models.models import local_now as _local_now
+    db.session.add(AssetLog(
+        asset_id=a.id, branch_id=a.branch_id, event_type='opening_balance',
+        quantity_after=sum(opening.values()), status_after=a.status,
+        breakdown_snapshot=json.dumps(opening),
+        note='Opening balance — carried over from before per-event history tracking.',
+        created_at=a.created_at or _local_now(), created_by='System'))
+    db.session.flush()
+
+
+def _record_asset_event(a, event_type, breakdown, quantity_before=None, status_before=None, note=None):
+    """The single place an asset's state ever actually changes. `breakdown`
+    is the FULL resulting {status: quantity} dict this event establishes —
+    not a delta. Writes it to the ledger as this event's breakdown_snapshot
+    (the durable, replayable record), THEN syncs the cached a.quantity/
+    a.status/AssetStatusCount from that same dict — so the cache is always
+    provably derived from the latest event, never set on its own. Backfills
+    an opening-balance event first if this asset predates event sourcing."""
+    import json
+    _backfill_opening_balance_if_needed(a)
+    _set_status_breakdown(a, breakdown)   # cache sync — see docstring above
+    term = get_active_term()
+    sess = get_active_session()
+    log = AssetLog(
+        asset_id=a.id, branch_id=a.branch_id, event_type=event_type,
+        quantity_before=quantity_before, quantity_after=a.quantity,
+        status_before=status_before, status_after=a.status,
+        breakdown_snapshot=json.dumps(breakdown),
+        note=(note or '').strip() or None,
+        session_id=sess.id if sess else None, term_id=term.id if term else None,
+        created_by=_actor())
+    db.session.add(log)
+    return log
+
+
+def _compute_target_breakdown(a, form):
+    """The FULL resulting {status: quantity} breakdown implied by the
+    submitted form — either an explicit per-status split, or the simple
+    single-status/quantity fields (each independently optional; a blank
+    field keeps whatever the asset's current value already is, matching
+    how the form has always behaved)."""
+    breakdown_json = (form.get('status_breakdown') or '').strip()
+    if breakdown_json:
+        import json
+        try:
+            pairs = json.loads(breakdown_json)
+            parsed = {}
+            for item in pairs:
+                st = (item.get('status') or '').strip()
+                qty = int(item.get('quantity') or 0)
+                if st in FIXED_ASSET_STATUSES and qty > 0:
+                    parsed[st] = parsed.get(st, 0) + qty
+            if parsed:
+                return parsed
+        except (ValueError, TypeError, AttributeError):
+            pass
+    st = (form.get('status') or '').strip()
+    final_status = st if (st in FIXED_ASSET_STATUSES and st != 'Disposed') else a.status
+    qty = form.get('quantity', type=int)
+    final_qty = qty if (qty is not None and qty >= 0) else a.quantity
+    return {(final_status or 'In Use'): (final_qty or 0)}
+
+
 def _apply_asset_fields(a, form):
-    """Mutate a FixedAsset from submitted form fields. Returns before/after
-    quantity, status and status-breakdown so the caller can decide what
-    history to log (this function only touches the row, never the ledger).
-    Requires `a.id` to exist if a status breakdown is submitted — flush new
-    assets first."""
+    """Mutate a FixedAsset's descriptive/placement fields from submitted form
+    fields — name, category, cost, location, ownership, etc. Deliberately
+    does NOT touch quantity/status/AssetStatusCount: those are only ever
+    changed via _record_asset_event, so every change to them is a logged
+    event, never a silent field edit. Returns before/after snapshots the
+    caller needs to decide what to log."""
     from utils.security import strip_tags
     qty_before, status_before = a.quantity, a.status
     breakdown_before = _breakdown_dict(a)
@@ -1806,34 +1891,6 @@ def _apply_asset_fields(a, form):
     a.useful_life_years = form.get('useful_life_years', type=int)
     a.salvage_value = form.get('salvage_value', type=float) or 0
 
-    breakdown_json = (form.get('status_breakdown') or '').strip()
-    parsed_breakdown = None
-    if breakdown_json:
-        import json
-        try:
-            pairs = json.loads(breakdown_json)
-            parsed_breakdown = {}
-            for item in pairs:
-                st = (item.get('status') or '').strip()
-                qty = int(item.get('quantity') or 0)
-                if st in FIXED_ASSET_STATUSES and qty > 0:
-                    parsed_breakdown[st] = parsed_breakdown.get(st, 0) + qty
-        except (ValueError, TypeError, AttributeError):
-            parsed_breakdown = None
-    if parsed_breakdown:
-        _set_status_breakdown(a, parsed_breakdown)
-    else:
-        # Simple single-status mode — clears any existing split, since the
-        # form is now the single source of truth for this asset's status.
-        st = (form.get('status') or '').strip()
-        if st in FIXED_ASSET_STATUSES and st != 'Disposed':
-            a.status = st
-        if form.get('quantity') is not None:
-            qty = form.get('quantity', type=int)
-            if qty is not None and qty >= 0:
-                a.quantity = qty
-        a.status_counts.clear()
-
     # Optional ownership/placement — every one of these may be cleared by
     # submitting an empty value, since a school may change its mind about
     # what an asset is assigned to.
@@ -1845,24 +1902,8 @@ def _apply_asset_fields(a, form):
     a.teacher_id = teacher_id or None
     section = (form.get('section') or '').strip()
     a.section = section if section in FIXED_ASSET_SECTIONS else None
-    return {'qty_before': qty_before, 'qty_after': a.quantity,
-            'status_before': status_before, 'status_after': a.status,
-            'breakdown_before': breakdown_before, 'breakdown_after': _breakdown_dict(a)}
-
-
-def _log_asset_event(a, event_type, quantity_before=None, quantity_after=None,
-                     status_before=None, status_after=None, note=None):
-    term = get_active_term()
-    sess = get_active_session()
-    log = AssetLog(
-        asset_id=a.id, branch_id=a.branch_id, event_type=event_type,
-        quantity_before=quantity_before, quantity_after=quantity_after,
-        status_before=status_before, status_after=status_after,
-        note=(note or '').strip() or None,
-        session_id=sess.id if sess else None, term_id=term.id if term else None,
-        created_by=_actor())
-    db.session.add(log)
-    return log
+    return {'qty_before': qty_before, 'status_before': status_before,
+            'breakdown_before': breakdown_before}
 
 
 def _class_options():
@@ -1945,13 +1986,14 @@ def add_asset():
     name = (request.form.get('name') or '').strip()
     if not name:
         return _err('Asset name is required.', url_for('sales.assets'))
-    a = FixedAsset(branch_id=branch_for_new(), name=name, quantity=1,
+    a = FixedAsset(branch_id=branch_for_new(), name=name, quantity=0,
                    acquisition_date=timeutil.today(), created_by=_actor())
     db.session.add(a)
-    db.session.flush()   # assigns a.id, needed if a status breakdown is submitted
+    db.session.flush()   # assigns a.id, needed for status-breakdown rows and the ledger FK
     _apply_asset_fields(a, request.form)
-    _log_asset_event(a, 'created', quantity_after=a.quantity, status_after=a.status,
-                     note=(request.form.get('change_note') or '').strip() or None)
+    target = _compute_target_breakdown(a, request.form)
+    _record_asset_event(a, 'created', target,
+                        note=(request.form.get('change_note') or '').strip() or None)
     db.session.commit()
     return _ok(f'Registered "{a.name}".', url_for('sales.assets'))
 
@@ -1964,22 +2006,28 @@ def edit_asset(asset_id):
         return _err('That asset belongs to another branch.', url_for('sales.assets'))
     note = (request.form.get('change_note') or '').strip() or None
     change = _apply_asset_fields(a, request.form)
-    if change['breakdown_before'] != change['breakdown_after']:
-        desc = _describe_breakdown(change['breakdown_after'])
-        _log_asset_event(a, 'status_changed', quantity_before=change['qty_before'],
-                         quantity_after=change['qty_after'],
-                         status_before=change['status_before'], status_after=change['status_after'],
-                         note=(f'{note} — {desc}' if note else desc))
-    else:
-        if change['qty_before'] != change['qty_after']:
-            _log_asset_event(a, 'quantity_changed', quantity_before=change['qty_before'],
-                             quantity_after=change['qty_after'], note=note)
-        if change['status_before'] != change['status_after']:
-            _log_asset_event(a, 'status_changed', status_before=change['status_before'],
-                             status_after=change['status_after'], note=note)
-        if (change['qty_before'] == change['qty_after']
-                and change['status_before'] == change['status_after'] and note):
-            _log_asset_event(a, 'updated', note=note)
+    target = _compute_target_breakdown(a, request.form)
+
+    if target != change['breakdown_before']:
+        # Something about quantity/status actually changed — log it as an
+        # event (which also syncs the cache from this same breakdown) and
+        # pick the most descriptive event type for what happened.
+        old_total = sum(change['breakdown_before'].values())
+        new_total = sum(target.values())
+        if len(target) > 1 or len(change['breakdown_before']) > 1:
+            event_type, auto_note = 'status_changed', _describe_breakdown(target)
+        elif old_total != new_total:
+            event_type, auto_note = 'quantity_changed', None
+        else:
+            event_type, auto_note = 'status_changed', None
+        _record_asset_event(a, event_type, target,
+                            quantity_before=old_total, status_before=change['status_before'],
+                            note=(f'{note} — {auto_note}' if note and auto_note else (note or auto_note)))
+    elif note:
+        # No quantity/status change, but the admin left a note — still worth
+        # a ledger entry (still goes through _record_asset_event so the
+        # cache-from-latest-snapshot invariant holds even for a no-op event).
+        _record_asset_event(a, 'updated', target, note=note)
     db.session.commit()
     return _ok('Asset updated.', url_for('sales.assets'))
 
@@ -2028,7 +2076,7 @@ def convert_to_asset(product_id):
         acquisition_cost=cost, acquisition_date=timeutil.today(),
         supplier=p.preferred_supplier, location=p.storage_location,
         custodian=(request.form.get('custodian') or '').strip() or None,
-        status='In Use', quantity=qty, source_product_id=p.id,
+        status='In Use', quantity=0, source_product_id=p.id,
         useful_life_years=request.form.get('useful_life_years', type=int),
         salvage_value=request.form.get('salvage_value', type=float) or 0,
         class_id=request.form.get('class_id', type=int) or None,
@@ -2041,8 +2089,8 @@ def convert_to_asset(product_id):
                      note=f'Fixed asset: {a.name}', apply=False)
     db.session.add(a)
     db.session.flush()
-    _log_asset_event(a, 'created', quantity_after=a.quantity, status_after=a.status,
-                     note=f'Converted from stock item "{p.name}"')
+    _record_asset_event(a, 'created', {a.status: qty},
+                        note=f'Converted from stock item "{p.name}"')
     db.session.commit()
     from utils.audit import log_action
     log_action('sales.asset_convert', detail=f'{a.name} x{qty}', target=a)
@@ -2064,33 +2112,33 @@ def dispose_asset(asset_id):
         return _err('That asset is already disposed.', url_for('sales.assets'))
     active_before = a.active_quantity
     status_before = a.status
+    qty_before = a.quantity
     dispose_qty = request.form.get('quantity', type=int)
     full = dispose_qty is None or dispose_qty >= active_before
     if full:
-        _set_status_breakdown(a, {'Disposed': a.quantity})
+        target = {'Disposed': a.quantity}
     else:
         if dispose_qty <= 0:
             return _err('Enter how many units to dispose.', url_for('sales.assets'))
-        breakdown = _breakdown_dict(a)
+        target = _breakdown_dict(a)
         remaining = dispose_qty
-        for st, qty in sorted(((s, q) for s, q in breakdown.items() if s != 'Disposed'),
+        for st, qty in sorted(((s, q) for s, q in target.items() if s != 'Disposed'),
                               key=lambda kv: -kv[1]):
             if remaining <= 0:
                 break
             take = min(qty, remaining)
-            breakdown[st] = qty - take
+            target[st] = qty - take
             remaining -= take
-        breakdown['Disposed'] = breakdown.get('Disposed', 0) + (dispose_qty - remaining)
-        _set_status_breakdown(a, breakdown)
-    active_after = a.active_quantity
+        target['Disposed'] = target.get('Disposed', 0) + (dispose_qty - remaining)
+
     proceeds = request.form.get('disposal_amount', type=float) or 0
     a.disposed_on = parse_date(request.form.get('disposed_on')) or timeutil.today()
     a.disposal_amount = (a.disposal_amount or 0) + proceeds
     a.disposal_note = (request.form.get('disposal_note') or '').strip() or a.disposal_note
-    _log_asset_event(a, 'disposed', quantity_before=active_before, quantity_after=active_after,
-                     status_before=status_before, status_after=a.status,
-                     note=(request.form.get('disposal_note') or '').strip() or None)
+    _record_asset_event(a, 'disposed', target, quantity_before=qty_before, status_before=status_before,
+                        note=(request.form.get('disposal_note') or '').strip() or None)
     db.session.commit()
+    active_after = a.active_quantity
     if proceeds > 0:
         from utils import finance_ledger as _fl
         _fl.post(_fl.REVENUE, proceeds, source_module='assets',

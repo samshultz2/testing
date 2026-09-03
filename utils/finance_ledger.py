@@ -288,6 +288,9 @@ _ADDED_COLUMNS = {
         'class_id': 'INTEGER', 'arm_id': 'INTEGER', 'teacher_id': 'INTEGER',
         'section': 'VARCHAR(20)',
     },
+    'asset_logs': {
+        'breakdown_snapshot': 'TEXT',
+    },
 }
 
 # Columns whose NOT NULL constraint must be relaxed on existing databases (a
