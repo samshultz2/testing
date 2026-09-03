@@ -1503,10 +1503,13 @@ function Assets({ d, notify }) {
         <div style={{ display: 'flex', gap: '.25rem' }}>
           <button type="button" className={'btn btn-sm ' + (tab === 'register' ? 'btn-primary' : 'btn-light')} onClick={() => setTab('register')}><i aria-hidden="true" className="fas fa-list" /> Register</button>
           <button type="button" className={'btn btn-sm ' + (tab === 'analytics' ? 'btn-primary' : 'btn-light')} onClick={() => setTab('analytics')}><i aria-hidden="true" className="fas fa-chart-pie" /> Analytics</button>
+          <button type="button" className={'btn btn-sm ' + (tab === 'history' ? 'btn-primary' : 'btn-light')} onClick={() => setTab('history')}><i aria-hidden="true" className="fas fa-clock-rotate-left" /> Historical</button>
         </div>
       </div>
       {tab === 'analytics' ? (
         <AssetAnalytics d={d} />
+      ) : tab === 'history' ? (
+        <AssetSnapshots d={d} />
       ) : (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: '.75rem', marginBottom: '1rem' }}>
@@ -1786,6 +1789,89 @@ function AssetHistoryModal({ asset, onClose }) {
 }
 
 // ---- Fixed asset analytics --------------------------------------------------
+// ---- Fixed asset historical snapshots -------------------------------------
+function AssetSnapshots({ d }) {
+  const today = new Date().toISOString().slice(0, 10);
+  const [date, setDate] = useState(today);
+  const [snap, setSnap] = useState(null);
+  const [snapError, setSnapError] = useState(null);
+  const [terms, setTerms] = useState(null);
+  const [termsError, setTermsError] = useState(null);
+
+  useEffect(() => {
+    let alive = true;
+    setSnap(null); setSnapError(null);
+    apiGet(`${d.snapshot_url}?date=${date}`).then((r) => { if (alive) setSnap(r); })
+      .catch(() => { if (alive) setSnapError('Could not load the snapshot.'); });
+    return () => { alive = false; };
+  }, [date, d.snapshot_url]);
+
+  useEffect(() => {
+    let alive = true;
+    apiGet(d.snapshot_terms_url).then((r) => { if (alive) setTerms(r); })
+      .catch(() => { if (alive) setTermsError('Could not load the term comparison.'); });
+    return () => { alive = false; };
+  }, [d.snapshot_terms_url]);
+
+  return (
+    <>
+      <div className="card mb-3">
+        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-calendar-day" /> Assets as of a date</h3></div>
+        <div className="card-body">
+          <p className="text-muted text-sm" style={{ marginTop: 0 }}>Reconstructed from each asset's event history — not a stored snapshot, so it reflects exactly what was known to be true that day.</p>
+          <input type="date" className="form-control" style={{ maxWidth: 220 }} max={today} value={date} onChange={(e) => setDate(e.target.value)} />
+        </div>
+      </div>
+
+      {snapError && <p className="text-danger">{snapError}</p>}
+      {!snap && !snapError && <p className="text-muted text-sm" style={{ padding: '1rem 0' }}>Loading…</p>}
+      {snap && (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '.75rem', marginBottom: '1rem' }}>
+            <Tile n={snap.overview.asset_records || 0} label="Asset records" />
+            <Tile n={snap.overview.total_units || 0} label="Total units" />
+            {Object.entries(snap.overview.by_status || {}).map(([st, qty]) => (
+              <Tile key={st} n={qty} label={st} />
+            ))}
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: '1rem', marginBottom: '1rem' }}>
+            <div className="card"><div className="card-header"><h3>By category</h3></div><div className="card-body">
+              <BarList rows={snap.by_category || []} labelKey="label" valueKey="quantity" fmt={(v) => v} color={chartPalette().green} /></div></div>
+            <div className="card"><div className="card-header"><h3>By section</h3></div><div className="card-body">
+              <BarList rows={snap.by_section || []} labelKey="label" valueKey="quantity" fmt={(v) => v} color={chartPalette().indigo} /></div></div>
+          </div>
+        </>
+      )}
+
+      <div className="card">
+        <div className="card-header"><h3><i aria-hidden="true" className="fas fa-table-columns" /> Term comparison</h3></div>
+        <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+          {termsError && <p className="text-danger" style={{ padding: '1rem' }}>{termsError}</p>}
+          {!terms && !termsError && <p className="text-muted text-sm" style={{ padding: '1rem' }}>Loading…</p>}
+          {terms && !terms.ok && <p className="text-muted" style={{ padding: '1rem' }}>{terms.error}</p>}
+          {terms && terms.ok && (
+            <table className="data-table">
+              <thead><tr><th>Status</th>{terms.columns.map((c) => <th key={c.term} className="text-right">{c.term}</th>)}</tr></thead>
+              <tbody>
+                {terms.statuses.map((st) => (
+                  <tr key={st}>
+                    <td>{st}</td>
+                    {terms.columns.map((c) => <td key={c.term} className="text-right">{c.totals[st] || 0}</td>)}
+                  </tr>
+                ))}
+                <tr style={{ fontWeight: 700 }}>
+                  <td>Total</td>
+                  {terms.columns.map((c) => <td key={c.term} className="text-right">{c.total_units}</td>)}
+                </tr>
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
 function AssetAnalytics({ d }) {
   const [filters, setFilters] = useState({ category: '', section: '', class_id: '', status: '' });
   const [data, setData] = useState(null);

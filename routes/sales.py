@@ -2013,6 +2013,8 @@ def assets():
         'add_url': url_for('sales.add_asset'),
         'export_url': url_for('sales.assets_export'),
         'analytics_url': url_for('sales.assets_analytics'),
+        'snapshot_url': url_for('sales.assets_snapshot'),
+        'snapshot_terms_url': url_for('sales.assets_snapshot_terms'),
         'urls': {'dashboard': url_for('sales.dashboard'), 'products': url_for('sales.products')},
     })
 
@@ -2301,6 +2303,131 @@ def _asset_qty_at(a, cutoff_dt, logs_by_asset):
     if created and cutoff_dt < created:
         return 0
     return a.quantity or 0
+
+
+def _breakdown_at(a, cutoff_dt, logs_by_asset):
+    """Best-effort full {status: quantity} breakdown for one asset at a
+    point in time, from its history ledger's breakdown_snapshot — the same
+    replay _asset_qty_at does for a single total, but returning the whole
+    per-status picture. Falls back to the asset's current breakdown when the
+    nearest-in-time event predates snapshots (legacy history) or when the
+    asset has no ledger at all yet, same reasoning as _asset_qty_at."""
+    import json
+    logs = logs_by_asset.get(a.id)
+    if logs:
+        for log in logs:                       # newest-first
+            if log.created_at <= cutoff_dt:
+                if log.breakdown_snapshot:
+                    try:
+                        return json.loads(log.breakdown_snapshot)
+                    except (ValueError, TypeError):
+                        pass
+                return _breakdown_dict(a)        # legacy event, no snapshot — best available guess
+        return {}                                # asset's first log is after cutoff — didn't exist yet
+    if a.disposed_on and cutoff_dt.date() >= a.disposed_on:
+        return {}
+    created = a.created_at
+    if created and cutoff_dt < created:
+        return {}
+    return _breakdown_dict(a)
+
+
+@sales_bp.route('/assets/snapshot')
+@login_required
+def assets_snapshot():
+    """Full asset state as of a given date — a category/status/section
+    breakdown reconstructed by replaying each asset's event ledger up to
+    that date. Nothing here is stored; it's computed fresh every request
+    from the same ledger the live 'now' view reads."""
+    from collections import defaultdict
+    from datetime import datetime, time as _time
+
+    date_str = (request.args.get('date') or '').strip()
+    cutoff_date = parse_date(date_str) or timeutil.today()
+    cutoff_dt = datetime.combine(cutoff_date, _time.max)   # end of that day
+
+    rows = scope_query(FixedAsset.query, FixedAsset).all()
+    asset_ids = [a.id for a in rows]
+    all_logs = (AssetLog.query.filter(AssetLog.asset_id.in_(asset_ids))
+                .order_by(AssetLog.asset_id, AssetLog.created_at.desc()).all()) if asset_ids else []
+    logs_by_asset = defaultdict(list)
+    for l in all_logs:
+        logs_by_asset[l.asset_id].append(l)
+
+    by_category = defaultdict(lambda: defaultdict(int))
+    by_status_total = defaultdict(int)
+    by_section = defaultdict(lambda: defaultdict(int))
+    total_units = 0
+    asset_count = 0
+    for a in rows:
+        breakdown = _breakdown_at(a, cutoff_dt, logs_by_asset)
+        breakdown = {st: int(q or 0) for st, q in breakdown.items() if q}
+        if not breakdown:
+            continue
+        asset_count += 1
+        cat = a.category or 'Other'
+        sec = (_section_label(_effective_section(a)) if _effective_section(a) else 'Unassigned')
+        for st, qty in breakdown.items():
+            total_units += qty
+            by_status_total[st] += qty
+            by_category[cat][st] += qty
+            by_section[sec][st] += qty
+
+    def _flatten(d):
+        return sorted(
+            [{'label': k, 'quantity': sum(v.values()), 'by_status': dict(v)} for k, v in d.items()],
+            key=lambda r: -r['quantity'])
+
+    return jsonify({
+        'ok': True, 'date': cutoff_date.isoformat(),
+        'overview': {'asset_records': asset_count, 'total_units': total_units,
+                    'by_status': dict(by_status_total)},
+        'by_category': _flatten(by_category), 'by_section': _flatten(by_section),
+    })
+
+
+@sales_bp.route('/assets/snapshot/terms')
+@login_required
+def assets_snapshot_terms():
+    """Status-by-term comparison for the active academic session — each
+    term's column is the asset state reconstructed as of that term's start
+    date, so the table exists without ever storing a term-end snapshot."""
+    from collections import defaultdict
+    from datetime import datetime, time as _time
+    from models import Term
+
+    active_session = get_active_session()
+    if not active_session:
+        return jsonify({'ok': False, 'error': 'No active academic session.'})
+    terms = (Term.query.filter_by(session_id=active_session.id)
+            .order_by(Term.term_number).all())
+    if not terms:
+        return jsonify({'ok': False, 'error': 'No terms set up for the active session.'})
+
+    rows = scope_query(FixedAsset.query, FixedAsset).all()
+    asset_ids = [a.id for a in rows]
+    all_logs = (AssetLog.query.filter(AssetLog.asset_id.in_(asset_ids))
+                .order_by(AssetLog.asset_id, AssetLog.created_at.desc()).all()) if asset_ids else []
+    logs_by_asset = defaultdict(list)
+    for l in all_logs:
+        logs_by_asset[l.asset_id].append(l)
+
+    columns = []
+    for term in terms:
+        if not term.start_date:
+            continue
+        cutoff_dt = datetime.combine(term.start_date, _time.max)
+        totals = defaultdict(int)
+        for a in rows:
+            breakdown = _breakdown_at(a, cutoff_dt, logs_by_asset)
+            for st, qty in breakdown.items():
+                totals[st] += int(qty or 0)
+        columns.append({'term': term.full_name, 'totals': dict(totals),
+                        'total_units': sum(totals.values())})
+
+    all_statuses = sorted({st for col in columns for st in col['totals']})
+    return jsonify({'ok': True, 'session': active_session.name,
+                    'statuses': all_statuses, 'columns': columns})
 
 
 @sales_bp.route('/assets/analytics')
