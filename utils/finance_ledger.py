@@ -290,6 +290,9 @@ _ADDED_COLUMNS = {
     },
     'asset_logs': {
         'breakdown_snapshot': 'TEXT',
+        'location_before': 'VARCHAR(150)', 'location_after': 'VARCHAR(150)',
+        'custodian_before': 'VARCHAR(150)', 'custodian_after': 'VARCHAR(150)',
+        'reference': 'VARCHAR(80)',
     },
 }
 

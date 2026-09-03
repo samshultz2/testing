@@ -1741,6 +1741,8 @@ def _asset_dict(a):
         'dispose_url': url_for('sales.dispose_asset', asset_id=a.id),
         'delete_url': url_for('sales.delete_asset', asset_id=a.id),
         'history_url': url_for('sales.asset_history', asset_id=a.id),
+        'transfer_url': url_for('sales.transfer_asset', asset_id=a.id),
+        'assign_url': url_for('sales.assign_asset', asset_id=a.id),
     }
 
 
@@ -1835,6 +1837,43 @@ def _record_asset_event(a, event_type, breakdown, quantity_before=None, status_b
     return log
 
 
+def _record_placement_event(a, location=None, custodian=None, reference=None, note=None):
+    """Record a transfer (location changed) and/or a custody change
+    (custodian changed) as first-class ledger events — location/custodian
+    are never silently overwritten. Pass only the dimension(s) actually
+    changing; None means 'leave as is'. Never destroys the previous value —
+    it's captured as location_before/custodian_before on the event, so the
+    complete movement/custody history stays queryable."""
+    changed_location = location is not None and location != (a.location or '')
+    changed_custodian = custodian is not None and custodian != (a.custodian or '')
+    if not changed_location and not changed_custodian:
+        return []
+    term = get_active_term()
+    sess = get_active_session()
+    clean_note = (note or '').strip() or None
+    clean_ref = (reference or '').strip() or None
+    logs = []
+    if changed_location:
+        logs.append(AssetLog(
+            asset_id=a.id, branch_id=a.branch_id, event_type='transferred',
+            location_before=a.location, location_after=location or None,
+            reference=clean_ref, note=clean_note,
+            session_id=sess.id if sess else None, term_id=term.id if term else None,
+            created_by=_actor()))
+        a.location = location or None
+    if changed_custodian:
+        logs.append(AssetLog(
+            asset_id=a.id, branch_id=a.branch_id, event_type=('assigned' if custodian else 'unassigned'),
+            custodian_before=a.custodian, custodian_after=custodian or None,
+            reference=clean_ref, note=clean_note,
+            session_id=sess.id if sess else None, term_id=term.id if term else None,
+            created_by=_actor()))
+        a.custodian = custodian or None
+    for log in logs:
+        db.session.add(log)
+    return logs
+
+
 def _compute_target_breakdown(a, form):
     """The FULL resulting {status: quantity} breakdown implied by the
     submitted form — either an explicit per-status split, or the simple
@@ -1886,8 +1925,6 @@ def _apply_asset_fields(a, form):
     if d:
         a.acquisition_date = d
     a.supplier = (form.get('supplier') or '').strip() or None
-    a.location = (form.get('location') or '').strip() or None
-    a.custodian = (form.get('custodian') or '').strip() or None
     a.useful_life_years = form.get('useful_life_years', type=int)
     a.salvage_value = form.get('salvage_value', type=float) or 0
 
@@ -1987,7 +2024,11 @@ def add_asset():
     if not name:
         return _err('Asset name is required.', url_for('sales.assets'))
     a = FixedAsset(branch_id=branch_for_new(), name=name, quantity=0,
-                   acquisition_date=timeutil.today(), created_by=_actor())
+                   acquisition_date=timeutil.today(), created_by=_actor(),
+                   # Initial placement is set directly — there's no prior
+                   # state to preserve, unlike a later transfer/assignment.
+                   location=(request.form.get('location') or '').strip() or None,
+                   custodian=(request.form.get('custodian') or '').strip() or None)
     db.session.add(a)
     db.session.flush()   # assigns a.id, needed for status-breakdown rows and the ledger FK
     _apply_asset_fields(a, request.form)
@@ -2007,6 +2048,14 @@ def edit_asset(asset_id):
     note = (request.form.get('change_note') or '').strip() or None
     change = _apply_asset_fields(a, request.form)
     target = _compute_target_breakdown(a, request.form)
+
+    # Location/custodian are never silently overwritten — a change here
+    # becomes a 'transferred'/'assigned'/'unassigned' ledger event, same as
+    # quantity/status changes do.
+    if request.form.get('location') is not None or request.form.get('custodian') is not None:
+        _record_placement_event(
+            a, location=request.form.get('location'), custodian=request.form.get('custodian'),
+            note=note)
 
     if target != change['breakdown_before']:
         # Something about quantity/status actually changed — log it as an
@@ -2030,6 +2079,50 @@ def edit_asset(asset_id):
         _record_asset_event(a, 'updated', target, note=note)
     db.session.commit()
     return _ok('Asset updated.', url_for('sales.assets'))
+
+
+@sales_bp.route('/assets/<int:asset_id>/transfer', methods=['POST'])
+@login_required
+def transfer_asset(asset_id):
+    """Move an asset to a new location — a dedicated, explicit action (not
+    folded into the general edit) so movement is always intentional and
+    always auditable. The previous location is never destroyed; it's kept
+    as location_before on the event."""
+    a = db.get_or_404(FixedAsset, asset_id)
+    if not can_access_branch(a.branch_id):
+        return _err('That asset belongs to another branch.', url_for('sales.assets'))
+    new_location = (request.form.get('location') or '').strip()
+    if not new_location:
+        return _err('Enter the destination location.', url_for('sales.assets'))
+    if new_location == (a.location or ''):
+        return _err('That is already the current location.', url_for('sales.assets'))
+    old_location = a.location or 'Unspecified'
+    _record_placement_event(a, location=new_location,
+                            reference=request.form.get('reference'),
+                            note=(request.form.get('note') or '').strip() or None)
+    db.session.commit()
+    return _ok(f'"{a.name}" transferred: {old_location} → {new_location}.', url_for('sales.assets'))
+
+
+@sales_bp.route('/assets/<int:asset_id>/assign', methods=['POST'])
+@login_required
+def assign_asset(asset_id):
+    """Assign (or unassign, with a blank custodian) an asset to whoever has
+    custody of it now — a dedicated action distinct from the general edit,
+    same reasoning as transfer: always intentional, always in the ledger."""
+    a = db.get_or_404(FixedAsset, asset_id)
+    if not can_access_branch(a.branch_id):
+        return _err('That asset belongs to another branch.', url_for('sales.assets'))
+    new_custodian = (request.form.get('custodian') or '').strip()
+    if new_custodian == (a.custodian or ''):
+        return _err('That is already the current custodian.', url_for('sales.assets'))
+    logs = _record_placement_event(a, custodian=new_custodian,
+                                   reference=request.form.get('reference'),
+                                   note=(request.form.get('note') or '').strip() or None)
+    db.session.commit()
+    verb = 'assigned to' if new_custodian else 'unassigned from'
+    who = new_custodian or (logs[0].custodian_before if logs else '')
+    return _ok(f'"{a.name}" {verb} {who}.'.strip(), url_for('sales.assets'))
 
 
 @sales_bp.route('/assets/<int:asset_id>/delete', methods=['POST'])
@@ -2164,6 +2257,9 @@ def asset_history(asset_id):
         'quantity_before': l.quantity_before, 'quantity_after': l.quantity_after,
         'quantity_delta': l.quantity_delta,
         'status_before': l.status_before, 'status_after': l.status_after,
+        'location_before': l.location_before or '', 'location_after': l.location_after or '',
+        'custodian_before': l.custodian_before or '', 'custodian_after': l.custodian_after or '',
+        'reference': l.reference or '',
         'note': l.note or '',
         'session': l.session.name if l.session else '',
         'term': l.term.name if l.term else '',

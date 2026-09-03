@@ -1470,6 +1470,8 @@ function Assets({ d, notify }) {
   const [section, setSection] = useState(d.section || '');
   const [editing, setEditing] = useState(null);   // asset being edited, or {} for add
   const [disposing, setDisposing] = useState(null);
+  const [transferring, setTransferring] = useState(null);
+  const [assigning, setAssigning] = useState(null);
   const [viewingHistory, setViewingHistory] = useState(null);
   const shown = d.assets.filter((a) => {
     if (q && !(`${a.name} ${a.asset_tag} ${a.serial_number}`.toLowerCase().includes(q.toLowerCase()))) return false;
@@ -1546,6 +1548,8 @@ function Assets({ d, notify }) {
                       </td>
                       <td><div style={{ display: 'flex', gap: '.3rem' }}>
                         <button type="button" className="btn btn-sm btn-light" onClick={() => setViewingHistory(a)} title="History"><i aria-hidden="true" className="fas fa-clock-rotate-left" /></button>
+                        <button type="button" className="btn btn-sm btn-light" onClick={() => setTransferring(a)} title="Transfer location"><i aria-hidden="true" className="fas fa-truck-ramp-box" /></button>
+                        <button type="button" className="btn btn-sm btn-light" onClick={() => setAssigning(a)} title="Assign custodian"><i aria-hidden="true" className="fas fa-user-tag" /></button>
                         <button type="button" className="btn btn-sm btn-light" onClick={() => setEditing(a)} title="Edit"><i aria-hidden="true" className="fas fa-pen" /></button>
                         {!a.is_disposed && <button type="button" className="btn btn-sm btn-light" onClick={() => setDisposing(a)} title="Dispose / retire"><i aria-hidden="true" className="fas fa-box-archive" /></button>}
                         <button type="button" className="btn btn-sm btn-light" onClick={() => doDelete(a)} title="Delete permanently"><i aria-hidden="true" className="fas fa-trash text-danger" /></button>
@@ -1560,6 +1564,10 @@ function Assets({ d, notify }) {
                              onClose={() => setEditing(null)} onSaved={() => { setEditing(null); nav.refresh(); }} />}
       {disposing && <DisposeModal asset={disposing} notify={notify}
                                   onClose={() => setDisposing(null)} onSaved={() => { setDisposing(null); nav.refresh(); }} />}
+      {transferring && <TransferModal asset={transferring} notify={notify}
+                                      onClose={() => setTransferring(null)} onSaved={() => { setTransferring(null); nav.refresh(); }} />}
+      {assigning && <AssignModal asset={assigning} notify={notify}
+                                 onClose={() => setAssigning(null)} onSaved={() => { setAssigning(null); nav.refresh(); }} />}
       {viewingHistory && <AssetHistoryModal asset={viewingHistory} onClose={() => setViewingHistory(null)} />}
     </>
   );
@@ -1684,6 +1692,47 @@ function DisposeModal({ asset, onClose, onSaved, notify }) {
   );
 }
 
+function TransferModal({ asset, onClose, onSaved, notify }) {
+  const [f, setF] = useState({ location: '', reference: '', note: '' });
+  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  const save = async () => {
+    if (!f.location.trim()) { notify('error', 'Enter the destination location.'); return; }
+    const r = await submitJson(asset.transfer_url, f);
+    if (r.ok) onSaved(); else notify('error', r.error || 'Could not transfer.');
+  };
+  return (
+    <Modal title={`Transfer "${asset.name}"`} icon="fa-truck-ramp-box" size="md" onClose={onClose}
+           footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button variant="primary" onClick={save}>Transfer</Button></>}>
+      <p className="text-muted text-sm" style={{ marginTop: 0 }}>Current location: <strong>{asset.location || 'Unspecified'}</strong>. The previous location stays in this asset's history.</p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: '.6rem' }}>
+        <Field label="New location *"><input className="form-control" value={f.location} onChange={(e) => set('location', e.target.value)} placeholder="e.g. Mathematics Department" /></Field>
+        <Field label="Reference (optional)"><input className="form-control" value={f.reference} onChange={(e) => set('reference', e.target.value)} placeholder="e.g. transfer slip #" /></Field>
+      </div>
+      <Field label="Note (optional)" wide><input className="form-control" value={f.note} onChange={(e) => set('note', e.target.value)} placeholder="e.g. Lab A being renovated" /></Field>
+    </Modal>
+  );
+}
+
+function AssignModal({ asset, onClose, onSaved, notify }) {
+  const [f, setF] = useState({ custodian: asset.custodian || '', reference: '', note: '' });
+  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  const save = async () => {
+    const r = await submitJson(asset.assign_url, f);
+    if (r.ok) onSaved(); else notify('error', r.error || 'Could not assign.');
+  };
+  return (
+    <Modal title={`Assign "${asset.name}"`} icon="fa-user-tag" size="md" onClose={onClose}
+           footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button variant="primary" onClick={save}>Save</Button></>}>
+      <p className="text-muted text-sm" style={{ marginTop: 0 }}>Current custodian: <strong>{asset.custodian || 'Unassigned'}</strong>. Leave blank to unassign.</p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: '.6rem' }}>
+        <Field label="New custodian"><input className="form-control" value={f.custodian} onChange={(e) => set('custodian', e.target.value)} placeholder="e.g. Mrs. Chukwu, or blank to unassign" /></Field>
+        <Field label="Reference (optional)"><input className="form-control" value={f.reference} onChange={(e) => set('reference', e.target.value)} placeholder="e.g. handover slip #" /></Field>
+      </div>
+      <Field label="Note (optional)" wide><input className="form-control" value={f.note} onChange={(e) => set('note', e.target.value)} /></Field>
+    </Modal>
+  );
+}
+
 function AssetHistoryModal({ asset, onClose }) {
   const [logs, setLogs] = useState(null);
   const [error, setError] = useState(null);
@@ -1694,7 +1743,9 @@ function AssetHistoryModal({ asset, onClose }) {
     return () => { alive = false; };
   }, [asset.history_url]);
   const EVENT_LABEL = { created: 'Registered', quantity_changed: 'Quantity changed',
-    status_changed: 'Status changed', updated: 'Updated', disposed: 'Disposed', restored: 'Restored' };
+    status_changed: 'Status changed', updated: 'Updated', disposed: 'Disposed', restored: 'Restored',
+    transferred: 'Transferred', assigned: 'Assigned', unassigned: 'Unassigned',
+    opening_balance: 'Opening balance' };
   return (
     <Modal title={`History — ${asset.name}`} icon="fa-clock-rotate-left" size="lg" onClose={onClose}
            footer={<Button variant="secondary" onClick={onClose}>Close</Button>}>
@@ -1717,6 +1768,13 @@ function AssetHistoryModal({ asset, onClose }) {
               {l.status_after && (
                 <div className="text-sm" style={{ marginTop: 2 }}>Status: {l.status_before || '—'} → <strong>{l.status_after}</strong></div>
               )}
+              {l.event_type === 'transferred' && (
+                <div className="text-sm" style={{ marginTop: 2 }}>Location: {l.location_before || 'Unspecified'} → <strong>{l.location_after || 'Unspecified'}</strong></div>
+              )}
+              {(l.event_type === 'assigned' || l.event_type === 'unassigned') && (
+                <div className="text-sm" style={{ marginTop: 2 }}>Custodian: {l.custodian_before || 'Unassigned'} → <strong>{l.custodian_after || 'Unassigned'}</strong></div>
+              )}
+              {l.reference && <div className="text-muted text-sm" style={{ marginTop: 2 }}>Ref: {l.reference}</div>}
               {(l.session || l.term) && <div className="text-muted text-sm" style={{ marginTop: 2 }}>{l.term}{l.term && l.session ? ' · ' : ''}{l.session}</div>}
               {l.note && <div className="text-sm" style={{ marginTop: 2 }}>{l.note}</div>}
             </div>

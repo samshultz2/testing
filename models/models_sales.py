@@ -425,7 +425,7 @@ FIXED_ASSET_SECTIONS = ['nursery', 'primary', 'junior', 'senior']
 # stood when this event-sourced model was introduced (see
 # recompute_asset_state) — never written by user action directly.
 ASSET_EVENT_TYPES = ['opening_balance', 'created', 'quantity_changed', 'status_changed',
-                     'updated', 'disposed', 'restored']
+                     'updated', 'disposed', 'restored', 'transferred', 'assigned', 'unassigned']
 
 
 class FixedAsset(db.Model):
@@ -564,6 +564,15 @@ class AssetLog(db.Model):
     # with its state at the time of first write under the new model, so
     # nothing is lost and nothing is invented (see recompute_asset_state).
     breakdown_snapshot = db.Column(db.Text)
+    # Location/custody at this event — populated for 'transferred' (location
+    # moved) and 'assigned'/'unassigned' (custodian changed) events, so
+    # 'where was this on date X' and 'who has had this' are answerable by
+    # replaying the ledger, the same way quantity/status already are.
+    location_before = db.Column(db.String(150))
+    location_after = db.Column(db.String(150))
+    custodian_before = db.Column(db.String(150))
+    custodian_after = db.Column(db.String(150))
+    reference = db.Column(db.String(80))     # e.g. a transfer/assignment slip number
     note = db.Column(db.String(255))
     session_id = db.Column(db.Integer, db.ForeignKey('academic_sessions.id'))
     term_id = db.Column(db.Integer, db.ForeignKey('terms.id'))
