@@ -12,12 +12,12 @@ from models import (db, Product, Sale, SaleItem, StockMovement, Student,
                     StudentEnrollment, ClassArmAssignment, SchoolClass, ClassArm,
                     Supplier, PurchaseOrder, PurchaseOrderItem, SupplierPayment, PromoCode,
                     StockAudit, StockAuditItem, FixedAsset, StockBatch, AssetLog,
-                    AssetStatusCount, AssetUnit, Teacher)
+                    AssetStatusCount, AssetUnit, AssetMaintenance, Teacher)
 from models.models_sales import (PRODUCT_CATEGORIES, SALE_METHODS, CUSTOMER_TYPES,
                                  UNITS, STOCK_IN_REASONS, STOCK_OUT_REASONS,
                                  PO_STATUSES, PURCHASE_METHODS,
                                  FIXED_ASSET_CATEGORIES, FIXED_ASSET_STATUSES,
-                                 FIXED_ASSET_SECTIONS, UNIT_CONDITIONS)
+                                 FIXED_ASSET_SECTIONS, UNIT_CONDITIONS, MAINTENANCE_STATUSES)
 from utils.access_control import (login_required, filter_classes_for_user,
                                   can_approve_purchase, can_sign_off_count)
 from utils.branch_scope import scope_query, branch_for_new, can_access_branch
@@ -1745,6 +1745,9 @@ def _asset_dict(a):
         'transfer_url': url_for('sales.transfer_asset', asset_id=a.id),
         'assign_url': url_for('sales.assign_asset', asset_id=a.id),
         'units_url': url_for('sales.asset_units', asset_id=a.id) if a.is_individually_tracked else '',
+        'maintenance_url': url_for('sales.asset_maintenance_list', asset_id=a.id),
+        'add_maintenance_url': url_for('sales.add_maintenance', asset_id=a.id),
+        'total_maintenance_cost': float(sum(m.cost or 0 for m in a.maintenance_records.all())),
     }
 
 
@@ -2010,7 +2013,7 @@ def assets():
         'q': q, 'category': category, 'status': status, 'section': section,
         'class_id': class_id or '',
         'categories': FIXED_ASSET_CATEGORIES, 'statuses': FIXED_ASSET_STATUSES,
-        'unit_conditions': UNIT_CONDITIONS,
+        'unit_conditions': UNIT_CONDITIONS, 'maintenance_statuses': MAINTENANCE_STATUSES,
         'sections': [{'key': k, 'label': lbl} for k, lbl in SECTION_LABELS],
         'classes': _class_options(), 'arms': _arm_options(), 'teachers': _teacher_options(),
         'add_url': url_for('sales.add_asset'),
@@ -2935,6 +2938,127 @@ def unit_scan(token):
                            condition_options=UNIT_CONDITIONS)
 
 
+# ---------------------------------------------------------------------------
+# Asset Maintenance (spec §12) — problem/diagnosis/cost/technician per event
+# ---------------------------------------------------------------------------
+
+def _maintenance_dict(m):
+    return {
+        'id': m.id, 'asset_id': m.asset_id, 'unit_id': m.unit_id,
+        'status': m.status, 'problem': m.problem or '', 'diagnosis': m.diagnosis or '',
+        'action_taken': m.action_taken or '', 'technician': m.technician or '',
+        'started_on': m.started_on.isoformat() if m.started_on else '',
+        'completed_on': m.completed_on.isoformat() if m.completed_on else '',
+        'next_maintenance_on': m.next_maintenance_on.isoformat() if m.next_maintenance_on else '',
+        'cost': m.cost or 0, 'parts_used': m.parts_used or '',
+        'warranty_covered': bool(m.warranty_covered), 'reference': m.reference or '',
+        'notes': m.notes or '', 'downtime_days': m.downtime_days,
+        'created_by': m.created_by or '',
+        'created_at': m.created_at.strftime('%d %b %Y') if m.created_at else '',
+        'edit_url': url_for('sales.edit_maintenance', maintenance_id=m.id),
+        'delete_url': url_for('sales.delete_maintenance', maintenance_id=m.id),
+    }
+
+
+@sales_bp.route('/assets/<int:asset_id>/maintenance')
+@login_required
+def asset_maintenance_list(asset_id):
+    a = db.get_or_404(FixedAsset, asset_id)
+    if not can_access_branch(a.branch_id):
+        return jsonify({'ok': False, 'error': 'That asset belongs to another branch.'}), 403
+    records = a.maintenance_records.all()
+    total_cost = sum(m.cost or 0 for m in records)
+    total_downtime = sum(m.downtime_days or 0 for m in records)
+    return jsonify({
+        'ok': True,
+        'asset': {'id': a.id, 'name': a.name,
+                  'acquisition_cost': a.acquisition_cost or 0,
+                  'total_maintenance_cost': float(total_cost),
+                  'total_downtime_days': total_downtime,
+                  # If total maintenance cost exceeds 50% of acquisition cost,
+                  # flag it as potentially uneconomical — a rough heuristic the
+                  # spec calls out explicitly.
+                  'possibly_uneconomical': (bool(a.acquisition_cost)
+                                            and total_cost > 0.5 * (a.acquisition_cost or 0))},
+        'records': [_maintenance_dict(m) for m in records],
+        'add_url': url_for('sales.add_maintenance', asset_id=a.id),
+    })
+
+
+@sales_bp.route('/assets/<int:asset_id>/maintenance/add', methods=['POST'])
+@login_required
+def add_maintenance(asset_id):
+    a = db.get_or_404(FixedAsset, asset_id)
+    if not can_access_branch(a.branch_id):
+        return _err('That asset belongs to another branch.', url_for('sales.assets'))
+    try:
+        m = AssetMaintenance(
+            asset_id=a.id,
+            unit_id=request.form.get('unit_id', type=int) or None,
+            branch_id=a.branch_id,
+            status=(request.form.get('status') or 'Completed').strip(),
+            problem=(request.form.get('problem') or '').strip() or None,
+            diagnosis=(request.form.get('diagnosis') or '').strip() or None,
+            action_taken=(request.form.get('action_taken') or '').strip() or None,
+            technician=(request.form.get('technician') or '').strip() or None,
+            started_on=parse_date(request.form.get('started_on')),
+            completed_on=parse_date(request.form.get('completed_on')),
+            next_maintenance_on=parse_date(request.form.get('next_maintenance_on')),
+            cost=request.form.get('cost', type=float) or 0,
+            parts_used=(request.form.get('parts_used') or '').strip() or None,
+            warranty_covered=bool(request.form.get('warranty_covered')),
+            reference=(request.form.get('reference') or '').strip() or None,
+            notes=(request.form.get('notes') or '').strip() or None,
+            created_by=_actor())
+        db.session.add(m)
+        db.session.commit()
+        from utils.audit import log_action
+        log_action('sales.maintenance_add', detail=f'{a.name}: {m.problem or "maintenance"}', target=m)
+        return _ok(f'Maintenance record added for "{a.name}".', url_for('sales.assets'))
+    except Exception as e:
+        db.session.rollback()
+        return _err(f'Error: {str(e)}', url_for('sales.assets'))
+
+
+@sales_bp.route('/assets/maintenance/<int:maintenance_id>/edit', methods=['POST'])
+@login_required
+def edit_maintenance(maintenance_id):
+    m = db.get_or_404(AssetMaintenance, maintenance_id)
+    if not can_access_branch(m.branch_id):
+        return _err('That record belongs to another branch.', url_for('sales.assets'))
+    try:
+        m.status = (request.form.get('status') or m.status).strip()
+        m.problem = (request.form.get('problem') or '').strip() or m.problem
+        m.diagnosis = (request.form.get('diagnosis') or '').strip() or None
+        m.action_taken = (request.form.get('action_taken') or '').strip() or None
+        m.technician = (request.form.get('technician') or '').strip() or None
+        if request.form.get('started_on'):
+            m.started_on = parse_date(request.form.get('started_on'))
+        if request.form.get('completed_on'):
+            m.completed_on = parse_date(request.form.get('completed_on'))
+        if request.form.get('next_maintenance_on'):
+            m.next_maintenance_on = parse_date(request.form.get('next_maintenance_on'))
+        m.cost = request.form.get('cost', type=float) or m.cost
+        m.parts_used = (request.form.get('parts_used') or '').strip() or None
+        m.warranty_covered = bool(request.form.get('warranty_covered'))
+        m.reference = (request.form.get('reference') or '').strip() or None
+        m.notes = (request.form.get('notes') or '').strip() or None
+        db.session.commit()
+        return _ok('Maintenance record updated.', url_for('sales.assets'))
+    except Exception as e:
+        db.session.rollback()
+        return _err(f'Error: {str(e)}', url_for('sales.assets'))
+
+
+@sales_bp.route('/assets/maintenance/<int:maintenance_id>/delete', methods=['POST'])
+@login_required
+def delete_maintenance(maintenance_id):
+    m = db.get_or_404(AssetMaintenance, maintenance_id)
+    if not can_access_branch(m.branch_id):
+        return _err('That record belongs to another branch.', url_for('sales.assets'))
+    db.session.delete(m)
+    db.session.commit()
+    return _ok('Maintenance record deleted.', url_for('sales.assets'))
 
 
 # ---------------------------------------------------------------------------

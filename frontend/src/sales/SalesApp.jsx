@@ -1473,6 +1473,7 @@ function Assets({ d, notify }) {
   const [transferring, setTransferring] = useState(null);
   const [assigning, setAssigning] = useState(null);
   const [managingUnits, setManagingUnits] = useState(null);
+  const [viewingMaintenance, setViewingMaintenance] = useState(null);
   const [viewingHistory, setViewingHistory] = useState(null);
   const shown = d.assets.filter((a) => {
     if (q && !(`${a.name} ${a.asset_tag} ${a.serial_number}`.toLowerCase().includes(q.toLowerCase()))) return false;
@@ -1552,6 +1553,7 @@ function Assets({ d, notify }) {
                       </td>
                       <td><div style={{ display: 'flex', gap: '.3rem' }}>
                         <button type="button" className="btn btn-sm btn-light" onClick={() => setViewingHistory(a)} title="History"><i aria-hidden="true" className="fas fa-clock-rotate-left" /></button>
+                        <button type="button" className="btn btn-sm btn-light" onClick={() => setViewingMaintenance(a)} title="Maintenance"><i aria-hidden="true" className="fas fa-wrench" /></button>
                         {a.is_individually_tracked
                           ? <button type="button" className="btn btn-sm btn-primary" onClick={() => setManagingUnits(a)} title="Manage physical units"><i aria-hidden="true" className="fas fa-qrcode" /> Units</button>
                           : <>
@@ -1579,6 +1581,8 @@ function Assets({ d, notify }) {
       {managingUnits && <AssetUnitsModal asset={managingUnits} d={d} notify={notify}
                                          onClose={() => setManagingUnits(null)} onSaved={() => { nav.refresh(); }} />}
       {viewingHistory && <AssetHistoryModal asset={viewingHistory} onClose={() => setViewingHistory(null)} />}
+      {viewingMaintenance && <AssetMaintenanceModal asset={viewingMaintenance} d={d} notify={notify}
+                                                    onClose={() => setViewingMaintenance(null)} onSaved={() => { setViewingMaintenance(null); nav.refresh(); }} />}
     </>
   );
 }
@@ -1842,6 +1846,117 @@ function UnitInlineAction({ label, icon, fields, onSubmit }) {
     </div>
   ) : (
     <button type="button" className="btn btn-sm btn-light" onClick={() => setOpen(true)}><i aria-hidden="true" className={`fas ${icon}`} /> {label}</button>
+  );
+}
+
+function AssetMaintenanceModal({ asset, d, onClose, onSaved, notify }) {
+  const [records, setRecords] = useState(null);
+  const [summary, setSummary] = useState(null);
+  const [addMode, setAddMode] = useState(false);
+  const [editingRec, setEditingRec] = useState(null);
+  const [f, setF] = useState({ status: 'Completed', problem: '', diagnosis: '', action_taken: '',
+    technician: '', started_on: '', completed_on: '', next_maintenance_on: '',
+    cost: '', parts_used: '', warranty_covered: '', reference: '', notes: '', unit_id: '' });
+  const setFk = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  const [busy, setBusy] = useState(false);
+  const reload = async () => {
+    try {
+      const r = await apiGet(asset.maintenance_url);
+      setRecords(r.records || []); setSummary(r.asset || null);
+    } catch { setRecords([]); }
+  };
+  useEffect(() => { reload(); }, [asset.maintenance_url]);
+  const startAdd = () => { setF({ status: 'Completed', problem: '', diagnosis: '', action_taken: '', technician: '', started_on: '', completed_on: '', next_maintenance_on: '', cost: '', parts_used: '', warranty_covered: '', reference: '', notes: '', unit_id: '' }); setAddMode(true); setEditingRec(null); };
+  const startEdit = (rec) => { setF({ ...rec, cost: rec.cost ? String(rec.cost) : '', warranty_covered: rec.warranty_covered ? 'on' : '' }); setEditingRec(rec); setAddMode(true); };
+  const save = async () => {
+    if (!f.problem.trim()) { notify('error', 'Describe the problem.'); return; }
+    setBusy(true);
+    const url = editingRec ? editingRec.edit_url : asset.add_maintenance_url;
+    const r = await submitJson(url, { ...f, warranty_covered: f.warranty_covered ? 'on' : '' });
+    setBusy(false);
+    if (r.ok) { notify('success', r.message); setAddMode(false); setEditingRec(null); reload(); onSaved(); }
+    else notify('error', r.error || 'Could not save.');
+  };
+  const del = async (rec) => {
+    if (!await confirm(`Delete this maintenance record?`)) return;
+    const r = await submitJson(rec.delete_url, {});
+    if (r.ok) { notify('success', r.message); reload(); onSaved(); }
+    else notify('error', r.error || 'Could not delete.');
+  };
+  const STATUS_COLOR = { Completed: 'b-ok', 'In Progress': 'b-warn', Scheduled: 'b-secondary', Cancelled: 'b-bad' };
+  return (
+    <Modal title={`Maintenance — ${asset.name}`} icon="fa-wrench" size="xl" onClose={onClose}
+           footer={<Button variant="secondary" onClick={onClose}>Close</Button>}>
+      {summary && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '.6rem', marginBottom: '1rem' }}>
+          <Tile n={`₦${(summary.total_maintenance_cost || 0).toLocaleString()}`} label="Total maintenance cost" />
+          <Tile n={`₦${(summary.acquisition_cost || 0).toLocaleString()}`} label="Acquisition cost" />
+          <Tile n={records ? records.filter((r) => r.status !== 'Cancelled').length : 0} label="Service events" />
+          {summary.possibly_uneconomical && (
+            <div className="card" style={{ borderColor: 'var(--danger)', padding: '.7rem', background: 'rgba(185,28,28,.06)' }}>
+              <strong className="text-danger text-sm">⚠ Possibly uneconomical</strong>
+              <div className="text-muted text-sm" style={{ marginTop: '.2rem' }}>Maintenance cost exceeds 50% of acquisition cost — consider replacing.</div>
+            </div>
+          )}
+        </div>
+      )}
+      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '.75rem' }}>
+        <Button variant="primary" onClick={startAdd}><i aria-hidden="true" className="fas fa-plus" /> Log maintenance</Button>
+      </div>
+      {addMode && (
+        <div className="card mb-3" style={{ borderColor: 'var(--primary)' }}>
+          <div className="card-header"><h3>{editingRec ? 'Edit maintenance record' : 'Log maintenance event'}</h3></div>
+          <div className="card-body">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '.6rem' }}>
+              <Field label="Status"><select className="form-control" value={f.status} onChange={(e) => setFk('status', e.target.value)}>{(d.maintenance_statuses || ['Completed', 'In Progress', 'Scheduled']).map((s) => <option key={s}>{s}</option>)}</select></Field>
+              <Field label="Problem / symptom *"><input className="form-control" value={f.problem} onChange={(e) => setFk('problem', e.target.value)} placeholder="e.g. Screen backlight failure" /></Field>
+              <Field label="Diagnosis"><input className="form-control" value={f.diagnosis} onChange={(e) => setFk('diagnosis', e.target.value)} /></Field>
+              <Field label="Action taken"><input className="form-control" value={f.action_taken} onChange={(e) => setFk('action_taken', e.target.value)} /></Field>
+              <Field label="Technician / vendor"><input className="form-control" value={f.technician} onChange={(e) => setFk('technician', e.target.value)} /></Field>
+              <Field label="Started"><input type="date" className="form-control" value={f.started_on} onChange={(e) => setFk('started_on', e.target.value)} /></Field>
+              <Field label="Completed"><input type="date" className="form-control" value={f.completed_on} onChange={(e) => setFk('completed_on', e.target.value)} /></Field>
+              <Field label="Next maintenance"><input type="date" className="form-control" value={f.next_maintenance_on} onChange={(e) => setFk('next_maintenance_on', e.target.value)} /></Field>
+              <Field label="Cost (₦)"><input type="number" min="0" className="form-control" value={f.cost} onChange={(e) => setFk('cost', e.target.value)} /></Field>
+              <Field label="Parts used"><input className="form-control" value={f.parts_used} onChange={(e) => setFk('parts_used', e.target.value)} placeholder="e.g. LCD backlight unit" /></Field>
+              <Field label="Reference (invoice/WO#)"><input className="form-control" value={f.reference} onChange={(e) => setFk('reference', e.target.value)} /></Field>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '.5rem', margin: '.6rem 0' }}>
+              <input type="checkbox" id="wc" checked={!!f.warranty_covered} onChange={(e) => setFk('warranty_covered', e.target.checked ? 'on' : '')} />
+              <label htmlFor="wc" className="text-sm" style={{ fontWeight: 600, cursor: 'pointer' }}>Covered under warranty</label>
+            </div>
+            <Field label="Notes" wide><input className="form-control" value={f.notes} onChange={(e) => setFk('notes', e.target.value)} /></Field>
+            <div style={{ display: 'flex', gap: '.5rem', marginTop: '.8rem' }}>
+              <Button variant="primary" onClick={save} disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save</Button>
+              <Button variant="secondary" onClick={() => { setAddMode(false); setEditingRec(null); }}>Cancel</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {!records && <p className="text-muted text-sm">Loading…</p>}
+      {records && records.length === 0 && !addMode && <Empty icon="fa-wrench" title="No maintenance records"><p>Log the first one when this asset is serviced.</p></Empty>}
+      {records && records.map((rec) => (
+        <div key={rec.id} className="card mb-2" style={{ padding: '.65rem .9rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '.3rem', alignItems: 'center' }}>
+            <div><strong>{rec.problem || 'Maintenance'}</strong>{rec.technician && <span className="text-muted text-sm"> · {rec.technician}</span>}</div>
+            <div style={{ display: 'flex', gap: '.25rem', alignItems: 'center' }}>
+              <span className={`badge ${STATUS_COLOR[rec.status] || 'b-ok'}`}>{rec.status}</span>
+              {rec.warranty_covered && <span className="badge b-ok">Warranty</span>}
+            </div>
+          </div>
+          <div className="text-sm" style={{ color: 'var(--text-muted)', marginTop: '.25rem', display: 'flex', flexWrap: 'wrap', gap: '.6rem' }}>
+            {rec.started_on && <span><i aria-hidden="true" className="fas fa-calendar" /> {rec.started_on}{rec.completed_on ? ` → ${rec.completed_on}` : ''}</span>}
+            {rec.downtime_days !== null && rec.downtime_days !== undefined && <span><i aria-hidden="true" className="fas fa-hourglass" /> {rec.downtime_days} day(s) downtime</span>}
+            {rec.cost > 0 && <span><i aria-hidden="true" className="fas fa-naira-sign" /> ₦{(rec.cost).toLocaleString()}</span>}
+            {rec.next_maintenance_on && <span><i aria-hidden="true" className="fas fa-calendar-check" /> Next: {rec.next_maintenance_on}</span>}
+          </div>
+          {rec.action_taken && <div className="text-sm" style={{ marginTop: '.2rem' }}>{rec.action_taken}</div>}
+          <div style={{ display: 'flex', gap: '.25rem', marginTop: '.4rem' }}>
+            <button type="button" className="btn btn-sm btn-light" onClick={() => startEdit(rec)}><i aria-hidden="true" className="fas fa-pen" /></button>
+            <button type="button" className="btn btn-sm btn-light text-danger" onClick={() => del(rec)}><i aria-hidden="true" className="fas fa-trash" /></button>
+          </div>
+        </div>
+      ))}
+    </Modal>
   );
 }
 

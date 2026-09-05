@@ -666,6 +666,57 @@ class AssetLog(db.Model):
         return f'<AssetLog {self.event_type} asset={self.asset_id}>'
 
 
+MAINTENANCE_STATUSES = ['Scheduled', 'In Progress', 'Completed', 'Cancelled']
+
+
+class AssetMaintenance(db.Model):
+    """One maintenance event for an asset (batch-level) or a specific unit
+    (individually-tracked). Records the problem, what was done, who did it,
+    what it cost, and how long the asset was out of service — feeding both
+    the per-asset maintenance tab and the 'is this asset becoming
+    uneconomical to maintain?' management question (§12)."""
+    __tablename__ = 'asset_maintenance'
+
+    id = db.Column(db.Integer, primary_key=True)
+    asset_id = db.Column(db.Integer, db.ForeignKey('fixed_assets.id'), nullable=False, index=True)
+    unit_id = db.Column(db.Integer, db.ForeignKey('asset_units.id'), index=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))
+    status = db.Column(db.String(20), default='Completed')
+    problem = db.Column(db.String(500))
+    diagnosis = db.Column(db.String(500))
+    action_taken = db.Column(db.String(500))
+    technician = db.Column(db.String(150))    # vendor or in-house
+    started_on = db.Column(db.Date)
+    completed_on = db.Column(db.Date)
+    next_maintenance_on = db.Column(db.Date)
+    cost = db.Column(db.Float, default=0)     # labour + parts
+    parts_used = db.Column(db.Text)           # free-text description
+    warranty_covered = db.Column(db.Boolean, default=False)
+    reference = db.Column(db.String(80))      # invoice / work-order number
+    notes = db.Column(db.Text)
+    created_by = db.Column(db.String(100))
+    created_at = db.Column(db.DateTime, default=local_now)
+
+    asset = db.relationship('FixedAsset',
+                            backref=db.backref('maintenance_records', lazy='dynamic',
+                                               order_by='AssetMaintenance.started_on.desc()',
+                                               cascade='all, delete-orphan'))
+    unit = db.relationship('AssetUnit',
+                           backref=db.backref('maintenance_records', lazy='dynamic',
+                                              order_by='AssetMaintenance.started_on.desc()',
+                                              cascade='all, delete-orphan'))
+    branch = db.relationship('Branch')
+
+    @property
+    def downtime_days(self):
+        if self.started_on and self.completed_on:
+            return max(0, (self.completed_on - self.started_on).days)
+        return None
+
+    def __repr__(self):
+        return f'<AssetMaintenance {self.asset_id} {self.started_on}>'
+
+
 class AssetStatusCount(db.Model):
     """Optional per-status quantity split for a FixedAsset — e.g. of 30
     laptops, 25 'In Use', 3 'Under Repair', 2 'Lost'. When rows exist here
