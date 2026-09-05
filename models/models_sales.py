@@ -467,6 +467,14 @@ class FixedAsset(db.Model):
     arm_id = db.Column(db.Integer, db.ForeignKey('class_arms.id'))
     teacher_id = db.Column(db.Integer, db.ForeignKey('teachers.id'))
     section = db.Column(db.String(20))   # Nursery / Primary / Junior Secondary / Senior Secondary
+    # When True, this row is an asset TYPE (e.g. "HP ProBook 440 G8") whose
+    # physical units are tracked individually via AssetUnit — each with its
+    # own tag/serial/QR/location/custodian/condition — instead of as one
+    # undifferentiated batch. Set at registration; not meant to be flipped
+    # once units exist (see routes/sales.py for the guard). Expensive,
+    # long-lived items (laptops, projectors, vehicles) suit this; cheap
+    # high-volume ones (chairs, textbooks) stay batch-tracked.
+    is_individually_tracked = db.Column(db.Boolean, default=False, nullable=False)
 
     branch = db.relationship('Branch')
     source_product = db.relationship('Product')
@@ -485,8 +493,19 @@ class FixedAsset(db.Model):
         """How this asset's units split across statuses, largest bucket
         first — e.g. 30 laptops → [{'status': 'In Use', 'quantity': 25},
         {'status': 'Under Repair', 'quantity': 3}, {'status': 'Lost', 'quantity': 2}].
-        Falls back to a single bucket using the summary `status` field for
+        For an individually-tracked asset, this is a live tally of its
+        AssetUnit rows (a disposed unit counts under 'Disposed', matching
+        batch mode's convention of keeping disposed units in the picture —
+        active_quantity is what excludes them). For a batch-tracked asset,
+        falls back to a single bucket using the summary `status` field for
         assets that have never had a split recorded."""
+        if self.is_individually_tracked:
+            from collections import Counter
+            counts = Counter()
+            for u in self.units:
+                counts['Disposed' if u.is_disposed else u.status] += 1
+            rows = [{'status': st, 'quantity': n} for st, n in counts.items() if n]
+            return sorted(rows, key=lambda r: -r['quantity'])
         rows = [{'status': c.status, 'quantity': c.quantity}
                 for c in (self.status_counts or []) if c.quantity]
         if rows:
@@ -495,6 +514,8 @@ class FixedAsset(db.Model):
 
     @property
     def is_split(self):
+        if self.is_individually_tracked:
+            return True   # always show the per-unit view, not a single status badge
         return len(self.status_counts or []) > 0
 
     @property
@@ -537,6 +558,45 @@ class FixedAsset(db.Model):
         return f'<FixedAsset {self.asset_tag or self.name}>'
 
 
+UNIT_CONDITIONS = ['Good', 'Fair', 'Poor']
+
+
+class AssetUnit(db.Model):
+    """One physical, individually-tracked unit of a FixedAsset 'type' — used
+    when FixedAsset.is_individually_tracked is True (e.g. one specific HP
+    ProBook out of a batch of 10, each with its own tag/serial/QR/location/
+    custodian/condition). Shares the same AssetLog ledger as batch-tracked
+    assets via AssetLog.unit_id, so a unit's full history — who's had it,
+    where it's been, what's happened to it — works the same way a batch's
+    history already does."""
+    __tablename__ = 'asset_units'
+
+    id = db.Column(db.Integer, primary_key=True)
+    asset_id = db.Column(db.Integer, db.ForeignKey('fixed_assets.id'), nullable=False, index=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))
+    unit_tag = db.Column(db.String(40), unique=True, index=True)   # e.g. HPL-00001
+    serial_number = db.Column(db.String(80))
+    qr_token = db.Column(db.String(40), unique=True, index=True)   # opaque id in the scan URL
+    status = db.Column(db.String(20), default='In Use')
+    condition = db.Column(db.String(20), default='Good')           # Good / Fair / Poor
+    location = db.Column(db.String(150))
+    custodian = db.Column(db.String(150))
+    is_disposed = db.Column(db.Boolean, default=False)
+    disposed_on = db.Column(db.Date)
+    disposal_amount = db.Column(db.Float)
+    created_by = db.Column(db.String(100))
+    created_at = db.Column(db.DateTime, default=local_now)
+
+    asset = db.relationship('FixedAsset',
+                            backref=db.backref('units', lazy='dynamic',
+                                               order_by='AssetUnit.unit_tag',
+                                               cascade='all, delete-orphan'))
+    branch = db.relationship('Branch')
+
+    def __repr__(self):
+        return f'<AssetUnit {self.unit_tag or self.id}>'
+
+
 class AssetLog(db.Model):
     """History ledger for a FixedAsset — one row per meaningful change
     (registered, quantity changed, status changed, edited, disposed,
@@ -548,6 +608,11 @@ class AssetLog(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     asset_id = db.Column(db.Integer, db.ForeignKey('fixed_assets.id'), nullable=False, index=True)
+    # Set when this event concerns one specific physical unit of an
+    # individually-tracked asset (see AssetUnit) rather than the batch as a
+    # whole — the same ledger, table, and helper functions serve both, so a
+    # unit's timeline and a batch's timeline work identically.
+    unit_id = db.Column(db.Integer, db.ForeignKey('asset_units.id'), index=True)
     branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))
     event_type = db.Column(db.String(20), nullable=False)
     quantity_before = db.Column(db.Integer)
@@ -583,6 +648,10 @@ class AssetLog(db.Model):
                             backref=db.backref('logs', lazy='dynamic',
                                                order_by='AssetLog.created_at.desc()',
                                                cascade='all, delete-orphan'))
+    unit = db.relationship('AssetUnit',
+                           backref=db.backref('logs', lazy='dynamic',
+                                              order_by='AssetLog.created_at.desc()',
+                                              cascade='all, delete-orphan'))
     branch = db.relationship('Branch')
     session = db.relationship('AcademicSession')
     term = db.relationship('Term')

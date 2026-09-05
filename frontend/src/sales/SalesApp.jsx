@@ -1472,6 +1472,7 @@ function Assets({ d, notify }) {
   const [disposing, setDisposing] = useState(null);
   const [transferring, setTransferring] = useState(null);
   const [assigning, setAssigning] = useState(null);
+  const [managingUnits, setManagingUnits] = useState(null);
   const [viewingHistory, setViewingHistory] = useState(null);
   const shown = d.assets.filter((a) => {
     if (q && !(`${a.name} ${a.asset_tag} ${a.serial_number}`.toLowerCase().includes(q.toLowerCase()))) return false;
@@ -1551,8 +1552,12 @@ function Assets({ d, notify }) {
                       </td>
                       <td><div style={{ display: 'flex', gap: '.3rem' }}>
                         <button type="button" className="btn btn-sm btn-light" onClick={() => setViewingHistory(a)} title="History"><i aria-hidden="true" className="fas fa-clock-rotate-left" /></button>
-                        <button type="button" className="btn btn-sm btn-light" onClick={() => setTransferring(a)} title="Transfer location"><i aria-hidden="true" className="fas fa-truck-ramp-box" /></button>
-                        <button type="button" className="btn btn-sm btn-light" onClick={() => setAssigning(a)} title="Assign custodian"><i aria-hidden="true" className="fas fa-user-tag" /></button>
+                        {a.is_individually_tracked
+                          ? <button type="button" className="btn btn-sm btn-primary" onClick={() => setManagingUnits(a)} title="Manage physical units"><i aria-hidden="true" className="fas fa-qrcode" /> Units</button>
+                          : <>
+                            <button type="button" className="btn btn-sm btn-light" onClick={() => setTransferring(a)} title="Transfer location"><i aria-hidden="true" className="fas fa-truck-ramp-box" /></button>
+                            <button type="button" className="btn btn-sm btn-light" onClick={() => setAssigning(a)} title="Assign custodian"><i aria-hidden="true" className="fas fa-user-tag" /></button>
+                          </>}
                         <button type="button" className="btn btn-sm btn-light" onClick={() => setEditing(a)} title="Edit"><i aria-hidden="true" className="fas fa-pen" /></button>
                         {!a.is_disposed && <button type="button" className="btn btn-sm btn-light" onClick={() => setDisposing(a)} title="Dispose / retire"><i aria-hidden="true" className="fas fa-box-archive" /></button>}
                         <button type="button" className="btn btn-sm btn-light" onClick={() => doDelete(a)} title="Delete permanently"><i aria-hidden="true" className="fas fa-trash text-danger" /></button>
@@ -1571,6 +1576,8 @@ function Assets({ d, notify }) {
                                       onClose={() => setTransferring(null)} onSaved={() => { setTransferring(null); nav.refresh(); }} />}
       {assigning && <AssignModal asset={assigning} notify={notify}
                                  onClose={() => setAssigning(null)} onSaved={() => { setAssigning(null); nav.refresh(); }} />}
+      {managingUnits && <AssetUnitsModal asset={managingUnits} d={d} notify={notify}
+                                         onClose={() => setManagingUnits(null)} onSaved={() => { nav.refresh(); }} />}
       {viewingHistory && <AssetHistoryModal asset={viewingHistory} onClose={() => setViewingHistory(null)} />}
     </>
   );
@@ -1589,6 +1596,7 @@ function AssetForm({ d, asset, onClose, onSaved, notify }) {
     teacher_id: asset?.teacher_id || '', section: asset?.section || '',
     change_note: '',
   }));
+  const [individual, setIndividual] = useState(!!asset?.is_individually_tracked);
   const [useSplit, setUseSplit] = useState(!!asset?.is_split);
   const [splitRows, setSplitRows] = useState(() => (asset?.is_split
     ? asset.status_breakdown.map((r) => ({ status: r.status, quantity: String(r.quantity) }))
@@ -1600,8 +1608,10 @@ function AssetForm({ d, asset, onClose, onSaved, notify }) {
   const splitTotal = splitRows.reduce((sum, r) => sum + (parseInt(r.quantity, 10) || 0), 0);
   const save = async () => {
     if (!f.name.trim()) { notify('error', 'Asset name is required.'); return; }
-    const payload = { ...f };
-    if (useSplit) {
+    const payload = { ...f, is_individually_tracked: individual ? 'on' : '' };
+    if (individual) {
+      delete payload.quantity; delete payload.status;
+    } else if (useSplit) {
       const rows = splitRows.filter((r) => (parseInt(r.quantity, 10) || 0) > 0);
       if (!rows.length) { notify('error', 'Enter at least one status with a quantity.'); return; }
       payload.status_breakdown = JSON.stringify(rows.map((r) => ({ status: r.status, quantity: parseInt(r.quantity, 10) || 0 })));
@@ -1612,22 +1622,36 @@ function AssetForm({ d, asset, onClose, onSaved, notify }) {
   return (
     <Modal title={asset ? 'Edit asset' : 'Register asset'} icon="fa-building-columns" size="lg" onClose={onClose}
            footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button variant="primary" onClick={save}>Save</Button></>}>
+      {!asset && (
+        <div className="card" style={{ padding: '.7rem .9rem', marginBottom: '1rem', background: 'var(--surface-2, #f8f9fa)' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: '.5rem', fontWeight: 600, cursor: 'pointer', margin: 0 }}>
+            <input type="checkbox" checked={individual} onChange={(e) => setIndividual(e.target.checked)} />
+            Track each unit individually (serial numbers, QR codes, per-unit location)
+          </label>
+          <span className="text-muted text-sm">For expensive, long-lived items like laptops, projectors, or vehicles. Use batch quantity below for cheap, high-volume items like chairs or textbooks. Can't be changed after saving.</span>
+        </div>
+      )}
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: '.6rem' }}>
         <Field label="Name *"><input className="form-control" value={f.name} onChange={(e) => set('name', e.target.value)} /></Field>
         <Field label="Asset tag"><input className="form-control" value={f.asset_tag} onChange={(e) => set('asset_tag', e.target.value)} /></Field>
         <Field label="Category"><select className="form-control" value={f.category} onChange={(e) => set('category', e.target.value)}>{d.categories.map((c) => <option key={c}>{c}</option>)}</select></Field>
-        {!useSplit && <Field label="Quantity *"><input type="number" min="0" className="form-control" value={f.quantity} onChange={(e) => set('quantity', e.target.value)} placeholder="e.g. 30 laptops" /></Field>}
+        {!individual && !useSplit && <Field label="Quantity *"><input type="number" min="0" className="form-control" value={f.quantity} onChange={(e) => set('quantity', e.target.value)} placeholder="e.g. 30 laptops" /></Field>}
         <Field label="Serial number"><input className="form-control" value={f.serial_number} onChange={(e) => set('serial_number', e.target.value)} /></Field>
         <Field label="Acquisition cost (₦)"><input type="number" className="form-control" value={f.acquisition_cost} onChange={(e) => set('acquisition_cost', e.target.value)} /></Field>
         <Field label="Acquired on"><input type="date" className="form-control" value={f.acquisition_date} onChange={(e) => set('acquisition_date', e.target.value)} /></Field>
         <Field label="Supplier"><input className="form-control" value={f.supplier} onChange={(e) => set('supplier', e.target.value)} /></Field>
         <Field label="Location"><input className="form-control" value={f.location} onChange={(e) => set('location', e.target.value)} /></Field>
         <Field label="Custodian"><input className="form-control" value={f.custodian} onChange={(e) => set('custodian', e.target.value)} /></Field>
-        {!useSplit && <Field label="Status"><select className="form-control" value={f.status} onChange={(e) => set('status', e.target.value)}>{d.statuses.filter((x) => x !== 'Disposed').map((st) => <option key={st}>{st}</option>)}</select></Field>}
+        {!individual && !useSplit && <Field label="Status"><select className="form-control" value={f.status} onChange={(e) => set('status', e.target.value)}>{d.statuses.filter((x) => x !== 'Disposed').map((st) => <option key={st}>{st}</option>)}</select></Field>}
         <Field label="Useful life (yrs)"><input type="number" className="form-control" value={f.useful_life_years} onChange={(e) => set('useful_life_years', e.target.value)} placeholder="for depreciation" /></Field>
         <Field label="Salvage value (₦)"><input type="number" className="form-control" value={f.salvage_value} onChange={(e) => set('salvage_value', e.target.value)} /></Field>
       </div>
 
+      {individual && (
+        <p className="text-muted text-sm" style={{ marginTop: '1rem' }}>Quantity and status come from the individual units you'll register next, on the assets list — not from fields here.</p>
+      )}
+      {!individual && (
+      <>
       <div style={{ marginTop: '1rem', display: 'flex', alignItems: 'center', gap: '.5rem' }}>
         <label style={{ display: 'flex', alignItems: 'center', gap: '.4rem', fontWeight: 600, cursor: 'pointer' }}>
           <input type="checkbox" checked={useSplit} onChange={(e) => setUseSplit(e.target.checked)} />
@@ -1652,6 +1676,8 @@ function AssetForm({ d, asset, onClose, onSaved, notify }) {
             <span className="text-muted text-sm" style={{ marginLeft: '.75rem' }}>Total: <strong>{splitTotal}</strong></span>
           </div>
         </div>
+      )}
+      </>
       )}
 
       <h4 style={{ margin: '1rem 0 .4rem' }}>Optional placement</h4>
@@ -1692,6 +1718,130 @@ function DisposeModal({ asset, onClose, onSaved, notify }) {
         <Field label="Note" wide><input className="form-control" value={f.disposal_note} onChange={(e) => set('disposal_note', e.target.value)} /></Field>
       </div>
     </Modal>
+  );
+}
+
+function AssetUnitsModal({ asset, d, onClose, onSaved, notify }) {
+  const [units, setUnits] = useState(null);
+  const [addUrl, setAddUrl] = useState('');
+  const [addMode, setAddMode] = useState(false);
+  const [addF, setAddF] = useState({ count: '1', prefix: '', unit_tag: '', serial_number: '', location: '', condition: 'Good', status: 'In Use' });
+  const setAdd = (k, v) => setAddF((s) => ({ ...s, [k]: v }));
+  const [busy, setBusy] = useState(false);
+  const reload = async () => {
+    try {
+      const r = await apiGet(asset.units_url);
+      setUnits(r.units || []); setAddUrl(r.add_url || '');
+    } catch { setUnits([]); }
+  };
+  useEffect(() => { reload(); }, [asset.units_url]);
+  const bulkMode = parseInt(addF.count, 10) > 1;
+  const doAdd = async () => {
+    if (!addUrl) return;
+    setBusy(true);
+    const r = await submitJson(addUrl, addF);
+    setBusy(false);
+    if (r.ok) { notify('success', r.message); setAddMode(false); reload(); onSaved(); }
+    else notify('error', r.error || 'Could not add units.');
+  };
+  const doAct = async (url, payload) => {
+    const r = await submitJson(url, payload);
+    if (r.ok) { notify('success', r.message); reload(); onSaved(); }
+    else notify('error', r.error || 'Failed.');
+  };
+  const COND_COLOR = { Good: 'b-ok', Fair: 'b-warn', Poor: 'b-bad' };
+  const STAT_COLOR = { 'In Use': 'b-ok', 'Under Repair': 'b-warn', 'Lost': 'b-bad', 'Disposed': 'b-bad' };
+  return (
+    <Modal title={`Units — ${asset.name}`} icon="fa-qrcode" size="xl" onClose={onClose}
+           footer={<Button variant="secondary" onClick={onClose}>Close</Button>}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+        <span className="text-muted text-sm">{units ? `${units.filter((u) => !u.is_disposed).length} active, ${units.filter((u) => u.is_disposed).length} disposed` : 'Loading…'}</span>
+        <Button variant="primary" onClick={() => setAddMode((s) => !s)}><i aria-hidden="true" className="fas fa-plus" /> Add unit(s)</Button>
+      </div>
+      {addMode && (
+        <div className="card mb-3" style={{ borderColor: 'var(--primary)' }}>
+          <div className="card-header"><h3>Register unit(s)</h3></div>
+          <div className="card-body">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '.6rem' }}>
+              <Field label="Count"><input type="number" min="1" max="200" className="form-control" value={addF.count} onChange={(e) => setAdd('count', e.target.value)} /></Field>
+              {bulkMode
+                ? <Field label="Tag prefix (e.g. HPL)"><input className="form-control" value={addF.prefix} onChange={(e) => setAdd('prefix', e.target.value)} placeholder="HPL → HPL-00001…" /></Field>
+                : <>
+                    <Field label="Unit tag"><input className="form-control" value={addF.unit_tag} onChange={(e) => setAdd('unit_tag', e.target.value)} placeholder="auto if blank" /></Field>
+                    <Field label="Serial number"><input className="form-control" value={addF.serial_number} onChange={(e) => setAdd('serial_number', e.target.value)} /></Field>
+                  </>}
+              <Field label="Location"><input className="form-control" value={addF.location} onChange={(e) => setAdd('location', e.target.value)} /></Field>
+              <Field label="Condition"><select className="form-control" value={addF.condition} onChange={(e) => setAdd('condition', e.target.value)}>{(d.unit_conditions || ['Good', 'Fair', 'Poor']).map((c) => <option key={c}>{c}</option>)}</select></Field>
+              <Field label="Status"><select className="form-control" value={addF.status} onChange={(e) => setAdd('status', e.target.value)}>{(d.statuses || []).filter((s) => s !== 'Disposed').map((s) => <option key={s}>{s}</option>)}</select></Field>
+            </div>
+            <div style={{ display: 'flex', gap: '.5rem', marginTop: '.8rem' }}>
+              <Button variant="primary" onClick={doAdd} disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save {addF.count || 1} unit(s)</Button>
+              <Button variant="secondary" onClick={() => setAddMode(false)}>Cancel</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {!units && <p className="text-muted text-sm">Loading…</p>}
+      {units && units.length === 0 && <Empty icon="fa-qrcode" title="No units registered yet"><p>Use "Add unit(s)" to register each physical item.</p></Empty>}
+      {units && units.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '.5rem' }}>
+          {units.map((u) => (
+            <div key={u.id} className="card" style={{ padding: '.6rem .8rem', opacity: u.is_disposed ? .6 : 1 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '.3rem', alignItems: 'center' }}>
+                <strong style={{ fontSize: '.95rem' }}>{u.unit_tag}</strong>
+                <div style={{ display: 'flex', gap: '.25rem', flexWrap: 'wrap' }}>
+                  <span className={`badge ${STAT_COLOR[u.is_disposed ? 'Disposed' : u.status] || 'b-ok'}`}>{u.is_disposed ? 'Disposed' : u.status}</span>
+                  <span className={`badge ${COND_COLOR[u.condition] || 'b-ok'}`}>{u.condition}</span>
+                </div>
+              </div>
+              <div className="text-sm" style={{ color: 'var(--text-muted)', marginTop: '.25rem' }}>
+                {u.location && <span><i aria-hidden="true" className="fas fa-location-dot" /> {u.location}  </span>}
+                {u.custodian && <span><i aria-hidden="true" className="fas fa-user" /> {u.custodian}</span>}
+              </div>
+              {!u.is_disposed && (
+                <div style={{ display: 'flex', gap: '.25rem', flexWrap: 'wrap', marginTop: '.4rem' }}>
+                  <UnitInlineAction label="Transfer" icon="fa-truck-ramp-box"
+                    fields={[{ name: 'location', placeholder: 'New location', required: true }]}
+                    onSubmit={(p) => doAct(u.transfer_url, p)} />
+                  <UnitInlineAction label="Assign" icon="fa-user-tag"
+                    fields={[{ name: 'custodian', placeholder: 'Custodian (blank = unassign)' }]}
+                    onSubmit={(p) => doAct(u.assign_url, p)} />
+                  <UnitInlineAction label="Status" icon="fa-circle-half-stroke"
+                    fields={[
+                      { name: 'status', type: 'select', options: (d.statuses || []).filter((s) => s !== 'Disposed') },
+                      { name: 'condition', type: 'select', options: d.unit_conditions || ['Good', 'Fair', 'Poor'] },
+                      { name: 'note', placeholder: 'Note (optional)' },
+                    ]}
+                    onSubmit={(p) => doAct(u.status_url, p)} />
+                  <button type="button" className="btn btn-sm btn-light" title="History"
+                    onClick={async () => { const r = await apiGet(u.history_url); notify('info', `${r.logs?.length || 0} event(s) — see dev console`); console.table(r.logs); }}><i aria-hidden="true" className="fas fa-clock-rotate-left" /></button>
+                  <button type="button" className="btn btn-sm btn-light text-danger" title="Delete unit"
+                    onClick={async () => { if (await confirm(`Delete ${u.unit_tag}?`)) doAct(u.delete_url, {}); }}><i aria-hidden="true" className="fas fa-trash" /></button>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+function UnitInlineAction({ label, icon, fields, onSubmit }) {
+  const [open, setOpen] = useState(false);
+  const [vals, setVals] = useState({});
+  const setV = (k, v) => setVals((s) => ({ ...s, [k]: v }));
+  const submit = () => { onSubmit(vals); setOpen(false); setVals({}); };
+  return open ? (
+    <div style={{ display: 'flex', gap: '.25rem', flexWrap: 'wrap', alignItems: 'center' }}>
+      {fields.map((f) => f.type === 'select'
+        ? <select key={f.name} className="form-control" style={{ maxWidth: 140 }} value={vals[f.name] || ''} onChange={(e) => setV(f.name, e.target.value)}><option value="">— {f.name} —</option>{(f.options || []).map((o) => <option key={o}>{o}</option>)}</select>
+        : <input key={f.name} className="form-control" style={{ maxWidth: 160 }} placeholder={f.placeholder} required={f.required} value={vals[f.name] || ''} onChange={(e) => setV(f.name, e.target.value)} />)}
+      <button type="button" className="btn btn-sm btn-primary" onClick={submit}><i aria-hidden="true" className="fas fa-check" /></button>
+      <button type="button" className="btn btn-sm btn-light" onClick={() => { setOpen(false); setVals({}); }}><i aria-hidden="true" className="fas fa-xmark" /></button>
+    </div>
+  ) : (
+    <button type="button" className="btn btn-sm btn-light" onClick={() => setOpen(true)}><i aria-hidden="true" className={`fas ${icon}`} /> {label}</button>
   );
 }
 

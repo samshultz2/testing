@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>{% if unit %}{{ unit.unit_tag }} — {{ asset.name }}{% else %}Asset not found{% endif %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
+  <style>
+    :root{
+      --bg:#eef1f7;--card:#fff;--ink:#1f2937;--muted:#6b7280;
+      --line:#eef2f7;--brand:#334155;--accent:#475569;--ok:#047857;--bad:#b91c1c;--warn:#b45309;
+      --shadow:0 18px 50px rgba(15,42,34,.12);
+    }
+    @media (prefers-color-scheme: dark){
+      :root{--bg:#0b1220;--card:#131c2b;--ink:#e5e7eb;--muted:#9aa6b8;
+            --line:#22304a;--brand:#cbd5e1;--accent:#94a3b8;--ok:#34d399;--bad:#f87171;--warn:#fbbf24;
+            --shadow:0 18px 50px rgba(0,0,0,.5);}
+    }
+    *{box-sizing:border-box}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;
+         background:radial-gradient(1200px 400px at 50% -160px, rgba(14,138,100,.18), transparent), var(--bg);
+         margin:0;color:var(--ink);min-height:100vh;
+         display:flex;flex-direction:column;align-items:center;padding:1.6rem 1rem}
+    .wrap{width:100%;max-width:480px}
+    .card{background:var(--card);border:1px solid var(--line);border-radius:20px;
+          padding:1.5rem 1.3rem;box-shadow:var(--shadow);margin-bottom:1rem}
+    h1{font-size:1.25rem;margin:.1rem 0 .2rem}
+    .sub{color:var(--muted);font-size:.88rem;margin:0 0 1rem}
+    .rows{margin:.2rem 0}
+    .row{display:flex;justify-content:space-between;gap:1rem;padding:.6rem 0;
+         border-bottom:1px solid var(--line);font-size:.92rem}
+    .row:last-child{border-bottom:0}
+    .row .k{color:var(--muted)}.row .v{font-weight:700;text-align:right}
+    .badge{display:inline-block;padding:.2rem .6rem;border-radius:20px;font-size:.78rem;font-weight:700}
+    .b-ok{background:rgba(4,120,87,.12);color:var(--ok)}
+    .b-warn{background:rgba(180,83,9,.12);color:var(--warn)}
+    .b-bad{background:rgba(185,28,28,.1);color:var(--bad)}
+    .section-title{font-size:.8rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);
+                   margin:0 0 .7rem}
+    .form-group{margin-bottom:.8rem}
+    label{display:block;font-size:.85rem;font-weight:600;margin-bottom:.3rem}
+    input[type=text],select{width:100%;padding:.6rem .7rem;border:1px solid var(--line);border-radius:10px;
+         font-size:.95rem;background:var(--card);color:var(--ink)}
+    .btn{border:0;border-radius:11px;padding:.7rem 1rem;font-weight:700;cursor:pointer;
+         font-size:.92rem;width:100%;margin-top:.4rem;display:flex;align-items:center;justify-content:center;gap:.4rem}
+    .btn-primary{background:var(--brand);color:#fff}
+    .btn-danger{background:var(--bad);color:#fff}
+    .btn-warn{background:var(--warn);color:#fff}
+    .btn-secondary{background:rgba(100,116,139,.12);color:var(--accent)}
+    .prompt{text-align:center;padding:1.2rem 0}
+    .prompt a{color:var(--brand);font-weight:700}
+    details{margin-top:.8rem}
+    summary{cursor:pointer;font-weight:700;font-size:.9rem;color:var(--brand)}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  {% if not unit %}
+  <div class="card">
+    <div class="prompt">
+      <i class="fas fa-triangle-exclamation" style="font-size:2rem;color:var(--bad)"></i>
+      <h1>Asset not found</h1>
+      <p class="sub">This QR code doesn't match any registered asset — it may have been removed.</p>
+    </div>
+  </div>
+  {% else %}
+  <div class="card">
+    <h1>{{ unit.unit_tag }}</h1>
+    <p class="sub">{{ asset.name }}{% if asset.category %} · {{ asset.category }}{% endif %}</p>
+    <div class="rows">
+      <div class="row"><span class="k">Status</span><span class="v">
+        <span class="badge {{ 'b-bad' if unit.is_disposed else ('b-warn' if unit.status in ('Under Repair','Lost') else 'b-ok') }}">
+          {{ 'Disposed' if unit.is_disposed else unit.status }}</span></span></div>
+      <div class="row"><span class="k">Condition</span><span class="v">{{ unit.condition }}</span></div>
+      <div class="row"><span class="k">Location</span><span class="v">{{ unit.location or 'Unspecified' }}</span></div>
+      <div class="row"><span class="k">Custodian</span><span class="v">{{ unit.custodian or 'Unassigned' }}</span></div>
+      {% if unit.serial_number %}<div class="row"><span class="k">Serial</span><span class="v">{{ unit.serial_number }}</span></div>{% endif %}
+    </div>
+  </div>
+
+  {% if not logged_in %}
+  <div class="card">
+    <div class="prompt">
+      <i class="fas fa-lock" style="font-size:1.6rem;color:var(--muted)"></i>
+      <p class="sub" style="margin-top:.6rem">Log in to confirm this asset's location, report an issue, or update its status.</p>
+      <a href="{{ url_for('auth.login', next=request.path) }}">Log in</a>
+    </div>
+  </div>
+  {% elif not can_act %}
+  <div class="card">
+    <div class="prompt">
+      <i class="fas fa-ban" style="font-size:1.6rem;color:var(--bad)"></i>
+      <p class="sub" style="margin-top:.6rem">This asset belongs to another branch — you don't have access to act on it.</p>
+    </div>
+  </div>
+  {% else %}
+  <div class="card">
+    <p class="section-title">Confirm location</p>
+    <form method="post" action="{{ url_for('sales.transfer_unit', unit_id=unit.id) }}">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="return_to" value="{{ request.path }}">
+      <input type="hidden" name="note" value="Confirmed via QR scan">
+      <div class="form-group">
+        <label>Where is it right now?</label>
+        <input type="text" name="location" placeholder="{{ unit.location or 'e.g. ICT Lab' }}" required>
+      </div>
+      <button type="submit" class="btn btn-primary"><i class="fas fa-location-dot"></i> Confirm / update location</button>
+    </form>
+  </div>
+
+  <div class="card">
+    <p class="section-title">Report an issue</p>
+    <form method="post" action="{{ url_for('sales.update_unit_status', unit_id=unit.id) }}">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="return_to" value="{{ request.path }}">
+      <div class="form-group">
+        <label>Condition</label>
+        <select name="condition">
+          {% for c in condition_options %}<option value="{{ c }}" {{ 'selected' if c == unit.condition }}>{{ c }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>What happened? (optional)</label>
+        <input type="text" name="note" placeholder="e.g. screen cracked">
+      </div>
+      <button type="submit" class="btn btn-warn"><i class="fas fa-wrench"></i> Request maintenance</button>
+    </form>
+    <form method="post" action="{{ url_for('sales.update_unit_status', unit_id=unit.id) }}" style="margin-top:.4rem">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="return_to" value="{{ request.path }}">
+      <input type="hidden" name="status" value="Lost">
+      <input type="hidden" name="note" value="Reported missing via QR scan">
+      <button type="submit" class="btn btn-danger"><i class="fas fa-triangle-exclamation"></i> Report missing</button>
+    </form>
+  </div>
+
+  <details class="card">
+    <summary>More actions</summary>
+    <div style="margin-top:1rem">
+      <form method="post" action="{{ url_for('sales.assign_unit', unit_id=unit.id) }}">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="return_to" value="{{ request.path }}">
+        <div class="form-group">
+          <label>Assign to</label>
+          <input type="text" name="custodian" placeholder="{{ unit.custodian or 'e.g. Mrs. Chukwu' }}">
+        </div>
+        <button type="submit" class="btn btn-secondary"><i class="fas fa-user-tag"></i> Assign / unassign</button>
+      </form>
+    </div>
+  </details>
+  {% endif %}
+  {% endif %}
+</div>
+</body>
+</html>

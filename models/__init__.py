@@ -47,7 +47,7 @@ from .staff_onboarding import StaffInvite, StaffSignup
 from .models_sales import (Product, Sale, SaleItem, StockMovement, Supplier,
                            PurchaseOrder, PurchaseOrderItem, SupplierPayment, PromoCode,
                            StockAudit, StockAuditItem, FixedAsset, StockBatch, AssetLog,
-                           AssetStatusCount)
+                           AssetStatusCount, AssetUnit, UNIT_CONDITIONS)
 from .models_welfare import DisciplineRecord, ClinicVisit
 from .models_graduate import (GraduateAudit, GRADUATE_STATUSES, RESTRICTED_STATUSES,
                               GraduateDocument, GRADUATE_DOC_TYPES,
@@ -62,6 +62,7 @@ __all__ = [
     'Branch', 'Product', 'Sale', 'SaleItem', 'StockMovement',
     'Supplier', 'PurchaseOrder', 'PurchaseOrderItem', 'SupplierPayment', 'PromoCode',
     'StockAudit', 'StockAuditItem', 'FixedAsset', 'StockBatch', 'AssetLog', 'AssetStatusCount',
+    'AssetUnit', 'UNIT_CONDITIONS',
     'DisciplineRecord', 'ClinicVisit',
     'GraduateAudit', 'GRADUATE_STATUSES', 'RESTRICTED_STATUSES',
     'GraduateDocument', 'GRADUATE_DOC_TYPES',

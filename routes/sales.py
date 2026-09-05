@@ -12,12 +12,12 @@ from models import (db, Product, Sale, SaleItem, StockMovement, Student,
                     StudentEnrollment, ClassArmAssignment, SchoolClass, ClassArm,
                     Supplier, PurchaseOrder, PurchaseOrderItem, SupplierPayment, PromoCode,
                     StockAudit, StockAuditItem, FixedAsset, StockBatch, AssetLog,
-                    AssetStatusCount, Teacher)
+                    AssetStatusCount, AssetUnit, Teacher)
 from models.models_sales import (PRODUCT_CATEGORIES, SALE_METHODS, CUSTOMER_TYPES,
                                  UNITS, STOCK_IN_REASONS, STOCK_OUT_REASONS,
                                  PO_STATUSES, PURCHASE_METHODS,
                                  FIXED_ASSET_CATEGORIES, FIXED_ASSET_STATUSES,
-                                 FIXED_ASSET_SECTIONS)
+                                 FIXED_ASSET_SECTIONS, UNIT_CONDITIONS)
 from utils.access_control import (login_required, filter_classes_for_user,
                                   can_approve_purchase, can_sign_off_count)
 from utils.branch_scope import scope_query, branch_for_new, can_access_branch
@@ -1721,7 +1721,8 @@ def _asset_dict(a):
         'supplier': a.supplier or '', 'location': a.location or '',
         'custodian': a.custodian or '', 'status': a.status,
         'useful_life_years': a.useful_life_years, 'salvage_value': a.salvage_value or 0,
-        'quantity': a.quantity or 1,
+        'quantity': a.quantity if a.is_individually_tracked else (a.quantity or 1),
+        'is_individually_tracked': bool(a.is_individually_tracked),
         'status_breakdown': a.status_breakdown, 'is_split': a.is_split,
         'active_quantity': a.active_quantity,
         'annual_depreciation': a.annual_depreciation,
@@ -1743,6 +1744,7 @@ def _asset_dict(a):
         'history_url': url_for('sales.asset_history', asset_id=a.id),
         'transfer_url': url_for('sales.transfer_asset', asset_id=a.id),
         'assign_url': url_for('sales.assign_asset', asset_id=a.id),
+        'units_url': url_for('sales.asset_units', asset_id=a.id) if a.is_individually_tracked else '',
     }
 
 
@@ -2008,6 +2010,7 @@ def assets():
         'q': q, 'category': category, 'status': status, 'section': section,
         'class_id': class_id or '',
         'categories': FIXED_ASSET_CATEGORIES, 'statuses': FIXED_ASSET_STATUSES,
+        'unit_conditions': UNIT_CONDITIONS,
         'sections': [{'key': k, 'label': lbl} for k, lbl in SECTION_LABELS],
         'classes': _class_options(), 'arms': _arm_options(), 'teachers': _teacher_options(),
         'add_url': url_for('sales.add_asset'),
@@ -2025,18 +2028,31 @@ def add_asset():
     name = (request.form.get('name') or '').strip()
     if not name:
         return _err('Asset name is required.', url_for('sales.assets'))
+    is_individual = bool(request.form.get('is_individually_tracked'))
     a = FixedAsset(branch_id=branch_for_new(), name=name, quantity=0,
+                   is_individually_tracked=is_individual,
                    acquisition_date=timeutil.today(), created_by=_actor(),
                    # Initial placement is set directly — there's no prior
                    # state to preserve, unlike a later transfer/assignment.
+                   # For an individually-tracked type this is just a
+                   # default new units can start from, not the type's own
+                   # location (it doesn't have one — its units do).
                    location=(request.form.get('location') or '').strip() or None,
                    custodian=(request.form.get('custodian') or '').strip() or None)
     db.session.add(a)
     db.session.flush()   # assigns a.id, needed for status-breakdown rows and the ledger FK
     _apply_asset_fields(a, request.form)
-    target = _compute_target_breakdown(a, request.form)
-    _record_asset_event(a, 'created', target,
-                        note=(request.form.get('change_note') or '').strip() or None)
+    if is_individual:
+        # No batch breakdown here — quantity/status for this type are
+        # derived from its AssetUnit rows, registered separately.
+        db.session.add(AssetLog(
+            asset_id=a.id, branch_id=a.branch_id, event_type='created',
+            note=(request.form.get('change_note') or '').strip() or 'Registered as an individually-tracked asset type.',
+            created_by=_actor()))
+    else:
+        target = _compute_target_breakdown(a, request.form)
+        _record_asset_event(a, 'created', target,
+                            note=(request.form.get('change_note') or '').strip() or None)
     db.session.commit()
     return _ok(f'Registered "{a.name}".', url_for('sales.assets'))
 
@@ -2059,26 +2075,29 @@ def edit_asset(asset_id):
             a, location=request.form.get('location'), custodian=request.form.get('custodian'),
             note=note)
 
-    if target != change['breakdown_before']:
-        # Something about quantity/status actually changed — log it as an
-        # event (which also syncs the cache from this same breakdown) and
-        # pick the most descriptive event type for what happened.
-        old_total = sum(change['breakdown_before'].values())
-        new_total = sum(target.values())
-        if len(target) > 1 or len(change['breakdown_before']) > 1:
-            event_type, auto_note = 'status_changed', _describe_breakdown(target)
-        elif old_total != new_total:
-            event_type, auto_note = 'quantity_changed', None
-        else:
-            event_type, auto_note = 'status_changed', None
-        _record_asset_event(a, event_type, target,
-                            quantity_before=old_total, status_before=change['status_before'],
-                            note=(f'{note} — {auto_note}' if note and auto_note else (note or auto_note)))
+    if not a.is_individually_tracked:
+        # Batch assets: quantity/status are event-sourced — record the
+        # change (or a note-only update) if anything actually changed.
+        if target != change['breakdown_before']:
+            old_total = sum(change['breakdown_before'].values())
+            if len(target) > 1 or len(change['breakdown_before']) > 1:
+                event_type, auto_note = 'status_changed', _describe_breakdown(target)
+            elif old_total != sum(target.values()):
+                event_type, auto_note = 'quantity_changed', None
+            else:
+                event_type, auto_note = 'status_changed', None
+            _record_asset_event(a, event_type, target,
+                                quantity_before=old_total, status_before=change['status_before'],
+                                note=(f'{note} — {auto_note}' if note and auto_note else (note or auto_note)))
+        elif note:
+            _record_asset_event(a, 'updated', target, note=note)
     elif note:
-        # No quantity/status change, but the admin left a note — still worth
-        # a ledger entry (still goes through _record_asset_event so the
-        # cache-from-latest-snapshot invariant holds even for a no-op event).
-        _record_asset_event(a, 'updated', target, note=note)
+        # Individually-tracked asset — no batch breakdown events; the type
+        # itself only gets a plain 'updated' note, units carry their own
+        # history via AssetUnit.logs.
+        db.session.add(AssetLog(
+            asset_id=a.id, branch_id=a.branch_id, event_type='updated', note=note,
+            created_by=_actor()))
     db.session.commit()
     return _ok('Asset updated.', url_for('sales.assets'))
 
@@ -2598,6 +2617,322 @@ def assets_export():
                    (a.teacher.user.full_name if a.teacher and a.teacher.user else ''),
                    _effective_section(a) or '', a.status])
     return xlsx_response(wb, 'fixed_assets.xlsx')
+
+
+# ---------------------------------------------------------------------------
+# Individually-tracked asset units (spec §4A/§11) — one physical item at a
+# time, each with its own tag/serial/QR/location/custodian/condition, and
+# its own slice of the same AssetLog ledger batch assets already use.
+# ---------------------------------------------------------------------------
+
+def _redirect_target(default_url):
+    """Where to send the user after a classic (non-AJAX) form post — the
+    form's own return_to hint if given and same-origin (e.g. back to the QR
+    scan page they came from), else the given default."""
+    rt = (request.form.get('return_to') or '').strip()
+    if rt.startswith('/') and not rt.startswith('//'):
+        return rt
+    return default_url
+
+
+def _unit_dict(u):
+    return {
+        'id': u.id, 'asset_id': u.asset_id, 'asset_name': u.asset.name if u.asset else '',
+        'unit_tag': u.unit_tag or '', 'serial_number': u.serial_number or '',
+        'status': u.status, 'condition': u.condition,
+        'location': u.location or '', 'custodian': u.custodian or '',
+        'is_disposed': bool(u.is_disposed),
+        'disposed_on': u.disposed_on.isoformat() if u.disposed_on else '',
+        'qr_url': url_for('sales.unit_scan', token=u.qr_token, _external=True) if u.qr_token else '',
+        'transfer_url': url_for('sales.transfer_unit', unit_id=u.id),
+        'assign_url': url_for('sales.assign_unit', unit_id=u.id),
+        'status_url': url_for('sales.update_unit_status', unit_id=u.id),
+        'dispose_url': url_for('sales.dispose_unit', unit_id=u.id),
+        'delete_url': url_for('sales.delete_unit', unit_id=u.id),
+        'history_url': url_for('sales.unit_history', unit_id=u.id),
+    }
+
+
+def _record_unit_event(u, event_type, status=None, location=None, custodian=None,
+                       condition=None, reference=None, note=None):
+    """Single entry point for any change to one AssetUnit — mirrors
+    _record_asset_event/_record_placement_event's shape, just for a single
+    physical item instead of a batch breakdown. Only the dimension(s)
+    actually passed are logged/changed; None means 'leave as is'. A no-op
+    call (nothing actually different) writes nothing, except for 'created'
+    and 'disposed' which are always worth a ledger line even if a field
+    happens to match its default."""
+    status_before, location_before, custodian_before, condition_before = (
+        u.status, u.location, u.custodian, u.condition)
+    changed = False
+    if status is not None and status != u.status:
+        u.status = status; changed = True
+    if location is not None and location != (u.location or ''):
+        u.location = location or None; changed = True
+    if custodian is not None and custodian != (u.custodian or ''):
+        u.custodian = custodian or None; changed = True
+    if condition is not None and condition != u.condition:
+        u.condition = condition; changed = True
+    if not changed and event_type not in ('created', 'disposed'):
+        return None
+    term = get_active_term()
+    sess = get_active_session()
+    log = AssetLog(
+        asset_id=u.asset_id, unit_id=u.id, branch_id=u.branch_id, event_type=event_type,
+        status_before=status_before, status_after=u.status,
+        location_before=location_before, location_after=u.location,
+        custodian_before=custodian_before, custodian_after=u.custodian,
+        reference=(reference or '').strip() or None, note=(note or '').strip() or None,
+        session_id=sess.id if sess else None, term_id=term.id if term else None,
+        created_by=_actor())
+    if condition_before != u.condition:
+        log.note = (f'{log.note} — condition: {condition_before} → {u.condition}'
+                   if log.note else f'condition: {condition_before} → {u.condition}')
+    db.session.add(log)
+    return log
+
+
+def _next_unit_tags(prefix, count):
+    """The next `count` sequential tags for `prefix` (e.g. HPL-00006,
+    HPL-00007…), continuing from the highest existing number for that
+    prefix — so previously-disposed/removed units never get their number
+    reused."""
+    import re
+    prefix = (prefix or 'UNIT').strip().upper()
+    existing = AssetUnit.query.filter(AssetUnit.unit_tag.like(f'{prefix}-%')).all()
+    highest = 0
+    for u in existing:
+        m = re.match(rf'^{re.escape(prefix)}-(\d+)$', u.unit_tag or '')
+        if m:
+            highest = max(highest, int(m.group(1)))
+    width = max(5, len(str(highest + count)))
+    return [f'{prefix}-{n:0{width}d}' for n in range(highest + 1, highest + count + 1)]
+
+
+@sales_bp.route('/assets/<int:asset_id>/units')
+@login_required
+def asset_units(asset_id):
+    a = db.get_or_404(FixedAsset, asset_id)
+    if not can_access_branch(a.branch_id):
+        return jsonify({'ok': False, 'error': 'That asset belongs to another branch.'}), 403
+    units = a.units.order_by(AssetUnit.unit_tag).all()
+    return jsonify({'ok': True, 'asset': {'id': a.id, 'name': a.name},
+                    'units': [_unit_dict(u) for u in units],
+                    'add_url': url_for('sales.add_units', asset_id=a.id)})
+
+
+@sales_bp.route('/assets/<int:asset_id>/units/add', methods=['POST'])
+@login_required
+def add_units(asset_id):
+    """Register unit(s) for an individually-tracked asset type — either one
+    unit with an explicit tag/serial, or a bulk batch of `count` units that
+    get auto-numbered from a prefix."""
+    a = db.get_or_404(FixedAsset, asset_id)
+    if not can_access_branch(a.branch_id):
+        return _err('That asset belongs to another branch.', url_for('sales.assets'))
+    if not a.is_individually_tracked:
+        return _err('This asset is not set up for individual unit tracking.', url_for('sales.assets'))
+
+    count = request.form.get('count', type=int) or 1
+    location = (request.form.get('location') or '').strip() or None
+    custodian = (request.form.get('custodian') or '').strip() or None
+    condition = (request.form.get('condition') or 'Good').strip()
+    if condition not in UNIT_CONDITIONS:
+        condition = 'Good'
+    status = (request.form.get('status') or 'In Use').strip()
+    if status not in FIXED_ASSET_STATUSES or status == 'Disposed':
+        status = 'In Use'
+
+    created = []
+    try:
+        if count > 1:
+            prefix = (request.form.get('prefix') or a.asset_tag or a.name[:3]).strip()
+            tags = _next_unit_tags(prefix, count)
+            for tag in tags:
+                u = AssetUnit(asset_id=a.id, branch_id=a.branch_id, unit_tag=tag, created_by=_actor())
+                db.session.add(u); db.session.flush()
+                _record_unit_event(u, 'created', status=status, location=location,
+                                   custodian=custodian, condition=condition,
+                                   note=f'Bulk-registered ({count} units)')
+                created.append(u)
+        else:
+            tag = (request.form.get('unit_tag') or '').strip()
+            if not tag:
+                tag = _next_unit_tags(request.form.get('prefix') or a.asset_tag or a.name[:3], 1)[0]
+            u = AssetUnit(asset_id=a.id, branch_id=a.branch_id, unit_tag=tag,
+                          serial_number=(request.form.get('serial_number') or '').strip() or None,
+                          created_by=_actor())
+            db.session.add(u); db.session.flush()
+            _record_unit_event(u, 'created', status=status, location=location,
+                               custodian=custodian, condition=condition)
+            created.append(u)
+
+        # Give every new unit an opaque scan token now that ids exist.
+        import secrets as _secrets
+        for u in created:
+            u.qr_token = _secrets.token_urlsafe(24)
+
+        # Keep the type's cached quantity roughly in step for anywhere still
+        # reading FixedAsset.quantity directly (exports, older summaries) —
+        # status_breakdown/active_quantity are always correct regardless,
+        # since they're computed live from the units.
+        a.quantity = a.units.count()
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return _err(f'Error: {str(e)}', url_for('sales.assets'))
+
+    return _ok(f'{len(created)} unit(s) registered.', url_for('sales.assets'))
+
+
+@sales_bp.route('/assets/units/<int:unit_id>/transfer', methods=['POST'])
+@login_required
+def transfer_unit(unit_id):
+    u = db.get_or_404(AssetUnit, unit_id)
+    dest = _redirect_target(url_for('sales.assets'))
+    if not can_access_branch(u.branch_id):
+        return _err('That unit belongs to another branch.', dest)
+    new_location = (request.form.get('location') or '').strip()
+    if not new_location:
+        return _err('Enter the destination location.', dest)
+    if new_location == (u.location or ''):
+        return _err('That is already the current location.', dest)
+    old = u.location or 'Unspecified'
+    _record_unit_event(u, 'transferred', location=new_location,
+                       reference=request.form.get('reference'),
+                       note=(request.form.get('note') or '').strip() or None)
+    db.session.commit()
+    return _ok(f'"{u.unit_tag}" transferred: {old} → {new_location}.', dest)
+
+
+@sales_bp.route('/assets/units/<int:unit_id>/assign', methods=['POST'])
+@login_required
+def assign_unit(unit_id):
+    u = db.get_or_404(AssetUnit, unit_id)
+    dest = _redirect_target(url_for('sales.assets'))
+    if not can_access_branch(u.branch_id):
+        return _err('That unit belongs to another branch.', dest)
+    new_custodian = (request.form.get('custodian') or '').strip()
+    if new_custodian == (u.custodian or ''):
+        return _err('That is already the current custodian.', dest)
+    log = _record_unit_event(u, 'assigned' if new_custodian else 'unassigned',
+                             custodian=new_custodian,
+                             reference=request.form.get('reference'),
+                             note=(request.form.get('note') or '').strip() or None)
+    db.session.commit()
+    verb = 'assigned to' if new_custodian else 'unassigned from'
+    who = new_custodian or (log.custodian_before if log else '')
+    return _ok(f'"{u.unit_tag}" {verb} {who}.'.strip(), dest)
+
+
+@sales_bp.route('/assets/units/<int:unit_id>/status', methods=['POST'])
+@login_required
+def update_unit_status(unit_id):
+    """Change a unit's status (e.g. Under Repair) and/or condition — the
+    per-unit equivalent of a batch's status split, just for one item."""
+    u = db.get_or_404(AssetUnit, unit_id)
+    dest = _redirect_target(url_for('sales.assets'))
+    if not can_access_branch(u.branch_id):
+        return _err('That unit belongs to another branch.', dest)
+    if u.is_disposed:
+        return _err('That unit is disposed — restore it from Dispose history first.', dest)
+    new_status = (request.form.get('status') or '').strip()
+    new_condition = (request.form.get('condition') or '').strip()
+    if new_status and new_status not in FIXED_ASSET_STATUSES:
+        new_status = None
+    if new_status == 'Disposed':
+        new_status = None   # use the dedicated Dispose action, not this one
+    if new_condition and new_condition not in UNIT_CONDITIONS:
+        new_condition = None
+    if not new_status and not new_condition:
+        return _err('Choose a status or condition to update.', dest)
+    _record_unit_event(u, 'status_changed', status=new_status or None, condition=new_condition or None,
+                       note=(request.form.get('note') or '').strip() or None)
+    db.session.commit()
+    return _ok(f'"{u.unit_tag}" updated.', dest)
+
+
+@sales_bp.route('/assets/units/<int:unit_id>/dispose', methods=['POST'])
+@login_required
+def dispose_unit(unit_id):
+    u = db.get_or_404(AssetUnit, unit_id)
+    if not can_access_branch(u.branch_id):
+        return _err('That unit belongs to another branch.', url_for('sales.assets'))
+    if u.is_disposed:
+        return _err('That unit is already disposed.', url_for('sales.assets'))
+    status_before = u.status
+    u.is_disposed = True
+    u.disposed_on = parse_date(request.form.get('disposed_on')) or timeutil.today()
+    u.disposal_amount = request.form.get('disposal_amount', type=float) or 0
+    _record_unit_event(u, 'disposed', status='Disposed',
+                       note=(request.form.get('disposal_note') or '').strip() or None)
+    db.session.commit()
+    proceeds = u.disposal_amount or 0
+    if proceeds > 0:
+        from utils import finance_ledger as _fl
+        _fl.post(_fl.REVENUE, proceeds, source_module='assets',
+                 category='Asset Disposal', branch_id=u.branch_id,
+                 method=(request.form.get('method') or 'Cash'),
+                 origin_type='asset_unit_disposal', origin_id=u.id,
+                 reference=u.unit_tag, description=f'Disposal of {u.asset.name} ({u.unit_tag})',
+                 created_by=_actor())
+        db.session.commit()
+    return _ok(f'"{u.unit_tag}" marked disposed.', url_for('sales.assets'))
+
+
+@sales_bp.route('/assets/units/<int:unit_id>/delete', methods=['POST'])
+@login_required
+def delete_unit(unit_id):
+    """Permanently remove a mistakenly-registered unit — distinct from
+    Dispose, which retires but keeps the record. Mirrors delete_asset."""
+    u = db.get_or_404(AssetUnit, unit_id)
+    if not can_access_branch(u.branch_id):
+        return _err('That unit belongs to another branch.', url_for('sales.assets'))
+    a = u.asset
+    tag = u.unit_tag
+    from utils.audit import log_action
+    log_action('sales.asset_unit_delete', detail=f'{a.name} {tag}', target=u)
+    db.session.delete(u)
+    db.session.flush()
+    a.quantity = a.units.count()
+    db.session.commit()
+    return _ok(f'"{tag}" deleted.', url_for('sales.assets'))
+
+
+@sales_bp.route('/assets/units/<int:unit_id>/history')
+@login_required
+def unit_history(unit_id):
+    u = db.get_or_404(AssetUnit, unit_id)
+    if not can_access_branch(u.branch_id):
+        return jsonify({'ok': False, 'error': 'That unit belongs to another branch.'}), 403
+    logs = u.logs.all()
+    return jsonify({'ok': True, 'unit': {'id': u.id, 'unit_tag': u.unit_tag}, 'logs': [{
+        'id': l.id, 'event_type': l.event_type,
+        'status_before': l.status_before, 'status_after': l.status_after,
+        'location_before': l.location_before or '', 'location_after': l.location_after or '',
+        'custodian_before': l.custodian_before or '', 'custodian_after': l.custodian_after or '',
+        'reference': l.reference or '', 'note': l.note or '',
+        'session': l.session.name if l.session else '', 'term': l.term.name if l.term else '',
+        'created_by': l.created_by or '',
+        'created_at': l.created_at.strftime('%d %b %Y %H:%M') if l.created_at else '',
+    } for l in logs]})
+
+
+@sales_bp.route('/assets/units/scan/<token>')
+def unit_scan(token):
+    """Mobile-friendly landing page for a scanned QR/barcode — no
+    @login_required so a phone camera app can open it directly; the page
+    itself checks for a session and prompts to log in before allowing any
+    action, but viewing basic identification is harmless."""
+    u = AssetUnit.query.filter_by(qr_token=token).first()
+    if not u:
+        return render_template('sales/unit_scan.html', unit=None), 404
+    logged_in = bool(session.get('logged_in'))
+    can_act = logged_in and can_access_branch(u.branch_id)
+    return render_template('sales/unit_scan.html', unit=u, asset=u.asset,
+                           logged_in=logged_in, can_act=can_act,
+                           status_options=FIXED_ASSET_STATUSES,
+                           condition_options=UNIT_CONDITIONS)
 
 
 
