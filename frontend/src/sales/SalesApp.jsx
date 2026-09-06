@@ -1506,12 +1506,15 @@ function Assets({ d, notify }) {
           <button type="button" className={'btn btn-sm ' + (tab === 'register' ? 'btn-primary' : 'btn-light')} onClick={() => setTab('register')}><i aria-hidden="true" className="fas fa-list" /> Register</button>
           <button type="button" className={'btn btn-sm ' + (tab === 'analytics' ? 'btn-primary' : 'btn-light')} onClick={() => setTab('analytics')}><i aria-hidden="true" className="fas fa-chart-pie" /> Analytics</button>
           <button type="button" className={'btn btn-sm ' + (tab === 'history' ? 'btn-primary' : 'btn-light')} onClick={() => setTab('history')}><i aria-hidden="true" className="fas fa-clock-rotate-left" /> Historical</button>
+          <button type="button" className={'btn btn-sm ' + (tab === 'audits' ? 'btn-primary' : 'btn-light')} onClick={() => setTab('audits')}><i aria-hidden="true" className="fas fa-clipboard-check" /> Audits</button>
         </div>
       </div>
       {tab === 'analytics' ? (
         <AssetAnalytics d={d} />
       ) : tab === 'history' ? (
         <AssetSnapshots d={d} />
+      ) : tab === 'audits' ? (
+        <AssetAudits d={d} notify={notify} />
       ) : (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: '.75rem', marginBottom: '1rem' }}>
@@ -2054,6 +2057,156 @@ function AssetHistoryModal({ asset, onClose }) {
 }
 
 // ---- Fixed asset analytics --------------------------------------------------
+// ---- Fixed asset physical audits -----------------------------------------
+function AssetAudits({ d, notify }) {
+  const nav = useNav();
+  const [audits, setAudits] = useState(null);
+  const [creating, setCreating] = useState(false);
+  const [cf, setCf] = useState({ name: '', description: '', category_filter: '' });
+  const setCfk = (k, v) => setCf((s) => ({ ...s, [k]: v }));
+  const [activeAudit, setActiveAudit] = useState(null);
+  const [detail, setDetail] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+
+  const loadAudits = async () => {
+    try { const r = await apiGet(d.audits_url); setAudits(r.audits || []); }
+    catch { setAudits([]); }
+  };
+
+  useEffect(() => { loadAudits(); }, [d.audits_url]);
+
+  const loadDetail = async (audit) => {
+    setActiveAudit(audit); setDetailLoading(true); setDetail(null);
+    try { const r = await apiGet(audit.detail_url); setDetail(r.audit); }
+    catch { setDetail(null); }
+    finally { setDetailLoading(false); }
+  };
+
+  const doCreate = async () => {
+    if (!cf.name.trim()) { notify('error', 'Enter a name for this audit.'); return; }
+    const r = await submitJson(d.create_audit_url, cf);
+    if (r.ok) { notify('success', r.message); setCreating(false); setCf({ name: '', description: '', category_filter: '' }); loadAudits(); }
+    else notify('error', r.error || 'Could not create audit.');
+  };
+
+  const doAct = async (url, successMsg) => {
+    const r = await submitJson(url, {});
+    if (r.ok) { notify('success', r.message || successMsg); loadAudits(); if (activeAudit) loadDetail(activeAudit); }
+    else notify('error', r.error || 'Failed.');
+  };
+
+  const markItem = async (item, state, extra = {}) => {
+    const r = await submitJson(item.mark_url, { state, ...extra });
+    if (r.ok) { notify('success', r.message); if (activeAudit) loadDetail(activeAudit); loadAudits(); }
+    else notify('error', r.error || 'Failed.');
+  };
+
+  const STATE_COLOR = { Verified: 'b-ok', Missing: 'b-bad', Damaged: 'b-warn', 'Wrong Location': 'b-warn', Unexpected: 'b-secondary', Pending: 'b-secondary' };
+  const STATUS_COLOR = { Draft: 'b-secondary', 'In Progress': 'b-warn', Completed: 'b-ok' };
+
+  if (activeAudit) {
+    const counts = detail ? detail.counts || {} : activeAudit.counts || {};
+    const total = detail ? detail.total_items : activeAudit.total_items;
+    const items = detail?.items || [];
+    return (
+      <>
+        <div className="page-header">
+          <h1>{activeAudit.name}</h1>
+          <div className="page-header-actions">
+            {detail?.status === 'Draft' && <Button variant="primary" onClick={() => doAct(activeAudit.start_url, 'Audit started.')}><i aria-hidden="true" className="fas fa-play" /> Start audit</Button>}
+            {detail?.status === 'In Progress' && <Button variant="warning" onClick={async () => { if (await confirm('Mark all remaining Pending items as Missing and complete the audit?')) doAct(activeAudit.complete_url, 'Audit completed.'); }}><i aria-hidden="true" className="fas fa-flag-checkered" /> Complete</Button>}
+            <Button variant="secondary" onClick={() => { setActiveAudit(null); setDetail(null); }}><i aria-hidden="true" className="fas fa-arrow-left" /> Back</Button>
+          </div>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(110px,1fr))', gap: '.6rem', marginBottom: '1rem' }}>
+          <Tile n={total || 0} label="Expected" />
+          {Object.entries(counts).map(([st, n]) => <Tile key={st} n={n} label={st} />)}
+        </div>
+        {detailLoading && <p className="text-muted text-sm">Loading items…</p>}
+        {!detailLoading && items.map((item) => (
+          <div key={item.id} className="card mb-2" style={{ padding: '.6rem .9rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '.3rem', alignItems: 'center' }}>
+              <div>
+                <strong>{item.asset_name}</strong>
+                {item.unit_tag && <span className="badge b-secondary" style={{ marginLeft: '.35rem' }}>{item.unit_tag}</span>}
+              </div>
+              <span className={`badge ${STATE_COLOR[item.state] || 'b-secondary'}`}>{item.state}</span>
+            </div>
+            {item.expected_location && <div className="text-muted text-sm"><i aria-hidden="true" className="fas fa-location-dot" /> Expected: {item.expected_location}</div>}
+            {item.found_location && item.found_location !== item.expected_location && <div className="text-muted text-sm" style={{ color: 'var(--warn)' }}><i aria-hidden="true" className="fas fa-location-dot" /> Found: {item.found_location}</div>}
+            {item.note && <div className="text-sm" style={{ marginTop: '.15rem' }}>{item.note}</div>}
+            {detail?.status !== 'Completed' && item.state === 'Pending' && (
+              <div style={{ display: 'flex', gap: '.25rem', flexWrap: 'wrap', marginTop: '.4rem' }}>
+                <button type="button" className="btn btn-sm btn-primary" onClick={() => markItem(item, 'Verified')}><i aria-hidden="true" className="fas fa-check" /> Verified</button>
+                <button type="button" className="btn btn-sm btn-warning" onClick={() => markItem(item, 'Damaged', { note: 'Reported damaged during audit' })}><i aria-hidden="true" className="fas fa-triangle-exclamation" /> Damaged</button>
+                <button type="button" className="btn btn-sm btn-danger" onClick={() => markItem(item, 'Missing')}><i aria-hidden="true" className="fas fa-question" /> Missing</button>
+                <UnitInlineAction label="Wrong Location" icon="fa-location-dot"
+                  fields={[{ name: 'found_location', placeholder: 'Actual location found', required: true }]}
+                  onSubmit={(p) => markItem(item, 'Wrong Location', p)} />
+              </div>
+            )}
+            {detail?.status !== 'Completed' && item.state !== 'Pending' && (
+              <button type="button" className="btn btn-sm btn-light" style={{ marginTop: '.4rem' }} onClick={() => markItem(item, 'Pending')}>Reset to Pending</button>
+            )}
+          </div>
+        ))}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div className="page-header"><h1>Asset Audits</h1>
+        <div className="page-header-actions">
+          <Button variant="primary" onClick={() => setCreating((s) => !s)}><i aria-hidden="true" className="fas fa-plus" /> New audit</Button>
+        </div>
+      </div>
+      {creating && (
+        <div className="card mb-3" style={{ borderColor: 'var(--primary)' }}>
+          <div className="card-header"><h3>Create verification audit</h3></div>
+          <div className="card-body">
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(160px,1fr))', gap: '.6rem' }}>
+              <Field label="Audit name *"><input className="form-control" value={cf.name} onChange={(e) => setCfk('name', e.target.value)} placeholder="e.g. Q3 2026 ICT Audit" /></Field>
+              <Field label="Category filter (optional)"><select className="form-control" value={cf.category_filter} onChange={(e) => setCfk('category_filter', e.target.value)}>
+                <option value="">All categories</option>{d.categories.map((c) => <option key={c}>{c}</option>)}</select></Field>
+              <Field label="Description (optional)" wide><input className="form-control" value={cf.description} onChange={(e) => setCfk('description', e.target.value)} /></Field>
+            </div>
+            <div style={{ display: 'flex', gap: '.5rem', marginTop: '.8rem' }}>
+              <Button variant="primary" onClick={doCreate}><i aria-hidden="true" className="fas fa-clipboard-list" /> Create &amp; populate</Button>
+              <Button variant="secondary" onClick={() => setCreating(false)}>Cancel</Button>
+            </div>
+          </div>
+        </div>
+      )}
+      {!audits && <p className="text-muted text-sm">Loading…</p>}
+      {audits && audits.length === 0 && !creating && <Empty icon="fa-clipboard-check" title="No audits yet"><p>Create a verification audit to track a physical inspection of your assets.</p></Empty>}
+      {audits && audits.map((audit) => (
+        <div key={audit.id} className="card mb-2" style={{ padding: '.7rem .9rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: '.3rem', alignItems: 'center' }}>
+            <div>
+              <strong>{audit.name}</strong>
+              {audit.category_filter && <span className="badge b-secondary" style={{ marginLeft: '.35rem' }}>{audit.category_filter}</span>}
+            </div>
+            <span className={`badge ${STATUS_COLOR[audit.status] || 'b-secondary'}`}>{audit.status}</span>
+          </div>
+          <div className="text-muted text-sm" style={{ margin: '.2rem 0' }}>
+            {audit.total_items} expected items
+            {Object.entries(audit.counts || {}).map(([st, n]) => (
+              <span key={st}> · <span className={`badge ${STATE_COLOR[st] || 'b-secondary'}`} style={{ fontSize: '.7rem' }}>{n} {st}</span></span>
+            ))}
+          </div>
+          <div style={{ display: 'flex', gap: '.3rem', marginTop: '.4rem' }}>
+            <Button variant="secondary" onClick={() => loadDetail(audit)}><i aria-hidden="true" className="fas fa-eye" /> View</Button>
+            {audit.status === 'Draft' && <Button variant="primary" onClick={() => doAct(audit.start_url, 'Started.')}><i aria-hidden="true" className="fas fa-play" /> Start</Button>}
+            {audit.status === 'In Progress' && <Button variant="warning" onClick={async () => { if (await confirm('Complete and mark all Pending as Missing?')) doAct(audit.complete_url, 'Completed.'); }}>Complete</Button>}
+            <button type="button" className="btn btn-sm btn-light text-danger" onClick={async () => { if (await confirm(`Delete audit "${audit.name}"?`)) doAct(audit.delete_url, 'Deleted.'); }}><i aria-hidden="true" className="fas fa-trash" /></button>
+          </div>
+        </div>
+      ))}
+    </>
+  );
+}
+
 // ---- Fixed asset historical snapshots -------------------------------------
 function AssetSnapshots({ d }) {
   const today = new Date().toISOString().slice(0, 10);

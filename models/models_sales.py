@@ -668,6 +668,63 @@ class AssetLog(db.Model):
 
 MAINTENANCE_STATUSES = ['Scheduled', 'In Progress', 'Completed', 'Cancelled']
 
+AUDIT_STATUSES = ['Draft', 'In Progress', 'Completed']
+AUDIT_ITEM_STATES = ['Pending', 'Verified', 'Missing', 'Damaged', 'Wrong Location', 'Unexpected']
+
+
+class AssetAudit(db.Model):
+    """A scheduled physical verification exercise — 'Q1 2026 ICT Equipment
+    Audit'. The system generates the expected asset list; staff scan or tick
+    items; the final report shows verified / missing / damaged / unexpected.
+    Does NOT auto-mark an asset permanently lost for missing one scan; items
+    get an 'Under Investigation' state instead (spec §10)."""
+    __tablename__ = 'asset_audits'
+
+    id = db.Column(db.Integer, primary_key=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))
+    name = db.Column(db.String(200), nullable=False)
+    description = db.Column(db.Text)
+    status = db.Column(db.String(20), default='Draft')
+    category_filter = db.Column(db.String(100))   # optional — restrict to one category
+    started_on = db.Column(db.Date)
+    completed_on = db.Column(db.Date)
+    created_by = db.Column(db.String(100))
+    created_at = db.Column(db.DateTime, default=local_now)
+
+    branch = db.relationship('Branch')
+    items = db.relationship('AssetAuditItem', backref='audit', lazy='dynamic',
+                            cascade='all, delete-orphan',
+                            order_by='AssetAuditItem.id')
+
+    def __repr__(self):
+        return f'<AssetAudit {self.name}>'
+
+
+class AssetAuditItem(db.Model):
+    """One asset (or one unit of an individually-tracked asset) in a
+    verification exercise. Starts as 'Pending'; staff mark it Verified,
+    Missing, Damaged, Wrong Location, or Unexpected as they scan/inspect."""
+    __tablename__ = 'asset_audit_items'
+
+    id = db.Column(db.Integer, primary_key=True)
+    audit_id = db.Column(db.Integer, db.ForeignKey('asset_audits.id'), nullable=False, index=True)
+    asset_id = db.Column(db.Integer, db.ForeignKey('fixed_assets.id'), nullable=False, index=True)
+    unit_id = db.Column(db.Integer, db.ForeignKey('asset_units.id'), index=True)
+    state = db.Column(db.String(30), default='Pending')   # see AUDIT_ITEM_STATES
+    expected_location = db.Column(db.String(150))
+    found_location = db.Column(db.String(150))
+    note = db.Column(db.String(500))
+    verified_by = db.Column(db.String(100))
+    verified_at = db.Column(db.DateTime)
+    quantity_expected = db.Column(db.Integer, default=1)  # for batch assets
+    quantity_found = db.Column(db.Integer)
+
+    asset = db.relationship('FixedAsset')
+    unit = db.relationship('AssetUnit')
+
+    def __repr__(self):
+        return f'<AssetAuditItem audit={self.audit_id} asset={self.asset_id}>'
+
 
 class AssetMaintenance(db.Model):
     """One maintenance event for an asset (batch-level) or a specific unit

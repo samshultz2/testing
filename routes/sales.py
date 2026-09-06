@@ -12,12 +12,14 @@ from models import (db, Product, Sale, SaleItem, StockMovement, Student,
                     StudentEnrollment, ClassArmAssignment, SchoolClass, ClassArm,
                     Supplier, PurchaseOrder, PurchaseOrderItem, SupplierPayment, PromoCode,
                     StockAudit, StockAuditItem, FixedAsset, StockBatch, AssetLog,
-                    AssetStatusCount, AssetUnit, AssetMaintenance, Teacher)
+                    AssetStatusCount, AssetUnit, AssetMaintenance,
+                    AssetAudit, AssetAuditItem, Teacher)
 from models.models_sales import (PRODUCT_CATEGORIES, SALE_METHODS, CUSTOMER_TYPES,
                                  UNITS, STOCK_IN_REASONS, STOCK_OUT_REASONS,
                                  PO_STATUSES, PURCHASE_METHODS,
                                  FIXED_ASSET_CATEGORIES, FIXED_ASSET_STATUSES,
-                                 FIXED_ASSET_SECTIONS, UNIT_CONDITIONS, MAINTENANCE_STATUSES)
+                                 FIXED_ASSET_SECTIONS, UNIT_CONDITIONS,
+                                 MAINTENANCE_STATUSES, AUDIT_STATUSES, AUDIT_ITEM_STATES)
 from utils.access_control import (login_required, filter_classes_for_user,
                                   can_approve_purchase, can_sign_off_count)
 from utils.branch_scope import scope_query, branch_for_new, can_access_branch
@@ -1520,7 +1522,7 @@ def new_audit():
             system_qty=p.stock_qty or 0, unit_cost=p.cost_price or 0))
     db.session.commit()
     return _ok(f'Count sheet {audit.reference} ready ({len(products)} items).',
-               url_for('sales.audit_detail', audit_id=audit.id))
+               url_for('sales.asset_audit_detail', audit_id=audit.id))
 
 
 def _audit_detail_payload(a):
@@ -2014,6 +2016,9 @@ def assets():
         'class_id': class_id or '',
         'categories': FIXED_ASSET_CATEGORIES, 'statuses': FIXED_ASSET_STATUSES,
         'unit_conditions': UNIT_CONDITIONS, 'maintenance_statuses': MAINTENANCE_STATUSES,
+        'audit_statuses': AUDIT_STATUSES, 'audit_item_states': AUDIT_ITEM_STATES,
+        'audits_url': url_for('sales.asset_audit_list'),
+        'create_audit_url': url_for('sales.asset_create_audit'),
         'sections': [{'key': k, 'label': lbl} for k, lbl in SECTION_LABELS],
         'classes': _class_options(), 'arms': _arm_options(), 'teachers': _teacher_options(),
         'add_url': url_for('sales.add_asset'),
@@ -3059,6 +3064,183 @@ def delete_maintenance(maintenance_id):
     db.session.delete(m)
     db.session.commit()
     return _ok('Maintenance record deleted.', url_for('sales.assets'))
+
+
+# ---------------------------------------------------------------------------
+# Asset Audits / Physical Verification (spec §10)
+# ---------------------------------------------------------------------------
+
+def _audit_dict(audit, with_items=False):
+    items = audit.items.all()
+    counts = {}
+    for item in items:
+        counts[item.state] = counts.get(item.state, 0) + 1
+    return {
+        'id': audit.id, 'name': audit.name, 'status': audit.status,
+        'description': audit.description or '',
+        'category_filter': audit.category_filter or '',
+        'started_on': audit.started_on.isoformat() if audit.started_on else '',
+        'completed_on': audit.completed_on.isoformat() if audit.completed_on else '',
+        'created_by': audit.created_by or '',
+        'created_at': audit.created_at.strftime('%d %b %Y') if audit.created_at else '',
+        'total_items': len(items),
+        'counts': counts,
+        'detail_url': url_for('sales.asset_audit_detail', audit_id=audit.id),
+        'start_url': url_for('sales.asset_start_audit', audit_id=audit.id),
+        'complete_url': url_for('sales.asset_complete_audit', audit_id=audit.id),
+        'delete_url': url_for('sales.asset_delete_audit', audit_id=audit.id),
+        'items': [_audit_item_dict(i) for i in items] if with_items else [],
+    }
+
+
+def _audit_item_dict(item):
+    return {
+        'id': item.id, 'audit_id': item.audit_id,
+        'asset_id': item.asset_id, 'asset_name': item.asset.name if item.asset else '',
+        'unit_id': item.unit_id,
+        'unit_tag': (item.unit.unit_tag if item.unit else '') or '',
+        'state': item.state,
+        'expected_location': item.expected_location or '',
+        'found_location': item.found_location or '',
+        'note': item.note or '',
+        'verified_by': item.verified_by or '',
+        'verified_at': item.verified_at.strftime('%d %b %Y %H:%M') if item.verified_at else '',
+        'quantity_expected': item.quantity_expected or 1,
+        'quantity_found': item.quantity_found,
+        'mark_url': url_for('sales.asset_mark_audit_item', item_id=item.id),
+    }
+
+
+@sales_bp.route('/assets/audits')
+@login_required
+def asset_audit_list():
+    audits = scope_query(AssetAudit.query, AssetAudit).order_by(
+        AssetAudit.created_at.desc()).all()
+    return jsonify({'ok': True, 'audits': [_audit_dict(a) for a in audits],
+                    'create_url': url_for('sales.asset_create_audit')})
+
+
+@sales_bp.route('/assets/audits/create', methods=['POST'])
+@login_required
+def asset_create_audit():
+    """Create a new verification audit and populate it with every asset (or
+    every individual unit) currently owned by the branch, optionally
+    filtered to one category. State starts as 'Pending' for every item —
+    no pre-marking; staff mark each one as they physically inspect it."""
+    from utils.branch_scope import branch_for_new
+    bid = branch_for_new()
+    name = (request.form.get('name') or '').strip()
+    if not name:
+        return _err('Enter a name for this audit.', url_for('sales.assets'))
+    cat_filter = (request.form.get('category_filter') or '').strip() or None
+    audit = AssetAudit(
+        branch_id=bid, name=name, status='Draft',
+        description=(request.form.get('description') or '').strip() or None,
+        category_filter=cat_filter, created_by=_actor())
+    db.session.add(audit)
+    db.session.flush()
+
+    # Build the expected item list from assets currently in this branch.
+    q = FixedAsset.query.filter_by(branch_id=bid, is_disposed=False, is_active=True if False else True)
+    q = q.filter(FixedAsset.is_disposed.is_(False))
+    if cat_filter:
+        q = q.filter(FixedAsset.category == cat_filter)
+    generated = 0
+    for a in q.all():
+        if a.is_individually_tracked:
+            for u in a.units.filter_by(is_disposed=False).all():
+                db.session.add(AssetAuditItem(
+                    audit_id=audit.id, asset_id=a.id, unit_id=u.id,
+                    state='Pending', expected_location=u.location))
+                generated += 1
+        else:
+            db.session.add(AssetAuditItem(
+                audit_id=audit.id, asset_id=a.id,
+                state='Pending', expected_location=a.location,
+                quantity_expected=a.active_quantity or a.quantity or 1))
+            generated += 1
+    db.session.commit()
+    return _ok(f'Audit "{name}" created with {generated} expected item(s).', url_for('sales.assets'))
+
+
+@sales_bp.route('/assets/audits/<int:audit_id>')
+@login_required
+def asset_audit_detail(audit_id):
+    audit = db.get_or_404(AssetAudit, audit_id)
+    if not can_access_branch(audit.branch_id):
+        return jsonify({'ok': False, 'error': 'That audit belongs to another branch.'}), 403
+    return jsonify({'ok': True, 'audit': _audit_dict(audit, with_items=True)})
+
+
+@sales_bp.route('/assets/audits/<int:audit_id>/start', methods=['POST'])
+@login_required
+def asset_start_audit(audit_id):
+    audit = db.get_or_404(AssetAudit, audit_id)
+    if not can_access_branch(audit.branch_id):
+        return _err('That audit belongs to another branch.', url_for('sales.assets'))
+    audit.status = 'In Progress'
+    audit.started_on = audit.started_on or timeutil.today()
+    db.session.commit()
+    return _ok(f'Audit "{audit.name}" started.', url_for('sales.assets'))
+
+
+@sales_bp.route('/assets/audits/<int:audit_id>/complete', methods=['POST'])
+@login_required
+def asset_complete_audit(audit_id):
+    audit = db.get_or_404(AssetAudit, audit_id)
+    if not can_access_branch(audit.branch_id):
+        return _err('That audit belongs to another branch.', url_for('sales.assets'))
+    audit.status = 'Completed'
+    audit.completed_on = audit.completed_on or timeutil.today()
+    # Everything still 'Pending' at completion is implicitly unverified —
+    # mark it 'Missing' so the report reflects what wasn't found, but keep
+    # the item for investigation rather than marking the asset permanently
+    # lost (spec §10: "Do not automatically mark an asset as permanently lost
+    # simply because it was not scanned during one audit").
+    for item in audit.items.filter_by(state='Pending').all():
+        item.state = 'Missing'
+    db.session.commit()
+    return _ok(f'Audit "{audit.name}" completed. Unverified items marked Missing.', url_for('sales.assets'))
+
+
+@sales_bp.route('/assets/audits/<int:audit_id>/delete', methods=['POST'])
+@login_required
+def asset_delete_audit(audit_id):
+    audit = db.get_or_404(AssetAudit, audit_id)
+    if not can_access_branch(audit.branch_id):
+        return _err('That audit belongs to another branch.', url_for('sales.assets'))
+    name = audit.name
+    db.session.delete(audit)
+    db.session.commit()
+    return _ok(f'Audit "{name}" deleted.', url_for('sales.assets'))
+
+
+@sales_bp.route('/assets/audits/items/<int:item_id>/mark', methods=['POST'])
+@login_required
+def asset_mark_audit_item(item_id):
+    """Mark a single audit item — the key action during a physical
+    verification walk-around. Captures state (Verified/Missing/Damaged/
+    Wrong Location/Unexpected), the actual found location if different from
+    expected, and a note. An 'Unexpected' item represents something found
+    that wasn't in the expected list, added on-the-fly during scanning."""
+    item = db.get_or_404(AssetAuditItem, item_id)
+    audit = item.audit
+    if not can_access_branch(audit.branch_id):
+        return _err('That audit belongs to another branch.', url_for('sales.assets'))
+    if audit.status == 'Completed':
+        return _err('This audit is already completed.', url_for('sales.assets'))
+    state = (request.form.get('state') or '').strip()
+    if state not in AUDIT_ITEM_STATES:
+        return _err(f'Invalid state. Choose from: {", ".join(AUDIT_ITEM_STATES)}', url_for('sales.assets'))
+    from utils import timeutil as _tu
+    item.state = state
+    item.found_location = (request.form.get('found_location') or '').strip() or item.expected_location
+    item.note = (request.form.get('note') or '').strip() or None
+    item.quantity_found = request.form.get('quantity_found', type=int)
+    item.verified_by = _actor()
+    item.verified_at = _tu.now()
+    db.session.commit()
+    return _ok(f'Item marked as {state}.', url_for('sales.assets'))
 
 
 # ---------------------------------------------------------------------------

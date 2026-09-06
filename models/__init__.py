@@ -47,8 +47,8 @@ from .staff_onboarding import StaffInvite, StaffSignup
 from .models_sales import (Product, Sale, SaleItem, StockMovement, Supplier,
                            PurchaseOrder, PurchaseOrderItem, SupplierPayment, PromoCode,
                            StockAudit, StockAuditItem, FixedAsset, StockBatch, AssetLog,
-                           AssetStatusCount, AssetUnit, AssetMaintenance,
-                           UNIT_CONDITIONS, MAINTENANCE_STATUSES)
+                           AssetStatusCount, AssetUnit, AssetMaintenance, AssetAudit, AssetAuditItem,
+                           UNIT_CONDITIONS, MAINTENANCE_STATUSES, AUDIT_STATUSES, AUDIT_ITEM_STATES)
 from .models_welfare import DisciplineRecord, ClinicVisit
 from .models_graduate import (GraduateAudit, GRADUATE_STATUSES, RESTRICTED_STATUSES,
                               GraduateDocument, GRADUATE_DOC_TYPES,
@@ -63,7 +63,8 @@ __all__ = [
     'Branch', 'Product', 'Sale', 'SaleItem', 'StockMovement',
     'Supplier', 'PurchaseOrder', 'PurchaseOrderItem', 'SupplierPayment', 'PromoCode',
     'StockAudit', 'StockAuditItem', 'FixedAsset', 'StockBatch', 'AssetLog', 'AssetStatusCount',
-    'AssetUnit', 'AssetMaintenance', 'UNIT_CONDITIONS', 'MAINTENANCE_STATUSES',
+    'AssetUnit', 'AssetMaintenance', 'AssetAudit', 'AssetAuditItem',
+    'UNIT_CONDITIONS', 'MAINTENANCE_STATUSES', 'AUDIT_STATUSES', 'AUDIT_ITEM_STATES',
     'DisciplineRecord', 'ClinicVisit',
     'GraduateAudit', 'GRADUATE_STATUSES', 'RESTRICTED_STATUSES',
     'GraduateDocument', 'GRADUATE_DOC_TYPES',
