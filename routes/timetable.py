@@ -591,18 +591,34 @@ def print_timetable(assignment_id):
     def hhmm(t):
         return t.strftime('%-H:%M') if t else ''
 
-    cell = ParagraphStyle('cell', fontName='Helvetica', fontSize=12,
-                          alignment=TA_CENTER, leading=13)
-    cell_b = ParagraphStyle('cellb', parent=cell, fontName='Helvetica-Bold')
-    head = ParagraphStyle('head', parent=cell_b, fontSize=11, leading=12,
-                          textColor=colors.white)
-    # One huge bold capital letter per cell, used to spell BREAK down a column.
-    brk = ParagraphStyle('brk', fontName='Helvetica-Bold', fontSize=42,
-                         leading=44, alignment=TA_CENTER,
-                         textColor=colors.HexColor('#9a3412'))
-
+    # Compute sizing first so font scale adjusts to column width.
     days = list(DAYS_OF_WEEK)
     n_days = len(days)
+    _break_cols_pre = [i + 1 for i, s in enumerate(slots) if s.is_break]
+    _n_teach = len(slots) - len(_break_cols_pre)
+
+    page_w, page_h = landscape(A4)
+    m_side, m_top, m_bottom = 6 * mm, 7 * mm, 6 * mm
+    content_w = page_w - 2 * m_side
+    content_h = page_h - m_top - m_bottom
+    day_w = 28 * mm; break_w = 11 * mm
+    teach_w = (content_w - day_w - len(_break_cols_pre) * break_w) / max(_n_teach, 1)
+
+    # Scale fonts so text never overflows narrow columns — guarantees single page.
+    _cfs = max(6, min(12, int(teach_w / mm / 4.0)))
+    _hfs = max(6, min(11, _cfs))
+    _bfs = max(12, min(38, int(teach_w / mm * 1.3)))
+
+    cell = ParagraphStyle('cell', fontName='Helvetica', fontSize=_cfs,
+                          alignment=TA_CENTER, leading=_cfs + 1)
+    cell_b = ParagraphStyle('cellb', parent=cell, fontName='Helvetica-Bold')
+    head = ParagraphStyle('head', parent=cell_b, fontSize=_hfs,
+                          leading=_hfs + 1, textColor=colors.white)
+    # One huge bold capital letter per cell, used to spell BREAK down a column.
+    brk = ParagraphStyle('brk', fontName='Helvetica-Bold', fontSize=_bfs,
+                         leading=_bfs + 2, alignment=TA_CENTER,
+                         textColor=colors.HexColor('#9a3412'))
+
     BREAK_WORD = 'BREAK'
 
     def break_letter(row_idx):
@@ -626,7 +642,7 @@ def print_timetable(assignment_id):
         header.append(Paragraph(label, head))
 
     table_data = [header]
-    break_cols = [i + 1 for i, s in enumerate(slots) if s.is_break]
+    break_cols = _break_cols_pre
     for r, (day_num, day_name) in enumerate(days):
         row = [Paragraph(day_name, cell_b)]
         for s in slots:
@@ -639,27 +655,18 @@ def print_timetable(assignment_id):
                 continue
             txt = e.subject.short_name or e.subject.name
             if include_teachers and e.teacher_name:
-                txt += f'<br/><font size=9 color="#555555">{e.teacher_name}</font>'
+                txt += f'<br/><font size={max(5,_cfs-2)} color="#555555">{e.teacher_name}</font>'
             row.append(Paragraph(txt, cell_b))
         table_data.append(row)
 
-    # ---- size everything to fill the A4 page with tiny margins ----
-    page_w, page_h = landscape(A4)
-    m_side, m_top, m_bottom = 6 * mm, 7 * mm, 6 * mm
-    content_w = page_w - 2 * m_side
-    content_h = page_h - m_top - m_bottom
-
-    n_break = len(break_cols)
-    n_teach = len(slots) - n_break
-    day_w = 28 * mm
-    break_w = 13 * mm
-    teach_w = (content_w - day_w - n_break * break_w) / max(n_teach, 1)
+    # Sizing already computed above using teach_w / _cfs etc.
     col_widths = [day_w] + [(break_w if s.is_break else teach_w) for s in slots]
+    n_break = len(break_cols)
 
-    header_reserve = 56            # space for school/class/term block
-    header_row_h = 26
-    body_row_h = (content_h - header_reserve - header_row_h) / max(n_days, 1)
-    row_heights = [header_row_h] + [body_row_h] * n_days
+    header_reserve = 44            # space for school/class/term block
+    header_row_h   = max(16, _hfs * 2 + 4)
+    body_row_h     = (content_h - header_reserve - header_row_h) / max(n_days, 1)
+    row_heights    = [header_row_h] + [body_row_h] * n_days
 
     style = [
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0f766e')),

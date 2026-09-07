@@ -609,6 +609,72 @@ def generate_for_class(batch_id, cc, arm, periods_per_day, break_after, no_repea
 
 
 
+def _extend_timetable_slots(existing_teaching, needed, school_level):
+    """Ensure the TimetableSlot table has at least `needed` teaching periods.
+    Called automatically when applying a generated batch that uses more periods
+    than the school currently has configured — so the admin doesn't need to
+    manually re-run Settings → Timetable Slots every time they change the
+    generator's periods_per_day rule. Appends only the extra slots needed;
+    leaves existing slots (including any break rows) completely untouched."""
+    from datetime import timedelta, datetime as _dt, time as _time
+    from models import TimetableSlot, SchoolSettings
+
+    current_count = len(existing_teaching)
+    if current_count >= needed:
+        return   # nothing to do
+
+    # Figure out how long each period should be from the last existing slot, or
+    # fall back to SchoolSettings, or use a 40-minute default.
+    last = existing_teaching[-1]
+    if last.start_time and last.end_time:
+        s = _dt.combine(_dt.today(), last.start_time)
+        e = _dt.combine(_dt.today(), last.end_time)
+        period_mins = int((e - s).total_seconds() / 60) or 40
+        next_start = _dt.combine(_dt.today(), last.end_time)
+    else:
+        period_mins = int(SchoolSettings.get('period_duration', 40) or 40)
+        next_start = _dt.combine(_dt.today(), _time(8, 0))
+
+    # The break position from GenTimetableRule for this level (break_after_period),
+    # so any new slots that cross the break point get a break row inserted — keeping
+    # the visual timetable structurally correct.
+    from models import GenTimetableRule
+    rule = GenTimetableRule.query.filter_by(
+        rule_type='break_after_period', school_level=school_level, is_active=True).first()
+    break_after = int(rule.value) if rule else None
+
+    # The highest `order` value currently in the slot table (including breaks)
+    # so our new rows sort correctly after everything that's already there.
+    from sqlalchemy import func
+    max_order = db.session.query(func.max(TimetableSlot.order)).scalar() or 0
+    order = max_order + 1
+
+    for period_num in range(current_count + 1, needed + 1):
+        # Insert a break slot if this period immediately follows the break position.
+        if break_after and period_num == break_after + 1:
+            break_dur = int(SchoolSettings.get('break_duration', 30) or 30)
+            break_end = next_start + timedelta(minutes=break_dur)
+            db.session.add(TimetableSlot(
+                slot_number=0, name='Break',
+                start_time=next_start.time(), end_time=break_end.time(),
+                is_break=True, duration_minutes=break_dur, order=order, is_active=True))
+            order += 1
+            next_start = break_end
+
+        end = next_start + timedelta(minutes=period_mins)
+        # Find the highest existing slot_number so our new ones continue the sequence.
+        max_slot_num = db.session.query(
+            func.max(TimetableSlot.slot_number)).scalar() or 0
+        db.session.add(TimetableSlot(
+            slot_number=max_slot_num + 1, name=f'Period {period_num}',
+            start_time=next_start.time(), end_time=end.time(),
+            is_break=False, duration_minutes=period_mins, order=order, is_active=True))
+        order += 1
+        next_start = end
+
+    db.session.flush()
+
+
 def _apply_batch(batch_id):
     """Publish a generated batch into the per-class timetable views
     (ClassTimetable) for the active term, replacing existing entries for the
@@ -632,11 +698,25 @@ def _apply_batch(batch_id):
     # Teaching periods, in school-day order (breaks excluded). The generator
     # numbers periods 1..N positionally, so we map a result's period_number to
     # the N-th teaching slot rather than relying on slot_number values matching.
+    # If the generated batch needs more teaching slots than exist (e.g. the admin
+    # changed periods_per_day in the generator rules but didn't regenerate the
+    # TimetableSlots in Settings), auto-extend them now from the generator rules
+    # so periods are never silently dropped.
     teaching = (TimetableSlot.query.filter_by(is_active=True, is_break=False)
                 .order_by(TimetableSlot.order, TimetableSlot.slot_number).all())
     if not teaching:
         return None, ('No class periods are configured. Set them up under '
                       'Settings → Timetable Slots, then apply again.'), 'error'
+
+    # Determine how many teaching periods the batch actually uses.
+    max_period_needed = max((r.period_number for r in results), default=0)
+    if max_period_needed > len(teaching):
+        # Extend TimetableSlot rows to cover the gap — use the last known slot's
+        # duration as a template so timing is continuous, and derive the level-
+        # specific day_start / break position from GenTimetableRule.
+        _extend_timetable_slots(teaching, max_period_needed, level)
+        teaching = (TimetableSlot.query.filter_by(is_active=True, is_break=False)
+                    .order_by(TimetableSlot.order, TimetableSlot.slot_number).all())
 
     def slot_for_period(p):
         return teaching[p - 1] if isinstance(p, int) and 1 <= p <= len(teaching) else None

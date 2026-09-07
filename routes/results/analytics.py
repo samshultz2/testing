@@ -379,11 +379,19 @@ def analytics_hub():
     class_compare = []
     internal_corr = None
     if year:
-        active_term = get_active_term()
+        from utils.helpers import session_for_exam_year
+        from models import Term
+        # Scope enrollment lookup to the session implied by the selected year,
+        # not whatever term is currently active — so ?year=2026 shows 2025/2026
+        # class composition, not the current active term's composition.
+        year_session = session_for_exam_year(year)
+        year_terms = (Term.query.filter_by(session_id=year_session.id).all()
+                      if year_session else [])
         arm_map = {}
-        if active_term:
+        if year_terms:
+            term_ids = [t.id for t in year_terms]
             enrs = StudentEnrollment.query.join(ClassArmAssignment).filter(
-                ClassArmAssignment.term_id == active_term.id,
+                ClassArmAssignment.term_id.in_(term_ids),
                 StudentEnrollment.is_active == True
             ).all()
             for e in enrs:
@@ -413,9 +421,17 @@ def analytics_hub():
             })
 
         pairs = []
+        # Use TermSummary rows from the selected session's terms so the internal
+        # performance data matches the session we're analysing, not today's live term.
         for r in scope_by_student(JAMBResult.query.filter_by(exam_year=year), JAMBResult).all():
-            ts = TermSummary.query.filter_by(student_id=r.student_id).order_by(
-                TermSummary.term_id.desc()).first()
+            if year_terms:
+                term_ids = [t.id for t in year_terms]
+                ts = (TermSummary.query.filter(TermSummary.student_id == r.student_id,
+                                               TermSummary.term_id.in_(term_ids))
+                      .order_by(TermSummary.term_id.desc()).first())
+            else:
+                ts = (TermSummary.query.filter_by(student_id=r.student_id)
+                      .order_by(TermSummary.term_id.desc()).first())
             if ts and ts.average_score is not None:
                 pairs.append((ts.average_score, r.total_score))
         if len(pairs) >= 5:
@@ -464,7 +480,9 @@ def analytics_hub():
         years=years,
         selected_year=year,
         jamb_subjects=exam_trends.jamb_subject_breakdown(bid, year),
-        waec_subject_gains=exam_trends.mock_waec_subject_gains(active_sess.id) if active_sess else {},
+        waec_subject_gains=exam_trends.mock_waec_subject_gains(
+            year_session.id if 'year_session' in dir() and year_session else (active_sess.id if active_sess else None)
+        ) if year else {},
         attendance_corr=exam_trends.attendance_performance_correlation(get_sss3_students(), 'jamb'),
         class_compare=class_compare,
         internal_corr=internal_corr,

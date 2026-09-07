@@ -579,6 +579,19 @@ def session_exam_year(session=None):
     return None
 
 
+def session_for_exam_year(exam_year):
+    """The AcademicSession whose exam year is `exam_year` (e.g. 2026 → 2025/2026).
+    Used to scope analytics queries to the correct session's terms when a
+    specific ?year= is requested on the analytics page."""
+    from models import AcademicSession
+    if exam_year is None:
+        return None
+    for s in AcademicSession.query.order_by(AcademicSession.name.desc()).all():
+        if session_exam_year(s) == exam_year:
+            return s
+    return None
+
+
 def resolve_exam_year(requested, years):
     """Pick the external-exam year to show, honouring the active/viewed session.
 
