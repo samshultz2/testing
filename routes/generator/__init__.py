@@ -611,20 +611,20 @@ def generate_for_class(batch_id, cc, arm, periods_per_day, break_after, no_repea
 
 def _extend_timetable_slots(existing_teaching, needed, school_level):
     """Ensure the TimetableSlot table has at least `needed` teaching periods.
-    Called automatically when applying a generated batch that uses more periods
-    than the school currently has configured — so the admin doesn't need to
-    manually re-run Settings → Timetable Slots every time they change the
-    generator's periods_per_day rule. Appends only the extra slots needed;
-    leaves existing slots (including any break rows) completely untouched."""
+    Inserts new periods after the last existing teaching slot — crucially,
+    BEFORE any break slots that already sit at higher order numbers (e.g. an
+    end-of-day assembly bell), so new periods never appear after a trailing
+    break. Any break slots that were after the last teaching slot are pushed
+    upward to make room. Existing slots are never reordered or removed."""
     from datetime import timedelta, datetime as _dt, time as _time
     from models import TimetableSlot, SchoolSettings
+    from sqlalchemy import func
 
     current_count = len(existing_teaching)
     if current_count >= needed:
-        return   # nothing to do
+        return
 
-    # Figure out how long each period should be from the last existing slot, or
-    # fall back to SchoolSettings, or use a 40-minute default.
+    # How long each period should be, from the last existing slot or a fallback.
     last = existing_teaching[-1]
     if last.start_time and last.end_time:
         s = _dt.combine(_dt.today(), last.start_time)
@@ -635,41 +635,32 @@ def _extend_timetable_slots(existing_teaching, needed, school_level):
         period_mins = int(SchoolSettings.get('period_duration', 40) or 40)
         next_start = _dt.combine(_dt.today(), _time(8, 0))
 
-    # The break position from GenTimetableRule for this level (break_after_period),
-    # so any new slots that cross the break point get a break row inserted — keeping
-    # the visual timetable structurally correct.
-    from models import GenTimetableRule
-    rule = GenTimetableRule.query.filter_by(
-        rule_type='break_after_period', school_level=school_level, is_active=True).first()
-    break_after = int(rule.value) if rule else None
+    last_teaching_order = last.order
+    extra = needed - current_count   # how many new teaching slots to add
 
-    # The highest `order` value currently in the slot table (including breaks)
-    # so our new rows sort correctly after everything that's already there.
-    from sqlalchemy import func
-    max_order = db.session.query(func.max(TimetableSlot.order)).scalar() or 0
-    order = max_order + 1
+    # Push any break slots that sit AFTER the last teaching slot upward so
+    # the new periods land before them in the visual ordering.
+    trailing_breaks = (TimetableSlot.query
+                       .filter_by(is_active=True, is_break=True)
+                       .filter(TimetableSlot.order > last_teaching_order)
+                       .order_by(TimetableSlot.order.desc()).all())
+    for tb in trailing_breaks:
+        tb.order += extra
+    db.session.flush()
 
-    for period_num in range(current_count + 1, needed + 1):
-        # Insert a break slot if this period immediately follows the break position.
-        if break_after and period_num == break_after + 1:
-            break_dur = int(SchoolSettings.get('break_duration', 30) or 30)
-            break_end = next_start + timedelta(minutes=break_dur)
-            db.session.add(TimetableSlot(
-                slot_number=0, name='Break',
-                start_time=next_start.time(), end_time=break_end.time(),
-                is_break=True, duration_minutes=break_dur, order=order, is_active=True))
-            order += 1
-            next_start = break_end
+    # The next slot_number continuing from the last teaching slot's number.
+    max_slot_num = (db.session.query(func.max(TimetableSlot.slot_number))
+                   .filter(TimetableSlot.is_break == False, TimetableSlot.is_active == True)
+                   .scalar() or 0)
 
+    for i in range(extra):
+        period_num = current_count + 1 + i
+        order = last_teaching_order + 1 + i
         end = next_start + timedelta(minutes=period_mins)
-        # Find the highest existing slot_number so our new ones continue the sequence.
-        max_slot_num = db.session.query(
-            func.max(TimetableSlot.slot_number)).scalar() or 0
         db.session.add(TimetableSlot(
-            slot_number=max_slot_num + 1, name=f'Period {period_num}',
+            slot_number=max_slot_num + 1 + i, name=f'Period {period_num}',
             start_time=next_start.time(), end_time=end.time(),
             is_break=False, duration_minutes=period_mins, order=order, is_active=True))
-        order += 1
         next_start = end
 
     db.session.flush()

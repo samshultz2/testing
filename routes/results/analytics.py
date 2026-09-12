@@ -378,15 +378,16 @@ def analytics_hub():
     # Class/arm comparison + internal-vs-JAMB correlation for the selected year.
     class_compare = []
     internal_corr = None
+
+    # Resolve year_session once here so both the class_compare block and the
+    # attendance/subject-gains blocks below can share it.
+    from utils.helpers import session_for_exam_year
+    from models import Term as _Term
+    year_session = session_for_exam_year(year) if year else None
+    year_terms = (_Term.query.filter_by(session_id=year_session.id).all()
+                  if year_session else [])
+
     if year:
-        from utils.helpers import session_for_exam_year
-        from models import Term
-        # Scope enrollment lookup to the session implied by the selected year,
-        # not whatever term is currently active — so ?year=2026 shows 2025/2026
-        # class composition, not the current active term's composition.
-        year_session = session_for_exam_year(year)
-        year_terms = (Term.query.filter_by(session_id=year_session.id).all()
-                      if year_session else [])
         arm_map = {}
         if year_terms:
             term_ids = [t.id for t in year_terms]
@@ -447,10 +448,29 @@ def analytics_hub():
     # Trends from data we capture but didn't previously analyse.
     from utils import exam_trends
     active_sess = get_active_session()
+    if year_session is None:
+        year_session = active_sess
+        if year_session:
+            year_terms = _Term.query.filter_by(session_id=year_session.id).all()
 
     mock_trend = _mock_jamb_trend(bid)
     mock_waec_trend = _mock_waec_trend(bid)
     at_risk = _at_risk_register(limit=25)
+
+    # attendance × JAMB correlation — scoped to the cohort that sat exams in
+    # the selected year, not the current active SSS3.
+    from utils.helpers import get_sss3_students
+    if year and year_session and year_terms:
+        from models import StudentEnrollment, ClassArmAssignment
+        year_term_ids = [t.id for t in year_terms]
+        cohort_sids = {e.student_id for e in (
+            StudentEnrollment.query.join(ClassArmAssignment)
+            .filter(ClassArmAssignment.term_id.in_(year_term_ids),
+                    StudentEnrollment.is_active == True).all())}
+        all_sss3 = get_sss3_students()  # returns a list
+        cohort_list = [s for s in all_sss3 if s.id in cohort_sids] if cohort_sids else all_sss3
+    else:
+        cohort_list = get_sss3_students()
 
     # Executive Smart Insights — synthesise the above stats into a ranked,
     # actionable "what / why / do next" summary (pure, adds no queries).
@@ -481,9 +501,9 @@ def analytics_hub():
         selected_year=year,
         jamb_subjects=exam_trends.jamb_subject_breakdown(bid, year),
         waec_subject_gains=exam_trends.mock_waec_subject_gains(
-            year_session.id if 'year_session' in dir() and year_session else (active_sess.id if active_sess else None)
+            year_session.id if year_session else (active_sess.id if active_sess else None)
         ) if year else {},
-        attendance_corr=exam_trends.attendance_performance_correlation(get_sss3_students(), 'jamb'),
+        attendance_corr=exam_trends.attendance_performance_correlation(cohort_list, 'jamb'),
         class_compare=class_compare,
         internal_corr=internal_corr,
         waec_stats=waec_stats,

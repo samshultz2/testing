@@ -2359,6 +2359,70 @@ def _breakdown_at(a, cutoff_dt, logs_by_asset):
     return _breakdown_dict(a)
 
 
+@sales_bp.route('/assets/<int:asset_id>/detail')
+@login_required
+def asset_detail(asset_id):
+    """Full asset detail — identification, current state, complete event
+    timeline, maintenance history, active audit items, and unit roster for
+    individually-tracked assets. Answers every question in spec §14:
+    'What is it? Where is it? Who has it? What happened to it? How much
+    has been spent maintaining it?'"""
+    a = db.get_or_404(FixedAsset, asset_id)
+    if not can_access_branch(a.branch_id):
+        return jsonify({'ok': False, 'error': 'That asset belongs to another branch.'}), 403
+
+    # Full event timeline — batch events + all unit events for this type,
+    # merged and sorted newest-first.
+    import json as _json
+    all_events = a.logs.order_by(AssetLog.created_at.desc()).all()
+    def _evt(l):
+        snap = None
+        if l.breakdown_snapshot:
+            try: snap = _json.loads(l.breakdown_snapshot)
+            except: pass
+        return {
+            'id': l.id, 'event_type': l.event_type,
+            'unit_id': l.unit_id, 'unit_tag': (l.unit.unit_tag if l.unit else '') or '',
+            'quantity_before': l.quantity_before, 'quantity_after': l.quantity_after,
+            'quantity_delta': l.quantity_delta,
+            'status_before': l.status_before or '', 'status_after': l.status_after or '',
+            'location_before': l.location_before or '', 'location_after': l.location_after or '',
+            'custodian_before': l.custodian_before or '', 'custodian_after': l.custodian_after or '',
+            'reference': l.reference or '', 'note': l.note or '',
+            'breakdown_snapshot': snap,
+            'session': l.session.name if l.session else '',
+            'term': l.term.name if l.term else '',
+            'created_by': l.created_by or '',
+            'created_at': l.created_at.strftime('%d %b %Y %H:%M') if l.created_at else '',
+        }
+
+    maintenance = [_maintenance_dict(m) for m in a.maintenance_records.all()]
+    total_maintenance_cost = sum(m.get('cost', 0) or 0 for m in maintenance)
+
+    units = [_unit_dict(u) for u in a.units.order_by(AssetUnit.unit_tag).all()] \
+            if a.is_individually_tracked else []
+
+    active_audit_items = []
+    for item in AssetAuditItem.query.filter_by(asset_id=a.id).all():
+        if item.audit and item.audit.status != 'Completed':
+            active_audit_items.append({
+                'audit_id': item.audit_id, 'audit_name': item.audit.name if item.audit else '',
+                'state': item.state, 'expected_location': item.expected_location or ''})
+
+    d = _asset_dict(a)
+    d.update({
+        'timeline': [_evt(l) for l in all_events],
+        'maintenance': maintenance,
+        'total_maintenance_cost': float(total_maintenance_cost),
+        'possibly_uneconomical': (bool(a.acquisition_cost) and total_maintenance_cost > 0.5 * (a.acquisition_cost or 0)),
+        'units': units,
+        'active_audit_items': active_audit_items,
+        'maintenance_url': url_for('sales.asset_maintenance_list', asset_id=a.id),
+        'add_maintenance_url': url_for('sales.add_maintenance', asset_id=a.id),
+    })
+    return jsonify({'ok': True, 'asset': d})
+
+
 @sales_bp.route('/assets/snapshot')
 @login_required
 def assets_snapshot():
@@ -2594,7 +2658,66 @@ def assets_analytics():
         'comparison': comparison,
         'filters': {'section': section_f, 'category': category_f, 'class_id': class_id_f or '',
                     'status': status_f},
+        'alerts': _asset_alerts(rows),
+        'recent': _asset_recent(rows, all_logs),
     })
+
+
+def _asset_alerts(rows):
+    """Operational alerts for the dashboard — maintenance due, under repair,
+    missing — answering 'what needs my attention right now?'"""
+    from datetime import timedelta
+    from models.models import local_now as _local_now
+    today = _local_now().date()
+    soon = today + timedelta(days=30)
+    under_repair = [{'id': a.id, 'name': a.name, 'quantity': sum(
+        r['quantity'] for r in a.status_breakdown if r['status'] == 'Under Repair')}
+        for a in rows if any(r['status'] == 'Under Repair' and r['quantity'] for r in a.status_breakdown)]
+    lost = [{'id': a.id, 'name': a.name, 'quantity': sum(
+        r['quantity'] for r in a.status_breakdown if r['status'] == 'Lost')}
+        for a in rows if any(r['status'] == 'Lost' and r['quantity'] for r in a.status_breakdown)]
+    maint_due = []
+    for a in rows:
+        nxt = (AssetMaintenance.query.filter_by(asset_id=a.id, status='Completed')
+               .filter(AssetMaintenance.next_maintenance_on.isnot(None))
+               .order_by(AssetMaintenance.next_maintenance_on.asc()).first())
+        if nxt and nxt.next_maintenance_on and nxt.next_maintenance_on <= soon:
+            maint_due.append({'id': a.id, 'name': a.name,
+                              'next_maintenance_on': nxt.next_maintenance_on.isoformat(),
+                              'overdue': nxt.next_maintenance_on < today})
+    maint_due.sort(key=lambda x: x['next_maintenance_on'])
+    return {'under_repair': under_repair[:5], 'lost': lost[:5], 'maintenance_due': maint_due[:10]}
+
+
+def _asset_recent(rows, all_logs):
+    """Recently acquired and recently transferred assets for the dashboard."""
+    recently_acquired = sorted(
+        [a for a in rows if a.acquisition_date],
+        key=lambda a: a.acquisition_date, reverse=True)[:5]
+    # Recently transferred: look for 'transferred' events in the last 30 days.
+    from datetime import timedelta
+    from models.models import local_now as _local_now
+    cutoff = _local_now() - timedelta(days=30)
+    transferred = []
+    seen = set()
+    for logs in all_logs.values():
+        for log in logs:
+            if log.event_type == 'transferred' and log.created_at and log.created_at >= cutoff:
+                if log.asset_id not in seen:
+                    seen.add(log.asset_id)
+                    a = next((x for x in rows if x.id == log.asset_id), None)
+                    if a:
+                        transferred.append({'id': a.id, 'name': a.name,
+                                           'from': log.location_before or '',
+                                           'to': log.location_after or '',
+                                           'date': log.created_at.strftime('%d %b %Y')})
+                break
+    return {
+        'acquired': [{'id': a.id, 'name': a.name, 'category': a.category,
+                      'quantity': a.quantity or 0, 'date': a.acquisition_date.isoformat()}
+                     for a in recently_acquired],
+        'transferred': transferred[:5],
+    }
 
 
 def _dt_combine(d):
