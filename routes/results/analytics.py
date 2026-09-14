@@ -466,7 +466,12 @@ def analytics_hub():
     # the selected year, not the current active SSS3.
     from utils.helpers import get_sss3_students
     if year and year_session and year_terms:
-        from models import StudentEnrollment, ClassArmAssignment
+        # StudentEnrollment/ClassArmAssignment are already module-level names
+        # here (via `from routes.results import *` at the top of this file) —
+        # a local re-import previously sat on this line, which makes Python
+        # treat the name as local for the WHOLE function and breaks the
+        # earlier, unrelated use of StudentEnrollment above (line ~394) with
+        # UnboundLocalError, since that use runs before this line does.
         year_term_ids = [t.id for t in year_terms]
         cohort_sids = {e.student_id for e in (
             StudentEnrollment.query.join(ClassArmAssignment)
