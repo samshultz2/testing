@@ -159,3 +159,42 @@ def test_solver_pairs_co_scheduled_subjects_into_the_same_slot(app):
                 if r2.day_of_week == row.day_of_week and r2.period_number == row.period_number
                 and r2.teacher_id == row.teacher_id]
             assert len(same_slot_same_teacher) == 1
+
+
+def test_print_results_can_filter_to_selected_arms(app):
+    """The master 'Print All' view can be narrowed to specific class-arms —
+    e.g. print only one side of a co-scheduled combined class instead of two
+    near-identical tables."""
+    cc_id, lit_id, acct_id = _build_combined_class(app, 'D')
+    batch_id = 'zzbatch-print-filter'
+    with app.app_context():
+        bid = Branch.get_default().id
+        db.session.add_all([
+            GenTimetableResult(branch_id=bid, batch_id=batch_id, school_level='sss',
+                               class_name='ZzSSS2D', arm_name='ZzDaisyD', day_of_week=0,
+                               period_number=1, subject_id=lit_id),
+            GenTimetableResult(branch_id=bid, batch_id=batch_id, school_level='sss',
+                               class_name='ZzSSS2D', arm_name='ZzIrisD', day_of_week=0,
+                               period_number=1, subject_id=acct_id),
+        ])
+        db.session.commit()
+
+    c = _admin(app)
+
+    # No filter — both arms show (existing "Print All" behaviour, unchanged).
+    r_all = c.get(f'/generator/results/{batch_id}/print')
+    assert r_all.status_code == 200
+    body_all = r_all.get_data(as_text=True)
+    assert 'ZzDaisyD' in body_all and 'ZzIrisD' in body_all
+
+    # Filtered to just the Daisy arm.
+    r_daisy = c.get(f'/generator/results/{batch_id}/print?arm=ZzSSS2D|ZzDaisyD')
+    assert r_daisy.status_code == 200
+    body_daisy = r_daisy.get_data(as_text=True)
+    assert 'ZzDaisyD' in body_daisy and 'ZzIrisD' not in body_daisy
+
+    # Filtered to just the Iris arm.
+    r_iris = c.get(f'/generator/results/{batch_id}/print?arm=ZzSSS2D|ZzIrisD')
+    assert r_iris.status_code == 200
+    body_iris = r_iris.get_data(as_text=True)
+    assert 'ZzIrisD' in body_iris and 'ZzDaisyD' not in body_iris

@@ -24,7 +24,20 @@ def print_results(batch_id):
     if not results:
         flash('No results.', 'error')
         return redirect(url_for('generator.results_list'))
-    
+
+    # Optional class-arm filter — e.g. skip a combined class's other arm when
+    # it's co-scheduled with the one being printed (same periods, just a
+    # different elective label), so the master document doesn't carry two
+    # near-duplicate tables. Each ?arm= value is "ClassName|ArmName"; no
+    # ?arm= at all (the plain "Print All" link) keeps the old behaviour of
+    # including every class-arm in this batch.
+    selected = {tuple(a.split('|', 1)) for a in request.args.getlist('arm') if '|' in a}
+    if selected:
+        results = [r for r in results if (r.class_name, r.arm_name) in selected]
+        if not results:
+            flash('No class-arms selected.', 'error')
+            return redirect(url_for('generator.view_results', batch_id=batch_id))
+
     timetables = {}
     for r in results:
         key = f"{r.class_name}_{r.arm_name}"

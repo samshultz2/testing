@@ -8,6 +8,7 @@
 
 <div class="page-header-actions mb-3">
     <a href="{{ url_for('generator.print_results', batch_id=batch_id) }}" class="btn btn-success"><i class="fas fa-print"></i> Print All</a>
+    <button type="button" class="btn btn-success" data-call="toggleSection" data-args="'print-select-panel'"><i class="fas fa-list-check"></i> Print Selected…</button>
     <a href="{{ url_for('generator.export_results', batch_id=batch_id) }}" class="btn btn-info"><i class="fas fa-download"></i> Excel (by Class)</a>
     <a href="{{ url_for('generator.export_results_by_day', batch_id=batch_id) }}" class="btn btn-primary"><i class="fas fa-calendar-day"></i> Excel (by Day)</a>
     <a href="{{ url_for('generator.export_results_by_day_pdf', batch_id=batch_id) }}" class="btn btn-danger"><i class="fas fa-file-pdf"></i> PDF (by Day)</a>
@@ -22,6 +23,30 @@
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="btn btn-danger"><i class="fas fa-trash"></i> Delete</button>
     </form>
+</div>
+
+<div class="card mb-3" id="print-select-panel" style="display: none;">
+    <div class="card-header"><h3><i class="fas fa-list-check"></i> Print Selected Class-Arms</h3></div>
+    <div class="card-body">
+        <p class="text-muted mb-3">Pick which class-arms go into the printed document — e.g. for a combined class
+            that's co-scheduled (same periods, just a different elective per arm), print only one arm instead of
+            two near-identical tables.</p>
+        <form method="GET" action="{{ url_for('generator.print_results', batch_id=batch_id) }}" id="print-select-form">
+            <div class="checkbox-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.5rem;">
+                {% for key, tt in timetables.items() %}
+                <label class="checkbox-label" style="padding: 0.5rem 0.75rem; background: var(--bg-tertiary); border-radius: var(--border-radius-sm);">
+                    <input type="checkbox" name="arm" value="{{ tt.class_name }}|{{ tt.arm_name }}" checked>
+                    <span><strong>{{ tt.class_name }}</strong> {{ tt.arm_name }}</span>
+                </label>
+                {% endfor %}
+            </div>
+            <div class="page-header-actions mt-3">
+                <button type="button" class="btn btn-secondary btn-sm" data-call="selectAllArms" data-args="true">Select All</button>
+                <button type="button" class="btn btn-secondary btn-sm" data-call="selectAllArms" data-args="false">Deselect All</button>
+                <button type="submit" class="btn btn-success"><i class="fas fa-print"></i> Print Selected</button>
+            </div>
+        </form>
+    </div>
 </div>
 
 {% for key, tt in timetables.items() %}
@@ -80,4 +105,15 @@
     </div>
 </div>
 {% endfor %}
+
+<script nonce="{{ csp_nonce }}">
+function toggleSection(id) {
+    const el = document.getElementById(id);
+    if (el) el.style.display = (el.style.display === 'none' || !el.style.display) ? 'block' : 'none';
+}
+
+function selectAllArms(checked) {
+    document.querySelectorAll('#print-select-form input[name="arm"]').forEach(cb => cb.checked = checked);
+}
+</script>
 {% endblock %}
