@@ -1471,6 +1471,8 @@ function Assets({ d, notify }) {
   const [editing, setEditing] = useState(null);   // asset being edited, or {} for add
   const [disposing, setDisposing] = useState(null);
   const [transferring, setTransferring] = useState(null);
+  const [movingStatus, setMovingStatus] = useState(null);
+  const [checkingOut, setCheckingOut] = useState(null);
   const [assigning, setAssigning] = useState(null);
   const [managingUnits, setManagingUnits] = useState(null);
   const [viewingMaintenance, setViewingMaintenance] = useState(null);
@@ -1545,6 +1547,7 @@ function Assets({ d, notify }) {
           <button type="button" className={'btn btn-sm ' + (tab === 'analytics' ? 'btn-primary' : 'btn-light')} onClick={() => setTab('analytics')}><i aria-hidden="true" className="fas fa-chart-pie" /> Analytics</button>
           <button type="button" className={'btn btn-sm ' + (tab === 'history' ? 'btn-primary' : 'btn-light')} onClick={() => setTab('history')}><i aria-hidden="true" className="fas fa-clock-rotate-left" /> Historical</button>
           <button type="button" className={'btn btn-sm ' + (tab === 'audits' ? 'btn-primary' : 'btn-light')} onClick={() => setTab('audits')}><i aria-hidden="true" className="fas fa-clipboard-check" /> Audits</button>
+          <button type="button" className={'btn btn-sm ' + (tab === 'loans' ? 'btn-primary' : 'btn-light')} onClick={() => setTab('loans')}><i aria-hidden="true" className="fas fa-right-left" /> Loans</button>
         </div>
       </div>
       {tab === 'analytics' ? (
@@ -1553,6 +1556,8 @@ function Assets({ d, notify }) {
         <AssetSnapshots d={d} />
       ) : tab === 'audits' ? (
         <AssetAudits d={d} notify={notify} />
+      ) : tab === 'loans' ? (
+        <AssetLoans d={d} notify={notify} />
       ) : (
         <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: '.75rem', marginBottom: '1rem' }}>
@@ -1633,9 +1638,14 @@ function Assets({ d, notify }) {
                         </button>
                         {a.is_individually_tracked
                           ? <button type="button" className="btn btn-sm btn-primary" onClick={() => setManagingUnits(a)} title="Manage physical units"><i aria-hidden="true" className="fas fa-qrcode" /> Units</button>
-                          : <>
+                          : !a.is_disposed && <>
                             <button type="button" className="btn btn-sm btn-light" onClick={() => setTransferring(a)} title="Transfer location"><i aria-hidden="true" className="fas fa-truck-ramp-box" /></button>
                             <button type="button" className="btn btn-sm btn-light" onClick={() => setAssigning(a)} title="Assign custodian"><i aria-hidden="true" className="fas fa-user-tag" /></button>
+                            <button type="button" className="btn btn-sm btn-light" onClick={() => setMovingStatus(a)} title="Move quantity between statuses (e.g. some to Under Repair)"><i aria-hidden="true" className="fas fa-right-left" /></button>
+                            <button type="button" className={'btn btn-sm ' + (a.on_loan_quantity > 0 ? 'btn-info' : 'btn-light')} onClick={() => setCheckingOut(a)}
+                                    title={a.on_loan_quantity > 0 ? `${a.on_loan_quantity} currently checked out — click to check out more` : 'Check out to someone temporarily'}>
+                              <i aria-hidden="true" className="fas fa-right-from-bracket" />{a.on_loan_quantity > 0 ? ` ${a.on_loan_quantity}` : ''}
+                            </button>
                           </>}
                         <button type="button" className="btn btn-sm btn-light" onClick={() => setEditing(a)} title="Edit"><i aria-hidden="true" className="fas fa-pen" /></button>
                         {!a.is_disposed && <button type="button" className="btn btn-sm btn-light" onClick={() => setDisposing(a)} title="Dispose / retire"><i aria-hidden="true" className="fas fa-box-archive" /></button>}
@@ -1655,6 +1665,10 @@ function Assets({ d, notify }) {
                                       onClose={() => setTransferring(null)} onSaved={() => { setTransferring(null); nav.refresh(); }} />}
       {assigning && <AssignModal asset={assigning} notify={notify}
                                  onClose={() => setAssigning(null)} onSaved={() => { setAssigning(null); nav.refresh(); }} />}
+      {movingStatus && <MoveStatusModal asset={movingStatus} d={d} notify={notify}
+                                        onClose={() => setMovingStatus(null)} onSaved={() => { setMovingStatus(null); nav.refresh(); }} />}
+      {checkingOut && <CheckoutModal asset={checkingOut} notify={notify}
+                                     onClose={() => setCheckingOut(null)} onSaved={() => { setCheckingOut(null); nav.refresh(); }} />}
       {managingUnits && <AssetUnitsModal asset={managingUnits} d={d} notify={notify}
                                          onClose={() => setManagingUnits(null)} onSaved={() => { nav.refresh(); }} />}
       {viewingHistory && <AssetHistoryModal asset={viewingHistory} onClose={() => setViewingHistory(null)} />}
@@ -1864,6 +1878,12 @@ function AssetUnitsModal({ asset, d, onClose, onSaved, notify }) {
     if (r.ok) { notify('success', r.message); reload(); onSaved(); }
     else notify('error', r.error || 'Failed.');
   };
+  const doReturn = async (u) => {
+    const note = await promptDialog({ title: `Return "${u.unit_tag}"`,
+      label: 'Return note (optional)', placeholder: 'e.g. condition on return', required: false });
+    if (note === null) return;
+    doAct(u.return_url, { return_note: note });
+  };
   const COND_COLOR = { Good: 'b-ok', Fair: 'b-warn', Poor: 'b-bad' };
   const STAT_COLOR = { 'In Use': 'b-ok', 'Under Repair': 'b-warn', 'Lost': 'b-bad', 'Disposed': 'b-bad' };
   return (
@@ -1914,6 +1934,14 @@ function AssetUnitsModal({ asset, d, onClose, onSaved, notify }) {
                 {u.location && <span><i aria-hidden="true" className="fas fa-location-dot" /> {u.location}  </span>}
                 {u.custodian && <span><i aria-hidden="true" className="fas fa-user" /> {u.custodian}</span>}
               </div>
+              {u.on_loan && (
+                <div className="text-sm" style={{ marginTop: '.25rem' }}>
+                  <span className={`badge ${u.loan_overdue ? 'b-bad' : 'b-warn'}`}>
+                    <i aria-hidden="true" className="fas fa-right-from-bracket" /> Checked out to {u.loan_borrower}
+                    {u.loan_due_back ? ` (due ${u.loan_due_back})` : ''}{u.loan_overdue ? ' — overdue' : ''}
+                  </span>
+                </div>
+              )}
               {!u.is_disposed && (
                 <div style={{ display: 'flex', gap: '.25rem', flexWrap: 'wrap', marginTop: '.4rem' }}>
                   <UnitInlineAction label="Transfer" icon="fa-truck-ramp-box"
@@ -1929,6 +1957,15 @@ function AssetUnitsModal({ asset, d, onClose, onSaved, notify }) {
                       { name: 'note', placeholder: 'Note (optional)' },
                     ]}
                     onSubmit={(p) => doAct(u.status_url, p)} />
+                  {u.on_loan
+                    ? <button type="button" className="btn btn-sm btn-info" onClick={() => doReturn(u)} title="Mark returned"><i aria-hidden="true" className="fas fa-right-to-bracket" /> Return</button>
+                    : <UnitInlineAction label="Checkout" icon="fa-right-from-bracket"
+                        fields={[
+                          { name: 'borrower', placeholder: 'Borrower', required: true },
+                          { name: 'purpose', placeholder: 'Purpose (optional)' },
+                          { name: 'due_back', placeholder: 'Due back YYYY-MM-DD (optional)' },
+                        ]}
+                        onSubmit={(p) => doAct(u.checkout_url, p)} />}
                   <button type="button" className="btn btn-sm btn-light" title="History"
                     onClick={() => setViewingUnitHistory(u)}><i aria-hidden="true" className="fas fa-clock-rotate-left" /></button>
                   <button type="button" className="btn btn-sm btn-light text-danger" title="Delete unit"
@@ -2117,6 +2154,137 @@ function AssignModal({ asset, onClose, onSaved, notify }) {
   );
 }
 
+function MoveStatusModal({ asset, d, onClose, onSaved, notify }) {
+  const buckets = (asset.status_breakdown || []).filter((r) => r.quantity > 0);
+  const otherStatuses = (d.statuses || []).filter((s) => s !== 'Disposed');
+  const [f, setF] = useState({
+    from_status: buckets[0]?.status || '',
+    to_status: otherStatuses.find((s) => s !== buckets[0]?.status) || '',
+    quantity: '1', note: '',
+  });
+  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  const have = buckets.find((r) => r.status === f.from_status)?.quantity || 0;
+  const save = async () => {
+    const qty = parseInt(f.quantity, 10) || 0;
+    if (!f.from_status || !f.to_status) { notify('error', 'Choose a status to move from and to.'); return; }
+    if (f.from_status === f.to_status) { notify('error', 'Choose two different statuses.'); return; }
+    if (qty <= 0 || qty > have) { notify('error', `Enter 1–${have} unit(s).`); return; }
+    const r = await submitJson(asset.move_status_url, f);
+    if (r.ok) { notify('success', r.message); onSaved(); } else notify('error', r.error || 'Could not move.');
+  };
+  return (
+    <Modal title={`Move quantity — "${asset.name}"`} icon="fa-right-left" size="md" onClose={onClose}
+           footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button variant="primary" onClick={save}>Move</Button></>}>
+      <p className="text-muted text-sm" style={{ marginTop: 0 }}>Shift some of this asset's quantity from one status to another — e.g. move 3 of 30 laptops from "In Use" to "Under Repair" — without retyping the whole split.</p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(140px,1fr))', gap: '.6rem' }}>
+        <Field label="From *">
+          <select className="form-control" value={f.from_status} onChange={(e) => set('from_status', e.target.value)}>
+            {buckets.map((r) => <option key={r.status} value={r.status}>{r.status} ({r.quantity})</option>)}
+          </select>
+        </Field>
+        <Field label="To *">
+          <select className="form-control" value={f.to_status} onChange={(e) => set('to_status', e.target.value)}>
+            {otherStatuses.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </Field>
+        <Field label={`Quantity (max ${have}) *`}>
+          <input type="number" min="1" max={have} className="form-control" value={f.quantity} onChange={(e) => set('quantity', e.target.value)} />
+        </Field>
+      </div>
+      <Field label="Note (optional)" wide><input className="form-control" value={f.note} onChange={(e) => set('note', e.target.value)} placeholder="e.g. reported faulty screen" /></Field>
+    </Modal>
+  );
+}
+
+function CheckoutModal({ asset, onClose, onSaved, notify }) {
+  const [f, setF] = useState({ borrower: '', purpose: '', quantity: '1', due_back: '', note: '' });
+  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  const save = async () => {
+    if (!f.borrower.trim()) { notify('error', 'Enter who this is going to.'); return; }
+    const qty = parseInt(f.quantity, 10) || 0;
+    if (qty <= 0 || qty > asset.available_quantity) { notify('error', `Enter 1–${asset.available_quantity} unit(s) (that's how many are available).`); return; }
+    const r = await submitJson(asset.checkout_url, f);
+    if (r.ok) { notify('success', r.message); onSaved(); } else notify('error', r.error || 'Could not check out.');
+  };
+  return (
+    <Modal title={`Check out — "${asset.name}"`} icon="fa-right-from-bracket" size="md" onClose={onClose}
+           footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button variant="primary" onClick={save}>Check out</Button></>}>
+      <p className="text-muted text-sm" style={{ marginTop: 0 }}>
+        Hand some of this asset to someone temporarily — e.g. laptops given to teachers to enter exam results — without changing its custodian or location. It shows up under Loans until marked returned.
+        {' '}<strong>{asset.available_quantity}</strong> available{asset.on_loan_quantity > 0 ? ` (${asset.on_loan_quantity} already out)` : ''}.
+      </p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: '.6rem' }}>
+        <Field label="Borrower *"><input className="form-control" value={f.borrower} onChange={(e) => set('borrower', e.target.value)} placeholder="e.g. Mr. Adeyemi" /></Field>
+        <Field label="Purpose"><input className="form-control" value={f.purpose} onChange={(e) => set('purpose', e.target.value)} placeholder="e.g. Entering exam results" /></Field>
+        <Field label={`Quantity (max ${asset.available_quantity}) *`}><input type="number" min="1" max={asset.available_quantity} className="form-control" value={f.quantity} onChange={(e) => set('quantity', e.target.value)} /></Field>
+        <Field label="Due back (optional)"><input type="date" className="form-control" value={f.due_back} onChange={(e) => set('due_back', e.target.value)} /></Field>
+      </div>
+      <Field label="Note (optional)" wide><input className="form-control" value={f.note} onChange={(e) => set('note', e.target.value)} /></Field>
+    </Modal>
+  );
+}
+
+function AssetLoans({ d, notify }) {
+  const [loans, setLoans] = useState(null);
+  const [showAll, setShowAll] = useState(false);
+  const load = async () => {
+    try {
+      const r = await apiGet(d.loans_url + (showAll ? '?status=all' : ''));
+      setLoans(r.loans || []);
+    } catch { setLoans([]); }
+  };
+  useEffect(() => { load(); }, [d.loans_url, showAll]);
+  const doReturn = async (loan) => {
+    const note = await promptDialog({ title: `Return from ${loan.borrower}`,
+      label: 'Return note (optional)', placeholder: 'e.g. condition on return', required: false });
+    if (note === null) return;
+    const r = await submitJson(loan.return_url, { return_note: note });
+    if (r.ok) { notify('success', r.message); load(); } else notify('error', r.error || 'Could not mark returned.');
+  };
+  const openCount = loans ? loans.filter((l) => l.is_out).length : 0;
+  const overdueCount = loans ? loans.filter((l) => l.is_out && l.is_overdue).length : 0;
+  return (
+    <>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: '.75rem', marginBottom: '1rem' }}>
+        <Tile n={openCount} label="Currently out" />
+        <Tile n={overdueCount} label="Overdue" danger={overdueCount > 0} />
+      </div>
+      <div className="card">
+        <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <h3>{showAll ? 'All loans' : 'Currently out'}</h3>
+          <button type="button" className="btn btn-sm btn-light" onClick={() => setShowAll((s) => !s)}>
+            {showAll ? 'Show only open' : 'Show returned too'}
+          </button>
+        </div>
+        <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+          {!loans && <p className="text-muted text-sm" style={{ padding: '1rem' }}>Loading…</p>}
+          {loans && loans.length === 0 && <EmptyState icon="fa-right-from-bracket" title="Nothing checked out">Use the checkout button on an asset or unit to hand it to someone temporarily.</EmptyState>}
+          {loans && loans.length > 0 && (
+            <table className="data-table"><thead><tr>
+              <th>Asset</th><th>Borrower</th><th>Purpose</th><th className="text-right">Qty</th>
+              <th>Checked out</th><th>Due back</th><th>Status</th><th /></tr></thead>
+              <tbody>{loans.map((l) => (
+                <tr key={l.id}>
+                  <td><strong>{l.asset_name}</strong>{l.unit_tag && <span className="text-muted text-sm"> · {l.unit_tag}</span>}</td>
+                  <td>{l.borrower}</td>
+                  <td className="text-muted text-sm">{l.purpose || '—'}</td>
+                  <td className="text-right">{l.quantity}</td>
+                  <td className="text-muted text-sm">{l.checked_out_at}</td>
+                  <td className="text-muted text-sm">{l.due_back || '—'}</td>
+                  <td>{l.is_out
+                    ? <span className={`badge ${l.is_overdue ? 'b-bad' : 'b-warn'}`}>{l.is_overdue ? 'Overdue' : 'Out'}</span>
+                    : <span className="badge b-ok">Returned {l.returned_at}</span>}</td>
+                  <td>{l.is_out && <button type="button" className="btn btn-sm btn-primary" onClick={() => doReturn(l)}><i aria-hidden="true" className="fas fa-check" /> Return</button>}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
 function AssetHistoryModal({ asset, onClose }) {
   const [logs, setLogs] = useState(null);
   const [error, setError] = useState(null);
@@ -2129,7 +2297,7 @@ function AssetHistoryModal({ asset, onClose }) {
   const EVENT_LABEL = { created: 'Registered', quantity_changed: 'Quantity changed',
     status_changed: 'Status changed', updated: 'Updated', disposed: 'Disposed', restored: 'Restored',
     transferred: 'Transferred', assigned: 'Assigned', unassigned: 'Unassigned',
-    opening_balance: 'Opening balance' };
+    opening_balance: 'Opening balance', loaned: 'Checked out', returned: 'Returned' };
   return (
     <Modal title={`History — ${asset.name}`} icon="fa-clock-rotate-left" size="lg" onClose={onClose}
            footer={<Button variant="secondary" onClick={onClose}>Close</Button>}>

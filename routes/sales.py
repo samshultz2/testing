@@ -13,7 +13,7 @@ from models import (db, Product, Sale, SaleItem, StockMovement, Student,
                     Supplier, PurchaseOrder, PurchaseOrderItem, SupplierPayment, PromoCode,
                     StockAudit, StockAuditItem, FixedAsset, StockBatch, AssetLog,
                     AssetStatusCount, AssetUnit, AssetMaintenance,
-                    AssetAudit, AssetAuditItem, Teacher)
+                    AssetAudit, AssetAuditItem, AssetLoan, Teacher)
 from models.models_sales import (PRODUCT_CATEGORIES, SALE_METHODS, CUSTOMER_TYPES,
                                  UNITS, STOCK_IN_REASONS, STOCK_OUT_REASONS,
                                  PO_STATUSES, PURCHASE_METHODS,
@@ -1717,6 +1717,7 @@ def _asset_dict(a):
     _maint_records = a.maintenance_records.all()
     _due_candidates = [m for m in _maint_records if m.next_maintenance_on]
     next_due = max(_due_candidates, key=lambda m: m.id).next_maintenance_on if _due_candidates else None
+    on_loan_qty = sum(l.quantity or 0 for l in a.loans if l.is_out) if not a.is_individually_tracked else 0
     return {
         'id': a.id, 'name': a.name, 'asset_tag': a.asset_tag or '',
         'category': a.category, 'description': a.description or '',
@@ -1730,6 +1731,8 @@ def _asset_dict(a):
         'is_individually_tracked': bool(a.is_individually_tracked),
         'status_breakdown': a.status_breakdown, 'is_split': a.is_split,
         'active_quantity': a.active_quantity,
+        'on_loan_quantity': on_loan_qty,
+        'available_quantity': max(0, (a.active_quantity or 0) - on_loan_qty),
         'annual_depreciation': a.annual_depreciation,
         'accumulated_depreciation': a.accumulated_depreciation,
         'book_value': a.book_value, 'is_disposed': a.is_disposed,
@@ -1745,6 +1748,8 @@ def _asset_dict(a):
                                     if _effective_section(a) else ''),
         'edit_url': url_for('sales.edit_asset', asset_id=a.id),
         'dispose_url': url_for('sales.dispose_asset', asset_id=a.id),
+        'move_status_url': url_for('sales.move_asset_status', asset_id=a.id),
+        'checkout_url': url_for('sales.checkout_asset', asset_id=a.id),
         'delete_url': url_for('sales.delete_asset', asset_id=a.id),
         'history_url': url_for('sales.asset_history', asset_id=a.id),
         'transfer_url': url_for('sales.transfer_asset', asset_id=a.id),
@@ -2042,6 +2047,7 @@ def assets():
         'bulk_assign_url': url_for('sales.bulk_assign_assets'),
         'bulk_dispose_url': url_for('sales.bulk_dispose_assets'),
         'bulk_delete_url': url_for('sales.bulk_delete_assets'),
+        'loans_url': url_for('sales.asset_loans_list'),
         'urls': {'dashboard': url_for('sales.dashboard'), 'products': url_for('sales.products')},
     })
 
@@ -2405,6 +2411,161 @@ def convert_to_asset(product_id):
     log_action('sales.asset_convert', detail=f'{a.name} x{qty}', target=a)
     return _ok(f'Converted {qty} × {p.name} into fixed asset "{a.name}".',
                url_for('sales.assets'))
+
+
+@sales_bp.route('/assets/<int:asset_id>/move-status', methods=['POST'])
+@login_required
+def move_asset_status(asset_id):
+    """Move some quantity of a batch asset from one status bucket to another
+    in one step — e.g. "3 of these 30 laptops just went Under Repair" —
+    instead of having to retype the whole status-breakdown split via Edit.
+    Batch-tracked assets only: an individually-tracked unit's status is
+    changed directly on that one unit (see update_unit_status)."""
+    a = db.get_or_404(FixedAsset, asset_id)
+    if not can_access_branch(a.branch_id):
+        return _err('That asset belongs to another branch.', url_for('sales.assets'))
+    if a.is_individually_tracked:
+        return _err('This is an individually-tracked type — change each unit\'s '
+                   'status from its Units panel instead.', url_for('sales.assets'))
+    from_status = (request.form.get('from_status') or '').strip()
+    to_status = (request.form.get('to_status') or '').strip()
+    qty = request.form.get('quantity', type=int) or 0
+    if to_status == 'Disposed':
+        return _err('Use Dispose for that — it also records proceeds.', url_for('sales.assets'))
+    if from_status not in FIXED_ASSET_STATUSES or to_status not in FIXED_ASSET_STATUSES:
+        return _err('Choose a valid status to move from and to.', url_for('sales.assets'))
+    if from_status == to_status:
+        return _err('Choose two different statuses.', url_for('sales.assets'))
+    if qty <= 0:
+        return _err('Enter how many units to move.', url_for('sales.assets'))
+    current = _breakdown_dict(a)
+    have = current.get(from_status, 0)
+    if qty > have:
+        return _err(f'Only {have} unit(s) are currently "{from_status}".', url_for('sales.assets'))
+    status_before, qty_before = a.status, a.quantity
+    target = dict(current)
+    target[from_status] = have - qty
+    target[to_status] = target.get(to_status, 0) + qty
+    note = (request.form.get('note') or '').strip() or None
+    auto_note = f'{qty} moved from {from_status} to {to_status}'
+    _record_asset_event(a, 'status_changed', target, quantity_before=qty_before,
+                        status_before=status_before,
+                        note=(f'{note} — {auto_note}' if note else auto_note))
+    db.session.commit()
+    return _ok(f'{qty} unit(s) moved: {from_status} → {to_status}.', url_for('sales.assets'))
+
+
+# ---------------------------------------------------------------------------
+# Temporary loans/checkout (AssetLoan) — e.g. laptops handed to teachers to
+# enter exam results, then returned. A loan is deliberately independent of
+# the asset/unit's own custodian/location: checking something out never
+# changes those, it just records what's out, to whom, and whether it's
+# overdue. Works for a quantity of a batch asset or one specific unit.
+# ---------------------------------------------------------------------------
+
+def _loan_dict(l):
+    return {
+        'id': l.id, 'asset_id': l.asset_id, 'asset_name': l.asset.name if l.asset else '',
+        'unit_id': l.unit_id, 'unit_tag': (l.unit.unit_tag if l.unit else ''),
+        'borrower': l.borrower, 'purpose': l.purpose or '',
+        'quantity': l.quantity or 1,
+        'checked_out_at': l.checked_out_at.strftime('%d %b %Y %H:%M') if l.checked_out_at else '',
+        'due_back': l.due_back.isoformat() if l.due_back else '',
+        'returned_at': l.returned_at.strftime('%d %b %Y %H:%M') if l.returned_at else '',
+        'is_out': l.is_out, 'is_overdue': l.is_overdue,
+        'note': l.note or '', 'return_note': l.return_note or '',
+        'return_url': url_for('sales.return_loan', loan_id=l.id),
+    }
+
+
+@sales_bp.route('/assets/loans')
+@login_required
+def asset_loans_list():
+    only_open = request.args.get('status', 'open') != 'all'
+    q = scope_query(AssetLoan.query, AssetLoan)
+    if only_open:
+        q = q.filter(AssetLoan.returned_at.is_(None))
+    loans = q.order_by(AssetLoan.checked_out_at.desc()).all()
+    return jsonify({'ok': True, 'loans': [_loan_dict(l) for l in loans]})
+
+
+@sales_bp.route('/assets/<int:asset_id>/checkout', methods=['POST'])
+@login_required
+def checkout_asset(asset_id):
+    """Hand out some quantity of a batch asset to a named person for a
+    while (e.g. 3 laptops to teachers for exam result entry)."""
+    a = db.get_or_404(FixedAsset, asset_id)
+    if not can_access_branch(a.branch_id):
+        return _err('That asset belongs to another branch.', url_for('sales.assets'))
+    if a.is_individually_tracked:
+        return _err('Check out a specific unit instead — see Units.', url_for('sales.assets'))
+    borrower = (request.form.get('borrower') or '').strip()
+    if not borrower:
+        return _err('Enter who this is going to.', url_for('sales.assets'))
+    qty = request.form.get('quantity', type=int) or 1
+    on_loan = sum(l.quantity or 0 for l in a.loans if l.is_out)
+    available = (a.active_quantity or 0) - on_loan
+    if qty <= 0 or qty > available:
+        return _err(f'Only {available} unit(s) are available to check out '
+                   f'({on_loan} already out).', url_for('sales.assets'))
+    purpose = (request.form.get('purpose') or '').strip() or None
+    loan = AssetLoan(
+        asset_id=a.id, branch_id=a.branch_id, borrower=borrower, purpose=purpose,
+        quantity=qty, due_back=parse_date(request.form.get('due_back')),
+        note=(request.form.get('note') or '').strip() or None, created_by=_actor())
+    db.session.add(loan)
+    db.session.add(AssetLog(
+        asset_id=a.id, branch_id=a.branch_id, event_type='loaned',
+        note=f'{qty} checked out to {borrower}' + (f' — {purpose}' if purpose else ''),
+        created_by=_actor()))
+    db.session.commit()
+    return _ok(f'{qty} unit(s) checked out to {borrower}.', url_for('sales.assets'))
+
+
+@sales_bp.route('/assets/units/<int:unit_id>/checkout', methods=['POST'])
+@login_required
+def checkout_unit(unit_id):
+    u = db.get_or_404(AssetUnit, unit_id)
+    if not can_access_branch(u.branch_id):
+        return _err('That unit belongs to another branch.', url_for('sales.assets'))
+    if u.is_disposed:
+        return _err('That unit is disposed.', url_for('sales.assets'))
+    if u.loans.filter_by(returned_at=None).first():
+        return _err(f'"{u.unit_tag}" is already checked out.', url_for('sales.assets'))
+    borrower = (request.form.get('borrower') or '').strip()
+    if not borrower:
+        return _err('Enter who this is going to.', url_for('sales.assets'))
+    purpose = (request.form.get('purpose') or '').strip() or None
+    loan = AssetLoan(
+        asset_id=u.asset_id, unit_id=u.id, branch_id=u.branch_id, borrower=borrower,
+        purpose=purpose, quantity=1, due_back=parse_date(request.form.get('due_back')),
+        note=(request.form.get('note') or '').strip() or None, created_by=_actor())
+    db.session.add(loan)
+    db.session.add(AssetLog(
+        asset_id=u.asset_id, unit_id=u.id, branch_id=u.branch_id, event_type='loaned',
+        note=f'Checked out to {borrower}' + (f' — {purpose}' if purpose else ''),
+        created_by=_actor()))
+    db.session.commit()
+    return _ok(f'"{u.unit_tag}" checked out to {borrower}.', url_for('sales.assets'))
+
+
+@sales_bp.route('/assets/loans/<int:loan_id>/return', methods=['POST'])
+@login_required
+def return_loan(loan_id):
+    l = db.get_or_404(AssetLoan, loan_id)
+    if not can_access_branch(l.branch_id):
+        return _err('That loan belongs to another branch.', url_for('sales.assets'))
+    if not l.is_out:
+        return _err('That was already returned.', url_for('sales.assets'))
+    l.returned_at = timeutil.now()
+    l.return_note = (request.form.get('return_note') or '').strip() or None
+    label = l.unit.unit_tag if l.unit else f'{l.quantity} unit(s)'
+    db.session.add(AssetLog(
+        asset_id=l.asset_id, unit_id=l.unit_id, branch_id=l.branch_id, event_type='returned',
+        note=f'{label} returned from {l.borrower}' + (f' — {l.return_note}' if l.return_note else ''),
+        created_by=_actor()))
+    db.session.commit()
+    return _ok(f'"{l.borrower}" returned {label}.', url_for('sales.assets'))
 
 
 @sales_bp.route('/assets/<int:asset_id>/dispose', methods=['POST'])
@@ -2954,6 +3115,7 @@ def _redirect_target(default_url):
 
 
 def _unit_dict(u):
+    open_loan = u.loans.filter_by(returned_at=None).first()
     return {
         'id': u.id, 'asset_id': u.asset_id, 'asset_name': u.asset.name if u.asset else '',
         'unit_tag': u.unit_tag or '', 'serial_number': u.serial_number or '',
@@ -2968,6 +3130,12 @@ def _unit_dict(u):
         'dispose_url': url_for('sales.dispose_unit', unit_id=u.id),
         'delete_url': url_for('sales.delete_unit', unit_id=u.id),
         'history_url': url_for('sales.unit_history', unit_id=u.id),
+        'checkout_url': url_for('sales.checkout_unit', unit_id=u.id),
+        'on_loan': bool(open_loan),
+        'loan_borrower': open_loan.borrower if open_loan else '',
+        'loan_due_back': (open_loan.due_back.isoformat() if open_loan and open_loan.due_back else ''),
+        'loan_overdue': bool(open_loan and open_loan.is_overdue),
+        'return_url': (url_for('sales.return_loan', loan_id=open_loan.id) if open_loan else ''),
     }
 
 

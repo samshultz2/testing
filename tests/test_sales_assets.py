@@ -1,7 +1,7 @@
 """Sales Phase 16 — fixed-asset register + conversion from inventory."""
 import datetime as dt
 from config import Config
-from models import db, Branch, Product, FixedAsset, StockMovement, FinanceTransaction
+from models import db, Branch, Product, FixedAsset, StockMovement, FinanceTransaction, AssetLoan
 from tests.conftest import login_token
 
 
@@ -254,3 +254,127 @@ def test_assets_page_survives_teacher_with_no_full_name(app):
         db.session.commit()
     c = _admin(app)
     assert c.get('/sales/assets').status_code == 200
+
+
+# --- quick status move -------------------------------------------------------
+
+def test_move_status_shifts_quantity_between_buckets(app):
+    c = _admin(app)
+    id1 = _add(c, 'ZzMoveStatus', quantity=10)
+    r = _post(c, f'/sales/assets/{id1}/move-status', from_status='In Use',
+             to_status='Under Repair', quantity=3)
+    assert r.get_json()['ok']
+    with app.app_context():
+        a = db.session.get(FixedAsset, id1)
+        bd = {row['status']: row['quantity'] for row in a.status_breakdown}
+        assert bd.get('In Use') == 7 and bd.get('Under Repair') == 3
+
+
+def test_move_status_rejects_more_than_available(app):
+    c = _admin(app)
+    id1 = _add(c, 'ZzMoveStatus2', quantity=5)
+    r = _post(c, f'/sales/assets/{id1}/move-status', from_status='In Use',
+             to_status='Under Repair', quantity=99)
+    assert not r.get_json()['ok']
+
+
+def test_move_status_rejects_disposed_target(app):
+    c = _admin(app)
+    id1 = _add(c, 'ZzMoveStatus3', quantity=5)
+    r = _post(c, f'/sales/assets/{id1}/move-status', from_status='In Use',
+             to_status='Disposed', quantity=1)
+    assert not r.get_json()['ok']
+
+
+def test_move_status_rejects_individually_tracked(app):
+    c = _admin(app)
+    id1 = _add(c, 'ZzMoveStatus4', is_individually_tracked='on')
+    r = _post(c, f'/sales/assets/{id1}/move-status', from_status='In Use',
+             to_status='Under Repair', quantity=1)
+    assert not r.get_json()['ok']
+
+
+# --- loans / checkout ---------------------------------------------------------
+
+def test_checkout_and_return_batch_asset(app):
+    c = _admin(app)
+    id1 = _add(c, 'ZzLoanLaptops', quantity=10)
+    r = _post(c, f'/sales/assets/{id1}/checkout', borrower='Mrs Adeyemi',
+             purpose='Result entry', quantity=3, due_back='2099-01-01')
+    body = r.get_json()
+    assert body['ok']
+    with app.app_context():
+        a = db.session.get(FixedAsset, id1)
+        assert a.active_quantity == 10          # checkout never changes quantity/status
+        loan = AssetLoan.query.filter_by(asset_id=id1).first()
+        assert loan is not None and loan.borrower == 'Mrs Adeyemi' and loan.quantity == 3
+        assert loan.is_out and not loan.is_overdue
+
+    # Assets payload reflects what's available.
+    r2 = c.get('/sales/assets', headers={'X-Requested-With': 'fetch'})
+    assets_json = r2.get_json()['assets']
+    a_json = next(x for x in assets_json if x['id'] == id1)
+    assert a_json['on_loan_quantity'] == 3
+    assert a_json['available_quantity'] == 7
+
+    # Can't check out more than what's available.
+    r3 = _post(c, f'/sales/assets/{id1}/checkout', borrower='Mr Bello', quantity=8)
+    assert not r3.get_json()['ok']
+
+    # Return it.
+    with app.app_context():
+        loan_id = AssetLoan.query.filter_by(asset_id=id1).first().id
+    r4 = _post(c, f'/sales/assets/loans/{loan_id}/return', return_note='All good')
+    assert r4.get_json()['ok']
+    with app.app_context():
+        loan = db.session.get(AssetLoan, loan_id)
+        assert not loan.is_out and loan.returned_at is not None
+
+    r5 = c.get('/sales/assets', headers={'X-Requested-With': 'fetch'})
+    a_json2 = next(x for x in r5.get_json()['assets'] if x['id'] == id1)
+    assert a_json2['on_loan_quantity'] == 0
+    assert a_json2['available_quantity'] == 10
+
+
+def test_checkout_unit_and_prevents_double_checkout(app):
+    from models import AssetUnit
+    c = _admin(app)
+    id1 = _add(c, 'ZzLoanUnitAsset', is_individually_tracked='on')
+    r = _post(c, f'/sales/assets/{id1}/units/add', unit_tag='ZZLOAN-001')
+    assert r.get_json()['ok']
+    with app.app_context():
+        unit_id = AssetUnit.query.filter_by(unit_tag='ZZLOAN-001').first().id
+
+    r2 = _post(c, f'/sales/assets/units/{unit_id}/checkout', borrower='Mr Okafor',
+              purpose='Result entry')
+    assert r2.get_json()['ok']
+
+    r3 = _post(c, f'/sales/assets/units/{unit_id}/checkout', borrower='Someone Else')
+    assert not r3.get_json()['ok']   # already out
+
+    r4 = c.get(f'/sales/assets/{id1}/units')
+    unit_json = next(u for u in r4.get_json()['units'] if u['id'] == unit_id)
+    assert unit_json['on_loan'] and unit_json['loan_borrower'] == 'Mr Okafor'
+
+    with app.app_context():
+        loan_id = AssetLoan.query.filter_by(unit_id=unit_id).first().id
+    r5 = _post(c, f'/sales/assets/loans/{loan_id}/return')
+    assert r5.get_json()['ok']
+
+    r6 = c.get(f'/sales/assets/{id1}/units')
+    unit_json2 = next(u for u in r6.get_json()['units'] if u['id'] == unit_id)
+    assert not unit_json2['on_loan']
+
+    # Can check it out again now that it's back.
+    r7 = _post(c, f'/sales/assets/units/{unit_id}/checkout', borrower='Mrs Yusuf')
+    assert r7.get_json()['ok']
+
+
+def test_loans_list_endpoint(app):
+    c = _admin(app)
+    id1 = _add(c, 'ZzLoanListAsset', quantity=5)
+    _post(c, f'/sales/assets/{id1}/checkout', borrower='Zz Borrower List', quantity=2)
+    r = c.get('/sales/assets/loans')
+    body = r.get_json()
+    assert body['ok']
+    assert any(l['borrower'] == 'Zz Borrower List' and l['is_out'] for l in body['loans'])

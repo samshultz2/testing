@@ -48,6 +48,7 @@ from .models_sales import (Product, Sale, SaleItem, StockMovement, Supplier,
                            PurchaseOrder, PurchaseOrderItem, SupplierPayment, PromoCode,
                            StockAudit, StockAuditItem, FixedAsset, StockBatch, AssetLog,
                            AssetStatusCount, AssetUnit, AssetMaintenance, AssetAudit, AssetAuditItem,
+                           AssetLoan,
                            UNIT_CONDITIONS, MAINTENANCE_STATUSES, AUDIT_STATUSES, AUDIT_ITEM_STATES)
 from .models_welfare import DisciplineRecord, ClinicVisit
 from .models_graduate import (GraduateAudit, GRADUATE_STATUSES, RESTRICTED_STATUSES,
@@ -63,7 +64,7 @@ __all__ = [
     'Branch', 'Product', 'Sale', 'SaleItem', 'StockMovement',
     'Supplier', 'PurchaseOrder', 'PurchaseOrderItem', 'SupplierPayment', 'PromoCode',
     'StockAudit', 'StockAuditItem', 'FixedAsset', 'StockBatch', 'AssetLog', 'AssetStatusCount',
-    'AssetUnit', 'AssetMaintenance', 'AssetAudit', 'AssetAuditItem',
+    'AssetUnit', 'AssetMaintenance', 'AssetAudit', 'AssetAuditItem', 'AssetLoan',
     'UNIT_CONDITIONS', 'MAINTENANCE_STATUSES', 'AUDIT_STATUSES', 'AUDIT_ITEM_STATES',
     'DisciplineRecord', 'ClinicVisit',
     'GraduateAudit', 'GRADUATE_STATUSES', 'RESTRICTED_STATUSES',

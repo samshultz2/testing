@@ -799,6 +799,60 @@ class AssetStatusCount(db.Model):
         return f'<AssetStatusCount asset={self.asset_id} {self.status}={self.quantity}>'
 
 
+class AssetLoan(db.Model):
+    """A temporary checkout of some quantity of a batch asset, or one
+    individually-tracked unit, to a named person for a stated purpose — e.g.
+    laptops handed to teachers to enter exam results, then returned. This is
+    deliberately NOT the same thing as a transfer/assignment: the asset's own
+    custodian/location keep meaning "where this normally lives / who's
+    normally responsible for it", while a loan is a parallel, temporary
+    ledger of what's out right now, to whom, and whether it's overdue —
+    checking something out never touches quantity/status/custodian/location
+    on the asset or unit itself. `returned_at` is NULL while still out."""
+    __tablename__ = 'asset_loans'
+
+    id = db.Column(db.Integer, primary_key=True)
+    asset_id = db.Column(db.Integer, db.ForeignKey('fixed_assets.id'), nullable=False, index=True)
+    # Set for a loan of one specific unit of an individually-tracked asset;
+    # NULL for a batch-asset loan (quantity out of the shared pool below).
+    unit_id = db.Column(db.Integer, db.ForeignKey('asset_units.id'), index=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))
+    borrower = db.Column(db.String(150), nullable=False)
+    purpose = db.Column(db.String(300))
+    quantity = db.Column(db.Integer, default=1)   # always 1 for a unit loan
+    checked_out_at = db.Column(db.DateTime, default=local_now)
+    due_back = db.Column(db.Date)
+    returned_at = db.Column(db.DateTime)
+    return_note = db.Column(db.Text)
+    note = db.Column(db.Text)
+    created_by = db.Column(db.String(100))
+    created_at = db.Column(db.DateTime, default=local_now)
+
+    asset = db.relationship('FixedAsset',
+                            backref=db.backref('loans', lazy='dynamic',
+                                               order_by='AssetLoan.checked_out_at.desc()',
+                                               cascade='all, delete-orphan'))
+    unit = db.relationship('AssetUnit',
+                           backref=db.backref('loans', lazy='dynamic',
+                                              order_by='AssetLoan.checked_out_at.desc()',
+                                              cascade='all, delete-orphan'))
+    branch = db.relationship('Branch')
+
+    @property
+    def is_out(self):
+        return self.returned_at is None
+
+    @property
+    def is_overdue(self):
+        if not self.is_out or not self.due_back:
+            return False
+        from utils import timeutil
+        return self.due_back < timeutil.today()
+
+    def __repr__(self):
+        return f'<AssetLoan asset={self.asset_id} unit={self.unit_id} -> {self.borrower}>'
+
+
 class PromoCode(db.Model):
     """A discount voucher applied at checkout — percentage or fixed amount, with
     optional minimum spend, expiry, usage cap and a category restriction."""
