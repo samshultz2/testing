@@ -122,3 +122,135 @@ def test_assets_page_and_export(app):
     assert c.get('/sales/assets').status_code == 200
     r = c.get('/sales/assets/export')
     assert r.status_code == 200 and ('spreadsheet' in r.content_type or 'officedocument' in r.content_type)
+
+
+def test_add_asset_defaults_quantity_to_one_when_omitted(app):
+    """A registration with no quantity/status-breakdown field posted (the
+    normal case when the form's default of 1 is left alone) must not create
+    a permanently stuck quantity-0 asset that can never be disposed."""
+    c = _admin(app)
+    _post(c, '/sales/assets/add', name='ZzDefaultQty', category='Other', acquisition_cost=100)
+    with app.app_context():
+        a = FixedAsset.query.filter_by(name='ZzDefaultQty').order_by(FixedAsset.id.desc()).first()
+        assert a.quantity == 1 and a.status == 'In Use'
+        assert a.status_breakdown == [{'status': 'In Use', 'quantity': 1}]
+
+
+def test_add_asset_rejects_explicit_zero_quantity(app):
+    c = _admin(app)
+    r = _post(c, '/sales/assets/add', name='ZzZeroQty', category='Other',
+             acquisition_cost=100, quantity=0)
+    assert not r.get_json()['ok']
+    with app.app_context():
+        assert FixedAsset.query.filter_by(name='ZzZeroQty').first() is None
+
+
+def test_create_audit_populates_expected_items(app):
+    """Regression test: /sales/assets/audits/create used to always 500
+    (filter_by(is_disposed=..., is_active=...) against columns that don't
+    exist on FixedAsset)."""
+    from models import AssetAudit, AssetAuditItem
+    c = _admin(app)
+    _post(c, '/sales/assets/add', name='ZzAuditableAsset', category='Furniture',
+         acquisition_cost=5000, quantity=3)
+    r = _post(c, '/sales/assets/audits/create', name='ZzAudit1')
+    assert r.get_json()['ok']
+    with app.app_context():
+        audit = AssetAudit.query.filter_by(name='ZzAudit1').first()
+        assert audit is not None and audit.status == 'Draft'
+        item = AssetAuditItem.query.filter_by(audit_id=audit.id).join(
+            FixedAsset, AssetAuditItem.asset_id == FixedAsset.id
+        ).filter(FixedAsset.name == 'ZzAuditableAsset').first()
+        assert item is not None and item.state == 'Pending' and item.quantity_expected == 3
+
+
+# --- bulk actions ------------------------------------------------------------
+
+def _add(c, name, **kw):
+    kw.setdefault('category', 'Other')
+    kw.setdefault('acquisition_cost', 1000)
+    _post(c, '/sales/assets/add', name=name, **kw)
+    with c.application.app_context():
+        return FixedAsset.query.filter_by(name=name).order_by(FixedAsset.id.desc()).first().id
+
+
+def test_bulk_transfer_moves_batch_assets_and_skips_units(app):
+    c = _admin(app)
+    id1 = _add(c, 'ZzBulkT1')
+    id2 = _add(c, 'ZzBulkT2')
+    id3 = _add(c, 'ZzBulkT3', is_individually_tracked='on')   # individually tracked
+    r = c.post('/sales/assets/bulk/transfer', headers={'X-Requested-With': 'fetch'},
+               data={'_csrf_token': 'a' * 64, 'location': 'New Store',
+                     'asset_ids': [str(id1), str(id2), str(id3)]})
+    body = r.get_json()
+    assert body['ok']
+    assert '2 asset(s) transferred' in body['message']
+    assert '1 individually-tracked' in body['message']
+    with app.app_context():
+        assert db.session.get(FixedAsset, id1).location == 'New Store'
+        assert db.session.get(FixedAsset, id2).location == 'New Store'
+        assert db.session.get(FixedAsset, id3).location != 'New Store'
+
+
+def test_bulk_dispose_retires_selected_and_posts_ledger(app):
+    c = _admin(app)
+    id1 = _add(c, 'ZzBulkD1', acquisition_cost=5000)
+    id2 = _add(c, 'ZzBulkD2', acquisition_cost=5000)
+    r = c.post('/sales/assets/bulk/dispose', headers={'X-Requested-With': 'fetch'},
+               data={'_csrf_token': 'a' * 64, 'disposal_amount': '1000',
+                     'asset_ids': [str(id1), str(id2)]})
+    assert r.get_json()['ok']
+    with app.app_context():
+        assert db.session.get(FixedAsset, id1).status == 'Disposed'
+        assert db.session.get(FixedAsset, id2).status == 'Disposed'
+        txs = FinanceTransaction.query.filter(
+            FinanceTransaction.origin_type == 'asset_disposal',
+            FinanceTransaction.origin_id.in_([id1, id2])).all()
+        assert len(txs) == 2 and all(t.amount == 1000 for t in txs)
+
+
+def test_bulk_delete_removes_selected(app):
+    c = _admin(app)
+    id1 = _add(c, 'ZzBulkDel1')
+    id2 = _add(c, 'ZzBulkDel2')
+    r = c.post('/sales/assets/bulk/delete', headers={'X-Requested-With': 'fetch'},
+               data={'_csrf_token': 'a' * 64, 'asset_ids': [str(id1), str(id2)]})
+    assert r.get_json()['ok']
+    with app.app_context():
+        assert db.session.get(FixedAsset, id1) is None
+        assert db.session.get(FixedAsset, id2) is None
+
+
+def test_bulk_actions_require_selection(app):
+    c = _admin(app)
+    for url in ('/sales/assets/bulk/transfer', '/sales/assets/bulk/assign',
+               '/sales/assets/bulk/dispose', '/sales/assets/bulk/delete'):
+        r = _post(c, url, location='X', custodian='Y')
+        assert not r.get_json()['ok']
+
+
+def test_assets_page_survives_teacher_with_no_full_name(app):
+    """Regression: /sales/assets populates its "Teacher" placement dropdown
+    via _teacher_options(), which used to sort teachers by
+    `t.user.full_name` directly — a plain nullable column. One teacher whose
+    user record had no full_name set crashed the sort (None vs str) and took
+    down the entire page, not just that dropdown."""
+    from models import User, Teacher
+    with app.app_context():
+        # Need at least one OTHER, normally-named teacher too — Python's
+        # sorted() never invokes the comparator (so never crashes) on a
+        # single-element list, so the bug only reproduces with >= 2 teachers
+        # where the sort must compare a None name against a real one.
+        if not User.query.filter_by(username='zznamedteacher').first():
+            u2 = User(username='zznamedteacher', full_name='Zz Named Teacher', role='teacher',
+                     password_hash='x', is_active=True)
+            db.session.add(u2); db.session.flush()
+            db.session.add(Teacher(user_id=u2.id, employee_id='ZZNAMED', is_active=True))
+        if not User.query.filter_by(username='zzblankname').first():
+            u = User(username='zzblankname', full_name=None, role='teacher',
+                     password_hash='x', is_active=True)
+            db.session.add(u); db.session.flush()
+            db.session.add(Teacher(user_id=u.id, employee_id='ZZBLANK', is_active=True))
+        db.session.commit()
+    c = _admin(app)
+    assert c.get('/sales/assets').status_code == 200

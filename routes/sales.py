@@ -1714,6 +1714,9 @@ def _effective_section(a):
 
 
 def _asset_dict(a):
+    _maint_records = a.maintenance_records.all()
+    _due_candidates = [m for m in _maint_records if m.next_maintenance_on]
+    next_due = max(_due_candidates, key=lambda m: m.id).next_maintenance_on if _due_candidates else None
     return {
         'id': a.id, 'name': a.name, 'asset_tag': a.asset_tag or '',
         'category': a.category, 'description': a.description or '',
@@ -1749,7 +1752,9 @@ def _asset_dict(a):
         'units_url': url_for('sales.asset_units', asset_id=a.id) if a.is_individually_tracked else '',
         'maintenance_url': url_for('sales.asset_maintenance_list', asset_id=a.id),
         'add_maintenance_url': url_for('sales.add_maintenance', asset_id=a.id),
-        'total_maintenance_cost': float(sum(m.cost or 0 for m in a.maintenance_records.all())),
+        'total_maintenance_cost': float(sum(m.cost or 0 for m in _maint_records)),
+        'next_maintenance_due': next_due.isoformat() if next_due else '',
+        'maintenance_overdue': bool(next_due and next_due < timeutil.today()),
     }
 
 
@@ -1956,14 +1961,21 @@ def _class_options():
 
 
 def _arm_options():
+    # order_by(ClassArm.name) directly can raise a database-side TypeError if
+    # any row's name is NULL (the column is declared NOT NULL, but a stray row
+    # from a migration/direct edit can still violate that) — coalesce it so a
+    # single bad row can never take down the whole /sales/assets page.
     return [{'id': ar.id, 'name': ar.name} for ar in
             ClassArm.query.filter_by(is_active=True).filter(ClassArm.is_default.isnot(True))
-            .order_by(ClassArm.name).all()]
+            .order_by(db.func.coalesce(ClassArm.name, '')).all()]
 
 
 def _teacher_options():
+    # User.full_name is a plain nullable column — a teacher whose user record
+    # never had it set would otherwise crash this sort (comparing None to a
+    # string) and take down the whole /sales/assets page over one bad row.
     teachers = scope_query(Teacher.query, Teacher).filter_by(is_active=True).all()
-    return sorted(({'id': t.id, 'name': t.user.full_name} for t in teachers if t.user),
+    return sorted(({'id': t.id, 'name': t.user.full_name or ''} for t in teachers if t.user),
                   key=lambda r: r['name'])
 
 
@@ -2026,6 +2038,10 @@ def assets():
         'analytics_url': url_for('sales.assets_analytics'),
         'snapshot_url': url_for('sales.assets_snapshot'),
         'snapshot_terms_url': url_for('sales.assets_snapshot_terms'),
+        'bulk_transfer_url': url_for('sales.bulk_transfer_assets'),
+        'bulk_assign_url': url_for('sales.bulk_assign_assets'),
+        'bulk_dispose_url': url_for('sales.bulk_dispose_assets'),
+        'bulk_delete_url': url_for('sales.bulk_delete_assets'),
         'urls': {'dashboard': url_for('sales.dashboard'), 'products': url_for('sales.products')},
     })
 
@@ -2037,7 +2053,14 @@ def add_asset():
     if not name:
         return _err('Asset name is required.', url_for('sales.assets'))
     is_individual = bool(request.form.get('is_individually_tracked'))
-    a = FixedAsset(branch_id=branch_for_new(), name=name, quantity=0,
+    # Default quantity is 1, not 0 — this is only the starting point
+    # _compute_target_breakdown() falls back to when the form omits both an
+    # explicit quantity and a status-breakdown split (it otherwise means
+    # "keep whatever's already there", which for a brand-new asset would
+    # silently register it at quantity 0: permanently stuck at status 'In
+    # Use' with no AssetStatusCount row, since _set_status_breakdown() never
+    # writes a zero-quantity bucket — so it could never actually be disposed.
+    a = FixedAsset(branch_id=branch_for_new(), name=name, quantity=1,
                    is_individually_tracked=is_individual,
                    acquisition_date=timeutil.today(), created_by=_actor(),
                    # Initial placement is set directly — there's no prior
@@ -2059,6 +2082,10 @@ def add_asset():
             created_by=_actor()))
     else:
         target = _compute_target_breakdown(a, request.form)
+        if sum(target.values()) <= 0:
+            db.session.rollback()
+            return _err('Enter a quantity of at least 1 (or a status breakdown '
+                       'that adds up to at least 1).', url_for('sales.assets'))
         _record_asset_event(a, 'created', target,
                             note=(request.form.get('change_note') or '').strip() or None)
     db.session.commit()
@@ -2169,6 +2196,166 @@ def delete_asset(asset_id):
     db.session.delete(a)
     db.session.commit()
     return _ok(f'"{name}" deleted.', url_for('sales.assets'))
+
+
+# ---------------------------------------------------------------------------
+# Bulk actions on the register — select several assets in one click and
+# transfer/assign/dispose/delete them together in a single request, reusing
+# exactly the same per-asset logic (_record_placement_event/_record_asset_
+# event/_actor) the single-asset routes above use, so bulk and single-asset
+# actions can never drift apart. Individually-tracked asset TYPES are skipped
+# by transfer/assign/dispose (those apply per-unit for that kind, via the
+# Units panel) — never silently mishandled, always counted and reported back.
+# ---------------------------------------------------------------------------
+
+def _bulk_asset_ids():
+    ids = []
+    for raw in request.form.getlist('asset_ids'):
+        try:
+            ids.append(int(raw))
+        except (TypeError, ValueError):
+            continue
+    return ids
+
+
+@sales_bp.route('/assets/bulk/transfer', methods=['POST'])
+@login_required
+def bulk_transfer_assets():
+    ids = _bulk_asset_ids()
+    new_location = (request.form.get('location') or '').strip()
+    if not ids:
+        return _err('Select at least one asset.', url_for('sales.assets'))
+    if not new_location:
+        return _err('Enter the destination location.', url_for('sales.assets'))
+    note = (request.form.get('note') or '').strip() or None
+    moved = skipped_unit = skipped_branch = skipped_same = 0
+    for a in FixedAsset.query.filter(FixedAsset.id.in_(ids)).all():
+        if not can_access_branch(a.branch_id):
+            skipped_branch += 1; continue
+        if a.is_individually_tracked:
+            skipped_unit += 1; continue
+        if new_location == (a.location or ''):
+            skipped_same += 1; continue
+        _record_placement_event(a, location=new_location, note=note)
+        moved += 1
+    db.session.commit()
+    msg = f'{moved} asset(s) transferred to {new_location}.'
+    extras = []
+    if skipped_unit:
+        extras.append(f'{skipped_unit} individually-tracked (use Units instead)')
+    if skipped_same:
+        extras.append(f'{skipped_same} already there')
+    if skipped_branch:
+        extras.append(f'{skipped_branch} outside your branch')
+    if extras:
+        msg += ' Skipped: ' + ', '.join(extras) + '.'
+    return _ok(msg, url_for('sales.assets'))
+
+
+@sales_bp.route('/assets/bulk/assign', methods=['POST'])
+@login_required
+def bulk_assign_assets():
+    ids = _bulk_asset_ids()
+    new_custodian = (request.form.get('custodian') or '').strip()
+    if not ids:
+        return _err('Select at least one asset.', url_for('sales.assets'))
+    note = (request.form.get('note') or '').strip() or None
+    changed = skipped_unit = skipped_branch = skipped_same = 0
+    for a in FixedAsset.query.filter(FixedAsset.id.in_(ids)).all():
+        if not can_access_branch(a.branch_id):
+            skipped_branch += 1; continue
+        if a.is_individually_tracked:
+            skipped_unit += 1; continue
+        if new_custodian == (a.custodian or ''):
+            skipped_same += 1; continue
+        _record_placement_event(a, custodian=new_custodian, note=note)
+        changed += 1
+    db.session.commit()
+    verb = f'assigned to {new_custodian}' if new_custodian else 'unassigned'
+    msg = f'{changed} asset(s) {verb}.'
+    extras = []
+    if skipped_unit:
+        extras.append(f'{skipped_unit} individually-tracked (use Units instead)')
+    if skipped_same:
+        extras.append(f'{skipped_same} already set')
+    if skipped_branch:
+        extras.append(f'{skipped_branch} outside your branch')
+    if extras:
+        msg += ' Skipped: ' + ', '.join(extras) + '.'
+    return _ok(msg, url_for('sales.assets'))
+
+
+@sales_bp.route('/assets/bulk/dispose', methods=['POST'])
+@login_required
+def bulk_dispose_assets():
+    """Fully retire each selected asset (the bulk equivalent of Dispose with
+    no quantity given — always a FULL disposal; use the single-asset Dispose
+    for a partial write-off). The same disposal amount/note/method is applied
+    to every selected asset — dispose individually for a per-asset figure."""
+    ids = _bulk_asset_ids()
+    if not ids:
+        return _err('Select at least one asset.', url_for('sales.assets'))
+    proceeds = request.form.get('disposal_amount', type=float) or 0
+    note = (request.form.get('disposal_note') or '').strip() or None
+    method = request.form.get('method') or 'Cash'
+    disposed_on = parse_date(request.form.get('disposed_on')) or timeutil.today()
+    from utils import finance_ledger as _fl
+    done = skipped_unit = skipped_branch = skipped_disposed = 0
+    for a in FixedAsset.query.filter(FixedAsset.id.in_(ids)).all():
+        if not can_access_branch(a.branch_id):
+            skipped_branch += 1; continue
+        if a.is_individually_tracked:
+            skipped_unit += 1; continue
+        if a.is_disposed:
+            skipped_disposed += 1; continue
+        status_before, qty_before = a.status, a.quantity
+        target = {'Disposed': a.quantity}
+        a.disposed_on = disposed_on
+        a.disposal_amount = (a.disposal_amount or 0) + proceeds
+        a.disposal_note = note or a.disposal_note
+        _record_asset_event(a, 'disposed', target, quantity_before=qty_before,
+                            status_before=status_before, note=note)
+        db.session.flush()
+        if proceeds > 0:
+            _fl.post(_fl.REVENUE, proceeds, source_module='assets',
+                     category='Asset Disposal', branch_id=a.branch_id, method=method,
+                     origin_type='asset_disposal', origin_id=a.id,
+                     reference=a.asset_tag or a.name, description=f'Disposal of {a.name}',
+                     created_by=_actor())
+        done += 1
+    db.session.commit()
+    msg = f'{done} asset(s) disposed.'
+    extras = []
+    if skipped_unit:
+        extras.append(f'{skipped_unit} individually-tracked (dispose their units instead)')
+    if skipped_disposed:
+        extras.append(f'{skipped_disposed} already disposed')
+    if skipped_branch:
+        extras.append(f'{skipped_branch} outside your branch')
+    if extras:
+        msg += ' Skipped: ' + ', '.join(extras) + '.'
+    return _ok(msg, url_for('sales.assets'))
+
+
+@sales_bp.route('/assets/bulk/delete', methods=['POST'])
+@login_required
+def bulk_delete_assets():
+    ids = _bulk_asset_ids()
+    if not ids:
+        return _err('Select at least one asset.', url_for('sales.assets'))
+    from utils.audit import log_action
+    deleted = skipped_branch = 0
+    for a in FixedAsset.query.filter(FixedAsset.id.in_(ids)).all():
+        if not can_access_branch(a.branch_id):
+            skipped_branch += 1; continue
+        log_action('sales.asset_delete', detail=f'{a.name} (tag {a.asset_tag or "—"})', target=a)
+        db.session.delete(a)
+        deleted += 1
+    db.session.commit()
+    msg = f'{deleted} asset(s) deleted.'
+    if skipped_branch:
+        msg += f' Skipped {skipped_branch} outside your branch.'
+    return _ok(msg, url_for('sales.assets'))
 
 
 @sales_bp.route('/products/<int:product_id>/convert-asset', methods=['POST'])
@@ -3264,12 +3451,17 @@ def asset_create_audit():
     db.session.flush()
 
     # Build the expected item list from assets currently in this branch.
-    q = FixedAsset.query.filter_by(branch_id=bid, is_disposed=False, is_active=True if False else True)
-    q = q.filter(FixedAsset.is_disposed.is_(False))
+    # `is_disposed` is a computed Python property (quantity>0 and
+    # active_quantity<=0), not a mapped column, so it's filtered here after
+    # the query rather than passed to filter_by()/filter() — an assets
+    # register is small enough that this costs nothing meaningful.
+    q = FixedAsset.query.filter_by(branch_id=bid)
     if cat_filter:
         q = q.filter(FixedAsset.category == cat_filter)
     generated = 0
     for a in q.all():
+        if a.is_disposed:
+            continue
         if a.is_individually_tracked:
             for u in a.units.filter_by(is_disposed=False).all():
                 db.session.add(AssetAuditItem(

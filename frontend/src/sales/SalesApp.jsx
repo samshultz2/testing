@@ -1475,6 +1475,11 @@ function Assets({ d, notify }) {
   const [managingUnits, setManagingUnits] = useState(null);
   const [viewingMaintenance, setViewingMaintenance] = useState(null);
   const [viewingHistory, setViewingHistory] = useState(null);
+  const [selected, setSelected] = useState(() => new Set());
+  const [bulkDisposing, setBulkDisposing] = useState(false);
+  const [bulkTransferTo, setBulkTransferTo] = useState('');
+  const [bulkAssignTo, setBulkAssignTo] = useState('');
+  const [bulkBusy, setBulkBusy] = useState(false);
   const shown = d.assets.filter((a) => {
     if (q && !(`${a.name} ${a.asset_tag} ${a.serial_number}`.toLowerCase().includes(q.toLowerCase()))) return false;
     if (cat && a.category !== cat) return false;
@@ -1482,6 +1487,9 @@ function Assets({ d, notify }) {
     if (section && a.effective_section !== section) return false;
     return true;
   });
+  // A filter change can hide rows that were selected — clear the selection
+  // rather than leave invisible/stale ids acted on by the bulk bar.
+  useEffect(() => { setSelected(new Set()); }, [q, cat, status, section]);
   const badge = (st) => {
     const tone = st === 'In Use' ? 'badge-success' : st === 'Disposed' ? 'badge-secondary'
       : st === 'Under Repair' ? 'badge-warning' : st === 'Lost' ? 'badge-danger' : 'badge-info';
@@ -1493,6 +1501,36 @@ function Assets({ d, notify }) {
     if (!ok) return;
     const r = await submitJson(a.delete_url, {});
     if (r.ok) nav.refresh(); else notify('error', r.error || 'Could not delete.');
+  };
+  const toggleOne = (id) => setSelected((s) => {
+    const n = new Set(s);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    return n;
+  });
+  const allShownSelected = shown.length > 0 && shown.every((a) => selected.has(a.id));
+  const toggleAll = () => setSelected(allShownSelected ? new Set() : new Set(shown.map((a) => a.id)));
+  const selectedIds = [...selected];
+  const clearSelection = () => setSelected(new Set());
+  const runBulk = async (url, payload, fallback) => {
+    setBulkBusy(true);
+    const r = await submitJson(url, { ...payload, asset_ids: selectedIds });
+    setBulkBusy(false);
+    if (r.ok) { notify('success', r.message || fallback); clearSelection(); nav.refresh(); }
+    else notify('error', r.error || 'Bulk action failed.');
+    return r.ok;
+  };
+  const doBulkTransfer = async () => {
+    if (!bulkTransferTo.trim()) { notify('error', 'Enter the destination location.'); return; }
+    if (await runBulk(d.bulk_transfer_url, { location: bulkTransferTo.trim() }, 'Transferred.')) setBulkTransferTo('');
+  };
+  const doBulkAssign = async () => {
+    if (await runBulk(d.bulk_assign_url, { custodian: bulkAssignTo.trim() }, 'Assigned.')) setBulkAssignTo('');
+  };
+  const doBulkDelete = async () => {
+    const ok = await confirm({ title: 'Delete selected assets', tone: 'danger', confirmText: 'Delete',
+      message: `Permanently delete ${selectedIds.length} selected asset(s)? This removes their full history too — this can't be undone.` });
+    if (!ok) return;
+    runBulk(d.bulk_delete_url, {}, 'Deleted.');
   };
   return (
     <>
@@ -1530,12 +1568,43 @@ function Assets({ d, notify }) {
             <select className="form-control" value={status} onChange={(e) => setStatus(e.target.value)} style={{ maxWidth: 160 }}><option value="">All statuses</option>{d.statuses.map((st) => <option key={st}>{st}</option>)}</select>
             <select className="form-control" value={section} onChange={(e) => setSection(e.target.value)} style={{ maxWidth: 180 }}><option value="">All sections</option>{d.sections.map((sc) => <option key={sc.key} value={sc.key}>{sc.label}</option>)}</select>
           </div></div>
+          {selectedIds.length > 0 && (
+            <div className="card mb-3" style={{ borderColor: 'var(--primary)' }}>
+              <div className="card-body" style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
+                <strong style={{ marginRight: '.25rem' }}>{selectedIds.length} selected</strong>
+                <input className="form-control" style={{ maxWidth: 170 }} placeholder="New location…"
+                       value={bulkTransferTo} onChange={(e) => setBulkTransferTo(e.target.value)} disabled={bulkBusy} />
+                <button type="button" className="btn btn-sm btn-secondary" disabled={bulkBusy || !bulkTransferTo.trim()}
+                        onClick={doBulkTransfer} title="Transfer selected (batch-tracked only)">
+                  <i aria-hidden="true" className="fas fa-truck-ramp-box" /> Transfer
+                </button>
+                <input className="form-control" style={{ maxWidth: 170 }} placeholder="Custodian (blank = unassign)…"
+                       value={bulkAssignTo} onChange={(e) => setBulkAssignTo(e.target.value)} disabled={bulkBusy} />
+                <button type="button" className="btn btn-sm btn-secondary" disabled={bulkBusy}
+                        onClick={doBulkAssign} title="Assign selected (batch-tracked only)">
+                  <i aria-hidden="true" className="fas fa-user-tag" /> Assign
+                </button>
+                <button type="button" className="btn btn-sm btn-warning" disabled={bulkBusy}
+                        onClick={() => setBulkDisposing(true)} title="Dispose selected (batch-tracked only)">
+                  <i aria-hidden="true" className="fas fa-box-archive" /> Dispose
+                </button>
+                <button type="button" className="btn btn-sm btn-danger" disabled={bulkBusy}
+                        onClick={doBulkDelete} title="Permanently delete selected">
+                  <i aria-hidden="true" className="fas fa-trash" /> Delete
+                </button>
+                <button type="button" className="btn btn-sm btn-light" onClick={clearSelection} style={{ marginLeft: 'auto' }}>Clear</button>
+              </div>
+            </div>
+          )}
           <div className="card"><div className="card-header"><h3>Assets ({shown.length})</h3></div>
             <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
               {shown.length ? (
-                <table className="data-table"><thead><tr><th>Asset</th><th>Category</th><th className="text-right">Qty</th><th>Assigned to</th><th className="text-right">Book value</th><th>Custodian</th><th>Status</th><th /></tr></thead>
+                <table className="data-table"><thead><tr>
+                  <th style={{ width: 30 }}><input type="checkbox" checked={allShownSelected} onChange={toggleAll} aria-label="Select all shown" /></th>
+                  <th>Asset</th><th>Category</th><th className="text-right">Qty</th><th>Assigned to</th><th className="text-right">Book value</th><th>Custodian</th><th>Status</th><th /></tr></thead>
                   <tbody>{shown.map((a) => (
-                    <tr key={a.id}>
+                    <tr key={a.id} className={selected.has(a.id) ? 'is-selected' : ''}>
+                      <td><input type="checkbox" checked={selected.has(a.id)} onChange={() => toggleOne(a.id)} aria-label={`Select ${a.name}`} /></td>
                       <td><strong>{a.name}</strong>{a.asset_tag && <span className="text-muted text-sm"> · {a.asset_tag}</span>}{a.from_product && <span className="badge badge-light" title="Converted from inventory" style={{ marginLeft: 4 }}>stock</span>}{a.serial_number && <div className="text-muted text-sm">SN {a.serial_number}</div>}</td>
                       <td>{a.category}</td>
                       <td className="text-right"><strong>{a.quantity}</strong></td>
@@ -1556,7 +1625,12 @@ function Assets({ d, notify }) {
                       </td>
                       <td><div style={{ display: 'flex', gap: '.3rem' }}>
                         <button type="button" className="btn btn-sm btn-light" onClick={() => setViewingHistory(a)} title="History"><i aria-hidden="true" className="fas fa-clock-rotate-left" /></button>
-                        <button type="button" className="btn btn-sm btn-light" onClick={() => setViewingMaintenance(a)} title="Maintenance"><i aria-hidden="true" className="fas fa-wrench" /></button>
+                        <button type="button" className={'btn btn-sm ' + (a.maintenance_overdue ? 'btn-danger' : a.next_maintenance_due ? 'btn-warning' : 'btn-light')}
+                                onClick={() => setViewingMaintenance(a)}
+                                title={a.maintenance_overdue ? `Maintenance overdue (due ${a.next_maintenance_due})`
+                                     : a.next_maintenance_due ? `Next maintenance due ${a.next_maintenance_due}` : 'Maintenance'}>
+                          <i aria-hidden="true" className="fas fa-wrench" />
+                        </button>
                         {a.is_individually_tracked
                           ? <button type="button" className="btn btn-sm btn-primary" onClick={() => setManagingUnits(a)} title="Manage physical units"><i aria-hidden="true" className="fas fa-qrcode" /> Units</button>
                           : <>
@@ -1586,6 +1660,9 @@ function Assets({ d, notify }) {
       {viewingHistory && <AssetHistoryModal asset={viewingHistory} onClose={() => setViewingHistory(null)} />}
       {viewingMaintenance && <AssetMaintenanceModal asset={viewingMaintenance} d={d} notify={notify}
                                                     onClose={() => setViewingMaintenance(null)} onSaved={() => { setViewingMaintenance(null); nav.refresh(); }} />}
+      {bulkDisposing && <BulkDisposeModal count={selectedIds.length} url={d.bulk_dispose_url} notify={notify}
+                                          onClose={() => setBulkDisposing(false)}
+                                          onSaved={(msg) => { setBulkDisposing(false); notify('success', msg); clearSelection(); nav.refresh(); }} />}
     </>
   );
 }
@@ -1615,6 +1692,9 @@ function AssetForm({ d, asset, onClose, onSaved, notify }) {
   const splitTotal = splitRows.reduce((sum, r) => sum + (parseInt(r.quantity, 10) || 0), 0);
   const save = async () => {
     if (!f.name.trim()) { notify('error', 'Asset name is required.'); return; }
+    if (!individual && !useSplit && !asset && (parseInt(f.quantity, 10) || 0) <= 0) {
+      notify('error', 'Enter a quantity of at least 1.'); return;
+    }
     const payload = { ...f, is_individually_tracked: individual ? 'on' : '' };
     if (individual) {
       delete payload.quantity; delete payload.status;
@@ -1642,7 +1722,7 @@ function AssetForm({ d, asset, onClose, onSaved, notify }) {
         <Field label="Name *"><input className="form-control" value={f.name} onChange={(e) => set('name', e.target.value)} /></Field>
         <Field label="Asset tag"><input className="form-control" value={f.asset_tag} onChange={(e) => set('asset_tag', e.target.value)} /></Field>
         <Field label="Category"><select className="form-control" value={f.category} onChange={(e) => set('category', e.target.value)}>{d.categories.map((c) => <option key={c}>{c}</option>)}</select></Field>
-        {!individual && !useSplit && <Field label="Quantity *"><input type="number" min="0" className="form-control" value={f.quantity} onChange={(e) => set('quantity', e.target.value)} placeholder="e.g. 30 laptops" /></Field>}
+        {!individual && !useSplit && <Field label="Quantity *"><input type="number" min="1" className="form-control" value={f.quantity} onChange={(e) => set('quantity', e.target.value)} placeholder="e.g. 30 laptops" /></Field>}
         <Field label="Serial number"><input className="form-control" value={f.serial_number} onChange={(e) => set('serial_number', e.target.value)} /></Field>
         <Field label="Acquisition cost (₦)"><input type="number" className="form-control" value={f.acquisition_cost} onChange={(e) => set('acquisition_cost', e.target.value)} /></Field>
         <Field label="Acquired on"><input type="date" className="form-control" value={f.acquisition_date} onChange={(e) => set('acquisition_date', e.target.value)} /></Field>
@@ -1728,6 +1808,33 @@ function DisposeModal({ asset, onClose, onSaved, notify }) {
   );
 }
 
+function BulkDisposeModal({ count, url, onClose, onSaved, notify }) {
+  const [f, setF] = useState({ disposed_on: '', disposal_amount: '', method: 'Cash', disposal_note: '' });
+  const [busy, setBusy] = useState(false);
+  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  const save = async () => {
+    setBusy(true);
+    const r = await submitJson(url, f);
+    setBusy(false);
+    if (r.ok) onSaved(r.message); else notify('error', r.error || 'Could not dispose.');
+  };
+  return (
+    <Modal title={`Dispose ${count} selected asset(s)`} icon="fa-box-archive" size="md" onClose={onClose}
+           footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button variant="danger" onClick={save} disabled={busy}>Dispose all</Button></>}>
+      <p className="text-muted text-sm" style={{ marginTop: 0 }}>
+        Each selected asset is retired IN FULL (individually-tracked types and already-disposed assets are skipped).
+        The same proceeds/note apply to every one — dispose individually instead for a different amount per asset.
+      </p>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: '.6rem' }}>
+        <Field label="Disposed on"><input type="date" className="form-control" value={f.disposed_on} onChange={(e) => set('disposed_on', e.target.value)} /></Field>
+        <Field label="Proceeds per asset (₦)"><input type="number" className="form-control" value={f.disposal_amount} onChange={(e) => set('disposal_amount', e.target.value)} /></Field>
+        <Field label="Method"><select className="form-control" value={f.method} onChange={(e) => set('method', e.target.value)}><option>Cash</option><option>Transfer</option><option>POS</option></select></Field>
+        <Field label="Note" wide><input className="form-control" value={f.disposal_note} onChange={(e) => set('disposal_note', e.target.value)} /></Field>
+      </div>
+    </Modal>
+  );
+}
+
 function AssetUnitsModal({ asset, d, onClose, onSaved, notify }) {
   const [units, setUnits] = useState(null);
   const [addUrl, setAddUrl] = useState('');
@@ -1735,6 +1842,7 @@ function AssetUnitsModal({ asset, d, onClose, onSaved, notify }) {
   const [addF, setAddF] = useState({ count: '1', prefix: '', unit_tag: '', serial_number: '', location: '', condition: 'Good', status: 'In Use' });
   const setAdd = (k, v) => setAddF((s) => ({ ...s, [k]: v }));
   const [busy, setBusy] = useState(false);
+  const [viewingUnitHistory, setViewingUnitHistory] = useState(null);
   const reload = async () => {
     try {
       const r = await apiGet(asset.units_url);
@@ -1759,6 +1867,7 @@ function AssetUnitsModal({ asset, d, onClose, onSaved, notify }) {
   const COND_COLOR = { Good: 'b-ok', Fair: 'b-warn', Poor: 'b-bad' };
   const STAT_COLOR = { 'In Use': 'b-ok', 'Under Repair': 'b-warn', 'Lost': 'b-bad', 'Disposed': 'b-bad' };
   return (
+    <>
     <Modal title={`Units — ${asset.name}`} icon="fa-qrcode" size="xl" onClose={onClose}
            footer={<Button variant="secondary" onClick={onClose}>Close</Button>}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
@@ -1821,7 +1930,7 @@ function AssetUnitsModal({ asset, d, onClose, onSaved, notify }) {
                     ]}
                     onSubmit={(p) => doAct(u.status_url, p)} />
                   <button type="button" className="btn btn-sm btn-light" title="History"
-                    onClick={async () => { const r = await apiGet(u.history_url); notify('info', `${r.logs?.length || 0} event(s) — see dev console`); console.table(r.logs); }}><i aria-hidden="true" className="fas fa-clock-rotate-left" /></button>
+                    onClick={() => setViewingUnitHistory(u)}><i aria-hidden="true" className="fas fa-clock-rotate-left" /></button>
                   <button type="button" className="btn btn-sm btn-light text-danger" title="Delete unit"
                     onClick={async () => { if (await confirm(`Delete ${u.unit_tag}?`)) doAct(u.delete_url, {}); }}><i aria-hidden="true" className="fas fa-trash" /></button>
                 </div>
@@ -1831,6 +1940,10 @@ function AssetUnitsModal({ asset, d, onClose, onSaved, notify }) {
         </div>
       )}
     </Modal>
+    {viewingUnitHistory && <AssetHistoryModal
+      asset={{ name: viewingUnitHistory.unit_tag, history_url: viewingUnitHistory.history_url }}
+      onClose={() => setViewingUnitHistory(null)} />}
+    </>
   );
 }
 
