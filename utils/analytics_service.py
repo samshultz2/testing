@@ -673,9 +673,13 @@ class AcademicAnalytics:
         """Get comprehensive school-wide JAMB statistics"""
         results = AcademicAnalytics._by_branch(
             JAMBResult.query.filter_by(exam_year=exam_year), JAMBResult, branch_id).all()
+        # A row with no total_score (a legacy/partial import) can't feed the
+        # arithmetic below — drop it rather than let sum()/max()/sorted() blow
+        # up the whole analytics page over one bad record.
+        results = [r for r in results if r.total_score is not None]
         if not results:
             return None
-        
+
         scores = [r.total_score for r in results]
         
         # Score distribution
@@ -734,7 +738,7 @@ class AcademicAnalytics:
             'subject_analysis': subject_analysis,
             'top_10': [{
                 'student_id': r.student_id,
-                'student_name': r.student.full_name,
+                'student_name': r.student.full_name if r.student else '—',
                 'score': r.total_score
             } for r in ranked_students[:10]]
         }
@@ -778,7 +782,7 @@ class AcademicAnalytics:
             waec = student.waec_results.filter_by(exam_year=exam_year).all()
             jamb = student.jamb_results.filter_by(exam_year=exam_year).first()
             
-            if waec and jamb:
+            if waec and jamb and jamb.total_score is not None:
                 total_points = sum(AcademicAnalytics.GRADE_POINTS.get(r.grade, 9) for r in waec)
                 avg_points = total_points / len(waec)
                 waec_points.append(avg_points)

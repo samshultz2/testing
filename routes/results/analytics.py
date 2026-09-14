@@ -445,7 +445,12 @@ def analytics_hub():
                 'mean_jamb': round(sum(ys) / len(ys), 1),
             }
 
-    # Trends from data we capture but didn't previously analyse.
+    # Trends from data we capture but didn't previously analyse. Mock JAMB/WAEC
+    # progression is single-session data — scope it to ``year_session`` (the
+    # session implied by the selected ?year, already resolved above, active
+    # session as fallback), not whatever session happens to be live today, so
+    # viewing a past year's analytics shows that year's mock-exam progression
+    # rather than always the current session's.
     from utils import exam_trends
     active_sess = get_active_session()
     if year_session is None:
@@ -453,8 +458,8 @@ def analytics_hub():
         if year_session:
             year_terms = _Term.query.filter_by(session_id=year_session.id).all()
 
-    mock_trend = _mock_jamb_trend(bid)
-    mock_waec_trend = _mock_waec_trend(bid)
+    mock_trend = _mock_jamb_trend(bid, year_session)
+    mock_waec_trend = _mock_waec_trend(bid, year_session)
     at_risk = _at_risk_register(limit=25)
 
     # attendance × JAMB correlation — scoped to the cohort that sat exams in
