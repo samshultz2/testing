@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}Add Co-Schedule Rule - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <a href="{{ url_for('generator.clash_rules_list') }}">Clash Rules</a> / <span>Add Co-Schedule Rule</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="fas fa-link"></i> Add Co-Schedule Rule</h1>
+</div>
+
+<p class="text-muted mb-3">Pair two subjects so they're always scheduled at the exact same time — e.g. when a combined
+    class splits into two streams for electives, so one stream isn't in class while the other is idle. Both sides
+    need a specific class and arm; teacher clashes for either subject are already prevented automatically.</p>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label class="form-label">Rule Name *</label>
+                <input type="text" name="name" class="form-control" required placeholder="e.g., Lit (Daisy) + Accounting (Iris)">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Description</label>
+                <textarea name="description" class="form-control" rows="2" placeholder="Explain why this pairing exists"></textarea>
+            </div>
+
+            <fieldset style="border: 1px solid #ddd; padding: 1rem; margin-bottom: 1rem; border-radius: 4px;">
+                <legend style="width: auto; padding: 0 0.5rem; font-weight: bold;">Source Subject</legend>
+
+                <div class="form-group">
+                    <label class="form-label">Subject *</label>
+                    <select name="source_subject_id" class="form-control" required>
+                        <option value="">Select Subject</option>
+                        {% for s in subjects %}
+                        <option value="{{ s.id }}">{{ s.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label">Class *</label>
+                            <select name="source_class_name" class="form-control" required id="sourceClass">
+                                <option value="">Select Class</option>
+                                {% for c in classes %}
+                                <option value="{{ c.class_name }}" data-arms="{{ c.arm_names }}">{{ c.class_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label">Arm *</label>
+                            <select name="source_arm_name" class="form-control" required id="sourceArm">
+                                <option value="">Select Arm</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </fieldset>
+
+            <fieldset style="border: 1px solid #ddd; padding: 1rem; margin-bottom: 1rem; border-radius: 4px;">
+                <legend style="width: auto; padding: 0 0.5rem; font-weight: bold;">Paired With (Target Subject)</legend>
+
+                <div class="form-group">
+                    <label class="form-label">Subject *</label>
+                    <select name="target_subject_id" class="form-control" required>
+                        <option value="">Select Subject</option>
+                        {% for s in subjects %}
+                        <option value="{{ s.id }}">{{ s.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label">Class *</label>
+                            <select name="target_class_name" class="form-control" required id="targetClass">
+                                <option value="">Select Class</option>
+                                {% for c in classes %}
+                                <option value="{{ c.class_name }}" data-arms="{{ c.arm_names }}">{{ c.class_name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label class="form-label">Arm *</label>
+                            <select name="target_arm_name" class="form-control" required id="targetArm">
+                                <option value="">Select Arm</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </fieldset>
+
+            <p class="text-muted text-sm">If the two subjects run a different number of periods per week (e.g.
+                Literature 4×, Accounting 5×), only the smaller count gets paired up — the rest of the larger
+                subject's periods are scheduled freely.</p>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Rule</button>
+                <a href="{{ url_for('generator.clash_rules_list') }}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+.row { display: flex; flex-wrap: wrap; margin: 0 -0.5rem; }
+.col-md-6 { flex: 0 0 50%; max-width: 50%; padding: 0 0.5rem; }
+@media (max-width: 768px) { .col-md-6 { flex: 0 0 100%; max-width: 100%; } }
+</style>
+
+<script nonce="{{ csp_nonce }}">
+document.getElementById('sourceClass').addEventListener('change', function() {
+    const arms = this.options[this.selectedIndex].dataset.arms;
+    const armSelect = document.getElementById('sourceArm');
+    armSelect.innerHTML = '<option value="">Select Arm</option>';
+    if (arms) {
+        arms.split(',').forEach(arm => {
+            // new Option() sets value/text safely (no markup injection from arm names).
+            armSelect.add(new Option(arm.trim(), arm.trim()));
+        });
+    }
+});
+
+document.getElementById('targetClass').addEventListener('change', function() {
+    const arms = this.options[this.selectedIndex].dataset.arms;
+    const armSelect = document.getElementById('targetArm');
+    armSelect.innerHTML = '<option value="">Select Arm</option>';
+    if (arms) {
+        arms.split(',').forEach(arm => {
+            // new Option() sets value/text safely (no markup injection from arm names).
+            armSelect.add(new Option(arm.trim(), arm.trim()));
+        });
+    }
+});
+</script>
+{% endblock %}

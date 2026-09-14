@@ -94,7 +94,8 @@ def test_client_sinks_are_escaped():
 
     # generator arm modals build options safely (no innerHTML += of arm names)
     for f in ('templates/generator/add_clash_rule.html',
-              'templates/generator/add_combined_rule.html'):
+              'templates/generator/add_combined_rule.html',
+              'templates/generator/add_coschedule_rule.html'):
         src = _read(f)
         assert 'new Option(' in src
         assert '<option value="${arm' not in src

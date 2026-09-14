@@ -98,14 +98,16 @@ def save_generator_settings():
 @login_required
 def clash_rules_list():
     """List all subject clash rules"""
-    from models import GenSubjectClashRule, GenCombinedClassRule
-    
+    from models import GenSubjectClashRule, GenCombinedClassRule, GenCoScheduleRule
+
     clash_rules = GenSubjectClashRule.query.filter_by(branch_id=gen_bid()).order_by(GenSubjectClashRule.id).all()
     combined_rules = GenCombinedClassRule.query.filter_by(branch_id=gen_bid()).order_by(GenCombinedClassRule.id).all()
-    
+    coschedule_rules = GenCoScheduleRule.query.filter_by(branch_id=gen_bid()).order_by(GenCoScheduleRule.id).all()
+
     return render_template('generator/clash_rules.html',
         clash_rules=clash_rules,
-        combined_rules=combined_rules
+        combined_rules=combined_rules,
+        coschedule_rules=coschedule_rules
     )
 
 
@@ -234,10 +236,80 @@ def toggle_combined_rule(rule_id):
 def delete_combined_rule(rule_id):
     """Delete a combined rule"""
     from models import GenCombinedClassRule
-    
+
     rule = gen_owned_or_404(GenCombinedClassRule, rule_id)
     db.session.delete(rule)
     db.session.commit()
-    
+
+    flash('Rule deleted', 'success')
+    return redirect(url_for('generator.clash_rules_list'))
+
+
+@generator_bp.route('/coschedule-rules/add', methods=['GET', 'POST'])
+@login_required
+def add_coschedule_rule():
+    """Add a new co-schedule rule (pair two subjects into the same slot)"""
+    from models import GenCoScheduleRule, GenClassConfig
+
+    if request.method == 'POST':
+        try:
+            rule = GenCoScheduleRule(
+                branch_id=gen_bid(),
+                name=request.form.get('name', '').strip(),
+                description=request.form.get('description', '').strip() or None,
+                source_subject_id=int(request.form.get('source_subject_id')),
+                source_class_name=request.form.get('source_class_name'),
+                source_arm_name=request.form.get('source_arm_name'),
+                target_subject_id=int(request.form.get('target_subject_id')),
+                target_class_name=request.form.get('target_class_name'),
+                target_arm_name=request.form.get('target_arm_name'),
+                is_active=True
+            )
+            if not rule.source_arm_name or not rule.target_arm_name:
+                raise ValueError('Both sides need a specific arm — a co-schedule pairing '
+                                 'needs an exact 1:1 match between two named groups.')
+            db.session.add(rule)
+            db.session.commit()
+            flash('Co-schedule rule added successfully', 'success')
+            return redirect(url_for('generator.clash_rules_list'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error adding rule: {str(e)}', 'error')
+
+    level = get_current_level()
+    subjects = GenSubject.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).order_by(GenSubject.name).all()
+    classes = GenClassConfig.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).order_by(GenClassConfig.class_name).all()
+
+    return render_template('generator/add_coschedule_rule.html',
+        subjects=subjects,
+        classes=classes
+    )
+
+
+@generator_bp.route('/coschedule-rules/<int:rule_id>/toggle', methods=['POST'])
+@login_required
+def toggle_coschedule_rule(rule_id):
+    """Toggle a co-schedule rule active/inactive"""
+    from models import GenCoScheduleRule
+
+    rule = gen_owned_or_404(GenCoScheduleRule, rule_id)
+    rule.is_active = not rule.is_active
+    db.session.commit()
+
+    status = 'activated' if rule.is_active else 'deactivated'
+    flash(f'Rule {status}', 'success')
+    return redirect(url_for('generator.clash_rules_list'))
+
+
+@generator_bp.route('/coschedule-rules/<int:rule_id>/delete', methods=['POST'])
+@login_required
+def delete_coschedule_rule(rule_id):
+    """Delete a co-schedule rule"""
+    from models import GenCoScheduleRule
+
+    rule = gen_owned_or_404(GenCoScheduleRule, rule_id)
+    db.session.delete(rule)
+    db.session.commit()
+
     flash('Rule deleted', 'success')
     return redirect(url_for('generator.clash_rules_list'))

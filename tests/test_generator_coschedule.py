@@ -1,0 +1,161 @@
+"""Timetable generator: co-schedule rules pair two subjects (usually from
+different arms of a combined class) into the exact same slot every time —
+the mirror of the existing subject-clash rules, which forbid that."""
+from config import Config
+from models import (
+    db, Branch, GenSubject, GenTeacher, GenTeacherAssignment, GenClassConfig,
+    GenClassArmStream, GenStream, GenStreamSubject, GenSubjectConfig,
+    GenCoScheduleRule, GenTimetableResult,
+)
+from tests.conftest import login_token
+
+
+def _admin(app):
+    c = app.test_client()
+    c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': login_token(c)})
+    with c.session_transaction() as s:
+        s['_csrf_token'] = 'a' * 64
+    return c
+
+
+def _post(c, url, **data):
+    data.setdefault('_csrf_token', 'a' * 64)
+    return c.post(url, data=data)
+
+
+def _build_combined_class(app, tag):
+    """SSS2 with two arms on two streams: Daisy=Arts (Literature),
+    Iris=Commercial (Accounting) — the exact scenario from the feature
+    request. Returns (class_config_id, literature_id, accounting_id).
+    `tag` keeps names unique across tests sharing one session-scoped DB."""
+    with app.app_context():
+        bid = Branch.get_default().id
+
+        cc = GenClassConfig(branch_id=bid, class_name=f'ZzSSS2{tag}', school_level='sss',
+                            num_arms=2, arm_names=f'ZzDaisy{tag},ZzIris{tag}', has_streams=True)
+        db.session.add(cc); db.session.flush()
+
+        arts = GenStream(branch_id=bid, name=f'ZzArts{tag}', school_level='sss')
+        comm = GenStream(branch_id=bid, name=f'ZzCommercial{tag}', school_level='sss')
+        db.session.add_all([arts, comm]); db.session.flush()
+
+        db.session.add_all([
+            GenClassArmStream(class_config_id=cc.id, arm_name=f'ZzDaisy{tag}', stream_id=arts.id),
+            GenClassArmStream(class_config_id=cc.id, arm_name=f'ZzIris{tag}', stream_id=comm.id),
+        ])
+
+        lit = GenSubject(branch_id=bid, name=f'ZzLiterature{tag}', school_level='sss')
+        acct = GenSubject(branch_id=bid, name=f'ZzAccounting{tag}', school_level='sss')
+        db.session.add_all([lit, acct]); db.session.flush()
+
+        db.session.add_all([
+            GenSubjectConfig(branch_id=bid, subject_id=lit.id, school_level='sss', periods_per_week=2),
+            GenSubjectConfig(branch_id=bid, subject_id=acct.id, school_level='sss', periods_per_week=2),
+            GenStreamSubject(stream_id=arts.id, subject_id=lit.id, periods_per_week=2),
+            GenStreamSubject(stream_id=comm.id, subject_id=acct.id, periods_per_week=2),
+        ])
+
+        lit_teacher = GenTeacher(branch_id=bid, name=f'Zz Lit Teacher{tag}', school_level='sss',
+                                 max_periods_per_day=6, max_periods_per_week=30)
+        acct_teacher = GenTeacher(branch_id=bid, name=f'Zz Acct Teacher{tag}', school_level='sss',
+                                  max_periods_per_day=6, max_periods_per_week=30)
+        db.session.add_all([lit_teacher, acct_teacher]); db.session.flush()
+
+        db.session.add_all([
+            GenTeacherAssignment(branch_id=bid, teacher_id=lit_teacher.id, subject_id=lit.id,
+                                 class_config_id=cc.id, arm_name=f'ZzDaisy{tag}'),
+            GenTeacherAssignment(branch_id=bid, teacher_id=acct_teacher.id, subject_id=acct.id,
+                                 class_config_id=cc.id, arm_name=f'ZzIris{tag}'),
+        ])
+        db.session.commit()
+        return cc.id, lit.id, acct.id
+
+
+def test_coschedule_rule_model_and_routes(app):
+    cc_id, lit_id, acct_id = _build_combined_class(app, 'A')
+    c = _admin(app)
+
+    r = _post(c, '/generator/coschedule-rules/add', name='ZzLit+Acct',
+             source_subject_id=lit_id, source_class_name='ZzSSS2A', source_arm_name='ZzDaisyA',
+             target_subject_id=acct_id, target_class_name='ZzSSS2A', target_arm_name='ZzIrisA')
+    assert r.status_code in (302, 200)
+
+    with app.app_context():
+        rule = GenCoScheduleRule.query.filter_by(name='ZzLit+Acct').first()
+        assert rule is not None
+        assert rule.is_active
+        assert rule.source_arm_name == 'ZzDaisyA' and rule.target_arm_name == 'ZzIrisA'
+        rule_id = rule.id
+
+    listing = c.get('/generator/clash-rules')
+    assert listing.status_code == 200
+    assert b'ZzLit+Acct' in listing.data
+
+    r2 = _post(c, f'/generator/coschedule-rules/{rule_id}/toggle')
+    assert r2.status_code in (302, 200)
+    with app.app_context():
+        assert GenCoScheduleRule.query.get(rule_id).is_active is False
+
+    r3 = _post(c, f'/generator/coschedule-rules/{rule_id}/delete')
+    assert r3.status_code in (302, 200)
+    with app.app_context():
+        assert GenCoScheduleRule.query.get(rule_id) is None
+
+
+def test_coschedule_rule_requires_specific_arm(app):
+    """Unlike clash rules, a co-schedule pairing can't use 'all arms' —
+    pairing needs an exact 1:1 correspondence between two named groups."""
+    cc_id, lit_id, acct_id = _build_combined_class(app, 'B')
+    c = _admin(app)
+    r = _post(c, '/generator/coschedule-rules/add', name='ZzBadRule',
+             source_subject_id=lit_id, source_class_name='ZzSSS2B', source_arm_name='',
+             target_subject_id=acct_id, target_class_name='ZzSSS2B', target_arm_name='ZzIrisB')
+    assert r.status_code in (302, 200)
+    with app.app_context():
+        assert GenCoScheduleRule.query.filter_by(name='ZzBadRule').first() is None
+
+
+def test_solver_pairs_co_scheduled_subjects_into_the_same_slot(app):
+    """The actual feature request: force Literature (Daisy) and Accounting
+    (Iris) into the same slot every time, with no teacher double-booking."""
+    cc_id, lit_id, acct_id = _build_combined_class(app, 'C')
+
+    with app.app_context():
+        bid = Branch.get_default().id
+        db.session.add(GenCoScheduleRule(
+            branch_id=bid, name='ZzPair', source_subject_id=lit_id,
+            source_class_name='ZzSSS2C', source_arm_name='ZzDaisyC',
+            target_subject_id=acct_id, target_class_name='ZzSSS2C', target_arm_name='ZzIrisC',
+            is_active=True))
+        db.session.commit()
+
+    c = _admin(app)
+    r = _post(c, '/generator/generate/ortools', **{'class_ids[]': cc_id},
+             time_limit='20', periods_per_day='6')
+    assert r.status_code == 302
+
+    with app.app_context():
+        rows = GenTimetableResult.query.order_by(GenTimetableResult.batch_id.desc()).all()
+        assert rows, 'no timetable rows saved — generation likely failed; check flash message'
+        batch_id = rows[0].batch_id
+        batch_rows = [row for row in rows if row.batch_id == batch_id]
+
+        lit_rows = [row for row in batch_rows if row.arm_name == 'ZzDaisyC' and row.subject_id == lit_id]
+        acct_rows = [row for row in batch_rows if row.arm_name == 'ZzIrisC' and row.subject_id == acct_id]
+        assert len(lit_rows) == 2 and len(acct_rows) == 2
+
+        lit_slots = {(row.day_of_week, row.period_number) for row in lit_rows}
+        acct_slots = {(row.day_of_week, row.period_number) for row in acct_rows}
+        assert lit_slots == acct_slots, (
+            f'Literature (Daisy) and Accounting (Iris) should land on identical slots, '
+            f'got {lit_slots} vs {acct_slots}')
+
+        # Each subject's own teacher isn't double-booked at that slot with
+        # anything else (baseline solver guarantee — nothing coschedule-specific
+        # needed for this, verified here as a sanity check on the pairing).
+        for row in lit_rows + acct_rows:
+            same_slot_same_teacher = [
+                r2 for r2 in batch_rows
+                if r2.day_of_week == row.day_of_week and r2.period_number == row.period_number
+                and r2.teacher_id == row.teacher_id]
+            assert len(same_slot_same_teacher) == 1

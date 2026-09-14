@@ -486,3 +486,49 @@ class GenCombinedClassRule(db.Model):
     
     def __repr__(self):
         return f'<GenCombinedClassRule {self.name}>'
+
+
+class GenCoScheduleRule(db.Model):
+    """
+    Rules pairing two subjects (usually from different arms of a combined
+    class) so they are FORCED into the same time slot every time — the
+    mirror of GenSubjectClashRule, which forbids that. Used when two arms
+    share a room/period grid for their common subjects but diverge for
+    streamed electives, and the split still needs to land in the same slot
+    each time (so the group doesn't end up with one arm idle while the
+    other is in class).
+    Example: SSS2 Daisy's Literature paired with SSS2 Iris's Accounting —
+    whenever one is scheduled, the other is scheduled at the exact same
+    time. Ordinary teacher-clash constraints already keep each subject's
+    own teacher free elsewhere at that slot, so nothing extra is needed
+    for that.
+    Both sides require a specific class + arm (unlike GenSubjectClashRule,
+    "all arms"/"all classes" wildcards don't make sense here — pairing
+    needs an exact 1:1 correspondence between two named groups).
+    """
+    __tablename__ = 'gen_co_schedule_rules'
+
+    id = db.Column(db.Integer, primary_key=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'), index=True)  # owning branch (per-branch generator)
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text)
+
+    # Source subject/group (e.g., Literature for SSS2 Daisy)
+    source_subject_id = db.Column(db.Integer, db.ForeignKey('gen_subjects.id'), nullable=False)
+    source_class_name = db.Column(db.String(20), nullable=False)  # e.g., "SSS2"
+    source_arm_name = db.Column(db.String(50), nullable=False)  # e.g., "Daisy"
+
+    # Target subject/group paired with the source (e.g., Accounting for SSS2 Iris)
+    target_subject_id = db.Column(db.Integer, db.ForeignKey('gen_subjects.id'), nullable=False)
+    target_class_name = db.Column(db.String(20), nullable=False)
+    target_arm_name = db.Column(db.String(50), nullable=False)
+
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=local_now)
+
+    # Relationships
+    source_subject = db.relationship('GenSubject', foreign_keys=[source_subject_id])
+    target_subject = db.relationship('GenSubject', foreign_keys=[target_subject_id])
+
+    def __repr__(self):
+        return f'<GenCoScheduleRule {self.name}>'
