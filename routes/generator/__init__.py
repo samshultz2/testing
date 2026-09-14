@@ -612,15 +612,15 @@ def generate_for_class(batch_id, cc, arm, periods_per_day, break_after, no_repea
 def _extend_timetable_slots(existing_teaching, needed, school_level):
     """Ensure the TimetableSlot table has at least `needed` teaching periods.
 
-    New periods are appended after whatever is chronologically LAST among all
-    currently active slots — a period or a break — so a new period can never
-    land on top of (overlap) a break that already follows the existing
-    periods. This deliberately never moves any existing slot's own configured
-    time (an admin-set break stays exactly where they put it); the caller
-    (``_apply_batch``) re-derives every active slot's ``order`` from actual
-    clock time via ``repair_slot_schedule()`` right after, so the new periods
-    always end up in the correct visual position without this function
-    needing to guess at it."""
+    New periods are appended immediately after the last existing TEACHING
+    period ends, continuing its own duration — a period's time is never
+    influenced by where a break currently sits. If a break ends up in the
+    way as a result (e.g. it used to be the last thing in the day and now a
+    new period runs into it), the caller (``_apply_batch``) resolves that
+    right after by calling ``repair_slot_schedule()``, which pushes the
+    break to after the period(s) it now overlaps — periods are never
+    displaced by a break, only the reverse — and re-derives every active
+    slot's ``order`` from the corrected clock times."""
     from datetime import timedelta, datetime as _dt, time as _time
     from sqlalchemy import func
     from models import TimetableSlot, SchoolSettings
@@ -634,20 +634,9 @@ def _extend_timetable_slots(existing_teaching, needed, school_level):
         s = _dt.combine(_dt.today(), last_teaching.start_time)
         e = _dt.combine(_dt.today(), last_teaching.end_time)
         period_mins = int((e - s).total_seconds() / 60) or 40
-    else:
-        period_mins = int(SchoolSettings.get('period_duration', 40) or 40)
-
-    # Continue from whichever active slot currently runs latest in the day —
-    # not just the last teaching period — so we skip over any break that
-    # already sits after it instead of overlapping it.
-    last_overall = (TimetableSlot.query.filter_by(is_active=True)
-                    .filter(TimetableSlot.end_time.isnot(None))
-                    .order_by(TimetableSlot.end_time.desc()).first())
-    if last_overall and last_overall.end_time:
-        next_start = _dt.combine(_dt.today(), last_overall.end_time)
-    elif last_teaching.end_time:
         next_start = _dt.combine(_dt.today(), last_teaching.end_time)
     else:
+        period_mins = int(SchoolSettings.get('period_duration', 40) or 40)
         next_start = _dt.combine(_dt.today(), _time(8, 0))
 
     max_order = db.session.query(func.max(TimetableSlot.order)).filter(
