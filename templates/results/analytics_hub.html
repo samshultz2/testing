@@ -510,7 +510,7 @@ a.exec:hover .go{opacity:1}
 </div>
 
 <!-- ============ MOCK JAMB PROGRESSION ============ -->
-<div class="section-title"><i class="fas fa-flask"></i> Mock JAMB Progression <span class="text-muted text-sm">(active session)</span></div>
+<div class="section-title"><i class="fas fa-flask"></i> Mock JAMB Progression <span class="text-muted text-sm">({{ selected_year }} session)</span></div>
 <div class="card mb-3">
     <div class="card-header"><h3><i class="fas fa-chart-line"></i> Cohort mock-score trajectory</h3></div>
     {% if mock_trend %}
@@ -524,12 +524,12 @@ a.exec:hover .go{opacity:1}
         </tbody>
     </table></div>
     {% else %}
-    <div class="card-body text-muted"><i class="fas fa-info-circle"></i> No Mock JAMB results recorded for the active session yet. <a href="{{ url_for('mock_jamb.index') }}">Set up a mock exam &rarr;</a></div>
+    <div class="card-body text-muted"><i class="fas fa-info-circle"></i> No Mock JAMB results recorded for the {{ selected_year }} session yet. <a href="{{ url_for('mock_jamb.index') }}">Set up a mock exam &rarr;</a></div>
     {% endif %}
 </div>
 
 <!-- ============ MOCK WAEC PROGRESSION ============ -->
-<div class="section-title"><i class="fas fa-clipboard-check"></i> Mock WAEC Progression <span class="text-muted text-sm">(active session)</span></div>
+<div class="section-title"><i class="fas fa-clipboard-check"></i> Mock WAEC Progression <span class="text-muted text-sm">({{ selected_year }} session)</span></div>
 <div class="card mb-3">
     <div class="card-header"><h3><i class="fas fa-chart-line"></i> Cohort credit trajectory</h3></div>
     {% if mock_waec_trend %}
@@ -543,7 +543,7 @@ a.exec:hover .go{opacity:1}
         </tbody>
     </table></div>
     {% else %}
-    <div class="card-body text-muted"><i class="fas fa-info-circle"></i> No Mock WAEC results recorded for the active session yet. <a href="{{ url_for('mock_waec.index') }}">Set up a mock exam &rarr;</a></div>
+    <div class="card-body text-muted"><i class="fas fa-info-circle"></i> No Mock WAEC results recorded for the {{ selected_year }} session yet. <a href="{{ url_for('mock_waec.index') }}">Set up a mock exam &rarr;</a></div>
     {% endif %}
 </div>
 

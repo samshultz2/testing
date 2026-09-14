@@ -428,12 +428,18 @@ def analytics_hub():
                 'mean_jamb': round(sum(ys) / len(ys), 1),
             }
 
-    # Trends from data we capture but didn't previously analyse.
+    # Trends from data we capture but didn't previously analyse. These panels
+    # ("Mock JAMB/WAEC progression") are single-session data — scope them to
+    # the session implied by the selected ``year`` (e.g. year=2026 -> the
+    # 2025/2026 session), not whatever session happens to be live today, so
+    # viewing a past year's analytics shows that year's mock-exam progression
+    # rather than always the current session's.
     from utils import exam_trends
-    active_sess = get_active_session()
+    from utils.helpers import session_for_exam_year
+    active_sess = session_for_exam_year(year) if year else get_active_session()
 
-    mock_trend = _mock_jamb_trend(bid)
-    mock_waec_trend = _mock_waec_trend(bid)
+    mock_trend = _mock_jamb_trend(bid, active_sess)
+    mock_waec_trend = _mock_waec_trend(bid, active_sess)
     at_risk = _at_risk_register(limit=25)
 
     # Executive Smart Insights — synthesise the above stats into a ranked,

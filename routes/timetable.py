@@ -48,6 +48,31 @@ def _slot_dict(s):
             'end': s.end_time.strftime('%H:%M') if s.end_time else ''}
 
 
+def _slots_for_assignment(assignment_id):
+    """Active timetable slots to display for one class's timetable.
+
+    ``TimetableSlot`` is a single school-wide table, but different generated
+    batches (a normal class timetable vs. an exam timetable, say) can publish
+    a different number of teaching periods per day. Rendering the *entire*
+    global slot list here would pad a class that only uses 7 periods with a
+    spurious trailing blank period, or clip a class using more periods than
+    some other class. Scope the view to the contiguous range of slots this
+    class's own entries actually span (including any break slots inside that
+    range) so the grid always matches what was actually generated for it."""
+    all_slots = TimetableSlot.query.filter_by(is_active=True).order_by(TimetableSlot.order).all()
+    if not assignment_id or not all_slots:
+        return all_slots
+    used_ids = {row[0] for row in db.session.query(ClassTimetable.slot_id)
+                .filter_by(class_arm_assignment_id=assignment_id, is_active=True).distinct()}
+    if not used_ids:
+        return all_slots
+    used_orders = [s.order for s in all_slots if s.id in used_ids]
+    if not used_orders:
+        return all_slots
+    lo, hi = min(used_orders), max(used_orders)
+    return [s for s in all_slots if lo <= s.order <= hi]
+
+
 @timetable_bp.route('/designer')
 @login_required
 def designer():
@@ -267,9 +292,9 @@ def index():
     if selected_assignment and form_scope is not None and selected_assignment.id not in form_scope:
         selected_assignment = None   # not this teacher's form class
     
-    # Get timetable slots
-    slots = TimetableSlot.query.filter_by(is_active=True).order_by(TimetableSlot.order).all()
-    
+    # Get timetable slots — scoped to what this class's own timetable uses.
+    slots = _slots_for_assignment(assignment_id)
+
     # Build timetable grid
     timetable_grid = {}
     subjects_for_class = []
@@ -582,7 +607,7 @@ def print_timetable(assignment_id):
     require_branch_access(assignment.branch_id)   # no cross-branch timetable PDF
     include_teachers = request.args.get('teachers') == '1'
 
-    slots = TimetableSlot.query.filter_by(is_active=True).order_by(TimetableSlot.order).all()
+    slots = _slots_for_assignment(assignment_id)
     entries = ClassTimetable.query.filter_by(
         class_arm_assignment_id=assignment_id, is_active=True).all()
     # grid[(day, slot_id)] = entry

@@ -135,12 +135,13 @@ def _read_uploaded_text(file):
 
 
 
-def _mock_waec_trend(branch_id):
-    """School-level Mock WAEC progression for the active session (branch-scoped):
-    one point per mock exam, showing whether the cohort is climbing toward the
-    5-credit WASSCE benchmark."""
+def _mock_waec_trend(branch_id, session=None):
+    """School-level Mock WAEC progression for ``session`` (branch-scoped): one
+    point per mock exam, showing whether the cohort is climbing toward the
+    5-credit WASSCE benchmark. Defaults to the active session when none is
+    given (i.e. every previous caller keeps working unchanged)."""
     from models.mock_waec import MockWAECAnalytics
-    session = get_active_session()
+    session = session if session is not None else get_active_session()
     if not session:
         return []
     out = []
@@ -181,7 +182,16 @@ def _cached_school_stats(kind, year, branch_id, compute):
             return hit if hit != '__none__' else None
     except Exception:
         db.session.rollback()
-    val = compute()
+    try:
+        val = compute()
+    except Exception:
+        # A bad row (a null score, an orphaned FK) in this year's data must
+        # not 500 the whole analytics hub — degrade to "no data" for this one
+        # stat instead, the same as a year that genuinely has none.
+        db.session.rollback()
+        current_app.logger.exception(
+            'analytics: %s stats failed for year=%s branch=%s', kind, year, branch_id)
+        return None
     try:
         AnalyticsCache.set(key, val if val is not None else '__none__', _STATS_TTL)
     except Exception:
@@ -278,12 +288,14 @@ def year_comparison(year, compare_year, branch_id):
             'metrics': exam_compare.compare_years(a, b)}
 
 
-def _mock_jamb_trend(branch_id):
-    """School-level Mock JAMB progression for the active session (branch-scoped):
-    one point per mock exam, in order. Drives the Mock JAMB trend chart and shows
-    whether the cohort is climbing toward the JAMB benchmarks."""
+def _mock_jamb_trend(branch_id, session=None):
+    """School-level Mock JAMB progression for ``session`` (branch-scoped): one
+    point per mock exam, in order. Drives the Mock JAMB trend chart and shows
+    whether the cohort is climbing toward the JAMB benchmarks. Defaults to the
+    active session when none is given (i.e. every previous caller keeps
+    working unchanged)."""
     from models.mock_jamb import MockJAMBExam
-    session = get_active_session()
+    session = session if session is not None else get_active_session()
     if not session:
         return []
     q = MockJAMBExam.query.filter_by(session_id=session.id)
@@ -291,7 +303,7 @@ def _mock_jamb_trend(branch_id):
         q = q.filter(MockJAMBExam.branch_id == branch_id)
     out = []
     for ex in q.order_by(MockJAMBExam.exam_number).all():
-        scores = [r.total_score for r in ex.results.all()]
+        scores = [r.total_score for r in ex.results.all() if r.total_score is not None]
         if not scores:
             continue
         out.append({

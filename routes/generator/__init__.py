@@ -610,6 +610,34 @@ def _apply_batch(batch_id):
         return None, ('No class periods are configured. Set them up under '
                       'Settings → Timetable Slots, then apply again.'), 'error'
 
+    # A batch can be generated with more teaching periods/day than the slot
+    # table currently holds (e.g. a 30-period exam timetable against a school
+    # normally run on 8) — auto-create the missing trailing periods instead of
+    # silently dropping them, so nothing generated is ever lost on apply.
+    max_period = max((r.period_number for r in results
+                      if isinstance(r.period_number, int)), default=0)
+    if max_period > len(teaching):
+        from datetime import timedelta
+        last = teaching[-1]
+        step = timedelta(minutes=last.duration_minutes or 40)
+        cur_end = datetime.combine(datetime.today(), last.end_time)
+        max_order = max((s.order or 0) for s in teaching)
+        next_number = (last.slot_number or len(teaching)) + 1
+        for _ in range(len(teaching), max_period):
+            start = cur_end.time()
+            cur_end = cur_end + step
+            end = cur_end.time()
+            max_order += 1
+            new_slot = TimetableSlot(
+                slot_number=next_number, name=f'Period {next_number}',
+                start_time=start, end_time=end,
+                is_break=False, duration_minutes=last.duration_minutes,
+                order=max_order, is_active=True)
+            db.session.add(new_slot)
+            teaching.append(new_slot)
+            next_number += 1
+        db.session.flush()
+
     def slot_for_period(p):
         return teaching[p - 1] if isinstance(p, int) and 1 <= p <= len(teaching) else None
 

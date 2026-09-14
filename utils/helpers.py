@@ -544,6 +544,21 @@ def session_exam_year(session=None):
     return None
 
 
+def session_for_exam_year(year):
+    """The AcademicSession whose external-exam year (see :func:`session_exam_year`)
+    is ``year`` — the inverse mapping. Used to scope session-specific data (e.g.
+    mock exam trends) to the single session implied by an explicit ``?year`` on
+    an external-exam/analytics page, instead of always using whatever session
+    happens to be live today. Returns None if no session matches."""
+    if not year:
+        return None
+    from models import AcademicSession
+    for s in AcademicSession.query.order_by(AcademicSession.id.desc()).all():
+        if session_exam_year(s) == year:
+            return s
+    return None
+
+
 def resolve_exam_year(requested, years):
     """Pick the external-exam year to show, honouring the active/viewed session.
 
