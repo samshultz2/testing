@@ -198,3 +198,83 @@ def test_print_results_can_filter_to_selected_arms(app):
     assert r_iris.status_code == 200
     body_iris = r_iris.get_data(as_text=True)
     assert 'ZzIrisD' in body_iris and 'ZzDaisyD' not in body_iris
+
+
+def _seed_print_filter_batch(app, tag):
+    """A combined class's two arms, each with one result row, for exercising
+    the shared _filter_by_arm() across print/export routes."""
+    cc_id, lit_id, acct_id = _build_combined_class(app, tag)
+    batch_id = f'zzbatch-export-filter-{tag}'
+    with app.app_context():
+        bid = Branch.get_default().id
+        db.session.add_all([
+            GenTimetableResult(branch_id=bid, batch_id=batch_id, school_level='sss',
+                               class_name=f'ZzSSS2{tag}', arm_name=f'ZzDaisy{tag}', day_of_week=0,
+                               period_number=1, subject_id=lit_id),
+            GenTimetableResult(branch_id=bid, batch_id=batch_id, school_level='sss',
+                               class_name=f'ZzSSS2{tag}', arm_name=f'ZzIris{tag}', day_of_week=0,
+                               period_number=1, subject_id=acct_id),
+        ])
+        db.session.commit()
+    return batch_id
+
+
+def test_export_by_class_can_filter_to_selected_arms(app):
+    import openpyxl
+    from io import BytesIO
+
+    batch_id = _seed_print_filter_batch(app, 'E')
+    c = _admin(app)
+
+    r_all = c.get(f'/generator/results/{batch_id}/export')
+    assert r_all.status_code == 200
+    wb_all = openpyxl.load_workbook(BytesIO(r_all.data))
+    assert len(wb_all.sheetnames) == 2
+
+    r_daisy = c.get(f'/generator/results/{batch_id}/export?arm=ZzSSS2E|ZzDaisyE')
+    assert r_daisy.status_code == 200
+    wb_daisy = openpyxl.load_workbook(BytesIO(r_daisy.data))
+    assert len(wb_daisy.sheetnames) == 1
+    assert 'Daisy' in wb_daisy.sheetnames[0] and 'Iris' not in wb_daisy.sheetnames[0]
+
+
+def test_export_by_day_can_filter_to_selected_arms(app):
+    import openpyxl
+    from io import BytesIO
+
+    batch_id = _seed_print_filter_batch(app, 'F')
+    c = _admin(app)
+
+    r_all = c.get(f'/generator/results/{batch_id}/export_by_day')
+    assert r_all.status_code == 200
+    wb_all = openpyxl.load_workbook(BytesIO(r_all.data))
+    monday_all = wb_all['Monday']
+    # Header rows (school name, address, day, periods) then one data row per arm.
+    rows_with_class_code = sum(1 for row in monday_all.iter_rows() if row[0].value and row[0].value.strip())
+    all_row_count = rows_with_class_code
+
+    r_daisy = c.get(f'/generator/results/{batch_id}/export_by_day?arm=ZzSSS2F|ZzDaisyF')
+    assert r_daisy.status_code == 200
+    wb_daisy = openpyxl.load_workbook(BytesIO(r_daisy.data))
+    monday_daisy = wb_daisy['Monday']
+    daisy_row_count = sum(1 for row in monday_daisy.iter_rows() if row[0].value and row[0].value.strip())
+
+    # Filtering to one arm removes exactly one data row (one fewer class-arm).
+    assert daisy_row_count == all_row_count - 1
+
+
+def test_export_by_day_pdf_respects_arm_filter(app):
+    batch_id = _seed_print_filter_batch(app, 'G')
+    c = _admin(app)
+
+    r_all = c.get(f'/generator/results/{batch_id}/export_by_day_pdf')
+    assert r_all.status_code == 200
+    assert r_all.mimetype == 'application/pdf'
+
+    r_daisy = c.get(f'/generator/results/{batch_id}/export_by_day_pdf?arm=ZzSSS2G|ZzDaisyG')
+    assert r_daisy.status_code == 200
+    assert r_daisy.mimetype == 'application/pdf'
+
+    # A filtered-out selection with no match falls back to the batch's view page.
+    r_none = c.get(f'/generator/results/{batch_id}/export_by_day_pdf?arm=NotAClass|NotAnArm')
+    assert r_none.status_code == 302

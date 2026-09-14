@@ -26,11 +26,11 @@
 </div>
 
 <div class="card mb-3" id="print-select-panel" style="display: none;">
-    <div class="card-header"><h3><i class="fas fa-list-check"></i> Print Selected Class-Arms</h3></div>
+    <div class="card-header"><h3><i class="fas fa-list-check"></i> Print / Export Selected Class-Arms</h3></div>
     <div class="card-body">
-        <p class="text-muted mb-3">Pick which class-arms go into the printed document — e.g. for a combined class
-            that's co-scheduled (same periods, just a different elective per arm), print only one arm instead of
-            two near-identical tables.</p>
+        <p class="text-muted mb-3">Pick which class-arms go into the document — e.g. for a combined class
+            that's co-scheduled (same periods, just a different elective per arm), include only one arm instead of
+            two near-identical tables. Applies to print and every export below.</p>
         <form method="GET" action="{{ url_for('generator.print_results', batch_id=batch_id) }}" id="print-select-form">
             <div class="checkbox-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0.5rem;">
                 {% for key, tt in timetables.items() %}
@@ -44,6 +44,9 @@
                 <button type="button" class="btn btn-secondary btn-sm" data-call="selectAllArms" data-args="true">Select All</button>
                 <button type="button" class="btn btn-secondary btn-sm" data-call="selectAllArms" data-args="false">Deselect All</button>
                 <button type="submit" class="btn btn-success"><i class="fas fa-print"></i> Print Selected</button>
+                <button type="submit" formaction="{{ url_for('generator.export_results', batch_id=batch_id) }}" class="btn btn-info"><i class="fas fa-download"></i> Excel (by Class)</button>
+                <button type="submit" formaction="{{ url_for('generator.export_results_by_day', batch_id=batch_id) }}" class="btn btn-primary"><i class="fas fa-calendar-day"></i> Excel (by Day)</button>
+                <button type="submit" formaction="{{ url_for('generator.export_results_by_day_pdf', batch_id=batch_id) }}" class="btn btn-danger"><i class="fas fa-file-pdf"></i> PDF (by Day)</button>
             </div>
         </form>
     </div>

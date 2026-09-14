@@ -16,6 +16,19 @@ def _short(subj, fallback_map, maxlen):
     return fallback_map.get(name, name[:maxlen])
 
 
+def _filter_by_arm(results):
+    """Optional class-arm filter shared by every print/export route — e.g.
+    skip a combined class's other arm when it's co-scheduled with the one
+    being exported (same periods, just a different elective label), so the
+    document doesn't carry two near-identical tables. Each ?arm= value is
+    "ClassName|ArmName"; no ?arm= at all keeps every class-arm in the batch,
+    unchanged from before this filter existed."""
+    selected = {tuple(a.split('|', 1)) for a in request.args.getlist('arm') if '|' in a}
+    if not selected:
+        return results
+    return [r for r in results if (r.class_name, r.arm_name) in selected]
+
+
 @generator_bp.route('/results/<batch_id>/print')
 @login_required
 def print_results(batch_id):
@@ -25,18 +38,10 @@ def print_results(batch_id):
         flash('No results.', 'error')
         return redirect(url_for('generator.results_list'))
 
-    # Optional class-arm filter — e.g. skip a combined class's other arm when
-    # it's co-scheduled with the one being printed (same periods, just a
-    # different elective label), so the master document doesn't carry two
-    # near-duplicate tables. Each ?arm= value is "ClassName|ArmName"; no
-    # ?arm= at all (the plain "Print All" link) keeps the old behaviour of
-    # including every class-arm in this batch.
-    selected = {tuple(a.split('|', 1)) for a in request.args.getlist('arm') if '|' in a}
-    if selected:
-        results = [r for r in results if (r.class_name, r.arm_name) in selected]
-        if not results:
-            flash('No class-arms selected.', 'error')
-            return redirect(url_for('generator.view_results', batch_id=batch_id))
+    results = _filter_by_arm(results)
+    if not results:
+        flash('No class-arms selected.', 'error')
+        return redirect(url_for('generator.view_results', batch_id=batch_id))
 
     timetables = {}
     for r in results:
@@ -97,18 +102,22 @@ def export_results(batch_id):
     if not results:
         flash('No results.', 'error')
         return redirect(url_for('generator.results_list'))
-    
+    results = _filter_by_arm(results)
+    if not results:
+        flash('No class-arms selected.', 'error')
+        return redirect(url_for('generator.view_results', batch_id=batch_id))
+
     # Get school info
     school_name = GenSettings.get('school_name', 'School')
     school_address = GenSettings.get('school_address', '')
-    
+
     timetables = {}
     for r in results:
         key = f"{r.class_name}_{r.arm_name}"
         if key not in timetables:
             timetables[key] = {'class_name': r.class_name, 'arm_name': r.arm_name, 'grid': {d: {} for d in range(5)}}
         timetables[key]['grid'][r.day_of_week][r.period_number] = r
-    
+
     school_level = results[0].school_level or 'sss'
     rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, school_level=school_level, branch_id=gen_bid()).all()}
     periods_per_day = int(rules.get('periods_per_day', 8))
@@ -340,7 +349,11 @@ def export_results_by_day(batch_id):
     if not results:
         flash('No results.', 'error')
         return redirect(url_for('generator.results_list'))
-    
+    results = _filter_by_arm(results)
+    if not results:
+        flash('No class-arms selected.', 'error')
+        return redirect(url_for('generator.view_results', batch_id=batch_id))
+
     # Determine school level from results
     school_level = results[0].school_level if results else 'sss'
     
@@ -652,7 +665,11 @@ def export_results_by_day_pdf(batch_id):
     if not results:
         flash('No results.', 'error')
         return redirect(url_for('generator.results_list'))
-    
+    results = _filter_by_arm(results)
+    if not results:
+        flash('No class-arms selected.', 'error')
+        return redirect(url_for('generator.view_results', batch_id=batch_id))
+
     school_level = results[0].school_level or 'sss'
     rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, school_level=school_level, branch_id=gen_bid()).all()}
     periods_per_day = int(rules.get('periods_per_day', 8))
