@@ -99,6 +99,13 @@
    print at a larger, more readable size than a dense day×period timetable
    (which would overflow the page if enlarged). */
 .tt-sheet.exporting table.grid-tt.listtable{font-size:30px}
+/* A roster/blank-grid cell that's still genuinely empty shows a faint "Name"
+   placeholder on screen (so the person filling it in knows what to type),
+   but that placeholder must never end up baked into a PNG/PDF export — unlike
+   @media print, html2canvas doesn't know to hide it, so suppress it whenever
+   the export snapshot is being taken (the .exporting class is present for the
+   full duration of the html2canvas capture). */
+.tt-sheet.exporting table.grid-tt td.roster-cell:empty::before{content:''}
 
 /* Clear visual demarcation between days (prints & exports too). currentColor
    adapts to each theme (dark line on light sheets, light line on dark ones). */
@@ -112,19 +119,26 @@
 .tt-sheet table.grid-tt.blankgrid th.col-sep,
 .tt-sheet table.grid-tt.blankgrid td.col-sep{border-left:3px solid currentColor}
 /* auto-numbered custom table: narrow centred S/N column, left-aligned normal-
-   weight cells (a real table, not the wide bold roster boxes). */
+   weight cells (a real table, not the wide bold roster boxes). Superseded by
+   the explicit <colgroup> widths every blankgrid-family table now renders
+   with (see colGroupHTML() in the script below), but left in place as a
+   harmless fallback for any row where a <colgroup> is somehow absent. */
 .tt-sheet table.grid-tt th.sn-col,
-.tt-sheet table.grid-tt td.sn-col{width:2.6em;text-align:center;font-weight:700}
-/* The table fills the full width, but each column sizes to its own content
-   (nowrap) rather than every column taking an equal share — so a long "Name"
-   gets the room and short columns like "Number" stay tight, and nothing wraps
-   onto a second line. The spare width goes to the widest (description-style)
-   column. If the data is wider than the page the sheet scrolls (screen) /
-   fits-to-width (PDF) instead of mangling the columns. */
-.tt-sheet table.grid-tt.listtable{width:100%;table-layout:auto}
-.tt-sheet table.grid-tt.listtable td.roster-cell{min-width:0;text-align:left;font-weight:400}
-.tt-sheet table.grid-tt.listtable th,
-.tt-sheet table.grid-tt.listtable td{white-space:nowrap}
+.tt-sheet table.grid-tt td.sn-col{text-align:center;font-weight:700}
+/* Blank Custom Grid / Sweeping Roster / Custom List-Table all share this
+   table-layout: an explicit <colgroup> (one modest, fixed-percentage "label"
+   or "S/N" column, then N equal-percentage data columns) gives every column
+   an exact width, and table-layout:fixed makes the browser honour it exactly
+   rather than re-deriving column widths from cell content — which is what
+   previously let one content-heavy column silently absorb all the table's
+   spare width (worse the wider the container, which is exactly why it only
+   showed up in the wider export canvas). Content still wraps inside its own
+   column instead of forcing the table wider or overflowing the page. */
+.tt-sheet table.grid-tt.blankgrid{width:100%;table-layout:fixed}
+.tt-sheet table.grid-tt.blankgrid th,
+.tt-sheet table.grid-tt.blankgrid td{
+    overflow-wrap:anywhere;word-break:break-word;box-sizing:border-box;min-width:0;max-width:100%}
+.tt-sheet table.grid-tt.listtable td.roster-cell{text-align:left;font-weight:400}
 
 /* themes */
 .tt-sheet[data-theme="classic"]{font-family:Georgia,'Times New Roman',serif}
@@ -282,9 +296,17 @@
 .tt-sheet, .tt-sheet *{-webkit-print-color-adjust:exact;print-color-adjust:exact;color-adjust:exact}
 
 /* While exporting we widen the sheet to a fixed canvas width so it fills the
-   page horizontally; height stays natural (no vertical stretching). */
+   page horizontally; height stays natural (no vertical stretching). 1480px is
+   the landscape A4 canvas width; portrait uses the same width scaled by A4's
+   own 210:297 aspect ratio (≈1046px) rather than an unrelated hardcoded
+   number, so both orientations render at a consistent, correctly-proportioned
+   resolution. Every column width inside the table is a <colgroup> percentage
+   (see colGroupHTML() below), so it fills whichever of these widths applies
+   with the same correct proportions — nothing here needs to know about
+   columns, and nothing about columns needs to know about orientation. */
 .tt-sheet.exporting{position:fixed;left:-10000px;top:0;width:1480px;max-width:none;
     height:auto;overflow:visible;border:none;border-radius:0}
+.tt-sheet.exporting.portrait{width:1046px}
 
 /* export preview modal */
 .export-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9999;
@@ -548,6 +570,13 @@ Do not include a serial-number/S-N column. Output only the rows — no totals or
 <div class="export-modal no-print" id="exportModal">
     <div class="box">
         <h3><i class="fas fa-eye"></i> Preview</h3>
+        <div class="form-group" style="margin:0 0 .25rem">
+            <label class="form-label" style="font-size:.8rem">A4 page orientation</label>
+            <select id="pageOrient" class="form-control">
+                <option value="landscape">Landscape (297 × 210mm)</option>
+                <option value="portrait">Portrait (210 × 297mm)</option>
+            </select>
+        </div>
         <div id="exportSpinner" class="export-spinner"><i class="fas fa-spinner fa-spin"></i> Rendering…</div>
         <img id="exportImg" alt="Timetable preview" style="display:none">
         <div class="export-actions">
@@ -1151,12 +1180,35 @@ function renderListSheet(){
     el('pBody').innerHTML='<table><thead>'+thead+'</thead><tbody>'+body+'</tbody></table>';
 }
 
+// Shared column-width calculator for every blankgrid-family table (Blank
+// Custom Grid, Sweeping Roster, Custom List/Table) — the one place that
+// decides how wide the leading label/S-N column is vs. how the rest of the
+// table's width is split among the N normal data columns, so a table with
+// 3, 5, 7… columns is always proportioned the same predictable way instead
+// of leaving it to the browser's content-based auto table layout (which is
+// what let one column silently absorb the table's spare width — see the
+// .blankgrid CSS comment above). Called once per render, for the live sheet
+// and for the export snapshot alike, so both are always identical.
+//   special: 'sn'    — a numbers-only S/N column (Custom List/Table)
+//            'label' — a text row-label column (WEEK/DAY/blank-grid rows)
+//            null    — no special column; every column shares equally
+function specialColPct(special){ return special==='sn' ? 8 : 14; }
+function colGroupHTML(numNormal, special){
+    numNormal = Math.max(0, numNormal|0);
+    var specialPct = special ? specialColPct(special) : 0;
+    var normalPct = numNormal>0 ? (100-specialPct)/numNormal : 0;
+    var cols = special ? ['<col style="width:'+specialPct+'%">'] : [];
+    for(var i=0;i<numNormal;i++) cols.push('<col style="width:'+normalPct+'%">');
+    return '<colgroup>'+cols.join('')+'</colgroup>';
+}
+
 function renderBlankGridSheet(){
     var roster=isRoster();
     var cols=(el('gridCols').value||'').split(',').map(function(s){return s.trim();}).filter(Boolean);
     // Auto-numbered custom table: a leading S/N column + N editable rows.
     if(isListTable()){
         var n=Math.max(1, Math.min(200, parseInt(el('listRows').value,10)||10));
+        var lcolgroup=colGroupHTML(cols.length, 'sn');
         var lthead='<tr><th class="sn-col">S/N</th>'+cols.map(function(c){return '<th class="col-sep">'+esc(c)+'</th>';}).join('')+'</tr>';
         var lbody='';
         for(var ri=0; ri<n; ri++){
@@ -1165,11 +1217,12 @@ function renderBlankGridSheet(){
                 return '<td class="roster-cell col-sep" contenteditable="true" data-rc="'+k+'" data-ph="">'+esc(rosterCells[k]||'')+'</td>';
             }).join('')+'</tr>';
         }
-        el('pBody').innerHTML='<table class="grid-tt blankgrid listtable"><thead>'+lthead+'</thead><tbody>'+lbody+'</tbody></table>';
+        el('pBody').innerHTML='<table class="grid-tt blankgrid listtable">'+lcolgroup+'<thead>'+lthead+'</thead><tbody>'+lbody+'</tbody></table>';
         return;
     }
     var rws=(el('gridRows').value||'').split('\n').map(function(s){return s.trim();}).filter(Boolean);
     var corner = roster ? (el('layout').value==='roster_week' ? 'Week' : 'Day') : '';
+    var colgroup=colGroupHTML(cols.length, 'label');
     var thead='<tr><th>'+esc(corner)+'</th>'+cols.map(function(c){return '<th class="col-sep">'+esc(c)+'</th>';}).join('')+'</tr>';
     var body=rws.map(function(rl,ri){
         return '<tr><th>'+esc(rl)+'</th>'+cols.map(function(c,ci){
@@ -1182,7 +1235,7 @@ function renderBlankGridSheet(){
                  + esc(rosterCells[k]||'')+'</td>';
         }).join('')+'</tr>';
     }).join('');
-    el('pBody').innerHTML='<table class="grid-tt blankgrid"><thead>'+thead+'</thead><tbody>'+body+'</tbody></table>';
+    el('pBody').innerHTML='<table class="grid-tt blankgrid">'+colgroup+'<thead>'+thead+'</thead><tbody>'+body+'</tbody></table>';
 }
 
 // ---------- Saturday plan: first-Saturday date + lesson-free cascade ----------
@@ -1468,27 +1521,32 @@ el('satManage').addEventListener('change', function(e){
 });
 
 // ---------- export (Full-HD image / PDF) with preview ----------
+// The exported PNG/PDF is a html2canvas screenshot of the SAME #sheet DOM the
+// live designer renders — there is no separate export layout to keep in
+// sync. Sizing it correctly (this file's real fix) therefore only has to
+// happen once, in the table's own <colgroup>-driven CSS: whatever width the
+// sheet is captured at (landscape or portrait), every column is already an
+// exact percentage of it, so html2canvas/jsPDF have nothing left to
+// recalculate — they just rasterise the layout that's already correct.
 var _exportCanvas = null;
+var _exportOrientation = 'landscape';
 function exportName(){
     return (el('title').value || layout().title || 'timetable').replace(/[^\w]+/g, '_');
 }
-function openExport(){
+function captureExport(){
     var sheet = el('sheet');
-    var modal = el('exportModal');
-    // Move the modal to <body> so its position:fixed is relative to the viewport
-    // and not a transformed/scrolled ancestor — otherwise on mobile it opens
-    // off-screen and you have to hunt for it. Also lock background scrolling.
-    if(modal.parentNode !== document.body) document.body.appendChild(modal);
-    document.body.style.overflow = 'hidden';
+    _exportOrientation = (el('pageOrient') && el('pageOrient').value) || 'landscape';
     el('exportImg').style.display = 'none';
+    // Reset in case a previous attempt's .catch() left an error message here.
+    el('exportSpinner').innerHTML = '<i class="fas fa-spinner fa-spin"></i> Rendering…';
     el('exportSpinner').style.display = 'block';
-    modal.style.display = 'flex';
-    sheet.classList.add('exporting');           // size to A4 landscape, fill it
+    sheet.classList.add('exporting');            // fills the A4 content width
+    sheet.classList.toggle('portrait', _exportOrientation === 'portrait');
     var scale = Math.max(2, Math.ceil(1920 / (sheet.offsetWidth || 1480)));
     html2canvas(sheet, {scale: scale, backgroundColor: '#ffffff',
                         windowWidth: sheet.scrollWidth, windowHeight: sheet.scrollHeight})
         .then(function(canvas){
-            sheet.classList.remove('exporting');
+            sheet.classList.remove('exporting', 'portrait');
             _exportCanvas = canvas;
             var img = el('exportImg');
             img.src = canvas.toDataURL('image/png');
@@ -1496,9 +1554,19 @@ function openExport(){
             el('exportSpinner').style.display = 'none';
         })
         .catch(function(e){
-            sheet.classList.remove('exporting');
+            sheet.classList.remove('exporting', 'portrait');
             el('exportSpinner').textContent = 'Could not render the timetable: ' + e;
         });
+}
+function openExport(){
+    var modal = el('exportModal');
+    // Move the modal to <body> so its position:fixed is relative to the viewport
+    // and not a transformed/scrolled ancestor — otherwise on mobile it opens
+    // off-screen and you have to hunt for it. Also lock background scrolling.
+    if(modal.parentNode !== document.body) document.body.appendChild(modal);
+    document.body.style.overflow = 'hidden';
+    modal.style.display = 'flex';
+    captureExport();
 }
 function closeExport(){ el('exportModal').style.display = 'none'; document.body.style.overflow = ''; }
 function downloadImage(){
@@ -1511,7 +1579,7 @@ function downloadImage(){
 function downloadPDF(){
     if(!_exportCanvas) return;
     var JsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
-    var pdf = new JsPDF({orientation: 'landscape', unit: 'mm', format: 'a4'});
+    var pdf = new JsPDF({orientation: _exportOrientation, unit: 'mm', format: 'a4'});
     var pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
     // Fill the page width and keep the natural aspect ratio (no vertical
     // stretch); if that would overflow the page height, fit to height instead.
@@ -1525,6 +1593,11 @@ function downloadPDF(){
 // click outside the box closes the preview
 document.getElementById('exportModal').addEventListener('click', function(e){
     if(e.target === this) closeExport();
+});
+// switching A4 orientation re-renders the preview (and what PDF/image download
+// will use) — only while the modal's actually open, never on page load.
+el('pageOrient').addEventListener('change', function(){
+    if(el('exportModal').style.display !== 'none') captureExport();
 });
 
 // seed with a couple of sessions so the tool is immediately usable

@@ -79,4 +79,9 @@ def repair_slot_schedule():
         return changed
     except Exception:
         db.session.rollback()
+        try:
+            from flask import current_app
+            current_app.logger.exception('repair_slot_schedule failed')
+        except Exception:
+            pass
         return False
