@@ -3007,7 +3007,7 @@ def assets_analytics():
         'filters': {'section': section_f, 'category': category_f, 'class_id': class_id_f or '',
                     'status': status_f},
         'alerts': _asset_alerts(rows),
-        'recent': _asset_recent(rows, all_logs),
+        'recent': _asset_recent(rows, logs_by_asset),
     })
 
 

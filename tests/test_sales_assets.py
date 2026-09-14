@@ -378,3 +378,19 @@ def test_loans_list_endpoint(app):
     body = r.get_json()
     assert body['ok']
     assert any(l['borrower'] == 'Zz Borrower List' and l['is_out'] for l in body['loans'])
+
+
+def test_analytics_endpoint_with_history(app):
+    """Regression: _asset_recent() used to be called with the flat AssetLog
+    list instead of the asset-id-keyed dict, so any dataset with asset
+    history (i.e. any real school) 500'd the whole Analytics tab."""
+    c = _admin(app)
+    id1 = _add(c, 'ZzAnalyticsAsset', quantity=3)
+    r = _post(c, f'/sales/assets/{id1}/transfer', location='New Wing')
+    assert r.get_json()['ok']
+
+    r2 = c.get('/sales/assets/analytics', headers={'X-Requested-With': 'fetch'})
+    assert r2.status_code == 200
+    body = r2.get_json()
+    assert body['ok']
+    assert any(t['name'] == 'ZzAnalyticsAsset' for t in body['recent']['transferred'])

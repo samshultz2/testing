@@ -1542,12 +1542,12 @@ function Assets({ d, notify }) {
         <a href={d.urls.products} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-boxes-stacked" /> Products</a>
       </>} />
       <div className="card mb-3" style={{ padding: '.25rem' }}>
-        <div style={{ display: 'flex', gap: '.25rem' }}>
-          <button type="button" className={'btn btn-sm ' + (tab === 'register' ? 'btn-primary' : 'btn-light')} onClick={() => setTab('register')}><i aria-hidden="true" className="fas fa-list" /> Register</button>
-          <button type="button" className={'btn btn-sm ' + (tab === 'analytics' ? 'btn-primary' : 'btn-light')} onClick={() => setTab('analytics')}><i aria-hidden="true" className="fas fa-chart-pie" /> Analytics</button>
-          <button type="button" className={'btn btn-sm ' + (tab === 'history' ? 'btn-primary' : 'btn-light')} onClick={() => setTab('history')}><i aria-hidden="true" className="fas fa-clock-rotate-left" /> Historical</button>
-          <button type="button" className={'btn btn-sm ' + (tab === 'audits' ? 'btn-primary' : 'btn-light')} onClick={() => setTab('audits')}><i aria-hidden="true" className="fas fa-clipboard-check" /> Audits</button>
-          <button type="button" className={'btn btn-sm ' + (tab === 'loans' ? 'btn-primary' : 'btn-light')} onClick={() => setTab('loans')}><i aria-hidden="true" className="fas fa-right-left" /> Loans</button>
+        <div style={{ display: 'flex', gap: '.25rem', flexWrap: 'wrap' }}>
+          <button type="button" style={{ whiteSpace: 'nowrap' }} className={'btn btn-sm ' + (tab === 'register' ? 'btn-primary' : 'btn-light')} onClick={() => setTab('register')}><i aria-hidden="true" className="fas fa-list" /> Register</button>
+          <button type="button" style={{ whiteSpace: 'nowrap' }} className={'btn btn-sm ' + (tab === 'analytics' ? 'btn-primary' : 'btn-light')} onClick={() => setTab('analytics')}><i aria-hidden="true" className="fas fa-chart-pie" /> Analytics</button>
+          <button type="button" style={{ whiteSpace: 'nowrap' }} className={'btn btn-sm ' + (tab === 'history' ? 'btn-primary' : 'btn-light')} onClick={() => setTab('history')}><i aria-hidden="true" className="fas fa-clock-rotate-left" /> Historical</button>
+          <button type="button" style={{ whiteSpace: 'nowrap' }} className={'btn btn-sm ' + (tab === 'audits' ? 'btn-primary' : 'btn-light')} onClick={() => setTab('audits')}><i aria-hidden="true" className="fas fa-clipboard-check" /> Audits</button>
+          <button type="button" style={{ whiteSpace: 'nowrap' }} className={'btn btn-sm ' + (tab === 'loans' ? 'btn-primary' : 'btn-light')} onClick={() => setTab('loans')}><i aria-hidden="true" className="fas fa-right-left" /> Loans</button>
         </div>
       </div>
       {tab === 'analytics' ? (
