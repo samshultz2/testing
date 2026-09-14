@@ -8,6 +8,8 @@ import datetime as _dt
 
 from sqlalchemy import func
 
+from utils import timeutil
+
 REPORTS = [
     ('directory', 'Staff Directory'),
     ('by_department', 'Staff by Department'),
@@ -143,7 +145,7 @@ def _service_years(filters):
 
 def _birthdays(filters):
     """Staff with a birthday in the next N days (default 30, or the from/to range)."""
-    today = _dt.date.today()
+    today = timeutil.today()
     start = filters.get('from') or today
     end = filters.get('to') or (today + _dt.timedelta(days=30))
     window = max((end - start).days, 0)
@@ -176,7 +178,7 @@ def _birthdays(filters):
 
 def _contracts(filters):
     """Contract staff whose contract ends (or has ended) within the window."""
-    today = _dt.date.today()
+    today = timeutil.today()
     horizon = filters.get('to') or (today + _dt.timedelta(days=90))
     rows = []
     for s in _staff_q(filters).all():
@@ -197,7 +199,7 @@ def _contracts(filters):
 
 def _retirement(filters):
     """Forecast of staff reaching the retirement age within ~5 years."""
-    today = _dt.date.today()
+    today = timeutil.today()
     rows = []
     for s in _staff_q(filters).all():
         if not s.date_of_birth:
@@ -220,7 +222,7 @@ def _leave(filters):
     from models import LeaveRecord, StaffMember
     from utils.branch_scope import scope_by_staff
     from sqlalchemy import extract
-    year = _dt.date.today().year
+    year = timeutil.today().year
     q = scope_by_staff(LeaveRecord.query.filter(LeaveRecord.status == 'Approved',
                        extract('year', LeaveRecord.start_date) == year), LeaveRecord)
     agg = {}
@@ -243,8 +245,8 @@ def _leave(filters):
 def _attendance(filters):
     from models import StaffAttendance, StaffMember
     from utils.branch_scope import scope_by_staff
-    start = filters.get('from') or _dt.date.today().replace(day=1)
-    end = filters.get('to') or _dt.date.today()
+    start = filters.get('from') or timeutil.today().replace(day=1)
+    end = filters.get('to') or timeutil.today()
     q = scope_by_staff(StaffAttendance.query.filter(
         StaffAttendance.date >= start, StaffAttendance.date <= end), StaffAttendance)
     agg = {}

@@ -62,19 +62,17 @@ def _checkin_serializer():
 
 def day_code():
     """A short-lived signed token valid for today's QR self check-in."""
-    import datetime as _dt
-    return _checkin_serializer().dumps({'d': _dt.date.today().isoformat()})
+    return _checkin_serializer().dumps({'d': timeutil.today().isoformat()})
 
 
 def verify_day_code(code):
     """True if ``code`` is a valid, unexpired (≤1 day) token minted for today."""
-    import datetime as _dt
     from itsdangerous import BadSignature, SignatureExpired
     try:
         data = _checkin_serializer().loads(code or '', max_age=86400)
     except (BadSignature, SignatureExpired, Exception):
         return False
-    return data.get('d') == _dt.date.today().isoformat()
+    return data.get('d') == timeutil.today().isoformat()
 
 
 def qr_svg_data_uri(text):
@@ -112,11 +110,12 @@ def within_geofence(lat, lng, settings=None):
 
 def mark_attendance_now(staff_id, method='self', when=None, note=None):
     """Upsert today's StaffAttendance for a staff member from a live check-in,
-    deriving Present/Late (and any lateness deduction) from the clock-in time."""
-    import datetime as _dt
+    deriving Present/Late (and any lateness deduction) from the clock-in time.
+    ``when`` (e.g. a biometric device's own timestamp) is used as-is when given;
+    otherwise defaults to the school's configured timezone, not the server's."""
     from models import StaffAttendance
     settings = get_settings()
-    now = when or _dt.datetime.now()
+    now = when or timeutil.now()
     day = now.date()
     clock_in = now.strftime('%H:%M')
     st, mins, ded = compute_attendance('Present', clock_in, settings)
@@ -135,9 +134,8 @@ def mark_attendance_now(staff_id, method='self', when=None, note=None):
 def clock_out_now(staff_id, when=None):
     """Stamp today's clock-out time for a staff member. Returns (rec, 'HH:MM')
     or (None, None) when there's no open clock-in to close today."""
-    import datetime as _dt
     from models import StaffAttendance
-    now = when or _dt.datetime.now()
+    now = when or timeutil.now()
     rec = StaffAttendance.query.filter_by(staff_id=staff_id, date=now.date()).first()
     if not rec or not rec.clock_in:
         return None, None
@@ -151,7 +149,6 @@ def hr_self_service(user):
     self-scope capability, and every query is limited to their own linked staff
     record — never anyone else's. Returns None when the user isn't linked to a
     staff record or holds no self-scope capability."""
-    import datetime as _dt
     from models import StaffMember, StaffAttendance, Payslip, PayrollRun
     from utils.access_control import self_scope_level
     from utils.hr_schema import ensure_hr_schema
@@ -171,7 +168,7 @@ def hr_self_service(user):
            'attendance': None, 'today': None, 'clock_action': None,
            'payslips': None, 'deductions': None, 'contributions': None,
            'leave': None, 'leave_balances': None, 'loans': None, 'documents': None}
-    today = _dt.date.today()
+    today = timeutil.today()
     if att_lvl:
         rows = (StaffAttendance.query.filter_by(staff_id=staff.id)
                 .order_by(StaffAttendance.date.desc()).limit(30).all())
@@ -384,7 +381,7 @@ def dashboard_stats(branch_id=None):
 
     active_status = active.filter_by(status='Active').count()
     import datetime as _dt
-    today = _dt.date.today()
+    today = timeutil.today()
     month_start = today.replace(day=1)
     new_hires = active.filter(StaffMember.date_employed >= month_start).count()
 
@@ -425,12 +422,11 @@ def dashboard_stats(branch_id=None):
 
 def upcoming_birthdays(branch_id=None, days=30, limit=8):
     """Staff with a birthday within the next ``days`` (branch-scoped)."""
-    import datetime as _dt
     q = StaffMember.query.filter(StaffMember.is_active == True,
                                  StaffMember.date_of_birth.isnot(None))
     if branch_id is not None:
         q = q.filter(StaffMember.branch_id == branch_id)
-    today = _dt.date.today()
+    today = timeutil.today()
     out = []
     for s in q.all():
         dob = s.date_of_birth
@@ -453,7 +449,7 @@ def upcoming_birthdays(branch_id=None, days=30, limit=8):
 
 def expiring_contracts(branch_id=None, days=60, limit=8):
     import datetime as _dt
-    today = _dt.date.today()
+    today = timeutil.today()
     q = StaffMember.query.filter(
         StaffMember.is_active == True, StaffMember.contract_end.isnot(None),
         StaffMember.contract_end >= today,
