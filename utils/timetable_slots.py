@@ -1,24 +1,26 @@
 """Self-healing for the school-wide ``TimetableSlot`` schedule.
 
-Two repair strategies, chosen automatically:
+Two repair strategies, chosen automatically. Both share one hard rule
+inherited from the original design: **a teaching period's own start/end time
+is authoritative and this module never rewrites it** — only a break ever
+moves. That matters because periods aren't always perfectly back-to-back (a
+school may leave a genuine gap for some reason of its own); recomputing every
+period's time from a fixed chain would silently erase gaps like that.
 
 1. **Rule-based** (used once every active break has ``after_period`` set —
    the normal case after the backfill migration). Each break declares which
-   teaching period it belongs immediately after (1-based, by the period's own
-   ``slot_number`` — its positional identity, unaffected by any clock-time
-   drift). The whole day is walked in that declared order — period 1, period
-   2, ..., inserting each break at its declared position — and every slot's
-   start/end time is (re)computed from there, preserving each row's own
-   ``duration_minutes``. This is definitive: unlike the overlap check below,
-   it will move a break *earlier* as well as later if that's what the rule
-   says, which is exactly what's needed when a break ended up sitting before
-   a period it should follow (no overlap involved, so nothing about the raw
-   clock times alone reveals that it's "wrong").
+   teaching period it belongs immediately after (1-based, among teaching
+   periods sorted by their own current ``start_time`` — the same ordering
+   basis the rest of the app already trusts). The break is placed to start
+   exactly when that period currently ends. This is definitive: unlike the
+   overlap check below, it will move a break *earlier* as well as later if
+   that's what the rule says, which is exactly what's needed when a break
+   ended up sitting before a period it should follow (no overlap involved,
+   so nothing about the raw clock times alone reveals that it's "wrong").
 
 2. **Overlap-only** (fallback for any break still missing ``after_period``).
    The historical behaviour: a break that overlaps a teaching period's clock
-   time is pushed to right after it — teaching periods are authoritative and
-   never moved, only the break — while a break that doesn't collide with
+   time is pushed to right after it, while a break that doesn't collide with
    anything is left exactly where it is, since there's no declared rule to
    check it against.
 
@@ -43,35 +45,27 @@ def _duration(slot, default_minutes):
 
 
 def _rebuild_from_after_period(teaching, breaks):
-    """Recompute every slot's start/end time by walking teaching periods in
-    ``slot_number`` order and inserting each break right after the period
-    its ``after_period`` names. Returns True if anything changed."""
-    if not teaching or not teaching[0].start_time:
+    """Reposition each break to start exactly when the teaching period its
+    ``after_period`` names currently ends. Teaching periods' own times are
+    never touched. ``teaching`` must already be sorted by current
+    ``start_time``. Returns True if anything changed."""
+    teaching = [t for t in teaching if t.start_time and t.end_time]
+    if not teaching:
         return False
 
-    by_after = {}
-    for b in breaks:
-        n = max(0, min(b.after_period, len(teaching)))
-        by_after.setdefault(n, []).append(b)
-
     changed = False
-    cursor = _dt.combine(_dt.today(), teaching[0].start_time)
-
-    def place(slot, default_minutes):
-        nonlocal cursor, changed
-        end = cursor + _duration(slot, default_minutes)
-        new_start, new_end = cursor.time(), end.time()
-        if (slot.start_time, slot.end_time) != (new_start, new_end):
-            slot.start_time, slot.end_time = new_start, new_end
+    n = len(teaching)
+    for b in breaks:
+        i = max(1, min(b.after_period, n))   # break "after period 0" has no
+        if b.after_period < 1:               # anchor without moving a period — skip it
+            continue
+        anchor_end = teaching[i - 1].end_time
+        dur = _duration(b, 30)
+        new_start = anchor_end
+        new_end = (_dt.combine(_dt.today(), new_start) + dur).time()
+        if (b.start_time, b.end_time) != (new_start, new_end):
+            b.start_time, b.end_time = new_start, new_end
             changed = True
-        cursor = end
-
-    for b in by_after.get(0, []):
-        place(b, 30)
-    for i, p in enumerate(teaching, start=1):
-        place(p, 40)
-        for b in by_after.get(i, []):
-            place(b, 30)
 
     return changed
 
@@ -115,7 +109,7 @@ def repair_slot_schedule():
 
     try:
         teaching = (TimetableSlot.query.filter_by(is_active=True, is_break=False)
-                   .order_by(TimetableSlot.slot_number, TimetableSlot.id).all())
+                   .order_by(TimetableSlot.start_time, TimetableSlot.slot_number).all())
         breaks = TimetableSlot.query.filter_by(is_active=True, is_break=True).all()
 
         if teaching and breaks and all(b.after_period is not None for b in breaks):
