@@ -16,19 +16,6 @@ def _short(subj, fallback_map, maxlen):
     return fallback_map.get(name, name[:maxlen])
 
 
-def _filter_by_arm(results):
-    """Optional class-arm filter shared by every print/export route — e.g.
-    skip a combined class's other arm when it's co-scheduled with the one
-    being exported (same periods, just a different elective label), so the
-    document doesn't carry two near-identical tables. Each ?arm= value is
-    "ClassName|ArmName"; no ?arm= at all keeps every class-arm in the batch,
-    unchanged from before this filter existed."""
-    selected = {tuple(a.split('|', 1)) for a in request.args.getlist('arm') if '|' in a}
-    if not selected:
-        return results
-    return [r for r in results if (r.class_name, r.arm_name) in selected]
-
-
 @generator_bp.route('/results/<batch_id>/print')
 @login_required
 def print_results(batch_id):
@@ -38,7 +25,7 @@ def print_results(batch_id):
         flash('No results.', 'error')
         return redirect(url_for('generator.results_list'))
 
-    results = _filter_by_arm(results)
+    results = filter_results_by_arm(results)
     if not results:
         flash('No class-arms selected.', 'error')
         return redirect(url_for('generator.view_results', batch_id=batch_id))
@@ -102,7 +89,7 @@ def export_results(batch_id):
     if not results:
         flash('No results.', 'error')
         return redirect(url_for('generator.results_list'))
-    results = _filter_by_arm(results)
+    results = filter_results_by_arm(results)
     if not results:
         flash('No class-arms selected.', 'error')
         return redirect(url_for('generator.view_results', batch_id=batch_id))
@@ -349,7 +336,7 @@ def export_results_by_day(batch_id):
     if not results:
         flash('No results.', 'error')
         return redirect(url_for('generator.results_list'))
-    results = _filter_by_arm(results)
+    results = filter_results_by_arm(results)
     if not results:
         flash('No class-arms selected.', 'error')
         return redirect(url_for('generator.view_results', batch_id=batch_id))
@@ -665,7 +652,7 @@ def export_results_by_day_pdf(batch_id):
     if not results:
         flash('No results.', 'error')
         return redirect(url_for('generator.results_list'))
-    results = _filter_by_arm(results)
+    results = filter_results_by_arm(results)
     if not results:
         flash('No class-arms selected.', 'error')
         return redirect(url_for('generator.view_results', batch_id=batch_id))

@@ -47,6 +47,7 @@
                 <button type="submit" formaction="{{ url_for('generator.export_results', batch_id=batch_id) }}" class="btn btn-info"><i class="fas fa-download"></i> Excel (by Class)</button>
                 <button type="submit" formaction="{{ url_for('generator.export_results_by_day', batch_id=batch_id) }}" class="btn btn-primary"><i class="fas fa-calendar-day"></i> Excel (by Day)</button>
                 <button type="submit" formaction="{{ url_for('generator.export_results_by_day_pdf', batch_id=batch_id) }}" class="btn btn-danger"><i class="fas fa-file-pdf"></i> PDF (by Day)</button>
+                <button type="submit" formaction="{{ url_for('generator.export_image', batch_id=batch_id) }}" class="btn btn-warning"><i class="fas fa-image"></i> Image (PNG)</button>
             </div>
         </form>
     </div>

@@ -5,7 +5,7 @@ V3: JPG format, correct abbreviations, school watermark
 """
 from flask import Response
 from models import GenTimetableResult, GenTimetableRule, GenTeacher, GenSubject, GenSettings
-from routes.generator import gen_bid
+from routes.generator import gen_bid, filter_results_by_arm
 from utils.generator_times import clock_params, break_after as _break_after
 from PIL import Image, ImageDraw, ImageFont
 from io import BytesIO
@@ -150,7 +150,10 @@ def generate_timetable_image(batch_id, layout='by_day', quality='ultra'):
     results = GenTimetableResult.query.filter_by(batch_id=batch_id, branch_id=gen_bid()).all()
     if not results:
         return None
-    
+    results = filter_results_by_arm(results)
+    if not results:
+        return None
+
     # Determine school level from results
     school_level = results[0].school_level if results else 'sss'
     

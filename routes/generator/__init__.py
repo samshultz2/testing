@@ -45,6 +45,19 @@ def gen_owned_or_404(model, obj_id):
     return obj
 
 
+def filter_results_by_arm(results):
+    """Optional class-arm filter shared by every print/export route (HTML,
+    Excel, PDF, PNG) — e.g. skip a combined class's other arm when it's
+    co-scheduled with the one being exported (same periods, just a different
+    elective label), so the document doesn't carry two near-identical tables.
+    Each ?arm= value is "ClassName|ArmName"; no ?arm= at all keeps every
+    class-arm in the batch, unchanged from before this filter existed."""
+    selected = {tuple(a.split('|', 1)) for a in request.args.getlist('arm') if '|' in a}
+    if not selected:
+        return results
+    return [r for r in results if (r.class_name, r.arm_name) in selected]
+
+
 DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
 SUBJECT_COLORS = [
     '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',

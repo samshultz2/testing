@@ -278,3 +278,29 @@ def test_export_by_day_pdf_respects_arm_filter(app):
     # A filtered-out selection with no match falls back to the batch's view page.
     r_none = c.get(f'/generator/results/{batch_id}/export_by_day_pdf?arm=NotAClass|NotAnArm')
     assert r_none.status_code == 302
+
+
+def test_export_image_respects_arm_filter(app):
+    from PIL import Image
+    from io import BytesIO
+
+    batch_id = _seed_print_filter_batch(app, 'H')
+    c = _admin(app)
+
+    r_all = c.get(f'/generator/results/{batch_id}/export_image_hd')
+    assert r_all.status_code == 200
+    assert r_all.mimetype == 'image/png'
+    img_all = Image.open(BytesIO(r_all.data))
+    all_height = img_all.height
+
+    r_daisy = c.get(f'/generator/results/{batch_id}/export_image_hd?arm=ZzSSS2H|ZzDaisyH')
+    assert r_daisy.status_code == 200
+    assert r_daisy.mimetype == 'image/png'
+    img_daisy = Image.open(BytesIO(r_daisy.data))
+    # One fewer class-arm row means a shorter image (same width, less height).
+    assert img_daisy.height < all_height
+    assert img_daisy.width == img_all.width
+
+    # A filtered-out selection with no match behaves like "no results".
+    r_none = c.get(f'/generator/results/{batch_id}/export_image_hd?arm=NotAClass|NotAnArm')
+    assert r_none.status_code == 302
