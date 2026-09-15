@@ -14,6 +14,7 @@ const FORMATS = [
   ['excel', 'Excel', 'fa-file-excel'], ['word', 'Word', 'fa-file-word'],
   ['pdf', 'PDF', 'fa-file-pdf'], ['image', 'Image', 'fa-file-image'],
 ];
+const FONT_SIZES = Array.from({ length: 60 - 14 + 1 }, (_, i) => 14 + i);
 
 // Field + format picker that builds a download URL on the existing export route.
 // Exports the selected students, or all rows matching the current filters.
@@ -22,6 +23,7 @@ export default function ExportModal({ total, selectedIds, exportUrl, applied, on
     const init = {}; FIELDS.forEach(([k]) => { init[k] = DEFAULT_ON.has(k); }); return init;
   });
   const [format, setFormat] = useState('excel');
+  const [fontSize, setFontSize] = useState(16);
   const toggle = (k) => setChecked((c) => ({ ...c, [k]: !c[k] }));
 
   const saveBlob = (blob, name) => {
@@ -48,6 +50,7 @@ export default function ExportModal({ total, selectedIds, exportUrl, applied, on
     if (!fields.length) return;
     const p = new URLSearchParams();
     p.set('format', format);
+    p.set('font_size', String(fontSize));
     p.set('fields', JSON.stringify(fields));
     if (selectedIds.length) p.set('student_ids', JSON.stringify(selectedIds));
     else {
@@ -84,6 +87,11 @@ export default function ExportModal({ total, selectedIds, exportUrl, applied, on
           </button>
         ))}
       </div>
+      <div className="field-section-title" style={{ fontWeight: 600, margin: '.75rem 0 .5rem' }}>Font size</div>
+      <select className="form-control" style={{ maxWidth: 160 }} value={fontSize}
+              onChange={(e) => setFontSize(Number(e.target.value))} aria-label="Export font size">
+        {FONT_SIZES.map((pt) => <option key={pt} value={pt}>{pt}pt</option>)}
+      </select>
     </Modal>
   );
 }

@@ -55,6 +55,17 @@ def short_header(name):
     return _SHORT_HEADER.get(name, name)
 
 
+def clamp_font_size(value, default):
+    """Clamp a user-picked export table font size to the 14-60pt range the
+    export modal offers, falling back to the format's own default when unset
+    or not a number."""
+    try:
+        v = int(value)
+    except (TypeError, ValueError):
+        return default
+    return max(14, min(60, v))
+
+
 def _is_wrap(h):
     k = (h or '').lower()
     return 'address' in k or 'hobb' in k or 'subject' in k
@@ -79,7 +90,7 @@ def _gender_glyph(value):
 # --------------------------------------------------------------------------- #
 # PDF (reportlab)
 # --------------------------------------------------------------------------- #
-def students_pdf(rows, headers, school, total=None):
+def students_pdf(rows, headers, school, total=None, font_size=None):
     from reportlab.lib.pagesizes import A4, landscape
     from reportlab.lib.units import mm
     from reportlab.lib import colors
@@ -107,15 +118,36 @@ def students_pdf(rows, headers, school, total=None):
     foot_h = 14 * mm
     avail = PW - 2 * margin - 2 * mm
 
-    fs = 16
+    fs = clamp_font_size(font_size, 16)
+    ncol = len(headers)
+    cell_pad = 6            # points of L/R padding inside each table cell
+    pad = 6 * mm            # width budget per column; must exceed 2*cell_pad
+
+    # Pre-flight: a column can never be narrower than its own widest single
+    # word/token without breaking that word mid-token. If those floors alone
+    # (summed across every column) wouldn't fit the page at the requested
+    # font size — easy to hit with several columns at a large picked size —
+    # shrink the font just enough that they do, rather than render columns
+    # that are forced to butcher their own text.
+    def _floor_sum(candidate_fs):
+        total = 0
+        for j in range(ncol):
+            w = max([stringWidth(t, boldf, candidate_fs) for t in short_header(headers[j]).split()] or [0])
+            for r in rows:
+                v = '' if j >= len(r) else ('' if r[j] is None else str(r[j]))
+                for tok in str(v).split():
+                    w = max(w, stringWidth(tok, base, candidate_fs))
+            total += w + pad
+        return total
+    floor_total = _floor_sum(fs)
+    if floor_total > avail:
+        fs = max(8, min(fs, int(fs * avail / floor_total * 0.97)))
+
     cell = ParagraphStyle('c', fontName=base, fontSize=fs, leading=fs + 3, textColor=colors.HexColor(INK))
     cellc = ParagraphStyle('cc', parent=cell, alignment=TA_CENTER)
     headp = ParagraphStyle('h', fontName=boldf, fontSize=fs, leading=fs + 2,
                            textColor=colors.white, alignment=TA_CENTER)
 
-    ncol = len(headers)
-    cell_pad = 6            # points of L/R padding inside each table cell
-    pad = 6 * mm            # width budget per column; must exceed 2*cell_pad
     def _disp(j, v):
         if headers[j].lower() == 'gender':
             g, _c = _gender_glyph(v)
@@ -152,28 +184,38 @@ def students_pdf(rows, headers, school, total=None):
             w = max(min(val_w(j) + pad, 38 * mm), fl)
         else:
             # Non-wrap: fit the widest value and the longest header word (the
-            # header itself may wrap); the value never wraps.
-            w = min(max(val_w(j), _hdr_word(j)) + pad, 50 * mm)
+            # header itself may wrap). The 50mm cap keeps typical columns
+            # tight, but must never win out over a single word/token wider
+            # than that — at a large picked font size a header or value word
+            # easily exceeds 50mm, and without this floor the cap would force
+            # it to break mid-word.
+            fl = word_floor(j)
+            w = min(max(val_w(j), _hdr_word(j)) + pad, max(50 * mm, fl))
+        floors[j] = fl
         col_w.append(max(w, 9 * mm))
     tot = sum(col_w)
     if tot > avail:
-        # Shrink wrap columns, but never below their longest word.
-        wrap_idx = [j for j in range(ncol) if _is_wrap(headers[j])]
-        slack = sum(max(0, col_w[j] - floors[j]) for j in wrap_idx)
+        # Shrink every column's slack above its own floor (the widest single
+        # word/token it must fit, wrap or not) proportionally, so no column's
+        # own text ever breaks mid-word. Only if that still isn't enough —
+        # e.g. many columns at a very large picked font size, where floors
+        # alone already exceed the page — fall back to a uniform scale that
+        # may dip below them; there's no way to fit everything at that point.
+        slack = sum(max(0, col_w[j] - floors[j]) for j in range(ncol))
         over = tot - avail
         if slack > 0:
             take = min(over, slack)
-            for j in wrap_idx:
+            for j in range(ncol):
                 s = max(0, col_w[j] - floors[j])
                 col_w[j] -= take * (s / slack) if slack else 0
             tot = sum(col_w); over = tot - avail
         if over > 0:
             f = avail / tot; col_w = [w * f for w in col_w]
     elif tot < avail:
-        # Keep columns responsive to their content — do NOT stretch them to fill
-        # the page (that leaves big gaps). Hand spare width first to any wrap
-        # column (address / subject-grades) so it wraps onto fewer lines, then
-        # only gently widen the text columns; the remainder is trailing space.
+        # Hand spare width first to any wrap column (address / subject-grades)
+        # so it wraps onto fewer lines, then gently widen the text columns —
+        # and finally spread whatever's still left across every column so the
+        # table always fills the full page width edge to edge.
         left = avail - tot
         wrap_cols = [j for j in range(ncol) if _is_wrap(headers[j])]
         if wrap_cols and left > 0:
@@ -187,13 +229,18 @@ def students_pdf(rows, headers, school, total=None):
         if left > 0:
             grow = [j for j in range(ncol) if not _is_wrap(headers[j])
                     and headers[j].lower() not in ('s/n', 'sn', 'age', 'gender')]
-            # cap each text column's growth so cells stay close to their content
+            # cap each text column's content-driven growth so cells stay close
+            # to their content before the final full-width pass below
             room = {j: min(col_w[j] * 0.35, 16 * mm) for j in grow}
             tr = sum(room.values())
             if tr > 0:
                 take = min(left, tr)
                 for j in grow:
                     col_w[j] += take * (room[j] / tr)
+                left -= take
+        if left > 0.01:
+            tot2 = sum(col_w)
+            col_w = [w + left * (w / tot2) for w in col_w]
 
     data = [[Paragraph(short_header(h), headp) for h in headers]]
     for r in rows:
@@ -362,12 +409,13 @@ def _draw_footer(cv, PW, margin, foot_h, school, base, boldf, obl):
 # --------------------------------------------------------------------------- #
 # Image (PIL) — one landscape-A4 PNG per page.
 # --------------------------------------------------------------------------- #
-def students_image_pages(rows, headers, school, total=None):
+def students_image_pages(rows, headers, school, total=None, font_size=None):
     from PIL import Image, ImageDraw, ImageFont
     S = 2
     DPI = 150
     PW = int(round(297 / 25.4 * DPI)); PH = int(round(210 / 25.4 * DPI))
     total = total if total is not None else len(rows)
+    fs = clamp_font_size(font_size, 18)
 
     def fnt(size, bold=False):
         p = _DEJAVU_BOLD if bold else _DEJAVU
@@ -379,14 +427,40 @@ def students_image_pages(rows, headers, school, total=None):
     C = {'navy': (30, 42, 74), 'gold': (184, 134, 43), 'ink': (31, 41, 55),
          'muted': (107, 114, 128), 'zebra': (244, 246, 249), 'line': (216, 222, 233),
          'white': (255, 255, 255), 'panel': (247, 248, 250)}
-    body, body_b = fnt(18), fnt(18, True)
-    name_f, addr_f, motto_f = fnt(42, True), fnt(17), fnt(17)
-    hdr_f, panel_lab, panel_val = fnt(18, True), fnt(12), fnt(22, True)
-    foot_b, foot_s = fnt(13, True), fnt(11)
     tmp = ImageDraw.Draw(Image.new('RGB', (1, 1)))
 
     def tw(t, f):
         b = tmp.textbbox((0, 0), str(t), font=f); return b[2] - b[0]
+
+    margin = 30 * S
+    avail = PW * S - 2 * margin
+    pad = 34 * S            # must exceed 2*cpx (per-cell L/R padding) so nothing clips
+    ncol = len(headers)
+
+    # Pre-flight: a column can never be narrower than its own widest single
+    # word/token without breaking that word mid-token. If those floors alone
+    # (summed across every column) wouldn't fit the page at the requested
+    # font size — easy to hit with several columns at a large picked size —
+    # shrink the font just enough that they do.
+    def _floor_sum(candidate_fs):
+        fb, fr = fnt(candidate_fs, True), fnt(candidate_fs, False)
+        total = 0
+        for j in range(ncol):
+            w = max([tw(t, fb) for t in short_header(headers[j]).split()] or [0])
+            for r in rows:
+                v = '' if j >= len(r) else ('' if r[j] is None else str(r[j]))
+                for tok in str(v).split():
+                    w = max(w, tw(tok, fr))
+            total += w + pad
+        return total
+    floor_total = _floor_sum(fs)
+    if floor_total > avail:
+        fs = max(8, min(fs, int(fs * avail / floor_total * 0.97)))
+
+    body, body_b = fnt(fs), fnt(fs, True)
+    name_f, addr_f, motto_f = fnt(42, True), fnt(17), fnt(17)
+    hdr_f, panel_lab, panel_val = fnt(fs, True), fnt(12), fnt(22, True)
+    foot_b, foot_s = fnt(13, True), fnt(11)
 
     def fit(t, f, mw):
         t = str(t)
@@ -411,11 +485,6 @@ def students_image_pages(rows, headers, school, total=None):
         if cur:
             lines.append(cur)
         return lines
-
-    margin = 30 * S
-    avail = PW * S - 2 * margin
-    pad = 34 * S            # must exceed 2*cpx (per-cell L/R padding) so nothing clips
-    ncol = len(headers)
 
     def _disp(j, v):
         if headers[j].lower() == 'gender':
@@ -449,27 +518,37 @@ def students_image_pages(rows, headers, school, total=None):
             floors[j] = fl
             w = max(min(val_w(j) + pad, int(210 * S)), fl)
         else:
-            # Non-wrap: fit widest value + longest header word (header may wrap).
-            w = min(max(val_w(j), _hdr_word(j)) + pad, int(280 * S))
+            # Non-wrap: fit widest value + longest header word (header may
+            # wrap). Never let the 280px cap win over a single word/token
+            # wider than that — at a large picked font size a word easily
+            # exceeds it, and without this floor the cap forces a mid-word
+            # break.
+            fl = word_floor(j)
+            w = min(max(val_w(j), _hdr_word(j)) + pad, max(int(280 * S), fl))
+        floors[j] = fl
         col_w.append(max(w, int(56 * S)))
     tot = sum(col_w)
-    if tot > avail:                        # shrink wrap columns, never below a word
-        wrap_idx = [j for j in range(ncol) if _is_wrap(headers[j])]
-        slack = sum(max(0, col_w[j] - floors[j]) for j in wrap_idx)
+    if tot > avail:
+        # Shrink every column's slack above its own floor (wrap or not), so
+        # no column's text ever breaks mid-word. Only if that's still not
+        # enough — e.g. many columns at a very large picked font size, where
+        # floors alone already exceed the page — fall back to a uniform
+        # scale that may dip below them.
+        slack = sum(max(0, col_w[j] - floors[j]) for j in range(ncol))
         over = tot - avail
         if slack > 0:
             take = min(over, slack)
-            for j in wrap_idx:
+            for j in range(ncol):
                 s = max(0, col_w[j] - floors[j])
                 col_w[j] -= int(take * (s / slack)) if slack else 0
             tot = sum(col_w); over = tot - avail
         if over > 0:
             f = avail / tot; col_w = [int(w * f) for w in col_w]
     elif tot < avail:
-        # Keep columns responsive to content — don't stretch them to fill the
-        # page. Spare width goes first to a wrap column (address / subject-
-        # grades) so it wraps onto fewer lines, then gently to the text columns;
-        # anything left over is trailing space.
+        # Spare width goes first to a wrap column (address / subject-grades)
+        # so it wraps onto fewer lines, then gently to the text columns — and
+        # finally spread across every column so the table always fills the
+        # full page width edge to edge.
         left = avail - tot
         wrap_cols = [j for j in range(ncol) if _is_wrap(headers[j])]
         if wrap_cols and left > 0:
@@ -489,6 +568,10 @@ def students_image_pages(rows, headers, school, total=None):
                 take = min(left, tr)
                 for j in grow:
                     col_w[j] += int(take * (room[j] / tr))
+                left = avail - sum(col_w)
+        if left > 0:
+            tot2 = sum(col_w)
+            col_w = [int(w + left * (w / tot2)) for w in col_w]
     table_w = sum(col_w)
     tx0 = margin  # full-width, left-aligned to the page margin
 
@@ -638,7 +721,7 @@ def _img_masthead(d, img, PW, margin, school, total, C, name_f, addr_f, motto_f,
 # --------------------------------------------------------------------------- #
 # Word (python-docx) — branded, A4 landscape, same visual language.
 # --------------------------------------------------------------------------- #
-def students_word(rows, headers, school, total=None, filename='students_export.docx'):
+def students_word(rows, headers, school, total=None, filename='students_export.docx', font_size=None):
     """A branded Word (.docx) export sharing the PDF/image design language:
     a centred masthead (logo, school name, address/contact, motto, meta line)
     and a navy table with a gold header rule, zebra rows and wrapping
@@ -653,6 +736,7 @@ def students_word(rows, headers, school, total=None, filename='students_export.d
     from flask import Response
 
     total = total if total is not None else len(rows)
+    fs = clamp_font_size(font_size, 16)
     navy = RGBColor(0x1E, 0x2A, 0x4A)
     gold = RGBColor(0xB8, 0x86, 0x2B)
     muted = RGBColor(0x6B, 0x72, 0x80)
@@ -716,7 +800,7 @@ def students_word(rows, headers, school, total=None, filename='students_export.d
         cell = hdr.cells[i]; cell.width = widths[i]
         cell.text = short_header(h)
         para = cell.paragraphs[0]; para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run = para.runs[0]; run.bold = True; run.font.size = Pt(16)
+        run = para.runs[0]; run.bold = True; run.font.size = Pt(fs)
         run.font.color.rgb = RGBColor(255, 255, 255)
         cell._tc.get_or_add_tcPr().append(parse_xml(f'<w:shd {nsdecls("w")} w:fill="1E2A4A"/>'))
 
@@ -729,7 +813,7 @@ def students_word(rows, headers, school, total=None, filename='students_export.d
             para = cell.paragraphs[0]
             para.alignment = WD_ALIGN_PARAGRAPH.LEFT if (_is_wrap(headers[i]) or i == 1) else WD_ALIGN_PARAGRAPH.CENTER
             if para.runs:
-                para.runs[0].font.size = Pt(16)
+                para.runs[0].font.size = Pt(fs)
             if idx % 2 == 0:
                 cell._tc.get_or_add_tcPr().append(parse_xml(f'<w:shd {nsdecls("w")} w:fill="F4F6F9"/>'))
 

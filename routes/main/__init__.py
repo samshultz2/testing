@@ -2467,19 +2467,21 @@ def _trash_scope(query):
 
 
 
-def export_students_excel(student_data, fields):
+def export_students_excel(student_data, fields, font_size=None):
     """Export students to Excel format with selected fields — a responsive,
     proportionally-weighted column layout (like the Word/PDF/image exports)
     instead of a fixed per-field width, so a handful of selected fields still
-    spread across the full sheet instead of leaving it mostly blank. 16pt
-    throughout for readability; row heights auto-adjust to fit wrapped text."""
+    spread across the full sheet instead of leaving it mostly blank. 16pt by
+    default (or the user-picked export font size); row heights auto-adjust to
+    fit wrapped text."""
     import openpyxl
     from openpyxl.styles import Font, Alignment, Border, Side, PatternFill
     from openpyxl.utils import get_column_letter
     from io import BytesIO
     from flask import Response
+    from utils.student_export import clamp_font_size
 
-    FONT_SIZE = 16
+    FONT_SIZE = clamp_font_size(font_size, 16)
 
     wb = openpyxl.Workbook()
     ws = wb.active
@@ -2525,7 +2527,7 @@ def export_students_excel(student_data, fields):
     title_cell.value = 'STUDENTS LIST'
     title_cell.font = Font(bold=True, size=FONT_SIZE + 2)
     title_cell.alignment = Alignment(horizontal='center', vertical='center')
-    ws.row_dimensions[1].height = 32
+    ws.row_dimensions[1].height = max(32, (FONT_SIZE + 2) * 2)
     
     # Empty row
     ws.row_dimensions[2].height = 10
@@ -2550,7 +2552,7 @@ def export_students_excel(student_data, fields):
         col_letter = get_column_letter(col)
         ws.column_dimensions[col_letter].width = col_widths[field]
     
-    ws.row_dimensions[header_row].height = 30
+    ws.row_dimensions[header_row].height = max(30, FONT_SIZE * 1.9)
     
     # Data rows
     for idx, student in enumerate(student_data, 1):
@@ -2574,17 +2576,20 @@ def export_students_excel(student_data, fields):
             
             # Estimate lines needed based on column width and text length. At
             # 16pt roughly 0.8 characters fit per width-unit (vs ~1.2 at the
-            # old 10pt) — fewer, wider characters per line.
+            # old 10pt) — fewer, wider characters per line; scaled for
+            # whatever font size was actually picked (bigger font, fewer
+            # characters fit per width-unit).
             col_width = col_widths[field]
-            chars_per_line = int(col_width * 0.8)
+            chars_per_line = int(col_width * 0.8 * 16 / FONT_SIZE)
             if chars_per_line > 0 and len(value) > 0:
                 lines_needed = max(1, -(-len(value) // chars_per_line))  # Ceiling division
                 # Also count actual newlines in the text
                 lines_needed = max(lines_needed, value.count('\n') + 1)
                 max_lines = max(max_lines, lines_needed)
-        
-        # Set row height based on content (22 points per line at 16pt, minimum 26)
-        row_height = max(26, max_lines * 22)
+
+        # Set row height based on content (22 points per line at 16pt, scaled
+        # to the picked font size; minimum 26)
+        row_height = max(26, max_lines * 22 * FONT_SIZE / 16)
         ws.row_dimensions[row].height = row_height
     
     # Footer row
@@ -2595,7 +2600,7 @@ def export_students_excel(student_data, fields):
     return xlsx_response(wb, 'students_export.xlsx')
 
 
-def export_students_word(student_data, fields):
+def export_students_word(student_data, fields, font_size=None):
     """Branded, A4-landscape students Word export (shared builder)."""
     from utils.school import school_profile
     from utils.student_export import students_word
@@ -2603,10 +2608,10 @@ def export_students_word(student_data, fields):
     rows = [[str(i)] + [('' if s.get(f) is None else str(s.get(f, ''))) for f in fields]
             for i, s in enumerate(student_data, 1)]
     return students_word(rows, headers, school_profile(), total=len(student_data),
-                         filename='students_export.docx')
+                         filename='students_export.docx', font_size=font_size)
 
 
-def export_students_pdf(student_data, fields):
+def export_students_pdf(student_data, fields, font_size=None):
     """Branded, A4-fitting students PDF (masthead + navy table + footer), paginated."""
     from io import BytesIO
     from utils.school import school_profile
@@ -2614,11 +2619,11 @@ def export_students_pdf(student_data, fields):
     headers = ['S/N'] + list(fields)
     rows = [[str(i)] + [('' if s.get(f) is None else str(s.get(f, ''))) for f in fields]
             for i, s in enumerate(student_data, 1)]
-    data = students_pdf(rows, headers, school_profile(), total=len(student_data))
+    data = students_pdf(rows, headers, school_profile(), total=len(student_data), font_size=font_size)
     return pdf_response(BytesIO(data), 'students_export.pdf', inline=False)
 
 
-def export_students_image(student_data, fields):
+def export_students_image(student_data, fields, font_size=None):
     """Branded, A4-page students image. One A4 page per image; the client loops
     over pages using the X-Total-Pages header so a long list downloads as several
     images."""
@@ -2628,7 +2633,7 @@ def export_students_image(student_data, fields):
     headers = ['S/N'] + list(fields)
     rows = [[str(i)] + [('' if s.get(f) is None else str(s.get(f, ''))) for f in fields]
             for i, s in enumerate(student_data, 1)]
-    pages = students_image_pages(rows, headers, school_profile(), total=len(student_data))
+    pages = students_image_pages(rows, headers, school_profile(), total=len(student_data), font_size=font_size)
     page = request.args.get('page', type=int) or 1
     page = max(1, min(page, len(pages)))
     suffix = '' if len(pages) == 1 else ('_p%d' % page)
