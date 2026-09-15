@@ -402,7 +402,26 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
                 last_period_slot = day * num_periods + (num_periods - 1)
                 for req in reqs:
                     model.Add(x[req['req_id'], last_period_slot] == 0)
-    
+
+    # Constraint 6b: A subject with more than one period/week can land in
+    # period 1 on at most one day — so once Geography has opened SSS2 Lily's
+    # Monday, its other periods that week can't repeat as another day's
+    # opener too. Skipped for subjects already fully banned from period 1
+    # (not_first_period, Constraint 6 above) since they can never be there
+    # at all, and for single-period subjects where there's nothing to repeat.
+    logger.debug("Adding first-period no-repeat constraint...")
+    first_period_slots = [day * num_periods for day in range(num_days)]
+    first_period_cap_count = 0
+    for key, info in subject_info.items():
+        if info['not_first_period']:
+            continue
+        reqs = subject_ca_reqs[key]
+        if len(reqs) <= 1:
+            continue
+        model.Add(sum(x[r['req_id'], slot] for r in reqs for slot in first_period_slots) <= 1)
+        first_period_cap_count += 1
+    logger.debug(f"  Added {first_period_cap_count} first-period no-repeat caps")
+
     # Constraint 7: No subject spanning break
     logger.debug(f"Adding no-subject-spanning-break constraint (break after P{break_after})...")
     for key, reqs in subject_ca_reqs.items():
@@ -838,6 +857,9 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
             active_rules.append(f'{coschedule_rule_count} co-schedule rule(s)')
         if any(info['not_first_period'] or info['not_last_period'] for info in subject_info.values()):
             active_rules.append('not-first/not-last period restrictions on some subjects')
+        if first_period_cap_count:
+            active_rules.append(f'{first_period_cap_count} first-period no-repeat cap(s) '
+                                f'(a subject can only open the day once a week)')
         if any(info['needs_double'] for info in subject_info.values()):
             active_rules.append('double-period placement for some subjects')
         multi_subject_teachers = sum(1 for reqs in teacher_classarm_reqs.values()
