@@ -379,3 +379,35 @@ def test_export_by_class_shows_coschedule_pair(app):
     assert '/' in all_text
     assert any(v.startswith('ZzLite') and '/ZzAcco' in v
                for row in ws.iter_rows() for v in [str(c.value) for c in row] if v and '/' in v)
+
+
+def test_export_by_day_shows_coschedule_pair(app):
+    import openpyxl
+    from io import BytesIO
+
+    batch_id = _seed_coscheduled_pair(app, 'M')
+    c = _admin(app)
+
+    r = c.get(f'/generator/results/{batch_id}/export_by_day?arm=ZzSSS2M|ZzDaisyM')
+    assert r.status_code == 200
+    wb = openpyxl.load_workbook(BytesIO(r.data))
+    monday = wb['Monday']
+    all_text = ' '.join(str(cell.value) for row in monday.iter_rows() for cell in row if cell.value)
+    assert 'ZzIrisM' not in all_text   # excluded arm's own row is gone
+    # export_by_day truncates to 5 chars (no abbrev_map match for these test names).
+    assert any(v.startswith('ZzLit') and '/ZzAcc' in v
+               for row in monday.iter_rows() for v in [str(c.value) for c in row] if v and '/' in v)
+
+
+def test_export_by_day_pdf_shows_coschedule_pair(app):
+    """PDF text isn't easily extractable in this test env, so this checks
+    the route succeeds with the filter+annotation active together (the same
+    code path exercised visually via Playwright) rather than the rendered
+    text itself."""
+    batch_id = _seed_coscheduled_pair(app, 'N')
+    c = _admin(app)
+
+    r = c.get(f'/generator/results/{batch_id}/export_by_day_pdf?arm=ZzSSS2N|ZzDaisyN')
+    assert r.status_code == 200
+    assert r.mimetype == 'application/pdf'
+    assert len(r.data) > 500
