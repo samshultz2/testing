@@ -604,6 +604,10 @@ Do not include a serial-number/S-N column. Output only the rows — no totals or
                 <option value="portrait">Portrait (210 × 297mm)</option>
             </select>
         </div>
+        <div class="form-group" style="margin:0 0 .25rem">
+            <label class="form-label" style="font-size:.8rem">Font size (14–50pt)</label>
+            <input type="number" id="exportFontSize" class="form-control" min="14" max="50" step="1" value="26">
+        </div>
         <div id="exportSpinner" class="export-spinner"><i class="fas fa-spinner fa-spin"></i> Rendering…</div>
         <img id="exportImg" alt="Timetable preview" style="display:none">
         <div class="export-actions">
@@ -1589,6 +1593,21 @@ function clearTableExportSizing(){
     if(!table) return;
     for(var i = 0; i < table.rows.length; i++) table.rows[i].style.height = '';
 }
+// User-picked export font size (14-50pt), applied as an inline style on the
+// exported table so it wins over every theme/layout's own font-size rule
+// (all of which use em/% units on descendants, so they scale with it too).
+function applyExportFontSize(){
+    var table = document.querySelector('#pBody table');
+    if(!table) return;
+    var size = parseInt(el('exportFontSize').value, 10);
+    if(!size || isNaN(size)) return;
+    size = Math.max(14, Math.min(50, size));
+    table.style.fontSize = size + 'px';
+}
+function clearExportFontSize(){
+    var table = document.querySelector('#pBody table');
+    if(table) table.style.fontSize = '';
+}
 function captureExport(){
     var sheet = el('sheet');
     _exportOrientation = (el('pageOrient') && el('pageOrient').value) || 'landscape';
@@ -1598,6 +1617,7 @@ function captureExport(){
     el('exportSpinner').style.display = 'block';
     sheet.classList.add('exporting');            // fills the A4 content width
     sheet.classList.toggle('portrait', _exportOrientation === 'portrait');
+    applyExportFontSize();                        // ...at the size the user picked...
     sizeTableForExport(sheet);                    // ...and now the content height too
     var scale = Math.max(2, Math.ceil(1920 / (sheet.offsetWidth || 1480)));
     html2canvas(sheet, {scale: scale, backgroundColor: '#ffffff',
@@ -1605,6 +1625,7 @@ function captureExport(){
         .then(function(canvas){
             sheet.classList.remove('exporting', 'portrait');
             clearTableExportSizing();
+            clearExportFontSize();
             _exportCanvas = canvas;
             var img = el('exportImg');
             img.src = canvas.toDataURL('image/png');
@@ -1614,6 +1635,7 @@ function captureExport(){
         .catch(function(e){
             sheet.classList.remove('exporting', 'portrait');
             clearTableExportSizing();
+            clearExportFontSize();
             el('exportSpinner').textContent = 'Could not render the timetable: ' + e;
         });
 }
@@ -1656,6 +1678,14 @@ document.getElementById('exportModal').addEventListener('click', function(e){
 // switching A4 orientation re-renders the preview (and what PDF/image download
 // will use) — only while the modal's actually open, never on page load.
 el('pageOrient').addEventListener('change', function(){
+    if(el('exportModal').style.display !== 'none') captureExport();
+});
+// same for the font size picker — clamp to 14-50 as the user types, then
+// re-render so the preview always matches what downloadPDF()/downloadImage()
+// will actually produce.
+el('exportFontSize').addEventListener('change', function(){
+    var v = Math.max(14, Math.min(50, parseInt(this.value, 10) || 26));
+    this.value = v;
     if(el('exportModal').style.display !== 'none') captureExport();
 });
 
