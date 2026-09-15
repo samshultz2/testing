@@ -138,7 +138,19 @@
 .tt-sheet table.grid-tt.blankgrid th,
 .tt-sheet table.grid-tt.blankgrid td{
     overflow-wrap:anywhere;word-break:break-word;box-sizing:border-box;min-width:0;max-width:100%}
+/* static/css/style.css has a legacy Bootstrap-style grid rule, [class*="col-"]
+   { width:100%; ... }, meant for its own .col-sm-N / .col-md-N utility
+   classes — but it also matches this table's unrelated ".col-sep" class (any
+   class containing "col-"), forcing every data column to claim width:100%
+   and squeezing the label column down to almost nothing. Reassert the real
+   width (the <colgroup> percentage) and padding here, scoped and specific
+   enough to always win regardless of load order. */
+.tt-sheet table.grid-tt.blankgrid th.col-sep,
+.tt-sheet table.grid-tt.blankgrid td.col-sep{width:auto;padding:10px 12px}
 .tt-sheet table.grid-tt.listtable td.roster-cell{text-align:left;font-weight:400}
+/* Sweeping roster (weekly/daily) reads better a touch larger than the other
+   designer layouts. */
+.tt-sheet table.grid-tt.roster{font-size:18px}
 
 /* themes */
 .tt-sheet[data-theme="classic"]{font-family:Georgia,'Times New Roman',serif}
@@ -1235,7 +1247,7 @@ function renderBlankGridSheet(){
                  + esc(rosterCells[k]||'')+'</td>';
         }).join('')+'</tr>';
     }).join('');
-    el('pBody').innerHTML='<table class="grid-tt blankgrid">'+colgroup+'<thead>'+thead+'</thead><tbody>'+body+'</tbody></table>';
+    el('pBody').innerHTML='<table class="grid-tt blankgrid'+(roster?' roster':'')+'">'+colgroup+'<thead>'+thead+'</thead><tbody>'+body+'</tbody></table>';
 }
 
 // ---------- Saturday plan: first-Saturday date + lesson-free cascade ----------
