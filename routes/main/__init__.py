@@ -2467,7 +2467,7 @@ def _trash_scope(query):
 
 
 
-def export_students_excel(student_data, fields, font_size=None):
+def export_students_excel(student_data, fields, font_size=None, title=None):
     """Export students to Excel format with selected fields — a responsive,
     proportionally-weighted column layout (like the Word/PDF/image exports)
     instead of a fixed per-field width, so a handful of selected fields still
@@ -2524,7 +2524,7 @@ def export_students_excel(student_data, fields, font_size=None):
     # Title row
     ws.merge_cells(start_row=1, start_column=1, end_row=1, end_column=len(fields) + 1)
     title_cell = ws['A1']
-    title_cell.value = 'STUDENTS LIST'
+    title_cell.value = (title or '').strip() or 'STUDENTS LIST'
     title_cell.font = Font(bold=True, size=FONT_SIZE + 2)
     title_cell.alignment = Alignment(horizontal='center', vertical='center')
     ws.row_dimensions[1].height = max(32, (FONT_SIZE + 2) * 2)
@@ -2600,7 +2600,7 @@ def export_students_excel(student_data, fields, font_size=None):
     return xlsx_response(wb, 'students_export.xlsx')
 
 
-def export_students_word(student_data, fields, font_size=None):
+def export_students_word(student_data, fields, font_size=None, title=None):
     """Branded, A4-landscape students Word export (shared builder)."""
     from utils.school import school_profile
     from utils.student_export import students_word
@@ -2608,10 +2608,10 @@ def export_students_word(student_data, fields, font_size=None):
     rows = [[str(i)] + [('' if s.get(f) is None else str(s.get(f, ''))) for f in fields]
             for i, s in enumerate(student_data, 1)]
     return students_word(rows, headers, school_profile(), total=len(student_data),
-                         filename='students_export.docx', font_size=font_size)
+                         filename='students_export.docx', font_size=font_size, title=title)
 
 
-def export_students_pdf(student_data, fields, font_size=None):
+def export_students_pdf(student_data, fields, font_size=None, title=None):
     """Branded, A4-fitting students PDF (masthead + navy table + footer), paginated."""
     from io import BytesIO
     from utils.school import school_profile
@@ -2619,11 +2619,11 @@ def export_students_pdf(student_data, fields, font_size=None):
     headers = ['S/N'] + list(fields)
     rows = [[str(i)] + [('' if s.get(f) is None else str(s.get(f, ''))) for f in fields]
             for i, s in enumerate(student_data, 1)]
-    data = students_pdf(rows, headers, school_profile(), total=len(student_data), font_size=font_size)
+    data = students_pdf(rows, headers, school_profile(), total=len(student_data), font_size=font_size, title=title)
     return pdf_response(BytesIO(data), 'students_export.pdf', inline=False)
 
 
-def export_students_image(student_data, fields, font_size=None):
+def export_students_image(student_data, fields, font_size=None, title=None):
     """Branded, A4-page students image. One A4 page per image; the client loops
     over pages using the X-Total-Pages header so a long list downloads as several
     images."""
@@ -2633,7 +2633,7 @@ def export_students_image(student_data, fields, font_size=None):
     headers = ['S/N'] + list(fields)
     rows = [[str(i)] + [('' if s.get(f) is None else str(s.get(f, ''))) for f in fields]
             for i, s in enumerate(student_data, 1)]
-    pages = students_image_pages(rows, headers, school_profile(), total=len(student_data), font_size=font_size)
+    pages = students_image_pages(rows, headers, school_profile(), total=len(student_data), font_size=font_size, title=title)
     page = request.args.get('page', type=int) or 1
     page = max(1, min(page, len(pages)))
     suffix = '' if len(pages) == 1 else ('_p%d' % page)

@@ -90,7 +90,7 @@ def _gender_glyph(value):
 # --------------------------------------------------------------------------- #
 # PDF (reportlab)
 # --------------------------------------------------------------------------- #
-def students_pdf(rows, headers, school, total=None, font_size=None):
+def students_pdf(rows, headers, school, total=None, font_size=None, title=None):
     from reportlab.lib.pagesizes import A4, landscape
     from reportlab.lib.units import mm
     from reportlab.lib import colors
@@ -271,6 +271,15 @@ def students_pdf(rows, headers, school, total=None, font_size=None):
         ('LINEBELOW', (0, 0), (-1, 0), 1.2, colors.HexColor(GOLD)),
     ]))
 
+    flow = []
+    if title:
+        from xml.sax.saxutils import escape as _xesc
+        title_style = ParagraphStyle('title', fontName=boldf, fontSize=max(fs + 4, 20),
+                                     leading=max(fs + 4, 20) + 4, textColor=colors.HexColor(NAVY),
+                                     alignment=TA_CENTER, spaceAfter=8)
+        flow.append(Paragraph(_xesc(str(title)), title_style))
+    flow.append(t)
+
     buf = io.BytesIO()
     # The masthead is drawn on the first page only; later pages use the full
     # height (below a small top gap) so the table keeps flowing.
@@ -309,7 +318,7 @@ def students_pdf(rows, headers, school, total=None, font_size=None):
                 super().showPage()
             super().save()
 
-    doc.build([NextPageTemplate('later'), t], canvasmaker=Numbered)
+    doc.build([NextPageTemplate('later')] + flow, canvasmaker=Numbered)
     return buf.getvalue()
 
 
@@ -409,7 +418,7 @@ def _draw_footer(cv, PW, margin, foot_h, school, base, boldf, obl):
 # --------------------------------------------------------------------------- #
 # Image (PIL) — one landscape-A4 PNG per page.
 # --------------------------------------------------------------------------- #
-def students_image_pages(rows, headers, school, total=None, font_size=None):
+def students_image_pages(rows, headers, school, total=None, font_size=None, title=None):
     from PIL import Image, ImageDraw, ImageFont
     S = 2
     DPI = 150
@@ -579,6 +588,8 @@ def students_image_pages(rows, headers, school, total=None, font_size=None):
     cpx = 12 * S
     mast_h = 200 * S
     foot_h = 46 * S
+    title_f = fnt(max(fs + 8, 26), True)
+    title_h = int(tmp.textbbox((0, 0), 'Ay', font=title_f)[3] * 1.7) if title else 0
 
     def row_lines(r):
         m = 1
@@ -590,10 +601,11 @@ def students_image_pages(rows, headers, school, total=None, font_size=None):
 
     header_h = line_h + 18 * S
     top_gap = 40 * S  # small top margin on later (masthead-free) pages
-    # The masthead is on the first page only, so page 1 has less room for rows
-    # than the rest — paginate with the right body height for each page.
+    # The masthead (and the optional title, on page 1 only) leaves page 1
+    # less room for rows than the rest — paginate with the right body
+    # height for each page.
     pages_rows, cur, cur_h = [], [], 0
-    first_area = PH * S - margin - mast_h - header_h - foot_h
+    first_area = PH * S - margin - mast_h - title_h - header_h - foot_h
     rest_area = PH * S - margin - top_gap - header_h - foot_h
     for r in rows:
         rh = row_lines(r) * (line_h + 4 * S) + 12 * S
@@ -615,6 +627,12 @@ def students_image_pages(rows, headers, school, total=None, font_size=None):
             _img_masthead(d, img, PW * S, margin, school, total, C, name_f, addr_f, motto_f,
                           panel_lab, panel_val, body, fit, tw)
             y0 = margin + mast_h
+            if title:
+                tt = fit(str(title), title_f, PW * S - 2 * margin)
+                th = tmp.textbbox((0, 0), 'Ay', font=title_f)[3]
+                ty = y0 + (title_h - th) / 2
+                d.text((PW * S / 2 - tw(tt, title_f) / 2, ty), tt, fill=C['navy'], font=title_f)
+                y0 += title_h
         else:
             y0 = margin + top_gap
         # Solid navy header band with a thin gold accent underline.
@@ -721,7 +739,7 @@ def _img_masthead(d, img, PW, margin, school, total, C, name_f, addr_f, motto_f,
 # --------------------------------------------------------------------------- #
 # Word (python-docx) — branded, A4 landscape, same visual language.
 # --------------------------------------------------------------------------- #
-def students_word(rows, headers, school, total=None, filename='students_export.docx', font_size=None):
+def students_word(rows, headers, school, total=None, filename='students_export.docx', font_size=None, title=None):
     """A branded Word (.docx) export sharing the PDF/image design language:
     a centred masthead (logo, school name, address/contact, motto, meta line)
     and a navy table with a gold header rule, zebra rows and wrapping
@@ -771,6 +789,11 @@ def students_word(rows, headers, school, total=None, filename='students_export.d
     meta = doc.add_paragraph(); meta.alignment = WD_ALIGN_PARAGRAPH.CENTER
     mr = meta.add_run('%d records  ·  %s' % (total, timeutil.today().strftime('%d %b %Y')))
     mr.font.size = Pt(9); mr.font.color.rgb = muted
+
+    if title:
+        tp = doc.add_paragraph(); tp.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        tr = tp.add_run(str(title)); tr.bold = True
+        tr.font.size = Pt(max(fs + 2, 18)); tr.font.color.rgb = navy
 
     # Column widths (proportional weights that fit the usable landscape width).
     ncol = len(headers)

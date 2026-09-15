@@ -1351,6 +1351,7 @@ def export_students_data():
     fields_json = request.args.get('fields', '[]')
     student_ids_json = request.args.get('student_ids', '[]')
     font_size = request.args.get('font_size', type=int)
+    title = strip_tags((request.args.get('title') or '').strip())[:150] or None
     
     try:
         fields = json.loads(fields_json)
@@ -1498,6 +1499,8 @@ def export_students_data():
         from flask import Response
         buf = StringIO()
         writer = _csv.writer(buf)
+        if title:
+            writer.writerow([title]); writer.writerow([])
         writer.writerow(export_fields)
         for row in student_data:
             writer.writerow([row.get(f, '') for f in export_fields])
@@ -1505,13 +1508,13 @@ def export_students_data():
         resp.headers['Content-Disposition'] = 'attachment; filename=students.csv'
         return resp
     elif format_type == 'excel':
-        return export_students_excel(student_data, export_fields, font_size=font_size)
+        return export_students_excel(student_data, export_fields, font_size=font_size, title=title)
     elif format_type == 'word':
-        return export_students_word(student_data, export_fields, font_size=font_size)
+        return export_students_word(student_data, export_fields, font_size=font_size, title=title)
     elif format_type == 'pdf':
-        return export_students_pdf(student_data, export_fields, font_size=font_size)
+        return export_students_pdf(student_data, export_fields, font_size=font_size, title=title)
     elif format_type == 'image':
-        return export_students_image(student_data, export_fields, font_size=font_size)
+        return export_students_image(student_data, export_fields, font_size=font_size, title=title)
     else:
         flash('Invalid export format.', 'error')
         return redirect(url_for('main.students_list'))

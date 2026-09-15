@@ -24,6 +24,7 @@ export default function ExportModal({ total, selectedIds, exportUrl, applied, on
   });
   const [format, setFormat] = useState('excel');
   const [fontSize, setFontSize] = useState(16);
+  const [title, setTitle] = useState('');
   const toggle = (k) => setChecked((c) => ({ ...c, [k]: !c[k] }));
 
   const saveBlob = (blob, name) => {
@@ -51,6 +52,7 @@ export default function ExportModal({ total, selectedIds, exportUrl, applied, on
     const p = new URLSearchParams();
     p.set('format', format);
     p.set('font_size', String(fontSize));
+    if (title.trim()) p.set('title', title.trim());
     p.set('fields', JSON.stringify(fields));
     if (selectedIds.length) p.set('student_ids', JSON.stringify(selectedIds));
     else {
@@ -70,7 +72,11 @@ export default function ExportModal({ total, selectedIds, exportUrl, applied, on
              <Button variant="primary" onClick={doExport}><i className="fas fa-download" aria-hidden="true" /> Export</Button>
            </>}>
       <p className="text-muted text-sm"><i className="fas fa-info-circle" aria-hidden="true" /> Exporting {selectedIds.length ? <strong>{count} selected</strong> : <>all <strong>{count}</strong></>} student(s).</p>
-      <div className="field-section-title" style={{ fontWeight: 600, margin: '.5rem 0' }}>Fields</div>
+      <div className="field-section-title" style={{ fontWeight: 600, margin: '.5rem 0' }}>Title (optional)</div>
+      <input type="text" className="form-control" value={title} maxLength={150}
+             placeholder="e.g. SS3 Students — 2024/2025" onChange={(e) => setTitle(e.target.value)}
+             aria-label="Export title" />
+      <div className="field-section-title" style={{ fontWeight: 600, margin: '.75rem 0 .5rem' }}>Fields</div>
       <div className="stu-field-grid">
         {FIELDS.map(([k, label]) => (
           <label key={k} className="stu-field">
