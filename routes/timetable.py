@@ -636,15 +636,19 @@ def print_timetable(assignment_id):
 
     page_w, page_h = landscape(A4)
     m_side, m_top, m_bottom = 6 * mm, 7 * mm, 6 * mm
-    content_w = page_w - 2 * m_side
-    content_h = page_h - m_top - m_bottom
+    # reportlab's default Frame keeps 6pt of padding on every side on top of
+    # the doc's own margins; not accounting for it pushes the table's last
+    # row onto an unwanted second page.
+    frame_pad = 6
+    content_w = page_w - 2 * m_side - 2 * frame_pad
+    content_h = page_h - m_top - m_bottom - 2 * frame_pad
     day_w = 28 * mm; break_w = 11 * mm
     teach_w = (content_w - day_w - len(_break_cols_pre) * break_w) / max(_n_teach, 1)
 
     # Scale fonts so text never overflows narrow columns — guarantees single page.
-    _cfs = max(6, min(12, int(teach_w / mm / 4.0)))
-    _hfs = max(6, min(11, _cfs))
-    _bfs = max(12, min(38, int(teach_w / mm * 1.3)))
+    _cfs = max(7, min(14, int(teach_w / mm / 3.4)))
+    _hfs = max(7, min(13, _cfs))
+    _bfs = max(14, min(44, int(teach_w / mm * 1.5)))
 
     cell = ParagraphStyle('cell', fontName='Helvetica', fontSize=_cfs,
                           alignment=TA_CENTER, leading=_cfs + 1)
@@ -700,11 +704,6 @@ def print_timetable(assignment_id):
     col_widths = [day_w] + [(break_w if s.is_break else teach_w) for s in slots]
     n_break = len(break_cols)
 
-    header_reserve = 44            # space for school/class/term block
-    header_row_h   = max(16, _hfs * 2 + 4)
-    body_row_h     = (content_h - header_reserve - header_row_h) / max(n_days, 1)
-    row_heights    = [header_row_h] + [body_row_h] * n_days
-
     style = [
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0f766e')),
         ('BACKGROUND', (0, 1), (0, -1), colors.HexColor('#e2e8f0')),
@@ -719,10 +718,6 @@ def print_timetable(assignment_id):
     for c in break_cols:
         style.append(('BACKGROUND', (c, 0), (c, -1), colors.HexColor('#ffedd5')))
 
-    buf = BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=landscape(A4),
-                            leftMargin=m_side, rightMargin=m_side,
-                            topMargin=m_top, bottomMargin=m_bottom)
     title_style = ParagraphStyle('title', fontName='Helvetica-Bold', fontSize=14,
                                  alignment=TA_CENTER, leading=16)
     sub_style = ParagraphStyle('sub', fontName='Helvetica', fontSize=9,
@@ -747,6 +742,23 @@ def print_timetable(assignment_id):
     else:
         elems.extend(it[0] for it in items)
     elems.append(Spacer(1, 4))
+
+    # Measure the actual header block height (logo/title/subtitle + spacer)
+    # instead of guessing, so the table's row heights use exactly the space
+    # left over — guaranteeing everything fits on a single page.
+    header_reserve = 0.0
+    for el in elems:
+        _, h = el.wrap(content_w, content_h)
+        header_reserve += h
+
+    header_row_h = max(16, _hfs * 2 + 4)
+    body_row_h   = (content_h - header_reserve - header_row_h) / max(n_days, 1)
+    row_heights  = [header_row_h] + [body_row_h] * n_days
+
+    buf = BytesIO()
+    doc = SimpleDocTemplate(buf, pagesize=landscape(A4),
+                            leftMargin=m_side, rightMargin=m_side,
+                            topMargin=m_top, bottomMargin=m_bottom)
     t = Table(table_data, colWidths=col_widths, rowHeights=row_heights, repeatRows=1)
     t.setStyle(TableStyle(style))
     elems.append(t)
