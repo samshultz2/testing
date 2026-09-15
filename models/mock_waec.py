@@ -128,7 +128,8 @@ class MockWAECResult(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.now)
     updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
-    student = db.relationship('Student', backref=db.backref('mock_waec_results', lazy='dynamic'))
+    student = db.relationship('Student', backref=db.backref(
+        'mock_waec_results', lazy='dynamic', cascade='all, delete-orphan'))
 
     __table_args__ = (
         db.UniqueConstraint('student_id', 'mock_exam_id', 'subject',

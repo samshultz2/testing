@@ -87,7 +87,8 @@ class StudentRiskAssessment(db.Model):
     created_at = db.Column(db.DateTime, default=local_now)
     
     # Relationships
-    student = db.relationship('Student', backref='risk_assessments')
+    student = db.relationship('Student', backref=db.backref(
+        'risk_assessments', cascade='all, delete-orphan'))
 
 
 class AcademicPrediction(db.Model):
@@ -117,7 +118,8 @@ class AcademicPrediction(db.Model):
     created_at = db.Column(db.DateTime, default=local_now)
     
     # Relationships
-    student = db.relationship('Student', backref='academic_predictions')
+    student = db.relationship('Student', backref=db.backref(
+        'academic_predictions', cascade='all, delete-orphan'))
 
 
 # ============================================================================

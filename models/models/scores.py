@@ -18,7 +18,8 @@ class StudentScore(db.Model):
     updated_at = db.Column(db.DateTime, default=local_now, onupdate=local_now)
     
     # Relationships
-    student = db.relationship('Student', backref='scores')
+    student = db.relationship('Student', backref=db.backref(
+        'scores', cascade='all, delete-orphan'))
     
     __table_args__ = (
         db.UniqueConstraint('student_id', 'class_subject_id', 'assessment_type_id', name='unique_student_score'),
@@ -45,7 +46,8 @@ class TermResult(db.Model):
     updated_at = db.Column(db.DateTime, default=local_now, onupdate=local_now)
     
     # Relationships
-    student = db.relationship('Student', backref='term_results')
+    student = db.relationship('Student', backref=db.backref(
+        'term_results', cascade='all, delete-orphan'))
     term = db.relationship('Term', backref='term_results')
     class_subject = db.relationship('ClassSubject', backref='term_results')
     
@@ -99,10 +101,15 @@ class TermSummary(db.Model):
                  if str(v).isdigit() and 1 <= int(v) <= 5}
         self.affective = json.dumps(clean) if clean else None
 
-    # Relationships
-    student = db.relationship('Student', backref='term_summaries')
+    # Relationships. Cascade on BOTH the student and enrollment sides: a
+    # student delete cascades to their StudentEnrollment rows too (see
+    # Student.enrollments), so whichever side SQLAlchemy processes first must
+    # not try to null out this row's other NOT NULL FK on the way.
+    student = db.relationship('Student', backref=db.backref(
+        'term_summaries', cascade='all, delete-orphan'))
     term = db.relationship('Term', backref='term_summaries')
-    enrollment = db.relationship('StudentEnrollment', backref='term_summary')
+    enrollment = db.relationship('StudentEnrollment', backref=db.backref(
+        'term_summary', cascade='all, delete-orphan'))
     
     __table_args__ = (
         db.UniqueConstraint('student_id', 'term_id', name='unique_term_summary'),

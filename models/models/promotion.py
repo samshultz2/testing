@@ -58,7 +58,8 @@ class PromotionRecord(db.Model):
     created_at = db.Column(db.DateTime, default=local_now)
     
     # Relationships
-    student = db.relationship('Student', backref='promotion_records')
+    student = db.relationship('Student', backref=db.backref(
+        'promotion_records', cascade='all, delete-orphan'))
     from_session = db.relationship('AcademicSession', foreign_keys=[from_session_id])
     to_session = db.relationship('AcademicSession', foreign_keys=[to_session_id])
     from_class = db.relationship('SchoolClass', foreign_keys=[from_class_id])
