@@ -1899,6 +1899,7 @@ def _students_payload():
         'can_sss3': is_admin() or is_sss3_form_teacher(),
         'add_url': url_for('main.add_student'),
         'import_url': url_for('main.import_students'),
+        'update_import_url': url_for('main.update_import_students') if can_manage else None,
         'enrolment': _student_form_options(with_enrolment=True)['enrolment'] if can_manage else None,
         'export_url': url_for('main.export_students_data'),
         'trash_url': url_for('main.students_trash'),
@@ -2329,6 +2330,33 @@ def _manageable_student_ids(ids):
     if tids is not None:
         allowed &= tids
     return [i for i in ids if i in allowed]
+
+
+def _update_roster(class_id, arm_id=None):
+    """The active students the caller may bulk-edit within one class (and
+    optionally one arm) for the active term — the search scope for paste
+    *update* mode, so matching never has to scan every student in the school.
+    Empty when the class/arm has no current-term enrolments, the caller has
+    no manageable students there, or there's no active term at all."""
+    active_term = get_active_term()
+    if not active_term:
+        return []
+    from utils.branch_scope import scope_query
+    from utils.access_control import teacher_form_student_ids
+    q = (scope_query(Student.query, Student)
+         .filter(Student.is_active == True)
+         .join(StudentEnrollment, StudentEnrollment.student_id == Student.id)
+         .join(ClassArmAssignment, StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+         .filter(StudentEnrollment.is_active == True,
+                 ClassArmAssignment.term_id == active_term.id,
+                 ClassArmAssignment.class_id == class_id))
+    if arm_id:
+        q = q.filter(ClassArmAssignment.arm_id == arm_id)
+    students = q.all()
+    tids = teacher_form_student_ids()
+    if tids is not None:
+        students = [s for s in students if s.id in tids]
+    return students
 
 
 

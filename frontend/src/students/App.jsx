@@ -3,6 +3,7 @@ import { apiGet } from '../lib/api';
 import { postForm } from '../lib/forms';
 import ExportModal from './ExportModal';
 import ImportModal from './ImportModal';
+import UpdateImportModal from './UpdateImportModal';
 import BulkMessageModal from './BulkMessageModal';
 import ImportPhotosModal from './ImportPhotosModal';
 import { confirm, promptDialog, Empty, Pagination } from '../components/ui';
@@ -88,6 +89,7 @@ export default function App({ initial }) {
   const [msg, setMsg] = useState(null);
   const [showExport, setShowExport] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showUpdateImport, setShowUpdateImport] = useState(false);
   const [showImportPhotos, setShowImportPhotos] = useState(false);
   const [bulkStream, setBulkStream] = useState('');
   const [bulkGender, setBulkGender] = useState('');
@@ -273,6 +275,7 @@ export default function App({ initial }) {
         <div className="page-header-actions stu-toolbar">
           {d.can_add && <a href={d.add_url} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Student</a>}
           {d.can_add && <button type="button" className="btn btn-outline" onClick={() => setShowImport(true)}><i aria-hidden="true" className="fas fa-paste" /> Import (paste)</button>}
+          {d.update_import_url && <button type="button" className="btn btn-outline" onClick={() => setShowUpdateImport(true)}><i aria-hidden="true" className="fas fa-pen-to-square" /> Update (paste)</button>}
           {d.import_photos_url && <button type="button" className="btn btn-outline" onClick={() => setShowImportPhotos(true)}><i aria-hidden="true" className="fas fa-images" /> Import photos</button>}
           {canAdmin && <button type="button" className="btn btn-outline btn-sm" title="Fill WAEC subjects from each student's stream"
                                onClick={async () => { if (await confirm("Fill WAEC subjects from stream for students who don't have them set?"))
@@ -628,6 +631,12 @@ export default function App({ initial }) {
         <ImportModal importUrl={d.import_url} enrolment={d.enrolment}
                      onClose={() => setShowImport(false)}
                      onDone={(text) => { setShowImport(false); setMsg({ tone: 'success', text }); refresh(); }} />
+      )}
+
+      {showUpdateImport && (
+        <UpdateImportModal updateImportUrl={d.update_import_url} filters={d.filters}
+                     onClose={() => setShowUpdateImport(false)}
+                     onDone={(text) => { setShowUpdateImport(false); setMsg({ tone: 'success', text }); refresh(); }} />
       )}
 
       {showImportPhotos && (

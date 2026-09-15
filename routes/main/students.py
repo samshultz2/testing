@@ -349,6 +349,70 @@ def import_students():
                     'redirect': url_for('main.students_list')})
 
 
+@main_bp.route('/students/update-import', methods=['POST'])
+@login_required
+def update_import_students():
+    """Update EXISTING students from pasted text — the update counterpart to
+    /students/import (which only ever creates). Scoped to one class (and
+    optionally one arm): the paste must name a class_id so matching searches
+    only that class's currently-enrolled roster, never the whole school.
+
+    Same two-mode pattern as the add importer: without a truthy ``commit``
+    flag this returns a dry-run *preview* — one row per pasted student, the
+    student it matched (by Student ID, or by Surname+First Name within the
+    roster) and a field-by-field diff of what would change — so nothing is
+    written until the caller confirms. A blank pasted cell always means
+    "leave this field alone", never "clear it".
+    """
+    from utils.excel_utils import (rows_from_pasted_text, preview_student_update_rows,
+                                   apply_student_update_rows)
+    if not page_can_write():
+        return jsonify({'ok': False, 'error': 'You do not have permission to update students.'}), 403
+
+    is_json = request.is_json
+    text = (request.json or {}).get('text', '') if is_json else request.form.get('text', '')
+    class_id = (request.json or {}).get('class_id') if is_json else request.form.get('class_id', type=int)
+    arm_id = (request.json or {}).get('arm_id') if is_json else request.form.get('arm_id', type=int)
+    try:
+        class_id = int(class_id) if class_id else None
+        arm_id = int(arm_id) if arm_id else None
+    except (TypeError, ValueError):
+        class_id = None
+
+    if not class_id:
+        return jsonify({'ok': False, 'error': 'Choose a class to search for students to update.'}), 400
+
+    rows = rows_from_pasted_text(text)
+    if not rows or len(rows) < 2:
+        return jsonify({'ok': False, 'error': 'Paste a heading row and at least one student.'}), 400
+
+    roster = _update_roster(class_id, arm_id)
+    if not roster:
+        return jsonify({'ok': False, 'error':
+                        'No students you can edit were found in that class/arm for the '
+                        'current term.'}), 404
+
+    prev = preview_student_update_rows(rows, roster)
+    if prev.get('error'):
+        return jsonify({'ok': False, 'error': prev['error']}), 400
+
+    commit = request.form.get('commit') in ('1', 'true', 'on', 'yes')
+    if not commit:
+        return jsonify({'ok': True, 'preview': True, **prev})
+
+    updated, messages = apply_student_update_rows(rows, roster, db, Student, ParentContact)
+    if updated:
+        from utils import query_cache
+        query_cache.bump('dash')
+        log_action('student.update_import', detail=f'Bulk-updated {updated} students from pasted text')
+        from utils.notify import notify_student_change
+        notify_student_change('update', detail=f'{updated} student(s) bulk-updated from pasted text',
+                              url=url_for('main.students_list'))
+        flash(f'Updated {updated} student(s).', 'success')
+    return jsonify({'ok': True, 'updated': updated, 'messages': messages,
+                    'redirect': url_for('main.students_list')})
+
+
 @main_bp.route('/students/<int:student_id>')
 @login_required
 def view_student(student_id):
