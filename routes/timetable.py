@@ -645,16 +645,13 @@ def print_timetable(assignment_id):
     day_w = 28 * mm; break_w = 11 * mm
     teach_w = (content_w - day_w - len(_break_cols_pre) * break_w) / max(_n_teach, 1)
 
-    # Scale fonts so text never overflows narrow columns — guarantees single page.
-    _cfs = max(7, min(14, int(teach_w / mm / 3.4)))
-    _hfs = max(7, min(13, _cfs))
+    # Header/break fonts scale with column width, independent of the subject
+    # font picked below — guarantees they never overflow narrow columns.
+    _hfs = max(7, min(13, int(teach_w / mm / 3.4)))
     _bfs = max(14, min(44, int(teach_w / mm * 1.5)))
 
-    cell = ParagraphStyle('cell', fontName='Helvetica', fontSize=_cfs,
-                          alignment=TA_CENTER, leading=_cfs + 1)
-    cell_b = ParagraphStyle('cellb', parent=cell, fontName='Helvetica-Bold')
-    head = ParagraphStyle('head', parent=cell_b, fontSize=_hfs,
-                          leading=_hfs + 1, textColor=colors.white)
+    head = ParagraphStyle('head', fontName='Helvetica-Bold', fontSize=_hfs,
+                          leading=_hfs + 1, alignment=TA_CENTER, textColor=colors.white)
     # One huge bold capital letter per cell, used to spell BREAK down a column.
     brk = ParagraphStyle('brk', fontName='Helvetica-Bold', fontSize=_bfs,
                          leading=_bfs + 2, alignment=TA_CENTER,
@@ -682,27 +679,8 @@ def print_timetable(assignment_id):
             label += f'<br/>{hhmm(s.start_time)}–{hhmm(s.end_time)}'
         header.append(Paragraph(label, head))
 
-    table_data = [header]
-    break_cols = _break_cols_pre
-    for r, (day_num, day_name) in enumerate(days):
-        row = [Paragraph(day_name, cell_b)]
-        for s in slots:
-            if s.is_break:
-                row.append(Paragraph(break_letter(r), brk))
-                continue
-            e = grid.get((day_num, s.id))
-            if not e or not e.subject:
-                row.append(Paragraph('', cell))
-                continue
-            txt = e.subject.short_name or e.subject.name
-            if include_teachers and e.teacher_name:
-                txt += f'<br/><font size={max(5,_cfs-2)} color="#555555">{e.teacher_name}</font>'
-            row.append(Paragraph(txt, cell_b))
-        table_data.append(row)
-
-    # Sizing already computed above using teach_w / _cfs etc.
     col_widths = [day_w] + [(break_w if s.is_break else teach_w) for s in slots]
-    n_break = len(break_cols)
+    break_cols = _break_cols_pre
 
     style = [
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0f766e')),
@@ -736,9 +714,9 @@ def print_timetable(assignment_id):
     if school:
         items.append((Paragraph(school, title_style), school, 'Helvetica-Bold', 14))
     items.append((Paragraph(sub, sub_style), sub_plain, 'Helvetica', 9))
-    header = logo_header_flowable(logo, items) if logo is not None else None
-    if header is not None:
-        elems.append(header)
+    header_flow = logo_header_flowable(logo, items) if logo is not None else None
+    if header_flow is not None:
+        elems.append(header_flow)
     else:
         elems.extend(it[0] for it in items)
     elems.append(Spacer(1, 4))
@@ -754,6 +732,53 @@ def print_timetable(assignment_id):
     header_row_h = max(16, _hfs * 2 + 4)
     body_row_h   = (content_h - header_reserve - header_row_h) / max(n_days, 1)
     row_heights  = [header_row_h] + [body_row_h] * n_days
+
+    # Pick the largest subject font (capped at 18pt) whose actual cell content
+    # — including the teacher-name line, when shown — still fits within one
+    # body row at this column width. Tested against the real entries being
+    # rendered, so it never overlaps into the next row regardless of how many
+    # periods/columns the day has.
+    filled_entries = [e for e in entries if e.subject]
+
+    def _cell_fits(fs):
+        tfs = max(5, fs - 2)
+        probe_style = ParagraphStyle('probe', fontName='Helvetica-Bold', fontSize=fs,
+                                     alignment=TA_CENTER, leading=fs + 1)
+        for e in filled_entries:
+            txt = e.subject.short_name or e.subject.name
+            if include_teachers and e.teacher_name:
+                txt += f'<br/><font size={tfs} color="#555555">{e.teacher_name}</font>'
+            _, h = Paragraph(txt, probe_style).wrap(teach_w, content_h)
+            if h > body_row_h:
+                return False
+        return True
+
+    _cfs = 7
+    for candidate in range(18, 6, -1):
+        if _cell_fits(candidate):
+            _cfs = candidate
+            break
+
+    cell = ParagraphStyle('cell', fontName='Helvetica', fontSize=_cfs,
+                          alignment=TA_CENTER, leading=_cfs + 1)
+    cell_b = ParagraphStyle('cellb', parent=cell, fontName='Helvetica-Bold')
+
+    table_data = [header]
+    for r, (day_num, day_name) in enumerate(days):
+        row = [Paragraph(day_name, cell_b)]
+        for s in slots:
+            if s.is_break:
+                row.append(Paragraph(break_letter(r), brk))
+                continue
+            e = grid.get((day_num, s.id))
+            if not e or not e.subject:
+                row.append(Paragraph('', cell))
+                continue
+            txt = e.subject.short_name or e.subject.name
+            if include_teachers and e.teacher_name:
+                txt += f'<br/><font size={max(5,_cfs-2)} color="#555555">{e.teacher_name}</font>'
+            row.append(Paragraph(txt, cell_b))
+        table_data.append(row)
 
     buf = BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=landscape(A4),
