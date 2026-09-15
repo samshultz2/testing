@@ -137,7 +137,8 @@
 .tt-sheet table.grid-tt.blankgrid{width:100%;table-layout:fixed}
 .tt-sheet table.grid-tt.blankgrid th,
 .tt-sheet table.grid-tt.blankgrid td{
-    overflow-wrap:anywhere;word-break:break-word;box-sizing:border-box;min-width:0;max-width:100%}
+    overflow-wrap:anywhere;word-break:break-word;box-sizing:border-box;min-width:0;max-width:100%;
+    vertical-align:middle}
 /* static/css/style.css has a legacy Bootstrap-style grid rule, [class*="col-"]
    { width:100%; ... }, meant for its own .col-sm-N / .col-md-N utility
    classes — but it also matches this table's unrelated ".col-sep" class (any
@@ -150,7 +151,7 @@
 .tt-sheet table.grid-tt.listtable td.roster-cell{text-align:left;font-weight:400}
 /* Sweeping roster (weekly/daily) reads better a touch larger than the other
    designer layouts. */
-.tt-sheet table.grid-tt.roster{font-size:22px}
+.tt-sheet table.grid-tt.roster{font-size:26px}
 
 /* themes */
 .tt-sheet[data-theme="classic"]{font-family:Georgia,'Times New Roman',serif}
@@ -1204,7 +1205,7 @@ function renderListSheet(){
 //   special: 'sn'    — a numbers-only S/N column (Custom List/Table)
 //            'label' — a text row-label column (WEEK/DAY/blank-grid rows)
 //            null    — no special column; every column shares equally
-function specialColPct(special){ return special==='sn' ? 8 : 14; }
+function specialColPct(special){ return special==='sn' ? 8 : 18; }
 function colGroupHTML(numNormal, special){
     numNormal = Math.max(0, numNormal|0);
     var specialPct = special ? specialColPct(special) : 0;
@@ -1545,6 +1546,35 @@ var _exportOrientation = 'landscape';
 function exportName(){
     return (el('title').value || layout().title || 'timetable').replace(/[^\w]+/g, '_');
 }
+// A short table (few weeks/rows) only fills the top of the export canvas,
+// leaving the rest of the page blank — the table's row heights are normally
+// intrinsic (font + padding), with nothing stretching them to the page. Give
+// every row an explicit height, computed fresh from however many rows are
+// actually on the sheet right now (any layout, any row/column count the user
+// has set up) and however much vertical space is actually left after the
+// school/title header block (measured live, not guessed, since header height
+// varies by theme/logo/subtitle). Table rows never shrink below what their
+// own content needs, so this only ever stretches a short table to fill the
+// page — it never compresses a long one (that still just fits-to-page in the
+// PDF placement below, as before).
+function sizeTableForExport(sheet){
+    var table = document.querySelector('#pBody table');
+    if(!table || !table.rows.length) return;
+    var cs = getComputedStyle(sheet);
+    var padTop = parseFloat(cs.paddingTop) || 0, padBottom = parseFloat(cs.paddingBottom) || 0;
+    var canvasW = sheet.offsetWidth;
+    var canvasH = _exportOrientation === 'portrait' ? canvasW * (297 / 210) : canvasW * (210 / 297);
+    var sheetContentTop = sheet.getBoundingClientRect().top + padTop;
+    var usedBefore = table.getBoundingClientRect().top - sheetContentTop;
+    var available = canvasH - padTop - padBottom - usedBefore;
+    var perRow = Math.max(20, available / table.rows.length);
+    for(var i = 0; i < table.rows.length; i++) table.rows[i].style.height = perRow + 'px';
+}
+function clearTableExportSizing(){
+    var table = document.querySelector('#pBody table');
+    if(!table) return;
+    for(var i = 0; i < table.rows.length; i++) table.rows[i].style.height = '';
+}
 function captureExport(){
     var sheet = el('sheet');
     _exportOrientation = (el('pageOrient') && el('pageOrient').value) || 'landscape';
@@ -1554,11 +1584,13 @@ function captureExport(){
     el('exportSpinner').style.display = 'block';
     sheet.classList.add('exporting');            // fills the A4 content width
     sheet.classList.toggle('portrait', _exportOrientation === 'portrait');
+    sizeTableForExport(sheet);                    // ...and now the content height too
     var scale = Math.max(2, Math.ceil(1920 / (sheet.offsetWidth || 1480)));
     html2canvas(sheet, {scale: scale, backgroundColor: '#ffffff',
                         windowWidth: sheet.scrollWidth, windowHeight: sheet.scrollHeight})
         .then(function(canvas){
             sheet.classList.remove('exporting', 'portrait');
+            clearTableExportSizing();
             _exportCanvas = canvas;
             var img = el('exportImg');
             img.src = canvas.toDataURL('image/png');
@@ -1567,6 +1599,7 @@ function captureExport(){
         })
         .catch(function(e){
             sheet.classList.remove('exporting', 'portrait');
+            clearTableExportSizing();
             el('exportSpinner').textContent = 'Could not render the timetable: ' + e;
         });
 }
