@@ -16,6 +16,13 @@ class TimetableSlot(db.Model):
     is_break = db.Column(db.Boolean, default=False)
     duration_minutes = db.Column(db.Integer)  # Auto-calculated or manual
     order = db.Column(db.Integer, default=0)
+    # Break rows only: this break belongs immediately after the Nth teaching
+    # period (1-based, counting only non-break slots in their own chronological
+    # order) — the explicit, definitive rule repair_slot_schedule() positions
+    # the break by, instead of inferring position from whatever clock times
+    # happen to be stored. NULL means "not yet configured"; such a break falls
+    # back to the older overlap-only self-heal.
+    after_period = db.Column(db.Integer)
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=local_now)
     

@@ -1034,7 +1034,8 @@ def timetable_slots():
         'slots': [{'id': s.id, 'name': s.name,
                    'start_time': s.start_time.strftime('%H:%M') if s.start_time else '',
                    'end_time': s.end_time.strftime('%H:%M') if s.end_time else '',
-                   'is_break': s.is_break} for s in slots],
+                   'is_break': s.is_break,
+                   'after_period': s.after_period} for s in slots],
     })
 
 
@@ -1088,7 +1089,8 @@ def generate_timetable_slots():
                     end_time=break_end.time(),
                     is_break=True,
                     duration_minutes=break_duration,
-                    order=order
+                    order=order,
+                    after_period=i + 1,   # declare the rule explicitly, not just its clock time
                 ))
                 current_time = break_end
                 order += 1
@@ -1112,6 +1114,7 @@ def save_timetable_slots():
         start_times = request.form.getlist('start_time[]')
         end_times = request.form.getlist('end_time[]')
         is_breaks = request.form.getlist('is_break[]')
+        after_periods = request.form.getlist('after_period[]')
 
         for i, slot_id in enumerate(slot_ids):
             if slot_id:
@@ -1130,7 +1133,18 @@ def save_timetable_slots():
                     slot.is_break = str(i) in is_breaks
                     slot.order = i + 1
 
+                    # after_period only means anything for a break — "this
+                    # break belongs immediately after teaching period N" — so
+                    # a non-break row (or a blank value) clears it.
+                    raw = after_periods[i] if i < len(after_periods) else ''
+                    slot.after_period = int(raw) if slot.is_break and str(raw).strip() != '' else None
+
         db.session.commit()
+        # Apply the (possibly just-declared) after_period rule immediately —
+        # the whole point of this field is a one-edit fix, not a silent value
+        # that only takes effect on someone else's next page load.
+        from utils.timetable_slots import repair_slot_schedule
+        repair_slot_schedule()
     except Exception as e:
         db.session.rollback()
         return _err(f'Error: {str(e)}', url_for('settings.timetable_slots'))

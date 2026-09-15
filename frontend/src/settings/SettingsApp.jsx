@@ -369,7 +369,7 @@ function TimetableSlots({ d, notify }) {
     save(d.save_url, {
       'slot_id[]': rows.map((r) => r.id), 'name[]': rows.map((r) => r.name),
       'start_time[]': rows.map((r) => r.start_time), 'end_time[]': rows.map((r) => r.end_time),
-      'is_break[]': breaks,
+      'is_break[]': breaks, 'after_period[]': rows.map((r) => r.after_period ?? ''),
     }, () => nav.refresh());
   };
   return (
@@ -383,7 +383,7 @@ function TimetableSlots({ d, notify }) {
         {rows.length ? (
           <form onSubmit={submit}>
             <div className="table-container"><table className="data-table">
-              <thead><tr><th>Name</th><th>Start</th><th>End</th><th>Break?</th></tr></thead>
+              <thead><tr><th>Name</th><th>Start</th><th>End</th><th>Break?</th><th>After period</th></tr></thead>
               <tbody>
                 {rows.map((r, i) => (
                   <tr key={i} className={r.is_break ? 'table-info' : ''}>
@@ -391,10 +391,20 @@ function TimetableSlots({ d, notify }) {
                     <td><input type="time" className="form-control" value={r.start_time} onChange={set(i, 'start_time')} style={{ width: 120 }} /></td>
                     <td><input type="time" className="form-control" value={r.end_time} onChange={set(i, 'end_time')} style={{ width: 120 }} /></td>
                     <td><input type="checkbox" checked={!!r.is_break} onChange={toggle(i)} /></td>
+                    <td>
+                      {r.is_break ? (
+                        <input type="number" min="0" className="form-control" style={{ width: 90 }}
+                          value={r.after_period ?? ''} onChange={set(i, 'after_period')}
+                          title="This break belongs immediately after teaching period N" placeholder="N" />
+                      ) : <span className="text-muted">—</span>}
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table></div>
+            <p className="form-hint mb-3">"After period" is the definitive rule used to position each break —
+              e.g. a break with "After period" set to 9 will always be placed right after Period 9, even if the
+              stored times drift. Only applies to break rows.</p>
             <Actions>
               <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save Changes</button>
               <a href={d.back_url} onClick={(e) => { e.preventDefault(); nav.go(d.back_url); }} className="btn btn-secondary">Back</a>

@@ -58,7 +58,11 @@ def _slots_for_assignment(assignment_id):
     spurious trailing blank period, or clip a class using more periods than
     some other class. Scope the view to the contiguous range of slots this
     class's own entries actually span (including any break slots inside that
-    range) so the grid always matches what was actually generated for it."""
+    range), plus any break(s) immediately following the last used period —
+    a dismissal break right after a class's final period of the day is still
+    part of that class's schedule even though no *period* comes after it —
+    stopping at the next teaching period, which this class doesn't use and
+    so shouldn't pull into view."""
     all_slots = TimetableSlot.query.filter_by(is_active=True).order_by(TimetableSlot.order).all()
     if not assignment_id or not all_slots:
         return all_slots
@@ -70,6 +74,12 @@ def _slots_for_assignment(assignment_id):
     if not used_orders:
         return all_slots
     lo, hi = min(used_orders), max(used_orders)
+    for s in all_slots:
+        if s.order <= hi:
+            continue
+        if not s.is_break:
+            break
+        hi = s.order
     return [s for s in all_slots if lo <= s.order <= hi]
 
 
