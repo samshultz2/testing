@@ -58,6 +58,49 @@ def filter_results_by_arm(results):
     return [r for r in results if (r.class_name, r.arm_name) in selected]
 
 
+def annotate_coschedule_pairs(all_results, filtered_results):
+    """When a print/export filter drops a combined class's other arm, its
+    co-scheduled subject would otherwise vanish from the document even
+    though that group of students is doing something at the same time.
+    For every kept result whose active GenCoScheduleRule counterpart's
+    arm got filtered out, sets `.coschedule_pair` to that counterpart's
+    GenSubject (else None), so a renderer can show e.g. "ACC/CRS" instead
+    of just "ACC" — mutates filtered_results in place; nothing to return.
+    A no-op when both sides of every pairing are already being shown
+    (their own rows already carry the other subject)."""
+    from models import GenCoScheduleRule
+    included_arms = {(r.class_name, r.arm_name) for r in filtered_results}
+    by_slot = {(r.class_name, r.arm_name, r.day_of_week, r.period_number): r.subject_id
+               for r in all_results}
+    rules = GenCoScheduleRule.query.filter_by(is_active=True, branch_id=gen_bid()).all()
+    subj_cache = {}
+
+    def _subj(sid):
+        if sid not in subj_cache:
+            subj_cache[sid] = GenSubject.query.get(sid)
+        return subj_cache[sid]
+
+    for r in filtered_results:
+        r.coschedule_pair = None
+        if not rules:
+            continue
+        for rule in rules:
+            if (r.class_name, r.arm_name, r.subject_id) == \
+               (rule.source_class_name, rule.source_arm_name, rule.source_subject_id):
+                cp_class, cp_arm, cp_subject_id = rule.target_class_name, rule.target_arm_name, rule.target_subject_id
+            elif (r.class_name, r.arm_name, r.subject_id) == \
+                 (rule.target_class_name, rule.target_arm_name, rule.target_subject_id):
+                cp_class, cp_arm, cp_subject_id = rule.source_class_name, rule.source_arm_name, rule.source_subject_id
+            else:
+                continue
+            if (cp_class, cp_arm) in included_arms:
+                break   # counterpart already has its own row — nothing to annotate
+            actual = by_slot.get((cp_class, cp_arm, r.day_of_week, r.period_number))
+            if actual == cp_subject_id:
+                r.coschedule_pair = _subj(cp_subject_id)
+            break
+
+
 DAYS_OF_WEEK = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
 SUBJECT_COLORS = [
     '#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7',

@@ -16,19 +16,32 @@ def _short(subj, fallback_map, maxlen):
     return fallback_map.get(name, name[:maxlen])
 
 
+def _short_cell(entry, subj, fallback_map, maxlen):
+    """The cell text for one slot: `_short(subj, ...)`, plus "/COUNTERPART"
+    when annotate_coschedule_pairs() found a co-scheduled subject on an arm
+    this document excluded (e.g. "ACC/CRS" for a combined class printed as
+    just one arm)."""
+    value = _short(subj, fallback_map, maxlen)
+    pair = getattr(entry, 'coschedule_pair', None)
+    if pair:
+        value += '/' + _short(pair, fallback_map, maxlen)
+    return value
+
+
 @generator_bp.route('/results/<batch_id>/print')
 @login_required
 def print_results(batch_id):
     level = get_current_level()
-    results = GenTimetableResult.query.filter_by(batch_id=batch_id, school_level=level, branch_id=gen_bid()).all()
-    if not results:
+    all_results = GenTimetableResult.query.filter_by(batch_id=batch_id, school_level=level, branch_id=gen_bid()).all()
+    if not all_results:
         flash('No results.', 'error')
         return redirect(url_for('generator.results_list'))
 
-    results = filter_results_by_arm(results)
+    results = filter_results_by_arm(all_results)
     if not results:
         flash('No class-arms selected.', 'error')
         return redirect(url_for('generator.view_results', batch_id=batch_id))
+    annotate_coschedule_pairs(all_results, results)
 
     timetables = {}
     for r in results:
@@ -58,7 +71,12 @@ def print_single_timetable(batch_id, class_name, arm_name):
     if not results:
         flash('Not found.', 'error')
         return redirect(url_for('generator.view_results', batch_id=batch_id))
-    
+
+    # Printing a single arm always excludes every other arm, so show any
+    # co-scheduled counterpart subject right alongside this one (e.g. "ACC/CRS").
+    all_results = GenTimetableResult.query.filter_by(batch_id=batch_id, branch_id=gen_bid()).all()
+    annotate_coschedule_pairs(all_results, results)
+
     grid = {d: {} for d in range(5)}
     for r in results:
         grid[r.day_of_week][r.period_number] = r
@@ -85,14 +103,15 @@ def export_results(batch_id):
     from openpyxl.styles import Font, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
     
-    results = GenTimetableResult.query.filter_by(batch_id=batch_id, branch_id=gen_bid()).all()
-    if not results:
+    all_results = GenTimetableResult.query.filter_by(batch_id=batch_id, branch_id=gen_bid()).all()
+    if not all_results:
         flash('No results.', 'error')
         return redirect(url_for('generator.results_list'))
-    results = filter_results_by_arm(results)
+    results = filter_results_by_arm(all_results)
     if not results:
         flash('No class-arms selected.', 'error')
         return redirect(url_for('generator.view_results', batch_id=batch_id))
+    annotate_coschedule_pairs(all_results, results)
 
     # Get school info
     school_name = GenSettings.get('school_name', 'School')
@@ -280,7 +299,7 @@ def export_results(batch_id):
                 entry = tt['grid'][day_idx].get(p)
                 value = ""
                 if entry and entry.subject:
-                    value = _short(entry.subject, abbrev_map, 6)
+                    value = _short_cell(entry, entry.subject, abbrev_map, 6)
 
                 cell = ws.cell(row=current_row, column=col, value=value)
                 cell.font = cell_font
@@ -298,7 +317,7 @@ def export_results(batch_id):
                 entry = tt['grid'][day_idx].get(p)
                 value = ""
                 if entry and entry.subject:
-                    value = _short(entry.subject, abbrev_map, 6)
+                    value = _short_cell(entry, entry.subject, abbrev_map, 6)
                 
                 cell = ws.cell(row=current_row, column=col, value=value)
                 cell.font = cell_font
@@ -332,14 +351,15 @@ def export_results_by_day(batch_id):
     from openpyxl.styles import Font, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
     
-    results = GenTimetableResult.query.filter_by(batch_id=batch_id, branch_id=gen_bid()).all()
-    if not results:
+    all_results = GenTimetableResult.query.filter_by(batch_id=batch_id, branch_id=gen_bid()).all()
+    if not all_results:
         flash('No results.', 'error')
         return redirect(url_for('generator.results_list'))
-    results = filter_results_by_arm(results)
+    results = filter_results_by_arm(all_results)
     if not results:
         flash('No class-arms selected.', 'error')
         return redirect(url_for('generator.view_results', batch_id=batch_id))
+    annotate_coschedule_pairs(all_results, results)
 
     # Determine school level from results
     school_level = results[0].school_level if results else 'sss'
@@ -595,7 +615,7 @@ def export_results_by_day(batch_id):
                 if slot_result and slot_result.subject_id:
                     subj = subject_lookup.get(slot_result.subject_id)
                     if subj:
-                        value = _short(subj, abbrev_map, 5)
+                        value = _short_cell(slot_result, subj, abbrev_map, 5)
 
                 cell = ws.cell(row=current_row, column=col, value=value)
                 cell.font = cell_font
@@ -616,7 +636,7 @@ def export_results_by_day(batch_id):
                 if slot_result and slot_result.subject_id:
                     subj = subject_lookup.get(slot_result.subject_id)
                     if subj:
-                        value = _short(subj, abbrev_map, 5)
+                        value = _short_cell(slot_result, subj, abbrev_map, 5)
                 
                 cell = ws.cell(row=current_row, column=col, value=value)
                 cell.font = cell_font
@@ -648,14 +668,15 @@ def export_results_by_day_pdf(batch_id):
     from reportlab.lib.units import mm
     from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, PageBreak
     
-    results = GenTimetableResult.query.filter_by(batch_id=batch_id, branch_id=gen_bid()).all()
-    if not results:
+    all_results = GenTimetableResult.query.filter_by(batch_id=batch_id, branch_id=gen_bid()).all()
+    if not all_results:
         flash('No results.', 'error')
         return redirect(url_for('generator.results_list'))
-    results = filter_results_by_arm(results)
+    results = filter_results_by_arm(all_results)
     if not results:
         flash('No class-arms selected.', 'error')
         return redirect(url_for('generator.view_results', batch_id=batch_id))
+    annotate_coschedule_pairs(all_results, results)
 
     school_level = results[0].school_level or 'sss'
     rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, school_level=school_level, branch_id=gen_bid()).all()}
@@ -808,7 +829,7 @@ def export_results_by_day_pdf(batch_id):
             for p in range(1, break_after + 1):
                 slot_result = next((r for r in arm_results if r.period_number == p), None)
                 if slot_result and slot_result.subject:
-                    row.append(_short(slot_result.subject, abbrev_map, 5))
+                    row.append(_short_cell(slot_result, slot_result.subject, abbrev_map, 5))
                 else:
                     row.append('')
 
@@ -819,7 +840,7 @@ def export_results_by_day_pdf(batch_id):
             for p in range(break_after + 1, periods_per_day + 1):
                 slot_result = next((r for r in arm_results if r.period_number == p), None)
                 if slot_result and slot_result.subject:
-                    row.append(_short(slot_result.subject, abbrev_map, 5))
+                    row.append(_short_cell(slot_result, slot_result.subject, abbrev_map, 5))
                 else:
                     row.append('')
             

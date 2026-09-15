@@ -304,3 +304,78 @@ def test_export_image_respects_arm_filter(app):
     # A filtered-out selection with no match behaves like "no results".
     r_none = c.get(f'/generator/results/{batch_id}/export_image_hd?arm=NotAClass|NotAnArm')
     assert r_none.status_code == 302
+
+
+def _seed_coscheduled_pair(app, tag):
+    """A combined class with an ACTIVE co-schedule rule and matching
+    GenTimetableResult rows on both sides of the same slot — the scenario
+    where dropping one arm from a print/export should still surface its
+    subject via the other arm's cell (e.g. "ZzLiterature/ZzAccounting")."""
+    cc_id, lit_id, acct_id = _build_combined_class(app, tag)
+    batch_id = f'zzbatch-pair-annotate-{tag}'
+    with app.app_context():
+        bid = Branch.get_default().id
+        db.session.add(GenCoScheduleRule(
+            branch_id=bid, name=f'ZzPairRule{tag}', source_subject_id=lit_id,
+            source_class_name=f'ZzSSS2{tag}', source_arm_name=f'ZzDaisy{tag}',
+            target_subject_id=acct_id, target_class_name=f'ZzSSS2{tag}', target_arm_name=f'ZzIris{tag}',
+            is_active=True))
+        db.session.add_all([
+            GenTimetableResult(branch_id=bid, batch_id=batch_id, school_level='sss',
+                               class_name=f'ZzSSS2{tag}', arm_name=f'ZzDaisy{tag}', day_of_week=0,
+                               period_number=1, subject_id=lit_id),
+            GenTimetableResult(branch_id=bid, batch_id=batch_id, school_level='sss',
+                               class_name=f'ZzSSS2{tag}', arm_name=f'ZzIris{tag}', day_of_week=0,
+                               period_number=1, subject_id=acct_id),
+        ])
+        db.session.commit()
+    return batch_id
+
+
+def test_print_shows_coschedule_pair_only_when_other_arm_excluded(app):
+    batch_id = _seed_coscheduled_pair(app, 'J')
+    c = _admin(app)
+
+    # Both arms included: Daisy's own cell should NOT carry the annotation —
+    # Iris already has its own row showing Accounting.
+    r_all = c.get(f'/generator/results/{batch_id}/print')
+    assert r_all.status_code == 200
+    body_all = r_all.get_data(as_text=True)
+    assert 'ZzLiteratureJ' in body_all and 'ZzAccountingJ' in body_all
+    assert 'ZzLiteratureJ/ZzAccountingJ' not in body_all
+
+    # Iris excluded: Daisy's cell should now show both subjects.
+    r_filtered = c.get(f'/generator/results/{batch_id}/print?arm=ZzSSS2J|ZzDaisyJ')
+    assert r_filtered.status_code == 200
+    body_filtered = r_filtered.get_data(as_text=True)
+    assert 'ZzIrisJ' not in body_filtered   # the excluded arm's own row is gone
+    assert 'ZzLiteratureJ/ZzAccountingJ' in body_filtered
+
+
+def test_print_single_timetable_shows_coschedule_pair(app):
+    """A single-arm print always excludes every other arm by definition, so
+    the counterpart should always be annotated when a rule pairs it."""
+    batch_id = _seed_coscheduled_pair(app, 'K')
+    c = _admin(app)
+
+    r = c.get(f'/generator/results/{batch_id}/print/ZzSSS2K/ZzDaisyK')
+    assert r.status_code == 200
+    body = r.get_data(as_text=True)
+    assert 'ZzLiteratureK/ZzAccountingK' in body
+
+
+def test_export_by_class_shows_coschedule_pair(app):
+    import openpyxl
+    from io import BytesIO
+
+    batch_id = _seed_coscheduled_pair(app, 'L')
+    c = _admin(app)
+
+    r = c.get(f'/generator/results/{batch_id}/export?arm=ZzSSS2L|ZzDaisyL')
+    assert r.status_code == 200
+    wb = openpyxl.load_workbook(BytesIO(r.data))
+    ws = wb[wb.sheetnames[0]]
+    all_text = ' '.join(str(cell.value) for row in ws.iter_rows() for cell in row if cell.value)
+    assert '/' in all_text
+    assert any(v.startswith('ZzLite') and '/ZzAcco' in v
+               for row in ws.iter_rows() for v in [str(c.value) for c in row] if v and '/' in v)

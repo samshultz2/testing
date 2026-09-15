@@ -5,7 +5,7 @@ V3: JPG format, correct abbreviations, school watermark
 """
 from flask import Response
 from models import GenTimetableResult, GenTimetableRule, GenTeacher, GenSubject, GenSettings
-from routes.generator import gen_bid, filter_results_by_arm
+from routes.generator import gen_bid, filter_results_by_arm, annotate_coschedule_pairs
 from utils.generator_times import clock_params, break_after as _break_after
 from PIL import Image, ImageDraw, ImageFont
 from io import BytesIO
@@ -115,6 +115,18 @@ def _abbrev(subj, maxlen=6):
     return SUBJECT_ABBREV.get(name, name[:maxlen] if len(name) > maxlen else name)
 
 
+def _abbrev_cell(result, subj, maxlen=6):
+    """The cell label for one slot: `_abbrev(subj, ...)`, plus "/COUNTERPART"
+    when filter_results_by_arm()'s companion annotate_coschedule_pairs()
+    found a co-scheduled subject on an arm this image excluded (e.g.
+    "ACC/CRS" for a combined class rendered as just one arm)."""
+    label = _abbrev(subj, maxlen)
+    pair = getattr(result, 'coschedule_pair', None)
+    if pair:
+        label += '/' + _abbrev(pair, maxlen)
+    return label
+
+
 def get_school_name():
     """Get school name from GenSettings"""
     try:
@@ -147,12 +159,13 @@ def generate_timetable_image(batch_id, layout='by_day', quality='ultra'):
     Format: PNG for lossless quality
     Includes: School name, address, period times, BREAK column
     """
-    results = GenTimetableResult.query.filter_by(batch_id=batch_id, branch_id=gen_bid()).all()
+    all_results = GenTimetableResult.query.filter_by(batch_id=batch_id, branch_id=gen_bid()).all()
+    if not all_results:
+        return None
+    results = filter_results_by_arm(all_results)
     if not results:
         return None
-    results = filter_results_by_arm(results)
-    if not results:
-        return None
+    annotate_coschedule_pairs(all_results, results)
 
     # Determine school level from results
     school_level = results[0].school_level if results else 'sss'
@@ -407,7 +420,7 @@ def generate_timetable_image(batch_id, layout='by_day', quality='ultra'):
                 if result:
                     subj = GenSubject.query.get(result.subject_id)
                     if subj:
-                        abbrev = _abbrev(subj, 6)
+                        abbrev = _abbrev_cell(result, subj, 6)
                         if font_cell:
                             bbox = draw.textbbox((0, 0), abbrev, font=font_cell)
                             text_width = bbox[2] - bbox[0]
@@ -441,7 +454,7 @@ def generate_timetable_image(batch_id, layout='by_day', quality='ultra'):
                 if result:
                     subj = GenSubject.query.get(result.subject_id)
                     if subj:
-                        abbrev = _abbrev(subj, 6)
+                        abbrev = _abbrev_cell(result, subj, 6)
                         if font_cell:
                             bbox = draw.textbbox((0, 0), abbrev, font=font_cell)
                             text_width = bbox[2] - bbox[0]
