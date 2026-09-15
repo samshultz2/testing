@@ -1182,16 +1182,21 @@ def print_all_teacher_timetables_pdf():
     per page (A4 landscape) — the bulk counterpart to print_teacher_timetable(),
     which downloads just one. Defaults to the same batch the teacher-timetable
     page itself would default to: the level's active/published batch, falling
-    back to the most recently generated one, when ?batch_id isn't given."""
-    from xml.sax.saxutils import escape
-    from reportlab.lib import colors
+    back to the most recently generated one, when ?batch_id isn't given.
+
+    Each page reuses generate_teacher_timetable_image() — the same PNG design
+    already used for the single-teacher image download (school header + logo,
+    teacher name, "Weekly Timetable | Max N periods/day" subtitle, break shown
+    as its own column with its time range, PosyHub footer) — rather than a
+    separate hand-built PDF layout, so the two exports always look identical
+    and periods_per_day/break placement always come from the same per-level
+    GenTimetableRule lookup that function already does correctly."""
     from reportlab.lib.pagesizes import A4, landscape
     from reportlab.lib.units import mm
-    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, PageBreak
-    from reportlab.lib.styles import ParagraphStyle
-    from reportlab.lib.enums import TA_CENTER
+    from reportlab.platypus import SimpleDocTemplate, Image as RLImage, PageBreak, Spacer
     from models import ActiveTimetableBatch
     from utils.branch_scope import viewing_branch_id
+    from routes.generator_image import generate_teacher_timetable_image
 
     batch_id = request.args.get('batch_id')
     level = get_current_level()
@@ -1211,91 +1216,53 @@ def print_all_teacher_timetables_pdf():
         flash('No timetable found for this batch.', 'error')
         return redirect(url_for('generator.teacher_timetable', batch_id=batch_id))
 
-    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(
-        is_active=True, branch_id=gen_bid()).all()}
-    periods_per_day = int(rules.get('periods_per_day', 8))
-
-    by_teacher = {}
-    for r in all_results:
-        if r.teacher_id:
-            by_teacher.setdefault(r.teacher_id, []).append(r)
-
-    if not by_teacher:
+    teacher_ids = sorted({r.teacher_id for r in all_results if r.teacher_id})
+    if not teacher_ids:
         flash('No teacher assignments found in this batch.', 'error')
         return redirect(url_for('generator.teacher_timetable', batch_id=batch_id))
 
-    teachers = {t.id: t for t in GenTeacher.query.filter(
-        GenTeacher.id.in_(list(by_teacher.keys()))).all()}
-    ordered_ids = sorted((tid for tid in by_teacher if tid in teachers),
+    teachers = {t.id: t for t in GenTeacher.query.filter(GenTeacher.id.in_(teacher_ids)).all()}
+    ordered_ids = sorted((tid for tid in teacher_ids if tid in teachers),
                         key=lambda tid: teachers[tid].name)
 
     output = BytesIO()
-    margin = 12 * mm
+    margin = 8 * mm
     doc = SimpleDocTemplate(output, pagesize=landscape(A4),
                             leftMargin=margin, rightMargin=margin,
                             topMargin=margin, bottomMargin=margin)
     page_w, page_h = landscape(A4)
     usable_width = page_w - 2 * margin
-
-    first_col_width = 24 * mm
-    period_col_width = (usable_width - first_col_width) / periods_per_day
-    col_widths = [first_col_width] + [period_col_width] * periods_per_day
-
-    title_style = ParagraphStyle('title', fontName='Helvetica-Bold', fontSize=18, alignment=TA_CENTER,
-                                 leading=22, spaceAfter=4)
-    subtitle_style = ParagraphStyle('subtitle', fontName='Helvetica', fontSize=11, alignment=TA_CENTER,
-                                    textColor=colors.HexColor('#555555'), leading=13, spaceAfter=10)
-    cell_style = ParagraphStyle('cell', fontName='Helvetica-Bold', fontSize=10, alignment=TA_CENTER, leading=12)
+    usable_height = page_h - 2 * margin
 
     elements = []
     for idx, tid in enumerate(ordered_ids):
-        teacher = teachers[tid]
-        teacher_results = by_teacher[tid]
-        grid = {d: {} for d in range(5)}
-        for r in teacher_results:
-            grid[r.day_of_week][r.period_number] = r
+        img = generate_teacher_timetable_image(batch_id, tid)
+        if not img:
+            continue
+        png_buf = BytesIO()
+        img.save(png_buf, format='PNG')
+        png_buf.seek(0)
 
-        table_data = [['Day / Period'] + [f'P{p}' for p in range(1, periods_per_day + 1)]]
-        for d in range(5):
-            row = [DAYS_OF_WEEK[d]]
-            for p in range(1, periods_per_day + 1):
-                entry = grid[d].get(p)
-                if entry and entry.subject:
-                    label = _short(entry.subject, {}, 12)
-                    text = (f'<b>{escape(label)}</b><br/>'
-                           f'<font size="8">{escape(entry.class_name)} {escape(entry.arm_name)}</font>')
-                    row.append(Paragraph(text, cell_style))
-                else:
-                    row.append('-')
-            table_data.append(row)
-
-        table = Table(table_data, colWidths=col_widths, repeatRows=1)
-        table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4472C4')),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 0), (-1, 0), 11),
-            ('FONTNAME', (0, 1), (0, -1), 'Helvetica-Bold'),
-            ('BACKGROUND', (0, 1), (0, -1), colors.HexColor('#F0F0F0')),
-            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('GRID', (0, 0), (-1, -1), 0.75, colors.HexColor('#888888')),
-            ('BOX', (0, 0), (-1, -1), 1.5, colors.black),
-            ('TOPPADDING', (0, 1), (-1, -1), 10),
-            ('BOTTOMPADDING', (0, 1), (-1, -1), 10),
-        ]))
-
-        subtitle_bits = []
-        if teacher.staff_id:
-            subtitle_bits.append(escape(teacher.staff_id))
-        subtitle_bits.append(f'Max {teacher.max_periods_per_day} periods/day')
-        subtitle_bits.append(f'{len(teacher_results)} periods this week')
-
-        elements.append(Paragraph(escape(teacher.name), title_style))
-        elements.append(Paragraph(' | '.join(subtitle_bits), subtitle_style))
-        elements.append(table)
+        # Scale the image down to fit the page, preserving its aspect ratio
+        # (never upscale a small one past its own size), and center it
+        # vertically — the design's own aspect ratio is wider than A4
+        # landscape, so fitting to width alone would leave it pinned to the
+        # top with a dead gap below.
+        iw, ih = img.size
+        fit_scale = min(usable_width / iw, usable_height / ih, 1.0)
+        draw_h = ih * fit_scale
+        top_gap = max(0, (usable_height - draw_h) / 2)
+        if top_gap:
+            elements.append(Spacer(1, top_gap))
+        rl_img = RLImage(png_buf, width=iw * fit_scale, height=draw_h)
+        rl_img.hAlign = 'CENTER'
+        elements.append(rl_img)
         if idx < len(ordered_ids) - 1:
             elements.append(PageBreak())
+
+    if not elements:
+        flash('No teacher timetables could be rendered for this batch.', 'error')
+        return redirect(url_for('generator.teacher_timetable', batch_id=batch_id))
 
     doc.build(elements)
     return pdf_response(output, f'all_teacher_timetables_{batch_id}.pdf')
