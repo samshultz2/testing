@@ -165,7 +165,8 @@ class CBTAttempt(db.Model):
     user_agent = db.Column(db.String(255))
     status = db.Column(db.String(15), default='In progress')   # In progress / Submitted / Auto-submitted
 
-    student = db.relationship('Student')
+    student = db.relationship('Student', backref=db.backref(
+        'cbt_attempts', lazy='dynamic', cascade='all, delete-orphan'))
     answers = db.relationship('CBTAnswer', backref='attempt',
                               lazy='dynamic', cascade='all, delete-orphan')
     violation_log = db.relationship('CBTViolation', backref='attempt',
@@ -202,7 +203,9 @@ class CBTLoginEvent(db.Model):
     __tablename__ = 'cbt_login_events'
 
     id = db.Column(db.Integer, primary_key=True)
-    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
+    # Nullable: this is a malpractice-investigation audit trail, so a purged
+    # student's FK is detached rather than blocking the delete.
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=True)
     exam_id = db.Column(db.Integer, db.ForeignKey('cbt_exams.id'))   # nullable (login)
     event = db.Column(db.String(20), default='login')               # login / start / fingerprint
     ip_address = db.Column(db.String(60))
@@ -223,7 +226,9 @@ class CBTLoginEvent(db.Model):
     geo_accuracy = db.Column(db.Float)
     created_at = db.Column(db.DateTime, default=local_now)
 
-    student = db.relationship('Student')
+    # backref (not cascaded): this is a malpractice-investigation audit
+    # trail, so a purged student's FK is detached rather than deleting it.
+    student = db.relationship('Student', backref=db.backref('cbt_login_events', lazy='dynamic'))
     exam = db.relationship('CBTExam')
 
     @property
@@ -258,7 +263,8 @@ class CBTDeviceSession(db.Model):
     first_seen = db.Column(db.DateTime, default=local_now)
     last_seen = db.Column(db.DateTime, default=local_now)
 
-    student = db.relationship('Student')
+    student = db.relationship('Student', backref=db.backref(
+        'cbt_device_sessions', lazy='dynamic', cascade='all, delete-orphan'))
 
     __table_args__ = (db.UniqueConstraint('student_id', 'client_token',
                                           name='uq_cbt_device_session'),)

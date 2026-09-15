@@ -24,7 +24,8 @@ class AttendanceIntervention(db.Model):
     created_at = db.Column(db.DateTime, default=local_now)
     updated_at = db.Column(db.DateTime, default=local_now, onupdate=local_now)
 
-    student = db.relationship('Student')
+    student = db.relationship('Student', backref=db.backref(
+        'attendance_interventions', lazy='dynamic', cascade='all, delete-orphan'))
     notes = db.relationship('InterventionNote', backref='intervention',
                             lazy='dynamic', cascade='all, delete-orphan')
 

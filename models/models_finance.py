@@ -56,7 +56,10 @@ class FeePayment(db.Model):
     __tablename__ = 'fee_payments'
 
     id = db.Column(db.Integer, primary_key=True)
-    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
+    # Nullable so a permanently-deleted student's payment history survives —
+    # purging a student detaches (doesn't delete) their fee records, for the
+    # audit trail. See db_migrations for the matching column-relax migration.
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=True)
     term_id = db.Column(db.Integer, db.ForeignKey('terms.id'), nullable=False)
     branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))
     amount = db.Column(db.Float, nullable=False)
@@ -80,7 +83,7 @@ class FeeDiscount(db.Model):
     __tablename__ = 'fee_discounts'
 
     id = db.Column(db.Integer, primary_key=True)
-    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=True)
     term_id = db.Column(db.Integer, db.ForeignKey('terms.id'), nullable=False)
     amount = db.Column(db.Float, nullable=False, default=0)
     reason = db.Column(db.String(255))
@@ -101,7 +104,7 @@ class AdditionalCharge(db.Model):
     __tablename__ = 'additional_charges'
 
     id = db.Column(db.Integer, primary_key=True)
-    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False, index=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=True, index=True)
     term_id = db.Column(db.Integer, db.ForeignKey('terms.id'), nullable=False, index=True)
     branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'))
     kind = db.Column(db.String(10), nullable=False, default='charge')  # 'charge' | 'credit'

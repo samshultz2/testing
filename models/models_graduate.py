@@ -35,7 +35,10 @@ class GraduateAudit(db.Model):
     __tablename__ = 'graduate_audits'
 
     id = db.Column(db.Integer, primary_key=True)
-    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False, index=True)
+    # Nullable: the module's own promise is "nothing is deleted" — purging a
+    # student (a trashed/mistaken record, not a real graduate) must detach
+    # this append-only audit trail rather than erase it or block the delete.
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=True, index=True)
     field = db.Column(db.String(40), nullable=False)      # e.g. 'graduate_status'
     old_value = db.Column(db.String(160))
     new_value = db.Column(db.String(160))
@@ -43,7 +46,7 @@ class GraduateAudit(db.Model):
     actor = db.Column(db.String(80))                      # username who made the change
     created_at = db.Column(db.DateTime, default=local_now, index=True)
 
-    student = db.relationship('Student')
+    student = db.relationship('Student', backref=db.backref('graduate_audits', lazy='dynamic'))
 
 
 # Document types the school can issue to a graduate. The original seven (Phase 2)
@@ -105,7 +108,10 @@ class GraduateDocument(db.Model):
     __tablename__ = 'graduate_documents'
 
     id = db.Column(db.Integer, primary_key=True)
-    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False, index=True)
+    # Nullable: an issued certificate must stay verifiable (its code checked
+    # by employers/universities) even if the underlying student record is
+    # later purged — see StudentRiskAssessment-style bug this avoids.
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=True, index=True)
     doc_type = db.Column(db.String(40), nullable=False)
     document_number = db.Column(db.String(50), unique=True, nullable=False)
     verification_code = db.Column(db.String(24), unique=True, nullable=False, index=True)
@@ -115,7 +121,7 @@ class GraduateDocument(db.Model):
     created_at = db.Column(db.DateTime, default=local_now)
     updated_at = db.Column(db.DateTime, default=local_now, onupdate=local_now)
 
-    student = db.relationship('Student')
+    student = db.relationship('Student', backref=db.backref('graduate_documents', lazy='dynamic'))
 
     __table_args__ = (
         db.UniqueConstraint('student_id', 'doc_type', name='uq_graduate_document'),
@@ -145,7 +151,7 @@ class AlumniProfile(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'),
-                           nullable=False, unique=True, index=True)
+                           nullable=True, unique=True, index=True)
     occupation = db.Column(db.String(120))
     employer = db.Column(db.String(160))
     job_title = db.Column(db.String(120))
@@ -161,7 +167,7 @@ class AlumniProfile(db.Model):
     updated_at = db.Column(db.DateTime, default=local_now, onupdate=local_now)
     updated_by = db.Column(db.String(80))            # 'self' or an admin username
 
-    student = db.relationship('Student')
+    student = db.relationship('Student', backref=db.backref('alumni_profile', uselist=False))
 
     # Fields an alumnus may set about themselves (drives both the portal form and
     # the admin editor; keeps a single source of truth for mass-assignment safety).
@@ -211,7 +217,7 @@ class DocumentVerification(db.Model):
     created_at = db.Column(db.DateTime, default=local_now, index=True)
 
     document = db.relationship('GraduateDocument')
-    student = db.relationship('Student')
+    student = db.relationship('Student', backref=db.backref('document_verifications', lazy='dynamic'))
 
     RESULTS = ('valid', 'revoked', 'not_found')
 
@@ -226,7 +232,7 @@ class DocumentRequest(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     student_id = db.Column(db.Integer, db.ForeignKey('students.id'),
-                           nullable=False, index=True)
+                           nullable=True, index=True)
     doc_type = db.Column(db.String(40), nullable=False)
     status = db.Column(db.String(20), nullable=False, default='pending', index=True)
     note = db.Column(db.String(500))                 # why the alumnus needs it
@@ -235,7 +241,7 @@ class DocumentRequest(db.Model):
     handled_at = db.Column(db.DateTime)
     handled_by = db.Column(db.String(80))
 
-    student = db.relationship('Student')
+    student = db.relationship('Student', backref=db.backref('document_requests', lazy='dynamic'))
 
     @property
     def label(self):

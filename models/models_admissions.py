@@ -65,7 +65,9 @@ class Applicant(db.Model):
 
     session = db.relationship('AcademicSession')
     intended_class = db.relationship('SchoolClass')
-    admitted_student = db.relationship('Student')
+    # backref (not cascaded) so a purged student's FK is detached rather than
+    # blocking the delete — the application record itself is kept.
+    admitted_student = db.relationship('Student', backref=db.backref('admissions', lazy='dynamic'))
 
     @property
     def full_name(self):

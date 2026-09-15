@@ -125,7 +125,9 @@ class Sale(db.Model):
     notes = db.Column(db.String(200))
     created_at = db.Column(db.DateTime, default=local_now)
 
-    student = db.relationship('Student')
+    # backref (not cascaded) so a purged buyer's FK is detached rather than
+    # blocking the delete outright — the sale itself is a financial record.
+    student = db.relationship('Student', backref=db.backref('sales', lazy='dynamic'))
     branch = db.relationship('Branch')
     items = db.relationship('SaleItem', backref='sale', lazy='dynamic',
                             cascade='all, delete-orphan')

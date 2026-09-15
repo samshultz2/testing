@@ -30,7 +30,9 @@ class ScratchCard(db.Model):
     created_at = db.Column(db.DateTime, default=local_now)
 
     term = db.relationship('Term')
-    student = db.relationship('Student')
+    # backref (not cascaded): a card is an issued/paid-for asset, so a purged
+    # student's restriction is detached rather than deleting the card itself.
+    student = db.relationship('Student', backref=db.backref('scratch_cards', lazy='dynamic'))
     checks = db.relationship('ResultCheckLog', backref='card',
                              cascade='all, delete-orphan', lazy='dynamic')
 
@@ -76,7 +78,9 @@ class ResultCheckLog(db.Model):
     user_agent = db.Column(db.String(300))
     checked_at = db.Column(db.DateTime, default=local_now)
 
-    student = db.relationship('Student')
+    # backref (not cascaded): this is an investigation audit trail, so a
+    # purged student's FK is detached rather than deleting the log entry.
+    student = db.relationship('Student', backref=db.backref('result_check_logs', lazy='dynamic'))
     term = db.relationship('Term')
 
     def __repr__(self):

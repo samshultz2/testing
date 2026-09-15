@@ -85,7 +85,8 @@ class BookLoan(db.Model):
     note = db.Column(db.String(200))
     created_at = db.Column(db.DateTime, default=local_now)
 
-    student = db.relationship('Student')
+    student = db.relationship('Student', backref=db.backref(
+        'library_loans', lazy='dynamic', cascade='all, delete-orphan'))
     staff = db.relationship('StaffMember')
 
     @property
@@ -137,7 +138,8 @@ class BookReservation(db.Model):
     note = db.Column(db.String(200))
 
     book = db.relationship('Book')
-    student = db.relationship('Student')
+    student = db.relationship('Student', backref=db.backref(
+        'library_reservations', lazy='dynamic', cascade='all, delete-orphan'))
     staff = db.relationship('StaffMember')
 
     @property

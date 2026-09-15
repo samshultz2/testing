@@ -195,7 +195,9 @@ class MessageRecipient(db.Model):
     error = db.Column(db.Text)            # provider error on a failed gateway send
     created_at = db.Column(db.DateTime, default=local_now)
 
-    student = db.relationship('Student')
+    # backref (not cascaded) so a purged student's FK is detached rather than
+    # blocking the delete — the send-history record itself is kept.
+    student = db.relationship('Student', backref=db.backref('message_recipients', lazy='dynamic'))
 
     def __repr__(self):
         return f'<MessageRecipient {self.phone} {self.status}>'

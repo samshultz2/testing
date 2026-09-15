@@ -57,13 +57,13 @@ class ContributionPayment(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     session_id = db.Column(db.Integer, db.ForeignKey('academic_sessions.id'), nullable=True)
-    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=True)
     amount = db.Column(db.Float, nullable=False)
     payment_date = db.Column(db.Date, nullable=False)
     received_by = db.Column(db.String(100))
     notes = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=local_now)
-    
+
     # Relationships
     student = db.relationship('Student', backref=db.backref('contributions', lazy='dynamic'))
     session = db.relationship('AcademicSession', backref=db.backref('contribution_payments', lazy='dynamic'))

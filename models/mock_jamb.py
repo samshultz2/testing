@@ -498,7 +498,8 @@ class MockJAMBAttempt(db.Model):
 
     exam = db.relationship('MockJAMBExam', backref=db.backref(
         'attempts', lazy='dynamic', cascade='all, delete-orphan'))
-    student = db.relationship('Student')
+    student = db.relationship('Student', backref=db.backref(
+        'mock_jamb_attempts', lazy='dynamic', cascade='all, delete-orphan'))
     answers = db.relationship('MockJAMBAnswer', backref='attempt', lazy='dynamic',
                               cascade='all, delete-orphan')
 

@@ -143,3 +143,145 @@ def test_bulk_purge_deletes_students_with_related_records(app):
     with app.app_context():
         assert Student.query.get(sid1) is None
         assert Student.query.get(sid2) is None
+
+
+# ---------------------------------------------------------------------------
+# Extended coverage: financial/audit/asset records are PRESERVED (detached,
+# not deleted) on purge; pure student-activity records are CASCADE-DELETED.
+# ---------------------------------------------------------------------------
+
+def _seed_preserve_records(app, tag):
+    """One row in each table that should survive a purge with its student_id
+    set to NULL — financial records, audit trails, and independently-issued
+    assets/applications. Returns (student_id, {table_name: row_id})."""
+    from models import (FeePayment, FeeDiscount, AdditionalCharge, ContributionPayment,
+                        Sale, Applicant, Message, MessageRecipient, ScratchCard,
+                        ResultCheckLog, CBTLoginEvent)
+    from models.models_graduate import (GraduateAudit, GraduateDocument, AlumniProfile,
+                                        DocumentVerification, DocumentRequest)
+    with app.app_context():
+        bid = Branch.get_default().id
+        ssn = AcademicSession(name=f'ZzPreserveSsn{tag}', is_active=False)
+        db.session.add(ssn); db.session.flush()
+        term = Term(session_id=ssn.id, term_number=1, name=f'ZzPreserveTerm{tag}', is_active=False)
+        db.session.add(term); db.session.flush()
+
+        student = Student(student_id=Student.generate_student_id(), surname='ZzPreserve',
+                          first_name=tag, gender='Male', is_active=False, branch_id=bid)
+        db.session.add(student); db.session.flush()
+        sid = student.id
+
+        fp = FeePayment(student_id=sid, term_id=term.id, amount=1000)
+        fd = FeeDiscount(student_id=sid, term_id=term.id, amount=100)
+        ac = AdditionalCharge(student_id=sid, term_id=term.id, amount=50)
+        cp = ContributionPayment(student_id=sid, amount=200, payment_date=date.today())
+        sale = Sale(student_id=sid)
+        applicant = Applicant(first_name='Zz', surname='Applied', admitted_student_id=sid)
+        msg = Message(body='Hello')
+        db.session.add_all([fp, fd, ac, cp, sale, applicant, msg])
+        db.session.flush()
+        mr = MessageRecipient(message_id=msg.id, student_id=sid)
+        sc = ScratchCard.generate_unique(student_id=sid)
+        db.session.add_all([mr, sc])
+        db.session.flush()
+        rcl = ResultCheckLog(card_id=sc.id, student_id=sid)
+        clev = CBTLoginEvent(student_id=sid)
+        gaud = GraduateAudit(student_id=sid, field='graduate_status', new_value='Graduated')
+        gdoc = GraduateDocument(student_id=sid, doc_type='transcript',
+                                document_number=f'ZzDOC{tag}', verification_code=f'ZzVER{tag}')
+        alum = AlumniProfile(student_id=sid, occupation='Engineer')
+        dverif = DocumentVerification(student_id=sid, result='valid')
+        dreq = DocumentRequest(student_id=sid, doc_type='transcript')
+        db.session.add_all([rcl, clev, gaud, gdoc, alum, dverif, dreq])
+        db.session.commit()
+
+        ids = {'fee_payment': fp.id, 'fee_discount': fd.id, 'additional_charge': ac.id,
+              'contribution_payment': cp.id, 'sale': sale.id, 'applicant': applicant.id,
+              'message_recipient': mr.id, 'scratch_card': sc.id, 'result_check_log': rcl.id,
+              'cbt_login_event': clev.id, 'graduate_audit': gaud.id, 'graduate_document': gdoc.id,
+              'alumni_profile': alum.id, 'document_verification': dverif.id,
+              'document_request': dreq.id}
+        return sid, ids
+
+
+def test_purge_preserves_financial_and_audit_records(app):
+    """Financial payments, audit trails, and independently-issued
+    assets/applications must survive a purge — only detached (student_id set
+    to NULL), never deleted and never blocking the delete."""
+    from models import (FeePayment, FeeDiscount, AdditionalCharge, ContributionPayment,
+                        Sale, Applicant, MessageRecipient, ScratchCard, ResultCheckLog, CBTLoginEvent)
+    from models.models_graduate import (GraduateAudit, GraduateDocument, AlumniProfile,
+                                        DocumentVerification, DocumentRequest)
+    sid, ids = _seed_preserve_records(app, 'P')
+
+    c = _admin(app)
+    r = c.post(f'/students/{sid}/purge', data={'_csrf_token': _csrf(c)})
+    assert r.status_code in (302, 200)
+
+    with app.app_context():
+        assert Student.query.get(sid) is None
+
+        assert FeePayment.query.get(ids['fee_payment']).student_id is None
+        assert FeeDiscount.query.get(ids['fee_discount']).student_id is None
+        assert AdditionalCharge.query.get(ids['additional_charge']).student_id is None
+        assert ContributionPayment.query.get(ids['contribution_payment']).student_id is None
+        assert Sale.query.get(ids['sale']).student_id is None
+        assert Applicant.query.get(ids['applicant']).admitted_student_id is None
+        assert MessageRecipient.query.get(ids['message_recipient']).student_id is None
+        assert ScratchCard.query.get(ids['scratch_card']).student_id is None
+        assert ResultCheckLog.query.get(ids['result_check_log']).student_id is None
+        assert CBTLoginEvent.query.get(ids['cbt_login_event']).student_id is None
+        assert GraduateAudit.query.get(ids['graduate_audit']).student_id is None
+        assert GraduateDocument.query.get(ids['graduate_document']).student_id is None
+        assert AlumniProfile.query.get(ids['alumni_profile']).student_id is None
+        assert DocumentVerification.query.get(ids['document_verification']).student_id is None
+        assert DocumentRequest.query.get(ids['document_request']).student_id is None
+
+
+def test_purge_cascade_deletes_activity_records(app):
+    """Pure student-activity data (exam attempts, live sessions, library
+    loans/reservations, attendance interventions) has no independent meaning
+    once the student is gone — it's deleted along with them."""
+    from models import (CBTExam, CBTAttempt, CBTDeviceSession, Book, BookLoan,
+                        BookReservation, AttendanceIntervention)
+    from models.mock_jamb import MockJAMBExam, MockJAMBAttempt
+
+    with app.app_context():
+        bid = Branch.get_default().id
+        ssn = AcademicSession(name='ZzCascadeSsn', is_active=False)
+        db.session.add(ssn); db.session.flush()
+
+        student = Student(student_id=Student.generate_student_id(), surname='ZzCascade',
+                          first_name='Test', gender='Male', is_active=False, branch_id=bid)
+        cbt_exam = CBTExam(title='ZzCBTExam')
+        jexam = MockJAMBExam(name='ZzJExam', exam_number=1, session_id=ssn.id,
+                             exam_date=date.today(), branch_id=bid)
+        book = Book(title='ZzBook')
+        db.session.add_all([student, cbt_exam, jexam, book]); db.session.flush()
+        sid = student.id
+
+        attempt = CBTAttempt(exam_id=cbt_exam.id, student_id=sid)
+        dsess = CBTDeviceSession(student_id=sid, client_token='ZzTok')
+        loan = BookLoan(book_id=book.id, student_id=sid)
+        resv = BookReservation(book_id=book.id, student_id=sid)
+        interv = AttendanceIntervention(student_id=sid)
+        db.session.add_all([attempt, dsess, loan, resv, interv]); db.session.flush()
+        jattempt = MockJAMBAttempt(mock_exam_id=jexam.id, student_id=sid)
+        db.session.add(jattempt)
+        db.session.commit()
+
+        ids = {'attempt': attempt.id, 'dsess': dsess.id, 'loan': loan.id,
+              'resv': resv.id, 'interv': interv.id, 'jattempt': jattempt.id}
+
+    c = _admin(app)
+    r = c.post(f'/students/{sid}/purge', data={'_csrf_token': _csrf(c)})
+    assert r.status_code in (302, 200)
+
+    with app.app_context():
+        assert Student.query.get(sid) is None
+        assert CBTAttempt.query.get(ids['attempt']) is None
+        assert CBTDeviceSession.query.get(ids['dsess']) is None
+        assert BookLoan.query.get(ids['loan']) is None
+        assert BookReservation.query.get(ids['resv']) is None
+        assert AttendanceIntervention.query.get(ids['interv']) is None
+        assert MockJAMBAttempt.query.get(ids['jattempt']) is None
