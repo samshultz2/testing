@@ -36,6 +36,14 @@
     </div>
 </div>
 
+{% if batch_id %}
+<div class="page-header-actions mb-3">
+    <a href="{{ url_for('generator.print_all_teacher_timetables_pdf', batch_id=batch_id) }}" class="btn btn-danger">
+        <i class="fas fa-file-pdf"></i> Download All Teachers (PDF)
+    </a>
+</div>
+{% endif %}
+
 {% if selected_teacher and teacher_grid %}
 <!-- Timetable Grid -->
 <div class="card mb-3">

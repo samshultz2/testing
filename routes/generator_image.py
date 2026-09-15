@@ -679,3 +679,78 @@ def image_to_response(img, filename):
         mimetype='image/png',
         headers={'Content-Disposition': f'attachment; filename={filename}'}
     )
+
+
+def generate_simple_table_image(title, headers, rows, col_widths=None, quality='hd',
+                                highlight_col=None):
+    """A plain grid-table PNG for a report (headers + data rows, all plain
+    text) — used for reports that are one flat table rather than a
+    day/period timetable grid (empty-slots, teacher workload). `rows` is a
+    list of lists of strings, same length as `headers`. `col_widths` are
+    relative weights (defaults to equal); `highlight_col`, if given, tints
+    that column's cells to draw the eye to it (e.g. a weekly total)."""
+    scale = 8 if quality == 'ultra' else 4
+    margin = 20 * scale
+    row_height = 34 * scale
+    header_height = 40 * scale
+    title_height = 50 * scale
+    total_width = 1100 * scale
+
+    n_cols = len(headers)
+    weights = col_widths or [1] * n_cols
+    weight_sum = sum(weights)
+    usable_width = total_width - 2 * margin
+    col_px = [int(usable_width * w / weight_sum) for w in weights]
+
+    img_height = title_height + header_height + row_height * len(rows) + 2 * margin
+    img = Image.new('RGB', (total_width, img_height), color='white')
+    draw = ImageDraw.Draw(img)
+
+    color_black = (0, 0, 0)
+    color_header_bg = (68, 114, 196)
+    color_white = (255, 255, 255)
+    color_border = (120, 120, 120)
+    color_stripe = (245, 247, 250)
+    color_highlight = (255, 243, 205)
+
+    font_title = get_font(28 * scale, bold=True)
+    font_header = get_font(15 * scale, bold=True)
+    font_cell = get_font(15 * scale)
+
+    y = margin
+    if font_title:
+        draw.text((margin, y), title, fill=color_black, font=font_title)
+    y += title_height
+
+    x = margin
+    draw.rectangle([margin, y, margin + usable_width, y + header_height], fill=color_header_bg)
+    for i, h in enumerate(headers):
+        if font_header:
+            bbox = draw.textbbox((0, 0), str(h), font=font_header)
+            tw = bbox[2] - bbox[0]
+            th = bbox[3] - bbox[1]
+            tx = x + (col_px[i] - tw) // 2
+            ty = y + (header_height - th) // 2
+            draw.text((tx, ty), str(h), fill=color_white, font=font_header)
+        draw.rectangle([x, y, x + col_px[i], y + header_height], outline=color_border, width=scale)
+        x += col_px[i]
+    y += header_height
+
+    for ri, row in enumerate(rows):
+        x = margin
+        row_bg = color_stripe if ri % 2 else color_white
+        for ci, val in enumerate(row):
+            bg = color_highlight if (highlight_col is not None and ci == highlight_col) else row_bg
+            draw.rectangle([x, y, x + col_px[ci], y + row_height], fill=bg, outline=color_border, width=max(1, scale // 2))
+            if font_cell:
+                text = str(val)
+                bbox = draw.textbbox((0, 0), text, font=font_cell)
+                tw = bbox[2] - bbox[0]
+                th = bbox[3] - bbox[1]
+                tx = x + (col_px[ci] - tw) // 2 if ci > 0 else x + 10 * scale
+                ty = y + (row_height - th) // 2
+                draw.text((tx, ty), text, fill=color_black, font=font_cell)
+            x += col_px[ci]
+        y += row_height
+
+    return img

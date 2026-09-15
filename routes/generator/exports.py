@@ -95,6 +95,153 @@ def print_single_timetable(batch_id, class_name, arm_name):
     )
 
 
+@generator_bp.route('/results/<batch_id>/print/<class_name>/<arm_name>/pdf')
+@login_required
+def print_single_timetable_pdf(batch_id, class_name, arm_name):
+    """One class-arm's full week as a single-page A4-landscape PDF, filling
+    the available space — a proper backend-rendered document rather than a
+    browser print-to-PDF of the HTML view. ?teachers=0 drops the teacher
+    name from each cell (on by default)."""
+    from xml.sax.saxutils import escape
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER
+
+    include_teachers = request.args.get('teachers', '1') != '0'
+
+    results = GenTimetableResult.query.filter_by(batch_id=batch_id, class_name=class_name,
+                                                  arm_name=arm_name, branch_id=gen_bid()).all()
+    if not results:
+        flash('Not found.', 'error')
+        return redirect(url_for('generator.view_results', batch_id=batch_id))
+
+    all_results = GenTimetableResult.query.filter_by(batch_id=batch_id, branch_id=gen_bid()).all()
+    annotate_coschedule_pairs(all_results, results)
+
+    grid = {d: {} for d in range(5)}
+    for r in results:
+        grid[r.day_of_week][r.period_number] = r
+
+    school_level = results[0].school_level or 'sss'
+    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(
+        is_active=True, school_level=school_level, branch_id=gen_bid()).all()}
+    periods_per_day = int(rules.get('periods_per_day', 8))
+    break_after = _break_after(rules, periods_per_day)
+
+    school_name = GenSettings.get('school_name', 'School')
+    school_address = GenSettings.get('school_address', '')
+
+    abbrev_map = {
+        'Mathematics': 'Maths', 'English Language': 'Eng', 'Physics': 'Phy',
+        'Chemistry': 'Chem', 'Biology': 'Bio', 'Economics': 'Econs',
+        'Government': 'Govt', 'Literature in English': 'Lit', 'Agricultural Science': 'Agric',
+        'Christian Religious Studies': 'CRS', 'Civic Education': 'Civic',
+        'Computer Studies': 'Comp', 'Commerce': 'Comm', 'Geography': 'Geo',
+        'Further Mathematics': 'F/Mth', 'Livestock Farming': 'Livst',
+        'History': 'Hist', 'Phonics': 'Phon',
+    }
+
+    output = BytesIO()
+    margin = 10 * mm
+    # SimpleDocTemplate wraps its content in a Frame with a default 6pt
+    # padding on every side (on top of the doc's own margins) — the table's
+    # row heights must budget for that too, or the last sliver of the table
+    # spills onto an unwanted second page.
+    frame_pad = 6
+    doc = SimpleDocTemplate(output, pagesize=landscape(A4),
+                            leftMargin=margin, rightMargin=margin,
+                            topMargin=margin, bottomMargin=margin)
+    page_w, page_h = landscape(A4)
+    usable_width = page_w - 2 * margin - 2 * frame_pad
+
+    first_col_width = 22 * mm
+    period_col_width = (usable_width - first_col_width) / periods_per_day
+    col_widths = [first_col_width] + [period_col_width] * periods_per_day
+
+    subject_font_size = 12 if include_teachers else 14
+    cell_style = ParagraphStyle('cell', fontName='Helvetica-Bold', fontSize=subject_font_size,
+                                alignment=TA_CENTER, leading=subject_font_size + 2)
+
+    # Build the cell content for one (day, period) slot as a Paragraph, so a
+    # long subject/teacher name wraps within its own column instead of
+    # overflowing into the next one (a plain string, with no word-wrap,
+    # would just spill over visually).
+    def cell_lines(day_idx, period):
+        entry = grid[day_idx].get(period)
+        if not entry or not entry.subject:
+            return Paragraph('-', cell_style)
+        label = escape(_short(entry.subject, abbrev_map, 8))
+        if entry.coschedule_pair:
+            label += '/' + escape(_short(entry.coschedule_pair, abbrev_map, 8))
+        text = f'<b>{label}</b>'
+        if include_teachers and entry.teacher:
+            text += f'<br/><font size="9">{escape(entry.teacher.name)}</font>'
+        return Paragraph(text, cell_style)
+
+    header_row = ['Period'] + DAYS_OF_WEEK
+    table_data = [header_row]
+    for p in range(1, periods_per_day + 1):
+        row = [f'P{p}'] + [cell_lines(d, p) for d in range(5)]
+        table_data.append(row)
+        if p == break_after:
+            table_data.append(['BREAK'] + [''] * 5)
+
+    title_style = ParagraphStyle('title', fontName='Helvetica-Bold', fontSize=16, alignment=TA_CENTER, leading=19)
+    subtitle_style = ParagraphStyle('subtitle', fontName='Helvetica', fontSize=10, alignment=TA_CENTER,
+                                    textColor=colors.HexColor('#555555'), leading=12)
+
+    title_elements = [Paragraph(f'{school_name.upper()}', title_style)]
+    if school_address:
+        title_elements.append(Paragraph(school_address, subtitle_style))
+    title_elements.append(Paragraph(f'{class_name} {arm_name} — Weekly Timetable', title_style))
+    spacer = Spacer(1, 4)
+
+    # Measure the actual rendered height of everything above the table (the
+    # title block can vary with whether there's a school address), so the
+    # table's own row heights are sized to exactly fill what's left on the
+    # page rather than guessed — a guess that's even slightly too generous
+    # here means the table spills onto an unwanted second page.
+    title_block_height = spacer.height
+    for el in title_elements:
+        _, h = el.wrap(usable_width, page_h)
+        title_block_height += h
+
+    num_rows = len(table_data)
+    header_height = 10 * mm
+    available_height = page_h - 2 * margin - 2 * frame_pad - title_block_height - header_height
+    data_row_height = available_height / (num_rows - 1)
+    row_heights = [header_height] + [data_row_height] * (num_rows - 1)
+
+    table = Table(table_data, colWidths=col_widths, rowHeights=row_heights, repeatRows=1)
+    break_row_indices = [i for i, row in enumerate(table_data) if row[0] == 'BREAK']
+    style_cmds = [
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4472C4')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 13),
+        ('FONTNAME', (0, 1), (0, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 1), (0, -1), subject_font_size),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('GRID', (0, 0), (-1, -1), 0.75, colors.HexColor('#666666')),
+        ('BOX', (0, 0), (-1, -1), 1.5, colors.black),
+    ]
+    for ri in break_row_indices:
+        style_cmds.append(('SPAN', (1, ri), (-1, ri)))
+        style_cmds.append(('BACKGROUND', (0, ri), (-1, ri), colors.HexColor('#FF6B6B')))
+        style_cmds.append(('TEXTCOLOR', (0, ri), (-1, ri), colors.white))
+        style_cmds.append(('FONTSIZE', (0, ri), (-1, ri), 10))
+    table.setStyle(TableStyle(style_cmds))
+
+    elements = title_elements + [spacer, table]
+
+    doc.build(elements)
+    return pdf_response(output, f'timetable_{class_name}_{arm_name}_{batch_id}.pdf')
+
+
 @generator_bp.route('/results/<batch_id>/export')
 @login_required
 def export_results(batch_id):
@@ -1026,3 +1173,245 @@ def print_teacher_timetable(batch_id, teacher_id):
         periods=range(1, periods_per_day + 1),
         days=DAYS_OF_WEEK
     )
+
+
+@generator_bp.route('/teacher-timetable/print-all-pdf')
+@login_required
+def print_all_teacher_timetables_pdf():
+    """Every teacher's individual weekly timetable in one PDF, one teacher
+    per page (A4 landscape) — the bulk counterpart to print_teacher_timetable(),
+    which downloads just one. Defaults to the same batch the teacher-timetable
+    page itself would default to: the level's active/published batch, falling
+    back to the most recently generated one, when ?batch_id isn't given."""
+    from xml.sax.saxutils import escape
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, PageBreak
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER
+    from models import ActiveTimetableBatch
+    from utils.branch_scope import viewing_branch_id
+
+    batch_id = request.args.get('batch_id')
+    level = get_current_level()
+    if not batch_id:
+        batch_id = ActiveTimetableBatch.active_batch_id(viewing_branch_id(), level)
+        if not batch_id:
+            latest = GenTimetableResult.query.filter_by(branch_id=gen_bid()).order_by(GenTimetableResult.generated_at.desc()).first()
+            if latest:
+                batch_id = latest.batch_id
+
+    if not batch_id:
+        flash('No timetable results found.', 'error')
+        return redirect(url_for('generator.teacher_timetable'))
+
+    all_results = GenTimetableResult.query.filter_by(batch_id=batch_id, branch_id=gen_bid()).all()
+    if not all_results:
+        flash('No timetable found for this batch.', 'error')
+        return redirect(url_for('generator.teacher_timetable', batch_id=batch_id))
+
+    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(
+        is_active=True, branch_id=gen_bid()).all()}
+    periods_per_day = int(rules.get('periods_per_day', 8))
+
+    by_teacher = {}
+    for r in all_results:
+        if r.teacher_id:
+            by_teacher.setdefault(r.teacher_id, []).append(r)
+
+    if not by_teacher:
+        flash('No teacher assignments found in this batch.', 'error')
+        return redirect(url_for('generator.teacher_timetable', batch_id=batch_id))
+
+    teachers = {t.id: t for t in GenTeacher.query.filter(
+        GenTeacher.id.in_(list(by_teacher.keys()))).all()}
+    ordered_ids = sorted((tid for tid in by_teacher if tid in teachers),
+                        key=lambda tid: teachers[tid].name)
+
+    output = BytesIO()
+    margin = 12 * mm
+    doc = SimpleDocTemplate(output, pagesize=landscape(A4),
+                            leftMargin=margin, rightMargin=margin,
+                            topMargin=margin, bottomMargin=margin)
+    page_w, page_h = landscape(A4)
+    usable_width = page_w - 2 * margin
+
+    first_col_width = 24 * mm
+    period_col_width = (usable_width - first_col_width) / periods_per_day
+    col_widths = [first_col_width] + [period_col_width] * periods_per_day
+
+    title_style = ParagraphStyle('title', fontName='Helvetica-Bold', fontSize=18, alignment=TA_CENTER,
+                                 leading=22, spaceAfter=4)
+    subtitle_style = ParagraphStyle('subtitle', fontName='Helvetica', fontSize=11, alignment=TA_CENTER,
+                                    textColor=colors.HexColor('#555555'), leading=13, spaceAfter=10)
+    cell_style = ParagraphStyle('cell', fontName='Helvetica-Bold', fontSize=10, alignment=TA_CENTER, leading=12)
+
+    elements = []
+    for idx, tid in enumerate(ordered_ids):
+        teacher = teachers[tid]
+        teacher_results = by_teacher[tid]
+        grid = {d: {} for d in range(5)}
+        for r in teacher_results:
+            grid[r.day_of_week][r.period_number] = r
+
+        table_data = [['Day / Period'] + [f'P{p}' for p in range(1, periods_per_day + 1)]]
+        for d in range(5):
+            row = [DAYS_OF_WEEK[d]]
+            for p in range(1, periods_per_day + 1):
+                entry = grid[d].get(p)
+                if entry and entry.subject:
+                    label = _short(entry.subject, {}, 12)
+                    text = (f'<b>{escape(label)}</b><br/>'
+                           f'<font size="8">{escape(entry.class_name)} {escape(entry.arm_name)}</font>')
+                    row.append(Paragraph(text, cell_style))
+                else:
+                    row.append('-')
+            table_data.append(row)
+
+        table = Table(table_data, colWidths=col_widths, repeatRows=1)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4472C4')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, 0), 11),
+            ('FONTNAME', (0, 1), (0, -1), 'Helvetica-Bold'),
+            ('BACKGROUND', (0, 1), (0, -1), colors.HexColor('#F0F0F0')),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('GRID', (0, 0), (-1, -1), 0.75, colors.HexColor('#888888')),
+            ('BOX', (0, 0), (-1, -1), 1.5, colors.black),
+            ('TOPPADDING', (0, 1), (-1, -1), 10),
+            ('BOTTOMPADDING', (0, 1), (-1, -1), 10),
+        ]))
+
+        subtitle_bits = []
+        if teacher.staff_id:
+            subtitle_bits.append(escape(teacher.staff_id))
+        subtitle_bits.append(f'Max {teacher.max_periods_per_day} periods/day')
+        subtitle_bits.append(f'{len(teacher_results)} periods this week')
+
+        elements.append(Paragraph(escape(teacher.name), title_style))
+        elements.append(Paragraph(' | '.join(subtitle_bits), subtitle_style))
+        elements.append(table)
+        if idx < len(ordered_ids) - 1:
+            elements.append(PageBreak())
+
+    doc.build(elements)
+    return pdf_response(output, f'all_teacher_timetables_{batch_id}.pdf')
+
+
+def _simple_table_pdf(title, headers, rows, filename, col_widths=None, highlight_col=None):
+    """A plain grid-table PDF (headers + string rows) on one A4 landscape
+    page, filling the available width/height — for reports that are one
+    flat table rather than a day/period timetable grid."""
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.units import mm
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.enums import TA_CENTER
+
+    output = BytesIO()
+    margin = 12 * mm
+    doc = SimpleDocTemplate(output, pagesize=landscape(A4),
+                            leftMargin=margin, rightMargin=margin,
+                            topMargin=margin, bottomMargin=margin)
+    page_w, page_h = landscape(A4)
+    usable_width = page_w - 2 * margin
+
+    n_cols = len(headers)
+    weights = col_widths or [1] * n_cols
+    weight_sum = sum(weights)
+    col_w = [usable_width * w / weight_sum for w in weights]
+
+    title_style = ParagraphStyle('title', fontName='Helvetica-Bold', fontSize=18,
+                                 alignment=TA_CENTER, spaceAfter=12)
+    data = [headers] + rows
+    table = Table(data, colWidths=col_w, repeatRows=1)
+    style_cmds = [
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4472C4')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 11),
+        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 1), (-1, -1), 10),
+        ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#888888')),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F5F7FA')]),
+        ('TOPPADDING', (0, 0), (-1, -1), 6),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+    ]
+    if highlight_col is not None:
+        style_cmds.append(('BACKGROUND', (highlight_col, 1), (highlight_col, -1), colors.HexColor('#FFF3CD')))
+    table.setStyle(TableStyle(style_cmds))
+
+    doc.build([Paragraph(title, title_style), table])
+    return pdf_response(output, filename)
+
+
+@generator_bp.route('/reports/unassigned/<batch_id>/image')
+@login_required
+def unassigned_report_image(batch_id):
+    from routes.generator.generation import _unassigned_rows
+    from routes.generator_image import generate_simple_table_image, image_to_response
+
+    rows, _ = _unassigned_rows(batch_id)
+    headers = ['Class', 'Arm'] + [d[:3] for d in DAYS_OF_WEEK] + ['Total/Week']
+    table_rows = [[r['class'], r['arm']] + [str(c) for c in r['per_day']] + [str(r['total'])] for r in rows]
+    img = generate_simple_table_image('Empty / Unassigned Slots', headers, table_rows,
+                                      col_widths=[1.3, 1, 0.7, 0.7, 0.7, 0.7, 0.7, 1],
+                                      quality='ultra', highlight_col=len(headers) - 1)
+    return image_to_response(img, f'empty_slots_{batch_id}.png')
+
+
+@generator_bp.route('/reports/unassigned/<batch_id>/pdf')
+@login_required
+def unassigned_report_pdf(batch_id):
+    from routes.generator.generation import _unassigned_rows
+
+    rows, _ = _unassigned_rows(batch_id)
+    headers = ['Class', 'Arm'] + [d[:3] for d in DAYS_OF_WEEK] + ['Total/Week']
+    table_rows = [[r['class'], r['arm']] + [str(c) for c in r['per_day']] + [str(r['total'])] for r in rows]
+    return _simple_table_pdf('Empty / Unassigned Slots', headers, table_rows,
+                             f'empty_slots_{batch_id}.pdf',
+                             col_widths=[1.3, 1, 0.7, 0.7, 0.7, 0.7, 0.7, 1],
+                             highlight_col=len(headers) - 1)
+
+
+@generator_bp.route('/reports/teacher-workload/<batch_id>/image')
+@login_required
+def teacher_workload_report_image(batch_id):
+    from routes.generator.generation import _teacher_workload
+    from routes.generator_image import generate_simple_table_image, image_to_response
+
+    workload = _teacher_workload(batch_id)
+    headers = ['Teacher'] + [d[:3] for d in DAYS_OF_WEEK] + ['Total', 'Max', 'Status']
+    table_rows = []
+    for data in workload.values():
+        status = 'OK' if data['total'] <= data['teacher'].max_periods_per_week else 'Overload'
+        table_rows.append([data['teacher'].name] + [str(data['per_day'][d]) for d in range(5)] +
+                          [str(data['total']), str(data['teacher'].max_periods_per_week), status])
+    img = generate_simple_table_image('Teacher Workload Report', headers, table_rows,
+                                      col_widths=[1.8, 0.6, 0.6, 0.6, 0.6, 0.6, 0.7, 0.6, 0.9],
+                                      quality='ultra', highlight_col=6)
+    return image_to_response(img, f'teacher_workload_{batch_id}.png')
+
+
+@generator_bp.route('/reports/teacher-workload/<batch_id>/pdf')
+@login_required
+def teacher_workload_report_pdf(batch_id):
+    from routes.generator.generation import _teacher_workload
+
+    workload = _teacher_workload(batch_id)
+    headers = ['Teacher'] + [d[:3] for d in DAYS_OF_WEEK] + ['Total', 'Max', 'Status']
+    table_rows = []
+    for data in workload.values():
+        status = 'OK' if data['total'] <= data['teacher'].max_periods_per_week else 'Overload'
+        table_rows.append([data['teacher'].name] + [str(data['per_day'][d]) for d in range(5)] +
+                          [str(data['total']), str(data['teacher'].max_periods_per_week), status])
+    return _simple_table_pdf('Teacher Workload Report', headers, table_rows,
+                             f'teacher_workload_{batch_id}.pdf',
+                             col_widths=[1.8, 0.6, 0.6, 0.6, 0.6, 0.6, 0.7, 0.6, 0.9],
+                             highlight_col=6)

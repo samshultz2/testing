@@ -562,9 +562,9 @@ def period_count_report(batch_id):
     )
 
 
-@generator_bp.route('/reports/teacher-workload/<batch_id>')
-@login_required
-def teacher_workload_report(batch_id):
+def _teacher_workload(batch_id):
+    """Per-teacher weekly load for a batch: {teacher_id: {teacher, total,
+    per_day: {0..4: count}, classes: set of "Class Arm" strings}}."""
     results = GenTimetableResult.query.filter_by(batch_id=batch_id, branch_id=gen_bid()).all()
     workload = {}
     for r in results:
@@ -577,7 +577,13 @@ def teacher_workload_report(batch_id):
             workload[r.teacher_id]['total'] += 1
             workload[r.teacher_id]['per_day'][r.day_of_week] += 1
             workload[r.teacher_id]['classes'].add(f"{r.class_name} {r.arm_name}")
-    
+    return workload
+
+
+@generator_bp.route('/reports/teacher-workload/<batch_id>')
+@login_required
+def teacher_workload_report(batch_id):
+    workload = _teacher_workload(batch_id)
     return render_template('generator/report_teacher_workload.html',
         batch_id=batch_id, workload=workload, days=DAYS_OF_WEEK
     )
@@ -613,30 +619,46 @@ def clash_report(batch_id):
     return render_template('generator/report_clashes.html', batch_id=batch_id, clashes=clashes)
 
 
-@generator_bp.route('/reports/unassigned/<batch_id>')
-@login_required
-def unassigned_report(batch_id):
+def _unassigned_rows(batch_id):
+    """Empty-slot counts for a batch, one row per class-arm: a count for
+    each weekday plus the weekly total. Every period from 1..periods_per_day
+    is a real teaching slot — the break sits *between* two period numbers,
+    it doesn't consume one — so all of them count toward "empty" if unfilled.
+    (A previous version skipped the period right before the break entirely,
+    silently undercounting.) Returns (rows, periods_per_day) — rows sorted
+    by class then arm, each {'class', 'arm', 'per_day': [Mon..Fri], 'total'}."""
     results = GenTimetableResult.query.filter_by(batch_id=batch_id, branch_id=gen_bid()).all()
     # A batch belongs to one school level — read the rules for that level
     # specifically (not whichever level tab happens to be open right now),
-    # since periods_per_day/break_after can differ between JSS and SSS.
+    # since periods_per_day can differ between JSS and SSS.
     level = results[0].school_level if results else get_current_level()
     rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(
         is_active=True, school_level=level, branch_id=gen_bid()).all()}
     periods_per_day = int(rules.get('periods_per_day', 8))
-    break_after = int(rules.get('break_after_period', 4))
-    
-    class_arms = set((r.class_name, r.arm_name) for r in results)
-    
-    empty = []
+
+    class_arms = sorted(set((r.class_name, r.arm_name) for r in results))
+
+    rows = []
     for cn, an in class_arms:
-        filled = {(r.day_of_week, r.period_number) for r in results if r.class_name == cn and r.arm_name == an}
+        filled = {(r.day_of_week, r.period_number) for r in results
+                 if r.class_name == cn and r.arm_name == an}
+        per_day = []
         for day in range(5):
-            for period in range(1, periods_per_day + 1):
-                if period != break_after and (day, period) not in filled:
-                    empty.append({'class': cn, 'arm': an, 'day': DAYS_OF_WEEK[day], 'period': period})
-    
-    return render_template('generator/report_unassigned.html', batch_id=batch_id, empty_slots=empty)
+            count = sum(1 for period in range(1, periods_per_day + 1)
+                       if (day, period) not in filled)
+            per_day.append(count)
+        rows.append({'class': cn, 'arm': an, 'per_day': per_day, 'total': sum(per_day)})
+    return rows, periods_per_day
+
+
+@generator_bp.route('/reports/unassigned/<batch_id>')
+@login_required
+def unassigned_report(batch_id):
+    rows, periods_per_day = _unassigned_rows(batch_id)
+    grand_total = sum(r['total'] for r in rows)
+    return render_template('generator/report_unassigned.html', batch_id=batch_id,
+        rows=rows, days=DAYS_OF_WEEK, grand_total=grand_total,
+        periods_per_day=periods_per_day)
 
 
 @generator_bp.route('/teacher-timetable')
@@ -653,15 +675,19 @@ def teacher_timetable():
     teachers = GenTeacher.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).order_by(GenTeacher.name).all()
     
     if not batch_id:
-        latest = GenTimetableResult.query.filter_by(branch_id=gen_bid()).order_by(GenTimetableResult.generated_at.desc()).first()
-        if latest:
-            batch_id = latest.batch_id
-    
+        from models import ActiveTimetableBatch
+        from utils.branch_scope import viewing_branch_id
+        batch_id = ActiveTimetableBatch.active_batch_id(viewing_branch_id(), level)
+        if not batch_id:
+            latest = GenTimetableResult.query.filter_by(branch_id=gen_bid()).order_by(GenTimetableResult.generated_at.desc()).first()
+            if latest:
+                batch_id = latest.batch_id
+
     batches = db.session.query(
         GenTimetableResult.batch_id,
         db.func.min(GenTimetableResult.generated_at).label('generated_at')
     ).filter(GenTimetableResult.branch_id == gen_bid()).group_by(GenTimetableResult.batch_id).order_by(db.desc('generated_at')).all()
-    
+
     teacher_grid = None
     selected_teacher = None
     total_periods = 0

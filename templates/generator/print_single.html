@@ -31,6 +31,8 @@
 
 <div class="page-header-actions mb-3">
     <button data-print class="btn btn-primary btn-lg"><i class="fas fa-print"></i> Print</button>
+    <a href="{{ url_for('generator.print_single_timetable_pdf', batch_id=batch_id, class_name=class_name, arm_name=arm_name, teachers=1) }}" class="btn btn-danger"><i class="fas fa-file-pdf"></i> PDF (with Teachers)</a>
+    <a href="{{ url_for('generator.print_single_timetable_pdf', batch_id=batch_id, class_name=class_name, arm_name=arm_name, teachers=0) }}" class="btn btn-light"><i class="fas fa-file-pdf"></i> PDF (no Teachers)</a>
     <a href="{{ url_for('generator.view_results', batch_id=batch_id) }}" class="btn btn-secondary">Back</a>
 </div>
 

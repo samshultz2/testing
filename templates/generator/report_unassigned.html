@@ -4,28 +4,36 @@
 {% block content %}
 <div class="page-header">
     <h1>Empty/Unassigned Slots</h1>
+    <div class="page-header-actions">
+        <a href="{{ url_for('generator.unassigned_report_image', batch_id=batch_id) }}" class="btn btn-info"><i class="fas fa-image"></i> Image (HD)</a>
+        <a href="{{ url_for('generator.unassigned_report_pdf', batch_id=batch_id) }}" class="btn btn-danger"><i class="fas fa-file-pdf"></i> PDF</a>
+    </div>
 </div>
 
-{% if empty_slots %}
+{% if rows %}
 <div class="card">
-    <div class="card-header" style="background: #fff3cd;"><h3><i class="fas fa-calendar-times"></i> {{ empty_slots|length }} Empty Slot(s)</h3></div>
-    <div class="card-body" style="padding: 0;">
+    <div class="card-header" style="background: #fff3cd;"><h3><i class="fas fa-calendar-times"></i> {{ grand_total }} Empty Slot(s) across {{ rows|length }} class-arm(s)</h3></div>
+    <div class="card-body" style="padding: 0; overflow-x: auto;">
         <table class="data-table">
             <thead>
                 <tr>
                     <th>Class</th>
                     <th>Arm</th>
-                    <th>Day</th>
-                    <th>Period</th>
+                    {% for day in days %}
+                    <th style="text-align: center;">{{ day[:3] }}</th>
+                    {% endfor %}
+                    <th style="text-align: center;">Total / Week</th>
                 </tr>
             </thead>
             <tbody>
-                {% for slot in empty_slots %}
+                {% for row in rows %}
                 <tr>
-                    <td>{{ slot.class }}</td>
-                    <td>{{ slot.arm }}</td>
-                    <td>{{ slot.day }}</td>
-                    <td>{{ slot.period }}</td>
+                    <td><strong>{{ row.class }}</strong></td>
+                    <td>{{ row.arm }}</td>
+                    {% for count in row.per_day %}
+                    <td style="text-align: center; {% if count > 0 %}color: var(--warn, #b45309);{% endif %}">{{ count }}</td>
+                    {% endfor %}
+                    <td style="text-align: center;"><strong>{{ row.total }}</strong></td>
                 </tr>
                 {% endfor %}
             </tbody>
