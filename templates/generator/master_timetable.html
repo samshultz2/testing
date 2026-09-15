@@ -37,6 +37,21 @@
                     {% endfor %}
                 </select>
             </div>
+            {% if batch_arms %}
+            <div class="form-group" style="flex-basis: 100%;">
+                <label class="form-label">Include class-arms</label>
+                <div class="checkbox-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 0.4rem;">
+                    {% for a in batch_arms %}
+                    {% set token = a.class_name ~ '|' ~ a.arm_name %}
+                    <label class="checkbox-label" style="padding: 0.3rem 0.6rem; background: var(--bg-tertiary); border-radius: var(--border-radius-sm); font-weight: normal;">
+                        <input type="checkbox" name="arm" value="{{ token }}" {% if not selected_arms or token in selected_arms %}checked{% endif %}>
+                        <span>{{ a.class_name }} {{ a.arm_name }}</span>
+                    </label>
+                    {% endfor %}
+                </div>
+                <p class="text-muted text-sm" style="margin: 0.4rem 0 0;">Uncheck a combined class's other arm and its co-scheduled subject still shows, e.g. "Accounting / CRS", on the arm you kept.</p>
+            </div>
+            {% endif %}
             <div class="form-group">
                 <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> View</button>
             </div>

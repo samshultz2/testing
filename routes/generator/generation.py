@@ -776,22 +776,39 @@ def master_timetable():
     rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, branch_id=gen_bid()).all()}
     
     master_data = []
+    batch_arms = []
     if batch_id:
-        results = GenTimetableResult.query.filter_by(
+        # The full class-arm list for this batch (day/period-independent), so
+        # the arm-exclude checkboxes stay stable as the user browses different
+        # slots — not just whichever arms happen to have a period right now.
+        batch_arms = [
+            {'class_name': cn, 'arm_name': an} for cn, an in
+            db.session.query(GenTimetableResult.class_name, GenTimetableResult.arm_name)
+            .filter_by(batch_id=batch_id, branch_id=gen_bid()).distinct()
+            .order_by(GenTimetableResult.class_name, GenTimetableResult.arm_name).all()
+        ]
+
+        all_results = GenTimetableResult.query.filter_by(
             batch_id=batch_id, day_of_week=selected_day, period_number=selected_period, branch_id=gen_bid()
         ).order_by(GenTimetableResult.class_name, GenTimetableResult.arm_name).all()
-        
+        results = filter_results_by_arm(all_results)
+        annotate_coschedule_pairs(all_results, results)
+
         for r in results:
+            subject_label = r.subject.name if r.subject else '-'
+            if r.coschedule_pair:
+                subject_label += ' / ' + r.coschedule_pair.name
             master_data.append({
                 'class_name': r.class_name, 'arm_name': r.arm_name,
-                'subject': r.subject.name if r.subject else '-',
+                'subject': subject_label,
                 'teacher': r.teacher.name if r.teacher else '-'
             })
-    
+
     return render_template('generator/master_timetable.html',
         batches=batches, batch_id=batch_id,
         selected_day=selected_day, selected_period=selected_period,
         periods_per_day=int(rules.get('periods_per_day', 8)),
         break_after_period=int(rules.get('break_after_period', 4)),
-        days=DAYS_OF_WEEK, master_data=master_data
+        days=DAYS_OF_WEEK, master_data=master_data, batch_arms=batch_arms,
+        selected_arms=set(request.args.getlist('arm'))
     )

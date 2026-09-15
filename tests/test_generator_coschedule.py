@@ -411,3 +411,30 @@ def test_export_by_day_pdf_shows_coschedule_pair(app):
     assert r.status_code == 200
     assert r.mimetype == 'application/pdf'
     assert len(r.data) > 500
+
+
+def test_master_timetable_shows_coschedule_pair_when_other_arm_excluded(app):
+    batch_id = _seed_coscheduled_pair(app, 'O')
+    c = _admin(app)
+
+    # Both arms included (default, no ?arm= at all): each keeps its own
+    # subject, no annotation needed since the other arm already has a row.
+    r_all = c.get(f'/generator/master-timetable?batch_id={batch_id}&day=0&period=1')
+    assert r_all.status_code == 200
+    body_all = r_all.get_data(as_text=True)
+    assert 'ZzIrisO' in body_all   # Iris still has its own row
+    assert 'ZzLiteratureO / ZzAccountingO' not in body_all
+
+    # Daisy only: Daisy's row should now show both subjects, Iris's own
+    # results row is gone (it still legitimately appears in the checkbox
+    # panel, just unchecked, so check the results table specifically).
+    r_daisy = c.get(f'/generator/master-timetable?batch_id={batch_id}&day=0&period=1&arm=ZzSSS2O|ZzDaisyO')
+    assert r_daisy.status_code == 200
+    body_daisy = r_daisy.get_data(as_text=True)
+    assert '<strong>ZzSSS2O ZzDaisyO</strong>' in body_daisy
+    assert '<strong>ZzSSS2O ZzIrisO</strong>' not in body_daisy
+    assert 'ZzLiteratureO / ZzAccountingO' in body_daisy
+
+    # The checkbox panel lists both arms regardless of which slot is viewed.
+    assert 'name="arm" value="ZzSSS2O|ZzDaisyO"' in body_daisy
+    assert 'name="arm" value="ZzSSS2O|ZzIrisO"' in body_daisy
