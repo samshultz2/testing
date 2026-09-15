@@ -6,7 +6,7 @@ period 1 by the existing not_first_period rule (nothing to cap)."""
 from config import Config
 from models import (
     db, Branch, GenClassConfig, GenSubject, GenClassSubjectConfig, GenTeacher,
-    GenTeacherAssignment, GenTeacherAvailability, GenTimetableResult,
+    GenTeacherAssignment, GenTeacherAvailability, GenTimetableResult, GenTimetableRule,
 )
 from tests.conftest import login_token
 
@@ -151,3 +151,52 @@ def test_first_period_cap_skips_subjects_already_banned_from_period_one(app):
         rows = GenTimetableResult.query.filter_by(class_name='ZzSSS2S').all()
         assert len(rows) == 3
         assert all(row.period_number != 1 for row in rows)
+
+
+def test_first_period_cap_is_togglable_off(app):
+    """The exact scenario that's infeasible with the cap on (see
+    test_first_period_repeat_is_infeasible_when_no_other_slot_exists) should
+    succeed once the "first_period_no_repeat" rule is turned off — letting a
+    school route around it without Claude/a developer's help."""
+    cc_id, geo_id = _build_class_with_p1_only_teacher(app, 'T', periods_per_week=2)
+    with app.app_context():
+        bid = Branch.get_default().id
+        db.session.add(GenTimetableRule(
+            branch_id=bid, rule_type='first_period_no_repeat', value='false',
+            school_level='sss', is_active=True))
+        db.session.commit()
+
+    c = _admin(app)
+    r = _post(c, '/generator/generate/ortools', **{'class_ids[]': cc_id},
+             time_limit='15', periods_per_day='6')
+    assert r.status_code == 302
+
+    with app.app_context():
+        rows = GenTimetableResult.query.filter_by(class_name='ZzSSS2T', subject_id=geo_id).all()
+        assert len(rows) == 2, 'expected generation to succeed once the cap is turned off'
+        # With the cap off, both periods land in period 1 (the teacher's only
+        # available slot) — confirming the toggle genuinely disabled the cap
+        # rather than the solver happening to avoid the trap another way.
+        assert all(row.period_number == 1 for row in rows)
+
+
+def test_rules_config_saves_first_period_no_repeat_toggle(app):
+    c = _admin(app)
+    level = 'sss'
+    with app.app_context():
+        from utils.branch_scope import default_branch_id
+        bid = default_branch_id()
+
+    r = _post(c, '/generator/rules/save', first_period_no_repeat='')  # unchecked
+    assert r.status_code == 302
+    with app.app_context():
+        rule = GenTimetableRule.query.filter_by(
+            rule_type='first_period_no_repeat', school_level=level, branch_id=bid).first()
+        assert rule is not None and rule.value == 'false'
+
+    r2 = _post(c, '/generator/rules/save', first_period_no_repeat='on')
+    assert r2.status_code == 302
+    with app.app_context():
+        rule2 = GenTimetableRule.query.filter_by(
+            rule_type='first_period_no_repeat', school_level=level, branch_id=bid).first()
+        assert rule2.value == 'true'

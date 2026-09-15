@@ -333,9 +333,11 @@ def run_ortools_generation():
         # Run OR-Tools solver
         # Get break_after from rules
         break_after = int(rules.get('break_after_period', 5))
-        
+        first_period_no_repeat = rules.get('first_period_no_repeat', 'true') == 'true'
+
         # Run OR-Tools solver
-        result = generate_with_ortools(class_ids, periods_per_day, time_limit, break_after)
+        result = generate_with_ortools(class_ids, periods_per_day, time_limit, break_after,
+                                       first_period_no_repeat=first_period_no_repeat)
         
         if not result['success']:
             detail = ' '.join(result.get('reasons') or [])

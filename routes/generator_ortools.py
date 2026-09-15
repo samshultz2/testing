@@ -124,7 +124,8 @@ def diagnose_infeasibility(class_arms, requirements, teachers, teacher_reqs, tea
     return reasons
 
 
-def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_after=4):
+def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_after=4,
+                          first_period_no_repeat=True):
     """
     Generate timetable using OR-Tools constraint programming solver.
     """
@@ -409,18 +410,24 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
     # opener too. Skipped for subjects already fully banned from period 1
     # (not_first_period, Constraint 6 above) since they can never be there
     # at all, and for single-period subjects where there's nothing to repeat.
-    logger.debug("Adding first-period no-repeat constraint...")
-    first_period_slots = [day * num_periods for day in range(num_days)]
+    # Togglable (default on) via the "first_period_no_repeat" rule setting —
+    # if it ever makes an otherwise-fine load infeasible, turning it off
+    # here lets that school generate as before rather than getting stuck.
     first_period_cap_count = 0
-    for key, info in subject_info.items():
-        if info['not_first_period']:
-            continue
-        reqs = subject_ca_reqs[key]
-        if len(reqs) <= 1:
-            continue
-        model.Add(sum(x[r['req_id'], slot] for r in reqs for slot in first_period_slots) <= 1)
-        first_period_cap_count += 1
-    logger.debug(f"  Added {first_period_cap_count} first-period no-repeat caps")
+    if first_period_no_repeat:
+        logger.debug("Adding first-period no-repeat constraint...")
+        first_period_slots = [day * num_periods for day in range(num_days)]
+        for key, info in subject_info.items():
+            if info['not_first_period']:
+                continue
+            reqs = subject_ca_reqs[key]
+            if len(reqs) <= 1:
+                continue
+            model.Add(sum(x[r['req_id'], slot] for r in reqs for slot in first_period_slots) <= 1)
+            first_period_cap_count += 1
+        logger.debug(f"  Added {first_period_cap_count} first-period no-repeat caps")
+    else:
+        logger.debug("First-period no-repeat constraint disabled by setting")
 
     # Constraint 7: No subject spanning break
     logger.debug(f"Adding no-subject-spanning-break constraint (break after P{break_after})...")
@@ -859,7 +866,9 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
             active_rules.append('not-first/not-last period restrictions on some subjects')
         if first_period_cap_count:
             active_rules.append(f'{first_period_cap_count} first-period no-repeat cap(s) '
-                                f'(a subject can only open the day once a week)')
+                                f'(a subject can only open the day once a week — turn off "A subject '
+                                f'can open the day on at most one day a week" in Timetable Rules if '
+                                f'this is the blocker)')
         if any(info['needs_double'] for info in subject_info.values()):
             active_rules.append('double-period placement for some subjects')
         multi_subject_teachers = sum(1 for reqs in teacher_classarm_reqs.values()

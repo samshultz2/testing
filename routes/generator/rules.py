@@ -31,6 +31,7 @@ def save_rules():
             ('no_repeat_same_day', 'true' if request.form.get('no_repeat_same_day') == 'on' else 'false'),
             ('max_consecutive', request.form.get('max_consecutive', '3')),
             ('distribute_evenly', 'true' if request.form.get('distribute_evenly') == 'on' else 'false'),
+            ('first_period_no_repeat', 'true' if request.form.get('first_period_no_repeat') == 'on' else 'false'),
         ]
         
         for rule_type, value in rules_to_save:
