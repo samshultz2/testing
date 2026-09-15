@@ -38,6 +38,34 @@ def test_client_error_endpoint_is_csrf_exempt_and_logged(app):
         assert any(e['kind'] == 'client' for e in errs)
 
 
+def test_unhandled_exception_is_recorded_via_signal(app):
+    """Regression: the got_request_exception receiver used to be connected
+    with blinker's default weak=True, and nothing else held a reference to
+    that closure — so it was garbage-collected right after
+    register_error_handlers() returned (often before the first request),
+    silently unregistering itself. A real unhandled exception was then never
+    recorded at all; only /client-error (a normal route, not signal-based)
+    kept working, which masked the bug.
+
+    Exercised the way Flask itself fires it (got_request_exception.send from
+    inside a request), rather than adding a new route — the app fixture is
+    session-scoped and other tests have already made it handle its first
+    request, so new routes can no longer be registered on it."""
+    from flask.signals import got_request_exception
+    assert got_request_exception.has_receivers_for(app)
+
+    from utils.error_tracking import recent_errors, clear_errors
+    with app.app_context():
+        clear_errors()
+
+    with app.test_request_context('/__signal_test'):
+        got_request_exception.send(app, exception=RuntimeError('boom-for-test'))
+
+    with app.app_context():
+        errs = recent_errors()
+        assert any('boom-for-test' in e['message'] and e['kind'] == 'server' for e in errs)
+
+
 def test_error_log_view_central_admin_only(app):
     from utils.error_tracking import record_error
     with app.app_context():

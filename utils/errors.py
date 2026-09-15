@@ -31,7 +31,14 @@ def register_error_handlers(app):
                          user=_current_user(), detail=traceback.format_exc())
         except Exception:
             pass
-    got_request_exception.connect(_log_exception, app)
+    # weak=False: by default blinker keeps only a WEAK reference to the
+    # receiver, and nothing else holds one to this closure — so without
+    # weak=False it gets garbage-collected right after this function
+    # returns (often before the first request), silently unregistering
+    # itself. That meant no server-side exception was ever actually
+    # recorded; keep a strong reference on the app too, belt-and-braces.
+    got_request_exception.connect(_log_exception, app, weak=False)
+    app._error_log_exception_receiver = _log_exception
 
     @app.errorhandler(400)
     def bad_request(e):
