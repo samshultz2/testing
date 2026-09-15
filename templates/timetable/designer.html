@@ -158,6 +158,19 @@
 .tt-sheet[data-theme="classic"] th,.tt-sheet[data-theme="classic"] td{border:1px solid #222}
 .tt-sheet[data-theme="classic"] th{background:#f0f0f0;text-transform:uppercase;font-size:.82rem;letter-spacing:.5px}
 
+/* print — bold sans-serif, grey header, thick black borders, striped rows
+   (a common printed-roster look: heavier and more legible than Classic's
+   serif borders, with row banding Classic doesn't have). */
+.tt-sheet[data-theme="print"]{font-family:'Arial Black',Arial,'Segoe UI',system-ui,sans-serif}
+.tt-sheet[data-theme="print"] th,.tt-sheet[data-theme="print"] td{border:2px solid #000;font-weight:800}
+.tt-sheet[data-theme="print"] th{text-transform:uppercase;letter-spacing:.5px;color:#000}
+.tt-sheet[data-theme="print"] thead th{background:#e8e8e8}
+.tt-sheet[data-theme="print"] tbody tr:nth-child(even) th,
+.tt-sheet[data-theme="print"] tbody tr:nth-child(even) td{background:#f0f0f0}
+.tt-sheet[data-theme="print"] tbody tr:nth-child(odd) th,
+.tt-sheet[data-theme="print"] tbody tr:nth-child(odd) td{background:#fff}
+.tt-sheet[data-theme="print"] .tt-school{color:#000;font-weight:900}
+
 .tt-sheet[data-theme="modern"]{font-family:'Segoe UI',system-ui,sans-serif}
 .tt-sheet[data-theme="modern"] th{background:#0f766e;color:#fff;border:1px solid #115e59}
 .tt-sheet[data-theme="modern"] td{border:1px solid #e2e8f0}
@@ -364,6 +377,7 @@
                 <label class="form-label">Design theme</label>
                 <select id="theme" class="form-control">
                     <option value="classic">Classic (bordered, serif)</option>
+                    <option value="print">Print (bold sans, grey header, striped)</option>
                     <option value="modern" selected>Modern (teal header)</option>
                     <option value="colour">Colourful (indigo, striped)</option>
                     <option value="minimal">Minimal (clean lines)</option>
