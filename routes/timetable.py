@@ -302,13 +302,15 @@ def index():
     if selected_assignment and form_scope is not None and selected_assignment.id not in form_scope:
         selected_assignment = None   # not this teacher's form class
     
-    # Self-heal any TimetableSlot left with a time/order mismatch by a
-    # historical extension bug (see utils/timetable_slots.py) — cheap and
-    # idempotent, so a plain page view fixes a stale display for an admin
-    # without needing them to re-apply a generator batch.
-    if is_admin() or can_write_module('timetable'):
-        from utils.timetable_slots import repair_slot_schedule
-        repair_slot_schedule()
+    # This page is a pure read/display layer: TimetableSlot (period times and
+    # break placement) is already correct by the time it gets here — the
+    # generator's "Apply to class timetables" step (routes/generator/
+    # __init__.py:_apply_batch) is what owns and repairs that shared config,
+    # via repair_slot_schedule(), before writing any ClassTimetable rows. A
+    # view/print route re-running that repair on every request used to mutate
+    # the same shared, cross-class table as a side effect of just looking at
+    # a timetable — which is what actually scrambled real class periods in
+    # production earlier. Read-only from here on: no repair, no rewrite.
 
     # Get timetable slots — scoped to what this class's own timetable uses.
     slots = _slots_for_assignment(assignment_id)
@@ -625,10 +627,9 @@ def print_timetable(assignment_id):
     require_branch_access(assignment.branch_id)   # no cross-branch timetable PDF
     include_teachers = request.args.get('teachers') == '1'
 
-    if is_admin() or can_write_module('timetable'):
-        from utils.timetable_slots import repair_slot_schedule
-        repair_slot_schedule()
-
+    # Pure read/display, same as index() above — no repair_slot_schedule()
+    # call here. TimetableSlot is already correct from the generator's apply
+    # step; a PDF request shouldn't be mutating shared, cross-class config.
     slots = _slots_for_assignment(assignment_id)
     entries = ClassTimetable.query.filter_by(
         class_arm_assignment_id=assignment_id, is_active=True).all()

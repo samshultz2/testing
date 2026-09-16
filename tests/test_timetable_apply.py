@@ -176,3 +176,43 @@ def test_apply_replaces_existing_entries(app):
         rows = ClassTimetable.query.filter_by(class_arm_assignment_id=ids['caa']).all()
         assert all(r.teacher_name != 'STALE' for r in rows)   # stale entry replaced
         assert len(rows) == 2
+
+
+def test_display_and_pdf_never_mutate_shared_slot_schedule(app):
+    """/timetable/ (the class view) and /timetable/print/<id> (its PDF) must
+    be a pure read layer: TimetableSlot's period times/order/break-position
+    are the generator apply step's responsibility (repair_slot_schedule(),
+    off-limits generator code) via _apply_batch — the display/PDF routes
+    must never call it themselves. Regression for the production incident
+    where a routine page view rewrote real class periods' clock times."""
+    ids = _setup(app)
+    client = _admin(app)
+    page = client.get(f'/generator/results/{ids["batch"]}').get_data(as_text=True)
+    token = re.search(r'name="csrf-token" content="([0-9a-f]+)"', page).group(1)
+    client.post(f'/generator/results/{ids["batch"]}/apply', data={'_csrf_token': token})
+
+    with app.app_context():
+        # Deliberately leave a break in a state repair_slot_schedule() WOULD
+        # fix: after_period=1 declares it belongs right after period 1 ends
+        # (09:40), but its stored time/order disagree. If the display or PDF
+        # route still called repair, this would get silently rewritten.
+        db.session.add(TimetableSlot(
+            slot_number=99, name='Break', is_break=True,
+            start_time=time(11, 0), end_time=time(11, 15),
+            order=99, after_period=1, is_active=True))
+        db.session.commit()
+        before = TimetableSlot.query.filter_by(slot_number=99).first()
+        before_state = (before.start_time, before.end_time, before.order)
+        caa = ClassArmAssignment.query.get(ids['caa'])
+        term_id, caa_id = caa.term_id, caa.id
+
+    client.get(f'/timetable/?term_id={term_id}&assignment_id={caa_id}')
+    with app.app_context():
+        s = TimetableSlot.query.filter_by(slot_number=99).first()
+        assert (s.start_time, s.end_time, s.order) == before_state
+
+    r = client.get(f'/timetable/print/{caa_id}')
+    assert r.status_code == 200
+    with app.app_context():
+        s = TimetableSlot.query.filter_by(slot_number=99).first()
+        assert (s.start_time, s.end_time, s.order) == before_state
