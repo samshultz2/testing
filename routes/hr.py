@@ -366,6 +366,19 @@ def staff_detail(staff_id):
     from utils.comms import normalise_phone
     today = timeutil.today()
     contract_left = s.contract_days_left
+
+    # Lateness breakdown month: any month/year via ?ym=YYYY-MM, defaulting to
+    # LAST month (this month is usually still in progress, so "last month" is
+    # the first fully-complete month to review).
+    last_y, last_m = (today.year, today.month - 1) if today.month > 1 else (today.year - 1, 12)
+    try:
+        ym_y, ym_m = (int(x) for x in (request.args.get('ym') or '').split('-', 1))
+        if not (1 <= ym_m <= 12):
+            raise ValueError
+        sel_year, sel_month = ym_y, ym_m
+    except ValueError:
+        sel_year, sel_month = last_y, last_m
+    late_breakdown_date = date(sel_year, sel_month, 1)
     return _render({
         'page': 'staff_detail', 'nav': _nav_urls(), 'is_admin': _is_admin(),
         'today': today.isoformat(), 'leave_types': hr.LEAVE_TYPES,
@@ -397,6 +410,10 @@ def staff_detail(staff_id):
         'teaching_load': hr.teaching_load(s),
         'attendance_summary': hr.attendance_summary(s.id, today.year, today.month),
         'attendance_month': today.strftime('%B %Y'),
+        'late_breakdown': hr.late_days_breakdown(s.id, sel_year, sel_month),
+        'late_breakdown_ym': late_breakdown_date.strftime('%Y-%m'),
+        'late_breakdown_label': late_breakdown_date.strftime('%B %Y'),
+        'late_rate': hr.get_settings()['late_rate'],
         'leave_summary': hr.leave_summary(s.id, today.year),
         'leave_balances': hr.leave_balances(s.id, today.year),
         'timeline': hr.build_timeline(s),

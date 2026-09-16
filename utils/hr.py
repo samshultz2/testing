@@ -698,6 +698,30 @@ def attendance_summary(staff_id, year, month):
     return out
 
 
+def late_days_breakdown(staff_id, year, month):
+    """Day-by-day lateness for one staff member in one month: date, clock-in,
+    minutes late and cost per day, plus the month's totals. Powers the
+    lateness breakdown on the staff detail page — every figure here (minutes
+    late, cost) is exactly what was already computed and stored on each
+    StaffAttendance row by compute_attendance() when the day was marked."""
+    rows = (StaffAttendance.query.filter(
+        StaffAttendance.staff_id == staff_id,
+        extract('year', StaffAttendance.date) == year,
+        extract('month', StaffAttendance.date) == month,
+        StaffAttendance.status == 'Late',
+        StaffAttendance.minutes_late > 0)
+        .order_by(StaffAttendance.date).all())
+    days = [{'date': a.date.isoformat(), 'date_label': a.date.strftime('%a, %d %b'),
+             'clock_in': a.clock_in or '', 'minutes_late': a.minutes_late or 0,
+             'deduction': round(a.deduction or 0, 2)} for a in rows]
+    return {
+        'days': days,
+        'days_late': len(days),
+        'total_minutes': sum(d['minutes_late'] for d in days),
+        'total_deduction': round(sum(d['deduction'] for d in days), 2),
+    }
+
+
 def leave_summary(staff_id, year):
     """Approved leave days taken this year (by type) plus a pending count."""
     approved = (LeaveRecord.query.filter(

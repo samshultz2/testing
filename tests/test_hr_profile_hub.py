@@ -149,3 +149,66 @@ def test_teaching_load_none_for_unlinked_staff(app):
         s = StaffMember(staff_id='NOLNK1', first_name='No', surname='Link', is_active=True)
         db.session.add(s); db.session.commit()
         assert hr_utils.teaching_load(s) is None
+
+
+# --- lateness breakdown ------------------------------------------------------
+def test_late_days_breakdown_returns_day_rows_and_totals(app):
+    from utils import hr as hr_utils
+    with app.app_context():
+        s = StaffMember(staff_id='LATE1', first_name='Late', surname='Zztest', is_active=True)
+        db.session.add(s); db.session.flush()
+        db.session.add_all([
+            StaffAttendance(staff_id=s.id, date=date(2025, 3, 3), status='Late',
+                            clock_in='07:45', minutes_late=15, deduction=150),
+            StaffAttendance(staff_id=s.id, date=date(2025, 3, 10), status='Late',
+                            clock_in='08:05', minutes_late=35, deduction=350),
+            # a Present day and an Absent day in the same month must NOT appear
+            StaffAttendance(staff_id=s.id, date=date(2025, 3, 4), status='Present'),
+            StaffAttendance(staff_id=s.id, date=date(2025, 3, 5), status='Absent', deduction=500),
+            # a different month must not leak in
+            StaffAttendance(staff_id=s.id, date=date(2025, 4, 1), status='Late',
+                            clock_in='08:00', minutes_late=30, deduction=300),
+        ])
+        db.session.commit()
+        out = hr_utils.late_days_breakdown(s.id, 2025, 3)
+        assert out['days_late'] == 2
+        assert [d['date'] for d in out['days']] == ['2025-03-03', '2025-03-10']  # ordered
+        assert out['days'][0] == {'date': '2025-03-03', 'date_label': 'Mon, 03 Mar',
+                                  'clock_in': '07:45', 'minutes_late': 15, 'deduction': 150}
+        assert out['total_minutes'] == 50
+        assert out['total_deduction'] == 500.0
+
+
+def test_late_days_breakdown_empty_month(app):
+    from utils import hr as hr_utils
+    with app.app_context():
+        s = StaffMember(staff_id='LATE2', first_name='Never', surname='Late', is_active=True)
+        db.session.add(s); db.session.commit()
+        out = hr_utils.late_days_breakdown(s.id, 2025, 3)
+        assert out == {'days': [], 'days_late': 0, 'total_minutes': 0, 'total_deduction': 0}
+
+
+def test_staff_detail_lateness_defaults_to_last_month_and_honours_ym(app):
+    with app.app_context():
+        s = StaffMember(staff_id='LATE3', first_name='Detail', surname='Zzlate', is_active=True)
+        db.session.add(s); db.session.flush()
+        db.session.add(StaffAttendance(staff_id=s.id, date=date(2025, 6, 12), status='Late',
+                                       clock_in='08:10', minutes_late=40, deduction=400))
+        db.session.commit()
+        sid = s.id
+    client = _admin(app)
+    # Explicit ?ym= picks that month regardless of "today".
+    r = client.get(f'/hr/staff/{sid}?ym=2025-06')
+    html = r.get_data(as_text=True)
+    assert '"late_breakdown_ym": "2025-06"' in html
+    assert '"minutes_late": 40' in html and '"deduction": 400.0' in html
+    assert '"total_minutes": 40' in html
+
+    # No ?ym= at all -> defaults to LAST month relative to real today, not
+    # this month and not the month we just seeded data for.
+    from utils import timeutil
+    today = timeutil.today()
+    last_y, last_m = (today.year, today.month - 1) if today.month > 1 else (today.year - 1, 12)
+    expected_ym = f'{last_y:04d}-{last_m:02d}'
+    r2 = client.get(f'/hr/staff/{sid}')
+    assert f'"late_breakdown_ym": "{expected_ym}"' in r2.get_data(as_text=True)

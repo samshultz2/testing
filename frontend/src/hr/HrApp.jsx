@@ -429,6 +429,45 @@ function ProfileHub({ d }) {
   );
 }
 
+function LatenessSection({ d }) {
+  const nav = useNav();
+  const lb = d.late_breakdown || { days: [], days_late: 0, total_minutes: 0, total_deduction: 0 };
+  return (
+    <div className="card mb-3">
+      <div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '.5rem' }}>
+        <h3><i aria-hidden="true" className="fas fa-clock" /> Lateness breakdown</h3>
+        <input type="month" className="form-control" style={{ width: 'auto' }} value={d.late_breakdown_ym}
+               onChange={(e) => e.target.value && navParams(nav.go, d.urls.self, { ym: e.target.value })} />
+      </div>
+      <div className="card-body">
+        <div className="hub-stat-row mb-2">
+          <div className="hub-stat"><div className="v text-warning">{lb.days_late}</div><div className="l">Days late</div></div>
+          <div className="hub-stat"><div className="v">{lb.total_minutes}</div><div className="l">Total minutes late</div></div>
+          <div className="hub-stat"><div className="v text-danger">{naira(lb.total_deduction)}</div><div className="l">Total cost</div></div>
+        </div>
+        {lb.days.length > 0 ? (
+          <table className="data-table no-mobile-scroll">
+            <thead><tr><th>Date</th><th>Clock-in</th><th className="text-right">Minutes late</th><th className="text-right">Cost</th></tr></thead>
+            <tbody>
+              {lb.days.map((r) => (
+                <tr key={r.date}>
+                  <td>{r.date_label}</td><td>{r.clock_in || '—'}</td>
+                  <td className="text-right">{r.minutes_late}</td><td className="text-right">{naira(r.deduction)}</td>
+                </tr>
+              ))}
+              <tr style={{ fontWeight: 700, borderTop: '2px solid var(--border-color)' }}>
+                <td colSpan={2}>Total</td>
+                <td className="text-right">{lb.total_minutes}</td>
+                <td className="text-right">{naira(lb.total_deduction)}</td>
+              </tr>
+            </tbody>
+          </table>
+        ) : <p className="text-muted text-sm mb-0">No lateness recorded for {d.late_breakdown_label}.</p>}
+      </div>
+    </div>
+  );
+}
+
 // ---- Staff detail ----------------------------------------------------------
 function StaffDetail({ d, notify }) {
   const nav = useNav();
@@ -480,6 +519,7 @@ function StaffDetail({ d, notify }) {
       )}
 
       <ProfileHub d={d} />
+      <LatenessSection d={d} />
 
       <div className="hr-2col">
         <div className="card"><div className="card-header"><h3>Details</h3></div><div className="card-body"><div className="info-grid">
