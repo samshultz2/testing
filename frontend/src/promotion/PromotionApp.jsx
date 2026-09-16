@@ -180,6 +180,13 @@ function Process({ d, notify }) {
       stream: bulk.action === 'promoted' && bulk.stream !== '' ? bulk.stream : r.stream,
     } : r)));
   };
+  // Quick path for "just this one student" (or a handful): tick their box(es),
+  // then this zeroes every other row to Skip in one click instead of having
+  // to flip each remaining row's dropdown by hand.
+  const skipUnselected = () => {
+    if (!sel.size) { notify('error', 'Select at least one student first.'); return; }
+    setRows((rs) => rs.map((r) => (sel.has(r.id) || r.isGrad ? r : { ...r, action: 'skip' })));
+  };
 
   const submit = async () => {
     setBusy(true);
@@ -229,7 +236,7 @@ function Process({ d, notify }) {
       {d.students.length ? (<>
         <div className="card mb-3"><div className="card-body">
           <p><strong>Promotion Threshold:</strong> {d.threshold}%</p>
-          <p className="text-muted">Rows are pre-filled with the recommended action — just review and <strong>Save Promotions</strong>, or adjust exceptions below.</p>
+          <p className="text-muted">Rows are pre-filled with the recommended action — just review and <strong>Save Promotions</strong>, or adjust exceptions below. To promote only a specific student or a subset, tick their checkbox(es) and use <strong>Only process selected (skip the rest)</strong>.</p>
           {(() => {
             const sum = rows.reduce((a, r) => { a[r.action] = (a[r.action] || 0) + 1; return a; }, {});
             const chip = (n, label, cls) => n ? <span className={'badge ' + cls} style={{ marginRight: '.4rem' }}>{n} {label}</span> : null;
@@ -258,6 +265,7 @@ function Process({ d, notify }) {
                 {bulkStreams.map((nm) => <option key={nm} value={nm}>{nm}</option>)}</select></div>
           </>)}
           <div className="form-group"><button type="button" className="btn btn-secondary" onClick={applyBulk}><i aria-hidden="true" className="fas fa-wand-magic-sparkles" /> Apply to selected</button></div>
+          <div className="form-group"><button type="button" className="btn btn-secondary" onClick={skipUnselected} title="Tick the student(s) to promote, then use this to skip everyone else"><i aria-hidden="true" className="fas fa-user-check" /> Only process selected (skip the rest)</button></div>
         </div></div></div>
 
         <div className="card">
