@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { postForm, submitJson } from '../lib/forms';
 import { useDraft } from '../lib/draft';
+import { compressPhoto } from '../lib/image';
 import { Banner } from '../components/ui';
 import { TextField, TextAreaField, SelectField, FormCard } from '../components/Form';
 
@@ -310,18 +311,25 @@ export default function StudentForm({ data }) {
 
   const urls = data.urls || {};
 
-  const onPhotoFile = (e) => {
+  const onPhotoFile = async (e) => {
     const file = e.target.files && e.target.files[0];
     e.target.value = '';                       // allow re-picking the same file
     if (!file) return;
-    if (file.size > 8 * 1024 * 1024) {
-      setBanner({ tone: 'error', text: 'That image is too large (max 8 MB).' });
+    if (!file.type.startsWith('image/')) {
+      setBanner({ tone: 'error', text: 'Please choose an image file.' });
       return;
     }
-    const rd = new FileReader();
-    rd.onload = () => set('photo', String(rd.result || ''));
-    rd.onerror = () => setBanner({ tone: 'error', text: 'Could not read that image.' });
-    rd.readAsDataURL(file);
+    // Sanity cap only — any real photo is downsized well below this by
+    // compressPhoto(); this just avoids the browser hanging on a bogus file.
+    if (file.size > 50 * 1024 * 1024) {
+      setBanner({ tone: 'error', text: 'That image is too large to process (max 50 MB).' });
+      return;
+    }
+    try {
+      set('photo', await compressPhoto(file));
+    } catch (err) {
+      setBanner({ tone: 'error', text: 'Could not read that image.' });
+    }
   };
 
   return (
@@ -523,7 +531,7 @@ export default function StudentForm({ data }) {
                   <input type="file" accept="image/png,image/jpeg,image/webp" onChange={onPhotoFile} style={{ display: 'none' }} />
                 </label>
                 {f.photo && <button type="button" className="sp-btn sp-btn-sm" style={{ marginLeft: '.4rem' }} onClick={() => set('photo', '')}><i aria-hidden="true" className="fas fa-times" /> Remove</button>}
-                <div className="text-muted" style={{ fontSize: '.75rem', marginTop: '.35rem' }}>JPG/PNG, up to 8 MB — auto-cropped to a passport photo and shown on the ID card.</div>
+                <div className="text-muted" style={{ fontSize: '.75rem', marginTop: '.35rem' }}>JPG/PNG — large photos are compressed automatically; auto-cropped to a passport photo and shown on the ID card.</div>
               </div>
             </div>
           </div>

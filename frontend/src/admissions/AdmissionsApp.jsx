@@ -4,6 +4,7 @@ import { submitJson } from '../lib/forms';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, Banner, PageHeader, Empty, SectionTabs, SectionShell, Table } from '../components/ui';
 import { canWrite } from '../lib/perms';
+import { compressPhoto } from '../lib/image';
 
 const Tabs = ({ d }) => { const { go } = useNav(); return <SectionTabs tabs={d.tabs} urls={d.urls} active={d.active} go={go} />; };
 
@@ -128,33 +129,6 @@ function Applicants({ d }) {
 }
 
 // ---- Applicant form --------------------------------------------------------
-// Resize + re-encode a photo client-side before it goes into the form's JSON
-// payload. A modern phone photo is routinely 8-20MB, which blows past both
-// the server's request-size cap and what a passport photo needs — instead of
-// rejecting those, always downscale to a generous resolution and re-encode as
-// a high-quality JPEG first. 1400px on the long side is far more detail than
-// the eventual ~480x600 passport crop needs, so there's no visible quality
-// loss; the result is typically a few hundred KB regardless of how large the
-// original file was.
-function compressPhoto(file, { maxDim = 1400, quality = 0.9 } = {}) {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
-      const w = Math.max(1, Math.round(img.width * scale));
-      const h = Math.max(1, Math.round(img.height * scale));
-      const canvas = document.createElement('canvas');
-      canvas.width = w; canvas.height = h;
-      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-      resolve(canvas.toDataURL('image/jpeg', quality));
-    };
-    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('load-failed')); };
-    img.src = url;
-  });
-}
-
 function ApplicantForm({ d, notify }) {
   const nav = useNav();
   const a = d.applicant || {};

@@ -56,3 +56,38 @@ def test_photo_upload_store_serve_and_on_id_card(app):
     assert r2.status_code == 200
     with app.app_context():
         assert StudentPhoto.query.filter_by(student_id=sid).first() is None
+
+
+def test_oversize_photo_is_compressed_not_rejected(app):
+    """A raw upload above the old fixed 8MB cap must be automatically
+    downscaled/compressed rather than rejected outright — same fix as
+    applicants (see test_applicant_fields_photo.py), applied to the shared
+    utils/student_photo._process() pipeline and MAX_FORM_MEMORY_SIZE."""
+    import os
+    from PIL import Image
+    with app.app_context():
+        s = Student(student_id='PICBIG', first_name='Big', surname='Photo',
+                    gender='Female', is_active=True)
+        db.session.add(s); db.session.commit()
+        sid = s.id
+
+    w, h = 1500, 2000
+    raw_pixels = os.urandom(w * h * 3)   # random noise resists PNG compression
+    im = Image.frombytes('RGB', (w, h), raw_pixels)
+    buf = io.BytesIO(); im.save(buf, 'PNG')
+    big_png = buf.getvalue()
+    assert len(big_png) > 8 * 1024 * 1024   # genuinely bigger than the old cap
+    data_url = 'data:image/png;base64,' + base64.b64encode(big_png).decode()
+
+    c = _admin(app)
+    tok = _csrf(c)
+    r = c.post(f'/students/{sid}/edit',
+               data={'_csrf_token': tok, 'form_complete': '1', 'first_name': 'Big', 'surname': 'Photo',
+                     'gender': 'Female', 'photo': data_url},
+               headers={'X-Requested-With': 'fetch'})
+    assert r.status_code == 200, r.status_code
+    with app.app_context():
+        row = StudentPhoto.query.filter_by(student_id=sid).first()
+        assert row is not None and row.data
+        assert row.width == 480 and row.height == 600
+        assert row.bytes < 8 * 1024 * 1024
