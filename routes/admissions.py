@@ -289,6 +289,8 @@ def applicant_detail(applicant_id):
             'session': a.session.name if a.session else None,
             'status': a.status, 'status_badge': badge.get(a.status, 'badge-secondary'),
             'gender': a.gender, 'parent_phone': a.parent_phone,
+            'photo_url': (url_for('admissions.applicant_photo', applicant_id=a.id)
+                          if (a.photo and a.photo.data) else ''),
             'admitted_student_id': a.admitted_student_id,
             'student_url': url_for('main.view_student', student_id=a.admitted_student_id) if a.admitted_student_id else None,
         },

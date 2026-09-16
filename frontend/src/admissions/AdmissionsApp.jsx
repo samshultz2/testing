@@ -282,7 +282,9 @@ function ApplicantDetail({ d, notify }) {
 
       <div className="card mb-3"><div className="card-body">
         <div className="d-flex gap-3 align-center flex-wrap">
-          <div className="avatar">{a.initials.toUpperCase()}</div>
+          {a.photo_url
+            ? <img src={a.photo_url} alt={a.full_name + "'s passport photo"} className="avatar-photo" />
+            : <div className="avatar">{a.initials.toUpperCase()}</div>}
           <div style={{ flex: 1, minWidth: 200 }}>
             <h2 style={{ margin: 0 }}>{a.full_name}</h2>
             <div className="text-muted">{a.application_no}{a.intended_class && ' · ' + a.intended_class}{a.session && ' · ' + a.session}</div>
