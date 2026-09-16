@@ -237,6 +237,14 @@
 .tt-sheet[data-theme="mono"] th{background:#000;color:#fff;border:1px solid #000;font-size:.8rem}
 .tt-sheet[data-theme="mono"] td{border:1px solid #000}
 
+/* plain — a completely unshaded black-on-white table: no header fill, no
+   zebra stripes, not even grey — just black text on white with black
+   borders. The most ink-frugal option of all the themes. */
+.tt-sheet[data-theme="plain"]{font-family:'Segoe UI',system-ui,sans-serif;color:#000}
+.tt-sheet[data-theme="plain"] th,.tt-sheet[data-theme="plain"] td{border:1px solid #000;color:#000;background:#fff}
+.tt-sheet[data-theme="plain"] th{font-weight:800;text-transform:uppercase;letter-spacing:.4px}
+.tt-sheet[data-theme="plain"] .tt-school{color:#000}
+
 /* forest — deep green header, warm cream rows */
 .tt-sheet[data-theme="forest"]{font-family:'Georgia',serif}
 .tt-sheet[data-theme="forest"] .tt-school{color:#14532d}
@@ -388,6 +396,7 @@
                     <option value="ocean">Ocean (cyan–blue)</option>
                     <option value="rose">Rose (maroon &amp; pink)</option>
                     <option value="mono">Mono (B&amp;W, photocopy-friendly)</option>
+                    <option value="plain">Plain (pure black &amp; white, no shading)</option>
                     <option value="forest">Forest (deep green, cream)</option>
                     <option value="royal">Royal (purple &amp; gold)</option>
                     <option value="slate">Slate (grey-blue, professional)</option>
@@ -405,6 +414,14 @@
                 <label class="form-label">School name</label>
                 <input id="school" class="form-control" value="{{ school_name }}" placeholder="School name">
             </div>
+            {% if school_logo_url %}
+            <div class="form-group" style="align-self:end">
+                <label class="form-label" style="display:flex;align-items:center;gap:.4rem;cursor:pointer;margin-bottom:.6rem">
+                    <input type="checkbox" id="showLogo" checked style="width:auto;margin:0">
+                    Show school logo
+                </label>
+            </div>
+            {% endif %}
             <div class="form-group" id="orientWrap">
                 <label class="form-label">Table orientation</label>
                 <select id="orient" class="form-control">
@@ -1349,6 +1366,7 @@ function collectState(){
         titleTouched:!!el('title').dataset.touched, subtitle:el('subtitle').value,
         orient:el('orient').value, gridCols:el('gridCols').value, gridRows:el('gridRows').value,
         rosterCount:el('rosterCount').value, listRows:el('listRows').value,
+        showLogo:el('showLogo')?el('showLogo').checked:true,
         rows:rows, rosterCells:rosterCells, saturday:saturdayPlan };
 }
 function applyState(s){
@@ -1362,6 +1380,10 @@ function applyState(s){
     if(s.gridRows!=null) el('gridRows').value=s.gridRows;
     if(s.rosterCount!=null) el('rosterCount').value=s.rosterCount;
     if(s.listRows!=null) el('listRows').value=s.listRows;
+    if(el('showLogo')){
+        el('showLogo').checked = s.showLogo!==false;
+        if(el('pLogo')) el('pLogo').style.display = el('showLogo').checked ? '' : 'none';
+    }
     rows=Array.isArray(s.rows)?s.rows.map(function(r){ return Object.assign(blankRow(), r); }):[];
     rosterCells=s.rosterCells||{};
     saturdayPlan=(s.saturday && typeof s.saturday==='object')?s.saturday:{first:'',free:{}};
@@ -1538,6 +1560,15 @@ el('rosterCount').addEventListener('input', function(){
 });
 el('theme').addEventListener('change', renderSheet);
 el('orient').addEventListener('change', renderSheet);
+// Logo toggle: hides/shows the <img> in the live preview — since export
+// captures this same DOM (html2canvas), the PDF/image download honours it
+// too, with no separate export-side logic needed.
+if(el('showLogo')){
+    el('showLogo').addEventListener('change', function(){
+        var img = el('pLogo');
+        if(img) img.style.display = this.checked ? '' : 'none';
+    });
+}
 el('title').addEventListener('input', function(){ this.dataset.touched='1'; });
 // Saturday planner: set the first Saturday, then tick lesson-free Saturdays.
 el('satFirst').addEventListener('change', function(){
