@@ -294,6 +294,14 @@ class Config:
 
     # Upload settings
     MAX_CONTENT_LENGTH = 16 * 1024 * 1024  # 16MB max file size
+    # Werkzeug 2.3+ separately caps non-file form FIELDS (e.g. a photo sent as
+    # a base64 data: URL, which several forms in this app use instead of a
+    # real multipart file input) at 500KB by default — independent of, and
+    # much smaller than, MAX_CONTENT_LENGTH above. A request tripping this
+    # still comes back as a plain 413, so it looks like (and the error page
+    # reports) the 16MB cap, when the real ceiling silently biting it is 500KB.
+    # Match it to MAX_CONTENT_LENGTH so that cap is the only one that matters.
+    MAX_FORM_MEMORY_SIZE = MAX_CONTENT_LENGTH
     UPLOAD_FOLDER = os.path.join(BASE_DIR, 'uploads')
     ALLOWED_EXTENSIONS = {'xlsx', 'xls'}
 

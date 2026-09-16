@@ -12,7 +12,15 @@ from io import BytesIO
 
 from utils.uploads import open_image
 
-MAX_INPUT_BYTES = 8 * 1024 * 1024        # reject raw inputs above 8 MB
+
+# A generous ceiling on the raw upload — just bounds how much gets buffered
+# into memory before decoding; it is NOT the real decompression-bomb guard
+# (open_image()'s pixel-count cap is), so it doesn't need to be tight. The
+# actual client/student/applicant photo is always downscaled to TARGET_W x
+# TARGET_H below regardless of how large the input was, so a big legitimate
+# photo (a modern phone camera easily produces 10-20MB JPEGs) is compressed
+# down rather than rejected outright.
+MAX_INPUT_BYTES = 40 * 1024 * 1024
 TARGET_W, TARGET_H = 480, 600            # portrait passport crop (4:5), px
 
 
@@ -23,7 +31,7 @@ def _process(raw):
     if not raw:
         raise ValueError('No image data.')
     if len(raw) > MAX_INPUT_BYTES:
-        raise ValueError('That image is too large (max 8 MB).')
+        raise ValueError('That image is too large (max %d MB).' % (MAX_INPUT_BYTES // (1024 * 1024)))
     try:
         im = open_image(BytesIO(raw))
     except Exception:

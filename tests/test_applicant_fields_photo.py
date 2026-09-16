@@ -45,6 +45,41 @@ def test_new_fields_and_photo(app):
     assert r.status_code == 200 and r.mimetype.startswith('image/')
 
 
+def test_oversize_photo_is_compressed_not_rejected(app):
+    """A raw upload above the old fixed 8MB cap must be automatically
+    downscaled/compressed rather than rejected outright — the app can't rely
+    on a phone camera photo (routinely 10-20MB) fitting under a small fixed
+    ceiling; it should always store a small, correctly-sized passport crop."""
+    import os
+    w, h = 1500, 2000
+    raw_pixels = os.urandom(w * h * 3)   # random noise resists PNG compression
+    im = Image.frombytes('RGB', (w, h), raw_pixels)
+    buf = io.BytesIO(); im.save(buf, 'PNG')
+    big_png = buf.getvalue()
+    assert len(big_png) > 8 * 1024 * 1024   # genuinely bigger than the old cap
+    data_url = 'data:image/png;base64,' + base64.b64encode(big_png).decode()
+
+    c = app.test_client()
+    c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': login_token(c)})
+    tag = next(_SEQ)
+    r = c.post('/admissions/applicants/add', data={
+        '_csrf_token': auth_csrf(c),
+        'first_name': f'Big{tag}', 'surname': 'Photo',
+        'photo_data': data_url,
+    }, follow_redirects=False)
+    assert r.status_code in (200, 302)
+
+    with app.app_context():
+        a = Applicant.query.filter_by(first_name=f'Big{tag}').first()
+        assert a is not None
+        row = ApplicantPhoto.query.filter_by(applicant_id=a.id).first()
+        assert row is not None and row.data
+        # Downscaled to the passport target, proving it was processed rather
+        # than passed through or rejected.
+        assert row.width == 480 and row.height == 600
+        assert row.bytes < 8 * 1024 * 1024
+
+
 def test_blank_form_bw_differs_from_colour(app):
     from utils.applicant_export import applicant_blank_pdf
     school = {'name': 'Test School'}

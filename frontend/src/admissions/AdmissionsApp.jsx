@@ -128,6 +128,33 @@ function Applicants({ d }) {
 }
 
 // ---- Applicant form --------------------------------------------------------
+// Resize + re-encode a photo client-side before it goes into the form's JSON
+// payload. A modern phone photo is routinely 8-20MB, which blows past both
+// the server's request-size cap and what a passport photo needs — instead of
+// rejecting those, always downscale to a generous resolution and re-encode as
+// a high-quality JPEG first. 1400px on the long side is far more detail than
+// the eventual ~480x600 passport crop needs, so there's no visible quality
+// loss; the result is typically a few hundred KB regardless of how large the
+// original file was.
+function compressPhoto(file, { maxDim = 1400, quality = 0.9 } = {}) {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+      const w = Math.max(1, Math.round(img.width * scale));
+      const h = Math.max(1, Math.round(img.height * scale));
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('load-failed')); };
+    img.src = url;
+  });
+}
+
 function ApplicantForm({ d, notify }) {
   const nav = useNav();
   const a = d.applicant || {};
@@ -150,13 +177,19 @@ function ApplicantForm({ d, notify }) {
   const existingPhoto = a.photo_url || '';
   const photoPreview = f.photo_data === '__clear__' ? ''
     : (f.photo_data && f.photo_data.slice(0, 5) === 'data:' ? f.photo_data : existingPhoto);
-  const onPhoto = (e) => {
+  const onPhoto = async (e) => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
-    if (file.size > 8 * 1024 * 1024) { notify('error', 'Image too large (max 8 MB).'); return; }
-    const reader = new FileReader();
-    reader.onload = () => setF((s) => ({ ...s, photo_data: reader.result }));
-    reader.readAsDataURL(file);
+    if (!file.type.startsWith('image/')) { notify('error', 'Please choose an image file.'); return; }
+    // Sanity cap only — any real photo is downsized well below this by
+    // compressPhoto(); this just avoids the browser hanging on a bogus file.
+    if (file.size > 50 * 1024 * 1024) { notify('error', 'That image is too large to process (max 50 MB).'); return; }
+    try {
+      const dataUrl = await compressPhoto(file);
+      setF((s) => ({ ...s, photo_data: dataUrl }));
+    } catch (err) {
+      notify('error', 'Could not read that image.');
+    }
   };
   const [busy, setBusy] = useState(false);
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
