@@ -9,6 +9,13 @@ const REL_SEQUENCE = ['Father', 'Mother', 'Guardian'];
 
 const RELATIONSHIP_FALLBACK = ['Father', 'Mother', 'Guardian', 'Sibling', 'Other'];
 
+// Nigerian phone: 11 digits starting with 0, or +234/234 followed by 10 digits
+// (mirrors utils/security.py's validate_phone_number so both agree).
+const PHONE_RE = /^(0[789][01]\d{8}|(\+?234)[789][01]\d{8})$/;
+const isValidPhone = (v) => PHONE_RE.test(v.replace(/[\s\-()]+/g, ''));
+const EMAIL_RE = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+const isValidEmail = (v) => EMAIL_RE.test(v.trim());
+
 // One WAEC/JAMB subject picker (checkbox grid) with a Clear shortcut.
 function SubjectChecks({ legendIcon, legend, all, selected, onToggle, onClear, name }) {
   return (
@@ -235,7 +242,19 @@ export default function StudentForm({ data }) {
   const addSch = () => setScholarships((cs) => [...cs, { name: '', provider: '', amount: '', status: '' }]);
   const removeSch = (i) => setScholarships((cs) => cs.filter((_, j) => j !== i));
 
-  const setContact = (i, k, v) => setContacts((cs) => cs.map((c, j) => (j === i ? { ...c, [k]: v } : c)));
+  const setContact = (i, k, v) => setContacts((cs) => cs.map((c, j) => {
+    if (j !== i) return c;
+    const next = { ...c, [k]: v };
+    // "Mr. …" / "Mrs. …" name prefixes are a strong enough signal to
+    // pre-select the relationship for the admin — still just a default,
+    // freely overridable via the dropdown.
+    if (k === 'name') {
+      const t = v.trim();
+      if (/^mrs\.?\s/i.test(t)) next.relationship = 'Mother';
+      else if (/^mr\.?\s/i.test(t)) next.relationship = 'Father';
+    }
+    return next;
+  }));
   // Smarter default: 1st contact = Father, 2nd = Mother, then Guardian.
   const addContact = () => setContacts((cs) =>
     [...cs, { name: '', phone_number: '', email: '', relationship: REL_SEQUENCE[cs.length] || 'Guardian' }]);
@@ -252,7 +271,13 @@ export default function StudentForm({ data }) {
     }
     const ce = {};
     contacts.forEach((c, i) => {
-      if (c.name.trim() && !c.phone_number.trim()) ce[i] = 'Phone is required for this contact.';
+      const row = {};
+      const phone = c.phone_number.trim();
+      if (c.name.trim() && !phone) row.phone = 'Phone is required for this contact.';
+      else if (phone && !isValidPhone(phone)) row.phone = 'Enter a valid phone number, e.g. 08012345678.';
+      const email = (c.email || '').trim();
+      if (email && !isValidEmail(email)) row.email = 'Enter a valid email address.';
+      if (row.phone || row.email) ce[i] = row;
     });
     setErrors(e); setContactErrors(ce);
     return Object.keys(e).length === 0 && Object.keys(ce).length === 0;
@@ -486,9 +511,9 @@ export default function StudentForm({ data }) {
           <div className="sf-contact" key={i}>
             <TextField label="Name" value={c.name} onChange={(v) => setContact(i, 'name', v)} placeholder="e.g., Mr. John" autoComplete="off" />
             <TextField label="Phone" required value={c.phone_number} onChange={(v) => setContact(i, 'phone_number', v)}
-                       type="tel" placeholder="08012345678" error={contactErrors[i]} autoComplete="off" />
+                       type="tel" placeholder="08012345678" error={contactErrors[i] && contactErrors[i].phone} autoComplete="off" />
             <TextField label="Email (optional)" value={c.email} onChange={(v) => setContact(i, 'email', v)}
-                       type="email" placeholder="parent@example.com" autoComplete="off" />
+                       type="email" placeholder="parent@example.com" error={contactErrors[i] && contactErrors[i].email} autoComplete="off" />
             <SelectField label="Relationship" value={c.relationship} onChange={(v) => setContact(i, 'relationship', v)} options={relationships} />
             <button type="button" className="sp-btn sp-btn-sm sp-btn-danger sf-remove" aria-label={`Remove contact ${i + 1}`}
                     disabled={contacts.length === 1} onClick={() => removeContact(i)}>
