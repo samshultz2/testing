@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { postForm, submitJson } from '../lib/forms';
 import { useDraft } from '../lib/draft';
 import { compressPhoto } from '../lib/image';
+import { isValidPhone, isValidEmail, relationshipFromName } from '../lib/validate';
 import { Banner } from '../components/ui';
 import { TextField, TextAreaField, SelectField, FormCard } from '../components/Form';
 
@@ -9,12 +10,17 @@ const REL_SEQUENCE = ['Father', 'Mother', 'Guardian'];
 
 const RELATIONSHIP_FALLBACK = ['Father', 'Mother', 'Guardian', 'Sibling', 'Other'];
 
-// Nigerian phone: 11 digits starting with 0, or +234/234 followed by 10 digits
-// (mirrors utils/security.py's validate_phone_number so both agree).
-const PHONE_RE = /^(0[789][01]\d{8}|(\+?234)[789][01]\d{8})$/;
-const isValidPhone = (v) => PHONE_RE.test(v.replace(/[\s\-()]+/g, ''));
-const EMAIL_RE = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-const isValidEmail = (v) => EMAIL_RE.test(v.trim());
+// Shared by the live (on-blur) check and the final submit-time check, so the
+// two can never disagree.
+function validateContactRow(c) {
+  const row = {};
+  const phone = (c.phone_number || '').trim();
+  if ((c.name || '').trim() && !phone) row.phone = 'Phone is required for this contact.';
+  else if (phone && !isValidPhone(phone)) row.phone = 'Enter a valid phone number, e.g. 08012345678.';
+  const email = (c.email || '').trim();
+  if (email && !isValidEmail(email)) row.email = 'Enter a valid email address.';
+  return row;
+}
 
 // One WAEC/JAMB subject picker (checkbox grid) with a Clear shortcut.
 function SubjectChecks({ legendIcon, legend, all, selected, onToggle, onClear, name }) {
@@ -242,23 +248,51 @@ export default function StudentForm({ data }) {
   const addSch = () => setScholarships((cs) => [...cs, { name: '', provider: '', amount: '', status: '' }]);
   const removeSch = (i) => setScholarships((cs) => cs.filter((_, j) => j !== i));
 
-  const setContact = (i, k, v) => setContacts((cs) => cs.map((c, j) => {
-    if (j !== i) return c;
-    const next = { ...c, [k]: v };
-    // "Mr. …" / "Mrs. …" name prefixes are a strong enough signal to
-    // pre-select the relationship for the admin — still just a default,
-    // freely overridable via the dropdown.
-    if (k === 'name') {
-      const t = v.trim();
-      if (/^mrs\.?\s/i.test(t)) next.relationship = 'Mother';
-      else if (/^mr\.?\s/i.test(t)) next.relationship = 'Father';
+  const setContact = (i, k, v) => {
+    setContacts((cs) => cs.map((c, j) => {
+      if (j !== i) return c;
+      const next = { ...c, [k]: v };
+      if (k === 'name') {
+        const rel = relationshipFromName(v);
+        if (rel) next.relationship = rel;
+      }
+      return next;
+    }));
+    // Live: once a row has a visible error, keep re-checking as the admin
+    // types so it clears the moment it's fixed — no need to click away or
+    // hit Save first. (A fresh, not-yet-touched field only gets checked on
+    // blur, below, so we don't flag it mid-keystroke.)
+    setContactErrors((ce) => {
+      if (!ce[i]) return ce;
+      const row = validateContactRow({ ...contacts[i], [k]: v });
+      if (!row.phone && !row.email) { const { [i]: _drop, ...rest } = ce; return rest; }
+      return { ...ce, [i]: row };
+    });
+  };
+  const contactBlur = (i) => setContactErrors((ce) => {
+    const row = validateContactRow(contacts[i]);
+    if (!row.phone && !row.email) {
+      if (!ce[i]) return ce;
+      const { [i]: _drop, ...rest } = ce;
+      return rest;
     }
-    return next;
-  }));
+    return { ...ce, [i]: row };
+  });
   // Smarter default: 1st contact = Father, 2nd = Mother, then Guardian.
   const addContact = () => setContacts((cs) =>
     [...cs, { name: '', phone_number: '', email: '', relationship: REL_SEQUENCE[cs.length] || 'Guardian' }]);
-  const removeContact = (i) => setContacts((cs) => (cs.length > 1 ? cs.filter((_, j) => j !== i) : cs));
+  const removeContact = (i) => {
+    setContacts((cs) => (cs.length > 1 ? cs.filter((_, j) => j !== i) : cs));
+    setContactErrors((ce) => {
+      const next = {};
+      Object.keys(ce).forEach((k) => {
+        const idx = Number(k);
+        if (idx < i) next[idx] = ce[k];
+        else if (idx > i) next[idx - 1] = ce[k];
+      });
+      return next;
+    });
+  };
 
   const validate = () => {
     const e = {};
@@ -271,12 +305,7 @@ export default function StudentForm({ data }) {
     }
     const ce = {};
     contacts.forEach((c, i) => {
-      const row = {};
-      const phone = c.phone_number.trim();
-      if (c.name.trim() && !phone) row.phone = 'Phone is required for this contact.';
-      else if (phone && !isValidPhone(phone)) row.phone = 'Enter a valid phone number, e.g. 08012345678.';
-      const email = (c.email || '').trim();
-      if (email && !isValidEmail(email)) row.email = 'Enter a valid email address.';
+      const row = validateContactRow(c);
       if (row.phone || row.email) ce[i] = row;
     });
     setErrors(e); setContactErrors(ce);
@@ -509,10 +538,10 @@ export default function StudentForm({ data }) {
       <FormCard icon="fa-phone" title="Parent/Guardian Contacts" collapsible defaultOpen={isEdit}>
         {contacts.map((c, i) => (
           <div className="sf-contact" key={i}>
-            <TextField label="Name" value={c.name} onChange={(v) => setContact(i, 'name', v)} placeholder="e.g., Mr. John" autoComplete="off" />
-            <TextField label="Phone" required value={c.phone_number} onChange={(v) => setContact(i, 'phone_number', v)}
+            <TextField label="Name" value={c.name} onChange={(v) => setContact(i, 'name', v)} onBlur={() => contactBlur(i)} placeholder="e.g., Mr. John" autoComplete="off" />
+            <TextField label="Phone" required value={c.phone_number} onChange={(v) => setContact(i, 'phone_number', v)} onBlur={() => contactBlur(i)}
                        type="tel" placeholder="08012345678" error={contactErrors[i] && contactErrors[i].phone} autoComplete="off" />
-            <TextField label="Email (optional)" value={c.email} onChange={(v) => setContact(i, 'email', v)}
+            <TextField label="Email (optional)" value={c.email} onChange={(v) => setContact(i, 'email', v)} onBlur={() => contactBlur(i)}
                        type="email" placeholder="parent@example.com" error={contactErrors[i] && contactErrors[i].email} autoComplete="off" />
             <SelectField label="Relationship" value={c.relationship} onChange={(v) => setContact(i, 'relationship', v)} options={relationships} />
             <button type="button" className="sp-btn sp-btn-sm sp-btn-danger sf-remove" aria-label={`Remove contact ${i + 1}`}

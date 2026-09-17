@@ -5,6 +5,22 @@ import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, Banner, PageHeader, Empty, SectionTabs, SectionShell, Table } from '../components/ui';
 import { canWrite } from '../lib/perms';
 import { compressPhoto } from '../lib/image';
+import { isValidPhone, isValidEmail, relationshipFromName } from '../lib/validate';
+
+// Format-only check for a contact field (no requiredness — none of these
+// fields are mandatory on the applicant form). Shared by the live (on-blur)
+// check and the submit-time check so they can never disagree.
+function contactFieldError(k, v) {
+  const val = (v || '').trim();
+  if (!val) return '';
+  if (k === 'parent_phone' || k === 'emergency_phone') {
+    return isValidPhone(val) ? '' : 'Enter a valid phone number, e.g. 08012345678.';
+  }
+  if (k === 'parent_email') {
+    return isValidEmail(val) ? '' : 'Enter a valid email address.';
+  }
+  return '';
+}
 
 const Tabs = ({ d }) => { const { go } = useNav(); return <SectionTabs tabs={d.tabs} urls={d.urls} active={d.active} go={go} />; };
 
@@ -166,10 +182,47 @@ function ApplicantForm({ d, notify }) {
     }
   };
   const [busy, setBusy] = useState(false);
-  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  const [errors, setErrors] = useState({});
+  const set = (k, v) => {
+    setF((s) => {
+      const next = { ...s, [k]: v };
+      // "Mr. …" / "Mrs. …" name prefixes are a strong enough signal to
+      // pre-fill the relationship field — still just a default, freely
+      // overridable by the admin.
+      if (k === 'parent_name') {
+        const rel = relationshipFromName(v);
+        if (rel) next.relationship = rel;
+      } else if (k === 'emergency_name') {
+        const rel = relationshipFromName(v);
+        if (rel) next.emergency_relationship = rel;
+      }
+      return next;
+    });
+    // Live: once a field has a visible error, keep re-checking as the admin
+    // types so it clears the moment it's fixed. A fresh field is only
+    // checked on blur (below), so we don't flag it mid-keystroke.
+    setErrors((er) => {
+      if (!er[k]) return er;
+      const msg = contactFieldError(k, v);
+      if (!msg) { const { [k]: _drop, ...rest } = er; return rest; }
+      return { ...er, [k]: msg };
+    });
+  };
+  const blurField = (k) => setErrors((er) => {
+    const msg = contactFieldError(k, f[k]);
+    if (!msg) { if (!er[k]) return er; const { [k]: _drop, ...rest } = er; return rest; }
+    return { ...er, [k]: msg };
+  });
   const submit = async (e) => {
     e.preventDefault();
     if (!f.first_name.trim() || !f.surname.trim()) { notify('error', 'First name and surname are required.'); return; }
+    const er = {};
+    ['parent_phone', 'parent_email', 'emergency_phone'].forEach((k) => {
+      const msg = contactFieldError(k, f[k]);
+      if (msg) er[k] = msg;
+    });
+    setErrors(er);
+    if (Object.keys(er).length) { notify('error', 'Please fix the highlighted fields.'); return; }
     setBusy(true);
     const r = await submitJson(d.submit_url, f);
     setBusy(false);
@@ -178,9 +231,12 @@ function ApplicantForm({ d, notify }) {
   // Render fields via a function call, NOT as <F/>: a component defined inside
   // render gets a fresh identity each keystroke, remounting the input and
   // dropping the mobile keyboard after every character.
-  const F = ({ label, k, type = 'text', req, ...rest }) => (
+  const F = ({ label, k, type = 'text', req, error, ...rest }) => (
     <div className="form-group" key={k}><label className="form-label">{label}{req && <span className="required"> *</span>}</label>
-      <input type={type} className="form-control" required={req} value={f[k]} onChange={(e) => set(k, e.target.value)} {...rest} /></div>
+      <input type={type} className="form-control" required={req} value={f[k]} onChange={(e) => set(k, e.target.value)}
+             aria-invalid={error ? true : undefined} {...rest} />
+      {error && <span className="form-error" role="alert" style={{ color: 'var(--danger, var(--danger))', fontSize: 'var(--text-xs)', display: 'block', marginTop: 3 }}>{error}</span>}
+    </div>
   );
   return (
     <>
@@ -226,15 +282,15 @@ function ApplicantForm({ d, notify }) {
         </div></div>
 
         <div className="card mb-3"><div className="card-header"><h3>Parent / Guardian</h3></div><div className="card-body">
-          <div className="form-row">{F({ label: 'Name', k: 'parent_name' })}{F({ label: 'Relationship', k: 'relationship', placeholder: 'Father/Mother/Guardian' })}</div>
-          <div className="form-row">{F({ label: 'Phone', k: 'parent_phone' })}{F({ label: 'Email', k: 'parent_email', type: 'email' })}</div>
+          <div className="form-row">{F({ label: 'Name', k: 'parent_name', placeholder: 'e.g., Mr. John' })}{F({ label: 'Relationship', k: 'relationship', placeholder: 'Father/Mother/Guardian' })}</div>
+          <div className="form-row">{F({ label: 'Phone', k: 'parent_phone', type: 'tel', placeholder: '08012345678', error: errors.parent_phone, onBlur: () => blurField('parent_phone') })}{F({ label: 'Email', k: 'parent_email', type: 'email', error: errors.parent_email, onBlur: () => blurField('parent_email') })}</div>
           {F({ label: 'Address', k: 'address' })}
           <div className="form-group mb-0"><label className="form-label">Notes</label><textarea className="form-control" rows="2" value={f.notes} onChange={(e) => set('notes', e.target.value)} /></div>
         </div></div>
 
         <div className="card mb-3"><div className="card-header"><h3>Emergency Contact</h3></div><div className="card-body">
           <div className="form-row">{F({ label: 'Name', k: 'emergency_name' })}{F({ label: 'Relationship', k: 'emergency_relationship', placeholder: 'Uncle/Aunt/Neighbour' })}</div>
-          <div className="form-row">{F({ label: 'Phone', k: 'emergency_phone' })}{F({ label: 'Address', k: 'emergency_address' })}</div>
+          <div className="form-row">{F({ label: 'Phone', k: 'emergency_phone', type: 'tel', placeholder: '08012345678', error: errors.emergency_phone, onBlur: () => blurField('emergency_phone') })}{F({ label: 'Address', k: 'emergency_address' })}</div>
         </div></div>
 
         <div className="card mb-3"><div className="card-header"><h3>Origin &amp; Health</h3></div><div className="card-body">
