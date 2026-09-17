@@ -3,6 +3,8 @@
 The panel is a cross-module widget: always permitted, its items self-filter by
 module permission and are sorted by severity. Signals are best-effort.
 """
+from datetime import date
+
 from config import Config
 from flask import session
 from models import db, Branch, Student, User
@@ -56,6 +58,37 @@ def test_incomplete_profile_surfaces(app):
     assert 'incomplete' in keys
     inc = next(it for it in j['insights'] if it['key'] == 'incomplete')
     assert inc['severity'] == 'low' and inc['url']
+    # The card must link straight to the filtered list, not the whole roster.
+    assert inc['url'].endswith('/students?incomplete=1')
+
+
+def test_incomplete_profile_link_lists_exactly_the_flagged_students(app):
+    """Clicking the insight's link must show exactly the students it counted —
+    no more (e.g. a complete profile), no less."""
+    c = _admin(app)
+    with app.app_context():
+        bid = Branch.get_default().id
+        incomplete = Student(student_id='ZZ_INC_A', first_name='Missing', surname='ZzIncDob',
+                             gender='Male', is_active=True, branch_id=bid, date_of_birth=None)
+        complete = Student(student_id='ZZ_INC_B', first_name='Has', surname='ZzIncAll',
+                           gender='Female', is_active=True, branch_id=bid,
+                           date_of_birth=date(2010, 1, 1))
+        db.session.add_all([incomplete, complete]); db.session.flush()
+        from models import ParentContact
+        db.session.add(ParentContact(student_id=complete.id, name='Mr. Complete',
+                                     phone_number='08011111111', relationship='Father'))
+        db.session.commit()
+
+    j = c.get('/api/dashboard/data').get_json()
+    inc = next(it for it in j['insights'] if it['key'] == 'incomplete')
+    dash_count = int(inc['title'].split()[0])
+
+    listing = c.get('/api/students?incomplete=1').get_json()
+    ids = {s['student_id'] for s in listing['students']}
+    assert 'ZZ_INC_A' in ids
+    assert 'ZZ_INC_B' not in ids
+    # The dashboard's count and the filtered list's total must never disagree.
+    assert listing['total'] == dash_count
 
 
 def test_open_intervention_surfaces_high(app):

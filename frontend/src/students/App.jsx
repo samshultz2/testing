@@ -33,12 +33,13 @@ function startState(applied, page) {
   const base = {
     gender: applied.gender || '', religion: applied.religion || '', stream: applied.stream || '',
     subject: applied.subject || '', class_id: applied.class_id || '', arm_id: applied.arm_id || '',
-    house: applied.house || '', boarding: applied.boarding || '',
+    house: applied.house || '', boarding: applied.boarding || '', incomplete: applied.incomplete || '',
     sort: applied.sort || 'surname', order: applied.order || 'asc', search: applied.search || '',
     page: page || 1,
   };
   const urlHasFilters = !!(applied.gender || applied.religion || applied.stream || applied.subject
-    || applied.class_id || applied.arm_id || applied.house || applied.boarding || applied.search);
+    || applied.class_id || applied.arm_id || applied.house || applied.boarding || applied.incomplete
+    || applied.search);
   if (!urlHasFilters && cameFromStudentPage()) {
     try {
       const saved = JSON.parse(sessionStorage.getItem(FILTER_KEY) || 'null');
@@ -162,11 +163,12 @@ export default function App({ initial }) {
   const setFilter = (k, v) => setQuery((q) => ({ ...q, [k]: v, page: 1 }));
   const goPage = (p) => setQuery((q) => ({ ...q, page: p }));
   const hasFilters = !!(search || query.gender || query.religion || query.stream
-    || query.subject || query.class_id || query.arm_id || query.house || query.boarding);
+    || query.subject || query.class_id || query.arm_id || query.house || query.boarding
+    || query.incomplete);
   const resetFilters = () => {
     setSearch('');
     setQuery({ gender: '', religion: '', stream: '', subject: '', class_id: '', arm_id: '',
-               house: '', boarding: '', sort: 'surname', order: 'asc', search: '', page: 1 });
+               house: '', boarding: '', incomplete: '', sort: 'surname', order: 'asc', search: '', page: 1 });
   };
   // Apply a saved filter set: restore its query and mirror the search box.
   const applySaved = (f) => {
@@ -360,6 +362,11 @@ export default function App({ initial }) {
           <Field label="Boarding">
             <select className="form-control" value={query.boarding} onChange={(e) => setFilter('boarding', e.target.value)}>
               <option value="">All</option><option>Day</option><option>Boarding</option>
+            </select>
+          </Field>
+          <Field label="Profile">
+            <select className="form-control" value={query.incomplete} onChange={(e) => setFilter('incomplete', e.target.value)}>
+              <option value="">All</option><option value="1">Incomplete only</option>
             </select>
           </Field>
           {canSss3 && <Field label="WAEC subject (SSS3)">

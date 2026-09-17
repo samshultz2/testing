@@ -1026,9 +1026,22 @@ def _dash_insights(active_term, tscope):
             pass
 
     # Students — incomplete profiles (no DOB or no parent contact on file).
+    # Scoped exactly like the students list page itself (see _students_query),
+    # not the wider dashboard tscope (which includes a teacher's *subject*
+    # classes) — so the count here and what the link below shows can never
+    # disagree, and a teacher never sees a number for students they can't
+    # actually open.
     if can_access_module('students'):
         try:
-            base = _student_scope(Student.query.filter_by(is_active=True), tscope)
+            from utils.branch_scope import scope_query
+            from utils.org_scope import scope_students
+            from utils.access_control import teacher_form_student_ids
+            base = scope_query(Student.query.filter_by(is_active=True), Student)
+            base = base.filter(db.or_(Student.is_graduated.is_(False), Student.is_graduated.is_(None)))
+            base = scope_students(base)
+            tids = teacher_form_student_ids()
+            if tids is not None:
+                base = base.filter(Student.id.in_(tids or [-1]))
             with_contact = db.session.query(ParentContact.student_id).distinct().subquery()
             n = base.filter(db.or_(
                 Student.date_of_birth.is_(None),
@@ -1037,7 +1050,7 @@ def _dash_insights(active_term, tscope):
                 add('incomplete', 'low', 'fa-user-pen',
                     f'{n} student profile{"s" if n != 1 else ""} incomplete',
                     'Missing date of birth or a parent contact.',
-                    url_for('main.students_list'))
+                    url_for('main.students_list') + '?incomplete=1')
         except Exception:
             pass
 
@@ -1673,6 +1686,7 @@ def _students_query():
     subject = request.args.get('subject', '')
     house = request.args.get('house', '')
     boarding = request.args.get('boarding', '')
+    incomplete = request.args.get('incomplete', '') == '1'
     class_id = request.args.get('class_id', '', type=int) or None
     arm_id = request.args.get('arm_id', '', type=int) or None
     sort_by = request.args.get('sort', 'surname')
@@ -1725,6 +1739,14 @@ def _students_query():
         query = query.filter(Student.house == house)
     if boarding:
         query = query.filter(Student.boarding_status == boarding)
+    if incomplete:
+        # Same rule as the dashboard's "incomplete profiles" insight — missing
+        # date of birth or no parent contact on file — so the count and the
+        # list it links to can never disagree.
+        with_contact = db.session.query(ParentContact.student_id).distinct().subquery()
+        query = query.filter(db.or_(
+            Student.date_of_birth.is_(None),
+            ~Student.id.in_(db.session.query(with_contact.c.student_id))))
 
     # WAEC-subject filter (SSS3 only), via a subquery so it composes with the joins.
     if subject:
@@ -1877,6 +1899,7 @@ def _students_payload():
             'religion': request.args.get('religion', ''), 'stream': request.args.get('stream', ''),
             'subject': request.args.get('subject', ''),
             'house': request.args.get('house', ''), 'boarding': request.args.get('boarding', ''),
+            'incomplete': request.args.get('incomplete', ''),
             'class_id': request.args.get('class_id', '', type=int) or None,
             'arm_id': request.args.get('arm_id', '', type=int) or None,
             'sort': request.args.get('sort', 'surname'), 'order': request.args.get('order', 'asc'),
