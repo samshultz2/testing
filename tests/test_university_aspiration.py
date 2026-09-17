@@ -431,6 +431,39 @@ def test_alternative_waec_subjects(app):
         assert e['status'] in ('ON_TRACK', 'CLOSE')
 
 
+def test_course_requirements_falls_back_to_jamb_for_missing_waec(app):
+    """A course with no WAEC subjects configured (e.g. added manually via
+    Settings -> Admissions data with just its JAMB combo) still gets a sensible
+    WAEC list from /api/course-requirements: English + Mathematics + its JAMB
+    combo, instead of an empty list."""
+    _seed(app)
+    with app.app_context():
+        c = Course(name='ZZ No Waec Course', department='Testing', base_cutoff=200,
+                   jamb_subjects='English Language, Physics, Chemistry, Biology',
+                   waec_subjects=None, is_active=True)
+        db.session.add(c); db.session.commit()
+        cid = c.id
+        assert c.waec_subject_list == []          # precondition: genuinely unset
+    admin = _admin(app)
+    r = admin.get(f'/api/course-requirements?course_id={cid}').get_json()
+    assert r['jamb_subjects'] == ['English Language', 'Physics', 'Chemistry', 'Biology']
+    assert r['waec_subjects'] == ['English Language', 'Mathematics', 'Physics', 'Chemistry', 'Biology']
+
+
+def test_course_requirements_keeps_configured_waec_as_is(app):
+    """When a course DOES have its own WAEC list, that list is returned
+    unchanged — the JAMB-derived fallback only kicks in when it's empty."""
+    _seed(app)
+    with app.app_context():
+        med = Course.query.filter_by(name='Medicine and Surgery').first()
+        cid = med.id
+        expected = med.waec_subject_list
+        assert expected                            # precondition: already configured
+    admin = _admin(app)
+    r = admin.get(f'/api/course-requirements?course_id={cid}').get_json()
+    assert r['waec_subjects'] == expected
+
+
 def test_student_report_shows_aspiration(app):
     """The consolidated exam report surfaces the student's own chosen-course
     verdict from the aspiration engine."""

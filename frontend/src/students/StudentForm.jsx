@@ -205,10 +205,23 @@ export default function StudentForm({ data }) {
       const r = await res.json();
       setF((x) => ({ ...x, jamb_target: r.jamb_target != null ? String(r.jamb_target) : x.jamb_target,
                      target_department: r.department || x.target_department }));
-      // Only the JAMB subjects + target are auto-filled from the course; WAEC
-      // subjects are left exactly as the user set them.
-      if (fillSubjects && Array.isArray(r.jamb_subjects)) setJamb(new Set(r.jamb_subjects));
-      setAspirationNote('JAMB target set to ' + r.jamb_target + ' and JAMB subjects filled from the course.');
+      // JAMB subjects are fully replaced by the course's combo. WAEC subjects
+      // are topped up instead (union, not replace): the school's own general +
+      // per-stream compulsory subjects (set via onStream/Settings -> Exam
+      // Subjects) stay ticked, and whatever the course additionally requires
+      // fills in the remaining slots.
+      let note = '';
+      if (fillSubjects && Array.isArray(r.jamb_subjects)) {
+        setJamb(new Set(r.jamb_subjects));
+        note = 'JAMB target set to ' + r.jamb_target + ' and JAMB subjects filled from the course';
+      } else {
+        note = 'JAMB target set to ' + r.jamb_target;
+      }
+      if (fillSubjects && Array.isArray(r.waec_subjects) && r.waec_subjects.length) {
+        setWaec((prev) => new Set([...prev, ...r.waec_subjects]));
+        note += ', and WAEC subjects topped up from the course';
+      }
+      setAspirationNote(note + '.');
     } catch (_e) { /* leave fields as-is on a network hiccup */ }
   };
   const pickUniversity = (item) => {
@@ -439,7 +452,8 @@ export default function StudentForm({ data }) {
         <p className="text-muted" style={{ fontSize: '.85rem', marginTop: 0 }}>
           Where the student wants to study. Picking a course auto-fills the department, the JAMB
           target (the course's competitive cut-off for the chosen university) and the JAMB subject
-          requirements below — all editable. WAEC subjects are left as you set them.
+          requirements below — all editable. WAEC subjects are topped up too, on top of whatever
+          the school already requires (general + stream) — nothing already ticked is removed.
         </p>
         <div className="sf-row">
           <div className="form-group">

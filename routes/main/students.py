@@ -101,6 +101,25 @@ def api_courses():
     return jsonify({'courses': [c.as_dict() for c in rows]})
 
 
+def _waec_subjects_for_course(course):
+    """The course's WAEC requirement list, falling back to English + Mathematics
+    plus its JAMB combo when WAEC isn't filled in for this course (common for
+    manually-added courses on Settings -> Admissions data). Mirrors how the
+    curated course catalogue itself derives WAEC from JAMB (see
+    utils/university_seed.py's _SCI_WAEC/_ENGR_WAEC etc. = JAMB combo + Maths)."""
+    waec = course.waec_subject_list
+    if waec:
+        return waec
+    jamb = course.jamb_subject_list
+    if not jamb:
+        return []
+    fallback = []
+    for s in ['English Language', 'Mathematics'] + jamb:
+        if s and s not in fallback:
+            fallback.append(s)
+    return fallback
+
+
 @main_bp.route('/api/course-requirements')
 @login_required
 def api_course_requirements():
@@ -115,7 +134,7 @@ def api_course_requirements():
         'department': course.department or '',
         'jamb_target': effective_cutoff(university, course),
         'jamb_subjects': course.jamb_subject_list,
-        'waec_subjects': course.waec_subject_list,
+        'waec_subjects': _waec_subjects_for_course(course),
     })
 
 
