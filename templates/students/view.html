@@ -70,10 +70,8 @@
 .sp-chip-primary { color: var(--primary); background: color-mix(in srgb, var(--primary) 12%, var(--bg-card)); }
 .sp-chip-blue { color: #2563eb; background: color-mix(in srgb, #3b82f6 12%, var(--bg-card)); }
 .sp-chip-rose { color: #e11d64; background: color-mix(in srgb, #f43f5e 12%, var(--bg-card)); }
-/* .sp-btn* live in style.css (shared across modules); the grid + mobile Back
-   hide are profile-specific. */
+/* .sp-btn* live in style.css (shared across modules); the grid is profile-specific. */
 .sp-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(112px, 1fr)); gap: .6rem; margin-top: 1.1rem; }
-@media (max-width: 640px) { .sp-btn-back { display: none; } }   /* the mobile shell provides Back */
 @media (min-width: 768px) { .sp-avatar { width: 104px; height: 104px; } .sp-name { font-size: 1.7rem; } }
 
 /* ── Collapsible profile sections (accordion rows on mobile, open on desktop) ── */
