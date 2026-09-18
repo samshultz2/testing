@@ -28,6 +28,24 @@ def index():
     })
 
 
+# The fixed exam rules (not a per-school setting): WAEC candidates register 9
+# subjects, JAMB (UTME) is always exactly 4.
+WAEC_EXPECTED_SUBJECTS = 9
+JAMB_EXPECTED_SUBJECTS = 4
+
+
+def _subject_count_mismatches(students, count_fn, expected):
+    """Students (from the SSS3/exam-candidate cohort) whose subject count for
+    one exam isn't the expected fixed number — miscounted registrations that
+    need a look before results start coming in. Sorted worst-first (furthest
+    from the expected count), then by name."""
+    out = [{'id': s.id, 'name': s.full_name, 'student_id': s.student_id, 'count': n,
+            'edit_url': url_for('main.edit_student', student_id=s.id)}
+           for s in students for n in [count_fn(s)] if n != expected]
+    out.sort(key=lambda r: (-abs(r['count'] - expected), r['name'] or ''))
+    return out
+
+
 @results_bp.route('/subject-enrolment')
 @login_required
 def subject_enrolment():
@@ -64,11 +82,23 @@ def subject_enrolment():
                  'url': url_for('results.subject_enrolment_detail', exam=exam, subject=subj, scope=scope)}
                 for subj, cnt in rows]
 
+    # Subject-count mismatches always check the SSS3/exam-candidate cohort —
+    # the count that actually matters for WAEC/JAMB registration — regardless
+    # of which scope tab the page itself is showing.
+    sss3_students = students if only_sss3 else get_sss3_students()
+    waec_mismatches = _subject_count_mismatches(
+        sss3_students, lambda s: len(s.waec_subject_list), WAEC_EXPECTED_SUBJECTS)
+    jamb_mismatches = _subject_count_mismatches(
+        sss3_students, lambda s: len(s.jamb_subject_list), JAMB_EXPECTED_SUBJECTS)
+
     return _render({
         'page': 'subject_enrolment', 'only_sss3': only_sss3, 'student_count': len(students),
         'waec_enrolled': waec_enrolled, 'jamb_enrolled': jamb_enrolled,
         'waec_rows': _rows(waec_rows, waec_enrolled, 'waec'),
         'jamb_rows': _rows(jamb_rows, jamb_enrolled, 'jamb'),
+        'sss3_count': len(sss3_students),
+        'waec_expected': WAEC_EXPECTED_SUBJECTS, 'jamb_expected': JAMB_EXPECTED_SUBJECTS,
+        'waec_mismatches': waec_mismatches, 'jamb_mismatches': jamb_mismatches,
         'urls': {'sss3': url_for('results.subject_enrolment', scope='sss3'),
                  'all': url_for('results.subject_enrolment', scope='all')},
     })

@@ -129,6 +129,12 @@ function SubjectEnrolment({ d }) {
           <div className="kpi-value">{d.waec_rows.length}</div>
         </div>
       </div>
+      <MismatchGroup icon="fa-file-alt" title="WAEC subject count issues"
+        hint={`SSS3 / exam candidates (${d.sss3_count}) who don't have exactly ${d.waec_expected} WAEC subjects`}
+        expected={d.waec_expected} rows={d.waec_mismatches} />
+      <MismatchGroup icon="fa-file-contract" title="JAMB subject count issues"
+        hint={`SSS3 / exam candidates (${d.sss3_count}) who don't have exactly ${d.jamb_expected} JAMB subjects`}
+        expected={d.jamb_expected} rows={d.jamb_mismatches} />
       <div className="enrol-grid">
         <div className="card">
           <div className="card-header"><h3><i aria-hidden="true" className="fas fa-file-alt" /> WAEC Subjects</h3></div>
@@ -142,6 +148,30 @@ function SubjectEnrolment({ d }) {
         </div>
       </div>
     </>
+  );
+}
+
+// A collapsible list of students whose subject count doesn't match the fixed
+// exam rule (WAEC = 9, JAMB = 4) — click through to fix it on their profile.
+// Mirrors the Readiness screen's .rgroup/.slist/.srow pattern for consistency.
+function MismatchGroup({ icon, title, hint, expected, rows }) {
+  return (
+    <details className={'rgroup' + (rows.length ? '' : ' clear')} open={rows.length > 0}>
+      <summary><span><i aria-hidden="true" className={'fas ' + icon} /> {title}</span><span className="count">{rows.length}</span></summary>
+      <p className="text-muted text-sm" style={{ margin: '.5rem 1rem 0' }}>{hint}</p>
+      {rows.length ? (
+        <div className="slist">{rows.map((r) => (
+          <div className="srow" key={r.id}>
+            <span>{r.name} <span className="text-muted">{r.student_id}</span></span>
+            <span>
+              <span className={r.count > expected ? 'text-danger' : 'text-warning'} style={{ marginRight: '.5rem' }}>
+                {r.count} of {expected}
+              </span>
+              <a href={r.edit_url}>Edit</a>
+            </span>
+          </div>))}</div>
+      ) : <div style={{ padding: '.75rem 1rem', color: 'var(--success)', fontSize: 'var(--text-sm)' }}><i aria-hidden="true" className="fas fa-check-circle" /> All good here.</div>}
+    </details>
   );
 }
 
