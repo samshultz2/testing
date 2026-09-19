@@ -5623,6 +5623,13 @@
 ]
 ],
 [
+"results.subject_branch_breakdown",
+"/results/subject-branch-breakdown",
+[
+"GET"
+]
+],
+[
 "results.subject_enrolment",
 "/results/subject-enrolment",
 [

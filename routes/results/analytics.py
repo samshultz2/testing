@@ -1275,3 +1275,190 @@ def waec_broadsheet_download():
                         logo_path=_lp, school_name=_sname)
     return Response(data, mimetype='application/pdf', headers={
         'Content-Disposition': f'attachment; filename="waec_broadsheet_{year}.pdf"'})
+
+
+# =============================================================================
+# SUBJECT / BRANCH GRADE BREAKDOWN — a printed grade-analysis-sheet report:
+# per subject, per branch, the percentage of candidates in each grade (WAEC /
+# Mock WAEC) or score band (JAMB / Mock JAMB has no grades — 0-100 per
+# subject), plus an overall summary by branch. Independent per exam kind.
+# =============================================================================
+
+# JAMB (& Mock JAMB) per-subject score bands — the JAMB-equivalent of WAEC's
+# nine A1-F9 grade columns, since JAMB has no grading scale (raw 0-100/subject).
+_JAMB_SCORE_BANDS = ['90-100', '80-89', '70-79', '60-69', '50-59', '40-49', '30-39', '20-29', '0-19']
+_JAMB_PASS_BANDS = {'50-59', '60-69', '70-79', '80-89', '90-100'}
+_WAEC_PASS_GRADES = {'A1', 'B2', 'B3', 'C4', 'C5', 'C6'}
+
+
+def _jamb_score_band(score):
+    if score is None:
+        return None
+    for lo, band in ((90, '90-100'), (80, '80-89'), (70, '70-79'), (60, '60-69'),
+                     (50, '50-59'), (40, '40-49'), (30, '30-39'), (20, '20-29')):
+        if score >= lo:
+            return band
+    return '0-19'
+
+
+def _branch_grade_breakdown(entries, bands, pass_bands):
+    """``entries``: iterable of (subject, band, branch_name) — one per subject
+    entry (a WAEC/Mock-WAEC result row, or one filled JAMB/Mock-JAMB subject
+    slot). Aggregates into the per-subject-per-branch percentage table plus a
+    per-branch overall summary, mirroring a school's printed grade-analysis
+    sheet. A subject with zero entries at a branch is left out of that
+    branch's per-subject row entirely (the template renders it "Not Offered")."""
+    from collections import defaultdict, Counter
+    subj_branch = defaultdict(lambda: defaultdict(Counter))
+    subj_total = Counter()
+    branch_all = defaultdict(Counter)
+    branch_n = Counter()
+    branches_seen = set()
+
+    for subject, band, branch in entries:
+        if not subject or band is None or not branch:
+            continue
+        branches_seen.add(branch)
+        subj_branch[subject][branch][band] += 1
+        subj_total[subject] += 1
+        branch_all[branch][band] += 1
+        branch_n[branch] += 1
+
+    subjects = [s for s, _ in subj_total.most_common()]
+    branches = sorted(branches_seen)
+
+    table = {}
+    for subj in subjects:
+        table[subj] = {}
+        for br in branches:
+            counter = subj_branch[subj].get(br)
+            n = sum(counter.values()) if counter else 0
+            if not n:
+                table[subj][br] = None
+            else:
+                table[subj][br] = {'n': n,
+                                   'pct': {b: round(counter.get(b, 0) / n * 100, 1) for b in bands}}
+
+    summary = {}
+    for br in branches:
+        n = branch_n[br]
+        c = branch_all[br]
+        pass_n = sum(c.get(b, 0) for b in pass_bands)
+        summary[br] = {
+            'n': n,
+            'pct': {b: round(c.get(b, 0) / n * 100, 1) for b in bands} if n else {b: 0 for b in bands},
+            'pass_n': pass_n,
+            'pass_pct': round(pass_n / n * 100, 1) if n else 0,
+        }
+
+    return {'subjects': subjects, 'branches': branches, 'bands': bands,
+            'table': table, 'summary': summary}
+
+
+def _pivot_jamb_entries(rows_with_branch):
+    """``rows_with_branch``: iterable of (JAMBResult|MockJAMBResult, branch_name).
+    Each result carries up to 4 (subject, score) slots — yield one
+    (subject, band, branch) tuple per filled slot."""
+    for r, branch in rows_with_branch:
+        for i in range(1, 5):
+            subj = getattr(r, f'subject{i}')
+            score = getattr(r, f'subject{i}_score')
+            if subj and score is not None:
+                yield (subj, _jamb_score_band(score), branch)
+
+
+@results_bp.route('/subject-branch-breakdown')
+@login_required
+def subject_branch_breakdown():
+    """Subject-wise performance & grade/score-band percentage breakdown, by
+    branch — independently for WAEC, JAMB, Mock WAEC or Mock JAMB."""
+    from models import Branch
+    from utils.branch_scope import viewing_branch_id
+
+    exam = request.args.get('exam', 'waec')
+    if exam not in ('waec', 'jamb', 'mock_waec', 'mock_jamb'):
+        exam = 'waec'
+    bid = viewing_branch_id()
+    branch_names = {b.id: b.name for b in Branch.query.all()}
+
+    result = None
+    years = []
+    mock_options = []
+    selected_year = None
+    selected_mock = None
+    pass_label = 'Overall Credit Pass (A1–C6)' if exam in ('waec', 'mock_waec') else 'Overall ≥50 Rate'
+    band_label = 'Grade' if exam in ('waec', 'mock_waec') else 'Score Band'
+
+    if exam in ('waec', 'jamb'):
+        Model = WAECResult if exam == 'waec' else JAMBResult
+        yq = db.session.query(Model.exam_year).distinct()
+        if bid is not None:
+            yq = yq.join(Student, Model.student_id == Student.id).filter(Student.branch_id == bid)
+        years = sorted({y[0] for y in yq.all()}, reverse=True)
+        selected_year = resolve_exam_year(request.args.get('year', type=int), years)
+        if selected_year:
+            q = (db.session.query(Model, Student.branch_id)
+                 .join(Student, Model.student_id == Student.id)
+                 .filter(Model.exam_year == selected_year))
+            if bid is not None:
+                q = q.filter(Student.branch_id == bid)
+            rows_with_branch = [(r, branch_names.get(br)) for r, br in q.all()]
+            if exam == 'waec':
+                entries = [(r.subject, r.grade, br) for r, br in rows_with_branch]
+                bands, pass_bands = WAECResult.VALID_GRADES, _WAEC_PASS_GRADES
+            else:
+                entries = list(_pivot_jamb_entries(rows_with_branch))
+                bands, pass_bands = _JAMB_SCORE_BANDS, _JAMB_PASS_BANDS
+            result = _branch_grade_breakdown(entries, bands, pass_bands)
+    else:
+        from models import AcademicSession
+        from models.mock_waec import MockWAECExam, MockWAECResult
+        from models.mock_jamb import MockJAMBExam, MockJAMBResult
+        ExamModel = MockWAECExam if exam == 'mock_waec' else MockJAMBExam
+        ResultModel = MockWAECResult if exam == 'mock_waec' else MockJAMBResult
+
+        pq = db.session.query(ExamModel.session_id, ExamModel.exam_number)
+        if bid is not None:
+            pq = pq.filter(ExamModel.branch_id == bid)
+        pairs = pq.distinct().all()
+        sess_names = {s.id: s.name for s in AcademicSession.query.all()}
+        mock_options = sorted(
+            ({'session_id': sid, 'exam_number': num,
+              'label': f"Mock {num} — {sess_names.get(sid, '?')}"} for sid, num in pairs),
+            key=lambda o: (sess_names.get(o['session_id'], ''), o['exam_number']), reverse=True)
+
+        mock_param = request.args.get('mock', '')
+        if mock_param and '_' in mock_param:
+            try:
+                req_sid, req_num = (int(x) for x in mock_param.split('_', 1))
+                selected_mock = next((o for o in mock_options
+                                      if o['session_id'] == req_sid and o['exam_number'] == req_num), None)
+            except ValueError:
+                selected_mock = None
+        if selected_mock is None and mock_options:
+            active_session = get_active_session()
+            active_sid = active_session.id if active_session else None
+            selected_mock = next((o for o in mock_options if o['session_id'] == active_sid),
+                                 mock_options[0])
+
+        if selected_mock:
+            exam_ids = [e.id for e in ExamModel.query.filter_by(
+                session_id=selected_mock['session_id'], exam_number=selected_mock['exam_number']).all()]
+            q = (db.session.query(ResultModel, Student.branch_id)
+                 .join(Student, ResultModel.student_id == Student.id)
+                 .filter(ResultModel.mock_exam_id.in_(exam_ids)))
+            if bid is not None:
+                q = q.filter(Student.branch_id == bid)
+            rows_with_branch = [(r, branch_names.get(br)) for r, br in q.all()]
+            if exam == 'mock_waec':
+                entries = [(r.subject, r.grade, br) for r, br in rows_with_branch]
+                bands, pass_bands = WAECResult.VALID_GRADES, _WAEC_PASS_GRADES
+            else:
+                entries = list(_pivot_jamb_entries(rows_with_branch))
+                bands, pass_bands = _JAMB_SCORE_BANDS, _JAMB_PASS_BANDS
+            result = _branch_grade_breakdown(entries, bands, pass_bands)
+
+    return render_template('results/subject_branch_breakdown.html',
+                           exam=exam, result=result, years=years, selected_year=selected_year,
+                           mock_options=mock_options, selected_mock=selected_mock,
+                           pass_label=pass_label, band_label=band_label)

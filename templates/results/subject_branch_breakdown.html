@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}Grade Breakdown - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('results.analytics_hub') }}">Exam Analytics</a> / <span>Grade Breakdown</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.gb-table { width: 100%; border-collapse: collapse; font-size: .85rem; white-space: nowrap; }
+.gb-table th, .gb-table td { border: 1px solid var(--border-color); padding: .4rem .6rem; text-align: center; }
+.gb-table thead th { background: var(--bg-secondary, var(--gray-50)); font-weight: 700; }
+.gb-table td.gb-subj { text-align: left; font-weight: 600; white-space: normal; vertical-align: middle; }
+.gb-table td.gb-branch { text-align: left; }
+.gb-table td.gb-notoffered { color: var(--text-muted); font-style: italic; }
+/* Band tints: 9-step green -> red -> purple ramp, shared by WAEC's A1-F9 and
+   JAMB's score bands. color-mix() against transparent keeps these readable in
+   both light and dark mode (no hardcoded text colour riding on top). */
+.gb-1 { background: color-mix(in srgb, #16a34a 30%, transparent); }
+.gb-2 { background: color-mix(in srgb, #22c55e 26%, transparent); }
+.gb-3 { background: color-mix(in srgb, #4ade80 22%, transparent); }
+.gb-4 { background: color-mix(in srgb, #eab308 26%, transparent); }
+.gb-5 { background: color-mix(in srgb, #f59e0b 22%, transparent); }
+.gb-6 { background: color-mix(in srgb, #f97316 26%, transparent); }
+.gb-7 { background: color-mix(in srgb, #ef4444 20%, transparent); }
+.gb-8 { background: color-mix(in srgb, #dc2626 26%, transparent); }
+.gb-9 { background: color-mix(in srgb, #9333ea 24%, transparent); }
+thead .gb-1 { background: color-mix(in srgb, #16a34a 55%, var(--bg-secondary, var(--gray-50))); }
+thead .gb-2 { background: color-mix(in srgb, #22c55e 50%, var(--bg-secondary, var(--gray-50))); }
+thead .gb-3 { background: color-mix(in srgb, #4ade80 45%, var(--bg-secondary, var(--gray-50))); }
+thead .gb-4 { background: color-mix(in srgb, #eab308 50%, var(--bg-secondary, var(--gray-50))); }
+thead .gb-5 { background: color-mix(in srgb, #f59e0b 45%, var(--bg-secondary, var(--gray-50))); }
+thead .gb-6 { background: color-mix(in srgb, #f97316 50%, var(--bg-secondary, var(--gray-50))); }
+thead .gb-7 { background: color-mix(in srgb, #ef4444 42%, var(--bg-secondary, var(--gray-50))); }
+thead .gb-8 { background: color-mix(in srgb, #dc2626 50%, var(--bg-secondary, var(--gray-50))); }
+thead .gb-9 { background: color-mix(in srgb, #9333ea 45%, var(--bg-secondary, var(--gray-50))); }
+.gb-scroll { overflow-x: auto; }
+.gb-selector { display: flex; align-items: center; gap: .5rem; margin-bottom: 1rem; }
+/* Base pill-tab layout (style.css only refines the active/hover states on
+   top of this — see its "Pill family" comment). */
+.scope-tabs { display: flex; gap: .4rem; margin-bottom: 1rem; flex-wrap: wrap; }
+.scope-tab { padding: .4rem .9rem; border: 1px solid var(--border-color); border-radius: var(--radius-full);
+  font-size: .8rem; text-decoration: none; color: var(--text-secondary); background: var(--bg-card); cursor: pointer; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Subject-Wise Performance &amp; Grade Breakdown</h1>
+        <p class="text-muted text-sm">Per-subject, per-branch {{ band_label|lower }} percentage distribution</p>
+    </div>
+</div>
+
+<div class="scope-tabs">
+    <a href="{{ url_for('results.subject_branch_breakdown', exam='waec') }}" class="scope-tab{{ ' active' if exam == 'waec' else '' }}">WAEC</a>
+    <a href="{{ url_for('results.subject_branch_breakdown', exam='jamb') }}" class="scope-tab{{ ' active' if exam == 'jamb' else '' }}">JAMB</a>
+    <a href="{{ url_for('results.subject_branch_breakdown', exam='mock_waec') }}" class="scope-tab{{ ' active' if exam == 'mock_waec' else '' }}">Mock WAEC</a>
+    <a href="{{ url_for('results.subject_branch_breakdown', exam='mock_jamb') }}" class="scope-tab{{ ' active' if exam == 'mock_jamb' else '' }}">Mock JAMB</a>
+</div>
+
+{% if exam in ('waec', 'jamb') %}
+<form method="GET" class="gb-selector">
+    <input type="hidden" name="exam" value="{{ exam }}">
+    <label class="form-label mb-0">Year</label>
+    <select name="year" class="form-control" style="max-width:130px;" data-autosubmit>
+        {% for y in years %}<option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>{% endfor %}
+    </select>
+</form>
+{% else %}
+<form method="GET" class="gb-selector">
+    <input type="hidden" name="exam" value="{{ exam }}">
+    <label class="form-label mb-0">Mock sitting</label>
+    <select name="mock" class="form-control" style="max-width:260px;" data-autosubmit>
+        {% for o in mock_options %}
+        <option value="{{ o.session_id }}_{{ o.exam_number }}"
+            {% if selected_mock and selected_mock.session_id == o.session_id and selected_mock.exam_number == o.exam_number %}selected{% endif %}>
+            {{ o.label }}
+        </option>
+        {% endfor %}
+    </select>
+</form>
+{% endif %}
+
+{% if not result or not result.subjects %}
+<div class="card"><div class="card-body text-muted">
+    <i class="fas fa-info-circle"></i>
+    No {{ 'JAMB' if 'jamb' in exam else 'WAEC' }} results recorded for this {{ 'sitting' if 'mock' in exam else 'year' }} yet.
+</div></div>
+{% else %}
+<div class="card mb-3"><div class="gb-scroll">
+<table class="gb-table">
+    <thead>
+        <tr>
+            <th rowspan="2">Subject</th>
+            <th rowspan="2">Branch</th>
+            <th rowspan="2">Candidates<br>(N)</th>
+            <th colspan="{{ result.bands|length }}">{{ band_label }} Percentage Breakdown</th>
+        </tr>
+        <tr>
+            {% for b in result.bands %}<th class="gb-{{ loop.index }}">{{ b }}<br>(%)</th>{% endfor %}
+        </tr>
+    </thead>
+    <tbody>
+        {% for subj in result.subjects %}
+        {% for br in result.branches %}
+        <tr>
+            {% if loop.first %}<td class="gb-subj" rowspan="{{ result.branches|length }}">{{ subj }}</td>{% endif %}
+            <td class="gb-branch">{{ br }}</td>
+            {% set cell = result.table[subj][br] %}
+            {% if cell is none %}
+            <td colspan="{{ result.bands|length + 1 }}" class="gb-notoffered">Not Offered</td>
+            {% else %}
+            <td>{{ cell.n }}</td>
+            {% for b in result.bands %}<td class="gb-{{ loop.index }}">{{ cell.pct[b] }}%</td>{% endfor %}
+            {% endif %}
+        </tr>
+        {% endfor %}
+        {% endfor %}
+    </tbody>
+</table>
+</div></div>
+
+<div class="card">
+    <div class="card-header"><h3>Overall {{ band_label }} Percentage Summary by Branch</h3></div>
+    <div class="gb-scroll">
+    <table class="gb-table">
+        <thead>
+            <tr>
+                <th>Branch</th>
+                <th>Total Subject<br>Entries (N)</th>
+                {% for b in result.bands %}<th class="gb-{{ loop.index }}">{{ b }}<br>(%)</th>{% endfor %}
+                <th>{{ pass_label }}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for br in result.branches %}
+            <tr>
+                <td class="gb-branch">{{ br }}</td>
+                <td>{{ result.summary[br].n }}</td>
+                {% for b in result.bands %}<td class="gb-{{ loop.index }}">{{ result.summary[br].pct[b] }}%</td>{% endfor %}
+                <td><strong>{{ result.summary[br].pass_pct }}%</strong> <span class="text-muted">({{ result.summary[br].pass_n }})</span></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

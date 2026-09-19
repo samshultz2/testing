@@ -567,6 +567,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a href="{{ url_for('results.subject_branch_breakdown') }}" class="nav-link {% if request.endpoint == 'results.subject_branch_breakdown' %}active{% endif %}">
+                            <i class="fas fa-table-cells"></i><span>Grade Breakdown</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="{{ url_for('results.readiness') }}" class="nav-link {% if request.endpoint == 'results.readiness' %}active{% endif %}">
                             <i class="fas fa-clipboard-check"></i><span>Exam Readiness</span>
                         </a>
