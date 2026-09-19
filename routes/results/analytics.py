@@ -1301,7 +1301,7 @@ def _jamb_score_band(score):
     return '0-19'
 
 
-def _branch_grade_breakdown(entries, bands, pass_bands, uploaded=None):
+def _branch_grade_breakdown(entries, bands, pass_bands, uploaded=None, pass_label='Credit Pass', band_label='Grade'):
     """``entries``: iterable of (subject, band, branch_name) — one per subject
     entry (a WAEC/Mock-WAEC result row, or one filled JAMB/Mock-JAMB subject
     slot). Aggregates into the per-subject-per-branch percentage table plus a
@@ -1313,7 +1313,13 @@ def _branch_grade_breakdown(entries, bands, pass_bands, uploaded=None):
     {band: int}}}`` — a branch's own summary sheet, imported via OCR/paste
     instead of per-student rows (see models.grade_distribution). When given
     for a (subject, branch) pair it REPLACES whatever ``entries`` computed for
-    that exact pair, since it's the branch's own authoritative figure."""
+    that exact pair, since it's the branch's own authoritative figure.
+
+    Also returns a second, differently-weighted branch ranking (``ranking``):
+    each band is worth points from ``len(bands)`` (the best band) down to 1
+    (the worst), and a branch's composite score is its weighted point total
+    divided by its total subject entries — a school's usual "weighted GPA"
+    ranking, distinct from the raw per-band percentage summary above."""
     from collections import defaultdict, Counter
     subj_branch = defaultdict(lambda: defaultdict(Counter))
     subj_total = Counter()
@@ -1377,8 +1383,53 @@ def _branch_grade_breakdown(entries, bands, pass_bands, uploaded=None):
             'pass_pct': round(pass_n / n * 100, 1) if n else 0,
         }
 
+    # ---- Composite ranking: a second summary by different criteria — a
+    # weighted-GPA-style score (best band = len(bands) pts down to 1 pt for
+    # the worst) instead of the raw per-band percentage breakdown above. ----
+    weights = {b: len(bands) - i for i, b in enumerate(bands)}
+    top3 = bands[:3] if len(bands) >= 3 else bands
+    pass_bands_ordered = [b for b in bands if b in pass_bands]
+    top3_range = f'{top3[0]} – {top3[-1]}' if len(top3) > 1 else top3[0]
+    pass_range = (f'{pass_bands_ordered[0]} – {pass_bands_ordered[-1]}'
+                 if len(pass_bands_ordered) > 1 else (pass_bands_ordered[0] if pass_bands_ordered else ''))
+
+    ranking = []
+    for br in branches:
+        n = branch_n[br]
+        if not n:
+            continue
+        c = branch_all[br]
+        weighted_sum = sum(c.get(b, 0) * weights[b] for b in bands)
+        top3_n = sum(c.get(b, 0) for b in top3)
+        ranking.append({
+            'branch': br, 'n': n, 'gpa': round(weighted_sum / n, 2),
+            'top3_pct': round(top3_n / n * 100, 1),
+            'pass_pct': summary[br]['pass_pct'], 'pass_n': summary[br]['pass_n'],
+        })
+    ranking.sort(key=lambda r: (-r['gpa'], r['branch']))
+    for i, r in enumerate(ranking, 1):
+        r['rank'] = i
+
+    credit_word = 'Credit Pass Rate' if band_label == 'Grade' else 'Pass Rate'
+    credit_col = 'Credit Pass' if band_label == 'Grade' else 'Pass'
+    top3_word = 'High Distinction/Credit Rate' if band_label == 'Grade' else 'Top-Tier Rate'
+    scale_text = ('Weighted GPA Scale: ' + ', '.join(
+        f"{b} = {weights[b]} {'pt' if weights[b] == 1 else 'pts'}" for b in bands) + '.')
+    composite_text = ('Composite Score: Calculated as the sum of all weighted grade points divided by '
+                      'total subject entries (N).')
+    secondary_text = f'Secondary Metrics: {credit_word}' + (f' ({pass_range} %)' if pass_range else '') \
+        + f' and {top3_word} ({top3_range} %).'
+
+    ranking_title = 'Composite Branch Performance Ranking (Weighted GPA System)'
+    ranking_criteria = {
+        'bullets': [scale_text, composite_text, secondary_text],
+        'top3_col': f'{top3_range} %',
+        'pass_col': f'{credit_col} % ({pass_range})' if pass_range else f'{credit_col} %',
+    }
+
     return {'subjects': subjects, 'branches': branches, 'bands': bands,
-            'table': table, 'summary': summary}
+            'table': table, 'summary': summary,
+            'ranking': ranking, 'ranking_title': ranking_title, 'ranking_criteria': ranking_criteria}
 
 
 def _uploaded_distribution(branch_names, exam, bid, exam_year=None, mock_session_id=None, mock_exam_number=None):
@@ -1480,7 +1531,8 @@ def _load_grade_breakdown(exam):
                 entries = list(_pivot_jamb_entries(rows_with_branch))
                 bands, pass_bands = _JAMB_SCORE_BANDS, _JAMB_PASS_BANDS
             uploaded = _uploaded_distribution(branch_names, exam, bid, exam_year=selected_year)
-            result = _branch_grade_breakdown(entries, bands, pass_bands, uploaded=uploaded)
+            result = _branch_grade_breakdown(entries, bands, pass_bands, uploaded=uploaded,
+                                             pass_label=pass_label, band_label=band_label)
     else:
         from models import AcademicSession
         from models.mock_waec import MockWAECExam, MockWAECResult
@@ -1539,7 +1591,8 @@ def _load_grade_breakdown(exam):
             uploaded = _uploaded_distribution(branch_names, exam, bid,
                                               mock_session_id=selected_mock['session_id'],
                                               mock_exam_number=selected_mock['exam_number'])
-            result = _branch_grade_breakdown(entries, bands, pass_bands, uploaded=uploaded)
+            result = _branch_grade_breakdown(entries, bands, pass_bands, uploaded=uploaded,
+                                             pass_label=pass_label, band_label=band_label)
 
     return {'exam': exam, 'exam_label': exam_label, 'period_label': period_label,
            'result': result, 'years': years, 'selected_year': selected_year,

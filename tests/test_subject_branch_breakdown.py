@@ -196,13 +196,15 @@ def test_waec_export_pdf_docx_xlsx_png(app):
     import io
     doc = Document(io.BytesIO(r.get_data()))
     # the navy masthead is itself a (1-column) table, so filter down to the
-    # two real data tables: main breakdown + overall summary
+    # three real data tables: main breakdown + overall summary + ranking
     data_tables = [t for t in doc.tables if len(t.columns) > 1]
-    assert len(data_tables) == 2
+    assert len(data_tables) == 3
     header = [c_.text for c_ in data_tables[0].rows[0].cells]
     assert header[:3] == ['SUBJECT', 'BRANCH', 'CANDIDATES (N)']
     band_header = [c_.text for c_ in data_tables[0].rows[1].cells]
     assert 'A1 (%)' in band_header
+    rank_header = [c_.text for c_ in data_tables[2].rows[0].cells]
+    assert rank_header[:4] == ['RANK', 'BRANCH', 'TOTAL ENTRIES (N)', 'WEIGHTED GPA']
 
     r = c.get(f'/results/subject-branch-breakdown/export.xlsx?exam=waec&year={yr}')
     assert r.status_code == 200
@@ -210,7 +212,7 @@ def test_waec_export_pdf_docx_xlsx_png(app):
     from openpyxl import load_workbook
     import io as _io
     wb = load_workbook(_io.BytesIO(r.get_data()))
-    assert wb.sheetnames == ['Grade Breakdown', 'Summary']
+    assert wb.sheetnames == ['Grade Breakdown', 'Summary', 'Branch Ranking']
 
     r = c.get(f'/results/subject-branch-breakdown/export.png?exam=waec&year={yr}')
     assert r.status_code == 200
@@ -237,3 +239,87 @@ def test_jamb_export_uses_score_bands(app):
     ws = wb['Grade Breakdown']
     all_values = [c.value for row in ws.iter_rows() for c in row]
     assert any(v and '90-100' in str(v) for v in all_values)
+
+
+def test_composite_ranking_computes_weighted_gpa_and_sorts_branches():
+    """The second, differently-weighted summary: best band worth len(bands)
+    points down to 1 for the worst, composite = weighted total / entries,
+    ranked highest-first."""
+    from routes.results.analytics import _branch_grade_breakdown
+
+    entries = [
+        ('Mathematics', 'A1', 'Jemila'), ('Mathematics', 'B2', 'Jemila'), ('Physics', 'B3', 'Jemila'),
+        ('Mathematics', 'C6', 'New Benin'), ('Mathematics', 'F9', 'New Benin'),
+    ]
+    bands = WAECResult.VALID_GRADES
+    pass_bands = {'A1', 'B2', 'B3', 'C4', 'C5', 'C6'}
+    result = _branch_grade_breakdown(entries, bands, pass_bands,
+                                     pass_label='Overall Credit Pass (A1–C6)', band_label='Grade')
+    ranking = result['ranking']
+    assert [r['branch'] for r in ranking] == ['Jemila', 'New Benin']   # best GPA first
+    assert ranking[0]['rank'] == 1 and ranking[1]['rank'] == 2
+    # Jemila: A1(9) + B2(8) + B3(7) = 24 / 3 entries = 8.0
+    assert ranking[0]['gpa'] == 8.0
+    assert ranking[0]['top3_pct'] == 100.0
+    # New Benin: C6(4) + F9(1) = 5 / 2 entries = 2.5
+    assert ranking[1]['gpa'] == 2.5
+    assert ranking[1]['top3_pct'] == 0.0
+    assert 'Composite Branch Performance Ranking' in result['ranking_title']
+    assert len(result['ranking_criteria']['bullets']) == 3
+
+
+def test_composite_ranking_appears_on_the_live_page_and_all_exports(app):
+    yr = 2087
+    with app.app_context():
+        b1 = _branch('GB Kappa')
+        b2 = _branch('GB Lambda')
+        db.session.flush()
+        s1 = _student(b1.id, 'Eleven'); s2 = _student(b2.id, 'Twelve')
+        db.session.flush()
+        db.session.add_all([
+            WAECResult(student_id=s1.id, exam_year=yr, subject='Mathematics', grade='A1'),
+            WAECResult(student_id=s2.id, exam_year=yr, subject='Mathematics', grade='F9'),
+        ])
+        db.session.commit()
+
+    c = _admin(app)
+    html = c.get(f'/results/subject-branch-breakdown?exam=waec&year={yr}').get_data(as_text=True)
+    assert 'Composite Branch Performance Ranking' in html
+    assert 'Weighted GPA Scale' in html
+    assert 'Criteria &amp; Weighting System' in html
+
+    r = c.get(f'/results/subject-branch-breakdown/export.pdf?exam=waec&year={yr}')
+    assert r.status_code == 200 and r.get_data()[:4] == b'%PDF'
+
+    r = c.get(f'/results/subject-branch-breakdown/export.png?exam=waec&year={yr}')
+    assert r.status_code == 200
+    assert r.mimetype in ('image/png', 'application/zip')
+
+
+def test_ranking_table_paginates_across_png_pages_instead_of_dropping_rows():
+    """A school with enough branches that the ranking table alone overflows a
+    single A4 page must spill onto additional pages with the header repeated
+    — not silently drop the branches past the first page's bottom margin
+    (the PNG renderer draws pages by hand, unlike the PDF/docx exporters
+    whose table libraries paginate automatically)."""
+    from routes.results.analytics import _branch_grade_breakdown
+    from utils.grade_breakdown_export import grade_breakdown_png_pages
+
+    entries = []
+    bands = WAECResult.VALID_GRADES
+    pass_bands = {'A1', 'B2', 'B3', 'C4', 'C5', 'C6'}
+    for i in range(70):
+        entries.append(('Mathematics', bands[i % len(bands)], f'PgBranch {i}'))
+        entries.append(('Mathematics', bands[(i + 1) % len(bands)], f'PgBranch {i}'))
+    result = _branch_grade_breakdown(entries, bands, pass_bands,
+                                     pass_label='Overall Credit Pass (A1–C6)', band_label='Grade')
+    assert len(result['ranking']) == 70
+    assert any(r['rank'] == 70 for r in result['ranking'])
+
+    meta = {'school_name': 'Pagination Test School'}
+    pages = grade_breakdown_png_pages(meta, result, 'Grade', 'Overall Credit Pass (A1–C6)')
+    # With 70 branches the ranking table alone can't fit on one page — this
+    # must produce more than one page rather than raising or truncating.
+    assert len(pages) > 1
+    for p in pages:
+        assert p[:8] == b'\x89PNG\r\n\x1a\n'

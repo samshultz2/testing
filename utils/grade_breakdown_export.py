@@ -293,6 +293,53 @@ def grade_breakdown_pdf(meta, result, band_label, pass_label):
     elems.append(KeepTogether(sub_banner(f'Overall {band_label} Percentage Summary by Branch')))
     elems.append(st)
 
+    # ---- Composite ranking: a second summary, by different criteria (a
+    # weighted-GPA-style composite score) ----
+    ranking = result.get('ranking')
+    if ranking:
+        rc = result['ranking_criteria']
+        crit_title_style = ParagraphStyle('critT', parent=styles['Normal'], fontSize=8, leading=10,
+                                          textColor=colors.HexColor('#64748B'), fontName='Helvetica-Bold')
+        crit_body_style = ParagraphStyle('critB', parent=styles['Normal'], fontSize=8.5, leading=12,
+                                         textColor=colors.HexColor('#334155'), fontName='Helvetica')
+        crit_rows = [[Paragraph('CRITERIA &amp; WEIGHTING SYSTEM', crit_title_style)]]
+        for b in rc['bullets']:
+            crit_rows.append([Paragraph('&#8226; ' + pdf_escape(b), crit_body_style)])
+        crit_box = Table(crit_rows, colWidths=[avail])
+        crit_box.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), colors.HexColor('#F8FAFC')),
+            ('BOX', (0, 0), (-1, -1), 0.6, grid),
+            ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
+            ('LEFTPADDING', (0, 0), (-1, -1), 8), ('RIGHTPADDING', (0, 0), (-1, -1), 8),
+        ]))
+
+        rank_headers = ['Rank', 'Branch', 'Total Entries (N)', 'Weighted GPA', rc['top3_col'], rc['pass_col']]
+        rank_text_rows = [[str(r['rank']), r['branch'], str(r['n']), f"{r['gpa']:.2f}",
+                           f"{r['top3_pct']}%", f"{r['pass_pct']}%"] for r in ranking]
+        rwidths = col_widths(rank_headers, rank_text_rows, grow_cols=[2, 3, 4, 5])
+        rdata = [[Paragraph(h.upper(), navy_headp) for h in rank_headers]]
+        rstyle = [
+            ('BACKGROUND', (0, 0), (-1, 0), navy),
+            ('FONTSIZE', (0, 0), (-1, -1), fs), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('LINEBELOW', (0, 0), (-1, 0), 1.1, navy),
+            ('LINEBELOW', (0, 1), (-1, -1), 0.4, grid),
+            ('BOX', (0, 0), (-1, -1), 0.6, navy), ('INNERGRID', (0, 0), (-1, -1), 0.3, grid),
+            ('TOPPADDING', (0, 0), (-1, -1), 4), ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+            ('LEFTPADDING', (0, 0), (-1, -1), 5), ('RIGHTPADDING', (0, 0), (-1, -1), 5),
+        ]
+        for r in ranking:
+            rdata.append([Paragraph(str(r['rank']), cellc), Paragraph(pdf_escape(r['branch']), cell),
+                         Paragraph(str(r['n']), cellc), Paragraph(f"<b>{r['gpa']:.2f}</b>", cellc),
+                         Paragraph(f"{r['top3_pct']}%", cellc), Paragraph(f"{r['pass_pct']}%", cellc)])
+        rt = Table(rdata, colWidths=rwidths, repeatRows=1)
+        rt.setStyle(TableStyle(rstyle))
+
+        elems.append(Spacer(1, 10))
+        elems.append(KeepTogether(sub_banner(result['ranking_title'])))
+        elems.append(crit_box)
+        elems.append(Spacer(1, 6))
+        elems.append(rt)
+
     doc.build(elems)
     return buf.getvalue()
 
@@ -475,6 +522,53 @@ def grade_breakdown_docx(meta, result, band_label, pass_label):
         [[len(b) for b in result['branches']]], ['Branch'], [3.2],
         'Total Subject Entries (N)', avail_cm, len(bands), tail_label=pass_label))
 
+    # ---- Composite ranking: a second summary, by different criteria (a
+    # weighted-GPA-style composite score) ----
+    ranking = result.get('ranking')
+    if ranking:
+        rc = result['ranking_criteria']
+
+        def criteria_box(title, bullets):
+            bt = doc.add_table(rows=1, cols=1)
+            bt.autofit = False
+            bt.columns[0].width = Cm(avail_cm)
+            c0 = bt.rows[0].cells[0]
+            c0.width = Cm(avail_cm)
+            shade(c0, 'F8FAFC')
+            p0 = c0.paragraphs[0]
+            r0 = p0.add_run(title.upper())
+            r0.bold = True; r0.font.size = Pt(8); r0.font.color.rgb = RGBColor(0x64, 0x74, 0x8B)
+            for b in bullets:
+                p = c0.add_paragraph()
+                r = p.add_run('• ' + b)
+                r.font.size = Pt(9); r.font.color.rgb = RGBColor(0x33, 0x41, 0x55)
+            doc.add_paragraph().paragraph_format.space_after = Pt(2)
+
+        sub_banner(result['ranking_title'])
+        criteria_box('Criteria & Weighting System', rc['bullets'])
+
+        rank_headers = ['Rank', 'Branch', 'Total Entries (N)', 'Weighted GPA', rc['top3_col'], rc['pass_col']]
+        rt = doc.add_table(rows=1, cols=len(rank_headers))
+        rt.style = 'Table Grid'
+        rt.alignment = WD_TABLE_ALIGNMENT.CENTER
+        for i, label in enumerate(rank_headers):
+            set_cell(rt.rows[0].cells[i], label.upper(), bold=True, color=white)
+            shade(rt.rows[0].cells[i], NAVY_HEX)
+
+        for r in ranking:
+            row = rt.add_row()
+            cells = row.cells
+            set_cell(cells[0], r['rank'])
+            set_cell(cells[1], r['branch'], align=WD_ALIGN_PARAGRAPH.LEFT)
+            set_cell(cells[2], r['n'])
+            set_cell(cells[3], f"{r['gpa']:.2f}", bold=True)
+            set_cell(cells[4], f"{r['top3_pct']}%")
+            set_cell(cells[5], f"{r['pass_pct']}%")
+
+        _apply_docx_col_widths(rt, _docx_col_widths(
+            [[1 for _ in ranking], [len(r['branch']) for r in ranking]],
+            ['Rank', 'Branch'], [1.6, 3.5], 'Total Entries (N)', avail_cm, 3))
+
     buf = io.BytesIO()
     doc.save(buf)
     return buf.getvalue()
@@ -612,6 +706,60 @@ def grade_breakdown_xlsx(meta, result, band_label, pass_label):
         ws2.column_dimensions[get_column_letter(c)].width = max(len(str(sum_headers[c - 1])), 8) + 1
     ws2.column_dimensions[get_column_letter(2 + len(bands) + 1)].width = len(pass_label) + 2
     ws2.row_dimensions[hrow2].height = 26
+
+    # ---- Composite ranking: a second summary, by different criteria (a
+    # weighted-GPA-style composite score) — its own sheet, own header. ----
+    ranking = result.get('ranking')
+    if ranking:
+        rc = result['ranking_criteria']
+        rank_headers = ['Rank', 'Branch', 'Total Entries (N)', 'Weighted GPA', rc['top3_col'], rc['pass_col']]
+        ws3 = wb.create_sheet('Branch Ranking')
+        crit_fill = PatternFill('solid', fgColor='F8FAFC')
+        wrap_left = Alignment(horizontal='left', vertical='center', wrap_text=True)
+
+        r3 = 1
+        c3 = ws3.cell(row=r3, column=1, value=result['ranking_title'].upper())
+        c3.font = Font(bold=True, size=13, color='FFFFFF')
+        c3.fill = navy_fill; c3.alignment = ctr
+        ws3.merge_cells(start_row=r3, start_column=1, end_row=r3, end_column=len(rank_headers))
+        r3 += 2
+
+        title_c = ws3.cell(row=r3, column=1, value='CRITERIA & WEIGHTING SYSTEM')
+        title_c.font = Font(bold=True, size=9, color='64748B'); title_c.fill = crit_fill; title_c.alignment = left
+        ws3.merge_cells(start_row=r3, start_column=1, end_row=r3, end_column=len(rank_headers))
+        r3 += 1
+        for b in rc['bullets']:
+            bc = ws3.cell(row=r3, column=1, value='• ' + b)
+            bc.font = Font(size=10, color='334155'); bc.fill = crit_fill; bc.alignment = wrap_left
+            ws3.merge_cells(start_row=r3, start_column=1, end_row=r3, end_column=len(rank_headers))
+            ws3.row_dimensions[r3].height = 24
+            r3 += 1
+        r3 += 1
+
+        hrow3 = r3
+        for i, label in enumerate(rank_headers):
+            c = ws3.cell(row=hrow3, column=i + 1, value=label.upper())
+            c.font = white_font; c.fill = navy_fill; c.alignment = ctr
+        r3 = hrow3 + 1
+        for rk in ranking:
+            ws3.cell(row=r3, column=1, value=rk['rank']).alignment = ctr
+            ws3.cell(row=r3, column=2, value=rk['branch']).alignment = left
+            ws3.cell(row=r3, column=3, value=rk['n']).alignment = ctr
+            gpa_c = ws3.cell(row=r3, column=4, value=rk['gpa']); gpa_c.alignment = ctr; gpa_c.font = Font(bold=True)
+            top3_c = ws3.cell(row=r3, column=5, value=rk['top3_pct'] / 100)
+            top3_c.number_format = '0.0%'; top3_c.alignment = ctr
+            pass_c = ws3.cell(row=r3, column=6, value=rk['pass_pct'] / 100)
+            pass_c.number_format = '0.0%'; pass_c.alignment = ctr
+            r3 += 1
+
+        ws3.column_dimensions['A'].width = len('Rank') + 4
+        ws3.column_dimensions['B'].width = max((len(rk['branch']) for rk in ranking), default=8) + 4
+        ws3.column_dimensions['C'].width = len('Total Entries (N)') + 2
+        ws3.column_dimensions['D'].width = len('Weighted GPA') + 2
+        ws3.column_dimensions['E'].width = max(len(rank_headers[4]), 10) + 2
+        ws3.column_dimensions['F'].width = max(len(rank_headers[5]), 10) + 2
+        ws3.row_dimensions[hrow3].height = 26
+
     return wb
 
 
@@ -903,7 +1051,109 @@ def grade_breakdown_png_pages(meta, result, band_label, pass_label):
     for j in range(len(sum_headers) - 1):
         x += scol_w[j]
         sd.line([x, sy0, x, sy], fill=C['line'], width=1)
-    save_page(simg)
+
+    # ---- Composite ranking: a second summary, by different criteria (a
+    # weighted-GPA-style composite score), continuing on this page if it
+    # fits, otherwise starting a fresh one. ----
+    ranking = result.get('ranking')
+    if ranking:
+        rc = result['ranking_criteria']
+        rank_headers = ['Rank', 'Branch', 'Total Entries (N)', 'Weighted GPA', rc['top3_col'], rc['pass_col']]
+        rank_text_rows = [[str(rk['rank']), rk['branch'], str(rk['n']), f"{rk['gpa']:.2f}",
+                           f"{rk['top3_pct']}%", f"{rk['pass_pct']}%"] for rk in ranking]
+        rcol_w = measure(rank_headers, rank_text_rows, grow_cols=[2, 3, 4, 5])
+        rcol_w[0] += int(6 * S)  # a little slack so "RANK" never brushes the truncation edge
+        rtable_w = sum(rcol_w)
+
+        def wrap_lines(text, f, maxw):
+            words = str(text).split(' ')
+            out, cur = [], ''
+            for w in words:
+                trial = (cur + ' ' + w).strip()
+                if not cur or tw(trial, f) <= maxw:
+                    cur = trial
+                else:
+                    out.append(cur)
+                    cur = w
+            if cur:
+                out.append(cur)
+            return out
+
+        crit_pad = int(10 * S)
+        crit_maxw = avail - 2 * crit_pad
+        crit_title_f = fnt(11, True)
+        crit_body_f = fnt(11)
+        crit_lh = tmp.textbbox((0, 0), 'Ay', font=crit_body_f)[3] + int(3 * S)
+        crit_lines = [('CRITERIA & WEIGHTING SYSTEM', crit_title_f, (100, 116, 139))]
+        for b in rc['bullets']:
+            for wln in wrap_lines('• ' + b, crit_body_f, crit_maxw):
+                crit_lines.append((wln, crit_body_f, (51, 65, 85)))
+        crit_h = crit_pad * 2 + crit_lh * len(crit_lines)
+
+        def draw_rank_header(d, y):
+            d.rectangle([margin, y, margin + rtable_w, y + header_h], fill=NAVY)
+            x = margin
+            for j, h in enumerate(rank_headers):
+                draw_centered_wrapped(d, x + rcol_w[j] / 2, y + header_h / 2, rcol_w[j] - 2 * cpx,
+                                     h.upper(), body_b, (255, 255, 255), line_h)
+                x += rcol_w[j]
+            d.rectangle([margin, y, margin + rtable_w, y + header_h], outline=NAVY, width=2)
+            return y + header_h
+
+        def close_rank_segment(d, top, bottom):
+            d.rectangle([margin, top, margin + rtable_w, bottom], outline=C['line'], width=1)
+            x = margin
+            for j in range(len(rank_headers) - 1):
+                x += rcol_w[j]
+                d.line([x, top, x, bottom], fill=C['line'], width=1)
+
+        # room needed for the section heading + criteria box + header + at
+        # least one data row, before it's worth starting on this page at all
+        header_block_h = banner_line_h + int(10 * S) + slim_gap + crit_h + int(8 * S) + header_h
+        if sy + header_block_h + row_h <= max_y:
+            rimg, rd = simg, sd
+            ry0 = draw_slim_banner(rd, sy + slim_gap, result['ranking_title'])
+        else:
+            save_page(simg)
+            rimg, rd, ry0b = new_page(page_title, draw_mast=False)
+            ry0 = draw_slim_banner(rd, ry0b, result['ranking_title'])
+
+        box_y = ry0
+        rd.rectangle([margin, box_y, margin + avail, box_y + crit_h],
+                    fill=(248, 250, 252), outline=(185, 194, 206), width=1)
+        ty = box_y + crit_pad
+        for text, f, color in crit_lines:
+            rd.text((margin + crit_pad, ty), text, fill=color, font=f)
+            ty += crit_lh
+        rtop = box_y + crit_h + int(8 * S)
+        ry = draw_rank_header(rd, rtop)
+        seg_top = rtop
+
+        for rk in ranking:
+            if ry + row_h > max_y:
+                close_rank_segment(rd, seg_top, ry)
+                save_page(rimg)
+                rimg, rd, ry0b = new_page(page_title, draw_mast=False)
+                ry = draw_rank_header(rd, ry0b)
+                seg_top = ry0b
+            x = margin
+            vals = [str(rk['rank']), rk['branch'], str(rk['n']), f"{rk['gpa']:.2f}",
+                   f"{rk['top3_pct']}%", f"{rk['pass_pct']}%"]
+            for j, val in enumerate(vals):
+                f_ = body_b if j == 3 else body
+                if j == 1:
+                    rd.text((x + cpx, ry + cpy), fit(val, body, rcol_w[j] - 2 * cpx), fill=C['text'], font=body)
+                else:
+                    tx = x + (rcol_w[j] - tw(val, f_)) / 2
+                    rd.text((tx, ry + cpy), val, fill=C['text'], font=f_)
+                x += rcol_w[j]
+            rd.line([margin, ry, margin + rtable_w, ry], fill=C['line'], width=1)
+            ry += row_h
+        close_rank_segment(rd, seg_top, ry)
+
+        save_page(rimg)
+    else:
+        save_page(simg)
 
     return pages
 

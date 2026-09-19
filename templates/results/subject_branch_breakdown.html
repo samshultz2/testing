@@ -32,6 +32,11 @@ thead .gb-7 { background: color-mix(in srgb, #ef4444 42%, var(--bg-secondary, va
 thead .gb-8 { background: color-mix(in srgb, #dc2626 50%, var(--bg-secondary, var(--gray-50))); }
 thead .gb-9 { background: color-mix(in srgb, #9333ea 45%, var(--bg-secondary, var(--gray-50))); }
 .gb-scroll { overflow-x: auto; }
+.gb-criteria { background: var(--bg-secondary, var(--gray-50)); border: 1px solid var(--border-color);
+  border-radius: var(--radius-md); padding: .75rem 1rem; margin: 0 0 1rem; font-size: .8rem; }
+.gb-criteria strong { color: var(--text-secondary); text-transform: uppercase; font-size: .72rem; letter-spacing: .02em; }
+.gb-criteria ul { margin: .4rem 0 0; padding-left: 1.1rem; }
+.gb-criteria li { margin-bottom: .2rem; color: var(--text-secondary); }
 .gb-selector { display: flex; align-items: center; gap: .5rem; margin-bottom: 1rem; }
 /* Base pill-tab layout (style.css only refines the active/hover states on
    top of this — see its "Pill family" comment). */
@@ -131,7 +136,7 @@ thead .gb-9 { background: color-mix(in srgb, #9333ea 45%, var(--bg-secondary, va
 </table>
 </div></div>
 
-<div class="card">
+<div class="card mb-3">
     <div class="card-header"><h3>Overall {{ band_label }} Percentage Summary by Branch</h3></div>
     <div class="gb-scroll">
     <table class="gb-table">
@@ -156,5 +161,45 @@ thead .gb-9 { background: color-mix(in srgb, #9333ea 45%, var(--bg-secondary, va
     </table>
     </div>
 </div>
+
+{% if result.ranking %}
+<div class="card">
+    <div class="card-header"><h3>{{ result.ranking_title }}</h3></div>
+    <div class="card-body" style="padding-bottom:0;">
+        <div class="gb-criteria">
+            <strong>Criteria &amp; Weighting System</strong>
+            <ul>
+                {% for b in result.ranking_criteria.bullets %}<li>{{ b }}</li>{% endfor %}
+            </ul>
+        </div>
+    </div>
+    <div class="gb-scroll">
+    <table class="gb-table">
+        <thead>
+            <tr>
+                <th>Rank</th>
+                <th>Branch</th>
+                <th>Total Entries<br>(N)</th>
+                <th>Weighted GPA</th>
+                <th>{{ result.ranking_criteria.top3_col }}</th>
+                <th>{{ result.ranking_criteria.pass_col }}</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in result.ranking %}
+            <tr>
+                <td>{{ r.rank }}</td>
+                <td class="gb-branch">{{ r.branch }}</td>
+                <td>{{ r.n }}</td>
+                <td><strong>{{ '%.2f'|format(r.gpa) }}</strong></td>
+                <td>{{ r.top3_pct }}%</td>
+                <td>{{ r.pass_pct }}%</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    </div>
+</div>
+{% endif %}
 {% endif %}
 {% endblock %}
