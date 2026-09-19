@@ -159,8 +159,9 @@
         <div class="form-card-body">
             <div class="form-group">
                 <label>Aggregate Score (0-400)</label>
-                <input type="number" name="total_score" class="total-score-input" 
+                <input type="number" name="total_score" id="totalScore" class="total-score-input"
                        min="0" max="400" value="{{ result.total_score }}" required>
+                <p class="text-muted" style="font-size:.8rem;margin-top:.35rem;">Auto-calculated from the subject scores below &mdash; edit directly if you only have the official total.</p>
             </div>
         </div>
     </div>
@@ -184,7 +185,7 @@
                 </div>
                 <div>
                     <label>Score</label>
-                    <input type="number" name="subject1_score" min="0" max="100" value="{{ result.subject1_score or '' }}">
+                    <input type="number" name="subject1_score" class="jamb-score" min="0" max="100" value="{{ result.subject1_score or '' }}">
                 </div>
             </div>
             
@@ -201,7 +202,7 @@
                 </div>
                 <div>
                     <label>Score</label>
-                    <input type="number" name="subject2_score" min="0" max="100" value="{{ result.subject2_score or '' }}">
+                    <input type="number" name="subject2_score" class="jamb-score" min="0" max="100" value="{{ result.subject2_score or '' }}">
                 </div>
             </div>
             
@@ -218,7 +219,7 @@
                 </div>
                 <div>
                     <label>Score</label>
-                    <input type="number" name="subject3_score" min="0" max="100" value="{{ result.subject3_score or '' }}">
+                    <input type="number" name="subject3_score" class="jamb-score" min="0" max="100" value="{{ result.subject3_score or '' }}">
                 </div>
             </div>
             
@@ -235,7 +236,7 @@
                 </div>
                 <div>
                     <label>Score</label>
-                    <input type="number" name="subject4_score" min="0" max="100" value="{{ result.subject4_score or '' }}">
+                    <input type="number" name="subject4_score" class="jamb-score" min="0" max="100" value="{{ result.subject4_score or '' }}">
                 </div>
             </div>
         </div>
@@ -262,4 +263,21 @@
         </button>
     </form>
 </div>
+
+<script nonce="{{ csp_nonce }}">
+(function () {
+    const scoreInputs = Array.from(document.querySelectorAll('.jamb-score'));
+    const totalField = document.getElementById('totalScore');
+    // Sum the four subject scores into the total field as they're typed — the
+    // user can still overwrite it directly (e.g. entering an official total).
+    function recalcTotal() {
+        const total = scoreInputs.reduce(function (sum, inp) {
+            const v = parseInt(inp.value, 10);
+            return sum + (isNaN(v) ? 0 : v);
+        }, 0);
+        totalField.value = total;
+    }
+    scoreInputs.forEach(function (inp) { inp.addEventListener('input', recalcTotal); });
+})();
+</script>
 {% endblock %}

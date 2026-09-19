@@ -5630,6 +5630,13 @@
 ]
 ],
 [
+"results.subject_branch_breakdown_export",
+"/results/subject-branch-breakdown/export.<fmt>",
+[
+"GET"
+]
+],
+[
 "results.subject_enrolment",
 "/results/subject-enrolment",
 [

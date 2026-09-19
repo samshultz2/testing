@@ -206,6 +206,14 @@ def add_jamb():
                  or session_exam_year(get_active_session()) or _date.today().year)
     # Only offer students who don't already have this session's JAMB result.
     students = students_needing_result(get_sss3_students(), JAMBResult, exam_year)
+    # A deep-link from the student profile ("Add" under JAMB) names the student
+    # directly — keep them in the list (even if already entered, so the form can
+    # still be reached to update it) and pre-select them.
+    preselect_id = request.args.get('student_id', type=int)
+    if preselect_id and not any(s.id == preselect_id for s in students):
+        extra = next((s for s in get_sss3_students() if s.id == preselect_id), None)
+        if extra:
+            students = [extra] + students
 
     if request.method == 'POST':
         try:
@@ -265,7 +273,8 @@ def add_jamb():
         students=students,
         subjects=WAEC_SUBJECTS,
         subject_map=student_subject_map(students),
-        current_year=exam_year, sessions=exam_year_choices()
+        current_year=exam_year, sessions=exam_year_choices(),
+        preselect_student_id=preselect_id
     )
 
 

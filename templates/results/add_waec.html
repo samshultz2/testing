@@ -95,6 +95,7 @@
     const SUBJECT_MAP = {{ subject_map | tojson }};
     const DEFAULTS = {{ default_subjects | tojson }};
     const STREAM_DEFAULTS = {{ stream_defaults | tojson }};
+    const PRESELECT = {{ (preselect_student_id or '') | tojson }};
     const subjectSelects = Array.from(document.querySelectorAll('.waec-subject'));
 
     function applySubjects(list) {
@@ -119,6 +120,13 @@
         studentSelect.addEventListener('change', function () {
             applySubjects(subjectsForStudent(SUBJECT_MAP[this.value]));
         });
+        // Arrived from a student's profile ("Add" under WAEC) — select them
+        // automatically instead of leaving the picker on "Select Student".
+        if (PRESELECT && studentSelect.querySelector('option[value="' + PRESELECT + '"]')) {
+            studentSelect.value = String(PRESELECT);
+            studentSelect.dispatchEvent(new Event('change'));
+            return;
+        }
     }
 
     // Pre-select the common subjects on first load.

@@ -47,6 +47,17 @@ thead .gb-9 { background: color-mix(in srgb, #9333ea 45%, var(--bg-secondary, va
         <h1>Subject-Wise Performance &amp; Grade Breakdown</h1>
         <p class="text-muted text-sm">Per-subject, per-branch {{ band_label|lower }} percentage distribution</p>
     </div>
+    {% if result and result.subjects %}
+    <div class="page-header-actions">
+        {% set export_args = {'exam': exam} %}
+        {% if exam in ('waec', 'jamb') %}{% set _ = export_args.update({'year': selected_year}) %}
+        {% elif selected_mock %}{% set _ = export_args.update({'mock': selected_mock.session_id ~ '_' ~ selected_mock.exam_number}) %}{% endif %}
+        <a href="{{ url_for('results.subject_branch_breakdown_export', fmt='pdf', **export_args) }}" class="btn btn-secondary btn-sm" title="Download PDF"><i class="fas fa-file-pdf"></i> PDF</a>
+        <a href="{{ url_for('results.subject_branch_breakdown_export', fmt='docx', **export_args) }}" class="btn btn-secondary btn-sm" title="Download Word"><i class="fas fa-file-word"></i> Word</a>
+        <a href="{{ url_for('results.subject_branch_breakdown_export', fmt='xlsx', **export_args) }}" class="btn btn-secondary btn-sm" title="Download Excel"><i class="fas fa-file-excel"></i> Excel</a>
+        <a href="{{ url_for('results.subject_branch_breakdown_export', fmt='png', **export_args) }}" class="btn btn-secondary btn-sm" title="Download HD Image"><i class="fas fa-file-image"></i> Image</a>
+    </div>
+    {% endif %}
 </div>
 
 <div class="scope-tabs">

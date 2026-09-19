@@ -137,3 +137,98 @@ def test_exam_type_switcher_links_present(app):
     html = c.get('/results/subject-branch-breakdown').get_data(as_text=True)
     assert 'exam=waec' in html and 'exam=jamb' in html
     assert 'exam=mock_waec' in html and 'exam=mock_jamb' in html
+
+
+def test_download_buttons_present_when_data_exists(app):
+    yr = 2084
+    with app.app_context():
+        b1 = _branch('GB Zeta')
+        db.session.flush()
+        s1 = _student(b1.id, 'Seven')
+        db.session.flush()
+        db.session.add(WAECResult(student_id=s1.id, exam_year=yr, subject='Mathematics', grade='A1'))
+        db.session.commit()
+
+    c = _admin(app)
+    html = c.get(f'/results/subject-branch-breakdown?exam=waec&year={yr}').get_data(as_text=True)
+    assert '/subject-branch-breakdown/export.pdf' in html
+    assert '/subject-branch-breakdown/export.docx' in html
+    assert '/subject-branch-breakdown/export.xlsx' in html
+    assert '/subject-branch-breakdown/export.png' in html
+
+
+def test_export_without_data_redirects_with_flash(app):
+    c = _admin(app)
+    r = c.get('/results/subject-branch-breakdown/export.pdf?exam=waec&year=1904')
+    assert r.status_code == 302
+    assert '/subject-branch-breakdown' in r.headers['Location']
+
+
+def test_export_rejects_unknown_format(app):
+    c = _admin(app)
+    r = c.get('/results/subject-branch-breakdown/export.bogus?exam=waec')
+    assert r.status_code == 404
+
+
+def test_waec_export_pdf_docx_xlsx_png(app):
+    yr = 2085
+    with app.app_context():
+        b1 = _branch('GB Eta')
+        b2 = _branch('GB Theta')
+        db.session.flush()
+        s1 = _student(b1.id, 'Eight'); s2 = _student(b2.id, 'Nine')
+        db.session.flush()
+        db.session.add_all([
+            WAECResult(student_id=s1.id, exam_year=yr, subject='Mathematics', grade='A1'),
+            WAECResult(student_id=s2.id, exam_year=yr, subject='English Language', grade='C6'),
+        ])
+        db.session.commit()
+
+    c = _admin(app)
+    r = c.get(f'/results/subject-branch-breakdown/export.pdf?exam=waec&year={yr}')
+    assert r.status_code == 200 and r.mimetype == 'application/pdf'
+    assert r.get_data()[:4] == b'%PDF'
+
+    r = c.get(f'/results/subject-branch-breakdown/export.docx?exam=waec&year={yr}')
+    assert r.status_code == 200
+    assert r.mimetype == 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    from docx import Document
+    import io
+    doc = Document(io.BytesIO(r.get_data()))
+    assert len(doc.tables) == 2                    # main breakdown + overall summary
+    header = [c_.text for c_ in doc.tables[0].rows[0].cells]
+    assert header[:3] == ['Subject', 'Branch', 'Candidates (N)']
+
+    r = c.get(f'/results/subject-branch-breakdown/export.xlsx?exam=waec&year={yr}')
+    assert r.status_code == 200
+    assert r.mimetype == 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    from openpyxl import load_workbook
+    import io as _io
+    wb = load_workbook(_io.BytesIO(r.get_data()))
+    assert wb.sheetnames == ['Grade Breakdown', 'Summary']
+
+    r = c.get(f'/results/subject-branch-breakdown/export.png?exam=waec&year={yr}')
+    assert r.status_code == 200
+    assert r.mimetype in ('image/png', 'application/zip')
+
+
+def test_jamb_export_uses_score_bands(app):
+    yr = 2086
+    with app.app_context():
+        b1 = _branch('GB Iota')
+        db.session.flush()
+        s1 = _student(b1.id, 'Ten')
+        db.session.flush()
+        db.session.add(JAMBResult(student_id=s1.id, exam_year=yr, total_score=180,
+                                  subject1='English', subject1_score=92))
+        db.session.commit()
+
+    c = _admin(app)
+    r = c.get(f'/results/subject-branch-breakdown/export.xlsx?exam=jamb&year={yr}')
+    assert r.status_code == 200
+    from openpyxl import load_workbook
+    import io
+    wb = load_workbook(io.BytesIO(r.get_data()))
+    ws = wb['Grade Breakdown']
+    all_values = [c.value for row in ws.iter_rows() for c in row]
+    assert any(v and '90-100' in str(v) for v in all_values)

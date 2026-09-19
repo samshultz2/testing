@@ -51,16 +51,11 @@
                 </div>
             </div>
 
-            <div class="form-group">
-                <label class="form-label">Total Score (0-400) <span class="required">*</span></label>
-                <input type="number" name="total_score" class="form-control" min="0" max="400" required>
-            </div>
-
             <hr class="my-3">
             <h3 class="mb-1">Subject Breakdown <span class="text-muted" style="font-size:.8rem;font-weight:400;">(optional)</span></h3>
             <div class="entry-hint">
                 <i class="fas fa-circle-info"></i>
-                <span>English is selected by default. Pick a student who has saved JAMB subjects and the four slots fill from their profile.</span>
+                <span>English is selected by default. Pick a student who has saved JAMB subjects and the four slots fill from their profile. The total below adds up automatically as you enter scores.</span>
             </div>
 
             {% for i in range(1, 5) %}
@@ -71,9 +66,15 @@
                     <option value="{{ subj }}">{{ subj }}</option>
                     {% endfor %}
                 </select>
-                <input type="number" name="subject{{ i }}_score" class="form-control" min="0" max="100" placeholder="Score">
+                <input type="number" name="subject{{ i }}_score" class="form-control jamb-score" min="0" max="100" placeholder="Score">
             </div>
             {% endfor %}
+
+            <div class="form-group">
+                <label class="form-label">Total Score (0-400) <span class="required">*</span></label>
+                <input type="number" name="total_score" id="totalScore" class="form-control" min="0" max="400" required>
+                <span class="text-muted" style="font-size:.78rem;">Auto-calculated from the subject scores above &mdash; edit directly if you only have the official total.</span>
+            </div>
 
             <div class="page-header-actions mt-3">
                 <button type="submit" class="btn btn-primary btn-lg"><i class="fas fa-save"></i> Save</button>
@@ -93,14 +94,29 @@
 <script nonce="{{ csp_nonce }}">
 (function () {
     const SUBJECT_MAP = {{ subject_map | tojson }};
+    const PRESELECT = {{ (preselect_student_id or '') | tojson }};
     const COMPULSORY = "English Language";
     const subjectSelects = Array.from(document.querySelectorAll('.jamb-subject'));
+    const scoreInputs = Array.from(document.querySelectorAll('.jamb-score'));
+    const totalField = document.getElementById('totalScore');
 
     function applySubjects(list) {
         subjectSelects.forEach(function (sel, idx) {
             sel.value = (list && list[idx]) ? list[idx] : '';
         });
     }
+
+    // Sum the four subject scores into the total field as they're typed —
+    // the user can still overwrite it directly (e.g. entering an official
+    // total without the subject breakdown).
+    function recalcTotal() {
+        const total = scoreInputs.reduce(function (sum, inp) {
+            const v = parseInt(inp.value, 10);
+            return sum + (isNaN(v) ? 0 : v);
+        }, 0);
+        totalField.value = total;
+    }
+    scoreInputs.forEach(function (inp) { inp.addEventListener('input', recalcTotal); });
 
     const studentSelect = document.getElementById('studentSelect');
     if (studentSelect) {
@@ -113,6 +129,13 @@
                 applySubjects([COMPULSORY]);
             }
         });
+        // Arrived from a student's profile ("Add" under JAMB) — select them
+        // automatically instead of leaving the picker on "Select Student".
+        if (PRESELECT && studentSelect.querySelector('option[value="' + PRESELECT + '"]')) {
+            studentSelect.value = String(PRESELECT);
+            studentSelect.dispatchEvent(new Event('change'));
+            return;
+        }
     }
 
     // English compulsory by default.
