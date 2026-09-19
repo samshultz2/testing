@@ -120,7 +120,7 @@ def grade_breakdown_pdf(meta, result, band_label, pass_label):
     from reportlab.lib import colors
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle, Paragraph,
-                                    Spacer, PageBreak, KeepTogether)
+                                    Spacer, KeepTogether)
     from reportlab.pdfbase.pdfmetrics import stringWidth
 
     grid = colors.HexColor('#B9C2CE')
@@ -167,6 +167,16 @@ def grade_breakdown_pdf(meta, result, band_label, pass_label):
             ('TOPPADDING', (0, 0), (-1, -1), 4), ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
         ]))
         return [bt, Spacer(1, 8)]
+
+    def sub_banner(title_text):
+        # A slim single-line navy bar (no school name repeat) — the summary
+        # table sits right under the main one on the same page, not its own.
+        bt = Table([[Paragraph(pdf_escape(title_text.upper()), banner_s)]], colWidths=[avail])
+        bt.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), navy), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING', (0, 0), (-1, -1), 4), ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ]))
+        return [bt, Spacer(1, 6)]
 
     def col_widths(headers, text_rows, grow_cols):
         nat = []
@@ -279,8 +289,8 @@ def grade_breakdown_pdf(meta, result, band_label, pass_label):
     st = Table(sdata, colWidths=swidths, repeatRows=2)
     st.setStyle(TableStyle(sstyle))
 
-    elems.append(PageBreak())
-    elems.append(KeepTogether(banner(f'Overall {band_label} Percentage Summary by Branch')))
+    elems.append(Spacer(1, 10))
+    elems.append(KeepTogether(sub_banner(f'Overall {band_label} Percentage Summary by Branch')))
     elems.append(st)
 
     doc.build(elems)
@@ -343,6 +353,21 @@ def grade_breakdown_docx(meta, result, band_label, pass_label):
         p1.alignment = WD_ALIGN_PARAGRAPH.CENTER
         r1 = p1.add_run(title_text.upper())
         r1.bold = True; r1.font.size = Pt(12); r1.font.color.rgb = white
+        doc.add_paragraph().paragraph_format.space_after = Pt(2)
+
+    def sub_banner(title_text):
+        # A slim single-line navy bar (no school name repeat) — the summary
+        # table sits right under the main one on the same page, not its own.
+        t = doc.add_table(rows=1, cols=1)
+        t.autofit = False
+        t.columns[0].width = Cm(avail_cm)
+        c0 = t.rows[0].cells[0]
+        c0.width = Cm(avail_cm)
+        shade(c0, NAVY_HEX)
+        p0 = c0.paragraphs[0]
+        p0.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        r0 = p0.add_run(title_text.upper())
+        r0.bold = True; r0.font.size = Pt(12); r0.font.color.rgb = white
         doc.add_paragraph().paragraph_format.space_after = Pt(2)
 
     def set_cell(cell, text, bold=False, align=WD_ALIGN_PARAGRAPH.CENTER, size=fs, italic=False, color=None):
@@ -412,8 +437,7 @@ def grade_breakdown_docx(meta, result, band_label, pass_label):
     nr = note.add_run('— Not Offered')
     nr.italic = True; nr.font.size = Pt(8); nr.font.color.rgb = note_rgb
 
-    doc.add_page_break()
-    banner(f'Overall {band_label} Percentage Summary by Branch')
+    sub_banner(f'Overall {band_label} Percentage Summary by Branch')
     sum_headers = _summary_headers(bands, pass_label)
     st = doc.add_table(rows=2, cols=len(sum_headers))
     st.style = 'Table Grid'
@@ -696,6 +720,16 @@ def grade_breakdown_png_pages(meta, result, band_label, pass_label):
         d.text((tx, ty + (banner_line_h - int(18 * S)) / 2), txt, fill=(255, 255, 255), font=banner_s_f)
         return margin + banner_h
 
+    def draw_slim_banner(d, y, text):
+        # A slim single-line navy bar (no school name repeat) — used for the
+        # summary section when it continues on the same page as the main table.
+        bh = banner_line_h
+        d.rectangle([margin, y, margin + avail, y + bh], fill=NAVY)
+        txt = fit(text.upper(), banner_s_f, avail - int(20 * S))
+        tx = margin + (avail - tw(txt, banner_s_f)) / 2
+        d.text((tx, y + (bh - int(18 * S)) / 2), txt, fill=(255, 255, 255), font=banner_s_f)
+        return y + bh + int(10 * S)
+
     def new_page(title_text, draw_mast):
         img = Image.new('RGB', (PW * S, PH * S), C['white'])
         d = ImageDraw.Draw(img)
@@ -794,16 +828,28 @@ def grade_breakdown_png_pages(meta, result, band_label, pass_label):
 
     grid_lines(d, y0, y)
     legend_y = y + int(10 * S)
-    if legend_y + key_f.size < PH * S - margin:
+    content_end_y = legend_y
+    if legend_y + key_f.size < max_y:
         d.text((margin, legend_y), '— Not Offered', fill=C['muted'], font=key_f)
-    save_page(img)
+        content_end_y = legend_y + key_f.size + int(8 * S)
 
-    # ---- Overall summary (own page) ----
+    # ---- Overall summary — right under the main table on the same A4 page
+    # when it fits (matching the reference sheet); only a fresh page if not. ----
     sum_headers = _summary_headers(bands, pass_label)
     sum_rows = _summary_text_rows(result, pass_label)
     scol_w = measure(sum_headers, sum_rows, grow_cols=list(range(2, 2 + len(bands))))
     stable_w = sum(scol_w)
-    simg, sd, sy0 = new_page(f'Overall {band_label} Percentage Summary by Branch', draw_mast=True)
+    slim_gap = int(14 * S)
+    summary_h = banner_line_h + int(10 * S) + slim_gap + header_h * 2 + row_h * len(result['branches'])
+
+    if content_end_y + summary_h <= max_y:
+        simg, sd = img, d
+        sy0 = draw_slim_banner(sd, content_end_y + slim_gap,
+                               f'Overall {band_label} Percentage Summary by Branch')
+    else:
+        save_page(img)
+        simg, sd, sy0b = new_page(page_title, draw_mast=False)
+        sy0 = draw_slim_banner(sd, sy0b, f'Overall {band_label} Percentage Summary by Branch')
 
     band_x0 = margin + scol_w[0] + scol_w[1]
     sd.rectangle([margin, sy0, band_x0, sy0 + header_h * 2], fill=NAVY)
