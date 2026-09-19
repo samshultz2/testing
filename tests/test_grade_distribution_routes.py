@@ -144,3 +144,93 @@ def test_uploaded_distribution_wins_over_db_rows_for_same_branch_subject(app):
     assert cell['n'] == 10                      # the uploaded total, not 1 (DB) + 10
     assert cell['uploaded'] is True
     assert cell['pct']['A1'] == 20.0 and cell['pct']['B2'] == 80.0
+
+
+def test_manage_page_lists_batches_and_edit_delete_links(app):
+    yr = 2090
+    with app.app_context():
+        b = _branch('GD Manage Branch')
+        db.session.flush()
+        db.session.add(BranchGradeDistribution(
+            branch_id=b.id, exam='waec', exam_year=yr, subject='Physics', candidates=12,
+            band_counts='{"A1": 5, "B2": 7}', source='paste'))
+        db.session.commit()
+        bid = b.id
+
+    c = _admin(app)
+    html = c.get('/results/subject-branch-breakdown/imports?exam=waec').get_data(as_text=True)
+    assert 'GD Manage Branch' in html
+    assert f'Exam Year {yr}' in html
+    assert '1' in html            # n_subjects
+    # Jinja autoescapes '&' to '&amp;' in the rendered href
+    assert f'/results/subject-branch-breakdown/import/edit?exam=waec&amp;branch_id={bid}&amp;exam_year={yr}' in html
+
+
+def test_edit_loads_existing_batch_normalized_into_review_grid(app):
+    """Two stored rows that both mean 'Mathematics' (the exact bug reported —
+    "General Mathematics" imported as a separate subject) must load into the
+    edit grid already merged into one Mathematics row."""
+    yr = 2091
+    with app.app_context():
+        b = _branch('GD Edit Branch')
+        db.session.flush()
+        db.session.add_all([
+            BranchGradeDistribution(branch_id=b.id, exam='waec', exam_year=yr, subject='Mathematics',
+                                    candidates=10, band_counts='{"A1": 2, "B2": 3}', source='paste'),
+            BranchGradeDistribution(branch_id=b.id, exam='waec', exam_year=yr, subject='General Mathematics',
+                                    candidates=5, band_counts='{"A1": 1}', source='paste'),
+        ])
+        db.session.commit()
+        bid = b.id
+
+    c = _admin(app)
+    html = c.get(f'/results/subject-branch-breakdown/import/edit?exam=waec&branch_id={bid}&exam_year={yr}').get_data(as_text=True)
+    assert 'Edit Import' in html
+    # merged into ONE subject-row input, not two (a second value="Mathematics"
+    # legitimately appears once more, in the <option> of the subject datalist)
+    assert html.count('name="subject[]" list="subjectList" value="Mathematics"') == 1
+    assert 'value="15"' in html                           # candidates summed: 10 + 5
+    assert 'name="band_0_A1" value="3"' in html            # A1 counts summed: 2 + 1
+
+
+def test_delete_removes_the_whole_batch(app):
+    yr = 2092
+    with app.app_context():
+        b = _branch('GD Delete Branch')
+        db.session.flush()
+        db.session.add(BranchGradeDistribution(
+            branch_id=b.id, exam='waec', exam_year=yr, subject='Chemistry', candidates=9,
+            band_counts='{"A1": 9}', source='paste'))
+        db.session.commit()
+        bid = b.id
+
+    c = _admin(app)
+    r = c.post('/results/subject-branch-breakdown/import/delete', data={
+        'exam': 'waec', 'branch_id': bid, 'exam_year': yr, '_csrf_token': auth_csrf(c)})
+    assert r.status_code == 302
+    with app.app_context():
+        assert BranchGradeDistribution.query.filter_by(branch_id=bid, exam='waec', exam_year=yr).count() == 0
+
+
+def test_already_stored_alias_mismatch_merges_on_the_live_breakdown_page(app):
+    """The read-time fix: rows already saved BEFORE the alias table knew about
+    "General Mathematics" must still merge correctly on the Grade Breakdown
+    page itself, with no re-import required."""
+    yr = 2093
+    with app.app_context():
+        b = _branch('GD Legacy Branch')
+        db.session.flush()
+        db.session.add_all([
+            BranchGradeDistribution(branch_id=b.id, exam='waec', exam_year=yr, subject='Mathematics',
+                                    candidates=10, band_counts='{"A1": 4}', source='paste'),
+            BranchGradeDistribution(branch_id=b.id, exam='waec', exam_year=yr, subject='General Mathematics',
+                                    candidates=6, band_counts='{"A1": 2}', source='paste'),
+        ])
+        db.session.commit()
+
+    c = _admin(app)
+    html = c.get(f'/results/subject-branch-breakdown?exam=waec&year={yr}').get_data(as_text=True)
+    # exactly one Mathematics row-group for this branch, not two, and the
+    # candidate counts are summed (10 + 6 = 16)
+    assert html.count('>Mathematics<') == 1
+    assert '>16<' in html

@@ -18,19 +18,22 @@
 {% endblock %}
 
 {% block content %}
+{% set source_label = {'paste': 'pasted text', 'file': 'uploaded file', 'photo': 'photo'}.get(source, 'saved import') %}
 <div class="page-header">
     <div>
-        <h1>Review Import — {{ branch.name }}</h1>
-        <p class="text-muted text-sm">Check the numbers below, fix anything the read got wrong, then save. Nothing is saved yet.</p>
+        <h1>{{ 'Edit Import' if editing else 'Review Import' }} — {{ branch.name }}</h1>
+        <p class="text-muted text-sm">
+            {% if editing %}Check the numbers below, fix anything, then save.{% else %}Check the numbers below, fix anything the read got wrong, then save. Nothing is saved yet.{% endif %}
+        </p>
     </div>
     <div class="page-header-actions">
-        <a href="{{ url_for('results.grade_distribution_import', exam=exam) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>
+        <a href="{{ url_for('results.grade_distribution_manage', exam=exam) if editing else url_for('results.grade_distribution_import', exam=exam) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>
     </div>
 </div>
 
 <div class="imp-hint">
     <i class="fas fa-circle-info"></i>
-    <span>Read {{ rows|length }} subject row(s) from your {{ {'paste': 'pasted text', 'file': 'uploaded file', 'photo': 'photo'}[source] }}. "Passes"/"Credit %" columns aren't needed — they're recalculated automatically from the {{ band_label|lower }} counts.</span>
+    <span>{% if editing %}Loaded {{ rows|length }} subject row(s) from the saved import.{% else %}Read {{ rows|length }} subject row(s) from your {{ source_label }}.{% endif %} "Passes"/"Credit %" columns aren't needed — they're recalculated automatically from the {{ band_label|lower }} counts.</span>
 </div>
 
 <div class="card">
@@ -76,8 +79,8 @@
             <button type="button" class="btn btn-secondary btn-sm mt-3" id="addRowBtn"><i class="fas fa-plus"></i> Add Subject Row</button>
 
             <div class="page-header-actions mt-3">
-                <button type="submit" class="btn btn-primary btn-lg"><i class="fas fa-save"></i> Save Grade Breakdown</button>
-                <a href="{{ url_for('results.grade_distribution_import', exam=exam) }}" class="btn btn-secondary btn-lg">Cancel</a>
+                <button type="submit" class="btn btn-primary btn-lg"><i class="fas fa-save"></i> {{ 'Save Changes' if editing else 'Save Grade Breakdown' }}</button>
+                <a href="{{ url_for('results.grade_distribution_manage', exam=exam) if editing else url_for('results.grade_distribution_import', exam=exam) }}" class="btn btn-secondary btn-lg">Cancel</a>
             </div>
         </form>
     </div>

@@ -49,6 +49,7 @@ thead .gb-9 { background: color-mix(in srgb, #9333ea 45%, var(--bg-secondary, va
     </div>
     <div class="page-header-actions">
         <a href="{{ url_for('results.grade_distribution_import', exam=exam) }}" class="btn btn-secondary btn-sm" title="Import a branch's own summary sheet (for branches that don't enter individual results)"><i class="fas fa-file-import"></i> Import Branch Report</a>
+        <a href="{{ url_for('results.grade_distribution_manage', exam=exam) }}" class="btn btn-secondary btn-sm" title="View, edit or delete previously imported reports"><i class="fas fa-list-check"></i> Manage Imports</a>
         {% if result and result.subjects %}
         {% set export_args = {'exam': exam} %}
         {% if exam in ('waec', 'jamb') %}{% set _ = export_args.update({'year': selected_year}) %}

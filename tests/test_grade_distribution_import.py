@@ -3,6 +3,7 @@ distribution sheet (paste, file upload, or OCR) into BranchGradeDistribution
 rows — see utils/grade_distribution_import.py."""
 from utils.grade_distribution_import import (
     parse_pasted_table, classify_header, match_subject_name, build_distribution_rows,
+    merge_rows_by_subject,
 )
 
 WAEC_BANDS = ['A1', 'B2', 'B3', 'C4', 'C5', 'C6', 'D7', 'E8', 'F9']
@@ -96,3 +97,58 @@ def test_build_distribution_rows_skips_blank_subject_rows():
     rows = [['', '10', '1'], ['Biology', '10', '1']]
     out = build_distribution_rows(headers, rows, WAEC_BANDS)
     assert len(out) == 1 and out[0]['subject'] == 'Biology'
+
+
+def test_match_subject_name_general_mathematics_is_mathematics():
+    """The exact bug reported: 'General Mathematics' (WAEC's own official
+    paper name) must resolve to the school's catalogued 'Mathematics', not
+    sit beside it as a lookalike duplicate subject."""
+    catalog = ['Mathematics', 'Further Mathematics']
+    for variant in ('General Mathematics', 'GENERAL MATHS', 'Gen. Maths', 'Core Mathematics'):
+        assert match_subject_name(variant, catalog) == 'Mathematics'
+
+
+def test_match_subject_name_common_alternate_names():
+    from utils.helpers import WAEC_SUBJECTS
+    cases = {
+        'Use of English': 'English Language', 'English': 'English Language',
+        'Lit': 'Literature in English', 'Literature': 'Literature in English',
+        'CRK': 'Christian Religious Studies', 'Bible Knowledge': 'Christian Religious Studies',
+        'IRK': 'Islamic Religious Studies',
+        'Agric': 'Agricultural Science', 'Agriculture': 'Agricultural Science',
+        'Govt': 'Government', 'Civics': 'Civic Education',
+        'Accounts': 'Accounting', 'Book Keeping': 'Accounting',
+        'Add Maths': 'Further Mathematics', 'Further Maths': 'Further Mathematics',
+        'Hist': 'History', 'Art': 'Visual Arts', 'Geog': 'Geography',
+        'ICT': 'Computer Studies', 'PHE': 'Physical Education',
+    }
+    for raw, expected in cases.items():
+        assert match_subject_name(raw, WAEC_SUBJECTS) == expected, raw
+
+
+def test_build_distribution_rows_merges_alias_duplicates_within_one_sheet():
+    """A sheet that (by mistake) lists both spellings must merge into one
+    subject row, not two."""
+    headers = ['Subject', 'SAT', 'A1', 'B2']
+    rows = [
+        ['Mathematics', '10', '3', '2'],
+        ['General Mathematics', '5', '1', '1'],
+    ]
+    out = build_distribution_rows(headers, rows, WAEC_BANDS, subject_catalog=['Mathematics'])
+    assert len(out) == 1
+    assert out[0]['subject'] == 'Mathematics'
+    assert out[0]['candidates'] == 15
+    assert out[0]['counts']['A1'] == 4 and out[0]['counts']['B2'] == 3
+
+
+def test_merge_rows_by_subject_sums_counts():
+    rows = [
+        {'subject': 'Mathematics', 'candidates': 10, 'counts': {'A1': 2, 'B2': 3}},
+        {'subject': 'Mathematics', 'candidates': 5, 'counts': {'A1': 1, 'C4': 2}},
+        {'subject': 'Physics', 'candidates': 8, 'counts': {'B2': 4}},
+    ]
+    out = merge_rows_by_subject(rows)
+    assert len(out) == 2
+    maths = next(r for r in out if r['subject'] == 'Mathematics')
+    assert maths['candidates'] == 15
+    assert maths['counts'] == {'A1': 3, 'B2': 3, 'C4': 2}

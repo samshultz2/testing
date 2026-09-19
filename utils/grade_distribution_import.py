@@ -79,16 +79,49 @@ def classify_header(header, bands):
 # utils.broadsheet_import._SUBJECT_ALIASES, adapted for a plain name catalog
 # instead of Subject ORM rows).
 _SUBJECT_ALIASES = {
+    # Mathematics — "General Mathematics" is the WAEC paper's own official
+    # name for the subject we catalogue as plain "Mathematics"; treat every
+    # common variant as the same subject.
     'pw': 'project', 'fm': 'further mathematics', 'fmaths': 'further mathematics',
-    'chm': 'chemistry', 'chem': 'chemistry', 'phy': 'physics', 'bio': 'biology',
-    'eng': 'english language', 'lit': 'literature in english',
-    'crs': 'christian religious studies', 'irs': 'islamic religious studies',
-    'civ': 'civic education', 'civic': 'civic education', 'com': 'commerce', 'comm': 'commerce',
-    'gov': 'government', 'govt': 'government', 'eco': 'economics', 'econs': 'economics',
-    'geo': 'geography', 'agr': 'agricultural science', 'agric': 'agricultural science',
-    'liv': 'livestock farming', 'livest': 'livestock farming', 'dit': 'digital technologies',
-    'digital': 'digital technologies', 'mth': 'mathematics', 'math': 'mathematics',
-    'maths': 'mathematics', 'gmaths': 'mathematics',
+    'addmaths': 'further mathematics', 'additionalmathematics': 'further mathematics',
+    'additionalmaths': 'further mathematics',
+    'chm': 'chemistry', 'chem': 'chemistry', 'phy': 'physics', 'phys': 'physics',
+    'bio': 'biology',
+    'eng': 'english language', 'english': 'english language', 'useofenglish': 'english language',
+    'englishlang': 'english language', 'englishlanguagearts': 'english language',
+    'lit': 'literature in english', 'literature': 'literature in english',
+    'litinenglish': 'literature in english',
+    'crs': 'christian religious studies', 'crk': 'christian religious studies',
+    'christianreligiousknowledge': 'christian religious studies',
+    'bibleknowledge': 'christian religious studies',
+    'irs': 'islamic religious studies', 'irk': 'islamic religious studies',
+    'islamicstudies': 'islamic religious studies',
+    'civ': 'civic education', 'civic': 'civic education', 'civics': 'civic education',
+    'com': 'commerce', 'comm': 'commerce',
+    'gov': 'government', 'govt': 'government',
+    'eco': 'economics', 'econs': 'economics', 'econ': 'economics',
+    'geo': 'geography', 'geog': 'geography',
+    'agr': 'agricultural science', 'agric': 'agricultural science', 'agriculture': 'agricultural science',
+    'agricscience': 'agricultural science', 'agrics': 'agricultural science',
+    'liv': 'livestock farming', 'livest': 'livestock farming', 'livestock': 'livestock farming',
+    'dit': 'digital technologies', 'digital': 'digital technologies',
+    'mth': 'mathematics', 'math': 'mathematics', 'maths': 'mathematics', 'gmaths': 'mathematics',
+    'generalmathematics': 'mathematics', 'generalmaths': 'mathematics', 'genmaths': 'mathematics',
+    'genmath': 'mathematics', 'coremaths': 'mathematics', 'coremathematics': 'mathematics',
+    'mathematic': 'mathematics',
+    'accounts': 'accounting', 'bookkeeping': 'accounting', 'principlesofaccounts': 'accounting',
+    'financialaccounting': 'accounting', 'poa': 'accounting',
+    'computerscience': 'computer studies', 'informationtechnology': 'computer studies',
+    'ict': 'computer studies',
+    'hist': 'history',
+    'art': 'visual arts', 'fineart': 'visual arts', 'finearts': 'visual arts', 'visualart': 'visual arts',
+    'td': 'technical drawing', 'techdrawing': 'technical drawing', 'technicaldrawings': 'technical drawing',
+    'foodnutrition': 'food and nutrition',
+    'homeecons': 'home economics', 'homeeconomics': 'home economics', 'homeec': 'home economics',
+    'phe': 'physical education', 'pe': 'physical education',
+    'physicalhealtheducation': 'physical education',
+    'yorubalanguage': 'yoruba', 'igbolanguage': 'igbo', 'hausalanguage': 'hausa',
+    'frenchlanguage': 'french',
 }
 
 
@@ -164,4 +197,24 @@ def build_distribution_rows(headers, rows, bands, subject_catalog=None):
         if not candidates:
             candidates = sum(counts.values())
         out.append({'subject': subject, 'candidates': candidates, 'counts': counts})
-    return out
+    return merge_rows_by_subject(out)
+
+
+def merge_rows_by_subject(rows):
+    """Collapse rows that share the same subject (after normalization —
+    e.g. a sheet listing both "Mathematics" and "General Mathematics") into
+    one, summing candidates and band counts. Preserves first-seen order."""
+    merged = {}
+    order = []
+    for r in rows:
+        key = _norm_key(r['subject'])
+        if not key:
+            continue
+        if key not in merged:
+            merged[key] = {'subject': r['subject'], 'candidates': 0, 'counts': {}}
+            order.append(key)
+        m = merged[key]
+        m['candidates'] += r.get('candidates', 0)
+        for b, c in (r.get('counts') or {}).items():
+            m['counts'][b] = m['counts'].get(b, 0) + c
+    return [merged[k] for k in order]

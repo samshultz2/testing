@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Manage Imported Reports - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('results.subject_branch_breakdown', exam=exam) }}">Grade Breakdown</a> / <span>Manage Imports</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.scope-tabs { display: flex; gap: .4rem; margin-bottom: 1rem; flex-wrap: wrap; }
+.scope-tab { padding: .4rem .9rem; border: 1px solid var(--border-color); border-radius: var(--radius-full);
+  font-size: .8rem; text-decoration: none; color: var(--text-secondary); background: var(--bg-card); cursor: pointer; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Manage Imported Reports</h1>
+        <p class="text-muted text-sm">Every branch's own {{ band_label|lower }} distribution sheet that's been imported — stored in <code>branch_grade_distributions</code>, separate from individual WAEC/JAMB results.</p>
+    </div>
+    <div class="page-header-actions">
+        <a href="{{ url_for('results.grade_distribution_import', exam=exam) }}" class="btn btn-primary btn-sm"><i class="fas fa-file-import"></i> Import New</a>
+        <a href="{{ url_for('results.subject_branch_breakdown', exam=exam) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back to Grade Breakdown</a>
+    </div>
+</div>
+
+<div class="scope-tabs">
+    <a href="{{ url_for('results.grade_distribution_manage', exam='waec') }}" class="scope-tab{{ ' active' if exam == 'waec' else '' }}">WAEC</a>
+    <a href="{{ url_for('results.grade_distribution_manage', exam='jamb') }}" class="scope-tab{{ ' active' if exam == 'jamb' else '' }}">JAMB</a>
+    <a href="{{ url_for('results.grade_distribution_manage', exam='mock_waec') }}" class="scope-tab{{ ' active' if exam == 'mock_waec' else '' }}">Mock WAEC</a>
+    <a href="{{ url_for('results.grade_distribution_manage', exam='mock_jamb') }}" class="scope-tab{{ ' active' if exam == 'mock_jamb' else '' }}">Mock JAMB</a>
+</div>
+
+<div class="card"><div class="card-body" style="padding:0;">
+{% if batches %}
+<div class="table-container">
+<table class="data-table table-stack no-mobile-scroll">
+    <thead><tr><th>Branch</th><th>Period</th><th>Subjects</th><th>Total Candidates</th><th>Source</th><th>Last Updated</th><th></th></tr></thead>
+    <tbody>
+    {% for b in batches %}
+    <tr>
+        <td data-label="Branch"><strong>{{ b.branch_name }}</strong></td>
+        <td data-label="Period">{{ b.period_label }}</td>
+        <td data-label="Subjects">{{ b.n_subjects }}</td>
+        <td data-label="Total Candidates">{{ b.total_candidates }}</td>
+        <td data-label="Source"><span class="badge badge-secondary">{{ b.source }}</span></td>
+        <td data-label="Last Updated"><small>{{ b.last_updated }}</small></td>
+        <td data-label="">
+            <div style="display:flex;gap:.4rem;">
+                {% set edit_args = {'exam': exam, 'branch_id': b.branch_id} %}
+                {% if b.exam_year %}{% set _ = edit_args.update({'exam_year': b.exam_year}) %}
+                {% else %}{% set _ = edit_args.update({'mock_session_id': b.mock_session_id, 'mock_exam_number': b.mock_exam_number}) %}{% endif %}
+                <a href="{{ url_for('results.grade_distribution_edit', **edit_args) }}" class="btn btn-sm btn-secondary" title="Edit"><i class="fas fa-pen"></i></a>
+                <form method="POST" action="{{ url_for('results.grade_distribution_delete') }}"
+                      data-confirm="Delete the imported report for {{ b.branch_name }} ({{ b.period_label }})? This cannot be undone.">
+                    <input type="hidden" name="exam" value="{{ exam }}">
+                    <input type="hidden" name="branch_id" value="{{ b.branch_id }}">
+                    {% if b.exam_year %}<input type="hidden" name="exam_year" value="{{ b.exam_year }}">
+                    {% else %}
+                    <input type="hidden" name="mock_session_id" value="{{ b.mock_session_id }}">
+                    <input type="hidden" name="mock_exam_number" value="{{ b.mock_exam_number }}">
+                    {% endif %}
+                    <button type="submit" class="btn btn-sm btn-danger" title="Delete"><i class="fas fa-trash"></i></button>
+                </form>
+            </div>
+        </td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+</div>
+{% else %}
+<div class="empty-state"><i class="fas fa-file-import"></i><h3>No imported reports yet</h3><p>Branches that don't enter individual results can have their summary sheet imported here.</p>
+<a href="{{ url_for('results.grade_distribution_import', exam=exam) }}" class="btn btn-primary mt-2">Import a Report</a></div>
+{% endif %}
+</div></div>
+{% endblock %}

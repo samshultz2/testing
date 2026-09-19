@@ -1385,19 +1385,34 @@ def _uploaded_distribution(branch_names, exam, bid, exam_year=None, mock_session
     """Branch-supplied grade/score distributions for this exact (exam, period)
     — see models.grade_distribution.BranchGradeDistribution. Returns
     ``{(subject, branch_name): {'n': int, 'counts': {band: int}}}`` ready for
-    ``_branch_grade_breakdown``'s ``uploaded=`` argument."""
+    ``_branch_grade_breakdown``'s ``uploaded=`` argument.
+
+    Subject names are re-normalized (and merged if two stored rows resolve to
+    the same canonical subject) against the *current* alias table on every
+    read — not just at import time — so a fix to the alias list (e.g. "General
+    Mathematics" now recognised as "Mathematics") is reflected immediately for
+    rows imported before that fix, with no need to re-import."""
     from models import BranchGradeDistribution
+    from utils.grade_distribution_import import match_subject_name, merge_rows_by_subject
     q = BranchGradeDistribution.query.filter_by(exam=exam, exam_year=exam_year,
                                                 mock_session_id=mock_session_id,
                                                 mock_exam_number=mock_exam_number)
     if bid is not None:
         q = q.filter(BranchGradeDistribution.branch_id == bid)
-    out = {}
+    catalog = _grade_distribution_catalog(exam)
+    by_branch = {}
     for row in q.all():
         br = branch_names.get(row.branch_id)
         if not br:
             continue
-        out[(row.subject, br)] = {'n': row.candidates, 'counts': row.counts()}
+        subject = match_subject_name(row.subject, catalog)
+        by_branch.setdefault(br, []).append(
+            {'subject': subject, 'candidates': row.candidates, 'counts': row.counts()})
+
+    out = {}
+    for br, rows in by_branch.items():
+        for r in merge_rows_by_subject(rows):
+            out[(r['subject'], br)] = {'n': r['candidates'], 'counts': r['counts']}
     return out
 
 
@@ -1785,13 +1800,21 @@ def grade_distribution_import_save():
         flash('Select the mock sitting.', 'error')
         return redirect(url_for('results.grade_distribution_import', exam=exam))
 
+    from utils.grade_distribution_import import match_subject_name, merge_rows_by_subject
+    catalog = _grade_distribution_catalog(exam)
+
     subjects = request.form.getlist('subject[]')
     candidates_list = request.form.getlist('candidates[]')
-    new_rows = []
+    parsed_rows = []
     for i, subj in enumerate(subjects):
         subj = (subj or '').strip()
         if not subj:
             continue
+        # Re-normalize on every save (not just on first import) — a manually
+        # typed or edited subject name (e.g. "General Mathematics") must still
+        # merge with the school's canonical "Mathematics", never sit beside it
+        # as a lookalike duplicate.
+        subj = match_subject_name(subj, catalog)
         try:
             candidates = int(candidates_list[i]) if i < len(candidates_list) and candidates_list[i] else 0
         except ValueError:
@@ -1810,13 +1833,17 @@ def grade_distribution_import_save():
             candidates = total
         if not candidates and not total:
             continue
+        parsed_rows.append({'subject': subj, 'candidates': candidates, 'counts': counts})
+
+    new_rows = []
+    for r in merge_rows_by_subject(parsed_rows):
         row = BranchGradeDistribution(
             branch_id=branch.id, exam=exam, exam_year=exam_year,
             mock_session_id=mock_session_id, mock_exam_number=mock_exam_number,
-            subject=subj, candidates=candidates,
+            subject=r['subject'], candidates=r['candidates'],
             source=request.form.get('source', 'manual')[:10],
             imported_by=flask_session.get('user_id'))
-        row.set_counts(counts)
+        row.set_counts(r['counts'])
         new_rows.append(row)
 
     if not new_rows:
@@ -1838,3 +1865,134 @@ def grade_distribution_import_save():
     elif mock_session_id and mock_exam_number:
         redirect_kwargs['mock'] = f'{mock_session_id}_{mock_exam_number}'
     return redirect(url_for('results.subject_branch_breakdown', **redirect_kwargs))
+
+
+@results_bp.route('/subject-branch-breakdown/imports')
+@login_required
+def grade_distribution_manage():
+    """Where an imported branch report actually lives: every saved batch
+    (one row per branch + exam + period), so it can be edited or deleted —
+    answers "where is this stored" with something more useful than a table
+    name."""
+    from sqlalchemy import func
+    from models import Branch, AcademicSession, BranchGradeDistribution
+    from utils.branch_scope import viewing_branch_id
+
+    exam = request.args.get('exam', 'waec')
+    if exam not in ('waec', 'jamb', 'mock_waec', 'mock_jamb'):
+        exam = 'waec'
+    bid = viewing_branch_id()
+
+    q = (db.session.query(
+            BranchGradeDistribution.branch_id, BranchGradeDistribution.exam,
+            BranchGradeDistribution.exam_year, BranchGradeDistribution.mock_session_id,
+            BranchGradeDistribution.mock_exam_number, BranchGradeDistribution.source,
+            func.count(BranchGradeDistribution.id).label('n_subjects'),
+            func.sum(BranchGradeDistribution.candidates).label('total_candidates'),
+            func.max(BranchGradeDistribution.updated_at).label('last_updated'))
+        .filter(BranchGradeDistribution.exam == exam)
+        .group_by(BranchGradeDistribution.branch_id, BranchGradeDistribution.exam,
+                 BranchGradeDistribution.exam_year, BranchGradeDistribution.mock_session_id,
+                 BranchGradeDistribution.mock_exam_number, BranchGradeDistribution.source))
+    if bid is not None:
+        q = q.filter(BranchGradeDistribution.branch_id == bid)
+
+    branch_names = {b.id: b.name for b in Branch.query.all()}
+    sess_names = {s.id: s.name for s in AcademicSession.query.all()}
+    batches = []
+    for row in q.order_by(func.max(BranchGradeDistribution.updated_at).desc()).all():
+        if row.mock_session_id and row.mock_exam_number:
+            period_label = f"Mock {row.mock_exam_number} — {sess_names.get(row.mock_session_id, '?')}"
+        else:
+            period_label = f'Exam Year {row.exam_year}'
+        batches.append({
+            'branch_id': row.branch_id, 'branch_name': branch_names.get(row.branch_id, '?'),
+            'exam_year': row.exam_year, 'mock_session_id': row.mock_session_id,
+            'mock_exam_number': row.mock_exam_number, 'period_label': period_label,
+            'n_subjects': row.n_subjects, 'total_candidates': row.total_candidates or 0,
+            'source': row.source or 'manual', 'last_updated': row.last_updated,
+        })
+
+    band_label = 'Grade' if exam in ('waec', 'mock_waec') else 'Score Band'
+    return render_template('results/grade_distribution_manage.html',
+        exam=exam, band_label=band_label, batches=batches)
+
+
+@results_bp.route('/subject-branch-breakdown/import/edit')
+@login_required
+def grade_distribution_edit():
+    """Load an already-saved batch straight into the same review grid used
+    right after a fresh parse — editing is just "review again"."""
+    from models import Branch, BranchGradeDistribution
+    from utils.branch_scope import viewing_branch_id, can_access_branch
+
+    exam = request.args.get('exam', 'waec')
+    if exam not in ('waec', 'jamb', 'mock_waec', 'mock_jamb'):
+        exam = 'waec'
+    branch_id = request.args.get('branch_id', type=int)
+    branch = db.session.get(Branch, branch_id) if branch_id else None
+    if not branch or not can_access_branch(branch.id):
+        flash('Select a valid branch.', 'error')
+        return redirect(url_for('results.grade_distribution_manage', exam=exam))
+
+    exam_year = request.args.get('exam_year', type=int)
+    mock_session_id = request.args.get('mock_session_id', type=int)
+    mock_exam_number = request.args.get('mock_exam_number', type=int)
+
+    q = BranchGradeDistribution.query.filter_by(
+        branch_id=branch.id, exam=exam, exam_year=exam_year,
+        mock_session_id=mock_session_id, mock_exam_number=mock_exam_number)
+    stored = q.order_by(BranchGradeDistribution.subject).all()
+    if not stored:
+        flash('That import no longer exists — it may already have been deleted.', 'warning')
+        return redirect(url_for('results.grade_distribution_manage', exam=exam))
+
+    bands = _grade_distribution_bands(exam)
+    band_label = 'Grade' if exam in ('waec', 'mock_waec') else 'Score Band'
+    catalog = _grade_distribution_catalog(exam)
+    from utils.grade_distribution_import import match_subject_name, merge_rows_by_subject
+    rows = merge_rows_by_subject([
+        {'subject': match_subject_name(r.subject, catalog), 'candidates': r.candidates, 'counts': r.counts()}
+        for r in stored])
+
+    period = {}
+    if exam_year:
+        period['exam_year'] = exam_year
+    else:
+        period['mock_session_id'] = mock_session_id
+        period['mock_exam_number'] = mock_exam_number
+
+    return render_template('results/grade_distribution_review.html',
+        exam=exam, bands=bands, band_label=band_label, branch=branch,
+        rows=rows, period=period, source=stored[0].source or 'manual', subjects=catalog,
+        editing=True)
+
+
+@results_bp.route('/subject-branch-breakdown/import/delete', methods=['POST'])
+@login_required
+def grade_distribution_delete():
+    """Delete every subject row of one imported batch (one branch's report
+    for one exact exam/period)."""
+    from models import Branch, BranchGradeDistribution
+    from utils.branch_scope import require_branch_access
+
+    exam = request.form.get('exam', 'waec')
+    branch_id = request.form.get('branch_id', type=int)
+    branch = db.session.get(Branch, branch_id) if branch_id else None
+    if not branch:
+        flash('Select a valid branch.', 'error')
+        return redirect(url_for('results.grade_distribution_manage', exam=exam))
+    require_branch_access(branch.id)
+
+    exam_year = request.form.get('exam_year', type=int)
+    mock_session_id = request.form.get('mock_session_id', type=int)
+    mock_exam_number = request.form.get('mock_exam_number', type=int)
+
+    deleted = BranchGradeDistribution.query.filter_by(
+        branch_id=branch.id, exam=exam, exam_year=exam_year,
+        mock_session_id=mock_session_id, mock_exam_number=mock_exam_number
+    ).delete(synchronize_session=False)
+    db.session.commit()
+    log_action('results.grade_distribution_delete', detail=f'{exam} {branch.name}', target=branch)
+    flash(f'Deleted the imported report for {branch.name} ({deleted} subject row(s)).', 'success')
+    return redirect(url_for('results.grade_distribution_manage', exam=exam))
