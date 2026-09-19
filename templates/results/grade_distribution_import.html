@@ -1,0 +1,160 @@
+{% extends "base.html" %}
+{% block title %}Import Branch Report - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('results.subject_branch_breakdown', exam=exam) }}">Grade Breakdown</a> / <span>Import Branch Report</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.imp-card{max-width:720px}
+.imp-tabs{display:flex;gap:.4rem;margin-bottom:1rem;flex-wrap:wrap}
+.imp-tab{padding:.4rem .9rem;border:1px solid var(--border-color);border-radius:var(--radius-full);
+  font-size:.85rem;background:var(--bg-card);color:var(--text-secondary);cursor:pointer}
+.imp-tab.active{background:var(--primary);border-color:var(--primary);color:#fff;font-weight:600}
+.imp-panel{display:none}
+.imp-panel.active{display:block}
+.dropzone{border:2px dashed var(--border-color);border-radius:var(--radius-lg);padding:1.75rem 1rem;text-align:center;cursor:pointer;transition:border-color var(--transition),background var(--transition)}
+.dropzone:hover,.dropzone.drag{border-color:var(--primary);background:var(--primary-light)}
+.dropzone i{font-size:2.2rem;color:var(--primary);margin-bottom:.4rem}
+.dropzone .hint{font-size:.8rem;color:var(--text-muted);margin-top:.3rem}
+#photoPreview{max-width:100%;margin-top:.75rem;border-radius:var(--radius-md);display:none}
+.imp-hint{display:flex;gap:.6rem;align-items:flex-start;background:var(--primary-light);color:var(--primary);border-radius:var(--radius-md);padding:.75rem 1rem;font-size:.85rem;margin:.25rem 0 1rem;line-height:1.4}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Import Branch Report</h1>
+        <p class="text-muted text-sm">For a branch that sends a subject-wise {{ band_label|lower }} distribution sheet instead of entering individual results</p>
+    </div>
+    <div class="page-header-actions">
+        <a href="{{ url_for('results.subject_branch_breakdown', exam=exam) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>
+    </div>
+</div>
+
+<div class="card imp-card">
+    <div class="card-body">
+        <form method="POST" enctype="multipart/form-data" id="impForm">
+            <input type="hidden" name="exam" value="{{ exam }}">
+            <input type="hidden" name="method" id="methodField" value="paste">
+
+            <div class="form-row">
+                {% if bid is none %}
+                <div class="form-group">
+                    <label class="form-label">Branch <span class="required">*</span></label>
+                    <select name="branch_id" class="form-control" required>
+                        <option value="">Select Branch</option>
+                        {% for b in branches %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}
+                    </select>
+                </div>
+                {% else %}
+                <input type="hidden" name="branch_id" value="{{ branches[0].id if branches else '' }}">
+                <div class="form-group">
+                    <label class="form-label">Branch</label>
+                    <input type="text" class="form-control" value="{{ branches[0].name if branches else '' }}" disabled>
+                </div>
+                {% endif %}
+
+                {% if exam in ('waec', 'jamb') %}
+                <div class="form-group">
+                    <label class="form-label">Exam Year <span class="required">*</span></label>
+                    <select name="exam_year" class="form-control" required>
+                        {% for y in years %}<option value="{{ y }}" {% if y == current_year %}selected{% endif %}>{{ y }}</option>{% endfor %}
+                        {% if current_year not in years %}<option value="{{ current_year }}" selected>{{ current_year }}</option>{% endif %}
+                    </select>
+                </div>
+                {% else %}
+                <div class="form-group">
+                    <label class="form-label">Mock Sitting <span class="required">*</span></label>
+                    <select name="mock" class="form-control" required>
+                        <option value="">Select sitting</option>
+                        {% for o in mock_options %}
+                        <option value="{{ o.session_id }}_{{ o.exam_number }}">{{ o.label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% endif %}
+            </div>
+
+            <hr class="my-3">
+
+            <div class="imp-tabs">
+                <span class="imp-tab active" data-method="paste">Paste Text</span>
+                <span class="imp-tab" data-method="file">Upload File</span>
+                <span class="imp-tab" data-method="photo">Scan Photo (AI)</span>
+            </div>
+
+            <div class="imp-panel active" data-panel="paste">
+                <div class="imp-hint"><i class="fas fa-circle-info"></i>
+                    <span>Copy the subject rows straight out of Excel/Sheets (including the header row) and paste them here.</span></div>
+                <textarea name="data" class="form-control" rows="10" placeholder="Subject&#9;SAT&#9;A1&#9;B2&#9;B3&#9;C4&#9;C5&#9;C6&#9;D7&#9;E8&#9;F9
+Mathematics&#9;129&#9;3&#9;52&#9;29&#9;28&#9;12&#9;1&#9;&#9;&#9;4"></textarea>
+            </div>
+
+            <div class="imp-panel" data-panel="file">
+                <div class="imp-hint"><i class="fas fa-circle-info"></i>
+                    <span>A CSV or Excel file with the same subject-wise layout — the header names don't need to match exactly, we'll guess and you can fix anything on the next screen.</span></div>
+                <input type="file" name="file" class="form-control" accept=".csv,.xlsx,.xlsm,.xls">
+            </div>
+
+            <div class="imp-panel" data-panel="photo">
+                <div class="imp-hint"><i class="fas fa-circle-info"></i>
+                    <span>A clear photo of the printed/handwritten summary sheet. Read by AI vision — always shown to you for review before saving.</span></div>
+                <label class="dropzone" id="dropzone" for="photoInput">
+                    <i class="fas fa-camera"></i>
+                    <div><strong>Tap to choose</strong> a photo, or drag one here</div>
+                    <div class="hint">JPG/PNG · a straight, well-lit shot reads best</div>
+                    <img id="photoPreview" alt="preview">
+                </label>
+                <input type="file" name="photo" id="photoInput" accept="image/*" hidden>
+            </div>
+
+            <div class="page-header-actions mt-3">
+                <button type="submit" class="btn btn-primary btn-lg" id="impBtn"><i class="fas fa-magnifying-glass"></i> Read &amp; Review</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script nonce="{{ csp_nonce }}">
+(function () {
+    const tabs = Array.from(document.querySelectorAll('.imp-tab'));
+    const panels = Array.from(document.querySelectorAll('.imp-panel'));
+    const methodField = document.getElementById('methodField');
+    tabs.forEach(function (tab) {
+        tab.addEventListener('click', function () {
+            tabs.forEach(function (t) { t.classList.remove('active'); });
+            panels.forEach(function (p) { p.classList.remove('active'); });
+            tab.classList.add('active');
+            document.querySelector('.imp-panel[data-panel="' + tab.dataset.method + '"]').classList.add('active');
+            methodField.value = tab.dataset.method;
+        });
+    });
+
+    const photoInput = document.getElementById('photoInput');
+    const dz = document.getElementById('dropzone');
+    const preview = document.getElementById('photoPreview');
+    if (photoInput && dz) {
+        function show(file) {
+            if (!file) return;
+            preview.src = URL.createObjectURL(file);
+            preview.style.display = 'block';
+        }
+        photoInput.addEventListener('change', function () { show(photoInput.files[0]); });
+        ['dragover', 'dragenter'].forEach(function (e) {
+            dz.addEventListener(e, function (ev) { ev.preventDefault(); dz.classList.add('drag'); });
+        });
+        ['dragleave', 'drop'].forEach(function (e) {
+            dz.addEventListener(e, function (ev) { ev.preventDefault(); dz.classList.remove('drag'); });
+        });
+        dz.addEventListener('drop', function (ev) {
+            if (ev.dataTransfer.files.length) { photoInput.files = ev.dataTransfer.files; show(photoInput.files[0]); }
+        });
+    }
+
+    document.getElementById('impForm').addEventListener('submit', function () {
+        const btn = document.getElementById('impBtn');
+        btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Reading…';
+    });
+})();
+</script>
+{% endblock %}

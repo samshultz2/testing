@@ -830,6 +830,70 @@ def vision_extract_broadsheet(image_bytes, media_type='image/png'):
         return None
 
 
+def vision_extract_grade_distribution(image_bytes, media_type='image/png'):
+    """Read a branch's subject-wise grade/score-band *distribution* summary
+    (one row per SUBJECT, columns like SAT/No.Sat + a count per grade band —
+    e.g. A1 B2 B3 C4 C5 C6 D7 E8 F9, sometimes combined like "D7-E8" — plus
+    derived columns like Passes/Credit% we don't need) into the same generic
+    ``{'headers': [...], 'rows': [[...]]}`` shape as vision_extract_broadsheet,
+    for utils.grade_distribution_import.build_distribution_rows to classify.
+    Returns None on any failure so the caller can fall back to paste/manual entry."""
+    cfg = _vision_config()
+    if not (cfg['enabled'] and cfg['has_key'] and cfg['installed']):
+        return None
+    try:
+        import base64
+        import json
+        import anthropic
+
+        client = anthropic.Anthropic(api_key=cfg['key'])
+        data = base64.standard_b64encode(image_bytes).decode('utf-8')
+        instruction = (
+            "This is a Nigerian school's subject-wise grade/score distribution "
+            "summary: one row per SUBJECT (not per student), with columns for the "
+            "number of candidates that sat it (often 'SAT' or 'No. Sat') and a "
+            "count of candidates in each grade or score band (e.g. A1 B2 B3 C4 C5 "
+            "C6 D7 E8 F9, or a combined column like 'D7-E8'). It may also have "
+            "derived columns like Passes/Credit% or a final TOTAL row — read "
+            "those too, exactly as printed, header and all. Read the column "
+            "headers exactly as written and EVERY subject row top to bottom. "
+            'Return ONLY JSON: {"headers": [col1, col2, ...], "rows": [[cell1, '
+            'cell2, ...], ...]} where the first header/cell of each row is the '
+            "subject name. Use \"\" for any blank/dash cell. Keep every row the "
+            "same length as headers. Do not invent rows or columns."
+        )
+        message = client.messages.create(
+            model=cfg['model'],
+            max_tokens=8000,
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": data}},
+                    {"type": "text", "text": instruction},
+                ],
+            }],
+        )
+        text = next((b.text for b in message.content if b.type == "text"), "").strip()
+        if text.startswith("```"):
+            text = text.strip("`")
+            text = text[text.find("{"):text.rfind("}") + 1]
+        parsed = json.loads(text)
+        headers = [str(h).strip() for h in (parsed.get('headers') or [])]
+        if not headers:
+            return None
+        ncol = len(headers)
+        rows = []
+        for r in (parsed.get('rows') or []):
+            cells = ['' if v is None else str(v).strip() for v in r][:ncol]
+            cells += [''] * (ncol - len(cells))
+            if any(cells):
+                rows.append(cells)
+        return {'headers': headers, 'rows': rows} if rows else None
+    except Exception as e:
+        _note_vision_error(e)
+        return None
+
+
 def _name_tokens(*parts):
     """Alphabetic name tokens (length >= 2), lower-cased. Drops punctuation,
     numbers and lone initials so ordering and middle names don't defeat matching."""

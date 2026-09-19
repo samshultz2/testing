@@ -1301,13 +1301,19 @@ def _jamb_score_band(score):
     return '0-19'
 
 
-def _branch_grade_breakdown(entries, bands, pass_bands):
+def _branch_grade_breakdown(entries, bands, pass_bands, uploaded=None):
     """``entries``: iterable of (subject, band, branch_name) — one per subject
     entry (a WAEC/Mock-WAEC result row, or one filled JAMB/Mock-JAMB subject
     slot). Aggregates into the per-subject-per-branch percentage table plus a
     per-branch overall summary, mirroring a school's printed grade-analysis
     sheet. A subject with zero entries at a branch is left out of that
-    branch's per-subject row entirely (the template renders it "Not Offered")."""
+    branch's per-subject row entirely (the template renders it "Not Offered").
+
+    ``uploaded`` (optional): ``{(subject, branch_name): {'n': int, 'counts':
+    {band: int}}}`` — a branch's own summary sheet, imported via OCR/paste
+    instead of per-student rows (see models.grade_distribution). When given
+    for a (subject, branch) pair it REPLACES whatever ``entries`` computed for
+    that exact pair, since it's the branch's own authoritative figure."""
     from collections import defaultdict, Counter
     subj_branch = defaultdict(lambda: defaultdict(Counter))
     subj_total = Counter()
@@ -1324,6 +1330,26 @@ def _branch_grade_breakdown(entries, bands, pass_bands):
         branch_all[branch][band] += 1
         branch_n[branch] += 1
 
+    uploaded_pairs = set()
+    if uploaded:
+        for (subject, branch), agg in uploaded.items():
+            if not subject or not branch or not agg.get('n'):
+                continue
+            uploaded_pairs.add((subject, branch))
+            branches_seen.add(branch)
+            old = subj_branch[subject].pop(branch, None)
+            if old:
+                subj_total[subject] -= sum(old.values())
+                branch_n[branch] -= sum(old.values())
+                for b, c in old.items():
+                    branch_all[branch][b] -= c
+            counts = Counter({b: c for b, c in agg['counts'].items() if b in bands})
+            subj_branch[subject][branch] = counts
+            subj_total[subject] += agg['n']
+            branch_n[branch] += agg['n']
+            for b, c in counts.items():
+                branch_all[branch][b] += c
+
     subjects = [s for s, _ in subj_total.most_common()]
     branches = sorted(branches_seen)
 
@@ -1336,7 +1362,7 @@ def _branch_grade_breakdown(entries, bands, pass_bands):
             if not n:
                 table[subj][br] = None
             else:
-                table[subj][br] = {'n': n,
+                table[subj][br] = {'n': n, 'uploaded': (subj, br) in uploaded_pairs,
                                    'pct': {b: round(counter.get(b, 0) / n * 100, 1) for b in bands}}
 
     summary = {}
@@ -1353,6 +1379,26 @@ def _branch_grade_breakdown(entries, bands, pass_bands):
 
     return {'subjects': subjects, 'branches': branches, 'bands': bands,
             'table': table, 'summary': summary}
+
+
+def _uploaded_distribution(branch_names, exam, bid, exam_year=None, mock_session_id=None, mock_exam_number=None):
+    """Branch-supplied grade/score distributions for this exact (exam, period)
+    — see models.grade_distribution.BranchGradeDistribution. Returns
+    ``{(subject, branch_name): {'n': int, 'counts': {band: int}}}`` ready for
+    ``_branch_grade_breakdown``'s ``uploaded=`` argument."""
+    from models import BranchGradeDistribution
+    q = BranchGradeDistribution.query.filter_by(exam=exam, exam_year=exam_year,
+                                                mock_session_id=mock_session_id,
+                                                mock_exam_number=mock_exam_number)
+    if bid is not None:
+        q = q.filter(BranchGradeDistribution.branch_id == bid)
+    out = {}
+    for row in q.all():
+        br = branch_names.get(row.branch_id)
+        if not br:
+            continue
+        out[(row.subject, br)] = {'n': row.candidates, 'counts': row.counts()}
+    return out
 
 
 def _pivot_jamb_entries(rows_with_branch):
@@ -1390,11 +1436,19 @@ def _load_grade_breakdown(exam):
     period_label = None
 
     if exam in ('waec', 'jamb'):
+        from models import BranchGradeDistribution
         Model = WAECResult if exam == 'waec' else JAMBResult
         yq = db.session.query(Model.exam_year).distinct()
         if bid is not None:
             yq = yq.join(Student, Model.student_id == Student.id).filter(Student.branch_id == bid)
-        years = sorted({y[0] for y in yq.all()}, reverse=True)
+        years = {y[0] for y in yq.all()}
+        # Union in years covered only by an uploaded branch summary sheet (no
+        # per-student rows at all) so the dropdown doesn't hide that period.
+        uyq = db.session.query(BranchGradeDistribution.exam_year).filter_by(exam=exam).distinct()
+        if bid is not None:
+            uyq = uyq.filter(BranchGradeDistribution.branch_id == bid)
+        years |= {y[0] for y in uyq.all() if y[0] is not None}
+        years = sorted(years, reverse=True)
         selected_year = resolve_exam_year(request.args.get('year', type=int), years)
         period_label = f'Exam Year {selected_year}' if selected_year else None
         if selected_year:
@@ -1410,7 +1464,8 @@ def _load_grade_breakdown(exam):
             else:
                 entries = list(_pivot_jamb_entries(rows_with_branch))
                 bands, pass_bands = _JAMB_SCORE_BANDS, _JAMB_PASS_BANDS
-            result = _branch_grade_breakdown(entries, bands, pass_bands)
+            uploaded = _uploaded_distribution(branch_names, exam, bid, exam_year=selected_year)
+            result = _branch_grade_breakdown(entries, bands, pass_bands, uploaded=uploaded)
     else:
         from models import AcademicSession
         from models.mock_waec import MockWAECExam, MockWAECResult
@@ -1418,10 +1473,18 @@ def _load_grade_breakdown(exam):
         ExamModel = MockWAECExam if exam == 'mock_waec' else MockJAMBExam
         ResultModel = MockWAECResult if exam == 'mock_waec' else MockJAMBResult
 
+        from models import BranchGradeDistribution
         pq = db.session.query(ExamModel.session_id, ExamModel.exam_number)
         if bid is not None:
             pq = pq.filter(ExamModel.branch_id == bid)
-        pairs = pq.distinct().all()
+        pairs = set(pq.distinct().all())
+        # Union in sittings covered only by an uploaded branch summary sheet
+        # (no per-student rows at all) so the dropdown doesn't hide them.
+        uq = db.session.query(BranchGradeDistribution.mock_session_id, BranchGradeDistribution.mock_exam_number
+                             ).filter_by(exam=exam)
+        if bid is not None:
+            uq = uq.filter(BranchGradeDistribution.branch_id == bid)
+        pairs |= {p for p in uq.distinct().all() if p[0] is not None and p[1] is not None}
         sess_names = {s.id: s.name for s in AcademicSession.query.all()}
         mock_options = sorted(
             ({'session_id': sid, 'exam_number': num,
@@ -1458,7 +1521,10 @@ def _load_grade_breakdown(exam):
             else:
                 entries = list(_pivot_jamb_entries(rows_with_branch))
                 bands, pass_bands = _JAMB_SCORE_BANDS, _JAMB_PASS_BANDS
-            result = _branch_grade_breakdown(entries, bands, pass_bands)
+            uploaded = _uploaded_distribution(branch_names, exam, bid,
+                                              mock_session_id=selected_mock['session_id'],
+                                              mock_exam_number=selected_mock['exam_number'])
+            result = _branch_grade_breakdown(entries, bands, pass_bands, uploaded=uploaded)
 
     return {'exam': exam, 'exam_label': exam_label, 'period_label': period_label,
            'result': result, 'years': years, 'selected_year': selected_year,
@@ -1521,3 +1587,226 @@ def subject_branch_breakdown_export(fmt):
     payload, mimetype, ext = grade_breakdown_image_export(meta, data['result'], data['band_label'], data['pass_label'])
     return send_file(io.BytesIO(payload), mimetype=mimetype,
                      as_attachment=True, download_name=f'{fname_base}.{ext}')
+
+
+# =============================================================================
+# BRANCH GRADE DISTRIBUTION IMPORT — for a branch that reports a subject-wise
+# summary sheet (candidates sat + a count per grade/score-band) instead of
+# entering individual student WAEC/JAMB results. Paste, file upload, or an
+# AI-vision photo all funnel into the same review grid before saving — the
+# source document itself is never stored, only the reviewed numbers.
+# =============================================================================
+
+def _grade_distribution_bands(exam):
+    return WAECResult.VALID_GRADES if exam in ('waec', 'mock_waec') else _JAMB_SCORE_BANDS
+
+
+def _grade_distribution_catalog(exam):
+    from utils.exam_subject_config import get_config
+    key = 'waec' if exam in ('waec', 'mock_waec') else 'jamb'
+    return get_config()[key]['catalog'] or WAEC_SUBJECTS
+
+
+@results_bp.route('/subject-branch-breakdown/import', methods=['GET', 'POST'])
+@login_required
+@rate_limited('ocr', max_requests=30, window_minutes=10)
+def grade_distribution_import():
+    """Step 1: pick the branch/period and paste/upload/scan the report. Never
+    saves anything itself — always hands off to the review grid."""
+    from models import Branch, AcademicSession
+    from utils.branch_scope import viewing_branch_id
+    from utils.grade_distribution_import import parse_pasted_table, build_distribution_rows
+    from utils.broadsheet_import import parse_table
+
+    exam = request.args.get('exam', 'waec')
+    if exam not in ('waec', 'jamb', 'mock_waec', 'mock_jamb'):
+        exam = 'waec'
+    bands = _grade_distribution_bands(exam)
+    band_label = 'Grade' if exam in ('waec', 'mock_waec') else 'Score Band'
+
+    bid = viewing_branch_id()
+    if bid is not None:
+        branches = [b for b in [db.session.get(Branch, bid)] if b]
+    else:
+        branches = Branch.query.order_by(Branch.name).all()
+
+    years = []
+    mock_options = []
+    if exam in ('waec', 'jamb'):
+        Model = WAECResult if exam == 'waec' else JAMBResult
+        years = sorted({y[0] for y in db.session.query(Model.exam_year).distinct().all()}, reverse=True)
+        current_year = session_exam_year(get_active_session())
+        if current_year and current_year not in years:
+            years = sorted(set(years) | {current_year}, reverse=True)
+    else:
+        from models.mock_waec import MockWAECExam
+        from models.mock_jamb import MockJAMBExam
+        ExamModel = MockWAECExam if exam == 'mock_waec' else MockJAMBExam
+        pairs = db.session.query(ExamModel.session_id, ExamModel.exam_number).distinct().all()
+        sess_names = {s.id: s.name for s in AcademicSession.query.all()}
+        mock_options = sorted(
+            ({'session_id': sid, 'exam_number': num, 'label': f"Mock {num} — {sess_names.get(sid, '?')}"}
+             for sid, num in pairs),
+            key=lambda o: (sess_names.get(o['session_id'], ''), o['exam_number']), reverse=True)
+
+    if request.method == 'POST':
+        branch_id = request.form.get('branch_id', type=int)
+        branch = db.session.get(Branch, branch_id) if branch_id else None
+        if not branch or (bid is not None and branch.id != bid):
+            flash('Select a valid branch.', 'error')
+            return redirect(url_for('results.grade_distribution_import', exam=exam))
+
+        method = request.form.get('method', 'paste')
+        table = None
+        if method == 'paste':
+            text = (request.form.get('data') or '').strip()
+            if not text:
+                flash('Paste the report text first.', 'error')
+                return redirect(url_for('results.grade_distribution_import', exam=exam))
+            table = parse_pasted_table(text)
+        elif method == 'file':
+            file = request.files.get('file')
+            if not file or not file.filename:
+                flash('Choose a file to upload.', 'error')
+                return redirect(url_for('results.grade_distribution_import', exam=exam))
+            from utils.uploads import ext_ok
+            if not ext_ok(file.filename, {'.csv', '.xlsx', '.xlsm', '.xls'}):
+                flash('Please upload a CSV or Excel file.', 'error')
+                return redirect(url_for('results.grade_distribution_import', exam=exam))
+            table = parse_table(file.read(), file.filename)
+        else:
+            from utils.waec_ocr import vision_available, vision_extract_grade_distribution, last_vision_error
+            file = request.files.get('photo')
+            if not file or not file.filename:
+                flash('Choose a photo to scan.', 'error')
+                return redirect(url_for('results.grade_distribution_import', exam=exam))
+            from utils.uploads import ext_ok, SCAN_EXTS
+            if not ext_ok(file.filename, SCAN_EXTS):
+                flash('Please upload an image.', 'error')
+                return redirect(url_for('results.grade_distribution_import', exam=exam))
+            if not vision_available():
+                flash('AI vision OCR is not enabled on this server — paste the text or upload a file instead.', 'error')
+                return redirect(url_for('results.grade_distribution_import', exam=exam))
+            table = vision_extract_grade_distribution(file.read(), file.mimetype or 'image/png')
+            if not table:
+                flash(last_vision_error() or 'Could not read the photo — try pasting the text instead.', 'warning')
+                return redirect(url_for('results.grade_distribution_import', exam=exam))
+
+        if not table or not table.get('rows'):
+            flash('No rows could be read from that input.', 'warning')
+            return redirect(url_for('results.grade_distribution_import', exam=exam))
+
+        catalog = _grade_distribution_catalog(exam)
+        parsed_rows = build_distribution_rows(table['headers'], table['rows'], bands, subject_catalog=catalog)
+        if not parsed_rows:
+            flash('No subject rows could be read from that input — check the format and try again.', 'warning')
+            return redirect(url_for('results.grade_distribution_import', exam=exam))
+
+        period = {}
+        if exam in ('waec', 'jamb'):
+            period['exam_year'] = request.form.get('exam_year', type=int)
+        else:
+            mock_param = request.form.get('mock', '')
+            if '_' in mock_param:
+                try:
+                    sid, num = mock_param.split('_', 1)
+                    period['mock_session_id'] = int(sid)
+                    period['mock_exam_number'] = int(num)
+                except ValueError:
+                    pass
+
+        return render_template('results/grade_distribution_review.html',
+            exam=exam, bands=bands, band_label=band_label, branch=branch,
+            rows=parsed_rows, period=period, source=method, subjects=catalog)
+
+    return render_template('results/grade_distribution_import.html',
+        exam=exam, band_label=band_label, branches=branches, bid=bid,
+        years=years, mock_options=mock_options,
+        current_year=session_exam_year(get_active_session()) or _date.today().year)
+
+
+@results_bp.route('/subject-branch-breakdown/import/save', methods=['POST'])
+@login_required
+def grade_distribution_import_save():
+    """Step 2: commit the reviewed/edited grid — replaces whatever this branch
+    had stored for this exact (exam, period), so re-importing a corrected
+    sheet is just "do it again"."""
+    from flask import session as flask_session
+    from models import Branch, BranchGradeDistribution
+    from utils.branch_scope import require_branch_access
+
+    exam = request.form.get('exam', 'waec')
+    if exam not in ('waec', 'jamb', 'mock_waec', 'mock_jamb'):
+        exam = 'waec'
+    bands = _grade_distribution_bands(exam)
+
+    branch_id = request.form.get('branch_id', type=int)
+    branch = db.session.get(Branch, branch_id) if branch_id else None
+    if not branch:
+        flash('Select a valid branch.', 'error')
+        return redirect(url_for('results.grade_distribution_import', exam=exam))
+    require_branch_access(branch.id)
+
+    exam_year = request.form.get('exam_year', type=int) if exam in ('waec', 'jamb') else None
+    mock_session_id = request.form.get('mock_session_id', type=int) if exam in ('mock_waec', 'mock_jamb') else None
+    mock_exam_number = request.form.get('mock_exam_number', type=int) if exam in ('mock_waec', 'mock_jamb') else None
+    if exam in ('waec', 'jamb') and not exam_year:
+        flash('Select the exam year.', 'error')
+        return redirect(url_for('results.grade_distribution_import', exam=exam))
+    if exam in ('mock_waec', 'mock_jamb') and not (mock_session_id and mock_exam_number):
+        flash('Select the mock sitting.', 'error')
+        return redirect(url_for('results.grade_distribution_import', exam=exam))
+
+    subjects = request.form.getlist('subject[]')
+    candidates_list = request.form.getlist('candidates[]')
+    new_rows = []
+    for i, subj in enumerate(subjects):
+        subj = (subj or '').strip()
+        if not subj:
+            continue
+        try:
+            candidates = int(candidates_list[i]) if i < len(candidates_list) and candidates_list[i] else 0
+        except ValueError:
+            candidates = 0
+        counts = {}
+        total = 0
+        for b in bands:
+            raw = (request.form.get(f'band_{i}_{b}') or '').strip()
+            try:
+                v = int(raw) if raw else 0
+            except ValueError:
+                v = 0
+            counts[b] = v
+            total += v
+        if not candidates:
+            candidates = total
+        if not candidates and not total:
+            continue
+        row = BranchGradeDistribution(
+            branch_id=branch.id, exam=exam, exam_year=exam_year,
+            mock_session_id=mock_session_id, mock_exam_number=mock_exam_number,
+            subject=subj, candidates=candidates,
+            source=request.form.get('source', 'manual')[:10],
+            imported_by=flask_session.get('user_id'))
+        row.set_counts(counts)
+        new_rows.append(row)
+
+    if not new_rows:
+        flash('No subject rows to save — check the values and try again.', 'warning')
+        return redirect(url_for('results.grade_distribution_import', exam=exam))
+
+    BranchGradeDistribution.query.filter_by(
+        branch_id=branch.id, exam=exam, exam_year=exam_year,
+        mock_session_id=mock_session_id, mock_exam_number=mock_exam_number
+    ).delete(synchronize_session=False)
+    db.session.add_all(new_rows)
+    db.session.commit()
+    log_action('results.grade_distribution_import', detail=f'{exam} {branch.name}', target=branch)
+    flash(f'Saved {len(new_rows)} subject row(s) for {branch.name}.', 'success')
+
+    redirect_kwargs = {'exam': exam}
+    if exam_year:
+        redirect_kwargs['year'] = exam_year
+    elif mock_session_id and mock_exam_number:
+        redirect_kwargs['mock'] = f'{mock_session_id}_{mock_exam_number}'
+    return redirect(url_for('results.subject_branch_breakdown', **redirect_kwargs))

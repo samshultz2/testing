@@ -47,8 +47,9 @@ thead .gb-9 { background: color-mix(in srgb, #9333ea 45%, var(--bg-secondary, va
         <h1>Subject-Wise Performance &amp; Grade Breakdown</h1>
         <p class="text-muted text-sm">Per-subject, per-branch {{ band_label|lower }} percentage distribution</p>
     </div>
-    {% if result and result.subjects %}
     <div class="page-header-actions">
+        <a href="{{ url_for('results.grade_distribution_import', exam=exam) }}" class="btn btn-secondary btn-sm" title="Import a branch's own summary sheet (for branches that don't enter individual results)"><i class="fas fa-file-import"></i> Import Branch Report</a>
+        {% if result and result.subjects %}
         {% set export_args = {'exam': exam} %}
         {% if exam in ('waec', 'jamb') %}{% set _ = export_args.update({'year': selected_year}) %}
         {% elif selected_mock %}{% set _ = export_args.update({'mock': selected_mock.session_id ~ '_' ~ selected_mock.exam_number}) %}{% endif %}
@@ -56,8 +57,8 @@ thead .gb-9 { background: color-mix(in srgb, #9333ea 45%, var(--bg-secondary, va
         <a href="{{ url_for('results.subject_branch_breakdown_export', fmt='docx', **export_args) }}" class="btn btn-secondary btn-sm" title="Download Word"><i class="fas fa-file-word"></i> Word</a>
         <a href="{{ url_for('results.subject_branch_breakdown_export', fmt='xlsx', **export_args) }}" class="btn btn-secondary btn-sm" title="Download Excel"><i class="fas fa-file-excel"></i> Excel</a>
         <a href="{{ url_for('results.subject_branch_breakdown_export', fmt='png', **export_args) }}" class="btn btn-secondary btn-sm" title="Download HD Image"><i class="fas fa-file-image"></i> Image</a>
+        {% endif %}
     </div>
-    {% endif %}
 </div>
 
 <div class="scope-tabs">
@@ -113,9 +114,9 @@ thead .gb-9 { background: color-mix(in srgb, #9333ea 45%, var(--bg-secondary, va
         {% for subj in result.subjects %}
         {% for br in result.branches %}
         <tr>
-            {% if loop.first %}<td class="gb-subj" rowspan="{{ result.branches|length }}">{{ subj }}</td>{% endif %}
-            <td class="gb-branch">{{ br }}</td>
             {% set cell = result.table[subj][br] %}
+            {% if loop.first %}<td class="gb-subj" rowspan="{{ result.branches|length }}">{{ subj }}</td>{% endif %}
+            <td class="gb-branch">{{ br }}{% if cell and cell.uploaded %} <i class="fas fa-file-import text-muted" style="font-size:.75em;" title="From an imported branch report"></i>{% endif %}</td>
             {% if cell is none %}
             <td colspan="{{ result.bands|length + 1 }}" class="gb-notoffered">Not Offered</td>
             {% else %}

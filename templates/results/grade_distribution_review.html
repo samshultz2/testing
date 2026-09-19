@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block title %}Review Branch Report - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('results.subject_branch_breakdown', exam=exam) }}">Grade Breakdown</a> / <span>Review Import</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.rev-table{width:100%;border-collapse:collapse;font-size:.85rem}
+.rev-table th,.rev-table td{border:1px solid var(--border-color);padding:.35rem .4rem;text-align:center}
+.rev-table thead th{background:var(--bg-secondary,var(--gray-50));font-weight:700}
+.rev-table td.rev-subj{text-align:left;min-width:170px}
+.rev-table input{width:100%;border:1px solid transparent;background:transparent;text-align:center;padding:.25rem;border-radius:4px;font-size:.85rem;color:var(--text-primary)}
+.rev-table td.rev-subj input{text-align:left}
+.rev-table input:focus{border-color:var(--primary);background:var(--bg-card);outline:none}
+.rev-table input[type=number]{width:60px}
+.rev-scroll{overflow-x:auto}
+.imp-hint{display:flex;gap:.6rem;align-items:flex-start;background:var(--primary-light);color:var(--primary);border-radius:var(--radius-md);padding:.75rem 1rem;font-size:.85rem;margin:.25rem 0 1rem;line-height:1.4}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div>
+        <h1>Review Import — {{ branch.name }}</h1>
+        <p class="text-muted text-sm">Check the numbers below, fix anything the read got wrong, then save. Nothing is saved yet.</p>
+    </div>
+    <div class="page-header-actions">
+        <a href="{{ url_for('results.grade_distribution_import', exam=exam) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>
+    </div>
+</div>
+
+<div class="imp-hint">
+    <i class="fas fa-circle-info"></i>
+    <span>Read {{ rows|length }} subject row(s) from your {{ {'paste': 'pasted text', 'file': 'uploaded file', 'photo': 'photo'}[source] }}. "Passes"/"Credit %" columns aren't needed — they're recalculated automatically from the {{ band_label|lower }} counts.</span>
+</div>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST" action="{{ url_for('results.grade_distribution_import_save') }}" id="revForm">
+            <input type="hidden" name="exam" value="{{ exam }}">
+            <input type="hidden" name="branch_id" value="{{ branch.id }}">
+            <input type="hidden" name="source" value="{{ source }}">
+            {% if period.exam_year %}<input type="hidden" name="exam_year" value="{{ period.exam_year }}">{% endif %}
+            {% if period.mock_session_id %}
+            <input type="hidden" name="mock_session_id" value="{{ period.mock_session_id }}">
+            <input type="hidden" name="mock_exam_number" value="{{ period.mock_exam_number }}">
+            {% endif %}
+
+            <div class="rev-scroll">
+            <table class="rev-table" id="revTable">
+                <thead>
+                    <tr>
+                        <th>Subject</th>
+                        <th>Candidates<br>(SAT)</th>
+                        {% for b in bands %}<th>{{ b }}</th>{% endfor %}
+                    </tr>
+                </thead>
+                <tbody id="revBody">
+                    {% for r in rows %}
+                    {% set row_index = loop.index0 %}
+                    <tr>
+                        <td class="rev-subj"><input type="text" name="subject[]" list="subjectList" value="{{ r.subject }}"></td>
+                        <td><input type="number" min="0" name="candidates[]" value="{{ r.candidates }}"></td>
+                        {% for b in bands %}
+                        <td><input type="number" min="0" name="band_{{ row_index }}_{{ b }}" value="{{ r.counts.get(b, 0) }}"></td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            </div>
+
+            <datalist id="subjectList">
+                {% for s in subjects %}<option value="{{ s }}">{% endfor %}
+            </datalist>
+
+            <button type="button" class="btn btn-secondary btn-sm mt-3" id="addRowBtn"><i class="fas fa-plus"></i> Add Subject Row</button>
+
+            <div class="page-header-actions mt-3">
+                <button type="submit" class="btn btn-primary btn-lg"><i class="fas fa-save"></i> Save Grade Breakdown</button>
+                <a href="{{ url_for('results.grade_distribution_import', exam=exam) }}" class="btn btn-secondary btn-lg">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script nonce="{{ csp_nonce }}">
+(function () {
+    const BANDS = {{ bands | tojson }};
+    const body = document.getElementById('revBody');
+    let nextIndex = {{ rows|length }};
+
+    function newRow(index) {
+        const tr = document.createElement('tr');
+        let html = '<td class="rev-subj"><input type="text" name="subject[]" list="subjectList"></td>'
+                 + '<td><input type="number" min="0" name="candidates[]"></td>';
+        BANDS.forEach(function (b) {
+            html += '<td><input type="number" min="0" name="band_' + index + '_' + b + '"></td>';
+        });
+        tr.innerHTML = html;
+        return tr;
+    }
+
+    document.getElementById('addRowBtn').addEventListener('click', function () {
+        body.appendChild(newRow(nextIndex));
+        nextIndex += 1;
+    });
+})();
+</script>
+{% endblock %}

@@ -119,3 +119,4 @@ from models.mock_jamb import (MockJAMBExam, MockJAMBResult, MockJAMBAnalytics,
                               MockJAMBPassage, MockJAMBQuestion, MockJAMBAttempt,
                               MockJAMBAnswer, MockJAMBSyllabus, MockJAMBSyllabusNode)
 from models.mock_waec import MockWAECExam, MockWAECResult, MockWAECAnalytics
+from models.grade_distribution import BranchGradeDistribution
