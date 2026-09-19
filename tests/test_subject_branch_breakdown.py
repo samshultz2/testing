@@ -195,9 +195,14 @@ def test_waec_export_pdf_docx_xlsx_png(app):
     from docx import Document
     import io
     doc = Document(io.BytesIO(r.get_data()))
-    assert len(doc.tables) == 2                    # main breakdown + overall summary
-    header = [c_.text for c_ in doc.tables[0].rows[0].cells]
-    assert header[:3] == ['Subject', 'Branch', 'Candidates (N)']
+    # the navy masthead is itself a (1-column) table, so filter down to the
+    # two real data tables: main breakdown + overall summary
+    data_tables = [t for t in doc.tables if len(t.columns) > 1]
+    assert len(data_tables) == 2
+    header = [c_.text for c_ in data_tables[0].rows[0].cells]
+    assert header[:3] == ['SUBJECT', 'BRANCH', 'CANDIDATES (N)']
+    band_header = [c_.text for c_ in data_tables[0].rows[1].cells]
+    assert 'A1 (%)' in band_header
 
     r = c.get(f'/results/subject-branch-breakdown/export.xlsx?exam=waec&year={yr}')
     assert r.status_code == 200

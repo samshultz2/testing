@@ -1,19 +1,22 @@
 """Multi-format export (PDF, Word, Excel, HD PNG) for the Subject-Wise Grade
-Breakdown report (routes.results.analytics.subject_branch_breakdown) — the
-same masthead/print-safe styling as utils/broadsheet_export.py, plus the
-on-screen A1-F9 / score-band colour ramp rendered as solid tints (CSS
-color-mix() has no equivalent outside a browser, so these are hand-kept in
-sync with the .gb-1..gb-9 rules in templates/results/subject_branch_breakdown.html).
+Breakdown report (routes.results.analytics.subject_branch_breakdown) —
+a navy masthead + two-tier colour-coded header, matching the school's own
+printed grade-analysis-sheet template. The on-screen A1-F9 / score-band
+colour ramp (CSS color-mix(), no equivalent outside a browser) is hand-kept
+in sync with the .gb-1..gb-9 rules in templates/results/subject_branch_breakdown.html:
+header cells use the base hue at full strength, body cells a light tint.
 """
 import io
 
-from utils.broadsheet_export import _school_name, _neutral, _NEUTRAL_RGB, zip_pngs
+from utils.broadsheet_export import _school_name, _NEUTRAL_RGB, zip_pngs
 from utils.web_exports import pdf_escape
+
+NAVY_HEX = '#173A63'
+NAVY_RGB = (23, 58, 99)
 
 _BAND_BASE = ['#16a34a', '#22c55e', '#4ade80', '#eab308', '#f59e0b',
              '#f97316', '#ef4444', '#dc2626', '#9333ea']
 _BAND_ALPHA = [.30, .26, .22, .26, .22, .26, .20, .26, .24]
-_BAND_ALPHA_HEAD = [.55, .50, .45, .50, .45, .50, .42, .50, .45]
 
 
 def _blend(hex_color, alpha, base=(255, 255, 255)):
@@ -23,15 +26,26 @@ def _blend(hex_color, alpha, base=(255, 255, 255)):
 
 
 def band_rgb(index, header=False):
-    """0-based band index -> (r,g,b) print-safe tint, matching the on-screen ramp."""
+    """0-based band index -> (r,g,b). ``header=True`` is the vivid, near-full-
+    strength swatch used on the colour-coded header cells; the default is the
+    light print-safe tint used on the data cells beneath it."""
     i = index % len(_BAND_BASE)
-    alpha = (_BAND_ALPHA_HEAD if header else _BAND_ALPHA)[i]
-    return _blend(_BAND_BASE[i], alpha)
+    if header:
+        hexc = _BAND_BASE[i].lstrip('#')
+        return tuple(int(hexc[j:j + 2], 16) for j in (0, 2, 4))
+    return _blend(_BAND_BASE[i], _BAND_ALPHA[i])
 
 
 def band_hex(index, header=False):
     r, g, b = band_rgb(index, header)
     return '#%02X%02X%02X' % (r, g, b)
+
+
+def _text_on(rgb):
+    """Black or white — whichever reads better on this background."""
+    r, g, b = rgb
+    luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255
+    return (255, 255, 255) if luminance < 0.62 else (15, 23, 42)
 
 
 def _main_headers(bands):
@@ -53,6 +67,16 @@ def _main_text_rows(result):
             else:
                 rows.append([subj if bi == 0 else '', br, str(cell['n'])]
                             + [f"{cell['pct'][b]}%" for b in bands])
+    return rows
+
+
+def _summary_text_rows(result, pass_label):
+    bands = result['bands']
+    rows = []
+    for br in result['branches']:
+        s = result['summary'][br]
+        rows.append([br, str(s['n'])] + [f"{s['pct'][b]}%" for b in bands]
+                    + [f"{s['pass_pct']}% ({s['pass_n']})"])
     return rows
 
 
@@ -86,16 +110,6 @@ def _apply_docx_col_widths(table, widths):
                 cell.width = widths[i]
 
 
-def _summary_text_rows(result, pass_label):
-    bands = result['bands']
-    rows = []
-    for br in result['branches']:
-        s = result['summary'][br]
-        rows.append([br, str(s['n'])] + [f"{s['pct'][b]}%" for b in bands]
-                    + [f"{s['pass_pct']}% ({s['pass_n']})"])
-    return rows
-
-
 # --------------------------------------------------------------------------- #
 # PDF (reportlab, landscape A4)
 # --------------------------------------------------------------------------- #
@@ -106,66 +120,53 @@ def grade_breakdown_pdf(meta, result, band_label, pass_label):
     from reportlab.lib import colors
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
     from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle, Paragraph,
-                                    Spacer, Image, PageBreak, KeepTogether)
-    from reportlab.lib.enums import TA_LEFT
+                                    Spacer, PageBreak, KeepTogether)
     from reportlab.pdfbase.pdfmetrics import stringWidth
 
-    primary, accent, light, ink = _neutral()
-    head_bg = colors.HexColor('#E9EDF2')
-    head_fg = colors.HexColor('#0F172A')
-    rule = colors.HexColor('#94A3B8')
-    grid = colors.HexColor('#D5DBE3')
-    zebra = colors.HexColor('#F5F7FA')
+    grid = colors.HexColor('#B9C2CE')
     note_fg = colors.HexColor('#94A3B8')
-    school_name = meta.get('school_name') or _school_name()
-    logo_path = meta.get('logo_path')
+    navy = colors.HexColor(NAVY_HEX)
+    school_name = (meta.get('school_name') or _school_name() or '').strip()
     bands = result['bands']
     ncol = 3 + len(bands)
     fs = 10 if ncol <= 10 else (9 if ncol <= 12 else 8)
 
+    def rl_color(rgb):
+        return colors.Color(rgb[0] / 255, rgb[1] / 255, rgb[2] / 255)
+
     styles = getSampleStyleSheet()
-    schoolst = ParagraphStyle('sn', parent=styles['Normal'], fontSize=11, textColor=colors.HexColor('#64748B'),
-                              fontName='Helvetica-Bold', alignment=TA_LEFT, spaceAfter=1)
-    h = ParagraphStyle('h', parent=styles['Title'], fontSize=17, textColor=primary, spaceAfter=2, alignment=TA_LEFT)
-    sub = ParagraphStyle('sub', parent=styles['Normal'], fontSize=9.5, textColor=colors.HexColor('#6B7A74'))
+    banner_l = ParagraphStyle('bl', parent=styles['Normal'], fontSize=15, leading=18,
+                              textColor=colors.white, fontName='Helvetica-Bold', alignment=1)
+    banner_s = ParagraphStyle('bs', parent=styles['Normal'], fontSize=11.5, leading=14,
+                              textColor=colors.white, fontName='Helvetica-Bold', alignment=1)
     cell = ParagraphStyle('c', parent=styles['Normal'], fontSize=fs, leading=fs + 2)
     cellc = ParagraphStyle('cc', parent=cell, alignment=1)
-    headp = ParagraphStyle('hp', parent=styles['Normal'], fontSize=fs, leading=fs + 2,
-                           textColor=head_fg, fontName='Helvetica-Bold', alignment=1)
     notep = ParagraphStyle('np', parent=cellc, textColor=note_fg, fontName='Helvetica-Oblique')
+    legendp = ParagraphStyle('lg', parent=styles['Normal'], fontSize=8, textColor=note_fg,
+                             fontName='Helvetica-Oblique')
+
+    def headp_for(rgb):
+        fg = _text_on(rgb)
+        return ParagraphStyle('hp%d' % id(rgb), parent=styles['Normal'], fontSize=fs, leading=fs + 2,
+                              textColor=rl_color(fg), fontName='Helvetica-Bold', alignment=1)
+    navy_headp = headp_for(NAVY_RGB)
 
     buf = io.BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=landscape(A4), topMargin=10 * mm, bottomMargin=12 * mm,
+    doc = SimpleDocTemplate(buf, pagesize=landscape(A4), topMargin=8 * mm, bottomMargin=10 * mm,
                             leftMargin=8 * mm, rightMargin=8 * mm, title='Grade Breakdown')
     avail = landscape(A4)[0] - 16 * mm
 
-    def logo_flowable():
-        if not logo_path:
-            return None
-        try:
-            from PIL import Image as _PILImage
-            iw, ih = _PILImage.open(logo_path).size
-            lw = 20 * mm
-            lh = lw * (ih / iw) if iw else 20 * mm
-            return Image(logo_path, width=lw, height=min(lh, 22 * mm))
-        except Exception:
-            return None
-
-    def masthead(title_text, subtitle_text):
-        cells = []
+    def banner(title_text):
+        rows = []
         if school_name:
-            cells.append(Paragraph(pdf_escape(school_name), schoolst))
-        cells.append(Paragraph(pdf_escape(title_text), h))
-        if subtitle_text:
-            cells.append(Paragraph(pdf_escape(subtitle_text), sub))
-        lg = logo_flowable()
-        if lg is not None:
-            mast = Table([[lg, cells]], colWidths=[24 * mm, avail - 24 * mm])
-            mast.setStyle(TableStyle([('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-                                      ('LEFTPADDING', (0, 0), (-1, -1), 0),
-                                      ('RIGHTPADDING', (0, 0), (-1, -1), 0)]))
-            return [mast, Spacer(1, 6)]
-        return list(cells) + [Spacer(1, 5)]
+            rows.append([Paragraph(pdf_escape(school_name.upper()), banner_l)])
+        rows.append([Paragraph(pdf_escape(title_text.upper()), banner_s)])
+        bt = Table(rows, colWidths=[avail])
+        bt.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, -1), navy), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+            ('TOPPADDING', (0, 0), (-1, -1), 4), ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ]))
+        return [bt, Spacer(1, 8)]
 
     def col_widths(headers, text_rows, grow_cols):
         nat = []
@@ -185,28 +186,32 @@ def grade_breakdown_pdf(meta, result, band_label, pass_label):
             widths = [w * (avail / tot) for w in nat]
         return widths
 
-    # ---- Main breakdown table ---- (leftover width fills the band columns,
-    # not Subject/Branch/N — those stay tight to their content, as in the
-    # reference layout, instead of stretching out with dead whitespace)
+    # ---- Main breakdown table ----
     headers = _main_headers(bands)
     widths = col_widths(headers, _main_text_rows(result), grow_cols=list(range(3, 3 + len(bands))))
+    span_label = f'{band_label} Percentage Breakdown'.upper()
 
-    data = [[Paragraph(pdf_escape(x), headp) for x in headers]]
+    row0 = [Paragraph('SUBJECT', navy_headp), Paragraph('BRANCH', navy_headp),
+           Paragraph('CANDIDATES (N)', navy_headp), Paragraph(pdf_escape(span_label), navy_headp)] \
+        + [''] * (len(bands) - 1)
+    row1 = ['', '', ''] + [Paragraph(f'{b} (%)', headp_for(band_rgb(i, header=True)))
+                           for i, b in enumerate(bands)]
+    data = [row0, row1]
     style_cmds = [
-        ('LINEBELOW', (0, 0), (-1, 0), 1.1, rule),
-        ('FONTSIZE', (0, 0), (-1, -1), fs),
-        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('LINEBELOW', (0, 1), (-1, -1), 0.4, grid),
-        ('BOX', (0, 0), (-1, -1), 0.5, grid),
-        ('INNERGRID', (0, 0), (-1, -1), 0.3, grid),
+        ('SPAN', (0, 0), (0, 1)), ('SPAN', (1, 0), (1, 1)), ('SPAN', (2, 0), (2, 1)),
+        ('SPAN', (3, 0), (3 + len(bands) - 1, 0)),
+        ('BACKGROUND', (0, 0), (2, 1), navy), ('BACKGROUND', (3, 0), (-1, 0), navy),
+        ('FONTSIZE', (0, 0), (-1, -1), fs), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
+        ('LINEBELOW', (0, 1), (-1, 1), 1.1, navy),
+        ('LINEBELOW', (0, 2), (-1, -1), 0.4, grid),
+        ('BOX', (0, 0), (-1, -1), 0.6, navy), ('INNERGRID', (0, 0), (-1, -1), 0.3, grid),
         ('TOPPADDING', (0, 0), (-1, -1), 3), ('BOTTOMPADDING', (0, 0), (-1, -1), 3),
         ('LEFTPADDING', (0, 0), (-1, -1), 4), ('RIGHTPADDING', (0, 0), (-1, -1), 4),
-        ('BACKGROUND', (0, 0), (2, 0), head_bg),
     ]
     for bx in range(len(bands)):
-        style_cmds.append(('BACKGROUND', (3 + bx, 0), (3 + bx, 0), colors.HexColor(band_hex(bx, header=True))))
+        style_cmds.append(('BACKGROUND', (3 + bx, 1), (3 + bx, 1), rl_color(band_rgb(bx, header=True))))
 
-    row_i = 1
+    row_i = 2
     for subj in result['subjects']:
         branches = result['branches']
         span_start = row_i
@@ -225,48 +230,57 @@ def grade_breakdown_pdf(meta, result, band_label, pass_label):
                 for bx, b in enumerate(bands):
                     line.append(Paragraph(f"{cell_['pct'][b]}%", cellc))
                     style_cmds.append(('BACKGROUND', (3 + bx, row_i), (3 + bx, row_i),
-                                       colors.HexColor(band_hex(bx))))
+                                       rl_color(band_rgb(bx))))
                 data.append(line)
             row_i += 1
         if len(branches) > 1:
             style_cmds.append(('SPAN', (0, span_start), (0, span_start + len(branches) - 1)))
-        style_cmds.append(('LINEBELOW', (0, row_i - 1), (-1, row_i - 1), 0.8, rule))
-    t = Table(data, colWidths=widths, repeatRows=1)
+        style_cmds.append(('LINEBELOW', (0, row_i - 1), (-1, row_i - 1), 0.8, navy))
+    t = Table(data, colWidths=widths, repeatRows=2)
     t.setStyle(TableStyle(style_cmds))
 
-    elems = [KeepTogether(masthead('Subject-Wise Performance & Grade Breakdown', meta.get('subtitle', ''))), t]
+    elems = [KeepTogether(banner('Subject-Wise Performance & Grade Percentage Breakdown')), t,
+            Spacer(1, 4), Paragraph('— Not Offered', legendp)]
 
     # ---- Overall summary table (own page) ----
     sum_headers = _summary_headers(bands, pass_label)
     sum_rows = _summary_text_rows(result, pass_label)
     swidths = col_widths(sum_headers, sum_rows, grow_cols=list(range(2, 2 + len(bands))))
-    sdata = [[Paragraph(pdf_escape(x), headp) for x in sum_headers]]
+    span_label2 = f'{band_label} Percentage'.upper()
+    srow0 = [Paragraph('BRANCH', navy_headp), Paragraph('TOTAL SUBJECT<br/>ENTRIES (N)', navy_headp),
+            Paragraph(pdf_escape(span_label2), navy_headp)] + [''] * (len(bands) - 1) \
+        + [Paragraph(pdf_escape(pass_label.upper()), navy_headp)]
+    srow1 = ['', ''] + [Paragraph(f'{b} (%)', headp_for(band_rgb(i, header=True)))
+                        for i, b in enumerate(bands)] + ['']
+    sdata = [srow0, srow1]
     sstyle = [
-        ('LINEBELOW', (0, 0), (-1, 0), 1.1, rule),
+        ('SPAN', (0, 0), (0, 1)), ('SPAN', (1, 0), (1, 1)),
+        ('SPAN', (2, 0), (2 + len(bands) - 1, 0)),
+        ('SPAN', (2 + len(bands), 0), (2 + len(bands), 1)),
+        ('BACKGROUND', (0, 0), (1, 1), navy), ('BACKGROUND', (2, 0), (2 + len(bands) - 1, 0), navy),
+        ('BACKGROUND', (2 + len(bands), 0), (2 + len(bands), 1), navy),
         ('FONTSIZE', (0, 0), (-1, -1), fs), ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-        ('LINEBELOW', (0, 1), (-1, -1), 0.4, grid),
-        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, zebra]),
-        ('BOX', (0, 0), (-1, -1), 0.5, grid), ('INNERGRID', (0, 0), (-1, -1), 0.3, grid),
+        ('LINEBELOW', (0, 1), (-1, 1), 1.1, navy),
+        ('LINEBELOW', (0, 2), (-1, -1), 0.4, grid),
+        ('BOX', (0, 0), (-1, -1), 0.6, navy), ('INNERGRID', (0, 0), (-1, -1), 0.3, grid),
         ('TOPPADDING', (0, 0), (-1, -1), 4), ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
         ('LEFTPADDING', (0, 0), (-1, -1), 5), ('RIGHTPADDING', (0, 0), (-1, -1), 5),
-        ('BACKGROUND', (0, 0), (1, 0), head_bg),
-        ('BACKGROUND', (-1, 0), (-1, 0), head_bg),
     ]
     for bx in range(len(bands)):
-        sstyle.append(('BACKGROUND', (2 + bx, 0), (2 + bx, 0), colors.HexColor(band_hex(bx, header=True))))
-    for ri, br in enumerate(result['branches'], 1):
+        sstyle.append(('BACKGROUND', (2 + bx, 1), (2 + bx, 1), rl_color(band_rgb(bx, header=True))))
+    for ri, br in enumerate(result['branches'], 2):
         s = result['summary'][br]
         line = [Paragraph(pdf_escape(br), cell), Paragraph(str(s['n']), cellc)]
         for bx, b in enumerate(bands):
             line.append(Paragraph(f"{s['pct'][b]}%", cellc))
-            sstyle.append(('BACKGROUND', (2 + bx, ri), (2 + bx, ri), colors.HexColor(band_hex(bx))))
+            sstyle.append(('BACKGROUND', (2 + bx, ri), (2 + bx, ri), rl_color(band_rgb(bx))))
         line.append(Paragraph(f"<b>{s['pass_pct']}%</b> ({s['pass_n']})", cellc))
         sdata.append(line)
-    st = Table(sdata, colWidths=swidths, repeatRows=1)
+    st = Table(sdata, colWidths=swidths, repeatRows=2)
     st.setStyle(TableStyle(sstyle))
 
     elems.append(PageBreak())
-    elems.append(KeepTogether(masthead(f'Overall {band_label} Percentage Summary by Branch', '')))
+    elems.append(KeepTogether(banner(f'Overall {band_label} Percentage Summary by Branch')))
     elems.append(st)
 
     doc.build(elems)
@@ -285,12 +299,10 @@ def grade_breakdown_docx(meta, result, band_label, pass_label):
     from docx.oxml.ns import nsdecls
     from docx.oxml import parse_xml
     from docx.enum.section import WD_ORIENT
-    import os as _os
 
-    school_name = meta.get('school_name') or _school_name()
-    logo_path = meta.get('logo_path')
-    navy = RGBColor(0x33, 0x41, 0x55)
-    muted = RGBColor(0x64, 0x74, 0x8B)
+    school_name = (meta.get('school_name') or _school_name() or '').strip()
+    navy = RGBColor(*NAVY_RGB)
+    white = RGBColor(0xFF, 0xFF, 0xFF)
     note_rgb = RGBColor(0x94, 0xA3, 0xB8)
     bands = result['bands']
     ncol = 3 + len(bands)
@@ -302,29 +314,36 @@ def grade_breakdown_docx(meta, result, band_label, pass_label):
     sec.page_width, sec.page_height = sec.page_height, sec.page_width
     sec.left_margin = sec.right_margin = Cm(1.0)
     sec.top_margin = sec.bottom_margin = Cm(1.0)
+    avail_cm = sec.page_width.cm - sec.left_margin.cm - sec.right_margin.cm
 
     def shade(cell, hexcolor):
         cell._tc.get_or_add_tcPr().append(parse_xml(f'<w:shd {nsdecls("w")} w:fill="{hexcolor.lstrip("#")}"/>'))
 
-    def masthead(title_text, subtitle_text):
-        if logo_path and _os.path.exists(logo_path):
-            try:
-                p = doc.add_paragraph()
-                p.alignment = WD_ALIGN_PARAGRAPH.LEFT
-                p.add_run().add_picture(logo_path, height=Cm(1.4))
-            except Exception:
-                pass
+    def rgb_of(rgb):
+        return RGBColor(*rgb)
+
+    def banner(title_text):
+        t = doc.add_table(rows=(2 if school_name else 1), cols=1)
+        t.autofit = False
+        t.columns[0].width = Cm(avail_cm)
+        row = 0
         if school_name:
-            sp = doc.add_paragraph()
-            r = sp.add_run(school_name)
-            r.bold = True; r.font.size = Pt(11); r.font.color.rgb = muted
-        hp = doc.add_paragraph()
-        hr = hp.add_run(title_text)
-        hr.bold = True; hr.font.size = Pt(16); hr.font.color.rgb = navy
-        if subtitle_text:
-            sb = doc.add_paragraph()
-            sr = sb.add_run(subtitle_text)
-            sr.font.size = Pt(9); sr.font.color.rgb = muted
+            c0 = t.rows[0].cells[0]
+            c0.width = Cm(avail_cm)
+            shade(c0, NAVY_HEX)
+            p0 = c0.paragraphs[0]
+            p0.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            r0 = p0.add_run(school_name.upper())
+            r0.bold = True; r0.font.size = Pt(15); r0.font.color.rgb = white
+            row = 1
+        c1 = t.rows[row].cells[0]
+        c1.width = Cm(avail_cm)
+        shade(c1, NAVY_HEX)
+        p1 = c1.paragraphs[0]
+        p1.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        r1 = p1.add_run(title_text.upper())
+        r1.bold = True; r1.font.size = Pt(12); r1.font.color.rgb = white
+        doc.add_paragraph().paragraph_format.space_after = Pt(2)
 
     def set_cell(cell, text, bold=False, align=WD_ALIGN_PARAGRAPH.CENTER, size=fs, italic=False, color=None):
         cell.text = str(text)
@@ -336,16 +355,26 @@ def grade_breakdown_docx(meta, result, band_label, pass_label):
             if color is not None:
                 run.font.color.rgb = color
 
-    masthead('Subject-Wise Performance & Grade Breakdown', meta.get('subtitle', ''))
+    banner('Subject-Wise Performance & Grade Percentage Breakdown')
 
     headers = _main_headers(bands)
-    t = doc.add_table(rows=1, cols=len(headers))
+    t = doc.add_table(rows=2, cols=len(headers))
     t.style = 'Table Grid'
     t.alignment = WD_TABLE_ALIGNMENT.CENTER
-    for i, label in enumerate(headers):
-        set_cell(t.rows[0].cells[i], label, bold=True)
-        shade(t.rows[0].cells[i], band_hex(i - 3, header=True) if i >= 3 else '#E9EDF2')
-    avail_cm = sec.page_width.cm - sec.left_margin.cm - sec.right_margin.cm
+    r0, r1 = t.rows[0].cells, t.rows[1].cells
+    for i, label in enumerate(('Subject', 'Branch', 'Candidates (N)')):
+        set_cell(r0[i], label.upper(), bold=True, color=white)
+        shade(r0[i], NAVY_HEX)
+        merged = r0[i].merge(r1[i])
+    span_label = f'{band_label} Percentage Breakdown'.upper()
+    hdr_span = r0[3]
+    for k in range(4, len(headers)):
+        hdr_span = hdr_span.merge(r0[k])
+    set_cell(hdr_span, span_label, bold=True, color=white)
+    shade(hdr_span, NAVY_HEX)
+    for bx, b in enumerate(bands):
+        set_cell(r1[3 + bx], f'{b} (%)', bold=True, color=rgb_of(_text_on(band_rgb(bx, header=True))))
+        shade(r1[3 + bx], band_hex(bx, header=True))
 
     for subj in result['subjects']:
         branches = result['branches']
@@ -368,7 +397,7 @@ def grade_breakdown_docx(meta, result, band_label, pass_label):
                     set_cell(cells[3 + bx], f"{cell_['pct'][b]}%")
                     shade(cells[3 + bx], band_hex(bx))
             if bi == 0:
-                set_cell(cells[0], subj, bold=True, align=WD_ALIGN_PARAGRAPH.LEFT)
+                set_cell(cells[0], subj, align=WD_ALIGN_PARAGRAPH.LEFT)
         if len(branches) > 1:
             top = t.rows[first_row_idx].cells[0]
             for k in range(1, len(branches)):
@@ -379,15 +408,34 @@ def grade_breakdown_docx(meta, result, band_label, pass_label):
         [[len(s) for s in result['subjects']], [len(b) for b in result['branches']]],
         ['Subject', 'Branch'], [4.2, 3.2], 'Candidates (N)', avail_cm, len(bands)))
 
+    note = doc.add_paragraph()
+    nr = note.add_run('— Not Offered')
+    nr.italic = True; nr.font.size = Pt(8); nr.font.color.rgb = note_rgb
+
     doc.add_page_break()
-    masthead(f'Overall {band_label} Percentage Summary by Branch', '')
+    banner(f'Overall {band_label} Percentage Summary by Branch')
     sum_headers = _summary_headers(bands, pass_label)
-    st = doc.add_table(rows=1, cols=len(sum_headers))
+    st = doc.add_table(rows=2, cols=len(sum_headers))
     st.style = 'Table Grid'
     st.alignment = WD_TABLE_ALIGNMENT.CENTER
-    for i, label in enumerate(sum_headers):
-        set_cell(st.rows[0].cells[i], label, bold=True)
-        shade(st.rows[0].cells[i], band_hex(i - 2, header=True) if 2 <= i < 2 + len(bands) else '#E9EDF2')
+    sr0, sr1 = st.rows[0].cells, st.rows[1].cells
+    for i, label in enumerate(('Branch', 'Total Subject Entries (N)')):
+        set_cell(sr0[i], label.upper(), bold=True, color=white)
+        shade(sr0[i], NAVY_HEX)
+        sr0[i].merge(sr1[i])
+    span2 = f'{band_label} Percentage'.upper()
+    hdr_span2 = sr0[2]
+    for k in range(3, 2 + len(bands)):
+        hdr_span2 = hdr_span2.merge(sr0[k])
+    set_cell(hdr_span2, span2, bold=True, color=white)
+    shade(hdr_span2, NAVY_HEX)
+    set_cell(sr0[2 + len(bands)], pass_label.upper(), bold=True, color=white)
+    shade(sr0[2 + len(bands)], NAVY_HEX)
+    sr0[2 + len(bands)].merge(sr1[2 + len(bands)])
+    for bx, b in enumerate(bands):
+        set_cell(sr1[2 + bx], f'{b} (%)', bold=True, color=rgb_of(_text_on(band_rgb(bx, header=True))))
+        shade(sr1[2 + bx], band_hex(bx, header=True))
+
     for br in result['branches']:
         s = result['summary'][br]
         row = st.add_row()
@@ -420,32 +468,44 @@ def grade_breakdown_xlsx(meta, result, band_label, pass_label):
     wb = Workbook()
     ws = wb.active
     ws.title = 'Grade Breakdown'
-    hf = Font(bold=True, color='0F172A')
-    head_fill = PatternFill('solid', fgColor='E9EDF2')
-    ctr = Alignment(horizontal='center', vertical='center')
+    navy_fill = PatternFill('solid', fgColor=NAVY_HEX.lstrip('#'))
+    white_font = Font(bold=True, color='FFFFFF')
+    ctr = Alignment(horizontal='center', vertical='center', wrap_text=True)
     left = Alignment(horizontal='left', vertical='center')
-    school_name = meta.get('school_name') or _school_name()
+    school_name = (meta.get('school_name') or _school_name() or '').strip()
     bands = result['bands']
+
+    def band_font(bx):
+        fg = _text_on(band_rgb(bx, header=True))
+        return Font(bold=True, color='%02X%02X%02X' % fg)
 
     r = 1
     if school_name:
-        ws.cell(row=r, column=1, value=school_name).font = Font(bold=True, color='64748B')
+        c0 = ws.cell(row=r, column=1, value=school_name.upper())
+        c0.font = Font(bold=True, size=14, color='FFFFFF')
+        c0.fill = navy_fill; c0.alignment = ctr
+        ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=3 + len(bands))
         r += 1
-    ws.cell(row=r, column=1, value='Subject-Wise Performance & Grade Breakdown').font = \
-        Font(bold=True, size=14, color='334155')
-    r += 1
-    if meta.get('subtitle'):
-        ws.cell(row=r, column=1, value=meta['subtitle']).font = Font(color='6B7A74')
-        r += 1
-    r += 1
+    c1 = ws.cell(row=r, column=1, value='Subject-Wise Performance & Grade Percentage Breakdown'.upper())
+    c1.font = Font(bold=True, size=12, color='FFFFFF')
+    c1.fill = navy_fill; c1.alignment = ctr
+    ws.merge_cells(start_row=r, start_column=1, end_row=r, end_column=3 + len(bands))
+    r += 2
 
     headers = _main_headers(bands)
     hrow = r
-    for c, label in enumerate(headers, 1):
-        cell = ws.cell(row=hrow, column=c, value=label)
-        cell.font = hf; cell.alignment = ctr
-        cell.fill = PatternFill('solid', fgColor=band_hex(c - 4, header=True).lstrip('#')) if c >= 4 else head_fill
-    r += 1
+    for i, label in enumerate(('Subject', 'Branch', 'Candidates (N)')):
+        c = ws.cell(row=hrow, column=i + 1, value=label.upper())
+        c.font = white_font; c.fill = navy_fill; c.alignment = ctr
+        ws.merge_cells(start_row=hrow, start_column=i + 1, end_row=hrow + 1, end_column=i + 1)
+    span_cell = ws.cell(row=hrow, column=4, value=f'{band_label} Percentage Breakdown'.upper())
+    span_cell.font = white_font; span_cell.fill = navy_fill; span_cell.alignment = ctr
+    ws.merge_cells(start_row=hrow, start_column=4, end_row=hrow, end_column=3 + len(bands))
+    for bx, b in enumerate(bands):
+        c = ws.cell(row=hrow + 1, column=4 + bx, value=f'{b} (%)')
+        c.font = band_font(bx); c.fill = PatternFill('solid', fgColor=band_hex(bx, header=True).lstrip('#'))
+        c.alignment = ctr
+    r = hrow + 2
     data_start = r
     for subj in result['subjects']:
         branches = result['branches']
@@ -468,9 +528,9 @@ def grade_breakdown_xlsx(meta, result, band_label, pass_label):
             r += 1
         subj_cell = ws.cell(row=subj_start, column=1, value=subj)
         subj_cell.alignment = left
-        subj_cell.font = Font(bold=True)
         if len(branches) > 1:
             ws.merge_cells(start_row=subj_start, start_column=1, end_row=r - 1, end_column=1)
+    ws.cell(row=r + 1, column=1, value='— Not Offered').font = Font(italic=True, color='94A3B8', size=9)
     ws.freeze_panes = ws.cell(row=data_start, column=1)
     # Content-tight columns — Subject/Branch/N stay as narrow as their actual
     # text (no dead whitespace), matching the reference layout; band columns
@@ -482,19 +542,32 @@ def grade_breakdown_xlsx(meta, result, band_label, pass_label):
     ws.column_dimensions['C'].width = len('Candidates (N)') + 1
     for c in range(4, len(headers) + 1):
         ws.column_dimensions[get_column_letter(c)].width = max(len(str(headers[c - 1])), 8) + 1
+    ws.row_dimensions[hrow].height = 26
 
     ws2 = wb.create_sheet('Summary')
     r2 = 1
-    ws2.cell(row=r2, column=1, value=f'Overall {band_label} Percentage Summary by Branch').font = \
-        Font(bold=True, size=13, color='334155')
-    r2 += 2
+    c2 = ws2.cell(row=r2, column=1, value=f'Overall {band_label} Percentage Summary by Branch'.upper())
+    c2.font = Font(bold=True, size=13, color='FFFFFF')
+    c2.fill = navy_fill; c2.alignment = ctr
     sum_headers = _summary_headers(bands, pass_label)
-    for c, label in enumerate(sum_headers, 1):
-        cell = ws2.cell(row=r2, column=c, value=label)
-        cell.font = hf; cell.alignment = ctr
-        cell.fill = (PatternFill('solid', fgColor=band_hex(c - 3, header=True).lstrip('#'))
-                     if 3 <= c < 3 + len(bands) else head_fill)
-    r2 += 1
+    ws2.merge_cells(start_row=r2, start_column=1, end_row=r2, end_column=len(sum_headers))
+    r2 += 2
+    hrow2 = r2
+    for i, label in enumerate(('Branch', 'Total Subject Entries (N)')):
+        c = ws2.cell(row=hrow2, column=i + 1, value=label.upper())
+        c.font = white_font; c.fill = navy_fill; c.alignment = ctr
+        ws2.merge_cells(start_row=hrow2, start_column=i + 1, end_row=hrow2 + 1, end_column=i + 1)
+    span2 = ws2.cell(row=hrow2, column=3, value=f'{band_label} Percentage'.upper())
+    span2.font = white_font; span2.fill = navy_fill; span2.alignment = ctr
+    ws2.merge_cells(start_row=hrow2, start_column=3, end_row=hrow2, end_column=2 + len(bands))
+    passc = ws2.cell(row=hrow2, column=3 + len(bands), value=pass_label.upper())
+    passc.font = white_font; passc.fill = navy_fill; passc.alignment = ctr
+    ws2.merge_cells(start_row=hrow2, start_column=3 + len(bands), end_row=hrow2 + 1, end_column=3 + len(bands))
+    for bx, b in enumerate(bands):
+        c = ws2.cell(row=hrow2 + 1, column=3 + bx, value=f'{b} (%)')
+        c.font = band_font(bx); c.fill = PatternFill('solid', fgColor=band_hex(bx, header=True).lstrip('#'))
+        c.alignment = ctr
+    r2 = hrow2 + 2
     for br in result['branches']:
         s = result['summary'][br]
         ws2.cell(row=r2, column=1, value=br).alignment = left
@@ -514,6 +587,7 @@ def grade_breakdown_xlsx(meta, result, band_label, pass_label):
     for c in range(3, 2 + len(bands) + 1):
         ws2.column_dimensions[get_column_letter(c)].width = max(len(str(sum_headers[c - 1])), 8) + 1
     ws2.column_dimensions[get_column_letter(2 + len(bands) + 1)].width = len(pass_label) + 2
+    ws2.row_dimensions[hrow2].height = 26
     return wb
 
 
@@ -528,8 +602,8 @@ def grade_breakdown_png_pages(meta, result, band_label, pass_label):
     PW = int(round(297 / 25.4 * DPI))
     PH = int(round(210 / 25.4 * DPI))
     C = _NEUTRAL_RGB
-    school_name = meta.get('school_name') or _school_name()
-    logo_path = meta.get('logo_path')
+    NAVY = NAVY_RGB
+    school_name = (meta.get('school_name') or _school_name() or '').strip()
     bands = result['bands']
     ncol = 3 + len(bands)
 
@@ -542,7 +616,7 @@ def grade_breakdown_png_pages(meta, result, band_label, pass_label):
 
     fs = 22 if ncol <= 10 else (18 if ncol <= 12 else 15)
     body, body_b = fnt(fs), fnt(fs, True)
-    title_f, sub_f, key_f = fnt(26, True), fnt(14), fnt(13)
+    banner_l_f, banner_s_f, key_f = fnt(24, True), fnt(18, True), fnt(13)
     tmp = ImageDraw.Draw(Image.new('RGB', (1, 1)))
 
     def tw(text, f):
@@ -557,38 +631,30 @@ def grade_breakdown_png_pages(meta, result, band_label, pass_label):
             text = text[:-1]
         return (text + '…') if text else ''
 
+    def draw_centered_wrapped(d, cx, cy_mid, maxw, text, f, fill, line_height):
+        """Centered text at (cx, cy_mid); wraps onto a 2nd line (split on the
+        widest-fitting word boundary) instead of truncating when it doesn't
+        fit on one — matching how the PDF's Paragraph cells wrap."""
+        text = str(text)
+        if tw(text, f) <= maxw:
+            d.text((cx - tw(text, f) / 2, cy_mid - line_height / 2), text, fill=fill, font=f)
+            return
+        words = text.split(' ')
+        best = None
+        for i in range(1, len(words)):
+            l1, l2 = ' '.join(words[:i]), ' '.join(words[i:])
+            if tw(l1, f) <= maxw and tw(l2, f) <= maxw:
+                best = (l1, l2)
+        if best is None:
+            mid = max(1, len(words) // 2)
+            best = (' '.join(words[:mid]) or words[0], ' '.join(words[mid:]))
+        for i, ln in enumerate(best):
+            txt = fit(ln, f, maxw)
+            d.text((cx - tw(txt, f) / 2, cy_mid - line_height + i * line_height), txt, fill=fill, font=f)
+
     margin = 34 * S
     avail = PW * S - 2 * margin
     cpx, cpy = int(9 * S), int(7 * S)
-
-    logo_im = None
-    if logo_path:
-        try:
-            logo_im = Image.open(logo_path).convert('RGBA')
-        except Exception:
-            logo_im = None
-    logo_box = int(64 * S)
-    logo_draw = None
-    if logo_im is not None:
-        lw, lh = logo_im.size
-        scale = logo_box / max(lw, lh)
-        logo_draw = logo_im.resize((max(1, int(lw * scale)), max(1, int(lh * scale))), Image.LANCZOS)
-    text_x = margin + (logo_box + int(14 * S) if logo_draw is not None else 0)
-
-    def draw_masthead(d, img, title_text, subtitle_text):
-        if logo_draw is not None:
-            img.paste(logo_draw, (margin, margin), logo_draw)
-        ty = margin
-        text_avail = PW * S - margin - text_x
-        if school_name:
-            d.text((text_x, ty), fit(school_name, sub_f, text_avail), fill=C['muted'], font=sub_f)
-            ty += int(20 * S)
-        d.text((text_x, ty), fit(title_text, title_f, text_avail), fill=C['header'], font=title_f)
-        ty += int(34 * S)
-        if subtitle_text:
-            d.text((text_x, ty), fit(subtitle_text, sub_f, text_avail), fill=C['muted'], font=sub_f)
-        mast_lines = int(34 * S) + (int(20 * S) if school_name else 0) + (int(22 * S) if subtitle_text else 0)
-        return max(mast_lines, logo_box if logo_draw is not None else 0)
 
     def measure(headers, text_rows, grow_cols):
         nat = []
@@ -610,17 +676,31 @@ def grade_breakdown_png_pages(meta, result, band_label, pass_label):
     line_h = tmp.textbbox((0, 0), "Ay", font=body)[3]
     row_h = line_h + 2 * cpy
     header_h = row_h + int(4 * S)
-    bottom_reserve = margin + int(24 * S)
+    bottom_reserve = margin + int(30 * S)
     top_gap = int(12 * S)
+    banner_line_h = int(30 * S)
+    banner_h = banner_line_h * (2 if school_name else 1) + int(10 * S)
 
     pages = []
 
-    def new_page(title_text, subtitle_text, draw_mast):
+    def draw_banner(d, img, title_text):
+        d.rectangle([margin, margin, margin + avail, margin + banner_h], fill=NAVY)
+        ty = margin
+        if school_name:
+            txt = fit(school_name.upper(), banner_l_f, avail - int(20 * S))
+            tx = margin + (avail - tw(txt, banner_l_f)) / 2
+            d.text((tx, ty + (banner_line_h - int(24 * S)) / 2), txt, fill=(255, 255, 255), font=banner_l_f)
+            ty += banner_line_h
+        txt = fit(title_text.upper(), banner_s_f, avail - int(20 * S))
+        tx = margin + (avail - tw(txt, banner_s_f)) / 2
+        d.text((tx, ty + (banner_line_h - int(18 * S)) / 2), txt, fill=(255, 255, 255), font=banner_s_f)
+        return margin + banner_h
+
+    def new_page(title_text, draw_mast):
         img = Image.new('RGB', (PW * S, PH * S), C['white'])
         d = ImageDraw.Draw(img)
         if draw_mast:
-            mh = draw_masthead(d, img, title_text, subtitle_text)
-            y0 = margin + mh
+            y0 = draw_banner(d, img, title_text) + int(14 * S)
         else:
             y0 = margin + top_gap
         return img, d, y0
@@ -630,25 +710,40 @@ def grade_breakdown_png_pages(meta, result, band_label, pass_label):
         img.resize((PW, PH), Image.LANCZOS).save(out, format='PNG')
         pages.append(out.getvalue())
 
-    # ---- Main breakdown table (paginates whole subject-blocks) ---- (leftover
-    # width fills the band columns, not Subject/Branch/N — see the PDF renderer)
+    # ---- Main breakdown table (paginates whole subject-blocks) ----
     headers = _main_headers(bands)
     col_w = measure(headers, _main_text_rows(result), grow_cols=list(range(3, 3 + len(bands))))
     table_w = sum(col_w)
-    page_title = 'Subject-Wise Performance & Grade Breakdown'
-    subtitle_text = meta.get('subtitle', '')
+    page_title = 'Subject-Wise Performance & Grade Percentage Breakdown'
+    span_label = f'{band_label} Percentage Breakdown'.upper()
 
-    def draw_header_row(d, y0):
-        d.rectangle([margin, y0, margin + table_w, y0 + header_h], fill=C['head_bg'])
+    def draw_header_rows(d, y0):
+        # row 0: Subject/Branch/N (navy, tall enough for 2 rows) + spanning label
+        d.rectangle([margin, y0, margin + col_w[0] + col_w[1] + col_w[2], y0 + header_h * 2], fill=NAVY)
+        band_x0 = margin + col_w[0] + col_w[1] + col_w[2]
+        d.rectangle([band_x0, y0, margin + table_w, y0 + header_h], fill=NAVY)
         x = margin
-        for j in range(len(headers)):
-            if j >= 3:
-                d.rectangle([x, y0, x + col_w[j], y0 + header_h], fill=band_rgb(j - 3, header=True))
-            d.text((x + cpx, y0 + (header_h - line_h) // 2), fit(headers[j], body_b, col_w[j] - 2 * cpx),
-                   fill=C['head_fg'], font=body_b)
+        for j, label in enumerate(('Subject', 'Branch', 'Candidates (N)')):
+            draw_centered_wrapped(d, x + col_w[j] / 2, y0 + header_h, col_w[j] - 2 * cpx,
+                                 label.upper(), body_b, (255, 255, 255), line_h)
             x += col_w[j]
-        d.rectangle([margin, y0 + header_h - max(2, S), margin + table_w, y0 + header_h], fill=C['rule'])
-        return y0 + header_h
+        txt = fit(span_label, body_b, table_w - col_w[0] - col_w[1] - col_w[2] - 2 * cpx)
+        d.text((band_x0 + (margin + table_w - band_x0 - tw(txt, body_b)) / 2,
+               y0 + (header_h - line_h) / 2), txt, fill=(255, 255, 255), font=body_b)
+        # row 1: individual band headers, colour-coded
+        y1 = y0 + header_h
+        x = band_x0
+        for j in range(3, len(headers)):
+            bx = j - 3
+            rgb = band_rgb(bx, header=True)
+            fg = _text_on(rgb)
+            d.rectangle([x, y1, x + col_w[j], y1 + header_h], fill=rgb)
+            txt = fit(headers[j], body_b, col_w[j] - 2 * cpx)
+            d.text((x + (col_w[j] - tw(txt, body_b)) / 2, y1 + (header_h - line_h) / 2),
+                   txt, fill=fg, font=body_b)
+            x += col_w[j]
+        d.rectangle([margin, y0, margin + table_w, y0 + header_h * 2], outline=NAVY, width=2)
+        return y0 + header_h * 2
 
     def grid_lines(d, y0, y):
         d.rectangle([margin, y0, margin + table_w, y], outline=C['line'], width=1)
@@ -657,23 +752,21 @@ def grade_breakdown_png_pages(meta, result, band_label, pass_label):
             x += col_w[j]
             d.line([x, y0, x, y], fill=C['line'], width=1)
 
-    img, d, y0 = new_page(page_title, subtitle_text, draw_mast=True)
-    y = draw_header_row(d, y0)
+    img, d, y0 = new_page(page_title, draw_mast=True)
+    y = draw_header_rows(d, y0)
     max_y = PH * S - bottom_reserve
 
     for subj in result['subjects']:
         branches = result['branches']
         need_h = row_h * len(branches)
-        if y + need_h > max_y and y > y0 + header_h:
+        if y + need_h > max_y and y > y0 + header_h * 2:
             grid_lines(d, y0, y)
             save_page(img)
-            img, d, y0 = new_page(page_title, subtitle_text, draw_mast=False)
-            y = draw_header_row(d, y0)
+            img, d, y0 = new_page(page_title, draw_mast=False)
+            y = draw_header_rows(d, y0)
         subj_top = y
         for ri, br in enumerate(branches):
             cell_ = result['table'][subj][br]
-            if ri % 2:
-                d.rectangle([margin, y, margin + table_w, y + row_h], fill=C['zebra'])
             x = margin + col_w[0]
             d.text((x + cpx, y + cpy), fit(br, body, col_w[1] - 2 * cpx), fill=C['text'], font=body)
             x += col_w[1]
@@ -696,10 +789,13 @@ def grade_breakdown_png_pages(meta, result, band_label, pass_label):
             d.line([margin, y, margin + table_w, y], fill=C['line'], width=1)
             y += row_h
         d.text((margin + cpx, subj_top + max(0, (y - subj_top - line_h) / 2)),
-               fit(subj, body_b, col_w[0] - 2 * cpx), fill=C['text'], font=body_b)
-        d.line([margin, y, margin + table_w, y], fill=C['rule'], width=2)
+               fit(subj, body, col_w[0] - 2 * cpx), fill=C['text'], font=body)
+        d.line([margin, y, margin + table_w, y], fill=NAVY, width=2)
 
     grid_lines(d, y0, y)
+    legend_y = y + int(10 * S)
+    if legend_y + key_f.size < PH * S - margin:
+        d.text((margin, legend_y), '— Not Offered', fill=C['muted'], font=key_f)
     save_page(img)
 
     # ---- Overall summary (own page) ----
@@ -707,21 +803,38 @@ def grade_breakdown_png_pages(meta, result, band_label, pass_label):
     sum_rows = _summary_text_rows(result, pass_label)
     scol_w = measure(sum_headers, sum_rows, grow_cols=list(range(2, 2 + len(bands))))
     stable_w = sum(scol_w)
-    simg, sd, sy0 = new_page(f'Overall {band_label} Percentage Summary by Branch', '', draw_mast=True)
-    sd.rectangle([margin, sy0, margin + stable_w, sy0 + header_h], fill=C['head_bg'])
+    simg, sd, sy0 = new_page(f'Overall {band_label} Percentage Summary by Branch', draw_mast=True)
+
+    band_x0 = margin + scol_w[0] + scol_w[1]
+    sd.rectangle([margin, sy0, band_x0, sy0 + header_h * 2], fill=NAVY)
+    sd.rectangle([band_x0, sy0, margin + stable_w - scol_w[-1], sy0 + header_h], fill=NAVY)
+    sd.rectangle([margin + stable_w - scol_w[-1], sy0, margin + stable_w, sy0 + header_h * 2], fill=NAVY)
     x = margin
-    for j, label in enumerate(sum_headers):
-        if 2 <= j < 2 + len(bands):
-            sd.rectangle([x, sy0, x + scol_w[j], sy0 + header_h], fill=band_rgb(j - 2, header=True))
-        sd.text((x + cpx, sy0 + (header_h - line_h) // 2), fit(label, body_b, scol_w[j] - 2 * cpx),
-                fill=C['head_fg'], font=body_b)
+    for j, label in enumerate(('Branch', 'Total Subject Entries (N)')):
+        draw_centered_wrapped(d=sd, cx=x + scol_w[j] / 2, cy_mid=sy0 + header_h, maxw=scol_w[j] - 2 * cpx,
+                             text=label.upper(), f=body_b, fill=(255, 255, 255), line_height=line_h)
         x += scol_w[j]
-    sd.rectangle([margin, sy0 + header_h - max(2, S), margin + stable_w, sy0 + header_h], fill=C['rule'])
-    sy = sy0 + header_h
+    span2 = f'{band_label} Percentage'.upper()
+    txt = fit(span2, body_b, (margin + stable_w - scol_w[-1]) - band_x0 - 2 * cpx)
+    sd.text((band_x0 + ((margin + stable_w - scol_w[-1]) - band_x0 - tw(txt, body_b)) / 2,
+            sy0 + (header_h - line_h) / 2), txt, fill=(255, 255, 255), font=body_b)
+    draw_centered_wrapped(d=sd, cx=margin + stable_w - scol_w[-1] / 2, cy_mid=sy0 + header_h,
+                         maxw=scol_w[-1] - 2 * cpx, text=pass_label.upper(), f=body_b,
+                         fill=(255, 255, 255), line_height=line_h)
+    sy1 = sy0 + header_h
+    x = band_x0
+    for bx, b in enumerate(bands):
+        bw = scol_w[2 + bx]
+        rgb = band_rgb(bx, header=True)
+        fg = _text_on(rgb)
+        sd.rectangle([x, sy1, x + bw, sy1 + header_h], fill=rgb)
+        txt = fit(f'{b} (%)', body_b, bw - 2 * cpx)
+        sd.text((x + (bw - tw(txt, body_b)) / 2, sy1 + (header_h - line_h) / 2), txt, fill=fg, font=body_b)
+        x += bw
+    sd.rectangle([margin, sy0, margin + stable_w, sy0 + header_h * 2], outline=NAVY, width=2)
+    sy = sy0 + header_h * 2
     for i, br in enumerate(result['branches']):
         s = result['summary'][br]
-        if i % 2:
-            sd.rectangle([margin, sy, margin + stable_w, sy + row_h], fill=C['zebra'])
         x = margin
         sd.text((x + cpx, sy + cpy), fit(br, body, scol_w[0] - 2 * cpx), fill=C['text'], font=body)
         x += scol_w[0]
