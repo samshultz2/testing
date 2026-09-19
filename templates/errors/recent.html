@@ -19,7 +19,17 @@
         <td data-label="What">{{ e.message }}</td>
         <td data-label="Where"><code>{{ e.where }}</code></td>
         <td data-label="User">{{ e.user }}</td>
-        <td data-label="">{% if e.detail %}<details><summary class="btn btn-sm btn-secondary" style="cursor:pointer;list-style:none;">Trace</summary><pre style="white-space:pre-wrap;font-size:.72rem;background:var(--gray-50);padding:.6rem;border-radius:6px;margin-top:.4rem;max-width:100%;overflow:auto;">{{ e.detail }}</pre></details>{% endif %}</td>
+        <td data-label="">
+            <div style="display:flex;align-items:flex-start;gap:.4rem;flex-wrap:wrap;">
+                {% if e.detail %}<details><summary class="btn btn-sm btn-secondary" style="cursor:pointer;list-style:none;">Trace</summary><pre style="white-space:pre-wrap;font-size:.72rem;background:var(--gray-50);padding:.6rem;border-radius:6px;margin-top:.4rem;max-width:100%;overflow:auto;">{{ e.detail }}</pre></details>{% endif %}
+                <button type="button" class="btn btn-sm btn-secondary copy-error-btn"
+                        data-ts="{{ e.ts }}" data-kind="{{ e.kind }}" data-message="{{ e.message }}"
+                        data-where="{{ e.where }}" data-user="{{ e.user }}" data-detail="{{ e.detail or '' }}"
+                        title="Copy this error to paste elsewhere">
+                    <i class="fas fa-copy"></i> Copy
+                </button>
+            </div>
+        </td>
     </tr>
     {% endfor %}
     </tbody>
@@ -29,4 +39,43 @@
 <div class="empty-state"><i class="fas fa-circle-check"></i><h3>No errors recorded</h3><p>Nothing has gone wrong since the last restart.</p></div>
 {% endif %}
 </div></div>
+
+<script nonce="{{ csp_nonce }}">
+(function () {
+    function fallbackCopy(text, done) {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        try { document.execCommand('copy'); done(); } catch (e) {}
+        document.body.removeChild(ta);
+    }
+    document.querySelectorAll('.copy-error-btn').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+            var parts = [
+                'WHEN: ' + btn.dataset.ts,
+                'TYPE: ' + btn.dataset.kind,
+                'WHAT: ' + btn.dataset.message,
+                'WHERE: ' + btn.dataset.where,
+                'USER: ' + btn.dataset.user,
+            ];
+            if (btn.dataset.detail) parts.push('', 'TRACE:', btn.dataset.detail);
+            var text = parts.join('\n');
+            var icon = btn.querySelector('i');
+            var origClass = icon.className;
+            var origText = btn.lastChild.textContent;
+            var done = function () {
+                icon.className = 'fas fa-check';
+                btn.lastChild.textContent = ' Copied';
+                setTimeout(function () { icon.className = origClass; btn.lastChild.textContent = origText; }, 1500);
+            };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(done, function () { fallbackCopy(text, done); });
+            } else { fallbackCopy(text, done); }
+        });
+    });
+})();
+</script>
 {% endblock %}

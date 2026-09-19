@@ -77,6 +77,11 @@ def test_error_log_view_central_admin_only(app):
     # Central admin sees the log with the recorded error.
     html = _admin(app).get('/error-log').get_data(as_text=True)
     assert 'Error Log' in html and 'ValueError: sample' in html
+    # each row has a Copy button carrying the full error as data attributes,
+    # so it can be copied and pasted elsewhere without expanding the trace
+    assert 'copy-error-btn' in html
+    assert 'data-message="ValueError: sample"' in html
+    assert 'data-where="GET /x"' in html and 'data-user="tester"' in html
 
 
 def test_forgot_password_rate_limited(app):
