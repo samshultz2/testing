@@ -294,6 +294,12 @@ def analytics_hub():
     years = sorted(set(waec_years + jamb_years), reverse=True)
 
     year = resolve_exam_year(request.args.get('year', type=int), years)
+    # The live session's exam year is always the resolved default (even with
+    # zero results yet) — make sure the Year dropdown actually offers it, so
+    # it doesn't misleadingly show a past year "selected" while the page is
+    # really showing the current one.
+    if year and year not in years:
+        years = sorted(set(years) | {year}, reverse=True)
     compare_year = request.args.get('compare', type=int)
 
     from utils.branch_scope import viewing_branch_id

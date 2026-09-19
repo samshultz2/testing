@@ -1,6 +1,6 @@
 """Results Phase 5 — academic analytics dashboard."""
 from config import Config
-from models import db, StudentScore, AnalyticsCache
+from models import db, AcademicSession, StudentScore, AnalyticsCache
 from tests.conftest import login_token
 from tests.test_score_integrity import _setup, _student
 from utils import results_analytics as ra
@@ -100,3 +100,19 @@ def test_saving_scores_busts_analytics_cache(app):
                  'student_id[]': [sid], 'score[]': ['90']})
     with app.app_context():
         assert AnalyticsCache.get(f"results_analytics:{ids['term']}:{ids['asg']}") is None
+
+
+def test_analytics_hub_defaults_to_live_session_even_with_no_data(app):
+    """A bare /results/analytics visit (no ?year=) must show the LIVE session's
+    exam year — even when nothing has been recorded for it yet — never a past
+    year with data. The Year dropdown must offer that year too, not just years
+    that happen to have results, so it doesn't misleadingly look like an old
+    year is still selected."""
+    with app.app_context():
+        AcademicSession.query.update({'is_active': False})
+        db.session.add(AcademicSession(name='2099/2100', is_active=True))
+        db.session.commit()
+    c = _admin(app)
+    body = c.get('/results/analytics').get_data(as_text=True)
+    assert 'value="2100"' in body
+    assert 'No JAMB results for 2100' in body or 'No WAEC results for 2100' in body

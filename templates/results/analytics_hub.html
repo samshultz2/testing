@@ -112,27 +112,6 @@ a.exec:hover .go{opacity:1}
     </div>
 </div>
 
-<script nonce="{{ csp_nonce }}">
-// Remembered year filter — restore the last year viewed and persist changes,
-// so returning to the hub reopens where you left off (per-browser).
-(function(){
-    var KEY='exam_hub_year', years={{ years|tojson }}.map(String);
-    var params=new URLSearchParams(location.search);
-    try{
-        if(!params.has('year')){
-            var saved=localStorage.getItem(KEY);
-            if(saved && years.indexOf(saved)!==-1 && saved!=='{{ selected_year }}'){
-                params.set('year',saved);
-                location.replace(location.pathname+'?'+params.toString());
-                return;
-            }
-        } else { localStorage.setItem(KEY, params.get('year')); }
-        var sel=document.querySelector('select[name="year"]');
-        if(sel){ sel.addEventListener('change',function(){ try{localStorage.setItem(KEY,sel.value);}catch(e){} }); }
-    }catch(e){}
-})();
-</script>
-
 {% if years and selected_year %}
 {% set uni_pct = cutoff.eligible_200_pct if cutoff else None %}
 {% set corr_r = correlation.correlation_coefficient if (correlation and not correlation.error) else None %}
