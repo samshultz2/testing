@@ -1607,6 +1607,33 @@ def _grade_distribution_catalog(exam):
     return get_config()[key]['catalog'] or WAEC_SUBJECTS
 
 
+def _grade_distribution_ai_prompt(band_label, bands):
+    """A prompt the admin can copy into Claude/Gemini/ChatGPT to turn a raw
+    photo/list of the branch's report into the tab-separated text this page's
+    Paste tab accepts. Keeps the exact column shape build_distribution_rows()
+    expects, so nothing needs remapping on the review screen."""
+    band_cols = '\t'.join(bands)
+    return (
+        f"Convert the subject-wise {band_label.lower()} distribution report below "
+        "into a table. Rules:\n"
+        "- The first column header must be 'Subject'.\n"
+        "- The second column header must be 'SAT' — the number of candidates who "
+        "sat that subject.\n"
+        f"- Then one column per {band_label.lower()}, in EXACTLY this order with "
+        f"these EXACT headers: {', '.join(bands)}.\n"
+        "- Each band cell is the COUNT of candidates in that subject who got that "
+        f"{band_label.lower()} (a whole number — 0 if none, blank only if the "
+        "source genuinely doesn't show it).\n"
+        "- Do NOT include derived columns like Passes, Credit %, Rank or Average "
+        "— leave those out entirely. Do not add a totals row.\n"
+        "- One subject per row, in the order they appear in the source.\n"
+        "- Output ONLY the data, TAB-separated, header row first — no commentary, "
+        "no markdown table, no code fences.\n\n"
+        f"Header row for reference:\nSubject\tSAT\t{band_cols}\n\n"
+        "Report data:\n<paste your list or screenshot text here>"
+    )
+
+
 @results_bp.route('/subject-branch-breakdown/import', methods=['GET', 'POST'])
 @login_required
 @rate_limited('ocr', max_requests=30, window_minutes=10)
@@ -1722,7 +1749,8 @@ def grade_distribution_import():
     return render_template('results/grade_distribution_import.html',
         exam=exam, band_label=band_label, branches=branches, bid=bid,
         years=years, mock_options=mock_options,
-        current_year=session_exam_year(get_active_session()) or _date.today().year)
+        current_year=session_exam_year(get_active_session()) or _date.today().year,
+        ai_prompt=_grade_distribution_ai_prompt(band_label, bands))
 
 
 @results_bp.route('/subject-branch-breakdown/import/save', methods=['POST'])

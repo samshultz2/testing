@@ -86,6 +86,15 @@
             <div class="imp-panel active" data-panel="paste">
                 <div class="imp-hint"><i class="fas fa-circle-info"></i>
                     <span>Copy the subject rows straight out of Excel/Sheets (including the header row) and paste them here.</span></div>
+
+                <details class="mb-2">
+                    <summary style="cursor:pointer;font-weight:600;"><i class="fas fa-robot"></i> No spreadsheet? Copy this prompt into Claude / Gemini / ChatGPT</summary>
+                    <p class="form-hint mt-1">Paste a photo or the raw text of the branch's report after the prompt, then paste what it gives back into the box below.</p>
+                    <textarea id="aiPrompt" class="form-control" rows="8" readonly style="font-family:monospace;font-size:.8rem;">{{ ai_prompt }}</textarea>
+                    <button type="button" id="copyPrompt" class="btn btn-secondary btn-sm mt-1"><i class="fas fa-copy"></i> Copy prompt</button>
+                    <span id="copyMsg" class="text-success text-sm" style="display:none;"><i class="fas fa-check"></i> Copied</span>
+                </details>
+
                 <textarea name="data" class="form-control" rows="10" placeholder="Subject&#9;SAT&#9;A1&#9;B2&#9;B3&#9;C4&#9;C5&#9;C6&#9;D7&#9;E8&#9;F9
 Mathematics&#9;129&#9;3&#9;52&#9;29&#9;28&#9;12&#9;1&#9;&#9;&#9;4"></textarea>
             </div>
@@ -155,6 +164,22 @@ Mathematics&#9;129&#9;3&#9;52&#9;29&#9;28&#9;12&#9;1&#9;&#9;&#9;4"></textarea>
         const btn = document.getElementById('impBtn');
         btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Reading…';
     });
+
+    const copyBtn = document.getElementById('copyPrompt');
+    if (copyBtn) {
+        copyBtn.addEventListener('click', function () {
+            const txt = document.getElementById('aiPrompt');
+            if (!txt) return;
+            txt.select();
+            const done = function () {
+                const msg = document.getElementById('copyMsg');
+                if (msg) { msg.style.display = 'inline'; setTimeout(function () { msg.style.display = 'none'; }, 2000); }
+            };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(txt.value).then(done, function () { try { document.execCommand('copy'); done(); } catch (e) {} });
+            } else { try { document.execCommand('copy'); done(); } catch (e) {} }
+        });
+    }
 })();
 </script>
 {% endblock %}

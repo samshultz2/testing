@@ -39,6 +39,18 @@ def test_import_form_renders(app):
     assert 'Paste Text' in html and 'Upload File' in html and 'Scan Photo' in html
 
 
+def test_paste_tab_has_copyable_ai_prompt_matching_the_exam_bands(app):
+    c = _admin(app)
+    html = c.get('/results/subject-branch-breakdown/import?exam=waec').get_data(as_text=True)
+    assert 'id="aiPrompt"' in html and 'id="copyPrompt"' in html
+    # the prompt must spell out WAEC's exact band order so the AI's reply
+    # pastes straight into build_distribution_rows() without remapping
+    assert 'Subject\tSAT\tA1\tB2\tB3\tC4\tC5\tC6\tD7\tE8\tF9' in html
+
+    html_jamb = c.get('/results/subject-branch-breakdown/import?exam=jamb').get_data(as_text=True)
+    assert '90-100' in html_jamb and '0-19' in html_jamb
+
+
 def test_paste_flow_goes_to_review_with_parsed_rows(app):
     yr = 2087
     with app.app_context():
