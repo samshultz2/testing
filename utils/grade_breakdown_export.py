@@ -56,6 +56,36 @@ def _main_text_rows(result):
     return rows
 
 
+def _docx_col_widths(name_lens, name_headers, name_caps, extra_header, avail_cm, n_band_cols, tail_label=None):
+    """Column widths (cm) for a docx table: name-ish columns sized to their
+    content (capped), band columns splitting whatever's left evenly — never
+    letting Subject/Branch balloon out to fill the page like Word's default
+    equal-split would."""
+    from docx.shared import Cm
+    widths = []
+    for lens, header, cap in zip(name_lens, name_headers, name_caps):
+        w = min(max(max(lens, default=8), len(header)) * 0.22 + 0.6, cap)
+        widths.append(w)
+    n_cm = len(extra_header) * 0.16 + 0.5
+    widths.append(n_cm)
+    tail_cm = min(len(tail_label) * 0.16 + 0.6, 5.5) if tail_label else 0
+    band_cm = (avail_cm - sum(widths) - tail_cm) / n_band_cols
+    widths += [band_cm] * n_band_cols
+    if tail_label:
+        widths.append(tail_cm)
+    return [Cm(w) for w in widths]
+
+
+def _apply_docx_col_widths(table, widths):
+    table.autofit = False
+    for i, w in enumerate(widths):
+        table.columns[i].width = w
+    for row in table.rows:
+        for i, cell in enumerate(row.cells):
+            if i < len(widths):
+                cell.width = widths[i]
+
+
 def _summary_text_rows(result, pass_label):
     bands = result['bands']
     rows = []
@@ -155,9 +185,11 @@ def grade_breakdown_pdf(meta, result, band_label, pass_label):
             widths = [w * (avail / tot) for w in nat]
         return widths
 
-    # ---- Main breakdown table ----
+    # ---- Main breakdown table ---- (leftover width fills the band columns,
+    # not Subject/Branch/N — those stay tight to their content, as in the
+    # reference layout, instead of stretching out with dead whitespace)
     headers = _main_headers(bands)
-    widths = col_widths(headers, _main_text_rows(result), grow_cols=[0, 1])
+    widths = col_widths(headers, _main_text_rows(result), grow_cols=list(range(3, 3 + len(bands))))
 
     data = [[Paragraph(pdf_escape(x), headp) for x in headers]]
     style_cmds = [
@@ -207,7 +239,7 @@ def grade_breakdown_pdf(meta, result, band_label, pass_label):
     # ---- Overall summary table (own page) ----
     sum_headers = _summary_headers(bands, pass_label)
     sum_rows = _summary_text_rows(result, pass_label)
-    swidths = col_widths(sum_headers, sum_rows, grow_cols=[0])
+    swidths = col_widths(sum_headers, sum_rows, grow_cols=list(range(2, 2 + len(bands))))
     sdata = [[Paragraph(pdf_escape(x), headp) for x in sum_headers]]
     sstyle = [
         ('LINEBELOW', (0, 0), (-1, 0), 1.1, rule),
@@ -313,6 +345,7 @@ def grade_breakdown_docx(meta, result, band_label, pass_label):
     for i, label in enumerate(headers):
         set_cell(t.rows[0].cells[i], label, bold=True)
         shade(t.rows[0].cells[i], band_hex(i - 3, header=True) if i >= 3 else '#E9EDF2')
+    avail_cm = sec.page_width.cm - sec.left_margin.cm - sec.right_margin.cm
 
     for subj in result['subjects']:
         branches = result['branches']
@@ -342,6 +375,10 @@ def grade_breakdown_docx(meta, result, band_label, pass_label):
                 top = top.merge(t.rows[first_row_idx + k].cells[0])
             top.paragraphs[0].alignment = WD_ALIGN_PARAGRAPH.LEFT
 
+    _apply_docx_col_widths(t, _docx_col_widths(
+        [[len(s) for s in result['subjects']], [len(b) for b in result['branches']]],
+        ['Subject', 'Branch'], [4.2, 3.2], 'Candidates (N)', avail_cm, len(bands)))
+
     doc.add_page_break()
     masthead(f'Overall {band_label} Percentage Summary by Branch', '')
     sum_headers = _summary_headers(bands, pass_label)
@@ -361,6 +398,10 @@ def grade_breakdown_docx(meta, result, band_label, pass_label):
             set_cell(cells[2 + bx], f"{s['pct'][b]}%")
             shade(cells[2 + bx], band_hex(bx))
         set_cell(cells[-1], f"{s['pass_pct']}% ({s['pass_n']})", bold=True)
+
+    _apply_docx_col_widths(st, _docx_col_widths(
+        [[len(b) for b in result['branches']]], ['Branch'], [3.2],
+        'Total Subject Entries (N)', avail_cm, len(bands), tail_label=pass_label))
 
     buf = io.BytesIO()
     doc.save(buf)
@@ -431,8 +472,16 @@ def grade_breakdown_xlsx(meta, result, band_label, pass_label):
         if len(branches) > 1:
             ws.merge_cells(start_row=subj_start, start_column=1, end_row=r - 1, end_column=1)
     ws.freeze_panes = ws.cell(row=data_start, column=1)
-    for c in range(1, len(headers) + 1):
-        ws.column_dimensions[get_column_letter(c)].width = 22 if c <= 2 else 14
+    # Content-tight columns — Subject/Branch/N stay as narrow as their actual
+    # text (no dead whitespace), matching the reference layout; band columns
+    # get a touch more room since they carry a "xx.x%" value under a header.
+    subj_w = min(max((len(s) for s in result['subjects']), default=8) + 2, 26)
+    br_w = min(max((len(b) for b in result['branches']), default=8) + 2, 18)
+    ws.column_dimensions['A'].width = max(subj_w, len('Subject') + 2)
+    ws.column_dimensions['B'].width = max(br_w, len('Branch') + 2)
+    ws.column_dimensions['C'].width = len('Candidates (N)') + 1
+    for c in range(4, len(headers) + 1):
+        ws.column_dimensions[get_column_letter(c)].width = max(len(str(headers[c - 1])), 8) + 1
 
     ws2 = wb.create_sheet('Summary')
     r2 = 1
@@ -459,8 +508,12 @@ def grade_breakdown_xlsx(meta, result, band_label, pass_label):
         last.alignment = ctr
         last.font = Font(bold=True)
         r2 += 1
-    for c in range(1, len(sum_headers) + 1):
-        ws2.column_dimensions[get_column_letter(c)].width = 20 if c == 1 else 16
+    br_w2 = min(max((len(b) for b in result['branches']), default=8) + 2, 18)
+    ws2.column_dimensions['A'].width = max(br_w2, len('Branch') + 2)
+    ws2.column_dimensions['B'].width = len('Total Subject Entries (N)') + 1
+    for c in range(3, 2 + len(bands) + 1):
+        ws2.column_dimensions[get_column_letter(c)].width = max(len(str(sum_headers[c - 1])), 8) + 1
+    ws2.column_dimensions[get_column_letter(2 + len(bands) + 1)].width = len(pass_label) + 2
     return wb
 
 
@@ -577,9 +630,10 @@ def grade_breakdown_png_pages(meta, result, band_label, pass_label):
         img.resize((PW, PH), Image.LANCZOS).save(out, format='PNG')
         pages.append(out.getvalue())
 
-    # ---- Main breakdown table (paginates whole subject-blocks) ----
+    # ---- Main breakdown table (paginates whole subject-blocks) ---- (leftover
+    # width fills the band columns, not Subject/Branch/N — see the PDF renderer)
     headers = _main_headers(bands)
-    col_w = measure(headers, _main_text_rows(result), grow_cols=[0, 1])
+    col_w = measure(headers, _main_text_rows(result), grow_cols=list(range(3, 3 + len(bands))))
     table_w = sum(col_w)
     page_title = 'Subject-Wise Performance & Grade Breakdown'
     subtitle_text = meta.get('subtitle', '')
@@ -651,7 +705,7 @@ def grade_breakdown_png_pages(meta, result, band_label, pass_label):
     # ---- Overall summary (own page) ----
     sum_headers = _summary_headers(bands, pass_label)
     sum_rows = _summary_text_rows(result, pass_label)
-    scol_w = measure(sum_headers, sum_rows, grow_cols=[0])
+    scol_w = measure(sum_headers, sum_rows, grow_cols=list(range(2, 2 + len(bands))))
     stable_w = sum(scol_w)
     simg, sd, sy0 = new_page(f'Overall {band_label} Percentage Summary by Branch', '', draw_mast=True)
     sd.rectangle([margin, sy0, margin + stable_w, sy0 + header_h], fill=C['head_bg'])
