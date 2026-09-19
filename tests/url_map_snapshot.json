@@ -393,6 +393,13 @@
 ]
 ],
 [
+"attendance.api_absentees",
+"/attendance/api/absentees",
+[
+"GET"
+]
+],
+[
 "attendance.api_analytics",
 "/attendance/api/analytics",
 [

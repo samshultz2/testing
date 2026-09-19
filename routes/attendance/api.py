@@ -643,6 +643,60 @@ def api_notify_absentees():
                     'redirect': url_for('comms.message_detail', message_id=msg.id)})
 
 
+@attendance_bp.route('/api/absentees')
+@login_required
+def api_absentees():
+    """Students absent (both sessions) on a date for one class, with their
+    parent's contact — plus a ready-to-share WhatsApp text listing all of
+    them. Unlike /api/notify/absentees (which drafts an automated per-parent
+    campaign), this is a plain list+text for staff to read or forward
+    themselves, e.g. to the front desk or a staff WhatsApp group."""
+    caa, err = _scoped_caa(request.args.get('assignment_id', type=int))
+    if err:
+        return err
+    ds = request.args.get('date')
+    try:
+        target = datetime.strptime(ds, '%Y-%m-%d').date() if ds else timeutil.today()
+    except Exception:
+        return jsonify({'error': 'bad date'}), 400
+
+    from utils.comms import primary_contact, normalise_phone
+    enrollments = (StudentEnrollment.query
+                   .filter_by(class_arm_assignment_id=caa.id, is_active=True)
+                   .join(Student).filter(Student.is_active == True)  # noqa: E712
+                   .order_by(*roster_order()).all())
+    marks = {a.enrollment_id: a for a in Attendance.query.filter(
+        Attendance.enrollment_id.in_([e.id for e in enrollments] or [-1]),
+        Attendance.date == target).all()}
+
+    absentees = []
+    for e in enrollments:
+        a = marks.get(e.id)
+        if not a or a.morning_present or a.afternoon_present:
+            continue
+        student = e.student
+        pc = primary_contact(student)
+        absentees.append({
+            'student_id': student.id, 'student_name': student.full_name,
+            'parent_name': (pc.name if pc else '') or '',
+            'parent_relationship': (pc.relationship if pc else '') or '',
+            'parent_phone': (pc.phone_number if pc else '') or '',
+            'wa_intl': normalise_phone(pc.phone_number) if pc and pc.phone_number else '',
+        })
+
+    lines = [f"These are the names of students absent from school today in {caa.display_name} "
+             f"({target.strftime('%d %b %Y')}) and their parents' contact:", '']
+    for i, s in enumerate(absentees, 1):
+        who = s['parent_name'] or 'Parent/Guardian'
+        rel = f" ({s['parent_relationship']})" if s['parent_relationship'] else ''
+        phone = s['parent_phone'] or 'no phone on file'
+        lines.append(f"{i}. {s['student_name']} — {who}{rel}: {phone}")
+    share_text = '\n'.join(lines)
+
+    return jsonify({'class_name': caa.display_name, 'date': target.isoformat(),
+                    'absentees': absentees, 'share_text': share_text})
+
+
 @attendance_bp.route('/api/notify/low', methods=['POST'])
 @login_required
 def api_notify_low():

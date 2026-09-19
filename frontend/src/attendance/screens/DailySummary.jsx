@@ -2,9 +2,68 @@ import React, { useState } from 'react';
 import { apiGet, apiPost } from '../../lib/api';
 import { useAsync } from '../../lib/hooks';
 import { useCtx } from '../App';
-import { Toolbar, Field, Select, Spinner, EmptyState, ErrorState, OfflineRequired, Pill, StatCards, Banner } from '../../components/ui';
+import { Toolbar, Field, Select, Spinner, EmptyState, ErrorState, OfflineRequired, Pill, StatCards, Banner, SectionTitle } from '../../components/ui';
 import { withGroups, GroupHeadRow } from '../roster';
 import { lastClass, recentClasses, rememberClass } from '../../lib/attprefs';
+
+function AbsenteesPanel({ assignmentId, date, className, ready }) {
+  const [state] = useAsync(
+    () => (ready ? apiGet(`/attendance/api/absentees?assignment_id=${assignmentId}&date=${encodeURIComponent(date)}`)
+                 : Promise.resolve(null)),
+    [assignmentId, date, ready]
+  );
+  const [copied, setCopied] = useState(false);
+  const a = state.data;
+  if (!ready || state.loading || state.error || !a || a.absentees.length === 0) return null;
+
+  const copyText = () => {
+    navigator.clipboard.writeText(a.share_text).then(() => {
+      setCopied(true); setTimeout(() => setCopied(false), 1500);
+    });
+  };
+  const shareUrl = 'https://wa.me/?text=' + encodeURIComponent(a.share_text);
+
+  return (
+    <div className="att-absentees no-print">
+      <SectionTitle icon="fa-user-clock">Absent Today ({a.absentees.length})</SectionTitle>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+        <a className="btn btn-sm att-wa-btn" href={shareUrl} target="_blank" rel="noopener">
+          <i className="fab fa-whatsapp" aria-hidden="true" /> Share via WhatsApp
+        </a>
+        <button type="button" className="btn btn-secondary btn-sm" onClick={copyText}>
+          <i className={'fas ' + (copied ? 'fa-check' : 'fa-copy')} aria-hidden="true" /> {copied ? 'Copied!' : 'Copy list'}
+        </button>
+      </div>
+      <div className="att-grid-wrap">
+        <table className="att-grid" aria-label={'Absent today — ' + className}>
+          <thead>
+            <tr>
+              <th scope="col" className="att-grid-name">Student</th>
+              <th scope="col">Parent / Guardian</th>
+              <th scope="col">Phone</th>
+              <th scope="col"></th>
+            </tr>
+          </thead>
+          <tbody>
+            {a.absentees.map((s) => (
+              <tr key={s.student_id}>
+                <td className="att-grid-name">{s.student_name}</td>
+                <td>{s.parent_name || <span className="text-muted">—</span>}
+                  {s.parent_relationship ? <span className="att-sub"> ({s.parent_relationship})</span> : null}</td>
+                <td>{s.parent_phone ? <a href={'tel:' + s.parent_phone}>{s.parent_phone}</a> : <span className="text-muted">No contact</span>}</td>
+                <td>{s.wa_intl && (
+                  <a href={'https://wa.me/' + s.wa_intl} target="_blank" rel="noopener" title="Message this parent">
+                    <i className="fab fa-whatsapp att-wa-ic" aria-hidden="true" />
+                  </a>
+                )}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 
 // Read-only daily attendance summary (server-computed → needs the network).
 export default function DailySummary() {
@@ -139,6 +198,8 @@ export default function DailySummary() {
               { value: d.afternoon_present, label: 'PM present' },
               { value: d.afternoon_absent, label: 'PM absent' },
             ]} />
+
+            <AbsenteesPanel assignmentId={assignmentId} date={date} className={d.class_name} ready={ready} />
 
             {d.students.length === 0 ? (
               <EmptyState icon="fa-users-slash" title="No students enrolled" hint="This class has no active enrolments for the term." />

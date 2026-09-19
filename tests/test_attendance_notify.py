@@ -128,3 +128,86 @@ def test_profile_includes_notifications_key(app):
     client = _admin(app)
     body = client.get(f'/attendance/api/student/{sid}').get_json()
     assert 'notifications' in body
+
+
+def _seed_class(app, tag, students):
+    """One class/date with several students. ``students``: list of
+    (first, surname, gender, morning, afternoon, parent_name, relationship, phone)."""
+    with app.app_context():
+        sess = AcademicSession(name=f'AbsSess{tag}', is_active=False)
+        db.session.add(sess); db.session.flush()
+        term = Term(session_id=sess.id, term_number=1, name=f'AbsTerm{tag}', is_active=False,
+                    start_date=date(2025, 6, 2), end_date=date(2025, 6, 6))
+        db.session.add(term); db.session.flush()
+        wk = Week(term_id=term.id, week_number=1, start_date=date(2025, 6, 2), end_date=date(2025, 6, 8))
+        db.session.add(wk); db.session.flush()
+        sc = SchoolClass(name=f'AC{tag}', level=1); arm = ClassArm(name=f'AA{tag}', is_active=True)
+        db.session.add_all([sc, arm]); db.session.flush()
+        bid = Branch.get_default().id
+        caa = ClassArmAssignment(class_id=sc.id, arm_id=arm.id, term_id=term.id, branch_id=bid)
+        db.session.add(caa); db.session.flush()
+        target = date(2025, 6, 2)
+        sids = []
+        for i, (fn, sn, g, m, a, pname, rel, phone) in enumerate(students):
+            st = Student(student_id=f'{tag}{i}', first_name=fn, surname=sn, gender=g,
+                        is_active=True, branch_id=bid)
+            db.session.add(st); db.session.flush()
+            if phone:
+                db.session.add(ParentContact(student_id=st.id, name=pname, relationship=rel,
+                                             phone_number=phone, is_primary=True))
+            en = StudentEnrollment(student_id=st.id, class_arm_assignment_id=caa.id, is_active=True)
+            db.session.add(en); db.session.flush()
+            db.session.add(Attendance(enrollment_id=en.id, week_id=wk.id, date=target,
+                                      morning_present=m, afternoon_present=a))
+            sids.append(st.id)
+        db.session.commit()
+        return caa.id, target, sids
+
+
+def test_absentees_endpoint_lists_full_day_absentees_with_contact_and_share_text(app):
+    caa_id, target, sids = _seed_class(app, 'LST1', [
+        ('John', 'Doe', 'Male', False, False, 'Mr Doe', 'Father', '08012345678'),
+        ('Jane', 'Smith', 'Female', False, False, 'Mrs Smith', 'Mother', '08087654321'),
+        ('Amaka', 'Okafor', 'Female', True, True, None, None, None),   # present -> excluded
+        ('Tunde', 'Bello', 'Male', True, False, None, None, None),     # late, not absent -> excluded
+    ])
+    client = _admin(app)
+    body = client.get(f'/attendance/api/absentees?assignment_id={caa_id}&date={target.isoformat()}').get_json()
+
+    assert [a['student_name'] for a in body['absentees']] == ['Doe John', 'Smith Jane']
+    assert body['absentees'][0]['parent_name'] == 'Mr Doe'
+    assert body['absentees'][0]['parent_relationship'] == 'Father'
+    assert body['absentees'][0]['parent_phone'] == '08012345678'
+    assert body['absentees'][0]['wa_intl'] == '2348012345678'
+
+    text = body['share_text']
+    assert 'absent from school today' in text
+    assert 'Doe John' in text and 'Mr Doe' in text and '08012345678' in text
+    assert 'Smith Jane' in text and 'Mrs Smith' in text and '08087654321' in text
+    assert 'Okafor Amaka' not in text and 'Bello Tunde' not in text
+
+
+def test_absentees_endpoint_handles_no_contact_and_no_absentees(app):
+    caa_id, target, sids = _seed_class(app, 'LST2', [
+        ('NoPhone', 'Kid', 'Male', False, False, None, None, None),
+    ])
+    client = _admin(app)
+    body = client.get(f'/attendance/api/absentees?assignment_id={caa_id}&date={target.isoformat()}').get_json()
+    assert len(body['absentees']) == 1
+    assert body['absentees'][0]['parent_phone'] == '' and body['absentees'][0]['wa_intl'] == ''
+    assert 'no phone on file' in body['share_text']
+
+    caa_id2, target2, _ = _seed_class(app, 'LST3', [
+        ('All', 'Present', 'Female', True, True, None, None, None),
+    ])
+    empty = client.get(f'/attendance/api/absentees?assignment_id={caa_id2}&date={target2.isoformat()}').get_json()
+    assert empty['absentees'] == []
+
+
+def test_absentees_endpoint_requires_view_access(app):
+    caa_id, target, sids = _seed_class(app, 'LST4', [
+        ('John', 'Doe', 'Male', False, False, 'Mr Doe', 'Father', '08012345678'),
+    ])
+    client = app.test_client()   # not logged in
+    r = client.get(f'/attendance/api/absentees?assignment_id={caa_id}&date={target.isoformat()}')
+    assert r.status_code in (302, 401, 403)
