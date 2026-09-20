@@ -15,6 +15,7 @@ from sqlalchemy import func
 
 from models import db, Book, BookLoan, Student, SchoolSettings
 from utils.access_control import login_required, admin_required, is_admin
+from utils.security import rate_limited
 from utils.branch_scope import (scope_query, scope_by_student, require_branch_access,
                                 can_access_branch)
 from utils.search import like_term
@@ -268,11 +269,15 @@ def add_book():
 
 @library_bp.route('/api/isbn-lookup')
 @login_required
+@rate_limited('isbn_lookup', max_requests=30, window_minutes=10)
 def isbn_lookup():
     """Auto-fill a book from its ISBN (typed, or scanned from a barcode photo on
     the client). Returns the fetched metadata plus any existing copies of the
     same book in this branch, so the librarian can add copies to an existing
-    title instead of creating a duplicate."""
+    title instead of creating a duplicate.
+
+    Fans out to several catalogues/aggregators at once (utils.isbn_lookup) —
+    rate-limited so a runaway client can't hammer those free public APIs."""
     from utils.isbn_lookup import lookup_isbn, normalise_isbn
     from utils.branch_scope import scope_query
     raw = request.args.get('isbn') or ''

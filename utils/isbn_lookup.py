@@ -1,9 +1,14 @@
-"""Look up book metadata by ISBN from public catalogues.
+"""Look up book metadata by ISBN across several public catalogues/aggregators
+— Open Library (twice, via two differently-indexed endpoints), Google Books,
+the Internet Archive, Crossref, and (optionally, once a key is configured)
+ISBNdb — so a title missing from one source is often still found in another.
+See ``_sources()`` for the exact list and try order.
 
-Tries Open Library first, then Google Books. Uses the stdlib-based
-``utils.http`` client (proxy/timeout-safe) so a mismatched ``requests`` can't
-hang the request. Returns a normalised dict the book form can consume, or None
-when nothing is found / the lookup fails. Never raises.
+Uses the stdlib-based ``utils.http`` client (proxy/timeout-safe) so a
+mismatched ``requests`` can't hang the request. Returns a normalised dict the
+book form can consume, or None when nothing is found / the lookup fails.
+Never raises — every source is individually try/excepted so one failing or
+timing out never blocks the rest.
 """
 from __future__ import annotations
 
@@ -103,28 +108,173 @@ def _from_google(isbn):
     }
 
 
-def lookup_isbn(raw_isbn):
-    """Normalised book metadata for an ISBN, or None. Best-effort across sources.
+def _from_openlibrary_search(isbn):
+    """Open Library's search index — a separately-built index from the bibkeys
+    API above, so it sometimes has an edition the other one doesn't."""
+    url = (f'https://openlibrary.org/search.json?isbn={isbn}&limit=1&'
+           'fields=title,subtitle,author_name,publisher,first_publish_year,subject,language')
+    res = get_json(url, timeout=8)
+    if not res.ok:
+        return None
+    docs = (res.json() or {}).get('docs') or []
+    if not docs or not docs[0].get('title'):
+        return None
+    d = docs[0]
+    subjects = d.get('subject') or []
+    return {
+        'title': d.get('title') or '', 'subtitle': d.get('subtitle') or '',
+        'author': ', '.join(d.get('author_name') or []),
+        'publisher': ', '.join((d.get('publisher') or [])[:2]),
+        'publication_year': d.get('first_publish_year'),
+        'subject': (subjects[0] if subjects else ''), 'keywords': ', '.join(subjects[:10]),
+        'description': '', 'language': ', '.join(d.get('language') or []),
+        'source': 'Open Library (search index)',
+    }
 
-    Tries both the given ISBN and its 10↔13 counterpart, since a title is often
-    catalogued under only one of the two forms."""
+
+def _from_archive_org(isbn):
+    """The Internet Archive's own catalogue (distinct from Open Library, which
+    it also runs) — includes many library collections it has scanned or taken
+    donations from, including African university and school libraries."""
+    url = ('https://archive.org/advancedsearch.php?q=isbn%3A' + isbn
+          + '&fl%5B%5D=title&fl%5B%5D=creator&fl%5B%5D=publisher&fl%5B%5D=date'
+            '&fl%5B%5D=subject&fl%5B%5D=language&rows=1&page=1&output=json')
+    res = get_json(url, timeout=8)
+    if not res.ok:
+        return None
+    docs = ((res.json() or {}).get('response') or {}).get('docs') or []
+    if not docs or not docs[0].get('title'):
+        return None
+    d = docs[0]
+    creator = d.get('creator')
+    author = ', '.join(creator) if isinstance(creator, list) else (creator or '')
+    subject = d.get('subject')
+    subjects = subject if isinstance(subject, list) else ([subject] if subject else [])
+    publisher = d.get('publisher')
+    return {
+        'title': d.get('title') or '', 'subtitle': '',
+        'author': author, 'publisher': (publisher[0] if isinstance(publisher, list) else publisher) or '',
+        'publication_year': _year(d.get('date')),
+        'subject': (subjects[0] if subjects else ''), 'keywords': ', '.join(subjects[:10]),
+        'description': '', 'language': ', '.join(d.get('language') or []) if isinstance(d.get('language'), list) else (d.get('language') or ''),
+        'source': 'Internet Archive',
+    }
+
+
+def _from_crossref(isbn):
+    """Crossref indexes some publishers' book/monograph metadata (deposited
+    alongside their journal articles) under a work's registered ISBNs."""
+    url = f'https://api.crossref.org/works?filter=isbn:{isbn}&rows=1'
+    res = get_json(url, timeout=8)
+    if not res.ok:
+        return None
+    items = ((res.json() or {}).get('message') or {}).get('items') or []
+    if not items:
+        return None
+    it = items[0]
+    titles = it.get('title') or []
+    if not titles:
+        return None
+    authors = ', '.join(
+        ' '.join(filter(None, [a.get('given'), a.get('family')])) for a in (it.get('author') or []))
+    pub_date = it.get('published-print') or it.get('published-online') or it.get('published') or {}
+    parts = (pub_date.get('date-parts') or [[]])[0]
+    year = parts[0] if parts else None
+    subjects = it.get('subject') or []
+    return {
+        'title': titles[0], 'subtitle': '',
+        'author': authors, 'publisher': it.get('publisher') or '',
+        'publication_year': year,
+        'subject': (subjects[0] if subjects else ''), 'keywords': ', '.join(subjects[:10]),
+        'description': '', 'language': it.get('language') or '',
+        'source': 'Crossref',
+    }
+
+
+def _from_isbndb(isbn):
+    """Optional: ISBNdb (isbndb.com) has far broader small-press/regional
+    publisher coverage than the free sources above — which is where most
+    Nigerian textbook publishers actually turn up. It needs a paid API key;
+    configure ISBNDB_API_KEY (Config / env) to turn this source on, otherwise
+    it's silently skipped."""
+    from config import Config
+    key = (Config.ISBNDB_API_KEY or '').strip()
+    if not key:
+        return None
+    res = get_json(f'https://api2.isbndb.com/book/{isbn}', headers={'Authorization': key}, timeout=8)
+    if not res.ok:
+        return None
+    book = (res.json() or {}).get('book') or {}
+    title = book.get('title') or ''
+    if not title:
+        return None
+    title_long = book.get('title_long') or ''
+    subjects = book.get('subjects') or []
+    return {
+        'title': title, 'subtitle': (title_long[len(title):].lstrip(' :-') if title_long.startswith(title) else ''),
+        'author': ', '.join(book.get('authors') or []), 'publisher': book.get('publisher') or '',
+        'publication_year': _year(book.get('date_published')),
+        'subject': (subjects[0] if subjects else ''), 'keywords': ', '.join(subjects),
+        'description': (book.get('synopsis') or book.get('overview') or '')[:2000],
+        'language': book.get('language') or '',
+        'source': 'ISBNdb',
+    }
+
+
+def _sources():
+    """Tried in order; the first source with a real hit (a title) wins. Free,
+    keyless sources first, then the ones that need registration/an optional
+    key — see _from_isbndb's docstring for the one meant to fill in Nigerian-
+    publisher gaps once a key is configured.
+
+    Referenced by name here (rather than a module-level tuple built once at
+    import time) so tests can monkeypatch e.g. ``isbn_lookup._from_google``
+    and have ``lookup_isbn`` pick up the replacement."""
+    return (_from_openlibrary, _from_google, _from_openlibrary_search,
+           _from_archive_org, _from_crossref, _from_isbndb)
+
+
+def _safe_fetch(fetch, form):
+    try:
+        return fetch(form)
+    except Exception:
+        return None
+
+
+def lookup_isbn(raw_isbn):
+    """Normalised book metadata for an ISBN, or None. Best-effort across up to
+    six catalogues/aggregators (see ``_sources()``) — each is wrapped so one
+    source erroring or timing out never blocks the rest.
+
+    Tries both the given ISBN and its 10↔13 counterpart, since a title is
+    often catalogued under only one of the two forms. Every (source, ISBN
+    form) combination — up to a dozen network calls — runs concurrently
+    rather than one after another: sequentially, a book genuinely absent from
+    every catalogue (common for locally-published Nigerian titles, which is
+    exactly the case that now tries the most sources) could block the request
+    for the sum of every source's timeout. Whichever combination is both a
+    real hit and highest-priority (earliest source, then the original ISBN
+    form before its alternate) wins."""
     isbn = normalise_isbn(raw_isbn)
     if not isbn:
         return None
-    # Try each ISBN form against each source; return the first real hit. The
-    # original ISBN is preserved on the result so the caller stores what was
-    # scanned/typed.
     forms = [isbn]
     alt = _alternate_isbn(isbn)
     if alt:
         forms.append(alt)
-    for fetch in (_from_openlibrary, _from_google):
-        for form in forms:
-            try:
-                found = fetch(form)
-            except Exception:
-                found = None
-            if found and found.get('title'):
-                found['isbn'] = isbn
-                return found
+    sources = _sources()
+    combos = [(si, fi, fetch, form) for si, fetch in enumerate(sources) for fi, form in enumerate(forms)]
+
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    best_priority, best_result = None, None
+    with ThreadPoolExecutor(max_workers=len(combos)) as ex:
+        futures = {ex.submit(_safe_fetch, fetch, form): (si, fi) for si, fi, fetch, form in combos}
+        for fut in as_completed(futures):
+            priority = futures[fut]
+            found = fut.result()
+            if found and found.get('title') and (best_priority is None or priority < best_priority):
+                best_priority, best_result = priority, found
+    if best_result:
+        best_result['isbn'] = isbn
+        return best_result
     return None

@@ -155,6 +155,13 @@ class Config:
     PAYSTACK_SECRET_KEY = os.environ.get('PAYSTACK_SECRET_KEY', '')
     PAYSTACK_PUBLIC_KEY = os.environ.get('PAYSTACK_PUBLIC_KEY', '')
 
+    # ISBNdb (https://isbndb.com) — a paid, keyed ISBN aggregator with much
+    # broader small-press/regional publisher coverage than the free sources,
+    # which is where most Nigerian textbook publishers (Learn Africa, HEBN,
+    # University Press Plc, Spectrum, Evans...) actually show up. Optional:
+    # the ISBN lookup simply skips this source when no key is configured.
+    ISBNDB_API_KEY = os.environ.get('ISBNDB_API_KEY', '')
+
     # Email (SMTP). Empty host/from => email features stay disabled.
     SMTP_HOST = os.environ.get('SMTP_HOST', '')
     SMTP_PORT = int(os.environ.get('SMTP_PORT', '587'))
