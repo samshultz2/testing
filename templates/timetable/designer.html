@@ -527,6 +527,11 @@ Output only the rows — no headings, totals or extra text, no code block.</pre>
                 <p class="sess-hint" id="bulkHint" style="margin-top:.5rem"></p>
                 <textarea id="bulkText" rows="6" placeholder=""></textarea>
                 <button class="btn btn-primary btn-sm" data-call="bulkAdd"><i class="fas fa-plus"></i> Add these</button>
+                <div style="margin-top:.6rem">
+                    <p class="sess-hint" style="margin:0 0 .3rem"><i class="fas fa-robot"></i> No spreadsheet? Snap a photo or paste a rough list, give any chatbot (Claude, Gemini, ChatGPT…) this prompt, then paste its answer above:</p>
+                    <pre id="tt-bulk-prompt" style="white-space:pre-wrap;background:var(--bg-muted,var(--gray-50));border:1px solid var(--border-color);border-radius:8px;padding:.6rem;font-size:.8rem;margin:0"></pre>
+                    <button type="button" class="btn btn-secondary btn-sm" style="margin-top:.4rem" data-copy="tt-bulk-prompt" data-copied="Copied"><i class="fas fa-copy"></i> Copy prompt</button>
+                </div>
             </details>
 
             <div id="rowBody"></div>
@@ -765,6 +770,34 @@ function sessCard(r,i){
          + '<div class="sess-grid">'+inner+'</div></div>';
 }
 var BULK_SHORT={week:'Week',date:'Date',day:'Day',group:'Class/Stream',time:'Start',dur:'Minutes',subject:'Subject',teacher:'Teacher',venue:'Venue'};
+var BULK_FIELD_HINT={
+    week:'the week number, e.g. 1',
+    date:'the date, e.g. 2025-09-15',
+    day:'the day name, e.g. Monday',
+    group:'the class/stream, or leave blank if not shown',
+    time:'the start time, e.g. 9:00am or 09:00',
+    dur:'the duration in minutes, e.g. 60',
+    subject:'the subject or activity',
+    teacher:'the teacher’s name, or leave blank',
+    venue:'the venue/room',
+};
+var BULK_INTRO={
+    saturday:'Read this Saturday class schedule',
+    holiday:'Read this holiday lesson schedule',
+    exam:'Read this exam timetable',
+};
+function buildBulkPrompt(){
+    var fields = layout().fields;
+    if(!fields.length) return '';
+    var numbered = fields.map(function(f,i){ return (i+1)+'. '+BULK_SHORT[f]+' — '+BULK_FIELD_HINT[f]; }).join('\n');
+    return (BULK_INTRO[el('layout').value] || 'Read this list of sessions')
+        + ' (photo, screenshot or rough notes) and output it as comma-separated rows, one session per line, '
+        + 'with these fields in this exact order:\n' + numbered + '\n\n'
+        + 'Rules:\n'
+        + '- Separate fields with a comma.\n'
+        + '- If a field isn’t shown for a session, leave it blank but keep its comma; trailing fields at the end of a line (e.g. Teacher) can be left off entirely.\n'
+        + 'Output only the rows — no headers, totals or extra commentary, no code block.';
+}
 function blankRow(){ return {week:'',date:'',day:'',group:'',time:'',dur:'60',subject:'',teacher:'',venue:''}; }
 function normTime(t){
     t=(t||'').trim(); if(!t) return '';
@@ -778,6 +811,7 @@ function renderEditor(){
     el('bulkHint').textContent = 'One session per line, in this order: ' +
         layout().fields.map(function(f){ return BULK_SHORT[f]; }).join(', ') +
         '. Separate with a comma, a | or a tab (paste straight from Excel/Sheets). Trailing fields can be left out.';
+    el('tt-bulk-prompt').textContent = buildBulkPrompt();
     el('rowBody').innerHTML = rows.map(sessCard).join('');
 }
 function focusCard(i){

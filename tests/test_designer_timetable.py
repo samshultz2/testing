@@ -104,6 +104,20 @@ def test_designer_has_custom_list_table_mode(auth_client):
     assert 'listRows:el(' in html
 
 
+def test_quick_add_has_copyable_ai_prompt(auth_client):
+    """The Saturday/Holiday/Exam "Quick add (one session per line)" box gets
+    the same copy-a-prompt-into-an-AI pattern as the other paste boxes, with
+    a field list that tracks whichever layout is selected."""
+    html = auth_client.get('/timetable/designer').get_data(as_text=True)
+    assert 'id="tt-bulk-prompt"' in html
+    assert 'data-copy="tt-bulk-prompt"' in html
+    assert 'function buildBulkPrompt()' in html
+    # rebuilt on every renderEditor() call, so it tracks the field order shown
+    # to the user (BULK_SHORT) rather than duplicating a second field list
+    assert "el('tt-bulk-prompt').textContent = buildBulkPrompt();" in html
+    assert 'BULK_INTRO' in html and 'BULK_FIELD_HINT' in html
+
+
 def test_designer_offers_extra_themes(auth_client):
     """The added design themes are selectable and have matching CSS."""
     html = auth_client.get('/timetable/designer').get_data(as_text=True)
