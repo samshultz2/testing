@@ -97,10 +97,12 @@ def test_dashboard_context_values(app):
     assert js['distribution'] == {'0-149': 0, '150-199': 1, '200-249': 0,
                                   '250-299': 1, '300+': 1}
     assert js['top'][0]['score'] == 300
+    assert 'is_current' in js   # see test_dashboard_snapshot_currency.py for its logic
 
     ws = ctx['waec_snapshot']
     assert ws['year'] == YEAR and ws['entries'] == 5 and ws['students'] == 2
     assert ws['pass_rate'] == 60.0
+    assert 'is_current' in ws
 
     # Keys the template relies on must all be present.
     for key in ('attendance_stats', 'attendance_trend', 'class_stats', 'recent_students',

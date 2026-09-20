@@ -1063,7 +1063,9 @@ function ExamCard({ kind, snap, url }) {
     meter = { pct: snap.pass_rate, label: 'Credit passes' };
     stats = [{ k: 'Students', v: snap.students }, { k: 'Entries', v: snap.entries }];
   } else {
-    big = snap.mean; unit = 'avg'; caption = `${snap.name} · ${snap.count} sat`;
+    big = snap.mean; unit = 'avg';
+    caption = `${snap.name} · ${snap.count} sat`;
+    if (snap.is_current === false) caption += ' · latest available';
     stats = [{ k: 'Top score', v: snap.max }];
   }
 
@@ -1082,7 +1084,8 @@ function ExamCard({ kind, snap, url }) {
         </span>
         <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1 }}>
           <strong style={{ fontSize: '.9rem' }}>{title}</strong>
-          {year && <span style={{ fontSize: '.68rem', color: 'var(--text-muted)' }}>{year}</span>}
+          {year && <span style={{ fontSize: '.68rem', color: 'var(--text-muted)' }}>
+            {year}{snap.is_current === false ? ' · latest available' : ''}</span>}
         </div>
         {(snap || kind === 'mock') && (
           <a href={url} aria-label={'Open ' + title} style={{ marginLeft: 'auto', color: accent }}>

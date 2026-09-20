@@ -1522,8 +1522,14 @@ def _dash_stream_distribution(tscope=None):
 
 
 def _dash_jamb_snapshot(tscope=None):
-    """Latest-year JAMB summary (branch- or teacher-scoped), or None."""
+    """Latest-year JAMB summary (branch- or teacher-scoped), or None.
+
+    ``is_current``: whether that year is the active session's own exam year
+    (via ``session_exam_year``) — False means these are the last real results
+    on file, shown because the new session's own exams haven't happened /
+    been entered yet, not because anything is broken."""
     from utils.branch_scope import scope_by_student
+    from utils.helpers import session_exam_year
     from models import JAMBResult
     jy = db.session.query(JAMBResult.exam_year).order_by(JAMBResult.exam_year.desc()).first()
     if not jy:
@@ -1538,8 +1544,10 @@ def _dash_jamb_snapshot(tscope=None):
     if not scores:
         return None
     top = rows[:5]
+    current_year = session_exam_year(get_active_session())
     return {
         'year': jy[0], 'count': len(scores),
+        'is_current': current_year is None or jy[0] >= current_year,
         'mean': round(sum(scores) / len(scores), 1),
         'max': max(scores),
         'above_200': sum(1 for s in scores if s >= 200),
@@ -1556,8 +1564,10 @@ def _dash_jamb_snapshot(tscope=None):
 
 
 def _dash_waec_snapshot(tscope=None):
-    """Latest-year WAEC summary (branch- or teacher-scoped), or None."""
+    """Latest-year WAEC summary (branch- or teacher-scoped), or None. See
+    ``_dash_jamb_snapshot`` for what ``is_current`` means."""
     from utils.branch_scope import scope_by_student
+    from utils.helpers import session_exam_year
     from models import WAECResult
     wy = db.session.query(WAECResult.exam_year).order_by(WAECResult.exam_year.desc()).first()
     if not wy:
@@ -1572,15 +1582,18 @@ def _dash_waec_snapshot(tscope=None):
         return None
     credit = {'A1', 'B2', 'B3', 'C4', 'C5', 'C6'}
     passes = sum(1 for r in rows if r.grade in credit)
+    current_year = session_exam_year(get_active_session())
     return {
         'year': wy[0], 'entries': len(rows),
+        'is_current': current_year is None or wy[0] >= current_year,
         'students': len({r.student_id for r in rows}),
         'pass_rate': round(passes / len(rows) * 100, 1),
     }
 
 
 def _dash_mock_snapshot(tscope=None):
-    """Latest Mock JAMB exam average (branch- or teacher-scoped), or None."""
+    """Latest Mock JAMB exam average (branch- or teacher-scoped), or None.
+    ``is_current``: whether that mock sitting belongs to the active session."""
     from utils.branch_scope import viewing_branch_id
     from models.mock_jamb import MockJAMBExam, MockJAMBResult
     last_mock = MockJAMBExam.query.order_by(MockJAMBExam.exam_date.desc()).first()
@@ -1597,7 +1610,9 @@ def _dash_mock_snapshot(tscope=None):
     ms = [r.total_score for r in res_q.all()]
     if not ms:
         return None
+    active_session = get_active_session()
     return {'name': last_mock.display_name, 'count': len(ms),
+            'is_current': active_session is None or last_mock.session_id == active_session.id,
             'mean': round(sum(ms) / len(ms), 1), 'max': max(ms)}
 
 

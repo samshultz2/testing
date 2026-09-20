@@ -1,6 +1,26 @@
 {% extends "base.html" %}
 {% block title %}Teacher Assignments - Generator{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <span>Teacher Assignments</span>{% endblock %}
+{% block extra_css %}
+<style>
+.arm-chips { display: flex; flex-wrap: wrap; gap: .5rem; padding: .15rem 0; }
+.arm-chip { position: relative; display: inline-flex; cursor: pointer; }
+.arm-chip input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
+.arm-chip span { display: inline-flex; align-items: center; gap: .35rem; padding: .5rem 1rem;
+  border-radius: var(--radius-full); border: 1.5px solid var(--border-color); background: var(--bg-card);
+  color: var(--text-secondary); font-size: .85rem; font-weight: 600; line-height: 1;
+  transition: background .15s, border-color .15s, color .15s; user-select: none; }
+.arm-chip span i { font-size: .7rem; opacity: 0; transition: opacity .15s; }
+.arm-chip input:checked + span { background: var(--primary); border-color: var(--primary); color: #fff; }
+.arm-chip input:checked + span i { opacity: 1; }
+.arm-chip:hover span { border-color: var(--primary); }
+.arm-chip input:focus-visible + span { outline: 2px solid var(--primary); outline-offset: 2px; }
+.arm-chips-empty { font-size: .85rem; color: var(--text-muted); font-style: italic; padding: .4rem 0; }
+/* Its own full-width row, not squeezed into one auto-fit grid column — a
+   class with several arms needs the room to lay them out horizontally. */
+.arm-field { grid-column: 1 / -1; }
+</style>
+{% endblock %}
 {% block content %}
 <div class="page-header">
     <h1>Teacher Assignments</h1>
@@ -41,11 +61,12 @@
                     {% endfor %}
                 </select>
             </div>
-            <div class="form-group">
+            <div class="form-group arm-field">
                 <label class="form-label">Arm(s)</label>
-                <select name="arm_names[]" id="armSelect" class="form-control" multiple size="4">
-                </select>
-                <span class="form-hint">Leave nothing selected for "All Arms". Ctrl/Cmd-click (or tap each) to pick more than one arm — one assignment is created per arm selected.</span>
+                <div id="armChips" class="arm-chips">
+                    <span class="arm-chips-empty">Select a class first</span>
+                </div>
+                <span class="form-hint">Tap to select one or more arms — leave none selected for "All Arms" (one assignment is created per arm selected).</span>
             </div>
             <div class="form-group">
                 <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Add Assignment</button>
@@ -113,24 +134,33 @@
 <script nonce="{{ csp_nonce }}">
 document.getElementById('classSelect').addEventListener('change', function() {
     const classId = this.value;
-    const armSelect = document.getElementById('armSelect');
-    
-    // Clear existing options
-    armSelect.innerHTML = '';
-    
-    if (classId) {
-        // Fetch arms for this class
-        fetch(`/generator/api/class/${classId}/arms`)
-            .then(response => response.json())
-            .then(arms => {
-                arms.forEach(arm => {
-                    const option = document.createElement('option');
-                    option.value = arm;
-                    option.textContent = arm;
-                    armSelect.appendChild(option);
-                });
-            });
+    const armChips = document.getElementById('armChips');
+
+    armChips.innerHTML = '';
+
+    if (!classId) {
+        armChips.innerHTML = '<span class="arm-chips-empty">Select a class first</span>';
+        return;
     }
+    fetch(`/generator/api/class/${classId}/arms`)
+        .then(response => response.json())
+        .then(arms => {
+            if (!arms.length) {
+                armChips.innerHTML = '<span class="arm-chips-empty">This class has no separate arms</span>';
+                return;
+            }
+            arms.forEach((arm, i) => {
+                const label = document.createElement('label');
+                label.className = 'arm-chip';
+                const input = document.createElement('input');
+                input.type = 'checkbox'; input.name = 'arm_names[]'; input.value = arm; input.id = 'arm-chip-' + i;
+                const span = document.createElement('span');
+                span.innerHTML = '<i class="fas fa-check" aria-hidden="true"></i>';
+                span.appendChild(document.createTextNode(arm));
+                label.appendChild(input); label.appendChild(span);
+                armChips.appendChild(label);
+            });
+        });
 });
 </script>
 {% endblock %}
