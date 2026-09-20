@@ -1,6 +1,6 @@
 """results blueprint — analytics routes (split from the former routes/results.py)."""
 from routes.results import *  # noqa: F401,F403
-from utils.web_exports import csv_response
+from utils.web_exports import csv_response, formula_guard
 
 
 @results_bp.route('/')
@@ -1242,7 +1242,7 @@ def waec_broadsheet_download():
     full_headers = ['S/N', 'Student'] + subjects + ['Credits', 'Avg grade']
     full_rows = []
     for i, r in enumerate(rows, 1):
-        line = [str(i), r['student']['full_name']]
+        line = [str(i), formula_guard(r['student']['full_name'])]
         line += [r['cells'].get(subj, '–') for subj in subjects]
         line += [str(r['credits']), r['avg_grade']]
         full_rows.append(line)

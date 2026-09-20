@@ -26,7 +26,7 @@ from utils.branch_scope import scope_query, branch_for_new, can_access_branch
 from utils import timeutil
 from utils.helpers import get_active_term, get_active_session, parse_date
 from utils.search import like_term
-from utils.web_exports import xlsx_response, csv_response
+from utils.web_exports import xlsx_response, csv_response, formula_guard
 from utils.results_analytics_org import SECTION_LABELS, _section_label
 
 sales_bp = Blueprint('sales', __name__, url_prefix='/sales')
@@ -895,7 +895,7 @@ def history_export():
                'Method', 'Items', 'Total', 'Paid', 'Balance']
 
     def _record(r):
-        return [r['receipt_no'], r['when'], r['buyer'], r['buyer_type'], r['class_arm'],
+        return [r['receipt_no'], r['when'], formula_guard(r['buyer']), r['buyer_type'], r['class_arm'],
                 r['cashier'], r['payment_method'], r['item_count'],
                 r['total'], r['amount_paid'], r['balance']]
 
@@ -3085,15 +3085,16 @@ def assets_export():
                'Accum. Depr.', 'Book Value', 'Custodian', 'Location', 'Class', 'Arm',
                'Teacher', 'Section', 'Status'])
     for a in rows:
-        ws.append([a.asset_tag or '', a.name, a.category, a.serial_number or '',
+        ws.append([formula_guard(a.asset_tag or ''), formula_guard(a.name), a.category,
+                   formula_guard(a.serial_number or ''),
                    a.quantity or 0, _describe_breakdown(_breakdown_dict(a)),
                    a.acquisition_date.isoformat() if a.acquisition_date else '',
                    a.acquisition_cost or 0, a.useful_life_years or '',
                    a.accumulated_depreciation, a.book_value,
-                   a.custodian or '', a.location or '',
+                   formula_guard(a.custodian or ''), formula_guard(a.location or ''),
                    a.school_class.name if a.school_class else '',
                    (a.arm.name if a.arm and not a.arm.is_default else ''),
-                   (a.teacher.user.full_name if a.teacher and a.teacher.user else ''),
+                   (formula_guard(a.teacher.user.full_name) if a.teacher and a.teacher.user else ''),
                    _effective_section(a) or '', a.status])
     return xlsx_response(wb, 'fixed_assets.xlsx')
 
@@ -3982,7 +3983,7 @@ def reports_export():
     headers = [c['label'] for c in cols]
 
     def _rec(r):
-        return [r.get(c['key'], '') for c in cols]
+        return [formula_guard(r.get(c['key'], '')) for c in cols]
 
     fname = f'sales_report_{kind}'
     if fmt in ('excel', 'xlsx'):

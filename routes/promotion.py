@@ -17,6 +17,7 @@ from utils.branch_scope import scope_query, scope_by_student, can_access_branch
 from utils.db_tx import safe_transaction
 from utils.audit import log_action
 from utils.security import rate_limited
+from utils.web_exports import formula_guard
 from datetime import date
 import json
 
@@ -699,14 +700,14 @@ def alumni_export():
     rows = _alumni_rows(f)
     for g, p in rows:
         w.writerow([
-            g.student_id or '', g.full_name,
+            formula_guard(g.student_id or ''), formula_guard(g.full_name),
             g.graduation_session.name if g.graduation_session else '',
             g.graduate_status or 'Graduated',
-            (p.occupation if p else '') or '', (p.job_title if p else '') or '',
-            (p.employer if p else '') or '', (p.higher_institution if p else '') or '',
-            (p.course_of_study if p else '') or '', (p.phone if p else '') or '',
-            (p.email if p else '') or '', (p.linkedin_url if p else '') or '',
-            (p.city if p else '') or '', (p.country if p else '') or '',
+            formula_guard((p.occupation if p else '') or ''), formula_guard((p.job_title if p else '') or ''),
+            formula_guard((p.employer if p else '') or ''), formula_guard((p.higher_institution if p else '') or ''),
+            formula_guard((p.course_of_study if p else '') or ''), formula_guard((p.phone if p else '') or ''),
+            formula_guard((p.email if p else '') or ''), formula_guard((p.linkedin_url if p else '') or ''),
+            formula_guard((p.city if p else '') or ''), formula_guard((p.country if p else '') or ''),
             'Yes' if (p and p.willing_to_mentor) else 'No',
         ])
     from flask import Response

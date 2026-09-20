@@ -5,7 +5,7 @@ import re
 from utils import timeutil
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, session, abort
 from utils.helpers import get_active_term, get_active_session, safe_redirect
-from utils.web_exports import xlsx_response, pdf_response
+from utils.web_exports import xlsx_response, pdf_response, formula_guard
 from datetime import date, timedelta
 from models import (
     db, Student, ParentContact, StudentEnrollment, ClassArmAssignment, Attendance, 
@@ -2606,7 +2606,7 @@ def export_students_excel(student_data, fields, font_size=None, title=None):
         max_lines = 1
         
         for col, field in enumerate(fields, 2):
-            value = str(student.get(field, '') or '')
+            value = formula_guard(str(student.get(field, '') or ''))
             cell = ws.cell(row=row, column=col, value=value)
             cell.border = border
             cell.alignment = left_align

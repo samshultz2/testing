@@ -597,7 +597,7 @@ def analytics_export():
     import csv
     import io
     from utils import site_analytics
-    from utils.web_exports import csv_response
+    from utils.web_exports import csv_response, formula_guard
     try:
         days = min(90, max(7, int(request.args.get('days', 30))))
     except (TypeError, ValueError):
@@ -611,11 +611,11 @@ def analytics_export():
     w.writerow([])
     w.writerow(['Top page', 'Views'])
     for p in data['top_pages']:
-        w.writerow([p['path'], p['views']])
+        w.writerow([formula_guard(p['path']), p['views']])
     w.writerow([])
     w.writerow(['Referrer', 'Views'])
     for r in data['top_referrers']:
-        w.writerow([r['source'], r['views']])
+        w.writerow([formula_guard(r['source']), r['views']])
     log_action('website.analytics_export', detail=f'{days}d')
     return csv_response(buf.getvalue(), f'website-analytics-{days}d.csv')
 

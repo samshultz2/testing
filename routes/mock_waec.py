@@ -23,7 +23,7 @@ from utils.access_control import admin_required
 from utils.security import rate_limited
 from utils.branch_scope import require_branch_access, branch_for_new, scope_query
 from utils.csrf import csrf_protect
-from utils.web_exports import xlsx_response
+from utils.web_exports import xlsx_response, formula_guard
 from utils.analytics_engine import recompute_student_safe
 from utils.subject_match import canonical_subject
 
@@ -303,7 +303,7 @@ def broadsheet_export(exam_id):
     ws.title = 'Broadsheet'
     ws.append(['S/N', 'Student'] + subjects + ['Credits', 'Avg %'])
     for i, row in enumerate(bs['rows'], 1):
-        line = [i, row['student'].full_name]
+        line = [i, formula_guard(row['student'].full_name)]
         for subj in subjects:
             r = row['cells'].get(subj)
             line.append(f'{r.score} {r.grade}' if r and r.score is not None else '')
@@ -1040,5 +1040,5 @@ def export_results(exam_id):
     results = (MockWAECResult.query.filter_by(mock_exam_id=exam_id)
                .join(Student).order_by(Student.surname, MockWAECResult.subject).all())
     for r in results:
-        ws.append([r.student.full_name, r.subject, r.score, r.grade])
+        ws.append([formula_guard(r.student.full_name), r.subject, r.score, r.grade])
     return xlsx_response(wb, f'mock_waec_{exam.exam_number}_{exam.session.name.replace("/", "-")}.xlsx')

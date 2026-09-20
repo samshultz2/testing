@@ -634,7 +634,7 @@ def export_jamb():
         row = idx + 3
         ws.cell(row=row, column=1, value=idx).border = border
         ws.cell(row=row, column=2, value=r.student.student_id).border = border
-        ws.cell(row=row, column=3, value=r.student.full_name).border = border
+        ws.cell(row=row, column=3, value=formula_guard(r.student.full_name)).border = border
         ws.cell(row=row, column=4, value=r.total_score).border = border
         ws.cell(row=row, column=5, value=r.subject1 or '-').border = border
         ws.cell(row=row, column=6, value=r.subject1_score or '-').border = border

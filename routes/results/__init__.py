@@ -20,7 +20,7 @@ from utils.helpers import (
 from datetime import date as _date
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
-from utils.web_exports import xlsx_response
+from utils.web_exports import xlsx_response, formula_guard
 from utils.analytics_service import AcademicAnalytics
 
 results_bp = Blueprint('results', __name__, url_prefix='/results')

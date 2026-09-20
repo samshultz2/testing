@@ -1480,7 +1480,7 @@ def export_broadsheet():
     for idx, data in enumerate(broadsheet_data, 1):
         row += 1
         ws.cell(row=row, column=1, value=data.get('position', idx)).border = thin_border
-        ws.cell(row=row, column=2, value=data['student'].full_name).border = thin_border
+        ws.cell(row=row, column=2, value=formula_guard(data['student'].full_name)).border = thin_border
         ws.cell(row=row, column=3, value=data['student'].student_id).border = thin_border
         
         col = 4

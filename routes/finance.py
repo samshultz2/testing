@@ -11,7 +11,7 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash, jsonify, Response, session)
 from sqlalchemy import func
 from sqlalchemy.orm import joinedload
-from utils.web_exports import xlsx_response, csv_response
+from utils.web_exports import xlsx_response, csv_response, formula_guard
 from utils.branch_scope import require_branch_access, scope_query, scope_by_student, viewing_branch_id
 
 from models import (
@@ -1238,15 +1238,17 @@ def export_report():
     payments = (scope_query(FeePayment.query.filter_by(term_id=term_id), FeePayment)
                 .order_by(FeePayment.payment_date).all()) if term_id else []
     for p in payments:
-        ws.append([p.receipt_no, p.payment_date.strftime('%Y-%m-%d'), p.student.full_name,
-                   p.student.student_id, p.method, p.reference or '', p.received_by or '', p.amount])
+        ws.append([formula_guard(p.receipt_no), p.payment_date.strftime('%Y-%m-%d'),
+                   formula_guard(p.student.full_name), p.student.student_id, p.method,
+                   formula_guard(p.reference or ''), formula_guard(p.received_by or ''), p.amount])
 
     # Expenses sheet
     ws2 = wb.create_sheet('Expenses')
     write_head(ws2, ['Date', 'Category', 'Description', 'Payee', 'Method', 'Reference', 'Amount'])
     for e in (scope_query(Expense.query.filter_by(term_id=term_id), Expense).order_by(Expense.expense_date).all() if term_id else []):
         ws2.append([e.expense_date.strftime('%Y-%m-%d'), e.category.name if e.category else '',
-                    e.description, e.payee or '', e.method, e.reference or '', e.amount])
+                    formula_guard(e.description or ''), formula_guard(e.payee or ''), e.method,
+                    formula_guard(e.reference or ''), e.amount])
 
     # Outstanding sheet
     ws3 = wb.create_sheet('Outstanding')

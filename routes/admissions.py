@@ -4,7 +4,7 @@ conversion of an admitted applicant into a Student, dashboard and CSV export.
 """
 from datetime import datetime, date
 from utils import timeutil
-from utils.web_exports import csv_response, pdf_response
+from utils.web_exports import csv_response, pdf_response, formula_guard
 from utils.helpers import get_active_session
 import csv
 import io
@@ -475,10 +475,10 @@ def export():
     w.writerow(['Application No', 'Name', 'Gender', 'Intended Class', 'Session',
                 'Status', 'Entrance Score', 'Parent', 'Phone', 'Applied'])
     for a in scope_query(Applicant.query, Applicant).order_by(Applicant.created_at.desc()).all():
-        w.writerow([a.application_no, a.full_name, a.gender or '',
+        w.writerow([formula_guard(a.application_no), formula_guard(a.full_name), a.gender or '',
                     a.intended_class.name if a.intended_class else '',
                     a.session.name if a.session else '', a.status,
                     a.entrance_score if a.entrance_score is not None else '',
-                    a.parent_name or '', a.parent_phone or '',
+                    formula_guard(a.parent_name or ''), formula_guard(a.parent_phone or ''),
                     a.applied_date or ''])
     return csv_response(out.getvalue(), 'applicants.csv')

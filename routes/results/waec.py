@@ -777,7 +777,7 @@ def export_waec():
         
         ws.cell(row=row, column=1, value=idx).border = border
         ws.cell(row=row, column=2, value=student.student_id).border = border
-        ws.cell(row=row, column=3, value=student.full_name).border = border
+        ws.cell(row=row, column=3, value=formula_guard(student.full_name)).border = border
         
         total_points = 0
         credit_count = 0

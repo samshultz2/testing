@@ -5,7 +5,7 @@ and a dashboard.
 from datetime import datetime, date, timedelta
 from utils import timeutil
 import csv
-from utils.web_exports import csv_response
+from utils.web_exports import csv_response, formula_guard
 import io
 from utils.helpers import safe_redirect
 
@@ -1066,7 +1066,7 @@ def export():
     w = csv.writer(out)
     w.writerow(['Title', 'Author', 'ISBN', 'Category', 'Total', 'Available', 'Shelf'])
     for b in scope_query(Book.query.filter_by(is_active=True), Book).order_by(Book.title).all():
-        w.writerow([b.title, b.author or '', b.isbn or '', b.category or '',
+        w.writerow([formula_guard(b.title), formula_guard(b.author or ''), b.isbn or '', b.category or '',
                     b.copies_total, b.copies_available, b.shelf or ''])
     return csv_response(out.getvalue(), 'library_catalogue.csv')
 

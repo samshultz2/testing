@@ -618,7 +618,7 @@ def score_import_template():
     # Student rows
     for row_num, enrollment in enumerate(enrollments, 2):
         ws.cell(row=row_num, column=1, value=enrollment.student.student_id)
-        ws.cell(row=row_num, column=2, value=enrollment.student.full_name)
+        ws.cell(row=row_num, column=2, value=formula_guard(enrollment.student.full_name))
     
     return xlsx_response(wb, 'score_import_template.xlsx')
 

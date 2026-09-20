@@ -2,6 +2,7 @@
 from routes.main import *  # noqa: F401,F403  (blueprint, models, helpers)
 from utils.search import like_term
 from utils.security import strip_tags
+from utils.web_exports import formula_guard
 
 
 def _sp_has_photo(student):
@@ -1522,7 +1523,7 @@ def export_students_data():
             writer.writerow([title]); writer.writerow([])
         writer.writerow(export_fields)
         for row in student_data:
-            writer.writerow([row.get(f, '') for f in export_fields])
+            writer.writerow([formula_guard(row.get(f, '')) for f in export_fields])
         resp = Response(buf.getvalue(), mimetype='text/csv')
         resp.headers['Content-Disposition'] = 'attachment; filename=students.csv'
         return resp

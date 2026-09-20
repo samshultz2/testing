@@ -20,7 +20,7 @@ import secrets
 from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash, session, jsonify, Response, current_app, abort)
 from werkzeug.utils import secure_filename
-from utils.web_exports import xlsx_response, pdf_response
+from utils.web_exports import xlsx_response, pdf_response, formula_guard
 from sqlalchemy import func
 from sqlalchemy.orm import contains_eager
 
@@ -1225,7 +1225,7 @@ def _exam_sheet(ws, exam):
     for i, a in enumerate(attempts, 1):
         ws.cell(row=r, column=1, value=i)
         ws.cell(row=r, column=2, value=a.student.student_id if a.student else '')
-        ws.cell(row=r, column=3, value=a.student.full_name if a.student else '')
+        ws.cell(row=r, column=3, value=formula_guard(a.student.full_name if a.student else ''))
         ws.cell(row=r, column=4, value=f'{a.raw_score:g}/{a.raw_total:g}' if a.raw_total else a.score)
         ws.cell(row=r, column=5, value=a.score)
         ws.cell(row=r, column=6, value=a.percentage)

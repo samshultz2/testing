@@ -10,7 +10,7 @@ from io import BytesIO
 import os
 import secrets
 from sqlalchemy import func
-from utils.web_exports import xlsx_response
+from utils.web_exports import xlsx_response, formula_guard
 
 from models import (db, Student, AcademicSession, StudentEnrollment, ClassArmAssignment,
                     SchoolClass, Subject, MockJAMBPassage, MockJAMBQuestion)
@@ -2461,7 +2461,7 @@ def export_results(exam_id):
     for row_idx, result in enumerate(results, 5):
         ws.cell(row=row_idx, column=1, value=row_idx - 4).border = border
         ws.cell(row=row_idx, column=2, value=result.student.student_id).border = border
-        ws.cell(row=row_idx, column=3, value=result.student.full_name).border = border
+        ws.cell(row=row_idx, column=3, value=formula_guard(result.student.full_name)).border = border
         ws.cell(row=row_idx, column=4, value=result.subject1 or '').border = border
         ws.cell(row=row_idx, column=5, value=result.subject1_score or 0).border = border
         ws.cell(row=row_idx, column=6, value=result.subject2 or '').border = border
