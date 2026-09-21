@@ -106,7 +106,7 @@ function AddRule({ d, notify }) {
     setBusy(false);
     if (r.ok) nav.go(r.redirect); else notify('error', r.error || 'Could not save.');
   };
-  const toggleSubj = (e) => setSubjects(Array.from(e.target.selectedOptions).map((o) => o.value));
+  const toggleSubj = (id) => setSubjects((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
   return (
     <>
       <PageHeader title="Add Promotion Rule" />
@@ -130,9 +130,28 @@ function AddRule({ d, notify }) {
             <small className="text-muted">Higher = checked first</small></div>
         </div>
         <div className="form-group"><label className="form-label">Required Subjects (for stream)</label>
-          <select className="form-control" multiple size="8" value={subjects} onChange={toggleSubj}>
-            {d.subjects.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select>
-          <small className="text-muted">Hold Ctrl/Cmd to select multiple. Average of these subjects must meet minimum.</small></div>
+          {d.subjects.length ? (
+            <div className="chip-picker">
+              {d.subjects.map((s) => {
+                const id = String(s.id);
+                return (
+                  <label className="chip-option" key={s.id}>
+                    <input type="checkbox" checked={subjects.includes(id)} onChange={() => toggleSubj(id)} />
+                    <span><i className="fas fa-check" aria-hidden="true" />{s.name}</span>
+                  </label>
+                );
+              })}
+            </div>
+          ) : <div className="chip-picker-empty">No subjects set up yet</div>}
+          <div className="d-flex align-center gap-3 mt-2 flex-wrap">
+            <button type="button" className="btn btn-link btn-sm" style={{ padding: 0 }}
+                    onClick={() => setSubjects(d.subjects.map((s) => String(s.id)))}>Select all</button>
+            <button type="button" className="btn btn-link btn-sm" style={{ padding: 0 }}
+                    onClick={() => setSubjects([])}>Clear</button>
+            <small className="text-muted">
+              {subjects.length ? `${subjects.length} selected — ` : ''}Average of these subjects must meet the minimum.
+            </small>
+          </div></div>
         <div className="page-header-actions">
           <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save Rule</button>
           <a href={d.urls.rules} className="btn btn-secondary">Cancel</a>
