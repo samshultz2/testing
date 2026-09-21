@@ -8,6 +8,10 @@ import { TextField, TextAreaField, SelectField, FormCard } from '../components/F
 
 const REL_SEQUENCE = ['Father', 'Mother', 'Guardian'];
 
+// WAEC allows sitting up to 8-9 subjects; JAMB (UTME) is always exactly 4.
+const WAEC_SUBJECTS_MAX = 8;
+const JAMB_SUBJECTS_MAX = 4;
+
 const RELATIONSHIP_FALLBACK = ['Father', 'Mother', 'Guardian', 'Sibling', 'Other'];
 
 // Shared by the live (on-blur) check and the final submit-time check, so the
@@ -22,25 +26,36 @@ function validateContactRow(c) {
   return row;
 }
 
-// One WAEC/JAMB subject picker (checkbox grid) with a Clear shortcut.
-function SubjectChecks({ legendIcon, legend, all, selected, onToggle, onClear, name }) {
+// One WAEC/JAMB subject picker (checkbox grid) with a Clear shortcut. `max`,
+// when given, caps how many can be ticked — once reached, every unticked box
+// disables itself so it's not just discouraged but actually impossible to
+// tick a 9th WAEC subject or a 5th JAMB subject.
+function SubjectChecks({ legendIcon, legend, all, selected, onToggle, onClear, name, max }) {
+  const atCap = !!max && selected.size >= max;
   return (
     <div className="exam-subjects-group" style={{ marginTop: '.25rem' }}>
       <div className="exam-subjects-head">
         <strong><i className={'fas ' + legendIcon} aria-hidden="true" /> {legend}</strong>
+        {max ? (
+          <span className={'exam-subjects-count' + (atCap ? ' is-full' : '')}>{selected.size} / {max} selected</span>
+        ) : null}
         <button type="button" className="exam-subjects-clear" onClick={onClear}
                 style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--danger)' }}>
           Clear
         </button>
       </div>
+      {atCap && <div className="exam-subjects-hint">Limit reached — uncheck one to pick another.</div>}
       <div className="subject-checks" role="group" aria-label={legend}>
-        {all.map((subj) => (
-          <label key={subj} className="subject-check">
-            <input type="checkbox" name={name} value={subj}
-                   checked={selected.has(subj)} onChange={() => onToggle(subj)} />
-            <span>{subj}</span>
-          </label>
-        ))}
+        {all.map((subj) => {
+          const checked = selected.has(subj);
+          return (
+            <label key={subj} className={'subject-check' + (!checked && atCap ? ' is-disabled' : '')}>
+              <input type="checkbox" name={name} value={subj} disabled={!checked && atCap}
+                     checked={checked} onChange={() => onToggle(subj)} />
+              <span>{subj}</span>
+            </label>
+          );
+        })}
       </div>
     </div>
   );
@@ -167,9 +182,9 @@ export default function StudentForm({ data }) {
   const onStream = (v) => {
     set('stream', v);
     const wsubs = (opt.stream_waec || {})[v];
-    if (wsubs) setWaec(new Set(wsubs));
+    if (wsubs) setWaec(capped(wsubs, WAEC_SUBJECTS_MAX));
     const jsubs = (opt.stream_jamb || {})[v];
-    if (jsubs) setJamb(new Set(jsubs));
+    if (jsubs) setJamb(capped(jsubs, JAMB_SUBJECTS_MAX));
   };
 
   // Extrapolate the chosen stream's compulsory subjects to every SSS2/SSS3
@@ -187,9 +202,19 @@ export default function StudentForm({ data }) {
       } else { alert((r && r.error) || 'Could not apply.'); }
     } finally { setApplying(false); }
   };
-  const toggle = (setter) => (subj) => setter((prev) => {
-    const next = new Set(prev); next.has(subj) ? next.delete(subj) : next.add(subj); return next;
+  const toggle = (setter, max) => (subj) => setter((prev) => {
+    const next = new Set(prev);
+    if (next.has(subj)) next.delete(subj);
+    else { if (max && next.size >= max) return prev; next.add(subj); }
+    return next;
   });
+  // Trims an auto-filled set (stream defaults, a course's subject combo) down
+  // to the same cap the checkboxes enforce, so a source list longer than the
+  // cap can never leave more boxes ticked than a person could tick by hand.
+  const capped = (list, max) => {
+    const uniq = [...new Set(list)];
+    return new Set(max ? uniq.slice(0, max) : uniq);
+  };
 
   // University aspiration: picking a course auto-fills the department, the JAMB
   // target (the course's competitive cut-off at the chosen university) and the
@@ -212,13 +237,13 @@ export default function StudentForm({ data }) {
       // fills in the remaining slots.
       let note = '';
       if (fillSubjects && Array.isArray(r.jamb_subjects)) {
-        setJamb(new Set(r.jamb_subjects));
+        setJamb(capped(r.jamb_subjects, JAMB_SUBJECTS_MAX));
         note = 'JAMB target set to ' + r.jamb_target + ' and JAMB subjects filled from the course';
       } else {
         note = 'JAMB target set to ' + r.jamb_target;
       }
       if (fillSubjects && Array.isArray(r.waec_subjects) && r.waec_subjects.length) {
-        setWaec((prev) => new Set([...prev, ...r.waec_subjects]));
+        setWaec((prev) => capped([...prev, ...r.waec_subjects], WAEC_SUBJECTS_MAX));
         note += ', and WAEC subjects topped up from the course';
       }
       setAspirationNote(note + '.');
@@ -654,9 +679,11 @@ export default function StudentForm({ data }) {
           </div>
         )}
         <SubjectChecks legendIcon="fa-file-alt" legend="WAEC Subjects" all={allSubjects} name="waec_subjects[]"
-                       selected={waec} onToggle={toggle(setWaec)} onClear={() => setWaec(new Set())} />
+                       max={WAEC_SUBJECTS_MAX} selected={waec} onToggle={toggle(setWaec, WAEC_SUBJECTS_MAX)}
+                       onClear={() => setWaec(new Set())} />
         <SubjectChecks legendIcon="fa-file-contract" legend="JAMB Subjects" all={jambSubjects} name="jamb_subjects[]"
-                       selected={jamb} onToggle={toggle(setJamb)} onClear={() => setJamb(new Set())} />
+                       max={JAMB_SUBJECTS_MAX} selected={jamb} onToggle={toggle(setJamb, JAMB_SUBJECTS_MAX)}
+                       onClear={() => setJamb(new Set())} />
       </FormCard>
 
       <div className="page-header-actions">

@@ -13,6 +13,20 @@ def _sp_has_photo(student):
         return False
 
 
+# WAEC allows sitting up to 8-9 subjects; JAMB (UTME) is always exactly 4.
+# The picker UI already makes it impossible to tick past these, but a raw
+# POST could still exceed them, so re-check server-side too.
+WAEC_SUBJECTS_MAX = 8
+JAMB_SUBJECTS_MAX = 4
+
+
+def _check_subject_caps(waec_list, jamb_list):
+    if len(waec_list) > WAEC_SUBJECTS_MAX:
+        raise ValueError(f'Choose at most {WAEC_SUBJECTS_MAX} WAEC subjects.')
+    if len(jamb_list) > JAMB_SUBJECTS_MAX:
+        raise ValueError(f'Choose at most {JAMB_SUBJECTS_MAX} JAMB subjects.')
+
+
 # Fields whose edits are worth an audit trail with their previous value. The
 # three sensitive ones (encrypted at rest) are audited as "changed" only — we
 # never copy their plaintext into the append-only log.
@@ -177,6 +191,9 @@ def add_student():
                                 "student limit. Upgrade your subscription to add more."}), 402
             return capped
         try:
+            waec_list = request.form.getlist('waec_subjects[]')
+            jamb_list = request.form.getlist('jamb_subjects[]')
+            _check_subject_caps(waec_list, jamb_list)
             # Create student
             student = Student(
                 student_id=Student.generate_student_id(),
@@ -188,8 +205,8 @@ def add_student():
                 religion=request.form.get('religion'),
                 home_address=request.form.get('home_address', '').strip() or None,
                 hobbies=request.form.get('hobbies', '').strip() or None,
-                waec_subjects=', '.join(request.form.getlist('waec_subjects[]')) or None,
-                jamb_subjects=', '.join(request.form.getlist('jamb_subjects[]')) or None,
+                waec_subjects=', '.join(waec_list) or None,
+                jamb_subjects=', '.join(jamb_list) or None,
                 stream=request.form.get('stream') or None,
                 jamb_target=request.form.get('jamb_target', type=int)
             )
@@ -706,6 +723,12 @@ def edit_student(student_id):
                 student.stream = form.get('stream') or None
             if has('jamb_target'):
                 student.jamb_target = form.get('jamb_target', type=int)
+            if complete or 'waec_subjects[]' in form or 'jamb_subjects[]' in form:
+                waec_list = form.getlist('waec_subjects[]') if (complete or 'waec_subjects[]' in form) \
+                    else (student.waec_subject_list or [])
+                jamb_list = form.getlist('jamb_subjects[]') if (complete or 'jamb_subjects[]' in form) \
+                    else (student.jamb_subject_list or [])
+                _check_subject_caps(waec_list, jamb_list)
             if complete or 'waec_subjects[]' in form:
                 student.waec_subjects = ', '.join(form.getlist('waec_subjects[]')) or None
             if complete or 'jamb_subjects[]' in form:
