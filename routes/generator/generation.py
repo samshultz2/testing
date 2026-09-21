@@ -334,10 +334,16 @@ def run_ortools_generation():
         # Get break_after from rules
         break_after = int(rules.get('break_after_period', 5))
         first_period_no_repeat = rules.get('first_period_no_repeat', 'true') == 'true'
+        day_separation_default_enabled = rules.get('day_separation_enabled', 'true') == 'true'
+        day_separation_default_day_a = int(rules.get('day_separation_day_a', 0))
+        day_separation_default_day_b = int(rules.get('day_separation_day_b', 4))
 
         # Run OR-Tools solver
         result = generate_with_ortools(class_ids, periods_per_day, time_limit, break_after,
-                                       first_period_no_repeat=first_period_no_repeat)
+                                       first_period_no_repeat=first_period_no_repeat,
+                                       day_separation_default_enabled=day_separation_default_enabled,
+                                       day_separation_default_day_a=day_separation_default_day_a,
+                                       day_separation_default_day_b=day_separation_default_day_b)
         
         if not result['success']:
             detail = ' '.join(result.get('reasons') or [])

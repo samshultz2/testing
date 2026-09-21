@@ -98,6 +98,42 @@ switch level in the menu to configure the other.</p>
             </div>
 
             <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="day_separation_enabled" id="day_separation_enabled"
+                           {% if rules.get('day_separation_enabled', 'true') == 'true' %}checked{% endif %}>
+                    <span>Keep every subject off two named days together</span>
+                </label>
+                <span class="form-hint">e.g. with Monday/Friday picked below, Physics for SSS1 Rose can be on
+                    Monday or Friday but never both in the same week — still free on every other day. On by
+                    default for every subject; turn off a specific subject instead under
+                    <a href="{{ url_for('generator.subjects_config') }}">Subject Settings</a> &rarr; that
+                    subject's rules, or use <a href="{{ url_for('generator.clash_rules_list') }}">Clash
+                    Rules</a> for a custom day-pair on just one class. If a subject is taught every school day,
+                    this pairing is impossible to honour for it — exempt it there if generation ever reports
+                    that.</span>
+                <div class="form-row mt-2" id="day_separation_days" style="max-width: 420px;">
+                    <div class="form-group">
+                        <label class="form-label">Day A</label>
+                        <select name="day_separation_day_a" class="form-control">
+                            {% for d in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] %}
+                            <option value="{{ loop.index0 }}"
+                                {% if rules.get('day_separation_day_a', '0')|int == loop.index0 %}selected{% endif %}>{{ d }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Day B</label>
+                        <select name="day_separation_day_b" class="form-control">
+                            {% for d in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] %}
+                            <option value="{{ loop.index0 }}"
+                                {% if rules.get('day_separation_day_b', '4')|int == loop.index0 %}selected{% endif %}>{{ d }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
                 <label class="form-label">Max Consecutive Periods (per teacher)</label>
                 <input type="number" name="max_consecutive" class="form-control" style="width: 100px;"
                        value="{{ rules.get('max_consecutive', '3') }}" 
@@ -150,6 +186,22 @@ switch level in the menu to configure the other.</p>
     ids.forEach(function (id) {
         var el = document.getElementById(id);
         if (el) el.addEventListener('input', recompute);
+    });
+})();
+</script>
+
+<script nonce="{{ csp_nonce }}">
+(function () {
+    var dayA = document.querySelector('select[name="day_separation_day_a"]');
+    var dayB = document.querySelector('select[name="day_separation_day_b"]');
+    var form = document.getElementById('day_separation_enabled') && document.getElementById('day_separation_enabled').closest('form');
+    if (!dayA || !dayB || !form) return;
+    form.addEventListener('submit', function (e) {
+        var enabled = document.getElementById('day_separation_enabled').checked;
+        if (enabled && dayA.value === dayB.value) {
+            e.preventDefault();
+            alert('Day A and Day B must be different days for the day-separation rule.');
+        }
     });
 })();
 </script>

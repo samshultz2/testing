@@ -84,6 +84,9 @@ class GenSubjectConfig(db.Model):
     category = db.Column(db.String(20), default='core')  # 'core', 'science', 'arts', 'commercial'
     not_first_period = db.Column(db.Boolean, default=False)
     not_last_period = db.Column(db.Boolean, default=False)
+    # Opts this subject OUT of the school-wide day-separation default (Rules ->
+    # Scheduling Constraints) — everything else stays in unless exempted here.
+    day_separation_exempt = db.Column(db.Boolean, default=False)
     color = db.Column(db.String(7), default='#4472C4')  # Hex color for display
     room_id = db.Column(db.Integer, db.ForeignKey('gen_rooms.id'))  # Required room/lab
     is_active = db.Column(db.Boolean, default=True)
@@ -532,3 +535,49 @@ class GenCoScheduleRule(db.Model):
 
     def __repr__(self):
         return f'<GenCoScheduleRule {self.name}>'
+
+
+DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
+
+
+class GenDaySeparationRule(db.Model):
+    """
+    Keeps a subject off two named days of the week together, for one class
+    (optionally one specific arm). If the subject lands on either day, it
+    can't also land on the other that same week — it's still free to be
+    scheduled on any other day, or on just one of the two.
+    Example: SSS1 Rose's Physics can be on Monday or on Friday, but never
+    both in the same week (so students never get it twice with a 4-day gap
+    right before/after the weekend).
+    """
+    __tablename__ = 'gen_day_separation_rules'
+
+    id = db.Column(db.Integer, primary_key=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'), index=True)  # owning branch (per-branch generator)
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text)
+
+    subject_id = db.Column(db.Integer, db.ForeignKey('gen_subjects.id'), nullable=False)
+    class_name = db.Column(db.String(20), nullable=False)  # e.g., "SSS1"
+    arm_name = db.Column(db.String(50))  # e.g., "Rose", or NULL for every arm of that class
+
+    # 0=Monday .. 4=Friday (the generator always runs a 5-day week).
+    day_a = db.Column(db.Integer, nullable=False)
+    day_b = db.Column(db.Integer, nullable=False)
+
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=local_now)
+
+    # Relationships
+    subject = db.relationship('GenSubject', foreign_keys=[subject_id])
+
+    @property
+    def day_a_name(self):
+        return DAY_NAMES[self.day_a] if self.day_a is not None and 0 <= self.day_a < len(DAY_NAMES) else '?'
+
+    @property
+    def day_b_name(self):
+        return DAY_NAMES[self.day_b] if self.day_b is not None and 0 <= self.day_b < len(DAY_NAMES) else '?'
+
+    def __repr__(self):
+        return f'<GenDaySeparationRule {self.name}>'

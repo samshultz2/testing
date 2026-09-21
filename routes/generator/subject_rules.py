@@ -62,6 +62,7 @@ def save_subject_rules(subject_id):
             'preferred_time': f.get('preferred', 'any'),
             'not_first_period': f.get('not_first') == 'on',
             'not_last_period': f.get('not_last') == 'on',
+            'day_separation_exempt': f.get('day_separation_exempt') == 'on',
             'is_active': True,
         }
         cfg = GenSubjectConfig.query.filter_by(subject_id=subject_id, school_level=level).first()

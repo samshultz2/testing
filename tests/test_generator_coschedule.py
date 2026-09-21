@@ -49,8 +49,15 @@ def _build_combined_class(app, tag):
         db.session.add_all([lit, acct]); db.session.flush()
 
         db.session.add_all([
-            GenSubjectConfig(branch_id=bid, subject_id=lit.id, school_level='sss', periods_per_week=2),
-            GenSubjectConfig(branch_id=bid, subject_id=acct.id, school_level='sss', periods_per_week=2),
+            # Exempt from the (unrelated) day-separation default: this fixture is
+            # about co-schedule pairing specifically, and coupling that with the
+            # school-wide day-separation rule needlessly tightens an already
+            # constrained (same-slot-paired) solve for no reason relevant to what
+            # these tests check.
+            GenSubjectConfig(branch_id=bid, subject_id=lit.id, school_level='sss', periods_per_week=2,
+                             day_separation_exempt=True),
+            GenSubjectConfig(branch_id=bid, subject_id=acct.id, school_level='sss', periods_per_week=2,
+                             day_separation_exempt=True),
             GenStreamSubject(stream_id=arts.id, subject_id=lit.id, periods_per_week=2),
             GenStreamSubject(stream_id=comm.id, subject_id=acct.id, periods_per_week=2),
         ])
@@ -119,6 +126,7 @@ def test_solver_pairs_co_scheduled_subjects_into_the_same_slot(app):
     """The actual feature request: force Literature (Daisy) and Accounting
     (Iris) into the same slot every time, with no teacher double-booking."""
     cc_id, lit_id, acct_id = _build_combined_class(app, 'C')
+    c = _admin(app)
 
     with app.app_context():
         bid = Branch.get_default().id
@@ -129,13 +137,18 @@ def test_solver_pairs_co_scheduled_subjects_into_the_same_slot(app):
             is_active=True))
         db.session.commit()
 
-    c = _admin(app)
-    r = _post(c, '/generator/generate/ortools', **{'class_ids[]': cc_id},
-             time_limit='20', periods_per_day='6')
-    assert r.status_code == 302
+    r = c.post('/generator/generate/ortools',
+              data={'_csrf_token': 'a' * 64, 'class_ids[]': cc_id, 'time_limit': '20', 'periods_per_day': '6'},
+              follow_redirects=True)
+    assert r.status_code == 200
 
     with app.app_context():
-        rows = GenTimetableResult.query.order_by(GenTimetableResult.batch_id.desc()).all()
+        # Scoped to this test's own arm names rather than "latest batch_id
+        # overall" — the shared session-scoped DB means another test's batch
+        # can otherwise look like the "latest" one and mask a real failure
+        # here (or a real failure here can slip through by matching an
+        # unrelated earlier batch's rows).
+        rows = GenTimetableResult.query.filter(GenTimetableResult.arm_name.in_(['ZzDaisyC', 'ZzIrisC'])).all()
         assert rows, 'no timetable rows saved — generation likely failed; check flash message'
         batch_id = rows[0].batch_id
         batch_rows = [row for row in rows if row.batch_id == batch_id]

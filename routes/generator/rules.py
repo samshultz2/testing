@@ -21,6 +21,9 @@ def rules_config():
 def save_rules():
     level = get_current_level()
     try:
+        if (request.form.get('day_separation_enabled') == 'on'
+                and request.form.get('day_separation_day_a', '0') == request.form.get('day_separation_day_b', '4')):
+            raise ValueError('Day A and Day B must be different days for the day-separation rule.')
         rules_to_save = [
             ('periods_per_day', request.form.get('periods_per_day', '8')),
             ('break_after_period', request.form.get('break_after_period', '5')),
@@ -32,6 +35,9 @@ def save_rules():
             ('max_consecutive', request.form.get('max_consecutive', '3')),
             ('distribute_evenly', 'true' if request.form.get('distribute_evenly') == 'on' else 'false'),
             ('first_period_no_repeat', 'true' if request.form.get('first_period_no_repeat') == 'on' else 'false'),
+            ('day_separation_enabled', 'true' if request.form.get('day_separation_enabled') == 'on' else 'false'),
+            ('day_separation_day_a', request.form.get('day_separation_day_a', '0')),
+            ('day_separation_day_b', request.form.get('day_separation_day_b', '4')),
         ]
         
         for rule_type, value in rules_to_save:
@@ -99,16 +105,18 @@ def save_generator_settings():
 @login_required
 def clash_rules_list():
     """List all subject clash rules"""
-    from models import GenSubjectClashRule, GenCombinedClassRule, GenCoScheduleRule
+    from models import GenSubjectClashRule, GenCombinedClassRule, GenCoScheduleRule, GenDaySeparationRule
 
     clash_rules = GenSubjectClashRule.query.filter_by(branch_id=gen_bid()).order_by(GenSubjectClashRule.id).all()
     combined_rules = GenCombinedClassRule.query.filter_by(branch_id=gen_bid()).order_by(GenCombinedClassRule.id).all()
     coschedule_rules = GenCoScheduleRule.query.filter_by(branch_id=gen_bid()).order_by(GenCoScheduleRule.id).all()
+    day_separation_rules = GenDaySeparationRule.query.filter_by(branch_id=gen_bid()).order_by(GenDaySeparationRule.id).all()
 
     return render_template('generator/clash_rules.html',
         clash_rules=clash_rules,
         combined_rules=combined_rules,
-        coschedule_rules=coschedule_rules
+        coschedule_rules=coschedule_rules,
+        day_separation_rules=day_separation_rules
     )
 
 
@@ -309,6 +317,84 @@ def delete_coschedule_rule(rule_id):
     from models import GenCoScheduleRule
 
     rule = gen_owned_or_404(GenCoScheduleRule, rule_id)
+    db.session.delete(rule)
+    db.session.commit()
+
+    flash('Rule deleted', 'success')
+    return redirect(url_for('generator.clash_rules_list'))
+
+
+@generator_bp.route('/day-separation-rules/add', methods=['GET', 'POST'])
+@login_required
+def add_day_separation_rule():
+    """Add a new day-separation rule (keep a subject off two named days
+    together for a class, e.g. SSS1 Rose's Physics can be on Monday or
+    Friday, never both in the same week)."""
+    from models import GenDaySeparationRule, GenClassConfig
+    from models.models.generator import DAY_NAMES
+
+    if request.method == 'POST':
+        try:
+            day_a = int(request.form.get('day_a'))
+            day_b = int(request.form.get('day_b'))
+            if day_a == day_b:
+                raise ValueError('Pick two different days — a subject can\'t be '
+                                 'separated from itself on the same day.')
+            if not (0 <= day_a < len(DAY_NAMES)) or not (0 <= day_b < len(DAY_NAMES)):
+                raise ValueError('Invalid day selection.')
+            rule = GenDaySeparationRule(
+                branch_id=gen_bid(),
+                name=request.form.get('name', '').strip(),
+                description=request.form.get('description', '').strip() or None,
+                subject_id=int(request.form.get('subject_id')),
+                class_name=request.form.get('class_name'),
+                arm_name=request.form.get('arm_name') or None,
+                day_a=day_a, day_b=day_b,
+                is_active=True
+            )
+            if not rule.name:
+                raise ValueError('Rule name is required.')
+            db.session.add(rule)
+            db.session.commit()
+            flash('Day-separation rule added successfully', 'success')
+            return redirect(url_for('generator.clash_rules_list'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error adding rule: {str(e)}', 'error')
+
+    level = get_current_level()
+    subjects = GenSubject.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).order_by(GenSubject.name).all()
+    classes = GenClassConfig.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).order_by(GenClassConfig.class_name).all()
+
+    return render_template('generator/add_day_separation_rule.html',
+        subjects=subjects,
+        classes=classes,
+        day_names=DAY_NAMES
+    )
+
+
+@generator_bp.route('/day-separation-rules/<int:rule_id>/toggle', methods=['POST'])
+@login_required
+def toggle_day_separation_rule(rule_id):
+    """Toggle a day-separation rule active/inactive"""
+    from models import GenDaySeparationRule
+
+    rule = gen_owned_or_404(GenDaySeparationRule, rule_id)
+    rule.is_active = not rule.is_active
+    db.session.commit()
+
+    status = 'activated' if rule.is_active else 'deactivated'
+    flash(f'Rule {status}', 'success')
+    return redirect(url_for('generator.clash_rules_list'))
+
+
+@generator_bp.route('/day-separation-rules/<int:rule_id>/delete', methods=['POST'])
+@login_required
+def delete_day_separation_rule(rule_id):
+    """Delete a day-separation rule"""
+    from models import GenDaySeparationRule
+
+    rule = gen_owned_or_404(GenDaySeparationRule, rule_id)
     db.session.delete(rule)
     db.session.commit()
 

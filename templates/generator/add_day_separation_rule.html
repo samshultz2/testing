@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}Add Day-Separation Rule - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <a href="{{ url_for('generator.clash_rules_list') }}">Clash Rules</a> / <span>Add Day-Separation Rule</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="fas fa-calendar-week"></i> Add Day-Separation Rule</h1>
+</div>
+
+<p class="text-muted mb-3">Keep a subject off two named days of the week together, for one class — if it lands on
+    either day, it can't also land on the other that same week. It's still free on every other day, and free to be
+    on just one of the two. This doesn't reduce the subject's total periods/week, it only rules out that one
+    day-pairing.</p>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST" id="daySepForm">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label class="form-label">Rule Name *</label>
+                <input type="text" name="name" class="form-control" required placeholder="e.g., SSS1 Rose Physics — not Mon+Fri">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Description</label>
+                <textarea name="description" class="form-control" rows="2" placeholder="Explain why this rule exists"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Subject *</label>
+                <select name="subject_id" class="form-control" required>
+                    <option value="">Select Subject</option>
+                    {% for s in subjects %}
+                    <option value="{{ s.id }}">{{ s.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label class="form-label">Class *</label>
+                        <select name="class_name" class="form-control" required id="daySepClass">
+                            <option value="">Select Class</option>
+                            {% for c in classes %}
+                            <option value="{{ c.class_name }}" data-arms="{{ c.arm_names }}">{{ c.class_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label class="form-label">Arm (leave empty for every arm)</label>
+                        <select name="arm_name" class="form-control" id="daySepArm">
+                            <option value="">All Arms</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label class="form-label">Day A *</label>
+                        <select name="day_a" class="form-control" required id="dayA">
+                            <option value="">Select Day</option>
+                            {% for d in day_names %}
+                            <option value="{{ loop.index0 }}">{{ d }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label class="form-label">Day B *</label>
+                        <select name="day_b" class="form-control" required id="dayB">
+                            <option value="">Select Day</option>
+                            {% for d in day_names %}
+                            <option value="{{ loop.index0 }}">{{ d }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <p class="text-muted text-sm" id="dayPairHint"></p>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Rule</button>
+                <a href="{{ url_for('generator.clash_rules_list') }}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+.row { display: flex; flex-wrap: wrap; margin: 0 -0.5rem; }
+.col-md-6 { flex: 0 0 50%; max-width: 50%; padding: 0 0.5rem; }
+@media (max-width: 768px) { .col-md-6 { flex: 0 0 100%; max-width: 100%; } }
+</style>
+
+<script nonce="{{ csp_nonce }}">
+document.getElementById('daySepClass').addEventListener('change', function() {
+    const arms = this.options[this.selectedIndex].dataset.arms;
+    const armSelect = document.getElementById('daySepArm');
+    armSelect.innerHTML = '<option value="">All Arms</option>';
+    if (arms) {
+        arms.split(',').forEach(arm => {
+            // new Option() sets value/text safely (no markup injection from arm names).
+            armSelect.add(new Option(arm.trim(), arm.trim()));
+        });
+    }
+});
+
+const dayA = document.getElementById('dayA'), dayB = document.getElementById('dayB');
+const hint = document.getElementById('dayPairHint');
+function checkDayPair() {
+    if (dayA.value !== '' && dayA.value === dayB.value) {
+        hint.textContent = 'Day A and Day B must be different days.';
+        hint.style.color = 'var(--danger, #dc3545)';
+    } else {
+        hint.textContent = '';
+    }
+}
+dayA.addEventListener('change', checkDayPair);
+dayB.addEventListener('change', checkDayPair);
+document.getElementById('daySepForm').addEventListener('submit', function(e) {
+    if (dayA.value !== '' && dayA.value === dayB.value) {
+        e.preventDefault();
+        checkDayPair();
+    }
+});
+</script>
+{% endblock %}

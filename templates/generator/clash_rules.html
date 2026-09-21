@@ -220,6 +220,72 @@
     </div>
 </div>
 
+<!-- Day-Separation Rules -->
+<div class="card mb-3">
+    <div class="card-header">
+        <h3><i class="fas fa-calendar-week"></i> Day-Separation Rules</h3>
+        <a href="{{ url_for('generator.add_day_separation_rule') }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add Rule</a>
+    </div>
+    <div class="card-body" style="padding: 0;">
+        {% if day_separation_rules %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Subject</th>
+                    <th>Class</th>
+                    <th>Days Kept Apart</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for rule in day_separation_rules %}
+                <tr>
+                    <td>
+                        <strong>{{ rule.name }}</strong>
+                        {% if rule.description %}
+                        <br><small class="text-muted">{{ rule.description[:50] }}{% if rule.description|length > 50 %}...{% endif %}</small>
+                        {% endif %}
+                    </td>
+                    <td><span class="badge badge-primary">{{ rule.subject.name }}</span></td>
+                    <td>{{ rule.class_name }} {{ rule.arm_name or '(All Arms)' }}</td>
+                    <td>{{ rule.day_a_name }} &harr; {{ rule.day_b_name }}</td>
+                    <td>
+                        {% if rule.is_active %}
+                        <span class="badge badge-success">Active</span>
+                        {% else %}
+                        <span class="badge badge-secondary">Inactive</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <form method="POST" action="{{ url_for('generator.toggle_day_separation_rule', rule_id=rule.id) }}" style="display: inline;">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm {% if rule.is_active %}btn-warning{% else %}btn-success{% endif %}" title="{% if rule.is_active %}Deactivate{% else %}Activate{% endif %}">
+                                <i class="fas fa-{% if rule.is_active %}pause{% else %}play{% endif %}"></i>
+                            </button>
+                        </form>
+                        <form method="POST" action="{{ url_for('generator.delete_day_separation_rule', rule_id=rule.id) }}" style="display: inline;" data-confirm="Delete this rule?">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm btn-danger" title="Delete">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-calendar-week"></i>
+            <p>No day-separation rules configured</p>
+            <a href="{{ url_for('generator.add_day_separation_rule') }}" class="btn btn-primary btn-sm">Add Rule</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
 <div class="card">
     <div class="card-header"><h3><i class="fas fa-info-circle"></i> Help</h3></div>
     <div class="card-body">
@@ -234,6 +300,10 @@
         <h4 class="mt-3">Co-Schedule Rules</h4>
         <p>Use these rules to force two subjects to always happen at the exact same time — the opposite of a Clash Rule. Typical for a combined class that splits into two streams for electives: pairing each stream's subject keeps both streams in class together instead of one being idle while the other has a lesson.</p>
         <p><strong>Example:</strong> SSS2 Daisy (Arts) takes Literature while SSS2 Iris (Commercial) takes Accounting — pair them so every time one is scheduled, the other is scheduled at the same slot. Teachers of both subjects are automatically kept free of other classes at that time — no extra rule needed for that.</p>
+
+        <h4 class="mt-3">Day-Separation Rules</h4>
+        <p>Use these rules to keep a subject off two specific days of the week together, for one class. If it lands on either day, it can't also land on the other that same week — it's still free on every other day, and free to be on just one of the two.</p>
+        <p><strong>Example:</strong> SSS1 Rose's Physics can be on Monday or on Friday, but never both in the same week. This doesn't reduce the subject's periods/week, it only rules out that one day-pairing — so it very rarely makes a timetable infeasible, unless that subject already needs a period on every single day of the week for that class.</p>
     </div>
 </div>
 {% endblock %}

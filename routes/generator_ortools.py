@@ -8,8 +8,9 @@ from models import (
     db, GenClassConfig, GenClassArmStream, GenStreamSubject, GenSubjectConfig,
     GenClassSubjectConfig, GenClassStreamSubject, GenTeacher, GenTeacherAssignment,
     GenTeacherAvailability, GenTimetableRule, GenTimetableResult, GenSubject,
-    GenSubjectClashRule, GenCombinedClassRule, GenCoScheduleRule
+    GenSubjectClashRule, GenCombinedClassRule, GenCoScheduleRule, GenDaySeparationRule
 )
+from models.models.generator import DAY_NAMES
 from routes.generator import gen_bid
 from utils.generator_doubles import resolve_double
 from collections import defaultdict
@@ -53,7 +54,7 @@ def get_class_level(class_name):
 
 def diagnose_infeasibility(class_arms, requirements, teachers, teacher_reqs, teacher_unavailable,
                            subject_info, num_periods, num_slots, num_days, break_after,
-                           valid_double_starts):
+                           valid_double_starts, day_separation_rules=(), day_separation_default=None):
     """Structural (pigeon-hole) checks that PROVE a generation request can
     never succeed, independent of what the solver does — e.g. asking a class
     for more periods per week than exist, or a teacher for more periods than
@@ -121,11 +122,51 @@ def diagnose_infeasibility(class_arms, requirements, teachers, teacher_reqs, tea
                     f"week, but there are only {num_days} school days (at most one double per day) "
                     f"— reduce the double-period count for this subject.")
 
+    # Day-separation rules: a subject kept off two named days together can
+    # never fit if it already needs a period on EVERY school day for that
+    # class-arm — every-day coverage would force it onto both of them.
+    for rule in day_separation_rules:
+        matching_cas = [ca for ca in class_arms if ca[0] == rule.class_name
+                        and (not rule.arm_name or ca[1] == rule.arm_name)]
+        for class_name, arm in matching_cas:
+            count = sum(1 for r in requirements if r['class_name'] == class_name
+                       and r['arm'] == arm and r['subject_id'] == rule.subject_id)
+            if count >= num_days:
+                subj_name = rule.subject.name if rule.subject else f'subject #{rule.subject_id}'
+                reasons.append(
+                    f"'{rule.name}': {class_name} {arm} needs {subj_name} on every school day "
+                    f"({count} periods/week across {num_days} days), which makes it impossible to "
+                    f"also keep it off {rule.day_a_name} and {rule.day_b_name} together — reduce "
+                    f"this subject's weekly periods, or remove/adjust the rule.")
+
+    # Same check for the school-wide default (Rules -> Scheduling Constraints):
+    # any non-exempt subject taught every school day can't honour it either.
+    if day_separation_default and day_separation_default.get('enabled'):
+        exempt = day_separation_default.get('exempt_subject_ids') or set()
+        day_a_name = DAY_NAMES[day_separation_default['day_a']]
+        day_b_name = DAY_NAMES[day_separation_default['day_b']]
+        seen = set()
+        for key, info in subject_info.items():
+            class_name, arm, subject_id = key
+            if subject_id in exempt or key in seen:
+                continue
+            count = sum(1 for r in requirements if r['class_name'] == class_name
+                       and r['arm'] == arm and r['subject_id'] == subject_id)
+            if count >= num_days:
+                seen.add(key)
+                reasons.append(
+                    f"Day-separation default: {class_name} {arm} needs {info['name']} on every "
+                    f"school day ({count} periods/week across {num_days} days), which makes it "
+                    f"impossible to also keep it off {day_a_name} and {day_b_name} together — "
+                    f"exempt {info['name']} from the day-separation rule under Subject Settings, "
+                    f"or turn the rule off under Timetable Rules.")
+
     return reasons
 
 
 def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_after=4,
-                          first_period_no_repeat=True):
+                          first_period_no_repeat=True, day_separation_default_enabled=True,
+                          day_separation_default_day_a=0, day_separation_default_day_b=4):
     """
     Generate timetable using OR-Tools constraint programming solver.
     """
@@ -327,6 +368,18 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
     num_slots = 5 * num_periods
     num_days = 5
     
+    day_separation_rules = GenDaySeparationRule.query.filter_by(is_active=True, branch_id=gen_bid()).all()
+
+    day_separation_default = {
+        'enabled': bool(day_separation_default_enabled),
+        'day_a': day_separation_default_day_a,
+        'day_b': day_separation_default_day_b,
+        'exempt_subject_ids': {
+            sc.subject_id for sc in GenSubjectConfig.query.filter_by(
+                branch_id=gen_bid(), day_separation_exempt=True).all()
+        },
+    }
+
     # ========== PRE-SOLVE DIAGNOSTICS ==========
     # Several causes of infeasibility are *structural* — no possible
     # assignment could ever satisfy them, independent of what the solver
@@ -336,7 +389,8 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
         class_arms=class_arms, requirements=requirements, teachers=teachers,
         teacher_reqs=teacher_reqs, teacher_unavailable=teacher_unavailable,
         subject_info=subject_info, num_periods=num_periods, num_slots=num_slots,
-        num_days=num_days, break_after=break_after, valid_double_starts=valid_double_starts)
+        num_days=num_days, break_after=break_after, valid_double_starts=valid_double_starts,
+        day_separation_rules=day_separation_rules, day_separation_default=day_separation_default)
     if reasons:
         return {'success': False,
                'message': f'Cannot generate — {len(reasons)} configuration problem'
@@ -794,7 +848,47 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
             for day in range(num_days):
                 day_slots = [day * num_periods + p for p in range(num_periods)]
                 model.Add(sum(x[r['req_id'], slot] for r in reqs for slot in day_slots) <= 1)
-    
+
+    # Constraint 13: Day separation rules (database-driven) — a subject kept
+    # off two named days together for a class(-arm): if it lands on either
+    # day, it can't also land on the other. Each rule is applied per matching
+    # class-arm (every arm of the class when arm_name is blank).
+    logger.debug("Adding day-separation constraints...")
+    day_sep_count = 0
+    for rule in day_separation_rules:
+        matching_cas = [ca for ca in class_arms if ca[0] == rule.class_name
+                        and (not rule.arm_name or ca[1] == rule.arm_name)]
+        day_a_slots = [rule.day_a * num_periods + p for p in range(num_periods)]
+        day_b_slots = [rule.day_b * num_periods + p for p in range(num_periods)]
+        for class_name, arm in matching_cas:
+            key = (class_name, arm, rule.subject_id)
+            reqs = subject_ca_reqs.get(key)
+            if not reqs:
+                continue
+            on_day_a = sum(x[r['req_id'], slot] for r in reqs for slot in day_a_slots)
+            on_day_b = sum(x[r['req_id'], slot] for r in reqs for slot in day_b_slots)
+            model.Add(on_day_a + on_day_b <= 1)
+            day_sep_count += 1
+    logger.debug(f"  Added {day_sep_count} day-separation constraints")
+
+    # Constraint 13b: the school-wide day-separation default (Rules ->
+    # Scheduling Constraints) — applies to every subject unless exempted
+    # under Subject Settings, on top of any custom rules above.
+    day_sep_default_count = 0
+    if day_separation_default['enabled']:
+        exempt = day_separation_default['exempt_subject_ids']
+        def_day_a_slots = [day_separation_default['day_a'] * num_periods + p for p in range(num_periods)]
+        def_day_b_slots = [day_separation_default['day_b'] * num_periods + p for p in range(num_periods)]
+        for key, reqs in subject_ca_reqs.items():
+            class_name, arm, subject_id = key
+            if subject_id in exempt:
+                continue
+            on_day_a = sum(x[r['req_id'], slot] for r in reqs for slot in def_day_a_slots)
+            on_day_b = sum(x[r['req_id'], slot] for r in reqs for slot in def_day_b_slots)
+            model.Add(on_day_a + on_day_b <= 1)
+            day_sep_default_count += 1
+    logger.debug(f"  Added {day_sep_default_count} default day-separation constraints")
+
     # ========== BALANCE EMPTY SLOTS ACROSS DAYS (soft objective) ==========
     # Some class-arms have fewer required periods than slots in the week
     # (e.g. only 40 of 45 periods actually taught) — that's expected, not a
@@ -862,6 +956,10 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
             active_rules.append(f'{combined_rule_count} combined-class rule(s)')
         if coschedule_rule_count:
             active_rules.append(f'{coschedule_rule_count} co-schedule rule(s)')
+        if day_sep_count:
+            active_rules.append(f'{day_sep_count} day-separation rule(s)')
+        if day_sep_default_count:
+            active_rules.append(f'the school-wide day-separation default ({day_sep_default_count} subject-class pairs)')
         if any(info['not_first_period'] or info['not_last_period'] for info in subject_info.values()):
             active_rules.append('not-first/not-last period restrictions on some subjects')
         if first_period_cap_count:
