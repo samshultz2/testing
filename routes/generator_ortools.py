@@ -131,7 +131,12 @@ def diagnose_infeasibility(class_arms, requirements, teachers, teacher_reqs, tea
         for class_name, arm in matching_cas:
             count = sum(1 for r in requirements if r['class_name'] == class_name
                        and r['arm'] == arm and r['subject_id'] == rule.subject_id)
-            if count >= num_days:
+            info = subject_info.get((class_name, arm, rule.subject_id)) or {}
+            # A double period packs 2 periods into 1 day, so it costs one
+            # fewer distinct day than an equal number of single periods —
+            # count raw periods minus that saving, not raw periods alone.
+            days_needed = count - (info.get('double_count') or 0 if info.get('needs_double') else 0)
+            if days_needed >= num_days:
                 subj_name = rule.subject.name if rule.subject else f'subject #{rule.subject_id}'
                 reasons.append(
                     f"'{rule.name}': {class_name} {arm} needs {subj_name} on every school day "
@@ -152,7 +157,8 @@ def diagnose_infeasibility(class_arms, requirements, teachers, teacher_reqs, tea
                 continue
             count = sum(1 for r in requirements if r['class_name'] == class_name
                        and r['arm'] == arm and r['subject_id'] == subject_id)
-            if count >= num_days:
+            days_needed = count - (info.get('double_count') or 0 if info.get('needs_double') else 0)
+            if days_needed >= num_days:
                 seen.add(key)
                 reasons.append(
                     f"Day-separation default: {class_name} {arm} needs {info['name']} on every "
@@ -853,6 +859,23 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
     # off two named days together for a class(-arm): if it lands on either
     # day, it can't also land on the other. Each rule is applied per matching
     # class-arm (every arm of the class when arm_name is blank).
+    #
+    # "Lands on a day" means at least one period there, not "exactly one" —
+    # a double period puts 2 periods on the same day, which must still count
+    # as a single occurrence of that day, not an automatic violation. So each
+    # side is reified into a boolean ("is the subject on this day at all?")
+    # rather than compared as a raw period count.
+    def _add_day_separation(reqs, day_a_slots, day_b_slots, tag):
+        on_day_a = sum(x[r['req_id'], slot] for r in reqs for slot in day_a_slots)
+        on_day_b = sum(x[r['req_id'], slot] for r in reqs for slot in day_b_slots)
+        is_a = model.NewBoolVar(f'daysep_a_{tag}')
+        is_b = model.NewBoolVar(f'daysep_b_{tag}')
+        model.Add(on_day_a >= 1).OnlyEnforceIf(is_a)
+        model.Add(on_day_a == 0).OnlyEnforceIf(is_a.Not())
+        model.Add(on_day_b >= 1).OnlyEnforceIf(is_b)
+        model.Add(on_day_b == 0).OnlyEnforceIf(is_b.Not())
+        model.Add(is_a + is_b <= 1)
+
     logger.debug("Adding day-separation constraints...")
     day_sep_count = 0
     for rule in day_separation_rules:
@@ -865,9 +888,7 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
             reqs = subject_ca_reqs.get(key)
             if not reqs:
                 continue
-            on_day_a = sum(x[r['req_id'], slot] for r in reqs for slot in day_a_slots)
-            on_day_b = sum(x[r['req_id'], slot] for r in reqs for slot in day_b_slots)
-            model.Add(on_day_a + on_day_b <= 1)
+            _add_day_separation(reqs, day_a_slots, day_b_slots, f'rule{rule.id}_{class_name}_{arm}')
             day_sep_count += 1
     logger.debug(f"  Added {day_sep_count} day-separation constraints")
 
@@ -883,9 +904,7 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
             class_name, arm, subject_id = key
             if subject_id in exempt:
                 continue
-            on_day_a = sum(x[r['req_id'], slot] for r in reqs for slot in def_day_a_slots)
-            on_day_b = sum(x[r['req_id'], slot] for r in reqs for slot in def_day_b_slots)
-            model.Add(on_day_a + on_day_b <= 1)
+            _add_day_separation(reqs, def_day_a_slots, def_day_b_slots, f'def_{class_name}_{arm}_{subject_id}')
             day_sep_default_count += 1
     logger.debug(f"  Added {day_sep_default_count} default day-separation constraints")
 
