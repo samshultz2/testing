@@ -622,11 +622,13 @@ def delete_holiday(holiday_id):
 @login_required
 def classes_list():
     """List all classes"""
-    classes = SchoolClass.query.order_by(SchoolClass.level).all()
+    classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all()
     return _render({
         'page': 'classes',
         'classes': [{'id': c.id, 'name': c.name, 'level': c.level,
-                     'description': c.description or ''} for c in classes],
+                     'description': c.description or '',
+                     'edit_url': url_for('academics.edit_class', class_id=c.id),
+                     'delete_url': url_for('academics.delete_class', class_id=c.id)} for c in classes],
         'add_url': url_for('academics.add_class')})
 
 
@@ -647,6 +649,60 @@ def add_class():
         db.session.add(SchoolClass(name=name, level=level, description=description))
         db.session.commit()
         return _ok('Class added successfully!', url_for('academics.classes_list'))
+    except Exception as e:
+        db.session.rollback()
+        return _err(f'Error: {str(e)}', url_for('academics.classes_list'))
+
+
+@academics_bp.route('/classes/<int:class_id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_class(class_id):
+    """Edit a class"""
+    school_class = db.get_or_404(SchoolClass, class_id)
+
+    if request.method == 'POST':
+        try:
+            name = request.form.get('name', '').strip().upper()
+            level = request.form.get('level', type=int)
+            description = request.form.get('description', '').strip()
+
+            if not name or not level:
+                return _err('Class name and level are required.', url_for('academics.edit_class', class_id=class_id))
+            existing = SchoolClass.query.filter(SchoolClass.name == name, SchoolClass.id != class_id).first()
+            if existing:
+                return _err('A class with this name already exists.', url_for('academics.edit_class', class_id=class_id))
+
+            school_class.name = name
+            school_class.level = level
+            school_class.description = description
+            db.session.commit()
+            return _ok('Class updated!', url_for('academics.classes_list'))
+        except Exception as e:
+            db.session.rollback()
+            return _err(f'Error: {str(e)}', url_for('academics.edit_class', class_id=class_id))
+
+    return _render({
+        'page': 'edit_class',
+        'school_class': {'id': school_class.id, 'name': school_class.name,
+                          'level': school_class.level, 'description': school_class.description or ''},
+        'submit_url': url_for('academics.edit_class', class_id=school_class.id),
+        'cancel_url': url_for('academics.classes_list'),
+    })
+
+
+@academics_bp.route('/classes/<int:class_id>/delete', methods=['POST'])
+@login_required
+def delete_class(class_id):
+    """Delete (deactivate) a class. Existing class-arm assignments and
+    enrollments that reference it are left untouched — class pickers already
+    filter to is_active, so it simply stops being offered going forward."""
+    school_class = db.get_or_404(SchoolClass, class_id)
+    try:
+        school_class.is_active = False
+        db.session.commit()
+        from utils.audit import log_action
+        log_action('class.delete', detail=school_class.name, target=school_class)
+        return _ok('Class deleted!', url_for('academics.classes_list'))
     except Exception as e:
         db.session.rollback()
         return _err(f'Error: {str(e)}', url_for('academics.classes_list'))
