@@ -339,6 +339,11 @@ function Arms({ d, notify }) {
     const r = await submitJson(d.add_url, f);
     if (r.ok) { setF({ name: '', description: '' }); notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Could not add.');
   };
+  const del = async (url, name) => {
+    if (!await confirm(`Delete ${name}? Existing rosters/timetables keep it, but it won't be offered for new assignments.`)) return;
+    const r = await submitJson(url, {});
+    if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Could not delete.');
+  };
   return (
     <>
       <div className="page-header"><h1>Class Arms</h1></div>
@@ -355,9 +360,43 @@ function Arms({ d, notify }) {
               <div className="data-card" key={a.id}>
                 <div className="data-card-header"><div className="data-card-title">{a.name}</div></div>
                 <div className="data-card-row"><span className="data-card-label">Description</span><span>{a.description || '-'}</span></div>
+                {canWrite(d) && <div className="data-card-actions">
+                  <a href={a.edit_url} className="btn btn-secondary btn-sm" aria-label="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>
+                  <button type="button" className="btn btn-danger btn-sm w-100" style={{ flex: 1 }} onClick={() => del(a.delete_url, a.name)}><i aria-hidden="true" className="fas fa-trash" /></button>
+                </div>}
               </div>))}</div>
           ) : <Empty icon="fa-layer-group" title=""><p>No arms added yet</p></Empty>}
         </div></div>
+    </>
+  );
+}
+
+// ---- Edit arm ----------------------------------------------------------
+function ArmForm({ d, notify }) {
+  const nav = useNav();
+  const [f, setF] = useState({ name: d.arm.name, description: d.arm.description });
+  const [busy, setBusy] = useState(false);
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!f.name.trim()) { notify('error', 'Arm name is required.'); return; }
+    setBusy(true);
+    const r = await submitJson(d.submit_url, f);
+    setBusy(false);
+    if (r.ok) nav.go(r.redirect); else notify('error', r.error || 'Could not save.');
+  };
+  return (
+    <>
+      <div className="page-header"><h1>Edit Arm</h1></div>
+      <div className="card"><div className="card-body"><form onSubmit={submit}>
+        <div className="form-group"><label className="form-label">Arm Name <span className="required">*</span></label>
+          <input type="text" className="form-control" placeholder="e.g., Rose, Lily" required value={f.name} onChange={(e) => setF((s) => ({ ...s, name: e.target.value }))} /></div>
+        <div className="form-group"><label className="form-label">Description</label>
+          <input type="text" className="form-control" placeholder="Optional" value={f.description} onChange={(e) => setF((s) => ({ ...s, description: e.target.value }))} /></div>
+        <div className="page-header-actions">
+          <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save</button>
+          <a href={d.cancel_url} className="btn btn-secondary">Cancel</a>
+        </div>
+      </form></div></div>
     </>
   );
 }
@@ -649,7 +688,7 @@ function CopyTermSetup({ d, notify }) {
 
 const SCREENS = { sessions: Sessions, add_session: SessionForm, edit_session: SessionForm,
   terms: Terms, add_term: AddTerm, edit_term: EditTerm, setup: Setup, view_term: ViewTerm,
-  classes: Classes, arms: Arms, assignments: Assignments, view_assignment: ViewAssignment,
+  classes: Classes, arms: Arms, edit_arm: ArmForm, assignments: Assignments, view_assignment: ViewAssignment,
   copy_term_setup: CopyTermSetup };
 
 export default function AcademicsApp({ data }) {

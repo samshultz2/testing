@@ -660,10 +660,12 @@ def add_class():
 @login_required
 def arms_list():
     """List all class arms (the hidden default 'General' arm is never shown)."""
-    arms = ClassArm.query.filter_by(is_default=False).order_by(ClassArm.name).all()
+    arms = ClassArm.query.filter_by(is_default=False, is_active=True).order_by(ClassArm.name).all()
     return _render({
         'page': 'arms',
-        'arms': [{'id': a.id, 'name': a.name, 'description': a.description or ''} for a in arms],
+        'arms': [{'id': a.id, 'name': a.name, 'description': a.description or '',
+                  'edit_url': url_for('academics.edit_arm', arm_id=a.id),
+                  'delete_url': url_for('academics.delete_arm', arm_id=a.id)} for a in arms],
         'add_url': url_for('academics.add_arm')})
 
 
@@ -683,6 +685,61 @@ def add_arm():
         db.session.add(ClassArm(name=name, description=description))
         db.session.commit()
         return _ok('Arm added successfully!', url_for('academics.arms_list'))
+    except Exception as e:
+        db.session.rollback()
+        return _err(f'Error: {str(e)}', url_for('academics.arms_list'))
+
+
+@academics_bp.route('/arms/<int:arm_id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_arm(arm_id):
+    """Edit a class arm"""
+    arm = db.get_or_404(ClassArm, arm_id)
+    if arm.is_default:
+        return _err('The default arm cannot be edited.', url_for('academics.arms_list'))
+
+    if request.method == 'POST':
+        try:
+            name = request.form.get('name', '').strip().title()
+            description = request.form.get('description', '').strip()
+
+            if not name:
+                return _err('Arm name is required.', url_for('academics.edit_arm', arm_id=arm_id))
+            existing = ClassArm.query.filter(ClassArm.name == name, ClassArm.id != arm_id).first()
+            if existing:
+                return _err('An arm with this name already exists.', url_for('academics.edit_arm', arm_id=arm_id))
+
+            arm.name = name
+            arm.description = description
+            db.session.commit()
+            return _ok('Arm updated!', url_for('academics.arms_list'))
+        except Exception as e:
+            db.session.rollback()
+            return _err(f'Error: {str(e)}', url_for('academics.edit_arm', arm_id=arm_id))
+
+    return _render({
+        'page': 'edit_arm',
+        'arm': {'id': arm.id, 'name': arm.name, 'description': arm.description or ''},
+        'submit_url': url_for('academics.edit_arm', arm_id=arm.id),
+        'cancel_url': url_for('academics.arms_list'),
+    })
+
+
+@academics_bp.route('/arms/<int:arm_id>/delete', methods=['POST'])
+@login_required
+def delete_arm(arm_id):
+    """Delete (deactivate) a class arm. Existing class-arm assignments and
+    enrollments that reference it are left untouched — arm pickers already
+    filter to is_active, so it simply stops being offered going forward."""
+    arm = db.get_or_404(ClassArm, arm_id)
+    if arm.is_default:
+        return _err('The default arm cannot be deleted.', url_for('academics.arms_list'))
+    try:
+        arm.is_active = False
+        db.session.commit()
+        from utils.audit import log_action
+        log_action('arm.delete', detail=arm.name, target=arm)
+        return _ok('Arm deleted!', url_for('academics.arms_list'))
     except Exception as e:
         db.session.rollback()
         return _err(f'Error: {str(e)}', url_for('academics.arms_list'))
