@@ -1,4 +1,4 @@
-"""WAEC allows sitting at most 8 subjects; JAMB (UTME) is always exactly 4.
+"""WAEC allows sitting at most 9 subjects; JAMB (UTME) is always exactly 4.
 The subject picker on the student add/edit form makes it impossible to tick
 past either cap client-side; these tests cover the server-side backstop
 (add_student / edit_student) for a raw POST that ignores the UI."""
@@ -29,14 +29,14 @@ def _student(app):
         return s.id
 
 
-def test_add_student_rejects_more_than_8_waec_subjects(app):
+def test_add_student_rejects_more_than_9_waec_subjects(app):
     c = _admin(app)
     token = _csrf(c)
     surname = 'ManyWaec' + uuid.uuid4().hex[:5]
     r = c.post('/students/add', headers={'X-Requested-With': 'fetch'}, data={
         '_csrf_token': token, 'first_name': 'Too', 'surname': surname,
         'gender': 'Male',
-        'waec_subjects[]': [f'Subj{i}' for i in range(9)],
+        'waec_subjects[]': [f'Subj{i}' for i in range(10)],
     })
     body = r.get_json()
     assert body['ok'] is False and 'WAEC' in body['error']
@@ -56,25 +56,25 @@ def test_add_student_rejects_more_than_4_jamb_subjects(app):
     assert body['ok'] is False and 'JAMB' in body['error']
 
 
-def test_add_student_accepts_exactly_8_waec_and_4_jamb(app):
+def test_add_student_accepts_exactly_9_waec_and_4_jamb(app):
     c = _admin(app)
     token = _csrf(c)
     r = c.post('/students/add', headers={'X-Requested-With': 'fetch'}, data={
         '_csrf_token': token, 'first_name': 'Exact', 'surname': 'Caps' + uuid.uuid4().hex[:5],
         'gender': 'Female',
-        'waec_subjects[]': [f'Subj{i}' for i in range(8)],
+        'waec_subjects[]': [f'Subj{i}' for i in range(9)],
         'jamb_subjects[]': ['English', 'Maths', 'Biology', 'Chemistry'],
     })
     assert r.get_json()['ok'] is True
 
 
-def test_edit_student_rejects_more_than_8_waec_subjects(app):
+def test_edit_student_rejects_more_than_9_waec_subjects(app):
     sid = _student(app)
     c = _admin(app)
     token = _csrf(c)
     r = c.post(f'/students/{sid}/edit', headers={'X-Requested-With': 'fetch'}, data={
         '_csrf_token': token,
-        'waec_subjects[]': [f'Subj{i}' for i in range(9)],
+        'waec_subjects[]': [f'Subj{i}' for i in range(10)],
     })
     body = r.get_json()
     assert body['ok'] is False and 'WAEC' in body['error']

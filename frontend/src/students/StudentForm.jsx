@@ -8,8 +8,8 @@ import { TextField, TextAreaField, SelectField, FormCard } from '../components/F
 
 const REL_SEQUENCE = ['Father', 'Mother', 'Guardian'];
 
-// WAEC allows sitting up to 8-9 subjects; JAMB (UTME) is always exactly 4.
-const WAEC_SUBJECTS_MAX = 8;
+// WAEC allows sitting up to 9 subjects; JAMB (UTME) is always exactly 4.
+const WAEC_SUBJECTS_MAX = 9;
 const JAMB_SUBJECTS_MAX = 4;
 
 const RELATIONSHIP_FALLBACK = ['Father', 'Mother', 'Guardian', 'Sibling', 'Other'];

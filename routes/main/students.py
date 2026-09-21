@@ -13,10 +13,10 @@ def _sp_has_photo(student):
         return False
 
 
-# WAEC allows sitting up to 8-9 subjects; JAMB (UTME) is always exactly 4.
+# WAEC allows sitting up to 9 subjects; JAMB (UTME) is always exactly 4.
 # The picker UI already makes it impossible to tick past these, but a raw
 # POST could still exceed them, so re-check server-side too.
-WAEC_SUBJECTS_MAX = 8
+WAEC_SUBJECTS_MAX = 9
 JAMB_SUBJECTS_MAX = 4
 
 
