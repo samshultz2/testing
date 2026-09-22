@@ -44,12 +44,37 @@
     </div>
     {% if bs and bs.rows %}
     <div class="page-header-actions">
-        <a href="{{ url_for('results.waec_broadsheet_pdf', year=selected_year) }}" target="_blank" rel="noopener" class="btn btn-primary btn-sm"><i class="fas fa-print"></i> Print / PDF</a>
-        <a href="{{ url_for('results.waec_broadsheet_pdf', year=selected_year, download=1) }}" class="btn btn-outline btn-sm"><i class="fas fa-file-pdf"></i> Download PDF</a>
+        <label class="no-print" style="display:flex;align-items:center;gap:.4rem;margin:0;font-size:.85rem;">Paper size:
+            <select id="bsSizeSel" class="form-control form-control-sm" style="width:auto;">
+                <option value="A4">A4</option>
+                <option value="A3">A3 — fits more columns per sheet</option>
+                <option value="A2">A2 — fits the most columns per sheet</option>
+            </select>
+        </label>
+        <a id="bsPrintLink" href="{{ url_for('results.waec_broadsheet_pdf', year=selected_year) }}" target="_blank" rel="noopener" class="btn btn-primary btn-sm"><i class="fas fa-print"></i> Print / PDF</a>
+        <a id="bsDownloadLink" href="{{ url_for('results.waec_broadsheet_pdf', year=selected_year, download=1) }}" class="btn btn-outline btn-sm"><i class="fas fa-file-pdf"></i> Download PDF</a>
         <a href="{{ url_for('results.waec_broadsheet_export', year=selected_year) }}" class="btn btn-success btn-sm"><i class="fas fa-file-excel"></i> Excel</a>
         <button type="button" id="bsCustomBtn" class="btn btn-secondary btn-sm no-print"><i class="fas fa-sliders"></i> Custom download</button>
         <a href="{{ url_for('results.analytics_hub', year=selected_year) }}" class="btn btn-info btn-sm no-print"><i class="fas fa-chart-column"></i> Analytics</a>
     </div>
+    <script nonce="{{ csp_nonce }}">
+    (function () {
+      var sizeSel = document.getElementById('bsSizeSel');
+      var printLink = document.getElementById('bsPrintLink');
+      var dlLink = document.getElementById('bsDownloadLink');
+      if (!sizeSel || !printLink || !dlLink) return;
+      var printBase = printLink.getAttribute('href');
+      var dlBase = dlLink.getAttribute('href');
+      function withSize(url, size) {
+        var sep = url.indexOf('?') > -1 ? '&' : '?';
+        return size === 'A4' ? url : url + sep + 'size=' + size;
+      }
+      sizeSel.addEventListener('change', function () {
+        printLink.setAttribute('href', withSize(printBase, sizeSel.value));
+        dlLink.setAttribute('href', withSize(dlBase, sizeSel.value));
+      });
+    })();
+    </script>
     {% endif %}
 </div>
 

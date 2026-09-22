@@ -11,6 +11,7 @@ from utils.web_exports import pdf_escape
 from utils.mock_waec_pdf import (
     _styles, _S, _opt, _school_header, _groups, _pagesize,
     _grade_key_table, _fit_per, _VHead, _EXTRA_ROWS, _BLACK,
+    _summary_word_row, _triple_rule,
 )
 
 # Grade-only summary (no "Average score %" — WAEC carries no scores).
@@ -24,13 +25,14 @@ def _bs_name(st):
     return ' '.join(p for p in parts if p).strip() or st.get('full_name') or ''
 
 
-def waec_broadsheet_pdf(bs, year, school, opts=None, per=8, orient='landscape'):
+def waec_broadsheet_pdf(bs, year, school, opts=None, per=8, orient='landscape', size='A4'):
     """Full grade matrix for a WAEC exam year. Wide subject sets split across
     pages (``per`` columns each). ``opts['summary']`` toggles the per-subject
-    offered/passed/failed/average-grade rows; ``orient`` is landscape or
-    portrait A4 with an 8mm margin."""
+    offered/passed/failed/average-grade rows, led by a "SUMMARY" divider
+    spelled into the sheet's own columns. ``orient``/``size`` pick the paper
+    (A4/A3/A2, landscape or portrait) with an 8mm margin."""
     _styles()
-    page = _pagesize(orient)
+    page = _pagesize(orient, size)
     import io
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=page, topMargin=8 * mm,
@@ -71,7 +73,19 @@ def waec_broadsheet_pdf(bs, year, school, opts=None, per=8, orient='landscape'):
         for _ in range(_EXTRA_ROWS):
             data.append([''] * ncols)
 
-        sum0 = nrows + 1 + _EXTRA_ROWS
+        summary_heading_row = len(data)
+        summary_heading_spans_full = False
+        if show_summary:
+            # Centre "SUMMARY" within the SUBJECT columns only -- the tail
+            # columns (Credits, Avg grade) on the last sheet aren't part of
+            # the per-subject block and shouldn't take letters.
+            heading_row, summary_heading_spans_full = _summary_word_row(2 + len(group))
+            if tail:
+                heading_row += ([_triple_rule() for _ in range(tail)] if not summary_heading_spans_full
+                                else [''] * tail)
+            data.append(heading_row)
+
+        sum0 = len(data)
         if show_summary:
             for label, fn in (('No. offered', lambda d: d['offered']),
                               ('No. passed (C6+)', lambda d: d['passed']),
@@ -84,6 +98,7 @@ def waec_broadsheet_pdf(bs, year, school, opts=None, per=8, orient='landscape'):
 
         widths = [sn_w, name_w] + [sub_w] * (len(group) + tail)
         heights = ([None] + [None] * nrows + [7.5 * mm] * _EXTRA_ROWS
+                   + ([9.5 * mm] if show_summary else [])
                    + ([None] * len(_WAEC_SUMMARY) if show_summary else []))
         t = Table(data, colWidths=widths, repeatRows=0, rowHeights=heights)
         style = [
@@ -99,7 +114,10 @@ def waec_broadsheet_pdf(bs, year, school, opts=None, per=8, orient='landscape'):
         ]
         if show_summary:
             style.append(('FONTSIZE', (0, sum0), (-1, -1), 8.5))
-            style.append(('LINEABOVE', (0, sum0), (-1, sum0), 1.3, _BLACK))
+            style.append(('LINEABOVE', (0, summary_heading_row), (-1, summary_heading_row), 1.6, _BLACK))
+            style.append(('LINEBELOW', (0, summary_heading_row), (-1, summary_heading_row), 1.6, _BLACK))
+            if summary_heading_spans_full:
+                style.append(('SPAN', (0, summary_heading_row), (ncols - 1, summary_heading_row)))
         t.setStyle(TableStyle(style))
         e.append(t)
         if _opt(opts, 'grades'):

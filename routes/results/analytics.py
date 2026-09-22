@@ -1139,9 +1139,12 @@ def waec_broadsheet_pdf():
         return redirect(url_for('results.waec_broadsheet', year=year))
     per = request.args.get('cols', default=0, type=int)
     orient = request.args.get('orient', 'landscape')
+    size = request.args.get('size', 'A4').upper()
+    if size not in ('A4', 'A3', 'A2'):
+        size = 'A4'
     # Cheap 304 when the browser already holds this exact broadsheet frame.
     from utils.http_cache import if_none_match, stamp
-    etag = _broadsheet_etag(bs, year, viewing_branch_id(), 'pdf', per, orient)
+    etag = _broadsheet_etag(bs, year, viewing_branch_id(), 'pdf', per, orient, size)
     not_modified = if_none_match(etag)
     if not_modified is not None:
         return not_modified
@@ -1149,7 +1152,7 @@ def waec_broadsheet_pdf():
     school = dict(school_profile() or {})
     school.setdefault('logo_path', logo_path())
     buf = _mk(bs, year, school, opts={'title': False},
-              per=(per if per and per > 0 else 0), orient=orient)
+              per=(per if per and per > 0 else 0), orient=orient, size=size)
     name = f'waec_broadsheet_{year}.pdf'
     resp = send_file(buf, mimetype='application/pdf',
                      as_attachment=request.args.get('download') == '1', download_name=name)
