@@ -579,7 +579,14 @@ def add_security_headers(response):
         # safe relaxation; scripts/styles/frames stay locked down above/below.
         "img-src 'self' data: blob: https:; "
         "connect-src 'self'; "
-        "object-src 'none'; "
+        # 'self' + blob: (not fully 'none'): Chrome's built-in PDF viewer renders a
+        # framed PDF via an internal <embed>-like mechanism that's gated by
+        # object-src, not frame-src — with 'none' here, frame-src 'self' blob:
+        # below still lets the iframe navigate to the blob: PDF, but Chrome then
+        # refuses to display it and shows its own "content is blocked" page
+        # in-frame (Firefox's PDF.js isn't subject to the same check, so this only
+        # breaks in Chrome). Still blocks any third-party <object>/<embed>/<applet>.
+        "object-src 'self' blob:; "
         # Allow our own pages plus blob: PDFs (the Mock-WAEC result/broadsheet
         # previews embed a server-generated PDF as a blob in an <iframe>).
         "frame-src 'self' blob:; "
