@@ -112,7 +112,6 @@
   var bwOpt = document.getElementById('bwOpt');
   var opts = Array.prototype.slice.call(document.querySelectorAll('.pdf-opt'));
   var subjBoxes = Array.prototype.slice.call(document.querySelectorAll('.pdf-subj'));
-  var lastBlob = null;
 
   function build(extra) {
     var p = [];
@@ -136,25 +135,32 @@
     dl.href = build('download=1');
     openTab.href = url;
     if (openTab2) openTab2.href = url;
-    // Load via blob so X-Frame-Options on the PDF response can't block the embed.
-    // Send X-Requested-With so an expired session returns 401 instead of a login
-    // redirect (which would otherwise be fetched as 200 HTML and rendered as a
-    // broken "PDF"); verify the body really is a PDF before framing it.
-    fetch(url, { credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } })
-      .then(function (r) {
-        var ct = r.headers.get('Content-Type') || '';
-        if (!r.ok || ct.indexOf('application/pdf') === -1) throw new Error('not a pdf (http ' + r.status + ')');
-        return r.blob();
-      })
-      .then(function (b) {
-        if (lastBlob) URL.revokeObjectURL(lastBlob);
-        lastBlob = URL.createObjectURL(b);
-        iframe.style.display = '';
-        fallback.style.display = 'none';
-        iframe.src = lastBlob;
-      })
-      .catch(function () { iframe.style.display = 'none'; fallback.style.display = ''; });
+    // Frame the real PDF URL directly (same origin, so X-Frame-Options:
+    // SAMEORIGIN allows it) instead of fetching it into a blob: URL first.
+    // Chrome's built-in PDF viewer is unreliable when a PDF is handed to it
+    // via a blob: URL inside an <iframe> — it can refuse to render an
+    // already-fetched, valid PDF and show its own "content is blocked" page
+    // in-frame, even though the exact same PDF opens fine as a normal
+    // top-level navigation (e.g. "Open in new tab"). Framing the URL
+    // directly makes the embedded preview go through that same, reliable
+    // top-level-style path instead.
+    iframe.style.display = '';
+    fallback.style.display = 'none';
+    iframe.src = url;
   }
+  // 'load' fires whether the framed response was the PDF or something else
+  // (e.g. an expired session's redirect to /login), so it can't by itself
+  // confirm success — but same-origin content lets us cheaply check *where*
+  // the iframe actually ended up, without a second fetch of the PDF body.
+  iframe.addEventListener('load', function () {
+    try {
+      var loc = iframe.contentWindow && iframe.contentWindow.location;
+      if (loc && /\/login(\?|$)/.test(loc.pathname + (loc.search || ''))) {
+        iframe.style.display = 'none';
+        fallback.style.display = '';
+      }
+    } catch (e) { /* PDF content isn't a scriptable document — nothing to check */ }
+  });
   opts.forEach(function (o) { o.addEventListener('change', refresh); });
   subjBoxes.forEach(function (b) { b.addEventListener('change', refresh); });
   var subjAll = document.getElementById('subjAll'), subjNone = document.getElementById('subjNone');
