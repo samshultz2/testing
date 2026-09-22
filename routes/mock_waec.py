@@ -201,14 +201,16 @@ def broadsheet(exam_id):
 @mock_waec_bp.route('/exam/<int:exam_id>/broadsheet/print')
 @login_required
 def broadsheet_print(exam_id):
-    """A4 print layout of the full broadsheet — bold, full-bleed, nothing hidden.
-    With many subjects the columns are split across page-groups (``cols`` per
-    group, 0 = all on one wide page) so the text stays large and readable; each
-    group repeats the S/N + Name columns and paginates vertically across pages."""
+    """A4/A3/A2 print layout of the full broadsheet — bold, full-bleed, nothing
+    hidden. With many subjects the columns are split across page-groups
+    (``cols`` per group, 0 = all on one wide page) so the text stays large and
+    readable; each group repeats the S/N + Name columns and paginates
+    vertically across pages."""
     exam = db.get_or_404(MockWAECExam, exam_id)
     require_branch_access(exam.branch_id)
     return render_template('mock_waec/pdf_preview.html', exam=exam,
-        title='Broadsheet (PDF)', show_cols=True, show_orient=True, options=_OPTS_BROADSHEET,
+        title='Broadsheet (PDF)', show_cols=True, show_orient=True, show_size=True,
+        show_layout_mode=True, options=_OPTS_BROADSHEET,
         pdf_url=url_for('mock_waec.broadsheet_pdf_view', exam_id=exam_id),
         back_url=url_for('mock_waec.broadsheet', exam_id=exam_id))
 
@@ -227,9 +229,12 @@ def broadsheet_pdf_view(exam_id):
         return redirect(url_for('mock_waec.broadsheet', exam_id=exam_id))
     from utils.mock_waec_pdf import broadsheet_pdf
     per = request.args.get('cols', default=8, type=int)
+    size = request.args.get('size', 'A4').upper()
     buf = broadsheet_pdf(bs, exam, _school_profile(),
                          opts=_pdf_opts(), per=(per if per and per > 0 else 0),
-                         orient=request.args.get('orient', 'landscape'))
+                         orient=request.args.get('orient', 'landscape'),
+                         size=(size if size in ('A4', 'A3', 'A2') else 'A4'),
+                         separate_cols=request.args.get('mode') == 'separate')
     name = f"broadsheet_{exam.exam_number}_{exam.session.name.replace('/', '-')}.pdf"
     return send_file(buf, mimetype='application/pdf',
                      as_attachment=request.args.get('download') == '1', download_name=name)

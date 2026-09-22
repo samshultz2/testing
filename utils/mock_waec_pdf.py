@@ -6,7 +6,7 @@ summary, signatures) are included.
 """
 import io
 
-from reportlab.lib.pagesizes import A4, landscape
+from reportlab.lib.pagesizes import A4, A3, A2, landscape
 from reportlab.lib import colors
 from reportlab.lib.units import mm
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -167,9 +167,15 @@ def _groups(subjects, per):
             if per and len(subjects) > per else [subjects])
 
 
-def _pagesize(orient):
-    """A4, landscape by default. ``orient='portrait'`` for tall paper."""
-    return A4 if orient == 'portrait' else landscape(A4)
+_PAPER_SIZES = {'A4': A4, 'A3': A3, 'A2': A2}
+
+
+def _pagesize(orient, size='A4'):
+    """A4 landscape by default. ``orient='portrait'`` for tall paper;
+    ``size`` is 'A4', 'A3' or 'A2' — a bigger sheet than A4 lets more subject
+    columns fit at full width before the sheet has to split into groups."""
+    base = _PAPER_SIZES.get((size or 'A4').upper(), A4)
+    return base if orient == 'portrait' else landscape(base)
 
 
 def _grade_key_table(usable):
@@ -201,25 +207,34 @@ def _fit_per(usable, sn_w, name_w, reserve, min_w, per, n):
     return per
 
 
-def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape'):
+def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape',
+                   size='A4', separate_cols=False):
     """Full score+grade matrix. Wide subject sets split across pages (``per``
     columns each); no admission numbers. ``opts['summary']`` toggles the
-    per-subject offered/passed/failed/average rows. ``orient`` is landscape or
-    portrait A4, filling the page with an 8mm margin."""
+    per-subject offered/passed/failed/average rows, led by a "SUMMARY"
+    divider spelled into the sheet's own columns (see ``_summary_word_row``).
+    ``orient``/``size`` pick the paper (A4/A3/A2, landscape or portrait),
+    filling the page with an 8mm margin. ``separate_cols`` gives each subject
+    its own Score and Grade sub-columns (like the blank recording sheet)
+    instead of one combined "score grade" column."""
     _styles()
-    page = _pagesize(orient)
+    page = _pagesize(orient, size)
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=page, topMargin=8 * mm,
                             bottomMargin=8 * mm, leftMargin=8 * mm, rightMargin=8 * mm,
                             title=f'Broadsheet — {exam.display_name}')
     usable = page[0] - 16 * mm
     sn_w, name_w = 9 * mm, 52 * mm
-    # Vertical headers don't constrain width, so columns only need to fit a score.
-    per = _fit_per(usable, sn_w, name_w, 24 * mm, 13 * mm, per, len(bs['subjects']))
+    # Vertical headers don't constrain width, so columns only need to fit a
+    # score; separate-columns mode needs 2 columns/subject, so its per-subject
+    # minimum is double a single narrow column's.
+    min_w = 16 * mm if separate_cols else 13 * mm
+    per = _fit_per(usable, sn_w, name_w, 24 * mm, min_w, per, len(bs['subjects']))
     groups = _groups(bs['subjects'], per)
     ss = bs['subject_summary']
     nrows = len(bs['rows'])
     show_summary = _opt(opts, 'summary')
+    header_rows = 2 if separate_cols else 1
     e = []
     for gi, group in enumerate(groups):
         last = gi == len(groups) - 1
@@ -229,41 +244,81 @@ def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape'):
         _school_header(e, school, opts, sub)
 
         tail = 2 if last else 0
-        sub_w = (usable - sn_w - name_w) / (len(group) + tail)
+        n_subj_cols = 2 * len(group) if separate_cols else len(group)
+        # Every individual column (each subject sub-column, and each tail
+        # column) is one "unit" wide. In separate-columns mode a subject's 2
+        # sub-columns and the 2 tail columns are each reserved 2 units total,
+        # so both keep the same footprint as one full subject block —
+        # matching combined mode, where every column is simply 1 unit.
+        tail_units = (2 if separate_cols else 1) * tail
+        unit = (usable - sn_w - name_w) / (n_subj_cols + tail_units)
 
-        header = [Paragraph('S/N', _S['colhead']), Paragraph('Name of Student', _S['colhead'])]
-        header += [_VHead(s) for s in group]                 # vertical subject names
-        if last:
-            header += [_VHead('Credits'), _VHead('Average %')]
-        data = [header]
+        if separate_cols:
+            h1 = [Paragraph('S/N', _S['colhead']), Paragraph('Name of Student', _S['colhead'])]
+            h2 = ['', '']
+            for s in group:
+                h1 += [_VHead(s), '']
+                h2 += [_VHead('Score', size=7), _VHead('Grade', size=7)]
+            if last:
+                h1 += [_VHead('Credits'), _VHead('Average %')]
+                h2 += ['', '']
+            data = [h1, h2]
+        else:
+            header = [Paragraph('S/N', _S['colhead']), Paragraph('Name of Student', _S['colhead'])]
+            header += [_VHead(s) for s in group]
+            if last:
+                header += [_VHead('Credits'), _VHead('Average %')]
+            data = [header]
+
         for i, row in enumerate(bs['rows'], 1):
             line = [str(i), Paragraph(pdf_escape(_short_name(row['student'])), _S['name'])]
             for s in group:
                 r = row['cells'].get(s)
-                line.append(f'{r.score} {r.grade}' if (r and r.score is not None) else '')
+                has = r and r.score is not None
+                if separate_cols:
+                    line += [str(r.score), r.grade] if has else ['', '']
+                else:
+                    line.append(f'{r.score} {r.grade}' if has else '')
             if last:
                 line += [str(row['credits']),
                          (str(row['average_score']) if row['average_score'] is not None else '')]
             data.append(line)
 
-        ncols = 2 + len(group) + tail
+        ncols = 2 + n_subj_cols + tail
         for _ in range(_EXTRA_ROWS):                          # blank rows for additions
             data.append([''] * ncols)
 
-        sum0 = nrows + 1 + _EXTRA_ROWS                        # first summary row index
+        summary_heading_row = len(data)
+        summary_heading_spans_full = False
+        if show_summary:
+            # Centre "SUMMARY" within the SUBJECT columns only -- the tail
+            # columns (Credits, Average %) on the last sheet aren't part of
+            # the per-subject block and shouldn't take letters.
+            heading_row, summary_heading_spans_full = _summary_word_row(2 + n_subj_cols)
+            if tail:
+                heading_row += ([_triple_rule() for _ in range(tail)] if not summary_heading_spans_full
+                                else [''] * tail)
+            data.append(heading_row)
+
+        sum0 = len(data)
         if show_summary:
             for label, fn in (('No. offered', lambda d: d['offered']),
                               ('No. passed (C6+)', lambda d: d['passed']),
                               ('No. failed', lambda d: d['failed']),
                               ('Average score %', lambda d: d['avg_score'] if d['avg_score'] is not None else '—'),
                               ('Average grade', lambda d: d['avg_grade'])):
-                rr = ['', label] + [str(fn(ss[s])) for s in group]
+                rr = ['', label]
+                for s in group:
+                    rr += [str(fn(ss[s])), ''] if separate_cols else [str(fn(ss[s]))]
                 if last:
                     rr += ['', '']
                 data.append(rr)
 
-        widths = [sn_w, name_w] + [sub_w] * (len(group) + tail)
-        heights = ([None] + [None] * nrows + [7.5 * mm] * _EXTRA_ROWS
+        widths = [sn_w, name_w] + [unit] * n_subj_cols
+        if tail:
+            widths += [unit] * tail
+        heights = ([None] * header_rows + [None] * nrows + [7.5 * mm] * _EXTRA_ROWS
+                   + ([9.5 * mm] if show_summary else [])
                    + ([None] * len(_BLANK_SUMMARY) if show_summary else []))
         # repeatRows=0: the header (subject names, S/N, Name, Credits, Average)
         # appears on the first page only; an overflowing roster continues without
@@ -272,17 +327,35 @@ def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape'):
         style = [
             ('GRID', (0, 0), (-1, -1), 0.9, _BLACK),
             ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, 1), (-1, nrows), 9.5),
+            ('FONTSIZE', (0, header_rows), (-1, header_rows - 1 + nrows), 9.5),
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('ALIGN', (1, 0), (1, -1), 'LEFT'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('VALIGN', (0, 0), (-1, 0), 'BOTTOM'),
+            ('VALIGN', (0, 0), (-1, header_rows - 1), 'BOTTOM'),
             ('TOPPADDING', (0, 0), (-1, -1), 2.5),
             ('BOTTOMPADDING', (0, 0), (-1, -1), 2.5),
         ]
+        if separate_cols:
+            style += [('SPAN', (0, 0), (0, 1)), ('SPAN', (1, 0), (1, 1)),
+                     ('LEFTPADDING', (2, 0), (-1, -1), 1), ('RIGHTPADDING', (2, 0), (-1, -1), 1)]
+            for j in range(len(group)):
+                c0 = 2 + j * 2
+                style.append(('SPAN', (c0, 0), (c0 + 1, 0)))
+            if last:
+                last_col = 2 + n_subj_cols
+                style += [('SPAN', (last_col, 0), (last_col, 1)),
+                         ('SPAN', (last_col + 1, 0), (last_col + 1, 1))]
         if show_summary:
             style.append(('FONTSIZE', (0, sum0), (-1, -1), 8.5))
-            style.append(('LINEABOVE', (0, sum0), (-1, sum0), 1.3, _BLACK))
+            style.append(('LINEABOVE', (0, summary_heading_row), (-1, summary_heading_row), 1.6, _BLACK))
+            style.append(('LINEBELOW', (0, summary_heading_row), (-1, summary_heading_row), 1.6, _BLACK))
+            if summary_heading_spans_full:
+                style.append(('SPAN', (0, summary_heading_row), (ncols - 1, summary_heading_row)))
+            if separate_cols:
+                for k in range(len(_BLANK_SUMMARY)):
+                    for j in range(len(group)):
+                        c0 = 2 + j * 2
+                        style.append(('SPAN', (c0, sum0 + k), (c0 + 1, sum0 + k)))
         t.setStyle(TableStyle(style))
         e.append(t)
         if _opt(opts, 'grades'):
