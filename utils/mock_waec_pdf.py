@@ -369,19 +369,21 @@ def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape',
 
 
 def blank_broadsheet_pdf(students, offered, subjects, exam, school, opts=None,
-                         per=0, orient='landscape'):
+                         per=0, orient='landscape', size='A4'):
     """A blank recording sheet: student names down the side, every subject across
-    the top with its own **Score** and **Grade** columns to write into. Landscape
-    or portrait A4. (``offered`` is accepted for call compatibility but no longer
-    used — cells are left plain rather than shading out non-offered subjects.)
+    the top with its own **Score** and **Grade** columns to write into.
+    ``orient``/``size`` pick the paper — landscape or portrait, A4/A3/A2.
+    (``offered`` is accepted for call compatibility but no longer used —
+    cells are left plain rather than shading out non-offered subjects.)
 
     Columns are sized to fit the whole subject set on one sheet by default
     (``per=0``): with the full WAEC load (~16 subjects) all of them stay on one
     landscape page instead of spilling a few onto a second sheet. The score/grade
     columns are deliberately narrow (hand-writing a 2-digit score or a grade), so
-    cell padding and the Score/Grade sub-labels are kept compact."""
+    cell padding and the Score/Grade sub-labels are kept compact — a bigger sheet
+    (A3/A2) gives that same subject set noticeably more breathing room."""
     _styles()
-    page = _pagesize(orient)
+    page = _pagesize(orient, size)
     buf = io.BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=page, topMargin=8 * mm,
                             bottomMargin=8 * mm, leftMargin=8 * mm, rightMargin=8 * mm,

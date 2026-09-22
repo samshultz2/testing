@@ -255,7 +255,7 @@ def broadsheet_blank(exam_id):
     candidates = MockWAECAnalytics._ordered_subjects(saved | set(WAEC_DEFAULT_SUBJECTS))
     subject_choices = [{'name': s, 'checked': s in saved} for s in candidates]
     return render_template('mock_waec/pdf_preview.html', exam=exam, show_cols=True,
-        show_orient=True, title='Blank recording sheet (PDF)', options=_OPTS_BLANK,
+        show_orient=True, show_size=True, title='Blank recording sheet (PDF)', options=_OPTS_BLANK,
         subject_choices=subject_choices,
         pdf_url=url_for('mock_waec.broadsheet_blank_pdf', exam_id=exam_id),
         back_url=url_for('mock_waec.view_exam', exam_id=exam_id))
@@ -284,9 +284,11 @@ def broadsheet_blank_pdf(exam_id):
             subjects = MockWAECAnalytics._ordered_subjects(union or set(WAEC_DEFAULT_SUBJECTS))
     from utils.mock_waec_pdf import blank_broadsheet_pdf
     per = request.args.get('cols', default=0, type=int)
+    size = request.args.get('size', 'A4').upper()
     buf = blank_broadsheet_pdf(students, offered, subjects, exam, _school_profile(),
                                opts=_pdf_opts(), per=(per if per and per > 0 else 0),
-                               orient=request.args.get('orient', 'landscape'))
+                               orient=request.args.get('orient', 'landscape'),
+                               size=(size if size in ('A4', 'A3', 'A2') else 'A4'))
     name = f"recording_sheet_{exam.exam_number}_{exam.session.name.replace('/', '-')}.pdf"
     return send_file(buf, mimetype='application/pdf',
                      as_attachment=request.args.get('download') == '1', download_name=name)
