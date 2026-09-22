@@ -190,10 +190,20 @@
       var unscaled = page.getViewport({ scale: 1 });
       naturalWidth = unscaled.width;
       var viewport = page.getViewport({ scale: scale });
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
+      // Render at the device's actual pixel density, not just CSS pixels —
+      // otherwise a canvas sized for a 1x screen gets upscaled by the
+      // browser on a 2x/3x phone display and text comes out visibly blurry.
+      // The canvas's CSS size stays at the logical (1x) viewport size; only
+      // the backing bitmap and the drawing transform are scaled up, per
+      // PDF.js's own recommended pattern.
+      var outputScale = window.devicePixelRatio || 1;
+      canvas.width = Math.floor(viewport.width * outputScale);
+      canvas.height = Math.floor(viewport.height * outputScale);
+      canvas.style.width = Math.floor(viewport.width) + 'px';
+      canvas.style.height = Math.floor(viewport.height) + 'px';
       var ctx = canvas.getContext('2d');
-      return page.render({ canvasContext: ctx, viewport: viewport }).promise.then(function () {
+      var transform = outputScale !== 1 ? [outputScale, 0, 0, outputScale, 0, 0] : null;
+      return page.render({ canvasContext: ctx, transform: transform, viewport: viewport }).promise.then(function () {
         if (myToken !== renderToken) return;
         pageIndicator.textContent = 'Page ' + pageNum + ' / ' + pdfDoc.numPages;
         prevBtn.disabled = pageNum <= 1;
