@@ -12,7 +12,7 @@ from reportlab.lib.units import mm
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.enums import TA_CENTER
 from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle, Paragraph,
-                                Spacer, PageBreak, Flowable)
+                                Spacer, PageBreak, Flowable, HRFlowable)
 from reportlab.pdfbase.pdfmetrics import stringWidth
 from utils.web_exports import pdf_escape
 
@@ -74,7 +74,44 @@ def _styles():
     _S['name'] = ParagraphStyle('nm', parent=base['Normal'], fontSize=8.5, leading=9.5,
                                 fontName='Helvetica-Bold')
     _S['cell'] = ParagraphStyle('c', parent=base['Normal'], fontSize=10)
+    _S['letter'] = ParagraphStyle('letter', parent=base['Normal'], fontSize=17, leading=19,
+                                  alignment=TA_CENTER, fontName='Helvetica-Bold')
     return _S
+
+
+def _triple_rule():
+    """Three thin parallel rules spanning one table cell -- a fresh set of
+    ``HRFlowable`` instances every call, since reusing one object across
+    multiple cells corrupts its wrap geometry after the first cell."""
+    return [
+        HRFlowable(width='100%', thickness=0.6, color=_BLACK, hAlign='CENTER',
+                  vAlign='MIDDLE', spaceBefore=0, spaceAfter=1.6),
+        HRFlowable(width='100%', thickness=0.6, color=_BLACK, hAlign='CENTER',
+                  vAlign='MIDDLE', spaceBefore=0, spaceAfter=1.6),
+        HRFlowable(width='100%', thickness=0.6, color=_BLACK, hAlign='CENTER',
+                  vAlign='MIDDLE', spaceBefore=0, spaceAfter=0),
+    ]
+
+
+def _summary_word_row(ncols, word='SUMMARY'):
+    """A row spelling ``word`` into the sheet's own existing Score/Grade
+    columns (one letter per real column, centred among them, no new boxes),
+    with every other cell in the row filled by a triple rule-through-text so
+    the whole row reads as one deliberate section divider.
+
+    Returns ``(row, spans_full_width)`` — when there are fewer Score/Grade
+    columns than letters (a sheet filtered down to very few subjects), it
+    falls back to one centred label spanning the whole row instead of
+    truncating the word."""
+    score_cols = ncols - 2
+    if score_cols < len(word):
+        row = [Paragraph(word, _S['letter'])] + [''] * (ncols - 1)
+        return row, True
+    start = 2 + (score_cols - len(word)) // 2
+    row = [_triple_rule() for _ in range(ncols)]
+    for i, ch in enumerate(word):
+        row[start + i] = Paragraph(ch, _S['letter'])
+    return row, False
 
 
 def _opt(opts, key, default=True):
@@ -312,8 +349,17 @@ def blank_broadsheet_pdf(students, offered, subjects, exam, school, opts=None,
         for _ in range(_EXTRA_ROWS):                        # blank rows for additions
             data.append(['', ''] + [''] * (2 * len(group)))
 
-        # Blank summary rows for filling the per-subject tallies by hand.
+        # Blank summary rows for filling the per-subject tallies by hand, led
+        # by a "SUMMARY" divider spelled into the sheet's own existing
+        # columns (see _summary_word_row) so the block is clearly marked
+        # before it starts.
         show_summary = _opt(opts, 'summary')
+        ncols = 2 + 2 * len(group)
+        summary_heading_row = len(data)
+        summary_heading_spans_full = False
+        if show_summary:
+            heading_row, summary_heading_spans_full = _summary_word_row(ncols)
+            data.append(heading_row)
         sum0 = len(data)                        # table row of the first summary row
         if show_summary:
             for label in _BLANK_SUMMARY:
@@ -321,6 +367,7 @@ def blank_broadsheet_pdf(students, offered, subjects, exam, school, opts=None,
 
         widths = [sn_w, name_w] + [cell_w] * (2 * len(group))
         heights = ([None, None] + [8.5 * mm] * nstud + [8.5 * mm] * _EXTRA_ROWS
+                   + ([10 * mm] if show_summary else [])
                    + ([8.5 * mm] * len(_BLANK_SUMMARY) if show_summary else []))
         # repeatRows=0: the column labels (subjects, Score/Grade, S/N, Name) appear
         # only on the first page — when the roster overflows onto further pages the
@@ -343,7 +390,12 @@ def blank_broadsheet_pdf(students, offered, subjects, exam, school, opts=None,
             c0 = 2 + j * 2
             style.append(('SPAN', (c0, 0), (c0 + 1, 0)))
         if show_summary:                       # one writing box per subject per row
-            style.append(('LINEABOVE', (0, sum0), (-1, sum0), 1.3, _BLACK))
+            # Double-weight rule top and bottom of the "SUMMARY" divider row —
+            # a classic printed-form section break, no colour or shading.
+            style.append(('LINEABOVE', (0, summary_heading_row), (-1, summary_heading_row), 1.6, _BLACK))
+            style.append(('LINEBELOW', (0, summary_heading_row), (-1, summary_heading_row), 1.6, _BLACK))
+            if summary_heading_spans_full:     # too few columns to spell it out letter-by-letter
+                style.append(('SPAN', (0, summary_heading_row), (ncols - 1, summary_heading_row)))
             for k in range(len(_BLANK_SUMMARY)):
                 for j in range(len(group)):
                     c0 = 2 + j * 2
