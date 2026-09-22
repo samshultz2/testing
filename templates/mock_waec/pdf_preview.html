@@ -104,6 +104,7 @@
     <div id="pdfFallback" class="text-muted text-sm" style="display:none;padding:1rem;text-align:center;">
         Preview couldn’t load inline. <a id="openTab2" href="#" target="_blank" rel="noopener"><strong>Open the PDF in a new tab</strong></a>,
         or <strong>refresh this page</strong> if your session may have timed out.
+        <div id="pdfFallbackDetail" style="margin-top:.5rem;font-family:monospace;font-size:.75rem;opacity:.7;word-break:break-word;"></div>
     </div>
 </div>
 
@@ -114,6 +115,7 @@
   var openTab = document.getElementById('openTab');
   var openTab2 = document.getElementById('openTab2');
   var fallback = document.getElementById('pdfFallback');
+  var fallbackDetail = document.getElementById('pdfFallbackDetail');
   var canvasWrap = document.getElementById('pdfCanvasWrap');
   var canvas = document.getElementById('pdfCanvas');
   var loading = document.getElementById('pdfLoading');
@@ -166,10 +168,13 @@
 
   var pdfDoc = null, pageNum = 1, scale = 1, naturalWidth = 0, renderToken = 0;
 
-  function showFallback() {
+  function showFallback(err) {
     canvasWrap.style.display = 'none';
     toolbar.style.display = 'none';
     fallback.style.display = '';
+    if (fallbackDetail) {
+      fallbackDetail.textContent = err ? ('Detail: ' + (err.message || err)) : '';
+    }
   }
 
   function fitScale() {
