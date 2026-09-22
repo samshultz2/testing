@@ -1411,47 +1411,15 @@ def export_students_data():
     if student_ids:
         # Export selected students (scoped: a teacher can't export other classes)
         query = _viewer_student_scope(Student.query.filter(Student.id.in_(student_ids)))
+        students = query.order_by(Student.surname).all()
     else:
-        # Export all students matching current filters
-        query = _viewer_student_scope(Student.query.filter_by(is_active=True))
-        
-        # Apply filters
-        search = request.args.get('search', '')
-        gender = request.args.get('gender', '')
-        religion = request.args.get('religion', '')
-        class_id = request.args.get('class_id', type=int)
-        arm_id = request.args.get('arm_id', type=int)
-        
-        if search:
-            search_term = like_term(search)
-            query = query.filter(
-                db.or_(
-                    Student.first_name.ilike(search_term, escape='\\'),
-                    Student.surname.ilike(search_term, escape='\\'),
-                    Student.middle_name.ilike(search_term, escape='\\'),
-                    Student.student_id.ilike(search_term, escape='\\')
-                )
-            )
-        if gender:
-            query = query.filter(Student.gender == gender)
-        if religion:
-            query = query.filter(Student.religion == religion)
-        
-        if class_id or arm_id:
-            active_term = get_active_term()
-            if active_term:
-                query = query.join(
-                    StudentEnrollment, Student.id == StudentEnrollment.student_id
-                ).join(
-                    ClassArmAssignment, StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id
-                ).filter(ClassArmAssignment.term_id == active_term.id)
-                
-                if class_id:
-                    query = query.filter(ClassArmAssignment.class_id == class_id)
-                if arm_id:
-                    query = query.filter(ClassArmAssignment.arm_id == arm_id)
-    
-    students = query.order_by(Student.surname).all()
+        # Export all students matching the list's current filters. Reuses the
+        # exact same query the list page itself builds (scope + every filter:
+        # search/gender/religion/stream/subject/house/boarding/incomplete/
+        # class/arm) instead of re-implementing a subset of it here, so an
+        # export with nothing selected can never include a student the
+        # on-screen filtered list doesn't show.
+        students = _students_query().all()
     
     if not students:
         flash('No students to export.', 'error')

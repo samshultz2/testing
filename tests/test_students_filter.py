@@ -124,3 +124,31 @@ def test_filter_works_for_non_admin(app):
         assert 'SF_A' in html and 'SF_B' not in html
     finally:
         _teardown(app)
+
+
+def test_export_with_none_selected_respects_every_list_filter(app):
+    """/students/export with no student_ids must export exactly the filtered
+    list, not every student — for *every* filter the list supports, not just
+    the handful (search/gender/religion/class/arm) the export route used to
+    re-implement on its own. stream/house/boarding/incomplete used to be
+    silently ignored on export, so a filtered export could include students
+    the on-screen list didn't show."""
+    _setup(app)
+    try:
+        with app.app_context():
+            bid = Branch.get_default().id
+            s_in = Student(student_id='SF_STREAM_IN', first_name='In', surname='Stream',
+                           gender='Male', is_active=True, branch_id=bid, stream='Science')
+            s_out = Student(student_id='SF_STREAM_OUT', first_name='Out', surname='Stream',
+                            gender='Male', is_active=True, branch_id=bid, stream='Arts')
+            db.session.add_all([s_in, s_out]); db.session.commit()
+        c = _admin(app)
+        import json as _json
+        r = c.get('/students/export?format=csv&stream=Science&fields='
+                   + _json.dumps(['student_id', 'surname']))
+        assert r.status_code == 200
+        body = r.get_data(as_text=True)
+        assert 'SF_STREAM_IN' in body
+        assert 'SF_STREAM_OUT' not in body
+    finally:
+        _teardown(app)
