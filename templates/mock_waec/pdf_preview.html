@@ -89,7 +89,18 @@
 {% endif %}
 
 <div id="pdfHost" style="position:relative;">
-    <iframe id="pdf" title="PDF preview" style="width:100%;height:76vh;border:1px solid var(--border-color);border-radius:var(--radius-md);background:#fff;"></iframe>
+    <div id="pdfToolbar" style="display:none;align-items:center;gap:.6rem;padding:.5rem .25rem;flex-wrap:wrap;">
+        <button type="button" id="pdfPrev" class="btn btn-secondary btn-sm" title="Previous page"><i class="fas fa-chevron-left"></i></button>
+        <span id="pdfPageIndicator" class="text-sm text-muted" style="min-width:5.5rem;text-align:center;">Page 1</span>
+        <button type="button" id="pdfNext" class="btn btn-secondary btn-sm" title="Next page"><i class="fas fa-chevron-right"></i></button>
+        <span style="width:1px;height:1.4rem;background:var(--border-color);margin:0 .3rem;"></span>
+        <button type="button" id="pdfZoomOut" class="btn btn-secondary btn-sm" title="Zoom out"><i class="fas fa-magnifying-glass-minus"></i></button>
+        <button type="button" id="pdfZoomIn" class="btn btn-secondary btn-sm" title="Zoom in"><i class="fas fa-magnifying-glass-plus"></i></button>
+    </div>
+    <div id="pdfCanvasWrap" style="width:100%;min-height:76vh;border:1px solid var(--border-color);border-radius:var(--radius-md);background:#e9edf1;overflow:auto;text-align:center;padding:1rem 0;">
+        <canvas id="pdfCanvas" style="box-shadow:0 1px 4px rgba(0,0,0,.25);background:#fff;"></canvas>
+        <div id="pdfLoading" class="text-muted text-sm" style="padding:2rem;">Loading preview…</div>
+    </div>
     <div id="pdfFallback" class="text-muted text-sm" style="display:none;padding:1rem;text-align:center;">
         Preview couldn’t load inline. <a id="openTab2" href="#" target="_blank" rel="noopener"><strong>Open the PDF in a new tab</strong></a>,
         or <strong>refresh this page</strong> if your session may have timed out.
@@ -99,11 +110,19 @@
 <script nonce="{{ csp_nonce }}">
 (function () {
   var base = "{{ pdf_url }}";
-  var iframe = document.getElementById('pdf');
   var dl = document.getElementById('dl');
   var openTab = document.getElementById('openTab');
   var openTab2 = document.getElementById('openTab2');
   var fallback = document.getElementById('pdfFallback');
+  var canvasWrap = document.getElementById('pdfCanvasWrap');
+  var canvas = document.getElementById('pdfCanvas');
+  var loading = document.getElementById('pdfLoading');
+  var toolbar = document.getElementById('pdfToolbar');
+  var pageIndicator = document.getElementById('pdfPageIndicator');
+  var prevBtn = document.getElementById('pdfPrev');
+  var nextBtn = document.getElementById('pdfNext');
+  var zoomInBtn = document.getElementById('pdfZoomIn');
+  var zoomOutBtn = document.getElementById('pdfZoomOut');
   var colsSel = document.getElementById('colsSel');
   var orientSel = document.getElementById('orientSel');
   var sizeSel = document.getElementById('sizeSel');
@@ -130,37 +149,101 @@
     if (extra) p.push(extra);
     return base + (p.length ? ('?' + p.join('&')) : '');
   }
+
+  // Rendered with PDF.js onto a <canvas> instead of framing the PDF URL in an
+  // <iframe> and relying on the browser's own built-in PDF viewer. Confirmed
+  // via a real device network capture that the server response was always
+  // correct (200, application/pdf, clean single headers, full body
+  // delivered) — the failure was Chrome's native viewer silently refusing to
+  // render a PDF loaded into a *subframe* on some devices (a top-level
+  // navigation to the identical URL, e.g. "Open in new tab", always worked).
+  // Rendering the bytes ourselves sidesteps that entirely and behaves the
+  // same in every browser.
+  var pdfjsLibPromise = import('/static/vendor/pdfjs/pdf.min.mjs').then(function (mod) {
+    mod.GlobalWorkerOptions.workerSrc = '/static/vendor/pdfjs/pdf.worker.min.mjs';
+    return mod;
+  });
+
+  var pdfDoc = null, pageNum = 1, scale = 1, naturalWidth = 0, renderToken = 0;
+
+  function showFallback() {
+    canvasWrap.style.display = 'none';
+    toolbar.style.display = 'none';
+    fallback.style.display = '';
+  }
+
+  function fitScale() {
+    var wrapWidth = canvasWrap.clientWidth - 24;   // minus padding
+    return naturalWidth ? Math.max(0.3, wrapWidth / naturalWidth) : 1;
+  }
+
+  function renderPage() {
+    if (!pdfDoc) return;
+    var myToken = ++renderToken;
+    pdfDoc.getPage(pageNum).then(function (page) {
+      if (myToken !== renderToken) return;          // a newer render superseded this one
+      var unscaled = page.getViewport({ scale: 1 });
+      naturalWidth = unscaled.width;
+      var viewport = page.getViewport({ scale: scale });
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      var ctx = canvas.getContext('2d');
+      return page.render({ canvasContext: ctx, viewport: viewport }).promise.then(function () {
+        if (myToken !== renderToken) return;
+        pageIndicator.textContent = 'Page ' + pageNum + ' / ' + pdfDoc.numPages;
+        prevBtn.disabled = pageNum <= 1;
+        nextBtn.disabled = pageNum >= pdfDoc.numPages;
+      });
+    }).catch(showFallback);
+  }
+
   function refresh() {
     var url = build('');
     dl.href = build('download=1');
     openTab.href = url;
     if (openTab2) openTab2.href = url;
-    // Frame the real PDF URL directly (same origin, so X-Frame-Options:
-    // SAMEORIGIN allows it) instead of fetching it into a blob: URL first.
-    // Chrome's built-in PDF viewer is unreliable when a PDF is handed to it
-    // via a blob: URL inside an <iframe> — it can refuse to render an
-    // already-fetched, valid PDF and show its own "content is blocked" page
-    // in-frame, even though the exact same PDF opens fine as a normal
-    // top-level navigation (e.g. "Open in new tab"). Framing the URL
-    // directly makes the embedded preview go through that same, reliable
-    // top-level-style path instead.
-    iframe.style.display = '';
+
+    loading.style.display = '';
+    canvas.style.display = 'none';
+    toolbar.style.display = 'none';
     fallback.style.display = 'none';
-    iframe.src = url;
+    canvasWrap.style.display = '';
+
+    // X-Requested-With flags this as a background fetch: an expired session
+    // then returns 401 instead of a login-page redirect that would otherwise
+    // be fetched as 200 HTML and (mis)treated as a PDF.
+    fetch(url, { credentials: 'same-origin', headers: { 'X-Requested-With': 'fetch' } })
+      .then(function (r) {
+        var ct = r.headers.get('Content-Type') || '';
+        if (!r.ok || ct.indexOf('application/pdf') === -1) throw new Error('not a pdf (http ' + r.status + ')');
+        return r.arrayBuffer();
+      })
+      .then(function (buf) {
+        return pdfjsLibPromise.then(function (pdfjsLib) {
+          return pdfjsLib.getDocument({ data: buf }).promise;
+        });
+      })
+      .then(function (doc) {
+        pdfDoc = doc;
+        pageNum = 1;
+        return doc.getPage(1);
+      })
+      .then(function (page) {
+        naturalWidth = page.getViewport({ scale: 1 }).width;
+        scale = fitScale();
+        loading.style.display = 'none';
+        canvas.style.display = '';
+        toolbar.style.display = 'flex';
+        renderPage();
+      })
+      .catch(showFallback);
   }
-  // 'load' fires whether the framed response was the PDF or something else
-  // (e.g. an expired session's redirect to /login), so it can't by itself
-  // confirm success — but same-origin content lets us cheaply check *where*
-  // the iframe actually ended up, without a second fetch of the PDF body.
-  iframe.addEventListener('load', function () {
-    try {
-      var loc = iframe.contentWindow && iframe.contentWindow.location;
-      if (loc && /\/login(\?|$)/.test(loc.pathname + (loc.search || ''))) {
-        iframe.style.display = 'none';
-        fallback.style.display = '';
-      }
-    } catch (e) { /* PDF content isn't a scriptable document — nothing to check */ }
-  });
+
+  prevBtn.addEventListener('click', function () { if (pageNum > 1) { pageNum -= 1; renderPage(); } });
+  nextBtn.addEventListener('click', function () { if (pdfDoc && pageNum < pdfDoc.numPages) { pageNum += 1; renderPage(); } });
+  zoomInBtn.addEventListener('click', function () { scale = Math.min(scale * 1.25, 4); renderPage(); });
+  zoomOutBtn.addEventListener('click', function () { scale = Math.max(scale / 1.25, 0.3); renderPage(); });
+
   opts.forEach(function (o) { o.addEventListener('change', refresh); });
   subjBoxes.forEach(function (b) { b.addEventListener('change', refresh); });
   var subjAll = document.getElementById('subjAll'), subjNone = document.getElementById('subjNone');

@@ -16,6 +16,8 @@ or spot-check a single file: `sha256sum <file>`.
 | `react.production.min.js` | React (UMD, production) | 18.3.1 | `d949f1c3687aedadcedac85261865f29b17cd273997e7f6b2bfc53b2f9d4c4dd` |
 | `react-dom.production.min.js` | ReactDOM (UMD, production) | 18.3.1 | `35f4f974f4b2bcd44da73963347f8952e341f83909e4498227d4e26b98f66f0d` |
 | `fontawesome/css/all.min.css` | Font Awesome Free | 6.4.0 | `1edb1725a9ea8ca4dcf2f5508cee183218aa1685e47c1b23056717f754f58ebf` |
+| `pdfjs/pdf.min.mjs` | PDF.js (legacy build) | 4.10.38 | `44ec6f011027ee77791386b66c14876a5fc29e20bf0433c07c6726fff7212b72` |
+| `pdfjs/pdf.worker.min.mjs` | PDF.js worker (legacy build) | 4.10.38 | `bd88805178a26c729db8c0107a5b630cb900ec070f4d8c7529a3e45530afd41d` |
 
 `fontawesome/webfonts/*` are the matching 6.4.0 font files shipped with the CSS
 above.
@@ -27,6 +29,9 @@ above.
 - React / ReactDOM 18.3.1 — https://unpkg.com/react@18.3.1/umd/react.production.min.js and
   https://unpkg.com/react-dom@18.3.1/umd/react-dom.production.min.js
 - Font Awesome Free 6.4.0 — https://fontawesome.com/download (Free for Web)
+- PDF.js 4.10.38 (legacy build, for broader mobile/older-browser compatibility) —
+  `npm pack pdfjs-dist@4.10.38`, files taken from `legacy/build/pdf.min.mjs` and
+  `legacy/build/pdf.worker.min.mjs` inside the package
 
 ## Updating a vendored file
 1. Download the new version from the upstream source above.
