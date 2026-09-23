@@ -36,10 +36,16 @@ def _assignments_for_term():
     if not term:
         return []
     q = scope_query(ClassArmAssignment.query.filter_by(term_id=term.id), ClassArmAssignment)
+    assignments = q.all()
+    from sqlalchemy import func
+    counts = dict(db.session.query(
+            StudentEnrollment.class_arm_assignment_id, func.count(StudentEnrollment.id))
+        .filter(StudentEnrollment.class_arm_assignment_id.in_([a.id for a in assignments]),
+                StudentEnrollment.is_active == True)
+        .group_by(StudentEnrollment.class_arm_assignment_id).all()) if assignments else {}
     rows = []
-    for a in q.all():
-        count = StudentEnrollment.query.filter_by(
-            class_arm_assignment_id=a.id, is_active=True).count()
+    for a in assignments:
+        count = counts.get(a.id, 0)
         if count:
             rows.append({'id': a.id, 'label': a.display_name,
                          'class_name': a.school_class.name if a.school_class else '',
