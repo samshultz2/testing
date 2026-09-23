@@ -1501,11 +1501,13 @@ def save_attendance():
     settings = hr.get_settings()
     staff_ids = request.form.getlist('staff_id', type=int)
     saved = 0
+    existing = {rec.staff_id: rec for rec in StaffAttendance.query.filter(
+        StaffAttendance.staff_id.in_(staff_ids), StaffAttendance.date == day).all()}
     for sid in staff_ids:
         status = request.form.get(f'status_{sid}') or 'Present'
         clock_in = (request.form.get(f'clock_{sid}') or '').strip() or None
         st, mins, ded = hr.compute_attendance(status, clock_in, settings)
-        rec = StaffAttendance.query.filter_by(staff_id=sid, date=day).first()
+        rec = existing.get(sid)
         if not rec:
             rec = StaffAttendance(staff_id=sid, date=day)
             db.session.add(rec)

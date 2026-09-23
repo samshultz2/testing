@@ -1132,10 +1132,13 @@ def affective():
     if request.method == 'POST' and selected_assignment and term_id:
         enrollments = StudentEnrollment.query.filter_by(
             class_arm_assignment_id=assignment_id, is_active=True).all()
+        existing = {ts.student_id: ts for ts in TermSummary.query.filter(
+            TermSummary.student_id.in_([e.student_id for e in enrollments]),
+            TermSummary.term_id == term_id).all()}
         for e in enrollments:
             mapping = {k: request.form.get(f'r_{e.student_id}_{k}', type=int)
                        for k in AFFECTIVE_KEYS}
-            ts = TermSummary.query.filter_by(student_id=e.student_id, term_id=term_id).first()
+            ts = existing.get(e.student_id)
             if not ts:
                 ts = TermSummary(student_id=e.student_id, term_id=term_id, enrollment_id=e.id)
                 db.session.add(ts)
@@ -1192,8 +1195,11 @@ def comments():
     if request.method == 'POST' and selected_assignment and term_id:
         enrollments = StudentEnrollment.query.filter_by(
             class_arm_assignment_id=assignment_id, is_active=True).all()
+        existing = {ts.student_id: ts for ts in TermSummary.query.filter(
+            TermSummary.student_id.in_([e.student_id for e in enrollments]),
+            TermSummary.term_id == term_id).all()}
         for e in enrollments:
-            ts = TermSummary.query.filter_by(student_id=e.student_id, term_id=term_id).first()
+            ts = existing.get(e.student_id)
             if not ts:
                 ts = TermSummary(student_id=e.student_id, term_id=term_id, enrollment_id=e.id)
                 db.session.add(ts)
