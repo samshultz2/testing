@@ -8,6 +8,7 @@ from utils import timeutil
 
 from models import (
     db, Student, ParentContact, StudentEnrollment, ClassArmAssignment, SchoolSettings,
+    FeePayment, FeeDiscount,
 )
 
 PLACEHOLDERS = ['{name}', '{student}', '{first_name}', '{surname}', '{class}', '{arm}',
@@ -112,6 +113,28 @@ def primary_contact(student):
         return None
     contacts.sort(key=lambda c: (not c.is_primary,))
     return contacts[0]
+
+
+def primary_contacts_map(student_ids):
+    """{student_id: best ParentContact} for many students in ONE query, instead
+    of student.parent_contacts.all() per student (lazy='dynamic' — a fresh
+    SELECT every time, with no identity-map reuse). Same selection rule as
+    primary_contact(): has a phone, primary first, else first."""
+    if not student_ids:
+        return {}
+    rows = (ParentContact.query
+            .filter(ParentContact.student_id.in_(student_ids),
+                    ParentContact.phone_number.isnot(None),
+                    ParentContact.phone_number != '')
+            .all())
+    by_student = {}
+    for c in rows:
+        by_student.setdefault(c.student_id, []).append(c)
+    out = {}
+    for sid, contacts in by_student.items():
+        contacts.sort(key=lambda c: (not c.is_primary,))
+        out[sid] = contacts[0]
+    return out
 
 
 def dispatch_campaign(msg, cfg=None):
@@ -324,10 +347,13 @@ def resolve_audience(audience, term, class_id=None, arm_id=None, student_ids=Non
                                Student).order_by(Student.surname).all()
 
     elif audience in ('class', 'arm'):
+        from sqlalchemy.orm import contains_eager
         q = scope_query(
             StudentEnrollment.query
             .join(ClassArmAssignment,
                   StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+            .join(Student, StudentEnrollment.student_id == Student.id)
+            .options(contains_eager(StudentEnrollment.student))
             .filter(StudentEnrollment.is_active == True),
             ClassArmAssignment)
         if term:
@@ -344,24 +370,50 @@ def resolve_audience(audience, term, class_id=None, arm_id=None, student_ids=Non
                 Student.query.filter(Student.id.in_(student_ids)), Student).all()
 
     elif audience == 'defaulters':
-        from utils.finance import student_bill
+        from sqlalchemy import func
+        from sqlalchemy.orm import contains_eager
+        from utils.finance import class_fee_total, charges_map
         if term:
             enr = scope_query(
                 StudentEnrollment.query
                 .join(ClassArmAssignment,
                       StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+                .join(Student, StudentEnrollment.student_id == Student.id)
+                .options(contains_eager(StudentEnrollment.class_arm_assignment),
+                        contains_eager(StudentEnrollment.student))
                 .filter(StudentEnrollment.is_active == True,
                         ClassArmAssignment.term_id == term.id),
                 ClassArmAssignment)
             if class_id:
                 enr = enr.filter(ClassArmAssignment.class_id == class_id)
-            for e in enr.all():
+            enrollments = enr.all()
+            student_ids_ = [e.student_id for e in enrollments]
+            # Same batched math as utils.finance.defaulters_summary() / the
+            # Finance Defaulters page — was one student_bill() call (itself 3+
+            # queries) PER enrollment here instead.
+            paid_map = dict(db.session.query(FeePayment.student_id, func.sum(FeePayment.amount))
+                            .filter(FeePayment.term_id == term.id,
+                                    FeePayment.student_id.in_(student_ids_))
+                            .group_by(FeePayment.student_id).all()) if student_ids_ else {}
+            disc_map = dict(db.session.query(FeeDiscount.student_id, func.sum(FeeDiscount.amount))
+                            .filter(FeeDiscount.term_id == term.id,
+                                    FeeDiscount.student_id.in_(student_ids_))
+                            .group_by(FeeDiscount.student_id).all()) if student_ids_ else {}
+            extra_map = charges_map(term.id)
+            total_cache = {}
+            for e in enrollments:
                 if not e.student:
                     continue
-                bill = student_bill(e.student_id, term.id)
-                if bill['balance'] > 0.005:
+                asg = e.class_arm_assignment
+                key = (asg.class_id, asg.arm_id)
+                if key not in total_cache:
+                    total_cache[key] = class_fee_total(term.id, asg.class_id, asg.arm_id)
+                payable = max(total_cache[key] + (extra_map.get(e.student_id) or 0.0)
+                             - (disc_map.get(e.student_id) or 0.0), 0)
+                balance = payable - (paid_map.get(e.student_id) or 0.0)
+                if balance > 0.005:
                     students.append(e.student)
-                    balances[e.student_id] = bill['balance']
+                    balances[e.student_id] = balance
 
     # Teachers may only message parents of their own form-class students.
     from utils.access_control import teacher_form_student_ids
@@ -369,14 +421,20 @@ def resolve_audience(audience, term, class_id=None, arm_id=None, student_ids=Non
     if form_ids is not None:
         students = [s for s in students if s.id in form_ids]
 
-    # De-duplicate, attach the best contact.
+    # De-duplicate, attach the best contact — batched (one query for every
+    # resolved student instead of student.parent_contacts.all() per student,
+    # which is lazy='dynamic' and re-queries every single call).
     seen = set()
-    out = []
+    dedup_students = []
     for s in students:
         if s.id in seen:
             continue
         seen.add(s.id)
-        c = primary_contact(s)
+        dedup_students.append(s)
+    contacts_map = primary_contacts_map([s.id for s in dedup_students])
+    out = []
+    for s in dedup_students:
+        c = contacts_map.get(s.id)
         out.append({
             'student': s,
             'parent_name': (c.name if c and c.name else 'Parent'),
