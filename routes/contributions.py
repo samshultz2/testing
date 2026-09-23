@@ -12,6 +12,7 @@ from models import (
 from functools import wraps
 from datetime import datetime, date, timedelta
 from sqlalchemy import func
+from sqlalchemy.orm import contains_eager
 from utils.branch_scope import scope_query, can_access_branch
 
 contributions_bp = Blueprint('contributions', __name__, url_prefix='/contributions')
@@ -888,16 +889,29 @@ def defaulters():
     
     sss3_assignments = scope_query(ClassArmAssignment.query.filter_by(class_id=sss3_class.id, term_id=active_term.id), ClassArmAssignment).all()
     assignment_ids = [a.id for a in sss3_assignments]
-    enrollments = StudentEnrollment.query.filter(
-        StudentEnrollment.class_arm_assignment_id.in_(assignment_ids),
-        StudentEnrollment.is_active == True
-    ).all()
-    
+    enrollments = (StudentEnrollment.query
+        .join(ClassArmAssignment,
+              StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+        .join(Student, StudentEnrollment.student_id == Student.id)
+        .options(contains_eager(StudentEnrollment.class_arm_assignment),
+                contains_eager(StudentEnrollment.student))
+        .filter(StudentEnrollment.class_arm_assignment_id.in_(assignment_ids),
+                StudentEnrollment.is_active == True)
+        .all())
+
     defaulters_list = []
     total_outstanding = 0
 
     from utils.services.contributions import paid_by_student
-    paid_map = paid_by_student(active_session.id, [e.student_id for e in enrollments])
+    student_ids = [e.student_id for e in enrollments]
+    paid_map = paid_by_student(active_session.id, student_ids)
+    # {student_id: latest payment date} in one query instead of one SELECT per
+    # defaulting student.
+    last_payment_map = dict(
+        db.session.query(ContributionPayment.student_id, func.max(ContributionPayment.payment_date))
+        .filter(ContributionPayment.student_id.in_(student_ids),
+                ContributionPayment.session_id == active_session.id)
+        .group_by(ContributionPayment.student_id).all()) if student_ids else {}
 
     for enrollment in enrollments:
         student = enrollment.student
@@ -906,12 +920,8 @@ def defaulters():
         total_paid = paid_map.get(student.id, 0)
 
         remaining = max_due - total_paid
-        
+
         if remaining > 0:
-            last_payment = ContributionPayment.query.filter_by(student_id=student.id, session_id=active_session.id).order_by(
-                ContributionPayment.payment_date.desc()
-            ).first()
-            
             defaulters_list.append({
                 'id': student.id,
                 'name': student.full_name,
@@ -919,7 +929,7 @@ def defaulters():
                 'total_paid': total_paid,
                 'remaining': remaining,
                 'percentage': (total_paid / max_due * 100) if max_due > 0 else 0,
-                'last_payment': last_payment.payment_date if last_payment else None
+                'last_payment': last_payment_map.get(student.id)
             })
             total_outstanding += remaining
     
