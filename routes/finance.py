@@ -10,7 +10,7 @@ from utils.helpers import get_active_term, session_terms
 from flask import (Blueprint, render_template, request, redirect, url_for,
                    flash, jsonify, Response, session)
 from sqlalchemy import func
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import joinedload, contains_eager
 from utils.web_exports import xlsx_response, csv_response, formula_guard
 from utils.branch_scope import require_branch_access, scope_query, scope_by_student, viewing_branch_id
 
@@ -918,10 +918,17 @@ def defaulters():
     totals = {'billed': 0.0, 'paid': 0.0, 'balance': 0.0}
     if term_id:
         from utils.branch_scope import scope_query
+        # Eager-load .class_arm_assignment and .student off the joins below
+        # (contains_eager) instead of the default lazy load: this loop's
+        # e.student is a fresh SELECT-per-row otherwise, one per enrollment
+        # across the whole school when no class filter is picked.
         enr_q = scope_query(
             StudentEnrollment.query
             .join(ClassArmAssignment,
                   StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+            .join(Student, StudentEnrollment.student_id == Student.id)
+            .options(contains_eager(StudentEnrollment.class_arm_assignment),
+                    contains_eager(StudentEnrollment.student))
             .filter(StudentEnrollment.is_active == True,
                     ClassArmAssignment.term_id == term_id),
             ClassArmAssignment)
