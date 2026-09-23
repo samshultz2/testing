@@ -2658,6 +2658,31 @@ def _portal_guard(exam):
     return student, exam
 
 
+def _payload_has_math(payload):
+    """True if any served question/option/passage in the sitting_payload()
+    output actually contains LaTeX — so the sitting page can skip loading
+    MathJax (1.17MB, its single heaviest asset) for the typical mock that has
+    no math notation at all."""
+    from utils.mathjax_content import has_math_markup
+    # Mock JAMB's own MathJax config has no $ / $$ delimiters (see
+    # mathjax-setup.js) — matched here so a currency amount doesn't force a
+    # 1.17MB load for a mock that has no actual LaTeX in it.
+    for s in payload:
+        for g in s.get('groups', []):
+            passage = g.get('passage')
+            if passage and has_math_markup(passage.body, dollar_delims=False):
+                return True
+            for qi in g.get('questions', []):
+                if has_math_markup(qi['q'].question_text, *[t for _, t in qi['options']],
+                                   dollar_delims=False):
+                    return True
+        for si in s.get('standalone', []):
+            if has_math_markup(si['q'].question_text, *[t for _, t in si['options']],
+                               dollar_delims=False):
+                return True
+    return False
+
+
 @mock_jamb_portal_bp.route('/')
 def portal_list():
     from routes.cbt import cbt_login_required, _current_student
@@ -2728,9 +2753,10 @@ def portal_sit(exam_id):
             db.session.rollback()
         show_calc = any(s.get('subject') and is_calculation_subject(s['subject'].name)
                         for s in payload)
+        show_math = _payload_has_math(payload)
         return render_template('mock_jamb/portal_sit.html', exam=exam, student=student,
                                subjects=payload, saved=saved, show_calc=show_calc,
-                               attempt=att, remaining=remaining)
+                               show_math=show_math, attempt=att, remaining=remaining)
     return _inner()
 
 

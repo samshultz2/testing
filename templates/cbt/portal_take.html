@@ -343,6 +343,6 @@ body{margin:0;font-family:'Inter',system-ui,sans-serif;background:#eef2f7;color:
     if(window.innerWidth<=860){document.querySelector('.mini-submit').style.display='block';}
 })();
 </script>
-{% include 'cbt/_mathjax.html' %}
+{% if show_math %}{% include 'cbt/_mathjax.html' %}{% endif %}
 </body>
 </html>

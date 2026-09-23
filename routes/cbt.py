@@ -1737,7 +1737,9 @@ def take(exam_id):
     # is shuffled and each radio carries the option's ORIGINAL letter as its
     # value — so the backend always knows the real option chosen, and grading
     # (selected_option vs correct_option) stays correct.
+    from utils.mathjax_content import has_math_markup
     qview = []
+    show_math = False
     for q in questions:
         opts = [(letter, text) for letter, text in q.options if text]
         if exam.shuffle:
@@ -1745,12 +1747,14 @@ def take(exam_id):
         options = [{'label': 'ABCD'[i], 'value': orig, 'text': text}
                    for i, (orig, text) in enumerate(opts)]
         qview.append({'q': q, 'options': options})
+        if not show_math and has_math_markup(q.question_text, *[o['text'] for o in options]):
+            show_math = True   # skip MathJax's 1.17MB load for the typical exam without it
     saved = {a.question_id: a.selected_option for a in attempt.answers}
     has_pin = bool((SchoolSettings.get('cbt_supervisor_pin', '') or '').strip())
     return render_template('cbt/portal_take.html', exam=exam, student=student,
         qview=qview, attempt=attempt, remaining=remaining, saved=saved,
         max_violations=(exam.violation_limit if exam.violation_limit is not None else 3),
-        strict=bool(exam.strict_mode), has_supervisor_pin=has_pin)
+        strict=bool(exam.strict_mode), has_supervisor_pin=has_pin, show_math=show_math)
 
 
 # Event types that count toward the auto-submit limit (leaving the exam).
