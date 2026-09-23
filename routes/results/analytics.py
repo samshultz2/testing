@@ -217,21 +217,36 @@ def readiness():
 
     # Readiness is judged from the MOCKS (Mock WAEC / Mock JAMB), since real JAMB
     # (2nd term) and WAEC (3rd term) don't exist yet for most of the cohort.
+    # Each of s.mock_jamb_results / s.mock_waec_results is lazy='dynamic', so a
+    # .count()/.all() call per student here is a fresh SELECT every time (no
+    # identity-map reuse for dynamic relationships) — batch both up front.
+    from models import MockJAMBResult, MockWAECResult
+    student_ids = [s.id for s in students]
+    jamb_scores = defaultdict(list)
+    if student_ids:
+        for sid, score in (db.session.query(MockJAMBResult.student_id, MockJAMBResult.total_score)
+                            .filter(MockJAMBResult.student_id.in_(student_ids)).all()):
+            jamb_scores[sid].append(score)
+    waec_counts = dict(db.session.query(
+            MockWAECResult.student_id, func.count(MockWAECResult.id))
+        .filter(MockWAECResult.student_id.in_(student_ids))
+        .group_by(MockWAECResult.student_id).all()) if student_ids else {}
+
     no_stream, no_jamb, no_waec, no_jamb_subjects, no_waec_subjects = [], [], [], [], []
     below_target = []
     for s in students:
         if not s.stream:
             no_stream.append(s)
-        if s.mock_jamb_results.count() == 0:
+        if not jamb_scores.get(s.id):
             no_jamb.append(s)
-        if s.mock_waec_results.count() == 0:
+        if not waec_counts.get(s.id):
             no_waec.append(s)
         if not s.jamb_subject_list:
             no_jamb_subjects.append(s)
         if not s.waec_subject_list:
             no_waec_subjects.append(s)
         if s.jamb_target:
-            mocks = [m.total_score for m in s.mock_jamb_results.all()]
+            mocks = jamb_scores.get(s.id) or []
             best = max(mocks) if mocks else 0
             if best < s.jamb_target:
                 below_target.append(s)
