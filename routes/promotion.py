@@ -1149,40 +1149,47 @@ def process_promotion():
             if arm_id:
                 aq = aq.filter_by(arm_id=arm_id)
             assignments = scope_query(aq, ClassArmAssignment).all()
-            
+
+            # Batched instead of the old one-query-per-student approach (which
+            # ran into the hundreds of queries for a single class): eager-load
+            # .student on the enrollment fetch, compute every student's
+            # average in one aggregate query per assignment, look up every
+            # existing promotion record in one query for the whole class, and
+            # build the recommendation logic (which never varied per student
+            # to begin with — only class_id/threshold matter) exactly once.
+            from sqlalchemy.orm import joinedload
+            per_assignment = []
+            all_student_ids = []
             for assignment in assignments:
-                # Get enrolled students
-                enrollments = StudentEnrollment.query.filter_by(
-                    class_arm_assignment_id=assignment.id,
-                    is_active=True
-                ).all()
-                
+                enrollments = (StudentEnrollment.query
+                              .filter_by(class_arm_assignment_id=assignment.id, is_active=True)
+                              .options(joinedload(StudentEnrollment.student))
+                              .all())
+                per_assignment.append((assignment, enrollments))
+                all_student_ids.extend(e.student_id for e in enrollments)
+
+            existing_by_student = {
+                pr.student_id: pr for pr in PromotionRecord.query.filter(
+                    PromotionRecord.student_id.in_(all_student_ids or [-1]),
+                    PromotionRecord.from_session_id == from_session_id).all()
+            }
+            recommend = _make_promotion_recommender(class_id, promotion_threshold)
+
+            for assignment, enrollments in per_assignment:
+                student_ids = [e.student_id for e in enrollments]
+                averages = _bulk_student_averages(student_ids, third_term.id, assignment)
                 for enrollment in enrollments:
                     student = enrollment.student
-                    
-                    # Calculate average score
-                    avg_score = calculate_student_average(student.id, third_term.id, assignment)
-                    
-                    # Check existing promotion record
-                    existing_promotion = PromotionRecord.query.filter_by(
-                        student_id=student.id,
-                        from_session_id=from_session_id
-                    ).first()
-                    
-                    # Determine recommended action
-                    recommendation = get_promotion_recommendation(
-                        student.id, class_id, avg_score, promotion_threshold
-                    )
-                    
+                    avg_score = averages.get(student.id)
                     students_data.append({
                         'student': student,
                         'enrollment': enrollment,
                         'assignment': assignment,
                         'average': avg_score,
-                        'recommendation': recommendation,
-                        'existing_promotion': existing_promotion
+                        'recommendation': recommend(avg_score),
+                        'existing_promotion': existing_by_student.get(student.id),
                     })
-            
+
             # Sort by average descending
             students_data.sort(key=lambda x: x['average'] or 0, reverse=True)
     
@@ -1512,78 +1519,87 @@ def promotion_history():
 # HELPER FUNCTIONS
 # ============================================================================
 
-def calculate_student_average(student_id, term_id, assignment):
-    """Calculate student's average score for a term"""
-    # Get class subjects
+def _bulk_student_averages(student_ids, term_id, assignment):
+    """Every student's term average for one class-arm assignment, in two
+    queries total instead of the old 1 + (subjects x students): one for the
+    term's class subjects (the same set for every student in this
+    assignment, so it doesn't belong inside a per-student loop), one
+    aggregate query summing every student's scores per subject."""
+    if not student_ids:
+        return {}
     class_subjects = ClassSubject.query.filter_by(
-        term_id=term_id,
-        class_id=assignment.class_id,
-        is_active=True
+        term_id=term_id, class_id=assignment.class_id, is_active=True
     ).filter(
         (ClassSubject.arm_id == None) | (ClassSubject.arm_id == assignment.arm_id)
     ).all()
-    
     if not class_subjects:
-        return None
-    
-    total_score = 0
-    subjects_with_scores = 0
-    
-    for cs in class_subjects:
-        # Sum all scores for this subject
-        scores = StudentScore.query.filter_by(
-            student_id=student_id,
-            class_subject_id=cs.id
-        ).all()
-        
-        subject_total = sum(s.score for s in scores)
-        if subject_total > 0:
-            total_score += subject_total
-            subjects_with_scores += 1
-    
-    if subjects_with_scores == 0:
-        return None
-    
-    return round(total_score / subjects_with_scores, 2)
+        return {sid: None for sid in student_ids}
+
+    from collections import defaultdict
+    from sqlalchemy import func
+    cs_ids = [cs.id for cs in class_subjects]
+    totals = (db.session.query(
+                StudentScore.student_id, StudentScore.class_subject_id,
+                func.sum(StudentScore.score))
+              .filter(StudentScore.student_id.in_(student_ids),
+                      StudentScore.class_subject_id.in_(cs_ids))
+              .group_by(StudentScore.student_id, StudentScore.class_subject_id)
+              .all())
+    by_student = defaultdict(dict)
+    for sid, csid, total in totals:
+        by_student[sid][csid] = total or 0
+
+    averages = {}
+    for sid in student_ids:
+        subject_totals = by_student.get(sid, {})
+        total_score = 0
+        subjects_with_scores = 0
+        for csid in cs_ids:
+            subject_total = subject_totals.get(csid, 0)
+            if subject_total > 0:
+                total_score += subject_total
+                subjects_with_scores += 1
+        averages[sid] = round(total_score / subjects_with_scores, 2) if subjects_with_scores else None
+    return averages
 
 
-def get_promotion_recommendation(student_id, class_id, average, threshold):
-    """Get promotion recommendation based on rules"""
-    if average is None:
-        return {'status': 'unknown', 'message': 'No scores', 'to_class': None, 'stream': None}
-    
+def _make_promotion_recommender(class_id, threshold):
+    """A function average -> recommendation dict, for a fixed class_id and
+    threshold. The old get_promotion_recommendation() re-ran the class lookup,
+    the promotion-rules query and the next-level-class query on every single
+    student call even though none of that depends on which student it is —
+    same class_id, same rules, every time. Look it up once per request
+    instead and close over it."""
     current_class = db.session.get(SchoolClass, class_id)
-    
-    # Check if graduating (SSS3) - always graduate, no repeating
+
+    # Graduating (SSS3) always graduates, no repeating — no rules needed.
     if current_class and current_class.level == 6:
-        return {'status': 'graduated', 'message': 'Graduate', 'to_class': None, 'stream': None}
-    
-    # Get promotion rules
+        def recommend(average):
+            if average is None:
+                return {'status': 'unknown', 'message': 'No scores', 'to_class': None, 'stream': None}
+            return {'status': 'graduated', 'message': 'Graduate', 'to_class': None, 'stream': None}
+        return recommend
+
     rules = PromotionRule.query.filter_by(
-        from_class_id=class_id,
-        is_active=True
+        from_class_id=class_id, is_active=True
     ).order_by(PromotionRule.priority.desc()).all()
-    
-    # Check each rule
-    for rule in rules:
-        if average >= rule.min_average:
-            # Check required subjects if specified
-            if rule.required_subjects:
-                # For stream-based promotion (like Science/Arts)
-                # This would need subject-specific score checking
-                pass
-            
-            return {
-                'status': 'promote',
-                'message': f'Promote to {rule.to_class.name}' + (f' ({rule.stream_name})' if rule.stream_name else ''),
-                'to_class': rule.to_class_id,
-                'stream': rule.stream_name
-            }
-    
-    # Default: check basic threshold
-    if average >= threshold:
-        next_class = SchoolClass.query.filter(SchoolClass.level == current_class.level + 1).first()
-        if next_class:
-            return {'status': 'promote', 'message': f'Promote to {next_class.name}', 'to_class': next_class.id, 'stream': None}
-    
-    return {'status': 'repeat', 'message': f'Below threshold ({average:.1f}%)', 'to_class': class_id, 'stream': None}
+    next_class = (SchoolClass.query.filter(SchoolClass.level == current_class.level + 1).first()
+                  if current_class else None)
+
+    def recommend(average):
+        if average is None:
+            return {'status': 'unknown', 'message': 'No scores', 'to_class': None, 'stream': None}
+        for rule in rules:
+            if average >= rule.min_average:
+                return {
+                    'status': 'promote',
+                    'message': f'Promote to {rule.to_class.name}' + (f' ({rule.stream_name})' if rule.stream_name else ''),
+                    'to_class': rule.to_class_id,
+                    'stream': rule.stream_name,
+                }
+        if average >= threshold and next_class:
+            return {'status': 'promote', 'message': f'Promote to {next_class.name}',
+                    'to_class': next_class.id, 'stream': None}
+        return {'status': 'repeat', 'message': f'Below threshold ({average:.1f}%)',
+                'to_class': class_id, 'stream': None}
+    return recommend
