@@ -1,0 +1,43 @@
+/* Self-hosted brand/product fonts — replaces per-page fonts.googleapis.com
+   links so every page (including the CBT/Mock JAMB exam-taking pages) avoids
+   an external-origin DNS+TLS round trip just to render text. Each file is the
+   single latin-subset VARIABLE font Google itself serves for these families,
+   so one small download covers every weight already used across the app
+   (see fonts.gstatic.com's own @font-face output: it maps every requested
+   static weight to the same variable file). Dynamic per-school fonts on the
+   public Website Builder pages are untouched — those are chosen at runtime
+   per site and still load from Google Fonts (see utils/site_themes.py).
+   Regenerate by re-running the curl steps in the commit that added this file
+   if a family/weight is ever added. */
+
+@font-face {
+  font-family: 'DM Sans';
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url('../vendor/fonts/dm-sans-var.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Space Grotesk';
+  font-style: normal;
+  font-weight: 500 700;
+  font-display: swap;
+  src: url('../vendor/fonts/space-grotesk-var.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('../vendor/fonts/inter-var.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+  src: url('../vendor/fonts/plus-jakarta-sans-var.woff2') format('woff2');
+}
