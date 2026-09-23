@@ -1894,12 +1894,20 @@ def _students_payload():
     # `SELECT DISTINCT stream ... ORDER BY surname` (order columns must be in the
     # select list), which SQLite tolerates.
     try:
+        from sqlalchemy import case
         base = _students_query().order_by(None)
-        male = base.filter(Student.gender == 'Male').count()
-        female = base.filter(Student.gender == 'Female').count()
-        streams = (base.filter(Student.stream.isnot(None), Student.stream != '')
-                   .with_entities(Student.stream).distinct().count())
-        summary = {'total': pg.total, 'male': male, 'female': female, 'streams': streams}
+        # One aggregate query instead of three separate COUNTs — same numbers,
+        # one DB round-trip. COUNT(DISTINCT ...) already skips NULLs on its
+        # own; the CASE also maps '' to NULL so an empty stream isn't counted
+        # as a distinct value, matching the previous filtered-count behaviour.
+        male, female, streams = base.with_entities(
+            func.sum(case((Student.gender == 'Male', 1), else_=0)),
+            func.sum(case((Student.gender == 'Female', 1), else_=0)),
+            func.count(func.distinct(
+                case((Student.stream.isnot(None) & (Student.stream != ''), Student.stream)))),
+        ).one()
+        summary = {'total': pg.total, 'male': int(male or 0), 'female': int(female or 0),
+                   'streams': int(streams or 0)}
     except Exception:
         # Clear any aborted transaction so the rest of the payload still builds.
         db.session.rollback()
@@ -1952,7 +1960,13 @@ def _students_payload():
         'bulk_id_cards_url': url_for('main.bulk_id_cards'),
         'bulk_aspiration_url': url_for('main.bulk_set_aspiration'),
         'import_photos_url': url_for('main.import_photos') if can_add else None,
-        **_aspiration_lists(),
+        # Universities/courses for the bulk-aspiration dropdowns are NOT
+        # embedded here: it's the full national catalogue (1000+ / 600+ rows)
+        # and this payload is refetched on every filter/page/sort change, so
+        # inlining it would resend hundreds of KB the list itself never uses.
+        # The frontend fetches it once, lazily, from aspiration_lists_url,
+        # only if/when the bulk-assign controls actually become visible.
+        'aspiration_lists_url': url_for('main.api_aspiration_lists'),
     }
 
 

@@ -106,6 +106,24 @@ def test_csv_export(app):
         _teardown(app)
 
 
+def test_list_payload_excludes_aspiration_catalogue(app):
+    """/api/students (and the SSR page payload) must NOT embed the full
+    universities/courses catalogue — it's the entire national list (1000+ /
+    600+ rows) and this payload is refetched on every filter/page/sort
+    change, so inlining it would resend hundreds of KB the list itself never
+    uses. It's served separately, on demand, via aspiration_lists_url."""
+    _setup(app)
+    try:
+        c = _admin(app)
+        j = c.get('/api/students').get_json()
+        assert 'universities' not in j and 'courses' not in j
+        assert j.get('aspiration_lists_url')
+        j2 = c.get(j['aspiration_lists_url']).get_json()
+        assert 'universities' in j2 and 'courses' in j2
+    finally:
+        _teardown(app)
+
+
 def test_filter_works_for_non_admin(app):
     """A non-admin (staff with students access) can also use the filter."""
     ids = _setup(app)

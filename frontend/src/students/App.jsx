@@ -117,6 +117,15 @@ export default function App({ initial }) {
   // let the first effect run fetch fresh (filtered) data instead of skipping it.
   const skip = useRef(!start.restored);
 
+  // The universities/courses catalogue (1000+ / 600+ rows) for the bulk
+  // "assign aspiration" dropdowns isn't in the list payload — it's fetched
+  // once, lazily, only once the bulk-assign controls actually appear, so a
+  // plain visit to the list (or any filter/page/sort change) never has to
+  // move that dead weight over the wire. Cached in state for the rest of
+  // this page visit once loaded.
+  const [aspirationLists, setAspirationLists] = useState(null);
+  const [loadingAspiration, setLoadingAspiration] = useState(false);
+
   const load = useCallback(async (q) => {
     setLoading(true);
     const p = new URLSearchParams();
@@ -152,6 +161,17 @@ export default function App({ initial }) {
     }, 500);
     return () => clearTimeout(t);
   }, [search]);
+
+  // Fetch the universities/courses catalogue only once the bulk-assign
+  // controls are actually shown (a bulk-capable user has selected at least
+  // one student), and only once per visit.
+  useEffect(() => {
+    const url = data && data.aspiration_lists_url;
+    const canShow = data && data.can_bulk && selected.size > 0;
+    if (!canShow || !url || aspirationLists || loadingAspiration) return;
+    setLoadingAspiration(true);
+    apiGet(url).then(setAspirationLists).catch(() => {}).finally(() => setLoadingAspiration(false));
+  }, [data, selected, aspirationLists, loadingAspiration]);
 
   const d = data || {};
   const students = d.students || [];
@@ -461,16 +481,18 @@ export default function App({ initial }) {
             </select>
             <button type="button" className="btn btn-primary btn-sm" disabled={!bulkBoarding}
                     onClick={() => needSel() && runAction(d.bulk_boarding_url, { boarding: bulkBoarding, student_ids: selectedIds }, 'Boarding status updated.')}>Apply</button>
-            {d.bulk_aspiration_url && (d.universities || []).length > 0 && <>
+            {d.bulk_aspiration_url && <>
               <select className="form-control" style={{ width: 'auto', maxWidth: 170 }} value={bulkUni}
-                      onChange={(e) => setBulkUni(e.target.value)} aria-label="Bulk university" title="Assign target university">
-                <option value="">University…</option>
-                {(d.universities || []).map((u) => <option key={u.id} value={u.id}>{u.label}</option>)}
+                      onChange={(e) => setBulkUni(e.target.value)} aria-label="Bulk university" title="Assign target university"
+                      disabled={loadingAspiration}>
+                <option value="">{loadingAspiration ? 'Loading…' : 'University…'}</option>
+                {(aspirationLists && aspirationLists.universities || []).map((u) => <option key={u.id} value={u.id}>{u.label}</option>)}
               </select>
               <select className="form-control" style={{ width: 'auto', maxWidth: 170 }} value={bulkCourse}
-                      onChange={(e) => setBulkCourse(e.target.value)} aria-label="Bulk course" title="Assign target course (fills JAMB target + subjects)">
-                <option value="">Course…</option>
-                {(d.courses || []).map((cc) => <option key={cc.id} value={cc.id}>{cc.label}</option>)}
+                      onChange={(e) => setBulkCourse(e.target.value)} aria-label="Bulk course" title="Assign target course (fills JAMB target + subjects)"
+                      disabled={loadingAspiration}>
+                <option value="">{loadingAspiration ? 'Loading…' : 'Course…'}</option>
+                {(aspirationLists && aspirationLists.courses || []).map((cc) => <option key={cc.id} value={cc.id}>{cc.label}</option>)}
               </select>
               <button type="button" className="btn btn-primary btn-sm" disabled={!bulkUni && !bulkCourse}
                       title="Set the target university and/or course for the selected students (a course also fills their JAMB target + subject requirements)"

@@ -3573,6 +3573,13 @@
 ]
 ],
 [
+"main.api_aspiration_lists",
+"/api/students/aspiration-lists",
+[
+"GET"
+]
+],
+[
 "main.api_course_requirements",
 "/api/course-requirements",
 [

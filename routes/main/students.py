@@ -116,6 +116,16 @@ def api_courses():
     return jsonify({'courses': [c.as_dict() for c in rows]})
 
 
+@main_bp.route('/api/students/aspiration-lists')
+@login_required
+def api_aspiration_lists():
+    """The full universities/courses catalogue for the students list's bulk
+    "assign aspiration" dropdowns. Split out from the list payload itself
+    (_students_payload) so it's fetched once, on demand, instead of being
+    resent on every filter/page/sort change — see _aspiration_lists()."""
+    return jsonify(_aspiration_lists())
+
+
 def _waec_subjects_for_course(course):
     """The course's WAEC requirement list, falling back to English + Mathematics
     plus its JAMB combo when WAEC isn't filled in for this course (common for
