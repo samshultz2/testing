@@ -18,6 +18,18 @@ export async function requestPersistence() {
   }
 }
 
+// True when the browser reports a constrained connection (2g/slow-2g, or the
+// user has Data Saver on) — speculative background fetches (e.g. prefetching
+// days the user hasn't asked for yet) should skip in that case, so they don't
+// compete for bandwidth with the request the user is actually waiting on.
+// Unsupported in Safari/Firefox; those browsers just never skip, same as
+// before this existed — nothing regresses where the API isn't there.
+export function isSlowConnection() {
+  const c = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+  if (!c) return false;
+  return !!c.saveData || c.effectiveType === 'slow-2g' || c.effectiveType === '2g';
+}
+
 export const cachePut = (key, value) => db.rosters.put({ key, value });
 export const cacheGet = async (key) => {
   const r = await db.rosters.get(key);

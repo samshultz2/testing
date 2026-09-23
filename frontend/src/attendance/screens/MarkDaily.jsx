@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { apiGet, apiPost, isPermanent } from '../../lib/api';
-import { cachePut, cacheGet, enqueue } from '../../lib/offline';
+import { cachePut, cacheGet, enqueue, isSlowConnection } from '../../lib/offline';
 import { useCtx } from '../App';
 import { Toolbar, Field, Select, Button, Spinner, EmptyState, ErrorState, Banner, Pill, Toast } from '../../components/ui';
 import { withGroups, genderLabel, groupHeadStyle } from '../roster';
@@ -61,8 +61,11 @@ export default function MarkDaily() {
 
   // After an online load, quietly cache every weekday of that week so the
   // teacher can mark the whole week offline — not just dates they opened first.
+  // Skipped on a detectably slow/metered connection: it's a nice-to-have for
+  // offline resilience, but on a slow network it's 4 extra requests competing
+  // with the roster the user is actually looking at right now.
   const prefetchWeek = useCallback(async (aid, baseDate) => {
-    if (!navigator.onLine) return;
+    if (!navigator.onLine || isSlowConnection()) return;
     let any = false;
     for (const dt of weekdays(baseDate)) {
       if (dt === baseDate) { any = true; continue; }

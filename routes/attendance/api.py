@@ -109,9 +109,15 @@ def api_roster():
     holidays = Holiday.query.filter_by(term_id=caa.term_id).all()
     week = _week_for_date(caa.term_id, target)
     hol = next((h for h in holidays if h.date == target), None)
+    # contains_eager populates .student from this same JOIN (already needed for
+    # the filter/order-by) instead of a plain .join(), which only filters —
+    # without it, every e.student.* access below is a separate lazy-load
+    # query, one per student (N+1) on every register open.
+    from sqlalchemy.orm import contains_eager
     enrollments = (StudentEnrollment.query
                    .filter_by(class_arm_assignment_id=assignment_id, is_active=True)
                    .join(Student).filter(Student.is_active == True)  # noqa: E712  exclude departed
+                   .options(contains_eager(StudentEnrollment.student))
                    .order_by(*roster_order()).all())
     existing = {a.enrollment_id: a for a in Attendance.query.filter(
         Attendance.enrollment_id.in_([e.id for e in enrollments] or [-1]),
@@ -265,9 +271,13 @@ def api_week():
         return jsonify({'error': 'week_id required'}), 400
     holidays = Holiday.query.filter_by(term_id=week.term_id).all()
     days = _week_school_days(week, holidays)
+    # contains_eager reuses the existing JOIN to populate .student, instead of
+    # a lazy-load per row (N+1) when the students list below reads e.student.*.
+    from sqlalchemy.orm import contains_eager
     enrollments = (StudentEnrollment.query
                    .filter_by(class_arm_assignment_id=assignment_id, is_active=True)
                    .join(Student).filter(Student.is_active == True)  # noqa: E712  exclude departed
+                   .options(contains_eager(StudentEnrollment.student))
                    .order_by(*roster_order()).all())
     recs = {}
     for r in Attendance.query.filter(
@@ -514,10 +524,16 @@ def api_report_alerts():
 
     alerts = []
     if week_ids and total_times_opened > 0 and class_by_id:
+        # contains_eager populates .student from this same JOIN — this spans
+        # every class the user can see for the whole term, so a per-row
+        # lazy-load here (the old N+1) scales far worse than the single-class
+        # roster endpoints above.
+        from sqlalchemy.orm import contains_eager
         enrollments = (StudentEnrollment.query
                        .filter(StudentEnrollment.class_arm_assignment_id.in_(list(class_by_id)),
                                StudentEnrollment.is_active == True)  # noqa: E712
                        .join(Student).filter(Student.is_active == True)  # noqa: E712  exclude departed
+                       .options(contains_eager(StudentEnrollment.student))
                        .all())
         present_by_enrollment = {}
         for a in Attendance.query.filter(
@@ -661,9 +677,11 @@ def api_absentees():
         return jsonify({'error': 'bad date'}), 400
 
     from utils.comms import primary_contact, normalise_phone
+    from sqlalchemy.orm import contains_eager
     enrollments = (StudentEnrollment.query
                    .filter_by(class_arm_assignment_id=caa.id, is_active=True)
                    .join(Student).filter(Student.is_active == True)  # noqa: E712
+                   .options(contains_eager(StudentEnrollment.student))
                    .order_by(*roster_order()).all())
     marks = {a.enrollment_id: a for a in Attendance.query.filter(
         Attendance.enrollment_id.in_([e.id for e in enrollments] or [-1]),
