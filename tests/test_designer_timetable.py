@@ -1,9 +1,17 @@
 """Saved Timetable Designer designs: create / list / load / update / delete,
 and branch isolation (one branch can't see, load or delete another's design)."""
 import json
+import os
 
 from models import db, Branch, User, DesignerTimetable
 from tests.conftest import login_token
+
+# The designer's own logic lives in a static, cacheable file (not inlined in
+# the page — see routes/timetable.py's designer()), so assertions about its
+# JS content check this file rather than the HTML response.
+_JS_PATH = os.path.join(os.path.dirname(__file__), '..', 'static', 'js', 'timetable-designer.js')
+with open(_JS_PATH, encoding='utf-8') as _f:
+    DESIGNER_JS = _f.read()
 
 
 def _tok(c):
@@ -74,34 +82,39 @@ def test_designer_page_has_day_demarcation_and_editable_grid(auth_client):
     cells, and the viewport-anchored export modal."""
     html = auth_client.get('/timetable/designer').get_data(as_text=True)
     # (1) export modal is reparented to <body> and locks scroll so it can't open
-    # off-screen behind a transformed ancestor on mobile
-    assert 'document.body.appendChild(modal)' in html
-    assert "document.body.style.overflow = 'hidden'" in html
-    # (2) thick visual demarcation between days (rows) and columns
+    # off-screen behind a transformed ancestor on mobile — JS logic
+    assert 'document.body.appendChild(modal)' in DESIGNER_JS
+    assert "document.body.style.overflow = 'hidden'" in DESIGNER_JS
+    # (2) thick visual demarcation between days (rows) and columns — CSS, so
+    # still server-rendered in the page itself
     assert 'tbody.day + tbody.day' in html
     assert 'tbody class="day"' in html
     assert 'day-col' in html and 'blankgrid' in html
-    # (3) the blank grid's cells are editable (contenteditable + persisted data-rc)
-    assert 'grid-tt blankgrid' in html
-    assert 'class="roster-cell col-sep" contenteditable="true"' in html
+    # (3) the blank grid's cells are editable (contenteditable + persisted
+    # data-rc) — the markup strings the JS builds at render time
+    assert 'grid-tt blankgrid' in DESIGNER_JS
+    assert 'class="roster-cell col-sep" contenteditable="true"' in DESIGNER_JS
 
 
 def test_designer_has_custom_list_table_mode(auth_client):
     """The auto-numbered custom table: layout option, S/N column, paste box +
     AI prompt, and the CSV paste handler."""
     html = auth_client.get('/timetable/designer').get_data(as_text=True)
-    # the new layout choice and its render path (S/N column, listtable table)
+    # the new layout choice — a static <option>, still in the page
     assert 'value="list_table"' in html
-    assert 'sn-col' in html and 'blankgrid listtable' in html
-    assert "isListTable()" in html
-    # CSV paste keeps working here: dedicated paste box, handler and AI prompt
+    assert 'sn-col' in html
+    # the render path that builds it — JS logic
+    assert 'blankgrid listtable' in DESIGNER_JS
+    assert "isListTable()" in DESIGNER_JS
+    # CSV paste keeps working here: dedicated paste box (static markup) +
+    # handler/AI prompt wiring (JS logic)
     assert 'id="listPasteBox"' in html
-    assert 'function listPaste()' in html
+    assert 'function listPaste()' in DESIGNER_JS
     assert 'id="tt-list-prompt"' in html
     assert 'data-call="listPaste"' in html
-    # row-count control + persistence of the row count
+    # row-count control (static markup) + persistence of the row count (JS)
     assert 'id="listRows"' in html
-    assert 'listRows:el(' in html
+    assert 'listRows:el(' in DESIGNER_JS
 
 
 def test_quick_add_has_copyable_ai_prompt(auth_client):
@@ -111,11 +124,11 @@ def test_quick_add_has_copyable_ai_prompt(auth_client):
     html = auth_client.get('/timetable/designer').get_data(as_text=True)
     assert 'id="tt-bulk-prompt"' in html
     assert 'data-copy="tt-bulk-prompt"' in html
-    assert 'function buildBulkPrompt()' in html
+    assert 'function buildBulkPrompt()' in DESIGNER_JS
     # rebuilt on every renderEditor() call, so it tracks the field order shown
     # to the user (BULK_SHORT) rather than duplicating a second field list
-    assert "el('tt-bulk-prompt').textContent = buildBulkPrompt();" in html
-    assert 'BULK_INTRO' in html and 'BULK_FIELD_HINT' in html
+    assert "el('tt-bulk-prompt').textContent = buildBulkPrompt();" in DESIGNER_JS
+    assert 'BULK_INTRO' in DESIGNER_JS and 'BULK_FIELD_HINT' in DESIGNER_JS
 
 
 def test_designer_offers_extra_themes(auth_client):

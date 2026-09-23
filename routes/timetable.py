@@ -95,9 +95,21 @@ def designer():
     school_name = SchoolSettings.get('school_name', '') or ''
     subjects = [s.name for s in
                 Subject.query.filter_by(is_active=True).order_by(Subject.name).all()]
+    # The designer's own JS lives in a static, cacheable file (not inlined in
+    # this page), so the handful of page-specific values it needs go in a
+    # small JSON config island instead of being templated into the script.
+    designer_config = {
+        'urls': {
+            'save': url_for('timetable.designer_save'),
+            'list': url_for('timetable.designer_saved'),
+            'load_base': url_for('timetable.designer_load', design_id=0)[:-1],
+            'delete_base': url_for('timetable.designer_delete', design_id=0)[:-1],
+        },
+        'saved': _saved_designs_list(),
+    }
     return render_template('timetable/designer.html',
                            school_name=school_name, school_logo_url=logo_url(),
-                           subjects=subjects, saved_designs=_saved_designs_list())
+                           subjects=subjects, designer_config=designer_config)
 
 
 # --- Saved designer timetables ---------------------------------------------
