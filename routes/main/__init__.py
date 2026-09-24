@@ -1617,9 +1617,17 @@ def _dash_mock_snapshot(tscope=None):
 
 
 def _dash_attendance_trend(active_term, tscope=None):
-    """Average attendance % for the last 8 weeks of the active term — branch-
-    scoped, or restricted to the teacher's own class assignments."""
+    """Average attendance % for the last 8 weeks that have actually started
+    in the active term — branch-scoped, or restricted to the teacher's own
+    class assignments.
+
+    generate_weeks() bulk-creates every week of a term up front (the whole
+    calendar), so "last 8 by start_date" can silently mean the last 8 weeks
+    of the TERM rather than of the CALENDAR SO FAR — all-future, all-empty
+    weeks — once the term has more weeks left than have happened. Excluding
+    weeks that haven't started yet keeps this showing actual recent data."""
     from utils.branch_scope import viewing_branch_id
+    from utils import timeutil
     if not active_term:
         return []
     branch_enr = None
@@ -1633,7 +1641,9 @@ def _dash_attendance_trend(active_term, tscope=None):
                           .join(ClassArmAssignment,
                                 StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
                           .filter(ClassArmAssignment.branch_id == bid))
-    weeks = Week.query.filter_by(term_id=active_term.id).order_by(Week.start_date).all()[-8:]
+    weeks = (Week.query.filter_by(term_id=active_term.id)
+             .filter(Week.start_date <= timeutil.today())
+             .order_by(Week.start_date).all()[-8:])
     trend = []
     for w in weeks:
         wq = Attendance.query.filter_by(week_id=w.id)
