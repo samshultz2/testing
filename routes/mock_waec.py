@@ -13,6 +13,7 @@ from flask import (Blueprint, request, redirect, url_for, flash, render_template
                    abort, send_file)
 from openpyxl import Workbook
 
+from sqlalchemy.orm import contains_eager
 from models import db, Student, AcademicSession, SchoolSettings
 from models.mock_waec import (MockWAECExam, MockWAECResult, MockWAECAnalytics,
                               waec_grade_from_score, PASS_GRADES)
@@ -170,8 +171,14 @@ def view_exam(exam_id):
     stats = MockWAECAnalytics.get_exam_statistics(exam_id)
 
     # Per-student rows (subject grades collapsed) for the results table.
+    # contains_eager reuses the join to hydrate .student instead of a lazy
+    # load per row (identity-map dedup means it's "only" one query per
+    # distinct student otherwise, but that's still N extra queries for an
+    # N-student cohort).
     rows = {}
-    for r in MockWAECResult.query.filter_by(mock_exam_id=exam_id).join(Student).all():
+    result_rows = (MockWAECResult.query.filter_by(mock_exam_id=exam_id)
+                   .join(Student).options(contains_eager(MockWAECResult.student)).all())
+    for r in result_rows:
         rows.setdefault(r.student_id, {'student': r.student, 'results': []})
         rows[r.student_id]['results'].append(r)
     students = []
@@ -547,6 +554,11 @@ def grid_entry(exam_id):
 
     if request.method == 'POST' and request.form.get('action') == 'save':
         cols = [c for c in request.form.getlist('col') if c in WAEC_SUBJECTS] or subjects
+        # One bulk fetch of this exam's existing results instead of a lookup
+        # query per (student, subject) cell — a full-cohort grid save can be
+        # 100+ students x several subjects.
+        existing_map = {(r.student_id, r.subject): r for r in
+                        MockWAECResult.query.filter_by(mock_exam_id=exam_id).all()}
         touched, saved = set(), 0
         for s in students:
             for subj in cols:
@@ -557,7 +569,7 @@ def grid_entry(exam_id):
                     score = max(0, min(100, int(round(float(raw)))))
                 except (TypeError, ValueError):
                     continue
-                _upsert_result(s.id, exam_id, subj, score, None)
+                _upsert_result(s.id, exam_id, subj, score, None, existing=existing_map)
                 touched.add(s.id)
                 saved += 1
         db.session.commit()
@@ -780,11 +792,15 @@ def paste_entry(exam_id):
 
     if request.method == 'POST' and action == 'confirm':
         rows, _ = _parse_paste(text)          # re-parse: never trust a serialized blob
+        # Same bulk-fetch-then-lookup as grid entry: a pasted import can be
+        # hundreds of rows.
+        existing_map = {(r.student_id, r.subject): r for r in
+                        MockWAECResult.query.filter_by(mock_exam_id=exam_id).all()}
         touched, saved = set(), 0
         for row in rows:
             if row['status'] in ('ok', 'warning') and row['student_id']:
                 _upsert_result(row['student_id'], exam_id, row['subject'],
-                               row['score'], row['grade'])
+                               row['score'], row['grade'], existing=existing_map)
                 touched.add(row['student_id'])
                 saved += 1
         db.session.commit()
@@ -801,13 +817,24 @@ def paste_entry(exam_id):
     return render_template('mock_waec/paste_entry.html', exam=exam, text=text, preview=preview)
 
 
-def _upsert_result(student_id, exam_id, subject, score, grade=None):
-    """Insert or update one subject result (no commit)."""
-    row = MockWAECResult.query.filter_by(
-        student_id=student_id, mock_exam_id=exam_id, subject=subject).first()
+def _upsert_result(student_id, exam_id, subject, score, grade=None, existing=None):
+    """Insert or update one subject result (no commit).
+
+    ``existing`` is an optional {(student_id, subject): row} map — pass one
+    (pre-fetched with a single bulk query) when saving many rows in a loop
+    (grid entry, paste import) to skip the per-call lookup query; omit it for
+    a one-off single-student save."""
+    key = (student_id, subject)
+    if existing is not None:
+        row = existing.get(key)
+    else:
+        row = MockWAECResult.query.filter_by(
+            student_id=student_id, mock_exam_id=exam_id, subject=subject).first()
     if row is None:
         row = MockWAECResult(student_id=student_id, mock_exam_id=exam_id, subject=subject)
         db.session.add(row)
+        if existing is not None:
+            existing[key] = row
     row.apply_score(score, grade)
     return row
 
@@ -918,7 +945,9 @@ def _slips_for(exam_id, student_id=None):
         return [{'student': student,
                  'summary': MockWAECAnalytics.get_student_exam_summary(student_id, exam_id)}]
     by_student = {}
-    for r in MockWAECResult.query.filter_by(mock_exam_id=exam_id).join(Student).all():
+    result_rows = (MockWAECResult.query.filter_by(mock_exam_id=exam_id)
+                   .join(Student).options(contains_eager(MockWAECResult.student)).all())
+    for r in result_rows:
         by_student.setdefault(r.student_id, {'student': r.student, 'results': []})
         by_student[r.student_id]['results'].append(r)
     slips = []
@@ -1045,7 +1074,8 @@ def export_results(exam_id):
     ws.title = 'Mock WAEC'
     ws.append(['Student', 'Subject', 'Score', 'Grade'])
     results = (MockWAECResult.query.filter_by(mock_exam_id=exam_id)
-               .join(Student).order_by(Student.surname, MockWAECResult.subject).all())
+               .join(Student).options(contains_eager(MockWAECResult.student))
+               .order_by(Student.surname, MockWAECResult.subject).all())
     for r in results:
         ws.append([formula_guard(r.student.full_name), r.subject, r.score, r.grade])
     return xlsx_response(wb, f'mock_waec_{exam.exam_number}_{exam.session.name.replace("/", "-")}.xlsx')

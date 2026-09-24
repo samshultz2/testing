@@ -189,10 +189,12 @@ def _jamb_records(exam, allowed_ids):
 
 def _waec_records(exam, allowed_ids):
     """One record per candidate aggregating that student's subject rows."""
+    from sqlalchemy.orm import contains_eager
     from models import MockWAECResult, Student
     from models.mock_waec import waec_grade_from_score
     rows = (MockWAECResult.query.filter_by(mock_exam_id=exam.id)
-            .join(Student, Student.id == MockWAECResult.student_id).all())
+            .join(Student, Student.id == MockWAECResult.student_id)
+            .options(contains_eager(MockWAECResult.student)).all())
     by_student = {}
     for r in rows:
         if allowed_ids is not None and r.student.branch_id not in allowed_ids:

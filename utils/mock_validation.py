@@ -259,25 +259,30 @@ def waec_validation(session_id=None, mock_exam_id=None, year=None):
             'session_id': mock.session_id}
     gp = WAECResult.grade_to_points
 
-    # Actual grades indexed by (student, subject) — the student's latest year, or
-    # the requested year.
-    def actual_grade(student_id, subject_norm):
-        q = WAECResult.query.filter_by(student_id=student_id)
+    mock_results = MockWAECResult.query.filter_by(mock_exam_id=mock.id).all()
+    student_ids = {r.student_id for r in mock_results}
+
+    # Actual grades indexed by (student, subject) — the student's latest year,
+    # or the requested year. One bulk query for every student in this mock
+    # instead of a fresh WAECResult query per mock-result ROW (a 100-student,
+    # 9-subject mock used to run up to 900 of these).
+    best_actual = {}
+    if student_ids:
+        q = WAECResult.query.filter(WAECResult.student_id.in_(student_ids))
         if year:
             q = q.filter_by(exam_year=year)
-        best = None
         for w in q.all():
-            if _norm_subject(w.subject) == subject_norm:
-                if best is None or w.exam_year > best.exam_year:
-                    best = w
-        return best
+            key = (w.student_id, _norm_subject(w.subject))
+            best = best_actual.get(key)
+            if best is None or w.exam_year > best.exam_year:
+                best_actual[key] = w
 
     pairs = []
-    for r in MockWAECResult.query.filter_by(mock_exam_id=mock.id).all():
+    for r in mock_results:
         if not r.grade:
             continue
         subj = _norm_subject(r.subject)
-        a = actual_grade(r.student_id, subj)
+        a = best_actual.get((r.student_id, subj))
         if a and a.grade:
             pairs.append({'student_id': r.student_id, 'subject': r.subject,
                           'subject_norm': subj, 'mock_grade': r.grade,

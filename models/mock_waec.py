@@ -325,9 +325,15 @@ class MockWAECAnalytics:
         if not exam:
             return None
 
+        from sqlalchemy.orm import contains_eager
         from models.models import Student
+        # contains_eager reuses this join to hydrate .student instead of a
+        # lazy load per row — this is the shared core behind the broadsheet
+        # page, its PDF/blank/export variants, analytics, deep and
+        # validation, so an N-student exam meant N extra queries on every one
+        # of those pages.
         results = (MockWAECResult.query.filter_by(mock_exam_id=exam_id)
-                   .join(Student).all())
+                   .join(Student).options(contains_eager(MockWAECResult.student)).all())
         grade_order = list(GRADE_POINTS)          # A1..F9 in order
 
         cells, students, present = {}, {}, set()
