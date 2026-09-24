@@ -156,9 +156,17 @@ def build_student_profile(student_id, focus_term_id=None):
     student = db.session.get(Student, student_id)
     if not student:
         return None
+    from sqlalchemy.orm import contains_eager, joinedload
     enrollments = (StudentEnrollment.query
                    .filter_by(student_id=student_id)
                    .join(ClassArmAssignment, StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+                   .options(
+                       contains_eager(StudentEnrollment.class_arm_assignment)
+                       .joinedload(ClassArmAssignment.term).joinedload(Term.session),
+                       contains_eager(StudentEnrollment.class_arm_assignment)
+                       .joinedload(ClassArmAssignment.school_class),
+                       contains_eager(StudentEnrollment.class_arm_assignment)
+                       .joinedload(ClassArmAssignment.arm))
                    .all())
     # Order by term (session, term number) newest-first.
     def _term_key(e):
