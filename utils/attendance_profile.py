@@ -13,10 +13,20 @@ from datetime import timedelta
 
 from models import (db, Student, StudentEnrollment, ClassArmAssignment, Term,
                     AcademicSession, Week, Holiday, Attendance)
+from utils import timeutil
 
 
-def _term_school_days(term_id):
-    """Ordered list of school weekdays (Mon–Fri minus holidays) in a term."""
+def _term_school_days(term_id, up_to=None):
+    """Ordered list of school weekdays (Mon–Fri minus holidays) in a term.
+
+    Terms are set up with every week of the calendar already created (see
+    academics.generate_weeks), including ones far in the future — so the
+    unfiltered list mixes days that have actually happened with days that
+    haven't. A day with no register yet isn't an absence, it just hasn't
+    occurred, so every percentage/day-count consumer needs the bounded list:
+    this defaults to capping at today. Pass ``up_to=False`` for the full
+    term (past AND future) — only a calendar/preview display should ever
+    want that."""
     weeks = Week.query.filter_by(term_id=term_id).order_by(Week.week_number).all()
     if not weeks:
         return []
@@ -28,6 +38,9 @@ def _term_school_days(term_id):
             if d.weekday() < 5 and d not in holiday_dates:
                 days.append(d)
             d += timedelta(days=1)
+    if up_to is not False:
+        cutoff = up_to or timeutil.today()
+        days = [d for d in days if d <= cutoff]
     return days
 
 
@@ -51,7 +64,13 @@ def warning_threshold():
 
 
 def _term_stats(enrollment, term_id, want_calendar=False):
-    """Per-term attendance for one enrollment."""
+    """Per-term attendance for one enrollment. Percentage and day counts only
+    ever look at school days up to today (via _term_school_days' default) —
+    a day that hasn't happened yet has no register row, and counting it as
+    absent would understate attendance for any term still in progress. The
+    optional calendar (for display) still spans the whole term including
+    future days — they simply show as 'unmarked', same as an untaken
+    register, since there's nothing to distinguish them by yet."""
     school_days = _term_school_days(term_id)
     if not school_days:
         return None
@@ -60,7 +79,6 @@ def _term_stats(enrollment, term_id, want_calendar=False):
         Attendance.date.in_(school_days)).all()}
     total_opened = len(school_days) * 2
     present_sessions = full_days = late_days = absent_days = 0
-    calendar = []
     for d in school_days:
         rec = recs.get(d)
         st = _status_of(rec)
@@ -71,16 +89,20 @@ def _term_stats(enrollment, term_id, want_calendar=False):
             late_days += 1
         else:
             absent_days += 1
-        if want_calendar:
-            calendar.append({'date': d.isoformat(), 'status': ('unmarked' if rec is None else st),
-                             'm': bool(rec.morning_present) if rec else None,
-                             'a': bool(rec.afternoon_present) if rec else None})
     pct = round(present_sessions / total_opened * 100, 1) if total_opened else 0.0
     out = {'present_sessions': present_sessions, 'total_opened': total_opened,
            'absent_sessions': total_opened - present_sessions,
            'school_days': len(school_days), 'full_days': full_days,
            'late_days': late_days, 'absent_days': absent_days, 'percentage': pct}
     if want_calendar:
+        full_term_days = _term_school_days(term_id, up_to=False)
+        calendar = []
+        for d in full_term_days:
+            rec = recs.get(d)
+            st = _status_of(rec)
+            calendar.append({'date': d.isoformat(), 'status': ('unmarked' if rec is None else st),
+                             'm': bool(rec.morning_present) if rec else None,
+                             'a': bool(rec.afternoon_present) if rec else None})
         out['calendar'] = calendar
     return out
 

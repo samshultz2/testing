@@ -10,6 +10,7 @@ from datetime import timedelta
 from models import (db, Attendance, StudentEnrollment, ClassArmAssignment, Term,
                     Week, Holiday, Branch)
 from utils.attendance_profile import _term_school_days, warning_threshold
+from utils import timeutil
 
 CRITICAL_PCT = 50.0
 _TTL = 900   # 15 minutes
@@ -156,9 +157,13 @@ def build(term, accessible_caas, *, is_central=False, use_cache=True):
             if a.date.weekday() < 5:
                 weekday_present[a.date.weekday()] += s
 
+    # Weeks are all pre-created for the whole term up front (generate_weeks),
+    # so excluding ones that haven't started yet keeps this from padding the
+    # trend with 0%-because-it-hasn't-happened-yet future weeks.
+    today = timeutil.today()
     trend = [{'label': f'W{w.week_number}',
               'percentage': _pct(week_present[w.id], week_days[w.id] * 2 * n_students)}
-             for w in weeks if week_days[w.id] > 0]
+             for w in weeks if week_days[w.id] > 0 and w.start_date <= today]
 
     DOW = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri']
     heatmap = [{'label': DOW[i],
