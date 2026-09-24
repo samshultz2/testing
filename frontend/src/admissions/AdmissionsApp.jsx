@@ -6,6 +6,7 @@ import { confirm, Banner, PageHeader, Empty, SectionTabs, SectionShell, Table } 
 import { canWrite } from '../lib/perms';
 import { compressPhoto } from '../lib/image';
 import { isValidPhone, isValidEmail, relationshipFromName } from '../lib/validate';
+import { COUNTRIES, NIGERIA_STATES, NIGERIA_STATES_LGAS, DEFAULT_COUNTRY, DEFAULT_STATE, ageFromDOB } from '../lib/geoData';
 
 // Format-only check for a contact field (no requiredness — none of these
 // fields are mandatory on the applicant form). Shared by the live (on-blur)
@@ -159,7 +160,7 @@ function ApplicantForm({ d, notify }) {
     parent_email: a.parent_email || '', address: a.address || '', notes: a.notes || '',
     emergency_name: a.emergency_name || '', emergency_relationship: a.emergency_relationship || '',
     emergency_phone: a.emergency_phone || '', emergency_address: a.emergency_address || '',
-    country: a.country || 'Nigeria', state_of_origin: a.state_of_origin || '', lga: a.lga || '',
+    country: a.country || DEFAULT_COUNTRY, state_of_origin: a.state_of_origin || (!a.country || a.country === DEFAULT_COUNTRY ? DEFAULT_STATE : ''), lga: a.lga || '',
     father_occupation: a.father_occupation || '', languages_spoken: a.languages_spoken || '',
     blood_group: a.blood_group || '', genotype: a.genotype || '',
     photo_data: '',
@@ -183,6 +184,9 @@ function ApplicantForm({ d, notify }) {
   };
   const [busy, setBusy] = useState(false);
   const [errors, setErrors] = useState({});
+  const age = ageFromDOB(f.date_of_birth);
+  const countryHasStates = f.country === DEFAULT_COUNTRY;
+  const lgaOptions = NIGERIA_STATES_LGAS[f.state_of_origin] || [];
   const set = (k, v) => {
     setF((s) => {
       const next = { ...s, [k]: v };
@@ -195,6 +199,20 @@ function ApplicantForm({ d, notify }) {
       } else if (k === 'emergency_name') {
         const rel = relationshipFromName(v);
         if (rel) next.emergency_relationship = rel;
+      } else if (k === 'country') {
+        // Switching to a country we have no state/LGA list for: the state
+        // field becomes free text, so drop a stale Nigerian-state value.
+        // Switching TO Nigeria: default to Edo rather than leaving it blank.
+        if (v === DEFAULT_COUNTRY) {
+          if (!s.state_of_origin) next.state_of_origin = DEFAULT_STATE;
+        } else if (NIGERIA_STATES.includes(s.state_of_origin)) {
+          next.state_of_origin = '';
+          next.lga = '';
+        }
+      } else if (k === 'state_of_origin') {
+        // A state's L.G.A. list changed under it — clear a no-longer-valid L.G.A.
+        const lgas = NIGERIA_STATES_LGAS[v] || [];
+        if (s.lga && !lgas.includes(s.lga)) next.lga = '';
       }
       return next;
     });
@@ -263,7 +281,11 @@ function ApplicantForm({ d, notify }) {
           <div className="form-row">{F({ label: 'Middle name', k: 'middle_name' })}
             <div className="form-group"><label className="form-label">Gender</label>
               <select className="form-control" value={f.gender} onChange={(e) => set('gender', e.target.value)}><option value="">—</option><option>Male</option><option>Female</option></select></div>
-            {F({ label: 'Date of birth', k: 'date_of_birth', type: 'date' })}</div>
+            <div className="form-group"><label className="form-label">Date of birth</label>
+              <input type="date" className="form-control" value={f.date_of_birth}
+                     onChange={(e) => set('date_of_birth', e.target.value)} />
+              {age !== null && <div className="form-hint">Age: {age} {age === 1 ? 'year' : 'years'}</div>}
+            </div></div>
           <div className="form-row">{F({ label: 'Previous school', k: 'previous_school' })}</div>
         </div></div>
 
@@ -294,7 +316,36 @@ function ApplicantForm({ d, notify }) {
         </div></div>
 
         <div className="card mb-3"><div className="card-header"><h3>Origin &amp; Health</h3></div><div className="card-body">
-          <div className="form-row">{F({ label: 'Country', k: 'country' })}{F({ label: 'State of origin', k: 'state_of_origin' })}{F({ label: 'L.G.A. of origin', k: 'lga' })}</div>
+          <div className="form-row">
+            <div className="form-group"><label className="form-label">Country</label>
+              <select className="form-control" value={f.country} onChange={(e) => set('country', e.target.value)}>
+                {/* An existing record's country may not be in our list (e.g. saved before
+                    this dropdown existed) — keep it selectable rather than silently blank it. */}
+                {f.country && !COUNTRIES.includes(f.country) && <option value={f.country}>{f.country}</option>}
+                {COUNTRIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select></div>
+            <div className="form-group"><label className="form-label">State of origin</label>
+              {countryHasStates
+                ? <select className="form-control" value={f.state_of_origin} onChange={(e) => set('state_of_origin', e.target.value)}>
+                    <option value="">—</option>
+                    {f.state_of_origin && !NIGERIA_STATES.includes(f.state_of_origin) && <option value={f.state_of_origin}>{f.state_of_origin}</option>}
+                    {NIGERIA_STATES.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                : <input type="text" className="form-control" value={f.state_of_origin}
+                         onChange={(e) => set('state_of_origin', e.target.value)} />}
+              </div>
+            <div className="form-group"><label className="form-label">L.G.A. of origin</label>
+              {countryHasStates && f.state_of_origin
+                ? <select className="form-control" value={f.lga} onChange={(e) => set('lga', e.target.value)}>
+                    <option value="">—</option>
+                    {f.lga && !lgaOptions.includes(f.lga) && <option value={f.lga}>{f.lga}</option>}
+                    {lgaOptions.map((l) => <option key={l} value={l}>{l}</option>)}
+                  </select>
+                : <input type="text" className="form-control" value={f.lga} disabled={countryHasStates && !f.state_of_origin}
+                         placeholder={countryHasStates && !f.state_of_origin ? 'Select a state first' : ''}
+                         onChange={(e) => set('lga', e.target.value)} />}
+              </div>
+          </div>
           <div className="form-row">{F({ label: "Father's occupation", k: 'father_occupation' })}{F({ label: 'Languages spoken at home', k: 'languages_spoken' })}</div>
           <div className="form-row">
             <div className="form-group"><label className="form-label">Blood group</label>
