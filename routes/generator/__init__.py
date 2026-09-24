@@ -1,7 +1,7 @@
 """
 Timetable Generator routes - Complete Version with all features
 """
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, Response
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, Response, g
 from models import (
     db, GenSubject, GenTeacher, GenTeacherSubject, GenTeacherAvailability, GenSubjectConfig,
     GenClassSubjectConfig, GenClassStreamSubject, GenStream, GenStreamSubject, GenClassConfig, GenClassArmStream, GenRoom,
@@ -30,9 +30,18 @@ def gen_bid():
     """Branch whose generator data this request reads/writes. Branch users are
     pinned to their own branch; a central user operates on the branch they are
     currently viewing (falling back to the default/HQ branch). The whole
-    generator (config + generation + results) is scoped to this branch."""
-    from utils.branch_scope import viewing_branch_id, default_branch_id
-    return viewing_branch_id() or default_branch_id()
+    generator (config + generation + results) is scoped to this branch.
+
+    Memoized on flask.g: every generator view calls this many times per
+    request (a dozen+ on the index/setup dashboards), and for a central user
+    with no branch picked, the fallback (default_branch_id()) re-queries the
+    branches table on every call — up to 2 SELECTs each. Nothing in a single
+    request changes the viewing branch mid-flight, so resolving it once and
+    reusing it is safe."""
+    if not hasattr(g, '_gen_bid'):
+        from utils.branch_scope import viewing_branch_id, default_branch_id
+        g._gen_bid = viewing_branch_id() or default_branch_id()
+    return g._gen_bid
 
 
 def gen_owned_or_404(model, obj_id):

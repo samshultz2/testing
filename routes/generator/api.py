@@ -17,11 +17,8 @@ def index():
     sss_subjects = GenSubject.query.filter_by(is_active=True, school_level='sss', branch_id=gen_bid()).count()
     
     # Class counts
-    jss_class_ids = [c.id for c in GenClassConfig.query.filter_by(is_active=True, school_level='jss', branch_id=gen_bid()).all()]
-    sss_class_ids = [c.id for c in GenClassConfig.query.filter_by(is_active=True, school_level='sss', branch_id=gen_bid()).all()]
-    
-    jss_classes = len(jss_class_ids)
-    sss_classes = len(sss_class_ids)
+    jss_classes = GenClassConfig.query.filter_by(is_active=True, school_level='jss', branch_id=gen_bid()).count()
+    sss_classes = GenClassConfig.query.filter_by(is_active=True, school_level='sss', branch_id=gen_bid()).count()
     
     jss_assignments = GenTeacherAssignment.query.join(GenClassConfig).filter(
         GenTeacherAssignment.is_active == True,
