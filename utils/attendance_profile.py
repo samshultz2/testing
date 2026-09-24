@@ -100,6 +100,34 @@ def student_term_percentage(student_id, term_id):
     return stats['percentage'] if stats else None
 
 
+def bulk_term_percentages(student_ids, term_id):
+    """Attendance % for many students in one term, batched — the intervention
+    dashboard's equivalent of calling student_term_percentage() per student,
+    without the N+1 (one shared school-days lookup, one enrollment query and
+    one Attendance query for the whole cohort instead of 2-4 queries each)."""
+    if not student_ids or not term_id:
+        return {}
+    school_days = _term_school_days(term_id)
+    if not school_days:
+        return {}
+    total_opened = len(school_days) * 2
+    enrollments = (StudentEnrollment.query
+                   .join(ClassArmAssignment, StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+                   .filter(StudentEnrollment.student_id.in_(student_ids),
+                           ClassArmAssignment.term_id == term_id).all())
+    enr_by_student = {}
+    for e in enrollments:
+        enr_by_student.setdefault(e.student_id, e)   # first match, same as student_term_percentage()'s .first()
+    present = {e.id: 0 for e in enr_by_student.values()}
+    if present:
+        for a in Attendance.query.filter(Attendance.enrollment_id.in_(list(present)),
+                                         Attendance.date.in_(school_days)).all():
+            if a.enrollment_id in present:
+                present[a.enrollment_id] += (1 if a.morning_present else 0) + (1 if a.afternoon_present else 0)
+    return {sid: round(present[e.id] / total_opened * 100, 1)
+            for sid, e in enr_by_student.items()}
+
+
 def build_student_profile(student_id, focus_term_id=None):
     """The full cross-term attendance profile for a student, or None if unknown.
     ``focus_term_id`` selects which term's calendar is expanded (default: latest)."""
