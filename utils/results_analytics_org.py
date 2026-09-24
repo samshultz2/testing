@@ -759,26 +759,42 @@ def teacher_scorecard(term_id, teacher_name, allowed_ids=None):
         return {'teacher': name, 'summary': {}, 'rows': [], 'by_subject': [],
                 'by_class': [], 'trend': {'term_names': [], 'averages': []}}
 
+    # Batch: applicable assignments + enrolled students for every class-subject
+    # this teacher has, in one query each, instead of one StudentEnrollment and
+    # one StudentScore query PER class-subject row.
+    applic_by_cs = {}
+    all_assignment_ids = set()
+    for cs in css:
+        applic = [a for a in asg_by_class.get(cs.class_id, [])
+                  if cs.arm_id is None or a.arm_id == cs.arm_id]
+        applic_by_cs[cs.id] = applic
+        all_assignment_ids.update(a.id for a in applic)
+    enr_by_assignment = {}
+    if all_assignment_ids:
+        for e in StudentEnrollment.query.filter(
+                StudentEnrollment.class_arm_assignment_id.in_(all_assignment_ids),
+                StudentEnrollment.is_active == True).all():  # noqa: E712
+            enr_by_assignment.setdefault(e.class_arm_assignment_id, []).append(e.student_id)
+    cs_ids_all = [cs.id for cs in css]
+    scores_by_cs = {}
+    if cs_ids_all:
+        for s in StudentScore.query.filter(StudentScore.class_subject_id.in_(cs_ids_all)).all():
+            if s.score is not None:
+                scores_by_cs.setdefault(s.class_subject_id, {})
+                d = scores_by_cs[s.class_subject_id]
+                d[s.student_id] = d.get(s.student_id, 0) + s.score
+
     rows = []
     all_totals = []
     students_seen = set()
     subj_roll, class_roll = {}, {}
     for cs in css:
-        applic = [a for a in asg_by_class.get(cs.class_id, [])
-                  if cs.arm_id is None or a.arm_id == cs.arm_id]
-        enr = (StudentEnrollment.query
-               .filter(StudentEnrollment.class_arm_assignment_id.in_([a.id for a in applic]),
-                       StudentEnrollment.is_active == True).all()) if applic else []  # noqa: E712
-        sids = [e.student_id for e in enr]
+        applic = applic_by_cs[cs.id]
+        sids = [sid for a in applic for sid in enr_by_assignment.get(a.id, [])]
         totals = []
         if sids:
-            per = {}
-            for s in StudentScore.query.filter(
-                    StudentScore.student_id.in_(sids),
-                    StudentScore.class_subject_id == cs.id).all():
-                if s.score is not None:
-                    per[s.student_id] = per.get(s.student_id, 0) + s.score
-            totals = [round(v, 2) for v in per.values()]
+            per = scores_by_cs.get(cs.id, {})
+            totals = [round(per[sid], 2) for sid in sids if sid in per]
             students_seen.update(sids)
         label = ', '.join(sorted({a.display_name for a in applic})) or (
             cs.school_class.name if cs.school_class else '')
@@ -812,21 +828,33 @@ def teacher_scorecard(term_id, teacher_name, allowed_ids=None):
           'pass_rate': round(100 * sum(1 for t in v if t >= pass_mark) / len(v), 1) if v else 0}
          for k, v in class_roll.items()], key=lambda x: -x['average'])
 
-    # Term trend for this teacher across the session.
+    # Term trend for this teacher across the session — one ClassSubject query
+    # (scoped to this teacher server-side, not the whole school) and one
+    # StudentScore query for every term at once, instead of one of each PER
+    # class-subject PER term.
+    from sqlalchemy import func as _func
     term = db.session.get(Term, term_id)
     names, averages = [], []
     if term and term.session_id:
-        for t in Term.query.filter_by(session_id=term.session_id).order_by(Term.term_number).all():
+        session_terms_ = Term.query.filter_by(session_id=term.session_id).order_by(Term.term_number).all()
+        term_ids = [t.id for t in session_terms_]
+        tcss_all = (ClassSubject.query.filter(
+                ClassSubject.term_id.in_(term_ids), ClassSubject.is_active == True,  # noqa: E712
+                _func.trim(_func.lower(ClassSubject.teacher_name)) == name.lower()).all())
+        cs_ids_by_term = {}
+        for c in tcss_all:
+            cs_ids_by_term.setdefault(c.term_id, []).append(c.id)
+        scores_by_term = {}
+        all_trend_cs_ids = [c.id for c in tcss_all]
+        if all_trend_cs_ids:
+            for sc in StudentScore.query.filter(
+                    StudentScore.class_subject_id.in_(all_trend_cs_ids)).all():
+                if sc.score is not None:
+                    scores_by_term.setdefault(sc.class_subject_id, []).append(sc.score)
+        for t in session_terms_:
             names.append(t.name)
-            tcss = (ClassSubject.query.filter(
-                ClassSubject.term_id == t.id, ClassSubject.is_active == True).all())  # noqa: E712
-            tcss = [c for c in tcss if (c.teacher_name or '').strip().lower() == name.lower()]
-            tot = []
-            if tcss:
-                for c in tcss:
-                    for sc in StudentScore.query.filter_by(class_subject_id=c.id).all():
-                        if sc.score is not None:
-                            tot.append(sc.score)
+            tot = [v for cs_id in cs_ids_by_term.get(t.id, [])
+                   for v in scores_by_term.get(cs_id, [])]
             averages.append(round(sum(tot) / len(tot), 2) if tot else None)
 
     return {
@@ -876,26 +904,43 @@ def subject_scorecard(term_id, subject_id, allowed_ids=None):
     if not css:
         return empty
 
+    # Batch: applicable assignments + enrolled students for every class-arm
+    # teaching this subject, in one query each, instead of one
+    # StudentEnrollment and one StudentScore query PER class-subject row (this
+    # can be dozens of rows for a subject taught school-wide).
+    applic_by_cs = {}
+    all_assignment_ids = set()
+    for cs in css:
+        applic = [a for a in asg_by_class.get(cs.class_id, [])
+                  if cs.arm_id is None or a.arm_id == cs.arm_id]
+        applic_by_cs[cs.id] = applic
+        all_assignment_ids.update(a.id for a in applic)
+    enr_by_assignment = {}
+    if all_assignment_ids:
+        for e in StudentEnrollment.query.filter(
+                StudentEnrollment.class_arm_assignment_id.in_(all_assignment_ids),
+                StudentEnrollment.is_active == True).all():  # noqa: E712
+            enr_by_assignment.setdefault(e.class_arm_assignment_id, []).append(e.student_id)
+    cs_ids_all = [cs.id for cs in css]
+    scores_by_cs = {}
+    if cs_ids_all:
+        for s in StudentScore.query.filter(StudentScore.class_subject_id.in_(cs_ids_all)).all():
+            if s.score is not None:
+                scores_by_cs.setdefault(s.class_subject_id, {})
+                d = scores_by_cs[s.class_subject_id]
+                d[s.student_id] = d.get(s.student_id, 0) + s.score
+
     rows, all_totals = [], []
     students_seen = set()
     teacher_roll, class_roll = {}, {}
     grade_dist = {g: 0 for g, _l, _h in bands}
     for cs in css:
-        applic = [a for a in asg_by_class.get(cs.class_id, [])
-                  if cs.arm_id is None or a.arm_id == cs.arm_id]
-        enr = (StudentEnrollment.query
-               .filter(StudentEnrollment.class_arm_assignment_id.in_([a.id for a in applic]),
-                       StudentEnrollment.is_active == True).all()) if applic else []  # noqa: E712
-        sids = [e.student_id for e in enr]
+        applic = applic_by_cs[cs.id]
+        sids = [sid for a in applic for sid in enr_by_assignment.get(a.id, [])]
         totals = []
         if sids:
-            per = {}
-            for s in StudentScore.query.filter(
-                    StudentScore.student_id.in_(sids),
-                    StudentScore.class_subject_id == cs.id).all():
-                if s.score is not None:
-                    per[s.student_id] = per.get(s.student_id, 0) + s.score
-            totals = [round(v, 2) for v in per.values()]
+            per = scores_by_cs.get(cs.id, {})
+            totals = [round(per[sid], 2) for sid in sids if sid in per]
             students_seen.update(sids)
         for t in totals:
             grade_dist[_grade_for(t, bands)] = grade_dist.get(_grade_for(t, bands), 0) + 1
@@ -928,20 +973,31 @@ def subject_scorecard(term_id, subject_id, allowed_ids=None):
               'pass_rate': round(100 * sum(1 for t in v if t >= pass_mark) / len(v), 1) if v else 0}
              for k, v in d.items()], key=lambda x: -x['average'])
 
-    # Term trend for this subject across the session.
+    # Term trend for this subject across the session — one ClassSubject query
+    # and one StudentScore query for every term at once, instead of one of
+    # each PER class-subject PER term.
     term = db.session.get(Term, term_id)
     names, averages = [], []
     if term and term.session_id:
-        for t in Term.query.filter_by(session_id=term.session_id).order_by(Term.term_number).all():
+        session_terms_ = Term.query.filter_by(session_id=term.session_id).order_by(Term.term_number).all()
+        term_ids = [t.id for t in session_terms_]
+        tcss_all = ClassSubject.query.filter(
+            ClassSubject.term_id.in_(term_ids), ClassSubject.subject_id == subject.id,
+            ClassSubject.is_active == True).all()  # noqa: E712
+        cs_ids_by_term = {}
+        for c in tcss_all:
+            cs_ids_by_term.setdefault(c.term_id, []).append(c.id)
+        scores_by_term_cs = {}
+        all_trend_cs_ids = [c.id for c in tcss_all]
+        if all_trend_cs_ids:
+            for sc in StudentScore.query.filter(
+                    StudentScore.class_subject_id.in_(all_trend_cs_ids)).all():
+                if sc.score is not None:
+                    scores_by_term_cs.setdefault(sc.class_subject_id, []).append(sc.score)
+        for t in session_terms_:
             names.append(t.name)
-            tcss = ClassSubject.query.filter(
-                ClassSubject.term_id == t.id, ClassSubject.subject_id == subject.id,
-                ClassSubject.is_active == True).all()  # noqa: E712
-            tot = []
-            for c in tcss:
-                for sc in StudentScore.query.filter_by(class_subject_id=c.id).all():
-                    if sc.score is not None:
-                        tot.append(sc.score)
+            tot = [v for cs_id in cs_ids_by_term.get(t.id, [])
+                   for v in scores_by_term_cs.get(cs_id, [])]
             averages.append(round(sum(tot) / len(tot), 2) if tot else None)
 
     band_defs = [('0–39', 0, 39.999), ('40–49', 40, 49.999), ('50–59', 50, 59.999),
