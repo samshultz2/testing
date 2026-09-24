@@ -95,19 +95,28 @@ def student_eligible(exam, student):
     return class_id in ids
 
 
-def candidate_subject_ids(exam, student):
-    """Ordered subject ids the student sits for this mock (English first, ≤ 4).
-
-    Subjects are those with questions in the pool the mock draws from — the
-    shared bank plus any legacy in-exam questions — intersected with the
-    student's registered JAMB subjects."""
+def exam_subject_pool(exam):
+    """(subj_ids, {id: Subject}) for the question pool this mock draws from —
+    the exam-level part of candidate_subject_ids(), which does NOT depend on
+    the student. A caller resolving subjects for MANY candidates of the same
+    exam (e.g. item analysis over a whole cohort) should compute this once
+    and pass it to candidate_subject_ids_from_pool() for each candidate,
+    instead of calling candidate_subject_ids() per candidate — that would
+    otherwise re-run this exact same exam-wide query once per candidate."""
     from models import db, MockJAMBQuestion, Subject
     subj_ids = [s for (s,) in db.session.query(MockJAMBQuestion.subject_id)
                 .filter(_pool_condition(MockJAMBQuestion, exam)).distinct().all()]
     if not subj_ids:
-        return []
+        return [], {}
     subjects = {s.id: s for s in Subject.query.filter(Subject.id.in_(subj_ids)).all()}
+    return subj_ids, subjects
 
+
+def candidate_subject_ids_from_pool(subj_ids, subjects, student):
+    """Same selection as candidate_subject_ids(), given an already-computed
+    exam-level pool (see exam_subject_pool) — no query."""
+    if not subj_ids:
+        return []
     registered = {_norm(n) for n in (student.jamb_subject_list or [])} if student else set()
     if registered:
         chosen = [sid for sid in subj_ids if _norm(subjects[sid].name) in registered]
@@ -118,6 +127,16 @@ def candidate_subject_ids(exam, student):
 
     chosen.sort(key=lambda sid: (not _is_english(subjects[sid].name), subjects[sid].name.lower()))
     return chosen[:4]
+
+
+def candidate_subject_ids(exam, student):
+    """Ordered subject ids the student sits for this mock (English first, ≤ 4).
+
+    Subjects are those with questions in the pool the mock draws from — the
+    shared bank plus any legacy in-exam questions — intersected with the
+    student's registered JAMB subjects."""
+    subj_ids, subjects = exam_subject_pool(exam)
+    return candidate_subject_ids_from_pool(subj_ids, subjects, student)
 
 
 def _seed(attempt, *parts):

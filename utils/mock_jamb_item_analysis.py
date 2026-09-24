@@ -61,11 +61,16 @@ def _pct(x):
 def _served_by_attempt(exam, attempts):
     """``{attempt_id: set(question_id served)}`` — reproduces exactly the paper
     each candidate sat, using the same deterministic builder as the sitting."""
-    from utils.mock_jamb_sitting import candidate_subject_ids, subject_items
+    from utils.mock_jamb_sitting import (exam_subject_pool,
+                                         candidate_subject_ids_from_pool, subject_items)
+    # The subject pool is exam-wide, not per-candidate — compute it once
+    # instead of once per attempt (candidate_subject_ids() would otherwise
+    # re-run the same exam-level query for every attempt in the cohort).
+    subj_ids, subjects = exam_subject_pool(exam)
     out = {}
     for att in attempts:
         served = set()
-        for sid in candidate_subject_ids(exam, att.student):
+        for sid in candidate_subject_ids_from_pool(subj_ids, subjects, att.student):
             _items, s = subject_items(exam, sid, att)
             served |= s
         out[att.id] = served
@@ -354,8 +359,9 @@ def item_analysis(exam_id, allowed_ids=None):
         'empty': False,
     }
 
-    attempts = MockJAMBAttempt.query.filter_by(
-        mock_exam_id=exam.id, status='Submitted').all()
+    from sqlalchemy.orm import joinedload
+    attempts = (MockJAMBAttempt.query.filter_by(mock_exam_id=exam.id, status='Submitted')
+               .options(joinedload(MockJAMBAttempt.student)).all())
     if allowed_ids is not None:
         attempts = [a for a in attempts if a.student and a.student.branch_id in allowed_ids]
 

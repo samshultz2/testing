@@ -82,7 +82,8 @@ def _resolve_jamb_mock(session_id, mock_exam_id):
 def jamb_validation(session_id=None, mock_exam_id=None, year=None):
     """Validate Mock JAMB against actual JAMB. Uses the given mock exam, or the
     final (highest-numbered) mock of the session."""
-    from models import db, JAMBResult
+    from sqlalchemy.orm import contains_eager
+    from models import db, JAMBResult, Student
     from models.mock_jamb import MockJAMBExam, MockJAMBResult
 
     mock = _resolve_jamb_mock(session_id, mock_exam_id)
@@ -92,13 +93,36 @@ def jamb_validation(session_id=None, mock_exam_id=None, year=None):
     meta = {'kind': 'jamb', 'mock_exam_id': mock.id, 'mock_name': mock.display_name,
             'session_id': session_id, 'cutoff': CUTOFF_DEFAULT}
 
-    def actual_for(student_id):
-        q = JAMBResult.query.filter_by(student_id=student_id)
+    exams = (MockJAMBExam.query.filter_by(session_id=session_id)
+             .order_by(MockJAMBExam.exam_number).all())
+    exam_ids = [ex.id for ex in exams] or [mock.id]
+
+    # Every MockJAMBResult across the whole session in one query (the primary
+    # mock's `pairs` AND the per-exam `per_mock` comparison both need this),
+    # plus one bulk JAMBResult query for every student involved — instead of
+    # a fresh JAMBResult query per candidate, repeated per exam in the
+    # session (M exams x C candidates extra queries otherwise).
+    all_mock_rows = (MockJAMBResult.query.filter(MockJAMBResult.mock_exam_id.in_(exam_ids))
+                     .join(Student).options(contains_eager(MockJAMBResult.student)).all())
+    rows_by_exam = {}
+    for r in all_mock_rows:
+        rows_by_exam.setdefault(r.mock_exam_id, []).append(r)
+    student_ids = {r.student_id for r in all_mock_rows}
+
+    best_actual = {}
+    if student_ids:
+        q = JAMBResult.query.filter(JAMBResult.student_id.in_(student_ids))
         if year:
             q = q.filter_by(exam_year=year)
-        return q.order_by(JAMBResult.exam_year.desc()).first()
+        for a in q.all():
+            best = best_actual.get(a.student_id)
+            if best is None or a.exam_year > best.exam_year:
+                best_actual[a.student_id] = a
 
-    mocks = MockJAMBResult.query.filter_by(mock_exam_id=mock.id).all()
+    def actual_for(student_id):
+        return best_actual.get(student_id)
+
+    mocks = rows_by_exam.get(mock.id, [])
     pairs = []
     for r in mocks:
         a = actual_for(r.student_id)
@@ -157,11 +181,9 @@ def jamb_validation(session_id=None, mock_exam_id=None, year=None):
 
     # Which mock in the session predicts actual best (correlation + MAE)?
     per_mock = []
-    exams = (MockJAMBExam.query.filter_by(session_id=session_id)
-             .order_by(MockJAMBExam.exam_number).all())
     for ex in exams:
         exs, eys = [], []
-        for r2 in MockJAMBResult.query.filter_by(mock_exam_id=ex.id).all():
+        for r2 in rows_by_exam.get(ex.id, []):
             a = actual_for(r2.student_id)
             if a and a.total_score is not None and r2.total_score is not None:
                 exs.append(r2.total_score); eys.append(a.total_score)

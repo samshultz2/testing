@@ -10,6 +10,7 @@ from io import BytesIO
 import os
 import secrets
 from sqlalchemy import func
+from sqlalchemy.orm import contains_eager
 from utils.web_exports import xlsx_response, formula_guard
 
 from models import (db, Student, AcademicSession, StudentEnrollment, ClassArmAssignment,
@@ -252,8 +253,11 @@ def view_exam(exam_id):
     max_score = request.args.get('max_score', type=int)
     search = request.args.get('search', '').strip()
     
-    # Build query for results
-    query = MockJAMBResult.query.filter_by(mock_exam_id=exam_id).join(Student)
+    # Build query for results — contains_eager reuses this join to hydrate
+    # .student instead of a lazy load per row (every MockJAMBResult row is
+    # already a distinct student here, so it's a 1:1 extra query otherwise).
+    query = (MockJAMBResult.query.filter_by(mock_exam_id=exam_id)
+             .join(Student).options(contains_eager(MockJAMBResult.student)))
     
     # Apply search filter
     if search:
@@ -513,23 +517,22 @@ def bulk_entry(exam_id):
     if sss3 and active_term:
         assignments = scope_query(ClassArmAssignment.query.filter_by(
             class_id=sss3.id, term_id=active_term.id), ClassArmAssignment).all()
+        # Bulk-fetch this exam's existing results once — the old code ran a
+        # MockJAMBResult lookup query per student on every GET (page render),
+        # not just on save.
+        existing_by_student = {r.student_id: r for r in
+                               MockJAMBResult.query.filter_by(mock_exam_id=exam_id).all()}
         for assignment in assignments:
-            enrollments = StudentEnrollment.query.filter_by(
-                class_arm_assignment_id=assignment.id,
-                is_active=True
-            ).join(Student).order_by(Student.surname).all()
-            
+            enrollments = (StudentEnrollment.query.filter_by(
+                class_arm_assignment_id=assignment.id, is_active=True)
+                .join(Student).options(contains_eager(StudentEnrollment.student))
+                .order_by(Student.surname).all())
+
             for enrollment in enrollments:
-                # Check if result exists
-                existing = MockJAMBResult.query.filter_by(
-                    student_id=enrollment.student_id,
-                    mock_exam_id=exam_id
-                ).first()
-                
                 students.append({
                     'student': enrollment.student,
                     'arm': assignment.arm_label,
-                    'existing_result': existing
+                    'existing_result': existing_by_student.get(enrollment.student_id)
                 })
     
     if request.method == 'POST':
@@ -2418,9 +2421,9 @@ def export_results(exam_id):
 
     exam = db.get_or_404(MockJAMBExam, exam_id)
     require_branch_access(exam.branch_id)
-    results = MockJAMBResult.query.filter_by(mock_exam_id=exam_id).join(Student).order_by(
-        MockJAMBResult.total_score.desc()
-    ).all()
+    results = (MockJAMBResult.query.filter_by(mock_exam_id=exam_id).join(Student)
+               .options(contains_eager(MockJAMBResult.student))
+               .order_by(MockJAMBResult.total_score.desc()).all())
     
     wb = Workbook()
     ws = wb.active
