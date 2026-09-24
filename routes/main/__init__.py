@@ -2097,10 +2097,14 @@ def _fmt_date(d):
 
 
 def _student_attendance_summary(sid):
-    """Compact attendance snapshot for the profile page: overall %, present /
-    absent / late days, low-attendance warning, latest term, and a deep link to
-    the full attendance profile. Returns None when the student has no attendance
-    data or the attendance module can't be reached (never breaks the profile)."""
+    """Compact attendance snapshot for the profile page. Headline figures
+    (donut, badge, present/late/absent day counts) are the CURRENT/latest
+    term — what someone glancing at a student's profile actually wants to
+    know ("how are they doing right now") — not a lifetime average that
+    could be hiding a fine current term behind a rough one from a year ago.
+    The cross-term 'overall' is still included, as secondary context.
+    Returns None when the student has no attendance data or the attendance
+    module can't be reached (never breaks the profile)."""
     try:
         from utils.attendance_profile import build_student_profile
         prof = build_student_profile(sid)
@@ -2109,17 +2113,24 @@ def _student_attendance_summary(sid):
     if not prof or not prof.get('terms'):
         return None
     overall = prof.get('overall') or {}
-    latest = (prof.get('terms') or [None])[0]
+    latest = (prof.get('terms') or [None])[0] or {}
+    thresh = prof.get('threshold')
+    latest_pct = latest.get('percentage')
     return {
-        'percentage': overall.get('percentage', 0),
-        'present_days': overall.get('full_days', 0),
-        'late_days': overall.get('late_days', 0),
-        'absent_days': overall.get('absent_days', 0),
+        # Current/latest term — the headline the card leads with.
+        'percentage': latest_pct if latest_pct is not None else 0,
+        'present_days': latest.get('full_days', 0),
+        'late_days': latest.get('late_days', 0),
+        'absent_days': latest.get('absent_days', 0),
+        'term_name': latest.get('term'),
+        'warning': bool(thresh is not None and latest_pct is not None and latest_pct < thresh),
+        'threshold': thresh,
+        # Cross-term — secondary context (a "since we started tracking" line).
+        'overall_percentage': overall.get('percentage', 0),
+        'overall_present_days': overall.get('full_days', 0),
+        'overall_late_days': overall.get('late_days', 0),
+        'overall_absent_days': overall.get('absent_days', 0),
         'terms': overall.get('terms', 0),
-        'threshold': prof.get('threshold'),
-        'warning': bool(prof.get('warning')),
-        'latest_term': (latest or {}).get('term') if latest else None,
-        'latest_percentage': (latest or {}).get('percentage') if latest else None,
         'url': url_for('attendance.attendance_app', tab='student', student_id=sid),
     }
 

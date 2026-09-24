@@ -16,15 +16,15 @@ function Info({ label, children }) {
 // Lightweight attendance donut (conic-gradient ring, no chart library) — the
 // headline percentage lives in the hole, the ring fills to that share and turns
 // danger-red when below the school's warning threshold.
-function AttendanceDonut({ pct, warning }) {
+function AttendanceDonut({ pct, warning, label = 'This term' }) {
   const p = Math.max(0, Math.min(100, Math.round(Number(pct) || 0)));
   const color = warning ? 'var(--danger)' : 'var(--success)';
   return (
     <div className="att-donut" style={{ '--p': p, '--c': color }} role="img"
-         aria-label={`Overall attendance ${p}%`}>
+         aria-label={`${label} attendance ${p}%`}>
       <div className="att-donut-hole">
         <span className="att-donut-pct">{p}%</span>
-        <span className="att-donut-cap">Overall</span>
+        <span className="att-donut-cap">{label}</span>
       </div>
     </div>
   );
@@ -313,16 +313,17 @@ export default function ViewApp({ initial }) {
                  action={d.attendance.url ? <a href={d.attendance.url} className="sp-btn sp-btn-sm"><i aria-hidden="true" className="fas fa-chart-line" /> Full profile</a> : null}>
             <div className="att-summary">
               <div className="att-donut-wrap">
-                <AttendanceDonut pct={d.attendance.percentage} warning={d.attendance.warning} />
+                <AttendanceDonut pct={d.attendance.percentage} warning={d.attendance.warning}
+                                 label={d.attendance.term_name || 'This term'} />
                 {d.attendance.warning && d.attendance.threshold != null &&
                   <span className="text-muted att-donut-warn">below {d.attendance.threshold}% threshold</span>}
               </div>
               <div className="info-grid att-legend">
-                {d.attendance.latest_term && <Info label={d.attendance.latest_term}>{d.attendance.latest_percentage}%</Info>}
                 <Info label="Present days">{d.attendance.present_days}</Info>
                 <Info label="Late days">{d.attendance.late_days}</Info>
                 <Info label="Absent days">{d.attendance.absent_days}</Info>
-                <Info label="Terms tracked">{d.attendance.terms}</Info>
+                {d.attendance.terms > 1 &&
+                  <Info label={`Overall (${d.attendance.terms} terms)`}>{d.attendance.overall_percentage}%</Info>}
               </div>
             </div>
         </Section>
