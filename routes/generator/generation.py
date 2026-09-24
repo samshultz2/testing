@@ -395,7 +395,11 @@ def results_list():
 @login_required
 def view_results(batch_id):
     level = get_current_level()
-    results = GenTimetableResult.query.filter_by(batch_id=batch_id, school_level=level, branch_id=gen_bid()).all()
+    from sqlalchemy.orm import joinedload
+    results = (GenTimetableResult.query
+               .filter_by(batch_id=batch_id, school_level=level, branch_id=gen_bid())
+               .options(joinedload(GenTimetableResult.subject), joinedload(GenTimetableResult.teacher))
+               .all())
     if not results:
         flash('No results found.', 'error')
         return redirect(url_for('generator.results_list'))
@@ -571,7 +575,11 @@ def period_count_report(batch_id):
 def _teacher_workload(batch_id):
     """Per-teacher weekly load for a batch: {teacher_id: {teacher, total,
     per_day: {0..4: count}, classes: set of "Class Arm" strings}}."""
-    results = GenTimetableResult.query.filter_by(batch_id=batch_id, branch_id=gen_bid()).all()
+    from sqlalchemy.orm import joinedload
+    results = (GenTimetableResult.query
+               .filter_by(batch_id=batch_id, branch_id=gen_bid())
+               .options(joinedload(GenTimetableResult.teacher))
+               .all())
     workload = {}
     for r in results:
         if r.teacher_id:
@@ -598,7 +606,11 @@ def teacher_workload_report(batch_id):
 @generator_bp.route('/reports/clashes/<batch_id>')
 @login_required
 def clash_report(batch_id):
-    results = GenTimetableResult.query.filter_by(batch_id=batch_id, branch_id=gen_bid()).all()
+    from sqlalchemy.orm import joinedload
+    results = (GenTimetableResult.query
+               .filter_by(batch_id=batch_id, branch_id=gen_bid())
+               .options(joinedload(GenTimetableResult.subject))
+               .all())
     teacher_slots = {}
     for r in results:
         if r.teacher_id:
@@ -611,17 +623,22 @@ def clash_report(batch_id):
                 'class': f"{r.class_name} {r.arm_name}",
                 'subject': r.subject.name if r.subject else '-'
             })
-    
+
+    # Batch-load every teacher that has a slot at all (not just clashing ones)
+    # in one query instead of a GenTeacher.get() per clashing teacher.
+    teachers_by_id = {t.id: t for t in GenTeacher.query.filter(
+        GenTeacher.id.in_(list(teacher_slots) or [-1])).all()}
+
     clashes = []
     for tid, slots in teacher_slots.items():
-        teacher = GenTeacher.query.get(tid)
+        teacher = teachers_by_id.get(tid)
         for (day, period), entries in slots.items():
             if len(entries) > 1:
                 clashes.append({
                     'teacher': teacher, 'day': DAYS_OF_WEEK[day],
                     'period': period, 'entries': entries
                 })
-    
+
     return render_template('generator/report_clashes.html', batch_id=batch_id, clashes=clashes)
 
 
@@ -707,12 +724,16 @@ def teacher_timetable():
     }
     
     if teacher_id and batch_id:
+        from sqlalchemy.orm import joinedload
         selected_teacher = GenTeacher.query.get(teacher_id)
-        results = GenTimetableResult.query.filter_by(batch_id=batch_id, teacher_id=teacher_id, branch_id=gen_bid()).all()
-        
+        results = (GenTimetableResult.query
+                   .filter_by(batch_id=batch_id, teacher_id=teacher_id, branch_id=gen_bid())
+                   .options(joinedload(GenTimetableResult.subject))
+                   .all())
+
         rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, branch_id=gen_bid()).all()}
         teacher_grid = {d: {} for d in range(5)}
-        
+
         # For breakdown statistics
         by_subject = defaultdict(int)
         by_class = defaultdict(int)
@@ -721,52 +742,56 @@ def teacher_timetable():
         by_stream = defaultdict(int)
         class_arm_subject_periods = defaultdict(int)
         day_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
-        
+
+        # Resolve every distinct class this teacher appears in to its stream
+        # name once, up front (batched), instead of a GenClassConfig +
+        # GenClassArmStream query pair per period — previously re-run for
+        # every row, even repeat periods of the same class.
+        class_names = {r.class_name for r in results}
+        class_configs = {c.class_name: c for c in GenClassConfig.query.filter(
+            GenClassConfig.class_name.in_(class_names or ['']), GenClassConfig.branch_id == gen_bid()).all()}
+        streamed_ids = [c.id for c in class_configs.values() if c.has_streams]
+        stream_names = {}
+        if streamed_ids:
+            for as_ in (GenClassArmStream.query
+                       .filter(GenClassArmStream.class_config_id.in_(streamed_ids))
+                       .options(joinedload(GenClassArmStream.stream)).all()):
+                if as_.stream:
+                    stream_names[(as_.class_config_id, as_.arm_name)] = as_.stream.name
+
+        def _stream_for(class_name, arm_name):
+            cfg = class_configs.get(class_name)
+            return stream_names.get((cfg.id, arm_name)) if cfg and cfg.has_streams else None
+
         for r in results:
             teacher_grid[r.day_of_week][r.period_number] = r
             total_periods += 1
-            
+
             subject_name = r.subject.name if r.subject else 'Unknown'
             class_name = r.class_name
             arm_name = r.arm_name
             class_arm = f"{class_name} {arm_name}"
-            
+
             # Count by different categories
             by_subject[subject_name] += 1
             by_class[class_name] += 1
             by_class_arm[class_arm] += 1
             by_day[day_names[r.day_of_week]] += 1
-            
+
             # Track for detailed breakdown
             class_arm_subject_periods[(class_name, arm_name, subject_name)] += 1
-            
-            # Get stream for this class-arm
-            class_config = GenClassConfig.query.filter_by(class_name=class_name, branch_id=gen_bid()).first()
-            if class_config and class_config.has_streams:
-                arm_stream = GenClassArmStream.query.filter_by(
-                    class_config_id=class_config.id, 
-                    arm_name=arm_name
-                ).first()
-                if arm_stream and arm_stream.stream:
-                    by_stream[arm_stream.stream.name] += 1
-        
+
+            stream_name = _stream_for(class_name, arm_name)
+            if stream_name:
+                by_stream[stream_name] += 1
+
         # Build detailed breakdown list
         for (class_name, arm_name, subject_name), periods in sorted(class_arm_subject_periods.items()):
-            stream_name = '-'
-            class_config = GenClassConfig.query.filter_by(class_name=class_name, branch_id=gen_bid()).first()
-            if class_config and class_config.has_streams:
-                arm_stream = GenClassArmStream.query.filter_by(
-                    class_config_id=class_config.id, 
-                    arm_name=arm_name
-                ).first()
-                if arm_stream and arm_stream.stream:
-                    stream_name = arm_stream.stream.name
-            
             breakdown['details'].append({
                 'class': class_name,
                 'arm': arm_name,
                 'subject': subject_name,
-                'stream': stream_name,
+                'stream': _stream_for(class_name, arm_name) or '-',
                 'periods': periods
             })
         
