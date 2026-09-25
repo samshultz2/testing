@@ -2195,6 +2195,13 @@
 ]
 ],
 [
+"generator.bulk_delete_teacher_assignments",
+"/generator/assignments/bulk-delete",
+[
+"POST"
+]
+],
+[
 "generator.clash_report",
 "/generator/reports/clashes/<batch_id>",
 [

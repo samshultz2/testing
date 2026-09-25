@@ -19,6 +19,10 @@
 /* Its own full-width row, not squeezed into one auto-fit grid column — a
    class with several arms needs the room to lay them out horizontally. */
 .arm-field { grid-column: 1 / -1; }
+.bulk-bar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: .75rem;
+  flex-wrap: wrap; }
+.bulk-bar .bulk-count { font-weight: 600; color: var(--text-secondary); }
+.assignment-select-col { width: 36px; }
 </style>
 {% endblock %}
 {% block content %}
@@ -76,6 +80,27 @@
 </div>
 
 <!-- Existing Assignments by Class -->
+{% set total_assignments = assignments_by_class.values() | map('length') | sum %}
+{% if total_assignments %}
+<!-- Not wrapped around the class cards below: each row already has its own
+     per-row delete <form>, and HTML forms can't nest. Every checkbox instead
+     associates with this form via its form="bulkDeleteForm" attribute, which
+     works regardless of where the checkbox sits in the document. -->
+<form id="bulkDeleteForm" method="POST" action="{{ url_for('generator.bulk_delete_teacher_assignments') }}"
+      data-confirm="Remove the selected assignment(s)? This cannot be undone.">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <div class="card mb-3">
+        <div class="card-body bulk-bar">
+            <span class="bulk-count" id="bulkCount">0 selected</span>
+            <button type="button" class="btn btn-secondary btn-sm" data-call="selectAllAssignments" data-args="true">Select All</button>
+            <button type="button" class="btn btn-secondary btn-sm" data-call="selectAllAssignments" data-args="false">Clear Selection</button>
+            <button type="submit" class="btn btn-danger btn-sm" id="bulkDeleteBtn" disabled>
+                <i class="fas fa-trash"></i> Remove Selected
+            </button>
+        </div>
+    </div>
+</form>
+
 {% for class_config in classes %}
 <div class="card mb-3">
     <div class="card-header">
@@ -87,6 +112,9 @@
         <table class="data-table">
             <thead>
                 <tr>
+                    <th class="assignment-select-col">
+                        <input type="checkbox" class="select-class-assignments" title="Select all in this class">
+                    </th>
                     <th>Subject</th>
                     <th>Teacher</th>
                     <th>Arm</th>
@@ -96,6 +124,7 @@
             <tbody>
                 {% for assignment in assignments_by_class[class_config.id] %}
                 <tr>
+                    <td><input type="checkbox" class="assignment-checkbox" name="assignment_ids[]" value="{{ assignment.id }}" form="bulkDeleteForm"></td>
                     <td>{{ assignment.subject.name }}</td>
                     <td>{{ assignment.teacher.name }}</td>
                     <td>{{ assignment.arm_name or 'All Arms' }}</td>
@@ -117,6 +146,7 @@
     </div>
 </div>
 {% endfor %}
+{% endif %}
 
 {% if not classes %}
 <div class="card">
@@ -161,6 +191,41 @@ document.getElementById('classSelect').addEventListener('change', function() {
                 armChips.appendChild(label);
             });
         });
+});
+
+function assignmentCheckboxes() {
+    return Array.from(document.querySelectorAll('.assignment-checkbox'));
+}
+
+function updateBulkBar() {
+    const checked = assignmentCheckboxes().filter(cb => cb.checked);
+    document.getElementById('bulkCount').textContent = checked.length + ' selected';
+    document.getElementById('bulkDeleteBtn').disabled = checked.length === 0;
+    // Keep each class table's own "select all" header checkbox in sync —
+    // checked only when every row in that table is checked, indeterminate
+    // when some (not all) are.
+    document.querySelectorAll('.select-class-assignments').forEach(function (header) {
+        const table = header.closest('table');
+        const rows = Array.from(table.querySelectorAll('.assignment-checkbox'));
+        const checkedRows = rows.filter(cb => cb.checked);
+        header.checked = rows.length > 0 && checkedRows.length === rows.length;
+        header.indeterminate = checkedRows.length > 0 && checkedRows.length < rows.length;
+    });
+}
+
+function selectAllAssignments(selectAll) {
+    assignmentCheckboxes().forEach(cb => { cb.checked = selectAll; });
+    updateBulkBar();
+}
+
+document.addEventListener('change', function (e) {
+    if (e.target.matches('.assignment-checkbox')) {
+        updateBulkBar();
+    } else if (e.target.matches('.select-class-assignments')) {
+        const table = e.target.closest('table');
+        table.querySelectorAll('.assignment-checkbox').forEach(cb => { cb.checked = e.target.checked; });
+        updateBulkBar();
+    }
 });
 </script>
 {% endblock %}

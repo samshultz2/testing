@@ -165,6 +165,41 @@ def delete_teacher_assignment(assignment_id):
     return redirect(url_for('generator.teacher_assignments'))
 
 
+@generator_bp.route('/assignments/bulk-delete', methods=['POST'])
+@login_required
+def bulk_delete_teacher_assignments():
+    from utils.branch_scope import can_access_branch
+
+    ids = [int(v) for v in request.form.getlist('assignment_ids[]') if v.isdigit()]
+    if not ids:
+        flash('No assignments selected.', 'error')
+        return redirect(url_for('generator.teacher_assignments'))
+    try:
+        # Skip (rather than 404/403 the whole batch on) any id the current
+        # user can't touch — a stale checkbox from a branch switch mid-page
+        # shouldn't block removing the rest of a valid selection.
+        assignments = GenTeacherAssignment.query.filter(
+            GenTeacherAssignment.id.in_(ids)).all()
+        removed = skipped = 0
+        for a in assignments:
+            if not can_access_branch(a.branch_id):
+                skipped += 1
+                continue
+            a.is_active = False
+            removed += 1
+        db.session.commit()
+        if removed and skipped:
+            flash(f'{removed} assignment(s) removed, {skipped} skipped (not accessible).', 'success')
+        elif removed:
+            flash(f'{removed} assignment(s) removed.', 'success')
+        else:
+            flash('No assignments were removed.', 'warning')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error: {str(e)}', 'error')
+    return redirect(url_for('generator.teacher_assignments'))
+
+
 @generator_bp.route('/generate')
 @login_required
 def generate_page():
