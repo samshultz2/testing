@@ -245,11 +245,16 @@ def print_single_timetable_pdf(batch_id, class_name, arm_name):
 @generator_bp.route('/results/<batch_id>/export')
 @login_required
 def export_results(batch_id):
-    """Export timetable by class - Each class MAXIMIZES A4 landscape page, no teacher names, NO COLORS for B&W printing"""
+    """Export timetable by class - Each class MAXIMIZES its page (A4 or A3
+    landscape, ?paper=a4|a3), no teacher names, NO COLORS for B&W printing"""
     import openpyxl
     from openpyxl.styles import Font, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
-    
+
+    paper = (request.args.get('paper') or 'a4').lower()
+    if paper not in ('a4', 'a3'):
+        paper = 'a4'
+
     all_results = GenTimetableResult.query.filter_by(batch_id=batch_id, branch_id=gen_bid()).all()
     if not all_results:
         flash('No results.', 'error')
@@ -349,8 +354,8 @@ def export_results(batch_id):
         tt = timetables[key]
         ws = wb.create_sheet(title=f"{tt['class_name']} {tt['arm_name']}"[:31])
         
-        # Page setup for A4 landscape - fit on ONE page
-        ws.page_setup.paperSize = ws.PAPERSIZE_A4
+        # Page setup - fit on ONE page of the chosen paper size
+        ws.page_setup.paperSize = ws.PAPERSIZE_A3 if paper == 'a3' else ws.PAPERSIZE_A4
         ws.page_setup.orientation = 'landscape'
         ws.page_setup.fitToPage = True
         ws.page_setup.fitToWidth = 1
@@ -487,17 +492,29 @@ def export_results(batch_id):
             else:
                 ws.column_dimensions[get_column_letter(col)].width = period_col_width
     
-    return xlsx_response(wb, f'timetables_{batch_id}.xlsx')
+    return xlsx_response(wb, f'timetables_{batch_id}_{paper}.xlsx')
 
 
 @generator_bp.route('/results/<batch_id>/export_by_day')
 @login_required
 def export_results_by_day(batch_id):
-    """Export timetable in day-wise format - MAXIMUM SIZE for A4 landscape printing, NO COLORS"""
+    """Export timetable in day-wise format — one day per sheet (A4 or A3), or
+    on A3, two days stacked on one sheet ("packed"). NO COLORS.
+
+    ?paper=a4|a3 (default a4), ?layout=single|packed (default single; packed
+    only takes effect on A3). Excel's own fitToPage scaling does the actual
+    size-to-fit-one-page work, so paper size alone already makes a single
+    day bigger on A3 — packed just stacks two days into that same fit."""
     import openpyxl
     from openpyxl.styles import Font, Alignment, Border, Side
     from openpyxl.utils import get_column_letter
-    
+
+    paper = (request.args.get('paper') or 'a4').lower()
+    if paper not in ('a4', 'a3'):
+        paper = 'a4'
+    layout = (request.args.get('layout') or 'single').lower()
+    days_per_page = 2 if (paper == 'a3' and layout == 'packed') else 1
+
     all_results = GenTimetableResult.query.filter_by(batch_id=batch_id, branch_id=gen_bid()).all()
     if not all_results:
         flash('No results.', 'error')
@@ -635,45 +652,32 @@ def export_results_by_day(batch_id):
     # Total columns: Class + periods-before + BREAK + periods-after.
     total_cols = 1 + break_after + 1 + (periods_per_day - break_after)
 
-    # Calculate heights (conservative for safe printing)
+    # Calculate heights (conservative for safe printing). Excel's own
+    # fitToPage/fitToWidth/fitToHeight scale whatever we write down to fill
+    # exactly one printed page of the chosen paper size — so these are just
+    # relative proportions, not a physical constraint we have to solve.
     num_data_rows = len(class_arms)
     school_header_height = 35
     address_header_height = 20
     day_header_height = 45
     period_header_height = 45
     total_page_height = 500  # Conservative for safe printing
-    
-    for d, day_name in enumerate(days):
-        ws = wb.create_sheet(title=day_name)
-        
-        ws.page_setup.paperSize = ws.PAPERSIZE_A4
-        ws.page_setup.orientation = 'landscape'
-        ws.page_setup.fitToPage = True
-        ws.page_setup.fitToWidth = 1
-        ws.page_setup.fitToHeight = 1
-        ws.print_options.horizontalCentered = True
-        ws.print_options.verticalCentered = True
-        
-        # Safe margins for most printers (0.5 inch)
-        ws.page_margins.left = 0.5
-        ws.page_margins.right = 0.5
-        ws.page_margins.top = 0.4
-        ws.page_margins.bottom = 0.4
-        ws.page_margins.header = 0
-        ws.page_margins.footer = 0
-        
-        current_row = 1
-        
-        # School name and address ONLY on Monday
+
+    def _write_day_block(ws, d, day_name, start_row):
+        """Writes one day's grid into ws starting at start_row. Returns the
+        row number immediately after this block, for stacking another one
+        (packed layout) or as the next sheet's start_row (unpacked)."""
+        current_row = start_row
+
+        # School name and address ONLY on the very first block of the workbook.
         if d == 0:
-            # School name header
             ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=total_cols)
             cell = ws.cell(row=current_row, column=1, value=school_name.upper())
             cell.font = school_font
             cell.alignment = center_align
             ws.row_dimensions[current_row].height = school_header_height
             current_row += 1
-            
+
             if school_address:
                 ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=total_cols)
                 cell = ws.cell(row=current_row, column=1, value=school_address)
@@ -681,18 +685,16 @@ def export_results_by_day(batch_id):
                 cell.alignment = center_align
                 ws.row_dimensions[current_row].height = address_header_height
                 current_row += 1
-            
-            # Recalculate data row height for Monday
+
             header_rows_height = school_header_height + (address_header_height if school_address else 0) + day_header_height + period_header_height
             remaining_height = total_page_height - header_rows_height
             data_row_height = remaining_height / num_data_rows
             data_row_height = max(data_row_height, 28)
         else:
-            # Other days - just day header and period header
             remaining_height = total_page_height - day_header_height - period_header_height
             data_row_height = remaining_height / num_data_rows
             data_row_height = max(data_row_height, 30)
-        
+
         # Day header
         ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=total_cols)
         cell = ws.cell(row=current_row, column=1, value=day_name.upper())
@@ -703,17 +705,15 @@ def export_results_by_day(batch_id):
             ws.cell(row=current_row, column=col).border = thick_border
         ws.row_dimensions[current_row].height = day_header_height
         current_row += 1
-        
+
         # Period headers with BREAK column
         col = 1
-        # Class column
         cell = ws.cell(row=current_row, column=col, value="Class")
         cell.font = header_font
         cell.border = thick_border
         cell.alignment = center_align
         col += 1
-        
-        # Before-break periods
+
         for i, p in enumerate(range(1, break_after + 1)):
             header_value = period_times_before_break[i] if d == 0 else f"P{p}"
             cell = ws.cell(row=current_row, column=col, value=header_value)
@@ -722,14 +722,12 @@ def export_results_by_day(batch_id):
             cell.alignment = center_align
             col += 1
 
-        # BREAK column header
         cell = ws.cell(row=current_row, column=col, value=break_time if d == 0 else "BREAK")
         cell.font = break_header_font
         cell.border = thick_border
         cell.alignment = center_align
         col += 1
 
-        # After-break periods
         for i, p in enumerate(range(break_after + 1, periods_per_day + 1)):
             header_value = period_times_after_break[i] if d == 0 else f"P{p}"
             cell = ws.cell(row=current_row, column=col, value=header_value)
@@ -737,25 +735,23 @@ def export_results_by_day(batch_id):
             cell.border = thick_border
             cell.alignment = center_align
             col += 1
-        
+
         ws.row_dimensions[current_row].height = period_header_height
         current_row += 1
-        
+
         # Data rows
         for class_name, arm in class_arms:
             short_code = get_short_code(class_name, arm)
             col = 1
-            
-            # Class code
+
             cell = ws.cell(row=current_row, column=col, value=short_code)
             cell.font = class_font
             cell.border = thick_border
             cell.alignment = center_align
             col += 1
-            
+
             arm_results = [r for r in results if r.class_name == class_name and r.arm_name == arm and r.day_of_week == d]
-            
-            # Before-break periods
+
             for p in range(1, break_after + 1):
                 slot_result = next((r for r in arm_results if r.period_number == p), None)
                 value = ""
@@ -770,13 +766,11 @@ def export_results_by_day(batch_id):
                 cell.alignment = center_align
                 col += 1
 
-            # BREAK column - empty with border
             cell = ws.cell(row=current_row, column=col, value="")
             cell.border = thin_border
             cell.alignment = center_align
             col += 1
 
-            # After-break periods
             for p in range(break_after + 1, periods_per_day + 1):
                 slot_result = next((r for r in arm_results if r.period_number == p), None)
                 value = ""
@@ -784,16 +778,47 @@ def export_results_by_day(batch_id):
                     subj = subject_lookup.get(slot_result.subject_id)
                     if subj:
                         value = _short_cell(slot_result, subj, abbrev_map, 5)
-                
+
                 cell = ws.cell(row=current_row, column=col, value=value)
                 cell.font = cell_font
                 cell.border = thin_border
                 cell.alignment = center_align
                 col += 1
-            
+
             ws.row_dimensions[current_row].height = data_row_height
             current_row += 1
-        
+
+        return current_row
+
+    # Group days into pages: 1 day/page normally, 2 (stacked, gap row
+    # between) on a "packed" A3 page.
+    day_groups = [days[i:i + days_per_page] for i in range(0, len(days), days_per_page)]
+    for group in day_groups:
+        sheet_title = ' & '.join(n[:3] for n in group) if len(group) > 1 else group[0]
+        ws = wb.create_sheet(title=sheet_title[:31])
+
+        ws.page_setup.paperSize = ws.PAPERSIZE_A3 if paper == 'a3' else ws.PAPERSIZE_A4
+        ws.page_setup.orientation = 'landscape'
+        ws.page_setup.fitToPage = True
+        ws.page_setup.fitToWidth = 1
+        ws.page_setup.fitToHeight = 1
+        ws.print_options.horizontalCentered = True
+        ws.print_options.verticalCentered = True
+
+        # Safe margins for most printers (0.5 inch)
+        ws.page_margins.left = 0.5
+        ws.page_margins.right = 0.5
+        ws.page_margins.top = 0.4
+        ws.page_margins.bottom = 0.4
+        ws.page_margins.header = 0
+        ws.page_margins.footer = 0
+
+        row = 1
+        for day_name in group:
+            d = days.index(day_name)
+            row = _write_day_block(ws, d, day_name, row)
+            row += 1  # gap row between stacked day-blocks
+
         # Column widths - fit within safe printable area
         ws.column_dimensions['A'].width = 8  # Class
         col_width = 26 if periods_per_day <= 8 else 22
@@ -802,19 +827,30 @@ def export_results_by_day(batch_id):
                 ws.column_dimensions[get_column_letter(col)].width = 8
             else:
                 ws.column_dimensions[get_column_letter(col)].width = col_width
-    
-    return xlsx_response(wb, f'timetables_by_day_{batch_id}.xlsx')
+
+    suffix = f'_{paper}' + ('_packed' if days_per_page > 1 else '')
+    return xlsx_response(wb, f'timetables_by_day_{batch_id}{suffix}.xlsx')
 
 
 @generator_bp.route('/results/<batch_id>/export_by_day_pdf')
 @login_required
 def export_results_by_day_pdf(batch_id):
-    """Export timetable as PDF - Each day fits EXACTLY on one A4 landscape page - NO COLORS"""
+    """Export timetable as PDF — one day per page (A4 or A3), or on A3, two
+    days stacked per page ("packed") — NO COLORS.
+
+    ?paper=a4|a3 (default a4), ?layout=single|packed (default single; packed
+    only takes effect on A3 — A4 has no room to pack two days legibly)."""
     from reportlab.lib import colors
-    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.pagesizes import A4, A3, landscape
     from reportlab.lib.units import mm
-    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, PageBreak
-    
+    from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, PageBreak, Spacer
+
+    paper = (request.args.get('paper') or 'a4').lower()
+    if paper not in ('a4', 'a3'):
+        paper = 'a4'
+    layout = (request.args.get('layout') or 'single').lower()
+    days_per_page = 2 if (paper == 'a3' and layout == 'packed') else 1
+
     all_results = GenTimetableResult.query.filter_by(batch_id=batch_id, branch_id=gen_bid()).all()
     if not all_results:
         flash('No results.', 'error')
@@ -882,25 +918,42 @@ def export_results_by_day_pdf(batch_id):
     
     output = BytesIO()
 
-    # A4 landscape: 297mm x 210mm - small margins so the grid fills the page.
+    # Small margins so the grid fills the page, on whichever sheet size was chosen.
     margin = 7*mm
     # reportlab's default Frame keeps 6pt of padding on every side; if we don't
     # subtract it the table is fractionally taller than the frame and its last
     # row is pushed onto a second page (leaving the first page half-empty).
     frame_pad = 6
-    page_w, page_h = landscape(A4)
+    sheet_size = A3 if paper == 'a3' else A4
+    page_w, page_h = landscape(sheet_size)
     usable_width = page_w - 2*margin - 2*frame_pad
-    usable_height = page_h - 2*margin - 2*frame_pad
+    # Packed A3 splits the page into `days_per_page` stacked blocks with a
+    # gap between them; single-day pages (A4, or A3 unpacked) use the whole
+    # page height for one day, same as before.
+    block_gap = 6*mm if days_per_page > 1 else 0
+    usable_height = ((page_h - 2*margin - 2*frame_pad) - block_gap * (days_per_page - 1)) / days_per_page
+
+    # Every font size and fixed header height below was tuned for a single
+    # day filling a full A4 landscape page. Scale them by how this layout's
+    # per-day block height compares to that baseline, so a bigger sheet (A3,
+    # single day) fills out proportionally instead of leaving dead space,
+    # and a packed block (A3, two days) shrinks just enough to fit — not an
+    # arbitrary hard-coded "small" size.
+    baseline_usable_height = landscape(A4)[1] - 2*margin - 2*frame_pad
+    scale = usable_height / baseline_usable_height
+
+    def sc(pt):
+        return pt * scale
 
     doc = SimpleDocTemplate(
         output,
-        pagesize=landscape(A4),
+        pagesize=landscape(sheet_size),
         leftMargin=margin,
         rightMargin=margin,
         topMargin=margin,
         bottomMargin=margin
     )
-    
+
     elements = []
     
     # Total columns: Class + periods-before + BREAK + periods-after
@@ -923,16 +976,16 @@ def export_results_by_day_pdf(batch_id):
         table_data = []
         row_heights = []
         
-        # Calculate row heights to fit EXACTLY on one page
+        # Calculate row heights to fit EXACTLY on this day's block
         if d == 0:  # Monday - include school name and address
-            school_header_height = 9*mm
-            address_header_height = 5*mm if school_address else 0
-            day_header_height = 11*mm
-            period_header_height = 16*mm    # taller: shows the P#/start/end times, bigger
+            school_header_height = sc(9*mm)
+            address_header_height = sc(5*mm) if school_address else 0
+            day_header_height = sc(11*mm)
+            period_header_height = sc(16*mm)    # taller: shows the P#/start/end times, bigger
             fixed_height = school_header_height + address_header_height + day_header_height + period_header_height
         else:
-            day_header_height = 11*mm
-            period_header_height = 10*mm
+            day_header_height = sc(11*mm)
+            period_header_height = sc(10*mm)
             fixed_height = day_header_height + period_header_height
 
         # Data rows split ALL remaining height so the grid fills the page. (-1pt
@@ -1021,44 +1074,44 @@ def export_results_by_day_pdf(batch_id):
             ('SPAN', (0, day_row_idx), (-1, day_row_idx)),
             ('TEXTCOLOR', (0, day_row_idx), (-1, day_row_idx), colors.black),
             ('FONTNAME', (0, day_row_idx), (-1, day_row_idx), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, day_row_idx), (-1, day_row_idx), 22),
+            ('FONTSIZE', (0, day_row_idx), (-1, day_row_idx), sc(22)),
             ('ALIGN', (0, day_row_idx), (-1, day_row_idx), 'CENTER'),
             ('VALIGN', (0, day_row_idx), (-1, day_row_idx), 'MIDDLE'),
-            
+
             # Period header row (P#/times) — bold and readable, not tiny
             ('FONTNAME', (0, header_row_idx), (-1, header_row_idx), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, header_row_idx), (-1, header_row_idx), 11 if d == 0 else 13),
-            ('LEADING', (0, header_row_idx), (-1, header_row_idx), 12 if d == 0 else 15),
+            ('FONTSIZE', (0, header_row_idx), (-1, header_row_idx), sc(11 if d == 0 else 13)),
+            ('LEADING', (0, header_row_idx), (-1, header_row_idx), sc(12 if d == 0 else 15)),
             ('ALIGN', (0, header_row_idx), (-1, header_row_idx), 'CENTER'),
             ('VALIGN', (0, header_row_idx), (-1, header_row_idx), 'MIDDLE'),
 
             # Break column header (narrow column, keep its multi-line label small)
-            ('FONTSIZE', (break_col, header_row_idx), (break_col, header_row_idx), 7),
-            ('LEADING', (break_col, header_row_idx), (break_col, header_row_idx), 8),
-            
+            ('FONTSIZE', (break_col, header_row_idx), (break_col, header_row_idx), sc(7)),
+            ('LEADING', (break_col, header_row_idx), (break_col, header_row_idx), sc(8)),
+
             # Class codes column
             ('FONTNAME', (0, data_start_row), (0, -1), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, data_start_row), (0, -1), 14),
-            
+            ('FONTSIZE', (0, data_start_row), (0, -1), sc(14)),
+
             # Subject cells - LARGE
             ('FONTNAME', (1, data_start_row), (-1, -1), 'Helvetica-Bold'),
-            ('FONTSIZE', (1, data_start_row), (-1, -1), 18),
-            
+            ('FONTSIZE', (1, data_start_row), (-1, -1), sc(18)),
+
             # All cells alignment
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            
+
             # Borders only - no background colors
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
             ('BOX', (0, 0), (-1, -1), 1.5, colors.black),
         ]
-        
+
         # Add school name styling for Monday
         if d == 0:
             style_commands.extend([
                 ('SPAN', (0, 0), (-1, 0)),
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, 0), (-1, 0), 16),
+                ('FONTSIZE', (0, 0), (-1, 0), sc(16)),
                 ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
                 ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
             ])
@@ -1066,20 +1119,28 @@ def export_results_by_day_pdf(batch_id):
                 style_commands.extend([
                     ('SPAN', (0, 1), (-1, 1)),
                     ('FONTNAME', (0, 1), (-1, 1), 'Helvetica'),
-                    ('FONTSIZE', (0, 1), (-1, 1), 8),
+                    ('FONTSIZE', (0, 1), (-1, 1), sc(8)),
                     ('TEXTCOLOR', (0, 1), (-1, 1), colors.black),
                     ('ALIGN', (0, 1), (-1, 1), 'CENTER'),
                     ('VALIGN', (0, 1), (-1, 1), 'MIDDLE'),
                 ])
-        
+
         table.setStyle(TableStyle(style_commands))
         elements.append(table)
-        
-        if d < len(days) - 1:
-            elements.append(PageBreak())
-    
+
+        is_last_day = (d == len(days) - 1)
+        if not is_last_day:
+            # Full page used up (single-day layout, or the last slot in a
+            # packed page) -> new page. Otherwise stack the next day's block
+            # right below this one on the same page.
+            if (d + 1) % days_per_page == 0:
+                elements.append(PageBreak())
+            else:
+                elements.append(Spacer(1, block_gap))
+
     doc.build(elements)
-    return pdf_response(output, f'timetables_by_day_{batch_id}.pdf', inline=False)
+    suffix = f'_{paper}' + ('_packed' if days_per_page > 1 else '')
+    return pdf_response(output, f'timetables_by_day_{batch_id}{suffix}.pdf', inline=False)
 
 
 @generator_bp.route('/results/<batch_id>/export_image')

@@ -40,7 +40,21 @@
                 </label>
                 {% endfor %}
             </div>
-            <div class="page-header-actions mt-3">
+            <div class="page-header-actions mt-3" style="align-items: center;">
+                <label class="text-muted text-sm" style="display: flex; align-items: center; gap: 0.4rem;">Paper
+                    <select name="paper" id="paper-select" class="form-control form-control-sm" style="width: auto;" onchange="onPaperChange()">
+                        <option value="a4">A4</option>
+                        <option value="a3">A3</option>
+                    </select>
+                </label>
+                <label class="text-muted text-sm" id="layout-label" style="display: none; align-items: center; gap: 0.4rem;">Layout
+                    <select name="layout" id="layout-select" class="form-control form-control-sm" style="width: auto;">
+                        <option value="single">One day per page</option>
+                        <option value="packed">Optimized — 2 days per page</option>
+                    </select>
+                </label>
+            </div>
+            <div class="page-header-actions mt-2">
                 <button type="button" class="btn btn-secondary btn-sm" data-call="selectAllArms" data-args="true">Select All</button>
                 <button type="button" class="btn btn-secondary btn-sm" data-call="selectAllArms" data-args="false">Deselect All</button>
                 <button type="submit" class="btn btn-success"><i class="fas fa-print"></i> Print Selected</button>
@@ -49,6 +63,9 @@
                 <button type="submit" formaction="{{ url_for('generator.export_results_by_day_pdf', batch_id=batch_id) }}" class="btn btn-danger"><i class="fas fa-file-pdf"></i> PDF (by Day)</button>
                 <button type="submit" formaction="{{ url_for('generator.export_image', batch_id=batch_id) }}" class="btn btn-warning"><i class="fas fa-image"></i> Image (PNG)</button>
             </div>
+            <p class="text-muted text-sm mt-1" style="margin-bottom: 0;">Paper size applies to the Excel and PDF
+                exports above (Image and Print use the browser's own paper setting). The "2 days per page" layout
+                is only offered on A3 — on A4 there isn't room to keep two days readable on one sheet.</p>
         </form>
     </div>
 </div>
@@ -118,6 +135,13 @@ function toggleSection(id) {
 
 function selectAllArms(checked) {
     document.querySelectorAll('#print-select-form input[name="arm"]').forEach(cb => cb.checked = checked);
+}
+
+function onPaperChange() {
+    const isA3 = document.getElementById('paper-select').value === 'a3';
+    const label = document.getElementById('layout-label');
+    label.style.display = isA3 ? 'flex' : 'none';
+    if (!isA3) document.getElementById('layout-select').value = 'single';
 }
 </script>
 {% endblock %}
