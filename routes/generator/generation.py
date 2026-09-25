@@ -614,6 +614,158 @@ def period_count_report(batch_id):
     )
 
 
+def _periods_for_arm(cc, arm_name, subject_id, global_subject_configs, class_subject_configs,
+                     arm_stream, stream_subjects, class_stream_subject_configs):
+    """Periods/week a subject counts for in one specific class-arm — same
+    resolution order generate_with_ortools() uses (class-stream override >
+    stream default > per-class config > global config), so this report's
+    numbers always match what generation would actually schedule. None if
+    the subject isn't actually configured/enabled for this arm at all."""
+    class_cfg = class_subject_configs.get(cc.id, {}).get(subject_id)
+    stream_id = arm_stream.get((cc.id, arm_name)) if cc.has_streams else None
+    if stream_id:
+        ss = stream_subjects.get(stream_id, {}).get(subject_id)
+        if not ss:
+            return None
+        if class_cfg and not class_cfg.is_enabled:
+            return None
+        css = class_stream_subject_configs.get((cc.id, stream_id), {}).get(subject_id)
+        if css and not css.is_enabled:
+            return None
+        if css and css.periods_per_week:
+            return css.periods_per_week
+        if ss.periods_per_week:
+            return ss.periods_per_week
+        gcfg = global_subject_configs.get(subject_id)
+        return gcfg.periods_per_week if gcfg else 2
+    if not class_cfg or not class_cfg.is_enabled:
+        return None
+    return class_cfg.periods_per_week
+
+
+def _format_assignment_line(class_name, subject_name, arm_name, num_arms, periods_list, line_total):
+    """One human-readable line for the teacher-assignment report, e.g.
+    "SSS1 - Maths all arms 4 periods each" or, for a single named arm,
+    "SSS1 - Govt (Rose) 3 periods". Falls back to something honest (rather
+    than a made-up number) when a subject isn't actually configured for
+    some or all of the arms it's assigned to."""
+    known = [p for p in periods_list if p is not None]
+    unknown = len(periods_list) - len(known)
+
+    def periods_word(n):
+        return f"{n} period{'s' if n != 1 else ''}"
+
+    if arm_name:
+        if known:
+            return f"{class_name} - {subject_name} ({arm_name}) {periods_word(known[0])}"
+        return f"{class_name} - {subject_name} ({arm_name}) — periods not configured"
+
+    if known and unknown == 0 and len(set(known)) == 1:
+        return f"{class_name} - {subject_name} all arms {periods_word(known[0])} each"
+    if known and unknown == 0:
+        return f"{class_name} - {subject_name} all arms ({periods_word(line_total)} total, varies by arm)"
+    if known:
+        return (f"{class_name} - {subject_name} all arms ({periods_word(line_total)} total across "
+                f"{len(known)} of {num_arms} arms — not configured for the rest)")
+    return f"{class_name} - {subject_name} all arms — periods not configured"
+
+
+def _teacher_assignment_summary():
+    """Per-teacher breakdown of every active GenTeacherAssignment for the
+    current level/branch — which class+subject(+arm) each covers, how many
+    periods/week that amounts to, and each teacher's weekly total. Returns
+    a list of {teacher, lines: [{text, line_total}], total}, sorted by
+    teacher name; lines within a teacher sorted by class then subject."""
+    from collections import defaultdict
+    from sqlalchemy.orm import joinedload
+
+    level = get_current_level()
+    bid = gen_bid()
+
+    classes = GenClassConfig.query.filter_by(is_active=True, school_level=level, branch_id=bid).all()
+    class_by_id = {c.id: c for c in classes}
+    if not class_by_id:
+        return []
+
+    assignments = (GenTeacherAssignment.query
+                   .filter(GenTeacherAssignment.class_config_id.in_(class_by_id.keys()),
+                           GenTeacherAssignment.is_active == True)
+                   .options(joinedload(GenTeacherAssignment.subject))
+                   .all())
+    if not assignments:
+        return []
+
+    teacher_ids = {a.teacher_id for a in assignments}
+    teachers = {t.id: t for t in GenTeacher.query.filter(GenTeacher.id.in_(teacher_ids)).all()}
+
+    global_subject_configs = {
+        sc.subject_id: sc for sc in GenSubjectConfig.query.filter_by(school_level=level, branch_id=bid).all()
+    }
+
+    class_subject_configs = defaultdict(dict)
+    for cfg in GenClassSubjectConfig.query.filter(
+            GenClassSubjectConfig.class_config_id.in_(class_by_id.keys()),
+            GenClassSubjectConfig.is_active == True).all():
+        class_subject_configs[cfg.class_config_id][cfg.subject_id] = cfg
+
+    arm_stream = {}
+    for cas in GenClassArmStream.query.filter(GenClassArmStream.class_config_id.in_(class_by_id.keys())).all():
+        arm_stream[(cas.class_config_id, cas.arm_name)] = cas.stream_id
+
+    stream_ids = {sid for sid in arm_stream.values() if sid}
+    stream_subjects = defaultdict(dict)
+    class_stream_subject_configs = defaultdict(dict)
+    if stream_ids:
+        for ss in GenStreamSubject.query.filter(GenStreamSubject.stream_id.in_(stream_ids)).all():
+            stream_subjects[ss.stream_id][ss.subject_id] = ss
+        for css in GenClassStreamSubject.query.filter(
+                GenClassStreamSubject.class_config_id.in_(class_by_id.keys()),
+                GenClassStreamSubject.stream_id.in_(stream_ids)).all():
+            class_stream_subject_configs[(css.class_config_id, css.stream_id)][css.subject_id] = css
+
+    grouped = defaultdict(list)
+    for a in assignments:
+        cc = class_by_id.get(a.class_config_id)
+        if not cc or not a.subject:
+            continue
+        arms = [a.arm_name] if a.arm_name else cc.arm_list
+        periods_list = [_periods_for_arm(cc, arm, a.subject_id, global_subject_configs,
+                                         class_subject_configs, arm_stream, stream_subjects,
+                                         class_stream_subject_configs) for arm in arms]
+        grouped[a.teacher_id].append({
+            'class_name': cc.class_name, 'subject_name': a.subject.name, 'arm_name': a.arm_name,
+            'num_arms': len(arms), 'periods_list': periods_list,
+        })
+
+    result = []
+    for tid, rows in grouped.items():
+        teacher = teachers.get(tid)
+        if not teacher:
+            continue
+        rows.sort(key=lambda r: (r['class_name'], r['subject_name']))
+        lines = []
+        total = 0
+        for r in rows:
+            line_total = sum(p for p in r['periods_list'] if p is not None)
+            total += line_total
+            lines.append({
+                'text': _format_assignment_line(r['class_name'], r['subject_name'], r['arm_name'],
+                                                r['num_arms'], r['periods_list'], line_total),
+                'line_total': line_total,
+            })
+        result.append({'teacher': teacher, 'lines': lines, 'total': total})
+
+    result.sort(key=lambda r: r['teacher'].name)
+    return result
+
+
+@generator_bp.route('/assignments/report')
+@login_required
+def teacher_assignment_summary_report():
+    summary = _teacher_assignment_summary()
+    return render_template('generator/teacher_assignment_summary.html', summary=summary)
+
+
 def _teacher_workload(batch_id):
     """Per-teacher weekly load for a batch: {teacher_id: {teacher, total,
     per_day: {0..4: count}, classes: set of "Class Arm" strings}}."""

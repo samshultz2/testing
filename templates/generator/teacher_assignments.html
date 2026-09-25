@@ -28,6 +28,11 @@
 {% block content %}
 <div class="page-header">
     <h1>Teacher Assignments</h1>
+    <div class="page-header-actions">
+        <a href="{{ url_for('generator.teacher_assignment_summary_report') }}" class="btn btn-secondary">
+            <i class="fas fa-clipboard-list"></i> Assignment Report
+        </a>
+    </div>
 </div>
 
 <p class="text-muted mb-3">Assign which teacher teaches which subject to which class. This determines who appears on the timetable.</p>

@@ -1532,3 +1532,56 @@ def period_count_report_pdf(batch_id):
     headers, table_rows, col_widths = _period_count_table(batch_id)
     return _simple_table_pdf('Period Count Report', headers, table_rows,
                              f'period_count_{batch_id}.pdf', col_widths=col_widths)
+
+
+@generator_bp.route('/assignments/report/image')
+@login_required
+def teacher_assignment_summary_image():
+    from routes.generator.generation import _teacher_assignment_summary
+    from routes.generator_image import generate_teacher_assignment_summary_image, image_to_response
+
+    summary = _teacher_assignment_summary()
+    img = generate_teacher_assignment_summary_image(summary)
+    return image_to_response(img, 'teacher_assignment_summary.png')
+
+
+@generator_bp.route('/assignments/report/pdf')
+@login_required
+def teacher_assignment_summary_pdf():
+    from routes.generator.generation import _teacher_assignment_summary
+    from reportlab.lib import colors
+    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.units import mm
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.enums import TA_LEFT
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, ListFlowable, ListItem
+
+    summary = _teacher_assignment_summary()
+    output = BytesIO()
+    margin = 15 * mm
+    doc = SimpleDocTemplate(output, pagesize=A4, leftMargin=margin, rightMargin=margin,
+                            topMargin=margin, bottomMargin=margin)
+
+    title_style = ParagraphStyle('title', fontName='Helvetica-Bold', fontSize=18,
+                                 spaceAfter=14)
+    teacher_style = ParagraphStyle('teacher', fontName='Helvetica-Bold', fontSize=13,
+                                   spaceBefore=10, spaceAfter=4)
+    line_style = ParagraphStyle('line', fontName='Helvetica', fontSize=10.5, leading=14,
+                                alignment=TA_LEFT)
+    total_style = ParagraphStyle('total', fontName='Helvetica-Bold', fontSize=10.5,
+                                 leading=14, spaceBefore=2, textColor=colors.HexColor('#1e6b3e'))
+
+    elements = [Paragraph('Teacher Assignment Summary', title_style)]
+    if not summary:
+        elements.append(Paragraph('No assignments yet.', line_style))
+    for row in summary:
+        elements.append(Paragraph(row['teacher'].name, teacher_style))
+        if row['lines']:
+            elements.append(ListFlowable(
+                [ListItem(Paragraph(line['text'], line_style), leftIndent=6) for line in row['lines']],
+                bulletType='bullet', start='-', leftIndent=14))
+        plural = 's' if row['total'] != 1 else ''
+        elements.append(Paragraph(f"Total — {row['total']} period{plural}/week", total_style))
+
+    doc.build(elements)
+    return pdf_response(output, 'teacher_assignment_summary.pdf')

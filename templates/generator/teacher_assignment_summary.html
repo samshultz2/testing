@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Teacher Assignment Summary - Generator{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <a href="{{ url_for('generator.teacher_assignments') }}">Teacher Assignments</a> / <span>Summary</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+    <h1>Teacher Assignment Summary</h1>
+    <div class="page-header-actions">
+        <a href="{{ url_for('generator.teacher_assignment_summary_image') }}" class="btn btn-info"><i class="fas fa-image"></i> Image (HD)</a>
+        <a href="{{ url_for('generator.teacher_assignment_summary_pdf') }}" class="btn btn-danger"><i class="fas fa-file-pdf"></i> PDF</a>
+    </div>
+</div>
+
+<p class="text-muted mb-3">What each teacher is assigned to teach and their total periods/week, at a glance.</p>
+
+{% if summary %}
+{% for row in summary %}
+<div class="card mb-3">
+    <div class="card-header">
+        <h3>{{ row.teacher.name }}</h3>
+        <span class="badge badge-primary">{{ row.total }} period{{ 's' if row.total != 1 else '' }}/week</span>
+    </div>
+    <div class="card-body">
+        <ul class="mb-0" style="padding-left: 1.25rem;">
+            {% for line in row.lines %}
+            <li>{{ line.text }}</li>
+            {% endfor %}
+        </ul>
+    </div>
+</div>
+{% endfor %}
+{% else %}
+<div class="card">
+    <div class="card-body">
+        <div class="empty-state">
+            <i class="fas fa-chalkboard-teacher"></i>
+            <h3>No Assignments Yet</h3>
+            <p>Add teacher assignments first to see this summary.</p>
+            <a href="{{ url_for('generator.teacher_assignments') }}" class="btn btn-primary">Teacher Assignments</a>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

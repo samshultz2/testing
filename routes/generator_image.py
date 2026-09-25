@@ -754,3 +754,71 @@ def generate_simple_table_image(title, headers, rows, col_widths=None, quality='
         y += row_height
 
     return img
+
+
+def generate_teacher_assignment_summary_image(summary, quality='hd'):
+    """A grouped, per-teacher list PNG for the teacher-assignment summary
+    report — each teacher's name, their assignment lines (as given by
+    generation._teacher_assignment_summary(), already formatted text), and
+    their weekly total. Not a grid, so this doesn't reuse
+    generate_simple_table_image(); height grows with content.
+
+    Unlike the fixed-size timetable grids (bounded by periods_per_day x 5
+    days), this list grows with the school's own teacher/assignment count
+    with no upper bound — the 8x "ultra" scale the grid exports use turned
+    a 150-teacher school into a multi-minute, 33MB render. This stays at a
+    much lighter scale/width (a text list needs far less resolution than a
+    printed grid) so it's still crisp on screen but doesn't blow up with a
+    bigger school."""
+    scale = 3 if quality == 'ultra' else 2
+    margin = 24 * scale
+    width = 1100 * scale
+    title_height = 56 * scale
+    teacher_gap = 22 * scale
+    name_height = 38 * scale
+    line_height = 28 * scale
+    total_height = 34 * scale
+
+    font_title = get_font(30 * scale, bold=True)
+    font_name = get_font(20 * scale, bold=True)
+    font_line = get_font(16 * scale)
+    font_total = get_font(16 * scale, bold=True)
+
+    img_height = margin * 2 + title_height
+    if not summary:
+        img_height += line_height
+    for row in summary:
+        img_height += name_height + len(row['lines']) * line_height + total_height + teacher_gap
+
+    img = Image.new('RGB', (width, int(img_height)), color='white')
+    draw = ImageDraw.Draw(img)
+
+    color_black = (20, 20, 20)
+    color_muted = (100, 100, 100)
+    color_total = (30, 107, 62)
+
+    y = margin
+    if font_title:
+        draw.text((margin, y), 'Teacher Assignment Summary', fill=color_black, font=font_title)
+    y += title_height
+
+    if not summary:
+        if font_line:
+            draw.text((margin, y), 'No assignments yet.', fill=color_muted, font=font_line)
+        y += line_height
+
+    for row in summary:
+        if font_name:
+            draw.text((margin, y), row['teacher'].name, fill=color_black, font=font_name)
+        y += name_height
+        for line in row['lines']:
+            if font_line:
+                draw.text((margin + 20 * scale, y), '• ' + line['text'], fill=color_black, font=font_line)
+            y += line_height
+        if font_total:
+            plural = 's' if row['total'] != 1 else ''
+            draw.text((margin + 20 * scale, y), f"Total — {row['total']} period{plural}/week",
+                      fill=color_total, font=font_total)
+        y += total_height + teacher_gap
+
+    return img
