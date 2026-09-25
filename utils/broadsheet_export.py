@@ -383,9 +383,11 @@ def blank_sheet_pdf(term_id, assignment_id, subject_name=''):
     asg = db.session.get(ClassArmAssignment, assignment_id)
     if not (term and asg):
         return None
+    from sqlalchemy.orm import contains_eager
     students = [e.student for e in (StudentEnrollment.query
                 .filter_by(class_arm_assignment_id=assignment_id, is_active=True)
-                .join(Student).order_by(Student.surname, Student.first_name).all())]
+                .join(Student).options(contains_eager(StudentEnrollment.student))
+                .order_by(Student.surname, Student.first_name).all())]
     cols = score_columns()
     # Plain black-and-white — no fills or shading (clean to photocopy).
     styles = getSampleStyleSheet()
@@ -395,20 +397,20 @@ def blank_sheet_pdf(term_id, assignment_id, subject_name=''):
                         alignment=1, textColor=colors.black, fontName='Helvetica-Bold')
     nm = ParagraphStyle('nm', parent=styles['Normal'], fontSize=8.5, leading=10)
 
-    # Header row: S/N, First, Middle, Surname, <score cols…>, Exam Total, General Total.
+    # Header row: S/N, Surname, Middle, First, <score cols…>, Exam Total, General Total.
     # No per-column max is printed — the max differs by subject, so the sheet stays generic.
     def col_head(label, mx=None):
         return Paragraph(label, hd)
-    header = [Paragraph('S/N', hd), Paragraph('First Name', hd),
-              Paragraph('Middle Name', hd), Paragraph('Surname', hd)]
+    header = [Paragraph('S/N', hd), Paragraph('Surname', hd),
+              Paragraph('Middle Name', hd), Paragraph('First Name', hd)]
     for c in cols:
         header.append(col_head(c['label'], c['max']))
     header += [col_head('Exam Total'), col_head('General Total')]
     data = [header]
     for i, st in enumerate(students, 1):
-        row = [str(i), Paragraph(pdf_escape(st.first_name or ''), nm),
+        row = [str(i), Paragraph(pdf_escape(st.surname or ''), nm),
                Paragraph(pdf_escape(st.middle_name or ''), nm),
-               Paragraph(pdf_escape(st.surname or ''), nm)]
+               Paragraph(pdf_escape(st.first_name or ''), nm)]
         row += [''] * (len(cols) + 2)          # blank score cells
         data.append(row)
     # A couple of spare blank rows for late entrants.
@@ -439,7 +441,7 @@ def blank_sheet_pdf(term_id, assignment_id, subject_name=''):
     n_score = len(cols) + 2
     names_w = sn_w + first_w + mid_w + sur_w
     score_w = max(9 * mm, (avail - names_w) / n_score)
-    widths = [sn_w, first_w, mid_w, sur_w] + [score_w] * n_score
+    widths = [sn_w, sur_w, mid_w, first_w] + [score_w] * n_score
     # If long names + many columns overspill the page width, shrink names to fit.
     overflow = sum(widths) - avail
     if overflow > 0:
@@ -447,7 +449,7 @@ def blank_sheet_pdf(term_id, assignment_id, subject_name=''):
         if shrink > 0:
             scale = 1 - shrink / (first_w + mid_w + sur_w)
             first_w, mid_w, sur_w = first_w * scale, mid_w * scale, sur_w * scale
-            widths = [sn_w, first_w, mid_w, sur_w] + [score_w] * n_score
+            widths = [sn_w, sur_w, mid_w, first_w] + [score_w] * n_score
 
     # Dynamic row height: fill the page's vertical space so a class up to ~45
     # students stays on one page, but each row keeps a comfortable writing floor

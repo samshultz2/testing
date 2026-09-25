@@ -1523,7 +1523,7 @@ def export_broadsheet():
 def blank_score_sheet():
     """A printable, A4 blank score-entry sheet for a class arm: the school's own
     assessment columns (CAs, optional HA, optional P.E/M.E, CBT, PBT/Theory, Exam
-    Total, General Total) with the roster pre-printed in First / Middle / Surname
+    Total, General Total) with the roster pre-printed in Surname / Middle / First
     columns and a blank space for the subject name."""
     from utils.broadsheet_export import blank_sheet_pdf, blank_sheet_filename
     from utils.web_exports import pdf_response

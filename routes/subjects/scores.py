@@ -48,19 +48,20 @@ def scores_entry():
     # Get subjects for selected class (filter by teacher's assigned subjects if not admin)
     class_subjects = []
     if selected_assignment:
+        from sqlalchemy.orm import contains_eager
         from utils.access_control import get_teacher_profile
         teacher = get_teacher_profile()
-        
+
         class_subjects_query = ClassSubject.query.filter_by(
             term_id=term_id,
             class_id=selected_assignment.class_id,
             is_active=True
         ).filter(
             (ClassSubject.arm_id == None) | (ClassSubject.arm_id == selected_assignment.arm_id)
-        ).join(Subject).order_by(Subject.name)
-        
+        ).join(Subject).options(contains_eager(ClassSubject.subject)).order_by(Subject.name)
+
         all_class_subjects = class_subjects_query.all()
-        
+
         # Filter by teacher's assigned subjects if not admin
         if teacher and not is_admin():
             teacher_subject_ids = [
@@ -72,33 +73,41 @@ def scores_entry():
             class_subjects = [cs for cs in all_class_subjects if cs.subject_id in teacher_subject_ids]
         else:
             class_subjects = all_class_subjects
-    
-    selected_class_subject = db.session.get(ClassSubject, class_subject_id) if class_subject_id else None
-    
+
+    from sqlalchemy.orm import joinedload
+    selected_class_subject = (db.session.get(ClassSubject, class_subject_id,
+                                             options=[joinedload(ClassSubject.subject)])
+                              if class_subject_id else None)
+
     # Get assessment types
     assessment_types = AssessmentType.query.filter_by(is_active=True).order_by(AssessmentType.order).all()
     selected_assessment = db.session.get(AssessmentType, assessment_type_id) if assessment_type_id else None
-    
+
+    # Class roster (every active enrollment in the selected arm) — shared by
+    # the score-entry table and the "by student" picker's roster below, so
+    # it's fetched once instead of twice when both sections are showing.
+    class_roster = []
+    if selected_assignment:
+        class_roster = (StudentEnrollment.query
+                        .options(joinedload(StudentEnrollment.student))
+                        .filter_by(class_arm_assignment_id=assignment_id, is_active=True)
+                        .join(Student).order_by(Student.surname, Student.first_name).all())
+
     # Get students and existing scores
     students_data = []
     if selected_assignment and selected_class_subject and selected_assessment:
-        from sqlalchemy.orm import joinedload
-        enrollments = (StudentEnrollment.query
-                       .options(joinedload(StudentEnrollment.student))
-                       .filter_by(class_arm_assignment_id=assignment_id, is_active=True)
-                       .join(Student).order_by(Student.surname, Student.first_name).all())
         # One query for every existing score in this class-subject + assessment,
         # indexed by student, instead of a lookup per student (removes the N+1).
         existing = {s.student_id: s.score for s in StudentScore.query.filter_by(
             class_subject_id=class_subject_id,
             assessment_type_id=assessment_type_id).all()}
-        for enrollment in enrollments:
+        for enrollment in class_roster:
             students_data.append({
                 'enrollment': enrollment,
                 'student': enrollment.student,
                 'score': existing.get(enrollment.student_id),
             })
-    
+
     # Max score: per-term setting > subject override > global default.
     max_score = selected_assessment.max_score if selected_assessment else 0
     if selected_class_subject and selected_assessment:
@@ -108,15 +117,8 @@ def scores_entry():
     # Roster for the "by student" entry mode: every student in the selected
     # class arm, so the UI can offer a live-filterable single-student picker
     # without an extra round-trip.
-    roster = []
-    if selected_assignment:
-        from sqlalchemy.orm import joinedload as _jl
-        for e in (StudentEnrollment.query
-                  .options(_jl(StudentEnrollment.student))
-                  .filter_by(class_arm_assignment_id=assignment_id, is_active=True)
-                  .join(Student).order_by(Student.surname, Student.first_name).all()):
-            roster.append({'id': e.student.id, 'full_name': e.student.full_name,
-                           'gender': e.student.gender or ''})
+    roster = [{'id': e.student.id, 'full_name': e.student.full_name,
+              'gender': e.student.gender or ''} for e in class_roster]
 
     return _render({
         'page': 'scores', 'nav': _nav_urls(),
@@ -563,11 +565,12 @@ def import_scores():
     if assignment_id:
         assignment = db.session.get(ClassArmAssignment, assignment_id)
         if assignment:
+            from sqlalchemy.orm import contains_eager
             class_subjects = ClassSubject.query.filter_by(
                 term_id=term_id,
                 class_id=assignment.class_id,
                 is_active=True
-            ).join(Subject).order_by(Subject.name).all()
+            ).join(Subject).options(contains_eager(ClassSubject.subject)).order_by(Subject.name).all()
     
     return render_template('subjects/import_scores.html',
         terms=terms, term_id=term_id,

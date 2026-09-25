@@ -271,11 +271,12 @@ def _scan_selector_context():
     class_subjects = []
     assignment = db.session.get(ClassArmAssignment, assignment_id) if assignment_id else None
     if assignment:
+        from sqlalchemy.orm import contains_eager
         class_subjects = ClassSubject.query.filter_by(
             term_id=term_id, class_id=assignment.class_id, is_active=True
         ).filter(
             (ClassSubject.arm_id == None) | (ClassSubject.arm_id == assignment.arm_id)
-        ).join(Subject).order_by(Subject.name).all()
+        ).join(Subject).options(contains_eager(ClassSubject.subject)).order_by(Subject.name).all()
 
     return {
         'terms': terms, 'term_id': term_id,
