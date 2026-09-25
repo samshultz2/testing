@@ -993,15 +993,52 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
         if multi_subject_teachers:
             active_rules.append('the same-teacher-same-class back-to-back-different-subject rule')
 
-        reason = ('No obvious capacity problem was found — the requested load fits the '
-                 'available slots on paper, so this is almost certainly the finer scheduling '
-                 'rules being too tight together rather than too little time in the week.')
+        # No single teacher or class-arm crosses a hard cap (diagnose_infeasibility
+        # already ruled that out) and none of the toggleable rules above are
+        # active either — so with nothing left to relax, the remaining
+        # explanation is almost always teacher contention: several teachers
+        # each individually *under* their cap, but collectively needing more
+        # simultaneous distinct slots than the week can offer once you account
+        # for everyone's schedule at once (a graph-colouring problem, not a
+        # simple pigeonhole one). Surfacing whichever teachers are packed
+        # tightest gives a concrete lead instead of a dead end — this is
+        # exactly the situation multiplying a class's arms tends to create,
+        # since the same teachers now have to cover far more class-arms.
+        teacher_load = []
+        for tid, reqs in teacher_reqs.items():
+            t = teachers.get(tid)
+            if not t:
+                continue
+            needed = len(reqs)
+            unavailable_count = len(teacher_unavailable.get(tid, set()))
+            cap = min(t.max_periods_per_week or num_slots,
+                     (t.max_periods_per_day or num_periods) * num_days,
+                     num_slots - unavailable_count)
+            if cap <= 0:
+                continue
+            distinct_arms = len({(r['class_name'], r['arm']) for r in reqs})
+            teacher_load.append((needed / cap, t.name, needed, cap, distinct_arms))
+        teacher_load.sort(reverse=True)
+        tight_teachers = [tl for tl in teacher_load[:5] if tl[0] >= 0.75]
+
+        reason = ('No single teacher or class-arm exceeds its own capacity, and no configurable '
+                 'rule is active either, so this isn\'t "too little time on paper" — it\'s the '
+                 'solver failing to interleave everyone\'s schedule at once even though each '
+                 'teacher individually has room. That\'s the classic result of spreading a fixed '
+                 'set of teachers across more class-arms than before (e.g. multiplying a class\'s '
+                 'arms): the same teachers now each need more distinct simultaneous slots.')
+        if tight_teachers:
+            reason += ' Teachers running closest to their limit — these are the most likely ' \
+                     'bottleneck, worth double-checking or splitting across more staff first: ' \
+                     + '; '.join(f'{name} ({needed}/{cap} periods/week, {arms} class-arms)'
+                                 for _, name, needed, cap, arms in tight_teachers) + '.'
         if active_rules:
-            reason += ' Rules active in this run that are worth relaxing or disabling one at a ' \
-                      'time to isolate the conflict: ' + '; '.join(active_rules) + '.'
-        else:
-            reason += ' Try increasing periods_per_day, or re-run with a longer time limit in ' \
-                      'case the solver just needs more time to prove a solution exists.'
+            reason += ' Rules active in this run that are also worth relaxing or disabling one ' \
+                      'at a time to isolate the conflict: ' + '; '.join(active_rules) + '.'
+        if not tight_teachers and not active_rules:
+            reason += ' Try increasing periods_per_day (more slots gives the solver more room to ' \
+                      'spread everyone out), or assigning some subjects to additional teachers ' \
+                      'instead of one teacher covering every arm.'
 
         return {'success': False, 'message': f'No solution found. Status: {solver.StatusName(status)}',
                'reasons': [reason]}
