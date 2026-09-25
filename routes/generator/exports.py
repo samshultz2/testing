@@ -933,17 +933,38 @@ def export_results_by_day_pdf(batch_id):
     block_gap = 6*mm if days_per_page > 1 else 0
     usable_height = ((page_h - 2*margin - 2*frame_pad) - block_gap * (days_per_page - 1)) / days_per_page
 
-    # Every font size and fixed header height below was tuned for a single
-    # day filling a full A4 landscape page. Scale them by how this layout's
-    # per-day block height compares to that baseline, so a bigger sheet (A3,
-    # single day) fills out proportionally instead of leaving dead space,
-    # and a packed block (A3, two days) shrinks just enough to fit — not an
-    # arbitrary hard-coded "small" size.
+    # Every font size, column width and fixed header height below was tuned
+    # for a single day filling a full A4 landscape page. Scale them against
+    # that baseline on two independent axes — height and width — so a bigger
+    # sheet (A3, single day) fills out proportionally in both directions
+    # instead of just growing taller while its fixed-width columns stay put
+    # (that used to make single-line labels like "Class" spill past their
+    # column border once the font outgrew it), and a packed block (A3, two
+    # days) shrinks just enough to fit its halved height without shrinking
+    # any further than that — it still has the full page width to work with.
     baseline_usable_height = landscape(A4)[1] - 2*margin - 2*frame_pad
-    scale = usable_height / baseline_usable_height
+    baseline_usable_width = landscape(A4)[0] - 2*margin - 2*frame_pad
+    hscale = usable_height / baseline_usable_height
+    wscale = usable_width / baseline_usable_width
+    # For anything that has to fit inside one specific column (a class code,
+    # a period header, the break label) the binding constraint is whichever
+    # axis is tighter — packed mode is squeezed by height, not width, so it
+    # must not be sized as if the ample width were the only limit.
+    fit_scale = min(hscale, wscale)
 
     def sc(pt):
-        return pt * scale
+        """Scale by page height — for full-width single-line rows (school
+        name, day header) where only vertical room is a real constraint."""
+        return pt * hscale
+
+    def sc_w(pt):
+        """Scale by page width — for column widths."""
+        return pt * wscale
+
+    def sc_fit(pt):
+        """Scale by whichever axis is tighter — for text confined to one
+        column, which must fit both its row's height and its column's width."""
+        return pt * fit_scale
 
     doc = SimpleDocTemplate(
         output,
@@ -955,15 +976,25 @@ def export_results_by_day_pdf(batch_id):
     )
 
     elements = []
-    
+
     # Total columns: Class + periods-before + BREAK + periods-after
     num_periods_before = break_after
     num_periods_after = periods_per_day - break_after
     total_cols = 1 + num_periods_before + 1 + num_periods_after
-    
-    # Column widths - fill entire width
-    first_col_width = 12*mm
-    break_col_width = 10*mm
+
+    # Column widths - fill entire width. The class-code column is sized to
+    # this batch's own longest code (get_short_code() output can be a couple
+    # of characters or, for a naming scheme get_short_code() doesn't shorten,
+    # several) at the class-code font size below — a fixed guess either
+    # wasted space for short codes or overflowed for long ones. Bounded so
+    # one long-named class-arm can't crush the period columns for everyone.
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+    class_code_font = sc_fit(14)
+    longest_code = max((get_short_code(cn, arm) for cn, arm in class_arms), default='Class')
+    longest_code = max(longest_code, 'Class', key=lambda s: stringWidth(s, 'Helvetica-Bold', class_code_font))
+    code_text_width = stringWidth(longest_code, 'Helvetica-Bold', class_code_font)
+    first_col_width = min(max(sc_w(12*mm), code_text_width + sc_w(6*mm)), sc_w(28*mm))
+    break_col_width = sc_w(10*mm)
     remaining_width = usable_width - first_col_width - break_col_width
     period_col_width = remaining_width / periods_per_day
     
@@ -1068,34 +1099,51 @@ def export_results_by_day_pdf(batch_id):
             header_row_idx = 1
             data_start_row = 2
         
-        # NO COLORS - just black text on white, with borders
+        # NO COLORS - just black text on white, with borders. Padding is kept
+        # tight and every font size gets an explicit LEADING close to it (a
+        # single line needs about 1.05x its size) rather than relying on
+        # reportlab's default ~1.2x leading + 3pt/side padding — that default
+        # headroom is a fixed point amount that doesn't scale with the page,
+        # so at A3 size (fonts ~1.45x bigger) it was too little, and large
+        # single-line headers like the day name were visibly bleeding into
+        # the row below.
         style_commands = [
+            ('TOPPADDING', (0, 0), (-1, -1), 2),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+            ('LEFTPADDING', (0, 0), (-1, -1), 2),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 2),
+
             # Day header row
             ('SPAN', (0, day_row_idx), (-1, day_row_idx)),
             ('TEXTCOLOR', (0, day_row_idx), (-1, day_row_idx), colors.black),
             ('FONTNAME', (0, day_row_idx), (-1, day_row_idx), 'Helvetica-Bold'),
             ('FONTSIZE', (0, day_row_idx), (-1, day_row_idx), sc(22)),
+            ('LEADING', (0, day_row_idx), (-1, day_row_idx), sc(23)),
             ('ALIGN', (0, day_row_idx), (-1, day_row_idx), 'CENTER'),
             ('VALIGN', (0, day_row_idx), (-1, day_row_idx), 'MIDDLE'),
 
-            # Period header row (P#/times) — bold and readable, not tiny
+            # Period header row (P#/times) — bold and readable, not tiny.
+            # Confined to a period column, so bound by whichever of
+            # height/width is tighter (fit_scale), not height alone.
             ('FONTNAME', (0, header_row_idx), (-1, header_row_idx), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, header_row_idx), (-1, header_row_idx), sc(11 if d == 0 else 13)),
-            ('LEADING', (0, header_row_idx), (-1, header_row_idx), sc(12 if d == 0 else 15)),
+            ('FONTSIZE', (0, header_row_idx), (-1, header_row_idx), sc_fit(11 if d == 0 else 13)),
+            ('LEADING', (0, header_row_idx), (-1, header_row_idx), sc_fit(12 if d == 0 else 14)),
             ('ALIGN', (0, header_row_idx), (-1, header_row_idx), 'CENTER'),
             ('VALIGN', (0, header_row_idx), (-1, header_row_idx), 'MIDDLE'),
 
             # Break column header (narrow column, keep its multi-line label small)
-            ('FONTSIZE', (break_col, header_row_idx), (break_col, header_row_idx), sc(7)),
-            ('LEADING', (break_col, header_row_idx), (break_col, header_row_idx), sc(8)),
+            ('FONTSIZE', (break_col, header_row_idx), (break_col, header_row_idx), sc_fit(7)),
+            ('LEADING', (break_col, header_row_idx), (break_col, header_row_idx), sc_fit(7.5)),
 
-            # Class codes column
+            # Class codes column — confined to the first column, so fit_scale.
             ('FONTNAME', (0, data_start_row), (0, -1), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, data_start_row), (0, -1), sc(14)),
+            ('FONTSIZE', (0, data_start_row), (0, -1), sc_fit(14)),
+            ('LEADING', (0, data_start_row), (0, -1), sc_fit(15)),
 
-            # Subject cells - LARGE
+            # Subject cells - LARGE, but still confined to a period column.
             ('FONTNAME', (1, data_start_row), (-1, -1), 'Helvetica-Bold'),
-            ('FONTSIZE', (1, data_start_row), (-1, -1), sc(18)),
+            ('FONTSIZE', (1, data_start_row), (-1, -1), sc_fit(18)),
+            ('LEADING', (1, data_start_row), (-1, -1), sc_fit(19)),
 
             # All cells alignment
             ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
@@ -1112,6 +1160,7 @@ def export_results_by_day_pdf(batch_id):
                 ('SPAN', (0, 0), (-1, 0)),
                 ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
                 ('FONTSIZE', (0, 0), (-1, 0), sc(16)),
+                ('LEADING', (0, 0), (-1, 0), sc(17)),
                 ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
                 ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
             ])
@@ -1120,6 +1169,7 @@ def export_results_by_day_pdf(batch_id):
                     ('SPAN', (0, 1), (-1, 1)),
                     ('FONTNAME', (0, 1), (-1, 1), 'Helvetica'),
                     ('FONTSIZE', (0, 1), (-1, 1), sc(8)),
+                    ('LEADING', (0, 1), (-1, 1), sc(9)),
                     ('TEXTCOLOR', (0, 1), (-1, 1), colors.black),
                     ('ALIGN', (0, 1), (-1, 1), 'CENTER'),
                     ('VALIGN', (0, 1), (-1, 1), 'MIDDLE'),

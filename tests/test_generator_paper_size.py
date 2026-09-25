@@ -155,3 +155,93 @@ def test_export_by_day_pdf_a3_page_is_bigger_than_a4(app):
     assert abs(rect.width - a3_w) < 2 and abs(rect.height - a3_h) < 2
     a4_w, _ = landscape(A4)
     assert a3_w > a4_w
+
+
+def _words(page):
+    return page.get_text('words')
+
+
+def _word(words, text):
+    """First word box (x0, y0, x1, y1) exactly matching `text`."""
+    for w in words:
+        if w[4] == text:
+            return w[:4]
+    raise AssertionError(f'word {text!r} not found on page')
+
+
+def _first_column_border_x(page):
+    """X-position of the grid line separating the class-code column from the
+    first period column — the ground truth for where that column actually
+    ends, as opposed to inferring it from a neighboring word's position."""
+    xs = set()
+    for d in page.get_drawings():
+        for item in d.get('items', []):
+            if item[0] == 'l':
+                p1, p2 = item[1], item[2]
+                if abs(p1.x - p2.x) < 0.01:
+                    xs.add(round(p1.x, 1))
+    xs = sorted(xs)
+    return xs[1]   # xs[0] is the page's own left border
+
+
+def _class_code(batch_id):
+    """The first class-arm's printed short code for a batch from `_seed`
+    (class 'A', arm 'Main' -> tag + 'A' + 'M'), matching get_short_code()."""
+    tag = batch_id.split('-', 1)[1]
+    return f'Zz{tag}AM'
+
+
+def test_export_by_day_pdf_a3_single_class_column_text_stays_in_its_column(app):
+    """Regression: on A3 the font grows with the page, but the first
+    (Class-code) column used to stay a fixed physical width — so a class
+    code (e.g. "ZzPS1AM") spilled past the column's own border, even off
+    the left edge of the page in the worst case, instead of the column
+    growing to match the bigger font. Column widths must scale with page
+    width too, not just row heights with page height."""
+    import fitz
+    batch_id = _seed(app)
+    c = _admin(app)
+    r = c.get(f'/generator/results/{batch_id}/export_by_day_pdf?paper=a3&layout=single')
+    doc = fitz.open(stream=r.data, filetype='pdf')
+    page = doc[0]
+    words = _words(page)
+    border_x = _first_column_border_x(page)
+    doc.close()
+    class_code_box = _word(words, _class_code(batch_id))
+    assert class_code_box[0] >= 0                 # not off the left edge of the page
+    assert class_code_box[2] <= border_x + 1       # not past its column's own border
+
+
+def test_export_by_day_pdf_a3_packed_class_column_text_stays_in_its_column(app):
+    import fitz
+    batch_id = _seed(app)
+    c = _admin(app)
+    r = c.get(f'/generator/results/{batch_id}/export_by_day_pdf?paper=a3&layout=packed')
+    doc = fitz.open(stream=r.data, filetype='pdf')
+    page = doc[0]
+    words = _words(page)
+    border_x = _first_column_border_x(page)
+    doc.close()
+    class_code_box = _word(words, _class_code(batch_id))
+    assert class_code_box[0] >= 0
+    assert class_code_box[2] <= border_x + 1
+
+
+def test_export_by_day_pdf_a3_single_day_header_does_not_overlap_period_row(app):
+    """Regression: the day-name row's font/row-height ratio was tuned at A4
+    scale using reportlab's default (fixed-point) leading and padding; once
+    scaled up ~1.45x for A3 the day name (e.g. "MONDAY") visibly bled down
+    into the period-header row below it. Compared against "P1" rather than
+    "Class": "P1" is the top line of a stacked 3-line cell (P1/start/end)
+    that VALIGN MIDDLE positions higher in the row than the single-line
+    "Class" label next to it, so it's the one that actually collides first."""
+    import fitz
+    batch_id = _seed(app)
+    c = _admin(app)
+    r = c.get(f'/generator/results/{batch_id}/export_by_day_pdf?paper=a3&layout=single')
+    doc = fitz.open(stream=r.data, filetype='pdf')
+    words = _words(doc[0])
+    doc.close()
+    day_box = _word(words, 'MONDAY')
+    p1_box = _word(words, 'P1')
+    assert day_box[3] <= p1_box[1]   # MONDAY's bottom edge is above P1's top edge
