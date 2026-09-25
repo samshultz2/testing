@@ -60,7 +60,8 @@ def index():
     page = max(1, request.args.get('page', 1, type=int) or 1)
     per_page = min(max(request.args.get('per_page', 50, type=int) or 50, 10), 200)
 
-    q = ScratchCard.query
+    from sqlalchemy.orm import joinedload
+    q = ScratchCard.query.options(joinedload(ScratchCard.term))
     if batch:
         q = q.filter_by(batch_label=batch)
     q = _apply_card_status(q, status)
@@ -261,7 +262,11 @@ def publish(term_id):
 @scratchcards_bp.route('/logs')
 @login_required
 def logs():
-    rows = (ResultCheckLog.query.order_by(ResultCheckLog.checked_at.desc())
+    from sqlalchemy.orm import joinedload
+    rows = (ResultCheckLog.query
+            .options(joinedload(ResultCheckLog.student), joinedload(ResultCheckLog.term),
+                     joinedload(ResultCheckLog.card))
+            .order_by(ResultCheckLog.checked_at.desc())
             .limit(500).all())
     return _render({
         'page': 'logs',
