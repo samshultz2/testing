@@ -4,6 +4,10 @@
 {% block content %}
 <div class="page-header">
     <h1>Period Count Report</h1>
+    <div class="page-header-actions">
+        <a href="{{ url_for('generator.period_count_report_image', batch_id=batch_id) }}" class="btn btn-info"><i class="fas fa-image"></i> Image (HD)</a>
+        <a href="{{ url_for('generator.period_count_report_pdf', batch_id=batch_id) }}" class="btn btn-danger"><i class="fas fa-file-pdf"></i> PDF</a>
+    </div>
 </div>
 
 <p class="text-muted mb-3">Compare assigned periods vs required per subject for each class.</p>

@@ -551,9 +551,10 @@ def reports_index():
     return render_template('generator/reports_index.html', batch=batch)
 
 
-@generator_bp.route('/reports/period-count/<batch_id>')
-@login_required
-def period_count_report(batch_id):
+def _period_count_data(batch_id):
+    """(counts, configs, subjects) for the period-count report — shared by
+    the HTML page and its image/PDF exports so all three show the same
+    numbers. counts: {"Class Arm": {subject_id: actual_count}}."""
     results = GenTimetableResult.query.filter_by(batch_id=batch_id, branch_id=gen_bid()).all()
     counts = {}
     for r in results:
@@ -562,11 +563,17 @@ def period_count_report(batch_id):
             counts[key] = {}
         if r.subject_id:
             counts[key][r.subject_id] = counts[key].get(r.subject_id, 0) + 1
-    
+
     level = get_current_level()
     configs = {c.subject_id: c for c in GenSubjectConfig.query.filter_by(school_level=level, branch_id=gen_bid()).all()}
     subjects = GenSubject.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).order_by(GenSubject.name).all()
-    
+    return counts, configs, subjects
+
+
+@generator_bp.route('/reports/period-count/<batch_id>')
+@login_required
+def period_count_report(batch_id):
+    counts, configs, subjects = _period_count_data(batch_id)
     return render_template('generator/report_period_count.html',
         batch_id=batch_id, counts=counts, configs=configs, subjects=subjects
     )

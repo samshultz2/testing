@@ -172,6 +172,57 @@ def test_unassigned_report_image_and_pdf(app):
     assert len(r_pdf.data) > 500
 
 
+def test_period_count_report_image_and_pdf(app):
+    batch_id, _ = _seed_single_class(app, 'PC1')
+    c = _admin(app)
+
+    r_page = c.get(f'/generator/reports/period-count/{batch_id}')
+    assert r_page.status_code == 200
+    body = r_page.get_data(as_text=True)
+    assert 'period_count_report_image' in body or 'Image (HD)' in body
+    assert 'period_count_report_pdf' in body or 'PDF' in body
+
+    r_img = c.get(f'/generator/reports/period-count/{batch_id}/image')
+    assert r_img.status_code == 200
+    assert r_img.mimetype == 'image/png'
+    from PIL import Image
+    from io import BytesIO
+    img = Image.open(BytesIO(r_img.data))
+    assert img.width > 0 and img.height > 0
+
+    r_pdf = c.get(f'/generator/reports/period-count/{batch_id}/pdf')
+    assert r_pdf.status_code == 200
+    assert r_pdf.mimetype == 'application/pdf'
+    assert len(r_pdf.data) > 500
+
+
+def test_period_count_export_shows_actual_over_expected_when_mismatched(app):
+    """_seed_single_class assigns the subject exactly 1 period/week; give it
+    a GenSubjectConfig requiring 3/week so actual (1) != expected (3) — the
+    export should spell that out as "1/3" text since a static image/PDF has
+    no hover tooltip for the expected count the live page's badge relies on."""
+    from models import GenSubjectConfig
+    batch_id, _ = _seed_single_class(app, 'PC2')
+    with app.app_context():
+        bid = Branch.get_default().id
+        subj = GenSubject.query.filter_by(name='ZzMathsPC2').first()
+        db.session.add(GenSubjectConfig(branch_id=bid, subject_id=subj.id,
+                                        school_level='sss', periods_per_week=3))
+        db.session.commit()
+
+    c = _admin(app)
+    r_page = c.get(f'/generator/reports/period-count/{batch_id}')
+    assert '1/3' not in r_page.get_data(as_text=True)  # live page uses a badge, not this text
+
+    r_pdf = c.get(f'/generator/reports/period-count/{batch_id}/pdf')
+    assert r_pdf.status_code == 200
+    import fitz
+    doc = fitz.open(stream=r_pdf.data, filetype='pdf')
+    text = doc[0].get_text()
+    doc.close()
+    assert '1/3' in text
+
+
 def _seed_two_teacher_batch(app, tag):
     """Two teachers, each with a few periods on one class-arm — enough to
     exercise the bulk all-teachers PDF's one-page-per-teacher pagination."""
