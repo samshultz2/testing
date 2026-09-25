@@ -196,11 +196,11 @@ def test_period_count_report_image_and_pdf(app):
     assert len(r_pdf.data) > 500
 
 
-def test_period_count_export_shows_actual_over_expected_when_mismatched(app):
+def test_period_count_export_shows_plain_actual_count_not_actual_over_expected(app):
     """_seed_single_class assigns the subject exactly 1 period/week; give it
-    a GenSubjectConfig requiring 3/week so actual (1) != expected (3) — the
-    export should spell that out as "1/3" text since a static image/PDF has
-    no hover tooltip for the expected count the live page's badge relies on."""
+    a GenSubjectConfig requiring 3/week so actual (1) != expected (3). The
+    export must show just the actual assigned count ("1"), not "1/3" —
+    the required/expected count plays no part in the exported table."""
     from models import GenSubjectConfig
     batch_id, _ = _seed_single_class(app, 'PC2')
     with app.app_context():
@@ -211,16 +211,14 @@ def test_period_count_export_shows_actual_over_expected_when_mismatched(app):
         db.session.commit()
 
     c = _admin(app)
-    r_page = c.get(f'/generator/reports/period-count/{batch_id}')
-    assert '1/3' not in r_page.get_data(as_text=True)  # live page uses a badge, not this text
-
     r_pdf = c.get(f'/generator/reports/period-count/{batch_id}/pdf')
     assert r_pdf.status_code == 200
     import fitz
     doc = fitz.open(stream=r_pdf.data, filetype='pdf')
     text = doc[0].get_text()
     doc.close()
-    assert '1/3' in text
+    assert '1/3' not in text
+    assert '1' in text
 
 
 def _seed_two_teacher_batch(app, tag):

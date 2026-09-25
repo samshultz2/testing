@@ -1497,28 +1497,19 @@ def teacher_workload_report_pdf(batch_id):
 
 def _period_count_table(batch_id):
     """(headers, rows, col_widths) for the period-count report's image/PDF
-    exports — same comparison the live page shows with a colored badge and a
-    hover tooltip for the expected count, spelled out as plain text instead
-    (a static export has no hover): "6" when the actual count matches what's
-    required, "4/6" when it doesn't (actual/expected), "-" when unassigned."""
+    exports: just the actual assigned periods for each class/subject, "-"
+    when unassigned."""
     from routes.generator.generation import _period_count_data
     from routes.generator_image import _abbrev
 
-    counts, configs, subjects = _period_count_data(batch_id)
+    counts, _configs, subjects = _period_count_data(batch_id)
     headers = ['Class'] + [_abbrev(s, maxlen=6) for s in subjects]
     table_rows = []
     for class_arm, subj_counts in counts.items():
         row = [class_arm]
         for s in subjects:
             actual = subj_counts.get(s.id, 0)
-            cfg = configs.get(s.id)
-            expected = cfg.periods_per_week if cfg else 0
-            if actual == expected:
-                row.append(str(actual) if actual else '-')
-            elif actual > 0:
-                row.append(f'{actual}/{expected}')
-            else:
-                row.append('-')
+            row.append(str(actual) if actual else '-')
         table_rows.append(row)
     col_widths = [1.6] + [0.7] * len(subjects)
     return headers, table_rows, col_widths
