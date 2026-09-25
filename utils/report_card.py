@@ -153,10 +153,12 @@ def build_report_card(student_id, term_id):
         return None, None
 
     assignment = enrollment.class_arm_assignment
+    from sqlalchemy.orm import contains_eager
     class_subjects = (ClassSubject.query.filter_by(
         term_id=term_id, class_id=assignment.class_id, is_active=True)
         .filter((ClassSubject.arm_id == None) | (ClassSubject.arm_id == assignment.arm_id))
-        .join(Subject).order_by(Subject.name).all())
+        .join(Subject).options(contains_eager(ClassSubject.subject))
+        .order_by(Subject.name).all())
 
     assessment_types = (AssessmentType.query.filter_by(is_active=True)
                         .order_by(AssessmentType.order, AssessmentType.id).all())
