@@ -8,11 +8,7 @@
 
 <div class="page-header-actions mb-3">
     <a href="{{ url_for('generator.print_results', batch_id=batch_id) }}" class="btn btn-success"><i class="fas fa-print"></i> Print All</a>
-    <button type="button" class="btn btn-success" data-call="toggleSection" data-args="'print-select-panel'"><i class="fas fa-list-check"></i> Print Selected…</button>
-    <a href="{{ url_for('generator.export_results', batch_id=batch_id) }}" class="btn btn-info"><i class="fas fa-download"></i> Excel (by Class)</a>
-    <a href="{{ url_for('generator.export_results_by_day', batch_id=batch_id) }}" class="btn btn-primary"><i class="fas fa-calendar-day"></i> Excel (by Day)</a>
-    <a href="{{ url_for('generator.export_results_by_day_pdf', batch_id=batch_id) }}" class="btn btn-danger"><i class="fas fa-file-pdf"></i> PDF (by Day)</a>
-    <a href="{{ url_for('generator.export_image', batch_id=batch_id) }}" class="btn btn-warning"><i class="fas fa-image"></i> Image (PNG)</a>
+    <button type="button" class="btn btn-success" data-call="toggleSection" data-args="'print-select-panel'"><i class="fas fa-list-check"></i> Export / Print (choose paper size)…</button>
     <a href="{{ url_for('generator.teacher_timetable', batch_id=batch_id) }}" class="btn btn-secondary"><i class="fas fa-chalkboard-teacher"></i> Teacher View</a>
     <a href="{{ url_for('generator.reports_index', batch_id=batch_id) }}" class="btn btn-secondary"><i class="fas fa-chart-bar"></i> Reports</a>
     <form method="POST" action="{{ url_for('generator.apply_results', batch_id=batch_id) }}" style="display: inline;" data-confirm="Publish this timetable into the class timetable views for the ACTIVE term? This replaces any existing entries for the classes it covers.">
@@ -42,7 +38,7 @@
             </div>
             <div class="page-header-actions mt-3" style="align-items: center;">
                 <label class="text-muted text-sm" style="display: flex; align-items: center; gap: 0.4rem;">Paper
-                    <select name="paper" id="paper-select" class="form-control form-control-sm" style="width: auto;" onchange="onPaperChange()">
+                    <select name="paper" id="paper-select" class="form-control form-control-sm" style="width: auto;">
                         <option value="a4">A4</option>
                         <option value="a3">A3</option>
                     </select>
@@ -143,5 +139,7 @@ function onPaperChange() {
     label.style.display = isA3 ? 'flex' : 'none';
     if (!isA3) document.getElementById('layout-select').value = 'single';
 }
+const paperSelectEl = document.getElementById('paper-select');
+if (paperSelectEl) paperSelectEl.addEventListener('change', onPaperChange);
 </script>
 {% endblock %}
