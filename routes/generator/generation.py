@@ -29,11 +29,16 @@ def teacher_assignments():
     # Get subjects for this level
     subjects = GenSubject.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).order_by(GenSubject.name).all()
     
+    from sqlalchemy.orm import contains_eager, joinedload
+
     assignments_by_class = {}
     for cc in classes:
-        assignments_by_class[cc.id] = GenTeacherAssignment.query.filter_by(
-            class_config_id=cc.id, is_active=True
-        ).all()
+        assignments_by_class[cc.id] = (GenTeacherAssignment.query
+            .filter_by(class_config_id=cc.id, is_active=True)
+            .join(GenSubject, GenTeacherAssignment.subject_id == GenSubject.id)
+            .options(contains_eager(GenTeacherAssignment.subject), joinedload(GenTeacherAssignment.teacher))
+            .order_by(GenSubject.name)
+            .all())
     return render_template('generator/teacher_assignments.html',
         classes=classes, teachers=teachers, subjects=subjects,
         assignments_by_class=assignments_by_class, level=level
