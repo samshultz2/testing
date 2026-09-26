@@ -83,3 +83,39 @@ def test_enroll_persists_and_reactivates(app):
     c.post(f'/academics/assignments/{caa_id}/enroll',
            data={'student_ids[]': [str(sid)], '_csrf_token': _pt(c)})
     assert _enrolled(app, caa_id, sid, active=True)
+
+
+def _setup_roster(app, tag, students):
+    """A fresh class-arm assignment with the given (first_name, surname)
+    students all actively enrolled, in the order given (i.e. NOT already
+    surname-sorted, so a passing test proves the route sorts them)."""
+    with app.app_context():
+        bid = Branch.get_default().id
+        sess = AcademicSession(name=f'{tag}-Sess'); db.session.add(sess); db.session.flush()
+        term = Term(session_id=sess.id, term_number=1, name=f'{tag}-Term')
+        db.session.add(term); db.session.flush()
+        sc = SchoolClass.query.first(); arm = ClassArm.query.first()
+        caa = ClassArmAssignment(class_id=sc.id, arm_id=arm.id, term_id=term.id, branch_id=bid)
+        db.session.add(caa); db.session.flush()
+        for i, (first, surname) in enumerate(students):
+            s = Student(student_id=f'{tag}{i}', first_name=first, surname=surname,
+                       gender='Male', is_active=True, branch_id=bid)
+            db.session.add(s); db.session.flush()
+            db.session.add(StudentEnrollment(student_id=s.id, class_arm_assignment_id=caa.id,
+                                             is_active=True))
+        db.session.commit()
+        return caa.id
+
+
+def test_roster_is_sorted_alphabetically_by_surname(app):
+    """Seeded in Zebra/Adams/Mensah order — the roster must come back Adams,
+    Mensah, Zebra regardless of enrollment order."""
+    caa_id = _setup_roster(app, 'ZzSurn', [
+        ('Yusuf', 'Zebra'), ('Chidi', 'Adams'), ('Kwame', 'Mensah'),
+    ])
+    c = _admin(app)
+    roster = _roster(c, caa_id)
+    assert len(roster['enrollments']) == 3
+    assert roster['enrollments'][0]['full_name'] == 'Adams Chidi'
+    assert roster['enrollments'][1]['full_name'] == 'Mensah Kwame'
+    assert roster['enrollments'][2]['full_name'] == 'Zebra Yusuf'

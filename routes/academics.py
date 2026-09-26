@@ -989,7 +989,8 @@ def view_assignment(assignment_id):
     require_branch_access(assignment.branch_id)   # no cross-branch roster
     enrollments = (assignment.enrollments.filter_by(is_active=True)
                   .join(Student, StudentEnrollment.student_id == Student.id)
-                  .filter(Student.is_graduated == False).all())
+                  .filter(Student.is_graduated == False)
+                  .order_by(Student.surname, Student.first_name).all())
 
     # Available = active, non-graduated students NOT already actively
     # enrolled in ANY class for this term. A student must be removed from
