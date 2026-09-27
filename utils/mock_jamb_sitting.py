@@ -488,24 +488,56 @@ def attempt_expired(attempt, grace_seconds=AUTO_SUBMIT_GRACE_SECONDS):
     return timeutil.now() >= deadline
 
 
+def async_grading_enabled():
+    """Queued grading only when explicitly enabled AND a real (Redis) queue
+    backs it — otherwise callers grade inline (the correct, immediate default).
+    Mirrors CBT's already-proven CBT_ASYNC_GRADING (routes/cbt.py,
+    docs/CBT_SCALE.md): a whole cohort submitting -- or auto-expiring on a
+    single admin page load -- at the timer deadline must not grade
+    synchronously on the web workers, which is exactly the moment it matters
+    most under a mass simultaneous sitting."""
+    import os
+    from utils import jobqueue
+    flag = os.environ.get('MOCKJAMB_ASYNC_GRADING', '').strip().lower()
+    return flag in ('1', 'true', 'yes', 'on') and jobqueue.backend_enabled()
+
+
+def queue_grading(attempt):
+    """Mark ``attempt`` as submitting and enqueue its grading, instead of
+    grading inline. Commits. Caller has already established the attempt isn't
+    already Submitted/Submitting."""
+    from models import db
+    from utils import jobqueue
+    attempt.status = 'Submitting'
+    attempt.submitted_at = timeutil.now()
+    db.session.commit()
+    jobqueue.enqueue('mockjamb_grade', {'attempt_id': attempt.id})
+
+
 def auto_submit_expired(exam=None, student=None, grace_seconds=AUTO_SUBMIT_GRACE_SECONDS):
-    """Server-side safety net: grade any in-progress attempt whose time has fully
-    elapsed but that was never submitted (e.g. the student closed the tab so the
-    client-side auto-submit never fired). Scoped to one exam and/or one student when
-    given. Idempotent — only touches attempts with no ``submitted_at`` that are past
-    the deadline. Returns the number graded. Never raises (best-effort)."""
+    """Server-side safety net: grade (or queue the grading of) any in-progress
+    attempt whose time has fully elapsed but that was never submitted (e.g. the
+    student closed the tab so the client-side auto-submit never fired). Scoped
+    to one exam and/or one student when given. Idempotent — only touches
+    attempts with no ``submitted_at`` that are past the deadline (queuing sets
+    ``submitted_at`` immediately, so a queued attempt is never re-matched by a
+    later call). Returns the number graded/queued. Never raises (best-effort)."""
     from models import db, MockJAMBAttempt
     q = MockJAMBAttempt.query.filter(MockJAMBAttempt.submitted_at.is_(None))
     if exam is not None:
         q = q.filter(MockJAMBAttempt.mock_exam_id == exam.id)
     if student is not None:
         q = q.filter(MockJAMBAttempt.student_id == student.id)
+    async_on = async_grading_enabled()
     graded = 0
     for att in q.all():
         if not attempt_expired(att, grace_seconds):
             continue
         try:
-            grade_attempt(att)          # commits; marks submitted + writes the result
+            if async_on:
+                queue_grading(att)
+            else:
+                grade_attempt(att)      # commits; marks submitted + writes the result
             graded += 1
         except Exception:
             db.session.rollback()

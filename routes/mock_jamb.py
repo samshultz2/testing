@@ -2978,7 +2978,7 @@ def portal_submit(exam_id):
     @cbt_login_required
     def _inner():
         from models import MockJAMBAttempt
-        from utils.mock_jamb_sitting import grade_attempt
+        from utils.mock_jamb_sitting import grade_attempt, queue_grading, async_grading_enabled
         exam = db.session.get(MockJAMBExam, exam_id)
         from routes.cbt import _current_student
         student = _current_student()
@@ -2987,8 +2987,15 @@ def portal_submit(exam_id):
         if not att:
             flash('No attempt to submit.', 'error')
             return redirect(url_for('mock_jamb_portal.portal_list'))
-        if att.status != 'Submitted':
-            grade_attempt(att)
+        if att.status not in ('Submitted', 'Submitting'):
+            # Queue grading so a whole cohort submitting at the deadline doesn't
+            # grade synchronously on the web workers -- the done page shows a
+            # brief "grading…" state and the jobs worker finalises within
+            # seconds; if unreachable, portal_done() self-heals after a grace.
+            if async_grading_enabled():
+                queue_grading(att)
+            else:
+                grade_attempt(att)
         return redirect(url_for('mock_jamb_portal.portal_done', exam_id=exam_id))
     return _inner()
 
@@ -2999,13 +3006,41 @@ def portal_done(exam_id):
     @cbt_login_required
     def _inner():
         from models import MockJAMBAttempt, MockJAMBResult
+        from utils.mock_jamb_sitting import grade_attempt
+        from utils import timeutil
         student = _current_student()
         exam = db.session.get(MockJAMBExam, exam_id)
         att = (MockJAMBAttempt.query.filter_by(mock_exam_id=exam_id, student_id=student.id).first()
                if (exam and student) else None)
-        if not att or att.status != 'Submitted':
+        if not att:
+            return redirect(url_for('mock_jamb_portal.portal_sit', exam_id=exam_id))
+        if att.status == 'Submitting':
+            # Queued grading in flight. Self-heal: if the worker hasn't
+            # finalised within a short grace, grade inline now so a student is
+            # never stuck waiting on a dead/overloaded worker.
+            grace = att.submitted_at and (timeutil.now() - att.submitted_at).total_seconds() > 60
+            if grace:
+                grade_attempt(att)
+            else:
+                return render_template('mock_jamb/portal_grading.html', exam=exam, student=student)
+        if att.status != 'Submitted':
             return redirect(url_for('mock_jamb_portal.portal_sit', exam_id=exam_id))
         result = MockJAMBResult.query.filter_by(student_id=student.id, mock_exam_id=exam_id).first()
         return render_template('mock_jamb/portal_done.html', exam=exam, student=student,
                                attempt=att, result=result)
     return _inner()
+
+
+def _mockjamb_grade_job(app, payload):
+    """utils.jobqueue handler: finalise a queued Mock JAMB grading job."""
+    from models import db, MockJAMBAttempt
+    from utils.mock_jamb_sitting import grade_attempt
+    attempt_id = payload.get('attempt_id')
+    att = db.session.get(MockJAMBAttempt, attempt_id) if attempt_id else None
+    if not att or att.status == 'Submitted':
+        return
+    grade_attempt(att)
+
+
+from utils import jobqueue as _mj_jobqueue   # noqa: E402
+_mj_jobqueue.register('mockjamb_grade', _mockjamb_grade_job)

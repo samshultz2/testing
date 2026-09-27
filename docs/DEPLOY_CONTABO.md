@@ -189,7 +189,8 @@ In `/opt/edusyncra/.env`:
 
 ```ini
 REDIS_URL=redis://:YOUR_STRONG_PASSWORD@127.0.0.1:6379/0
-CBT_ASYNC_GRADING=1          # queue grading so the deadline spike drains off the web tier
+CBT_ASYNC_GRADING=1          # queue CBT grading so the deadline spike drains off the web tier
+MOCKJAMB_ASYNC_GRADING=1     # same, for Mock JAMB submissions -- see docs/MOCK_JAMB_SCALE.md
 ```
 
 The app auto-detects Redis; without it, it falls back to an in-process cache and
@@ -300,8 +301,8 @@ nginx/gunicorn logs go to journald (already rotated). Watch disk on `/platform`.
 
 - **PgBouncer trouble** → point `DATABASE_URL`/`TENANT_DATABASE_URL_TEMPLATE` back
   at `:5432`, unset `PGBOUNCER`, `systemctl restart edusyncra-web`.
-- **Redis trouble** → unset `REDIS_URL` (+ `CBT_ASYNC_GRADING`); the app falls back
-  to in-process cache + inline grading with no data loss.
+- **Redis trouble** → unset `REDIS_URL` (+ `CBT_ASYNC_GRADING` / `MOCKJAMB_ASYNC_GRADING`);
+  the app falls back to in-process cache + inline grading with no data loss.
 - **Bad deploy** → `git checkout <previous>` in `/opt/edusyncra`, restart the two
   units. Data is untouched (schema self-heals forward only).
 - **Whole-VPS loss** → provision a new box, run Phases 1–8, restore the newest
