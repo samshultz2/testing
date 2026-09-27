@@ -55,8 +55,20 @@ details.ba > summary{cursor:pointer;font-weight:700;padding:.3rem 0}
     <div class="ba-kpi"><div class="v">{{ data.topics|length }}</div><div class="l">Topics with questions</div></div>
     <div class="ba-kpi"><div class="v">{{ data.gaps.topics|length }}</div><div class="l">Syllabus topics never tested</div></div>
     <div class="ba-kpi"><div class="v">{{ data.cold_topics|length }}</div><div class="l">Cold topics{% if data.recent_years %} (not in {{ data.recent_years|join(', ') }}){% endif %}</div></div>
-    {% if data.untagged %}<div class="ba-kpi"><div class="v" style="color:#b45309;">{{ data.untagged }}</div><div class="l">Untagged (no topic)</div></div>{% endif %}
+    {% if data.untagged %}<div class="ba-kpi"><div class="v" style="color:#b45309;">{{ data.untagged }}</div><div class="l">Untagged ({{ 'no syllabus code' if data.coded else 'no topic' }})</div></div>{% endif %}
 </div>
+
+{% if data.coded %}
+<div class="card" style="margin-bottom:1rem;border-left:4px solid #0d6a4e;">
+    <div class="card-body" style="display:flex;align-items:center;gap:.6rem;">
+        <i class="fas fa-diagram-project" style="color:#0d6a4e;"></i>
+        <p class="text-sm" style="margin:0;"><strong>Sourced from the coded syllabus</strong> — the breakdown, gaps and cold checks below are built from {{ subject.name }}'s imported syllabus tree
+            (<a href="{{ url_for('mock_jamb.bank_syllabus', subject_id=subject_id) }}">manage it here</a>), not the free-text topic/sub-topic fields. Every syllabus item is counted, so a
+            never-banked item shows as a real gap. The auto-tag and local-tag tools below still fill the free-text fields other pages (weakness reports, mastery) read from — use
+            <a href="{{ url_for('mock_jamb.bank_syllabus', subject_id=subject_id) }}">Coded Syllabus Manager</a>'s AI retag to fill in syllabus codes instead.</p>
+    </div>
+</div>
+{% endif %}
 
 <div class="card" style="margin-bottom:1rem;border-left:4px solid #7c3aed;">
     <div class="card-header"><h3><i class="fas fa-wand-magic-sparkles"></i> Auto-tag with the syllabus classifier</h3></div>

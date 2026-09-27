@@ -34,7 +34,120 @@ def subject_breakdown(subject):
     window used for the cold check), ``topics`` / ``subtopics`` (count, percent,
     years covered, most-recent year, cold flag), ``by_year``, ``by_exam_body``,
     and ``gaps`` — syllabus topics/sub-topics with no banked question at all.
+
+    Prefers the subject's imported *coded* syllabus (stable per-question
+    ``syllabus_item_code``, see MockJAMBSyllabus/MockJAMBSyllabusNode) when one
+    exists: gaps are then exact (every syllabus item is known up front, so a
+    never-banked item shows as a real gap, not just a name that was never
+    typed as a free-text topic). Falls back to the free-text ``topic``/
+    ``subtopic`` fields for a subject with no coded syllabus imported yet —
+    same shape either way, so the template doesn't care which one ran.
     """
+    from models import MockJAMBSyllabus
+    syll = MockJAMBSyllabus.query.filter_by(subject_id=subject.id).first()
+    if syll:
+        return _coded_breakdown(subject, syll)
+    return _freetext_breakdown(subject)
+
+
+def _coded_breakdown(subject, syll):
+    """subject_breakdown(), sourced from the coded syllabus tree instead of
+    free-text topic/subtopic: one 'topic' row per coded topic node, one
+    'subtopic' row per coded item (leaf) node, and TRUE gaps -- a syllabus
+    item with zero banked questions shows up even if no question was ever
+    typed with a matching name."""
+    from models import db, MockJAMBQuestion, MockJAMBSyllabusNode
+    from sqlalchemy import func
+
+    sid = subject.id
+    base = MockJAMBQuestion.query.filter(
+        MockJAMBQuestion.subject_id == sid,
+        MockJAMBQuestion.mock_exam_id.is_(None))
+    total = base.count()
+
+    nodes = MockJAMBSyllabusNode.query.filter_by(syllabus_id=syll.id).all()
+    by_id = {n.id: n for n in nodes}
+    topics_by_id = {n.id: n for n in nodes if n.kind == 'topic'}
+    items = [n for n in nodes if n.kind == 'item']
+
+    year_ints = sorted({_year_int(y) for (y,) in db.session.query(MockJAMBQuestion.exam_year)
+                        .filter(MockJAMBQuestion.subject_id == sid,
+                                MockJAMBQuestion.mock_exam_id.is_(None)).distinct().all()
+                        if _year_int(y) is not None}, reverse=True)
+    recent_years = set(year_ints[:RECENT_WINDOW])
+
+    # count + years banked per coded item code
+    item_agg = {}
+    for code, yr, n in (db.session.query(MockJAMBQuestion.syllabus_item_code,
+                                         MockJAMBQuestion.exam_year, func.count(MockJAMBQuestion.id))
+                        .filter(MockJAMBQuestion.subject_id == sid,
+                                MockJAMBQuestion.mock_exam_id.is_(None),
+                                MockJAMBQuestion.syllabus_item_code.isnot(None),
+                                MockJAMBQuestion.syllabus_item_code != '')
+                        .group_by(MockJAMBQuestion.syllabus_item_code, MockJAMBQuestion.exam_year).all()):
+        slot = item_agg.setdefault(code, {'count': 0, 'years': set()})
+        slot['count'] += n
+        yi = _year_int(yr)
+        if yi is not None:
+            slot['years'].add(yi)
+
+    def _row(count, years):
+        years = sorted(years, reverse=True)
+        recent_hit = bool(years and recent_years & set(years))
+        return {
+            'count': count, 'pct': _pct(count, total), 'years': years,
+            'recent_year': (years[0] if years else None),
+            'cold': bool(recent_years and years and not recent_hit),
+        }
+
+    # per coded item ("subtopic" row) -- every item in the tree, banked or not
+    subtopics = []
+    topic_totals = {}   # topic node id -> {'count', 'years'}
+    for it in items:
+        topic_node = by_id.get(it.parent_id)
+        topic_name = topic_node.name if topic_node else None
+        slot = item_agg.get(it.code, {'count': 0, 'years': set()})
+        row = _row(slot['count'], slot['years'])
+        row.update({'topic': topic_name, 'subtopic': it.name})
+        subtopics.append(row)
+        if topic_node:
+            agg = topic_totals.setdefault(topic_node.id, {'count': 0, 'years': set()})
+            agg['count'] += slot['count']
+            agg['years'] |= slot['years']
+    subtopics.sort(key=lambda d: (-d['count'], (d['subtopic'] or '').lower()))
+
+    # per coded topic ("topic" row) -- every topic in the tree, banked or not
+    topics = []
+    for tnode in topics_by_id.values():
+        agg = topic_totals.get(tnode.id, {'count': 0, 'years': set()})
+        row = _row(agg['count'], agg['years'])
+        row.update({'topic': tnode.name})
+        topics.append(row)
+    topics.sort(key=lambda d: (-d['count'], (d['topic'] or '').lower()))
+
+    untagged = base.filter((MockJAMBQuestion.syllabus_item_code.is_(None)) |
+                           (MockJAMBQuestion.syllabus_item_code == '')).count()
+
+    by_year = [{'year': y, 'count': n} for (y, n) in sorted(
+        _year_counts(db, sid).items(), key=lambda kv: (kv[0] is None, -(kv[0] or 0)))]
+    by_exam_body = [{'body': (b or 'Unspecified'), 'count': n} for (b, n) in
+                    sorted(_body_counts(db, sid).items(), key=lambda kv: -kv[1])]
+
+    gap_topics = [t['topic'] for t in topics if t['count'] == 0]
+    gap_subtopics = [{'topic': s['topic'], 'subtopic': s['subtopic']}
+                     for s in subtopics if s['count'] == 0]
+
+    return {
+        'total': total, 'untagged': untagged, 'coded': True,
+        'recent_years': sorted(recent_years, reverse=True),
+        'topics': topics, 'subtopics': subtopics,
+        'by_year': by_year, 'by_exam_body': by_exam_body,
+        'cold_topics': [t for t in topics if t['cold']],
+        'gaps': {'topics': gap_topics, 'subtopics': gap_subtopics},
+    }
+
+
+def _freetext_breakdown(subject):
     from models import db, MockJAMBQuestion
     from sqlalchemy import func
 
@@ -107,7 +220,7 @@ def subject_breakdown(subject):
     gaps = _syllabus_gaps(subject, topic_agg, sub_agg)
 
     return {
-        'total': total, 'untagged': untagged,
+        'total': total, 'untagged': untagged, 'coded': False,
         'recent_years': sorted(recent_years, reverse=True),
         'topics': topics, 'subtopics': subtopics,
         'by_year': by_year, 'by_exam_body': by_exam_body,
