@@ -165,10 +165,26 @@ class Student(db.Model):
             )
         return None
     
+    # scrypt's default cost (n=32768) is deliberately CPU/memory-hard -- the
+    # right call for a login users choose themselves, but portal PINs are
+    # admin-issued (~40-bit generated, or admin-typed) and this same cost is
+    # what a mass simultaneous exam-day login burst collides with: each check
+    # is ~100ms+ of real CPU work, and a school's exam VPS only has a handful
+    # of cores to run them on, so hundreds of concurrent logins queue for tens
+    # of seconds behind each other before anything else -- including autosave
+    # and page loads on the SAME worker pool -- can run at all. A quarter of
+    # the default cost still costs an offline attacker real time per guess
+    # against that keyspace, and online guessing is separately throttled by
+    # the DB-backed login rate limiter (utils.security.login_limiter) -- that
+    # limiter, not this hash cost, is the primary defense against brute force.
+    _PORTAL_PW_METHOD = 'scrypt:8192:8:1'
+
     def set_portal_password(self, password):
         # Hash-only: keep the one-way hash for login verification, never a
-        # recoverable copy. The caller shows/prints the raw PIN once.
-        self.portal_password_hash = generate_password_hash(password)
+        # recoverable copy. The caller shows/prints the raw PIN once. Existing
+        # hashes made at the old (higher) cost keep verifying fine -- Werkzeug
+        # reads the cost from the stored hash string itself, not from here.
+        self.portal_password_hash = generate_password_hash(password, method=self._PORTAL_PW_METHOD)
 
     def check_portal_password(self, password):
         # Cap length before hashing — scrypt on an unbounded value is a worker DoS.

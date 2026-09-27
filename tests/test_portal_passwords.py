@@ -67,3 +67,34 @@ def test_no_route_reveals_existing_passwords(app):
     """The old plaintext export route is gone — passwords can't be recovered."""
     c, _ = _central_admin(app)
     assert c.get('/cbt/passwords/export?format=xlsx').status_code == 404
+
+
+def test_set_portal_password_uses_reduced_scrypt_cost(app):
+    """A mass simultaneous exam-day login burst is CPU-bound on scrypt checks
+    (see docs/MOCK_JAMB_SCALE.md) — new hashes must use the reduced cost
+    (Student._PORTAL_PW_METHOD), not Werkzeug's default (scrypt:32768:8:1)."""
+    with app.app_context():
+        s = Student(student_id='PW_COST1', first_name='Cost', surname='Test',
+                    gender='Male', is_active=True, branch_id=Branch.get_default().id)
+        s.set_portal_password('somePassword123')
+        db.session.add(s); db.session.commit()
+        assert s.portal_password_hash.startswith(Student._PORTAL_PW_METHOD + '$')
+        assert s.check_portal_password('somePassword123')
+        assert not s.check_portal_password('wrongPassword')
+
+
+def test_check_portal_password_still_verifies_old_cost_hashes(app):
+    """Backward compatibility: a hash made at the OLD (pre-fix) default cost --
+    e.g. from before this change shipped -- must keep verifying. Werkzeug reads
+    the cost parameters from the stored hash string itself, not from the
+    current method default, so old rows are unaffected by lowering the cost
+    for newly-set passwords."""
+    from werkzeug.security import generate_password_hash
+    with app.app_context():
+        s = Student(student_id='PW_COST2', first_name='Old', surname='Cost',
+                    gender='Male', is_active=True, branch_id=Branch.get_default().id)
+        s.portal_password_hash = generate_password_hash('legacyPassword', method='scrypt:32768:8:1')
+        db.session.add(s); db.session.commit()
+        assert s.portal_password_hash.startswith('scrypt:32768:8:1$')
+        assert s.check_portal_password('legacyPassword')
+        assert not s.check_portal_password('wrongPassword')
