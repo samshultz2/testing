@@ -240,3 +240,45 @@ def test_bank_analytics_page_shows_coded_banner(app):
     html = r.get_data(as_text=True)
     assert 'Sourced from the coded syllabus' in html
     assert 'Geometry' in html and 'Circles' in html
+
+
+def test_coded_subtopics_group_by_topic_not_scattered_by_count(app):
+    """A topic with several items, banked in wildly different amounts, must
+    still list its items on adjacent rows -- sorting by count alone would
+    scatter them and make the same topic name look duplicated far apart."""
+    from models import db, Subject, MockJAMBSyllabus, MockJAMBSyllabusNode
+    from utils.mock_bank_analytics import subject_breakdown
+    with app.app_context():
+        s = Subject(name='CodedAnaGroup', is_active=True); db.session.add(s); db.session.flush()
+        sid = s.id
+        syll = MockJAMBSyllabus(subject_id=sid, subject_name=s.name, code='Z')
+        db.session.add(syll); db.session.flush()
+        big_topic = MockJAMBSyllabusNode(syllabus_id=syll.id, parent_id=None,
+                                         code='Z.BIG', kind='topic', name='Polynomials', sort_order=1)
+        other_topic = MockJAMBSyllabusNode(syllabus_id=syll.id, parent_id=None,
+                                           code='Z.OTHER', kind='topic', name='Other', sort_order=2)
+        db.session.add_all([big_topic, other_topic]); db.session.flush()
+        # 3 items under "Polynomials" with very different banked counts, so a
+        # count-first sort would interleave "Other"'s item between them.
+        items = [
+            MockJAMBSyllabusNode(syllabus_id=syll.id, parent_id=big_topic.id,
+                                 code=f'Z.BIG.{i}', kind='item', name=f'Item {i}', sort_order=i)
+            for i in range(3)
+        ]
+        other_item = MockJAMBSyllabusNode(syllabus_id=syll.id, parent_id=other_topic.id,
+                                          code='Z.OTHER.0', kind='item', name='Solo item', sort_order=0)
+        db.session.add_all(items + [other_item]); db.session.flush()
+        db.session.add_all([
+            _q(sid, syllabus_item_code='Z.BIG.0', exam_year='2023'),
+            _q(sid, syllabus_item_code='Z.BIG.0', exam_year='2023'),
+            _q(sid, syllabus_item_code='Z.BIG.0', exam_year='2023'),
+            _q(sid, syllabus_item_code='Z.BIG.1', exam_year='2023'),
+            # Z.BIG.2 stays unbanked (a gap)
+            _q(sid, syllabus_item_code='Z.OTHER.0', exam_year='2023'),
+            _q(sid, syllabus_item_code='Z.OTHER.0', exam_year='2023'),
+        ])
+        db.session.commit()
+        data = subject_breakdown(db.session.get(Subject, sid))
+    topics_in_order = [s['topic'] for s in data['subtopics']]
+    # all 3 "Polynomials" items land together, before "Other" starts
+    assert topics_in_order == ['Polynomials', 'Polynomials', 'Polynomials', 'Other']

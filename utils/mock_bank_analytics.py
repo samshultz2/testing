@@ -100,10 +100,14 @@ def _coded_breakdown(subject, syll):
             'cold': bool(recent_years and years and not recent_hit),
         }
 
-    # per coded item ("subtopic" row) -- every item in the tree, banked or not
+    # per coded item ("subtopic" row) -- every item in the tree, banked or not.
+    # Sorted by the syllabus's own topic/item order (not by count) so a topic's
+    # several items land together, adjacent -- scattering them by count would
+    # put the same topic name on far-apart rows and read as duplication.
     subtopics = []
     topic_totals = {}   # topic node id -> {'count', 'years'}
-    for it in items:
+    for it in sorted(items, key=lambda n: (by_id[n.parent_id].sort_order if n.parent_id in by_id else 0,
+                                           n.parent_id or 0, n.sort_order, n.name or '')):
         topic_node = by_id.get(it.parent_id)
         topic_name = topic_node.name if topic_node else None
         slot = item_agg.get(it.code, {'count': 0, 'years': set()})
@@ -114,16 +118,15 @@ def _coded_breakdown(subject, syll):
             agg = topic_totals.setdefault(topic_node.id, {'count': 0, 'years': set()})
             agg['count'] += slot['count']
             agg['years'] |= slot['years']
-    subtopics.sort(key=lambda d: (-d['count'], (d['subtopic'] or '').lower()))
 
-    # per coded topic ("topic" row) -- every topic in the tree, banked or not
+    # per coded topic ("topic" row) -- every topic in the tree, banked or not,
+    # kept in the syllabus's own order for the same reason.
     topics = []
-    for tnode in topics_by_id.values():
+    for tnode in sorted(topics_by_id.values(), key=lambda n: (n.sort_order, n.name or '')):
         agg = topic_totals.get(tnode.id, {'count': 0, 'years': set()})
         row = _row(agg['count'], agg['years'])
         row.update({'topic': tnode.name})
         topics.append(row)
-    topics.sort(key=lambda d: (-d['count'], (d['topic'] or '').lower()))
 
     untagged = base.filter((MockJAMBQuestion.syllabus_item_code.is_(None)) |
                            (MockJAMBQuestion.syllabus_item_code == '')).count()
@@ -197,7 +200,14 @@ def _freetext_breakdown(subject):
                 # recent window to compare against, and this topic carries year data).
                 'cold': bool(recent_years and slot['years'] and not recent_hit),
             })
-        out.sort(key=lambda d: (-d['count'], (d.get(keyname) or d['topic'] or '').lower()))
+        if keyname == 'subtopic':
+            # group by topic first so a topic's several sub-topics land on
+            # adjacent rows -- sorting by count alone scatters them and reads
+            # as duplication when the same topic name recurs far apart.
+            out.sort(key=lambda d: ((d['topic'] or '').lower(), -d['count'],
+                                    (d['subtopic'] or '').lower()))
+        else:
+            out.sort(key=lambda d: (-d['count'], (d.get(keyname) or d['topic'] or '').lower()))
         return out
 
     # Untagged (no topic) questions are surfaced separately, not as a "topic".

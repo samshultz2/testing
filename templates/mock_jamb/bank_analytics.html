@@ -249,7 +249,9 @@ details.ba > summary{cursor:pointer;font-weight:700;padding:.3rem 0}
             <tbody>
                 {% for s in data.subtopics %}
                 <tr>
-                    <td class="text-muted">{{ s.topic or '—' }}</td>
+                    {# subtopics are grouped by topic -- blank the repeated cell so several
+                       sub-topics under one topic read as a group, not as duplicate rows #}
+                    <td class="text-muted">{{ s.topic or '—' if loop.first or s.topic != loop.previtem.topic else '' }}</td>
                     <td>{{ s.subtopic }}{% if s.cold %} <span class="pill pill-cold">cold</span>{% endif %}</td>
                     <td class="num">{{ s.count }}</td>
                     <td class="num">{{ s.pct }}%</td>
