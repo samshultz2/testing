@@ -2749,11 +2749,20 @@ def portal_sit(exam_id):
         from utils.mock_jamb_sitting import is_calculation_subject
         payload = sitting_payload(exam, subject_ids, att)
         # Persist the freshly-drawn paper (cached on the attempt) so reloads/resume
-        # and grading reuse it instead of re-scanning the bank on every load.
+        # and grading reuse it instead of re-scanning the bank on every load. Scoped
+        # expire_on_commit=False so this commit doesn't expire the Subject/Question/
+        # Passage objects already loaded into `payload` -- the very next line (and
+        # the template render) touch them, and a normal commit would otherwise force
+        # a fresh per-object reload of each one right after (one query per subject
+        # and one per question).
+        _sess = db.session()
+        _sess.expire_on_commit = False
         try:
             db.session.commit()
         except Exception:
             db.session.rollback()
+        finally:
+            _sess.expire_on_commit = True
         show_calc = any(s.get('subject') and is_calculation_subject(s['subject'].name)
                         for s in payload)
         show_math = _payload_has_math(payload)

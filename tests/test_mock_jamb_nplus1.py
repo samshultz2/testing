@@ -151,3 +151,70 @@ def test_item_analysis_subject_pool_query_not_repeated_per_attempt(app):
     with app.app_context():
         n = _count_selects(app, 'subjects', lambda: item_analysis(exam_id))
         assert n <= 2, f'{n} Subject SELECTs for {_COHORT_SIZE} attempts on one exam — the subject pool is being re-fetched per attempt'
+
+
+def _seed_multi_subject_sitting(app, tag):
+    """One student registered for 4 JAMB subjects (English + 3 electives),
+    each with a couple of questions, and a portal password set — enough to
+    exercise sitting_payload()'s per-subject Subject lookup with more than
+    one subject."""
+    from tests.test_mock_jamb_sitting import _portal_login
+    with app.app_context():
+        bid = Branch.get_default().id
+        subject_names = ['English Language', 'Mathematics', 'Physics', 'Chemistry']
+        subjects = []
+        for name in subject_names:
+            subj = Subject.query.filter_by(name=f'{tag}{name}').first() or \
+                Subject(name=f'{tag}{name}', is_active=True)
+            db.session.add(subj)
+            subjects.append(subj)
+        db.session.flush()
+        sess = AcademicSession(name=f'{tag}-Sess')
+        db.session.add(sess); db.session.flush()
+        exam = MockJAMBExam(name=f'{tag} Mock', exam_number=1, session_id=sess.id,
+                            exam_date=date(2025, 3, 1), branch_id=bid,
+                            is_published=True, duration_minutes=90)
+        db.session.add(exam); db.session.flush()
+        for subj in subjects:
+            for i in range(2):
+                db.session.add(MockJAMBQuestion(
+                    mock_exam_id=exam.id, subject_id=subj.id, question_text=f'{subj.name} Q{i+1}',
+                    option_a='a', option_b='b', option_c='c', option_d='d',
+                    correct_option='A', marks=1, order=i + 1))
+        student = Student(student_id=f'{tag}ST', first_name='Sit', surname=tag,
+                          gender='Male', is_active=True, branch_id=bid,
+                          jamb_subjects=', '.join(f'{tag}{n}' for n in subject_names))
+        db.session.add(student); db.session.commit()
+        return exam.id, student.id
+
+
+def test_portal_sit_does_not_scale_with_subject_count(app):
+    from tests.test_mock_jamb_sitting import _portal_login
+    exam_id, student_id = _seed_multi_subject_sitting(app, f'PS{uuid.uuid4().hex[:6]}')
+    c = _portal_login(app, student_id)
+    n = _count_selects(app, 'subjects', lambda: c.get(f'/exam/mock-jamb/{exam_id}'))
+    assert n <= 2, (
+        f'{n} Subject SELECTs sitting a 4-subject mock — sitting_payload() looks '
+        f'like it fetches each subject with its own query instead of one batched IN')
+
+
+def test_portal_sit_questions_do_not_get_reloaded_after_cache_commit(app):
+    """The paper-persisting db.session.commit() in portal_sit() must not expire
+    the Question objects already loaded into the payload — otherwise the very
+    next line (show_calc) and the template render force a fresh reload of
+    every question sitting_payload() just fetched (one SELECT per question,
+    not per subject). A first-time draw legitimately costs one pool-fetch
+    query per subject (4 here) plus one subject-discovery query — that part
+    is bounded by subject count, not question count, and reloads/resume reuse
+    the cached paper via cheap PK lookups instead of re-scanning the pool."""
+    from tests.test_mock_jamb_sitting import _portal_login
+    exam_id, student_id = _seed_multi_subject_sitting(app, f'PQ{uuid.uuid4().hex[:6]}')
+    c = _portal_login(app, student_id)
+    n = _count_selects(app, 'mock_jamb_questions', lambda: c.get(f'/exam/mock-jamb/{exam_id}'))
+    # 4 subjects: 1 discovery query + up to 1 fresh pool-draw query per subject.
+    # Anywhere near double this (e.g. 14) means the post-fetch commit is
+    # expiring and reloading questions one at a time.
+    assert n <= 7, (
+        f'{n} mock_jamb_questions SELECTs sitting a 4-subject/8-question mock — '
+        f'the paper-cache commit in portal_sit() looks like it is expiring '
+        f'already-loaded Question objects, forcing a reload per question')

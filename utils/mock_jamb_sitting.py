@@ -44,10 +44,22 @@ def is_calculation_subject(name):
 
 def _exam_owns_questions(exam):
     """True if this mock has its own authored questions (a legacy mock). Such a
-    mock serves ONLY its own questions; a mock with none draws from the bank."""
+    mock serves ONLY its own questions; a mock with none draws from the bank.
+    Depends only on ``exam`` (not the subject), but _pool_condition() calls it
+    twice per subject (once for passages, once for questions) — cache the result
+    on the exam instance so a multi-subject sitting doesn't re-run this query
+    for every subject."""
+    cached = getattr(exam, '_owns_questions_cache', None)
+    if cached is not None:
+        return cached
     from models import db, MockJAMBQuestion
-    return db.session.query(MockJAMBQuestion.id).filter(
+    result = db.session.query(MockJAMBQuestion.id).filter(
         MockJAMBQuestion.mock_exam_id == exam.id).first() is not None
+    try:
+        exam._owns_questions_cache = result
+    except Exception:
+        pass
+    return result
 
 
 def _pool_condition(model, exam):
@@ -272,24 +284,27 @@ def _rebuild_from_paper(attempt, subject_id):
     return items, served
 
 
-def subject_items(exam, subject_id, attempt):
+def subject_items(exam, subject_id, attempt, subject=None):
     """Deterministic served paper for one subject: an ordered list of items, each
     a passage-group (passage + its questions) or a stand-alone question.
 
     The paper is drawn ONCE per candidate (first render) and cached on the attempt
     (``paper`` JSON); every later reload/resume and grading rebuilds it from that
     cache with cheap primary-key lookups — so a mass simultaneous start doesn't
-    re-scan the whole question bank on every page load. Returns (items, served)."""
+    re-scan the whole question bank on every page load. ``subject``, if the
+    caller already has it (e.g. sitting several subjects in one request),
+    avoids a redundant per-subject lookup on a fresh (uncached) draw. Returns
+    (items, served)."""
     cached = _rebuild_from_paper(attempt, subject_id)
     if cached is not None:
         return cached
-    items, served = _draw_subject_items(exam, subject_id, attempt)
+    items, served = _draw_subject_items(exam, subject_id, attempt, subject=subject)
     if served:
         _store_paper_subject(attempt, subject_id, items)
     return items, served
 
 
-def _draw_subject_items(exam, subject_id, attempt):
+def _draw_subject_items(exam, subject_id, attempt, subject=None):
     """Draw a fresh JAMB-shaped, per-candidate random paper from the subject's pool:
     for a subject with a JAMB blueprint whose questions are section-tagged, it
     samples each section to the blueprint counts (comprehension/cloze passages kept
@@ -310,7 +325,8 @@ def _draw_subject_items(exam, subject_id, attempt):
 
     rng = random.Random(_seed(attempt, subject_id, 'order'))
 
-    subject = db.session.get(Subject, subject_id)
+    if subject is None:
+        subject = db.session.get(Subject, subject_id)
     subj_name = subject.name if subject else ''
     has_sections = any((q.section or '').strip() for q in qrows)
 
@@ -395,10 +411,11 @@ def sitting_payload(exam, subject_ids, attempt):
     stand-alone questions, in the candidate's shuffled order, with shuffled
     options. Correct answers are NOT included."""
     from models import db, Subject
+    subjects_by_id = {s.id: s for s in Subject.query.filter(Subject.id.in_(subject_ids)).all()}
     out = []
     for sid in subject_ids:
-        subject = db.session.get(Subject, sid)
-        items, served = subject_items(exam, sid, attempt)
+        subject = subjects_by_id.get(sid)
+        items, served = subject_items(exam, sid, attempt, subject=subject)
         groups, standalone = [], []
         for it in items:
             if it['kind'] == 'passage':
