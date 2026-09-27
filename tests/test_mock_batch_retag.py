@@ -122,3 +122,52 @@ def test_batch_retag_tags_untagged_only_then_force(app, monkeypatch):
     _drain_all(app)
     with app.app_context():
         assert db.session.get(MockJAMBQuestion, q2_id).syllabus_item_code == 'MATH.GEO.1.A'
+
+
+def test_batch_retag_also_corrects_section(app, monkeypatch):
+    """apply_results() must resolve and write blueprint_section, same as the
+    inline coded_retag() path -- this is the code path the "Batch" method
+    (recommended for large runs) uses, so it can't silently skip the fix."""
+    import json as _json
+    from utils.jamb_syllabus_import import import_syllabus
+    from utils import jobs
+
+    tag = next(_SEQ)
+    monkeypatch.setattr('utils.jobs.async_enabled', lambda app=None: True)
+    monkeypatch.setattr('utils.waec_ocr._vision_config',
+                        lambda: {'installed': True, 'has_key': True,
+                                 'model': 'claude-haiku-4-5', 'key': 'sk-test'})
+
+    with app.app_context():
+        s = Subject(name=f'BatchSec{tag}', is_active=True)
+        db.session.add(s); db.session.commit()
+        syll_json = {
+            'subject': f'BatchSec{tag}', 'code': f'Y{tag}', 'prefix': f'Y{tag}',
+            'version': '1', 'total': 10,
+            'blueprint': [{'section': 'antonyms', 'label': 'Antonyms', 'count': 5},
+                         {'section': 'synonyms', 'label': 'Synonyms', 'count': 5}],
+            'sections': [{
+                'code': 'LEX', 'name': 'Lexis', 'topics': [{
+                    'code': 'LEX.1', 'name': 'Vocabulary', 'items': [
+                        {'code': 'LEX.1.A', 'name': 'Antonyms', 'blueprint_section': 'antonyms'},
+                    ],
+                }],
+            }],
+        }
+        import_syllabus(s, _json.dumps(syll_json), fmt='json')
+        q = MockJAMBQuestion(subject_id=s.id, question_text='opposite of happy',
+                             correct_option='A', exam_body='JAMB', section='synonyms')
+        db.session.add(q); db.session.commit()
+        qid, sid = q.id, s.id
+
+        monkeypatch.setitem(sys.modules, 'anthropic',
+                            _fake_anthropic({f'q{qid}': f'Y{tag}.LEX.1.A'}))
+        jobs.enqueue('bank_batch_retag',
+                     {'subject_id': sid, 'model': '', 'force': False, 'phase': 'submit'})
+
+    _drain_all(app)
+
+    with app.app_context():
+        got = db.session.get(MockJAMBQuestion, qid)
+        assert got.syllabus_item_code == f'Y{tag}.LEX.1.A'
+        assert got.section == 'antonyms'

@@ -19,7 +19,7 @@ from __future__ import annotations
 import json
 
 from utils.mock_bank_coded_retag import (
-    coded_nodes, _syllabus_block, _extract_json_array, OUTSIDE,
+    coded_nodes, _syllabus_block, _extract_json_array, OUTSIDE, _resolve_blueprint_section,
 )
 
 _MAX_REQUESTS = 5000            # safety cap per batch (well under the API's 100k)
@@ -115,6 +115,8 @@ def apply_results(client, batch_id, subject, by_code, by_id):
     """Stream the finished batch, validate codes and write them. Returns a
     summary dict."""
     from models import db, MockJAMBQuestion
+    from utils.jamb_blueprint import sections_for
+    valid_sections = {s['section'] for s in sections_for(subject.name)}
     summary = {'tagged': 0, 'outside': 0, 'invalid': 0, 'errored': 0, 'scanned': 0}
     for entry in client.messages.batches.results(batch_id):
         cid = getattr(entry, 'custom_id', None)
@@ -155,6 +157,9 @@ def apply_results(client, batch_id, subject, by_code, by_id):
         parent = by_id.get(node.parent_id)
         row.subtopic = (node.name or '')[:120] or None
         row.topic = ((parent.name if parent else node.name) or '')[:100] or None
+        bp_section = _resolve_blueprint_section(node, by_id, valid_sections)
+        if bp_section:
+            row.section = bp_section
         summary['tagged'] += 1
     db.session.commit()
     return summary
