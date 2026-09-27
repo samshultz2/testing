@@ -52,6 +52,23 @@ def _syllabus_block(by_code):
     return '\n'.join(lines)
 
 
+def _resolve_blueprint_section(node, by_id, valid_sections):
+    """The draw blueprint section a question tagged to ``node`` belongs to:
+    ``node``'s own ``blueprint_section`` if set, else its nearest ancestor's,
+    validated against the subject's actual blueprint sections. None if nothing
+    in the chain has been curated yet, or the curated value is stale (no
+    longer a real section) -- callers then leave `section` untouched, same as
+    before this field existed."""
+    seen, cur = set(), node
+    while cur is not None and cur.id not in seen:
+        seen.add(cur.id)
+        bs = (cur.blueprint_section or '').strip()
+        if bs:
+            return bs if bs in valid_sections else None
+        cur = by_id.get(cur.parent_id)
+    return None
+
+
 def _extract_json_array(text):
     if not text:
         return []
@@ -134,6 +151,8 @@ def coded_retag(subject, year=None, exam_body=None, mode='all', max_questions=_M
         result['error'] = 'no_syllabus'; return result
     syllabus_block = _syllabus_block(by_code)
     by_id = {n.id: n for n in by_code.values()}
+    from utils.jamb_blueprint import sections_for
+    valid_sections = {s['section'] for s in sections_for(subject.name)}
 
     q = db.session.query(MockJAMBQuestion.id).filter(
         MockJAMBQuestion.subject_id == subject.id,
@@ -188,6 +207,14 @@ def coded_retag(subject, year=None, exam_body=None, mode='all', max_questions=_M
             parent = by_id.get(node.parent_id)
             row.subtopic = (item_name or '')[:120] or None
             row.topic = ((parent.name if parent else item_name) or '')[:100] or None
+            # Also correct the flat `section` the exam draw actually samples by,
+            # when this node (or an ancestor) has a curated blueprint_section --
+            # the coded classification is more reliable than the free-text
+            # keyword classifier that otherwise owns this field, so a confident
+            # coded match should win.
+            bp_section = _resolve_blueprint_section(node, by_id, valid_sections)
+            if bp_section:
+                row.section = bp_section
             result['tagged'] += 1
         db.session.commit()
 

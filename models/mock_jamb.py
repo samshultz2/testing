@@ -577,6 +577,14 @@ class MockJAMBSyllabusNode(db.Model):
     question_count = db.Column(db.Integer)
     passage = db.Column(db.Boolean, default=False)
     per_passage = db.Column(db.Integer)
+    # Which draw blueprint section (see utils.jamb_blueprint) a question tagged
+    # to this node — or, if unset here, its nearest ancestor with one set —
+    # belongs to. Ties the coded syllabus to the flat `section` field the exam
+    # draw actually samples by, so a confident coded classification can also
+    # set the right section (see utils.mock_bank_coded_retag). NULL when the
+    # mapping hasn't been curated for this node yet — the retagger then leaves
+    # `section` untouched, same as before this field existed.
+    blueprint_section = db.Column(db.String(40))
 
     parent = db.relationship('MockJAMBSyllabusNode', remote_side=[id],
                              backref=db.backref('children', lazy='dynamic'))

@@ -13,7 +13,7 @@
   ],
   "sections": [
     {
-      "code": "NUM", "name": "Number and Numeration",
+      "code": "NUM", "name": "Number and Numeration", "blueprint_section": "number",
       "topics": [
         {"code": "NUM.1", "name": "Number bases / Modular Arithmetic", "items": [
           {"code": "NUM.1.A", "name": "Operations in different number bases from 2 to 10"},
@@ -48,7 +48,7 @@
       ]
     },
     {
-      "code": "ALG", "name": "Algebra",
+      "code": "ALG", "name": "Algebra", "blueprint_section": "algebra",
       "topics": [
         {"code": "ALG.1", "name": "Polynomials", "items": [
           {"code": "ALG.1.A", "name": "Change of subject of formula"},
@@ -86,7 +86,7 @@
       ]
     },
     {
-      "code": "GEO", "name": "Geometry and Trigonometry",
+      "code": "GEO", "name": "Geometry and Trigonometry", "blueprint_section": "geometry",
       "topics": [
         {"code": "GEO.1", "name": "Euclidean Geometry", "items": [
           {"code": "GEO.1.A", "name": "Properties of angles and lines"},
@@ -121,7 +121,7 @@
       ]
     },
     {
-      "code": "CAL", "name": "Calculus",
+      "code": "CAL", "name": "Calculus", "blueprint_section": "calculus",
       "topics": [
         {"code": "CAL.1", "name": "Differentiation", "items": [
           {"code": "CAL.1.A", "name": "Limit of a function"},
@@ -138,7 +138,7 @@
       ]
     },
     {
-      "code": "STA", "name": "Statistics",
+      "code": "STA", "name": "Statistics", "blueprint_section": "statistics",
       "topics": [
         {"code": "STA.1", "name": "Representation of data", "items": [
           {"code": "STA.1.A", "name": "Frequency distribution"},

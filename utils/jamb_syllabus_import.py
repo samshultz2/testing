@@ -24,12 +24,19 @@ form the stable code)::
               {"code": "NUM.1.A", "name": "Operations in bases 2-10"}]}]}]
     }
 
+A section/topic/item may optionally carry ``"blueprint_section"``: the draw
+blueprint's own section key (matching a ``blueprint[].section`` value above)
+that a question tagged to this node belongs to — see
+``MockJAMBSyllabusNode.blueprint_section``. An item inherits its nearest
+ancestor's value when it has none of its own; leave it out entirely where the
+mapping hasn't been curated yet.
+
 CSV shape (flat; codes are already full/stable)::
 
-    code,kind,name,parent,count,passage,per_passage
-    MATH.NUM,section,Number and Numeration,,10,,
-    MATH.NUM.1,topic,Number bases,MATH.NUM,,,
-    MATH.NUM.1.A,item,Operations in bases 2-10,MATH.NUM.1,,,
+    code,kind,name,parent,count,passage,per_passage,blueprint_section
+    MATH.NUM,section,Number and Numeration,,10,,,number
+    MATH.NUM.1,topic,Number bases,MATH.NUM,,,,
+    MATH.NUM.1.A,item,Operations in bases 2-10,MATH.NUM.1,,,,
 """
 from __future__ import annotations
 
@@ -90,17 +97,20 @@ def parse_json(text_or_obj):
         nodes.append({'code': sec_code, 'kind': 'section', 'name': (sec.get('name') or '').strip(),
                       'parent': None, 'order': si,
                       'question_count': sec.get('count'), 'passage': bool(sec.get('passage')),
-                      'per_passage': sec.get('per_passage')})
+                      'per_passage': sec.get('per_passage'),
+                      'blueprint_section': (sec.get('blueprint_section') or '').strip() or None})
         for ti, top in enumerate(sec.get('topics') or []):
             top_code = full(top.get('code'))
             nodes.append({'code': top_code, 'kind': 'topic', 'name': (top.get('name') or '').strip(),
                           'parent': sec_code, 'order': ti,
-                          'question_count': None, 'passage': False, 'per_passage': None})
+                          'question_count': None, 'passage': False, 'per_passage': None,
+                          'blueprint_section': (top.get('blueprint_section') or '').strip() or None})
             for ii, item in enumerate(top.get('items') or []):
                 nodes.append({'code': full(item.get('code')), 'kind': 'item',
                               'name': (item.get('name') or '').strip(),
                               'parent': top_code, 'order': ii,
-                              'question_count': None, 'passage': False, 'per_passage': None})
+                              'question_count': None, 'passage': False, 'per_passage': None,
+                              'blueprint_section': (item.get('blueprint_section') or '').strip() or None})
 
     blueprint = _clean_blueprint(data.get('blueprint'))
     return {
@@ -166,6 +176,7 @@ def parse_csv(text, subject=None, version=None):
             'question_count': int(cnt) if cnt.isdigit() else None,
             'passage': col(row, 'passage').lower() in ('1', 'true', 'yes', 'y'),
             'per_passage': int(col(row, 'per_passage')) if col(row, 'per_passage').isdigit() else None,
+            'blueprint_section': col(row, 'blueprint_section', 'blueprint section') or None,
         }
         nodes.append(node)
         if kind == 'section' and node['question_count']:
@@ -227,6 +238,7 @@ def reconcile_syllabus(subject, data):
         row.kind = nd.get('kind')
         row.name = nd.get('name')
         row.sort_order = nd.get('order') or 0
+        row.blueprint_section = nd.get('blueprint_section')
         row.question_count = nd.get('question_count')
         row.passage = bool(nd.get('passage'))
         row.per_passage = nd.get('per_passage')

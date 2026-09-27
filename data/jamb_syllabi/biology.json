@@ -11,6 +11,7 @@
         {
           "code": "VAR.1",
           "name": "Living organisms",
+          "blueprint_section": "cell",
           "items": [
             {
               "code": "VAR.1.A",
@@ -93,6 +94,7 @@
         {
           "code": "FRM.2",
           "name": "Nutrition",
+          "blueprint_section": "nutrition",
           "items": [
             {
               "code": "FRM.2.A",
@@ -115,6 +117,7 @@
         {
           "code": "FRM.3",
           "name": "Transport",
+          "blueprint_section": "transport_respiration",
           "items": [
             {
               "code": "FRM.3.A",
@@ -137,6 +140,7 @@
         {
           "code": "FRM.4",
           "name": "Respiration",
+          "blueprint_section": "transport_respiration",
           "items": [
             {
               "code": "FRM.4.A",
@@ -159,6 +163,7 @@
         {
           "code": "FRM.5",
           "name": "Excretion",
+          "blueprint_section": "excretion_regulation",
           "items": [
             {
               "code": "FRM.5.A",
@@ -177,6 +182,7 @@
         {
           "code": "FRM.6",
           "name": "Support and movement",
+          "blueprint_section": "support_movement",
           "items": [
             {
               "code": "FRM.6.A",
@@ -195,6 +201,7 @@
         {
           "code": "FRM.7",
           "name": "Reproduction",
+          "blueprint_section": "reproduction",
           "items": [
             {
               "code": "FRM.7.A",
@@ -213,6 +220,7 @@
         {
           "code": "FRM.8",
           "name": "Growth",
+          "blueprint_section": "reproduction",
           "items": [
             {
               "code": "FRM.8.A",
@@ -227,6 +235,7 @@
         {
           "code": "FRM.9",
           "name": "Co-ordination and control",
+          "blueprint_section": "excretion_regulation",
           "items": [
             {
               "code": "FRM.9.A",
@@ -255,6 +264,7 @@
         {
           "code": "ECO.1",
           "name": "Factors affecting distribution of organisms",
+          "blueprint_section": "ecology",
           "items": [
             {
               "code": "ECO.1.A",
@@ -269,6 +279,7 @@
         {
           "code": "ECO.2",
           "name": "Symbiotic interactions of plants and animals",
+          "blueprint_section": "ecology",
           "items": [
             {
               "code": "ECO.2.A",
@@ -283,6 +294,7 @@
         {
           "code": "ECO.3",
           "name": "Natural habitats",
+          "blueprint_section": "ecology",
           "items": [
             {
               "code": "ECO.3.A",
@@ -297,6 +309,7 @@
         {
           "code": "ECO.4",
           "name": "Local (Nigerian) biomes",
+          "blueprint_section": "ecology",
           "items": [
             {
               "code": "ECO.4.A",
@@ -323,6 +336,7 @@
         {
           "code": "ECO.5",
           "name": "The ecology of populations",
+          "blueprint_section": "ecology",
           "items": [
             {
               "code": "ECO.5.A",
@@ -345,6 +359,7 @@
         {
           "code": "ECO.6",
           "name": "Soil",
+          "blueprint_section": "ecology",
           "items": [
             {
               "code": "ECO.6.A",
@@ -363,6 +378,7 @@
         {
           "code": "ECO.7",
           "name": "Humans and environment",
+          "blueprint_section": "ecology",
           "items": [
             {
               "code": "ECO.7.A",
@@ -395,6 +411,7 @@
         {
           "code": "HER.1",
           "name": "Variation in population",
+          "blueprint_section": "genetics_evolution",
           "items": [
             {
               "code": "HER.1.A",
@@ -413,6 +430,7 @@
         {
           "code": "HER.2",
           "name": "Heredity",
+          "blueprint_section": "genetics_evolution",
           "items": [
             {
               "code": "HER.2.A",
@@ -439,6 +457,7 @@
         {
           "code": "HER.3",
           "name": "Biotechnology",
+          "blueprint_section": "genetics_evolution",
           "items": [
             {
               "code": "HER.3.A",
@@ -455,6 +474,7 @@
         {
           "code": "EVO.1",
           "name": "Theories of evolution",
+          "blueprint_section": "genetics_evolution",
           "items": [
             {
               "code": "EVO.1.A",
@@ -473,6 +493,7 @@
         {
           "code": "EVO.2",
           "name": "Evidence of evolution",
+          "blueprint_section": "genetics_evolution",
           "items": [
             {
               "code": "EVO.2.A",

@@ -7,6 +7,7 @@
     {
       "code": "SEP",
       "name": "Separation of Mixtures and Purification of Chemical Substances",
+      "blueprint_section": "separation",
       "topics": [
         {
           "code": "SEP.1",
@@ -39,6 +40,7 @@
     {
       "code": "COMB",
       "name": "Chemical Combination",
+      "blueprint_section": "stoichiometry",
       "topics": [
         {
           "code": "COMB.1",
@@ -63,6 +65,7 @@
     {
       "code": "GAS",
       "name": "Kinetic Theory of Matter and Gas Laws",
+      "blueprint_section": "states_gas",
       "topics": [
         {
           "code": "GAS.1",
@@ -101,6 +104,7 @@
     {
       "code": "ATOM",
       "name": "Atomic Structure and Bonding",
+      "blueprint_section": "atomic_bonding",
       "topics": [
         {
           "code": "ATOM.1",
@@ -243,6 +247,7 @@
     {
       "code": "ACID",
       "name": "Acids, Bases and Salts",
+      "blueprint_section": "acids_bases_salts",
       "topics": [
         {
           "code": "ACID.1",
@@ -275,6 +280,7 @@
     {
       "code": "REDOX",
       "name": "Oxidation and Reduction (Redox)",
+      "blueprint_section": "redox_electro",
       "topics": [
         {
           "code": "REDOX.1",
@@ -307,6 +313,7 @@
     {
       "code": "ELEC",
       "name": "Electrolysis",
+      "blueprint_section": "redox_electro",
       "topics": [
         {
           "code": "ELEC.1",
@@ -339,6 +346,7 @@
     {
       "code": "ENER",
       "name": "Energy Changes",
+      "blueprint_section": "energetics_rates",
       "topics": [
         {
           "code": "ENER.1",
@@ -363,6 +371,7 @@
     {
       "code": "RATE",
       "name": "Rates of Chemical Reaction",
+      "blueprint_section": "energetics_rates",
       "topics": [
         {
           "code": "RATE.1",
@@ -387,6 +396,7 @@
     {
       "code": "EQUIL",
       "name": "Chemical Equilibria",
+      "blueprint_section": "energetics_rates",
       "topics": [
         {
           "code": "EQUIL.1",
@@ -407,6 +417,7 @@
     {
       "code": "NONMET",
       "name": "Non-metals and their Compounds",
+      "blueprint_section": "periodic_metals",
       "topics": [
         {
           "code": "NONMET.1",
@@ -487,6 +498,7 @@
     {
       "code": "MET",
       "name": "Metals and their Compounds",
+      "blueprint_section": "periodic_metals",
       "topics": [
         {
           "code": "MET.1",
@@ -547,6 +559,7 @@
     {
       "code": "ORG",
       "name": "Organic Compounds",
+      "blueprint_section": "organic",
       "topics": [
         {
           "code": "ORG.1",

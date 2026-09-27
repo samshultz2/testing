@@ -7,6 +7,7 @@
     {
       "code": "DRA",
       "name": "Drama",
+      "blueprint_section": "drama",
       "topics": [
         {
           "code": "DRA.A",
@@ -111,6 +112,7 @@
     {
       "code": "PRO",
       "name": "Prose",
+      "blueprint_section": "prose",
       "topics": [
         {
           "code": "PRO.A",
@@ -175,6 +177,7 @@
     {
       "code": "POE",
       "name": "Poetry",
+      "blueprint_section": "poetry",
       "topics": [
         {
           "code": "POE.A",
@@ -259,6 +262,7 @@
     {
       "code": "TERM",
       "name": "General Literary Terms and Principles",
+      "blueprint_section": "appreciation",
       "topics": [
         {
           "code": "TERM.A",
@@ -275,6 +279,7 @@
     {
       "code": "APPR",
       "name": "Literary Appreciation",
+      "blueprint_section": "appreciation",
       "topics": [
         {
           "code": "APPR.1",

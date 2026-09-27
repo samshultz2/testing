@@ -64,6 +64,74 @@ def test_all_bundled_syllabi_import_cleanly(app):
             assert codes and all('.' in c and c == c.upper() for c in codes)
 
 
+def test_curated_blueprint_sections_are_valid(app):
+    """Every blueprint_section curated into a bundled syllabus must name a real
+    section of that subject's own draw blueprint -- a stale/typo'd value would
+    otherwise silently never resolve (see _resolve_blueprint_section).
+
+    Checked directly against the parsed file's data, not through a DB import:
+    a subject with its own embedded blueprint (English, Maths) must match
+    THAT list -- it can carry sections (e.g. English's "reading_text") the
+    hardcoded JAMB_BLUEPRINT doesn't have -- while one without an embedded
+    blueprint falls back to the hardcoded JAMB_BLUEPRINT for its subject, same
+    as blueprint_for() does once imported. No Subject rows are touched, so
+    this can't collide with other tests' subject-name aliasing."""
+    from utils.jamb_syllabus_import import parse
+    from utils.jamb_blueprint import JAMB_BLUEPRINT, DEFAULT_BLUEPRINT, norm_subject
+    base = os.path.join(_ROOT, 'data', 'jamb_syllabi')
+    with app.app_context():
+        for fn in sorted(os.listdir(base)):
+            if not fn.endswith('.json'):
+                continue
+            with open(os.path.join(base, fn)) as fh:
+                data = parse(fh.read(), fmt='json')
+            if data.get('blueprint'):
+                valid = {s['section'] for s in data['blueprint']}
+            else:
+                bp = JAMB_BLUEPRINT.get(norm_subject(data['subject']), DEFAULT_BLUEPRINT)
+                valid = {s['section'] for s in bp['sections']}
+            curated = [n.get('blueprint_section') for n in data['nodes'] if n.get('blueprint_section')]
+            bad = [c for c in curated if c not in valid]
+            assert not bad, f'{fn}: blueprint_section(s) not in this subject\'s blueprint: {bad}'
+
+
+def test_english_syllabus_has_a_distinct_cloze_item(app):
+    """The reported bug: cloze-passage questions had no dedicated coded item to
+    be tagged with at all, so the AI fell back to the nearest thing
+    (Comprehension). There must now be a real item mapped to blueprint_section
+    'cloze'."""
+    from utils.jamb_syllabus_import import import_syllabus
+    sid = _subject(app, f'EngCloze{next(_SEQ)}')
+    with app.app_context():
+        subj = db.session.get(Subject, sid)
+        import_syllabus(subj, _english_json(), fmt='json')
+        cloze_items = (MockJAMBSyllabusNode.query.join(MockJAMBSyllabus)
+                      .filter(MockJAMBSyllabus.subject_id == sid,
+                              MockJAMBSyllabusNode.blueprint_section == 'cloze').all())
+        assert cloze_items, 'no coded item maps to the cloze blueprint section'
+
+
+def test_english_novel_and_antonym_items_are_distinct(app):
+    """The other reported mix-up: a novel/reading-text question and an antonym
+    question must resolve to different blueprint sections."""
+    from utils.jamb_syllabus_import import import_syllabus
+    from utils.mock_bank_coded_retag import _resolve_blueprint_section
+    from utils.jamb_blueprint import sections_for
+    sid = _subject(app, 'English Language')
+    with app.app_context():
+        subj = db.session.get(Subject, sid)
+        import_syllabus(subj, _english_json(), fmt='json')
+        nodes = (MockJAMBSyllabusNode.query.join(MockJAMBSyllabus)
+                .filter(MockJAMBSyllabus.subject_id == sid).all())
+        by_id = {n.id: n for n in nodes}
+        by_code = {n.code: n for n in nodes}
+        valid = {s['section'] for s in sections_for(subj.name)}
+        novel_node = by_code['ENG.CMP.2.D']     # "Approved reading text"
+        antonym_node = by_code['ENG.LEX.1.B']   # "Antonyms"
+        assert _resolve_blueprint_section(novel_node, by_id, valid) == 'reading_text'
+        assert _resolve_blueprint_section(antonym_node, by_id, valid) == 'antonyms'
+
+
 def test_parse_json_prefixes_stable_codes():
     from utils.jamb_syllabus_import import parse
     d = parse(_math_json(), fmt='json')
