@@ -104,12 +104,54 @@ def run_job(job_id):
     return job
 
 
+_STUCK_MINUTES = 10
+# Kinds whose handler makes an external API call with no periodic progress
+# commit in between a phase's start and its next self-enqueue -- if the worker
+# process dies mid-call, the row is left at 'running' forever with nothing to
+# resume it (drain() only ever picks up 'queued' rows). Other handlers either
+# finish quickly or (like bank_local_tag) commit progress regularly, so a
+# crash there is caught by the next queued row rather than an orphaned one.
+_WATCHDOG_KINDS = ('bank_batch_retag',)
+
+
+def reap_stuck(stale_minutes=_STUCK_MINUTES, kinds=_WATCHDOG_KINDS):
+    """Fail any job that has sat at 'running' past a worker crash/restart, so it
+    surfaces as a clear error instead of leaving the status pill stuck on the
+    same message forever. Best-effort — never raises."""
+    from datetime import timedelta
+    from models import db, local_now, BackgroundJob
+    try:
+        cutoff = local_now() - timedelta(minutes=stale_minutes)
+        stuck = (BackgroundJob.query
+                 .filter(BackgroundJob.status == 'running',
+                         BackgroundJob.kind.in_(kinds),
+                         BackgroundJob.started_at.isnot(None),
+                         BackgroundJob.started_at < cutoff)
+                 .all())
+    except Exception:
+        db.session.rollback()
+        return 0
+    for job in stuck:
+        job.status = 'failed'
+        job.message = (f'Stalled — no update in over {stale_minutes} minute(s), likely a worker '
+                       'restart mid-call. The batch may still be processing on Anthropic\'s side '
+                       'but is no longer tracked here; retry the batch retag.')
+        job.finished_at = local_now()
+    if stuck:
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
+    return len(stuck)
+
+
 def drain(app=None, limit=3):
     """Run up to ``limit`` queued jobs on the bound DB. Called from the scheduler
     tick when ASYNC_JOBS is on. Best-effort — never raises."""
     from models import db, BackgroundJob
     try:
         _ensure_table()
+        reap_stuck()
         jobs = (BackgroundJob.query.filter_by(status='queued')
                 .order_by(BackgroundJob.id).limit(limit).all())
     except Exception:

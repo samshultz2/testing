@@ -1580,8 +1580,9 @@ def _batch_job_in_progress(job):
     """True while the batch-retag job chain (submit -> poll -> poll -> ... ->
     apply) is still re-enqueueing itself. Each phase's own row ends 'done', so
     this reads the status *message* set by utils.jobs._handle_bank_batch_retag,
-    not job.status."""
-    if not job:
+    not job.status -- except 'failed', which always means stopped (e.g. the
+    stale-job watchdog reaped it after a worker crash mid-call)."""
+    if not job or (job.status or '') == 'failed':
         return False
     message = job.message or job.status or ''
     return any(marker in message for marker in _BATCH_IN_PROGRESS_MARKERS)

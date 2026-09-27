@@ -2,10 +2,11 @@
 import itertools
 import sys
 import types
+from datetime import timedelta
 
 import pytest
 
-from models import (db, Subject, MockJAMBQuestion, MockJAMBSyllabus,
+from models import (db, local_now, Subject, MockJAMBQuestion, MockJAMBSyllabus,
                     MockJAMBSyllabusNode, BackgroundJob)
 
 _SEQ = itertools.count()
@@ -171,3 +172,32 @@ def test_batch_retag_also_corrects_section(app, monkeypatch):
         got = db.session.get(MockJAMBQuestion, qid)
         assert got.syllabus_item_code == f'Y{tag}.LEX.1.A'
         assert got.section == 'antonyms'
+
+
+def test_stuck_running_batch_job_is_reaped(app):
+    """If the jobs worker dies mid-call (e.g. mid-submit to Anthropic), the row
+    is left at 'running' with nothing to resume it -- drain() only ever picks
+    up 'queued' rows. The watchdog must fail it out after it goes stale, so the
+    status pill stops looking like it's still progressing, while a job that's
+    merely running normally (started recently) must be left alone."""
+    from utils import jobs
+
+    with app.app_context():
+        stale = BackgroundJob(kind='bank_batch_retag', status='running',
+                              params='{"subject_id": 1}',
+                              started_at=local_now() - timedelta(minutes=15))
+        fresh = BackgroundJob(kind='bank_batch_retag', status='running',
+                              params='{"subject_id": 2}',
+                              started_at=local_now() - timedelta(minutes=1))
+        db.session.add_all([stale, fresh])
+        db.session.commit()
+        stale_id, fresh_id = stale.id, fresh.id
+
+        reaped = jobs.reap_stuck(stale_minutes=10)
+        assert reaped == 1
+
+        stale_row = db.session.get(BackgroundJob, stale_id)
+        fresh_row = db.session.get(BackgroundJob, fresh_id)
+        assert stale_row.status == 'failed'
+        assert 'stalled' in stale_row.message.lower()
+        assert fresh_row.status == 'running'          # untouched -- not stale yet
