@@ -1403,6 +1403,7 @@ def bank_syllabus():
                            syllabus=syll, tree=tree, blueprint=blueprint, bundled=bundled,
                            years=years, tagged_count=tagged_count, total_questions_q=total_q,
                            key_set=key_set, batch_async=batch_async, batch_job=batch_job,
+                           batch_job_in_progress=_batch_job_in_progress(batch_job),
                            bank_url=url_for('mock_jamb.bank', subject_id=subject_id or ''))
 
 
@@ -1570,6 +1571,40 @@ def bank_syllabus_batch_retag():
     flash(f'Batch retag queued for {subject.name} ({scope}). It runs in the background — '
           f'refresh this page to watch progress; the tagged count updates as results apply.', 'success')
     return redirect(url_for('mock_jamb.bank_syllabus', subject_id=subject_id))
+
+
+_BATCH_IN_PROGRESS_MARKERS = ('awaiting results', 'processing… (poll')
+
+
+def _batch_job_in_progress(job):
+    """True while the batch-retag job chain (submit -> poll -> poll -> ... ->
+    apply) is still re-enqueueing itself. Each phase's own row ends 'done', so
+    this reads the status *message* set by utils.jobs._handle_bank_batch_retag,
+    not job.status."""
+    if not job:
+        return False
+    message = job.message or job.status or ''
+    return any(marker in message for marker in _BATCH_IN_PROGRESS_MARKERS)
+
+
+@mock_jamb_bp.route('/bank/syllabus/batch-status')
+@login_required
+def bank_syllabus_batch_status():
+    """Poll target for the auto-refreshing batch-retag status pill. Cheap: one
+    indexed lookup, no AI call — the actual Claude batch is only ever checked
+    from the jobs worker's own tick, never from a page view."""
+    from models import BackgroundJob
+    subject_id = request.args.get('subject_id', type=int)
+    job = None
+    if subject_id:
+        job = (BackgroundJob.query
+               .filter(BackgroundJob.kind == 'bank_batch_retag',
+                       BackgroundJob.params.like(f'%"subject_id": {subject_id}%'))
+               .order_by(BackgroundJob.id.desc()).first())
+    if not job:
+        return jsonify({'found': False})
+    return jsonify({'found': True, 'message': job.message or job.status, 'total': job.total or 0,
+                    'in_progress': _batch_job_in_progress(job)})
 
 
 @mock_jamb_bp.route('/bank/analytics')

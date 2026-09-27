@@ -4242,6 +4242,13 @@
 ]
 ],
 [
+"mock_jamb.bank_syllabus_batch_status",
+"/mock-jamb/bank/syllabus/batch-status",
+[
+"GET"
+]
+],
+[
 "mock_jamb.bank_syllabus_clear",
 "/mock-jamb/bank/syllabus/clear",
 [

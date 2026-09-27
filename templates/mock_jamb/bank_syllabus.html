@@ -95,9 +95,9 @@
         No Anthropic API key is set. Add one under <strong>Settings &rarr; AI Vision OCR</strong> to enable this.</p>
     {% endif %}
     {% if batch_job %}
-    <div class="pill" style="display:block;margin-bottom:.8rem;padding:.5rem .7rem;background:var(--gray-100)">
-      <strong>Batch:</strong> {{ batch_job.message or batch_job.status }}
-      {% if batch_job.total %}<span class="text-muted">({{ batch_job.total }} question(s) submitted)</span>{% endif %}
+    <div class="pill" id="batchJobPill" style="display:block;margin-bottom:.8rem;padding:.5rem .7rem;background:var(--gray-100)">
+      <strong>Batch:</strong> <span id="batchJobMessage">{{ batch_job.message or batch_job.status }}</span>
+      <span id="batchJobTotal" class="text-muted">{% if batch_job.total %}({{ batch_job.total }} question(s) submitted){% endif %}</span>
     </div>
     {% endif %}
 
@@ -170,6 +170,35 @@
         if (!m) { m = document.createElement('input'); m.type = 'hidden'; m.name = 'mode'; form.appendChild(m); }
         m.value = (force && force.checked) ? 'all' : 'untagged';
     });
+})();
+
+// Auto-refresh the batch status pill while a batch retag is in progress. The
+// batch itself runs entirely server-side (submitted to Claude, polled and
+// applied by the edusyncra-jobs worker) -- this poll only re-reads that state,
+// so a closed tab or a dropped connection here never stops the retag; a failed
+// fetch is silently retried on the next tick instead of stopping the loop.
+(function () {
+    var pill = document.getElementById('batchJobPill');
+    if (!pill) return;
+    var inProgress = {{ 'true' if batch_job_in_progress else 'false' }};
+    if (!inProgress) return;
+    var msgEl = document.getElementById('batchJobMessage');
+    var totalEl = document.getElementById('batchJobTotal');
+    var statusUrl = "{{ url_for('mock_jamb.bank_syllabus_batch_status', subject_id=subject_id or '') }}";
+    var timer = setInterval(function () {
+        fetch(statusUrl, {headers: {'X-Requested-With': 'fetch'}})
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data.found) return;
+                if (msgEl) msgEl.textContent = data.message;
+                if (totalEl) totalEl.textContent = data.total ? '(' + data.total + ' question(s) submitted)' : '';
+                if (!data.in_progress) {
+                    clearInterval(timer);
+                    location.reload();  // pick up the updated tagged/total counts elsewhere on the page
+                }
+            })
+            .catch(function () { /* network blip -- try again next tick */ });
+    }, 6000);
 })();
 </script>
 
