@@ -126,11 +126,23 @@
 
 <div class="card mb-3">
     <div class="card-header"><h3>Topic &amp; sub-topic mastery <span class="text-muted text-sm">— weakest first, with sub-topic drill-down</span></h3></div>
-    <div class="table-responsive"><table class="data-table">
+    <div class="card-body" style="padding-bottom:0;">
+        {% set topic_subjects = data.topics | map(attribute='subject') | unique | list %}
+        {% if topic_subjects|length > 1 %}
+        <div class="ia-filter" id="topicSubjectFilter">
+            <button type="button" data-subj="all" class="active">All subjects</button>
+            {% for subj in topic_subjects %}
+            <button type="button" data-subj="{{ subj }}">{{ subj }}</button>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    <div class="table-responsive"><table class="data-table" id="topicTable">
         <thead><tr><th>Subject</th><th>Topic / sub-topic</th><th>Items</th><th>Responses</th><th>Mastery</th><th>Verdict</th></tr></thead>
         <tbody>
             {% for t in data.topics %}
-            <tr>
+            {% set gi = loop.index0 %}
+            <tr data-group="{{ gi }}" data-subject="{{ t.subject }}">
                 <td>{{ t.subject }}</td>
                 <td><strong>{{ t.topic }}</strong></td>
                 <td>{{ t["items"] }}</td>
@@ -139,7 +151,7 @@
                 <td><span class="band-{{ t.band }}">{{ t.band_label }}</span></td>
             </tr>
             {% for s in t.subtopics %}
-            <tr class="sub-row">
+            <tr class="sub-row" data-group="{{ gi }}" data-subject="{{ t.subject }}">
                 <td></td>
                 <td class="stopic"><i class="fas fa-turn-up fa-rotate-90" style="opacity:.5;"></i> {{ s.subtopic }}</td>
                 <td>{{ s["items"] }}</td>
@@ -151,6 +163,7 @@
             {% endfor %}
         </tbody>
     </table></div>
+    <div id="topicPager" style="display:flex;align-items:center;justify-content:center;flex-wrap:wrap;padding:.7rem;"></div>
     <div class="card-body" style="padding-top:0;"><div class="ia-note">Mastery is correct answers as a share of attempts on tagged questions. Tag every question with a topic and sub-topic in the question manager to sharpen this breakdown.</div></div>
 </div>
 
@@ -285,6 +298,56 @@
         });
     }
     if(rows.length) render();
+
+    // topic & sub-topic mastery table: subject filter + client-side pagination
+    // by topic-group (a topic row plus its sub-topic rows moves as one unit).
+    var tSubjFilter = document.getElementById('topicSubjectFilter');
+    var tPager = document.getElementById('topicPager');
+    var tTable = document.getElementById('topicTable');
+    if(tTable){
+        var groups = {};
+        Array.prototype.slice.call(tTable.querySelectorAll('tbody tr')).forEach(function(tr){
+            var g = tr.dataset.group;
+            (groups[g] = groups[g] || []).push(tr);
+        });
+        var groupList = Object.keys(groups).map(function(g){ return groups[g]; })
+            .sort(function(a, b){ return (+a[0].dataset.group) - (+b[0].dataset.group); });
+        var TPER = 10, tSubj = 'all', tPage = 1;
+        function tRender(){
+            var visible = groupList.filter(function(g){
+                return tSubj === 'all' || g[0].dataset.subject === tSubj;
+            });
+            var pages = Math.max(1, Math.ceil(visible.length / TPER));
+            if(tPage > pages) tPage = pages;
+            var start = (tPage - 1) * TPER, end = start + TPER;
+            groupList.forEach(function(g){ g.forEach(function(tr){ tr.style.display = 'none'; }); });
+            visible.slice(start, end).forEach(function(g){ g.forEach(function(tr){ tr.style.display = ''; }); });
+            if(tPager){
+                if(visible.length <= TPER){ tPager.innerHTML = ''; return; }
+                tPager.innerHTML = '<button type="button" class="btn btn-secondary btn-sm" data-p="prev"'
+                    + (tPage <= 1 ? ' disabled' : '') + '>&#8249; Prev</button>'
+                    + '<span class="text-sm text-muted" style="margin:0 .6rem;">Page ' + tPage + ' of ' + pages
+                    + ' · ' + visible.length + ' topic(s)</span>'
+                    + '<button type="button" class="btn btn-secondary btn-sm" data-p="next"'
+                    + (tPage >= pages ? ' disabled' : '') + '>Next &#8250;</button>';
+            }
+        }
+        if(tSubjFilter){
+            tSubjFilter.addEventListener('click', function(e){
+                var b = e.target.closest('button'); if(!b) return;
+                tSubjFilter.querySelectorAll('button').forEach(function(x){ x.classList.remove('active'); });
+                b.classList.add('active');
+                tSubj = b.dataset.subj; tPage = 1; tRender();
+            });
+        }
+        if(tPager){
+            tPager.addEventListener('click', function(e){
+                var b = e.target.closest('button'); if(!b || b.disabled) return;
+                tPage += (b.dataset.p === 'next') ? 1 : -1; tRender();
+            });
+        }
+        tRender();
+    }
 
     function draw(){
         if(!window.Chart){ return; }
