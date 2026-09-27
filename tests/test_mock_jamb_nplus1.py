@@ -198,6 +198,189 @@ def test_portal_sit_does_not_scale_with_subject_count(app):
         f'like it fetches each subject with its own query instead of one batched IN')
 
 
+def _seed_many_bank_exams(app, tag, n_exams=6):
+    """One student, one bank-drawn subject with a couple of stand-alone
+    questions, and several PUBLISHED bank-drawn mocks (no exam-owned
+    questions) that all share that identical bank pool -- what a school
+    running several concurrent/rolling mocks looks like."""
+    with app.app_context():
+        bid = Branch.get_default().id
+        subj = Subject(name=f'{tag}Physics', is_active=True)
+        db.session.add(subj); db.session.flush()
+        for i in range(2):
+            db.session.add(MockJAMBQuestion(
+                mock_exam_id=None, subject_id=subj.id, question_text=f'{tag} Q{i+1}',
+                option_a='a', option_b='b', option_c='c', option_d='d',
+                correct_option='A', marks=1, order=i + 1))
+        exam_ids = []
+        for i in range(n_exams):
+            sess = AcademicSession(name=f'{tag}-Sess{i}')
+            db.session.add(sess); db.session.flush()
+            exam = MockJAMBExam(name=f'{tag} Mock {i}', exam_number=1, session_id=sess.id,
+                                exam_date=date(2025, 4, 1), branch_id=bid,
+                                is_published=True, is_active=True, duration_minutes=90)
+            db.session.add(exam); db.session.flush()
+            exam_ids.append(exam.id)
+        student = Student(student_id=f'{tag}ST', first_name='Many', surname=tag,
+                          gender='Male', is_active=True, branch_id=bid,
+                          jamb_subjects=subj.name)
+        db.session.add(student); db.session.commit()
+        return exam_ids, student.id
+
+
+def test_portal_list_does_not_scale_with_exam_count(app, monkeypatch):
+    """Every student hits this landing page before sitting anything -- with many
+    students loading it around the same time, an N+1 per exam multiplies fast.
+    Each bank-drawn exam shares the identical question-pool query, so the
+    per-exam Subject/attempt lookups must not scale with how many published
+    mocks exist. Counts calls to exam_subject_pool() directly (rather than raw
+    'subjects' SELECTs) so this isn't thrown off by other tests' leftover
+    published exams sharing the session-scoped test DB -- those get their own,
+    legitimately separate pool-cache entry and must not inflate this count."""
+    import utils.mock_jamb_sitting as mjs
+    from tests.test_mock_jamb_sitting import _portal_login
+    exam_ids, student_id = _seed_many_bank_exams(app, f'PL{uuid.uuid4().hex[:6]}', n_exams=6)
+    c = _portal_login(app, student_id)
+
+    calls = {'bank': 0}
+    real_pool = mjs.exam_subject_pool
+    def _counting(exam):
+        if not mjs._exam_owns_questions(exam):
+            calls['bank'] += 1
+        return real_pool(exam)
+    monkeypatch.setattr(mjs, 'exam_subject_pool', _counting)
+
+    r = c.get('/exam/mock-jamb/')
+    assert r.status_code == 200
+    assert calls['bank'] <= 1, (
+        f"exam_subject_pool() called {calls['bank']}x for the shared bank pool across "
+        f"{len(exam_ids)} bank-drawn mocks -- looks like it's being re-fetched once per exam "
+        f"instead of cached")
+
+    n_att = _count_selects(app, 'mock_jamb_attempts', lambda: c.get('/exam/mock-jamb/'))
+    assert n_att <= 2, (
+        f'{n_att} mock_jamb_attempts SELECTs listing {len(exam_ids)} mocks -- attempts look '
+        f'like they are fetched one exam at a time instead of one batched IN query')
+    html = c.get('/exam/mock-jamb/').get_data(as_text=True)
+    assert html.count('First Mock JAMB') >= len(exam_ids)   # every exam still rendered
+
+
+def test_grade_attempt_does_not_rescan_pool_per_submission(app):
+    """grade_attempt() used to call candidate_subject_ids() on EVERY submission --
+    which reruns exam_subject_pool()'s exam-wide, student-independent DISTINCT
+    scan of the question pool -- exactly the moment a whole cohort auto-submits
+    near the timer deadline. Once an attempt's paper is cached (always true by
+    submission time), grading must read the subject list straight from it."""
+    from utils.mock_jamb_sitting import grade_attempt, sitting_payload
+    tag = f'GA{uuid.uuid4().hex[:6]}'
+    with app.app_context():
+        bid = Branch.get_default().id
+        subj = Subject(name=f'{tag}Physics', is_active=True)
+        db.session.add(subj); db.session.flush()
+        q = MockJAMBQuestion(mock_exam_id=None, subject_id=subj.id, question_text='Q1',
+                             option_a='a', option_b='b', option_c='c', option_d='d',
+                             correct_option='A', marks=1, order=1)
+        db.session.add(q); db.session.flush()
+        sess = AcademicSession(name=f'{tag}-Sess'); db.session.add(sess); db.session.flush()
+        exam = MockJAMBExam(name=f'{tag} Mock', exam_number=1, session_id=sess.id,
+                            exam_date=date(2025, 5, 1), branch_id=bid,
+                            is_published=True, is_active=True, duration_minutes=90)
+        db.session.add(exam); db.session.flush()
+        exam_id, subj_id = exam.id, subj.id
+
+        att_ids = []
+        for i in range(_COHORT_SIZE):
+            st = Student(student_id=f'{tag}{i:03d}', first_name=f'S{i}', surname=tag,
+                        gender='Male', is_active=True, branch_id=bid, jamb_subjects=subj.name)
+            db.session.add(st); db.session.flush()
+            att = MockJAMBAttempt(mock_exam_id=exam_id, student_id=st.id, duration_minutes=90)
+            db.session.add(att); db.session.flush()
+            # draw + cache the paper exactly as portal_sit's first render would.
+            sitting_payload(db.session.get(MockJAMBExam, exam_id), [subj_id], att)
+            att_ids.append(att.id)
+        db.session.commit()
+
+    def _grade_all():
+        with app.app_context():
+            for aid in att_ids:
+                grade_attempt(db.session.get(MockJAMBAttempt, aid))
+
+    n = _count_selects(app, 'mock_jamb_questions', _grade_all)
+    # Each attempt legitimately costs 2 mock_jamb_questions SELECTs even fully
+    # fixed (rebuilding the cached paper + fetching the served rows to mark) --
+    # anywhere near 3 per attempt means the pool-wide scan is still running once
+    # per submission on top of that.
+    assert n <= 2 * _COHORT_SIZE + 2, (
+        f'{n} mock_jamb_questions SELECTs grading {_COHORT_SIZE} attempts on one exam -- '
+        f'grade_attempt() looks like it re-runs the exam-wide subject-pool scan per submission')
+
+
+def test_portal_guard_caches_eligibility_across_the_sitting(app, monkeypatch):
+    """_portal_guard() calls student_eligible() (2 queries: class placement +
+    the mock's eligible-class lookup) on EVERY request -- including every
+    autosave, which fires every ~1-30s for the whole exam duration across a
+    whole cohort. The verdict can't change mid-sitting, so it must be cached
+    (in the student's own session) after the first check, not re-derived on
+    every save."""
+    from tests.test_mock_jamb_sitting import _build_exam, _portal_login
+    eid, sid, eng_id, mth_id = _build_exam(app)
+    c = _portal_login(app, sid)
+
+    calls = {'n': 0}
+    real = __import__('utils.mock_jamb_sitting', fromlist=['student_eligible']).student_eligible
+    def _counting(*a, **k):
+        calls['n'] += 1
+        return real(*a, **k)
+    monkeypatch.setattr('utils.mock_jamb_sitting.student_eligible', _counting)
+
+    r1 = c.get(f'/exam/mock-jamb/{eid}')
+    assert r1.status_code == 200
+    assert calls['n'] == 1, f'student_eligible() called {calls["n"]}x on first load -- expected exactly 1'
+
+    r2 = c.get(f'/exam/mock-jamb/{eid}')
+    assert r2.status_code == 200
+    assert calls['n'] == 1, (
+        f'student_eligible() called again on a reload ({calls["n"]} total) -- the '
+        f'per-exam eligibility cache in _portal_guard() looks like it is not being hit')
+
+
+def test_portal_sit_survives_concurrent_attempt_creation_race(app, monkeypatch):
+    """Two near-simultaneous requests for the same (exam, student) -- a double
+    click on Start, or a client retry over a flaky school connection, both of
+    which get more likely exactly when a whole cohort starts together -- must
+    not 500 on the unique_mock_attempt constraint. Simulates the race
+    deterministically: a "concurrent" row is inserted via a raw connection the
+    instant our own commit fires, so our own commit hits the real unique-
+    constraint violation exactly as a second real request would."""
+    from tests.test_mock_jamb_sitting import _build_exam, _portal_login
+    from models import db, MockJAMBAttempt
+    from sqlalchemy import text
+    eid, sid, eng_id, mth_id = _build_exam(app)
+    c = _portal_login(app, sid)
+
+    real_commit = db.session.commit
+    fired = {'n': 0}
+
+    def _racing_commit(*a, **k):
+        if fired['n'] == 0:
+            fired['n'] += 1
+            with app.app_context():
+                with db.engine.begin() as conn:
+                    conn.execute(text(
+                        "INSERT INTO mock_jamb_attempts "
+                        "(mock_exam_id, student_id, duration_minutes, status, total_score) "
+                        "VALUES (:eid, :sid, 90, 'In progress', 0)"), {'eid': eid, 'sid': sid})
+        return real_commit(*a, **k)
+
+    monkeypatch.setattr(db.session, 'commit', _racing_commit)
+    r = c.get(f'/exam/mock-jamb/{eid}')
+    assert r.status_code == 200, f'race produced a {r.status_code} instead of falling back to the winning row'
+
+    with app.app_context():
+        rows = MockJAMBAttempt.query.filter_by(mock_exam_id=eid, student_id=sid).all()
+        assert len(rows) == 1, f'{len(rows)} attempts survived the race -- expected exactly 1'
+
+
 def test_portal_sit_questions_do_not_get_reloaded_after_cache_commit(app):
     """The paper-persisting db.session.commit() in portal_sit() must not expire
     the Question objects already loaded into the payload — otherwise the very

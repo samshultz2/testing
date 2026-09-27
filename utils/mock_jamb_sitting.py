@@ -151,6 +151,25 @@ def candidate_subject_ids(exam, student):
     return candidate_subject_ids_from_pool(subj_ids, subjects, student)
 
 
+def subject_ids_for_attempt(exam, student, attempt):
+    """The candidate's subject ids for this attempt: read straight from the
+    cached paper (its keys ARE the subject ids resolved when the paper was
+    first drawn) instead of re-running candidate_subject_ids() -- which does
+    an exam-wide, student-independent pool scan (exam_subject_pool()) that
+    doesn't need repeating on every reload/resume or at every submission.
+    Under a mass simultaneous start (every reload hitting portal_sit) or a mass
+    submit at the timer deadline (every grade_attempt call), that scan would
+    otherwise re-run per request instead of once per candidate. Falls back to
+    the real query only for a genuinely fresh (not-yet-drawn) attempt."""
+    paper = _load_paper(attempt) if attempt else {}
+    if paper:
+        try:
+            return [int(k) for k in paper.keys()]
+        except (TypeError, ValueError):
+            pass
+    return candidate_subject_ids(exam, student)
+
+
 def _seed(attempt, *parts):
     """A stable seed for this attempt (and optional sub-key), so a candidate's
     paper is identical on every reload but differs between candidates."""
@@ -501,7 +520,7 @@ def grade_attempt(attempt):
     from models import db, MockJAMBQuestion, MockJAMBResult, Subject
     exam = attempt.exam
     student = attempt.student
-    subject_ids = candidate_subject_ids(exam, student)
+    subject_ids = subject_ids_for_attempt(exam, student, attempt)
 
     ans = {a.question_id: a for a in attempt.answers}
     per = []

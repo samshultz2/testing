@@ -4,6 +4,7 @@ Full management of mock JAMB exams with analytics and insights
 """
 from flask import (Blueprint, request, redirect, url_for, flash, jsonify, Response,
                    render_template, current_app)
+from sqlalchemy.exc import IntegrityError
 from utils.helpers import get_active_term, get_active_session
 from datetime import datetime
 from io import BytesIO
@@ -2683,6 +2684,7 @@ def toggle_publish(exam_id):
 def _portal_guard(exam):
     """Ensure the exam is published and the student may sit it: same branch and
     an eligible class (SSS3 by default, configurable per mock)."""
+    from flask import session
     from routes.cbt import _current_student
     from utils.mock_jamb_sitting import student_eligible
     student = _current_student()
@@ -2692,7 +2694,17 @@ def _portal_guard(exam):
         return student, None
     if exam.branch_id and student.branch_id and exam.branch_id != student.branch_id:
         return student, None
-    if not student_eligible(exam, student):
+    # student_eligible() costs 2 queries (class placement + the mock's eligible-
+    # class lookup), neither of which can change mid-sitting -- but this guard
+    # runs on every autosave too (every ~1-30s for the whole exam), so cache the
+    # verdict in the student's own signed session instead of re-querying on
+    # every save for the whole cohort's entire sitting duration.
+    cache_key = f'mjb_elig_{exam.id}'
+    cached = session.get(cache_key)
+    if cached is None:
+        cached = bool(student_eligible(exam, student))
+        session[cache_key] = cached
+    if not cached:
         return student, None
     return student, exam
 
@@ -2724,24 +2736,59 @@ def _payload_has_math(payload):
 
 @mock_jamb_portal_bp.route('/')
 def portal_list():
+    """Every student hits this landing page before sitting anything, so with many
+    students loading it around the same time (right before a mass sitting) an
+    N+1 here multiplies fast. Batches what the naive per-exam loop used to repeat:
+    the student's class placement (exam-independent -- was re-queried once per
+    exam), each distinct eligible_levels' class set, each distinct question pool
+    (every bank-drawn exam shares the identical pool query), and every attempt
+    lookup (now one IN query instead of one per exam)."""
     from routes.cbt import cbt_login_required, _current_student
     @cbt_login_required
     def _inner():
         from models import MockJAMBAttempt
-        from utils.mock_jamb_sitting import candidate_subject_ids, student_eligible
+        from utils.mock_jamb_sitting import (
+            candidate_subject_ids_from_pool, exam_subject_pool,
+            eligible_class_ids, _exam_owns_questions)
         student = _current_student()
         exams = (MockJAMBExam.query.filter_by(is_published=True, is_active=True)
                  .order_by(MockJAMBExam.exam_date.desc()).all())
+        exams = [e for e in exams
+                 if not (e.branch_id and student.branch_id and e.branch_id != student.branch_id)]
+
+        class_id = None
+        try:
+            from routes.cbt import _student_placement
+            from utils.helpers import get_active_term
+            class_id, _arm = _student_placement(student.id, get_active_term())
+        except Exception:
+            class_id = None
+
+        elig_cache = {}
+        def _eligible(e):
+            key = (e.eligible_levels or '').strip().lower()
+            if key not in elig_cache:
+                elig_cache[key] = eligible_class_ids(e)
+            ids = elig_cache[key]
+            return not ids or class_id is None or class_id in ids
+        exams = [e for e in exams if _eligible(e)]
+
+        exam_ids = [e.id for e in exams]
+        attempts = {a.mock_exam_id: a for a in MockJAMBAttempt.query.filter(
+            MockJAMBAttempt.student_id == student.id,
+            MockJAMBAttempt.mock_exam_id.in_(exam_ids)).all()} if exam_ids else {}
+
+        pool_cache = {}
         rows = []
         for e in exams:
-            if e.branch_id and student.branch_id and e.branch_id != student.branch_id:
-                continue
-            if not student_eligible(e, student):
-                continue
-            subs = candidate_subject_ids(e, student)
+            key = e.id if _exam_owns_questions(e) else 'bank'
+            if key not in pool_cache:
+                pool_cache[key] = exam_subject_pool(e)
+            subj_ids, subjects = pool_cache[key]
+            subs = candidate_subject_ids_from_pool(subj_ids, subjects, student)
             if not subs:
                 continue
-            att = MockJAMBAttempt.query.filter_by(mock_exam_id=e.id, student_id=student.id).first()
+            att = attempts.get(e.id)
             rows.append({'exam': e, 'subjects': len(subs),
                          'submitted': bool(att and att.status == 'Submitted'),
                          'in_progress': bool(att and att.status != 'Submitted'),
@@ -2756,27 +2803,44 @@ def portal_sit(exam_id):
     @cbt_login_required
     def _inner():
         from models import MockJAMBAttempt
-        from utils.mock_jamb_sitting import candidate_subject_ids, sitting_payload
+        from utils.mock_jamb_sitting import sitting_payload, subject_ids_for_attempt
         exam = db.session.get(MockJAMBExam, exam_id)
         student, ok = _portal_guard(exam)
         if not ok:
             flash('This mock is not open for you.', 'error')
             return redirect(url_for('mock_jamb_portal.portal_list'))
-        subject_ids = candidate_subject_ids(exam, student)
+        # Look up (don't create yet) any existing attempt so a reload/resume can
+        # read its already-drawn subject list straight from the cached paper --
+        # subject_ids_for_attempt() then skips candidate_subject_ids()'s exam-wide
+        # pool scan entirely, which matters when a whole cohort is reloading the
+        # same mock at once.
+        att = MockJAMBAttempt.query.filter_by(mock_exam_id=exam.id, student_id=student.id).first()
+        subject_ids = subject_ids_for_attempt(exam, student, att)
         if not subject_ids:
             flash('You have no subjects to sit in this mock.', 'error')
             return redirect(url_for('mock_jamb_portal.portal_list'))
         # Safety net: if the student's timer already elapsed while the tab was
         # closed, force-submit (grade) it now instead of resuming a dead attempt.
+        # Mutates the same `att` object we already hold (identity-mapped), so no
+        # re-fetch is needed to see the just-graded status below.
         from utils.mock_jamb_sitting import auto_submit_expired
         auto_submit_expired(exam=exam, student=student)
-        att = MockJAMBAttempt.query.filter_by(mock_exam_id=exam.id, student_id=student.id).first()
         if att and (att.status == 'Submitted' or att.submitted_at):
             return redirect(url_for('mock_jamb_portal.portal_done', exam_id=exam.id))
         if not att:
             att = MockJAMBAttempt(mock_exam_id=exam.id, student_id=student.id,
                                   duration_minutes=exam.duration_minutes or 120)
-            db.session.add(att); db.session.commit()
+            db.session.add(att)
+            try:
+                db.session.commit()
+            except IntegrityError:
+                # A near-simultaneous request (double-tap on Start, or a client
+                # retry over a flaky connection) already created this attempt --
+                # fall back to it instead of a 500 on the unique_mock_attempt
+                # constraint.
+                db.session.rollback()
+                att = MockJAMBAttempt.query.filter_by(
+                    mock_exam_id=exam.id, student_id=student.id).first()
         saved = {a.question_id: a.selected_option for a in att.answers}
         # seconds left = duration - elapsed
         import datetime as _dt
