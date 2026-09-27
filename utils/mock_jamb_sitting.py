@@ -304,6 +304,29 @@ def subject_items(exam, subject_id, attempt, subject=None):
     return items, served
 
 
+def _coded_item_topic_map(subject_id):
+    """``{syllabus_item_code: topic_code}`` from a subject's imported coded
+    syllabus (see MockJAMBSyllabus/MockJAMBSyllabusNode), or ``{}`` if the
+    subject has no coded syllabus imported yet. One query per subject per
+    fresh draw — draw_paper() uses this to spread the draw evenly across
+    coded topics instead of a flat random sample, backfilling from
+    not-yet-coded questions so an incompletely tagged subject still fills
+    its blueprint (never a smaller paper than before coding started)."""
+    from models import MockJAMBSyllabus, MockJAMBSyllabusNode
+    syll = MockJAMBSyllabus.query.filter_by(subject_id=subject_id).first()
+    if not syll:
+        return {}
+    nodes = MockJAMBSyllabusNode.query.filter_by(syllabus_id=syll.id).all()
+    by_id = {n.id: n for n in nodes}
+    out = {}
+    for n in nodes:
+        if n.kind == 'item':
+            parent = by_id.get(n.parent_id)
+            if parent:
+                out[n.code] = parent.code
+    return out
+
+
 def _draw_subject_items(exam, subject_id, attempt, subject=None):
     """Draw a fresh JAMB-shaped, per-candidate random paper from the subject's pool:
     for a subject with a JAMB blueprint whose questions are section-tagged, it
@@ -329,6 +352,7 @@ def _draw_subject_items(exam, subject_id, attempt, subject=None):
         subject = db.session.get(Subject, subject_id)
     subj_name = subject.name if subject else ''
     has_sections = any((q.section or '').strip() for q in qrows)
+    item_topic_map = _coded_item_topic_map(subject_id)
 
     # Structured JAMB draw when the subject has a blueprint AND tagged questions.
     if norm_subject(subj_name) in JAMB_BLUEPRINT and has_sections:
@@ -362,7 +386,7 @@ def _draw_subject_items(exam, subject_id, attempt, subject=None):
             questions_by_section['novel'] = [
                 q for q in questions_by_section['novel'] if _novel_match(q)]
         items, served = draw_paper(bp, passages_by_section, questions_by_section, rng,
-                                   arrange=_is_english(subj_name))
+                                   arrange=_is_english(subj_name), item_topic_map=item_topic_map)
         if served:
             return items, served
         # blueprint drew nothing (mis-tagged) → fall through to legacy
@@ -373,16 +397,14 @@ def _draw_subject_items(exam, subject_id, attempt, subject=None):
     # or the DEFAULT_BLUEPRINT (40) for every other JAMB subject that has no
     # bespoke blueprint (Commerce, Government, Economics, ...). This guarantees an
     # untagged pool never dumps the ENTIRE bank on the student.
-    from utils.jamb_blueprint import blueprint_for
+    from utils.jamb_blueprint import blueprint_for, _draw_balanced
     passage_groups = [{'passage': p, 'questions': by_passage[p.id]}
                       for p in passages if by_passage.get(p.id)]
     cap = exam.questions_per_subject or blueprint_for(subj_name)['total'] or 0
     if cap:
         passage_q = sum(len(g['questions']) for g in passage_groups)
         rem = max(0, cap - passage_q)
-        pool = list(standalone)
-        rng.shuffle(pool)
-        standalone = pool[:rem]
+        standalone = _draw_balanced(standalone, rem, rng, item_topic_map)
 
     items = [{'kind': 'passage', **g} for g in passage_groups] + \
             [{'kind': 'question', 'q': q} for q in standalone]

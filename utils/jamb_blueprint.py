@@ -255,7 +255,45 @@ def section_label(subject_name, section):
     return (section or 'General').replace('_', ' ').title()
 
 
-def draw_paper(blueprint, passages_by_section, questions_by_section, rng, arrange=False):
+def _draw_balanced(pool, want, rng, item_topic_map):
+    """Sample ``want`` questions from ``pool``, spread evenly across the coded
+    syllabus topics present in it (round-robin), then backfill any remainder
+    from the questions ``item_topic_map`` doesn't cover. With no coded tagging
+    on the pool this reduces to a plain shuffle-and-take, identical to the
+    pre-coded-syllabus behaviour."""
+    if not item_topic_map:
+        pool = list(pool)
+        rng.shuffle(pool)
+        return pool[:want]
+
+    by_topic, uncoded = {}, []
+    for q in pool:
+        topic = item_topic_map.get(q.syllabus_item_code)
+        (by_topic.setdefault(topic, []) if topic else uncoded).append(q)
+
+    chosen = []
+    if by_topic:
+        topics = list(by_topic.keys())
+        rng.shuffle(topics)
+        for lst in by_topic.values():
+            rng.shuffle(lst)
+        i, empty_streak = 0, 0
+        while len(chosen) < want and empty_streak < len(topics):
+            t = topics[i % len(topics)]
+            i += 1
+            if by_topic[t]:
+                chosen.append(by_topic[t].pop())
+                empty_streak = 0
+            else:
+                empty_streak += 1
+    if len(chosen) < want:
+        rng.shuffle(uncoded)
+        chosen.extend(uncoded[:want - len(chosen)])
+    return chosen
+
+
+def draw_paper(blueprint, passages_by_section, questions_by_section, rng, arrange=False,
+               item_topic_map=None):
     """Draw a JAMB-shaped paper for one subject.
 
     ``passages_by_section``: ``{section: [{'passage': p, 'questions': [q,...]}]}``
@@ -265,6 +303,13 @@ def draw_paper(blueprint, passages_by_section, questions_by_section, rng, arrang
     Cloze → … → Orals) instead of shuffling sections together — JAMB presents Use
     of English this way. Per-candidate variety still comes from which questions are
     sampled and the per-question option shuffle, so papers stay unique.
+    ``item_topic_map``: optional ``{syllabus_item_code: topic_key}`` from the
+    subject's imported coded syllabus. When given, stand-alone sections spread
+    their draw evenly across the coded topics present (instead of a flat random
+    sample), backfilling from not-yet-coded questions to still reach the
+    section's target — so retagging a subject's bank incrementally improves
+    balance without ever shrinking an under-tagged paper. Passage sections are
+    unaffected (a passage's questions are always kept together).
 
     Returns ``(items, served_ids)`` where items are ``{'kind':'passage', 'passage', 'questions'}``
     or ``{'kind':'question', 'q'}`` (passages kept whole).
@@ -295,9 +340,8 @@ def draw_paper(blueprint, passages_by_section, questions_by_section, rng, arrang
                 items.append({'kind': 'passage', 'passage': g['passage'], 'questions': qs})
                 taken += len(qs)
         else:
-            pool = list(questions_by_section.get(sec['section'], []))
-            rng.shuffle(pool)
-            for q in pool[:want]:
+            pool = questions_by_section.get(sec['section'], [])
+            for q in _draw_balanced(pool, want, rng, item_topic_map):
                 items.append({'kind': 'question', 'q': q})
     if not arrange:
         rng.shuffle(items)
