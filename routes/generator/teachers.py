@@ -1,4 +1,6 @@
 """generator_bp — teachers routes (split from the former routes/generator.py)."""
+import math
+
 from routes.generator import *  # noqa: F401,F403
 
 
@@ -8,6 +10,46 @@ def teachers_list():
     level = get_current_level()
     teachers = GenTeacher.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).order_by(GenTeacher.name).all()
     return render_template('generator/teachers.html', teachers=teachers, level=level)
+
+
+@generator_bp.route('/teachers/bulk-increase-periods', methods=['POST'])
+@login_required
+def bulk_increase_teacher_periods():
+    """Raise max periods/week by a flat amount for the selected teachers, and
+    recompute each one's max periods/day to match — spread the new weekly max
+    evenly across that teacher's own working days (available_days_list), capped
+    at the school's actual periods-per-day structure (a day only has so many
+    periods to give)."""
+    level = get_current_level()
+    increment = request.form.get('increment', type=int)
+    teacher_ids = [int(x) for x in request.form.getlist('teacher_ids[]') if x]
+
+    if not increment or increment <= 0:
+        flash('Enter a positive number of periods to add.', 'error')
+        return redirect(url_for('generator.teachers_list'))
+    if not teacher_ids:
+        flash('Select at least one teacher.', 'error')
+        return redirect(url_for('generator.teachers_list'))
+
+    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(
+        is_active=True, school_level=level, branch_id=gen_bid()).all()}
+    day_cap = int(rules.get('periods_per_day', 8))
+
+    teachers = GenTeacher.query.filter(
+        GenTeacher.id.in_(teacher_ids), GenTeacher.is_active == True,  # noqa: E712
+        GenTeacher.branch_id == gen_bid(), GenTeacher.school_level == level).all()
+    try:
+        for teacher in teachers:
+            teacher.max_periods_per_week += increment
+            days = len(teacher.available_days_list) or 5
+            teacher.max_periods_per_day = min(day_cap, math.ceil(teacher.max_periods_per_week / days))
+        db.session.commit()
+        flash(f'Raised max periods/week by {increment} for {len(teachers)} teacher(s) '
+              f'and recalculated their max periods/day.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error: {str(e)}', 'error')
+    return redirect(url_for('generator.teachers_list'))
 
 
 @generator_bp.route('/teachers/add', methods=['GET', 'POST'])

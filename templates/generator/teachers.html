@@ -1,18 +1,60 @@
 {% extends "base.html" %}
 {% block title %}Teachers - Generator{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <span>Teachers</span>{% endblock %}
+{% block extra_css %}
+<style>
+.bulk-bar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: .75rem;
+  flex-wrap: wrap; }
+.bulk-bar .bulk-count { font-weight: 600; color: var(--text-secondary); }
+.bulk-bar .bulk-increment { width: 90px; }
+.teacher-select { position: absolute; top: .75rem; right: .75rem; }
+.data-card { position: relative; }
+</style>
+{% endblock %}
 {% block content %}
 <div class="page-header">
     <h1>Teachers</h1>
-    <a href="{{ url_for('generator.add_teacher') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add Teacher</a>
+    <div class="page-header-actions">
+        <a href="{{ url_for('generator.level_dashboard', level=level) }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back to {{ level|upper }} Dashboard
+        </a>
+        <a href="{{ url_for('generator.add_teacher') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add Teacher</a>
+    </div>
 </div>
 
 {% if teachers %}
+<!-- Not wrapped around the teacher cards below: each card's own per-teacher
+     links can't sit inside another form. Every checkbox instead associates
+     with this form via its form="bulkIncreaseForm" attribute, which works
+     regardless of where the checkbox sits in the document. -->
+<form id="bulkIncreaseForm" method="POST" action="{{ url_for('generator.bulk_increase_teacher_periods') }}">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+    <div class="card mb-3">
+        <div class="card-body bulk-bar">
+            <span class="bulk-count" id="bulkCount">0 selected</span>
+            <button type="button" class="btn btn-secondary btn-sm" data-call="selectAllTeachers" data-args="true">Select All</button>
+            <button type="button" class="btn btn-secondary btn-sm" data-call="selectAllTeachers" data-args="false">Clear Selection</button>
+            <label class="form-label" style="margin: 0;" for="bulkIncrement">Add to max/week</label>
+            <input type="number" id="bulkIncrement" name="increment" class="form-control bulk-increment" min="1" step="1" placeholder="e.g. 2">
+            <button type="submit" class="btn btn-primary btn-sm" id="bulkIncreaseBtn" disabled>
+                <i class="fas fa-arrow-up"></i> Increase Selected
+            </button>
+            <span class="form-hint" style="width: 100%; margin: 0;">
+                Raises max periods/week by this amount for every selected teacher, and
+                recalculates their max periods/day to match (spread evenly across each
+                teacher's own working days, capped at the school's periods-per-day).
+            </span>
+        </div>
+    </div>
+</form>
+
 <div class="card">
     <div class="card-body" style="padding: 0;">
         <div class="data-cards" style="padding: 1rem;">
             {% for teacher in teachers %}
             <div class="data-card">
+                <input type="checkbox" class="teacher-select teacher-checkbox" name="teacher_ids[]"
+                       value="{{ teacher.id }}" form="bulkIncreaseForm" title="Select {{ teacher.name }}">
                 <div class="data-card-header">
                     <div class="data-card-title">{{ teacher.name }}</div>
                     {% if teacher.staff_id %}<span class="badge badge-secondary">{{ teacher.staff_id }}</span>{% endif %}
@@ -51,4 +93,33 @@
     </div>
 </div>
 {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script nonce="{{ csp_nonce }}">
+function teacherCheckboxes() {
+    return Array.from(document.querySelectorAll('.teacher-checkbox'));
+}
+
+function updateBulkBar() {
+    const checked = teacherCheckboxes().filter(cb => cb.checked);
+    const increment = parseInt(document.getElementById('bulkIncrement').value, 10);
+    document.getElementById('bulkCount').textContent = checked.length + ' selected';
+    document.getElementById('bulkIncreaseBtn').disabled = checked.length === 0 || !(increment > 0);
+}
+
+function selectAllTeachers(selectAll) {
+    teacherCheckboxes().forEach(function (cb) { cb.checked = selectAll; });
+    updateBulkBar();
+}
+
+document.addEventListener('change', function (e) {
+    if (e.target.matches('.teacher-checkbox') || e.target.id === 'bulkIncrement') {
+        updateBulkBar();
+    }
+});
+document.addEventListener('input', function (e) {
+    if (e.target.id === 'bulkIncrement') updateBulkBar();
+});
+</script>
 {% endblock %}

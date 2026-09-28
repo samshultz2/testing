@@ -4,6 +4,11 @@
 {% block content %}
 <div class="page-header">
     <h1>{{ teacher.name }}</h1>
+    <div class="page-header-actions">
+        <a href="{{ url_for('generator.teachers_list') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back to Teachers
+        </a>
+    </div>
 </div>
 
 <!-- Teacher Details -->
