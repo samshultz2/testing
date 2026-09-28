@@ -178,7 +178,7 @@ state.
 | 100 concurrent CBT | ~7 | **PASS** | Comfortable. |
 | 500 concurrent CBT | ~35 | **PASS** | Comfortable. |
 | 1,000 concurrent CBT | ~70 | **PASS** | Fine with `WEB_CONCURRENCY=4` + tuned PG. |
-| **1,800 JAMB Mock** (6 branches, one school DB) | ~120 | **PASS (target)** | One tenant DB; cached paper draw + subject-pool index. Bursty start/submit within capacity. **Enable Redis + PgBouncer; validate on staging.** |
+| **1,800 JAMB Mock** (6 branches, one school DB) | ~120 | **NOT MET on a 4-vCPU box** (measured) | One tenant DB; cached paper draw + subject-pool index; Redis + async grading help but don't add CPU capacity. **Staging load test (4 vCPU/8GB, `loadtest/locustfile_mock_jamb.py`, realistic ~10min staggered login) measured: 250 concurrent comfortable (median 0.6s, p95 7.2s), 500 workable (median 1.4s, p95 20s), 800 sluggish but not failing (median 4.1-4.4s, p95 42-43s, p99 58-65s) — confirmed CPU-bound via load average (9-12 on 4 cores) while Postgres connections/query times stayed nowhere near their limits (≤30 of 200 connections, <2s query times). 1,800 was not tested directly but extrapolates well past usable for a live exam on this box size. See `docs/MOCK_JAMB_SCALE.md` for the full readout.** |
 | 3,000 concurrent CBT | ~200 | **MARGINAL** | Feasible with Redis, async grading, PgBouncer, `WEB_CONCURRENCY=4`; mass-reconnect bursts are the risk. Validate; be ready to add a second app VPS. |
 | 5,000 concurrent CBT | ~335 | **LIKELY EXCEEDS one box for bursts** | Steady state ~at the edge; simultaneous start/reconnect of 5,000 exceeds 16 slots. Needs **horizontal web scale (2–3 app VPSes) + PgBouncer + Redis**, or staggered start windows. The app is scale-ready for this; the single 4-vCPU box is not. |
 
@@ -212,9 +212,16 @@ code change.
 
 ## Deployment verdict
 
-**DEPLOY** to the single VPS for normal operations and up to **~1,800 concurrent
-JAMB-Mock candidates**, conditional on the P0-OPEN ops items (production `.env`
-secrets, Postgres `max_connections`/PgBouncer, Redis hardening) and a **staging
-load-test run** confirming the 1,800 tier. For **3,000–5,000 concurrent CBT**, the
+**DEPLOY** to the single VPS for normal operations and comfortably up to
+**~500 concurrent JAMB-Mock candidates** (measured: median 0.6-1.4s, p95 7-20s),
+conditional on the P0-OPEN ops items (production `.env` secrets, Postgres
+`max_connections`/PgBouncer, Redis hardening). The originally-targeted **1,800**
+tier is **not met on a single 4-vCPU/8-GB box** — a staging load test (see
+`docs/MOCK_JAMB_SCALE.md`) found the bottleneck is raw CPU, not the database or
+app config: at 800 concurrent, response times are already 3-6× worse than at
+500 (median 4.1-4.4s, p99 58-65s) despite Postgres, Redis and async grading all
+healthy and nowhere near their own limits. Scaling this tier needs **more vCPUs**
+(roughly double, i.e. 8, is a reasonable next step to test) or **more app VPSes**,
+not more tuning of the current box. For **3,000–5,000 concurrent CBT**, the
 application is ready but a single 4-vCPU/8-GB box is not — plan a second app VPS
 (and PgBouncer/Redis already in place) before scheduling exams at that size.

@@ -1,9 +1,12 @@
 # Running Mock JAMB at scale
 
-How the online Mock JAMB sitting is built to carry a whole cohort — 800-1,500
-candidates sitting one mock at once — mirroring the same proven pattern as
-CBT (see `docs/CBT_SCALE.md`), and how to turn on its optional async-grading
-tier.
+How the online Mock JAMB sitting is built to carry a whole cohort sitting one
+mock at once, mirroring the same proven pattern as CBT (see
+`docs/CBT_SCALE.md`), and how to turn on its optional async-grading tier.
+**800-1,500 was the original design target; a real staging load test found a
+single 4 vCPU/8GB box is comfortable to ~500 and sluggish by 800 — see
+"Hardware sizing" below for the measured numbers and what actually moves the
+ceiling (more vCPUs), before assuming this box size covers the higher end.**
 
 ## The properties
 
@@ -25,10 +28,13 @@ tier.
 ```ini
 # .env (staging/production)
 DATABASE_URL=postgresql+psycopg://…      # always, for real concurrency
-WEB_CONCURRENCY=4                         # web workers = ~2–4× vCPU
+WEB_CONCURRENCY=4                         # web workers = ~1× vCPU (gthread; NOT 2-4x, see gunicorn.conf.py)
 RUN_INPROCESS_JOBS=0                       # split jobs off the web tier
 REDIS_URL=redis://127.0.0.1:6379/0         # required for the queue backend
 MOCKJAMB_ASYNC_GRADING=1                   # queue grading at the deadline
+GUNICORN_MAX_REQUESTS=20000                # raise well above the 1000 default for the sitting's duration —
+                                            # otherwise workers recycle every 60-90s under sustained load,
+                                            # each recycle briefly cutting capacity (measured, see below)
 ```
 
 Same topology as CBT's tier (`docs/CBT_SCALE.md`) — run the web tier and the
@@ -36,18 +42,56 @@ dedicated jobs worker side by side (`docs/DEPLOYMENT.md` §4 / `docs/DEPLOY_CONT
 Phase 6-7). `CBT_ASYNC_GRADING` and `MOCKJAMB_ASYNC_GRADING` are independent
 flags (one per feature) sharing the same Redis-backed queue (`utils/jobqueue.py`).
 
-## Hardware sizing (4 vCPU / 8GB RAM / 100GB storage)
+## Hardware sizing (4 vCPU / 8GB RAM / 100GB storage) — measured, not estimated
 
-Already validated for a *larger* cohort (~1,800) on this exact box size —
-see `docs/DEPLOY_CONTABO.md` and `docs/PRODUCTION_AUDIT.md`. No changes needed
-for an 800-1,500-candidate Mock JAMB beyond what's already documented there:
+An earlier version of this doc claimed the ~1,800 target was "already
+validated" on this box size. That was wrong — it was an *analytical estimate*
+in `docs/PRODUCTION_AUDIT.md` that explicitly called for a staging load-test
+run to confirm it. That run has now actually happened
+(`loadtest/locustfile_mock_jamb.py`, realistic ~10-minute staggered login,
+`MOCKJAMB_ASYNC_GRADING=1`, the reduced-cost portal-password hash, and
+`GUNICORN_MAX_REQUESTS` disabled to isolate that variable), and the real
+numbers are meaningfully worse than the estimate:
 
-- **Gunicorn**: `WEB_CONCURRENCY=4` (gthread) × `GUNICORN_THREADS=4`.
+| Concurrent students | Aggregate median | p95 | p99 | Failure rate |
+|---|---|---|---|---|
+| 250 | 0.6s | 7.2s | 12s | 2.3% |
+| 500 | 1.4s | 20s | 30s | 3.3-3.6% |
+| 800 | 4.1-4.4s | 42-43s | 58-65s | 3.3-3.6% |
+
+**250 is comfortable, 500 is workable, 800 is sluggish but not broken — the
+degradation is smooth and monotonic, not a sudden cliff.** 1,800 was not
+tested directly but extrapolates well past what's usable for a live exam on
+this box size.
+
+**Root cause, confirmed by live monitoring during an 800-user run**: raw CPU,
+not the database. `pg_stat_activity` connection count never exceeded 30 (limit
+200), active queries stayed under 13 concurrent, and no query ran longer than
+1-2 seconds — Postgres had huge headroom throughout. Meanwhile host load
+average hit 9-12 on this box's 4 physical cores — 2-3× oversubscribed. Every
+layer (gunicorn workers doing password checks, Postgres serving those fast
+queries, the jobs worker grading) was fighting over the same 4 cores. Redis,
+async grading, and connection-pool tuning don't fix this — they redistribute
+load, they don't create CPU capacity. **Vertical scaling (more vCPUs) or
+horizontal scaling (more app VPSes / staggered real-world seating) are the
+actual levers past ~500-800 concurrent on this box size.**
+
+What's already in place and worth keeping regardless of box size:
+
+- **Gunicorn**: `WEB_CONCURRENCY=4` (gthread, ≈1×cores — NOT 2×cores; see
+  `gunicorn.conf.py`) × `GUNICORN_THREADS=4`. For a sustained mass-sitting
+  window, also raise `GUNICORN_MAX_REQUESTS` well above its default of 1000
+  (e.g. `GUNICORN_MAX_REQUESTS=20000`) — at the default, workers recycle every
+  60-90s under this load, and each recycle briefly cuts capacity right when
+  you can least afford it. Measured to reduce the failure rate in the same
+  load test.
 - **Postgres**: `max_connections=200`, `shared_buffers=2GB`,
   `effective_cache_size=5GB`, `work_mem=16MB`, `maintenance_work_mem=256MB`.
-- **PgBouncer**: optional at this scale (a single tenant DB) — skip it, point
-  straight at `:5432`, unless you're also running several other large tenants
-  concurrently.
+  Confirmed not the bottleneck up to 800 concurrent — connection count and
+  query latency both had large headroom.
+- **PgBouncer**: optional at this scale (a single tenant DB) — the load test
+  ran without it and connections were never the constraint. Add it only if a
+  future test with more tenants/DBs shows connection pressure.
 - **Redis**: `maxmemory 512mb`, `allkeys-lru` — ample headroom.
 - **nginx**: `worker_processes auto;` and a `worker_connections` of at least
   4096 in the distro's `nginx.conf` `events{}` block (neither repo nginx

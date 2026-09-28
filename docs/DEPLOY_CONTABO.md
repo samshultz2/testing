@@ -10,8 +10,13 @@ and scale tier the audit called for.
 > I'll adjust. Times assume a fresh Ubuntu 22.04/24.04.
 
 Capacity recap (see `docs/PRODUCTION_AUDIT.md`): this box is **PASS** for normal
-use, 100–1,000 CBT, and the **~1,800 JAMB-Mock** target; **marginal** at 3,000 and
-**needs a second app VPS** at 5,000. Nothing below blocks scaling later.
+use and 100–1,000 CBT. For JAMB-Mock, a real staging load test (not just
+analytical estimate) found this box comfortable up to **~500 concurrent**
+candidates and workable-but-sluggish at 800; the originally-targeted **1,800**
+JAMB-Mock tier is **not met** on 4 vCPU — that's a CPU ceiling, not something
+PgBouncer/Redis/tuning fixes (see `docs/MOCK_JAMB_SCALE.md`). CBT is **marginal**
+at 3,000 and **needs a second app VPS** at 5,000. Nothing below blocks scaling
+later.
 
 ---
 

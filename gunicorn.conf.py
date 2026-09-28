@@ -12,10 +12,24 @@ also set ``RUN_INPROCESS_JOBS=0`` on the web workers and run the loop in a
 dedicated process instead.
 
 Scaling for a mass exam sitting (e.g. 1000 students starting at once):
-* Raise ``WEB_CONCURRENCY`` to ~ (2 × CPU cores) so the web tier isn't the
-  bottleneck. Each worker keeps its own SQLAlchemy pool, so size Postgres
+* Set ``WEB_CONCURRENCY`` to ~ (1 × CPU cores), not 2×. This is ``gthread``, not
+  ``sync`` — each worker already runs ``GUNICORN_THREADS`` concurrent threads, so
+  I/O-wait concurrency (DB round-trips) comes from threads, not extra processes.
+  Load-tested on a 4 vCPU box (see ``docs/MOCK_JAMB_SCALE.md``): running more
+  worker PROCESSES than physical cores doesn't add real parallelism for the
+  CPU-bound work in a request (password hashing, Python bytecode under the GIL)
+  — it only adds scheduler contention. The actual ceiling under a mass sitting
+  was the box's 4 physical cores, confirmed via load average (9-12 on 4 cores)
+  while Postgres connections/query times stayed nowhere near their own limits.
+  Each worker keeps its own SQLAlchemy pool, so size Postgres
   ``max_connections`` >= workers × (DB_POOL_SIZE + DB_MAX_OVERFLOW), or front the
-  DB with PgBouncer.
+  DB with PgBouncer — though in the same load test, connection count was never
+  the bottleneck even without PgBouncer.
+* Raise ``GUNICORN_MAX_REQUESTS`` well above the default (e.g. 20000, or unset
+  it) for the duration of a mass sitting. At the default (1000), workers recycle
+  every 60-90s under sustained high traffic, and each recycle briefly cuts
+  available capacity — measurably worse right when you can least afford it.
+  Confirmed to reduce the failure rate in the same load test.
 * The default stays 1 worker so a tiny box (Termux/proot) isn't surprised by the
   memory of extra workers — bump it explicitly in the environment.
 
