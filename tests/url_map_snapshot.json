@@ -2202,6 +2202,13 @@
 ]
 ],
 [
+"generator.bulk_delete_teachers",
+"/generator/teachers/bulk-delete",
+[
+"POST"
+]
+],
+[
 "generator.bulk_increase_teacher_periods",
 "/generator/teachers/bulk-increase-periods",
 [

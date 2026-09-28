@@ -52,6 +52,31 @@ def bulk_increase_teacher_periods():
     return redirect(url_for('generator.teachers_list'))
 
 
+@generator_bp.route('/teachers/bulk-delete', methods=['POST'])
+@login_required
+def bulk_delete_teachers():
+    """Soft-delete every selected teacher at once — same is_active=False as the
+    single-teacher delete, same branch/level scoping as the bulk period raise."""
+    level = get_current_level()
+    teacher_ids = [int(x) for x in request.form.getlist('teacher_ids[]') if x]
+    if not teacher_ids:
+        flash('Select at least one teacher.', 'error')
+        return redirect(url_for('generator.teachers_list'))
+
+    teachers = GenTeacher.query.filter(
+        GenTeacher.id.in_(teacher_ids), GenTeacher.is_active == True,  # noqa: E712
+        GenTeacher.branch_id == gen_bid(), GenTeacher.school_level == level).all()
+    try:
+        for teacher in teachers:
+            teacher.is_active = False
+        db.session.commit()
+        flash(f'Removed {len(teachers)} teacher(s).', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error: {str(e)}', 'error')
+    return redirect(url_for('generator.teachers_list'))
+
+
 @generator_bp.route('/teachers/add', methods=['GET', 'POST'])
 @login_required
 def add_teacher():

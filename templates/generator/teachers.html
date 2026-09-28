@@ -24,37 +24,48 @@
 
 {% if teachers %}
 <!-- Not wrapped around the teacher cards below: each card's own per-teacher
-     links can't sit inside another form. Every checkbox instead associates
-     with this form via its form="bulkIncreaseForm" attribute, which works
-     regardless of where the checkbox sits in the document. -->
+     links can't sit inside another form, and the same selection feeds TWO
+     different actions (increase / delete) so no single checkbox can carry a
+     form="" attribute pointing at just one of them. Instead, each button
+     submits its own empty carrier form, and a script (below) fills in
+     teacher_ids[] from whatever's currently checked right before it submits. -->
 <form id="bulkIncreaseForm" method="POST" action="{{ url_for('generator.bulk_increase_teacher_periods') }}">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-    <div class="card mb-3">
-        <div class="card-body bulk-bar">
-            <span class="bulk-count" id="bulkCount">0 selected</span>
-            <button type="button" class="btn btn-secondary btn-sm" data-call="selectAllTeachers" data-args="true">Select All</button>
-            <button type="button" class="btn btn-secondary btn-sm" data-call="selectAllTeachers" data-args="false">Clear Selection</button>
-            <label class="form-label" style="margin: 0;" for="bulkIncrement">Add to max/week</label>
-            <input type="number" id="bulkIncrement" name="increment" class="form-control bulk-increment" min="1" step="1" placeholder="e.g. 2">
-            <button type="submit" class="btn btn-primary btn-sm" id="bulkIncreaseBtn" disabled>
-                <i class="fas fa-arrow-up"></i> Increase Selected
-            </button>
-            <span class="form-hint" style="width: 100%; margin: 0;">
-                Raises max periods/week by this amount for every selected teacher, and
-                recalculates their max periods/day to match (spread evenly across each
-                teacher's own working days, capped at the school's periods-per-day).
-            </span>
-        </div>
-    </div>
 </form>
+<form id="bulkDeleteForm" method="POST" action="{{ url_for('generator.bulk_delete_teachers') }}"
+      data-confirm="Remove the selected teacher(s)? This cannot be undone.">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+</form>
+
+<div class="card mb-3">
+    <div class="card-body bulk-bar">
+        <span class="bulk-count" id="bulkCount">0 selected</span>
+        <button type="button" class="btn btn-secondary btn-sm" data-call="selectAllTeachers" data-args="true">Select All</button>
+        <button type="button" class="btn btn-secondary btn-sm" data-call="selectAllTeachers" data-args="false">Clear Selection</button>
+        <label class="form-label" style="margin: 0;" for="bulkIncrement">Add to max/week</label>
+        <input type="number" id="bulkIncrement" name="increment" class="form-control bulk-increment" min="1" step="1" placeholder="e.g. 2">
+        <button type="submit" form="bulkIncreaseForm" class="btn btn-primary btn-sm" id="bulkIncreaseBtn" disabled>
+            <i class="fas fa-arrow-up"></i> Increase Selected
+        </button>
+        <button type="submit" form="bulkDeleteForm" class="btn btn-danger btn-sm" id="bulkDeleteBtn" disabled>
+            <i class="fas fa-trash"></i> Delete Selected
+        </button>
+        <span class="form-hint" style="width: 100%; margin: 0;">
+            "Increase Selected" raises max periods/week by the amount above for every
+            selected teacher, and recalculates their max periods/day to match (spread
+            evenly across each teacher's own working days, capped at the school's
+            periods-per-day). "Delete Selected" removes the selected teachers.
+        </span>
+    </div>
+</div>
 
 <div class="card">
     <div class="card-body" style="padding: 0;">
         <div class="data-cards" style="padding: 1rem;">
             {% for teacher in teachers %}
             <div class="data-card">
-                <input type="checkbox" class="teacher-select teacher-checkbox" name="teacher_ids[]"
-                       value="{{ teacher.id }}" form="bulkIncreaseForm" title="Select {{ teacher.name }}">
+                <input type="checkbox" class="teacher-select teacher-checkbox"
+                       value="{{ teacher.id }}" title="Select {{ teacher.name }}">
                 <div class="data-card-header">
                     <div class="data-card-title">{{ teacher.name }}</div>
                     {% if teacher.staff_id %}<span class="badge badge-secondary">{{ teacher.staff_id }}</span>{% endif %}
@@ -106,6 +117,7 @@ function updateBulkBar() {
     const increment = parseInt(document.getElementById('bulkIncrement').value, 10);
     document.getElementById('bulkCount').textContent = checked.length + ' selected';
     document.getElementById('bulkIncreaseBtn').disabled = checked.length === 0 || !(increment > 0);
+    document.getElementById('bulkDeleteBtn').disabled = checked.length === 0;
 }
 
 function selectAllTeachers(selectAll) {
@@ -120,6 +132,22 @@ document.addEventListener('change', function (e) {
 });
 document.addEventListener('input', function (e) {
     if (e.target.id === 'bulkIncrement') updateBulkBar();
+});
+
+// Both bulk forms are empty carriers (see the comment above them) -- fill in
+// teacher_ids[] from whatever's currently checked right before each submits.
+// Runs on the bubble phase, so for #bulkDeleteForm (data-confirm) this only
+// fires on the real, confirmed submission -- the confirm handler's capture-
+// phase listener stops the first, unconfirmed attempt before it gets here.
+document.addEventListener('submit', function (e) {
+    var f = e.target;
+    if (f.id !== 'bulkIncreaseForm' && f.id !== 'bulkDeleteForm') return;
+    f.querySelectorAll('input[name="teacher_ids[]"]').forEach(function (i) { i.remove(); });
+    teacherCheckboxes().filter(function (cb) { return cb.checked; }).forEach(function (cb) {
+        var i = document.createElement('input');
+        i.type = 'hidden'; i.name = 'teacher_ids[]'; i.value = cb.value;
+        f.appendChild(i);
+    });
 });
 </script>
 {% endblock %}

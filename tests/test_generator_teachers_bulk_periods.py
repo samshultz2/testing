@@ -193,3 +193,82 @@ def test_bulk_increase_skips_ids_from_another_branch(app):
         assert db.session.get(GenTeacher, other_tid).max_periods_per_week == 35
         # ...but the default-branch teacher they have no access to is untouched.
         assert db.session.get(GenTeacher, own_tid).max_periods_per_week == 30
+
+
+def test_teachers_page_has_delete_controls(app):
+    _seed_teacher(app, 'DelUI')
+    c = _admin(app)
+    r = c.get('/generator/teachers')
+    body = r.get_data(as_text=True)
+    assert 'bulk_delete_teachers' in body or 'bulkDeleteForm' in body
+    assert 'Delete Selected' in body
+
+
+def test_bulk_delete_removes_every_selected_teacher(app):
+    tid1 = _seed_teacher(app, 'Del1')
+    tid2 = _seed_teacher(app, 'Del2')
+    c = _admin(app)
+    r = c.post('/generator/teachers/bulk-delete', follow_redirects=True, data={
+        '_csrf_token': 'a' * 64, 'teacher_ids[]': [str(tid1), str(tid2)],
+    })
+    assert r.status_code == 200
+    assert '2 teacher(s)' in r.get_data(as_text=True)
+    with app.app_context():
+        assert db.session.get(GenTeacher, tid1).is_active is False
+        assert db.session.get(GenTeacher, tid2).is_active is False
+
+
+def test_bulk_delete_leaves_unselected_teachers_alone(app):
+    tid1 = _seed_teacher(app, 'Del3')
+    tid2 = _seed_teacher(app, 'Del4')
+    c = _admin(app)
+    c.post('/generator/teachers/bulk-delete', follow_redirects=True, data={
+        '_csrf_token': 'a' * 64, 'teacher_ids[]': [str(tid1)],
+    })
+    with app.app_context():
+        assert db.session.get(GenTeacher, tid1).is_active is False
+        assert db.session.get(GenTeacher, tid2).is_active is True
+
+
+def test_bulk_delete_with_no_selection_flashes_error_and_deletes_nothing(app):
+    tid = _seed_teacher(app, 'Del5')
+    c = _admin(app)
+    r = c.post('/generator/teachers/bulk-delete', follow_redirects=True, data={
+        '_csrf_token': 'a' * 64,
+    })
+    assert r.status_code == 200
+    assert 'Select at least one teacher' in r.get_data(as_text=True)
+    with app.app_context():
+        assert db.session.get(GenTeacher, tid).is_active is True
+
+
+def test_bulk_delete_skips_ids_from_another_branch(app):
+    """Same isolation guarantee as the bulk period raise: an id from a branch
+    the current user can't access is silently skipped, not deleted."""
+    from models import User
+
+    with app.app_context():
+        other = Branch(name='ZzTPDelOtherBranch', is_default=False)
+        db.session.add(other); db.session.flush()
+        u = User(username='zztpdel_branch_admin', full_name='Zz TP Del Branch Admin', role='admin',
+                 scope='branch', branch_id=other.id, rank=50, manage_scope='branch',
+                 is_active=True, must_change_password=False)
+        u.set_password('Str0ng!Passw0rd1')
+        other_teacher = GenTeacher(branch_id=other.id, name='Zz Other Del Teacher', school_level='sss',
+                                   max_periods_per_day=6, max_periods_per_week=30)
+        db.session.add_all([u, other_teacher]); db.session.commit()
+        other_tid = other_teacher.id
+
+    own_tid = _seed_teacher(app, 'Del6')
+    c = app.test_client()
+    c.post('/login', data={'username': 'zztpdel_branch_admin', 'password': 'Str0ng!Passw0rd1',
+                           '_csrf_token': login_token(c)})
+    from tests.conftest import auth_csrf
+    r = c.post('/generator/teachers/bulk-delete', follow_redirects=True, data={
+        '_csrf_token': auth_csrf(c), 'teacher_ids[]': [str(other_tid), str(own_tid)],
+    })
+    assert r.status_code == 200
+
+    with app.app_context():
+        assert db.session.get(GenTeacher, other_tid).is_active is False
+        assert db.session.get(GenTeacher, own_tid).is_active is True
