@@ -2202,6 +2202,13 @@
 ]
 ],
 [
+"generator.bulk_increase_teacher_periods",
+"/generator/teachers/bulk-increase-periods",
+[
+"POST"
+]
+],
+[
 "generator.clash_report",
 "/generator/reports/clashes/<batch_id>",
 [
