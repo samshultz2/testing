@@ -12,7 +12,8 @@
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='img/favicon.svg') }}">
     <link rel="apple-touch-icon" href="{{ url_for('static', filename='icons/apple-touch-icon.png') }}">
     {% include 'components/_ios_splash.html' %}
-    <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
+    <link id="faPreload" rel="preload" as="style" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
+    <noscript><link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}"></noscript>
     <style>
         :root{
             --brand:#0d6a4e; --brand-2:#11998e; --ink:#1f2937; --muted:#6b7280;
@@ -42,8 +43,13 @@
         .auth-brand::before{width:360px;height:360px;background:#12b886;top:-120px;right:-80px}
         .auth-brand::after{width:300px;height:300px;background:#0e8a64;bottom:-100px;left:-60px}
         .auth-brand .ab-inner{position:relative;z-index:1;max-width:440px}
-        .auth-brand .ab-logo{width:56px;height:56px;border-radius:15px;background:#fff;padding:6px;
-            object-fit:contain;box-shadow:0 10px 30px rgba(0,0,0,.3);margin-bottom:1.5rem}
+        /* background-image (not <img>) so a viewport where .auth-brand is display:none
+           (below 960px — the vast majority of real visits) never fetches this at all;
+           an <img src> would be fetched by the browser regardless of CSS display. */
+        .auth-brand .ab-logo{width:56px;height:56px;border-radius:15px;background-color:#fff;
+            padding:6px;background-origin:content-box;background-clip:content-box;
+            background-size:contain;background-position:center;background-repeat:no-repeat;
+            box-shadow:0 10px 30px rgba(0,0,0,.3);margin-bottom:1.5rem}
         .auth-brand h2{font-size:2rem;line-height:1.15;letter-spacing:-.02em;font-weight:800;margin-bottom:.75rem}
         .auth-brand .ab-sub{color:rgba(255,255,255,.82);font-size:1rem;line-height:1.5;margin-bottom:2rem}
         .auth-brand .ab-feat{display:flex;align-items:flex-start;gap:.85rem;margin-bottom:1.1rem;
@@ -171,7 +177,7 @@
     <div class="auth-shell">
     <aside class="auth-brand" aria-hidden="true">
         <div class="ab-inner">
-            <img class="ab-logo" src="{{ school_brand.logo_url or url_for('static', filename='img/logo-mark.svg') }}" alt="">
+            <div class="ab-logo" role="presentation" style="background-image:url('{{ school_brand.logo_url or url_for('static', filename='img/logo-mark.svg') }}')"></div>
             <h2>Run your whole school from one calm, powerful workspace.</h2>
             <p class="ab-sub">Admissions, attendance, results, finance, library and more — beautifully unified for {{ school_brand.name or 'your school' }}.</p>
             <div class="ab-feat"><i class="fas fa-layer-group"></i><span><b>Everything in one place.</b> Students, staff, results and fees, always in sync.</span></div>
@@ -186,7 +192,8 @@
             <div class="login-header">
                 <div class="login-logo">
                     <img src="{{ school_brand.logo_url or url_for('static', filename='img/logo-mark.svg') }}"
-                         alt="{{ school_brand.name or 'EduSyncra' }} logo" width="72" height="72">
+                         alt="{{ school_brand.name or 'EduSyncra' }} logo" width="72" height="72"
+                         fetchpriority="high" decoding="async">
                 </div>
                 <h1>{{ school_brand.name or 'EduSyncra' }}</h1>
                 <p>Sign in to your school management workspace</p>
@@ -263,6 +270,13 @@
 
     <script nonce="{{ csp_nonce }}">
     (function(){
+        // Flip the preloaded FontAwesome stylesheet from preload -> stylesheet so it
+        // applies without having blocked initial render. (Not an onload="" attribute:
+        // this page's CSP has no 'unsafe-inline' for script-src, and nonces don't cover
+        // inline event-handler attributes — only <script> tags, like this one.)
+        var fa = document.getElementById('faPreload');
+        if (fa) fa.rel = 'stylesheet';
+
         // Other-portals menu
         var b=document.getElementById('menuBtn'), p=document.getElementById('menuPanel');
         b.addEventListener('click', function(e){ e.stopPropagation();
