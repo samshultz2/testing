@@ -1,5 +1,7 @@
 """Timetable generator: /generator/teachers back button, and bulk-raising max
 periods/week for selected teachers with max periods/day auto-recalculated."""
+import re
+
 from config import Config
 from models import db, Branch, GenTeacher, GenTimetableRule
 from tests.conftest import login_token
@@ -48,6 +50,24 @@ def test_teachers_page_has_checkboxes_and_bulk_controls(app):
     assert 'teacher-checkbox' in body
     assert 'bulk_increase_teacher_periods' in body or 'bulkIncreaseForm' in body
     assert 'Increase Selected' in body
+
+
+def test_bulk_increment_input_is_wired_to_its_form(app):
+    """Regression guard: the "Add to max/week" number input lives OUTSIDE
+    <form id="bulkIncreaseForm"> in the markup (three bulk actions share one
+    set of unbound checkboxes -- see the template's own comment), so it only
+    actually submits with that form if it carries a matching form="" attribute.
+    Without it, the browser silently drops the typed value, the server sees
+    no `increment` at all, and every attempt fails with "Enter a positive
+    number..." regardless of what was typed -- exactly what shipped once."""
+    _seed_teacher(app, 'FormWire')
+    c = _admin(app)
+    body = c.get('/generator/teachers').get_data(as_text=True)
+    assert re.search(
+        r'<input[^>]*\bid="bulkIncrement"[^>]*\bform="bulkIncreaseForm"',
+        body) or re.search(
+        r'<input[^>]*\bform="bulkIncreaseForm"[^>]*\bid="bulkIncrement"',
+        body), 'bulkIncrement input must carry form="bulkIncreaseForm" or its value never reaches the server'
 
 
 def test_add_teacher_page_has_back_button(app):
