@@ -1,7 +1,17 @@
 """SQLAlchemy models — student (split from the former models/models.py).
 Base names (db, local_now, EncryptedString, …) come from the package __init__;
 sibling models are referenced lazily inside methods as in the original."""
+import re as _re
+
 from models.models import *  # noqa: F401,F403
+
+
+def _session_short_code(name):
+    """"2025/2026" -> "2526" (last 2 digits of each year). None if the session
+    name isn't in that YYYY/YYYY shape — an id just skips the code rather than
+    embedding something meaningless."""
+    m = _re.fullmatch(r'(\d{4})/(\d{4})', (name or '').strip())
+    return m.group(1)[2:] + m.group(2)[2:] if m else None
 
 
 class Student(db.Model):
@@ -194,10 +204,19 @@ class Student(db.Model):
         return bool(self.portal_password_hash) and check_password_hash(self.portal_password_hash, password)
 
     @staticmethod
-    def student_id_format():
+    def student_id_format(branch_id=None):
         """The school's configured (prefix, min-digits) for student ids — default
         ('STU', 5). Digits is the MINIMUM zero-pad width; the running number grows
-        past it when needed. Best-effort read (settings table may be absent)."""
+        past it when needed. Best-effort read (settings table may be absent).
+
+        Prefix resolution: ``branch_id``'s own Branch.code (a school's different
+        branches commonly want their own prefix — e.g. "NB" for New Benin, "JM"
+        for Jemila) overrides the school-wide SchoolSettings.student_id_prefix,
+        which falls back to 'STU'. If SchoolSettings.student_id_include_session
+        is on, the current active AcademicSession's short code (e.g. "2025/2026"
+        -> "2526") is appended after the prefix, so ids also carry the session
+        they were issued in and each session naturally restarts its own
+        numbering (a new prefix+code combination has no prior ids to run from)."""
         prefix, digits = 'STU', 5
         try:
             from models.models import SchoolSettings
@@ -207,16 +226,29 @@ class Student(db.Model):
             d = SchoolSettings.get('student_id_digits')
             if d:
                 digits = max(1, min(int(d), 12))
+            if branch_id:
+                from models.models_branch import Branch
+                b = db.session.get(Branch, branch_id)
+                if b and b.code and b.code.strip():
+                    prefix = b.code.strip().upper()
+            if SchoolSettings.get('student_id_include_session'):
+                from models.models.academics import AcademicSession
+                sess = AcademicSession.query.filter_by(is_active=True).first()
+                code = _session_short_code(sess.name) if sess else None
+                if code:
+                    prefix = f'{prefix}{code}'
         except Exception:
             pass
         return prefix, digits
 
     @staticmethod
-    def generate_student_id():
+    def generate_student_id(branch_id=None):
         """Generate the next unique id using the school's configured prefix +
-        minimum digit width (defaults STU#####). Robust to legacy/non-conforming
-        ids: the running number is taken from existing ids that match the prefix."""
-        prefix, digits = Student.student_id_format()
+        minimum digit width (defaults STU#####), scoped to ``branch_id``'s own
+        prefix and the active session's code when configured (see
+        ``student_id_format``). Robust to legacy/non-conforming ids: the running
+        number is taken from existing ids that match the resolved prefix."""
+        prefix, digits = Student.student_id_format(branch_id)
         plen = len(prefix)
         nums = []
         for (sid,) in db.session.query(Student.student_id).all():

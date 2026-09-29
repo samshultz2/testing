@@ -709,7 +709,7 @@ def import_student_rows(rows, db, Student, ParentContact,
                 # otherwise roll back the whole row — e.g. a mis-shifted column
                 # that drops a long address into the 30-char religion field.
                 student = Student(
-                    student_id=Student.generate_student_id(),
+                    student_id=Student.generate_student_id(branch_id),
                     surname=_cap(surname, 50),
                     first_name=_cap(first_name, 50),
                     middle_name=_cap(_cell_str(get(row, 'middle_name')), 50),

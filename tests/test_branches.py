@@ -66,6 +66,102 @@ def test_branches_page_and_add(app):
         assert Branch.query.filter_by(name='Ikeja').first() is not None
 
 
+def test_branch_code_normalizes_to_uppercase(app):
+    """A branch's Code also becomes its student-id prefix (Student.student_id_format),
+    so it's normalized the same way the school-wide prefix is."""
+    client = _admin(app)
+    token = _page_token(client)
+    client.post('/settings/branches/add',
+                data={'name': 'ZzBrLowercase', 'code': 'lc', '_csrf_token': token},
+                follow_redirects=True)
+    with app.app_context():
+        b = Branch.query.filter_by(name='ZzBrLowercase').first()
+        assert b is not None
+        assert b.code == 'LC'
+
+
+def test_branch_code_rejects_bad_format(app):
+    client = _admin(app)
+    token = _page_token(client)
+    r = client.post('/settings/branches/add',
+                    data={'name': 'ZzBrBadCode', 'code': 'not-a-code!', '_csrf_token': token},
+                    follow_redirects=True)
+    assert r.status_code == 200
+    assert b'letters/digits' in r.data
+    with app.app_context():
+        assert Branch.query.filter_by(name='ZzBrBadCode').first() is None
+
+
+def test_branch_code_must_be_unique(app):
+    client = _admin(app)
+    token = _page_token(client)
+    client.post('/settings/branches/add',
+                data={'name': 'ZzBrDupe1', 'code': 'DUP', '_csrf_token': token},
+                follow_redirects=True)
+    r = client.post('/settings/branches/add',
+                    data={'name': 'ZzBrDupe2', 'code': 'dup', '_csrf_token': token},
+                    follow_redirects=True)   # same code, different case
+    assert r.status_code == 200
+    assert b'already used' in r.data
+    with app.app_context():
+        assert Branch.query.filter_by(name='ZzBrDupe2').first() is None
+
+
+def test_branch_code_blank_is_allowed(app):
+    """A branch with no code falls back to the school-wide prefix -- code stays
+    optional, not required."""
+    client = _admin(app)
+    token = _page_token(client)
+    r = client.post('/settings/branches/add',
+                    data={'name': 'ZzBrNoCode', 'code': '', '_csrf_token': token},
+                    follow_redirects=True)
+    assert r.status_code == 200
+    with app.app_context():
+        b = Branch.query.filter_by(name='ZzBrNoCode').first()
+        assert b is not None
+        assert b.code is None
+
+
+def test_edit_branch_code_rejects_duplicate_of_another_branch(app):
+    client = _admin(app)
+    token = _page_token(client)
+    client.post('/settings/branches/add',
+                data={'name': 'ZzBrEditA', 'code': 'EDA', '_csrf_token': token},
+                follow_redirects=True)
+    client.post('/settings/branches/add',
+                data={'name': 'ZzBrEditB', 'code': 'EDB', '_csrf_token': token},
+                follow_redirects=True)
+    with app.app_context():
+        bid = Branch.query.filter_by(name='ZzBrEditB').first().id
+    r = client.post(f'/settings/branches/{bid}/edit',
+                    data={'name': 'ZzBrEditB', 'code': 'EDA', '_csrf_token': token},
+                    follow_redirects=True)
+    assert b'already used' in r.data
+    with app.app_context():
+        assert db.session.get(Branch, bid).code == 'EDB'   # unchanged
+
+
+def test_edit_branch_can_keep_its_own_code(app):
+    """Re-saving a branch with the SAME code it already has must not trip the
+    duplicate check against itself."""
+    client = _admin(app)
+    token = _page_token(client)
+    client.post('/settings/branches/add',
+                data={'name': 'ZzBrKeepCode', 'code': 'KEEP', '_csrf_token': token},
+                follow_redirects=True)
+    with app.app_context():
+        bid = Branch.query.filter_by(name='ZzBrKeepCode').first().id
+    r = client.post(f'/settings/branches/{bid}/edit',
+                    data={'name': 'ZzBrKeepCode', 'code': 'keep', 'phone': '08011112222',
+                          '_csrf_token': token},
+                    follow_redirects=True)
+    assert r.status_code == 200
+    with app.app_context():
+        b = db.session.get(Branch, bid)
+        assert b.code == 'KEEP'
+        assert b.phone == '08011112222'
+
+
 def test_create_branch_scoped_user(app):
     client = _admin(app)
     token = _page_token(client)

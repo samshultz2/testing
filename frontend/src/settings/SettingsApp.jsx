@@ -134,6 +134,13 @@ function School({ d, notify }) {
   );
 }
 
+// "2025/2026" -> "2526" (last 2 digits of each year), mirroring
+// models/models/student.py::_session_short_code. null if not that shape.
+function sessionShortCode(name) {
+  const m = /^(\d{4})\/(\d{4})$/.exec((name || '').trim());
+  return m ? m[1].slice(2) + m[2].slice(2) : null;
+}
+
 // ---- Academic settings ------------------------------------------------------
 function Academic({ d, notify }) {
   const nav = useNav();
@@ -146,6 +153,7 @@ function Academic({ d, notify }) {
     promotion_threshold: s.promotion_threshold || '50',
     student_id_prefix: s.student_id_prefix || 'STU',
     student_id_digits: s.student_id_digits || '5',
+    student_id_include_session: (s.student_id_include_session ?? 'false') !== 'false' ? '1' : '0',
     uses_class_arms: (s.uses_class_arms ?? 'true') !== 'false' ? '1' : '0',
   });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
@@ -186,13 +194,32 @@ function Academic({ d, notify }) {
               <input type="text" className="form-control" value={f.student_id_prefix}
                      onChange={(e) => setF({ ...f, student_id_prefix: e.target.value.toUpperCase() })}
                      maxLength={10} placeholder="e.g. PIO" />
-              <small className="text-muted">Letters/digits, up to 10 (e.g. PIO). Blank = STU.</small></div>
+              <small className="text-muted">Default prefix, letters/digits up to 10 (e.g. PIO). Blank = STU. A
+                branch with its own Code (Settings → Branches) uses that instead — e.g. a "New Benin" branch
+                coded NB and a "Jemila" branch coded JM get NB##### / JM##### ids automatically.</small></div>
             <div className="form-group"><label className="form-label">Minimum Digits</label>
               <input type="number" className="form-control" value={f.student_id_digits} onChange={set('student_id_digits')} min="3" max="12" />
               <small className="text-muted">Zero-padded width — e.g. 6 → {(f.student_id_prefix || 'STU')}{'000001'}. Numbers grow past this if needed.</small></div>
           </div>
+          <div className="form-group">
+            <label className="form-check" style={{ display: 'flex', alignItems: 'center', gap: '.5rem' }}>
+              <input type="checkbox" checked={f.student_id_include_session === '1'} onChange={toggle('student_id_include_session')} />
+              <span>Include the academic session in new student IDs</span>
+            </label>
+            <small className="text-muted d-block">
+              {d.active_session_name && sessionShortCode(d.active_session_name)
+                ? <>e.g. the {d.active_session_name} session inserts <strong>{sessionShortCode(d.active_session_name)}</strong> right
+                    after the prefix (a later session, e.g. 2026/2027, inserts 2627 instead) — each session then starts its own
+                    numbering from 1.</>
+                : <>e.g. a 2025/2026 session inserts <strong>2526</strong> right after the prefix (2026/2027 inserts 2627 instead)
+                    — each session then starts its own numbering from 1. No active session is set right now, so this can't take
+                    effect until one is.</>}
+            </small>
+          </div>
           <p className="text-muted" style={{ fontSize: '.82rem', marginTop: '-.4rem' }}>
-            Next new ID will look like <strong>{(f.student_id_prefix || 'STU')}{'1'.padStart(Math.max(3, Math.min(parseInt(f.student_id_digits, 10) || 5, 12)), '0')}</strong>. Existing IDs are never changed.
+            Next new ID (default prefix, no branch override) will look like <strong>{(f.student_id_prefix || 'STU')}
+            {(f.student_id_include_session === '1' && d.active_session_name && sessionShortCode(d.active_session_name)) || ''}
+            {'1'.padStart(Math.max(3, Math.min(parseInt(f.student_id_digits, 10) || 5, 12)), '0')}</strong>. Existing IDs are never changed.
           </p>
 
           <h4 style={{ margin: '1.5rem 0 1rem', color: 'var(--text-secondary)' }}>Class Structure</h4>
@@ -518,7 +545,7 @@ function BranchEdit({ b, save, refresh }) {
       <summary className="btn btn-sm btn-secondary" style={{ listStyle: 'none', cursor: 'pointer' }}>Edit</summary>
       <form onSubmit={submit} style={{ marginTop: '.5rem', display: 'grid', gap: '.4rem', minWidth: 220 }}>
         <input type="text" className="form-control" value={f.name} onChange={set('name')} />
-        <input type="text" className="form-control" value={f.code} onChange={set('code')} placeholder="Code" />
+        <input type="text" className="form-control" value={f.code} onChange={(e) => setF({ ...f, code: e.target.value.toUpperCase() })} placeholder="Code (student-ID prefix)" maxLength={10} />
         <input type="text" className="form-control" value={f.phone} onChange={set('phone')} placeholder="Phone" />
         <input type="text" className="form-control" value={f.address} onChange={set('address')} placeholder="Address" />
         <label className="text-sm"><input type="checkbox" checked={f.is_active} onChange={(e) => setF({ ...f, is_active: e.target.checked })} /> Active</label>
@@ -544,6 +571,9 @@ function Branches({ d, notify }) {
       <p className="text-muted text-sm" style={{ marginBottom: '1rem' }}>
         <i aria-hidden="true" className="fas fa-info-circle" /> Central users (Director of Studies, Exams &amp; Standards, IT) see every branch.
         Branch users only see their own. The <strong>default</strong> branch is where new and existing unassigned records belong.
+        A branch's <strong>Code</strong> also becomes that branch's student-ID prefix (Settings → Academic sets the school-wide
+        default for branches with no code of their own) — e.g. a "New Benin" branch coded NB gets NB##### ids, "Jemila" coded
+        JM gets JM##### ids.
       </p>
       <div className="card mb-3">
         <div className="card-header"><h3><i aria-hidden="true" className="fas fa-plus" /> Add branch</h3></div>
@@ -551,8 +581,8 @@ function Branches({ d, notify }) {
           <form onSubmit={add} className="filter-form" style={{ flexWrap: 'wrap', gap: '1rem' }}>
             <div className="form-group"><label className="form-label">Name <span className="text-danger">*</span></label>
               <input type="text" className="form-control" value={f.name} onChange={set('name')} placeholder="e.g. Jemila" required /></div>
-            <div className="form-group"><label className="form-label">Code</label>
-              <input type="text" className="form-control" value={f.code} onChange={set('code')} placeholder="e.g. JEM" /></div>
+            <div className="form-group"><label className="form-label">Code (student-ID prefix)</label>
+              <input type="text" className="form-control" value={f.code} onChange={(e) => setF({ ...f, code: e.target.value.toUpperCase() })} placeholder="e.g. JEM" maxLength={10} /></div>
             <div className="form-group"><label className="form-label">Phone</label>
               <input type="text" className="form-control" value={f.phone} onChange={set('phone')} /></div>
             <div className="form-group" style={{ flex: '1 1 220px' }}><label className="form-label">Address</label>

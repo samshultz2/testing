@@ -56,7 +56,8 @@ def convert_to_student(applicant, assignment_id=None):
         return None, 'Applicant needs a gender before conversion'
 
     student = Student(
-        student_id=Student.generate_student_id(),
+        student_id=Student.generate_student_id(applicant.branch_id),
+        branch_id=applicant.branch_id,
         first_name=applicant.first_name,
         middle_name=applicant.middle_name,
         surname=applicant.surname,

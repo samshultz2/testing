@@ -535,6 +535,17 @@ def branches():
     })
 
 
+def _clean_branch_code(raw):
+    """Uppercase + validate a branch code (also used as its student-id prefix
+    when set — see Student.student_id_format). Same shape as the school-wide
+    prefix: 1-10 letters/digits, or blank. Returns (code_or_None, error_or_None)."""
+    import re as _re
+    code = (raw or '').strip().upper()
+    if code and not _re.fullmatch(r'[A-Z0-9]{1,10}', code):
+        return None, 'Branch code must be 1–10 letters/digits (e.g. JEM).'
+    return code or None, None
+
+
 @settings_bp.route('/branches/add', methods=['POST'])
 @central_admin_required
 def add_branch():
@@ -544,6 +555,12 @@ def add_branch():
         return _err('Branch name is required.', url_for('settings.branches'))
     if Branch.query.filter_by(name=name).first():
         return _err('A branch with that name already exists.', url_for('settings.branches'))
+    code, code_err = _clean_branch_code(request.form.get('code'))
+    if code_err:
+        return _err(code_err, url_for('settings.branches'))
+    if code and Branch.query.filter_by(code=code).first():
+        return _err(f'Branch code "{code}" is already used by another branch.',
+                    url_for('settings.branches'))
     # Soft plan cap: block only the create when over the branch limit. Payments
     # and existing branches are never affected.
     from utils.entitlements import creation_cap_check
@@ -556,7 +573,7 @@ def add_branch():
     first = Branch.query.count() == 0
     db.session.add(Branch(
         name=name,
-        code=(request.form.get('code') or '').strip() or None,
+        code=code,
         address=(request.form.get('address') or '').strip() or None,
         phone=(request.form.get('phone') or '').strip() or None,
         is_default=first))   # the very first branch is the default
@@ -571,8 +588,14 @@ def add_branch():
 def edit_branch(branch_id):
     from models import db, Branch
     b = db.get_or_404(Branch, branch_id)
+    code, code_err = _clean_branch_code(request.form.get('code'))
+    if code_err:
+        return _err(code_err, url_for('settings.branches'))
+    if code and Branch.query.filter(Branch.code == code, Branch.id != branch_id).first():
+        return _err(f'Branch code "{code}" is already used by another branch.',
+                    url_for('settings.branches'))
     b.name = (request.form.get('name') or b.name).strip()
-    b.code = (request.form.get('code') or '').strip() or None
+    b.code = code
     b.address = (request.form.get('address') or '').strip() or None
     b.phone = (request.form.get('phone') or '').strip() or None
     b.is_active = request.form.get('is_active') == 'on'
@@ -763,6 +786,9 @@ def academic_settings():
             sid_digits = request.form.get('student_id_digits', type=int) or 5
             SchoolSettings.set('student_id_digits', max(3, min(sid_digits, 12)), 'int',
                                'Minimum digit width for auto-generated student IDs')
+            sid_include_session = (request.form.get('student_id_include_session') or '').strip().lower() in ('1', 'true', 'on', 'yes')
+            SchoolSettings.set('student_id_include_session', sid_include_session, 'bool',
+                               "Insert the active session's short code (e.g. 2025/2026 -> 2526) into new student IDs")
             uses_arms = (request.form.get('uses_class_arms') or '').strip().lower() in ('1', 'true', 'on', 'yes')
             SchoolSettings.set('uses_class_arms', uses_arms, 'bool', 'School streams classes into arms')
             if not uses_arms:
@@ -772,11 +798,13 @@ def academic_settings():
             return _err(f'Error: {str(e)}', url_for('settings.academic_settings'))
         return _ok('Academic settings updated!', url_for('settings.academic_settings'))
 
+    active_session = AcademicSession.query.filter_by(is_active=True).first()
     return _render({
         'page': 'academic',
         'settings': _settings_dict(),
         'submit_url': url_for('settings.academic_settings'),
         'back_url': url_for('settings.index'),
+        'active_session_name': active_session.name if active_session else None,
     })
 
 

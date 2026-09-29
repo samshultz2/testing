@@ -204,9 +204,14 @@ def add_student():
             waec_list = request.form.getlist('waec_subjects[]')
             jamb_list = request.form.getlist('jamb_subjects[]')
             _check_subject_caps(waec_list, jamb_list)
+            # Resolve the branch first (not after) so the student id's prefix,
+            # when a branch has its own, is right on the very first save.
+            from utils.branch_scope import branch_for_new
+            new_branch_id = branch_for_new(request.form.get('branch_id', type=int))
             # Create student
             student = Student(
-                student_id=Student.generate_student_id(),
+                student_id=Student.generate_student_id(new_branch_id),
+                branch_id=new_branch_id,
                 first_name=strip_tags(request.form.get('first_name')),
                 middle_name=strip_tags(request.form.get('middle_name')) or None,
                 surname=strip_tags(request.form.get('surname')),
@@ -220,9 +225,6 @@ def add_student():
                 stream=request.form.get('stream') or None,
                 jamb_target=request.form.get('jamb_target', type=int)
             )
-            # Stamp the student with the creator's (or chosen) branch.
-            from utils.branch_scope import branch_for_new
-            student.branch_id = branch_for_new(request.form.get('branch_id', type=int))
             _apply_optional_student_fields(student, request.form)
             _apply_aspiration_fields(student, request.form)
 
