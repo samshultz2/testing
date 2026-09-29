@@ -129,13 +129,33 @@ class GenClassSubjectConfig(db.Model):
     periods_per_week = db.Column(db.Integer, default=4)
     needs_double_period = db.Column(db.Boolean, default=False)
     double_period_count = db.Column(db.Integer, default=0)
+    # Per-class period placement restrictions -- override GenSubjectConfig's
+    # (school-wide) not_first_period/not_last_period for just this class when
+    # this row exists; avoid_morning/avoid_afternoon/excluded_periods have no
+    # global equivalent, they're class-only.
+    not_first_period = db.Column(db.Boolean, default=False)
+    not_last_period = db.Column(db.Boolean, default=False)
+    avoid_morning = db.Column(db.Boolean, default=False)     # never before the break
+    avoid_afternoon = db.Column(db.Boolean, default=False)   # never after the break
+    excluded_periods = db.Column(db.String(50))  # comma-separated period numbers, e.g. "3,5"
     is_active = db.Column(db.Boolean, default=True)
     
     # Relationships
     class_config = db.relationship('GenClassConfig', backref='subject_configs')
     subject = db.relationship('GenSubject')
-    
+
     __table_args__ = (db.UniqueConstraint('class_config_id', 'subject_id'),)
+
+    @property
+    def excluded_periods_list(self):
+        if not self.excluded_periods:
+            return []
+        out = []
+        for p in self.excluded_periods.split(','):
+            p = p.strip()
+            if p.isdigit():
+                out.append(int(p))
+        return out
 
 
 class GenRoom(db.Model):

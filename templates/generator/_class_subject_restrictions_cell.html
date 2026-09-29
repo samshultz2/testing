@@ -1,0 +1,17 @@
+                        <td style="white-space: nowrap;">
+                            <label class="restriction-chip" title="Never schedule as period 1{% if item.global_not_first %} (already off period 1 school-wide for this subject; checking this has no extra effect){% endif %}">
+                                <input type="checkbox" name="not_first_{{ item.subject.id }}" {% if item.not_first_period %}checked{% endif %}> 1st{% if item.global_not_first %}*{% endif %}
+                            </label>
+                            <label class="restriction-chip" title="Never schedule as the last period of the day{% if item.global_not_last %} (already off the last period school-wide for this subject; checking this has no extra effect){% endif %}">
+                                <input type="checkbox" name="not_last_{{ item.subject.id }}" {% if item.not_last_period %}checked{% endif %}> Last{% if item.global_not_last %}*{% endif %}
+                            </label>
+                            <label class="restriction-chip" title="Never schedule before the break">
+                                <input type="checkbox" name="avoid_morning_{{ item.subject.id }}" {% if item.avoid_morning %}checked{% endif %}> AM
+                            </label>
+                            <label class="restriction-chip" title="Never schedule after the break">
+                                <input type="checkbox" name="avoid_afternoon_{{ item.subject.id }}" {% if item.avoid_afternoon %}checked{% endif %}> PM
+                            </label>
+                            <input type="text" name="excluded_periods_{{ item.subject.id }}" value="{{ item.excluded_periods }}"
+                                   class="form-control" style="width: 60px; display: inline-block;"
+                                   placeholder="e.g. 3,5" title="Comma-separated period numbers this subject must never use, any day">
+                        </td>

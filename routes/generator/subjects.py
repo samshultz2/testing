@@ -2,6 +2,20 @@
 from routes.generator import *  # noqa: F401,F403
 
 
+def _clean_excluded_periods(raw):
+    """Free-text "e.g. 3,5" field -> a clean "3,5" string of positive integers,
+    deduped and sorted, or None. Silently drops anything that isn't a number
+    (letters, stray punctuation) rather than rejecting the whole save."""
+    if not raw:
+        return None
+    nums = set()
+    for part in raw.split(','):
+        part = part.strip()
+        if part.isdigit() and int(part) > 0:
+            nums.add(int(part))
+    return ','.join(str(n) for n in sorted(nums)) or None
+
+
 @generator_bp.route('/subjects')
 @login_required
 def subjects_config():
@@ -247,7 +261,23 @@ def class_subjects_config(class_id):
             double_count = 0
             is_enabled = True  # Default enabled
             has_override = False
-        
+
+        # Period-placement restrictions. The checkbox reflects only this
+        # class's OWN stored flag -- not_first/not_last are additive with
+        # the subject's school-wide GenSubjectConfig default at generation
+        # time (routes/generator_ortools.py's _effective_restrictions), so a
+        # global "not first period" still applies here even when this class's
+        # own checkbox is unchecked; global_not_first/global_not_last let the
+        # template say so. avoid_morning/avoid_afternoon/excluded_periods
+        # have no global equivalent, they're class-only either way.
+        not_first_period = class_cfg.not_first_period if class_cfg else False
+        not_last_period = class_cfg.not_last_period if class_cfg else False
+        avoid_morning = class_cfg.avoid_morning if class_cfg else False
+        avoid_afternoon = class_cfg.avoid_afternoon if class_cfg else False
+        excluded_periods = (class_cfg.excluded_periods if class_cfg else None) or ''
+        global_not_first = global_cfg.not_first_period if global_cfg else False
+        global_not_last = global_cfg.not_last_period if global_cfg else False
+
         subjects_data.append({
             'subject': subject,
             'periods': periods,
@@ -255,7 +285,14 @@ def class_subjects_config(class_id):
             'double_count': double_count,
             'is_enabled': is_enabled,
             'has_override': has_override,
-            'category': category
+            'category': category,
+            'not_first_period': not_first_period,
+            'not_last_period': not_last_period,
+            'avoid_morning': avoid_morning,
+            'avoid_afternoon': avoid_afternoon,
+            'excluded_periods': excluded_periods,
+            'global_not_first': global_not_first,
+            'global_not_last': global_not_last,
         })
     
     return render_template('generator/class_subjects_config.html',
@@ -277,16 +314,26 @@ def save_class_subjects_config(class_id):
             periods = request.form.get(f'periods_{subject_id}', type=int) or 4
             needs_double = request.form.get(f'double_{subject_id}') == 'on'
             double_count = request.form.get(f'double_count_{subject_id}', type=int) or 0
-            
+            not_first_period = request.form.get(f'not_first_{subject_id}') == 'on'
+            not_last_period = request.form.get(f'not_last_{subject_id}') == 'on'
+            avoid_morning = request.form.get(f'avoid_morning_{subject_id}') == 'on'
+            avoid_afternoon = request.form.get(f'avoid_afternoon_{subject_id}') == 'on'
+            excluded_periods = _clean_excluded_periods(request.form.get(f'excluded_periods_{subject_id}', ''))
+
             existing = GenClassSubjectConfig.query.filter_by(
                 class_config_id=class_id, subject_id=subject_id
             ).first()
-            
+
             if existing:
                 existing.is_enabled = is_enabled
                 existing.periods_per_week = periods
                 existing.needs_double_period = needs_double
                 existing.double_period_count = double_count if needs_double else 0
+                existing.not_first_period = not_first_period
+                existing.not_last_period = not_last_period
+                existing.avoid_morning = avoid_morning
+                existing.avoid_afternoon = avoid_afternoon
+                existing.excluded_periods = excluded_periods
                 existing.is_active = True
             else:
                 db.session.add(GenClassSubjectConfig(
@@ -295,9 +342,14 @@ def save_class_subjects_config(class_id):
                     is_enabled=is_enabled,
                     periods_per_week=periods,
                     needs_double_period=needs_double,
-                    double_period_count=double_count if needs_double else 0
+                    double_period_count=double_count if needs_double else 0,
+                    not_first_period=not_first_period,
+                    not_last_period=not_last_period,
+                    avoid_morning=avoid_morning,
+                    avoid_afternoon=avoid_afternoon,
+                    excluded_periods=excluded_periods,
                 ))
-        
+
         db.session.commit()
         flash(f'Subject configuration for {class_config.class_name} saved!', 'success')
     except Exception as e:

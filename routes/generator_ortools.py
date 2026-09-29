@@ -30,16 +30,6 @@ except ImportError:
     logger.warning("OR-Tools not installed. Run: pip install ortools")
 
 
-# Class-specific period restrictions
-CLASS_SPECIFIC_RESTRICTIONS = {
-    'Mathematics': {
-        'SSS1': {'not_first': True, 'not_last': False},
-        'SSS2': {'not_first': True, 'not_last': False},
-        'SSS3': {'not_first': True, 'not_last': False}
-    }
-}
-
-
 def get_class_level(class_name):
     """Extract class level like SSS1, SSS2, SSS3 from class name"""
     class_name = class_name.upper().replace(' ', '')
@@ -50,6 +40,29 @@ def get_class_level(class_name):
     elif 'SSS3' in class_name or 'SS3' in class_name:
         return 'SSS3'
     return class_name
+
+
+def _effective_restrictions(class_cfg, global_cfg):
+    """Period-placement restrictions for one (class, subject). not_first/
+    not_last are ADDITIVE: a GenClassSubjectConfig row exists for nearly
+    every subject already (it's where periods_per_week lives), so "row
+    exists -> full override" would silently drop the subject's school-wide
+    GenSubjectConfig restriction the moment a school touches anything else
+    on that row. Instead the class-level checkbox can only ever ADD a
+    restriction on top of the global default, never remove one -- OR, not
+    override. avoid_morning/avoid_afternoon/excluded_periods have no global
+    equivalent, they only ever come from class_cfg. Returns
+    (not_first, not_last, avoid_morning, avoid_afternoon, excluded_periods)."""
+    global_not_first = global_cfg.not_first_period if global_cfg else False
+    global_not_last = global_cfg.not_last_period if global_cfg else False
+    if class_cfg is not None:
+        return (
+            global_not_first or class_cfg.not_first_period,
+            global_not_last or class_cfg.not_last_period,
+            class_cfg.avoid_morning, class_cfg.avoid_afternoon,
+            class_cfg.excluded_periods_list,
+        )
+    return (global_not_first, global_not_last, False, False, [])
 
 
 def diagnose_infeasibility(class_arms, requirements, teachers, teacher_reqs, teacher_unavailable,
@@ -250,20 +263,10 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
                     needs_double, double_count = resolve_double(
                         css, ss, class_cfg, global_subject_configs.get(ss.subject_id))
                     
-                    not_first = False
-                    not_last = False
-                    cfg = global_subject_configs.get(ss.subject_id)
-                    if cfg:
-                        not_first = cfg.not_first_period
-                        not_last = cfg.not_last_period
-                    
+                    not_first, not_last, avoid_morning, avoid_afternoon, excluded_periods = \
+                        _effective_restrictions(class_cfg, global_subject_configs.get(ss.subject_id))
+
                     subj_name = ss.subject.name
-                    if subj_name in CLASS_SPECIFIC_RESTRICTIONS:
-                        if class_level in CLASS_SPECIFIC_RESTRICTIONS[subj_name]:
-                            restr = CLASS_SPECIFIC_RESTRICTIONS[subj_name][class_level]
-                            not_first = not_first or restr.get('not_first', False)
-                            not_last = not_last or restr.get('not_last', False)
-                    
                     subjects.append({
                         'subject_id': ss.subject_id,
                         'subject_name': subj_name,
@@ -272,6 +275,9 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
                         'double_count': double_count,
                         'not_first_period': not_first,
                         'not_last_period': not_last,
+                        'avoid_morning': avoid_morning,
+                        'avoid_afternoon': avoid_afternoon,
+                        'excluded_periods': excluded_periods,
                     })
             else:
                 for cfg in class_configs.values():
@@ -286,19 +292,9 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
                     needs_double, double_count = resolve_double(
                         None, None, cfg, global_subject_configs.get(cfg.subject_id))
                     
-                    not_first = False
-                    not_last = False
-                    gcfg = global_subject_configs.get(cfg.subject_id)
-                    if gcfg:
-                        not_first = gcfg.not_first_period
-                        not_last = gcfg.not_last_period
-                    
-                    if subj.name in CLASS_SPECIFIC_RESTRICTIONS:
-                        if class_level in CLASS_SPECIFIC_RESTRICTIONS[subj.name]:
-                            restr = CLASS_SPECIFIC_RESTRICTIONS[subj.name][class_level]
-                            not_first = not_first or restr.get('not_first', False)
-                            not_last = not_last or restr.get('not_last', False)
-                    
+                    not_first, not_last, avoid_morning, avoid_afternoon, excluded_periods = \
+                        _effective_restrictions(cfg, global_subject_configs.get(cfg.subject_id))
+
                     subjects.append({
                         'subject_id': cfg.subject_id,
                         'subject_name': subj.name,
@@ -307,6 +303,9 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
                         'double_count': double_count,
                         'not_first_period': not_first,
                         'not_last_period': not_last,
+                        'avoid_morning': avoid_morning,
+                        'avoid_afternoon': avoid_afternoon,
+                        'excluded_periods': excluded_periods,
                     })
             
             assignments = {}
@@ -327,6 +326,9 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
                     'double_count': subj['double_count'],
                     'not_first_period': subj['not_first_period'],
                     'not_last_period': subj['not_last_period'],
+                    'avoid_morning': subj['avoid_morning'],
+                    'avoid_afternoon': subj['avoid_afternoon'],
+                    'excluded_periods': subj['excluded_periods'],
                 }
                 
                 for p_num in range(subj['periods']):
@@ -463,6 +465,31 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
                 last_period_slot = day * num_periods + (num_periods - 1)
                 for req in reqs:
                     model.Add(x[req['req_id'], last_period_slot] == 0)
+
+        if info.get('avoid_morning'):
+            logger.debug(f"  {class_name} {arm} {info['name']}: avoid morning (periods 1-{break_after})")
+            for day in range(num_days):
+                for period in range(1, break_after + 1):
+                    slot = day * num_periods + (period - 1)
+                    for req in reqs:
+                        model.Add(x[req['req_id'], slot] == 0)
+
+        if info.get('avoid_afternoon'):
+            logger.debug(f"  {class_name} {arm} {info['name']}: avoid afternoon (periods {break_after + 1}-{num_periods})")
+            for day in range(num_days):
+                for period in range(break_after + 1, num_periods + 1):
+                    slot = day * num_periods + (period - 1)
+                    for req in reqs:
+                        model.Add(x[req['req_id'], slot] == 0)
+
+        for excluded_period in info.get('excluded_periods') or []:
+            if not (1 <= excluded_period <= num_periods):
+                continue   # out of range for this generation -- nothing to constrain
+            logger.debug(f"  {class_name} {arm} {info['name']}: never period {excluded_period}")
+            for day in range(num_days):
+                slot = day * num_periods + (excluded_period - 1)
+                for req in reqs:
+                    model.Add(x[req['req_id'], slot] == 0)
 
     # Constraint 6b: A subject with more than one period/week can land in
     # period 1 on at most one day — so once Geography has opened SSS2 Lily's
@@ -987,6 +1014,10 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
             active_rules.append(f'the school-wide day-separation default ({day_sep_default_count} subject-class pairs)')
         if any(info['not_first_period'] or info['not_last_period'] for info in subject_info.values()):
             active_rules.append('not-first/not-last period restrictions on some subjects')
+        if any(info.get('avoid_morning') or info.get('avoid_afternoon') for info in subject_info.values()):
+            active_rules.append('morning/afternoon avoidance restrictions on some subjects')
+        if any(info.get('excluded_periods') for info in subject_info.values()):
+            active_rules.append('specific-period exclusions on some subjects')
         if first_period_cap_count:
             active_rules.append(f'{first_period_cap_count} first-period no-repeat cap(s) '
                                 f'(a subject can only open the day once a week — turn off "A subject '
