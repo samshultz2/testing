@@ -1054,8 +1054,8 @@ def master_timetable():
 
         for r in results:
             subject_label = r.subject.name if r.subject else '-'
-            if r.coschedule_pair:
-                subject_label += ' / ' + r.coschedule_pair.name
+            for pair in getattr(r, 'coschedule_pairs', None) or []:
+                subject_label += ' / ' + pair.name
             master_data.append({
                 'class_name': r.class_name, 'arm_name': r.arm_name,
                 'subject': subject_label,

@@ -493,21 +493,21 @@ class GenCombinedClassRule(db.Model):
 
 class GenCoScheduleRule(db.Model):
     """
-    Rules pairing two subjects (usually from different arms of a combined
-    class) so they are FORCED into the same time slot every time — the
-    mirror of GenSubjectClashRule, which forbids that. Used when two arms
-    share a room/period grid for their common subjects but diverge for
-    streamed electives, and the split still needs to land in the same slot
-    each time (so the group doesn't end up with one arm idle while the
-    other is in class).
-    Example: SSS2 Daisy's Literature paired with SSS2 Iris's Accounting —
-    whenever one is scheduled, the other is scheduled at the exact same
-    time. Ordinary teacher-clash constraints already keep each subject's
-    own teacher free elsewhere at that slot, so nothing extra is needed
-    for that.
-    Both sides require a specific class + arm (unlike GenSubjectClashRule,
-    "all arms"/"all classes" wildcards don't make sense here — pairing
-    needs an exact 1:1 correspondence between two named groups).
+    A GROUP of two or more (class, arm, subject) slots (usually different
+    arms of a combined class) that are FORCED into the same time slot every
+    time — the mirror of GenSubjectClashRule, which forbids that. Used when
+    several arms share a room/period grid for their common subjects but
+    diverge for streamed electives, and the split still needs to land in the
+    same slot each time (so the group doesn't end up with some arms idle
+    while others are in class).
+    Example (3-way): SSS2 Daisy's Literature, SSS2 Iris's Accounting, and
+    SSS2 Lily's Government — whenever any one is scheduled, the other two
+    are scheduled at the exact same time. Ordinary teacher-clash constraints
+    already keep each subject's own teacher free elsewhere at that slot, so
+    nothing extra is needed for that.
+    Every member requires a specific class + arm (unlike GenSubjectClashRule,
+    "all arms"/"all classes" wildcards don't make sense here — the group
+    needs an exact 1:1 correspondence between its named members).
     """
     __tablename__ = 'gen_co_schedule_rules'
 
@@ -515,26 +515,37 @@ class GenCoScheduleRule(db.Model):
     branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'), index=True)  # owning branch (per-branch generator)
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.Text)
-
-    # Source subject/group (e.g., Literature for SSS2 Daisy)
-    source_subject_id = db.Column(db.Integer, db.ForeignKey('gen_subjects.id'), nullable=False)
-    source_class_name = db.Column(db.String(20), nullable=False)  # e.g., "SSS2"
-    source_arm_name = db.Column(db.String(50), nullable=False)  # e.g., "Daisy"
-
-    # Target subject/group paired with the source (e.g., Accounting for SSS2 Iris)
-    target_subject_id = db.Column(db.Integer, db.ForeignKey('gen_subjects.id'), nullable=False)
-    target_class_name = db.Column(db.String(20), nullable=False)
-    target_arm_name = db.Column(db.String(50), nullable=False)
-
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=local_now)
 
     # Relationships
-    source_subject = db.relationship('GenSubject', foreign_keys=[source_subject_id])
-    target_subject = db.relationship('GenSubject', foreign_keys=[target_subject_id])
+    members = db.relationship('GenCoScheduleRuleMember', backref='rule', lazy='dynamic',
+                              cascade='all, delete-orphan', order_by='GenCoScheduleRuleMember.id')
 
     def __repr__(self):
         return f'<GenCoScheduleRule {self.name}>'
+
+
+class GenCoScheduleRuleMember(db.Model):
+    """One (class, arm, subject) slot belonging to a GenCoScheduleRule group
+    — every member in a group is always scheduled at the same time as every
+    other member. An arm can only appear once per group (it can only be
+    doing one subject at any given slot)."""
+    __tablename__ = 'gen_co_schedule_rule_members'
+
+    id = db.Column(db.Integer, primary_key=True)
+    rule_id = db.Column(db.Integer, db.ForeignKey('gen_co_schedule_rules.id'), nullable=False, index=True)
+    subject_id = db.Column(db.Integer, db.ForeignKey('gen_subjects.id'), nullable=False)
+    class_name = db.Column(db.String(20), nullable=False)
+    arm_name = db.Column(db.String(50), nullable=False)
+
+    subject = db.relationship('GenSubject')
+
+    __table_args__ = (db.UniqueConstraint('rule_id', 'class_name', 'arm_name',
+                                          name='uq_gen_coschedule_member_rule_arm'),)
+
+    def __repr__(self):
+        return f'<GenCoScheduleRuleMember {self.class_name} {self.arm_name}: {self.subject_id}>'
 
 
 DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']

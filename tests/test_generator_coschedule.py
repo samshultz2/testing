@@ -5,7 +5,7 @@ from config import Config
 from models import (
     db, Branch, GenSubject, GenTeacher, GenTeacherAssignment, GenClassConfig,
     GenClassArmStream, GenStream, GenStreamSubject, GenSubjectConfig,
-    GenCoScheduleRule, GenTimetableResult,
+    GenCoScheduleRule, GenCoScheduleRuleMember, GenTimetableResult,
 )
 from tests.conftest import login_token
 
@@ -82,16 +82,21 @@ def test_coschedule_rule_model_and_routes(app):
     cc_id, lit_id, acct_id = _build_combined_class(app, 'A')
     c = _admin(app)
 
-    r = _post(c, '/generator/coschedule-rules/add', name='ZzLit+Acct',
-             source_subject_id=lit_id, source_class_name='ZzSSS2A', source_arm_name='ZzDaisyA',
-             target_subject_id=acct_id, target_class_name='ZzSSS2A', target_arm_name='ZzIrisA')
+    r = _post(c, '/generator/coschedule-rules/add', **{
+        'name': 'ZzLit+Acct',
+        'member_subject_id[]': [str(lit_id), str(acct_id)],
+        'member_class_name[]': ['ZzSSS2A', 'ZzSSS2A'],
+        'member_arm_name[]': ['ZzDaisyA', 'ZzIrisA'],
+    })
     assert r.status_code in (302, 200)
 
     with app.app_context():
         rule = GenCoScheduleRule.query.filter_by(name='ZzLit+Acct').first()
         assert rule is not None
         assert rule.is_active
-        assert rule.source_arm_name == 'ZzDaisyA' and rule.target_arm_name == 'ZzIrisA'
+        members = list(rule.members)
+        assert len(members) == 2
+        assert {m.arm_name for m in members} == {'ZzDaisyA', 'ZzIrisA'}
         rule_id = rule.id
 
     listing = c.get('/generator/clash-rules')
@@ -110,16 +115,61 @@ def test_coschedule_rule_model_and_routes(app):
 
 
 def test_coschedule_rule_requires_specific_arm(app):
-    """Unlike clash rules, a co-schedule pairing can't use 'all arms' —
-    pairing needs an exact 1:1 correspondence between two named groups."""
+    """Unlike clash rules, a co-schedule group can't use 'all arms' — every
+    member needs an exact class + arm."""
     cc_id, lit_id, acct_id = _build_combined_class(app, 'B')
     c = _admin(app)
-    r = _post(c, '/generator/coschedule-rules/add', name='ZzBadRule',
-             source_subject_id=lit_id, source_class_name='ZzSSS2B', source_arm_name='',
-             target_subject_id=acct_id, target_class_name='ZzSSS2B', target_arm_name='ZzIrisB')
+    r = _post(c, '/generator/coschedule-rules/add', **{
+        'name': 'ZzBadRule',
+        'member_subject_id[]': [str(lit_id), str(acct_id)],
+        'member_class_name[]': ['ZzSSS2B', 'ZzSSS2B'],
+        'member_arm_name[]': ['', 'ZzIrisB'],
+    })
     assert r.status_code in (302, 200)
     with app.app_context():
         assert GenCoScheduleRule.query.filter_by(name='ZzBadRule').first() is None
+
+
+def test_coschedule_rule_requires_at_least_2_members(app):
+    """A single member isn't a group -- nothing to co-schedule it with."""
+    cc_id, lit_id, acct_id = _build_combined_class(app, 'B2')
+    c = _admin(app)
+    r = _post(c, '/generator/coschedule-rules/add', **{
+        'name': 'ZzOneMember',
+        'member_subject_id[]': [str(lit_id)],
+        'member_class_name[]': ['ZzSSS2B2'],
+        'member_arm_name[]': ['ZzDaisyB2'],
+    })
+    assert r.status_code in (302, 200)
+    with app.app_context():
+        assert GenCoScheduleRule.query.filter_by(name='ZzOneMember').first() is None
+
+
+def test_coschedule_rule_supports_3_way_group(app):
+    """The actual feature request: 3+ arms grouped into one co-schedule rule,
+    not just a pair."""
+    cc_id, lit_id, acct_id = _build_combined_class(app, 'B3')
+    c = _admin(app)
+    with app.app_context():
+        bid = Branch.get_default().id
+        geo = GenSubject(branch_id=bid, name='ZzGeographyB3', school_level='sss')
+        db.session.add(geo)
+        db.session.commit()
+        geo_id = geo.id
+
+    r = _post(c, '/generator/coschedule-rules/add', **{
+        'name': 'ZzTriple',
+        'member_subject_id[]': [str(lit_id), str(acct_id), str(geo_id)],
+        'member_class_name[]': ['ZzSSS2B3', 'ZzSSS2B3', 'ZzSSS2B3'],
+        'member_arm_name[]': ['ZzDaisyB3', 'ZzIrisB3', 'ZzLilyB3'],
+    })
+    assert r.status_code in (302, 200)
+    with app.app_context():
+        rule = GenCoScheduleRule.query.filter_by(name='ZzTriple').first()
+        assert rule is not None
+        members = list(rule.members)
+        assert len(members) == 3
+        assert {m.arm_name for m in members} == {'ZzDaisyB3', 'ZzIrisB3', 'ZzLilyB3'}
 
 
 def test_solver_pairs_co_scheduled_subjects_into_the_same_slot(app):
@@ -130,11 +180,12 @@ def test_solver_pairs_co_scheduled_subjects_into_the_same_slot(app):
 
     with app.app_context():
         bid = Branch.get_default().id
-        db.session.add(GenCoScheduleRule(
-            branch_id=bid, name='ZzPair', source_subject_id=lit_id,
-            source_class_name='ZzSSS2C', source_arm_name='ZzDaisyC',
-            target_subject_id=acct_id, target_class_name='ZzSSS2C', target_arm_name='ZzIrisC',
-            is_active=True))
+        rule = GenCoScheduleRule(branch_id=bid, name='ZzPair', is_active=True)
+        db.session.add(rule); db.session.flush()
+        db.session.add_all([
+            GenCoScheduleRuleMember(rule_id=rule.id, subject_id=lit_id, class_name='ZzSSS2C', arm_name='ZzDaisyC'),
+            GenCoScheduleRuleMember(rule_id=rule.id, subject_id=acct_id, class_name='ZzSSS2C', arm_name='ZzIrisC'),
+        ])
         db.session.commit()
 
     r = c.post('/generator/generate/ortools',
@@ -172,6 +223,106 @@ def test_solver_pairs_co_scheduled_subjects_into_the_same_slot(app):
                 if r2.day_of_week == row.day_of_week and r2.period_number == row.period_number
                 and r2.teacher_id == row.teacher_id]
             assert len(same_slot_same_teacher) == 1
+
+
+def _build_combined_class_3arm(app, tag):
+    """SSS2 with three arms on three streams — the 3+-way group scenario.
+    Returns (class_config_id, subject_a_id, subject_b_id, subject_c_id)."""
+    with app.app_context():
+        bid = Branch.get_default().id
+
+        cc = GenClassConfig(branch_id=bid, class_name=f'ZzSSS2{tag}', school_level='sss',
+                            num_arms=3, arm_names=f'ZzDaisy{tag},ZzIris{tag},ZzLily{tag}', has_streams=True)
+        db.session.add(cc); db.session.flush()
+
+        arts = GenStream(branch_id=bid, name=f'ZzArts{tag}', school_level='sss')
+        comm = GenStream(branch_id=bid, name=f'ZzCommercial{tag}', school_level='sss')
+        sci = GenStream(branch_id=bid, name=f'ZzScience{tag}', school_level='sss')
+        db.session.add_all([arts, comm, sci]); db.session.flush()
+
+        db.session.add_all([
+            GenClassArmStream(class_config_id=cc.id, arm_name=f'ZzDaisy{tag}', stream_id=arts.id),
+            GenClassArmStream(class_config_id=cc.id, arm_name=f'ZzIris{tag}', stream_id=comm.id),
+            GenClassArmStream(class_config_id=cc.id, arm_name=f'ZzLily{tag}', stream_id=sci.id),
+        ])
+
+        lit = GenSubject(branch_id=bid, name=f'ZzLiterature{tag}', school_level='sss')
+        acct = GenSubject(branch_id=bid, name=f'ZzAccounting{tag}', school_level='sss')
+        geo = GenSubject(branch_id=bid, name=f'ZzGeography{tag}', school_level='sss')
+        db.session.add_all([lit, acct, geo]); db.session.flush()
+
+        db.session.add_all([
+            GenSubjectConfig(branch_id=bid, subject_id=lit.id, school_level='sss', periods_per_week=2,
+                             day_separation_exempt=True),
+            GenSubjectConfig(branch_id=bid, subject_id=acct.id, school_level='sss', periods_per_week=2,
+                             day_separation_exempt=True),
+            GenSubjectConfig(branch_id=bid, subject_id=geo.id, school_level='sss', periods_per_week=2,
+                             day_separation_exempt=True),
+            GenStreamSubject(stream_id=arts.id, subject_id=lit.id, periods_per_week=2),
+            GenStreamSubject(stream_id=comm.id, subject_id=acct.id, periods_per_week=2),
+            GenStreamSubject(stream_id=sci.id, subject_id=geo.id, periods_per_week=2),
+        ])
+
+        lit_teacher = GenTeacher(branch_id=bid, name=f'Zz Lit Teacher{tag}', school_level='sss',
+                                 max_periods_per_day=6, max_periods_per_week=30)
+        acct_teacher = GenTeacher(branch_id=bid, name=f'Zz Acct Teacher{tag}', school_level='sss',
+                                  max_periods_per_day=6, max_periods_per_week=30)
+        geo_teacher = GenTeacher(branch_id=bid, name=f'Zz Geo Teacher{tag}', school_level='sss',
+                                 max_periods_per_day=6, max_periods_per_week=30)
+        db.session.add_all([lit_teacher, acct_teacher, geo_teacher]); db.session.flush()
+
+        db.session.add_all([
+            GenTeacherAssignment(branch_id=bid, teacher_id=lit_teacher.id, subject_id=lit.id,
+                                 class_config_id=cc.id, arm_name=f'ZzDaisy{tag}'),
+            GenTeacherAssignment(branch_id=bid, teacher_id=acct_teacher.id, subject_id=acct.id,
+                                 class_config_id=cc.id, arm_name=f'ZzIris{tag}'),
+            GenTeacherAssignment(branch_id=bid, teacher_id=geo_teacher.id, subject_id=geo.id,
+                                 class_config_id=cc.id, arm_name=f'ZzLily{tag}'),
+        ])
+        db.session.commit()
+        return cc.id, lit.id, acct.id, geo.id
+
+
+def test_solver_groups_3_arms_into_the_same_slot(app):
+    """The multi-arm feature request: a 3-way group (not just a pair) all
+    lands in the same slot every time."""
+    cc_id, lit_id, acct_id, geo_id = _build_combined_class_3arm(app, 'C3')
+    c = _admin(app)
+
+    with app.app_context():
+        bid = Branch.get_default().id
+        rule = GenCoScheduleRule(branch_id=bid, name='ZzTripleSolve', is_active=True)
+        db.session.add(rule); db.session.flush()
+        db.session.add_all([
+            GenCoScheduleRuleMember(rule_id=rule.id, subject_id=lit_id, class_name='ZzSSS2C3', arm_name='ZzDaisyC3'),
+            GenCoScheduleRuleMember(rule_id=rule.id, subject_id=acct_id, class_name='ZzSSS2C3', arm_name='ZzIrisC3'),
+            GenCoScheduleRuleMember(rule_id=rule.id, subject_id=geo_id, class_name='ZzSSS2C3', arm_name='ZzLilyC3'),
+        ])
+        db.session.commit()
+
+    r = c.post('/generator/generate/ortools',
+              data={'_csrf_token': 'a' * 64, 'class_ids[]': cc_id, 'time_limit': '20', 'periods_per_day': '6'},
+              follow_redirects=True)
+    assert r.status_code == 200
+
+    with app.app_context():
+        rows = GenTimetableResult.query.filter(
+            GenTimetableResult.arm_name.in_(['ZzDaisyC3', 'ZzIrisC3', 'ZzLilyC3'])).all()
+        assert rows, 'no timetable rows saved — generation likely failed; check flash message'
+        batch_id = rows[0].batch_id
+        batch_rows = [row for row in rows if row.batch_id == batch_id]
+
+        lit_rows = [row for row in batch_rows if row.arm_name == 'ZzDaisyC3' and row.subject_id == lit_id]
+        acct_rows = [row for row in batch_rows if row.arm_name == 'ZzIrisC3' and row.subject_id == acct_id]
+        geo_rows = [row for row in batch_rows if row.arm_name == 'ZzLilyC3' and row.subject_id == geo_id]
+        assert len(lit_rows) == 2 and len(acct_rows) == 2 and len(geo_rows) == 2
+
+        lit_slots = {(row.day_of_week, row.period_number) for row in lit_rows}
+        acct_slots = {(row.day_of_week, row.period_number) for row in acct_rows}
+        geo_slots = {(row.day_of_week, row.period_number) for row in geo_rows}
+        assert lit_slots == acct_slots == geo_slots, (
+            f'all 3 group members should land on identical slots, '
+            f'got {lit_slots} vs {acct_slots} vs {geo_slots}')
 
 
 def test_print_results_can_filter_to_selected_arms(app):
@@ -328,11 +479,12 @@ def _seed_coscheduled_pair(app, tag):
     batch_id = f'zzbatch-pair-annotate-{tag}'
     with app.app_context():
         bid = Branch.get_default().id
-        db.session.add(GenCoScheduleRule(
-            branch_id=bid, name=f'ZzPairRule{tag}', source_subject_id=lit_id,
-            source_class_name=f'ZzSSS2{tag}', source_arm_name=f'ZzDaisy{tag}',
-            target_subject_id=acct_id, target_class_name=f'ZzSSS2{tag}', target_arm_name=f'ZzIris{tag}',
-            is_active=True))
+        rule = GenCoScheduleRule(branch_id=bid, name=f'ZzPairRule{tag}', is_active=True)
+        db.session.add(rule); db.session.flush()
+        db.session.add_all([
+            GenCoScheduleRuleMember(rule_id=rule.id, subject_id=lit_id, class_name=f'ZzSSS2{tag}', arm_name=f'ZzDaisy{tag}'),
+            GenCoScheduleRuleMember(rule_id=rule.id, subject_id=acct_id, class_name=f'ZzSSS2{tag}', arm_name=f'ZzIris{tag}'),
+        ])
         db.session.add_all([
             GenTimetableResult(branch_id=bid, batch_id=batch_id, school_level='sss',
                                class_name=f'ZzSSS2{tag}', arm_name=f'ZzDaisy{tag}', day_of_week=0,

@@ -18,12 +18,11 @@ def _short(subj, fallback_map, maxlen):
 
 def _short_cell(entry, subj, fallback_map, maxlen):
     """The cell text for one slot: `_short(subj, ...)`, plus "/COUNTERPART"
-    when annotate_coschedule_pairs() found a co-scheduled subject on an arm
-    this document excluded (e.g. "ACC/CRS" for a combined class printed as
-    just one arm)."""
+    for each co-scheduled subject annotate_coschedule_pairs() found on an arm
+    this document excluded (e.g. "ACC/CRS/GOV" for a 3-arm combined class
+    printed as just one arm)."""
     value = _short(subj, fallback_map, maxlen)
-    pair = getattr(entry, 'coschedule_pair', None)
-    if pair:
+    for pair in getattr(entry, 'coschedule_pairs', None) or []:
         value += '/' + _short(pair, fallback_map, maxlen)
     return value
 
@@ -174,8 +173,8 @@ def print_single_timetable_pdf(batch_id, class_name, arm_name):
         if not entry or not entry.subject:
             return Paragraph('-', cell_style)
         label = escape(_short(entry.subject, abbrev_map, 8))
-        if entry.coschedule_pair:
-            label += '/' + escape(_short(entry.coschedule_pair, abbrev_map, 8))
+        for pair in getattr(entry, 'coschedule_pairs', None) or []:
+            label += '/' + escape(_short(pair, abbrev_map, 8))
         text = f'<b>{label}</b>'
         if include_teachers and entry.teacher:
             text += f'<br/><font size="9">{escape(entry.teacher.name)}</font>'

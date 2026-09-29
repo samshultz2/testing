@@ -68,15 +68,16 @@ def filter_results_by_arm(results):
 
 
 def annotate_coschedule_pairs(all_results, filtered_results):
-    """When a print/export filter drops a combined class's other arm, its
-    co-scheduled subject would otherwise vanish from the document even
+    """When a print/export filter drops a combined class's other arm(s), its
+    co-scheduled subject(s) would otherwise vanish from the document even
     though that group of students is doing something at the same time.
-    For every kept result whose active GenCoScheduleRule counterpart's
-    arm got filtered out, sets `.coschedule_pair` to that counterpart's
-    GenSubject (else None), so a renderer can show e.g. "ACC/CRS" instead
-    of just "ACC" — mutates filtered_results in place; nothing to return.
-    A no-op when both sides of every pairing are already being shown
-    (their own rows already carry the other subject)."""
+    For every kept result that belongs to an active GenCoScheduleRule group,
+    sets `.coschedule_pairs` to the list of that group's OTHER members'
+    GenSubject (whichever ones got filtered out and are actually running at
+    the same slot; else []), so a renderer can show e.g. "ACC/CRS/GOV"
+    instead of just "ACC" — mutates filtered_results in place; nothing to
+    return. A no-op when every member of a group is already being shown
+    (their own rows already carry the other subjects)."""
     from models import GenCoScheduleRule
     included_arms = {(r.class_name, r.arm_name) for r in filtered_results}
     by_slot = {(r.class_name, r.arm_name, r.day_of_week, r.period_number): r.subject_id
@@ -90,23 +91,24 @@ def annotate_coschedule_pairs(all_results, filtered_results):
         return subj_cache[sid]
 
     for r in filtered_results:
-        r.coschedule_pair = None
+        r.coschedule_pairs = []
         if not rules:
             continue
         for rule in rules:
-            if (r.class_name, r.arm_name, r.subject_id) == \
-               (rule.source_class_name, rule.source_arm_name, rule.source_subject_id):
-                cp_class, cp_arm, cp_subject_id = rule.target_class_name, rule.target_arm_name, rule.target_subject_id
-            elif (r.class_name, r.arm_name, r.subject_id) == \
-                 (rule.target_class_name, rule.target_arm_name, rule.target_subject_id):
-                cp_class, cp_arm, cp_subject_id = rule.source_class_name, rule.source_arm_name, rule.source_subject_id
-            else:
+            members = list(rule.members)
+            match = next((m for m in members if (m.class_name, m.arm_name, m.subject_id) ==
+                          (r.class_name, r.arm_name, r.subject_id)), None)
+            if match is None:
                 continue
-            if (cp_class, cp_arm) in included_arms:
-                break   # counterpart already has its own row — nothing to annotate
-            actual = by_slot.get((cp_class, cp_arm, r.day_of_week, r.period_number))
-            if actual == cp_subject_id:
-                r.coschedule_pair = _subj(cp_subject_id)
+            pairs, seen_subject_ids = [], {r.subject_id}
+            for m in members:
+                if m.id == match.id or (m.class_name, m.arm_name) in included_arms:
+                    continue   # this member, or one whose own row is already shown
+                actual = by_slot.get((m.class_name, m.arm_name, r.day_of_week, r.period_number))
+                if actual == m.subject_id and m.subject_id not in seen_subject_ids:
+                    pairs.append(_subj(m.subject_id))
+                    seen_subject_ids.add(m.subject_id)
+            r.coschedule_pairs = pairs
             break
 
 

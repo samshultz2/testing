@@ -19,7 +19,8 @@ from .models import (
     GenClassSubjectConfig, GenClassStreamSubject, GenStream, GenStreamSubject, GenRoom,
     GenClassConfig, GenClassArmStream,
     GenTeacherAssignment, GenTimetableRule, GenTimetableResult, GenSettings,
-    GenSubjectClashRule, GenCombinedClassRule, GenCoScheduleRule, GenDaySeparationRule, ActiveTimetableBatch
+    GenSubjectClashRule, GenCombinedClassRule, GenCoScheduleRule, GenCoScheduleRuleMember,
+    GenDaySeparationRule, ActiveTimetableBatch
 )
 from .models_contributions import ContributionSettings, ContributionPayment, ContributionExpense
 from .models_finance import (FeeItem, FeeStructure, FeePayment, FeeDiscount,
@@ -87,7 +88,8 @@ __all__ = [
     'GenClassSubjectConfig', 'GenClassStreamSubject', 'GenStream', 'GenStreamSubject', 'GenRoom',
     'GenClassConfig', 'GenClassArmStream',
     'GenTeacherAssignment', 'GenTimetableRule', 'GenTimetableResult', 'GenSettings',
-    'GenSubjectClashRule', 'GenCombinedClassRule', 'GenCoScheduleRule', 'GenDaySeparationRule', 'ActiveTimetableBatch',
+    'GenSubjectClashRule', 'GenCombinedClassRule', 'GenCoScheduleRule', 'GenCoScheduleRuleMember',
+    'GenDaySeparationRule', 'ActiveTimetableBatch',
     'ContributionSettings', 'ContributionPayment', 'ContributionExpense',
     'FeeItem', 'FeeStructure', 'FeePayment', 'FeeDiscount',
     'ExpenseCategory', 'Expense', 'FinanceTransaction', 'AdditionalCharge', 'InstallmentPlan',

@@ -117,12 +117,11 @@ def _abbrev(subj, maxlen=6):
 
 def _abbrev_cell(result, subj, maxlen=6):
     """The cell label for one slot: `_abbrev(subj, ...)`, plus "/COUNTERPART"
-    when filter_results_by_arm()'s companion annotate_coschedule_pairs()
-    found a co-scheduled subject on an arm this image excluded (e.g.
-    "ACC/CRS" for a combined class rendered as just one arm)."""
+    for each co-scheduled subject filter_results_by_arm()'s companion
+    annotate_coschedule_pairs() found on an arm this image excluded (e.g.
+    "ACC/CRS/GOV" for a 3-arm combined class rendered as just one arm)."""
     label = _abbrev(subj, maxlen)
-    pair = getattr(result, 'coschedule_pair', None)
-    if pair:
+    for pair in getattr(result, 'coschedule_pairs', None) or []:
         label += '/' + _abbrev(pair, maxlen)
     return label
 

@@ -57,7 +57,7 @@
                 {% set entry = tt.grid[day_idx].get(period) %}
                 <td>
                     {% if entry and entry.subject %}
-                    <strong>{{ entry.subject.short_name or entry.subject.name }}{% if entry.coschedule_pair %}/{{ entry.coschedule_pair.short_name or entry.coschedule_pair.name }}{% endif %}</strong>
+                    <strong>{{ entry.subject.short_name or entry.subject.name }}{% for pair in entry.coschedule_pairs or [] %}/{{ pair.short_name or pair.name }}{% endfor %}</strong>
                     {% if entry.teacher %}
                     <br><small>{{ entry.teacher.name }}</small>
                     {% endif %}

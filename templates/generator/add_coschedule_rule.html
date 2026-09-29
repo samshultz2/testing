@@ -7,99 +7,34 @@
     <h1><i class="fas fa-link"></i> Add Co-Schedule Rule</h1>
 </div>
 
-<p class="text-muted mb-3">Pair two subjects so they're always scheduled at the exact same time — e.g. when a combined
-    class splits into two streams for electives, so one stream isn't in class while the other is idle. Both sides
-    need a specific class and arm; teacher clashes for either subject are already prevented automatically.</p>
+<p class="text-muted mb-3">Group two or more (class, arm, subject) slots so they're always scheduled at the exact
+    same time — e.g. when a combined class splits into 3 or 4 streams for electives, so no stream is idle while
+    the others are in class. Every member needs a specific class and arm; teacher clashes for each subject are
+    already prevented automatically.</p>
 
 <div class="card">
     <div class="card-body">
-        <form method="POST">
+        <form method="POST" id="coscheduleForm">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
                 <label class="form-label">Rule Name *</label>
-                <input type="text" name="name" class="form-control" required placeholder="e.g., Lit (Daisy) + Accounting (Iris)">
+                <input type="text" name="name" class="form-control" required placeholder="e.g., Lit (Daisy) + Accounting (Iris) + Govt (Lily)">
             </div>
 
             <div class="form-group">
                 <label class="form-label">Description</label>
-                <textarea name="description" class="form-control" rows="2" placeholder="Explain why this pairing exists"></textarea>
+                <textarea name="description" class="form-control" rows="2" placeholder="Explain why this grouping exists"></textarea>
             </div>
 
-            <fieldset style="border: 1px solid #ddd; padding: 1rem; margin-bottom: 1rem; border-radius: 4px;">
-                <legend style="width: auto; padding: 0 0.5rem; font-weight: bold;">Source Subject</legend>
+            <div id="membersContainer"></div>
 
-                <div class="form-group">
-                    <label class="form-label">Subject *</label>
-                    <select name="source_subject_id" class="form-control" required>
-                        <option value="">Select Subject</option>
-                        {% for s in subjects %}
-                        <option value="{{ s.id }}">{{ s.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
+            <button type="button" class="btn btn-secondary btn-sm mb-3" id="addMemberBtn">
+                <i class="fas fa-plus"></i> Add Another Member
+            </button>
 
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="form-group">
-                            <label class="form-label">Class *</label>
-                            <select name="source_class_name" class="form-control" required id="sourceClass">
-                                <option value="">Select Class</option>
-                                {% for c in classes %}
-                                <option value="{{ c.class_name }}" data-arms="{{ c.arm_names }}">{{ c.class_name }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="form-group">
-                            <label class="form-label">Arm *</label>
-                            <select name="source_arm_name" class="form-control" required id="sourceArm">
-                                <option value="">Select Arm</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-            </fieldset>
-
-            <fieldset style="border: 1px solid #ddd; padding: 1rem; margin-bottom: 1rem; border-radius: 4px;">
-                <legend style="width: auto; padding: 0 0.5rem; font-weight: bold;">Paired With (Target Subject)</legend>
-
-                <div class="form-group">
-                    <label class="form-label">Subject *</label>
-                    <select name="target_subject_id" class="form-control" required>
-                        <option value="">Select Subject</option>
-                        {% for s in subjects %}
-                        <option value="{{ s.id }}">{{ s.name }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-
-                <div class="row">
-                    <div class="col-md-6">
-                        <div class="form-group">
-                            <label class="form-label">Class *</label>
-                            <select name="target_class_name" class="form-control" required id="targetClass">
-                                <option value="">Select Class</option>
-                                {% for c in classes %}
-                                <option value="{{ c.class_name }}" data-arms="{{ c.arm_names }}">{{ c.class_name }}</option>
-                                {% endfor %}
-                            </select>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="form-group">
-                            <label class="form-label">Arm *</label>
-                            <select name="target_arm_name" class="form-control" required id="targetArm">
-                                <option value="">Select Arm</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-            </fieldset>
-
-            <p class="text-muted text-sm">If the two subjects run a different number of periods per week (e.g.
-                Literature 4×, Accounting 5×), only the smaller count gets paired up — the rest of the larger
-                subject's periods are scheduled freely.</p>
+            <p class="text-muted text-sm">If members run a different number of periods per week (e.g.
+                Literature 4×, Accounting 5×, Government 5×), only the smallest count gets grouped up each week —
+                the rest of the larger subjects' periods are scheduled freely.</p>
 
             <div class="form-actions">
                 <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Rule</button>
@@ -113,31 +48,137 @@
 .row { display: flex; flex-wrap: wrap; margin: 0 -0.5rem; }
 .col-md-6 { flex: 0 0 50%; max-width: 50%; padding: 0 0.5rem; }
 @media (max-width: 768px) { .col-md-6 { flex: 0 0 100%; max-width: 100%; } }
+.member-row { border: 1px solid #ddd; padding: 1rem; margin-bottom: 1rem; border-radius: 4px; position: relative; }
+.member-row .member-legend { font-weight: bold; margin-bottom: .5rem; }
+.member-row .remove-member-btn { position: absolute; top: .75rem; right: .75rem; }
 </style>
 
 <script nonce="{{ csp_nonce }}">
-document.getElementById('sourceClass').addEventListener('change', function() {
-    const arms = this.options[this.selectedIndex].dataset.arms;
-    const armSelect = document.getElementById('sourceArm');
-    armSelect.innerHTML = '<option value="">Select Arm</option>';
-    if (arms) {
-        arms.split(',').forEach(arm => {
-            // new Option() sets value/text safely (no markup injection from arm names).
-            armSelect.add(new Option(arm.trim(), arm.trim()));
-        });
-    }
+var SUBJECT_OPTIONS = [
+    {% for s in subjects %}{id: {{ s.id }}, name: {{ s.name|tojson }}},{% endfor %}
+];
+var CLASS_OPTIONS = [
+    {% for c in classes %}{name: {{ c.class_name|tojson }}, arms: {{ c.arm_names|tojson }}},{% endfor %}
+];
+var memberSeq = 0;
+
+function buildMemberRow() {
+    memberSeq += 1;
+    var idx = memberSeq;
+    var row = document.createElement('div');
+    row.className = 'member-row';
+    row.dataset.memberIdx = idx;
+
+    var legend = document.createElement('div');
+    legend.className = 'member-legend';
+    legend.textContent = 'Member';
+    row.appendChild(legend);
+
+    var removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.className = 'btn btn-danger btn-sm remove-member-btn';
+    removeBtn.innerHTML = '<i class="fas fa-times"></i>';
+    removeBtn.title = 'Remove this member';
+    removeBtn.addEventListener('click', function () { removeMemberRow(row); });
+    row.appendChild(removeBtn);
+
+    var subjGroup = document.createElement('div');
+    subjGroup.className = 'form-group';
+    var subjLabel = document.createElement('label');
+    subjLabel.className = 'form-label';
+    subjLabel.textContent = 'Subject *';
+    var subjSelect = document.createElement('select');
+    subjSelect.name = 'member_subject_id[]';
+    subjSelect.className = 'form-control';
+    subjSelect.required = true;
+    subjSelect.add(new Option('Select Subject', ''));
+    SUBJECT_OPTIONS.forEach(function (s) { subjSelect.add(new Option(s.name, s.id)); });
+    subjGroup.appendChild(subjLabel);
+    subjGroup.appendChild(subjSelect);
+    row.appendChild(subjGroup);
+
+    var rowFlex = document.createElement('div');
+    rowFlex.className = 'row';
+
+    var classCol = document.createElement('div');
+    classCol.className = 'col-md-6';
+    var classGroup = document.createElement('div');
+    classGroup.className = 'form-group';
+    var classLabel = document.createElement('label');
+    classLabel.className = 'form-label';
+    classLabel.textContent = 'Class *';
+    var classSelect = document.createElement('select');
+    classSelect.name = 'member_class_name[]';
+    classSelect.className = 'form-control';
+    classSelect.required = true;
+    classSelect.add(new Option('Select Class', ''));
+    CLASS_OPTIONS.forEach(function (c) {
+        var opt = new Option(c.name, c.name);
+        opt.dataset.arms = c.arms;
+        classSelect.add(opt);
+    });
+    classGroup.appendChild(classLabel);
+    classGroup.appendChild(classSelect);
+    classCol.appendChild(classGroup);
+    rowFlex.appendChild(classCol);
+
+    var armCol = document.createElement('div');
+    armCol.className = 'col-md-6';
+    var armGroup = document.createElement('div');
+    armGroup.className = 'form-group';
+    var armLabel = document.createElement('label');
+    armLabel.className = 'form-label';
+    armLabel.textContent = 'Arm *';
+    var armSelect = document.createElement('select');
+    armSelect.name = 'member_arm_name[]';
+    armSelect.className = 'form-control';
+    armSelect.required = true;
+    armSelect.add(new Option('Select Arm', ''));
+    armGroup.appendChild(armLabel);
+    armGroup.appendChild(armSelect);
+    armCol.appendChild(armGroup);
+    rowFlex.appendChild(armCol);
+
+    row.appendChild(rowFlex);
+
+    classSelect.addEventListener('change', function () {
+        var arms = this.options[this.selectedIndex].dataset.arms;
+        armSelect.innerHTML = '';
+        armSelect.add(new Option('Select Arm', ''));
+        if (arms) {
+            arms.split(',').forEach(function (arm) {
+                armSelect.add(new Option(arm.trim(), arm.trim()));
+            });
+        }
+    });
+
+    return row;
+}
+
+function removeMemberRow(row) {
+    var container = document.getElementById('membersContainer');
+    if (container.children.length <= 2) return;  // a group needs at least 2 members
+    row.remove();
+    updateRemoveButtons();
+}
+
+function updateRemoveButtons() {
+    var container = document.getElementById('membersContainer');
+    var rows = container.children;
+    Array.from(rows).forEach(function (row) {
+        var btn = row.querySelector('.remove-member-btn');
+        btn.style.display = rows.length <= 2 ? 'none' : '';
+    });
+}
+
+document.getElementById('addMemberBtn').addEventListener('click', function () {
+    document.getElementById('membersContainer').appendChild(buildMemberRow());
+    updateRemoveButtons();
 });
 
-document.getElementById('targetClass').addEventListener('change', function() {
-    const arms = this.options[this.selectedIndex].dataset.arms;
-    const armSelect = document.getElementById('targetArm');
-    armSelect.innerHTML = '<option value="">Select Arm</option>';
-    if (arms) {
-        arms.split(',').forEach(arm => {
-            // new Option() sets value/text safely (no markup injection from arm names).
-            armSelect.add(new Option(arm.trim(), arm.trim()));
-        });
-    }
-});
+// Start with 2 members -- the minimum for a group.
+document.getElementById('membersContainer').appendChild(buildMemberRow());
+document.getElementById('membersContainer').appendChild(buildMemberRow());
+updateRemoveButtons();
 </script>
 {% endblock %}

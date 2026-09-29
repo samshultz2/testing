@@ -257,27 +257,46 @@ def delete_combined_rule(rule_id):
 @generator_bp.route('/coschedule-rules/add', methods=['GET', 'POST'])
 @login_required
 def add_coschedule_rule():
-    """Add a new co-schedule rule (pair two subjects into the same slot)"""
-    from models import GenCoScheduleRule, GenClassConfig
+    """Add a new co-schedule rule (force 2 or more class/arm/subject slots
+    into the same time slot every time)"""
+    from models import GenCoScheduleRule, GenCoScheduleRuleMember, GenClassConfig
 
     if request.method == 'POST':
         try:
+            subject_ids = request.form.getlist('member_subject_id[]')
+            class_names = request.form.getlist('member_class_name[]')
+            arm_names = request.form.getlist('member_arm_name[]')
+            if not (len(subject_ids) == len(class_names) == len(arm_names)):
+                raise ValueError('Malformed member rows submitted.')
+
+            members = []
+            seen_arms = set()
+            for subj_id, cname, aname in zip(subject_ids, class_names, arm_names):
+                subj_id, cname, aname = (subj_id or '').strip(), (cname or '').strip(), (aname or '').strip()
+                if not subj_id and not cname and not aname:
+                    continue  # blank trailing row from the repeatable UI
+                if not subj_id or not cname or not aname:
+                    raise ValueError('Every member needs a subject, class, and arm.')
+                if (cname, aname) in seen_arms:
+                    raise ValueError(f'{cname} {aname} was added more than once — each arm can only appear once per group.')
+                seen_arms.add((cname, aname))
+                members.append((int(subj_id), cname, aname))
+
+            if len(members) < 2:
+                raise ValueError('A co-schedule group needs at least 2 members — a specific '
+                                 'arm/subject on each side that should always land in the same slot.')
+
             rule = GenCoScheduleRule(
                 branch_id=gen_bid(),
                 name=request.form.get('name', '').strip(),
                 description=request.form.get('description', '').strip() or None,
-                source_subject_id=int(request.form.get('source_subject_id')),
-                source_class_name=request.form.get('source_class_name'),
-                source_arm_name=request.form.get('source_arm_name'),
-                target_subject_id=int(request.form.get('target_subject_id')),
-                target_class_name=request.form.get('target_class_name'),
-                target_arm_name=request.form.get('target_arm_name'),
                 is_active=True
             )
-            if not rule.source_arm_name or not rule.target_arm_name:
-                raise ValueError('Both sides need a specific arm — a co-schedule pairing '
-                                 'needs an exact 1:1 match between two named groups.')
             db.session.add(rule)
+            db.session.flush()
+            for subj_id, cname, aname in members:
+                db.session.add(GenCoScheduleRuleMember(
+                    rule_id=rule.id, subject_id=subj_id, class_name=cname, arm_name=aname))
             db.session.commit()
             flash('Co-schedule rule added successfully', 'success')
             return redirect(url_for('generator.clash_rules_list'))

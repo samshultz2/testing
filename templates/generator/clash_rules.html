@@ -162,8 +162,7 @@
             <thead>
                 <tr>
                     <th>Name</th>
-                    <th>Source Subject</th>
-                    <th>Paired With</th>
+                    <th>Members</th>
                     <th>Status</th>
                     <th>Actions</th>
                 </tr>
@@ -178,12 +177,10 @@
                         {% endif %}
                     </td>
                     <td>
-                        <span class="badge badge-primary">{{ rule.source_subject.name }}</span><br>
-                        <small>{{ rule.source_class_name }} {{ rule.source_arm_name }}</small>
-                    </td>
-                    <td>
-                        <span class="badge badge-secondary">{{ rule.target_subject.name }}</span><br>
-                        <small>{{ rule.target_class_name }} {{ rule.target_arm_name }}</small>
+                        {% for member in rule.members %}
+                        <span class="badge {% if loop.first %}badge-primary{% else %}badge-secondary{% endif %}">{{ member.subject.name }}</span>
+                        <small>{{ member.class_name }} {{ member.arm_name }}</small>{% if not loop.last %}<br>{% endif %}
+                        {% endfor %}
                     </td>
                     <td>
                         {% if rule.is_active %}

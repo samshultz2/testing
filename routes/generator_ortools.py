@@ -746,13 +746,14 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
     
     logger.debug(f"  Added {combined_consecutive_count} combined consecutive constraints")
 
-    # Constraint 12: Co-schedule pairing (database-driven)
-    # Reads rules from GenCoScheduleRule table — the mirror of Constraint 10:
-    # forces the source and target subject's periods into the SAME slot
-    # instead of forbidding them from sharing one. Ordinary teacher-clash
-    # constraints (Constraint 3) already keep each side's own teacher free
-    # of other classes at that slot, so no extra logic is needed for that.
-    logger.debug("Adding co-schedule pairing constraints (from database)...")
+    # Constraint 12: Co-schedule grouping (database-driven)
+    # Reads groups from GenCoScheduleRule/GenCoScheduleRuleMember — the mirror
+    # of Constraint 10: forces every member's periods into the SAME slot
+    # instead of forbidding them from sharing one. A group can have 2 or more
+    # members (e.g. a combined class split 3 or 4 ways). Ordinary teacher-
+    # clash constraints (Constraint 3) already keep each member's own teacher
+    # free of other classes at that slot, so no extra logic is needed for that.
+    logger.debug("Adding co-schedule grouping constraints (from database)...")
     coschedule_pair_count = 0
 
     coschedule_rules = GenCoScheduleRule.query.filter_by(is_active=True, branch_id=gen_bid()).all()
@@ -761,39 +762,44 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
         logger.debug("  No co-schedule rules configured")
 
     for rule in coschedule_rules:
-        source_subj = GenSubject.query.get(rule.source_subject_id)
-        target_subj = GenSubject.query.get(rule.target_subject_id)
-        if not source_subj or not target_subj:
-            logger.debug(f"  Warning: Subject for rule '{rule.name}' not found, skipping...")
+        members = list(rule.members)
+        if len(members) < 2:
+            logger.debug(f"  Warning: '{rule.name}' has fewer than 2 members, skipping...")
             continue
 
-        source_reqs = sorted(
-            [r for r in requirements if r['class_name'] == rule.source_class_name
-             and r['arm'] == rule.source_arm_name and r['subject_id'] == rule.source_subject_id],
-            key=lambda r: r['period_index'])
-        target_reqs = sorted(
-            [r for r in requirements if r['class_name'] == rule.target_class_name
-             and r['arm'] == rule.target_arm_name and r['subject_id'] == rule.target_subject_id],
-            key=lambda r: r['period_index'])
-
-        if not source_reqs or not target_reqs:
-            logger.debug(f"  Warning: '{rule.name}' — missing {source_subj.name} for "
-                        f"{rule.source_class_name} {rule.source_arm_name} or {target_subj.name} for "
-                        f"{rule.target_class_name} {rule.target_arm_name}, skipping...")
+        member_reqs = []
+        ok = True
+        for m in members:
+            subj = GenSubject.query.get(m.subject_id)
+            if not subj:
+                logger.debug(f"  Warning: Subject for rule '{rule.name}' member {m.class_name} {m.arm_name} not found, skipping...")
+                ok = False
+                break
+            reqs = sorted(
+                [r for r in requirements if r['class_name'] == m.class_name
+                 and r['arm'] == m.arm_name and r['subject_id'] == m.subject_id],
+                key=lambda r: r['period_index'])
+            if not reqs:
+                logger.debug(f"  Warning: '{rule.name}' — missing {subj.name} for {m.class_name} {m.arm_name}, skipping...")
+                ok = False
+                break
+            member_reqs.append((m, subj, reqs))
+        if not ok:
             continue
 
-        pair_count = min(len(source_reqs), len(target_reqs))
-        logger.debug(f"  {rule.source_class_name} {rule.source_arm_name} {source_subj.name} paired with "
-                    f"{rule.target_class_name} {rule.target_arm_name} {target_subj.name} "
-                    f"({pair_count} of {len(source_reqs)}/{len(target_reqs)} period(s))")
+        pair_count = min(len(reqs) for _, _, reqs in member_reqs)
+        logger.debug(f"  '{rule.name}': " +
+                    " = ".join(f"{m.class_name} {m.arm_name} {subj.name}" for m, subj, _ in member_reqs) +
+                    f" ({pair_count} of {[len(reqs) for _, _, reqs in member_reqs]} period(s))")
 
         for i in range(pair_count):
-            s_req, t_req = source_reqs[i], target_reqs[i]
+            reqs_i = [reqs[i] for _, _, reqs in member_reqs]
             for slot in range(num_slots):
-                model.Add(x[s_req['req_id'], slot] == x[t_req['req_id'], slot])
+                for j in range(1, len(reqs_i)):
+                    model.Add(x[reqs_i[0]['req_id'], slot] == x[reqs_i[j]['req_id'], slot])
             coschedule_pair_count += 1
 
-    logger.debug(f"  Added {coschedule_pair_count} co-schedule pairings")
+    logger.debug(f"  Added {coschedule_pair_count} co-schedule groupings")
 
     # ========== DOUBLE PERIOD CONSTRAINTS ==========
     logger.debug("Adding double period constraints...")
