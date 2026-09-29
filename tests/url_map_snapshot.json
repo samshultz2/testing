@@ -2216,6 +2216,13 @@
 ]
 ],
 [
+"generator.bulk_sync_teacher_periods",
+"/generator/teachers/bulk-sync-periods",
+[
+"POST"
+]
+],
+[
 "generator.clash_report",
 "/generator/reports/clashes/<batch_id>",
 [

@@ -77,6 +77,63 @@ def bulk_delete_teachers():
     return redirect(url_for('generator.teachers_list'))
 
 
+@generator_bp.route('/teachers/bulk-sync-periods', methods=['POST'])
+@login_required
+def bulk_sync_teacher_periods():
+    """Set max periods/week for the selected teachers to their REAL workload
+    from /generator/assignments -- the same per-arm, stream-aware periods/week
+    total the Assignment Report shows (_teacher_assignment_summary(), also
+    behind /generator/assignments/report), not a manually-typed number. Then
+    recalculate max periods/day the same way the bulk period-raise does:
+    spread evenly across the teacher's own working days, capped at the
+    school's periods-per-day structure.
+
+    A selected teacher with no active assignments has no computed total to
+    sync to -- skipped (not zeroed), so an empty roster doesn't blow away a
+    number someone set deliberately ahead of assigning classes."""
+    from routes.generator.generation import _teacher_assignment_summary
+
+    level = get_current_level()
+    teacher_ids = [int(x) for x in request.form.getlist('teacher_ids[]') if x]
+    if not teacher_ids:
+        flash('Select at least one teacher.', 'error')
+        return redirect(url_for('generator.teachers_list'))
+
+    teachers = {t.id: t for t in GenTeacher.query.filter(
+        GenTeacher.id.in_(teacher_ids), GenTeacher.is_active == True,  # noqa: E712
+        GenTeacher.branch_id == gen_bid(), GenTeacher.school_level == level).all()}
+    if not teachers:
+        flash('None of the selected teachers were found.', 'error')
+        return redirect(url_for('generator.teachers_list'))
+
+    rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(
+        is_active=True, school_level=level, branch_id=gen_bid()).all()}
+    day_cap = int(rules.get('periods_per_day', 8))
+
+    totals = {row['teacher'].id: row['total'] for row in _teacher_assignment_summary()}
+
+    try:
+        synced, skipped = 0, 0
+        for tid, teacher in teachers.items():
+            total = totals.get(tid)
+            if total is None:
+                skipped += 1
+                continue
+            teacher.max_periods_per_week = total
+            days = len(teacher.available_days_list) or 5
+            teacher.max_periods_per_day = min(day_cap, math.ceil(total / days)) if total else 0
+            synced += 1
+        db.session.commit()
+        msg = f'Synced max periods/week from real assignments for {synced} teacher(s).'
+        if skipped:
+            msg += f' Skipped {skipped} with no active assignments.'
+        flash(msg, 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error: {str(e)}', 'error')
+    return redirect(url_for('generator.teachers_list'))
+
+
 @generator_bp.route('/teachers/add', methods=['GET', 'POST'])
 @login_required
 def add_teacher():
