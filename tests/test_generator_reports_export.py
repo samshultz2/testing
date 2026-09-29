@@ -113,6 +113,43 @@ def test_teacher_workload_report_image_and_pdf(app):
     assert len(r_pdf.data) > 500
 
 
+def test_teacher_workload_report_lists_teachers_alphabetically(app):
+    """The web page, image, and PDF exports all iterate the same
+    _teacher_workload() dict directly -- seed teachers in a deliberately
+    non-alphabetical order and confirm the web report's row order is sorted
+    by name, not insertion/result order."""
+    with app.app_context():
+        bid = Branch.get_default().id
+        cc = GenClassConfig(branch_id=bid, class_name='ZzRepSSS1Z', school_level='sss',
+                            num_arms=1, arm_names='ZzArmZ')
+        subj = GenSubject(branch_id=bid, name='ZzMathsZ', school_level='sss')
+        db.session.add_all([cc, subj]); db.session.flush()
+
+        names = ['ZzWalter', 'ZzAmara', 'ZzMichael']
+        teachers = []
+        for i, name in enumerate(names):
+            t = GenTeacher(branch_id=bid, name=name, school_level='sss',
+                           max_periods_per_day=6, max_periods_per_week=30)
+            db.session.add(t); db.session.flush()
+            teachers.append(t)
+            db.session.add(GenTeacherAssignment(branch_id=bid, teacher_id=t.id, subject_id=subj.id,
+                                                class_config_id=cc.id, arm_name='ZzArmZ'))
+
+        batch_id = 'zzbatch-report-alpha'
+        for i, t in enumerate(teachers):
+            db.session.add(GenTimetableResult(
+                branch_id=bid, batch_id=batch_id, school_level='sss',
+                class_name='ZzRepSSS1Z', arm_name='ZzArmZ', day_of_week=0,
+                period_number=i + 1, subject_id=subj.id, teacher_id=t.id))
+        db.session.commit()
+
+    c = _admin(app)
+    body = c.get(f'/generator/reports/teacher-workload/{batch_id}').get_data(as_text=True)
+    positions = {name: body.index(name) for name in names}
+    assert positions['ZzAmara'] < positions['ZzMichael'] < positions['ZzWalter'], (
+        f'expected alphabetical order (Amara, Michael, Walter), got positions {positions}')
+
+
 def test_unassigned_report_counts_every_period_including_pre_break(app):
     """Regression test for the undercounting bug: the old code excluded the
     period right before the break from ever counting as empty. Seed a batch

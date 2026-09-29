@@ -772,8 +772,11 @@ def teacher_assignment_summary_report():
 
 
 def _teacher_workload(batch_id):
-    """Per-teacher weekly load for a batch: {teacher_id: {teacher, total,
-    per_day: {0..4: count}, classes: set of "Class Arm" strings}}."""
+    """Per-teacher weekly load for a batch, sorted alphabetically by teacher
+    name: {teacher_id: {teacher, total, per_day: {0..4: count}, classes: set
+    of "Class Arm" strings}}. Shared by the web report, image, and PDF
+    exports, which all iterate this dict directly -- sorting it here once
+    covers all three."""
     from sqlalchemy.orm import joinedload
     results = (GenTimetableResult.query
                .filter_by(batch_id=batch_id, branch_id=gen_bid())
@@ -790,7 +793,7 @@ def _teacher_workload(batch_id):
             workload[r.teacher_id]['total'] += 1
             workload[r.teacher_id]['per_day'][r.day_of_week] += 1
             workload[r.teacher_id]['classes'].add(f"{r.class_name} {r.arm_name}")
-    return workload
+    return dict(sorted(workload.items(), key=lambda kv: (kv[1]['teacher'].name or '').lower()))
 
 
 @generator_bp.route('/reports/teacher-workload/<batch_id>')
