@@ -1380,9 +1380,18 @@ def print_all_teacher_timetables_pdf():
 
 
 def _simple_table_pdf(title, headers, rows, filename, col_widths=None, highlight_col=None):
-    """A plain grid-table PDF (headers + string rows) on one A4 landscape
-    page, filling the available width/height — for reports that are one
-    flat table rather than a day/period timetable grid."""
+    """A plain grid-table PDF (headers + string rows) on A4 landscape,
+    filling the available width — for reports that are one flat table
+    rather than a day/period timetable grid.
+
+    Row height/font auto-fits so a realistic table (school with dozens of
+    teachers/classes) lands on ONE page instead of spilling its last row or
+    two onto an otherwise-empty second sheet: at the default font/padding,
+    if all rows fit within the page then explicit row heights are set to
+    exactly fill it (like print_single_timetable_pdf does for the weekly
+    grid); if not, font/padding step down (to a legibility floor) until it
+    does fit. A genuinely huge table (past what even the floor can fit)
+    paginates naturally rather than being crushed illegibly small."""
     from reportlab.lib import colors
     from reportlab.lib.pagesizes import A4, landscape
     from reportlab.lib.units import mm
@@ -1392,11 +1401,16 @@ def _simple_table_pdf(title, headers, rows, filename, col_widths=None, highlight
 
     output = BytesIO()
     margin = 12 * mm
+    # SimpleDocTemplate wraps its content in a Frame with a default 6pt
+    # padding on every side (on top of the doc's own margins) — budget for
+    # that too, or a table that looks like it should just fit spills a
+    # sliver onto an unwanted second page (see print_single_timetable_pdf).
+    frame_pad = 6
     doc = SimpleDocTemplate(output, pagesize=landscape(A4),
                             leftMargin=margin, rightMargin=margin,
                             topMargin=margin, bottomMargin=margin)
     page_w, page_h = landscape(A4)
-    usable_width = page_w - 2 * margin
+    usable_width = page_w - 2 * margin - 2 * frame_pad
 
     n_cols = len(headers)
     weights = col_widths or [1] * n_cols
@@ -1405,27 +1419,44 @@ def _simple_table_pdf(title, headers, rows, filename, col_widths=None, highlight
 
     title_style = ParagraphStyle('title', fontName='Helvetica-Bold', fontSize=18,
                                  alignment=TA_CENTER, spaceAfter=12)
+    title_para = Paragraph(title, title_style)
+    _, title_height = title_para.wrap(usable_width, page_h)
+
     data = [headers] + rows
-    table = Table(data, colWidths=col_w, repeatRows=1)
+    n_rows = len(data)
+    available_height = page_h - 2 * margin - 2 * frame_pad - title_height
+
+    header_font = 11
+    row_heights = None
+    for data_font, pad in ((10, 6), (9, 5), (8, 4), (7, 3)):
+        header_h = header_font + 2 * pad + 3
+        data_h = data_font + 2 * pad + 3
+        if header_h + data_h * (n_rows - 1) <= available_height:
+            row_heights = [header_h] + [data_h] * (n_rows - 1)
+            break
+    else:
+        data_font, pad = 7, 3   # smallest tried; still too many rows -- let it paginate
+
+    table = Table(data, colWidths=col_w, rowHeights=row_heights, repeatRows=1)
     style_cmds = [
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4472C4')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTSIZE', (0, 0), (-1, 0), 11),
+        ('FONTSIZE', (0, 0), (-1, 0), header_font),
         ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 1), (-1, -1), 10),
+        ('FONTSIZE', (0, 1), (-1, -1), data_font),
         ('ALIGN', (1, 0), (-1, -1), 'CENTER'),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#888888')),
         ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F5F7FA')]),
-        ('TOPPADDING', (0, 0), (-1, -1), 6),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('TOPPADDING', (0, 0), (-1, -1), pad),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), pad),
     ]
     if highlight_col is not None:
         style_cmds.append(('BACKGROUND', (highlight_col, 1), (highlight_col, -1), colors.HexColor('#FFF3CD')))
     table.setStyle(TableStyle(style_cmds))
 
-    doc.build([Paragraph(title, title_style), table])
+    doc.build([title_para, table])
     return pdf_response(output, filename)
 
 
