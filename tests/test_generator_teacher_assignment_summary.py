@@ -250,16 +250,18 @@ def test_image_download_is_never_cached(app):
     assert 'no-store' in cache_control and 'no-cache' in cache_control
 
 
-def test_pdf_is_landscape_for_more_horizontal_room(app):
-    bid = _seed_n_teachers(app, 'LAND', 1)
+def test_pdf_is_portrait(app):
+    """Stays portrait -- only the column layout changed, not the page
+    orientation."""
+    bid = _seed_n_teachers(app, 'PORT', 1)
     c = _scoped_to_branch(_admin(app), bid)
     r = c.get('/generator/assignments/report/pdf')
     import fitz
     doc = fitz.open(stream=r.data, filetype='pdf')
     try:
         page = doc[0]
-        assert page.rect.width > page.rect.height, (
-            f'expected landscape (wider than tall), got {page.rect.width}x{page.rect.height}')
+        assert page.rect.height > page.rect.width, (
+            f'expected portrait (taller than wide), got {page.rect.width}x{page.rect.height}')
     finally:
         doc.close()
 

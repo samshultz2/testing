@@ -1580,7 +1580,7 @@ def teacher_assignment_summary_image():
 def teacher_assignment_summary_pdf():
     from routes.generator.generation import _teacher_assignment_summary
     from reportlab.lib import colors
-    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.enums import TA_LEFT
@@ -1590,7 +1590,7 @@ def teacher_assignment_summary_pdf():
     summary = _teacher_assignment_summary()
     output = BytesIO()
     margin = 15 * mm
-    page_size = landscape(A4)
+    page_size = A4
     doc = SimpleDocTemplate(output, pagesize=page_size, leftMargin=margin, rightMargin=margin,
                             topMargin=margin, bottomMargin=margin)
 
@@ -1603,11 +1603,11 @@ def teacher_assignment_summary_pdf():
     total_style = ParagraphStyle('total', fontName='Helvetica-Bold', fontSize=10.5,
                                  leading=14, spaceBefore=2, textColor=colors.HexColor('#1e6b3e'))
 
-    # Landscape + 2 columns so a page isn't mostly blank on the right of a
-    # narrow name-and-bullets block — each teacher only needs a fraction of
-    # a full page's width. Paired row-by-row (not a balanced-height split)
-    # so the reading order stays a simple left-then-right, top-to-bottom grid.
-    gutter = 10 * mm
+    # 2 columns (portrait page) so a page isn't mostly blank on the right of
+    # a narrow name-and-bullets block — each teacher only needs a fraction of
+    # a full page's width. Paired row-by-row (not a balanced-height split) so
+    # the reading order stays a simple left-then-right, top-to-bottom grid.
+    gutter = 8 * mm
     content_width = page_size[0] - 2 * margin
     col_width = (content_width - gutter) / 2
 
