@@ -81,6 +81,13 @@ def test_class_subjects_config_page_shows_new_restriction_controls(app):
     assert f'excluded_periods_{subj_id}' in body
 
 
+def test_class_subjects_config_has_back_button(app):
+    cc_id, subj_id = _build_class(app, 'CI')
+    c = _admin(app)
+    body = c.get(f'/generator/class-subjects/{cc_id}').get_data(as_text=True)
+    assert 'Back to Class Subjects' in body
+
+
 def test_class_subjects_config_flags_global_not_first_period(app):
     """The class-level checkbox itself is NOT checked just because a global
     default exists (checking it would bake a redundant class-level flag onto

@@ -283,6 +283,72 @@
     </div>
 </div>
 
+<!-- Fixed-Period Rules -->
+<div class="card mb-3">
+    <div class="card-header">
+        <h3><i class="fas fa-thumbtack"></i> Fixed-Period Rules</h3>
+        <a href="{{ url_for('generator.add_fixed_period_rule') }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add Rule</a>
+    </div>
+    <div class="card-body" style="padding: 0;">
+        {% if fixed_period_rules %}
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Subject</th>
+                    <th>Class</th>
+                    <th>Fixed Period</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for rule in fixed_period_rules %}
+                <tr>
+                    <td>
+                        <strong>{{ rule.name }}</strong>
+                        {% if rule.description %}
+                        <br><small class="text-muted">{{ rule.description[:50] }}{% if rule.description|length > 50 %}...{% endif %}</small>
+                        {% endif %}
+                    </td>
+                    <td><span class="badge badge-primary">{{ rule.subject.name }}</span></td>
+                    <td>{{ rule.class_name }} {{ rule.arm_name or '(All Arms)' }}</td>
+                    <td>Period {{ rule.fixed_period }}</td>
+                    <td>
+                        {% if rule.is_active %}
+                        <span class="badge badge-success">Active</span>
+                        {% else %}
+                        <span class="badge badge-secondary">Inactive</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <form method="POST" action="{{ url_for('generator.toggle_fixed_period_rule', rule_id=rule.id) }}" style="display: inline;">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm {% if rule.is_active %}btn-warning{% else %}btn-success{% endif %}" title="{% if rule.is_active %}Deactivate{% else %}Activate{% endif %}">
+                                <i class="fas fa-{% if rule.is_active %}pause{% else %}play{% endif %}"></i>
+                            </button>
+                        </form>
+                        <form method="POST" action="{{ url_for('generator.delete_fixed_period_rule', rule_id=rule.id) }}" style="display: inline;" data-confirm="Delete this rule?">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                            <button type="submit" class="btn btn-sm btn-danger" title="Delete">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-thumbtack"></i>
+            <p>No fixed-period rules configured</p>
+            <a href="{{ url_for('generator.add_fixed_period_rule') }}" class="btn btn-primary btn-sm">Add Rule</a>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
 <div class="card">
     <div class="card-header"><h3><i class="fas fa-info-circle"></i> Help</h3></div>
     <div class="card-body">
@@ -301,6 +367,10 @@
         <h4 class="mt-3">Day-Separation Rules</h4>
         <p>Use these rules to keep a subject off two specific days of the week together, for one class. If it lands on either day, it can't also land on the other that same week — it's still free on every other day, and free to be on just one of the two.</p>
         <p><strong>Example:</strong> SSS1 Rose's Physics can be on Monday or on Friday, but never both in the same week. This doesn't reduce the subject's periods/week, it only rules out that one day-pairing — so it very rarely makes a timetable infeasible, unless that subject already needs a period on every single day of the week for that class.</p>
+
+        <h4 class="mt-3">Fixed-Period Rules</h4>
+        <p>Use these rules to pin a subject to one specific period number, for one class (optionally one specific arm) — whatever day it lands on, it must always be at that exact period. Unlike the per-class "Restrictions" on the Class Subjects page (which only rule periods out), this pins the subject to exactly one period in.</p>
+        <p><strong>Example:</strong> SSS2 Lily's Chemistry must always be period 2 — Monday period 2, Wednesday period 2, whichever days it's scheduled, never any other period. This doesn't change the subject's periods/week, just where in the day each one falls — but a subject needing more periods/week than the class has available days will make the timetable infeasible, since each day can only offer that one fixed slot.</p>
     </div>
 </div>
 {% endblock %}

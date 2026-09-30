@@ -20,7 +20,7 @@ from .models import (
     GenClassConfig, GenClassArmStream,
     GenTeacherAssignment, GenTimetableRule, GenTimetableResult, GenSettings,
     GenSubjectClashRule, GenCombinedClassRule, GenCoScheduleRule, GenCoScheduleRuleMember,
-    GenDaySeparationRule, ActiveTimetableBatch
+    GenDaySeparationRule, GenFixedPeriodRule, ActiveTimetableBatch
 )
 from .models_contributions import ContributionSettings, ContributionPayment, ContributionExpense
 from .models_finance import (FeeItem, FeeStructure, FeePayment, FeeDiscount,
@@ -89,7 +89,7 @@ __all__ = [
     'GenClassConfig', 'GenClassArmStream',
     'GenTeacherAssignment', 'GenTimetableRule', 'GenTimetableResult', 'GenSettings',
     'GenSubjectClashRule', 'GenCombinedClassRule', 'GenCoScheduleRule', 'GenCoScheduleRuleMember',
-    'GenDaySeparationRule', 'ActiveTimetableBatch',
+    'GenDaySeparationRule', 'GenFixedPeriodRule', 'ActiveTimetableBatch',
     'ContributionSettings', 'ContributionPayment', 'ContributionExpense',
     'FeeItem', 'FeeStructure', 'FeePayment', 'FeeDiscount',
     'ExpenseCategory', 'Expense', 'FinanceTransaction', 'AdditionalCharge', 'InstallmentPlan',

@@ -8,7 +8,8 @@ from models import (
     db, GenClassConfig, GenClassArmStream, GenStreamSubject, GenSubjectConfig,
     GenClassSubjectConfig, GenClassStreamSubject, GenTeacher, GenTeacherAssignment,
     GenTeacherAvailability, GenTimetableRule, GenTimetableResult, GenSubject,
-    GenSubjectClashRule, GenCombinedClassRule, GenCoScheduleRule, GenDaySeparationRule
+    GenSubjectClashRule, GenCombinedClassRule, GenCoScheduleRule, GenDaySeparationRule,
+    GenFixedPeriodRule
 )
 from models.models.generator import DAY_NAMES
 from routes.generator import gen_bid
@@ -67,7 +68,8 @@ def _effective_restrictions(class_cfg, global_cfg):
 
 def diagnose_infeasibility(class_arms, requirements, teachers, teacher_reqs, teacher_unavailable,
                            subject_info, num_periods, num_slots, num_days, break_after,
-                           valid_double_starts, day_separation_rules=(), day_separation_default=None):
+                           valid_double_starts, day_separation_rules=(), day_separation_default=None,
+                           fixed_period_rules=()):
     """Structural (pigeon-hole) checks that PROVE a generation request can
     never succeed, independent of what the solver does — e.g. asking a class
     for more periods per week than exist, or a teacher for more periods than
@@ -179,6 +181,29 @@ def diagnose_infeasibility(class_arms, requirements, teachers, teacher_reqs, tea
                     f"impossible to also keep it off {day_a_name} and {day_b_name} together — "
                     f"exempt {info['name']} from the day-separation rule under Subject Settings, "
                     f"or turn the rule off under Timetable Rules.")
+
+    # Fixed-period rules: pinning a subject to one period allows at most one
+    # occurrence per day (that period, once), so needing more periods/week
+    # than there are school days can never fit.
+    for rule in fixed_period_rules:
+        if not (1 <= rule.fixed_period <= num_periods):
+            reasons.append(
+                f"'{rule.name}' pins {rule.class_name} {rule.arm_name or '(all arms)'} to period "
+                f"{rule.fixed_period}, which is out of range for a {num_periods}-period day — fix "
+                f"the rule or the periods_per_day setting.")
+            continue
+        matching_cas = [ca for ca in class_arms if ca[0] == rule.class_name
+                        and (not rule.arm_name or ca[1] == rule.arm_name)]
+        for class_name, arm in matching_cas:
+            count = sum(1 for r in requirements if r['class_name'] == class_name
+                       and r['arm'] == arm and r['subject_id'] == rule.subject_id)
+            if count > num_days:
+                subj_name = rule.subject.name if rule.subject else f'subject #{rule.subject_id}'
+                reasons.append(
+                    f"'{rule.name}': {class_name} {arm} needs {subj_name} {count} periods/week, but "
+                    f"pinning it to period {rule.fixed_period} allows at most one occurrence per day "
+                    f"({num_days} school days) — reduce this subject's weekly periods for this class, "
+                    f"or remove/adjust the rule.")
 
     return reasons
 
@@ -377,6 +402,7 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
     num_days = 5
     
     day_separation_rules = GenDaySeparationRule.query.filter_by(is_active=True, branch_id=gen_bid()).all()
+    fixed_period_rules = GenFixedPeriodRule.query.filter_by(is_active=True, branch_id=gen_bid()).all()
 
     day_separation_default = {
         'enabled': bool(day_separation_default_enabled),
@@ -398,7 +424,8 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
         teacher_reqs=teacher_reqs, teacher_unavailable=teacher_unavailable,
         subject_info=subject_info, num_periods=num_periods, num_slots=num_slots,
         num_days=num_days, break_after=break_after, valid_double_starts=valid_double_starts,
-        day_separation_rules=day_separation_rules, day_separation_default=day_separation_default)
+        day_separation_rules=day_separation_rules, day_separation_default=day_separation_default,
+        fixed_period_rules=fixed_period_rules)
     if reasons:
         return {'success': False,
                'message': f'Cannot generate — {len(reasons)} configuration problem'
@@ -941,6 +968,33 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
             day_sep_default_count += 1
     logger.debug(f"  Added {day_sep_default_count} default day-separation constraints")
 
+    # Constraint 13c: Fixed-period rules — pins a subject to one specific
+    # period number for a class (optionally one arm): every one of that
+    # requirement's periods must land at that exact period, whatever day it
+    # falls on. The mirror of excluded_periods (which only rules periods
+    # out): this rules every OTHER period out, leaving just the one in.
+    logger.debug("Adding fixed-period constraints...")
+    fixed_period_count = 0
+    for rule in fixed_period_rules:
+        if not (1 <= rule.fixed_period <= num_periods):
+            logger.debug(f"  Warning: '{rule.name}' pins period {rule.fixed_period}, out of range "
+                        f"for this generation's {num_periods} periods/day, skipping...")
+            continue
+        matching_cas = [ca for ca in class_arms if ca[0] == rule.class_name
+                        and (not rule.arm_name or ca[1] == rule.arm_name)]
+        allowed_slots = {day * num_periods + (rule.fixed_period - 1) for day in range(num_days)}
+        for class_name, arm in matching_cas:
+            key = (class_name, arm, rule.subject_id)
+            reqs = subject_ca_reqs.get(key)
+            if not reqs:
+                continue
+            for req in reqs:
+                for slot in range(num_slots):
+                    if slot not in allowed_slots:
+                        model.Add(x[req['req_id'], slot] == 0)
+            fixed_period_count += 1
+    logger.debug(f"  Added {fixed_period_count} fixed-period constraints")
+
     # ========== BALANCE EMPTY SLOTS ACROSS DAYS (soft objective) ==========
     # Some class-arms have fewer required periods than slots in the week
     # (e.g. only 40 of 45 periods actually taught) — that's expected, not a
@@ -1012,6 +1066,8 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
             active_rules.append(f'{day_sep_count} day-separation rule(s)')
         if day_sep_default_count:
             active_rules.append(f'the school-wide day-separation default ({day_sep_default_count} subject-class pairs)')
+        if fixed_period_count:
+            active_rules.append(f'{fixed_period_count} fixed-period rule(s)')
         if any(info['not_first_period'] or info['not_last_period'] for info in subject_info.values()):
             active_rules.append('not-first/not-last period restrictions on some subjects')
         if any(info.get('avoid_morning') or info.get('avoid_afternoon') for info in subject_info.values()):

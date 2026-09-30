@@ -612,3 +612,35 @@ class GenDaySeparationRule(db.Model):
 
     def __repr__(self):
         return f'<GenDaySeparationRule {self.name}>'
+
+
+class GenFixedPeriodRule(db.Model):
+    """
+    Pins a subject to one specific period number, for one class (optionally
+    one specific arm) — whatever day it lands on, it must always be at that
+    exact period. Doesn't change how many periods/week the subject gets,
+    just where in the day each one falls.
+    Example: SSS2 Lily's Chemistry must always be period 2 — Monday period 2,
+    Wednesday period 2, whichever days it's scheduled, never any other period.
+    """
+    __tablename__ = 'gen_fixed_period_rules'
+
+    id = db.Column(db.Integer, primary_key=True)
+    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'), index=True)  # owning branch (per-branch generator)
+    name = db.Column(db.String(100), nullable=False)
+    description = db.Column(db.Text)
+
+    subject_id = db.Column(db.Integer, db.ForeignKey('gen_subjects.id'), nullable=False)
+    class_name = db.Column(db.String(20), nullable=False)  # e.g., "SSS2"
+    arm_name = db.Column(db.String(50))  # e.g., "Lily", or NULL for every arm of that class
+
+    fixed_period = db.Column(db.Integer, nullable=False)  # 1-based period number
+
+    is_active = db.Column(db.Boolean, default=True)
+    created_at = db.Column(db.DateTime, default=local_now)
+
+    # Relationships
+    subject = db.relationship('GenSubject', foreign_keys=[subject_id])
+
+    def __repr__(self):
+        return f'<GenFixedPeriodRule {self.name}>'

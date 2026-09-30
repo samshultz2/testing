@@ -11,6 +11,11 @@
 {% block content %}
 <div class="page-header">
     <h1>{{ class_config.class_name }} - Subjects</h1>
+    <div class="page-header-actions">
+        <a href="{{ url_for('generator.class_subjects_list') }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back to Class Subjects
+        </a>
+    </div>
 </div>
 
 <p class="text-muted mb-3">Select which subjects {{ class_config.class_name }} takes and set periods per week for each.</p>

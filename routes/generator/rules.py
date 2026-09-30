@@ -105,18 +105,21 @@ def save_generator_settings():
 @login_required
 def clash_rules_list():
     """List all subject clash rules"""
-    from models import GenSubjectClashRule, GenCombinedClassRule, GenCoScheduleRule, GenDaySeparationRule
+    from models import (GenSubjectClashRule, GenCombinedClassRule, GenCoScheduleRule,
+                        GenDaySeparationRule, GenFixedPeriodRule)
 
     clash_rules = GenSubjectClashRule.query.filter_by(branch_id=gen_bid()).order_by(GenSubjectClashRule.id).all()
     combined_rules = GenCombinedClassRule.query.filter_by(branch_id=gen_bid()).order_by(GenCombinedClassRule.id).all()
     coschedule_rules = GenCoScheduleRule.query.filter_by(branch_id=gen_bid()).order_by(GenCoScheduleRule.id).all()
     day_separation_rules = GenDaySeparationRule.query.filter_by(branch_id=gen_bid()).order_by(GenDaySeparationRule.id).all()
+    fixed_period_rules = GenFixedPeriodRule.query.filter_by(branch_id=gen_bid()).order_by(GenFixedPeriodRule.id).all()
 
     return render_template('generator/clash_rules.html',
         clash_rules=clash_rules,
         combined_rules=combined_rules,
         coschedule_rules=coschedule_rules,
-        day_separation_rules=day_separation_rules
+        day_separation_rules=day_separation_rules,
+        fixed_period_rules=fixed_period_rules
     )
 
 
@@ -414,6 +417,86 @@ def delete_day_separation_rule(rule_id):
     from models import GenDaySeparationRule
 
     rule = gen_owned_or_404(GenDaySeparationRule, rule_id)
+    db.session.delete(rule)
+    db.session.commit()
+
+    flash('Rule deleted', 'success')
+    return redirect(url_for('generator.clash_rules_list'))
+
+
+@generator_bp.route('/fixed-period-rules/add', methods=['GET', 'POST'])
+@login_required
+def add_fixed_period_rule():
+    """Add a new fixed-period rule (pin a subject to one specific period
+    number for a class/arm, e.g. SSS2 Lily's Chemistry must always be
+    period 2, whichever day it lands on)."""
+    from models import GenFixedPeriodRule, GenClassConfig, GenTimetableRule
+
+    level = get_current_level()
+    ppd_rule = GenTimetableRule.query.filter_by(
+        rule_type='periods_per_day', school_level=level, is_active=True, branch_id=gen_bid()).first()
+    try:
+        max_periods = int(ppd_rule.value) if ppd_rule and ppd_rule.value else 8
+    except (TypeError, ValueError):
+        max_periods = 8
+
+    if request.method == 'POST':
+        try:
+            fixed_period = int(request.form.get('fixed_period'))
+            if not (1 <= fixed_period <= max_periods):
+                raise ValueError(f'Period must be between 1 and {max_periods}.')
+            rule = GenFixedPeriodRule(
+                branch_id=gen_bid(),
+                name=request.form.get('name', '').strip(),
+                description=request.form.get('description', '').strip() or None,
+                subject_id=int(request.form.get('subject_id')),
+                class_name=request.form.get('class_name'),
+                arm_name=request.form.get('arm_name') or None,
+                fixed_period=fixed_period,
+                is_active=True
+            )
+            if not rule.name:
+                raise ValueError('Rule name is required.')
+            db.session.add(rule)
+            db.session.commit()
+            flash('Fixed-period rule added successfully', 'success')
+            return redirect(url_for('generator.clash_rules_list'))
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Error adding rule: {str(e)}', 'error')
+
+    subjects = GenSubject.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).order_by(GenSubject.name).all()
+    classes = GenClassConfig.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).order_by(GenClassConfig.class_name).all()
+
+    return render_template('generator/add_fixed_period_rule.html',
+        subjects=subjects,
+        classes=classes,
+        max_periods=max_periods
+    )
+
+
+@generator_bp.route('/fixed-period-rules/<int:rule_id>/toggle', methods=['POST'])
+@login_required
+def toggle_fixed_period_rule(rule_id):
+    """Toggle a fixed-period rule active/inactive"""
+    from models import GenFixedPeriodRule
+
+    rule = gen_owned_or_404(GenFixedPeriodRule, rule_id)
+    rule.is_active = not rule.is_active
+    db.session.commit()
+
+    status = 'activated' if rule.is_active else 'deactivated'
+    flash(f'Rule {status}', 'success')
+    return redirect(url_for('generator.clash_rules_list'))
+
+
+@generator_bp.route('/fixed-period-rules/<int:rule_id>/delete', methods=['POST'])
+@login_required
+def delete_fixed_period_rule(rule_id):
+    """Delete a fixed-period rule"""
+    from models import GenFixedPeriodRule
+
+    rule = gen_owned_or_404(GenFixedPeriodRule, rule_id)
     db.session.delete(rule)
     db.session.commit()
 
