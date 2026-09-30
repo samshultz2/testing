@@ -46,13 +46,23 @@ def _disposition(filename, inline):
     """RFC 6266 Content-Disposition. The filename is quoted (so spaces — e.g. a
     term name like "First Term" — don't truncate the download) and also sent as
     ``filename*=UTF-8''`` so accented names survive; control chars are stripped
-    to prevent header injection."""
+    to prevent header injection.
+
+    Also sets no-cache headers: these are always freshly generated from
+    current data (a report, an export), so a stale cached copy served back
+    for the same URL — the browser's own HTTP cache, not just a service
+    worker — is always wrong, never a legitimate speed win."""
     from urllib.parse import quote
     kind = 'inline' if inline else 'attachment'
     name = ''.join(c for c in str(filename) if c >= ' ' and c not in '\r\n')
     ascii_name = name.replace('"', '').replace('\\', '').encode('ascii', 'ignore').decode() or 'download'
     star = quote(name, safe='')
-    return {'Content-Disposition': f'{kind}; filename="{ascii_name}"; filename*=UTF-8\'\'{star}'}
+    return {
+        'Content-Disposition': f'{kind}; filename="{ascii_name}"; filename*=UTF-8\'\'{star}',
+        'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+        'Pragma': 'no-cache',
+        'Expires': '0',
+    }
 
 
 CSV_MIME = 'text/csv; charset=utf-8'

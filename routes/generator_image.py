@@ -39,6 +39,29 @@ def _paste_logo_left(img, logo, text_x, top_y, target_h, gap):
         return 0
 
 
+def _wrap_text(draw, text, font, max_width):
+    """Greedy word-wrap ``text`` to fit within ``max_width`` px, for a fixed
+    ``font``. A single word wider than ``max_width`` on its own (rare, but
+    possible with a very long joined name) is left on its own line rather
+    than broken mid-word. Returns a list of one or more lines; never empty."""
+    if not text:
+        return ['']
+    if font is None:
+        return [text]   # can't measure without a font; caller already skips drawing when font is None
+    words = text.split(' ')
+    lines = []
+    current = words[0]
+    for word in words[1:]:
+        candidate = current + ' ' + word
+        if draw.textlength(candidate, font=font) <= max_width:
+            current = candidate
+        else:
+            lines.append(current)
+            current = word
+    lines.append(current)
+    return lines
+
+
 def get_font(size, bold=False):
     """Get a font, trying system fonts first"""
     font_paths = [
@@ -676,7 +699,14 @@ def image_to_response(img, filename):
     return Response(
         buffer.getvalue(),
         mimetype='image/png',
-        headers={'Content-Disposition': f'attachment; filename={filename}'}
+        headers={
+            'Content-Disposition': f'attachment; filename={filename}',
+            # Always freshly rendered from current data -- never let the
+            # browser reuse a stale cached copy for the same URL.
+            'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma': 'no-cache',
+            'Expires': '0',
+        }
     )
 
 
@@ -755,6 +785,35 @@ def generate_simple_table_image(title, headers, rows, col_widths=None, quality='
     return img
 
 
+def _build_teacher_block(measure_draw, row, font_name, font_line, font_total, col_width, scale,
+                         color_black, color_total):
+    """Lay out one teacher's block (name, bulleted assignment lines, total)
+    wrapped to fit ``col_width``. Returns (ops, height) where ops is a list
+    of (text, font, color, x_offset, line_height) draw instructions, so the
+    caller can measure every block's height before drawing anything (needed
+    to size the image and to pair rows up by height)."""
+    indent = 20 * scale
+    name_line_h = 38 * scale
+    line_line_h = 28 * scale
+    total_line_h = 34 * scale
+
+    ops = []
+    height = 0
+    for wrapped in _wrap_text(measure_draw, row['teacher'].name, font_name, col_width):
+        ops.append((wrapped, font_name, color_black, 0, name_line_h))
+        height += name_line_h
+    for line in row['lines']:
+        for wrapped in _wrap_text(measure_draw, '• ' + line['text'], font_line, col_width - indent):
+            ops.append((wrapped, font_line, color_black, indent, line_line_h))
+            height += line_line_h
+    plural = 's' if row['total'] != 1 else ''
+    total_text = f"Total — {row['total']} period{plural}/week"
+    for wrapped in _wrap_text(measure_draw, total_text, font_total, col_width - indent):
+        ops.append((wrapped, font_total, color_total, indent, total_line_h))
+        height += total_line_h
+    return ops, height
+
+
 def generate_teacher_assignment_summary_image(summary, quality='hd'):
     """A grouped, per-teacher list PNG for the teacher-assignment summary
     report — each teacher's name, their assignment lines (as given by
@@ -768,33 +827,56 @@ def generate_teacher_assignment_summary_image(summary, quality='hd'):
     a 150-teacher school into a multi-minute, 33MB render. This stays at a
     much lighter scale/width (a text list needs far less resolution than a
     printed grid) so it's still crisp on screen but doesn't blow up with a
-    bigger school."""
+    bigger school.
+
+    Laid out as 2 columns, paired row-by-row (teacher 0 & 1 side by side,
+    then 2 & 3, ...) rather than one full-width column — a name-and-bullets
+    block rarely needs anywhere near the page's full width, so a single
+    column left most of the image blank on the right for the whole page."""
     scale = 3 if quality == 'ultra' else 2
     margin = 24 * scale
     width = 1100 * scale
+    gutter = 40 * scale
+    col_width = (width - 2 * margin - gutter) // 2
     title_height = 56 * scale
-    teacher_gap = 22 * scale
-    name_height = 38 * scale
+    row_gap = 22 * scale
     line_height = 28 * scale
-    total_height = 34 * scale
 
     font_title = get_font(30 * scale, bold=True)
     font_name = get_font(20 * scale, bold=True)
     font_line = get_font(16 * scale)
     font_total = get_font(16 * scale, bold=True)
 
-    img_height = margin * 2 + title_height
-    if not summary:
-        img_height += line_height
-    for row in summary:
-        img_height += name_height + len(row['lines']) * line_height + total_height + teacher_gap
-
-    img = Image.new('RGB', (width, int(img_height)), color='white')
-    draw = ImageDraw.Draw(img)
-
     color_black = (20, 20, 20)
     color_muted = (100, 100, 100)
     color_total = (30, 107, 62)
+
+    # Text is measured (for wrapping) before the real image exists -- a font's
+    # metrics don't depend on the image it's eventually drawn into, so a
+    # throwaway 1x1 image is enough to measure with.
+    measure_draw = ImageDraw.Draw(Image.new('RGB', (1, 1)))
+
+    rows_layout = []
+    for i in range(0, len(summary), 2):
+        left_ops, left_h = _build_teacher_block(
+            measure_draw, summary[i], font_name, font_line, font_total, col_width, scale,
+            color_black, color_total)
+        if i + 1 < len(summary):
+            right_ops, right_h = _build_teacher_block(
+                measure_draw, summary[i + 1], font_name, font_line, font_total, col_width, scale,
+                color_black, color_total)
+        else:
+            right_ops, right_h = [], 0
+        rows_layout.append((left_ops, right_ops, max(left_h, right_h)))
+
+    img_height = margin * 2 + title_height
+    if not summary:
+        img_height += line_height
+    for _, _, row_height in rows_layout:
+        img_height += row_height + row_gap
+
+    img = Image.new('RGB', (width, int(img_height)), color='white')
+    draw = ImageDraw.Draw(img)
 
     y = margin
     if font_title:
@@ -806,18 +888,19 @@ def generate_teacher_assignment_summary_image(summary, quality='hd'):
             draw.text((margin, y), 'No assignments yet.', fill=color_muted, font=font_line)
         y += line_height
 
-    for row in summary:
-        if font_name:
-            draw.text((margin, y), row['teacher'].name, fill=color_black, font=font_name)
-        y += name_height
-        for line in row['lines']:
-            if font_line:
-                draw.text((margin + 20 * scale, y), '• ' + line['text'], fill=color_black, font=font_line)
-            y += line_height
-        if font_total:
-            plural = 's' if row['total'] != 1 else ''
-            draw.text((margin + 20 * scale, y), f"Total — {row['total']} period{plural}/week",
-                      fill=color_total, font=font_total)
-        y += total_height + teacher_gap
+    col2_x = margin + col_width + gutter
+    for left_ops, right_ops, row_height in rows_layout:
+        row_top = y
+        yy = row_top
+        for text, font, color, x_off, line_h in left_ops:
+            if font:
+                draw.text((margin + x_off, yy), text, fill=color, font=font)
+            yy += line_h
+        yy = row_top
+        for text, font, color, x_off, line_h in right_ops:
+            if font:
+                draw.text((col2_x + x_off, yy), text, fill=color, font=font)
+            yy += line_h
+        y = row_top + row_height + row_gap
 
     return img

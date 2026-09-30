@@ -1580,38 +1580,66 @@ def teacher_assignment_summary_image():
 def teacher_assignment_summary_pdf():
     from routes.generator.generation import _teacher_assignment_summary
     from reportlab.lib import colors
-    from reportlab.lib.pagesizes import A4
+    from reportlab.lib.pagesizes import A4, landscape
     from reportlab.lib.units import mm
     from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.enums import TA_LEFT
-    from reportlab.platypus import SimpleDocTemplate, Paragraph, ListFlowable, ListItem
+    from reportlab.platypus import SimpleDocTemplate, Paragraph, ListFlowable, ListItem, Table, TableStyle, Spacer
+    from xml.sax.saxutils import escape
 
     summary = _teacher_assignment_summary()
     output = BytesIO()
     margin = 15 * mm
-    doc = SimpleDocTemplate(output, pagesize=A4, leftMargin=margin, rightMargin=margin,
+    page_size = landscape(A4)
+    doc = SimpleDocTemplate(output, pagesize=page_size, leftMargin=margin, rightMargin=margin,
                             topMargin=margin, bottomMargin=margin)
 
     title_style = ParagraphStyle('title', fontName='Helvetica-Bold', fontSize=18,
                                  spaceAfter=14)
     teacher_style = ParagraphStyle('teacher', fontName='Helvetica-Bold', fontSize=13,
-                                   spaceBefore=10, spaceAfter=4)
+                                   spaceBefore=0, spaceAfter=4)
     line_style = ParagraphStyle('line', fontName='Helvetica', fontSize=10.5, leading=14,
                                 alignment=TA_LEFT)
     total_style = ParagraphStyle('total', fontName='Helvetica-Bold', fontSize=10.5,
                                  leading=14, spaceBefore=2, textColor=colors.HexColor('#1e6b3e'))
 
+    # Landscape + 2 columns so a page isn't mostly blank on the right of a
+    # narrow name-and-bullets block — each teacher only needs a fraction of
+    # a full page's width. Paired row-by-row (not a balanced-height split)
+    # so the reading order stays a simple left-then-right, top-to-bottom grid.
+    gutter = 10 * mm
+    content_width = page_size[0] - 2 * margin
+    col_width = (content_width - gutter) / 2
+
+    def _teacher_cell(row):
+        if row is None:
+            return []
+        flow = [Paragraph(escape(row['teacher'].name), teacher_style)]
+        if row['lines']:
+            flow.append(ListFlowable(
+                [ListItem(Paragraph(escape(line['text']), line_style), leftIndent=6) for line in row['lines']],
+                bulletType='bullet', start='-', leftIndent=14))
+        plural = 's' if row['total'] != 1 else ''
+        flow.append(Paragraph(f"Total — {row['total']} period{plural}/week", total_style))
+        return flow
+
     elements = [Paragraph('Teacher Assignment Summary', title_style)]
     if not summary:
         elements.append(Paragraph('No assignments yet.', line_style))
-    for row in summary:
-        elements.append(Paragraph(row['teacher'].name, teacher_style))
-        if row['lines']:
-            elements.append(ListFlowable(
-                [ListItem(Paragraph(line['text'], line_style), leftIndent=6) for line in row['lines']],
-                bulletType='bullet', start='-', leftIndent=14))
-        plural = 's' if row['total'] != 1 else ''
-        elements.append(Paragraph(f"Total — {row['total']} period{plural}/week", total_style))
+    for i in range(0, len(summary), 2):
+        left = summary[i]
+        right = summary[i + 1] if i + 1 < len(summary) else None
+        row_table = Table([[_teacher_cell(left), _teacher_cell(right)]], colWidths=[col_width, col_width])
+        row_table.setStyle(TableStyle([
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('LEFTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (-1, -1), 0),
+            ('RIGHTPADDING', (0, 0), (0, -1), gutter),
+            ('TOPPADDING', (0, 0), (-1, -1), 6),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+            ('LINEBELOW', (0, 0), (-1, -1), 0.5, colors.HexColor('#e0e0e0')),
+        ]))
+        elements.append(row_table)
 
     doc.build(elements)
-    return pdf_response(output, 'teacher_assignment_summary.pdf')
+    return pdf_response(output, 'teacher_assignment_summary.pdf', inline=False)
