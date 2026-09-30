@@ -33,7 +33,16 @@
                 </label>
                 <span class="form-hint">If checked, you'll need to assign streams to each arm</span>
             </div>
-            
+
+            <div class="form-group">
+                <label class="checkbox-label">
+                    <input type="checkbox" name="require_free_first_period">
+                    <span>On days with a free period, always make period 1 one of them</span>
+                </label>
+                <span class="form-hint">If this class ends up with any free period on a day, period 1 must be free
+                    too — fully packed days aren't affected. Applies to every arm of this class.</span>
+            </div>
+
             <div class="page-header-actions">
                 <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save</button>
                 <a href="{{ url_for('generator.classes_config') }}" class="btn btn-secondary">Cancel</a>

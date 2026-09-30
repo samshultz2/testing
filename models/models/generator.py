@@ -229,6 +229,10 @@ class GenClassConfig(db.Model):
     num_arms = db.Column(db.Integer, default=1)
     arm_names = db.Column(db.String(200))  # Comma-separated: "Iris,Rose,Lily,Tulip"
     has_streams = db.Column(db.Boolean, default=False)
+    # On any day this class(-arm) ends up with at least one free period, period 1
+    # must be one of them -- enforced by the solver as a hard constraint. Days
+    # that come out fully packed (no free periods at all) are unaffected.
+    require_free_first_period = db.Column(db.Boolean, default=False)
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=local_now)
     

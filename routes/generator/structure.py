@@ -198,7 +198,8 @@ def add_class_config():
                 branch_id=gen_bid(),
                 num_arms=request.form.get('num_arms', type=int) or 1,
                 arm_names=request.form.get('arm_names', '').strip() or None,
-                has_streams=has_streams
+                has_streams=has_streams,
+                require_free_first_period=request.form.get('require_free_first_period') == 'on'
             )
             db.session.add(class_config)
             db.session.commit()
@@ -232,6 +233,7 @@ def update_class_config(class_id):
         class_config.num_arms = request.form.get('num_arms', type=int) or 1
         class_config.arm_names = request.form.get('arm_names', '').strip() or None
         class_config.has_streams = request.form.get('has_streams') == 'on'
+        class_config.require_free_first_period = request.form.get('require_free_first_period') == 'on'
         db.session.commit()
         flash('Class configuration updated!', 'success')
     except Exception as e:

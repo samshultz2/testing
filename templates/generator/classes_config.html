@@ -42,6 +42,12 @@
                     </span>
                 </div>
                 {% endif %}
+                {% if class_config.require_free_first_period %}
+                <div class="data-card-row">
+                    <span class="data-card-label">Free Periods</span>
+                    <span class="badge badge-info">Period 1 first</span>
+                </div>
+                {% endif %}
                 <div class="data-card-actions">
                     <a href="{{ url_for('generator.edit_class_config', class_id=class_config.id) }}" class="btn btn-primary btn-sm">
                         <i class="fas fa-edit"></i> Edit

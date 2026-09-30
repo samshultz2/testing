@@ -243,12 +243,15 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
     requirements = []
     class_arms = []
     subject_info = {}
-    
+    class_free_first_flags = {}
+
     for class_id in class_ids:
         cc = GenClassConfig.query.get(class_id)
         if not cc or not cc.is_active:
             continue
-        
+
+        class_free_first_flags[cc.class_name] = bool(cc.require_free_first_period)
+
         for arm in cc.arm_list:
             class_arms.append((cc.class_name, arm))
             class_level = get_class_level(cc.class_name)
@@ -1025,6 +1028,30 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
             period_placement_count += 1
     logger.debug(f"  Added {period_placement_count} period-placement constraints")
 
+    # Constraint 13d: "require free first period" per-class toggle (Class
+    # Configuration). On any day this class(-arm) ends up with at least one
+    # free period, period 1 must be one of them; a fully-packed day is
+    # unaffected. In terms of free[p] = 1 - occupied[p], the rule is
+    # free[p] <= free[1] for every period p -- equivalently
+    # occupied[1] <= occupied[p], which is what's enforced directly below on
+    # the (already 0/1, since a class-arm can hold at most one subject per
+    # slot) sums of assignment vars, no extra variables needed.
+    logger.debug("Adding require-free-first-period constraints...")
+    free_first_count = 0
+    for class_name, arm in class_arms:
+        if not class_free_first_flags.get(class_name):
+            continue
+        ca_reqs = [r for r in requirements if (r['class_name'], r['arm']) == (class_name, arm)]
+        if not ca_reqs:
+            continue
+        for day in range(num_days):
+            occ_first = sum(x[r['req_id'], day * num_periods] for r in ca_reqs)
+            for p in range(2, num_periods + 1):
+                occ_p = sum(x[r['req_id'], day * num_periods + (p - 1)] for r in ca_reqs)
+                model.Add(occ_first <= occ_p)
+        free_first_count += 1
+    logger.debug(f"  Added require-free-first-period constraints for {free_first_count} class-arm(s)")
+
     # ========== BALANCE EMPTY SLOTS ACROSS DAYS (soft objective) ==========
     # Some class-arms have fewer required periods than slots in the week
     # (e.g. only 40 of 45 periods actually taught) — that's expected, not a
@@ -1098,6 +1125,10 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
             active_rules.append(f'the school-wide day-separation default ({day_sep_default_count} subject-class pairs)')
         if period_placement_count:
             active_rules.append(f'{period_placement_count} period-placement rule(s)')
+        if free_first_count:
+            active_rules.append(f'{free_first_count} class(-arm) with "always free period 1 on free days" on '
+                                f'(this can conflict with rules that avoid period 1, e.g. day-opener caps or '
+                                f'a not_first period-placement rule on a subject that ends up needing to fill it)')
         if any(info['not_first_period'] or info['not_last_period'] for info in subject_info.values()):
             active_rules.append('not-first/not-last period restrictions on some subjects')
         if any(info.get('avoid_morning') or info.get('avoid_afternoon') for info in subject_info.values()):
