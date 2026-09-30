@@ -6,6 +6,7 @@ from routes.generator import *  # noqa: F401,F403
 @login_required
 def rules_config():
     from utils.generator_times import day_end_time, clock_params
+    from utils.timeutil import get_time_format
     level = get_current_level()
     rules = {r.rule_type: r.value for r in GenTimetableRule.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).all()}
     end_time = day_end_time(rules, int(rules.get('periods_per_day', 8)),
@@ -13,7 +14,8 @@ def rules_config():
     sh, sm, _, _ = clock_params(rules)          # normalized HH:MM for the <input type="time">
     day_start_hhmm = f"{sh:02d}:{sm:02d}"
     return render_template('generator/rules_config.html', rules=rules, level=level,
-                           end_time=end_time, day_start_hhmm=day_start_hhmm)
+                           end_time=end_time, day_start_hhmm=day_start_hhmm,
+                           time_format=get_time_format())
 
 
 @generator_bp.route('/rules/save', methods=['POST'])

@@ -53,13 +53,15 @@ def break_after(rules, periods_per_day, default=5):
 
 
 def day_end_time(rules, periods_per_day, break_after=5):
-    """The computed dismissal time as ``H:MM`` for the given level.
+    """The computed dismissal time, formatted per the configured (12h/24h)
+    display setting, for the given level.
 
     end = start + periods*period_len + one break (only if the break falls
     within the day, i.e. break_after < periods_per_day).
     """
+    from utils.timeutil import format_clock
     sh, sm, plen, blen = clock_params(rules)
     total = sh * 60 + sm + periods_per_day * plen
     if 0 < break_after < periods_per_day:
         total += blen
-    return f"{total // 60}:{total % 60:02d}"
+    return format_clock((total // 60) % 24, total % 60)

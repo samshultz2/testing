@@ -675,17 +675,24 @@ def school_settings():
                 SchoolSettings.set('timezone', tz, 'string', 'Site-wide timezone')
                 from utils.timeutil import clear_cache
                 clear_cache()
+            tf = (request.form.get('time_format') or '').strip()
+            if tf in ('12h', '24h'):
+                SchoolSettings.set('time_format', tf, 'string',
+                                   'Clock display format for period/school-day times (12h or 24h)')
+                from utils.timeutil import clear_time_format_cache
+                clear_time_format_cache()
         except Exception as e:
             return _err(f'Error: {str(e)}', url_for('settings.school_settings'))
         return _ok('School settings updated!', url_for('settings.school_settings'))
 
-    from utils.timeutil import all_timezones, get_timezone
+    from utils.timeutil import all_timezones, get_timezone, get_time_format
     from utils.school import logo_url
     return _render({
         'page': 'school',
         'settings': _settings_dict(),
         'timezones': all_timezones(),
         'current_tz': get_timezone(),
+        'current_time_format': get_time_format(),
         'logo_url': logo_url(),
         'submit_url': url_for('settings.school_settings'),
         'logo_upload_url': url_for('settings.upload_school_logo'),

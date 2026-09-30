@@ -1,6 +1,7 @@
 """generator_bp — exports routes (split from the former routes/generator.py)."""
 from routes.generator import *  # noqa: F401,F403
 from utils.generator_times import clock_params, break_after as _break_after
+from utils.timeutil import format_clock
 
 
 def _short(subj, fallback_map, maxlen):
@@ -289,13 +290,13 @@ def export_results(batch_id):
         end_total = start_total + _plen
         start_h, start_m = start_total // 60, start_total % 60
         end_h, end_m = end_total // 60, end_total % 60
-        period_times.append(f"P{p}\n{start_h}:{start_m:02d}-{end_h}:{end_m:02d}")
+        period_times.append(f"P{p}\n{format_clock(start_h, start_m)}-{format_clock(end_h, end_m)}")
         start_hour, start_min = end_h, end_m
         if p == break_after:
-            break_start = f"{end_h}:{end_m:02d}"
+            break_start = format_clock(end_h, end_m)
             start_total = start_hour * 60 + start_min + _blen
             start_hour, start_min = start_total // 60, start_total % 60
-            break_end = f"{start_hour}:{start_min:02d}"
+            break_end = format_clock(start_hour, start_min)
             break_time = f"BREAK\n{break_start}\n-\n{break_end}"
     
     # Abbreviations
@@ -551,8 +552,8 @@ def export_results_by_day(batch_id):
         end_total = start_total + _plen
         start_h, start_m = start_total // 60, start_total % 60
         end_h, end_m = end_total // 60, end_total % 60
-        start_str = f"{start_h}:{start_m:02d}"
-        end_str = f"{end_h}:{end_m:02d}"
+        start_str = format_clock(start_h, start_m)
+        end_str = format_clock(end_h, end_m)
 
         if p <= break_after:
             period_times_before_break.append(f"P{p}\n{start_str}-{end_str}")
@@ -563,10 +564,10 @@ def export_results_by_day(batch_id):
 
         # Capture break time after the configured period
         if p == break_after:
-            break_start = f"{end_h}:{end_m:02d}"
+            break_start = format_clock(end_h, end_m)
             start_total = start_hour * 60 + start_min + _blen
             start_hour, start_min = start_total // 60, start_total % 60
-            break_end = f"{start_hour}:{start_min:02d}"
+            break_end = format_clock(start_hour, start_min)
             break_time = f"BREAK\n{break_start}\n-\n{break_end}"
     
     class_arms = sorted(set((r.class_name, r.arm_name) for r in results))
@@ -883,7 +884,7 @@ def export_results_by_day_pdf(batch_id):
         start_h, start_m = start_total // 60, start_total % 60
         end_h, end_m = end_total // 60, end_total % 60
 
-        time_str = f"P{p}\n{start_h}:{start_m:02d}\n{end_h}:{end_m:02d}"
+        time_str = f"P{p}\n{format_clock(start_h, start_m)}\n{format_clock(end_h, end_m)}"
         if p <= break_after:
             period_times_before.append(time_str)
         else:
@@ -891,10 +892,10 @@ def export_results_by_day_pdf(batch_id):
 
         start_hour, start_min = end_h, end_m
         if p == break_after:
-            break_start = f"{end_h}:{end_m:02d}"
+            break_start = format_clock(end_h, end_m)
             start_total = start_hour * 60 + start_min + _blen
             start_hour, start_min = start_total // 60, start_total % 60
-            break_end = f"{start_hour}:{start_min:02d}"
+            break_end = format_clock(start_hour, start_min)
             break_time = f"BREAK\n{break_start}\n-\n{break_end}"
     
     class_arms = sorted(set((r.class_name, r.arm_name) for r in results))

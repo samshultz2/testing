@@ -164,11 +164,22 @@ switch level in the menu to configure the other.</p>
     </div>
 </form>
 
-<script>
-// Live dismissal-time preview: mirrors utils/generator_times.day_end_time().
+<script nonce="{{ csp_nonce }}">
+// Live dismissal-time preview: mirrors utils/generator_times.day_end_time()
+// and utils/timeutil.format_clock() (time_format from the server: 12h/24h).
 (function () {
+    var TIME_FORMAT = {{ time_format|tojson }};
     var ids = ['day_start', 'period_minutes', 'break_minutes', 'periods_per_day', 'break_after_period'];
     var out = document.getElementById('end_time_preview');
+    function formatClock(h, m) {
+        h = ((h % 24) + 24) % 24;
+        if (TIME_FORMAT === '12h') {
+            var period = h < 12 ? 'AM' : 'PM';
+            var h12 = h % 12; if (h12 === 0) h12 = 12;
+            return h12 + ':' + (m < 10 ? '0' + m : m) + ' ' + period;
+        }
+        return (h < 10 ? '0' + h : h) + ':' + (m < 10 ? '0' + m : m);
+    }
     function recompute() {
         var ds = (document.getElementById('day_start').value || '08:20').split(':');
         var sh = parseInt(ds[0], 10), sm = parseInt(ds[1], 10);
@@ -180,8 +191,8 @@ switch level in the menu to configure the other.</p>
         if (isNaN(blen)) blen = 0;
         var total = sh * 60 + sm + ppd * plen;
         if (!isNaN(ba) && ba > 0 && ba < ppd) total += blen;
-        var h = Math.floor(total / 60), m = total % 60;
-        out.textContent = h + ':' + (m < 10 ? '0' + m : m);
+        var h = Math.floor(total / 60) % 24, m = total % 60;
+        out.textContent = formatClock(h, m);
     }
     ids.forEach(function (id) {
         var el = document.getElementById(id);

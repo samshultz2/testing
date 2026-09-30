@@ -28,6 +28,10 @@ COMMON_TIMEZONES = [
 
 _cache = {'name': None, 'ts': 0.0}
 
+DEFAULT_TIME_FORMAT = '24h'   # or '12h'
+
+_fmt_cache = {'value': None, 'ts': 0.0}
+
 
 def get_timezone():
     """Configured timezone name (cached ~30s to avoid a DB hit per call)."""
@@ -46,6 +50,48 @@ def get_timezone():
 
 def clear_cache():
     _cache['name'] = None
+
+
+def get_time_format():
+    """Configured clock display format, ``'12h'`` or ``'24h'`` (cached ~30s).
+
+    Governs how period/school-day clock times are *displayed* everywhere
+    (timetable pages, generator previews, PDF/image/XLSX exports) -- it never
+    touches how times are stored (always naive 24h) or the value of a native
+    ``<input type="time">``, which browsers already render per the user's own
+    OS locale regardless of this setting."""
+    nowt = time.time()
+    if _fmt_cache['value'] is None or nowt - _fmt_cache['ts'] > 30:
+        value = DEFAULT_TIME_FORMAT
+        try:
+            from models import SchoolSettings
+            value = SchoolSettings.get('time_format', DEFAULT_TIME_FORMAT) or DEFAULT_TIME_FORMAT
+        except Exception:
+            value = DEFAULT_TIME_FORMAT
+        if value not in ('12h', '24h'):
+            value = DEFAULT_TIME_FORMAT
+        _fmt_cache['value'] = value
+        _fmt_cache['ts'] = nowt
+    return _fmt_cache['value']
+
+
+def format_clock(hour, minute, fmt=None):
+    """Format an ``(hour, minute)`` 24h clock pair per the configured (or
+    given) time format. ``'12h'`` renders like ``8:20 AM`` / ``1:00 PM``
+    (no leading zero on the hour); ``'24h'`` renders like ``08:20`` /
+    ``13:00``."""
+    fmt = fmt or get_time_format()
+    hour = int(hour) % 24
+    minute = int(minute) % 60
+    if fmt == '12h':
+        period = 'AM' if hour < 12 else 'PM'
+        h12 = hour % 12 or 12
+        return f'{h12}:{minute:02d} {period}'
+    return f'{hour:02d}:{minute:02d}'
+
+
+def clear_time_format_cache():
+    _fmt_cache['value'] = None
 
 
 def now():

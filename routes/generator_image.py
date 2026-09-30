@@ -7,6 +7,7 @@ from flask import Response
 from models import GenTimetableResult, GenTimetableRule, GenTeacher, GenSubject, GenSettings
 from routes.generator import gen_bid, filter_results_by_arm, annotate_coschedule_pairs
 from utils.generator_times import clock_params, break_after as _break_after
+from utils.timeutil import format_clock
 from PIL import Image, ImageDraw, ImageFont
 from io import BytesIO
 
@@ -219,7 +220,7 @@ def generate_timetable_image(batch_id, layout='by_day', quality='ultra'):
         start_h, start_m = start_total // 60, start_total % 60
         end_h, end_m = end_total // 60, end_total % 60
 
-        time_str = f"P{p}\n{start_h}:{start_m:02d}-{end_h}:{end_m:02d}"
+        time_str = f"P{p}\n{format_clock(start_h, start_m)}-{format_clock(end_h, end_m)}"
         if p <= break_after:
             period_times_before.append(time_str)
         else:
@@ -227,10 +228,10 @@ def generate_timetable_image(batch_id, layout='by_day', quality='ultra'):
 
         start_hour, start_min = end_h, end_m
         if p == break_after:
-            break_start = f"{end_h}:{end_m:02d}"
+            break_start = format_clock(end_h, end_m)
             start_total = start_hour * 60 + start_min + _blen
             start_hour, start_min = start_total // 60, start_total % 60
-            break_end = f"{start_hour}:{start_min:02d}"
+            break_end = format_clock(start_hour, start_min)
             break_time = f"{break_start}-{break_end}"
     
     # Resolution settings
@@ -519,7 +520,7 @@ def generate_teacher_timetable_image(batch_id, teacher_id):
     _sh, _sm, _plen, _blen = clock_params(rules)
     _bs = _sh * 60 + _sm + break_after * _plen
     _be = _bs + _blen
-    break_label = f"{_bs // 60}:{_bs % 60:02d}-{_be // 60}:{_be % 60:02d}"
+    break_label = f"{format_clock(_bs // 60, _bs % 60)}-{format_clock(_be // 60, _be % 60)}"
 
     days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
     school_name = get_school_name()

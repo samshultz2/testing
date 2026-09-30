@@ -43,9 +43,10 @@ _wants_json, _render, _ok, _err = section_responders(
 
 
 def _slot_dict(s):
+    from utils.timeutil import format_clock
     return {'id': s.id, 'name': s.name, 'is_break': s.is_break,
-            'start': s.start_time.strftime('%H:%M') if s.start_time else '',
-            'end': s.end_time.strftime('%H:%M') if s.end_time else ''}
+            'start': format_clock(s.start_time.hour, s.start_time.minute) if s.start_time else '',
+            'end': format_clock(s.end_time.hour, s.end_time.minute) if s.end_time else ''}
 
 
 def _slots_for_assignment(assignment_id):
@@ -648,8 +649,10 @@ def print_timetable(assignment_id):
     # grid[(day, slot_id)] = entry
     grid = {(e.day_of_week, e.slot_id): e for e in entries}
 
+    from utils.timeutil import format_clock
+
     def hhmm(t):
-        return t.strftime('%-H:%M') if t else ''
+        return format_clock(t.hour, t.minute) if t else ''
 
     # Compute sizing first so font scale adjusts to column width.
     days = list(DAYS_OF_WEEK)

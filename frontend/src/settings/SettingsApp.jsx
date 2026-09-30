@@ -61,6 +61,7 @@ function School({ d, notify }) {
     school_phone: s.school_phone || '', school_email: s.school_email || '',
     school_motto: s.school_motto || '', next_term_fees: s.next_term_fees || '',
     next_term_begins: s.next_term_begins || '', timezone: d.current_tz || '',
+    time_format: d.current_time_format || '24h',
   });
   const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   const [saving, setSaving] = useState(false);
@@ -122,6 +123,12 @@ function School({ d, notify }) {
               {(d.timezones || []).map((tz) => <option key={tz} value={tz}>{tz}</option>)}
             </select>
             <span className="form-hint d-block">Used for all dates, times, exam windows and timestamps across the site. Default: Africa/Lagos (UTC+1).</span></div>
+          <div className="form-group"><label className="form-label">Time Format</label>
+            <select className="form-control" value={f.time_format} onChange={set('time_format')} style={{ maxWidth: 220 }}>
+              <option value="24h">24-hour (e.g. 13:40)</option>
+              <option value="12h">12-hour (e.g. 1:40 PM)</option>
+            </select>
+            <span className="form-hint d-block">How period and school-day clock times are shown on timetable pages and in every PDF, image and spreadsheet export. Doesn't affect date/time pickers, which always follow your device.</span></div>
           <Actions>
             <button type="submit" className={'btn btn-primary' + (saving ? ' is-loading' : '')} disabled={saving} aria-busy={saving || undefined}>
               <i aria-hidden="true" className={'fas ' + (saving ? 'fa-spinner fa-spin' : 'fa-save')} /> {saving ? 'Saving…' : 'Save'}
