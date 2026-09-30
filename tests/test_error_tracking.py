@@ -70,3 +70,30 @@ def test_client_errors_do_not_alert(app, monkeypatch, tmp_path):
                         lambda *a, **k: sent.append(a))
     et.record_error('client', 'js blew up')
     assert sent == []
+
+
+def test_error_timestamp_follows_configured_timezone(app, monkeypatch, tmp_path):
+    """The error log's 'ts' must reflect the school's configured timezone
+    (utils.timeutil), not the server's own OS clock -- a VPS typically runs
+    UTC regardless of where the school actually is, so a raw time.strftime()
+    call silently mislabels every entry with the wrong hour."""
+    _use_tmp_log(monkeypatch, tmp_path)
+    from models import SchoolSettings
+    from utils import timeutil
+    with app.app_context():
+        try:
+            # Kiritimati is UTC+14 -- 13h+ away from almost anywhere else,
+            # so its wall-clock hour/date reliably differs from server time.
+            SchoolSettings.set('timezone', 'Pacific/Kiritimati', 'string', 'tz')
+            timeutil.clear_cache()
+            expected = timeutil.now().strftime('%Y-%m-%d %H:%M:%S')
+
+            et.record_error('server', 'tz check')
+            entry = et.recent_errors(1)[0]
+            # Exact-second match is flaky by nature; compare to the minute.
+            assert entry['ts'][:16] == expected[:16], (
+                f"expected timestamp in Pacific/Kiritimati ({expected}), "
+                f"got {entry['ts']} (looks like raw server/UTC time)")
+        finally:
+            SchoolSettings.set('timezone', 'Africa/Lagos', 'string', 'Site-wide timezone')
+            timeutil.clear_cache()

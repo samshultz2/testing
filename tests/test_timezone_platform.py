@@ -51,7 +51,16 @@ def test_models_local_now_follows_configured_timezone(app, _restore_tz):
 
 # --- Regression guard: no raw server-clock reads in application code ---------
 
-_RAW = re.compile(r'(?<![.\w])(date\.today|datetime\.now)\(\)')
+_RAW = re.compile(
+    r'(?<![.\w])date\.today\(\)'
+    r'|(?<![.\w])datetime\.now\(\)'
+    # These take a format arg, so no empty-parens requirement -- but still
+    # anchored so a real attribute access like `some_time.strftime(...)` on a
+    # datetime value (already correct, just being formatted) isn't flagged.
+    r'|(?<![.\w])time\.strftime\('
+    r'|(?<![.\w])time\.localtime\('
+    r'|(?<![.\w])time\.ctime\('
+)
 
 # Intentional server/UTC time, or the timezone source itself.
 _ALLOW = {
@@ -59,6 +68,7 @@ _ALLOW = {
     os.path.join('utils', 'perf_logging.py'),      # ops diagnostics timestamps
     os.path.join('utils', 'backup.py'),            # backup filenames (stable clock)
     os.path.join('models', 'models', '__init__.py'),  # local_now() fallback only
+    os.path.join('utils', 'error_tracking.py'),        # _ts_now() fallback only
 }
 
 

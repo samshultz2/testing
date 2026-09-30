@@ -38,11 +38,23 @@ def _log_path():
     return _cfg('ERROR_LOG_FILE', '')
 
 
+def _ts_now():
+    """Current time in the configured site timezone (utils.timeutil), not the
+    server's own OS timezone -- a VPS typically runs UTC regardless of where
+    the school actually is, so time.strftime() here would silently mislabel
+    every error with the wrong hour."""
+    try:
+        from utils.timeutil import now as _tz_now
+        return _tz_now().strftime('%Y-%m-%d %H:%M:%S')
+    except Exception:
+        return time.strftime('%Y-%m-%d %H:%M:%S')
+
+
 def record_error(kind, message, *, where='', user='', detail=''):
     """Record one error: log it, persist it, keep it in the recent buffer, and
     (for server errors) fire a throttled email alert."""
     entry = {
-        'ts': time.strftime('%Y-%m-%d %H:%M:%S'),
+        'ts': _ts_now(),
         'kind': kind,
         'message': str(message)[:1000],
         'where': str(where)[:300],
