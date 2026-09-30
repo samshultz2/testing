@@ -2203,6 +2203,13 @@
 ]
 ],
 [
+"generator.bulk_delete_results",
+"/generator/results/bulk-delete",
+[
+"POST"
+]
+],
+[
 "generator.bulk_delete_teacher_assignments",
 "/generator/assignments/bulk-delete",
 [

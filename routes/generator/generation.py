@@ -570,6 +570,33 @@ def delete_results(batch_id):
     return redirect(url_for('generator.results_list'))
 
 
+@generator_bp.route('/results/bulk-delete', methods=['POST'])
+@login_required
+def bulk_delete_results():
+    """Delete every selected generated-timetable batch at once — same effect
+    as the single-batch delete above, just for however many were checked on
+    the results list. Only removes this branch's own GenTimetableResult rows
+    for those batches; a batch already published (applied/set-in-use) is
+    unaffected in the actual per-class timetables, which were copied out
+    separately and don't live in this table."""
+    batch_ids = [b for b in request.form.getlist('batch_ids[]') if b]
+    if not batch_ids:
+        flash('Select at least one timetable.', 'error')
+        return redirect(url_for('generator.results_list'))
+
+    try:
+        deleted = GenTimetableResult.query.filter(
+            GenTimetableResult.batch_id.in_(batch_ids), GenTimetableResult.branch_id == gen_bid()
+        ).delete(synchronize_session=False)
+        db.session.commit()
+        flash(f'Deleted {len(batch_ids)} timetable(s).' if deleted else 'Nothing to delete.',
+              'success' if deleted else 'error')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error: {str(e)}', 'error')
+    return redirect(url_for('generator.results_list'))
+
+
 @generator_bp.route('/reports')
 @login_required
 def reports_index():

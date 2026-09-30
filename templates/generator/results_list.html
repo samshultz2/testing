@@ -1,6 +1,12 @@
 {% extends "base.html" %}
 {% block title %}Generated Timetables - Generator{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <span>Results</span>{% endblock %}
+{% block extra_css %}
+<style>
+.batch-select { position: absolute; top: .75rem; right: .75rem; }
+.data-card { position: relative; }
+</style>
+{% endblock %}
 {% block content %}
 <div class="page-header">
     <h1>Generated Timetables</h1>
@@ -8,12 +14,33 @@
 </div>
 
 {% if batches %}
+<!-- Not wrapped around the batch cards below: each card's own "View"/"Print"/
+     etc. links can't sit inside another form. This one's an empty carrier --
+     a script fills in batch_ids[] from whatever's checked right before submit. -->
+<form id="bulkDeleteForm" method="POST" action="{{ url_for('generator.bulk_delete_results') }}"
+      data-confirm="Delete the selected timetable(s)? This cannot be undone.">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+</form>
+
+<div class="card mb-3">
+    <div class="card-body" style="display: flex; align-items: center; gap: .75rem; flex-wrap: wrap;">
+        <span style="font-weight: 600; color: var(--text-secondary);" id="batchBulkCount">0 selected</span>
+        <button type="button" class="btn btn-secondary btn-sm" data-call="selectAllBatches" data-args="true">Select All</button>
+        <button type="button" class="btn btn-secondary btn-sm" data-call="selectAllBatches" data-args="false">Clear Selection</button>
+        <button type="submit" form="bulkDeleteForm" class="btn btn-danger btn-sm" id="batchBulkDeleteBtn" disabled>
+            <i class="fas fa-trash"></i> Delete Selected
+        </button>
+    </div>
+</div>
+
 <div class="card">
     <div class="card-body" style="padding: 0;">
         <div class="data-cards" style="padding: 1rem;">
             {% for batch in batches %}
             {% set is_active = (batch.batch_id == active_batch_id) %}
             <div class="data-card" {% if is_active %}style="border:2px solid var(--success, #16a34a);"{% endif %}>
+                <input type="checkbox" class="batch-select batch-checkbox"
+                       value="{{ batch.batch_id }}" title="Select batch #{{ batch.batch_id }}">
                 <div class="data-card-header">
                     <div class="data-card-title">Batch #{{ batch.batch_id }}
                         {% if is_active %}<span class="badge badge-success"><i class="fas fa-check-circle"></i> In use</span>{% endif %}
@@ -59,4 +86,40 @@
     </div>
 </div>
 {% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script nonce="{{ csp_nonce }}">
+function batchCheckboxes() {
+    return Array.from(document.querySelectorAll('.batch-checkbox'));
+}
+
+function updateBatchBulkBar() {
+    const checked = batchCheckboxes().filter(cb => cb.checked);
+    document.getElementById('batchBulkCount').textContent = checked.length + ' selected';
+    document.getElementById('batchBulkDeleteBtn').disabled = checked.length === 0;
+}
+
+function selectAllBatches(selectAll) {
+    batchCheckboxes().forEach(function (cb) { cb.checked = selectAll; });
+    updateBatchBulkBar();
+}
+
+document.addEventListener('change', function (e) {
+    if (e.target.matches('.batch-checkbox')) updateBatchBulkBar();
+});
+
+// #bulkDeleteForm is an empty carrier (see the comment above it) -- fill in
+// batch_ids[] from whatever's currently checked right before it submits.
+document.addEventListener('submit', function (e) {
+    var f = e.target;
+    if (f.id !== 'bulkDeleteForm') return;
+    f.querySelectorAll('input[name="batch_ids[]"]').forEach(function (i) { i.remove(); });
+    batchCheckboxes().filter(function (cb) { return cb.checked; }).forEach(function (cb) {
+        var i = document.createElement('input');
+        i.type = 'hidden'; i.name = 'batch_ids[]'; i.value = cb.value;
+        f.appendChild(i);
+    });
+});
+</script>
 {% endblock %}
