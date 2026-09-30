@@ -1,0 +1,183 @@
+{% extends "base.html" %}
+{% block title %}Add Period-Placement Rule - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <a href="{{ url_for('generator.clash_rules_list') }}">Clash Rules</a> / <span>Add Period-Placement Rule</span>{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <h1><i class="fas fa-thumbtack"></i> Add Period-Placement Rule</h1>
+</div>
+
+<p class="text-muted mb-3">Control where a subject can land in the day, for a class (optionally one specific arm).
+    Doesn't change how many periods/week the subject gets, just where in the day each one is allowed to fall.</p>
+
+<div class="card">
+    <div class="card-body">
+        <form method="POST" id="ruleForm">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label class="form-label">Rule Name *</label>
+                <input type="text" name="name" class="form-control" required placeholder="e.g., SSS2 Lily Chemistry — always period 2">
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Description</label>
+                <textarea name="description" class="form-control" rows="2" placeholder="Explain why this rule exists"></textarea>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Subject *</label>
+                <select name="subject_id" class="form-control" required>
+                    <option value="">Select Subject</option>
+                    {% for s in subjects %}
+                    <option value="{{ s.id }}">{{ s.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label class="form-label">Class *</label>
+                        <select name="class_name" class="form-control" required id="ruleClass">
+                            <option value="">Select Class</option>
+                            {% for c in classes %}
+                            <option value="{{ c.class_name }}" data-arms="{{ c.arm_names }}">{{ c.class_name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label class="form-label">Arm (leave empty for every arm)</label>
+                        <select name="arm_name" class="form-control" id="ruleArm">
+                            <option value="">All Arms</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">Rule Type *</label>
+                <select name="rule_type" class="form-control" required id="ruleType" style="max-width: 320px;">
+                    <option value="">Select Rule Type</option>
+                    <option value="fixed">Always a particular period</option>
+                    <option value="not_first">Not the first period</option>
+                    <option value="not_last">Not the last period</option>
+                    <option value="morning_only">Morning only</option>
+                    <option value="afternoon_only">Afternoon only</option>
+                    <option value="range">A range of periods (e.g. 2nd–4th)</option>
+                </select>
+            </div>
+
+            <div class="form-group" id="fixedPeriodGroup" style="display: none;">
+                <label class="form-label">Period *</label>
+                <select name="period_value" class="form-control" id="fixedPeriodSelect" style="max-width: 200px;">
+                    <option value="">Select Period</option>
+                    {% for p in range(1, max_periods + 1) %}
+                    <option value="{{ p }}">Period {{ p }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+
+            <div class="row" id="rangeGroup" style="display: none;">
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label class="form-label">From Period *</label>
+                        <select name="period_value" class="form-control" id="rangeStartSelect">
+                            <option value="">Select Period</option>
+                            {% for p in range(1, max_periods + 1) %}
+                            <option value="{{ p }}">Period {{ p }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="form-group">
+                        <label class="form-label">To Period *</label>
+                        <select name="range_end" class="form-control" id="rangeEndSelect">
+                            <option value="">Select Period</option>
+                            {% for p in range(1, max_periods + 1) %}
+                            <option value="{{ p }}">Period {{ p }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <p class="text-muted text-sm" id="rangeHint" style="display: none;"></p>
+
+            <p class="text-muted text-sm">If the subject runs more than one period/week, every one of them must
+                satisfy this rule on whichever days they're scheduled — a tight window (a single fixed period, or a
+                narrow range) can only offer one slot per day, so a subject needing more periods/week than there are
+                school days may become infeasible with a very tight rule.</p>
+
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Rule</button>
+                <a href="{{ url_for('generator.clash_rules_list') }}" class="btn btn-secondary">Cancel</a>
+            </div>
+        </form>
+    </div>
+</div>
+
+<style>
+.row { display: flex; flex-wrap: wrap; margin: 0 -0.5rem; }
+.col-md-6 { flex: 0 0 50%; max-width: 50%; padding: 0 0.5rem; }
+@media (max-width: 768px) { .col-md-6 { flex: 0 0 100%; max-width: 100%; } }
+</style>
+
+<script nonce="{{ csp_nonce }}">
+document.getElementById('ruleClass').addEventListener('change', function() {
+    const arms = this.options[this.selectedIndex].dataset.arms;
+    const armSelect = document.getElementById('ruleArm');
+    armSelect.innerHTML = '<option value="">All Arms</option>';
+    if (arms) {
+        arms.split(',').forEach(arm => {
+            // new Option() sets value/text safely (no markup injection from arm names).
+            armSelect.add(new Option(arm.trim(), arm.trim()));
+        });
+    }
+});
+
+const ruleType = document.getElementById('ruleType');
+const fixedGroup = document.getElementById('fixedPeriodGroup');
+const fixedSelect = document.getElementById('fixedPeriodSelect');
+const rangeGroup = document.getElementById('rangeGroup');
+const rangeStart = document.getElementById('rangeStartSelect');
+const rangeEnd = document.getElementById('rangeEndSelect');
+const rangeHint = document.getElementById('rangeHint');
+
+function updateRuleTypeFields() {
+    const isFixed = ruleType.value === 'fixed';
+    const isRange = ruleType.value === 'range';
+    fixedGroup.style.display = isFixed ? '' : 'none';
+    fixedSelect.name = isFixed ? 'period_value' : '';
+    rangeGroup.style.display = isRange ? '' : 'none';
+    rangeStart.name = isRange ? 'period_value' : '';
+    rangeEnd.name = isRange ? 'range_end' : '';
+    checkRangeOrder();
+}
+
+function checkRangeOrder() {
+    if (ruleType.value !== 'range') { rangeHint.style.display = 'none'; return; }
+    if (rangeStart.value !== '' && rangeEnd.value !== '' && parseInt(rangeStart.value, 10) > parseInt(rangeEnd.value, 10)) {
+        rangeHint.textContent = '"From Period" must not be after "To Period".';
+        rangeHint.style.color = 'var(--danger, #dc3545)';
+        rangeHint.style.display = '';
+    } else {
+        rangeHint.style.display = 'none';
+    }
+}
+
+ruleType.addEventListener('change', updateRuleTypeFields);
+rangeStart.addEventListener('change', checkRangeOrder);
+rangeEnd.addEventListener('change', checkRangeOrder);
+updateRuleTypeFields();
+
+document.getElementById('ruleForm').addEventListener('submit', function(e) {
+    if (ruleType.value === 'range' && rangeStart.value !== '' && rangeEnd.value !== ''
+        && parseInt(rangeStart.value, 10) > parseInt(rangeEnd.value, 10)) {
+        e.preventDefault();
+        checkRangeOrder();
+    }
+});
+</script>
+{% endblock %}

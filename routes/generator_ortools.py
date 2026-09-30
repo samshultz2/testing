@@ -9,7 +9,7 @@ from models import (
     GenClassSubjectConfig, GenClassStreamSubject, GenTeacher, GenTeacherAssignment,
     GenTeacherAvailability, GenTimetableRule, GenTimetableResult, GenSubject,
     GenSubjectClashRule, GenCombinedClassRule, GenCoScheduleRule, GenDaySeparationRule,
-    GenFixedPeriodRule
+    GenPeriodPlacementRule
 )
 from models.models.generator import DAY_NAMES
 from routes.generator import gen_bid
@@ -69,7 +69,7 @@ def _effective_restrictions(class_cfg, global_cfg):
 def diagnose_infeasibility(class_arms, requirements, teachers, teacher_reqs, teacher_unavailable,
                            subject_info, num_periods, num_slots, num_days, break_after,
                            valid_double_starts, day_separation_rules=(), day_separation_default=None,
-                           fixed_period_rules=()):
+                           period_placement_rules=()):
     """Structural (pigeon-hole) checks that PROVE a generation request can
     never succeed, independent of what the solver does — e.g. asking a class
     for more periods per week than exist, or a teacher for more periods than
@@ -182,16 +182,25 @@ def diagnose_infeasibility(class_arms, requirements, teachers, teacher_reqs, tea
                     f"exempt {info['name']} from the day-separation rule under Subject Settings, "
                     f"or turn the rule off under Timetable Rules.")
 
-    # Fixed-period rules: pinning a subject to one period allows at most one
-    # occurrence per day (that period, once), so needing more periods/week
-    # than there are school days can never fit.
-    for rule in fixed_period_rules:
-        if not (1 <= rule.fixed_period <= num_periods):
-            reasons.append(
-                f"'{rule.name}' pins {rule.class_name} {rule.arm_name or '(all arms)'} to period "
-                f"{rule.fixed_period}, which is out of range for a {num_periods}-period day — fix "
-                f"the rule or the periods_per_day setting.")
+    # Period-placement rules with a NARROW window (fixed, or a range as tight
+    # as a single period) allow at most one occurrence per day within that
+    # window, so needing more periods/week than there are school days can
+    # never fit. Wider ranges and the four whole-half-day rule types
+    # (not_first/not_last/morning_only/afternoon_only) aren't narrow enough
+    # for this particular pigeon-hole check to usefully apply.
+    for rule in period_placement_rules:
+        if rule.rule_type not in ('fixed', 'range'):
             continue
+        width = 1 if rule.rule_type == 'fixed' else (rule.range_end - rule.period_value + 1)
+        lo, hi = rule.period_value, (rule.period_value if rule.rule_type == 'fixed' else rule.range_end)
+        if not (1 <= lo <= num_periods) or not (1 <= hi <= num_periods):
+            reasons.append(
+                f"'{rule.name}' targets period {lo}" + (f"-{hi}" if hi != lo else '') +
+                f" for {rule.class_name} {rule.arm_name or '(all arms)'}, out of range for a "
+                f"{num_periods}-period day — fix the rule or the periods_per_day setting.")
+            continue
+        if width > 1:
+            continue   # wide enough that the simple per-day-capacity check below doesn't apply
         matching_cas = [ca for ca in class_arms if ca[0] == rule.class_name
                         and (not rule.arm_name or ca[1] == rule.arm_name)]
         for class_name, arm in matching_cas:
@@ -201,7 +210,7 @@ def diagnose_infeasibility(class_arms, requirements, teachers, teacher_reqs, tea
                 subj_name = rule.subject.name if rule.subject else f'subject #{rule.subject_id}'
                 reasons.append(
                     f"'{rule.name}': {class_name} {arm} needs {subj_name} {count} periods/week, but "
-                    f"pinning it to period {rule.fixed_period} allows at most one occurrence per day "
+                    f"pinning it to period {lo} allows at most one occurrence per day "
                     f"({num_days} school days) — reduce this subject's weekly periods for this class, "
                     f"or remove/adjust the rule.")
 
@@ -402,7 +411,7 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
     num_days = 5
     
     day_separation_rules = GenDaySeparationRule.query.filter_by(is_active=True, branch_id=gen_bid()).all()
-    fixed_period_rules = GenFixedPeriodRule.query.filter_by(is_active=True, branch_id=gen_bid()).all()
+    period_placement_rules = GenPeriodPlacementRule.query.filter_by(is_active=True, branch_id=gen_bid()).all()
 
     day_separation_default = {
         'enabled': bool(day_separation_default_enabled),
@@ -425,7 +434,7 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
         subject_info=subject_info, num_periods=num_periods, num_slots=num_slots,
         num_days=num_days, break_after=break_after, valid_double_starts=valid_double_starts,
         day_separation_rules=day_separation_rules, day_separation_default=day_separation_default,
-        fixed_period_rules=fixed_period_rules)
+        period_placement_rules=period_placement_rules)
     if reasons:
         return {'success': False,
                'message': f'Cannot generate — {len(reasons)} configuration problem'
@@ -968,21 +977,42 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
             day_sep_default_count += 1
     logger.debug(f"  Added {day_sep_default_count} default day-separation constraints")
 
-    # Constraint 13c: Fixed-period rules — pins a subject to one specific
-    # period number for a class (optionally one arm): every one of that
-    # requirement's periods must land at that exact period, whatever day it
-    # falls on. The mirror of excluded_periods (which only rules periods
-    # out): this rules every OTHER period out, leaving just the one in.
-    logger.debug("Adding fixed-period constraints...")
-    fixed_period_count = 0
-    for rule in fixed_period_rules:
-        if not (1 <= rule.fixed_period <= num_periods):
-            logger.debug(f"  Warning: '{rule.name}' pins period {rule.fixed_period}, out of range "
-                        f"for this generation's {num_periods} periods/day, skipping...")
+    # Constraint 13c: Period-placement rules — controls where a subject can
+    # land for a class (optionally one arm): every one of that requirement's
+    # periods must fall within the rule's allowed set of periods, whatever
+    # day it lands on. Each rule type just computes a different allowed-
+    # periods set; the actual constraint (forbid every period outside it) is
+    # the same for all of them.
+    logger.debug("Adding period-placement constraints...")
+    period_placement_count = 0
+    for rule in period_placement_rules:
+        if rule.rule_type == 'fixed':
+            if not (1 <= rule.period_value <= num_periods):
+                logger.debug(f"  Warning: '{rule.name}' pins period {rule.period_value}, out of range "
+                            f"for this generation's {num_periods} periods/day, skipping...")
+                continue
+            allowed_periods = {rule.period_value}
+        elif rule.rule_type == 'not_first':
+            allowed_periods = set(range(2, num_periods + 1))
+        elif rule.rule_type == 'not_last':
+            allowed_periods = set(range(1, num_periods))
+        elif rule.rule_type == 'morning_only':
+            allowed_periods = set(range(1, break_after + 1))
+        elif rule.rule_type == 'afternoon_only':
+            allowed_periods = set(range(break_after + 1, num_periods + 1))
+        elif rule.rule_type == 'range':
+            if not (1 <= rule.period_value <= num_periods) or not (1 <= rule.range_end <= num_periods):
+                logger.debug(f"  Warning: '{rule.name}' ranges period {rule.period_value}-{rule.range_end}, "
+                            f"out of range for this generation's {num_periods} periods/day, skipping...")
+                continue
+            allowed_periods = set(range(rule.period_value, rule.range_end + 1))
+        else:
+            logger.debug(f"  Warning: '{rule.name}' has unknown rule_type {rule.rule_type!r}, skipping...")
             continue
+
         matching_cas = [ca for ca in class_arms if ca[0] == rule.class_name
                         and (not rule.arm_name or ca[1] == rule.arm_name)]
-        allowed_slots = {day * num_periods + (rule.fixed_period - 1) for day in range(num_days)}
+        allowed_slots = {day * num_periods + (p - 1) for day in range(num_days) for p in allowed_periods}
         for class_name, arm in matching_cas:
             key = (class_name, arm, rule.subject_id)
             reqs = subject_ca_reqs.get(key)
@@ -992,8 +1022,8 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
                 for slot in range(num_slots):
                     if slot not in allowed_slots:
                         model.Add(x[req['req_id'], slot] == 0)
-            fixed_period_count += 1
-    logger.debug(f"  Added {fixed_period_count} fixed-period constraints")
+            period_placement_count += 1
+    logger.debug(f"  Added {period_placement_count} period-placement constraints")
 
     # ========== BALANCE EMPTY SLOTS ACROSS DAYS (soft objective) ==========
     # Some class-arms have fewer required periods than slots in the week
@@ -1066,8 +1096,8 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
             active_rules.append(f'{day_sep_count} day-separation rule(s)')
         if day_sep_default_count:
             active_rules.append(f'the school-wide day-separation default ({day_sep_default_count} subject-class pairs)')
-        if fixed_period_count:
-            active_rules.append(f'{fixed_period_count} fixed-period rule(s)')
+        if period_placement_count:
+            active_rules.append(f'{period_placement_count} period-placement rule(s)')
         if any(info['not_first_period'] or info['not_last_period'] for info in subject_info.values()):
             active_rules.append('not-first/not-last period restrictions on some subjects')
         if any(info.get('avoid_morning') or info.get('avoid_afternoon') for info in subject_info.values()):

@@ -614,16 +614,32 @@ class GenDaySeparationRule(db.Model):
         return f'<GenDaySeparationRule {self.name}>'
 
 
-class GenFixedPeriodRule(db.Model):
+PERIOD_PLACEMENT_RULE_TYPES = (
+    'fixed',            # always this exact period, whatever day
+    'not_first',        # never period 1
+    'not_last',         # never the day's last period
+    'morning_only',     # never after the break
+    'afternoon_only',   # never before the break
+    'range',            # only within [range_start, range_end], inclusive
+)
+
+
+class GenPeriodPlacementRule(db.Model):
     """
-    Pins a subject to one specific period number, for one class (optionally
-    one specific arm) — whatever day it lands on, it must always be at that
-    exact period. Doesn't change how many periods/week the subject gets,
-    just where in the day each one falls.
-    Example: SSS2 Lily's Chemistry must always be period 2 — Monday period 2,
-    Wednesday period 2, whichever days it's scheduled, never any other period.
+    Constrains where a subject can land, for one class (optionally one
+    specific arm) — a superset of the old fixed-period-only rule. One rule
+    is one of PERIOD_PLACEMENT_RULE_TYPES:
+      - fixed: always period_value, whatever day it's scheduled
+      - not_first / not_last: never period 1 / never the day's last period
+      - morning_only / afternoon_only: never after / never before the break
+      - range: only within period_value..range_end (inclusive), any day
+    Doesn't change how many periods/week the subject gets, just where in
+    the day each one is allowed to fall.
+    Example: SSS2 Lily's Chemistry must always be period 2 (fixed,
+    period_value=2); or SSS1 Rose's PE must land somewhere in periods 2-4
+    (range, period_value=2, range_end=4).
     """
-    __tablename__ = 'gen_fixed_period_rules'
+    __tablename__ = 'gen_period_placement_rules'
 
     id = db.Column(db.Integer, primary_key=True)
     branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'), index=True)  # owning branch (per-branch generator)
@@ -634,7 +650,11 @@ class GenFixedPeriodRule(db.Model):
     class_name = db.Column(db.String(20), nullable=False)  # e.g., "SSS2"
     arm_name = db.Column(db.String(50))  # e.g., "Lily", or NULL for every arm of that class
 
-    fixed_period = db.Column(db.Integer, nullable=False)  # 1-based period number
+    rule_type = db.Column(db.String(20), nullable=False, default='fixed')
+    # 'fixed': the pinned period. 'range': the range's start period.
+    # Unused (NULL) for not_first/not_last/morning_only/afternoon_only.
+    period_value = db.Column(db.Integer)
+    range_end = db.Column(db.Integer)  # 'range' only: the range's end period (inclusive)
 
     is_active = db.Column(db.Boolean, default=True)
     created_at = db.Column(db.DateTime, default=local_now)
@@ -643,4 +663,4 @@ class GenFixedPeriodRule(db.Model):
     subject = db.relationship('GenSubject', foreign_keys=[subject_id])
 
     def __repr__(self):
-        return f'<GenFixedPeriodRule {self.name}>'
+        return f'<GenPeriodPlacementRule {self.name} ({self.rule_type})>'
