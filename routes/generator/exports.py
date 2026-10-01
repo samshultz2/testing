@@ -663,17 +663,11 @@ def export_results_by_day(batch_id):
     period_header_height = 45
     total_page_height = 500  # Conservative for safe printing
 
-    def _write_day_block(ws, d, day_name, start_row, show_period_header=True):
+    def _write_day_block(ws, d, day_name, start_row):
         """Writes one day's grid into ws starting at start_row. Returns the
         row number immediately after this block, for stacking another one
-        (packed layout) or as the next sheet's start_row (unpacked).
-
-        ``show_period_header`` is False for the second day of a packed A3
-        pair: its "Class | P1...P9 | BREAK | ..." row would just repeat the
-        first day's (periods are the same every day), so it's skipped and
-        that day's data rows start right under its own day-name bar."""
+        (packed layout) or as the next sheet's start_row (unpacked)."""
         current_row = start_row
-        this_period_header_height = period_header_height if show_period_header else 0
 
         # School name and address ONLY on the very first block of the workbook.
         if d == 0:
@@ -692,12 +686,12 @@ def export_results_by_day(batch_id):
                 ws.row_dimensions[current_row].height = address_header_height
                 current_row += 1
 
-            header_rows_height = school_header_height + (address_header_height if school_address else 0) + day_header_height + this_period_header_height
+            header_rows_height = school_header_height + (address_header_height if school_address else 0) + day_header_height + period_header_height
             remaining_height = total_page_height - header_rows_height
             data_row_height = remaining_height / num_data_rows
             data_row_height = max(data_row_height, 28)
         else:
-            remaining_height = total_page_height - day_header_height - this_period_header_height
+            remaining_height = total_page_height - day_header_height - period_header_height
             data_row_height = remaining_height / num_data_rows
             data_row_height = max(data_row_height, 30)
 
@@ -712,40 +706,38 @@ def export_results_by_day(batch_id):
         ws.row_dimensions[current_row].height = day_header_height
         current_row += 1
 
-        # Period headers with BREAK column -- only for the first day of a
-        # packed pair (or any single-day page, where it's always the first).
-        if show_period_header:
-            col = 1
-            cell = ws.cell(row=current_row, column=col, value="Class")
+        # Period headers with BREAK column
+        col = 1
+        cell = ws.cell(row=current_row, column=col, value="Class")
+        cell.font = header_font
+        cell.border = thick_border
+        cell.alignment = center_align
+        col += 1
+
+        for i, p in enumerate(range(1, break_after + 1)):
+            header_value = period_times_before_break[i] if d == 0 else f"P{p}"
+            cell = ws.cell(row=current_row, column=col, value=header_value)
             cell.font = header_font
             cell.border = thick_border
             cell.alignment = center_align
             col += 1
 
-            for i, p in enumerate(range(1, break_after + 1)):
-                header_value = period_times_before_break[i] if d == 0 else f"P{p}"
-                cell = ws.cell(row=current_row, column=col, value=header_value)
-                cell.font = header_font
-                cell.border = thick_border
-                cell.alignment = center_align
-                col += 1
+        cell = ws.cell(row=current_row, column=col, value=break_time if d == 0 else "BREAK")
+        cell.font = break_header_font
+        cell.border = thick_border
+        cell.alignment = center_align
+        col += 1
 
-            cell = ws.cell(row=current_row, column=col, value=break_time if d == 0 else "BREAK")
-            cell.font = break_header_font
+        for i, p in enumerate(range(break_after + 1, periods_per_day + 1)):
+            header_value = period_times_after_break[i] if d == 0 else f"P{p}"
+            cell = ws.cell(row=current_row, column=col, value=header_value)
+            cell.font = header_font
             cell.border = thick_border
             cell.alignment = center_align
             col += 1
 
-            for i, p in enumerate(range(break_after + 1, periods_per_day + 1)):
-                header_value = period_times_after_break[i] if d == 0 else f"P{p}"
-                cell = ws.cell(row=current_row, column=col, value=header_value)
-                cell.font = header_font
-                cell.border = thick_border
-                cell.alignment = center_align
-                col += 1
-
-            ws.row_dimensions[current_row].height = period_header_height
-            current_row += 1
+        ws.row_dimensions[current_row].height = period_header_height
+        current_row += 1
 
         # Data rows
         for class_name, arm in class_arms:
@@ -822,9 +814,9 @@ def export_results_by_day(batch_id):
         ws.page_margins.footer = 0
 
         row = 1
-        for i, day_name in enumerate(group):
+        for day_name in group:
             d = days.index(day_name)
-            row = _write_day_block(ws, d, day_name, row, show_period_header=(i == 0))
+            row = _write_day_block(ws, d, day_name, row)
             row += 1  # gap row between stacked day-blocks
 
         # Column widths - fit within safe printable area

@@ -220,9 +220,7 @@ def generate_timetable_image(batch_id, layout='by_day', quality='ultra'):
         start_h, start_m = start_total // 60, start_total % 60
         end_h, end_m = end_total // 60, end_total % 60
 
-        # 3 lines (period / start / end) rather than cramming "start-end"
-        # onto one line, which overlapped under a 12h AM/PM format.
-        time_str = f"P{p}\n{format_clock(start_h, start_m)}\n{format_clock(end_h, end_m)}"
+        time_str = f"P{p}\n{format_clock(start_h, start_m)}-{format_clock(end_h, end_m)}"
         if p <= break_after:
             period_times_before.append(time_str)
         else:
@@ -234,16 +232,16 @@ def generate_timetable_image(batch_id, layout='by_day', quality='ultra'):
             start_total = start_hour * 60 + start_min + _blen
             start_hour, start_min = start_total // 60, start_total % 60
             break_end = format_clock(start_hour, start_min)
-            break_time = (break_start, break_end)
+            break_time = f"{break_start}-{break_end}"
     
     # Resolution settings
     scale = 8 if quality == 'ultra' else 4
     cell_width = 85 * scale
     cell_height = 35 * scale
-    header_height = 70 * scale  # Taller still -- 3 stacked lines (period / start / end)
+    header_height = 55 * scale  # Taller for time display
     day_header_height = 55 * scale
     class_col_width = 55 * scale
-    break_col_width = 48 * scale  # Narrower than a teaching period, but wide enough for "11:20 AM"
+    break_col_width = 35 * scale  # Narrower break column
     margin = 50 * scale
     day_spacing = 25 * scale
     title_height = 120 * scale  # Taller for school name + address
@@ -329,75 +327,89 @@ def generate_timetable_image(batch_id, layout='by_day', quality='ultra'):
         x = margin
         
         # Class header cell
-        draw.rectangle([x, y_offset, x + class_col_width, y_offset + header_height],
+        draw.rectangle([x, y_offset, x + class_col_width, y_offset + header_height], 
                       fill=color_light_gray, outline=color_border, width=scale)
         if font_header_simple:
             text = "Class"
             bbox = draw.textbbox((0, 0), text, font=font_header_simple)
             text_width = bbox[2] - bbox[0]
             text_x = x + (class_col_width - text_width) // 2
-            text_y = y_offset + (header_height - (bbox[3] - bbox[1])) // 2
-            draw.text((text_x, text_y), text, fill=color_black, font=font_header_simple)
+            draw.text((text_x, y_offset + 15 * scale), text, fill=color_black, font=font_header_simple)
         x += class_col_width
-
-        def _draw_period_header(x, text, is_detailed):
-            """Period header cell: 3 stacked lines (period / start / end) on
-            Monday, just the bare "P{n}" label on every other day (periods
-            are the same every day, so repeating the times would be
-            redundant clutter)."""
-            draw.rectangle([x, y_offset, x + cell_width, y_offset + header_height],
-                          fill=color_light_gray, outline=color_border, width=scale)
-            if is_detailed:
-                lines = text.split('\n')
-                bbox = draw.textbbox((0, 0), lines[0], font=font_header_simple)
-                text_width = bbox[2] - bbox[0]
-                draw.text((x + (cell_width - text_width) // 2, y_offset + 6 * scale),
-                         lines[0], fill=color_black, font=font_header_simple)
-                bbox = draw.textbbox((0, 0), lines[1], font=font_header)
-                text_width = bbox[2] - bbox[0]
-                draw.text((x + (cell_width - text_width) // 2, y_offset + 30 * scale),
-                         lines[1], fill=color_gray, font=font_header)
-                bbox = draw.textbbox((0, 0), lines[2], font=font_header)
-                text_width = bbox[2] - bbox[0]
-                draw.text((x + (cell_width - text_width) // 2, y_offset + 50 * scale),
-                         lines[2], fill=color_gray, font=font_header)
-            else:
-                bbox = draw.textbbox((0, 0), text, font=font_header_simple)
-                text_width = bbox[2] - bbox[0]
-                text_y = y_offset + (header_height - (bbox[3] - bbox[1])) // 2
-                draw.text((x + (cell_width - text_width) // 2, text_y), text, fill=color_black, font=font_header_simple)
-
+        
         # P1-P5 headers with times (only on Monday)
         for i in range(num_periods_before):
-            _draw_period_header(x, period_times_before[i] if day_idx == 0 else f"P{i+1}", day_idx == 0)
+            draw.rectangle([x, y_offset, x + cell_width, y_offset + header_height],
+                          fill=color_light_gray, outline=color_border, width=scale)
+            
+            if day_idx == 0:  # Monday - show times
+                text = period_times_before[i]
+                lines = text.split('\n')
+                if font_header:
+                    # Period number
+                    bbox = draw.textbbox((0, 0), lines[0], font=font_header_simple)
+                    text_width = bbox[2] - bbox[0]
+                    text_x = x + (cell_width - text_width) // 2
+                    draw.text((text_x, y_offset + 5 * scale), lines[0], fill=color_black, font=font_header_simple)
+                    # Time
+                    bbox = draw.textbbox((0, 0), lines[1], font=font_header)
+                    text_width = bbox[2] - bbox[0]
+                    text_x = x + (cell_width - text_width) // 2
+                    draw.text((text_x, y_offset + 28 * scale), lines[1], fill=color_gray, font=font_header)
+            else:
+                text = f"P{i+1}"
+                if font_header_simple:
+                    bbox = draw.textbbox((0, 0), text, font=font_header_simple)
+                    text_width = bbox[2] - bbox[0]
+                    text_x = x + (cell_width - text_width) // 2
+                    draw.text((text_x, y_offset + 15 * scale), text, fill=color_black, font=font_header_simple)
             x += cell_width
-
+        
         # BREAK header
         draw.rectangle([x, y_offset, x + break_col_width, y_offset + header_height],
                       fill=color_break, outline=color_border, width=scale)
-        if day_idx == 0 and font_header:  # Monday - show break time, stacked (start / end)
-            font_break_time = get_font(8 * scale, bold=True)
+        if day_idx == 0 and font_header:  # Monday - show break time
             bbox = draw.textbbox((0, 0), "BREAK", font=font_header)
             text_width = bbox[2] - bbox[0]
-            draw.text((x + (break_col_width - text_width) // 2, y_offset + 6 * scale),
-                     "BREAK", fill=color_white, font=font_header)
-            for li, line in enumerate(break_time):
-                bbox = draw.textbbox((0, 0), line, font=font_break_time)
-                text_width = bbox[2] - bbox[0]
-                draw.text((x + (break_col_width - text_width) // 2, y_offset + (28 + li * 16) * scale),
-                         line, fill=color_white, font=font_break_time)
+            text_x = x + (break_col_width - text_width) // 2
+            draw.text((text_x, y_offset + 5 * scale), "BREAK", fill=color_white, font=font_header)
+            bbox = draw.textbbox((0, 0), break_time, font=font_header)
+            text_width = bbox[2] - bbox[0]
+            text_x = x + (break_col_width - text_width) // 2
+            draw.text((text_x, y_offset + 28 * scale), break_time, fill=color_white, font=font_header)
         else:
             text = "BREAK"
             if font_header:
                 bbox = draw.textbbox((0, 0), text, font=font_header)
                 text_width = bbox[2] - bbox[0]
-                text_y = y_offset + (header_height - (bbox[3] - bbox[1])) // 2
-                draw.text((x + (break_col_width - text_width) // 2, text_y), text, fill=color_white, font=font_header)
+                text_x = x + (break_col_width - text_width) // 2
+                draw.text((text_x, y_offset + 15 * scale), text, fill=color_white, font=font_header)
         x += break_col_width
-
+        
         # P6-P8 headers with times (only on Monday)
         for i in range(num_periods_after):
-            _draw_period_header(x, period_times_after[i] if day_idx == 0 else f"P{break_after + i + 1}", day_idx == 0)
+            draw.rectangle([x, y_offset, x + cell_width, y_offset + header_height],
+                          fill=color_light_gray, outline=color_border, width=scale)
+            
+            if day_idx == 0:  # Monday - show times
+                text = period_times_after[i]
+                lines = text.split('\n')
+                if font_header:
+                    bbox = draw.textbbox((0, 0), lines[0], font=font_header_simple)
+                    text_width = bbox[2] - bbox[0]
+                    text_x = x + (cell_width - text_width) // 2
+                    draw.text((text_x, y_offset + 5 * scale), lines[0], fill=color_black, font=font_header_simple)
+                    bbox = draw.textbbox((0, 0), lines[1], font=font_header)
+                    text_width = bbox[2] - bbox[0]
+                    text_x = x + (cell_width - text_width) // 2
+                    draw.text((text_x, y_offset + 28 * scale), lines[1], fill=color_gray, font=font_header)
+            else:
+                text = f"P{6+i}"
+                if font_header_simple:
+                    bbox = draw.textbbox((0, 0), text, font=font_header_simple)
+                    text_width = bbox[2] - bbox[0]
+                    text_x = x + (cell_width - text_width) // 2
+                    draw.text((text_x, y_offset + 15 * scale), text, fill=color_black, font=font_header_simple)
             x += cell_width
         
         y_offset += header_height
