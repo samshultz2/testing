@@ -672,6 +672,27 @@ def export_results_by_day(batch_id):
     _header_rows_height = (school_header_height + (address_header_height if school_address else 0)
                            + day_header_height + period_header_height)
     data_row_height = max((total_page_height - _header_rows_height) / num_data_rows, 28)
+    gap_row_height = 15  # between stacked day-blocks on a packed page
+
+    def _block_height(d, is_first_in_group):
+        """Total row height one day's block takes up, without writing
+        anything -- used to compute the padding below."""
+        h = 0.0
+        if d == 0:
+            h += school_header_height + (address_header_height if school_address else 0)
+        h += day_header_height
+        if is_first_in_group:
+            h += period_header_height
+        h += num_data_rows * data_row_height
+        return h
+
+    def _group_height(group):
+        total = 0.0
+        for i, day_name in enumerate(group):
+            total += _block_height(days.index(day_name), i == 0)
+            if i < len(group) - 1:
+                total += gap_row_height
+        return total
 
     def _write_day_block(ws, d, day_name, start_row, show_period_header=True):
         """Writes one day's grid into ws starting at start_row. Returns the
@@ -801,6 +822,18 @@ def export_results_by_day(batch_id):
     # Group days into pages: 1 day/page normally, 2 (stacked, gap row
     # between) on a "packed" A3 page.
     day_groups = [days[i:i + days_per_page] for i in range(0, len(days), days_per_page)]
+
+    # Excel's fitToPage scales EACH sheet independently to fill exactly one
+    # page -- so a sheet with fewer rows (e.g. Friday alone, the leftover
+    # from pairing 5 days 2-at-a-time) gets stretched MORE than a denser one
+    # (Monday+Tuesday), and its rows/columns end up visibly bigger even
+    # though the stored heights/widths are identical. Padding every sheet's
+    # content out to the same total height as the densest one neutralizes
+    # that: every sheet scales by the same factor, so row and column sizing
+    # reads identically everywhere -- sparser pages just carry blank space
+    # at the bottom instead of stretching to fill it.
+    target_block_height = max(_group_height(g) for g in day_groups)
+
     for group in day_groups:
         sheet_title = ' & '.join(n[:3] for n in group) if len(group) > 1 else group[0]
         ws = wb.create_sheet(title=sheet_title[:31])
@@ -822,10 +855,20 @@ def export_results_by_day(batch_id):
         ws.page_margins.footer = 0
 
         row = 1
+        used_height = 0.0
         for i, day_name in enumerate(group):
             d = days.index(day_name)
             row = _write_day_block(ws, d, day_name, row, show_period_header=(i == 0))
-            row += 1  # gap row between stacked day-blocks
+            used_height += _block_height(d, i == 0)
+            if i < len(group) - 1:
+                ws.row_dimensions[row].height = gap_row_height
+                used_height += gap_row_height
+                row += 1
+
+        remaining = target_block_height - used_height
+        if remaining > 0.5:
+            ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=total_cols)
+            ws.row_dimensions[row].height = remaining
 
         # Column widths - fit within safe printable area. Same formula every
         # sheet (periods_per_day/break_after are fixed for the whole export),

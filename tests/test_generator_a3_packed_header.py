@@ -282,3 +282,36 @@ def test_subject_cells_are_uppercase_and_centered(app):
             elif cell.value == 'phy':
                 raise AssertionError('subject short name was not upper-cased on export')
     assert found, 'expected at least one PHY cell in the data rows'
+
+
+def test_every_sheet_has_same_total_content_height(app):
+    """Excel's fitToPage scales each sheet independently to fill exactly
+    one page -- so without padding, a sheet with fewer rows (e.g. Friday
+    alone, the odd one out when pairing 5 days 2-at-a-time) would stretch
+    its rows/columns bigger than a denser sheet (Monday+Tuesday), even
+    though the stored per-row heights are identical. Every sheet's total
+    row height (including any padding row) must come out equal so they
+    all print at the same scale."""
+    import openpyxl
+    batch_id, bid = _seed(app, 'PADH', periods_per_day=9, break_after=5)
+    c = _scoped_to_branch(_admin(app), bid)
+
+    r = c.get(f'/generator/results/{batch_id}/export_by_day?paper=a3&layout=packed')
+    assert r.status_code == 200
+    wb = openpyxl.load_workbook(BytesIO(r.data))
+    assert wb.sheetnames == ['Mon & Tue', 'Wed & Thu', 'Friday']
+
+    totals = {}
+    for sheet_name in wb.sheetnames:
+        ws = wb[sheet_name]
+        totals[sheet_name] = sum(rd.height for rd in ws.row_dimensions.values() if rd.height)
+
+    values = set(totals.values())
+    assert len(values) == 1, f'sheet total heights differ: {totals}'
+
+    # Friday (the single-day leftover) must actually have fewer real content
+    # rows than Mon & Tue -- confirms the equal total above came from
+    # padding, not from every sheet coincidentally having the same content.
+    mon_tue_rows = sum(1 for row in wb['Mon & Tue'].iter_rows() if any(c.value for c in row))
+    friday_rows = sum(1 for row in wb['Friday'].iter_rows() if any(c.value for c in row))
+    assert friday_rows < mon_tue_rows
