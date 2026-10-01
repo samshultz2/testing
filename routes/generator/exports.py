@@ -1061,7 +1061,12 @@ def export_results_by_day_pdf(batch_id):
     for d, day_name in enumerate(days):
         table_data = []
         row_heights = []
-        
+
+        # Only the first day in each stacked page-group shows the period
+        # header row (P#/times + BREAK) — the next day(s) sharing that page
+        # flow straight into their data rows instead of repeating it.
+        show_period_header = (d % days_per_page == 0)
+
         # Calculate row heights to fit EXACTLY on this day's block
         if d == 0:  # Monday - include school name and address
             school_header_height = sc(9*mm)
@@ -1096,14 +1101,18 @@ def export_results_by_day_pdf(batch_id):
         table_data.append(day_row)
         row_heights.append(day_header_height)
         
-        # Period header row
-        if d == 0:  # Monday - show times
-            header_row = ['Class'] + period_times_before + [break_time] + period_times_after
-        else:
-            header_row = ['Class'] + [f'P{p}' for p in range(1, break_after + 1)] + ['BREAK'] + [f'P{p}' for p in range(break_after + 1, periods_per_day + 1)]
-        table_data.append(header_row)
-        row_heights.append(period_header_height)
-        
+        # Period header row — skipped for a day that isn't first on its page
+        # (the freed height stays reserved in fixed_height above, so
+        # data_row_height is unaffected and matches the day before it; it
+        # just shows up as blank space at the end of this shorter block).
+        if show_period_header:
+            if d == 0:  # Monday - show times
+                header_row = ['Class'] + period_times_before + [break_time] + period_times_after
+            else:
+                header_row = ['Class'] + [f'P{p}' for p in range(1, break_after + 1)] + ['BREAK'] + [f'P{p}' for p in range(break_after + 1, periods_per_day + 1)]
+            table_data.append(header_row)
+            row_heights.append(period_header_height)
+
         # Data rows
         for class_name, arm in class_arms:
             short_code = get_short_code(class_name, arm)
@@ -1141,19 +1150,16 @@ def export_results_by_day_pdf(batch_id):
         
         # Calculate row indices
         if d == 0:
-            if school_address:
-                day_row_idx = 2
-                header_row_idx = 3
-                data_start_row = 4
-            else:
-                day_row_idx = 1
-                header_row_idx = 2
-                data_start_row = 3
+            day_row_idx = 2 if school_address else 1
         else:
             day_row_idx = 0
-            header_row_idx = 1
-            data_start_row = 2
-        
+        if show_period_header:
+            header_row_idx = day_row_idx + 1
+            data_start_row = header_row_idx + 1
+        else:
+            header_row_idx = None
+            data_start_row = day_row_idx + 1
+
         # NO COLORS - just black text on white, with borders. Padding is kept
         # tight and every font size gets an explicit LEADING close to it (a
         # single line needs about 1.05x its size) rather than relying on
@@ -1177,19 +1183,6 @@ def export_results_by_day_pdf(batch_id):
             ('ALIGN', (0, day_row_idx), (-1, day_row_idx), 'CENTER'),
             ('VALIGN', (0, day_row_idx), (-1, day_row_idx), 'MIDDLE'),
 
-            # Period header row (P#/times) — bold and readable, not tiny.
-            # Confined to a period column, so bound by whichever of
-            # height/width is tighter (fit_scale), not height alone.
-            ('FONTNAME', (0, header_row_idx), (-1, header_row_idx), 'Helvetica-Bold'),
-            ('FONTSIZE', (0, header_row_idx), (-1, header_row_idx), sc_fit(11 if d == 0 else 13)),
-            ('LEADING', (0, header_row_idx), (-1, header_row_idx), sc_fit(12 if d == 0 else 14)),
-            ('ALIGN', (0, header_row_idx), (-1, header_row_idx), 'CENTER'),
-            ('VALIGN', (0, header_row_idx), (-1, header_row_idx), 'MIDDLE'),
-
-            # Break column header (narrow column, keep its multi-line label small)
-            ('FONTSIZE', (break_col, header_row_idx), (break_col, header_row_idx), sc_fit(7)),
-            ('LEADING', (break_col, header_row_idx), (break_col, header_row_idx), sc_fit(7.5)),
-
             # Class codes column — confined to the first column, so fit_scale.
             ('FONTNAME', (0, data_start_row), (0, -1), 'Helvetica-Bold'),
             ('FONTSIZE', (0, data_start_row), (0, -1), sc_fit(14)),
@@ -1208,6 +1201,23 @@ def export_results_by_day_pdf(batch_id):
             ('GRID', (0, 0), (-1, -1), 1, colors.black),
             ('BOX', (0, 0), (-1, -1), 1.5, colors.black),
         ]
+
+        # Period header row (P#/times) — bold and readable, not tiny. Only
+        # present when this day shows it (see show_period_header above).
+        # Confined to a period column, so bound by whichever of
+        # height/width is tighter (fit_scale), not height alone.
+        if show_period_header:
+            style_commands.extend([
+                ('FONTNAME', (0, header_row_idx), (-1, header_row_idx), 'Helvetica-Bold'),
+                ('FONTSIZE', (0, header_row_idx), (-1, header_row_idx), sc_fit(11 if d == 0 else 13)),
+                ('LEADING', (0, header_row_idx), (-1, header_row_idx), sc_fit(12 if d == 0 else 14)),
+                ('ALIGN', (0, header_row_idx), (-1, header_row_idx), 'CENTER'),
+                ('VALIGN', (0, header_row_idx), (-1, header_row_idx), 'MIDDLE'),
+
+                # Break column header (narrow column, keep its multi-line label small)
+                ('FONTSIZE', (break_col, header_row_idx), (break_col, header_row_idx), sc_fit(7)),
+                ('LEADING', (break_col, header_row_idx), (break_col, header_row_idx), sc_fit(7.5)),
+            ])
 
         # Add school name styling for Monday
         if d == 0:
