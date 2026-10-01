@@ -49,7 +49,7 @@ def _scoped_to_branch(c, branch_id):
     return c
 
 
-def _seed(app, tag, periods_per_day=9, break_after=5):
+def _seed(app, tag, periods_per_day=9, break_after=5, subject_short_name=None):
     with app.app_context():
         b = Branch(name=f'ZzA3HeaderBranch{tag}', code=None)
         db.session.add(b); db.session.flush()
@@ -75,7 +75,7 @@ def _seed(app, tag, periods_per_day=9, break_after=5):
                             num_arms=1, arm_names=f'ZzArm{tag}', has_streams=False)
         db.session.add(cc); db.session.flush()
 
-        subj = GenSubject(branch_id=bid, name=f'ZzSubj{tag}', school_level='sss')
+        subj = GenSubject(branch_id=bid, name=f'ZzSubj{tag}', short_name=subject_short_name, school_level='sss')
         db.session.add(subj); db.session.flush()
 
         t = GenTeacher(branch_id=bid, name=f'Zz Teacher {tag}', school_level='sss',
@@ -257,3 +257,28 @@ def test_break_column_width_follows_actual_break_after(app):
     narrow_width = ws.column_dimensions[get_column_letter(break_col_idx)].width
     wide_width = ws.column_dimensions[get_column_letter(break_col_idx - 1)].width
     assert narrow_width < wide_width
+
+
+def test_subject_cells_are_uppercase_and_centered(app):
+    """A lower/mixed-case short name typed in Subject Settings must still
+    render upper-cased on export, centered like every other data cell."""
+    import openpyxl
+    batch_id, bid = _seed(app, 'UPPER', periods_per_day=9, break_after=5,
+                          subject_short_name='phy')
+    c = _scoped_to_branch(_admin(app), bid)
+
+    r = c.get(f'/generator/results/{batch_id}/export_by_day?paper=a3&layout=packed')
+    assert r.status_code == 200
+    wb = openpyxl.load_workbook(BytesIO(r.data))
+    ws = wb[wb.sheetnames[0]]
+
+    found = False
+    for row in ws.iter_rows(min_row=4, max_row=16):
+        for cell in row:
+            if cell.value == 'PHY':
+                found = True
+                assert cell.alignment.horizontal == 'center'
+                assert cell.alignment.vertical == 'center'
+            elif cell.value == 'phy':
+                raise AssertionError('subject short name was not upper-cased on export')
+    assert found, 'expected at least one PHY cell in the data rows'

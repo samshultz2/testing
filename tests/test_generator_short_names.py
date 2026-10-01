@@ -1,5 +1,6 @@
 """The generator exports/printouts use the user's own subject short name (from
-/generator/subjects) rather than a built-in abbreviation."""
+/generator/subjects) rather than a built-in abbreviation -- always upper-cased
+for a consistent look on the grid, however it was typed in."""
 from routes.generator.exports import _short
 
 
@@ -13,10 +14,15 @@ FALLBACK = {'Mathematics': 'Maths'}
 
 def test_prefers_user_short_name():
     assert _short(_Subj('Mathematics', 'MTH'), FALLBACK, 5) == 'MTH'      # user's own wins
-    assert _short(_Subj('Mathematics', '  '), FALLBACK, 5) == 'Maths'     # blank -> fallback map
-    assert _short(_Subj('Mathematics', None), FALLBACK, 5) == 'Maths'
-    assert _short(_Subj('Astronomy', None), FALLBACK, 4) == 'Astr'        # else truncate
+    assert _short(_Subj('Mathematics', '  '), FALLBACK, 5) == 'MATHS'     # blank -> fallback map
+    assert _short(_Subj('Mathematics', None), FALLBACK, 5) == 'MATHS'
+    assert _short(_Subj('Astronomy', None), FALLBACK, 4) == 'ASTR'        # else truncate
     assert _short(None, FALLBACK, 5) == ''
+
+
+def test_user_short_name_is_upper_cased():
+    assert _short(_Subj('Physics', 'phy'), FALLBACK, 5) == 'PHY'
+    assert _short(_Subj('Government', 'Gov'), FALLBACK, 5) == 'GOV'
 
 
 def test_image_abbrev_prefers_short_name():

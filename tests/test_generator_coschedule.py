@@ -542,7 +542,8 @@ def test_export_by_class_shows_coschedule_pair(app):
     ws = wb[wb.sheetnames[0]]
     all_text = ' '.join(str(cell.value) for row in ws.iter_rows() for cell in row if cell.value)
     assert '/' in all_text
-    assert any(v.startswith('ZzLite') and '/ZzAcco' in v
+    # subject abbreviations are upper-cased on export.
+    assert any(v.startswith('ZZLITE') and '/ZZACCO' in v
                for row in ws.iter_rows() for v in [str(c.value) for c in row] if v and '/' in v)
 
 
@@ -559,8 +560,9 @@ def test_export_by_day_shows_coschedule_pair(app):
     monday = wb['Monday']
     all_text = ' '.join(str(cell.value) for row in monday.iter_rows() for cell in row if cell.value)
     assert 'ZzIrisM' not in all_text   # excluded arm's own row is gone
-    # export_by_day truncates to 5 chars (no abbrev_map match for these test names).
-    assert any(v.startswith('ZzLit') and '/ZzAcc' in v
+    # export_by_day truncates to 5 chars (no abbrev_map match for these test names),
+    # and subject abbreviations are upper-cased on export.
+    assert any(v.startswith('ZZLIT') and '/ZZACC' in v
                for row in monday.iter_rows() for v in [str(c.value) for c in row] if v and '/' in v)
 
 

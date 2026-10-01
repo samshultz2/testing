@@ -7,14 +7,15 @@ from utils.timeutil import format_clock
 def _short(subj, fallback_map, maxlen):
     """The short label to print for a generator subject: the user's own short
     name from /generator/subjects when set, else the built-in abbreviation, else
-    a truncation of the full name."""
+    a truncation of the full name. Always upper-cased for a consistent look
+    across the grid, regardless of how the short name was typed in."""
     if subj is None:
         return ''
     sn = (getattr(subj, 'short_name', '') or '').strip()
     if sn:
-        return sn
+        return sn.upper()
     name = getattr(subj, 'name', '') or ''
-    return fallback_map.get(name, name[:maxlen])
+    return fallback_map.get(name, name[:maxlen]).upper()
 
 
 def _short_cell(entry, subj, fallback_map, maxlen):
