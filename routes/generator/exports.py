@@ -556,9 +556,9 @@ def export_results_by_day(batch_id):
         end_str = format_clock(end_h, end_m)
 
         if p <= break_after:
-            period_times_before_break.append(f"P{p}\n{start_str}-{end_str}")
+            period_times_before_break.append(f"P{p}\n{start_str}\n{end_str}")
         else:
-            period_times_after_break.append(f"P{p}\n{start_str}-{end_str}")
+            period_times_after_break.append(f"P{p}\n{start_str}\n{end_str}")
 
         start_hour, start_min = end_h, end_m
 
@@ -660,8 +660,17 @@ def export_results_by_day(batch_id):
     school_header_height = 35
     address_header_height = 20
     day_header_height = 45
-    period_header_height = 45
+    period_header_height = 60  # tall enough for the 3 stacked period-header lines
     total_page_height = 500  # Conservative for safe printing
+
+    # One data-row height for the WHOLE export -- every day, every page, every
+    # sheet uses this exact value, so row sizing reads as consistent instead
+    # of Monday's rows (which share a page with the school name/address) being
+    # visibly shorter than every other day's. Sized against the tightest
+    # case (a block carrying the school header) so nothing overflows a page.
+    _header_rows_height = (school_header_height + (address_header_height if school_address else 0)
+                           + day_header_height + period_header_height)
+    data_row_height = max((total_page_height - _header_rows_height) / num_data_rows, 28)
 
     def _write_day_block(ws, d, day_name, start_row, show_period_header=True):
         """Writes one day's grid into ws starting at start_row. Returns the
@@ -673,7 +682,6 @@ def export_results_by_day(batch_id):
         first day's (periods are the same every day), so it's skipped and
         that day's data rows start right under its own day-name bar."""
         current_row = start_row
-        this_period_header_height = period_header_height if show_period_header else 0
 
         # School name and address ONLY on the very first block of the workbook.
         if d == 0:
@@ -691,15 +699,6 @@ def export_results_by_day(batch_id):
                 cell.alignment = center_align
                 ws.row_dimensions[current_row].height = address_header_height
                 current_row += 1
-
-            header_rows_height = school_header_height + (address_header_height if school_address else 0) + day_header_height + this_period_header_height
-            remaining_height = total_page_height - header_rows_height
-            data_row_height = remaining_height / num_data_rows
-            data_row_height = max(data_row_height, 28)
-        else:
-            remaining_height = total_page_height - day_header_height - this_period_header_height
-            data_row_height = remaining_height / num_data_rows
-            data_row_height = max(data_row_height, 30)
 
         # Day header
         ws.merge_cells(start_row=current_row, start_column=1, end_row=current_row, end_column=total_cols)
@@ -827,11 +826,15 @@ def export_results_by_day(batch_id):
             row = _write_day_block(ws, d, day_name, row, show_period_header=(i == 0))
             row += 1  # gap row between stacked day-blocks
 
-        # Column widths - fit within safe printable area
+        # Column widths - fit within safe printable area. Same formula every
+        # sheet (periods_per_day/break_after are fixed for the whole export),
+        # so every day/page already gets identical widths; the break column
+        # is wherever break_after actually puts it, not a hardcoded index.
         ws.column_dimensions['A'].width = 8  # Class
         col_width = 26 if periods_per_day <= 8 else 22
+        break_col = break_after + 2   # 1 (Class) + break_after period columns, then BREAK
         for col in range(2, total_cols + 1):
-            if col == 7:  # Break column
+            if col == break_col:
                 ws.column_dimensions[get_column_letter(col)].width = 8
             else:
                 ws.column_dimensions[get_column_letter(col)].width = col_width
