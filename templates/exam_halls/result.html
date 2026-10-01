@@ -105,7 +105,7 @@
     {% for key, cnt in hall.by_group.items() %}<span class="grp-badge">{{ key }}: {{ cnt }}</span>{% endfor %}
     {% if hall.seating %}
       <span class="grp-badge" style="background:{% if hall.seating.conflicts %}#fef3c7{% else %}#dcfce7{% endif %};">
-        Same-arm neighbours: {{ hall.seating.conflicts }}</span>
+        Same-class neighbours: {{ hall.seating.conflicts }}</span>
     {% endif %}
   </div>
 

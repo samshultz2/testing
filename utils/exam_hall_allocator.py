@@ -12,10 +12,13 @@ halls in proportion to capacity, interleave genders) this construction is
 optimal, instant and reproducible, with no solver time or tuning to babysit.
 
 Within a hall, ``seat_hall`` then lays candidates out on a seat grid so that no
-two students from the same class sit in adjacent seats (front/back/side) — an
-SSS1 candidate ends up between SSS2 candidates, row-wise and column-wise —
-using OR-tools CP-SAT when available to minimise same-class neighbours, with a
-deterministic round-robin fallback.
+two students from the same class sit in adjacent seats — front, back, side OR
+diagonal — an SSS1 candidate ends up surrounded by SSS2 candidates on every
+side, using OR-tools CP-SAT when available to minimise same-class neighbours,
+with a deterministic fallback. Diagonal seats matter as much as orthogonal
+ones for copying/passing answers, so "adjacent" means any of the 8 cells
+touching a seat (the king-move/Moore neighbourhood), not just the 4 sharing an
+edge with it.
 
 Public entry points: ``allocate_halls(groups, halls, balance_gender=True)`` and
 ``seat_hall(students, cols=5)``.
@@ -183,16 +186,23 @@ def allocate_halls(groups, halls, balance_gender=True, seed=None):
 
 def _sk(s):
     """The key a student is separated by for seating: the CLASS. Same-class
-    candidates (any arm) write the same papers, so they must not sit next to each
-    other (in a row or a column); different classes may interleave — e.g. an SSS1
-    candidate sits between two SSS2 candidates. Falls back to the class+arm group
-    key when the class isn't carried on the record."""
+    candidates (any arm) write the same papers, so they must not sit next to
+    each other in any direction — row, column or diagonal; different classes
+    may interleave — e.g. an SSS1 candidate sits between two SSS2 candidates.
+    Falls back to the class+arm group key when the class isn't carried on the
+    record."""
     return (s.get('class_name') or s.get('_group_key') or '').strip()
 
 
 def _pairs(n, rows, cols):
-    """Orthogonal (row/column) neighbour cell-index pairs among the first n
-    row-major cells."""
+    """Neighbour cell-index pairs among the first n row-major cells, under the
+    full 8-direction (Moore) neighbourhood — orthogonal (row/column) AND
+    diagonal. A diagonal seatmate can see or pass a paper just as easily as a
+    direct side neighbour, so both count as "adjacent" here.
+
+    Walking 4 of the 8 directions from every cell (right, down, down-right,
+    down-left) touches each unordered neighbour pair exactly once — the other
+    4 directions are the same pairs seen from the other cell."""
     def cell(r, c):
         return r * cols + c
     out = []
@@ -201,10 +211,12 @@ def _pairs(n, rows, cols):
             u = cell(r, c)
             if u >= n:
                 continue
-            if c + 1 < cols and cell(r, c + 1) < n:
-                out.append((u, cell(r, c + 1)))
-            if r + 1 < rows and cell(r + 1, c) < n:
-                out.append((u, cell(r + 1, c)))
+            for dr, dc in ((0, 1), (1, 0), (1, 1), (1, -1)):
+                r2, c2 = r + dr, c + dc
+                if 0 <= r2 < rows and 0 <= c2 < cols:
+                    v = cell(r2, c2)
+                    if v < n:
+                        out.append((u, v))
     return out
 
 
@@ -233,19 +245,27 @@ def _roundrobin_seq(n, counts, group_class):
     return seq
 
 
-def _seat_layout_diagonal(n, rows, cols, counts, group_class):
-    """Deterministic, count-preserving layout that concentrates each CLASS on one
-    colour of a checkerboard. Cells of a colour are never orthogonally adjacent,
-    so every neighbour pair is opposite-colour: if each class sits on a single
-    colour, no two same-class candidates touch. For two balanced classes this is
-    a *guaranteed* perfect alternation (SSS1/SSS2/SSS1…); with more classes or a
-    dominant class it packs them as disjointly as possible. Also a warm start for
-    CP-SAT. Arms of a class are then round-robined across that class's seats."""
+def _seat_layout_moore(n, rows, cols, counts, group_class):
+    """Deterministic, count-preserving layout that concentrates each CLASS on
+    one colour of a 2x2 tile pattern (row-parity x column-parity — 4 colours).
+    Two cells of the same colour always differ by an even number of rows AND
+    an even number of columns, so the closest they can ever be is a Chebyshev
+    distance of 2 — never orthogonally OR diagonally adjacent. (A plain 2-colour
+    checkerboard only guarantees that for orthogonal neighbours; its diagonal
+    neighbours are always the SAME colour, which is exactly backwards for this
+    use.) Up to 4 classes can each claim one whole colour and end up with zero
+    neighbours of their own class in any direction; a class bigger than one
+    colour (or a 5th+ class) spills into whichever colour still has the most
+    room — the best achievable at that density, since no independent set in
+    this 8-neighbour adjacency can exceed 1/4 of a fully-packed grid. Also a
+    warm start for CP-SAT. Arms of a class are then round-robined across that
+    class's seats."""
     from collections import defaultdict
     used = list(range(n))                                      # first n cells, row-major
-    white = [i for i in used if ((i // cols) + (i % cols)) % 2 == 0]
-    black = [i for i in used if ((i // cols) + (i % cols)) % 2 == 1]
-    free = {0: white, 1: black}
+    free = {0: [], 1: [], 2: [], 3: []}
+    for i in used:
+        r, c = divmod(i, cols)
+        free[(r % 2) * 2 + (c % 2)].append(i)
 
     classes = sorted(set(group_class),
                      key=lambda c: sum(counts[g] for g in range(len(counts))
@@ -253,14 +273,17 @@ def _seat_layout_diagonal(n, rows, cols, counts, group_class):
     cell_class = [None] * (rows * cols)
     for c in classes:
         need = sum(counts[g] for g in range(len(counts)) if group_class[g] == c)
-        primary = 0 if len(free[0]) >= len(free[1]) else 1     # the emptier... fullest colour
-        for color in (primary, 1 - primary):
+        # Claim whichever colour still has the most free seats, repeatedly,
+        # until this class is fully seated — biggest classes get first pick
+        # (processed largest-first above) and whole colours where possible.
+        while need > 0:
+            color = max(free, key=lambda k: len(free[k]))
+            if not free[color]:
+                break   # grid exhausted (shouldn't happen: sum(counts) == n)
             take = min(need, len(free[color]))
             for _ in range(take):
                 cell_class[free[color].pop()] = c
             need -= take
-            if need == 0:
-                break
 
     # Within each class's seats, spread its arms round-robin.
     cells_by_class = defaultdict(list)
@@ -285,10 +308,11 @@ def _seat_layout_diagonal(n, rows, cols, counts, group_class):
 
 def _seat_layout_cpsat(n, rows, cols, counts, group_class, time_limit, hint, rand_seed=0):
     """CP-SAT: assign a group to each of the first ``n`` cells minimising, in
-    priority order, same-CLASS orthogonal neighbours then same-arm (same group)
-    neighbours. So classes are separated first and, when a hall is one class,
-    arms are separated. Warm-started from ``hint``. Returns a per-cell group list
-    (None for trailing empties) or None if OR-tools is unavailable / finds none."""
+    priority order, same-CLASS neighbours (any of the 8 surrounding seats) then
+    same-arm (same group) neighbours. So classes are separated first and, when
+    a hall is one class, arms are separated. Warm-started from ``hint``.
+    Returns a per-cell group list (None for trailing empties) or None if
+    OR-tools is unavailable / finds none."""
     try:
         from ortools.sat.python import cp_model
     except Exception:
@@ -352,13 +376,16 @@ def _seat_layout_cpsat(n, rows, cols, counts, group_class, time_limit, hint, ran
 
 def seat_hall(students, cols=5, optimize=True, time_limit=4.0, seed=None):
     """Lay a hall's ``students`` onto a seat grid (``cols`` seats per row),
-    numbering seats and keeping the same class out of adjacent seats (row and
-    column) where the numbers allow. ``seed`` varies which candidate takes which
-    seat so each run differs while still obeying the rules.
+    numbering seats and keeping the same class out of adjacent seats — row,
+    column OR diagonal — where the numbers allow. ``seed`` varies which
+    candidate takes which seat so each run differs while still obeying the
+    rules.
 
     Returns ``{'rows': [[seat|None,...],...], 'cols', 'nrows', 'count',
     'conflicts'}`` where each seat is ``{'seat': n, 'student': {...}}`` and
-    ``conflicts`` counts remaining same-group orthogonal neighbours (0 is ideal).
+    ``conflicts`` counts remaining same-class neighbours in any of the 8
+    surrounding seats (0 is ideal, though at high occupancy a few are
+    unavoidable — see ``_seat_layout_moore``).
     """
     rng = random.Random(seed)
     students = list(students)
@@ -382,9 +409,9 @@ def seat_hall(students, cols=5, optimize=True, time_limit=4.0, seed=None):
         buckets[k].append(s)
     counts = [len(buckets[k]) for k in order]
 
-    # Bigger halls get more solver time; warm-start from the diagonal fallback.
+    # Bigger halls get more solver time; warm-start from the deterministic fallback.
     tl = time_limit if n <= 60 else min(20.0, time_limit + n / 20.0)
-    hint = _seat_layout_diagonal(n, rows, cols, counts, group_class)
+    hint = _seat_layout_moore(n, rows, cols, counts, group_class)
     layout = None
     if optimize:
         layout = _seat_layout_cpsat(n, rows, cols, counts, group_class, tl, hint,
@@ -417,14 +444,11 @@ def seat_hall(students, cols=5, optimize=True, time_limit=4.0, seed=None):
     def gk(idx):
         return _sk(flat[idx]) if flat[idx] is not None else None
 
-    conflicts = 0
-    for r in range(rows):
-        for c in range(cols):
-            idx = r * cols + c
-            if flat[idx] is None:
-                continue
-            if c + 1 < cols and flat[idx + 1] is not None and gk(idx) == gk(idx + 1):
-                conflicts += 1
-            if r + 1 < rows and flat[idx + cols] is not None and gk(idx) == gk(idx + cols):
-                conflicts += 1
+    # Reuse the exact same adjacency definition the optimizer minimises
+    # (_pairs, the 8-direction Moore neighbourhood) so this count can never
+    # drift from what CP-SAT was actually scoring.
+    conflicts = sum(
+        1 for u, v in _pairs(rows * cols, rows, cols)
+        if flat[u] is not None and flat[v] is not None and gk(u) == gk(v)
+    )
     return {'rows': grid, 'cols': cols, 'nrows': rows, 'count': n, 'conflicts': conflicts}

@@ -61,7 +61,7 @@ def test_allocate_and_pdf(app):
     assert 'Main Hall' in body and 'Hall 2' in body
     assert 'EXAM HALL ALLOCATION' in body
     assert 'FRONT OF HALL' in body          # seating chart rendered
-    assert 'Same-arm neighbours' in body    # adjacency stat shown
+    assert 'Same-class neighbours' in body  # adjacency stat shown
 
     # PDF renders from the same inputs.
     r = c.post('/tools/exam-halls/pdf', data=form)
