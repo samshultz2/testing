@@ -131,6 +131,28 @@ def test_quick_add_has_copyable_ai_prompt(auth_client):
     assert 'BULK_INTRO' in DESIGNER_JS and 'BULK_FIELD_HINT' in DESIGNER_JS
 
 
+def test_grid_paste_supports_class_stream_and_has_dynamic_prompt(auth_client):
+    """The Saturday/Holiday "paste a whole grid" box: a day cell can carry a
+    trailing "(Class/Stream)" so more than one class can share a day, and its
+    AI prompt is built per-layout (like the Quick-add prompt already was)
+    instead of a single hardcoded block that never mentioned classes."""
+    html = auth_client.get('/timetable/designer').get_data(as_text=True)
+    # the AI-prompt <pre> is now populated by JS, not server-rendered text
+    assert '<pre id="tt-ai-prompt"' in html
+    assert 'Read this class timetable and output it' not in html
+    # the day-cell class/stream parser + its use in gridPaste()
+    assert 'function parseDayCell(' in DESIGNER_JS
+    assert 'dc.group' in DESIGNER_JS and 'r.group = group' in DESIGNER_JS
+    # the dynamic, per-layout grid prompt, rebuilt on every renderEditor()
+    assert 'function buildGridPrompt()' in DESIGNER_JS
+    assert "el('tt-ai-prompt').textContent = buildGridPrompt();" in DESIGNER_JS
+    assert 'GRID_INTRO' in DESIGNER_JS
+    # the prompt itself instructs the AI to tag a class/stream in brackets
+    assert 'class/stream in brackets' in DESIGNER_JS
+    # the on-page hint documents the same syntax with a worked example
+    assert 'Monday (Science)' in html and 'Monday (Arts)' in html
+
+
 def test_designer_offers_extra_themes(auth_client):
     """The added design themes are selectable and have matching CSS."""
     html = auth_client.get('/timetable/designer').get_data(as_text=True)

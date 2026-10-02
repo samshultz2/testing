@@ -487,18 +487,17 @@
                     Paste the whole week as a table. <b>First line</b> = the period times (leave the first cell blank or write “Day”).
                     <b>Each next line</b> = the day, then a subject per period. Separate cells with a comma, a | or a tab (copy straight from Excel/Sheets).
                     Put a teacher in brackets, e.g. <code>Maths (Mr A)</code>. Leave a cell blank for a free period or a break.
+                    <b>More than one class on the same day?</b> Add the class/stream in brackets after the day, on its own line —
+                    e.g. <code>Monday (Science)</code> and <code>Monday (Arts)</code> as two separate lines — and each becomes its own
+                    row tagged with that Class/Stream. Leave the brackets off when every class follows the same timetable.
                     <b>Tip:</b> to fill the rest of a day with one activity (e.g. <code>Skill Acquisition</code>), repeat the same text in each remaining
                     period — identical neighbouring cells merge into one block automatically (across periods and, where you use Class/Stream, across streams too).
                 </p>
-                <textarea id="gridPasteText" rows="6" placeholder="Day, 8:00-9:00, 9:00-10:00, 10:00-11:00&#10;Monday, Maths (Mr A), English, Physics&#10;Tuesday, English, Physics, Maths&#10;Wednesday, Physics, Maths, English"></textarea>
+                <textarea id="gridPasteText" rows="6" placeholder="Day, 8:00-9:00, 9:00-10:00, 10:00-11:00&#10;Monday (Science), Maths (Mr A), Physics&#10;Monday (Arts), Government, Literature&#10;Tuesday, English, Physics, Maths"></textarea>
                 <button class="btn btn-primary btn-sm" data-call="gridPaste"><i class="fas fa-bolt"></i> Build timetable from grid</button>
                 <div style="margin-top:.6rem">
                     <p class="sess-hint" style="margin:0 0 .3rem"><i class="fas fa-robot"></i> No spreadsheet? Snap a photo of the timetable, give any chatbot (Claude, Gemini, ChatGPT…) this prompt, then paste its answer above:</p>
-                    <pre id="tt-ai-prompt" style="white-space:pre-wrap;background:var(--bg-muted,var(--gray-50));border:1px solid var(--border-color);border-radius:8px;padding:.6rem;font-size:.8rem;margin:0">Read this class timetable and output it as a comma-separated grid, one row per line:
-- First line: the word "Day", then each period's time range — e.g. Day, 8:00-9:00, 9:00-10:00, 10:00-11:00
-- Each next line: the day name, then the subject in each period in order. Put the teacher in brackets, e.g. Maths (Mr A). Leave a cell empty for a free period or break.
-- If the rest of a day is a single activity (e.g. Skill Acquisition), repeat that exact same text in every remaining period so it merges into one block — do NOT write it only once.
-Output only the rows — no headings, totals or extra text, no code block.</pre>
+                    <pre id="tt-ai-prompt" style="white-space:pre-wrap;background:var(--bg-muted,var(--gray-50));border:1px solid var(--border-color);border-radius:8px;padding:.6rem;font-size:.8rem;margin:0"></pre>
                     <button type="button" class="btn btn-secondary btn-sm" style="margin-top:.4rem" data-copy="tt-ai-prompt" data-copied="Copied"><i class="fas fa-copy"></i> Copy prompt</button>
                 </div>
             </details>

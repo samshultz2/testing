@@ -153,6 +153,32 @@ function buildBulkPrompt(){
         + '- If a field isn’t shown for a session, leave it blank but keep its comma; trailing fields at the end of a line (e.g. Teacher) can be left off entirely.\n'
         + 'Output only the rows — no headers, totals or extra commentary, no code block.';
 }
+// Grid-paste prompt (days x periods) -- shared by Saturday and Holiday, the
+// two layouts whose "day" row can carry more than one class/stream.
+var GRID_INTRO={
+    saturday:'Read this Saturday class timetable',
+    holiday:'Read this holiday lesson timetable',
+};
+function buildGridPrompt(){
+    var isHoliday = el('layout').value === 'holiday';
+    var dayLine = isHoliday
+        ? '- Each next line: the date (write it as a date if one is shown, otherwise the day name), then the subject '
+          + 'in each period in order. Put the teacher in brackets, e.g. Maths (Mr A). Leave a cell empty for a free '
+          + 'period or break.\n'
+        : '- Each next line: the day, then the subject in each period in order. Put the teacher in brackets, e.g. '
+          + 'Maths (Mr A). Leave a cell empty for a free period or break.\n';
+    return (GRID_INTRO[el('layout').value] || 'Read this class timetable')
+        + ' (photo, screenshot or spreadsheet) and output it as a comma-separated grid, one row per line:\n'
+        + '- First line: the word "Day", then each period\'s time range — e.g. Day, 8:00-9:00, 9:00-10:00, 10:00-11:00\n'
+        + dayLine
+        + '- If more than one class/stream has DIFFERENT subjects on the same day (e.g. Science vs Arts), '
+        + 'give each its own line for that day, with the class/stream in brackets right after it — '
+        + 'e.g. Monday (Science), Maths (Mr A), ...  then  Monday (Arts), Government, ...  on the next line. '
+        + 'Skip the brackets entirely if every class follows the same timetable.\n'
+        + '- If the rest of a day is a single activity (e.g. Skill Acquisition), repeat that exact same text in every '
+        + 'remaining period so it merges into one block — do NOT write it only once.\n'
+        + 'Output only the rows — no headings, totals or extra text, no code block.';
+}
 function blankRow(){ return {week:'',date:'',day:'',group:'',time:'',dur:'60',subject:'',teacher:'',venue:''}; }
 function normTime(t){
     t=(t||'').trim(); if(!t) return '';
@@ -167,6 +193,7 @@ function renderEditor(){
         layout().fields.map(function(f){ return BULK_SHORT[f]; }).join(', ') +
         '. Separate with a comma, a | or a tab (paste straight from Excel/Sheets). Trailing fields can be left out.';
     el('tt-bulk-prompt').textContent = buildBulkPrompt();
+    el('tt-ai-prompt').textContent = buildGridPrompt();
     el('rowBody').innerHTML = rows.map(sessCard).join('');
 }
 function focusCard(i){
@@ -283,6 +310,15 @@ function parseSubjectCell(s){
     else { var sl = s.split(/\s*\/\s*/); if(sl.length > 1){ s = sl[0].trim(); teacher = sl.slice(1).join('/').trim(); } }
     return {subject: s, teacher: teacher};
 }
+// The day/date cell may carry a trailing "(Class/Stream)" the same way a
+// subject cell carries "(Teacher)" -- e.g. "Monday (Science)" -- so more than
+// one class can share a day: give each its own line with its own group.
+function parseDayCell(s){
+    s = (s || '').trim(); var group = '';
+    var m = s.match(/^(.*?)\s*[\(（](.+?)[\)）]\s*$/);
+    if(m){ s = m[1].trim(); group = m[2].trim(); }
+    return {label: s, group: group};
+}
 function gridPaste(){
     var lines = (el('gridPasteText').value || '').split('\n').filter(function(s){ return s.trim(); });
     if(lines.length < 2){ alert('Add a header line of period times and at least one day row.'); return; }
@@ -293,15 +329,16 @@ function gridPaste(){
         var cells = splitCells(lines[li]);
         var first = (cells[0] || '').trim();
         if(!first) continue;
-        var day = first, date = '';
-        if(parseDateAny(first)){ date = toISO(first); day = dayFromDate(first) || first; }
+        var dc = parseDayCell(first);
+        var day = dc.label, date = '', group = dc.group;
+        if(parseDateAny(dc.label)){ date = toISO(dc.label); day = dayFromDate(dc.label) || dc.label; }
         for(var pi = 0; pi < periods.length; pi++){
             var p = periods[pi]; if(!p) continue;
             var sc = parseSubjectCell(cells[pi + 1] || '');
             if(!sc.subject) continue;
             var r = blankRow();
             r.day = day; r.date = date; r.time = p.time; r.dur = p.dur;
-            r.subject = sc.subject; r.teacher = sc.teacher;
+            r.subject = sc.subject; r.teacher = sc.teacher; r.group = group;
             rows.push(r); added++;
         }
     }
