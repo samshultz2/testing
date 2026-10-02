@@ -51,7 +51,7 @@ def _gender_bucket(g):
     return 'O'
 
 
-def allocate_halls(groups, halls, balance_gender=True, seed=None):
+def allocate_halls(groups, halls, balance_gender=True, seed=None, diversify_classes=False):
     """Allocate candidates to halls.
 
     ``groups``: list of ``{'key': 'SSS1 Rose', 'students': [ {id, name, gender,
@@ -59,6 +59,17 @@ def allocate_halls(groups, halls, balance_gender=True, seed=None):
     ``halls``: list of ``{'name': str, 'capacity': int, 'is_main': bool}``.
     ``seed``: shuffles which candidates land in which hall so each run gives a
     fresh (but still rule-abiding) arrangement; pass a fixed value to reproduce.
+    ``diversify_classes``: when 3+ CLASSES are selected (regardless of how many
+    arms each has), each arm-group's hall quota is normally computed on its
+    own, proportional to raw hall capacity -- every arm lands close to the
+    right split, but capacity getting exhausted by earlier-processed arms can
+    still nudge a later class's arms toward whichever halls happen to have
+    slack left, leaving one hall's overall CLASS mix thinner than another's.
+    With this on, each class's seats are first reserved across halls in
+    proportion to capacity as a whole, and its own arms then draw only from
+    that reservation -- so every hall's class-by-class mix tracks the overall
+    mix as closely as rounding allows. It changes nothing when only 1-2
+    classes are present (there's nothing to rebalance against).
 
     Returns a dict describing the filled halls plus per-hall and per-group stats.
     Raises ``ValueError`` if there are no halls/capacity or capacity < candidates.
@@ -85,6 +96,32 @@ def allocate_halls(groups, halls, balance_gender=True, seed=None):
     # rotates within this order so groups don't all pile onto the same hall.
     base_order = sorted(range(n_h), key=lambda i: caps[i], reverse=True)
 
+    # diversify_classes: reserve each CLASS's seats across halls (∝ capacity)
+    # up front, so an arm-group's quota is drawn from its own class's
+    # reservation rather than raw capacity -- see the docstring above.
+    class_of_group, class_remaining = {}, None
+    if diversify_classes:
+        for g in groups:
+            class_of_group[g['key']] = (
+                g['students'][0].get('class_name') or g['key']) if g['students'] else g['key']
+        class_totals = {}
+        for g in groups:
+            cls = class_of_group[g['key']]
+            class_totals[cls] = class_totals.get(cls, 0) + len(g['students'])
+        class_remaining = {}
+        for cls, total in class_totals.items():
+            q = _largest_remainder(total, caps)
+            class_remaining[cls] = [min(q[h], caps[h]) for h in range(n_h)]
+        # Classes' reservations can together over-claim a hall after per-class
+        # rounding (each was rounded independently) -- scale them back down to
+        # that hall's true capacity so they never ask for more than it has.
+        for h in range(n_h):
+            total_reserved = sum(cr[h] for cr in class_remaining.values())
+            if total_reserved > caps[h] > 0:
+                scale = caps[h] / total_reserved
+                for cr in class_remaining.values():
+                    cr[h] = int(cr[h] * scale)
+
     for gi, g in enumerate(groups):
         students = list(g['students'])
         if not students:
@@ -93,9 +130,11 @@ def allocate_halls(groups, halls, balance_gender=True, seed=None):
         for s in students:
             s['_group_key'] = g['key']       # for per-hall group breakdown stats
 
-        # Quota per hall ∝ capacity, then repaired to fit remaining seats. This
-        # is what spreads a group across every hall in proportion to capacity.
-        quota = _largest_remainder(len(students), caps)
+        # Quota per hall ∝ capacity (or, with diversify_classes, ∝ this arm's
+        # own class's remaining per-hall reservation), then repaired to fit
+        # remaining seats. This is what spreads a group across every hall.
+        weights = class_remaining[class_of_group[g['key']]] if diversify_classes else caps
+        quota = _largest_remainder(len(students), weights)
         quota = [min(quota[h], remaining[h]) for h in range(n_h)]
         deficit = len(students) - sum(quota)
         # Push any overflow (from rounding/caps) onto halls that still have slack.
@@ -109,6 +148,11 @@ def allocate_halls(groups, halls, balance_gender=True, seed=None):
             h_ptr += 1
             if h_ptr > n_h * (max(remaining) + 2):
                 break  # safety; should never trigger given the capacity check
+
+        if diversify_classes:
+            cr = class_remaining[class_of_group[g['key']]]
+            for h in range(n_h):
+                cr[h] = max(0, cr[h] - quota[h])   # consume this arm's share of its class's room
 
         if balance_gender:
             # Fill each hall's quota with a gender mix proportional to the group's

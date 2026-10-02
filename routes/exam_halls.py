@@ -142,6 +142,7 @@ def allocate():
     groups = _gather_groups(request.form)
     halls = _parse_halls(request.form)
     balance = request.form.get('balance_gender') == 'on'
+    diversify = request.form.get('diversify_classes') == 'on'
     if not groups:
         flash('Select at least one class/arm that has students.', 'error')
         return redirect(url_for('exam_halls.index'))
@@ -156,7 +157,8 @@ def allocate():
     if seed is None:
         seed = _random.randrange(1_000_000_000)
     try:
-        result = allocate_halls(groups, halls, balance_gender=balance, seed=seed)
+        result = allocate_halls(groups, halls, balance_gender=balance, seed=seed,
+                                diversify_classes=diversify)
     except ValueError as e:
         flash(str(e), 'error')
         return redirect(url_for('exam_halls.index'))
@@ -172,6 +174,7 @@ def allocate():
                'hall_capacity': request.form.getlist('hall_capacity'),
                'main_hall': request.form.get('main_hall', ''),
                'balance_gender': 'on' if balance else '',
+               'diversify_classes': 'on' if diversify else '',
                'candidate_set': request.form.get('candidate_set', 'all'),
                'streams': request.form.getlist('streams'),
                'seats_per_row': str(cols),
@@ -188,10 +191,12 @@ def pdf():
     groups = _gather_groups(request.form)
     halls = _parse_halls(request.form)
     balance = request.form.get('balance_gender') == 'on'
+    diversify = request.form.get('diversify_classes') == 'on'
     cols = request.form.get('seats_per_row', type=int) or 5
     seed = request.form.get('seed', type=int) or 0
     try:
-        result = allocate_halls(groups, halls, balance_gender=balance, seed=seed)
+        result = allocate_halls(groups, halls, balance_gender=balance, seed=seed,
+                                diversify_classes=diversify)
     except ValueError as e:
         flash(str(e), 'error')
         return redirect(url_for('exam_halls.index'))

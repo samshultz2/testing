@@ -86,6 +86,64 @@ def test_deterministic():
     assert [h['count'] for h in a['halls']] == [h['count'] for h in c['halls']]
 
 
+def _class_group(key, cls, n):
+    """Like _group, but each student carries class_name -- diversify_classes
+    needs it to tell which class a group belongs to."""
+    return {'key': key, 'students': [
+        {'id': f'{key}-{i}', 'name': f'{key} {i}', 'gender': 'Male', 'class_name': cls}
+        for i in range(n)]}
+
+
+def test_diversify_classes_off_by_default():
+    # Without the flag, a 3rd/tiny class can still end up concentrated in
+    # just one hall purely because its arms are quota'd independently.
+    groups = [_class_group('SSS3 A', 'SSS3', 1), _class_group('SSS3 B', 'SSS3', 1),
+              _class_group('SSS1 A', 'SSS1', 40), _class_group('SSS2 A', 'SSS2', 38)]
+    halls = [{'name': f'H{i}', 'capacity': c} for i, c in enumerate([30, 25, 20, 15])]
+    res = allocate_halls(groups, halls, balance_gender=False, seed=1)
+    sss3_per_hall = [sum(1 for s in h['students'] if s['class_name'] == 'SSS3') for h in res['halls']]
+    assert sss3_per_hall == [2, 0, 0, 0]
+
+
+def test_diversify_classes_spreads_each_class_across_more_halls():
+    # Same scenario, diversify_classes=True: SSS3's 2 seats are reserved
+    # across halls AT THE CLASS LEVEL first, so its two 1-student arms land
+    # in two DIFFERENT halls instead of piling onto the same one.
+    groups = [_class_group('SSS3 A', 'SSS3', 1), _class_group('SSS3 B', 'SSS3', 1),
+              _class_group('SSS1 A', 'SSS1', 40), _class_group('SSS2 A', 'SSS2', 38)]
+    halls = [{'name': f'H{i}', 'capacity': c} for i, c in enumerate([30, 25, 20, 15])]
+    res = allocate_halls(groups, halls, balance_gender=False, seed=1, diversify_classes=True)
+    sss3_per_hall = [sum(1 for s in h['students'] if s['class_name'] == 'SSS3') for h in res['halls']]
+    assert sss3_per_hall == [1, 1, 0, 0]
+    assert sum(sss3_per_hall) == 2   # nobody lost or duplicated
+
+
+def test_diversify_classes_preserves_capacity_and_totals():
+    # The diversify path must never change WHO gets seated or break capacity
+    # limits -- only which hall each arm's quota is drawn from.
+    groups = [_class_group('SSS1 A', 'SSS1', 23), _class_group('SSS1 B', 'SSS1', 19),
+              _class_group('SSS2 A', 'SSS2', 14), _class_group('SSS2 B', 'SSS2', 11),
+              _class_group('SSS3 A', 'SSS3', 9), _class_group('SSS3 B', 'SSS3', 7)]
+    halls = [{'name': 'Main', 'capacity': 60, 'is_main': True},
+             {'name': 'B', 'capacity': 25}, {'name': 'C', 'capacity': 15}]
+    res = allocate_halls(groups, halls, balance_gender=True, seed=3, diversify_classes=True)
+    assert res['total_students'] == 83
+    placed = sum(h['count'] for h in res['halls'])
+    assert placed == 83
+    for h in res['halls']:
+        assert h['count'] <= h['capacity']
+
+
+def test_diversify_classes_with_one_class_matches_default():
+    # With only one class present (two arms of the same SSS1) there's nothing
+    # to rebalance -- behaviour matches the default (same per-hall counts).
+    groups = [_class_group('A1', 'SSS1', 30), _class_group('A2', 'SSS1', 25)]
+    halls = [{'name': 'M', 'capacity': 35, 'is_main': True}, {'name': 'B', 'capacity': 20}]
+    off = allocate_halls(groups, halls, balance_gender=False, seed=2, diversify_classes=False)
+    on = allocate_halls(groups, halls, balance_gender=False, seed=2, diversify_classes=True)
+    assert [h['count'] for h in off['halls']] == [h['count'] for h in on['halls']]
+
+
 # ---- Seat layout within a hall -------------------------------------------------
 from utils.exam_hall_allocator import seat_hall
 

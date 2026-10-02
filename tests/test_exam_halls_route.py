@@ -68,6 +68,28 @@ def test_allocate_and_pdf(app):
     assert r.status_code == 200 and r.data[:4] == b'%PDF'
 
 
+def test_diversify_classes_toggle_is_accepted(app):
+    # End-to-end wiring check: the checkbox reaches allocate_halls without
+    # erroring (the rebalancing logic itself is covered at the unit level in
+    # test_exam_hall_allocator.py).
+    _ids, caa_id = _seed(app, 10)
+    c = app.test_client()
+    c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': login_token(c)})
+    token = auth_csrf(c)
+    form = {
+        '_csrf_token': token,
+        'assignments': str(caa_id),
+        'hall_name': ['Main Hall'],
+        'hall_capacity': ['100000'],
+        'main_hall': '0',
+        'balance_gender': 'on',
+        'diversify_classes': 'on',
+    }
+    r = c.post('/tools/exam-halls/allocate', data=form)
+    assert r.status_code == 200
+    assert 'EXAM HALL ALLOCATION' in r.get_data(as_text=True)
+
+
 def test_candidate_set_filter_excludes_unregistered(app):
     # Students seeded without a WAEC reg number -> WAEC set yields nobody.
     _ids, caa_id = _seed(app, 8)
