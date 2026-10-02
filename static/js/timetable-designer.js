@@ -177,6 +177,8 @@ function buildGridPrompt(){
         + 'Skip the brackets entirely if every class follows the same timetable.\n'
         + '- If the rest of a day is a single activity (e.g. Skill Acquisition), repeat that exact same text in every '
         + 'remaining period so it merges into one block — do NOT write it only once.\n'
+        + '- If a cell shows more than one subject for the same period (e.g. "PHY/GOVT" for a split class), keep it '
+        + 'exactly as written, slash and all — do NOT treat anything after a "/" as a teacher name.\n'
         + 'Output only the rows — no headings, totals or extra text, no code block.';
 }
 function blankRow(){ return {week:'',date:'',day:'',group:'',time:'',dur:'60',subject:'',teacher:'',venue:''}; }
@@ -309,9 +311,15 @@ function parsePeriodCell(s){
 }
 function parseSubjectCell(s){
     s = (s || '').trim(); var teacher = '';
+    // "Subject (Teacher)" is the one documented/taught syntax (see the
+    // grid-paste hint and its AI prompt). A bare "/" is deliberately left
+    // alone rather than split into subject/teacher -- it's common for a cell
+    // to pack more than one subject into a single period this way (e.g.
+    // "PHY/GOVT" for parallel stream options sitting together), and treating
+    // every "/" as a teacher separator silently mangled those into a bogus
+    // "teacher" field.
     var m = s.match(/^(.*?)\s*[\(（](.+?)[\)）]\s*$/);     // "Subject (Teacher)"
     if(m){ s = m[1].trim(); teacher = m[2].trim(); }
-    else { var sl = s.split(/\s*\/\s*/); if(sl.length > 1){ s = sl[0].trim(); teacher = sl.slice(1).join('/').trim(); } }
     return {subject: s, teacher: teacher};
 }
 // The day/date cell may carry a trailing "(Class/Stream)" the same way a

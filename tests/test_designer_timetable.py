@@ -178,6 +178,21 @@ def test_saturday_layout_keeps_an_explicit_date_from_grid_paste(auth_client):
     assert "else if(!r.date){ r.daylabel=''; }" in DESIGNER_JS
 
 
+def test_grid_paste_preserves_a_slash_in_the_subject_cell(auth_client):
+    """A real-world pasted cell like "PHY/GOVT" packs more than one subject
+    into one period (e.g. parallel stream options for a split class) -- a
+    totally different thing from the documented "Subject (Teacher)" syntax.
+    parseSubjectCell used to ALSO split on a bare "/" as a subject/teacher
+    shorthand (undocumented, untaught by any hint or AI prompt), which
+    silently mangled every such cell into a bogus "teacher" field. Only the
+    bracket syntax should ever produce a teacher now."""
+    assert 'function parseSubjectCell(' in DESIGNER_JS
+    assert "sl = s.split(/\\s*\\/\\s*/)" not in DESIGNER_JS   # the removed fallback
+    assert 'do NOT treat anything after a "/" as a teacher name' in DESIGNER_JS  # AI prompt
+    html = auth_client.get('/timetable/designer').get_data(as_text=True)
+    assert 'PHY/GOVT' in html   # on-page hint's worked example
+
+
 def test_designer_offers_extra_themes(auth_client):
     """The added design themes are selectable and have matching CSS."""
     html = auth_client.get('/timetable/designer').get_data(as_text=True)
