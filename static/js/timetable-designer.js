@@ -224,6 +224,10 @@ var DAY_ALIAS={mon:'Monday',monday:'Monday',tue:'Tuesday',tues:'Tuesday',tuesday
     thurs:'Thursday',thursday:'Thursday',fri:'Friday',friday:'Friday',sat:'Saturday',
     saturday:'Saturday',sun:'Sunday',sunday:'Sunday'};
 function canonDay(v){ return DAY_ALIAS[(v||'').trim().toLowerCase().replace(/\.+$/,'')] || (v||'').trim(); }
+// Matches a weekday name/abbreviation at the START of a string, with an
+// optional trailing "." and/or "," before whatever follows — used to strip a
+// day name sitting in front of a date in the same cell (see parseDayCell).
+var DAY_PREFIX_RE = new RegExp('^(' + Object.keys(DAY_ALIAS).join('|') + ')\\.?,?\\s+', 'i');
 function ttLooks(field, v){
     v=(v||'').trim(); if(!v) return false;
     if(field==='date') return !!parseDateAny(v);
@@ -317,6 +321,18 @@ function parseDayCell(s){
     s = (s || '').trim(); var group = '';
     var m = s.match(/^(.*?)\s*[\(（](.+?)[\)）]\s*$/);
     if(m){ s = m[1].trim(); group = m[2].trim(); }
+    // A leading weekday name/abbreviation before the date itself (e.g. "SAT
+    // 1/10/2026", "Saturday, 1/10/2026") is common when pasting straight from
+    // a spreadsheet that shows both in one cell. parseDateAny only recognises
+    // a cell that's JUST a date, so left as-is this never parses and the
+    // whole string ends up shown as one unsplit line instead of the day on
+    // top and the date underneath. Strip the prefix -- but only when a real
+    // date follows it, so a plain "Saturday" (no date) is left untouched.
+    var dp = s.match(DAY_PREFIX_RE);
+    if(dp){
+        var rest = s.slice(dp[0].length).trim();
+        if(parseDateAny(rest)) s = rest;
+    }
     return {label: s, group: group};
 }
 function gridPaste(){
@@ -754,7 +770,11 @@ function applySaturdayDates(){
     rows.forEach(function(r){
         var w=parseInt(r.week,10);
         if(w>=1){ r.daylabel='Week '+w; r.day='Week '+w; r.date=map[w]||''; }
-        else { r.daylabel=''; r.date=''; }
+        // A row with no week number but its OWN explicit date (e.g. pasted
+        // via the grid-paste box, which sets day/date directly) keeps that
+        // date rather than having it wiped — only a genuinely blank row
+        // (no week, no date) gets cleared.
+        else if(!r.date){ r.daylabel=''; }
     });
 }
 function renderManageSaturdays(){

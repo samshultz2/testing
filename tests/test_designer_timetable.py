@@ -153,6 +153,31 @@ def test_grid_paste_supports_class_stream_and_has_dynamic_prompt(auth_client):
     assert 'Monday (Science)' in html and 'Monday (Arts)' in html
 
 
+def test_grid_paste_day_cell_strips_leading_weekday_before_date():
+    """A day/date cell copied from a spreadsheet often shows BOTH, e.g.
+    "SAT 10/1/2026". parseDateAny only recognises a cell that's JUST a date,
+    so left as-is this never parses and the whole string prints as one
+    unsplit line instead of the day name on top and the date underneath.
+    parseDayCell must strip a leading weekday name/abbreviation so the date
+    parses -- but only when a real date actually follows it."""
+    assert 'var DAY_PREFIX_RE' in DESIGNER_JS
+    assert 's.match(DAY_PREFIX_RE)' in DESIGNER_JS
+    # only strips when what remains actually parses as a date -- guards a
+    # plain "Saturday" (no date attached) from being mangled
+    assert 'if(parseDateAny(rest)) s = rest;' in DESIGNER_JS
+
+
+def test_saturday_layout_keeps_an_explicit_date_from_grid_paste(auth_client):
+    """applySaturdayDates() used to unconditionally wipe date/daylabel for any
+    Saturday-layout row without a week number -- which would erase the very
+    date gridPaste() just parsed for a pasted "SAT 10/1/2026"-style row
+    (Saturday sessions have no week number when they come from the grid-paste
+    box, only from Quick-add/session cards). It must now only clear a row
+    that has neither a week NOR an explicit date of its own."""
+    assert 'function applySaturdayDates()' in DESIGNER_JS
+    assert "else if(!r.date){ r.daylabel=''; }" in DESIGNER_JS
+
+
 def test_designer_offers_extra_themes(auth_client):
     """The added design themes are selectable and have matching CSS."""
     html = auth_client.get('/timetable/designer').get_data(as_text=True)
