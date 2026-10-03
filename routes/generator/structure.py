@@ -192,12 +192,17 @@ def add_class_config():
                 flash('Class exists.', 'error')
                 return redirect(url_for('generator.add_class_config'))
             has_streams = request.form.get('has_streams') == 'on'
+            arm_names = request.form.get('arm_names', '').strip()
+            parsed_arms = [a.strip() for a in arm_names.split(',') if a.strip()]
             class_config = GenClassConfig(
                 class_name=class_name,
                 school_level=level,
                 branch_id=gen_bid(),
-                num_arms=request.form.get('num_arms', type=int) or 1,
-                arm_names=request.form.get('arm_names', '').strip() or None,
+                # Derived from arm_names, the field generation actually reads
+                # (GenClassConfig.arm_list) -- never a separately-submitted
+                # count, which could silently drift from the real arm list.
+                num_arms=len(parsed_arms) or (request.form.get('num_arms', type=int) or 1),
+                arm_names=arm_names or None,
                 has_streams=has_streams,
                 require_free_first_period=request.form.get('require_free_first_period') == 'on'
             )
@@ -229,9 +234,13 @@ def edit_class_config(class_id):
 def update_class_config(class_id):
     class_config = gen_owned_or_404(GenClassConfig, class_id)
     try:
+        arm_names = request.form.get('arm_names', '').strip()
+        parsed_arms = [a.strip() for a in arm_names.split(',') if a.strip()]
         class_config.class_name = request.form.get('class_name', '').strip()
-        class_config.num_arms = request.form.get('num_arms', type=int) or 1
-        class_config.arm_names = request.form.get('arm_names', '').strip() or None
+        # Derived from arm_names -- see add_class_config for why this must
+        # never be taken from a separately-submitted count.
+        class_config.num_arms = len(parsed_arms) or (request.form.get('num_arms', type=int) or 1)
+        class_config.arm_names = arm_names or None
         class_config.has_streams = request.form.get('has_streams') == 'on'
         class_config.require_free_first_period = request.form.get('require_free_first_period') == 'on'
         db.session.commit()

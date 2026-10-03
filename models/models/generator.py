@@ -245,7 +245,16 @@ class GenClassConfig(db.Model):
         if self.arm_names:
             return [a.strip() for a in self.arm_names.split(',')]
         return []
-    
+
+    @property
+    def arm_count(self):
+        """The real number of arms, derived from arm_names -- the field
+        generation actually iterates (see arm_list) -- rather than the
+        separately-stored num_arms counter, which is editable independently
+        of arm_names and can drift out of sync with it. Falls back to
+        num_arms only when no arm names are set at all."""
+        return len(self.arm_list) if self.arm_names else (self.num_arms or 1)
+
     def __repr__(self):
         return f'<GenClassConfig {self.class_name}>'
 

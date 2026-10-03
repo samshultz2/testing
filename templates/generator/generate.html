@@ -145,7 +145,7 @@
                     <input type="checkbox" name="class_ids[]" value="{{ class_config.id }}" checked>
                     <span>
                         <strong>{{ class_config.class_name }}</strong>
-                        <br><small class="text-muted">{{ class_config.num_arms }} arm(s): {{ class_config.arm_names or 'A, B, C...' }}</small>
+                        <br><small class="text-muted">{{ class_config.arm_count }} arm(s): {{ class_config.arm_names or 'A, B, C...' }}</small>
                         {% if class_config.has_streams %}<br><small class="badge badge-info">Has Streams</small>{% endif %}
                     </span>
                 </label>
@@ -188,7 +188,7 @@
                 </label>
             </div>
             <div id="ortools-options" style="display: none; margin-top: 1rem; padding: 1rem; background: var(--bg-secondary); border-radius: var(--border-radius-sm);">
-                <label class="form-label">Time Limit (seconds)</label>
+                <label class="form-label">Time Limit</label>
                 <select name="time_limit" class="form-control" style="max-width: 200px;">
                     <option value="60">60 seconds (quick)</option>
                     <option value="180">3 minutes</option>

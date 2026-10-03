@@ -18,14 +18,9 @@
             </div>
             
             <div class="form-group">
-                <label class="form-label">Number of Arms</label>
-                <input type="number" name="num_arms" class="form-control" value="{{ class_config.num_arms }}" min="1" max="10">
-            </div>
-            
-            <div class="form-group">
                 <label class="form-label">Arm Names</label>
                 <input type="text" name="arm_names" class="form-control" value="{{ class_config.arm_names or '' }}">
-                <span class="form-hint">Comma-separated: e.g., Iris, Rose, Lily, Tulip</span>
+                <span class="form-hint">Comma-separated: e.g., Iris, Rose, Lily, Tulip — the number of arms is taken from this list</span>
             </div>
             
             <div class="form-group">
