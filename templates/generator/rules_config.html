@@ -181,6 +181,79 @@ switch level in the menu to configure the other.</p>
     </div>
 </form>
 
+{% if subjects and classes %}
+<div class="card mb-3">
+    <div class="card-header"><h3>Day-Separation: Per-Class Exceptions</h3></div>
+    <div class="card-body">
+        <p class="text-muted mb-3">The subject checklist above decides day-separation for a subject across
+            <em>every</em> class. Use this to override that for one specific class — e.g. Physics is on for
+            every class except SSS1 Rose.</p>
+
+        {% if day_separation_class_overrides %}
+        <table class="table mb-3">
+            <thead><tr><th>Subject</th><th>Class</th><th>This class</th><th></th></tr></thead>
+            <tbody>
+                {% for ov in day_separation_class_overrides %}
+                <tr>
+                    <td>{{ ov.subject_name }}</td>
+                    <td>{{ ov.class_name }}</td>
+                    <td>
+                        {% if ov.exempt %}
+                        <span class="badge badge-secondary">Exempt (off)</span>
+                        {% else %}
+                        <span class="badge badge-primary">Included (on)</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <form method="POST" action="{{ url_for('generator.set_day_separation_class_override') }}" style="display:inline;">
+                            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                            <input type="hidden" name="subject_id" value="{{ ov.subject_id }}">
+                            <input type="hidden" name="class_id" value="{{ ov.class_config_id }}">
+                            <input type="hidden" name="choice" value="inherit">
+                            <button type="submit" class="btn btn-secondary btn-sm">Remove (inherit default)</button>
+                        </form>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="text-muted">No per-class exceptions yet.</p>
+        {% endif %}
+
+        <form method="POST" action="{{ url_for('generator.set_day_separation_class_override') }}" class="form-row" style="align-items: flex-end;">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <div class="form-group">
+                <label class="form-label">Subject</label>
+                <select name="subject_id" class="form-control" required>
+                    {% for subject in subjects %}
+                    <option value="{{ subject.id }}">{{ subject.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">Class</label>
+                <select name="class_id" class="form-control" required>
+                    {% for cc in classes %}
+                    <option value="{{ cc.id }}">{{ cc.class_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label class="form-label">For this class</label>
+                <select name="choice" class="form-control" required>
+                    <option value="include">Apply rule (included)</option>
+                    <option value="exempt">Exempt (off)</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <button type="submit" class="btn btn-secondary">Add Exception</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endif %}
+
 <script nonce="{{ csp_nonce }}">
 // Live dismissal-time preview: mirrors utils/generator_times.day_end_time()
 // and utils/timeutil.format_clock() (time_format from the server: 12h/24h).

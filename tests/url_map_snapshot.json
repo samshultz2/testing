@@ -2646,6 +2646,13 @@
 ]
 ],
 [
+"generator.set_day_separation_class_override",
+"/generator/rules/day-separation-class-override",
+[
+"POST"
+]
+],
+[
 "generator.set_in_use",
 "/generator/results/<batch_id>/set-in-use",
 [

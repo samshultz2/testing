@@ -23,10 +23,27 @@ def rules_config():
         sc.subject_id for sc in GenSubjectConfig.query.filter_by(
             branch_id=gen_bid(), school_level=level, day_separation_exempt=False).all()
     }
+    # Per-class exceptions to the subject-level choice above — e.g. a subject
+    # that's on for most classes but should be off for one specific class.
+    classes = GenClassConfig.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()) \
+        .order_by(GenClassConfig.class_name).all()
+    class_override_rows = (
+        GenClassSubjectConfig.query.join(GenClassConfig)
+        .filter(GenClassConfig.branch_id == gen_bid(), GenClassConfig.school_level == level,
+               GenClassSubjectConfig.day_separation_exempt.isnot(None))
+        .all()
+    )
+    day_separation_class_overrides = [{
+        'class_config_id': ov.class_config_id, 'class_name': ov.class_config.class_name,
+        'subject_id': ov.subject_id, 'subject_name': ov.subject.name,
+        'exempt': ov.day_separation_exempt,
+    } for ov in class_override_rows]
+    day_separation_class_overrides.sort(key=lambda r: (r['subject_name'], r['class_name']))
     return render_template('generator/rules_config.html', rules=rules, level=level,
                            end_time=end_time, day_start_hhmm=day_start_hhmm,
                            time_format=get_time_format(), subjects=subjects,
-                           day_separation_subject_ids=day_separation_subject_ids)
+                           day_separation_subject_ids=day_separation_subject_ids,
+                           classes=classes, day_separation_class_overrides=day_separation_class_overrides)
 
 
 @generator_bp.route('/rules/save', methods=['POST'])
@@ -82,6 +99,40 @@ def save_rules():
 
         db.session.commit()
         flash('Rules saved!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error: {str(e)}', 'error')
+    return redirect(url_for('generator.rules_config'))
+
+
+@generator_bp.route('/rules/day-separation-class-override', methods=['POST'])
+@login_required
+def set_day_separation_class_override():
+    """One class's exception to the day-separation subject picker above --
+    e.g. Mathematics is on for every class except SSS1 Gold. 'inherit'
+    clears the exception (back to whatever the subject-level choice says)."""
+    level = get_current_level()
+    try:
+        subject_id = request.form.get('subject_id', type=int)
+        class_id = request.form.get('class_id', type=int)
+        choice = request.form.get('choice')
+        if choice not in ('include', 'exempt', 'inherit'):
+            raise ValueError('Pick Apply, Exempt, or Inherit default.')
+        subject = GenSubject.query.filter_by(id=subject_id, school_level=level, branch_id=gen_bid()).first()
+        cc = GenClassConfig.query.filter_by(id=class_id, school_level=level, branch_id=gen_bid()).first()
+        if not subject or not cc:
+            raise ValueError('Subject or class not found.')
+
+        value = {'include': False, 'exempt': True, 'inherit': None}[choice]
+        row = GenClassSubjectConfig.query.filter_by(class_config_id=class_id, subject_id=subject_id).first()
+        if row:
+            row.day_separation_exempt = value
+        elif value is not None:
+            db.session.add(GenClassSubjectConfig(class_config_id=class_id, subject_id=subject_id,
+                                                  day_separation_exempt=value))
+        # else: no row and nothing to inherit away from -- nothing to do.
+        db.session.commit()
+        flash(f'Day-separation exception saved for {subject.name} / {cc.class_name}.', 'success')
     except Exception as e:
         db.session.rollback()
         flash(f'Error: {str(e)}', 'error')

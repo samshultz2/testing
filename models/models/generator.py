@@ -138,6 +138,13 @@ class GenClassSubjectConfig(db.Model):
     avoid_morning = db.Column(db.Boolean, default=False)     # never before the break
     avoid_afternoon = db.Column(db.Boolean, default=False)   # never after the break
     excluded_periods = db.Column(db.String(50))  # comma-separated period numbers, e.g. "3,5"
+    # Per-class override of GenSubjectConfig.day_separation_exempt. NULL (the
+    # default) means "no override, inherit the subject-level default" --
+    # deliberately nullable rather than defaulting to a concrete value, since
+    # a row here already exists for nearly every (class, subject) pair just
+    # from periods_per_week, so "row exists" can't double as "this class has
+    # an explicit day-separation choice" the way it does for is_enabled.
+    day_separation_exempt = db.Column(db.Boolean, default=None)
     is_active = db.Column(db.Boolean, default=True)
     
     # Relationships

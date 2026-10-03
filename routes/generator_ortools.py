@@ -66,6 +66,18 @@ def _effective_restrictions(class_cfg, global_cfg):
     return (global_not_first, global_not_last, False, False, [])
 
 
+def _day_sep_exempt(day_separation_default, class_name, subject_id):
+    """Whether (class_name, subject_id) is exempt from the school-wide
+    day-separation default. A per-class override (GenClassSubjectConfig.
+    day_separation_exempt, when not NULL) wins; otherwise falls back to the
+    subject-level default (GenSubjectConfig.day_separation_exempt, exempt
+    unless explicitly included -- see day_separation_default's build site)."""
+    override = (day_separation_default.get('class_overrides') or {}).get((class_name, subject_id))
+    if override is not None:
+        return override
+    return subject_id in (day_separation_default.get('exempt_subject_ids') or set())
+
+
 def diagnose_infeasibility(class_arms, requirements, teachers, teacher_reqs, teacher_unavailable,
                            subject_info, num_periods, num_slots, num_days, break_after,
                            valid_double_starts, day_separation_rules=(), day_separation_default=None,
@@ -162,13 +174,12 @@ def diagnose_infeasibility(class_arms, requirements, teachers, teacher_reqs, tea
     # Same check for the school-wide default (Rules -> Scheduling Constraints):
     # any non-exempt subject taught every school day can't honour it either.
     if day_separation_default and day_separation_default.get('enabled'):
-        exempt = day_separation_default.get('exempt_subject_ids') or set()
         day_a_name = DAY_NAMES[day_separation_default['day_a']]
         day_b_name = DAY_NAMES[day_separation_default['day_b']]
         seen = set()
         for key, info in subject_info.items():
             class_name, arm, subject_id = key
-            if subject_id in exempt or key in seen:
+            if _day_sep_exempt(day_separation_default, class_name, subject_id) or key in seen:
                 continue
             count = sum(1 for r in requirements if r['class_name'] == class_name
                        and r['arm'] == arm and r['subject_id'] == subject_id)
@@ -430,11 +441,27 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
         sc.subject_id for sc in GenSubjectConfig.query.filter_by(
             branch_id=gen_bid(), day_separation_exempt=False).all()
     }
+    # Per-class exceptions to the subject-level choice above (also opt-in vs.
+    # opt-out, same checklist on the Rules page but expandable per subject):
+    # NULL on a GenClassSubjectConfig row means "no override, inherit the
+    # subject-level default" -- only rows with an explicit True/False matter
+    # here, see _day_sep_exempt.
+    class_override_rows = (
+        db.session.query(GenClassSubjectConfig.subject_id, GenClassSubjectConfig.day_separation_exempt,
+                         GenClassConfig.class_name)
+        .join(GenClassConfig, GenClassSubjectConfig.class_config_id == GenClassConfig.id)
+        .filter(GenClassConfig.branch_id == gen_bid(),
+               GenClassSubjectConfig.day_separation_exempt.isnot(None))
+        .all()
+    )
+    class_overrides = {(class_name, subject_id): exempt
+                       for subject_id, exempt, class_name in class_override_rows}
     day_separation_default = {
         'enabled': bool(day_separation_default_enabled),
         'day_a': day_separation_default_day_a,
         'day_b': day_separation_default_day_b,
         'exempt_subject_ids': run_subject_ids - included_subject_ids,
+        'class_overrides': class_overrides,
     }
 
     # ========== PRE-SOLVE DIAGNOSTICS ==========
@@ -976,16 +1003,15 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
     logger.debug(f"  Added {day_sep_count} day-separation constraints")
 
     # Constraint 13b: the school-wide day-separation default (Rules ->
-    # Scheduling Constraints) — applies to every subject unless exempted
-    # under Subject Settings, on top of any custom rules above.
+    # Scheduling Constraints) — opt-in per subject, with a per-class
+    # exception on top, both picked from the Rules page itself.
     day_sep_default_count = 0
     if day_separation_default['enabled']:
-        exempt = day_separation_default['exempt_subject_ids']
         def_day_a_slots = [day_separation_default['day_a'] * num_periods + p for p in range(num_periods)]
         def_day_b_slots = [day_separation_default['day_b'] * num_periods + p for p in range(num_periods)]
         for key, reqs in subject_ca_reqs.items():
             class_name, arm, subject_id = key
-            if subject_id in exempt:
+            if _day_sep_exempt(day_separation_default, class_name, subject_id):
                 continue
             _add_day_separation(reqs, def_day_a_slots, def_day_b_slots, f'def_{class_name}_{arm}_{subject_id}')
             day_sep_default_count += 1

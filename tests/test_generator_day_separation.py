@@ -219,7 +219,11 @@ def _build_double_period_class(app, tag, teacher_days=None):
             # `periods_per_day` posted to /generate/ortools is actually
             # ignored — the route reads it from GenTimetableRule instead
             # (defaulting to 8) — so match that instead of the posted value.
-            rule = GenTimetableRule.query.filter_by(rule_type='periods_per_day', is_active=True).first()
+            # Scoped to this branch -- unscoped, .first() can return another
+            # branch's periods_per_day row (e.g. one a dedicated-branch test
+            # elsewhere left behind), under-marking this teacher's blocked
+            # periods and letting the solver dodge the "needs both days" trap.
+            rule = GenTimetableRule.query.filter_by(rule_type='periods_per_day', is_active=True, branch_id=bid).first()
             actual_periods_per_day = int(rule.value) if rule and str(rule.value).isdigit() else 8
             for day in range(5):
                 for period in range(1, actual_periods_per_day + 1):
