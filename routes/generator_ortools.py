@@ -416,14 +416,25 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
     day_separation_rules = GenDaySeparationRule.query.filter_by(is_active=True, branch_id=gen_bid()).all()
     period_placement_rules = GenPeriodPlacementRule.query.filter_by(is_active=True, branch_id=gen_bid()).all()
 
+    # Opt-in, not opt-out: a subject is exempt (left OUT of the day-separation
+    # default) unless a GenSubjectConfig row for it explicitly says otherwise
+    # (day_separation_exempt=False). That makes "no config row at all" -- a
+    # brand new subject, or one never touched on the Rules page's subject
+    # picker below -- exempt by default, rather than silently swept into the
+    # rule. Scoped to just the subjects in THIS run (subject_ca_reqs' keys),
+    # not every subject ever created, and GenSubject rows are already
+    # level-specific (never shared between JSS/SSS), so this needs no
+    # separate school_level filter.
+    run_subject_ids = {key[2] for key in subject_ca_reqs}
+    included_subject_ids = {
+        sc.subject_id for sc in GenSubjectConfig.query.filter_by(
+            branch_id=gen_bid(), day_separation_exempt=False).all()
+    }
     day_separation_default = {
         'enabled': bool(day_separation_default_enabled),
         'day_a': day_separation_default_day_a,
         'day_b': day_separation_default_day_b,
-        'exempt_subject_ids': {
-            sc.subject_id for sc in GenSubjectConfig.query.filter_by(
-                branch_id=gen_bid(), day_separation_exempt=True).all()
-        },
+        'exempt_subject_ids': run_subject_ids - included_subject_ids,
     }
 
     # ========== PRE-SOLVE DIAGNOSTICS ==========

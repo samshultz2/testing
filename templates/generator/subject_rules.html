@@ -53,8 +53,8 @@
                 <label class="sr-toggle"><input type="checkbox" name="not_last" {{ 'checked' if cfg and cfg.not_last_period else '' }}> Not last period</label>
             </div>
             <div class="sr-row">
-                <div class="sr-lbl"><b>Day-separation rule</b><span>The school-wide "don't land on both named days" rule (Rules &rarr; Scheduling Constraints) applies to {{ subject.name }} unless exempted — check this if it's taught every school day or otherwise shouldn't be restricted that way.</span></div>
-                <label class="sr-toggle"><input type="checkbox" name="day_separation_exempt" {{ 'checked' if cfg and cfg.day_separation_exempt else '' }}> Exempt from day-separation rule</label>
+                <div class="sr-lbl"><b>Day-separation rule</b><span>The school-wide "don't land on both named days" rule (Rules &rarr; Scheduling Constraints) is off for every subject by default — check this to apply it to {{ subject.name }} specifically. (Easier to pick several subjects at once from the Rules page itself.)</span></div>
+                <label class="sr-toggle"><input type="checkbox" name="day_separation_included" {{ 'checked' if cfg and not cfg.day_separation_exempt else '' }}> Apply day-separation rule to this subject</label>
             </div>
             <div class="sr-row">
                 <div class="sr-lbl"><b>Preferred time of day</b><span>Bias {{ subject.name }} towards a part of the day.</span></div>

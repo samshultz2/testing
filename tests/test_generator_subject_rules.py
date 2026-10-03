@@ -55,7 +55,14 @@ def test_save_writes_all_three_models(auth_client, app):
         assert cfg.preferred_time == 'morning'
         ov = GenClassSubjectConfig.query.filter_by(class_config_id=cid, subject_id=sid).first()
         assert ov and ov.periods_per_week == 3 and ov.is_enabled is True
-        rule = GenTimetableRule.query.filter_by(rule_type='max_consecutive', school_level='sss').first()
+        # Scoped to the default branch (what auth_client/gen_bid() resolves to
+        # for a central user with no branch picked) -- unscoped, .first() can
+        # return ANY branch's max_consecutive row for school_level='sss',
+        # including one left by an unrelated test that ran earlier and used
+        # its own dedicated branch.
+        from models import Branch
+        rule = GenTimetableRule.query.filter_by(rule_type='max_consecutive', school_level='sss',
+                                                 branch_id=Branch.get_default().id).first()
         assert rule and rule.value == '1'
 
 

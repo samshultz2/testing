@@ -13,9 +13,20 @@ def rules_config():
                             int(rules.get('break_after_period', 5)))
     sh, sm, _, _ = clock_params(rules)          # normalized HH:MM for the <input type="time">
     day_start_hhmm = f"{sh:02d}:{sm:02d}"
+    # Day-separation is opt-in per subject, picked right here instead of
+    # visiting each subject's own rules page: a subject is "on" only if its
+    # GenSubjectConfig row explicitly says day_separation_exempt=False.
+    # No row at all (never touched) means exempt -- off by default.
+    subjects = GenSubject.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()) \
+        .order_by(GenSubject.name).all()
+    day_separation_subject_ids = {
+        sc.subject_id for sc in GenSubjectConfig.query.filter_by(
+            branch_id=gen_bid(), school_level=level, day_separation_exempt=False).all()
+    }
     return render_template('generator/rules_config.html', rules=rules, level=level,
                            end_time=end_time, day_start_hhmm=day_start_hhmm,
-                           time_format=get_time_format())
+                           time_format=get_time_format(), subjects=subjects,
+                           day_separation_subject_ids=day_separation_subject_ids)
 
 
 @generator_bp.route('/rules/save', methods=['POST'])
@@ -50,7 +61,25 @@ def save_rules():
                 existing.is_active = True
             else:
                 db.session.add(GenTimetableRule(rule_type=rule_type, value=value, school_level=level, is_active=True, branch_id=gen_bid()))
-        
+
+        # Which subjects day-separation applies to, picked right here instead
+        # of visiting each subject's own rules page. Every subject at this
+        # level gets an explicit GenSubjectConfig.day_separation_exempt value
+        # on every save (not just the ones checked), so a subject's state is
+        # never ambiguous after this form has been submitted once.
+        selected_subject_ids = {int(sid) for sid in request.form.getlist('day_separation_subjects[]') if sid.isdigit()}
+        subjects = GenSubject.query.filter_by(is_active=True, school_level=level, branch_id=gen_bid()).all()
+        configs = {sc.subject_id: sc for sc in GenSubjectConfig.query.filter_by(
+            school_level=level, branch_id=gen_bid()).all()}
+        for subject in subjects:
+            exempt = subject.id not in selected_subject_ids
+            cfg = configs.get(subject.id)
+            if cfg:
+                cfg.day_separation_exempt = exempt
+            else:
+                db.session.add(GenSubjectConfig(subject_id=subject.id, school_level=level,
+                                                branch_id=gen_bid(), day_separation_exempt=exempt))
+
         db.session.commit()
         flash('Rules saved!', 'success')
     except Exception as e:

@@ -101,16 +101,15 @@ switch level in the menu to configure the other.</p>
                 <label class="checkbox-label">
                     <input type="checkbox" name="day_separation_enabled" id="day_separation_enabled"
                            {% if rules.get('day_separation_enabled', 'true') == 'true' %}checked{% endif %}>
-                    <span>Keep every subject off two named days together</span>
+                    <span>Keep subjects off two named days together</span>
                 </label>
                 <span class="form-hint">e.g. with Monday/Friday picked below, Physics for SSS1 Rose can be on
-                    Monday or Friday but never both in the same week — still free on every other day. On by
-                    default for every subject; turn off a specific subject instead under
-                    <a href="{{ url_for('generator.subjects_config') }}">Subject Settings</a> &rarr; that
-                    subject's rules, or use <a href="{{ url_for('generator.clash_rules_list') }}">Clash
-                    Rules</a> for a custom day-pair on just one class. If a subject is taught every school day,
-                    this pairing is impossible to honour for it — exempt it there if generation ever reports
-                    that.</span>
+                    Monday or Friday but never both in the same week — still free on every other day. Off by
+                    default for every subject — tick which subjects it should apply to below (unticked
+                    subjects are unaffected, no need to visit each one's own Subject Settings), or use
+                    <a href="{{ url_for('generator.clash_rules_list') }}">Clash Rules</a> for a custom day-pair
+                    on just one class instead. If a ticked subject is taught every school day, this pairing is
+                    impossible to honour for it — untick it here if generation ever reports that.</span>
                 <div class="form-row mt-2" id="day_separation_days" style="max-width: 420px;">
                     <div class="form-group">
                         <label class="form-label">Day A</label>
@@ -131,6 +130,24 @@ switch level in the menu to configure the other.</p>
                         </select>
                     </div>
                 </div>
+                {% if subjects %}
+                <div class="mt-2">
+                    <label class="form-label">Apply to these subjects</label>
+                    <div class="mb-2">
+                        <button type="button" class="btn btn-secondary btn-sm" data-call="selectAllDaySepSubjects" data-args="true">Select All</button>
+                        <button type="button" class="btn btn-secondary btn-sm" data-call="selectAllDaySepSubjects" data-args="false">Clear All</button>
+                    </div>
+                    <div class="checkbox-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.4rem; max-width: 700px;">
+                        {% for subject in subjects %}
+                        <label class="checkbox-label" style="padding: 0.4rem 0.6rem; background: var(--bg-tertiary); border-radius: var(--border-radius-sm);">
+                            <input type="checkbox" name="day_separation_subjects[]" value="{{ subject.id }}"
+                                   {% if subject.id in day_separation_subject_ids %}checked{% endif %}>
+                            <span>{{ subject.name }}</span>
+                        </label>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
             </div>
 
             <div class="form-group">
@@ -202,6 +219,9 @@ switch level in the menu to configure the other.</p>
 </script>
 
 <script nonce="{{ csp_nonce }}">
+function selectAllDaySepSubjects(checked) {
+    document.querySelectorAll('input[name="day_separation_subjects[]"]').forEach(function (cb) { cb.checked = checked; });
+}
 (function () {
     var dayA = document.querySelector('select[name="day_separation_day_a"]');
     var dayB = document.querySelector('select[name="day_separation_day_b"]');
