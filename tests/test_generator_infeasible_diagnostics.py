@@ -19,12 +19,18 @@ def _admin(app):
     return c
 
 
-def _build_contended_scenario(app, tag):
+def _build_contended_scenario(app, tag, day_separation_enabled=False, periods_per_week=6):
     """2 class levels x 5 arms each, with a dedicated teacher per
     (level, subject) covering every arm of that level (arm_name=None) at
     exactly their weekly cap — individually within every simple capacity
     check, but collectively too tightly packed for the solver to interleave.
-    Mirrors multiplying a class's arm count without adding staff."""
+    Mirrors multiplying a class's arm count without adding staff.
+
+    periods_per_week must stay below the 5 school days when exercising
+    day_separation_enabled=True, or the simple "needs every school day"
+    pigeonhole check (diagnose_infeasibility) fires first and reports that
+    specific, already-well-tested reason instead of reaching the generic
+    teacher-contention path this scenario is built to exercise."""
     with app.app_context():
         bid = Branch.get_default().id
 
@@ -33,7 +39,8 @@ def _build_contended_scenario(app, tag):
         db.session.add(GenTimetableRule(rule_type='break_after_period', value='4',
                                         school_level='sss', is_active=True, branch_id=bid))
         # Explicitly off, same as "disabled all rules" in the report this guards.
-        db.session.add(GenTimetableRule(rule_type='day_separation_enabled', value='false',
+        db.session.add(GenTimetableRule(rule_type='day_separation_enabled',
+                                        value='true' if day_separation_enabled else 'false',
                                         school_level='sss', is_active=True, branch_id=bid))
         db.session.add(GenTimetableRule(rule_type='first_period_no_repeat', value='false',
                                         school_level='sss', is_active=True, branch_id=bid))
@@ -47,7 +54,7 @@ def _build_contended_scenario(app, tag):
         db.session.flush()
         for s in subjects:
             db.session.add(GenSubjectConfig(branch_id=bid, subject_id=s.id, school_level='sss',
-                                            periods_per_week=6))
+                                            periods_per_week=periods_per_week))
 
         class_ids = []
         for level in ('SSS1', 'SSS2'):
@@ -59,10 +66,11 @@ def _build_contended_scenario(app, tag):
             for s in subjects:
                 db.session.add(GenClassSubjectConfig(class_config_id=cc.id, subject_id=s.id,
                                                      is_enabled=True, is_active=True,
-                                                     periods_per_week=6))
-                # 5 arms * 6 periods/week = 30 = exactly this teacher's cap.
+                                                     periods_per_week=periods_per_week))
+                # 5 arms * periods_per_week = exactly this teacher's cap.
                 t = GenTeacher(branch_id=bid, name=f'{tag}_{level}_{s.name}', school_level='sss',
-                               max_periods_per_day=6, max_periods_per_week=30)
+                               max_periods_per_day=periods_per_week,
+                               max_periods_per_week=5 * periods_per_week)
                 db.session.add(t)
                 db.session.flush()
                 db.session.add(GenTeacherAssignment(branch_id=bid, teacher_id=t.id,
@@ -97,6 +105,40 @@ def test_infeasible_with_no_active_rules_names_the_bottleneck_teachers(app):
         # "false" would silently disable those features for every other
         # sss-level generator test that runs after this one in the shared
         # session-scoped test DB.
+        with app.app_context():
+            bid = Branch.get_default().id
+            GenTimetableRule.query.filter(
+                GenTimetableRule.rule_type.in_(
+                    ['day_separation_enabled', 'first_period_no_repeat']),
+                GenTimetableRule.school_level == 'sss',
+                GenTimetableRule.branch_id == bid,
+            ).delete(synchronize_session=False)
+            db.session.commit()
+
+
+def test_infeasible_with_an_active_rule_does_not_claim_none_are_active(app):
+    """Same contended-teacher scenario, but with day-separation ON this time.
+    The failure message used to open with "no configurable rule is active
+    either" UNCONDITIONALLY, even on this exact path where it then went on to
+    list "Rules active in this run..." a sentence later — directly
+    contradicting itself and sending whoever read it looking for a
+    non-existent teacher-only cause instead of the rule actually in play."""
+    class_ids = _build_contended_scenario(app, 'ZzIDGR', day_separation_enabled=True,
+                                          periods_per_week=4)
+    try:
+        c = _admin(app)
+        r = c.post('/generator/generate/ortools', follow_redirects=True, data={
+            '_csrf_token': 'a' * 64,
+            'class_ids[]': [str(i) for i in class_ids],
+            'time_limit': '30',
+        })
+        assert r.status_code == 200
+        body = r.data.decode('utf-8', errors='replace')
+        assert 'Generation failed' in body
+        assert 'no configurable rule is active either' not in body
+        assert 'bottleneck' in body
+        assert 'day-separation default' in body
+    finally:
         with app.app_context():
             bid = Branch.get_default().id
             GenTimetableRule.query.filter(

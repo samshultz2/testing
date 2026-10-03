@@ -1175,12 +1175,22 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
         teacher_load.sort(reverse=True)
         tight_teachers = [tl for tl in teacher_load[:5] if tl[0] >= 0.75]
 
-        reason = ('No single teacher or class-arm exceeds its own capacity, and no configurable '
-                 'rule is active either, so this isn\'t "too little time on paper" — it\'s the '
-                 'solver failing to interleave everyone\'s schedule at once even though each '
-                 'teacher individually has room. That\'s the classic result of spreading a fixed '
-                 'set of teachers across more class-arms than before (e.g. multiplying a class\'s '
-                 'arms): the same teachers now each need more distinct simultaneous slots.')
+        if active_rules:
+            reason = ('No single teacher or class-arm exceeds its own capacity on its own, but '
+                     'configurable rule(s) are active that add further restrictions on top of that '
+                     '— so this isn\'t "too little time on paper" either, it\'s the solver failing '
+                     'to interleave everyone\'s schedule at once within those restrictions, even '
+                     'though each teacher individually has room. That can happen even when no '
+                     'single rule or teacher is individually overloaded: each active rule removes '
+                     'some scheduling freedom, and that\'s often enough to tip an already-tight '
+                     'teacher load (see below) from solvable to not-solvable-in-time.')
+        else:
+            reason = ('No single teacher or class-arm exceeds its own capacity, and no configurable '
+                     'rule is active either, so this isn\'t "too little time on paper" — it\'s the '
+                     'solver failing to interleave everyone\'s schedule at once even though each '
+                     'teacher individually has room. That\'s the classic result of spreading a fixed '
+                     'set of teachers across more class-arms than before (e.g. multiplying a class\'s '
+                     'arms): the same teachers now each need more distinct simultaneous slots.')
         if tight_teachers:
             reason += ' Teachers running closest to their limit — these are the most likely ' \
                      'bottleneck, worth double-checking or splitting across more staff first: ' \
