@@ -626,6 +626,8 @@ def ticket_detail(ticket_id):
             if body:
                 tenancy.add_ticket_message(ticket_id, body,
                                            author=session.get('username') or 'admin', is_staff=True)
+                from utils.ticket_notify import notify_school_of_reply
+                notify_school_of_reply(ticket, body)
                 _audit('ticket_reply', subdomain=ticket.subdomain, detail=f'#{ticket_id}')
                 flash('Reply sent.', 'success')
         return redirect(url_for('platform.ticket_detail', ticket_id=ticket_id))

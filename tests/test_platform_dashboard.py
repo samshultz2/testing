@@ -523,6 +523,61 @@ def test_support_ticket_flow(mt):
     assert t2.status == 'closed'
 
 
+def test_support_ticket_notifications(mt, monkeypatch):
+    """Tickets live in the control-plane DB, out of reach of the per-tenant
+    in-app bell -- email is the only channel that reaches both sides. A
+    school opening/replying to a ticket should email the platform's support
+    inbox; the operator replying should email the school's admin_email."""
+    app, tenancy = mt
+    c = _login_owner(app)
+    H = {'Host': 'edusyncra.test'}
+
+    monkeypatch.setattr('utils.mailer.is_configured', lambda: True)
+    sent = []
+    monkeypatch.setattr('utils.mailer.send_email_async',
+                        lambda to, subject, body, html=None: sent.append((to, subject, body)))
+
+    from utils import platform_settings
+    tok0 = re.search(r'name="_csrf_token" value="([0-9a-f]+)"',
+                     c.get('/platform/settings', headers=H).get_data(as_text=True)).group(1)
+    c.post('/platform/settings', headers=H,
+           data={'support_email': 'ops@edusyncra.site', '_csrf_token': tok0})
+    assert platform_settings.get_settings()['support_email'] == 'ops@edusyncra.site'
+
+    # School opens a ticket -> the platform's support inbox is emailed.
+    tok = re.search(r'name="_csrf_token" value="([0-9a-f]+)"',
+                    c.get('/support/', headers=H).get_data(as_text=True)).group(1)
+    c.post('/support/new', headers=H,
+           data={'subject': 'Printer jam', 'body': 'Reports will not print',
+                 'priority': 'normal', '_csrf_token': tok})
+    tid = tenancy.list_tickets(subdomain='owner')[0].id
+    assert len(sent) == 1
+    to, subject, body = sent[0]
+    assert to == 'ops@edusyncra.site'
+    assert 'owner' in subject and str(tid) in subject
+    assert 'Reports will not print' in body
+
+    # School replies -> the support inbox is emailed again.
+    tok1 = re.search(r'name="_csrf_token" value="([0-9a-f]+)"',
+                     c.get('/support/%d' % tid, headers=H).get_data(as_text=True)).group(1)
+    c.post('/support/%d/reply' % tid, headers=H,
+           data={'body': 'Still broken', '_csrf_token': tok1})
+    assert len(sent) == 2
+    assert sent[1][0] == 'ops@edusyncra.site' and 'Still broken' in sent[1][2]
+
+    # Operator replies -> the school's registered admin_email is emailed,
+    # not the support inbox.
+    tok2 = re.search(r'name="_csrf_token" value="([0-9a-f]+)"',
+                     c.get('/platform/tickets/%d' % tid, headers=H).get_data(as_text=True)).group(1)
+    c.post('/platform/tickets/%d' % tid, headers=H,
+           data={'action': 'reply', 'body': 'Replacing your printer driver', '_csrf_token': tok2})
+    assert len(sent) == 3
+    to3, subject3, body3 = sent[2]
+    assert to3 == 'me@edusyncra.test'          # owner's admin_email from register_tenant()
+    assert 'Printer jam' in subject3
+    assert 'Replacing your printer driver' in body3
+
+
 def test_platform_settings_and_maintenance_banner(mt):
     app, tenancy = mt
     c = _login_owner(app)

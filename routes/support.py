@@ -47,6 +47,10 @@ def new():
                                 created_by=session.get('username') or 'admin',
                                 priority=(request.form.get('priority') or 'normal'),
                                 is_staff=False)
+    ticket, _ = tenancy.get_ticket(tid, subdomain=sub)
+    if ticket is not None:
+        from utils.ticket_notify import notify_operator_of_ticket_activity
+        notify_operator_of_ticket_activity(ticket, body, is_new=True)
     flash('Support ticket opened — we’ll get back to you here.', 'success')
     return redirect(url_for('support.thread', ticket_id=tid))
 
@@ -72,4 +76,6 @@ def reply(ticket_id):
     if body:
         tenancy.add_ticket_message(ticket_id, body,
                                    author=session.get('username') or 'admin', is_staff=False)
+        from utils.ticket_notify import notify_operator_of_ticket_activity
+        notify_operator_of_ticket_activity(ticket, body, is_new=False)
     return redirect(url_for('support.thread', ticket_id=ticket_id))
