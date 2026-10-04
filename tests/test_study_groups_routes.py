@@ -304,6 +304,9 @@ def test_export_pdf_and_xlsx(app):
     assert rx.status_code == 200 and len(rx.data) > 0
     assert 'spreadsheet' in rx.headers.get('Content-Type', '') or 'xlsx' in rx.headers.get(
         'Content-Disposition', '')
+    rg = c.get(f'/tools/study-groups/{set_id}/export.png')
+    assert rg.status_code == 200 and rg.data[:8] == b'\x89PNG\r\n\x1a\n'
+    assert len(rg.data) > 1000
 
 
 def test_delete_set_removes_groups_and_members(app):

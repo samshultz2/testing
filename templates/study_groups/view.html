@@ -50,9 +50,9 @@
 </p>
 
 <div class="sg-actions">
-  <button type="button" class="btn btn-secondary btn-sm sg-export-btn" id="sgExportPng" aria-label="Export HD Image">
+  <a class="btn btn-secondary btn-sm sg-export-btn" href="{{ data.urls.png }}" aria-label="Export HD Image">
     <i class="fas fa-image"></i> <span class="btn-label">Export HD Image</span>
-  </button>
+  </a>
   <a class="btn btn-secondary btn-sm sg-export-btn" href="{{ data.urls.pdf }}" aria-label="Export PDF">
     <i class="fas fa-file-pdf"></i> <span class="btn-label">Export PDF</span>
   </a>
@@ -72,6 +72,5 @@
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', filename='vendor/html2canvas.min.js') }}"></script>
 <script src="{{ bundle_url('js/study-groups.js') }}" defer></script>
 {% endblock %}

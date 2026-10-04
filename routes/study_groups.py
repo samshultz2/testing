@@ -91,6 +91,7 @@ def _set_payload(gs):
             'rename': url_for('study_groups.rename_group', set_id=gs.id),
             'pdf': url_for('study_groups.export_pdf', set_id=gs.id),
             'xlsx': url_for('study_groups.export_xlsx', set_id=gs.id),
+            'png': url_for('study_groups.export_png', set_id=gs.id),
             'delete': url_for('study_groups.delete_set', set_id=gs.id),
             'index': url_for('study_groups.index'),
         },
@@ -236,3 +237,14 @@ def export_xlsx(set_id):
     from utils.web_exports import xlsx_response
     buf = build_xlsx(_set_payload(gs))
     return xlsx_response(buf, f'{(gs.title or "study-groups")}.xlsx')
+
+
+@study_groups_bp.route('/<int:set_id>/export.png')
+@login_required
+def export_png(set_id):
+    gs = _set_or_404(set_id)
+    from utils.study_groups_export import build_png
+    from utils.web_exports import png_response
+    from utils.school import school_profile
+    buf = build_png(_set_payload(gs), school_profile() or {})
+    return png_response(buf, f'{(gs.title or "study-groups")}.png', inline=False)

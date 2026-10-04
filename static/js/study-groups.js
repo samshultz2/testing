@@ -1,7 +1,8 @@
 /* Study Groups board: render groups from the embedded JSON, let an admin
  * drag a student card into another group (or use the "Move to" dropdown --
- * same action, just without drag), pick a new leader, rename a group, and
- * export the board as a PNG via the already-vendored html2canvas. */
+ * same action, just without drag), pick a new leader, and rename a group.
+ * HD image / PDF / Excel exports are plain links to server-rendered files
+ * (see routes/study_groups.py + utils/study_groups_export.py). */
 (function () {
   var dataEl = document.getElementById('sg-data');
   if (!dataEl) return;
@@ -131,17 +132,4 @@
   }
 
   render();
-
-  var exportBtn = document.getElementById('sgExportPng');
-  if (exportBtn && window.html2canvas) {
-    exportBtn.addEventListener('click', function () {
-      var node = document.getElementById('sgBoardWrap');
-      window.html2canvas(node, { scale: 2, backgroundColor: '#ffffff', useCORS: true }).then(function (canvas) {
-        var a = document.createElement('a');
-        a.download = (DATA.title || 'study-groups').replace(/[^a-z0-9-_]+/gi, '-') + '.png';
-        a.href = canvas.toDataURL('image/png');
-        a.click();
-      });
-    });
-  }
 })();

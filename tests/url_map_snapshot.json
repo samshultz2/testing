@@ -7068,6 +7068,13 @@
 ]
 ],
 [
+"study_groups.export_png",
+"/tools/study-groups/<int:set_id>/export.png",
+[
+"GET"
+]
+],
+[
 "study_groups.export_xlsx",
 "/tools/study-groups/<int:set_id>/export.xlsx",
 [
