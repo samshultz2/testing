@@ -1,7 +1,7 @@
 """PDF, Excel and HD-image exports for a Study Groups set. The image export
-(``build_png``) is drawn server-side with Pillow -- a branded masthead plus a
-grid of navy-headed group cards -- using the same visual language as
-``utils/student_export.py``; it is not a screenshot of the rendered page."""
+(``build_png``) is drawn server-side with Pillow -- a modern indigo/violet
+gradient hero banner, chip-based summary stats and a grid of group cards with
+pastel avatar chips -- it is not a screenshot of the rendered page."""
 import io
 
 from reportlab.lib.pagesizes import A4
@@ -93,25 +93,64 @@ def build_xlsx(data):
 
 
 def build_png(data, school):
-    """A branded HD PNG of the board: masthead (logo, school identity, an info
-    panel) above a grid of navy-headed group cards, one row per member with
-    the leader picked out by a gold tint -- same design language as
-    ``utils/student_export.py``'s image export, drawn from scratch with
-    Pillow rather than captured from the page."""
+    """A branded HD PNG of the board drawn server-side with Pillow: an indigo/
+    violet gradient hero banner (logo + school identity), a chip-based summary
+    with custom stat icons, and a grid of group cards -- each with a distinct
+    gradient accent strip, pastel per-student avatar chips, a gold leader
+    badge, and emerald/sky/rose/slate score pills. Not a page screenshot."""
     import os
-    from PIL import Image, ImageDraw, ImageFont
+    import math
+    from PIL import Image, ImageDraw, ImageFont, ImageFilter
     from utils.student_export import _FONT_REG, _FONT_BOLD, _FONT_ITAL
     from utils.numfmt import fmt_num as n
     from utils import timeutil
 
-    NAVY, GOLD, INK, MUTED = (30, 42, 74), (184, 134, 43), (31, 41, 55), (107, 114, 128)
-    LINE, WHITE, PANEL, ZEBRA = (216, 222, 233), (255, 255, 255), (247, 248, 250), (248, 250, 252)
-    LEADER_BG, LEADER_BORDER = (255, 247, 224), (244, 208, 111)
+    # ---- palette: indigo/violet brand, amber reserved for the "leader" signal ----
+    INK = (15, 23, 42)
+    SUBTLE = (71, 85, 105)
+    MUTED = (100, 116, 139)
+    LINE = (228, 232, 240)
+    LINE_SOFT = (240, 242, 247)
+    WHITE = (255, 255, 255)
+    PAGE_BG = (250, 250, 252)
+
+    INDIGO_DARK = (67, 56, 202)
+    VIOLET = (124, 58, 237)
+    INDIGO_BG = (238, 237, 253)
+    INDIGO_FG = (67, 56, 202)
+
+    AMBER = (245, 158, 11)
+    AMBER_WASH = (255, 251, 235)
+    AMBER_CHIP_BG = (254, 243, 199)
+    AMBER_CHIP_FG = (146, 64, 14)
+
+    EMERALD_BG, EMERALD_FG = (209, 250, 229), (4, 120, 87)
+    SKY_BG, SKY_FG = (224, 242, 254), (3, 105, 161)
+    ROSE_BG, ROSE_FG = (255, 228, 230), (159, 18, 57)
+    SLATE_BG, SLATE_FG = (241, 245, 249), (100, 116, 139)
+
+    AVATAR_PALETTE = [
+        ((224, 231, 255), (67, 56, 202)),   # indigo
+        ((255, 228, 230), (190, 18, 60)),   # rose
+        ((220, 252, 231), (21, 128, 61)),   # green
+        ((254, 249, 195), (161, 98, 7)),    # yellow
+        ((224, 242, 254), (3, 105, 161)),   # sky
+        ((243, 232, 255), (107, 33, 168)),  # purple
+        ((255, 237, 213), (194, 65, 12)),   # orange
+        ((204, 251, 241), (15, 118, 110)),  # teal
+    ]
+    CARD_GRADIENTS = [
+        ((79, 70, 229), (124, 58, 237)),    # indigo -> violet
+        ((14, 165, 233), (79, 70, 229)),    # sky -> indigo
+        ((124, 58, 237), (219, 39, 119)),   # violet -> pink
+        ((16, 185, 129), (14, 165, 233)),   # emerald -> sky
+        ((20, 184, 166), (79, 70, 229)),    # teal -> indigo
+    ]
 
     S = 2                       # supersample factor; downscaled at the end for anti-aliasing
-    BASE_W = 1500
+    BASE_W = 1480
     W = BASE_W * S
-    margin = 36 * S
+    margin = 44 * S
 
     def fnt(size, bold=False, italic=False):
         p = _FONT_BOLD if bold else (_FONT_ITAL if italic else _FONT_REG)
@@ -138,165 +177,379 @@ def build_png(data, school):
             t = t[:-1]
         return (t + '…') if t else ''
 
-    name_f = fnt(28, True)
+    def initials(name):
+        parts = [p for p in str(name).split() if p]
+        if not parts:
+            return '?'
+        if len(parts) == 1:
+            return parts[0][:2].upper()
+        return (parts[0][0] + parts[-1][0]).upper()
+
+    def score_tier(avg):
+        if avg is None:
+            return SLATE_BG, SLATE_FG, 'NEW'
+        v = float(avg)
+        txt = n(avg)
+        if v >= 70:
+            return EMERALD_BG, EMERALD_FG, txt
+        if v >= 50:
+            return SKY_BG, SKY_FG, txt
+        return ROSE_BG, ROSE_FG, txt
+
+    def star_points(cx, cy, r_out, r_in, rot=-90):
+        pts = []
+        for i in range(10):
+            ang = math.radians(rot + i * 36)
+            r = r_out if i % 2 == 0 else r_in
+            pts.append((cx + r * math.cos(ang), cy + r * math.sin(ang)))
+        return pts
+
+    def spaced_w(text, f, tracking):
+        if not text:
+            return 0
+        return sum(tw(c, f) for c in text) + tracking * (len(text) - 1)
+
+    def draw_spaced(dctx, xy, text, f, fill, tracking):
+        x, y = xy
+        for c in text:
+            dctx.text((x, y), c, font=f, fill=fill)
+            x += tw(c, f) + tracking
+
+    def diagonal_gradient(w, h, c1, c2):
+        """Fast smooth diagonal gradient via a tiny grid upscaled with bilinear filtering."""
+        w, h = max(1, int(w)), max(1, int(h))
+        grid = 40
+        small = Image.new('RGB', (grid, grid))
+        px = small.load()
+        for yy in range(grid):
+            for xx in range(grid):
+                t = (xx + yy) / (2 * (grid - 1))
+                px[xx, yy] = tuple(int(c1[k] + (c2[k] - c1[k]) * t) for k in range(3))
+        return small.resize((w, h), Image.BILINEAR)
+
+    def rounded_mask(w, h, radius, corners=(True, True, True, True)):
+        w, h = max(1, int(w)), max(1, int(h))
+        mask = Image.new('L', (w, h), 0)
+        md = ImageDraw.Draw(mask)
+        md.rounded_rectangle([0, 0, w - 1, h - 1], radius=radius, fill=255, corners=corners)
+        return mask
+
+    def shadow(img, box, radius, blur=16, alpha=26, offset=(0, 8 * S)):
+        x0, y0, x1, y1 = box
+        pad = blur * 3
+        sw, sh = int(x1 - x0 + 2 * pad), int(y1 - y0 + 2 * pad)
+        if sw <= 0 or sh <= 0:
+            return
+        sh_img = Image.new('RGBA', (sw, sh), (0, 0, 0, 0))
+        sd = ImageDraw.Draw(sh_img)
+        sd.rounded_rectangle([pad, pad, sw - pad, sh - pad], radius=radius, fill=(30, 32, 58, alpha))
+        sh_img = sh_img.filter(ImageFilter.GaussianBlur(blur))
+        img.paste(sh_img, (int(x0 - pad + offset[0]), int(y0 - pad + offset[1])), sh_img)
+
+    def shadow_ellipse(img, cx, cy, r, blur=4, alpha=28, offset=(0, 2 * S)):
+        pad = blur * 3
+        size = int(r * 2 + 2 * pad)
+        sh_img = Image.new('RGBA', (size, size), (0, 0, 0, 0))
+        sd = ImageDraw.Draw(sh_img)
+        sd.ellipse([pad, pad, size - pad, size - pad], fill=(20, 22, 45, alpha))
+        sh_img = sh_img.filter(ImageFilter.GaussianBlur(blur))
+        img.paste(sh_img, (int(cx - r - pad + offset[0]), int(cy - r - pad + offset[1])), sh_img)
+
+    def icon_groups(dctx, cx, cy, s, color):
+        g, sq = s * 0.22, s * 0.38
+        for ox in (-1, 1):
+            for oy in (-1, 1):
+                x0 = cx + ox * (g / 2 + sq / 2) - sq / 2
+                y0 = cy + oy * (g / 2 + sq / 2) - sq / 2
+                dctx.rounded_rectangle([x0, y0, x0 + sq, y0 + sq], radius=sq * 0.26, fill=color)
+
+    def icon_people(dctx, cx, cy, s, color, bg):
+        r = s * 0.22
+        for ox, fill in ((-s * 0.16, bg), (s * 0.16, color)):
+            hx, hy = cx + ox, cy - s * 0.12
+            dctx.ellipse([hx - r, hy - r, hx + r, hy + r], fill=fill, outline=color, width=max(1, int(1 * S)))
+            bw, bh = s * 0.58, s * 0.3
+            dctx.rounded_rectangle([hx - bw / 2, hy + r - 1, hx + bw / 2, hy + r + bh], radius=bh * 0.4,
+                                   fill=fill, outline=color, width=max(1, int(1 * S)))
+
+    def icon_calendar(dctx, cx, cy, s, color):
+        w, h = s * 0.62, s * 0.56
+        x0, y0 = cx - w / 2, cy - h / 2 + s * 0.04
+        dctx.rounded_rectangle([x0, y0, x0 + w, y0 + h], radius=s * 0.08, outline=color, width=max(1, int(2 * S)))
+        dctx.line([x0, y0 + h * 0.34, x0 + w, y0 + h * 0.34], fill=color, width=max(1, int(2 * S)))
+        for fx in (x0 + w * 0.26, x0 + w * 0.74):
+            dctx.line([fx, y0 - s * 0.06, fx, y0 + h * 0.18], fill=color, width=max(1, int(2 * S)))
+
+    # Fonts
+    name_f = fnt(30, True)
     addr_f = fnt(13)
-    motto_f = fnt(13, italic=True)
-    panel_lab, panel_val = fnt(10), fnt(17, True)
-    title_f = fnt(24, True)
-    meta_f = fnt(12)
-    hdr_f, count_f = fnt(14, True), fnt(11)
-    member_f, member_b, avg_f = fnt(13), fnt(13, True), fnt(11)
-    foot_b, foot_s = fnt(10, True), fnt(9)
+    title_f = fnt(28, True)
+    meta_f = fnt(13)
+    attrib_f = fnt(11)
+    chip_f = fnt(11, True)
+    stat_lab_f, stat_val_f = fnt(10, True), fnt(17, True)
+    hdr_f = fnt(16, True)
+    count_f = fnt(11, True)
+    member_f, member_b = fnt(13), fnt(13, True)
+    avatar_f = fnt(12, True)
+    badge_f = fnt(10, True)
+    score_f = fnt(11, True)
+    foot_s = fnt(9)
 
     groups = data.get('groups') or []
     title = data.get('title') or 'Study Groups'
     basis_term_name = data.get('basis_term_name')
-    meta_line = (f"{data.get('class_name', '')}  ·  {data.get('term_name', '')}  ·  "
-                f"{data.get('num_groups')} group(s) of {data.get('group_size')}  ·  " +
-                (f"ranked by {basis_term_name} average" if basis_term_name
-                 else 'no prior-term data available — placed randomly'))
-    sub_line = f"by {data.get('created_by', '')} on {data.get('created_at', '')}"
+    meta_line = (f"{data.get('class_name', '')}   ·   {data.get('term_name', '')}   ·   "
+                f"{data.get('num_groups')} group(s) of {data.get('group_size')}")
+    rank_line = (f"Ranked by {basis_term_name} average" if basis_term_name
+                else 'No prior-term data available — new students placed randomly')
+    attrib_line = f"Generated by {data.get('created_by', '')} on {data.get('created_at', '')}"
 
-    # ---- masthead ----
-    mast_h = 150 * S
-    title_h = int(th(title_f) * 1.9)
-    meta_h = int(th(meta_f) * 1.6) * 2
+    # ---- sizing passes ----
+    banner_h = 148 * S
+    sum_top = banner_h + 28 * S
+    sum_h = 168 * S
+    sum_pad = 32 * S
 
-    # ---- grid layout ----
-    gap = 18 * S
-    min_card_w = 320 * S
+    gap = 22 * S
+    min_card_w = 340 * S
     avail = W - 2 * margin
     cols = max(1, min(4, int((avail + gap) // (min_card_w + gap))))
     card_w = int((avail - (cols - 1) * gap) / cols)
 
-    row_h_hdr = 40 * S
-    member_row_h = int(th(member_f) * 2.0)
-    pad_x = 14 * S
+    strip_h = 7 * S
+    hdr_pad_top = 20 * S
+    hdr_row_h = 44 * S
+    member_row_h = int(th(member_f) * 3.0)
+    card_radius = 20 * S
+    avatar_d = 34 * S
+    pad_x = 20 * S
 
     def card_height(g):
-        return row_h_hdr + max(1, len(g.get('members') or [])) * member_row_h
+        return strip_h + hdr_pad_top + hdr_row_h + max(1, len(g.get('members') or [])) * member_row_h + 10 * S
 
     rows_layout = [groups[i:i + cols] for i in range(0, len(groups), cols)] or [[]]
-    body_top = margin + mast_h + title_h + meta_h + 10 * S
-    y = body_top
+    grid_top = sum_top + sum_h + 32 * S
+    y = grid_top
     row_tops = []
     for chunk in rows_layout:
         h = max((card_height(g) for g in chunk), default=0)
         row_tops.append((y, h))
         y += h + gap
-    body_bottom = (y - gap) if groups else body_top
-    foot_h = 44 * S
-    H = int(body_bottom + foot_h + margin)
+    grid_bottom = (y - gap) if groups else grid_top
+    foot_h = 54 * S
+    H = int(grid_bottom + foot_h + margin)
 
-    img = Image.new('RGB', (W, H), WHITE)
+    img = Image.new('RGB', (W, H), PAGE_BG)
     d = ImageDraw.Draw(img)
-    d.rounded_rectangle([int(margin * 0.55), int(margin * 0.55), W - int(margin * 0.55), H - int(margin * 0.55)],
-                        radius=16, outline=GOLD, width=3)
 
-    # ---- masthead: logo + school identity (left), info panel (right) ----
-    x = margin + 10 * S
+    # ---- hero banner: indigo -> violet diagonal gradient with soft glow blobs ----
+    banner = diagonal_gradient(W, banner_h, INDIGO_DARK, VIOLET)
+    glow = Image.new('RGBA', (W, int(banner_h)), (0, 0, 0, 0))
+    gd = ImageDraw.Draw(glow)
+    gd.ellipse([W * 0.72, -banner_h * 0.6, W * 0.72 + banner_h * 2.0, banner_h * 1.4],
+              fill=(255, 255, 255, 22))
+    gd.ellipse([W * 0.92, banner_h * 0.1, W * 0.92 + banner_h * 1.1, banner_h * 1.3],
+              fill=(255, 255, 255, 16))
+    glow = glow.filter(ImageFilter.GaussianBlur(40))
+    banner = Image.alpha_composite(banner.convert('RGBA'), glow).convert('RGB')
+    img.paste(banner, (0, 0))
+
+    bx = margin
     logo = (school or {}).get('logo_path')
-    lx = x
+    circ_d = 96 * S
+    circ_y = (banner_h - circ_d) / 2
+    logo_drawn = False
     if logo and os.path.exists(logo):
         try:
+            d.ellipse([bx, circ_y, bx + circ_d, circ_y + circ_d], fill=WHITE)
             lg = Image.open(logo).convert('RGBA')
-            h = 130 * S
-            w = int(lg.width * h / lg.height)
-            lg = lg.resize((min(w, int(150 * S)), h), Image.LANCZOS)
-            img.paste(lg, (x, margin + 10 * S), lg)
-            lx = x + min(w, int(150 * S)) + 24 * S
+            inner = circ_d - 16 * S
+            w0, h0 = lg.size
+            scale = inner / max(w0, h0)
+            lg = lg.resize((max(1, int(w0 * scale)), max(1, int(h0 * scale))), Image.LANCZOS)
+            lx = bx + (circ_d - lg.width) / 2
+            ly = circ_y + (circ_d - lg.height) / 2
+            img.paste(lg, (int(lx), int(ly)), lg)
+            logo_drawn = True
         except Exception:
-            lx = x
+            logo_drawn = False
+    if not logo_drawn:
+        d.ellipse([bx, circ_y, bx + circ_d, circ_y + circ_d], fill=WHITE)
+        mono = ''.join(w[0] for w in ((school or {}).get('name') or 'S').split()[:2]).upper()
+        mf = fnt(26, True)
+        d.text((bx + circ_d / 2 - tw(mono, mf) / 2, circ_y + circ_d / 2 - th(mf) / 2), mono,
+               fill=INDIGO_DARK, font=mf)
+    text_x = bx + circ_d + 26 * S
 
-    pw, ph = 500 * S, 126 * S
-    px, py = W - margin - 10 * S - pw, margin + 10 * S
-    right_limit = px - 24 * S
-    d.rounded_rectangle([px, py, px + pw, py + ph], radius=12 * S, fill=PANEL, outline=LINE, width=2)
-    cells = [('GROUPS', str(data.get('num_groups') or len(groups))),
-             ('PER GROUP', str(data.get('group_size') or '')),
-             ('DATE', timeutil.today().strftime('%d %b %Y'))]
-    cwid = pw / 3
-    for i, (lab, val) in enumerate(cells):
-        cx = px + i * cwid + cwid / 2
-        d.text((cx - tw(lab, panel_lab) / 2, py + 22 * S), lab, fill=MUTED, font=panel_lab)
-        d.text((cx - tw(val, panel_val) / 2, py + 64 * S), val, fill=NAVY, font=panel_val)
-        if i:
-            d.line([px + i * cwid, py + 18 * S, px + i * cwid, py + ph - 18 * S], fill=LINE, width=1)
-
+    name_right_limit = W - margin
     nm = ((school or {}).get('name') or 'School').upper()
-    nf, nsz = name_f, 28
-    while nsz > 16 and tw(nm, nf) > (right_limit - lx):
+    nf, nsz = name_f, 30
+    while nsz > 18 and tw(nm, nf) > (name_right_limit - text_x):
         nsz -= 2
         nf = fnt(nsz, True)
-    name_top = margin + 14 * S
-    d.text((lx, name_top), fit(nm, nf, right_limit - lx), fill=NAVY, font=nf)
-    ty = name_top + th(nf) + 16 * S
+    name_top = banner_h / 2 - 42 * S
+    d.text((text_x, name_top), fit(nm, nf, name_right_limit - text_x), fill=WHITE, font=nf)
+    ty = name_top + th(nf) + 14 * S
     addr = (school or {}).get('address') or ''
-    if addr:
-        d.text((lx, ty), fit('●  ' + addr, addr_f, right_limit - lx), fill=INK, font=addr_f)
-        ty += th(addr_f) + 14 * S
     contact = '      '.join(p for p in [(school or {}).get('phone') or '', (school or {}).get('email') or ''] if p)
-    if contact:
-        d.text((lx, ty), fit(contact, addr_f, right_limit - lx), fill=INK, font=addr_f)
-        ty += th(addr_f) + 14 * S
+    line2 = '   ·   '.join(p for p in [addr, contact] if p)
+    if line2:
+        d.text((text_x, ty), fit(line2, addr_f, name_right_limit - text_x), fill=(221, 216, 254), font=addr_f)
+        ty += th(addr_f) + 10 * S
     motto = (school or {}).get('motto') or ''
     if motto:
-        d.text((lx, ty), fit('—  ' + motto + '  —', motto_f, right_limit - lx), fill=GOLD, font=motto_f)
+        d.text((text_x, ty), fit(motto, addr_f, name_right_limit - text_x), fill=(197, 190, 248), font=addr_f)
 
-    # ---- title + meta ----
-    ty0 = margin + mast_h
-    tt = fit(str(title), title_f, W - 2 * margin)
-    d.text((W / 2 - tw(tt, title_f) / 2, ty0 + (title_h - th(title_f)) / 2), tt, fill=NAVY, font=title_f)
-    mt = fit(meta_line, meta_f, W - 2 * margin)
-    d.text((W / 2 - tw(mt, meta_f) / 2, ty0 + title_h), mt, fill=MUTED, font=meta_f)
-    st = fit(sub_line, meta_f, W - 2 * margin)
-    d.text((W / 2 - tw(st, meta_f) / 2, ty0 + title_h + th(meta_f) * 1.6), st, fill=MUTED, font=meta_f)
+    # ---- summary: title + report chip (left), stat chips (right) -- flat, chip-based ----
+    shadow(img, (margin, sum_top, W - margin, sum_top + sum_h), card_radius)
+    d.rounded_rectangle([margin, sum_top, W - margin, sum_top + sum_h], radius=card_radius, fill=WHITE,
+                        outline=LINE, width=1)
+
+    stat_w, stat_h, stat_gap = 148 * S, sum_h - 48 * S, 14 * S
+    n_stats = 3
+    stats_total_w = stat_w * n_stats + stat_gap * (n_stats - 1)
+    stats_x0 = W - margin - sum_pad - stats_total_w
+    text_right_limit = stats_x0 - 36 * S
+
+    tx0 = margin + sum_pad
+    ty0 = sum_top + 26 * S
+    tt = fit(str(title), title_f, text_right_limit - tx0)
+    d.text((tx0, ty0), tt, fill=INK, font=title_f)
+    chip_txt = 'GROUP ASSIGNMENT REPORT'
+    ctrack = 1.2 * S
+    cw = spaced_w(chip_txt, chip_f, ctrack) + 24 * S
+    ch_ = 24 * S
+    cx0 = tx0 + tw(tt, title_f) + 16 * S
+    cy0 = ty0 + th(title_f) / 2 - ch_ / 2
+    if cx0 + cw <= text_right_limit:
+        d.rounded_rectangle([cx0, cy0, cx0 + cw, cy0 + ch_], radius=ch_ / 2, fill=INDIGO_BG)
+        draw_spaced(d, (cx0 + 12 * S, cy0 + ch_ / 2 - th(chip_f) / 2), chip_txt, chip_f, INDIGO_FG, ctrack)
+    ty0 += th(title_f) + 16 * S
+    d.text((tx0, ty0), fit(meta_line, meta_f, text_right_limit - tx0), fill=SUBTLE, font=meta_f)
+    ty0 += th(meta_f) + 10 * S
+    d.text((tx0, ty0), fit(rank_line, meta_f, text_right_limit - tx0), fill=MUTED, font=meta_f)
+    ty0 += th(meta_f) + 12 * S
+    d.text((tx0, ty0), fit(attrib_line, attrib_f, text_right_limit - tx0), fill=MUTED, font=attrib_f)
+
+    stat_cells = [('Groups', str(data.get('num_groups') or len(groups)), 'g'),
+                 ('Per group', str(data.get('group_size') or ''), 'p'),
+                 ('Date', timeutil.today().strftime('%d %b %Y'), 'd')]
+    sy = sum_top + 24 * S
+    for i, (lab, val, kind) in enumerate(stat_cells):
+        sx = stats_x0 + i * (stat_w + stat_gap)
+        d.rounded_rectangle([sx, sy, sx + stat_w, sy + stat_h], radius=16 * S, fill=INDIGO_BG)
+        icon_cx, icon_cy = sx + 30 * S, sy + stat_h / 2
+        if kind == 'g':
+            icon_groups(d, icon_cx, icon_cy, 24 * S, INDIGO_FG)
+        elif kind == 'p':
+            icon_people(d, icon_cx, icon_cy, 24 * S, INDIGO_FG, INDIGO_BG)
+        else:
+            icon_calendar(d, icon_cx, icon_cy, 24 * S, INDIGO_FG)
+        tx = sx + 54 * S
+        d.text((tx, sy + stat_h / 2 - th(stat_val_f) - 2 * S), val, fill=INK, font=stat_val_f)
+        d.text((tx, sy + stat_h / 2 + 4 * S), lab, fill=MUTED, font=stat_lab_f)
 
     # ---- group cards ----
-    gi = 0
     for row_i, chunk in enumerate(rows_layout):
-        row_y, row_h = row_tops[row_i] if groups else (body_top, 0)
+        row_y, row_h = row_tops[row_i] if groups else (grid_top, 0)
         for col_i, g in enumerate(chunk):
+            card_idx = row_i * cols + col_i
             cx0 = margin + col_i * (card_w + gap)
             ch = card_height(g)
-            d.rectangle([cx0, row_y, cx0 + card_w, row_y + ch], outline=LINE, width=2)
-            d.rectangle([cx0, row_y, cx0 + card_w, row_y + row_h_hdr], fill=NAVY)
-            d.rectangle([cx0, row_y + row_h_hdr - 3 * S, cx0 + card_w, row_y + row_h_hdr], fill=GOLD)
+            shadow(img, (cx0, row_y, cx0 + card_w, row_y + ch), card_radius, blur=14, alpha=22)
+            d.rounded_rectangle([cx0, row_y, cx0 + card_w, row_y + ch], radius=card_radius, fill=WHITE,
+                                outline=LINE, width=1)
+            g1, g2 = CARD_GRADIENTS[card_idx % len(CARD_GRADIENTS)]
+            strip = diagonal_gradient(card_w, strip_h, g1, g2)
+            mask = rounded_mask(card_w, strip_h * 3, card_radius, corners=(True, True, False, False))
+            mask = mask.crop((0, 0, card_w, strip_h))
+            img.paste(strip, (int(cx0), int(row_y)), mask)
+
             members = g.get('members') or []
-            label = f"{g.get('label', '')}  ·  {len(members)}"
-            d.text((cx0 + pad_x, row_y + (row_h_hdr - th(hdr_f)) / 2), fit(label, hdr_f, card_w - 2 * pad_x),
-                   fill=WHITE, font=hdr_f)
-            yy = row_y + row_h_hdr
+            label_y = row_y + strip_h + hdr_pad_top
+            label = fit(g.get('label', ''), hdr_f, card_w - 2 * pad_x - 60 * S)
+            d.text((cx0 + pad_x, label_y), label, fill=INK, font=hdr_f)
+            cnt_txt = f"{len(members)}"
+            pill_w = max(40 * S, tw(cnt_txt, count_f) + 24 * S)
+            pill_h = 26 * S
+            pill_x = cx0 + card_w - pad_x - pill_w
+            pill_y = label_y + th(hdr_f) / 2 - pill_h / 2
+            d.rounded_rectangle([pill_x, pill_y, pill_x + pill_w, pill_y + pill_h], radius=pill_h / 2,
+                                fill=INDIGO_BG)
+            d.text((pill_x + pill_w / 2 - tw(cnt_txt, count_f) / 2, pill_y + pill_h / 2 - th(count_f) / 2),
+                   cnt_txt, fill=INDIGO_FG, font=count_f)
+
+            yy = row_y + strip_h + hdr_pad_top + hdr_row_h
             if not members:
-                d.text((cx0 + pad_x, yy + 10 * S), 'No members', fill=MUTED, font=member_f)
+                d.text((cx0 + pad_x, yy + 14 * S), 'No members', fill=MUTED, font=member_f)
             for idx, m in enumerate(members):
                 is_leader = bool(m.get('is_leader'))
-                bg = LEADER_BG if is_leader else (ZEBRA if idx % 2 else WHITE)
-                d.rectangle([cx0 + 2, yy, cx0 + card_w - 2, yy + member_row_h], fill=bg)
                 if is_leader:
-                    d.rectangle([cx0 + 2, yy, cx0 + 5 * S, yy + member_row_h], fill=GOLD)
-                avg = m.get('basis_average')
-                avg_txt = n(avg) if avg is not None else ''
-                avg_w = tw(avg_txt, avg_f) if avg_txt else 0
-                name_mw = card_w - 2 * pad_x - avg_w - (8 * S if avg_w else 0)
+                    d.rectangle([cx0 + 2, yy, cx0 + card_w - 2, yy + member_row_h], fill=AMBER_WASH)
+                    d.rectangle([cx0 + 2, yy, cx0 + 4 * S, yy + member_row_h], fill=AMBER)
+
+                av_cx = cx0 + pad_x + avatar_d / 2 + (4 * S if is_leader else 0)
+                av_cy = yy + member_row_h / 2
+                shadow_ellipse(img, av_cx, av_cy, avatar_d / 2)
+                if is_leader:
+                    av_fill, av_fg = AMBER, WHITE
+                else:
+                    av_fill, av_fg = AVATAR_PALETTE[idx % len(AVATAR_PALETTE)]
+                d.ellipse([av_cx - avatar_d / 2, av_cy - avatar_d / 2, av_cx + avatar_d / 2, av_cy + avatar_d / 2],
+                          fill=av_fill, outline=WHITE, width=max(1, int(2 * S)))
+                ini = initials(m.get('name', ''))
+                d.text((av_cx - tw(ini, avatar_f) / 2, av_cy - th(avatar_f) / 2), ini, fill=av_fg, font=avatar_f)
+                if is_leader:
+                    bd_r = 10 * S
+                    bd_cx, bd_cy = av_cx + avatar_d / 2 - 2 * S, av_cy - avatar_d / 2 + 2 * S
+                    d.ellipse([bd_cx - bd_r, bd_cy - bd_r, bd_cx + bd_r, bd_cy + bd_r], fill=WHITE,
+                             outline=AMBER, width=2)
+                    pts = star_points(bd_cx, bd_cy, bd_r * 0.62, bd_r * 0.26)
+                    d.polygon(pts, fill=AMBER)
+
+                name_x = av_cx + avatar_d / 2 + 14 * S
+                bg_c, fg_c, score_txt = score_tier(m.get('basis_average'))
+                sp_w = max(48 * S, tw(score_txt, score_f) + 22 * S)
+                sp_h = 25 * S
+                sp_x = cx0 + card_w - pad_x - sp_w
+                sp_y = yy + (member_row_h - sp_h) / 2
+                d.rounded_rectangle([sp_x, sp_y, sp_x + sp_w, sp_y + sp_h], radius=sp_h / 2, fill=bg_c)
+                d.text((sp_x + sp_w / 2 - tw(score_txt, score_f) / 2, sp_y + sp_h / 2 - th(score_f) / 2),
+                       score_txt, fill=fg_c, font=score_f)
+
+                badge_w = 0
+                if is_leader:
+                    badge_txt = 'LEADER'
+                    badge_w = tw(badge_txt, badge_f) + 18 * S
+                name_mw = sp_x - 10 * S - name_x - (badge_w + 8 * S if badge_w else 0)
                 name_font = member_b if is_leader else member_f
-                name_txt = fit(m.get('name', ''), name_font, name_mw)
+                name_txt = fit(m.get('name', ''), name_font, max(10 * S, name_mw))
                 tyy = yy + (member_row_h - th(name_font)) / 2
-                d.text((cx0 + pad_x, tyy), name_txt, fill=(NAVY if is_leader else INK), font=name_font)
-                if avg_txt:
-                    d.text((cx0 + card_w - pad_x - avg_w, yy + (member_row_h - th(avg_f)) / 2), avg_txt,
-                           fill=MUTED, font=avg_f)
-                d.line([cx0 + 2, yy + member_row_h, cx0 + card_w - 2, yy + member_row_h], fill=LINE, width=1)
+                d.text((name_x, tyy), name_txt, fill=INK, font=name_font)
+                if badge_w:
+                    bxp = name_x + tw(name_txt, name_font) + 8 * S
+                    bh2 = 20 * S
+                    byp = yy + (member_row_h - bh2) / 2
+                    d.rounded_rectangle([bxp, byp, bxp + badge_w, byp + bh2], radius=bh2 / 2, fill=AMBER_CHIP_BG)
+                    d.text((bxp + badge_w / 2 - tw('LEADER', badge_f) / 2, byp + bh2 / 2 - th(badge_f) / 2),
+                           'LEADER', fill=AMBER_CHIP_FG, font=badge_f)
+
+                if idx < len(members) - 1:
+                    d.line([cx0 + pad_x, yy + member_row_h, cx0 + card_w - pad_x, yy + member_row_h],
+                           fill=LINE_SOFT, width=1)
                 yy += member_row_h
-            gi += 1
 
     # ---- footer ----
-    fy = H - margin - foot_h + 10 * S
+    fy = H - margin - foot_h + 14 * S
     d.line([margin, fy, W - margin, fy], fill=LINE, width=1)
-    school_name = ((school or {}).get('name') or 'School').upper()
-    d.text((margin, fy + 10 * S), school_name, fill=NAVY, font=foot_b)
-    conf = 'This document is system-generated and confidential.'
-    d.text((W - margin - tw(conf, foot_s), fy + 10 * S), conf, fill=MUTED, font=foot_s)
+    school_name = (school or {}).get('name') or 'School'
+    d.text((margin, fy + 14 * S), school_name, fill=SUBTLE, font=foot_s)
+    total_students = sum(len(g.get('members') or []) for g in groups)
+    gist = f"{total_students} student(s) across {len(groups)} group(s)"
+    d.text((W / 2 - tw(gist, foot_s) / 2, fy + 14 * S), gist, fill=MUTED, font=foot_s)
+    conf = 'Confidential — for school, parent and guardian use only'
+    d.text((W - margin - tw(conf, foot_s), fy + 14 * S), conf, fill=MUTED, font=foot_s)
 
     out_w, out_h = BASE_W, max(1, H // S)
     buf = io.BytesIO()
