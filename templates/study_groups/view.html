@@ -52,6 +52,9 @@
              placeholder="Set #{{ data.id }}" aria-label="Group set name" maxlength="120">
     </h1>
   </div>
+  <div class="page-header-actions">
+    <a href="{{ data.urls.index }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back to Study Groups</a>
+  </div>
 </div>
 <p class="sg-meta">
   {{ data.class_name }} &middot; {{ data.term_name }} &middot; {{ data.num_groups }} group(s) of {{ data.group_size }}
