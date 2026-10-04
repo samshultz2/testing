@@ -82,6 +82,19 @@ def graduates_list():
 
     graduates = query.order_by(Student.surname, Student.first_name).all()
 
+    # Batch the passport-photo lookup (one query, not an N+1 of has_photo()
+    # per row) so the list can show avatars instead of initials-only tiles.
+    photo_ids = set()
+    try:
+        from models import StudentPhoto
+        gids = [s.id for s in graduates]
+        if gids:
+            photo_ids = {pid for (pid,) in db.session.query(StudentPhoto.student_id)
+                         .filter(StudentPhoto.student_id.in_(gids)).all()}
+    except Exception:
+        db.session.rollback()
+        photo_ids = set()
+
     return _render({
         'page': 'graduates', 'session_id': session_id or '', 'sessions': _sessions_json(),
         'status': status, 'statuses': GRADUATE_STATUSES,
@@ -100,6 +113,7 @@ def graduates_list():
             'graduation_date': s.graduation_date.strftime('%d %b %Y') if s.graduation_date else None,
             'graduation_session': s.graduation_session.name if s.graduation_session else None,
             'has_waec': s.waec_results.count() > 0, 'has_jamb': s.jamb_results.count() > 0,
+            'photo_url': url_for('main.student_photo', student_id=s.id) if s.id in photo_ids else '',
             'profile_url': url_for('promotion.graduate_profile', student_id=s.id),
         } for s in graduates],
     })

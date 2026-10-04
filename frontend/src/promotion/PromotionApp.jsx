@@ -331,24 +331,34 @@ function Process({ d, notify }) {
   );
 }
 
-// Graduate lifecycle status -> badge color. Keeps the status column scannable
-// (everything was a flat "info" badge before) without needing a backend change.
-const GRAD_STATUS_BADGE = {
-  'Graduation Pending': 'badge-warning',
-  'Graduated': 'badge-info',
-  'Certificate Issued': 'badge-primary',
-  'Alumni Active': 'badge-success',
-  'Transcript Requested': 'badge-warning',
-  'Transcript Issued': 'badge-primary',
-  'Employment Verification Completed': 'badge-success',
-  'Further Education Recorded': 'badge-success',
-  'Alumni Ambassador': 'badge-success',
-  'Deceased': 'badge-secondary',
+// Graduate lifecycle status -> status-dot tone. Keeps the status column
+// scannable (everything was a flat "info" badge before) without needing a
+// backend change.
+const GRAD_STATUS_TONE = {
+  'Graduation Pending': 'warning',
+  'Graduated': 'info',
+  'Certificate Issued': 'primary',
+  'Alumni Active': 'success',
+  'Transcript Requested': 'warning',
+  'Transcript Issued': 'primary',
+  'Employment Verification Completed': 'success',
+  'Further Education Recorded': 'success',
+  'Alumni Ambassador': 'success',
+  'Deceased': 'secondary',
 };
 function gradInitials(name) {
   const parts = (name || '').split(' ').filter(Boolean);
   if (!parts.length) return '—';
   return ((parts[0][0] || '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
+}
+
+// Photo when available, falling back to an initials tile (and back to
+// initials again if the photo URL 404s) — same pattern as the Students list.
+function GradAvatar({ name, photo }) {
+  const [broken, setBroken] = useState(false);
+  return (photo && !broken)
+    ? <span className="grad-av"><img src={photo} alt="" loading="lazy" onError={() => setBroken(true)} /></span>
+    : <span className="grad-av" aria-hidden="true">{gradInitials(name)}</span>;
 }
 
 // ---- Graduates -------------------------------------------------------------
@@ -395,6 +405,15 @@ function Graduates({ d }) {
         <div className="stat-card"><div className="stat-icon warning"><i aria-hidden="true" className="fas fa-file-circle-question" /></div><div className="stat-content"><h3>{noResults}</h3><p>No results uploaded</p></div></div>
       </div>
 
+      {/* mobile-only: a swipeable chip row stands in for the 4 boxed stat
+          cards above (hidden <=759px) so the list starts sooner on a phone */}
+      <div className="grad-chips">
+        <span className="grad-chip"><i aria-hidden="true" className="fas fa-graduation-cap" /> <b>{d.graduates.length}</b>&nbsp;total</span>
+        <span className="grad-chip"><i aria-hidden="true" className="fas fa-mars" /> <b>{males}</b>&nbsp;male</span>
+        <span className="grad-chip"><i aria-hidden="true" className="fas fa-venus" /> <b>{females}</b>&nbsp;female</span>
+        {noResults > 0 && <span className="grad-chip warn"><i aria-hidden="true" className="fas fa-triangle-exclamation" /> <b>{noResults}</b>&nbsp;missing results</span>}
+      </div>
+
       {d.graduates.length ? (<>
         <div className="card mb-3"><div className="card-body"><div className="filter-form">
           <div className="form-group" style={{ flex: '2 1 240px' }}><label className="form-label">Search graduates</label>
@@ -422,35 +441,49 @@ function Graduates({ d }) {
             <a href={bulkHref} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-file-zipper" /> Bulk issue</a>
           </div>}
         </div>
-          <div className="card-body" style={{ padding: 0 }}><div className="data-cards" style={{ padding: '1rem' }}>
-            {shown.length === 0 && <div style={{ gridColumn: '1 / -1' }}><Empty icon="fa-magnifying-glass" title="No matches">
-              <p>No graduates match “{q}”.</p></Empty></div>}
-            {shown.map((s) => (
-              <div className="data-card" key={s.id}>
-                <div className="data-card-header" style={{ flexWrap: 'wrap', rowGap: '.4rem' }}>
-                  <div className="data-card-title" style={{ display: 'flex', alignItems: 'center', gap: '.55rem', minWidth: 0 }}>
-                    <span className="grad-av" aria-hidden="true">{gradInitials(s.full_name)}</span>
-                    <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{s.full_name}<br /><span className="text-muted text-sm" style={{ fontWeight: 400 }}>{s.student_id}</span></span>
+          <div className="card-body" style={{ padding: '1rem' }}>
+            {shown.length === 0 ? <Empty icon="fa-magnifying-glass" title="No matches">
+              <p>No graduates match “{q}”.</p></Empty> : <div className="grad-list">
+              {shown.map((s) => {
+                const tone = GRAD_STATUS_TONE[s.status] || 'info';
+                return (
+                  <div className="grad-row" key={s.id}>
+                    <div className="who">
+                      <GradAvatar name={s.full_name} photo={s.photo_url} />
+                      <div style={{ minWidth: 0 }}>
+                        <div className="nm">{s.full_name}</div>
+                        <div className="id">{s.student_id}</div>
+                      </div>
+                    </div>
+                    <div className="meta">
+                      <span><i aria-hidden="true" className={'fas ' + (s.gender === 'Male' ? 'fa-mars' : 'fa-venus')} /> {s.gender}</span>
+                      {s.graduation_session && <span>{s.graduation_session}</span>}
+                      {s.graduation_date && <span>Graduated {s.graduation_date}</span>}
+                    </div>
+                    <div className="f-status">
+                      <span className={'grad-status tone-' + tone}><span className="dot" aria-hidden="true" />{s.status || 'Graduated'}</span>
+                    </div>
+                    <div className="f-results">
+                      <span className={'grad-res' + (s.has_waec ? ' on' : '')}><i aria-hidden="true" className={'fas fa-' + (s.has_waec ? 'circle-check' : 'circle')} /> WAEC</span>
+                      <span className={'grad-res' + (s.has_jamb ? ' on' : '')}><i aria-hidden="true" className={'fas fa-' + (s.has_jamb ? 'circle-check' : 'circle')} /> JAMB</span>
+                    </div>
+                    <div className="f-actions">
+                      <a href={s.profile_url} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-eye" /> View</a>
+                    </div>
                   </div>
-                  <span className={'badge ' + (GRAD_STATUS_BADGE[s.status] || 'badge-info')} style={{ whiteSpace: 'normal', textAlign: 'right' }}>{s.status || 'Graduated'}</span>
-                </div>
-                <div className="data-card-row"><span className="data-card-label">Gender</span>
-                  <span><i aria-hidden="true" className={'fas ' + (s.gender === 'Male' ? 'fa-mars' : 'fa-venus')} /> {s.gender}</span></div>
-                {s.graduation_date && <div className="data-card-row"><span className="data-card-label">Graduated</span><span>{s.graduation_date}</span></div>}
-                {s.graduation_session && <div className="data-card-row"><span className="data-card-label">Session</span><span>{s.graduation_session}</span></div>}
-                <div className="data-card-row"><span className="data-card-label">Results</span>
-                  <span style={{ display: 'flex', flexWrap: 'wrap', gap: '.3rem', justifyContent: 'flex-end' }}>
-                    {s.has_waec ? <span className="badge badge-info">WAEC</span> : <span className="badge badge-secondary">No WAEC</span>}
-                    {s.has_jamb ? <span className="badge badge-primary">JAMB</span> : <span className="badge badge-secondary">No JAMB</span>}
-                  </span></div>
-                <div className="data-card-actions"><a href={s.profile_url} className="btn btn-primary btn-sm w-100"><i aria-hidden="true" className="fas fa-eye" /> View Profile</a></div>
-              </div>
-            ))}
-          </div></div></div>
+                );
+              })}
+            </div>}
+          </div></div>
       </>) : <div className="card"><div className="card-body"><Empty icon="fa-graduation-cap" title="No Graduates">
         <p>{hasFilters ? 'No graduates match the current filters.' : 'No students have been marked as graduated yet.'}</p>
         {hasFilters && <div className="empty-state-actions"><button type="button" className="btn btn-secondary" onClick={clearFilters}><i aria-hidden="true" className="fas fa-rotate-left" /> Clear filters</button></div>}
       </Empty></div></div>}
+
+      {/* mobile-only: thumb-reachable FAB carries the primary action instead
+          of a header button that scrolls out of reach; mirrors the page
+          header's "Graduate current SSS3" action (same perm gate) */}
+      {canWrite(d) && <a href={d.preview_url} className="grad-fab"><i aria-hidden="true" className="fas fa-user-graduate" /> Graduate</a>}
     </>
   );
 }

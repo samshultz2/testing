@@ -27,12 +27,77 @@
 .jamb-subjects{display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem}
 @media(max-width:600px){.jamb-subjects{grid-template-columns:1fr}}
 
-/* Graduates list: a small initials tile beside each name, same visual
-   language as the Students list's avatar (circular, tinted, bold). */
+/* Graduates list: photo when available, falling back to an initials tile —
+   same visual language as the Students list's avatar (circular, tinted). */
 .grad-av{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;
-  width:36px;height:36px;border-radius:var(--radius-full);font-weight:700;font-size:.78rem;
+  width:40px;height:40px;border-radius:var(--radius-full);font-weight:700;font-size:.78rem;
   letter-spacing:.02em;color:var(--primary);background:color-mix(in srgb,var(--primary) 14%,var(--bg-card));
-  border:1px solid var(--border-color)}
+  border:1px solid var(--border-color);overflow:hidden}
+.grad-av img{width:100%;height:100%;object-fit:cover;display:block}
+
+/* Lifecycle status as a dot + label (replaces a flat badge, scales better to
+   the longer status strings like "Employment Verification Completed"). */
+.grad-status{display:inline-flex;align-items:center;gap:.4rem;font-weight:600;font-size:.82rem;white-space:normal}
+.grad-status .dot{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+.grad-status.tone-warning{color:#92400e}.grad-status.tone-warning .dot{background:var(--warning)}
+.grad-status.tone-info{color:#155e75}.grad-status.tone-info .dot{background:var(--info)}
+.grad-status.tone-primary{color:var(--primary-hover)}.grad-status.tone-primary .dot{background:var(--primary)}
+.grad-status.tone-success{color:#0f5132}.grad-status.tone-success .dot{background:var(--success)}
+.grad-status.tone-secondary{color:var(--text-secondary)}.grad-status.tone-secondary .dot{background:var(--gray-400)}
+
+/* WAEC/JAMB as icon pills instead of plain badges — grey + hollow circle
+   when missing, green + check when uploaded, so the eye catches gaps fast. */
+.grad-res{display:inline-flex;align-items:center;gap:.35rem;font-size:.72rem;font-weight:600;
+  padding:.3rem .6rem;border-radius:var(--radius-full);background:var(--gray-100);color:var(--text-muted)}
+.grad-res.on{background:var(--success-light);color:#0f5132}
+
+/* The graduate list: one row per graduate. Mobile stacks it as a card;
+   >=900px it becomes a dense table-like row via grid-template-areas, same
+   markup both ways (no separate desktop/mobile DOM to keep in sync). */
+.grad-list{display:flex;flex-direction:column;gap:.65rem}
+.grad-row{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);
+  padding:.9rem 1rem;box-shadow:var(--shadow-sm);display:grid;row-gap:.5rem;
+  grid-template-columns:1fr auto;
+  grid-template-areas:"who who" "status status" "meta meta" "results actions";
+  transition:box-shadow var(--transition),border-color var(--transition)}
+.grad-row:hover{box-shadow:var(--shadow-sm);border-color:var(--gray-300)}
+.grad-row .who{grid-area:who;display:flex;align-items:center;gap:.65rem;min-width:0}
+.grad-row .who .nm{font-weight:700;font-size:.92rem;overflow-wrap:anywhere}
+.grad-row .who .id{color:var(--text-muted);font-size:.74rem}
+.grad-row .f-status{grid-area:status;justify-self:start;align-self:start}
+.grad-row .meta{grid-area:meta;color:var(--text-muted);font-size:.78rem;display:flex;flex-wrap:wrap;gap:.3rem .9rem;align-items:center}
+.grad-row .meta i{width:12px;text-align:center;font-size:.72rem;opacity:.7}
+.grad-row .f-results{grid-area:results;display:flex;gap:.45rem;flex-wrap:wrap;min-width:0}
+.grad-row .f-actions{grid-area:actions;justify-self:end;align-self:center}
+@media (min-width:900px){
+  .grad-row{grid-template-columns:2.2fr 1.6fr 1.3fr 1.1fr auto;
+    grid-template-areas:"who meta status results actions";align-items:center;padding:.7rem 1.1rem}
+  .grad-row .meta{flex-wrap:nowrap}
+  .grad-row .f-status{justify-self:start;align-self:center}
+}
+
+/* Mobile-first chrome for the top of the page: a swipeable stat-chip row
+   stands in for the 4 boxed stat cards (which eat too much vertical space
+   on a phone), and the primary action moves to a thumb-reachable FAB
+   instead of a header button that scrolls out of reach. Both are no-ops
+   on desktop (hidden/not shown) via the media query below. */
+.grad-chips{display:none}
+.grad-fab{display:none}
+@media (max-width:759px){
+  .stats-grid{display:none}
+  .grad-chips{display:flex;gap:.5rem;overflow-x:auto;padding:.1rem .1rem .7rem;margin-bottom:.4rem;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .grad-chips::-webkit-scrollbar{display:none}
+  .grad-chip{flex:0 0 auto;display:inline-flex;align-items:center;gap:.4rem;background:var(--bg-card);
+    border:1px solid var(--border-color);border-radius:999px;padding:.5rem .85rem;font-size:.8rem;
+    font-weight:600;color:var(--text-secondary);white-space:nowrap}
+  .grad-chip b{color:var(--text-primary)}
+  .grad-chip.warn{background:var(--warning-light);border-color:transparent;color:#92400e}
+  .page-header-actions .btn-success{display:none}
+  .grad-fab{display:flex;position:fixed;right:1rem;bottom:1rem;z-index:40;background:var(--primary);
+    color:#fff;border:none;border-radius:999px;padding:.95rem 1.3rem;box-shadow:0 10px 24px rgba(13,106,78,.35);
+    align-items:center;gap:.55rem;font-weight:700;font-size:.86rem;text-decoration:none}
+  .grad-list{padding-bottom:4.5rem}
+}
 </style>
 {% endblock %}
 {% block content %}
