@@ -148,6 +148,36 @@ _wants_json, _render, _ok, _err = section_responders(
     'cbt/app.html', 'cbt_json', 'cbt.dashboard')
 
 
+def _notify_exam_scheduled(exam, *, verb):
+    """Bell the branch's admins that a CBT exam was created or published.
+    Students have no persistent session this app could notify into (their
+    portal login only lasts the time they're on the exam-taking page), so
+    this is staff-facing only -- they're expected to tell students some
+    other way (announcement, SMS, in class)."""
+    from utils import automations
+    if not automations.is_enabled('cbt_exam_scheduled'):
+        return
+    try:
+        from utils.notify import notify_branch_admins, actor_label
+        bits = []
+        if exam.subject:
+            bits.append(exam.subject.name)
+        if exam.school_class:
+            cls = exam.school_class.name
+            if exam.arm and not getattr(exam.arm, 'is_default', False):
+                cls += f' {exam.arm.name}'
+            bits.append(cls)
+        where = ' — ' + ' '.join(bits) if bits else ''
+        when = exam.exam_date.strftime('%d %b %Y') if exam.exam_date else 'an unset date'
+        notify_branch_admins(
+            f'CBT exam {verb}',
+            body=f'{exam.title}{where}, {when} · by {actor_label()}',
+            url=url_for('cbt.exam_detail', exam_id=exam.id),
+            branch_id=exam.branch_id, category='success' if verb == 'published' else 'info')
+    except Exception:
+        pass
+
+
 def _exam_403(exam_id):
     """Load a staff-managed CBT exam by id, enforcing branch access so a guessed
     id can't reach another branch's exam (central users still see everything)."""
@@ -366,6 +396,7 @@ def add_exam():
         db.session.commit()
         from utils.audit import log_action
         log_action('cbt.exam_create', target=e)
+        _notify_exam_scheduled(e, verb='scheduled')
         return _ok('Exam created — now add questions.', url_for('cbt.exam_detail', exam_id=e.id))
     return _render(_exam_form_payload(None, url_for('cbt.add_exam'), url_for('cbt.dashboard')))
 
@@ -403,6 +434,8 @@ def toggle_publish(exam_id):
     db.session.commit()
     from utils.audit import log_action
     log_action('cbt.exam_publish' if e.is_published else 'cbt.exam_unpublish', target=e)
+    if e.is_published:
+        _notify_exam_scheduled(e, verb='published')
     flash('Exam published.' if e.is_published else 'Exam unpublished.', 'success')
     return redirect(url_for('cbt.exam_detail', exam_id=e.id))
 

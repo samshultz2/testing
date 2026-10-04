@@ -68,6 +68,10 @@ REGISTRY = [
      "Post an in-app notification when a timetable generation run succeeds or "
      "fails, so it's not lost if the flash message is missed.",
      'Generator', True),
+    ('cbt_exam_scheduled', 'CBT exam scheduled',
+     "Alert the branch's admins when a new CBT exam is created or published "
+     "(students don't see it until the exam's own day either way).",
+     'CBT', True),
 ]
 
 _DEFAULTS = {k: d for k, _l, _desc, _cat, d in REGISTRY}
