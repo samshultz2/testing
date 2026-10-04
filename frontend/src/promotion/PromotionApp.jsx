@@ -521,9 +521,23 @@ function GraduatePreview({ d, notify }) {
 
 // ---- Graduate profile ------------------------------------------------------
 const NGN = (n) => '₦' + Number(n || 0).toLocaleString(undefined, { maximumFractionDigits: 0 });
-const InfoRow = ({ label, value }) => (value || value === 0)
-  ? <div className="info-row"><span className="text-muted">{label}</span><strong>{value}</strong></div> : null;
 
+// Compact label/value pair for the profile rail (null when there's nothing to show).
+const GpKV = ({ label, value }) => (value || value === 0) ? (
+  <div className="gp-kv"><div className="k">{label}</div><div className="v">{value}</div></div>
+) : null;
+
+const ALUMNI_FIELD_ICONS = {
+  occupation: 'fa-briefcase', job_title: 'fa-id-badge', employer: 'fa-building',
+  higher_institution: 'fa-school', course_of_study: 'fa-book', phone: 'fa-phone',
+  email: 'fa-envelope', linkedin_url: 'fa-link', city: 'fa-location-dot', country: 'fa-flag',
+};
+
+const WAEC_GRADE_BADGE = {
+  A1: 'badge-success', B2: 'badge-success', B3: 'badge-success',
+  C4: 'badge-warning', C5: 'badge-warning', C6: 'badge-warning',
+  D7: 'badge-danger', E8: 'badge-danger', F9: 'badge-danger',
+};
 function GraduateProfile({ d, notify }) {
   const s = d.student;
   const rec = d.record || {};
@@ -611,198 +625,261 @@ function GraduateProfile({ d, notify }) {
             <i aria-hidden="true" className="fas fa-rotate-left" /> Un-graduate</button>}
         </div>
       </div>
-      <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-graduation-cap" /> Graduation Info</h3></div>
-        <div className="card-body"><div className="info-grid">
-          <div className="info-row"><span className="text-muted">Status</span><strong><span className="badge badge-info">{d.status || 'Graduated'}</span></strong></div>
-          {d.graduation_date && <div className="info-row"><span className="text-muted">Graduation Date</span><strong>{d.graduation_date}</strong></div>}
-          {d.graduation_session && <div className="info-row"><span className="text-muted">Session</span><strong>{d.graduation_session}</strong></div>}
-        </div></div></div>
+      <div className="gp-grid">
+        {/* ===================== RAIL ===================== */}
+        <div className="gp-rail">
 
-      {d.urls.change_status && <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-arrows-turn-right" /> Update Graduate Status</h3></div>
-        <div className="card-body">
-          <div className="form-row">
-            <div className="form-group" style={{ flex: 1, minWidth: '180px' }}><label className="form-label">Status</label>
-              <select className="form-control" value={status} onChange={(e) => setStatus(e.target.value)}>
-                {(d.statuses || []).map((st) => <option key={st} value={st}>{st}</option>)}</select></div>
-            <div className="form-group" style={{ flex: 2, minWidth: '220px' }}><label className="form-label">Reason <span className="text-muted">(recorded in the audit trail)</span></label>
-              <input className="form-control" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Certificate collected on 12 Aug" /></div>
+          <div className="gp-sec">
+            <div className="gp-sec-head"><div className="ttl"><span className="gp-sec-ic p"><i aria-hidden="true" className="fas fa-graduation-cap" /></span><h3>Graduation</h3></div></div>
+            <div className="gp-sec-body">
+              {((rec.attendance && rec.attendance.total > 0) || rec.finance || (typeof rec.clinic_visits === 'number' && rec.clinic_visits > 0)) &&
+                <div className="gp-qstats" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(90px,1fr))' }}>
+                  {rec.attendance && rec.attendance.total > 0 && <div className="gp-qstat"><b>{rec.attendance.percent}%</b><span>Attendance</span></div>}
+                  {rec.finance && <div className="gp-qstat"><b>{NGN(rec.finance.total_paid)}</b><span>Fees paid</span></div>}
+                  {typeof rec.clinic_visits === 'number' && rec.clinic_visits > 0 && <div className="gp-qstat"><b>{rec.clinic_visits}</b><span>Clinic visits</span></div>}
+                </div>}
+              <GpKV label="Status" value={d.status || 'Graduated'} />
+              <GpKV label="Graduated" value={d.graduation_date} />
+              <GpKV label="Session" value={d.graduation_session} />
+            </div>
           </div>
-          <button type="button" className="btn btn-primary" disabled={busy} onClick={saveStatus}><i aria-hidden="true" className="fas fa-save" /> Update status</button>
-        </div></div>}
 
-      {(d.status_history && d.status_history.length > 0) && <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-clock-rotate-left" /> Status History</h3></div>
-        <div className="card-body"><div className="table-container" style={{ border: 'none' }}><table className="data-table table-stack no-mobile-scroll">
-          <thead><tr><th>When</th><th>Change</th><th>Reason</th><th>By</th></tr></thead>
-          <tbody>{d.status_history.map((h, i) => (
-            <tr key={i}><td data-label="When">{h.at}</td><td data-label="Change">{h.old} → <strong>{h.new}</strong></td><td data-label="Reason">{h.reason || '—'}</td><td data-label="By">{h.actor || '—'}</td></tr>))}</tbody>
-        </table></div></div></div>}
+          {d.urls.change_status && <div className="gp-sec">
+            <div className="gp-sec-head"><div className="ttl"><span className="gp-sec-ic a"><i aria-hidden="true" className="fas fa-arrows-turn-right" /></span><h3>Update Status</h3></div></div>
+            <div className="gp-sec-body">
+              <div className="gp-status-now"><span className="dot" aria-hidden="true" /><b>Currently: {d.status || 'Graduated'}</b></div>
+              <div className="gp-field"><label>New status</label>
+                <select className="form-control" value={status} onChange={(e) => setStatus(e.target.value)}>
+                  {(d.statuses || []).map((st) => <option key={st} value={st}>{st}</option>)}</select></div>
+              <div className="gp-field"><label>Reason <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(audit trail)</span></label>
+                <textarea className="form-control" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Certificate collected on 12 Aug" /></div>
+              <button type="button" className="btn btn-primary" style={{ width: '100%' }} disabled={busy} onClick={saveStatus}><i aria-hidden="true" className="fas fa-save" /> Update status</button>
+            </div>
+          </div>}
 
-      {/* ---- Documents ---- */}
-      {d.documents && d.documents.length > 0 && <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-file-signature" /> Documents</h3></div>
-        <div className="card-body"><div className="data-cards">
-          {d.documents.map((doc) => (
-            <div className="data-card" key={doc.type}>
-              <div className="data-card-header"><div className="data-card-title">{doc.label}</div>
-                {doc.revoked ? <span className="badge badge-danger">Revoked</span>
-                  : doc.number ? <span className="badge badge-success">Issued</span>
-                  : <span className="badge badge-secondary">Not issued</span>}</div>
-              {doc.number && <div className="data-card-row"><span className="data-card-label">No.</span><span>{doc.number}</span></div>}
-              {doc.reprint_count > 0 && <div className="data-card-row"><span className="data-card-label">Reprints</span><span>{doc.reprint_count}</span></div>}
-              {doc.number && <div className="data-card-row"><span className="data-card-label">Verified</span><span>{doc.verify_count > 0 ? <span className="badge badge-info">{doc.verify_count}× checked</span> : <span style={{ color: 'var(--text-muted, #94a3b8)' }}>not yet</span>}</span></div>}
-              {doc.verify_url && <div className="data-card-row"><span className="data-card-label">Verify</span><span><a href={doc.verify_url} target="_blank" rel="noopener noreferrer">link</a></span></div>}
-              <div className="data-card-actions">
-                <a href={doc.download_url} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm w-100">
-                  <i aria-hidden="true" className={'fas ' + (doc.number ? 'fa-rotate' : 'fa-download')} /> {doc.number ? 'Re-issue / Download' : 'Generate & Download'}</a>
-                {doc.number && doc.revoke_url && <button type="button"
-                  className={'btn btn-sm w-100 ' + (doc.revoked ? 'btn-secondary' : 'btn-danger')}
-                  style={{ marginTop: '.4rem' }} onClick={() => revokeDoc(doc)}>
-                  <i aria-hidden="true" className={'fas ' + (doc.revoked ? 'fa-rotate-left' : 'fa-ban')} /> {doc.revoked ? 'Reinstate' : 'Revoke'}</button>}
-              </div>
-            </div>))}
+          {d.set_password_url && <div className="gp-sec">
+            <div className="gp-sec-head"><div className="ttl"><span className="gp-sec-ic i"><i aria-hidden="true" className="fas fa-key" /></span><h3>Portal Access</h3></div></div>
+            <div className="gp-sec-body">
+              <p style={{ margin: '0 0 .8rem', fontSize: '.78rem', color: 'var(--text-muted)' }}>Set a password so this graduate can sign in to the alumni portal. They can also log in with a verification code from any document you issued them.</p>
+              <div className="gp-field"><label>New password</label>
+                <div className="gp-ctrl"><i aria-hidden="true" className="fas fa-lock gp-pre" />
+                  <input className="form-control" type="text" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="At least 6 characters" /></div></div>
+              <button type="button" className="btn btn-secondary" style={{ width: '100%' }} disabled={busy} onClick={savePassword}><i aria-hidden="true" className="fas fa-key" /> Set password</button>
+              {d.alumni_login_url && <div style={{ marginTop: '.8rem', padding: '.6rem .7rem', background: 'var(--gray-50)', borderRadius: 'var(--radius-md)', fontSize: '.76rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '.4rem', overflow: 'hidden' }}>
+                <i aria-hidden="true" className="fas fa-link" style={{ flexShrink: 0 }} />
+                <a href={d.alumni_login_url} target="_blank" rel="noopener noreferrer" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.alumni_login_url}</a>
+              </div>}
+            </div>
+          </div>}
+
         </div>
-        <p className="text-muted text-sm" style={{ marginTop: '.6rem', marginBottom: 0 }}>
-          <i aria-hidden="true" className="fas fa-qrcode" /> Each PDF carries a QR code + unique number; anyone can confirm it at the public verification page.</p>
-        </div></div>}
 
-      {/* ---- Document requests (from the alumni portal) ---- */}
-      {d.doc_requests && d.doc_requests.length > 0 && <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-inbox" /> Document Requests</h3></div>
-        <div className="card-body"><div className="table-container" style={{ border: 'none' }}><table className="data-table table-stack no-mobile-scroll">
-          <thead><tr><th>Document</th><th>Requested</th><th>Note</th><th>Status</th><th /></tr></thead>
-          <tbody>{d.doc_requests.map((r) => (
-            <tr key={r.id}>
-              <td data-label="Document">{r.label}</td><td data-label="Requested">{r.requested_at}</td><td data-label="Note">{r.note || '—'}</td>
-              <td data-label="Status"><span className={'badge ' + (r.status === 'pending' ? 'badge-warning' : r.status === 'fulfilled' ? 'badge-success' : 'badge-secondary')}>{r.status}</span></td>
-              <td className="actions" style={{ whiteSpace: 'nowrap' }}>{r.status === 'pending' ? <>
-                <button type="button" className="btn btn-success btn-sm" onClick={() => fulfilReq(r)}><i aria-hidden="true" className="fas fa-file-arrow-down" /> Issue</button>{' '}
-                <button type="button" className="btn btn-danger btn-sm" onClick={() => declineReq(r)}><i aria-hidden="true" className="fas fa-xmark" /> Decline</button>
-              </> : (r.response_note || '—')}</td>
-            </tr>))}</tbody>
-        </table></div></div></div>}
+        {/* ===================== MAIN ===================== */}
+        <div className="gp-main">
 
-      {/* ---- Alumni details ---- */}
-      {d.alumni_save_url && <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-id-badge" /> Alumni Details</h3>
-        {d.alumni && d.alumni.updated_at && <span className="text-muted text-sm">Updated {d.alumni.updated_at}{d.alumni.updated_by ? ` by ${d.alumni.updated_by}` : ''}</span>}</div>
-        <div className="card-body">
-          <div className="form-row" style={{ flexWrap: 'wrap', gap: '.6rem' }}>
-            {[['occupation', 'Occupation'], ['job_title', 'Job title'], ['employer', 'Employer'],
-              ['higher_institution', 'Higher institution'], ['course_of_study', 'Course of study'],
-              ['phone', 'Phone'], ['email', 'Email'], ['linkedin_url', 'LinkedIn URL'],
-              ['city', 'City'], ['country', 'Country']].map(([k, lab]) => (
-              <div className="form-group" key={k} style={{ flex: '1 1 200px' }}>
-                <label className="form-label">{lab}</label>
-                <input className="form-control" value={alu[k] || ''} onChange={(e) => setAluField(k, e.target.value)} />
-              </div>))}
-          </div>
-          <div className="form-group"><label className="form-label">Achievements</label>
-            <textarea className="form-control" rows={2} value={alu.achievements || ''} onChange={(e) => setAluField('achievements', e.target.value)} /></div>
-          <div className="form-group"><label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '.5rem' }}>
-            <input type="checkbox" checked={!!alu.willing_to_mentor} onChange={(e) => setAluField('willing_to_mentor', e.target.checked)} /> Willing to mentor current students</label></div>
-          <button type="button" className="btn btn-primary" disabled={busy} onClick={saveAlumni}><i aria-hidden="true" className="fas fa-save" /> Save alumni details</button>
-        </div></div>}
+          {(d.status_history && d.status_history.length > 0) && <div className="gp-sec">
+            <div className="gp-sec-head"><div className="ttl"><span className="gp-sec-ic g"><i aria-hidden="true" className="fas fa-clock-rotate-left" /></span><h3>Status History</h3></div><span className="meta">{d.status_history.length} change{d.status_history.length === 1 ? '' : 's'}</span></div>
+            <div className="gp-tl">
+              {d.status_history.map((h, i) => (
+                <div className="gp-tlrow" key={i}><span className={'gp-tldot' + (i === 0 ? '' : ' muted')} aria-hidden="true" />
+                  <div className="gp-tlbody">
+                    <div className="gp-tlchange">{h.old || '—'} <span className="arrow">→</span> <strong>{h.new}</strong></div>
+                    <div className="gp-tlmeta">{h.reason ? h.reason + ' · ' : ''}{h.at}{h.actor ? ` · by ${h.actor}` : ''}</div>
+                  </div></div>
+              ))}
+            </div>
+          </div>}
 
-      {/* ---- Portal access ---- */}
-      {d.set_password_url && <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-key" /> Alumni Portal Access</h3></div>
-        <div className="card-body">
-          <p className="text-muted text-sm" style={{ marginTop: 0 }}>Set a portal password so this graduate can sign in at the alumni portal. They can also log in with a verification code from any document you issued them.</p>
-          <div className="form-row" style={{ alignItems: 'flex-end', gap: '.6rem' }}>
-            <div className="form-group" style={{ flex: 1, minWidth: '200px' }}><label className="form-label">New portal password</label>
-              <input className="form-control" type="text" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="At least 6 characters" /></div>
-            <button type="button" className="btn btn-secondary" disabled={busy} onClick={savePassword}><i aria-hidden="true" className="fas fa-key" /> Set password</button>
-          </div>
-          {d.alumni_login_url && <p className="text-muted text-sm" style={{ marginBottom: 0 }}>Portal: <a href={d.alumni_login_url} target="_blank" rel="noopener noreferrer">{d.alumni_login_url}</a></p>}
-        </div></div>}
+          {/* ---- Documents ---- */}
+          {d.documents && d.documents.length > 0 && <div className="gp-sec">
+            <div className="gp-sec-head"><div className="ttl"><span className="gp-sec-ic s"><i aria-hidden="true" className="fas fa-file-signature" /></span><h3>Documents</h3></div><span className="meta">{d.documents.length} types</span></div>
+            <div className="gp-doctiles">
+              {d.documents.map((doc) => (
+                <div className="gp-doctile" key={doc.type}>
+                  <div className={'gp-dt-ribbon ' + (doc.revoked ? 'revoked' : doc.number ? 'issued' : 'none')} />
+                  <div className="gp-dt-body">
+                    <div className="gp-dt-top">
+                      <span className={'gp-dt-ic' + (doc.revoked ? ' danger' : doc.number ? '' : ' off')}>
+                        <i aria-hidden="true" className={'fas ' + (doc.revoked ? 'fa-file-circle-xmark' : doc.number ? 'fa-file-circle-check' : 'fa-file-signature')} /></span>
+                      {doc.revoked ? <span className="badge badge-danger">Revoked</span>
+                        : doc.number ? <span className="badge badge-success">Issued</span>
+                        : <span className="badge badge-secondary">Not issued</span>}
+                    </div>
+                    <div><div className="gp-dt-label">{doc.label}</div>{doc.number && <div className="gp-dt-num">No. {doc.number}{doc.reprint_count > 0 ? ` · ${doc.reprint_count} reprint${doc.reprint_count === 1 ? '' : 's'}` : ''}</div>}</div>
+                    {doc.number && <div className="gp-dt-verify">
+                      {doc.verify_count > 0 ? <><i aria-hidden="true" className="fas fa-circle-check" style={{ color: 'var(--success)' }} /> {doc.verify_count}× checked</> : <><i aria-hidden="true" className="fas fa-circle" /> not yet checked</>}
+                      {doc.verify_url && <>· <a href={doc.verify_url} target="_blank" rel="noopener noreferrer">verify link</a></>}
+                    </div>}
+                    <div className="gp-dt-actions">
+                      <a href={doc.download_url} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm">
+                        <i aria-hidden="true" className={'fas ' + (doc.number ? 'fa-rotate' : 'fa-download')} /> {doc.number ? 'Re-issue' : 'Generate'}</a>
+                      {doc.number && doc.revoke_url && <button type="button" className="btn btn-secondary btn-sm" onClick={() => revokeDoc(doc)}>
+                        <i aria-hidden="true" className={'fas ' + (doc.revoked ? 'fa-rotate-left' : 'fa-ban')} /> {doc.revoked ? 'Reinstate' : 'Revoke'}</button>}
+                    </div>
+                  </div>
+                </div>))}
+            </div>
+            <p className="text-muted text-sm" style={{ margin: '0 1.25rem 1.1rem' }}>
+              <i aria-hidden="true" className="fas fa-qrcode" /> Each PDF carries a QR code + unique number; anyone can confirm it at the public verification page.</p>
+          </div>}
 
-      {/* ---- Permanent record (read-only) ---- */}
-      <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-id-card" /> Biodata</h3></div>
-        <div className="card-body" style={{ display: 'flex', gap: '1.2rem', flexWrap: 'wrap' }}>
-          {bio.photo_url ? <img src={bio.photo_url} alt="" style={{ width: 96, height: 96, objectFit: 'cover', borderRadius: 12, border: '1px solid var(--border-color)' }} /> : null}
-          <div className="info-grid" style={{ flex: 1, minWidth: 240 }}>
-            <InfoRow label="Date of Birth" value={bio.date_of_birth} />
-            <InfoRow label="Admission Session" value={rec.admission_session} />
-            <InfoRow label="House" value={bio.house} />
-            <InfoRow label="Boarding" value={bio.boarding_status} />
-            <InfoRow label="Stream" value={bio.stream} />
-            <InfoRow label="Blood Group" value={bio.blood_group} />
-            <InfoRow label="Genotype" value={bio.genotype} />
-            <InfoRow label="Allergies" value={bio.allergies} />
-            <InfoRow label="Religion" value={bio.religion} />
-            <InfoRow label="Address" value={bio.home_address} />
-            <InfoRow label="WAEC Subjects" value={bio.waec_subjects} />
-            <InfoRow label="JAMB Subjects" value={bio.jamb_subjects} />
-            <InfoRow label="JAMB Reg. No." value={bio.jamb_reg_number} />
-          </div>
-        </div></div>
+          {/* ---- Document requests (from the alumni portal) ---- */}
+          {d.doc_requests && d.doc_requests.length > 0 && <div className="gp-sec">
+            <div className="gp-sec-head"><div className="ttl"><span className="gp-sec-ic a"><i aria-hidden="true" className="fas fa-inbox" /></span><h3>Document Requests</h3></div><span className="meta">from the alumni portal</span></div>
+            <div className="gp-rowlist">
+              {d.doc_requests.map((r) => (
+                <div className="gp-rlrow" key={r.id}>
+                  <span className="ric"><i aria-hidden="true" className="fas fa-file" /></span>
+                  <div className="rbody"><div className="rtitle">{r.label}</div><div className="rsub">Requested {r.requested_at}{r.note ? ` · "${r.note}"` : ''}</div></div>
+                  {r.status === 'pending' ? <>
+                    <span className="badge badge-warning">pending</span>
+                    <div className="ractions">
+                      <button type="button" className="btn btn-primary btn-sm" onClick={() => fulfilReq(r)}><i aria-hidden="true" className="fas fa-file-arrow-down" /></button>
+                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => declineReq(r)}><i aria-hidden="true" className="fas fa-xmark" /></button>
+                    </div>
+                  </> : <span className="rval">{r.response_note || (r.status === 'fulfilled' ? 'Issued' : r.status === 'declined' ? 'Declined' : r.status)}</span>}
+                </div>
+              ))}
+            </div>
+          </div>}
 
-      {rec.class_history && rec.class_history.length > 0 && <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-timeline" /> Class &amp; Arm History</h3></div>
-        <div className="card-body"><div className="table-container" style={{ border: 'none' }}><table className="data-table table-stack no-mobile-scroll">
-          <thead><tr><th>Session</th><th>Term</th><th>Class</th><th>Arm</th></tr></thead>
-          <tbody>{rec.class_history.map((h, i) => <tr key={i}><td data-label="Session">{h.session}</td><td data-label="Term">{h.term}</td><td data-label="Class">{h.klass}</td><td data-label="Arm">{h.arm}</td></tr>)}</tbody>
-        </table></div></div></div>}
-
-      {rec.academic && (rec.academic.terms_count > 0) && <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-chart-line" /> Academic History</h3>
-        {rec.academic.cumulative != null && <span className="badge badge-primary">Cumulative avg: {rec.academic.cumulative}%</span>}</div>
-        <div className="card-body">{rec.academic.terms.map((t, i) => (
-          <div className="card" style={{ marginBottom: '1rem' }} key={i}>
-            <div className="card-header"><span><strong>{t.session}</strong> · {t.term}</span>{t.average != null && <span className="text-muted">Term avg: {t.average}%</span>}</div>
-            <div className="card-body" style={{ padding: 0 }}><div className="table-container" style={{ border: 'none' }}><table className="data-table table-stack no-mobile-scroll">
-              <thead><tr><th>Subject</th><th>Score</th><th>Grade</th><th>Position</th><th>Remark</th></tr></thead>
-              <tbody>{t.subjects.map((sub, j) => <tr key={j}><td data-label="Subject">{sub.subject}</td><td data-label="Score">{sub.score}</td><td data-label="Grade">{sub.grade || '—'}</td><td data-label="Position">{sub.position || '—'}</td><td data-label="Remark">{sub.remark || sub.comment || '—'}</td></tr>)}</tbody>
-            </table></div></div>
-          </div>))}</div></div>}
-
-      <div className="stats-grid mb-3">
-        {rec.attendance && rec.attendance.total > 0 && <div className="stat-card"><div className="stat-icon info"><i aria-hidden="true" className="fas fa-calendar-check" /></div>
-          <div className="stat-content"><h3>{rec.attendance.percent}%</h3><p>Attendance ({rec.attendance.present}/{rec.attendance.total})</p></div></div>}
-        {rec.finance && <div className="stat-card"><div className="stat-icon success"><i aria-hidden="true" className="fas fa-coins" /></div>
-          <div className="stat-content"><h3>{NGN(rec.finance.total_paid)}</h3><p>Total fees paid ({rec.finance.count})</p></div></div>}
-        {typeof rec.clinic_visits === 'number' && rec.clinic_visits > 0 && <div className="stat-card"><div className="stat-icon secondary"><i aria-hidden="true" className="fas fa-notes-medical" /></div>
-          <div className="stat-content"><h3>{rec.clinic_visits}</h3><p>Clinic visits</p></div></div>}
-      </div>
-
-      {rec.finance && rec.finance.recent && rec.finance.recent.length > 0 && <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-receipt" /> Recent Fee Payments</h3></div>
-        <div className="card-body"><div className="table-container" style={{ border: 'none' }}><table className="data-table table-stack no-mobile-scroll">
-          <thead><tr><th>Date</th><th>Amount</th><th>Method</th><th>Receipt</th></tr></thead>
-          <tbody>{rec.finance.recent.map((p, i) => <tr key={i}><td data-label="Date">{p.date}</td><td data-label="Amount">{NGN(p.amount)}</td><td data-label="Method">{p.method || '—'}</td><td data-label="Receipt">{p.receipt || '—'}</td></tr>)}</tbody>
-        </table></div></div></div>}
-
-      {rec.discipline && rec.discipline.length > 0 && <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-gavel" /> Discipline Records</h3></div>
-        <div className="card-body"><div className="table-container" style={{ border: 'none' }}><table className="data-table table-stack no-mobile-scroll">
-          <thead><tr><th>Date</th><th>Category</th><th>Severity</th><th>Description</th><th>Action</th></tr></thead>
-          <tbody>{rec.discipline.map((r, i) => <tr key={i}><td data-label="Date">{r.date}</td><td data-label="Category">{r.category}</td><td data-label="Severity">{r.severity || '—'}</td><td data-label="Description">{r.description || '—'}</td><td data-label="Action">{r.action || '—'}</td></tr>)}</tbody>
-        </table></div></div></div>}
-
-      <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-file-alt" /> WAEC Results</h3>
-        {canWrite(d) && <a href={d.urls.add_waec} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add</a>}</div>
-        <div className="card-body">{d.waec_by_year.length ? d.waec_by_year.map((data, i) => (
-          <div className="card" style={{ marginBottom: '1rem' }} key={i}>
-            <div className="card-header"><span><strong>{data.exam_year}</strong></span>{data.exam_number && <span className="text-muted">Exam No: {data.exam_number}</span>}</div>
-            <div className="card-body"><div className="subjects-grid">{data.subjects.map((r, j) => (
-              <div className="subject-item" key={j}><span>{r.subject}</span><span className={'grade-badge grade-' + r.grade}>{r.grade}</span></div>))}</div></div>
-          </div>
-        )) : <Empty icon="fa-file-alt" title=""><p>No WAEC results recorded</p>{canWrite(d) && <a href={d.urls.add_waec} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add WAEC Result</a>}</Empty>}</div></div>
-
-      <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-file-contract" /> JAMB Results</h3>
-        {canWrite(d) && <a href={d.urls.add_jamb} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add</a>}</div>
-        <div className="card-body">{d.jamb_results.length ? d.jamb_results.map((j, i) => (
-          <div className="card" style={{ marginBottom: '1rem' }} key={i}>
-            <div className="card-header"><span><strong>{j.exam_year}</strong></span><span className="badge badge-primary" style={{ fontSize: 'var(--text-md)' }}>{j.total_score}</span></div>
-            <div className="card-body">{j.registration_number && <p className="text-muted mb-2">Reg No: {j.registration_number}</p>}
-              <div className="jamb-subjects">{j.subjects.map((sub, k) => (
-                <div className="subject-item" key={k}><span>{sub.name}</span><strong>{sub.score}</strong></div>))}</div></div>
-          </div>
-        )) : <Empty icon="fa-file-contract" title=""><p>No JAMB results recorded</p>{canWrite(d) && <a href={d.urls.add_jamb} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add JAMB Result</a>}</Empty>}</div></div>
-
-      {d.contacts.length > 0 && (
-        <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-phone" /> Contact Information</h3></div>
-          <div className="card-body"><div className="data-cards" style={{ padding: 0 }}>
-            {d.contacts.map((c, i) => (
-              <div className="data-card" key={i}>
-                <div className="data-card-header"><div className="data-card-title">{c.name}</div><span className="badge badge-secondary">{c.relationship}</span></div>
-                <div className="data-card-row"><span className="data-card-label">Phone</span><span>{c.phone}</span></div>
+          {/* ---- Alumni details ---- */}
+          {d.alumni_save_url && <div className="gp-sec">
+            <div className="gp-sec-head"><div className="ttl"><span className="gp-sec-ic i"><i aria-hidden="true" className="fas fa-id-badge" /></span><h3>Alumni Details</h3></div>
+              {d.alumni && d.alumni.updated_at && <span className="meta">Updated {d.alumni.updated_at}{d.alumni.updated_by ? ` by ${d.alumni.updated_by}` : ''}</span>}</div>
+            <div className="gp-sec-body">
+              <div className="gp-formgrid">
+                {[['occupation', 'Occupation'], ['job_title', 'Job title'], ['employer', 'Employer'],
+                  ['higher_institution', 'Higher institution'], ['course_of_study', 'Course of study'],
+                  ['phone', 'Phone'], ['email', 'Email'], ['linkedin_url', 'LinkedIn URL'],
+                  ['city', 'City'], ['country', 'Country']].map(([k, lab]) => (
+                  <div className="gp-field" key={k}><label>{lab}</label>
+                    <div className="gp-ctrl"><i aria-hidden="true" className={'fas ' + ALUMNI_FIELD_ICONS[k] + ' gp-pre'} />
+                      <input className="form-control" value={alu[k] || ''} onChange={(e) => setAluField(k, e.target.value)} /></div></div>))}
               </div>
-            ))}
-          </div></div></div>
-      )}
+              <div className="gp-field"><label>Achievements</label>
+                <textarea className="form-control" rows={2} value={alu.achievements || ''} onChange={(e) => setAluField('achievements', e.target.value)} /></div>
+              <div className="gp-chk"><input type="checkbox" checked={!!alu.willing_to_mentor} onChange={(e) => setAluField('willing_to_mentor', e.target.checked)} /> Willing to mentor current students</div>
+              <button type="button" className="btn btn-primary" disabled={busy} onClick={saveAlumni}><i aria-hidden="true" className="fas fa-save" /> Save alumni details</button>
+            </div>
+          </div>}
+
+          {/* ---- Permanent record (read-only) ---- */}
+          <div className="gp-sec">
+            <div className="gp-sec-head"><div className="ttl"><span className="gp-sec-ic g"><i aria-hidden="true" className="fas fa-id-card" /></span><h3>Biodata</h3></div></div>
+            <div className="gp-sec-body" style={{ display: 'flex', gap: '1.2rem', flexWrap: 'wrap' }}>
+              {bio.photo_url ? <img src={bio.photo_url} alt="" style={{ width: 96, height: 96, objectFit: 'cover', borderRadius: 12, border: '1px solid var(--border-color)' }} /> : null}
+              <div style={{ flex: 1, minWidth: 240, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.6rem 1.2rem' }}>
+                <GpKV label="Date of Birth" value={bio.date_of_birth} />
+                <GpKV label="Admission Session" value={rec.admission_session} />
+                <GpKV label="House" value={bio.house} />
+                <GpKV label="Boarding" value={bio.boarding_status} />
+                <GpKV label="Stream" value={bio.stream} />
+                <GpKV label="Blood Group" value={bio.blood_group} />
+                <GpKV label="Genotype" value={bio.genotype} />
+                <GpKV label="Allergies" value={bio.allergies} />
+                <GpKV label="Religion" value={bio.religion} />
+                <div style={{ gridColumn: '1/-1' }}><GpKV label="Address" value={bio.home_address} /></div>
+                <GpKV label="WAEC Subjects" value={bio.waec_subjects} />
+                <GpKV label="JAMB Subjects" value={bio.jamb_subjects} />
+                <GpKV label="JAMB Reg. No." value={bio.jamb_reg_number} />
+              </div>
+            </div>
+          </div>
+
+          {rec.class_history && rec.class_history.length > 0 && <div className="gp-sec">
+            <div className="gp-sec-head"><div className="ttl"><span className="gp-sec-ic g"><i aria-hidden="true" className="fas fa-timeline" /></span><h3>Class &amp; Arm History</h3></div></div>
+            <div className="gp-rowlist">
+              {rec.class_history.map((h, i) => (
+                <div className="gp-rlrow" key={i}><span className="ric"><i aria-hidden="true" className="fas fa-layer-group" /></span>
+                  <div className="rbody"><div className="rtitle">{h.klass} {h.arm}</div><div className="rsub">{h.session} · {h.term}</div></div></div>
+              ))}
+            </div>
+          </div>}
+
+          {rec.academic && (rec.academic.terms_count > 0) && <div className="gp-sec">
+            <div className="gp-sec-head"><div className="ttl"><span className="gp-sec-ic p"><i aria-hidden="true" className="fas fa-chart-line" /></span><h3>Academic History</h3></div>
+              {rec.academic.cumulative != null && <span className="badge badge-primary">Cumulative avg: {rec.academic.cumulative}%</span>}</div>
+            <div className="gp-sec-body">
+              {rec.academic.terms.map((t, i) => (
+                <div className="gp-examblock" key={i}>
+                  <div className="gp-examhead"><b>{t.session}</b><span className="muted">{t.term}</span>{t.average != null && <span className="muted">Term avg: {t.average}%</span>}</div>
+                  <div className="subjects-grid" style={{ padding: '.85rem .95rem' }}>
+                    {t.subjects.map((sub, j) => (
+                      <div className="subject-item" key={j}><span>{sub.subject}</span><strong>{sub.score}{sub.grade ? ` · ${sub.grade}` : ''}</strong></div>))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>}
+
+          {rec.finance && rec.finance.recent && rec.finance.recent.length > 0 && <div className="gp-sec">
+            <div className="gp-sec-head"><div className="ttl"><span className="gp-sec-ic s"><i aria-hidden="true" className="fas fa-receipt" /></span><h3>Recent Fee Payments</h3></div></div>
+            <div className="gp-rowlist">
+              {rec.finance.recent.map((p, i) => (
+                <div className="gp-rlrow" key={i}><span className="ric" style={{ background: 'var(--success-light)', color: 'var(--success)' }}><i aria-hidden="true" className="fas fa-naira-sign" /></span>
+                  <div className="rbody"><div className="rtitle">{NGN(p.amount)}</div><div className="rsub">{p.date} · {p.method || '—'}</div></div>
+                  <span className="rval">{p.receipt || '—'}</span></div>
+              ))}
+            </div>
+          </div>}
+
+          {rec.discipline && rec.discipline.length > 0 && <div className="gp-sec">
+            <div className="gp-sec-head"><div className="ttl"><span className="gp-sec-ic w"><i aria-hidden="true" className="fas fa-gavel" /></span><h3>Discipline Records</h3></div></div>
+            <div className="gp-rowlist">
+              {rec.discipline.map((r, i) => (
+                <div className="gp-rlrow" key={i}><span className="ric"><i aria-hidden="true" className="fas fa-gavel" /></span>
+                  <div className="rbody"><div className="rtitle">{r.category}{r.severity ? ` · ${r.severity}` : ''}</div><div className="rsub">{r.date}{r.description ? ` — ${r.description}` : ''}</div></div>
+                  <span className="rval">{r.action || '—'}</span></div>
+              ))}
+            </div>
+          </div>}
+
+          <div className="gp-sec">
+            <div className="gp-sec-head"><div className="ttl"><span className="gp-sec-ic p"><i aria-hidden="true" className="fas fa-file-alt" /></span><h3>WAEC Results</h3></div>
+              {canWrite(d) && <a href={d.urls.add_waec} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add</a>}</div>
+            <div className="gp-sec-body">{d.waec_by_year.length ? d.waec_by_year.map((data, i) => (
+              <div className="gp-examblock" key={i}>
+                <div className="gp-examhead"><b>{data.exam_year}</b>{data.exam_number && <span className="muted">Exam No: {data.exam_number}</span>}</div>
+                <div className="subjects-grid" style={{ padding: '.85rem .95rem' }}>
+                  {data.subjects.map((r, j) => (
+                    <div className="subject-item" key={j}><span>{r.subject}</span><span className={'badge ' + (WAEC_GRADE_BADGE[r.grade] || 'badge-secondary')}>{r.grade}</span></div>))}
+                </div>
+              </div>
+            )) : <Empty icon="fa-file-alt" title=""><p>No WAEC results recorded</p>{canWrite(d) && <a href={d.urls.add_waec} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add WAEC Result</a>}</Empty>}</div>
+          </div>
+
+          <div className="gp-sec">
+            <div className="gp-sec-head"><div className="ttl"><span className="gp-sec-ic a"><i aria-hidden="true" className="fas fa-file-contract" /></span><h3>JAMB Results</h3></div>
+              {canWrite(d) && <a href={d.urls.add_jamb} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add</a>}</div>
+            <div className="gp-sec-body">{d.jamb_results.length ? d.jamb_results.map((j, i) => (
+              <div className="gp-examblock" key={i}>
+                <div className="gp-examhead"><b>{j.exam_year}</b>{j.registration_number && <span className="muted">Reg No: {j.registration_number}</span>}<span className="badge badge-primary">{j.total_score}</span></div>
+                <div className="subjects-grid" style={{ padding: '.85rem .95rem' }}>
+                  {j.subjects.map((sub, k) => (
+                    <div className="subject-item" key={k}><span>{sub.name}</span><strong>{sub.score}</strong></div>))}
+                </div>
+              </div>
+            )) : <Empty icon="fa-file-contract" title=""><p>No JAMB results recorded</p>{canWrite(d) && <a href={d.urls.add_jamb} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add JAMB Result</a>}</Empty>}</div>
+          </div>
+
+          {d.contacts.length > 0 && (
+            <div className="gp-sec">
+              <div className="gp-sec-head"><div className="ttl"><span className="gp-sec-ic g"><i aria-hidden="true" className="fas fa-phone" /></span><h3>Contact Information</h3></div></div>
+              <div className="gp-contacts">
+                {d.contacts.map((c, i) => (
+                  <div className="gp-contact" key={i}>
+                    <span className="cav">{(c.name || '?').split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase()}</span>
+                    <div><div className="cname">{c.name}</div><div className="crel">{c.relationship}</div></div>
+                    <span className="cphone">{c.phone}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+        </div>
+      </div>
     </>
   );
 }

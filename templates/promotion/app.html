@@ -19,13 +19,7 @@
 .profile-avatar{width:80px;height:80px;background:rgba(255,255,255,0.2);border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:2rem}
 .profile-info h1{margin:0 0 .25rem;font-size:1.5rem}.profile-info p{margin:0;opacity:.9}
 .subjects-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:.5rem}
-.subject-item{display:flex;justify-content:space-between;padding:.5rem;background:var(--bg-tertiary);border-radius:var(--radius-sm)}
-.grade-badge{font-weight:bold;padding:.25rem .5rem;border-radius:4px}
-.grade-A1,.grade-B2,.grade-B3{background:#c8e6c9;color:#2e7d32}
-.grade-C4,.grade-C5,.grade-C6{background:#fff9c4;color:#f57f17}
-.grade-D7,.grade-E8,.grade-F9{background:#ffcdd2;color:#c62828}
-.jamb-subjects{display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem}
-@media(max-width:600px){.jamb-subjects{grid-template-columns:1fr}}
+.subject-item{display:flex;justify-content:space-between;align-items:center;padding:.5rem .65rem;background:var(--gray-50);border-radius:var(--radius-sm)}
 
 /* Graduates list: photo when available, falling back to an initials tile —
    same visual language as the Students list's avatar (circular, tinted). */
@@ -44,6 +38,12 @@
 .grad-status.tone-primary{color:var(--primary-hover)}.grad-status.tone-primary .dot{background:var(--primary)}
 .grad-status.tone-success{color:#0f5132}.grad-status.tone-success .dot{background:var(--success)}
 .grad-status.tone-secondary{color:var(--text-secondary)}.grad-status.tone-secondary .dot{background:var(--gray-400)}
+/* These hand-picked tints follow the same light/dark pair the global
+   .badge-* classes already use (style.css ~L1615), so status text stays
+   readable across every selectable theme, not just the default one. */
+[data-theme="dark"] .grad-status.tone-warning,[data-theme="dark"] .grad-chip.warn{color:#fcd34d}
+[data-theme="dark"] .grad-status.tone-info{color:#7dd3fc}
+[data-theme="dark"] .grad-status.tone-success,[data-theme="dark"] .grad-res.on{color:#6ee7b7}
 
 /* WAEC/JAMB as icon pills instead of plain badges — grey + hollow circle
    when missing, green + check when uploaded, so the eye catches gaps fast. */
@@ -97,6 +97,125 @@
     color:#fff;border:none;border-radius:999px;padding:.95rem 1.3rem;box-shadow:0 10px 24px rgba(13,106,78,.35);
     align-items:center;gap:.55rem;font-weight:700;font-size:.86rem;text-decoration:none}
   .grad-list{padding-bottom:4.5rem}
+}
+
+/* ==========================================================================
+   Graduate profile page ("gp-" prefix). The hero above still uses the
+   shared .profile-hero/.ph-* system (also used by HR) — untouched here.
+   Everything below it is a two-column layout: a sticky rail (graduation
+   info, status update, portal access) + a main column for records, so a
+   long profile reads as a dashboard instead of one endless card stack.
+   Every color below is a CSS variable (or a token pair already mirrored in
+   style.css's [data-theme="dark"] block), so the page follows whichever of
+   the 13 selectable themes — light or dark-based — the user has chosen,
+   the same as the rest of the app.
+   ========================================================================== */
+.gp-grid{display:grid;grid-template-columns:320px 1fr;gap:1.25rem;align-items:start}
+.gp-rail{display:flex;flex-direction:column;gap:1.1rem;position:sticky;top:1.25rem}
+.gp-main{display:flex;flex-direction:column;gap:1.1rem;min-width:0}
+@media (max-width:980px){.gp-grid{grid-template-columns:1fr}.gp-rail{position:static}}
+
+.gp-sec{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);overflow:hidden}
+.gp-sec-head{display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:1.05rem 1.25rem;border-bottom:1px solid var(--border-light)}
+.gp-sec-head .ttl{display:flex;align-items:center;gap:.7rem;min-width:0}
+.gp-sec-ic{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:.92rem}
+.gp-sec-ic.p{background:var(--primary-light);color:var(--primary)}
+.gp-sec-ic.a{background:var(--accent-light);color:var(--accent)}
+.gp-sec-ic.i{background:var(--info-light);color:var(--info)}
+.gp-sec-ic.s{background:var(--success-light);color:var(--success)}
+.gp-sec-ic.w{background:var(--warning-light);color:var(--warning)}
+.gp-sec-ic.g{background:var(--gray-200);color:var(--text-secondary)}
+.gp-sec-head h3{margin:0;font-size:.96rem;font-weight:700;overflow-wrap:anywhere}
+.gp-sec-head .meta{font-size:.78rem;color:var(--text-muted);flex-shrink:0}
+.gp-sec-body{padding:1.15rem 1.25rem}
+
+.gp-qstats{display:grid;grid-template-columns:1fr 1fr;gap:.6rem;margin-bottom:.9rem}
+.gp-qstat{background:var(--gray-50);border:1px solid var(--border-light);border-radius:var(--radius-md);padding:.8rem .7rem;text-align:center}
+.gp-qstat b{display:block;font-family:var(--font-display);font-size:1.25rem;line-height:1.1}
+.gp-qstat span{font-size:.66rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.02em}
+.gp-kv{margin-bottom:.6rem}
+.gp-kv:last-child{margin-bottom:0}
+.gp-kv .k{font-size:.72rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.02em}
+.gp-kv .v{font-size:.86rem;font-weight:600;margin-top:.15rem}
+
+.gp-status-now{display:flex;align-items:center;gap:.5rem;padding:.7rem .85rem;background:var(--primary-light);border-radius:var(--radius-md);margin-bottom:.95rem}
+.gp-status-now .dot{width:8px;height:8px;border-radius:50%;background:var(--primary);flex-shrink:0}
+.gp-status-now b{font-size:.84rem;color:var(--primary-hover);overflow-wrap:anywhere}
+
+.gp-field{margin-bottom:.9rem}
+.gp-field:last-child{margin-bottom:0}
+.gp-field label{display:block;font-size:.78rem;font-weight:600;color:var(--text-secondary);margin-bottom:.4rem}
+.gp-ctrl{position:relative}
+.gp-ctrl i.gp-pre{position:absolute;left:.8rem;top:50%;transform:translateY(-50%);color:var(--text-muted);font-size:.82rem;pointer-events:none}
+.gp-ctrl .form-control{padding-left:2.1rem}
+
+.gp-rowlist{display:flex;flex-direction:column}
+.gp-rlrow{display:flex;align-items:center;gap:.85rem;padding:.8rem 1.25rem;border-bottom:1px solid var(--border-light)}
+.gp-rlrow:last-child{border-bottom:none}
+.gp-rlrow .ric{width:34px;height:34px;border-radius:999px;background:var(--gray-100);color:var(--text-secondary);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:.8rem}
+.gp-rlrow .rbody{flex:1;min-width:0}
+.gp-rlrow .rtitle{font-weight:600;font-size:.86rem;overflow-wrap:anywhere}
+.gp-rlrow .rsub{font-size:.76rem;color:var(--text-muted);margin-top:.1rem;overflow-wrap:anywhere}
+.gp-rlrow .rval{font-size:.82rem;color:var(--text-secondary);text-align:right;flex-shrink:0}
+.gp-rlrow .ractions{display:flex;gap:.4rem;flex-shrink:0}
+
+.gp-tl{padding:1.1rem 1.25rem}
+.gp-tlrow{display:flex;gap:.85rem;position:relative;padding-bottom:1.1rem}
+.gp-tlrow:last-child{padding-bottom:0}
+.gp-tlrow:not(:last-child)::before{content:'';position:absolute;left:5px;top:16px;bottom:-2px;width:1.5px;background:var(--border-color)}
+.gp-tldot{width:11px;height:11px;border-radius:50%;background:var(--primary);flex-shrink:0;margin-top:3px;box-shadow:0 0 0 3px var(--primary-light)}
+.gp-tldot.muted{background:var(--gray-400);box-shadow:0 0 0 3px var(--gray-200)}
+.gp-tlbody{flex:1;min-width:0}
+.gp-tlchange{font-size:.84rem;font-weight:600;overflow-wrap:anywhere}
+.gp-tlchange .arrow{color:var(--gray-400);margin:0 .35rem;font-weight:400}
+.gp-tlmeta{font-size:.76rem;color:var(--text-muted);margin-top:.2rem}
+
+.gp-doctiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:.85rem;padding:1.15rem 1.25rem}
+.gp-doctile{border:1px solid var(--border-color);border-radius:var(--radius-lg);overflow:hidden;display:flex;flex-direction:column}
+.gp-dt-ribbon{height:5px}
+.gp-dt-ribbon.issued{background:var(--success)}
+.gp-dt-ribbon.revoked{background:var(--danger)}
+.gp-dt-ribbon.none{background:var(--gray-300)}
+.gp-dt-body{padding:1rem;flex:1;display:flex;flex-direction:column;gap:.55rem}
+.gp-dt-top{display:flex;align-items:flex-start;justify-content:space-between;gap:.5rem}
+.gp-dt-ic{width:38px;height:38px;border-radius:10px;background:var(--primary-light);color:var(--primary);
+  display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0}
+.gp-dt-ic.off{background:var(--gray-200);color:var(--text-secondary)}
+.gp-dt-ic.danger{background:var(--danger-light);color:var(--danger)}
+.gp-dt-label{font-weight:700;font-size:.86rem;line-height:1.3;overflow-wrap:anywhere}
+.gp-dt-num{font-size:.75rem;color:var(--text-muted)}
+.gp-dt-verify{font-size:.74rem;color:var(--text-muted);display:flex;align-items:center;gap:.3rem;flex-wrap:wrap}
+.gp-dt-verify a{color:var(--primary)}
+.gp-dt-actions{display:flex;flex-direction:column;gap:.4rem;margin-top:auto;padding-top:.3rem}
+.gp-dt-actions .btn{width:100%}
+
+.gp-formgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:.85rem 1rem}
+@media (max-width:640px){.gp-formgrid{grid-template-columns:1fr}}
+.gp-chk{display:flex;align-items:center;gap:.55rem;padding:.7rem .85rem;background:var(--gray-50);border-radius:var(--radius-md);font-size:.84rem;font-weight:600;margin-bottom:1rem}
+.gp-chk input{width:17px;height:17px;accent-color:var(--primary)}
+
+.gp-examblock{border:1px solid var(--border-light);border-radius:var(--radius-md);margin-bottom:.8rem;overflow:hidden}
+.gp-examblock:last-child{margin-bottom:0}
+.gp-examhead{display:flex;align-items:center;justify-content:space-between;gap:.5rem;padding:.7rem .95rem;background:var(--gray-50);font-size:.84rem}
+.gp-examhead b{font-family:var(--font-display)}
+.gp-examhead .muted{color:var(--text-muted)}
+
+.gp-contacts{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.7rem;padding:1.15rem 1.25rem}
+.gp-contact{display:flex;align-items:center;gap:.7rem;border:1px solid var(--border-light);border-radius:var(--radius-md);padding:.75rem .85rem}
+.gp-contact .cav{width:38px;height:38px;border-radius:999px;background:var(--primary-light);color:var(--primary);
+  display:flex;align-items:center;justify-content:center;font-weight:700;font-size:.75rem;flex-shrink:0}
+.gp-contact .cname{font-weight:700;font-size:.84rem}
+.gp-contact .crel{font-size:.74rem;color:var(--text-muted)}
+.gp-contact .cphone{margin-left:auto;font-size:.78rem;color:var(--text-secondary);font-weight:600;white-space:nowrap}
+
+@media (max-width:759px){
+  .gp-doctiles{grid-template-columns:1fr 1fr;padding:1rem}
+  .gp-sec-head{padding:.9rem 1rem}
+  .gp-sec-body{padding:1rem}
+  .gp-rlrow{padding:.75rem 1rem}
+  .gp-tl{padding:1rem}
+  .gp-contacts{padding:1rem;grid-template-columns:1fr}
 }
 </style>
 {% endblock %}
