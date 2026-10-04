@@ -697,6 +697,11 @@
                         </a>
                     </li>
                     {% endif %}
+                    <li class="nav-item">
+                        <a href="{{ url_for('study_groups.index') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('study_groups.') %}active{% endif %}">
+                            <i class="fas fa-users"></i><span>Study Groups</span>
+                        </a>
+                    </li>
                     {% if can_access_module('website') %}
                     <li class="nav-item">
                         <a href="{{ url_for('website_admin.index') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('website_admin.') %}active{% endif %}">

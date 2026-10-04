@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}Study Groups - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>Tools</span> <span>Study Groups</span>{% endblock %}
+
+{% block extra_css %}
+<style>
+.sg-grid { display: grid; grid-template-columns: 1fr; gap: 1rem; }
+@media (min-width: 900px) { .sg-grid { grid-template-columns: 1.1fr .9fr; } }
+.sg-card { background: var(--bg-card); border: 1px solid #e0e0e0; border-radius: 10px; padding: 1rem; margin-bottom: 1rem; }
+.sg-card h3 { font-size: 1rem; margin: 0 0 .75rem 0; }
+.sg-field { margin-bottom: .9rem; }
+.sg-field label { display: block; font-size: .8rem; font-weight: 600; margin-bottom: .35rem; }
+.sg-field input, .sg-field select { width: 100%; padding: .55rem; border: 1px solid #ddd; border-radius: 6px; font-size: .9rem; }
+.arm-list { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .3rem; }
+.arm-item { display: flex; align-items: center; gap: .4rem; padding: .4rem .6rem; background: var(--gray-50); border: 1px solid #e5e7eb; border-radius: 8px; font-size: .85rem; }
+.arm-item .cnt { color: var(--text-muted); font-size: .75rem; }
+.muted { color: var(--text-muted); font-size: .8rem; }
+.sg-recent-row { display: flex; justify-content: space-between; align-items: center; padding: .55rem .2rem; border-bottom: 1px solid #f0f0f0; font-size: .85rem; }
+.sg-recent-row:last-child { border-bottom: none; }
+.sg-recent-row a { font-weight: 600; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem;margin-bottom:1rem;">
+  <div>
+    <h1 style="font-size:1.25rem;margin:0;"><i class="fas fa-users"></i> Study Groups</h1>
+    <p class="muted" style="margin:.25rem 0 0;">Group a class into study/project groups by last term's performance &mdash;
+      top performers lead each group. New students with no prior results are placed randomly.</p>
+  </div>
+</div>
+
+{% if not has_term %}
+  <div class="sg-card"><p class="muted" style="margin:0;">No active term is set. Set an active term first.</p></div>
+{% elif not classes %}
+  <div class="sg-card"><p class="muted" style="margin:0;">No classes with enrolled students were found for the active term in your branch.</p></div>
+{% else %}
+<div class="sg-grid">
+  <div class="sg-card">
+    <h3>New Grouping</h3>
+    <form method="POST" action="{{ url_for('study_groups.generate') }}">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <div class="sg-field">
+        <label>Class</label>
+        <select id="sgClassSelect" name="class_id" required>
+          <option value="" disabled selected>Choose a class&hellip;</option>
+          {% for c in classes %}
+          <option value="{{ c.id }}">{{ c.name }} ({{ c.total }} students)</option>
+          {% endfor %}
+        </select>
+      </div>
+
+      <div class="sg-field">
+        <label>Arm(s) <span class="muted">(pick 2+ to merge arms for this grouping only &mdash; it won't change where any student is actually enrolled)</span></label>
+        {% for c in classes %}
+        <div class="arm-list" data-class-arms="{{ c.id }}" style="display:none;">
+          {% for a in c.arms %}
+          <label class="arm-item">
+            <input type="checkbox" name="arm_ids[]" value="{{ a.id }}" class="sg-arm-box">
+            <span>{{ a.name }}</span>
+            <span class="cnt">{{ a.count }}</span>
+          </label>
+          {% endfor %}
+        </div>
+        {% endfor %}
+        <p class="muted" style="margin:.4rem 0 0;">Selected students: <strong id="sgSelCount">0</strong></p>
+      </div>
+
+      <div class="sg-field">
+        <label>Students per group</label>
+        <input type="number" name="group_size" min="1" max="100" value="4" required>
+      </div>
+
+      <div class="sg-field">
+        <label>Title <span class="muted">(optional)</span></label>
+        <input type="text" name="title" maxlength="150" placeholder="e.g. Term 2 Project Groups">
+      </div>
+
+      <button type="submit" class="btn btn-primary"><i class="fas fa-random"></i> Generate Groups</button>
+    </form>
+  </div>
+
+  <div class="sg-card">
+    <h3>Recent Group Sets</h3>
+    {% if recent %}
+    {% for r in recent %}
+    <div class="sg-recent-row">
+      <div>
+        <a href="{{ r.url }}">{{ r.title }}</a>
+        <div class="muted">{{ r.class_name }} &middot; {{ r.num_groups }} group(s) of {{ r.group_size }} &middot; {{ r.created_at }}</div>
+      </div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <p class="muted" style="margin:0;">No groups generated yet.</p>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var classSelect = document.getElementById('sgClassSelect');
+  var selCount = document.getElementById('sgSelCount');
+
+  function showArmsFor(classId) {
+    document.querySelectorAll('[data-class-arms]').forEach(function (div) {
+      var match = div.getAttribute('data-class-arms') === String(classId);
+      div.style.display = match ? 'flex' : 'none';
+      div.querySelectorAll('.sg-arm-box').forEach(function (b) { if (!match) b.checked = false; });
+    });
+    recount();
+  }
+
+  function recount() {
+    var total = 0;
+    document.querySelectorAll('.sg-arm-box:checked').forEach(function (b) {
+      var cnt = b.closest('.arm-item').querySelector('.cnt');
+      total += parseInt(cnt.textContent, 10) || 0;
+    });
+    selCount.textContent = total;
+  }
+
+  if (classSelect) {
+    classSelect.addEventListener('change', function () { showArmsFor(classSelect.value); });
+  }
+  document.querySelectorAll('.sg-arm-box').forEach(function (b) {
+    b.addEventListener('change', recount);
+  });
+})();
+</script>
+{% endblock %}

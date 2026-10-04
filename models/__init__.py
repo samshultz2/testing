@@ -57,6 +57,7 @@ from .models_graduate import (GraduateAudit, GRADUATE_STATUSES, RESTRICTED_STATU
                               AlumniProfile, DocumentRequest, DOC_REQUEST_STATUSES,
                               DocTemplatePref, DocumentVerification)
 from .models_waec_cert import WAECCertTemplate, WAECCertPreset, WAECCertIssue
+from .models_study_groups import GroupSet, StudentGroup, GroupMember
 from .models_jobs import BackgroundJob
 
 __all__ = [
