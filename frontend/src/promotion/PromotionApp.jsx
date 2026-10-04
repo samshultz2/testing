@@ -331,25 +331,53 @@ function Process({ d, notify }) {
   );
 }
 
+// Graduate lifecycle status -> badge color. Keeps the status column scannable
+// (everything was a flat "info" badge before) without needing a backend change.
+const GRAD_STATUS_BADGE = {
+  'Graduation Pending': 'badge-warning',
+  'Graduated': 'badge-info',
+  'Certificate Issued': 'badge-primary',
+  'Alumni Active': 'badge-success',
+  'Transcript Requested': 'badge-warning',
+  'Transcript Issued': 'badge-primary',
+  'Employment Verification Completed': 'badge-success',
+  'Further Education Recorded': 'badge-success',
+  'Alumni Ambassador': 'badge-success',
+  'Deceased': 'badge-secondary',
+};
+function gradInitials(name) {
+  const parts = (name || '').split(' ').filter(Boolean);
+  if (!parts.length) return '—';
+  return ((parts[0][0] || '') + (parts.length > 1 ? parts[parts.length - 1][0] : '')).toUpperCase();
+}
+
 // ---- Graduates -------------------------------------------------------------
 function Graduates({ d }) {
   const nav = useNav();
   const docTypes = d.doc_types || [];
   const [bulkType, setBulkType] = useState(docTypes.length ? docTypes[0].type : '');
   const [q, setQ] = useState('');
+  const [sortBy, setSortBy] = useState('name');
   const males = d.graduates.filter((g) => g.gender === 'Male').length;
   const females = d.graduates.filter((g) => g.gender === 'Female').length;
-  // Live search over the loaded graduates — matches name, student ID or session.
+  const noResults = d.graduates.filter((g) => !g.has_waec && !g.has_jamb).length;
+  const hasFilters = !!(d.session_id || d.status);
+  // Live search + client-side sort over the loaded graduates — matches name,
+  // student ID, session or status.
   const shown = useMemo(() => {
     const t = q.trim().toLowerCase();
-    if (!t) return d.graduates;
-    return d.graduates.filter((s) => (
+    const list = !t ? d.graduates.slice() : d.graduates.filter((s) => (
       `${s.full_name} ${s.student_id} ${s.graduation_session || ''} ${s.status || ''}`
     ).toLowerCase().includes(t));
-  }, [q, d.graduates]);
+    if (sortBy === 'name_desc') list.sort((a, b) => b.full_name.localeCompare(a.full_name));
+    else if (sortBy === 'status') list.sort((a, b) => (a.status || '').localeCompare(b.status || ''));
+    else list.sort((a, b) => a.full_name.localeCompare(b.full_name));
+    return list;
+  }, [q, d.graduates, sortBy]);
   const bulkHref = d.bulk_url && bulkType
     ? `${d.bulk_url}?doc_type=${encodeURIComponent(bulkType)}${d.session_id ? `&session_id=${d.session_id}` : ''}${d.status ? `&status=${encodeURIComponent(d.status)}` : ''}`
     : null;
+  const clearFilters = () => navParams(nav.go, window.location.pathname, {});
   return (
     <>
       <PageHeader title="Graduates" actions={<>
@@ -359,42 +387,70 @@ function Graduates({ d }) {
         {d.compare_url && <a href={d.compare_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-chart-column" /> Compare with SSS3</a>}
         {canWrite(d) && <a href={d.preview_url} className="btn btn-success"><i aria-hidden="true" className="fas fa-user-graduate" /> Graduate current SSS3</a>}
       </>} />
-      <div className="card mb-3"><div className="card-body"><div className="filter-form">
-        <div className="form-group" style={{ flex: '1 1 240px' }}><label className="form-label">Search graduates</label>
-          <div className="enroll-search"><i aria-hidden="true" className="fas fa-search" />
-            <input type="search" className="form-control" placeholder="Name or student ID…" autoComplete="off"
-              value={q} onChange={(e) => setQ(e.target.value)} /></div></div>
-        <div className="form-group"><label className="form-label">Graduation Session</label>
-          <select className="form-control" value={d.session_id} onChange={(e) => navParams(nav.go, window.location.pathname, { session_id: e.target.value, status: d.status || '' })}>
-            <option value="">All Sessions</option>{d.sessions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
-        <div className="form-group"><label className="form-label">Status</label>
-          <select className="form-control" value={d.status || ''} onChange={(e) => navParams(nav.go, window.location.pathname, { session_id: d.session_id || '', status: e.target.value })}>
-            <option value="">All Statuses</option>{(d.statuses || []).map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
-      </div></div></div>
+
+      <div className="stats-grid mb-3">
+        <div className="stat-card"><div className="stat-icon success"><i aria-hidden="true" className="fas fa-graduation-cap" /></div><div className="stat-content"><h3>{d.graduates.length}</h3><p>Total Graduates</p></div></div>
+        <div className="stat-card"><div className="stat-icon info"><i aria-hidden="true" className="fas fa-mars" /></div><div className="stat-content"><h3>{males}</h3><p>Male</p></div></div>
+        <div className="stat-card"><div className="stat-icon secondary"><i aria-hidden="true" className="fas fa-venus" /></div><div className="stat-content"><h3>{females}</h3><p>Female</p></div></div>
+        <div className="stat-card"><div className="stat-icon warning"><i aria-hidden="true" className="fas fa-file-circle-question" /></div><div className="stat-content"><h3>{noResults}</h3><p>No results uploaded</p></div></div>
+      </div>
+
       {d.graduates.length ? (<>
-        <div className="stats-grid mb-3">
-          <div className="stat-card"><div className="stat-icon success"><i aria-hidden="true" className="fas fa-graduation-cap" /></div><div className="stat-content"><h3>{d.graduates.length}</h3><p>Total Graduates</p></div></div>
-          <div className="stat-card"><div className="stat-icon info"><i aria-hidden="true" className="fas fa-male" /></div><div className="stat-content"><h3>{males}</h3><p>Male</p></div></div>
-          <div className="stat-card"><div className="stat-icon secondary"><i aria-hidden="true" className="fas fa-female" /></div><div className="stat-content"><h3>{females}</h3><p>Female</p></div></div>
+        <div className="card mb-3"><div className="card-body"><div className="filter-form">
+          <div className="form-group" style={{ flex: '2 1 240px' }}><label className="form-label">Search graduates</label>
+            <div className="enroll-search"><i aria-hidden="true" className="fas fa-search" />
+              <input type="search" className="form-control" placeholder="Name, student ID, session or status…" autoComplete="off"
+                value={q} onChange={(e) => setQ(e.target.value)} /></div></div>
+          <div className="form-group" style={{ flex: '1 1 180px' }}><label className="form-label">Graduation Session</label>
+            <select className="form-control" value={d.session_id} onChange={(e) => navParams(nav.go, window.location.pathname, { session_id: e.target.value, status: d.status || '' })}>
+              <option value="">All Sessions</option>{d.sessions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
+          <div className="form-group" style={{ flex: '1 1 180px' }}><label className="form-label">Status</label>
+            <select className="form-control" value={d.status || ''} onChange={(e) => navParams(nav.go, window.location.pathname, { session_id: d.session_id || '', status: e.target.value })}>
+              <option value="">All Statuses</option>{(d.statuses || []).map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
+          <div className="form-group" style={{ flex: '1 1 160px' }}><label className="form-label">Sort by</label>
+            <select className="form-control" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+              <option value="name">Name (A–Z)</option><option value="name_desc">Name (Z–A)</option><option value="status">Status</option></select></div>
+          {hasFilters && <div className="form-group" style={{ flex: '0 0 auto', alignSelf: 'flex-end' }}>
+            <button type="button" className="btn btn-secondary" onClick={clearFilters}><i aria-hidden="true" className="fas fa-rotate-left" /> Clear filters</button></div>}
+        </div></div></div>
+
+        <div className="card"><div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '.5rem' }}>
+          <h3>Graduates ({shown.length}{shown.length !== d.graduates.length ? ` of ${d.graduates.length}` : ''})</h3>
+          {canWrite(d) && docTypes.length > 0 && d.bulk_url && <div style={{ display: 'flex', gap: '.4rem', alignItems: 'center', flexWrap: 'wrap', maxWidth: '100%' }}>
+            <select className="form-control" style={{ width: 'auto', maxWidth: '220px' }} value={bulkType} onChange={(e) => setBulkType(e.target.value)}>
+              {docTypes.map((t) => <option key={t.type} value={t.type}>{t.label}</option>)}</select>
+            <a href={bulkHref} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-file-zipper" /> Bulk issue</a>
+          </div>}
         </div>
-        <div className="card"><div className="card-header"><h3>Graduates ({shown.length}{shown.length !== d.graduates.length ? ` of ${d.graduates.length}` : ''})</h3></div>
           <div className="card-body" style={{ padding: 0 }}><div className="data-cards" style={{ padding: '1rem' }}>
-            {shown.length === 0 && <p className="text-muted text-center" style={{ padding: '1rem', gridColumn: '1 / -1' }}>No graduates match “{q}”.</p>}
+            {shown.length === 0 && <div style={{ gridColumn: '1 / -1' }}><Empty icon="fa-magnifying-glass" title="No matches">
+              <p>No graduates match “{q}”.</p></Empty></div>}
             {shown.map((s) => (
               <div className="data-card" key={s.id}>
-                <div className="data-card-header"><div className="data-card-title">{s.full_name}</div><span className="badge badge-info">{s.status || 'Graduated'}</span></div>
-                <div className="data-card-row"><span className="data-card-label">ID</span><span>{s.student_id}</span></div>
-                <div className="data-card-row"><span className="data-card-label">Gender</span><span>{s.gender}</span></div>
+                <div className="data-card-header" style={{ flexWrap: 'wrap', rowGap: '.4rem' }}>
+                  <div className="data-card-title" style={{ display: 'flex', alignItems: 'center', gap: '.55rem', minWidth: 0 }}>
+                    <span className="grad-av" aria-hidden="true">{gradInitials(s.full_name)}</span>
+                    <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{s.full_name}<br /><span className="text-muted text-sm" style={{ fontWeight: 400 }}>{s.student_id}</span></span>
+                  </div>
+                  <span className={'badge ' + (GRAD_STATUS_BADGE[s.status] || 'badge-info')} style={{ whiteSpace: 'normal', textAlign: 'right' }}>{s.status || 'Graduated'}</span>
+                </div>
+                <div className="data-card-row"><span className="data-card-label">Gender</span>
+                  <span><i aria-hidden="true" className={'fas ' + (s.gender === 'Male' ? 'fa-mars' : 'fa-venus')} /> {s.gender}</span></div>
                 {s.graduation_date && <div className="data-card-row"><span className="data-card-label">Graduated</span><span>{s.graduation_date}</span></div>}
                 {s.graduation_session && <div className="data-card-row"><span className="data-card-label">Session</span><span>{s.graduation_session}</span></div>}
-                <div className="data-card-row"><span className="data-card-label">Results</span><span>
-                  {s.has_waec && <span className="badge badge-info">WAEC</span>} {s.has_jamb && <span className="badge badge-primary">JAMB</span>}</span></div>
+                <div className="data-card-row"><span className="data-card-label">Results</span>
+                  <span style={{ display: 'flex', flexWrap: 'wrap', gap: '.3rem', justifyContent: 'flex-end' }}>
+                    {s.has_waec ? <span className="badge badge-info">WAEC</span> : <span className="badge badge-secondary">No WAEC</span>}
+                    {s.has_jamb ? <span className="badge badge-primary">JAMB</span> : <span className="badge badge-secondary">No JAMB</span>}
+                  </span></div>
                 <div className="data-card-actions"><a href={s.profile_url} className="btn btn-primary btn-sm w-100"><i aria-hidden="true" className="fas fa-eye" /> View Profile</a></div>
               </div>
             ))}
           </div></div></div>
       </>) : <div className="card"><div className="card-body"><Empty icon="fa-graduation-cap" title="No Graduates">
-        <p>{d.session_id ? 'No graduates found for this session' : 'No students have been marked as graduated yet'}</p></Empty></div></div>}
+        <p>{hasFilters ? 'No graduates match the current filters.' : 'No students have been marked as graduated yet.'}</p>
+        {hasFilters && <div className="empty-state-actions"><button type="button" className="btn btn-secondary" onClick={clearFilters}><i aria-hidden="true" className="fas fa-rotate-left" /> Clear filters</button></div>}
+      </Empty></div></div>}
     </>
   );
 }

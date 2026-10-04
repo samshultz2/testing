@@ -1195,6 +1195,7 @@ img {
 .stat-icon.info { background: var(--info-light); color: var(--info); }
 .stat-icon.warning { background: var(--warning-light); color: var(--warning); }
 .stat-icon.danger { background: var(--danger-light); color: var(--danger); }
+.stat-icon.secondary { background: var(--gray-200); color: var(--text-secondary); }
 
 .stat-content {
     flex: 1;

@@ -26,6 +26,13 @@
 .grade-D7,.grade-E8,.grade-F9{background:#ffcdd2;color:#c62828}
 .jamb-subjects{display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem}
 @media(max-width:600px){.jamb-subjects{grid-template-columns:1fr}}
+
+/* Graduates list: a small initials tile beside each name, same visual
+   language as the Students list's avatar (circular, tinted, bold). */
+.grad-av{display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;
+  width:36px;height:36px;border-radius:var(--radius-full);font-weight:700;font-size:.78rem;
+  letter-spacing:.02em;color:var(--primary);background:color-mix(in srgb,var(--primary) 14%,var(--bg-card));
+  border:1px solid var(--border-color)}
 </style>
 {% endblock %}
 {% block content %}
