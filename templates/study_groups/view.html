@@ -20,6 +20,18 @@
 .sg-leader-btn { font-size: .68rem; background: none; border: 1px solid #ddd; border-radius: 4px; padding: .05rem .3rem; cursor: pointer; }
 .sg-meta { color: var(--text-muted); font-size: .85rem; margin-bottom: .8rem; }
 .sg-actions { display: flex; gap: .5rem; flex-wrap: wrap; margin-bottom: .9rem; }
+@media (max-width: 768px) {
+  .sg-export-btn .btn-label {
+    position: absolute !important;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .sg-export-btn { padding-left: .65rem; padding-right: .65rem; }
+}
 </style>
 {% endblock %}
 
@@ -38,9 +50,15 @@
 </p>
 
 <div class="sg-actions">
-  <button type="button" class="btn btn-secondary btn-sm" id="sgExportPng"><i class="fas fa-image"></i> Export HD Image</button>
-  <a class="btn btn-secondary btn-sm" href="{{ data.urls.pdf }}"><i class="fas fa-file-pdf"></i> Export PDF</a>
-  <a class="btn btn-secondary btn-sm" href="{{ data.urls.xlsx }}"><i class="fas fa-file-excel"></i> Export Excel</a>
+  <button type="button" class="btn btn-secondary btn-sm sg-export-btn" id="sgExportPng" aria-label="Export HD Image">
+    <i class="fas fa-image"></i> <span class="btn-label">Export HD Image</span>
+  </button>
+  <a class="btn btn-secondary btn-sm sg-export-btn" href="{{ data.urls.pdf }}" aria-label="Export PDF">
+    <i class="fas fa-file-pdf"></i> <span class="btn-label">Export PDF</span>
+  </a>
+  <a class="btn btn-secondary btn-sm sg-export-btn" href="{{ data.urls.xlsx }}" aria-label="Export Excel">
+    <i class="fas fa-file-excel"></i> <span class="btn-label">Export Excel</span>
+  </a>
   <form method="POST" action="{{ data.urls.delete }}" style="display:inline;"
         data-confirm="Delete this group set? This cannot be undone.">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
