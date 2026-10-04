@@ -277,6 +277,31 @@ def test_rename_group(app):
         assert db.session.get(StudentGroup, group_id).label == 'The Eagles'
 
 
+def test_rename_set(app):
+    built = _build_class(app, num_students=4, arms=1)
+    c = _scoped_to_branch(_admin(app), built['bid'])
+    _post(c, '/tools/study-groups/generate', class_id=built['class_id'],
+         **{'arm_ids[]': built['arm_ids']}, group_size='4')
+    with app.app_context():
+        gs = GroupSet.query.filter_by(class_id=built['class_id']).first()
+        set_id = gs.id
+
+    r = c.post(f'/tools/study-groups/{set_id}/rename-set',
+              data={'_csrf_token': 'a' * 64, 'title': 'Term 2 Project Groups'},
+              headers={'X-Requested-With': 'fetch'})
+    assert r.status_code == 200 and r.get_json()['title'] == 'Term 2 Project Groups'
+    with app.app_context():
+        assert db.session.get(GroupSet, set_id).title == 'Term 2 Project Groups'
+
+    # blank clears back to the "Set #N" fallback (None, not an empty string)
+    r2 = c.post(f'/tools/study-groups/{set_id}/rename-set',
+               data={'_csrf_token': 'a' * 64, 'title': '  '},
+               headers={'X-Requested-With': 'fetch'})
+    assert r2.status_code == 200 and r2.get_json()['title'] is None
+    with app.app_context():
+        assert db.session.get(GroupSet, set_id).title is None
+
+
 def test_view_page_renders(app):
     built = _build_class(app, num_students=5, arms=1)
     c = _scoped_to_branch(_admin(app), built['bid'])
@@ -307,6 +332,12 @@ def test_export_pdf_and_xlsx(app):
     rg = c.get(f'/tools/study-groups/{set_id}/export.png')
     assert rg.status_code == 200 and rg.data[:8] == b'\x89PNG\r\n\x1a\n'
     assert len(rg.data) > 1000
+    import io
+    from PIL import Image
+    img = Image.open(io.BytesIO(rg.data))
+    # fixed A4-landscape canvas regardless of roster size -- the export always
+    # fits on one page; only its internal font/spacing scale adapts
+    assert img.size == (1754, 1240)
 
 
 def test_delete_set_removes_groups_and_members(app):

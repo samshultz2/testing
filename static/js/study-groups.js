@@ -1,6 +1,7 @@
 /* Study Groups board: render groups from the embedded JSON, let an admin
  * drag a student card into another group (or use the "Move to" dropdown --
- * same action, just without drag), pick a new leader, and rename a group.
+ * same action, just without drag), pick a new leader, rename a group, and
+ * rename the set itself (the page heading).
  * HD image / PDF / Excel exports are plain links to server-rendered files
  * (see routes/study_groups.py + utils/study_groups_export.py). */
 (function () {
@@ -132,4 +133,18 @@
   }
 
   render();
+
+  var titleInput = document.getElementById('sgSetTitle');
+  if (titleInput) {
+    titleInput.addEventListener('change', function () {
+      post(DATA.urls.rename_set, { title: titleInput.value }).then(function (res) {
+        if (res.ok) {
+          DATA.title = res.title;
+          titleInput.value = res.title || '';
+        } else {
+          alert(res.error || 'Could not rename set.');
+        }
+      });
+    });
+  }
 })();

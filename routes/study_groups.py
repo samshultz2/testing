@@ -89,6 +89,7 @@ def _set_payload(gs):
             'move': url_for('study_groups.move_member', set_id=gs.id),
             'leader': url_for('study_groups.set_group_leader', set_id=gs.id),
             'rename': url_for('study_groups.rename_group', set_id=gs.id),
+            'rename_set': url_for('study_groups.rename_set', set_id=gs.id),
             'pdf': url_for('study_groups.export_pdf', set_id=gs.id),
             'xlsx': url_for('study_groups.export_xlsx', set_id=gs.id),
             'png': url_for('study_groups.export_png', set_id=gs.id),
@@ -206,6 +207,19 @@ def rename_group(set_id):
     group.label = label or None
     db.session.commit()
     return jsonify(ok=True, label=group.display_label)
+
+
+@study_groups_bp.route('/<int:set_id>/rename-set', methods=['POST'])
+@login_required
+def rename_set(set_id):
+    gs = _set_or_404(set_id)
+    title = (request.form.get('title') or '').strip()[:120]
+    gs.title = title or None
+    db.session.commit()
+    if request.headers.get('X-Requested-With') == 'fetch':
+        return jsonify(ok=True, title=gs.title)
+    flash('Group set renamed.', 'success')
+    return redirect(url_for('study_groups.view_set', set_id=set_id))
 
 
 @study_groups_bp.route('/<int:set_id>/delete', methods=['POST'])

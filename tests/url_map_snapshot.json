@@ -7110,6 +7110,13 @@
 ]
 ],
 [
+"study_groups.rename_set",
+"/tools/study-groups/<int:set_id>/rename-set",
+[
+"POST"
+]
+],
+[
 "study_groups.set_group_leader",
 "/tools/study-groups/<int:set_id>/leader",
 [
