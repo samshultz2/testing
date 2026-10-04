@@ -189,9 +189,11 @@ def diagnose_infeasibility(class_arms, requirements, teachers, teacher_reqs, tea
                 reasons.append(
                     f"Day-separation default: {class_name} {arm} needs {info['name']} on every "
                     f"school day ({count} periods/week across {num_days} days), which makes it "
-                    f"impossible to also keep it off {day_a_name} and {day_b_name} together — "
-                    f"exempt {info['name']} from the day-separation rule under Subject Settings, "
-                    f"or turn the rule off under Timetable Rules.")
+                    f"impossible to also keep it off {day_a_name} and {day_b_name} together — add a "
+                    f"per-class exception exempting {info['name']} for {class_name} under "
+                    f"\"Day-Separation: Per-Class Exceptions\" on the Rules page (this is the one "
+                    f"class that can't honour it, not necessarily every class taking the subject), "
+                    f"or turn the whole rule off under Timetable Rules.")
 
     # Period-placement rules with a NARROW window (fixed, or a range as tight
     # as a single period) allow at most one occurrence per day within that
@@ -228,12 +230,100 @@ def diagnose_infeasibility(class_arms, requirements, teachers, teacher_reqs, tea
     return reasons
 
 
+# Gunicorn's worker timeout (see gunicorn.conf.py) is 120s and the main solve
+# is already allowed up to Config.SOLVER_MAX_SECONDS (90s by default), so a
+# failed run can arrive here with very little margin left. These two caps
+# keep probing from ever pushing a request past that: PROBE_TOTAL_BUDGET_CAP
+# is the most probing is ever allowed to add, and PROBE_SAFETY_MARGIN is how
+# much of the 120s ceiling is reserved (model rebuilds, response handling)
+# before any of that budget is spent at all.
+PROBE_TOTAL_BUDGET_CAP = 15
+PROBE_SAFETY_MARGIN = 35
+PROBE_MAX_CANDIDATES = 6
+
+
+def _probe_day_separation_class_exemptions(class_ids, periods_per_day, break_after, first_period_no_repeat,
+                                           day_separation_default_enabled, day_separation_default_day_a,
+                                           day_separation_default_day_b, candidate_classes, elapsed_so_far):
+    """Called only when a run fails for reasons diagnose_infeasibility() couldn't
+    pin on a single provable cause, and the day-separation default actually
+    added constraints for some class. Rather than leaving the admin to
+    guess-and-check per-class exceptions through the Rules page one at a time
+    (as reported: turning the default on for a subject failed, but exempting
+    it for just one class and keeping it for the rest worked), try that same
+    thing here -- temporarily exempt one whole class at a time from the
+    default and re-solve with a short time limit, to say up front which
+    exemption(s) would actually fix it.
+
+    Bounded hard: this only runs after the main solve already used however
+    much of its own time budget, and gunicorn's worker timeout doesn't care
+    why a request is slow. See the PROBE_* constants above."""
+    budget = min(PROBE_TOTAL_BUDGET_CAP, max(0, PROBE_SAFETY_MARGIN - elapsed_so_far))
+    # Deterministic order, capped so a school with many classes doesn't blow
+    # the time budget on one class at a time -- not a ranking by likelihood.
+    candidates = sorted(candidate_classes)[:PROBE_MAX_CANDIDATES]
+    if budget < 3:
+        return ('Not enough time left in this run to automatically test which class exemption would '
+                'fix this — add a per-class exception for one class at a time under "Day-Separation: '
+                'Per-Class Exceptions" on the Rules page and re-generate to check directly.')
+
+    per_probe = max(3, budget // len(candidates))
+    fixes = []
+    tried = []
+    for class_name in candidates:
+        if budget < 3:
+            break
+        probe_start = time.time()
+        try:
+            probe_result = generate_with_ortools(
+                class_ids, periods_per_day, time_limit=min(per_probe, budget), break_after=break_after,
+                first_period_no_repeat=first_period_no_repeat,
+                day_separation_default_enabled=day_separation_default_enabled,
+                day_separation_default_day_a=day_separation_default_day_a,
+                day_separation_default_day_b=day_separation_default_day_b,
+                extra_day_sep_class_exempt={class_name}, _day_sep_probe=True)
+        except Exception:
+            probe_result = {'success': False}
+        budget -= (time.time() - probe_start)
+        tried.append(class_name)
+        if probe_result.get('success'):
+            fixes.append(class_name)
+
+    if fixes:
+        return (
+            'Tried exempting one class at a time from the day-separation default to find a fix: '
+            'exempting ' + '; '.join(fixes) + ' on its own would make this solvable — add that as a '
+            'per-class exception under "Day-Separation: Per-Class Exceptions" on the Rules page and '
+            're-generate.')
+    return (
+        'Tried exempting each affected class from the day-separation default one at a time '
+        f'({", ".join(tried)}' + (', within the time available' if len(tried) < len(candidates) else '') +
+        '), but none alone fixed it — the conflict likely needs more than one exemption, or a '
+        'different change (fewer periods/week for the subject, more teacher availability, or turning '
+        'the rule off for now).')
+
+
 def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_after=4,
                           first_period_no_repeat=True, day_separation_default_enabled=True,
-                          day_separation_default_day_a=0, day_separation_default_day_b=4):
+                          day_separation_default_day_a=0, day_separation_default_day_b=4,
+                          day_sep_auto_probe=True,
+                          extra_day_sep_class_exempt=None, _day_sep_probe=False):
     """
     Generate timetable using OR-Tools constraint programming solver.
+
+    `day_sep_auto_probe` (Rules page: "If generation fails, automatically
+    test which class exemption would fix it") gates the probe step below --
+    when off, a failed run skips straight to its message with no extra
+    re-solving.
+
+    `extra_day_sep_class_exempt`, if given, is a set of class names to force
+    exempt from the day-separation default on top of whatever the Rules page
+    already has configured -- used internally to probe "would exempting this
+    one class make the run solvable?" without the caller having to actually
+    save that exception first. `_day_sep_probe` marks a call as one of those
+    probes, so it skips running the probe step itself (no recursion).
     """
+    _start_time = time.time()
     if not check_ortools_available():
         return {'success': False, 'message': 'OR-Tools not installed'}
     
@@ -456,6 +546,14 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
     )
     class_overrides = {(class_name, subject_id): exempt
                        for subject_id, exempt, class_name in class_override_rows}
+    if extra_day_sep_class_exempt:
+        # Probe-only override (see generate_with_ortools's docstring): force
+        # exempt for every subject this class actually teaches, regardless
+        # of what's saved on the Rules page -- it never writes to the DB.
+        for key in subject_ca_reqs:
+            class_name, _arm, subject_id = key
+            if class_name in extra_day_sep_class_exempt:
+                class_overrides[(class_name, subject_id)] = True
     day_separation_default = {
         'enabled': bool(day_separation_default_enabled),
         'day_a': day_separation_default_day_a,
@@ -1006,6 +1104,7 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
     # Scheduling Constraints) — opt-in per subject, with a per-class
     # exception on top, both picked from the Rules page itself.
     day_sep_default_count = 0
+    day_sep_default_classes = set()
     if day_separation_default['enabled']:
         def_day_a_slots = [day_separation_default['day_a'] * num_periods + p for p in range(num_periods)]
         def_day_b_slots = [day_separation_default['day_b'] * num_periods + p for p in range(num_periods)]
@@ -1015,6 +1114,7 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
                 continue
             _add_day_separation(reqs, def_day_a_slots, def_day_b_slots, f'def_{class_name}_{arm}_{subject_id}')
             day_sep_default_count += 1
+            day_sep_default_classes.add(class_name)
     logger.debug(f"  Added {day_sep_default_count} default day-separation constraints")
 
     # Constraint 13c: Period-placement rules — controls where a subject can
@@ -1240,6 +1340,17 @@ def generate_with_ortools(class_ids, periods_per_day, time_limit=300, break_afte
             reason += ' Try increasing periods_per_day (more slots gives the solver more room to ' \
                       'spread everyone out), or assigning some subjects to additional teachers ' \
                       'instead of one teacher covering every arm.'
+
+        if (day_sep_auto_probe and not _day_sep_probe
+                and day_separation_default.get('enabled') and day_sep_default_classes):
+            reason += ' ' + _probe_day_separation_class_exemptions(
+                class_ids=class_ids, periods_per_day=periods_per_day, break_after=break_after,
+                first_period_no_repeat=first_period_no_repeat,
+                day_separation_default_enabled=day_separation_default_enabled,
+                day_separation_default_day_a=day_separation_default_day_a,
+                day_separation_default_day_b=day_separation_default_day_b,
+                candidate_classes=day_sep_default_classes,
+                elapsed_so_far=time.time() - _start_time)
 
         return {'success': False, 'message': f'No solution found. Status: {solver.StatusName(status)}',
                'reasons': [reason]}

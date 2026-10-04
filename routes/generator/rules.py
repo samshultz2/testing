@@ -68,6 +68,8 @@ def save_rules():
             ('day_separation_enabled', 'true' if request.form.get('day_separation_enabled') == 'on' else 'false'),
             ('day_separation_day_a', request.form.get('day_separation_day_a', '0')),
             ('day_separation_day_b', request.form.get('day_separation_day_b', '4')),
+            ('day_separation_auto_probe',
+             'true' if request.form.get('day_separation_auto_probe') == 'on' else 'false'),
         ]
         
         for rule_type, value in rules_to_save:

@@ -148,6 +148,20 @@ switch level in the menu to configure the other.</p>
                     </div>
                 </div>
                 {% endif %}
+                <div class="mt-2">
+                    <label class="checkbox-label">
+                        <input type="checkbox" name="day_separation_auto_probe"
+                               {% if rules.get('day_separation_auto_probe', 'true') == 'true' %}checked{% endif %}>
+                        <span>If generation fails, automatically test which class exemption would fix it</span>
+                    </label>
+                    <span class="form-hint">When a run fails for a reason that isn't a single obvious cause,
+                        re-try it with one class at a time temporarily exempted from this rule (short re-solve
+                        each) and report which exemption, if any, would actually make it solvable — e.g.
+                        "exempting Accounting for SSS1 would work" — instead of you finding that out by
+                        trial and error through Per-Class Exceptions above. Adds extra time to a failed run
+                        (a handful of seconds per class checked); turn it off if you'd rather generation fail
+                        fast and diagnose it yourself.</span>
+                </div>
             </div>
 
             <div class="form-group">
