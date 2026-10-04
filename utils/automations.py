@@ -45,6 +45,10 @@ REGISTRY = [
      "Post an in-app notification when a staff member is added, updated or removed "
      "— naming whose record, what field changed and who did it.",
      'HR', True),
+    ('leave_requested', 'Leave request submitted',
+     "Alert the branch's admins when a staff member's leave request is recorded "
+     "and needs review.",
+     'HR', True),
     ('library_overdue', 'Library overdue reminders',
      "Once a day, alert admins about overdue library books and draft a reminder to "
      "the borrowers' parents for review.",
@@ -60,6 +64,10 @@ REGISTRY = [
      "Once a day, bell admins and Sales & Inventory staff about products expiring "
      "within 30 days (or already expired).",
      'Sales', False),
+    ('generation_result', 'Timetable generation result',
+     "Post an in-app notification when a timetable generation run succeeds or "
+     "fails, so it's not lost if the flash message is missed.",
+     'Generator', True),
 ]
 
 _DEFAULTS = {k: d for k, _l, _desc, _cat, d in REGISTRY}

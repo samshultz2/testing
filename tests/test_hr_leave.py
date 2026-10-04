@@ -102,6 +102,81 @@ def test_approve_notifies_linked_staff_user(app):
         assert after >= 1
 
 
+def test_add_leave_notifies_branch_admins(app):
+    """Submitting a leave request should alert admins (branch-scoped, same
+    pattern as notify_staff_change) so it doesn't sit unseen as Pending.
+    notify_branch_admins() addresses real admin User rows individually (not
+    a role broadcast) when a branch_id is given, so one must exist for this
+    branch for a notification to land at all -- see notify_staff_change's
+    own tests for the same requirement."""
+    with app.app_context():
+        from models import Branch
+        b = Branch(name='ZzLeaveNotifyBranch', code=None)
+        db.session.add(b); db.session.flush()
+        bid = b.id
+        admin_u = User(username='zzleaveadmin', full_name='Branch Admin', role='admin',
+                      branch_id=bid, password_hash='x', is_active=True)
+        db.session.add(admin_u); db.session.flush()
+        admin_uid = admin_u.id
+        s = StaffMember(staff_id='LVNOTADM1', first_name='Needs', surname='Zzapproval',
+                        branch_id=bid, is_active=True)
+        db.session.add(s); db.session.commit()
+        sid = s.id
+    client = _admin(app)
+    tok = _ptoken(client)
+    start = date.today() + timedelta(days=10)
+    end = start + timedelta(days=2)
+    r = client.post('/hr/leave/add', headers={'X-Requested-With': 'fetch'},
+                    data={'staff_id': str(sid), 'leave_type': 'Annual',
+                          'start_date': start.isoformat(), 'end_date': end.isoformat(),
+                          '_csrf_token': tok}).get_json()
+    assert r['ok']
+    with app.app_context():
+        lv = LeaveRecord.query.filter_by(staff_id=sid).first()
+        assert lv is not None and lv.status == 'Pending'
+        notes = Notification.query.filter(
+            Notification.title == 'Leave request submitted', Notification.user_id == admin_uid).all()
+        # StaffMember.full_name is "surname first_name" (see the model property).
+        assert any('Zzapproval Needs' in (n.body or '') and 'LVNOTADM1' in (n.body or '')
+                  for n in notes)
+
+
+def test_disabling_leave_requested_automation_skips_notification(app):
+    with app.app_context():
+        from models import Branch
+        from utils import automations
+        automations.set_enabled('leave_requested', False)
+        b = Branch(name='ZzLeaveNotifyOffBranch', code=None)
+        db.session.add(b); db.session.flush()
+        bid = b.id
+        # An admin who WOULD be notified if the toggle were on -- proves the
+        # absence of a notification is the toggle, not just no recipient.
+        db.session.add(User(username='zzleaveadminoff', full_name='Branch Admin Off',
+                            role='admin', branch_id=bid, password_hash='x', is_active=True))
+        s = StaffMember(staff_id='LVNOTOFF1', first_name='Quiet', surname='Zzrequest',
+                        branch_id=bid, is_active=True)
+        db.session.add(s); db.session.commit()
+        sid = s.id
+    try:
+        client = _admin(app)
+        tok = _ptoken(client)
+        start = date.today() + timedelta(days=12)
+        r = client.post('/hr/leave/add', headers={'X-Requested-With': 'fetch'},
+                        data={'staff_id': str(sid), 'leave_type': 'Casual',
+                              'start_date': start.isoformat(), 'end_date': start.isoformat(),
+                              '_csrf_token': tok}).get_json()
+        assert r['ok']
+        with app.app_context():
+            notes = Notification.query.filter(
+                Notification.title == 'Leave request submitted',
+                Notification.body.like('%Zzrequest Quiet%')).all()
+            assert not notes
+    finally:
+        with app.app_context():
+            from utils import automations
+            automations.set_enabled('leave_requested', True)
+
+
 def test_profile_exposes_leave_balances(app):
     with app.app_context():
         s = StaffMember(staff_id='LVPRO1', first_name='Pro', surname='Zzbal', is_active=True)

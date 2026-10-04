@@ -981,11 +981,25 @@ def add_leave():
     end = _d(request.form.get('end_date'))
     if not (staff_id and start and end) or end < start:
         return _err('Select a staff member and a valid date range.', url_for('hr.leave_list'))
-    db.session.add(LeaveRecord(
+    lv = LeaveRecord(
         staff_id=staff_id, leave_type=request.form.get('leave_type') or 'Other',
         start_date=start, end_date=end, days=(end - start).days + 1,
-        reason=(request.form.get('reason') or '').strip() or None))
+        reason=(request.form.get('reason') or '').strip() or None)
+    db.session.add(lv)
     db.session.commit()
+    from utils import automations
+    if automations.is_enabled('leave_requested'):
+        try:
+            from utils.notify import notify_branch_admins, actor_label
+            staff = lv.staff
+            span = f"{lv.start_date.strftime('%d %b')}–{lv.end_date.strftime('%d %b %Y')}"
+            notify_branch_admins(
+                'Leave request submitted',
+                body=f'{staff.full_name} ({staff.staff_id}) — {lv.leave_type or "leave"}, '
+                    f'{span} ({lv.days} day{"s" if lv.days != 1 else ""}) · by {actor_label()}',
+                url=url_for('hr.leave_list'), branch_id=staff.branch_id, category='warning')
+        except Exception:
+            pass
     return _ok('Leave request recorded.', url_for('hr.leave_list'))
 
 

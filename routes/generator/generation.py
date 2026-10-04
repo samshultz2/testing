@@ -19,6 +19,29 @@ def _level_for_classes(class_ids):
     return levels.pop(), None
 
 
+def _notify_generation_result(success, *, message, detail='', batch_id=None, category='info'):
+    """Bell admins with the outcome of a generation run -- so a failure (or
+    its auto-probe diagnosis) isn't lost the moment the flash message is
+    missed or the admin navigates away. Best-effort; never breaks the run
+    that triggered it."""
+    from utils import automations
+    if not automations.is_enabled('generation_result'):
+        return
+    try:
+        from utils.notify import notify_branch_admins
+        title = 'Timetable generated' if success else 'Timetable generation failed'
+        body = message
+        if detail:
+            # The auto-probe diagnosis especially can run long -- keep the
+            # bell body skimmable; the full text is still in the flash.
+            body = f'{body} · {detail[:300]}' + ('…' if len(detail) > 300 else '')
+        url = (url_for('generator.view_results', batch_id=batch_id) if (success and batch_id)
+              else url_for('generator.generate_page'))
+        notify_branch_admins(title, body=body, url=url, branch_id=gen_bid(), category=category)
+    except Exception:
+        pass
+
+
 @generator_bp.route('/assignments')
 @login_required
 def teacher_assignments():
@@ -323,17 +346,22 @@ def run_generation():
         filled_pct = ((total - empty) / total) * 100 if total > 0 else 0
         
         if empty > 0:
-            flash(f'Generated {len(result["class_arms"])} timetables. {empty} empty slots ({filled_pct:.1f}% filled).', 'warning')
+            msg = f'Generated {len(result["class_arms"])} timetables. {empty} empty slots ({filled_pct:.1f}% filled).'
+            flash(msg, 'warning')
+            _notify_generation_result(True, message=msg, batch_id=batch_id, category='warning')
         else:
-            flash(f'Successfully generated {len(result["class_arms"])} timetables with 100% slots filled!', 'success')
-        
+            msg = f'Successfully generated {len(result["class_arms"])} timetables with 100% slots filled!'
+            flash(msg, 'success')
+            _notify_generation_result(True, message=msg, batch_id=batch_id, category='success')
+
         return redirect(url_for('generator.view_results', batch_id=batch_id))
-        
+
     except Exception as e:
         db.session.rollback()
         import traceback
         traceback.print_exc()
         flash(f'Error: {str(e)}', 'error')
+        _notify_generation_result(False, message=f'Error: {e}', category='error')
         return redirect(url_for('generator.generate_page'))
 
 
@@ -390,22 +418,27 @@ def run_ortools_generation():
         if not result['success']:
             detail = ' '.join(result.get('reasons') or [])
             flash(f'Generation failed: {result["message"]}' + (f' {detail}' if detail else ''), 'error')
+            _notify_generation_result(False, message=result['message'], detail=detail, category='error')
             return redirect(url_for('generator.generate_page'))
-        
+
         # Save results
         batch_id = save_ortools_result(result, level)
-        
+
         empty = result['empty_count']
         assigned = result['assigned_count']
         total = result['total_requirements']
         total_slots = len(result['class_arms']) * periods_per_day * 5
         filled_pct = ((total_slots - empty) / total_slots) * 100 if total_slots > 0 else 0
-        
+
         if empty > 0:
-            flash(f'OR-Tools: Assigned {assigned}/{total} requirements. {empty} empty slots ({filled_pct:.1f}% filled).', 'warning')
+            msg = f'OR-Tools: Assigned {assigned}/{total} requirements. {empty} empty slots ({filled_pct:.1f}% filled).'
+            flash(msg, 'warning')
+            _notify_generation_result(True, message=msg, batch_id=batch_id, category='warning')
         else:
-            flash(f'OR-Tools: Perfect! Assigned all {assigned} requirements with 100% slots filled!', 'success')
-        
+            msg = f'OR-Tools: Perfect! Assigned all {assigned} requirements with 100% slots filled!'
+            flash(msg, 'success')
+            _notify_generation_result(True, message=msg, batch_id=batch_id, category='success')
+
         return redirect(url_for('generator.view_results', batch_id=batch_id))
         
     except Exception as e:
@@ -413,6 +446,7 @@ def run_ortools_generation():
         import traceback
         traceback.print_exc()
         flash(f'Error: {str(e)}', 'error')
+        _notify_generation_result(False, message=f'Error: {e}', category='error')
         return redirect(url_for('generator.generate_page'))
 
 
