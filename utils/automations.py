@@ -49,6 +49,13 @@ REGISTRY = [
      "Alert the branch's admins when a staff member's leave request is recorded "
      "and needs review.",
      'HR', True),
+    ('payroll_run', 'Payroll run finalized/paid',
+     "Alert the branch's admins when a payroll run is finalized or marked paid.",
+     'HR', True),
+    ('recruitment_activity', 'Recruitment activity',
+     "Alert the branch's admins when a job application is recorded or an "
+     "interview is scheduled.",
+     'HR', True),
     ('library_overdue', 'Library overdue reminders',
      "Once a day, alert admins about overdue library books and draft a reminder to "
      "the borrowers' parents for review.",
@@ -72,6 +79,25 @@ REGISTRY = [
      "Alert the branch's admins when a new CBT exam is created or published "
      "(students don't see it until the exam's own day either way).",
      'CBT', True),
+    ('event_added', 'Event added to calendar',
+     "Alert admins when a new event is added to the school calendar.",
+     'Events', True),
+    ('contribution_activity', 'Contribution payment/expense recorded',
+     "Alert admins when a contribution payment or expense is recorded.",
+     'Contributions', True),
+    ('welfare_record_added', 'Discipline/clinic record added',
+     "Alert the branch's admins when a discipline incident or clinic visit is "
+     "recorded for a student (names the student only -- no medical or incident "
+     "detail, which stay encrypted in the record itself).",
+     'Welfare', True),
+    ('alumni_document_request', 'Alumni document request',
+     "Alert the branch's admins when an alumnus requests a transcript or other "
+     "document through the alumni portal.",
+     'Alumni', True),
+    ('mock_results_entered', 'Mock exam results entered',
+     "Alert the branch's admins when Mock JAMB or Mock WAEC results are "
+     "bulk-entered for an exam.",
+     'Mock Exams', True),
 ]
 
 _DEFAULTS = {k: d for k, _l, _desc, _cat, d in REGISTRY}

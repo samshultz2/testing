@@ -589,6 +589,18 @@ def bulk_entry(exam_id):
                     added += 1
             
             db.session.commit()
+            if added or updated:
+                from utils import automations
+                if automations.is_enabled('mock_results_entered'):
+                    try:
+                        from utils.notify import notify_branch_admins
+                        notify_branch_admins(
+                            'Mock exam results entered',
+                            body=f'{exam.display_name} — {added} added, {updated} updated',
+                            url=url_for('mock_jamb.view_exam', exam_id=exam_id),
+                            branch_id=exam.branch_id, category='success')
+                    except Exception:
+                        pass
             return _ok(f'Results saved! Added: {added}, Updated: {updated}',
                        url_for('mock_jamb.view_exam', exam_id=exam_id))
 

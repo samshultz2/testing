@@ -25,6 +25,23 @@ def _student_or_404(student_id):
     return s
 
 
+def _notify_welfare_record(student, title, detail):
+    """Bell the branch's admins that a welfare record was added -- names the
+    student only, never the (encrypted, medical/incident) description or
+    treatment text, which stays in the record itself."""
+    from utils import automations
+    if not automations.is_enabled('welfare_record_added'):
+        return
+    try:
+        from utils.notify import notify_branch_admins
+        notify_branch_admins(
+            title, body=f'{student.full_name} ({student.student_id}) — {detail}',
+            url=url_for('main.view_student', student_id=student.id),
+            branch_id=student.branch_id, category='warning')
+    except Exception:
+        pass
+
+
 @welfare_bp.route('/discipline/<int:student_id>/add', methods=['POST'])
 @login_required
 def add_discipline(student_id):
@@ -43,6 +60,9 @@ def add_discipline(student_id):
         reported_by=session.get('user') or 'Staff'))
     db.session.commit()
     log_action('welfare.discipline_add', target=s)
+    _notify_welfare_record(s, 'Discipline record added',
+                           ' / '.join(filter(None, [request.form.get('category'),
+                                                     request.form.get('severity')])) or 'logged')
     flash('Discipline record added.', 'success')
     return redirect(url_for('main.view_student', student_id=s.id))
 
@@ -75,6 +95,7 @@ def add_clinic(student_id):
         attended_by=session.get('user') or 'Staff'))
     db.session.commit()
     log_action('welfare.clinic_add', target=s)
+    _notify_welfare_record(s, 'Clinic visit recorded', 'see student profile for details')
     flash('Clinic visit recorded.', 'success')
     return redirect(url_for('main.view_student', student_id=s.id))
 

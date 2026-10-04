@@ -187,5 +187,16 @@ def request_document():
         student_id=student.id, doc_type=doc_type, status='pending',
         note=(request.form.get('note') or '').strip()[:500] or None))
     db.session.commit()
+    from utils import automations
+    if automations.is_enabled('alumni_document_request'):
+        try:
+            from utils.notify import notify_branch_admins
+            notify_branch_admins(
+                'Alumni document request',
+                body=f'{student.full_name} ({student.student_id}) requested a {doc_type}',
+                url=url_for('promotion.alumni_directory'),
+                branch_id=student.branch_id, category='info')
+        except Exception:
+            pass
     flash('Your request has been sent to the school.', 'success')
     return redirect(url_for('alumni.home') + '#request')

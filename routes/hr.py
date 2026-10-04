@@ -60,6 +60,39 @@ def _is_admin():
     return is_admin()
 
 
+def _notify_recruitment_event(vacancy, title, detail, url):
+    """Bell the branch's admins about recruitment activity (an application
+    recorded, an interview scheduled) -- useful even when staff did the
+    recording themselves, same as notify_staff_change for other HR events."""
+    from utils import automations
+    if not automations.is_enabled('recruitment_activity'):
+        return
+    try:
+        from utils.notify import notify_branch_admins, actor_label
+        notify_branch_admins(title, body=f'{detail} · by {actor_label()}', url=url,
+                             branch_id=vacancy.branch_id, category='info')
+    except Exception:
+        pass
+
+
+def _notify_payroll_event(run, title, detail=''):
+    """Bell the branch's admins when a payroll run is finalized or marked
+    paid -- so it doesn't rely on the acting admin telling everyone else."""
+    from utils import automations
+    if not automations.is_enabled('payroll_run'):
+        return
+    try:
+        from utils.notify import notify_branch_admins, actor_label
+        body = run.period_label
+        if detail:
+            body = f'{body} — {detail}'
+        notify_branch_admins(title, body=f'{body} · by {actor_label()}',
+                             url=url_for('hr.payroll_detail', run_id=run.id),
+                             branch_id=run.branch_id, category='success')
+    except Exception:
+        pass
+
+
 def _require_payroll_run_access(run):
     """Payroll is per-branch: a branch admin manages only their own branch's
     runs, a central admin manages every branch's. A legacy NULL-branch run is
@@ -1186,6 +1219,7 @@ def finalize_payroll(run_id):
             db.session.flush()
             run.posted_expense_id = exp.id
             db.session.commit()
+            _notify_payroll_event(run, 'Payroll finalized', 'posted to Finance expenses')
             return _ok('Payroll finalized and posted to Finance expenses.',
                        url_for('hr.payroll_detail', run_id=run_id))
         except Exception as e:
@@ -1196,9 +1230,11 @@ def finalize_payroll(run_id):
             current_app.logger.exception('Payroll #%s: posting to Finance failed', run.id)
             run.status = 'Finalized'
             db.session.commit()
+            _notify_payroll_event(run, 'Payroll finalized', 'Finance posting failed, needs re-posting')
             return _ok(f'Payroll finalized, but posting to Finance failed ({e}). '
                        'You can post it again later.', url_for('hr.payroll_detail', run_id=run_id))
     db.session.commit()
+    _notify_payroll_event(run, 'Payroll finalized')
     return _ok('Payroll finalized.', url_for('hr.payroll_detail', run_id=run_id))
 
 
@@ -1209,6 +1245,7 @@ def mark_paid(run_id):
     _require_payroll_run_access(run)
     run.status = 'Paid'
     db.session.commit()
+    _notify_payroll_event(run, 'Payroll marked paid')
     return _ok('Payroll marked as paid.', url_for('hr.payroll_detail', run_id=run_id))
 
 
@@ -1890,6 +1927,9 @@ def application_add(vac_id):
         resume_id=resume_id, status='Applied')
     db.session.add(a)
     db.session.commit()
+    _notify_recruitment_event(v, 'Job application recorded',
+                              f'{a.full_name} applied for {v.title}',
+                              url_for('hr.vacancy_detail', vac_id=vac_id))
     return _ok(f'Application from {a.full_name} recorded.', url_for('hr.vacancy_detail', vac_id=vac_id))
 
 
@@ -1944,6 +1984,10 @@ def interview_schedule(app_id):
     if a.status in ('Applied', 'Shortlisted'):
         a.status = 'Interview'
     db.session.commit()
+    when_label = when.strftime('%d %b %Y %H:%M') if when else 'a time to be confirmed'
+    _notify_recruitment_event(a.vacancy, 'Interview scheduled',
+                              f'{a.full_name} ({a.vacancy.title}) — {when_label}',
+                              url_for('hr.vacancy_detail', vac_id=a.vacancy_id))
     return _ok('Interview scheduled.', url_for('hr.vacancy_detail', vac_id=a.vacancy_id))
 
 

@@ -167,6 +167,20 @@ def add_event():
         _read(e)
         db.session.add(e)
         db.session.commit()
+        from utils import automations
+        if automations.is_enabled('event_added'):
+            try:
+                from utils.notify import notify_admins
+                when = e.start_date.strftime('%d %b %Y')
+                if e.end_date and e.end_date != e.start_date:
+                    when += f' – {e.end_date.strftime("%d %b %Y")}'
+                notify_admins(
+                    'Event added',
+                    body=f'{e.title} — {when}' + (f' ({e.location})' if e.location else ''),
+                    url=url_for('events.calendar', year=e.start_date.year, month=e.start_date.month),
+                    category='info')
+            except Exception:
+                pass
         return _ok('Event added.',
                    url_for('events.calendar', year=e.start_date.year, month=e.start_date.month))
     preset = _d(request.args.get('date'))

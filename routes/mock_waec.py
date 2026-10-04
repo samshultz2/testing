@@ -575,6 +575,18 @@ def grid_entry(exam_id):
         db.session.commit()
         for sid in touched:
             recompute_student_safe(sid)
+        if saved:
+            from utils import automations
+            if automations.is_enabled('mock_results_entered'):
+                try:
+                    from utils.notify import notify_branch_admins
+                    notify_branch_admins(
+                        'Mock exam results entered',
+                        body=f'{exam.display_name} — {saved} score(s) for {len(touched)} student(s)',
+                        url=url_for('mock_waec.grid_entry', exam_id=exam_id),
+                        branch_id=exam.branch_id, category='success')
+                except Exception:
+                    pass
         flash(f'Saved {saved} score(s) for {len(touched)} student(s).', 'success')
         return redirect(url_for('mock_waec.grid_entry', exam_id=exam_id, col=cols))
 

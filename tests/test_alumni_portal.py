@@ -101,6 +101,46 @@ def test_alumnus_updates_profile_and_requests_document(app):
     assert b'already have a pending request' in r.data
 
 
+def test_document_request_notifies_admins(app):
+    from models import Notification
+    sid = _grad(app, 'ALUNOTIFY', pw='secretpw')
+    c = app.test_client()
+    tok = _portal_csrf(c)
+    c.post('/alumni/login', data={'student_id': 'ALUNOTIFY', 'credential': 'secretpw',
+                                  '_csrf_token': tok})
+    ptok = _meta_csrf(c, '/alumni/')
+    r = c.post('/alumni/request', data={'doc_type': 'transcript', 'note': 'For uni',
+                                        '_csrf_token': ptok}, follow_redirects=True)
+    assert r.status_code == 200
+    with app.app_context():
+        notes = Notification.query.filter_by(title='Alumni document request', role='admin').all()
+        # Student.full_name is "surname first_name" (see the model property).
+        assert any('Nus Alum' in (n.body or '') and 'transcript' in (n.body or '') for n in notes)
+
+
+def test_disabling_alumni_document_request_automation_skips_notification(app):
+    from models import Notification
+    from utils import automations
+    with app.app_context():
+        automations.set_enabled('alumni_document_request', False)
+        before = Notification.query.filter_by(title='Alumni document request', role='admin').count()
+    try:
+        sid = _grad(app, 'ALUNOTIFYOFF', pw='secretpw')
+        c = app.test_client()
+        tok = _portal_csrf(c)
+        c.post('/alumni/login', data={'student_id': 'ALUNOTIFYOFF', 'credential': 'secretpw',
+                                      '_csrf_token': tok})
+        ptok = _meta_csrf(c, '/alumni/')
+        c.post('/alumni/request', data={'doc_type': 'transcript', '_csrf_token': ptok},
+              follow_redirects=True)
+        with app.app_context():
+            after = Notification.query.filter_by(title='Alumni document request', role='admin').count()
+            assert after == before
+    finally:
+        with app.app_context():
+            automations.set_enabled('alumni_document_request', True)
+
+
 def test_admin_fulfils_and_declines_requests(app):
     sid = _grad(app, 'ALUAD', pw='secretpw')
     with app.app_context():

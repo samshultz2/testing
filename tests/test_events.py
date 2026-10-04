@@ -38,3 +38,37 @@ def test_add_event_json(app):
     assert r.status_code == 200 and r.get_json()['ok']
     with app.app_context():
         assert SchoolEvent.query.filter_by(title='JSON Founders Day').first() is not None
+
+
+def test_add_event_notifies_admins(app):
+    from models import Notification
+    client = _admin(app)
+    r = client.post('/events/add', headers={'X-Requested-With': 'fetch'},
+                    data={'title': 'ZzNotify Founders Day', 'start_date': date.today().isoformat(),
+                          'category': 'Activity', 'location': 'Main Hall',
+                          '_csrf_token': _ptoken(client)})
+    assert r.status_code == 200 and r.get_json()['ok']
+    with app.app_context():
+        notes = Notification.query.filter_by(title='Event added', role='admin').all()
+        assert any('ZzNotify Founders Day' in (n.body or '') and 'Main Hall' in (n.body or '')
+                  for n in notes)
+
+
+def test_disabling_event_added_automation_skips_notification(app):
+    from models import Notification
+    from utils import automations
+    with app.app_context():
+        automations.set_enabled('event_added', False)
+    try:
+        client = _admin(app)
+        r = client.post('/events/add', headers={'X-Requested-With': 'fetch'},
+                        data={'title': 'ZzQuiet Event', 'start_date': date.today().isoformat(),
+                              '_csrf_token': _ptoken(client)})
+        assert r.status_code == 200 and r.get_json()['ok']
+        with app.app_context():
+            notes = Notification.query.filter_by(title='Event added', role='admin').filter(
+                Notification.body.like('%ZzQuiet Event%')).all()
+            assert not notes
+    finally:
+        with app.app_context():
+            automations.set_enabled('event_added', True)

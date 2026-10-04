@@ -343,6 +343,16 @@ def add_payment():
             db.session.add(payment)
             db.session.commit()
             student = db.session.get(Student, student_id)
+            from utils import automations
+            if automations.is_enabled('contribution_activity'):
+                try:
+                    from utils.notify import notify_admins
+                    notify_admins('Contribution payment recorded',
+                                  body=f'₦{amount:,.0f} from {student.full_name}' +
+                                       (f' · received by {received_by}' if received_by else ''),
+                                  url=url_for('contributions.payments_list'), category='success')
+                except Exception:
+                    pass
             return _ok(f'Payment of ₦{amount:,.0f} added for {student.full_name}',
                        url_for('contributions.dashboard'))
         except Exception as e:
@@ -492,6 +502,16 @@ def add_expense():
             expense = ContributionExpense(session_id=active_session.id if active_session else None, expense_date=expense_date, description=description, amount=amount, notes=notes)
             db.session.add(expense)
             db.session.commit()
+            from utils import automations
+            if automations.is_enabled('contribution_activity'):
+                try:
+                    from utils.notify import notify_admins
+                    notify_admins('Contribution expense recorded',
+                                  body=f'₦{amount:,.0f} — {description}' if description
+                                       else f'₦{amount:,.0f}',
+                                  url=url_for('contributions.expenses_list'), category='warning')
+                except Exception:
+                    pass
             return _ok(f'Expense of ₦{amount:,.0f} added', url_for('contributions.expenses_list'))
         except Exception as e:
             db.session.rollback()
