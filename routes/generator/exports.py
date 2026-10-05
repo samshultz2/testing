@@ -29,6 +29,42 @@ def _short_cell(entry, subj, fallback_map, maxlen):
     return value
 
 
+# A4 and A3 landscape share one aspect ratio, but the fixed-inch margins
+# used throughout the xlsx exports below eat a smaller share of the bigger
+# page, so the real scale factor between them isn't a flat sqrt(2) -- it has
+# to be computed against the actual usable area. Shared by every xlsx export
+# below so A4 vs A3 sizing math can't drift between them.
+_XLSX_A4_W_PT, _XLSX_A4_H_PT = 841.89, 595.28    # A4 landscape points (297 x 210mm)
+_XLSX_A3_W_PT, _XLSX_A3_H_PT = 1190.55, 841.89   # A3 landscape points (420 x 297mm)
+
+
+def _xlsx_paper_scale(paper, margin_lr_in=0.5, margin_tb_in=0.4):
+    """Real physical-size scale factors for an A4-vs-A3 landscape xlsx sheet
+    with the given fixed-inch margins on each side. Returns
+    (hscale, wscale, fit_scale, usable_w, usable_h) in points -- hscale/
+    wscale scale a row height / column width from its A4 baseline up for
+    A3, fit_scale (the tighter of the two) is for anything confined to one
+    column AND row, like a font size."""
+    page_w_pt, page_h_pt = (_XLSX_A3_W_PT, _XLSX_A3_H_PT) if paper == 'a3' else (_XLSX_A4_W_PT, _XLSX_A4_H_PT)
+    usable_w = page_w_pt - 2 * margin_lr_in * 72
+    usable_h = page_h_pt - 2 * margin_tb_in * 72
+    baseline_w = _XLSX_A4_W_PT - 2 * margin_lr_in * 72
+    baseline_h = _XLSX_A4_H_PT - 2 * margin_tb_in * 72
+    hscale = usable_h / baseline_h
+    wscale = usable_w / baseline_w
+    fit_scale = min(hscale, wscale)
+    return hscale, wscale, fit_scale, usable_w, usable_h
+
+
+def _xlsx_col_width_for_pts(target_pts):
+    """Convert a target physical column width (points) into Excel's
+    'character width' unit (approx. Calibri 11: ~7px/char + 5px padding at
+    96 DPI) -- Excel's width model is defined against that font's metrics
+    regardless of what font actually renders inside the column."""
+    px = target_pts * 96 / 72
+    return max(1.0, (px - 5) / 7)
+
+
 @generator_bp.route('/results/<batch_id>/print')
 @login_required
 def print_results(batch_id):
@@ -261,22 +297,8 @@ def export_results(batch_id):
     # PRINTING -- opened plainly in Excel/LibreOffice/Sheets the content
     # would be the same physical size on A4 and A3, just surrounded by more
     # blank page. Scale every size up for A3 so the sheet itself already
-    # fills the bigger page, same approach as export_results_by_day_pdf's
-    # sc()/sc_w()/sc_fit() helpers. A4 and A3 landscape share one aspect
-    # ratio, but the margins below are fixed inches, so they eat a smaller
-    # share of the bigger page -- compute the real factor rather than
-    # assuming a flat sqrt(2).
-    MARGIN_LR_IN, MARGIN_TB_IN = 0.5, 0.4
-    A4_W_PT, A4_H_PT = 841.89, 595.28    # A4 landscape points (297 x 210mm)
-    A3_W_PT, A3_H_PT = 1190.55, 841.89   # A3 landscape points (420 x 297mm)
-    page_w_pt, page_h_pt = (A3_W_PT, A3_H_PT) if paper == 'a3' else (A4_W_PT, A4_H_PT)
-    usable_w = page_w_pt - 2 * MARGIN_LR_IN * 72
-    usable_h = page_h_pt - 2 * MARGIN_TB_IN * 72
-    baseline_w = A4_W_PT - 2 * MARGIN_LR_IN * 72
-    baseline_h = A4_H_PT - 2 * MARGIN_TB_IN * 72
-    hscale = usable_h / baseline_h
-    wscale = usable_w / baseline_w
-    fit_scale = min(hscale, wscale)  # text confined to one column/row
+    # fills the bigger page.
+    hscale, wscale, fit_scale, usable_w, usable_h = _xlsx_paper_scale(paper)
 
     def sc(pt):
         """Scale by page height -- for full-width single-line rows."""
@@ -333,8 +355,8 @@ def export_results(batch_id):
             start_total = start_hour * 60 + start_min + _blen
             start_hour, start_min = start_total // 60, start_total % 60
             break_end = format_clock(start_hour, start_min)
-            break_time = f"BREAK\n{break_start}\n-\n{break_end}"
-    
+            break_time = f"BREAK\n{break_start}-{break_end}"
+
     # Abbreviations
     abbrev_map = {
         'Mathematics': 'Maths', 'English Language': 'Eng', 'Physics': 'Phy',
@@ -399,7 +421,11 @@ def export_results(batch_id):
     school_header_height = sc(38)
     address_header_height = sc(20) if school_address else 0
     class_title_height = sc(32)
-    period_header_height = sc(45)
+    # Needs to fit 3 wrapped lines at header_font's size (e.g. "P1" /
+    # "8:00 AM-" / "8:40 AM") without the text overflowing a fixed row
+    # height -- Excel/Sheets center wrap_text vertically and CLIP whatever
+    # doesn't fit, which is what cut the header text off at the top.
+    period_header_height = sc(62)
     # 5 day rows get ALL remaining space
     fixed_height = school_header_height + address_header_height + class_title_height + period_header_height
     day_row_height = (total_page_height - fixed_height) / 5
@@ -418,13 +444,9 @@ def export_results(batch_id):
     period_cols = total_cols - 2  # all period columns, before + after break
     period_col_pts = max(usable_w - DAY_FLOOR_PT - BREAK_FLOOR_PT, 0) / period_cols
 
-    def _col_width_for_pts(target_pts):
-        px = target_pts * 96 / 72
-        return max(1.0, (px - 5) / 7)
-
-    day_col_width = _col_width_for_pts(DAY_FLOOR_PT)
-    period_col_width = _col_width_for_pts(period_col_pts)
-    break_col_width = _col_width_for_pts(BREAK_FLOOR_PT)
+    day_col_width = _xlsx_col_width_for_pts(DAY_FLOOR_PT)
+    period_col_width = _xlsx_col_width_for_pts(period_col_pts)
+    break_col_width = _xlsx_col_width_for_pts(BREAK_FLOOR_PT)
     
     for key in sorted(timetables.keys()):
         tt = timetables[key]
@@ -589,6 +611,26 @@ def export_results_by_day(batch_id):
     layout = (request.args.get('layout') or 'single').lower()
     days_per_page = 2 if (paper == 'a3' and layout == 'packed') else 1
 
+    # Same real-physical-size scaling as export_results(). usable_h is the
+    # full page's usable height for an UNPACKED (1 day/page) sheet; a packed
+    # A3 page stacks 2 of those blocks plus a gap into that same usable_h,
+    # so each block's own height budget is computed further down once
+    # days_per_page is known.
+    hscale, wscale, fit_scale, usable_w, usable_h = _xlsx_paper_scale(paper)
+
+    def sc(pt):
+        """Scale by page height -- for full-width single-line rows."""
+        return pt * hscale
+
+    def sc_w(width):
+        """Scale by page width -- for column widths."""
+        return width * wscale
+
+    def sc_fit(pt):
+        """Scale by whichever axis is tighter -- for font sizes, so text
+        never outgrows the column/row it sits in."""
+        return round(pt * fit_scale)
+
     all_results = GenTimetableResult.query.filter_by(batch_id=batch_id, branch_id=gen_bid()).all()
     if not all_results:
         flash('No results.', 'error')
@@ -642,8 +684,8 @@ def export_results_by_day(batch_id):
             start_total = start_hour * 60 + start_min + _blen
             start_hour, start_min = start_total // 60, start_total % 60
             break_end = format_clock(start_hour, start_min)
-            break_time = f"BREAK\n{break_start}\n-\n{break_end}"
-    
+            break_time = f"BREAK\n{break_start}-{break_end}"
+
     class_arms = sorted(set((r.class_name, r.arm_name) for r in results))
     
     def get_short_code(class_name, arm):
@@ -698,14 +740,17 @@ def export_results_by_day(batch_id):
     # Build a lookup dict for subjects
     subject_lookup = {s.id: s for s in GenSubject.query.filter_by(is_active=True, school_level=school_level, branch_id=gen_bid()).all()}
     
-    # NO COLORS - Pure black text on white for B&W printing
-    school_font = Font(bold=True, size=24, color='000000')
-    address_font = Font(bold=False, size=12, color='000000')
-    day_font = Font(bold=True, size=32, color='000000')
-    header_font = Font(bold=True, size=14, color='000000')
-    class_font = Font(bold=True, size=20, color='000000')
-    cell_font = Font(bold=True, size=24, color='000000')
-    break_header_font = Font(bold=True, size=9, color='000000')
+    # NO COLORS - Pure black text on white for B&W printing. Sizes are the
+    # A4 baseline; sc_fit() scales them up for A3 the same way export_results
+    # does, so the grid fills the bigger page instead of just Excel's
+    # print-time fit.
+    school_font = Font(bold=True, size=sc_fit(24), color='000000')
+    address_font = Font(bold=False, size=sc_fit(12), color='000000')
+    day_font = Font(bold=True, size=sc_fit(32), color='000000')
+    header_font = Font(bold=True, size=sc_fit(14), color='000000')
+    class_font = Font(bold=True, size=sc_fit(20), color='000000')
+    cell_font = Font(bold=True, size=sc_fit(24), color='000000')
+    break_header_font = Font(bold=True, size=sc_fit(10), color='000000')
     
     thin_border = Border(
         left=Side(style='thin'),
@@ -725,27 +770,55 @@ def export_results_by_day(batch_id):
     
     # Total columns: Class + periods-before + BREAK + periods-after.
     total_cols = 1 + break_after + 1 + (periods_per_day - break_after)
+    break_col = break_after + 2   # 1 (Class) + break_after period columns, then BREAK
 
-    # Calculate heights (conservative for safe printing). Excel's own
-    # fitToPage/fitToWidth/fitToHeight scale whatever we write down to fill
-    # exactly one printed page of the chosen paper size — so these are just
-    # relative proportions, not a physical constraint we have to solve.
+    # Heights, filled to the EXACT usable page height (not a conservative
+    # under-estimate), the same approach as export_results -- see its
+    # comment for why: Excel's fitToPage applies ONE uniform scale bound by
+    # whichever axis is tighter, so a content block whose row-height total
+    # and column-width total don't already match the real page's aspect
+    # ratio ends up with a lot of blank space on the looser axis once
+    # printed.
     num_data_rows = len(class_arms)
-    school_header_height = 35
-    address_header_height = 20
-    day_header_height = 45
-    period_header_height = 60  # tall enough for the 3 stacked period-header lines
-    total_page_height = 500  # Conservative for safe printing
+    # Rounded to 2dp at the source so every sheet's total (summed in a
+    # different order/grouping per sheet) lands on the exact same float --
+    # otherwise IEEE754 rounding noise (~1e-13) can make two sheets that are
+    # supposed to be pixel-identical compare unequal.
+    school_header_height = round(sc(35), 2)
+    address_header_height = round(sc(20), 2)
+    day_header_height = round(sc(45), 2)
+    # Needs to fit the 3 stacked period-header lines ("P1" / start / end) at
+    # header_font's (now A3-scaled) size without the text overflowing a
+    # fixed row height and getting clipped top and bottom.
+    period_header_height = round(sc(62), 2)
+    gap_row_height = round(sc(15), 2)  # between stacked day-blocks on a packed page
 
     # One data-row height for the WHOLE export -- every day, every page, every
     # sheet uses this exact value, so row sizing reads as consistent instead
     # of Monday's rows (which share a page with the school name/address) being
     # visibly shorter than every other day's. Sized against the tightest
-    # case (a block carrying the school header) so nothing overflows a page.
+    # case -- the group containing Monday, which carries the school header
+    # AND (being first in its group) the period-header row -- a day_header
+    # per block but the school/address/period-header overhead only ONCE per
+    # GROUP (every other block in a packed pair skips its own period header
+    # since the periods repeat, and only Monday itself ever shows school/
+    # address), so that's how it's budgeted here, not per block.
     _header_rows_height = (school_header_height + (address_header_height if school_address else 0)
-                           + day_header_height + period_header_height)
-    data_row_height = max((total_page_height - _header_rows_height) / num_data_rows, 28)
-    gap_row_height = 15  # between stacked day-blocks on a packed page
+                           + days_per_page * day_header_height + period_header_height
+                           + gap_row_height * (days_per_page - 1))
+    data_row_height = round(max((usable_h - _header_rows_height) / (days_per_page * num_data_rows), 28), 2)
+
+    # Column widths: Class and BREAK need a roughly FIXED physical width
+    # regardless of periods_per_day -- see export_results's comment on the
+    # same issue. Reserve a fixed floor for each, split the rest evenly
+    # across the actual period columns.
+    CLASS_FLOOR_PT = sc_w(50)   # fits a short class code ("S1A") at class_font size
+    BREAK_FLOOR_PT = sc_w(42)   # fits "BREAK" / a time label at break_header_font size
+    period_cols = total_cols - 2
+    period_col_pts = max(usable_w - CLASS_FLOOR_PT - BREAK_FLOOR_PT, 0) / period_cols
+    class_col_width = _xlsx_col_width_for_pts(CLASS_FLOOR_PT)
+    period_col_width = _xlsx_col_width_for_pts(period_col_pts)
+    break_col_width = _xlsx_col_width_for_pts(BREAK_FLOOR_PT)
 
     def _block_height(d, is_first_in_group):
         """Total row height one day's block takes up, without writing
@@ -938,23 +1011,20 @@ def export_results_by_day(batch_id):
                 used_height += gap_row_height
                 row += 1
 
-        remaining = target_block_height - used_height
+        remaining = round(target_block_height - used_height, 2)
         if remaining > 0.5:
             ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=total_cols)
             ws.row_dimensions[row].height = remaining
 
-        # Column widths - fit within safe printable area. Same formula every
-        # sheet (periods_per_day/break_after are fixed for the whole export),
-        # so every day/page already gets identical widths; the break column
-        # is wherever break_after actually puts it, not a hardcoded index.
-        ws.column_dimensions['A'].width = 8  # Class
-        col_width = 26 if periods_per_day <= 8 else 22
-        break_col = break_after + 2   # 1 (Class) + break_after period columns, then BREAK
+        # Column widths - precomputed above to exactly fill the usable width.
+        # Same formula every sheet (periods_per_day/break_after are fixed
+        # for the whole export), so every day/page gets identical widths.
+        ws.column_dimensions['A'].width = class_col_width  # Class
         for col in range(2, total_cols + 1):
             if col == break_col:
-                ws.column_dimensions[get_column_letter(col)].width = 8
+                ws.column_dimensions[get_column_letter(col)].width = break_col_width
             else:
-                ws.column_dimensions[get_column_letter(col)].width = col_width
+                ws.column_dimensions[get_column_letter(col)].width = period_col_width
 
     suffix = f'_{paper}' + ('_packed' if days_per_page > 1 else '')
     return xlsx_response(wb, f'timetables_by_day_{batch_id}{suffix}.xlsx')
