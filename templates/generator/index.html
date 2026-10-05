@@ -4,116 +4,146 @@
 
 {% block extra_css %}
 <style>
-.level-selector{display:grid;grid-template-columns:1fr;gap:1.5rem;max-width:900px;margin:0 auto}
-@media(min-width:768px){.level-selector{grid-template-columns:repeat(2,1fr)}}
-.level-card{background:var(--bg-card);border-radius:var(--radius-lg);border:2px solid var(--border-color);overflow:hidden;transition:all .3s ease;cursor:pointer;text-decoration:none;color:inherit}
-.level-card:hover{transform:translateY(-4px);box-shadow:0 12px 40px rgba(0,0,0,.15);border-color:var(--primary)}
-.level-card-header{padding:2rem;text-align:center;color:white}
-.level-card.jss .level-card-header{background:linear-gradient(135deg,#11998e 0%,#38ef7d 100%)}
-.level-card.sss .level-card-header{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%)}
-.level-icon{font-size:3rem;margin-bottom:1rem}
-.level-title{font-size:1.5rem;font-weight:700;margin:0}
-.level-subtitle{font-size:.9rem;opacity:.9;margin-top:.25rem}
-.level-card-body{padding:1.5rem}
-.level-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem}
-.level-stat{text-align:center;padding:.75rem;background:var(--gray-50);border-radius:var(--radius-md)}
-.level-stat-value{font-size:1.5rem;font-weight:700}
-.level-stat-label{font-size:.7rem;color:var(--text-muted);text-transform:uppercase}
-.level-status{margin-top:1rem;padding:.75rem;border-radius:var(--radius-md);text-align:center;font-weight:600}
-.level-status.ready{background:rgba(40,167,69,.1);color:#28a745}
-.level-status.not-ready{background:rgba(220,53,69,.1);color:#dc3545}
-.level-last-gen{margin-top:.75rem;font-size:.8rem;color:var(--text-muted);text-align:center}
-.page-intro{text-align:center;margin-bottom:2rem}
-.page-intro h1{font-size:1.75rem;margin-bottom:.5rem}
-.page-intro p{color:var(--text-muted);max-width:500px;margin:0 auto}
+.content-narrow{max-width:1040px;margin:0 auto}
+
+/* ---- page head ---- */
+.gi-head{text-align:center;margin-bottom:1.7rem}
+.gi-head .ic{width:52px;height:52px;border-radius:14px;background:var(--primary-light);color:var(--primary);
+  display:flex;align-items:center;justify-content:center;font-size:1.35rem;margin:0 auto .9rem}
+.gi-head h1{margin:0;font-size:1.6rem;letter-spacing:-.02em}
+.gi-head p{margin:.4rem 0 0;color:var(--text-muted);font-size:.9rem}
+
+/* ---- level cards ---- */
+.level-grid{display:grid;grid-template-columns:1fr;gap:1.1rem}
+@media(min-width:720px){.level-grid{grid-template-columns:1fr 1fr}}
+.level-card{position:relative;display:block;background:var(--bg-card);border:1.5px solid var(--border-color);border-radius:var(--radius-xl);
+  overflow:hidden;text-decoration:none;color:inherit;box-shadow:var(--shadow-sm);transition:border-color .18s,box-shadow .18s,transform .18s}
+.level-card:hover{border-color:var(--primary);box-shadow:var(--shadow-lg);transform:translateY(-2px);color:inherit}
+.level-card:hover{text-decoration:none !important}
+.level-top{display:flex;align-items:center;gap:.9rem;padding:1.3rem 1.4rem 1.1rem}
+.level-ic{width:48px;height:48px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:1.3rem;flex-shrink:0}
+.level-card.jss .level-ic{background:var(--info-light);color:var(--info)}
+.level-card.sss .level-ic{background:var(--primary-light);color:var(--primary)}
+.level-name{font-size:1.2rem;font-weight:700;line-height:1.2}
+.level-sub{font-size:.8rem;color:var(--text-muted);margin-top:.1rem}
+.level-arrow{margin-left:auto;color:var(--gray-300);font-size:1rem;flex-shrink:0;transition:transform .18s,color .18s}
+.level-card:hover .level-arrow{color:var(--primary);transform:translateX(3px)}
+
+.level-chips{display:flex;gap:.5rem;padding:0 1.4rem 1.2rem;flex-wrap:wrap}
+.level-chip{flex:1 1 72px;text-align:center;background:var(--gray-50);border:1px solid var(--border-light);border-radius:var(--radius-md);padding:.6rem .4rem}
+.level-chip b{display:block;font-size:1.2rem;line-height:1.15}
+.level-chip span{font-size:.64rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.02em}
+
+.level-foot{display:flex;align-items:center;justify-content:space-between;gap:.6rem;padding:.9rem 1.4rem;border-top:1px solid var(--border-light);flex-wrap:wrap}
+.level-lastgen{font-size:.76rem;color:var(--text-muted)}
+
+.gi-note{display:flex;align-items:center;justify-content:center;gap:.5rem;margin-top:1.4rem;color:var(--text-muted);font-size:.82rem;text-align:center}
+
+/* ---- how it works ---- */
+.howit{margin-top:2.4rem}
+@media(max-width:600px){.howit{display:none}}
+.howit-head{text-align:center;margin-bottom:1.3rem}
+.howit-head h2{margin:0;font-size:1.15rem;letter-spacing:-.01em}
+.howit-head p{margin:.3rem 0 0;color:var(--text-muted);font-size:.84rem}
+.steps{display:grid;grid-template-columns:repeat(4,1fr);gap:1rem;position:relative}
+@media(max-width:860px){.steps{grid-template-columns:1fr 1fr}}
+.step{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);padding:1.1rem 1.1rem 1.2rem;position:relative}
+.step-num{position:absolute;top:-.6rem;left:1rem;width:24px;height:24px;border-radius:50%;background:var(--primary);color:#fff;
+  font-size:.72rem;font-weight:700;display:flex;align-items:center;justify-content:center}
+.step-ic{width:38px;height:38px;border-radius:10px;background:var(--gray-50);border:1px solid var(--border-light);color:var(--primary);
+  display:flex;align-items:center;justify-content:center;font-size:1rem;margin-bottom:.7rem}
+.step h3{margin:0 0 .3rem;font-size:.92rem;font-weight:700}
+.step p{margin:0;font-size:.78rem;color:var(--text-muted);line-height:1.5}
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="page-intro">
-    <h1><i class="fas fa-calendar-alt"></i> Timetable Generator</h1>
+<div class="content-narrow">
+  <div class="gi-head">
+    <div class="ic"><i class="fas fa-calendar-days"></i></div>
+    <h1>Timetable Generator</h1>
     <p>Select a school level to configure and generate timetables</p>
-</div>
+  </div>
 
-<div class="level-selector">
-    <!-- JSS Card -->
+  <div class="level-grid">
     <a href="{{ url_for('generator.level_dashboard', level='jss') }}" class="level-card jss">
-        <div class="level-card-header">
-            <div class="level-icon"><i class="fas fa-school"></i></div>
-            <h2 class="level-title">JSS</h2>
-            <div class="level-subtitle">Junior Secondary School</div>
-        </div>
-        <div class="level-card-body">
-            <div class="level-stats">
-                <div class="level-stat">
-                    <div class="level-stat-value">{{ jss_stats.teachers }}</div>
-                    <div class="level-stat-label">Teachers</div>
-                </div>
-                <div class="level-stat">
-                    <div class="level-stat-value">{{ jss_stats.subjects }}</div>
-                    <div class="level-stat-label">Subjects</div>
-                </div>
-                <div class="level-stat">
-                    <div class="level-stat-value">{{ jss_stats.classes }}</div>
-                    <div class="level-stat-label">Classes</div>
-                </div>
-                <div class="level-stat">
-                    <div class="level-stat-value">{{ jss_stats.assignments }}</div>
-                    <div class="level-stat-label">Assignments</div>
-                </div>
-            </div>
-            {% if jss_stats.ready %}
-            <div class="level-status ready"><i class="fas fa-check-circle"></i> Ready to Generate</div>
-            {% else %}
-            <div class="level-status not-ready"><i class="fas fa-exclamation-circle"></i> Setup Required</div>
-            {% endif %}
-            {% if jss_stats.latest %}
-            <div class="level-last-gen">Last generated: {{ jss_stats.latest.generated_at.strftime('%d %b %Y %H:%M') }}</div>
-            {% endif %}
-        </div>
+      <div class="level-top">
+        <span class="level-ic"><i class="fas fa-school"></i></span>
+        <div><div class="level-name">JSS</div><div class="level-sub">Junior Secondary School</div></div>
+        <i class="fas fa-arrow-right level-arrow"></i>
+      </div>
+      <div class="level-chips">
+        <div class="level-chip"><b>{{ jss_stats.teachers }}</b><span>Teachers</span></div>
+        <div class="level-chip"><b>{{ jss_stats.subjects }}</b><span>Subjects</span></div>
+        <div class="level-chip"><b>{{ jss_stats.classes }}</b><span>Classes</span></div>
+        <div class="level-chip"><b>{{ jss_stats.assignments }}</b><span>Assignments</span></div>
+      </div>
+      <div class="level-foot">
+        {% if jss_stats.ready %}
+        <span class="badge badge-success"><i class="fas fa-check-circle"></i> Ready to generate</span>
+        {% else %}
+        <span class="badge badge-danger"><i class="fas fa-circle-exclamation"></i> Setup required</span>
+        {% endif %}
+        {% if jss_stats.latest %}
+        <span class="level-lastgen">Last generated {{ jss_stats.latest.generated_at.strftime('%d %b %Y') }}</span>
+        {% endif %}
+      </div>
     </a>
-    
-    <!-- SSS Card -->
-    <a href="{{ url_for('generator.level_dashboard', level='sss') }}" class="level-card sss">
-        <div class="level-card-header">
-            <div class="level-icon"><i class="fas fa-graduation-cap"></i></div>
-            <h2 class="level-title">SSS</h2>
-            <div class="level-subtitle">Senior Secondary School</div>
-        </div>
-        <div class="level-card-body">
-            <div class="level-stats">
-                <div class="level-stat">
-                    <div class="level-stat-value">{{ sss_stats.teachers }}</div>
-                    <div class="level-stat-label">Teachers</div>
-                </div>
-                <div class="level-stat">
-                    <div class="level-stat-value">{{ sss_stats.subjects }}</div>
-                    <div class="level-stat-label">Subjects</div>
-                </div>
-                <div class="level-stat">
-                    <div class="level-stat-value">{{ sss_stats.classes }}</div>
-                    <div class="level-stat-label">Classes</div>
-                </div>
-                <div class="level-stat">
-                    <div class="level-stat-value">{{ sss_stats.assignments }}</div>
-                    <div class="level-stat-label">Assignments</div>
-                </div>
-            </div>
-            {% if sss_stats.ready %}
-            <div class="level-status ready"><i class="fas fa-check-circle"></i> Ready to Generate</div>
-            {% else %}
-            <div class="level-status not-ready"><i class="fas fa-exclamation-circle"></i> Setup Required</div>
-            {% endif %}
-            {% if sss_stats.latest %}
-            <div class="level-last-gen">Last generated: {{ sss_stats.latest.generated_at.strftime('%d %b %Y %H:%M') }}</div>
-            {% endif %}
-        </div>
-    </a>
-</div>
 
-<div class="text-center mt-4">
-    <p class="text-muted" style="font-size:.85rem">
-        <i class="fas fa-info-circle"></i> Each level has its own teachers, subjects, classes, and timetables.
-    </p>
+    <a href="{{ url_for('generator.level_dashboard', level='sss') }}" class="level-card sss">
+      <div class="level-top">
+        <span class="level-ic"><i class="fas fa-graduation-cap"></i></span>
+        <div><div class="level-name">SSS</div><div class="level-sub">Senior Secondary School</div></div>
+        <i class="fas fa-arrow-right level-arrow"></i>
+      </div>
+      <div class="level-chips">
+        <div class="level-chip"><b>{{ sss_stats.teachers }}</b><span>Teachers</span></div>
+        <div class="level-chip"><b>{{ sss_stats.subjects }}</b><span>Subjects</span></div>
+        <div class="level-chip"><b>{{ sss_stats.classes }}</b><span>Classes</span></div>
+        <div class="level-chip"><b>{{ sss_stats.assignments }}</b><span>Assignments</span></div>
+      </div>
+      <div class="level-foot">
+        {% if sss_stats.ready %}
+        <span class="badge badge-success"><i class="fas fa-check-circle"></i> Ready to generate</span>
+        {% else %}
+        <span class="badge badge-danger"><i class="fas fa-circle-exclamation"></i> Setup required</span>
+        {% endif %}
+        {% if sss_stats.latest %}
+        <span class="level-lastgen">Last generated {{ sss_stats.latest.generated_at.strftime('%d %b %Y') }}</span>
+        {% endif %}
+      </div>
+    </a>
+  </div>
+
+  <div class="gi-note"><i class="fas fa-circle-info"></i> Each level has its own teachers, subjects, classes, and timetables.</div>
+
+  <div class="howit">
+    <div class="howit-head">
+      <h2>How it works</h2>
+      <p>Four steps, done once per level — then re-generate any time your setup changes.</p>
+    </div>
+    <div class="steps">
+      <div class="step"><span class="step-num">1</span>
+        <div class="step-ic"><i class="fas fa-chalkboard-user"></i></div>
+        <h3>Add teachers</h3>
+        <p>List who's teaching this level, their subjects, and how many periods they can take.</p>
+      </div>
+      <div class="step"><span class="step-num">2</span>
+        <div class="step-ic"><i class="fas fa-book"></i></div>
+        <h3>Configure subjects</h3>
+        <p>Set each subject's weekly periods and whether it's core or elective.</p>
+      </div>
+      <div class="step"><span class="step-num">3</span>
+        <div class="step-ic"><i class="fas fa-user-tag"></i></div>
+        <h3>Assign &amp; set classes</h3>
+        <p>Define classes and arms, then match teachers to what they'll teach in each.</p>
+      </div>
+      <div class="step"><span class="step-num">4</span>
+        <div class="step-ic"><i class="fas fa-wand-magic-sparkles"></i></div>
+        <h3>Generate</h3>
+        <p>Pick a method and build conflict-free timetables for the classes you choose.</p>
+      </div>
+    </div>
+  </div>
 </div>
 {% endblock %}

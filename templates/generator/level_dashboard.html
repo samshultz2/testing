@@ -4,193 +4,223 @@
 
 {% block extra_css %}
 <style>
-.level-header{display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem;padding:1rem;border-radius:var(--radius-lg);color:white;flex-wrap:wrap}
-.level-header.jss{background:linear-gradient(135deg,#11998e 0%,#38ef7d 100%)}
-.level-header.sss{background:linear-gradient(135deg,#667eea 0%,#764ba2 100%)}
-.level-header-icon{font-size:2rem}
-.level-header-info{flex:1 1 12rem;min-width:0}
-.level-header-info h1{margin:0;font-size:1.25rem}
-.level-header-info p{margin:0;opacity:.9;font-size:.85rem}
-.level-actions{margin-left:auto;display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
-.level-switch{padding:.5rem 1rem;background:rgba(255,255,255,.2);border-radius:20px;color:white;text-decoration:none;font-size:.85rem;transition:background .2s}
-.level-switch:hover{background:rgba(255,255,255,.3);color:white}
-.config-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:1rem;margin-bottom:1.5rem}
-@media(min-width:768px){.config-grid{grid-template-columns:repeat(4,1fr)}}
-.config-grid.secondary{grid-template-columns:1fr;max-width:500px;margin:0 auto 1.5rem}
-@media(min-width:520px){.config-grid.secondary{grid-template-columns:repeat(2,1fr)}}
-@media(min-width:768px){.config-grid.secondary.sss{grid-template-columns:repeat(3,1fr);max-width:760px}}
-@media(max-width:600px){.level-actions{margin-left:0;width:100%}}
-.config-card{background:var(--bg-card);border-radius:var(--radius-lg);border:1px solid var(--border-color);padding:1.25rem;text-align:center;transition:all .2s}
-.config-card:hover{border-color:var(--primary);transform:translateY(-2px)}
-.config-card a{text-decoration:none;color:inherit;display:block}
-.config-icon{width:50px;height:50px;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto .75rem;font-size:1.25rem;color:white}
-.config-icon.teachers{background:linear-gradient(135deg,#f093fb,#f5576c)}
-.config-icon.subjects{background:linear-gradient(135deg,#4facfe,#00f2fe)}
-.config-icon.classes{background:linear-gradient(135deg,#43e97b,#38f9d7)}
-.config-icon.assignments{background:linear-gradient(135deg,#fa709a,#fee140)}
-.config-icon.streams{background:linear-gradient(135deg,#a8edea,#fed6e3)}
-.config-icon.rules{background:linear-gradient(135deg,#d299c2,#fef9d7)}
-.config-title{font-weight:600;font-size:.9rem;margin-bottom:.25rem}
-.config-count{font-size:1.5rem;font-weight:700;color:var(--primary)}
-.config-link{font-size:.75rem;color:var(--text-muted);margin-top:.5rem}
-.action-section{margin-top:2rem}
-.generate-card{background:var(--bg-card);border-radius:var(--radius-lg);border:2px solid var(--border-color);padding:2rem;text-align:center}
-.generate-card.ready{border-color:#28a745}
-.generate-card.not-ready{border-color:#dc3545}
-.generate-icon{font-size:3rem;margin-bottom:1rem}
-.generate-card.ready .generate-icon{color:#28a745}
-.generate-card.not-ready .generate-icon{color:#dc3545}
-.quick-links{display:flex;flex-wrap:wrap;gap:.5rem;justify-content:center;margin-top:1.5rem}
-.quick-link{padding:.5rem 1rem;background:var(--gray-100);border-radius:20px;font-size:.85rem;color:var(--text-muted);text-decoration:none;transition:all .2s}
-.quick-link:hover{background:var(--primary);color:white}
+.content-narrow{max-width:760px;margin:0 auto}
+
+.btn-ghost{display:inline-flex;align-items:center;gap:.4em;padding:.5em .9em;border-radius:var(--radius-md);font-size:.8rem;font-weight:600;
+  background:var(--bg-card);border:1px solid var(--border-color);color:var(--text-secondary);text-decoration:none}
+.btn-ghost:hover{border-color:var(--primary);color:var(--primary)}
+
+/* ---- level head ---- */
+.lvl-head{display:flex;align-items:flex-start;gap:.9rem;margin-bottom:1.1rem;flex-wrap:wrap}
+.lvl-ic{width:48px;height:48px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0}
+.lvl-ic.jss{background:var(--info-light);color:var(--info)}
+.lvl-ic.sss{background:var(--primary-light);color:var(--primary)}
+.lvl-head-txt{flex:1 1 10rem;min-width:0}
+.lvl-head-txt h1{margin:0;font-size:1.3rem;letter-spacing:-.02em}
+.lvl-head-txt p{margin:.2rem 0 0;color:var(--text-muted);font-size:.84rem}
+.lvl-actions{display:flex;gap:.5rem;flex-wrap:wrap;width:100%}
+@media(min-width:560px){.lvl-actions{width:auto;margin-left:auto}}
+
+/* ---- config cards ---- */
+.cfg-grid{display:grid;grid-template-columns:1fr 1fr;gap:.7rem;margin-bottom:1.1rem}
+@media(min-width:560px){.cfg-grid{grid-template-columns:repeat(4,1fr)}}
+.cfg-grid.secondary{grid-template-columns:1fr 1fr}
+.cfg-grid.secondary.sss{grid-template-columns:1fr 1fr 1fr}
+@media(min-width:560px){.cfg-grid.secondary{max-width:560px;margin-left:auto;margin-right:auto}}
+
+.cfg-card{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);text-decoration:none;color:inherit;
+  display:block;padding:1rem .9rem;text-align:center;box-shadow:var(--shadow-sm);transition:border-color .18s,box-shadow .18s,transform .18s}
+.cfg-card:hover{border-color:var(--primary);box-shadow:var(--shadow-md);transform:translateY(-2px);color:inherit}
+.cfg-card:hover{text-decoration:none !important}
+.cfg-ic{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;margin:0 auto .55rem;font-size:1rem}
+.cfg-ic.teachers{background:var(--info-light);color:var(--info)}
+.cfg-ic.subjects{background:var(--primary-light);color:var(--primary)}
+.cfg-ic.classes{background:var(--accent-light);color:var(--accent)}
+.cfg-ic.assignments{background:var(--warning-light);color:var(--warning)}
+.cfg-ic.muted{background:var(--gray-100);color:var(--gray-600)}
+.cfg-title{font-size:.76rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.02em}
+.cfg-count{font-size:1.4rem;font-weight:700;margin-top:.15rem;line-height:1.2}
+.cfg-link{font-size:.7rem;color:var(--text-muted);margin-top:.2rem}
+
+/* ---- generate card ---- */
+.gen-card{background:var(--bg-card);border:1.5px solid var(--border-color);border-radius:var(--radius-xl);padding:1.4rem 1.2rem;text-align:center;
+  box-shadow:var(--shadow-sm);margin-bottom:1.3rem}
+.gen-card.ready{border-color:color-mix(in srgb,var(--success) 35%,var(--border-color))}
+.gen-card.notready{border-color:color-mix(in srgb,var(--danger) 25%,var(--border-color))}
+.gen-ic{width:58px;height:58px;border-radius:16px;display:flex;align-items:center;justify-content:center;margin:0 auto .8rem;font-size:1.5rem}
+.gen-card.ready .gen-ic{background:var(--success-light);color:var(--success)}
+.gen-card.notready .gen-ic{background:var(--danger-light);color:var(--danger)}
+.gen-card h3{margin:0 0 .3rem;font-size:1.05rem}
+.gen-card p{margin:0;color:var(--text-muted);font-size:.86rem}
+.gen-checklist{display:flex;flex-wrap:wrap;gap:.4rem;justify-content:center;margin-top:.9rem}
+.gen-cta{margin-top:1.1rem}
+.gen-last{margin-top:1.1rem;padding-top:1rem;border-top:1px solid var(--border-light);display:flex;flex-direction:column;align-items:center;gap:.5rem}
+.gen-last small{color:var(--text-muted);font-size:.78rem}
+
+/* ---- quick link sections ---- */
+.qsec{margin-top:1.6rem}
+.qsec-head{display:flex;align-items:baseline;gap:.5rem;margin:0 0 .65rem;padding:0 .1rem}
+.qsec-head h3{margin:0;font-size:.98rem;font-weight:700}
+.qsec-head i{color:var(--primary);font-size:.82rem}
+.qsec.alt .qsec-head i{color:var(--info)}
+.qsec-sub{margin:-.45rem 0 .65rem;padding:0 .1rem;color:var(--text-muted);font-size:.78rem}
+
+.qcard{background:var(--bg-card);border:1px solid var(--border-light);border-radius:var(--radius-xl);overflow:hidden;box-shadow:var(--shadow-sm)}
+.qrow{display:flex;align-items:center;gap:.9rem;padding:1rem 1.1rem;text-decoration:none;color:inherit;
+  border-bottom:1px solid color-mix(in srgb,var(--border-color) 40%,transparent);transition:background .15s}
+.qrow:last-child{border-bottom:none}
+.qrow:hover,.qrow:active{background:var(--gray-50);color:inherit}
+.qrow:hover{text-decoration:none !important}
+.qrow .qic{width:38px;height:38px;border-radius:12px;background:var(--primary-light);color:var(--primary);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:.88rem}
+.qsec.alt .qic{background:var(--info-light);color:var(--info)}
+.qrow .qtxt{flex:1;min-width:0}
+.qrow .qtxt b{display:block;font-size:.85rem;font-weight:500;color:var(--text-primary);letter-spacing:.005em}
+.qrow .qtxt span{display:block;font-size:.73rem;font-weight:400;color:var(--text-muted);margin-top:.2rem;line-height:1.5}
+.qrow .qarrow{color:var(--gray-300);font-size:.76rem;flex-shrink:0;transition:transform .15s,color .15s}
+.qrow:hover .qarrow{color:var(--primary);transform:translateX(2px)}
+.qsec.alt .qrow:hover .qarrow{color:var(--info)}
 </style>
 {% endblock %}
 
 {% block content %}
-<!-- Level Header -->
-<div class="level-header {{ level }}">
-    <div class="level-header-icon">
-        <i class="fas fa-{% if level == 'jss' %}school{% else %}graduation-cap{% endif %}"></i>
+<div class="content-narrow">
+  <div class="lvl-head">
+    <span class="lvl-ic {{ level }}"><i class="fas fa-{% if level == 'jss' %}school{% else %}graduation-cap{% endif %}"></i></span>
+    <div class="lvl-head-txt">
+      <h1>{{ level_name }}</h1>
+      <p>Configure teachers, subjects, classes and generate timetables</p>
     </div>
-    <div class="level-header-info">
-        <h1>{{ level_name }}</h1>
-        <p>Configure teachers, subjects, classes and generate timetables</p>
+    <div class="lvl-actions">
+      <a href="{{ url_for('generator.setup_guide') }}" class="btn-ghost"><i class="fas fa-list-check"></i> Setup guide</a>
+      <a href="{{ url_for('generator.level_dashboard', level='sss' if level == 'jss' else 'jss') }}" class="btn-ghost">
+        <i class="fas fa-exchange-alt"></i> Switch to {{ 'SSS' if level == 'jss' else 'JSS' }}
+      </a>
     </div>
-    <div class="level-actions">
-        <a href="{{ url_for('generator.setup_guide') }}" class="level-switch" title="Step-by-step checklist">
-            <i class="fas fa-list-check"></i> Setup guide
-        </a>
-        <a href="{{ url_for('generator.level_dashboard', level='sss' if level == 'jss' else 'jss') }}" class="level-switch">
-            <i class="fas fa-exchange-alt"></i> Switch to {{ 'SSS' if level == 'jss' else 'JSS' }}
-        </a>
-    </div>
-</div>
+  </div>
 
-<!-- Configuration Cards -->
-<div class="config-grid">
-    <div class="config-card">
-        <a href="{{ url_for('generator.teachers_list') }}">
-            <div class="config-icon teachers"><i class="fas fa-chalkboard-teacher"></i></div>
-            <div class="config-title">Teachers</div>
-            <div class="config-count">{{ teachers_count }}</div>
-            <div class="config-link">Manage →</div>
-        </a>
-    </div>
-    
-    <div class="config-card">
-        <a href="{{ url_for('generator.subjects_config') }}">
-            <div class="config-icon subjects"><i class="fas fa-book"></i></div>
-            <div class="config-title">Subjects</div>
-            <div class="config-count">{{ subjects_count }}</div>
-            <div class="config-link">{% if configured_subjects > 0 %}{{ configured_subjects }} configured{% else %}Configure →{% endif %}</div>
-        </a>
-    </div>
-    
-    <div class="config-card">
-        <a href="{{ url_for('generator.classes_config') }}">
-            <div class="config-icon classes"><i class="fas fa-door-open"></i></div>
-            <div class="config-title">Classes</div>
-            <div class="config-count">{{ classes_count }}</div>
-            <div class="config-link">Setup →</div>
-        </a>
-    </div>
-    
-    <div class="config-card">
-        <a href="{{ url_for('generator.teacher_assignments') }}">
-            <div class="config-icon assignments"><i class="fas fa-user-tag"></i></div>
-            <div class="config-title">Assignments</div>
-            <div class="config-count">{{ assignments_count }}</div>
-            <div class="config-link">Assign →</div>
-        </a>
-    </div>
-</div>
+  <div class="cfg-grid">
+    <a href="{{ url_for('generator.teachers_list') }}" class="cfg-card">
+      <div class="cfg-ic teachers"><i class="fas fa-chalkboard-teacher"></i></div>
+      <div class="cfg-title">Teachers</div>
+      <div class="cfg-count">{{ teachers_count }}</div>
+      <div class="cfg-link">Manage →</div>
+    </a>
+    <a href="{{ url_for('generator.subjects_config') }}" class="cfg-card">
+      <div class="cfg-ic subjects"><i class="fas fa-book"></i></div>
+      <div class="cfg-title">Subjects</div>
+      <div class="cfg-count">{{ subjects_count }}</div>
+      <div class="cfg-link">{% if configured_subjects > 0 %}{{ configured_subjects }} configured{% else %}Configure →{% endif %}</div>
+    </a>
+    <a href="{{ url_for('generator.classes_config') }}" class="cfg-card">
+      <div class="cfg-ic classes"><i class="fas fa-door-open"></i></div>
+      <div class="cfg-title">Classes</div>
+      <div class="cfg-count">{{ classes_count }}</div>
+      <div class="cfg-link">Setup →</div>
+    </a>
+    <a href="{{ url_for('generator.teacher_assignments') }}" class="cfg-card">
+      <div class="cfg-ic assignments"><i class="fas fa-user-tag"></i></div>
+      <div class="cfg-title">Assignments</div>
+      <div class="cfg-count">{{ assignments_count }}</div>
+      <div class="cfg-link">Assign →</div>
+    </a>
+  </div>
 
-<!-- Rules, rooms (+ streams for SSS) -->
-<div class="config-grid secondary {{ 'sss' if level == 'sss' else '' }}">
+  <div class="cfg-grid secondary {{ 'sss' if level == 'sss' else '' }}">
     {% if level == 'sss' %}
-    <div class="config-card">
-        <a href="{{ url_for('generator.streams_list') }}">
-            <div class="config-icon streams"><i class="fas fa-layer-group"></i></div>
-            <div class="config-title">Streams</div>
-            <div class="config-count">{{ streams_count }}</div>
-            <div class="config-link">Science/Arts/Commercial →</div>
-        </a>
+    <a href="{{ url_for('generator.streams_list') }}" class="cfg-card">
+      <div class="cfg-ic muted"><i class="fas fa-layer-group"></i></div>
+      <div class="cfg-title">Streams</div>
+      <div class="cfg-count">{{ streams_count }}</div>
+      <div class="cfg-link">Science/Arts/Commercial →</div>
+    </a>
+    {% endif %}
+    <a href="{{ url_for('generator.rules_config') }}" class="cfg-card">
+      <div class="cfg-ic muted"><i class="fas fa-cogs"></i></div>
+      <div class="cfg-title">Rules</div>
+      <div class="cfg-count">—</div>
+      <div class="cfg-link">Periods, break →</div>
+    </a>
+    <a href="{{ url_for('generator.rooms_list') }}" class="cfg-card">
+      <div class="cfg-ic muted"><i class="fas fa-door-closed"></i></div>
+      <div class="cfg-title">Rooms</div>
+      <div class="cfg-count">{{ rooms_count }}</div>
+      <div class="cfg-link">Venues (optional) →</div>
+    </a>
+  </div>
+
+  <div class="gen-card {% if ready_to_generate %}ready{% else %}notready{% endif %}">
+    <div class="gen-ic"><i class="fas fa-{% if ready_to_generate %}play-circle{% else %}exclamation-circle{% endif %}"></i></div>
+    {% if ready_to_generate %}
+    <h3>Ready to Generate!</h3>
+    <p>All configurations are in place. You can generate the timetable now.</p>
+    <div class="gen-cta">
+      <a href="{{ url_for('generator.generate_page') }}" class="btn btn-success btn-lg"><i class="fas fa-magic"></i> Generate Timetable</a>
+    </div>
+    {% else %}
+    <h3>Setup Required</h3>
+    <p>Complete the configuration above before generating.</p>
+    <div class="gen-checklist">
+      {% if teachers_count == 0 %}<span class="badge badge-danger"><i class="fas fa-circle-exclamation"></i> Add teachers</span>{% endif %}
+      {% if configured_subjects == 0 %}<span class="badge badge-danger"><i class="fas fa-circle-exclamation"></i> Configure subjects</span>{% endif %}
+      {% if classes_count == 0 %}<span class="badge badge-danger"><i class="fas fa-circle-exclamation"></i> Setup classes</span>{% endif %}
+      {% if assignments_count == 0 %}<span class="badge badge-danger"><i class="fas fa-circle-exclamation"></i> Assign teachers to classes</span>{% endif %}
     </div>
     {% endif %}
-    <div class="config-card">
-        <a href="{{ url_for('generator.rules_config') }}">
-            <div class="config-icon rules"><i class="fas fa-cogs"></i></div>
-            <div class="config-title">Rules</div>
-            <div class="config-count">-</div>
-            <div class="config-link">Periods, break, constraints →</div>
-        </a>
-    </div>
-    <div class="config-card">
-        <a href="{{ url_for('generator.rooms_list') }}">
-            <div class="config-icon streams" style="background:linear-gradient(135deg,#30cfd0,#330867)"><i class="fas fa-door-closed"></i></div>
-            <div class="config-title">Rooms</div>
-            <div class="config-count">{{ rooms_count }}</div>
-            <div class="config-link">Venues (optional) →</div>
-        </a>
-    </div>
-</div>
 
-<!-- Generate Section -->
-<div class="action-section">
-    <div class="generate-card {% if ready_to_generate %}ready{% else %}not-ready{% endif %}">
-        <div class="generate-icon">
-            <i class="fas fa-{% if ready_to_generate %}play-circle{% else %}exclamation-circle{% endif %}"></i>
-        </div>
-        {% if ready_to_generate %}
-        <h3>Ready to Generate!</h3>
-        <p class="text-muted">All configurations are in place. You can generate the timetable now.</p>
-        <a href="{{ url_for('generator.generate_page') }}" class="btn btn-success btn-lg mt-3">
-            <i class="fas fa-magic"></i> Generate Timetable
-        </a>
-        {% else %}
-        <h3>Setup Required</h3>
-        <p class="text-muted">Complete the configuration above before generating.</p>
-        <ul style="text-align:left;max-width:300px;margin:1rem auto;font-size:.9rem">
-            {% if teachers_count == 0 %}<li class="text-danger">Add teachers</li>{% endif %}
-            {% if subjects_configured == 0 %}<li class="text-danger">Configure subjects</li>{% endif %}
-            {% if classes_count == 0 %}<li class="text-danger">Setup classes</li>{% endif %}
-            {% if assignments_count == 0 %}<li class="text-danger">Assign teachers to classes</li>{% endif %}
-        </ul>
-        {% endif %}
-        
-        {% if latest_batch %}
-        <div class="mt-3 pt-3" style="border-top:1px solid var(--border-color)">
-            <small class="text-muted">Last generated: {{ latest_batch.generated_at.strftime('%d %b %Y at %H:%M') }}</small>
-            <br>
-            <a href="{{ url_for('generator.view_results', batch_id=latest_batch.batch_id) }}" class="btn btn-outline-primary btn-sm mt-2">
-                <i class="fas fa-eye"></i> View Last Timetable
-            </a>
-        </div>
-        {% endif %}
+    {% if latest_batch %}
+    <div class="gen-last">
+      <small>Last generated {{ latest_batch.generated_at.strftime('%d %b %Y at %H:%M') }}</small>
+      <a href="{{ url_for('generator.view_results', batch_id=latest_batch.batch_id) }}" class="btn btn-outline-primary btn-sm">
+        <i class="fas fa-eye"></i> View Last Timetable
+      </a>
     </div>
-</div>
+    {% endif %}
+  </div>
 
-<!-- Every other setting, one click away -->
-<div style="margin-top:2rem;">
-    <h3 style="font-size:1rem;margin-bottom:.4rem;"><i class="fas fa-sliders-h"></i> Configuration &amp; rules</h3>
-    <p class="text-muted text-sm" style="margin-top:0;margin-bottom:.7rem;">Fine-tune how the timetable is built. Sensible defaults apply where you leave these untouched.</p>
-    <div class="quick-links" style="justify-content:flex-start;">
-        <a href="{{ url_for('generator.rules_config') }}" class="quick-link" title="Periods per day, break, no-repeat, even spread, max consecutive"><i class="fas fa-cogs"></i> Generation rules</a>
-        <a href="{{ url_for('generator.class_subjects_list') }}" class="quick-link" title="How many periods each subject gets per week, per class"><i class="fas fa-sliders-h"></i> Per-class subjects &amp; periods</a>
-        {% if level == 'sss' %}
-        <a href="{{ url_for('generator.streams_list') }}" class="quick-link"><i class="fas fa-stream"></i> Stream subjects</a>
-        {% endif %}
-        <a href="{{ url_for('generator.clash_rules_list') }}" class="quick-link" title="Subjects that must not clash, and combined-class rules"><i class="fas fa-ban"></i> Clash &amp; combined-class rules</a>
-        <a href="{{ url_for('generator.rooms_list') }}" class="quick-link"><i class="fas fa-door-closed"></i> Rooms / venues</a>
-        <a href="{{ url_for('settings.timetable_slots') }}" class="quick-link" title="The teaching periods and their times (shared timetable)"><i class="fas fa-clock"></i> Periods &amp; times</a>
-        <a href="{{ url_for('generator.generator_settings') }}" class="quick-link" title="School name, address, session &amp; term printed on exports"><i class="fas fa-print"></i> Print / header details</a>
+  <div class="qsec">
+    <div class="qsec-head"><i class="fas fa-sliders-h"></i> <h3>Configuration &amp; rules</h3></div>
+    <p class="qsec-sub">Fine-tune how the timetable is built. Sensible defaults apply where you leave these untouched.</p>
+    <div class="qcard">
+      <a href="{{ url_for('generator.rules_config') }}" class="qrow"><span class="qic"><i class="fas fa-cogs"></i></span>
+        <span class="qtxt"><b>Generation rules</b><span>Periods per day, break, no-repeat, even spread</span></span>
+        <i class="fas fa-chevron-right qarrow"></i></a>
+      <a href="{{ url_for('generator.class_subjects_list') }}" class="qrow"><span class="qic"><i class="fas fa-sliders-h"></i></span>
+        <span class="qtxt"><b>Per-class subjects &amp; periods</b><span>Weekly periods per subject, per class</span></span>
+        <i class="fas fa-chevron-right qarrow"></i></a>
+      {% if level == 'sss' %}
+      <a href="{{ url_for('generator.streams_list') }}" class="qrow"><span class="qic"><i class="fas fa-stream"></i></span>
+        <span class="qtxt"><b>Stream subjects</b><span>Science / Arts / Commercial electives</span></span>
+        <i class="fas fa-chevron-right qarrow"></i></a>
+      {% endif %}
+      <a href="{{ url_for('generator.clash_rules_list') }}" class="qrow"><span class="qic"><i class="fas fa-ban"></i></span>
+        <span class="qtxt"><b>Clash &amp; combined-class rules</b><span>Subjects that must not clash</span></span>
+        <i class="fas fa-chevron-right qarrow"></i></a>
+      <a href="{{ url_for('generator.rooms_list') }}" class="qrow"><span class="qic"><i class="fas fa-door-closed"></i></span>
+        <span class="qtxt"><b>Rooms / venues</b><span>Assign teaching spaces</span></span>
+        <i class="fas fa-chevron-right qarrow"></i></a>
+      <a href="{{ url_for('settings.timetable_slots') }}" class="qrow"><span class="qic"><i class="fas fa-clock"></i></span>
+        <span class="qtxt"><b>Periods &amp; times</b><span>Shared teaching-period timetable</span></span>
+        <i class="fas fa-chevron-right qarrow"></i></a>
+      <a href="{{ url_for('generator.generator_settings') }}" class="qrow"><span class="qic"><i class="fas fa-print"></i></span>
+        <span class="qtxt"><b>Print / header details</b><span>School name, session &amp; term on exports</span></span>
+        <i class="fas fa-chevron-right qarrow"></i></a>
     </div>
+  </div>
 
-    <h3 style="font-size:1rem;margin:1.4rem 0 .4rem;"><i class="fas fa-chart-bar"></i> Results &amp; checks</h3>
-    <div class="quick-links" style="justify-content:flex-start;">
-        <a href="{{ url_for('generator.results_list') }}" class="quick-link"><i class="fas fa-history"></i> Past timetables</a>
-        <a href="{{ url_for('generator.reports_index') }}" class="quick-link" title="Teacher workload, clashes, unassigned subjects"><i class="fas fa-clipboard-check"></i> Reports &amp; validation</a>
-        <a href="{{ url_for('generator.setup_guide') }}" class="quick-link"><i class="fas fa-list-check"></i> Setup checklist</a>
+  <div class="qsec alt">
+    <div class="qsec-head"><i class="fas fa-chart-bar"></i> <h3>Results &amp; checks</h3></div>
+    <div class="qcard">
+      <a href="{{ url_for('generator.results_list') }}" class="qrow"><span class="qic"><i class="fas fa-history"></i></span>
+        <span class="qtxt"><b>Past timetables</b><span>Browse previous generation batches</span></span>
+        <i class="fas fa-chevron-right qarrow"></i></a>
+      <a href="{{ url_for('generator.reports_index') }}" class="qrow"><span class="qic"><i class="fas fa-clipboard-check"></i></span>
+        <span class="qtxt"><b>Reports &amp; validation</b><span>Teacher workload, clashes, unassigned subjects</span></span>
+        <i class="fas fa-chevron-right qarrow"></i></a>
+      <a href="{{ url_for('generator.setup_guide') }}" class="qrow"><span class="qic"><i class="fas fa-list-check"></i></span>
+        <span class="qtxt"><b>Setup checklist</b><span>Step-by-step guide to full setup</span></span>
+        <i class="fas fa-chevron-right qarrow"></i></a>
     </div>
+  </div>
 </div>
 {% endblock %}
