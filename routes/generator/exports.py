@@ -1376,22 +1376,40 @@ def export_results_by_day_pdf(batch_id):
         table_data = []
         row_heights = []
 
-        # Only the first day in each stacked page-group shows the period
-        # header row (P#/times + BREAK) — the next day(s) sharing that page
-        # flow straight into their data rows instead of repeating it.
-        show_period_header = (d % days_per_page == 0)
+        # Packed: the first day in each stacked page-group shows the period
+        # header row (P#/times + BREAK) — the day sharing that page below it
+        # flows straight into its data rows instead of repeating it. Single
+        # (days_per_page == 1): every day is its OWN separate page, so
+        # repeating the header on each one is just the same P#/times five
+        # times over -- shown once, on the very first page, and nowhere else.
+        show_period_header = (d == 0) if days_per_page == 1 else (d % days_per_page == 0)
 
         # Calculate row heights to fit EXACTLY on this day's block
         if d == 0:  # Monday - include school name and address
             school_header_height = sc(9*mm)
             address_header_height = sc(5*mm) if school_address else 0
             day_header_height = sc(11*mm)
-            period_header_height = sc(16*mm)    # taller: shows the P#/start/end times, bigger
+            # Taller than before (was 16mm) -- paired with the bigger period
+            # header font below (bold was already there, it just wasn't
+            # legible at the old size).
+            period_header_height = sc(22*mm)
             fixed_height = school_header_height + address_header_height + day_header_height + period_header_height
         else:
             day_header_height = sc(11*mm)
             period_header_height = sc(10*mm)
-            fixed_height = day_header_height + period_header_height
+            if days_per_page > 1:
+                # Packed: this block shares its PAGE with a sibling block, so
+                # even when this day doesn't show its own period header, the
+                # height stays reserved as blank space rather than going to
+                # data rows -- otherwise the two stacked blocks on the same
+                # page would show different-sized data rows side by side.
+                fixed_height = day_header_height + period_header_height
+            else:
+                # Single: every day is its own separate page and the period
+                # header only ever appears on day 0 (show_period_header,
+                # above) -- every other page reclaims that space for bigger
+                # data rows instead of leaving it blank.
+                fixed_height = day_header_height
 
         # Data rows split ALL remaining height so the grid fills the page. (-1pt
         # guards against float rounding tipping the table onto a second page.)
@@ -1523,14 +1541,27 @@ def export_results_by_day_pdf(batch_id):
         # Confined to a period column, so bound by whichever of
         # height/width is tighter (fit_scale), not height alone.
         if show_period_header:
+            # d==0's size bumped from 11 -- already Helvetica-Bold in the
+            # source, but at 11pt the bold weight barely read as bold at
+            # all. This is now the ONLY period-header row single-day-per-page
+            # layouts ever draw (see show_period_header above), so it's worth
+            # sizing for legibility rather than squeezing in alongside a
+            # school/address block it used to have to share Monday's page
+            # with proportionally. Packed mode's d!=0 case (13) is untouched.
+            header_font_sz = 17 if d == 0 else 13
             style_commands.extend([
                 ('FONTNAME', (0, header_row_idx), (-1, header_row_idx), 'Helvetica-Bold'),
-                ('FONTSIZE', (0, header_row_idx), (-1, header_row_idx), sc_fit(11 if d == 0 else 13)),
-                ('LEADING', (0, header_row_idx), (-1, header_row_idx), sc_fit(12 if d == 0 else 14)),
+                ('FONTSIZE', (0, header_row_idx), (-1, header_row_idx), sc_fit(header_font_sz)),
+                ('LEADING', (0, header_row_idx), (-1, header_row_idx), sc_fit(header_font_sz + 1)),
                 ('ALIGN', (0, header_row_idx), (-1, header_row_idx), 'CENTER'),
                 ('VALIGN', (0, header_row_idx), (-1, header_row_idx), 'MIDDLE'),
 
-                # Break column header (narrow column, keep its multi-line label small)
+                # Break column header -- NOT bumped with the rest: this
+                # column is fixed-width (break_col_width, sc_w(10*mm)) and
+                # independent of header_font_sz, and "BREAK" at 10pt already
+                # overflowed that width into the grid lines on either side
+                # (verified against a real render). 7 is the largest size
+                # that was already confirmed to fit here.
                 ('FONTSIZE', (break_col, header_row_idx), (break_col, header_row_idx), sc_fit(7)),
                 ('LEADING', (break_col, header_row_idx), (break_col, header_row_idx), sc_fit(7.5)),
             ])

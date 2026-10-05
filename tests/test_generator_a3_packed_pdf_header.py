@@ -120,9 +120,12 @@ def test_packed_pdf_wed_thu_pair_also_has_single_header(app):
     assert 'WEDNESDAY' in page2 and 'THURSDAY' in page2
 
 
-def test_single_day_per_page_pdf_unaffected(app):
-    """layout=single (the default / A4) keeps one header per day, since
-    show_period_header = (d % 1 == 0) is always True there."""
+def test_single_day_per_page_pdf_shows_header_once(app):
+    """layout=single (the default / A4): every day is its own separate
+    physical page, so repeating the P#/times header on each one is just the
+    same times five times over -- it's shown ONCE, on the very first page,
+    and omitted on every page after that (the freed space goes to bigger
+    data rows instead of staying blank)."""
     batch_id, bid = _seed(app, 'SGL', periods_per_day=9, break_after=5)
     c = _scoped_to_branch(_admin(app), bid)
 
@@ -130,9 +133,12 @@ def test_single_day_per_page_pdf_unaffected(app):
     assert r.status_code == 200
     pages = _pages_text(r.data)
     assert len(pages) == 5
-    for page in pages:
-        assert page.count('Class') == 1
-        assert page.count('BREAK') == 1
+    first, rest = pages[0], pages[1:]
+    assert first.count('Class') == 1
+    assert first.count('BREAK') == 1
+    for page in rest:
+        assert 'Class' not in page
+        assert 'BREAK' not in page
 
 
 def test_packed_pdf_last_lone_day_still_shows_its_own_header(app):
