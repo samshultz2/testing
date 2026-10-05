@@ -256,6 +256,41 @@ def export_results(batch_id):
     if paper not in ('a4', 'a3'):
         paper = 'a4'
 
+    # Row/column/font sizing below was tuned for A4 landscape. Excel's own
+    # fitToPage scaling (set further down) only kicks in when actually
+    # PRINTING -- opened plainly in Excel/LibreOffice/Sheets the content
+    # would be the same physical size on A4 and A3, just surrounded by more
+    # blank page. Scale every size up for A3 so the sheet itself already
+    # fills the bigger page, same approach as export_results_by_day_pdf's
+    # sc()/sc_w()/sc_fit() helpers. A4 and A3 landscape share one aspect
+    # ratio, but the margins below are fixed inches, so they eat a smaller
+    # share of the bigger page -- compute the real factor rather than
+    # assuming a flat sqrt(2).
+    MARGIN_LR_IN, MARGIN_TB_IN = 0.5, 0.4
+    A4_W_PT, A4_H_PT = 841.89, 595.28    # A4 landscape points (297 x 210mm)
+    A3_W_PT, A3_H_PT = 1190.55, 841.89   # A3 landscape points (420 x 297mm)
+    page_w_pt, page_h_pt = (A3_W_PT, A3_H_PT) if paper == 'a3' else (A4_W_PT, A4_H_PT)
+    usable_w = page_w_pt - 2 * MARGIN_LR_IN * 72
+    usable_h = page_h_pt - 2 * MARGIN_TB_IN * 72
+    baseline_w = A4_W_PT - 2 * MARGIN_LR_IN * 72
+    baseline_h = A4_H_PT - 2 * MARGIN_TB_IN * 72
+    hscale = usable_h / baseline_h
+    wscale = usable_w / baseline_w
+    fit_scale = min(hscale, wscale)  # text confined to one column/row
+
+    def sc(pt):
+        """Scale by page height -- for full-width single-line rows."""
+        return pt * hscale
+
+    def sc_w(width):
+        """Scale by page width -- for column widths."""
+        return width * wscale
+
+    def sc_fit(pt):
+        """Scale by whichever axis is tighter -- for font sizes, so text
+        never outgrows the column/row it sits in."""
+        return round(pt * fit_scale)
+
     all_results = GenTimetableResult.query.filter_by(batch_id=batch_id, branch_id=gen_bid()).all()
     if not all_results:
         flash('No results.', 'error')
@@ -314,15 +349,20 @@ def export_results(batch_id):
     wb = openpyxl.Workbook()
     wb.remove(wb.active)
     
-    # NO COLORS - Pure black text on white, maximum contrast for B&W printing
-    school_font = Font(bold=True, size=32, color='000000')
-    address_font = Font(bold=False, size=14, color='000000')
-    class_title_font = Font(bold=True, size=28, color='000000')
-    day_font = Font(bold=True, size=24, color='000000')
-    header_font = Font(bold=True, size=11, color='000000')
-    cell_font = Font(bold=True, size=32, color='000000')
-    break_header_font = Font(bold=True, size=8, color='000000')
-    
+    # NO COLORS - Pure black text on white, maximum contrast for B&W printing.
+    # Sizes are the A4 baseline; sc_fit() scales them up for A3 so the
+    # period-time headers (and everything else) stay legible-sized instead
+    # of looking lost in bigger cells. header_font governs the period-time
+    # headers specifically -- bumped from 11 to 14 so they read as bold and
+    # big even at the A4 baseline, not just proportionally on A3.
+    school_font = Font(bold=True, size=sc_fit(32), color='000000')
+    address_font = Font(bold=False, size=sc_fit(14), color='000000')
+    class_title_font = Font(bold=True, size=sc_fit(28), color='000000')
+    day_font = Font(bold=True, size=sc_fit(24), color='000000')
+    header_font = Font(bold=True, size=sc_fit(14), color='000000')
+    cell_font = Font(bold=True, size=sc_fit(32), color='000000')
+    break_header_font = Font(bold=True, size=sc_fit(10), color='000000')
+
     thin_border = Border(
         left=Side(style='thin'), right=Side(style='thin'),
         top=Side(style='thin'), bottom=Side(style='thin')
@@ -331,22 +371,24 @@ def export_results(batch_id):
         left=Side(style='medium'), right=Side(style='medium'),
         top=Side(style='medium'), bottom=Side(style='medium')
     )
-    
+
     center_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
-    
+
     days = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday']
-    
+
     # Total columns: Day label + periods-before + BREAK + periods-after.
     total_cols = 1 + break_after + 1 + (periods_per_day - break_after)
-    
+
     # A4 Landscape: 297mm x 210mm
     # Safe margins for most printers: 0.5" (12.7mm) each side
     # Usable: ~272mm x 185mm
-    total_page_height = 500  # points for A4 landscape height (conservative)
-    school_header_height = 38
-    address_header_height = 20 if school_address else 0
-    class_title_height = 32
-    period_header_height = 45
+    # Always landscape (set per-sheet below) -- heights scaled by sc() so the
+    # grid itself fills a bigger A3 page, not just Excel's print-time fit.
+    total_page_height = sc(500)  # points for A4 landscape height (conservative)
+    school_header_height = sc(38)
+    address_header_height = sc(20) if school_address else 0
+    class_title_height = sc(32)
+    period_header_height = sc(45)
     # 5 day rows get ALL remaining space
     fixed_height = school_header_height + address_header_height + class_title_height + period_header_height
     day_row_height = (total_page_height - fixed_height) / 5
@@ -481,11 +523,12 @@ def export_results(batch_id):
             ws.row_dimensions[current_row].height = day_row_height
             current_row += 1
         
-        # Column widths - fit within safe printable area
+        # Column widths - fit within safe printable area, scaled by sc_w()
+        # for A3 so the grid itself is wider, not just Excel's print-time fit.
         # A4 landscape with 0.5" margins: ~250mm usable width
-        ws.column_dimensions['A'].width = 12  # Day column
-        period_col_width = 28  # Period columns
-        break_col_width = 8   # Break column
+        ws.column_dimensions['A'].width = sc_w(12)  # Day column
+        period_col_width = sc_w(28)  # Period columns
+        break_col_width = sc_w(8)   # Break column
         
         for col in range(2, total_cols + 1):
             if col == 7:  # Break column
