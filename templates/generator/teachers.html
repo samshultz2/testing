@@ -3,19 +3,89 @@
 {% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <span>Teachers</span>{% endblock %}
 {% block extra_css %}
 <style>
-.bulk-bar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: .75rem;
-  flex-wrap: wrap; }
-.bulk-bar .bulk-count { font-weight: 600; color: var(--text-secondary); }
-.bulk-bar .bulk-increment { width: 90px; }
-.teacher-select { position: absolute; top: .75rem; right: .75rem; }
-.data-card { position: relative; }
+/* Teachers page — avatar + metric-chip cards and a selectable-card pattern,
+   matching the Generate page's visual language. Every color is a CSS
+   variable (or mirrors the light/dark pair the global .badge-* classes
+   use), so it follows whichever of the app's selectable themes is active. */
+.th-head{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:1.3rem;flex-wrap:wrap}
+.th-head .eyebrow{display:flex;align-items:center;gap:.5rem;color:var(--text-muted);font-size:.82rem;font-weight:600;margin-bottom:.3rem}
+.th-head h1{margin:0;font-size:1.55rem;font-family:var(--font-display);letter-spacing:-.02em;display:flex;align-items:center;gap:.6rem}
+.th-head h1 .ic{width:42px;height:42px;border-radius:12px;background:var(--primary-light);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0}
+.th-actions{display:flex;gap:.5rem;flex-wrap:wrap}
+
+.btn-ghost{background:var(--gray-100);color:var(--text-secondary)}
+.btn-ghost:hover:not(:disabled){background:var(--gray-200);color:var(--text-secondary)}
+
+/* ---- bulk bar ---- */
+.bulkbar{position:sticky;top:0;z-index:5;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);
+  box-shadow:var(--shadow-sm);padding:.9rem 1.1rem;margin-bottom:1.1rem}
+.bulkbar-row{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap}
+.bulkbar .sel-count{display:flex;align-items:center;gap:.5rem;font-size:.85rem;font-weight:700;color:var(--text-primary);flex-shrink:0}
+.bulkbar .sel-count .n{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;padding:0 .4rem;
+  border-radius:999px;background:var(--primary-light);color:var(--primary-hover);font-family:var(--font-display)}
+.bulkbar .linklike{background:none;border:none;color:var(--primary);font-weight:600;font-size:.82rem;cursor:pointer;padding:.2rem .3rem}
+.bulkbar .sep{width:1px;height:20px;background:var(--border-color);flex-shrink:0}
+.bulkbar .spacer{flex:1 1 auto}
+.stepper{display:flex;align-items:center;gap:.4rem;background:var(--gray-50);border:1px solid var(--border-light);border-radius:var(--radius-md);padding:.3rem .5rem .3rem .75rem}
+.stepper label{font-size:.78rem;color:var(--text-secondary);font-weight:600;white-space:nowrap}
+.stepper input{width:56px;border:none;background:transparent;font-size:.85rem;font-weight:700;color:var(--text-primary);text-align:center}
+.stepper input:focus{outline:none}
+.bulkbar .hint{display:flex;align-items:flex-start;gap:.5rem;margin-top:.8rem;padding-top:.8rem;border-top:1px solid var(--border-light);
+  font-size:.78rem;color:var(--text-muted);line-height:1.5}
+.bulkbar .hint i{color:var(--gray-400);margin-top:.15rem;flex-shrink:0}
+.bulkbar .hint a{color:var(--primary);font-weight:600}
+
+/* ---- teacher cards ---- */
+.tch-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:.9rem}
+.tch-card{position:relative;background:var(--bg-card);border:1.5px solid var(--border-color);border-radius:var(--radius-lg);
+  padding:1.1rem;transition:border-color .15s,box-shadow .15s;box-shadow:var(--shadow-sm)}
+.tch-card.on{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-light)}
+.tch-card .sel{position:absolute;top:.9rem;right:.9rem}
+.tch-card .sel input{position:absolute;opacity:0;pointer-events:none}
+.tch-card .sel .cbx{width:22px;height:22px;border-radius:7px;border:1.5px solid var(--border-color);background:var(--bg-card);
+  display:flex;align-items:center;justify-content:center;color:#fff;font-size:.72rem;cursor:pointer}
+.tch-card .sel .cbx i{opacity:0}
+.tch-card.on .sel .cbx{background:var(--primary);border-color:var(--primary)}
+.tch-card.on .sel .cbx i{opacity:1}
+.tch-card .top{display:flex;align-items:center;gap:.75rem;padding-right:1.8rem}
+.tch-av{width:44px;height:44px;border-radius:var(--radius-full);flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  font-weight:700;font-size:.85rem;letter-spacing:.02em;color:var(--primary);background:color-mix(in srgb,var(--primary) 14%,var(--bg-card));
+  border:1px solid var(--border-color)}
+.tch-name{font-weight:700;font-size:.95rem;line-height:1.25;overflow-wrap:anywhere}
+.tch-sub{display:flex;align-items:center;gap:.4rem;margin-top:.2rem;flex-wrap:wrap}
+.tch-metrics{display:flex;gap:.5rem;margin:.95rem 0 1rem}
+.tmetric{flex:1;text-align:center;background:var(--gray-50);border-radius:var(--radius-md);padding:.55rem .3rem}
+.tmetric b{display:block;font-family:var(--font-display);font-size:1.05rem;line-height:1.1}
+.tmetric span{font-size:.64rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.02em}
+.tch-card .edit-btn{width:100%}
+.pt-badge{background:var(--accent-light);color:#92400e}
+/* All 4 dark-base themes (dark/midnight/carbon/mocha) share the same tint
+   values, so one dark-mode palette covers all of them. */
+[data-theme="dark"] .pt-badge, [data-theme="midnight"] .pt-badge,
+[data-theme="carbon"] .pt-badge, [data-theme="mocha"] .pt-badge{color:#fcd34d}
+
+@media (max-width:620px){
+  .bulkbar-row{gap:.6rem}
+  .bulkbar .sep{display:none}
+  .bulkbar .spacer{display:none}
+  .stepper{flex:1 1 100%;justify-content:space-between}
+  .th-actions{width:100%}
+  .th-actions .btn{flex:1}
+}
 </style>
 {% endblock %}
+{% macro initials(name) -%}
+{%- set parts = (name or '').split() -%}
+{%- if parts -%}{{ (parts[0][0] + (parts[-1][0] if parts|length > 1 else ''))|upper }}{%- else -%}?{%- endif -%}
+{%- endmacro %}
 {% block content %}
-<div class="page-header">
-    <h1>Teachers</h1>
-    <div class="page-header-actions">
-        <a href="{{ url_for('generator.level_dashboard', level=level) }}" class="btn btn-secondary">
+<div class="th-head">
+    <div>
+        <div class="eyebrow"><i class="fas fa-graduation-cap"></i> {{ level|upper }} · Timetable Generator</div>
+        <h1><span class="ic"><i class="fas fa-chalkboard-user"></i></span> Teachers</h1>
+    </div>
+    <div class="th-actions">
+        <a href="{{ url_for('generator.level_dashboard', level=level) }}" class="btn btn-ghost">
             <i class="fas fa-arrow-left"></i> Back to {{ level|upper }} Dashboard
         </a>
         <a href="{{ url_for('generator.add_teacher') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add Teacher</a>
@@ -40,67 +110,65 @@
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
 </form>
 
-<div class="card mb-3">
-    <div class="card-body bulk-bar">
-        <span class="bulk-count" id="bulkCount">0 selected</span>
-        <button type="button" class="btn btn-secondary btn-sm" data-call="selectAllTeachers" data-args="true">Select All</button>
-        <button type="button" class="btn btn-secondary btn-sm" data-call="selectAllTeachers" data-args="false">Clear Selection</button>
-        <button type="submit" form="bulkSyncForm" class="btn btn-secondary btn-sm" id="bulkSyncBtn" disabled>
+<div class="bulkbar">
+    <div class="bulkbar-row">
+        <span class="sel-count"><span class="n" id="bulkCount">0</span> selected</span>
+        <button type="button" class="linklike" data-call="selectAllTeachers" data-args="true">Select all</button>
+        <button type="button" class="linklike" data-call="selectAllTeachers" data-args="false">Clear</button>
+        <span class="sep"></span>
+        <button type="submit" form="bulkSyncForm" class="btn btn-ghost btn-sm" id="bulkSyncBtn" disabled>
             <i class="fas fa-rotate"></i> Sync from Assignments
         </button>
-        <label class="form-label" style="margin: 0;" for="bulkIncrement">Add to max/week</label>
-        <input type="number" id="bulkIncrement" name="increment" form="bulkIncreaseForm" class="form-control bulk-increment" min="1" step="1" placeholder="e.g. 2">
+        <span class="spacer"></span>
+        <div class="stepper">
+            <label for="bulkIncrement">Add to max/week</label>
+            <input type="number" id="bulkIncrement" name="increment" form="bulkIncreaseForm" min="1" step="1" placeholder="e.g. 2">
+        </div>
         <button type="submit" form="bulkIncreaseForm" class="btn btn-primary btn-sm" id="bulkIncreaseBtn" disabled>
             <i class="fas fa-arrow-up"></i> Increase Selected
         </button>
         <button type="submit" form="bulkDeleteForm" class="btn btn-danger btn-sm" id="bulkDeleteBtn" disabled>
             <i class="fas fa-trash"></i> Delete Selected
         </button>
-        <span class="form-hint" style="width: 100%; margin: 0;">
-            "Sync from Assignments" sets max periods/week to each selected teacher's REAL
-            workload from <a href="{{ url_for('generator.teacher_assignments') }}">Teacher
-            Assignments</a> — periods/week per stream for classes with streams, per arm for
-            classes without — and recalculates max periods/day to match. "Increase Selected"
-            instead raises max periods/week by the amount above. Both recalculate max
-            periods/day the same way: spread evenly across each teacher's own working days,
-            capped at the school's periods-per-day. "Delete Selected" removes the selected
-            teachers.
-        </span>
+    </div>
+    <div class="hint"><i class="fas fa-circle-info"></i>
+        <span>"Sync from Assignments" sets max periods/week to each selected teacher's REAL workload from
+            <a href="{{ url_for('generator.teacher_assignments') }}">Teacher Assignments</a> — periods/week per
+            stream for classes with streams, per arm for classes without — and recalculates max periods/day to
+            match. "Increase" instead raises max periods/week by the amount above. Both recalculate max periods/day
+            the same way: spread evenly across each teacher's own working days, capped at the school's
+            periods-per-day. "Delete" removes the selected teachers.</span>
     </div>
 </div>
 
-<div class="card">
-    <div class="card-body" style="padding: 0;">
-        <div class="data-cards" style="padding: 1rem;">
-            {% for teacher in teachers %}
-            <div class="data-card">
-                <input type="checkbox" class="teacher-select teacher-checkbox"
-                       value="{{ teacher.id }}" title="Select {{ teacher.name }}">
-                <div class="data-card-header">
-                    <div class="data-card-title">{{ teacher.name }}</div>
+<div class="tch-grid">
+    {% for teacher in teachers %}
+    <label class="tch-card">
+        <span class="sel">
+            <input type="checkbox" class="teacher-checkbox" value="{{ teacher.id }}" title="Select {{ teacher.name }}"
+                   data-call="toggleTeacherCard" data-args="this" data-on="change">
+            <span class="cbx"><i class="fas fa-check"></i></span>
+        </span>
+        <div class="top">
+            <span class="tch-av">{{ initials(teacher.name) }}</span>
+            <div>
+                <div class="tch-name">{{ teacher.name }}</div>
+                <div class="tch-sub">
                     {% if teacher.staff_id %}<span class="badge badge-secondary">{{ teacher.staff_id }}</span>{% endif %}
-                </div>
-                <div class="data-card-row">
-                    <span class="data-card-label">Subjects</span>
-                    <span>{{ teacher.subjects.count() }}</span>
-                </div>
-                <div class="data-card-row">
-                    <span class="data-card-label">Max/Day</span>
-                    <span>{{ teacher.max_periods_per_day }} periods</span>
-                </div>
-                <div class="data-card-row">
-                    <span class="data-card-label">Max/Week</span>
-                    <span>{{ teacher.max_periods_per_week }} periods</span>
-                </div>
-                <div class="data-card-actions">
-                    <a href="{{ url_for('generator.edit_teacher', teacher_id=teacher.id) }}" class="btn btn-primary btn-sm">
-                        <i class="fas fa-edit"></i> Edit
-                    </a>
+                    {% if teacher.is_part_time %}<span class="badge pt-badge">Part-time</span>{% endif %}
                 </div>
             </div>
-            {% endfor %}
         </div>
-    </div>
+        <div class="tch-metrics">
+            <div class="tmetric"><b>{{ teacher.subjects.count() }}</b><span>Subjects</span></div>
+            <div class="tmetric"><b>{{ teacher.max_periods_per_day }}</b><span>Max/day</span></div>
+            <div class="tmetric"><b>{{ teacher.max_periods_per_week }}</b><span>Max/week</span></div>
+        </div>
+        <a href="{{ url_for('generator.edit_teacher', teacher_id=teacher.id) }}" class="btn btn-primary btn-sm edit-btn">
+            <i class="fas fa-pen"></i> Edit
+        </a>
+    </label>
+    {% endfor %}
 </div>
 {% else %}
 <div class="card">
@@ -125,22 +193,25 @@ function teacherCheckboxes() {
 function updateBulkBar() {
     const checked = teacherCheckboxes().filter(cb => cb.checked);
     const increment = parseInt(document.getElementById('bulkIncrement').value, 10);
-    document.getElementById('bulkCount').textContent = checked.length + ' selected';
+    document.getElementById('bulkCount').textContent = checked.length;
     document.getElementById('bulkIncreaseBtn').disabled = checked.length === 0 || !(increment > 0);
     document.getElementById('bulkDeleteBtn').disabled = checked.length === 0;
     document.getElementById('bulkSyncBtn').disabled = checked.length === 0;
 }
 
-function selectAllTeachers(selectAll) {
-    teacherCheckboxes().forEach(function (cb) { cb.checked = selectAll; });
+function toggleTeacherCard(cb) {
+    cb.closest('.tch-card').classList.toggle('on', cb.checked);
     updateBulkBar();
 }
 
-document.addEventListener('change', function (e) {
-    if (e.target.matches('.teacher-checkbox') || e.target.id === 'bulkIncrement') {
-        updateBulkBar();
-    }
-});
+function selectAllTeachers(selectAll) {
+    teacherCheckboxes().forEach(function (cb) {
+        cb.checked = selectAll;
+        cb.closest('.tch-card').classList.toggle('on', selectAll);
+    });
+    updateBulkBar();
+}
+
 document.addEventListener('input', function (e) {
     if (e.target.id === 'bulkIncrement') updateBulkBar();
 });

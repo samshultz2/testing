@@ -18,8 +18,12 @@
 @media (max-width:480px){.gen-head p{margin-left:0}}
 
 .gen-readybar{display:flex;align-items:center;gap:1rem;padding:1.1rem 1.3rem;border-radius:var(--radius-lg);margin-bottom:1.1rem;border:1px solid transparent}
-.gen-readybar.ok{background:linear-gradient(135deg,var(--success-light),color-mix(in srgb,var(--success-light) 55%,var(--bg-card)));border-color:color-mix(in srgb,var(--success) 30%,transparent)}
-.gen-readybar.warn{background:linear-gradient(135deg,var(--warning-light),color-mix(in srgb,var(--warning-light) 55%,var(--bg-card)));border-color:color-mix(in srgb,var(--warning) 30%,transparent)}
+/* A flat tint, not a gradient: a gradient that fades toward --bg-card looks
+   fine on light themes but turns muddy and low-contrast on dark ones, since
+   --bg-card is dark there while --success-light/--warning-light stay the
+   same fixed translucent tint across every theme. */
+.gen-readybar.ok{background:var(--success-light);border-color:color-mix(in srgb,var(--success) 30%,transparent)}
+.gen-readybar.warn{background:var(--warning-light);border-color:color-mix(in srgb,var(--warning) 30%,transparent)}
 .gen-readybar .ric{width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0;color:#fff}
 .gen-readybar.ok .ric{background:var(--success)}
 .gen-readybar.warn .ric{background:var(--warning)}
@@ -28,8 +32,12 @@
 .gen-readybar.ok .rt b{color:#0f5132}
 .gen-readybar.warn .rt b{color:#92400e}
 .gen-readybar .rt span{font-size:.84rem;color:var(--text-secondary)}
-[data-theme="dark"] .gen-readybar.ok .rt b{color:#6ee7b7}
-[data-theme="dark"] .gen-readybar.warn .rt b{color:#fcd34d}
+/* All 4 dark-base themes (dark/midnight/carbon/mocha) share the same tint
+   values, so one dark-mode palette covers them all. */
+[data-theme="dark"] .gen-readybar.ok .rt b, [data-theme="midnight"] .gen-readybar.ok .rt b,
+[data-theme="carbon"] .gen-readybar.ok .rt b, [data-theme="mocha"] .gen-readybar.ok .rt b{color:#6ee7b7}
+[data-theme="dark"] .gen-readybar.warn .rt b, [data-theme="midnight"] .gen-readybar.warn .rt b,
+[data-theme="carbon"] .gen-readybar.warn .rt b, [data-theme="mocha"] .gen-readybar.warn .rt b{color:#fcd34d}
 
 .gen-chips{display:flex;gap:.6rem;flex-wrap:wrap;margin:0 0 1.1rem}
 .gen-chip{display:inline-flex;align-items:center;gap:.5rem;background:var(--bg-card);border:1px solid var(--border-color);
@@ -78,9 +86,11 @@
   border-radius:var(--radius-md);cursor:pointer;background:var(--bg-card);transition:border-color .15s,background .15s}
 .gen-class-card input{position:absolute;opacity:0;pointer-events:none}
 .gen-class-card .cbx{width:20px;height:20px;border-radius:6px;border:1.5px solid var(--border-color);flex-shrink:0;margin-top:.1rem;
-  display:flex;align-items:center;justify-content:center;color:#fff;font-size:.68rem;transition:all .15s}
+  display:flex;align-items:center;justify-content:center;color:#fff;font-size:.68rem;transition:all .15s;background:var(--bg-card)}
+.gen-class-card .cbx i{opacity:0}
 .gen-class-card.on{border-color:var(--primary);background:var(--primary-light)}
 .gen-class-card.on .cbx{background:var(--primary);border-color:var(--primary)}
+.gen-class-card.on .cbx i{opacity:1}
 .gen-class-card .cname{font-weight:700;font-size:.88rem}
 .gen-class-card .carm{font-size:.76rem;color:var(--text-muted);margin-top:.15rem}
 .gen-class-card .cbadge{margin-top:.4rem}
@@ -104,7 +114,10 @@
 .gen-method-card.disabled{opacity:.55;pointer-events:none}
 /* Mirrors the light/dark pair the global .badge-warning already uses, so this
    amber text stays readable under a dark-base theme too. */
-[data-theme="dark"] .gen-method-card.opt .mic,[data-theme="dark"] .gen-tag-rec{color:#fcd34d}
+[data-theme="dark"] .gen-method-card.opt .mic, [data-theme="midnight"] .gen-method-card.opt .mic,
+[data-theme="carbon"] .gen-method-card.opt .mic, [data-theme="mocha"] .gen-method-card.opt .mic,
+[data-theme="dark"] .gen-tag-rec, [data-theme="midnight"] .gen-tag-rec,
+[data-theme="carbon"] .gen-tag-rec, [data-theme="mocha"] .gen-tag-rec{color:#fcd34d}
 
 .gen-ortools-opts{margin-top:1rem;padding:1rem 1.1rem;background:var(--gray-50);border-radius:var(--radius-md);border:1px solid var(--border-light)}
 .gen-ortools-opts > label{display:block;font-size:.78rem;font-weight:600;color:var(--text-secondary);margin-bottom:.5rem}

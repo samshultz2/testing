@@ -1612,11 +1612,21 @@ input[type="radio"] {
 .badge-warning { background: var(--warning-light); color: #92400e; }
 .badge-danger { background: var(--danger-light); color: #991b1b; }
 .badge-secondary { background: var(--gray-200); color: var(--text-secondary); }
-[data-theme="dark"] .badge-success { color: #6ee7b7; }
-[data-theme="dark"] .badge-info { color: #7dd3fc; }
-[data-theme="dark"] .badge-warning { color: #fcd34d; }
-[data-theme="dark"] .badge-danger { color: #fca5a5; }
-[data-theme="dark"] .badge-primary { color: var(--primary); }
+/* All 4 dark-base themes (dark/midnight/carbon/mocha) share the same
+   --success-light/--info-light/--warning-light/--danger-light tint values,
+   so one set of light pastel text colors reads cleanly on all of them —
+   this was previously scoped to [data-theme="dark"] only, leaving badges
+   low-contrast under the other 3 dark-base themes. */
+[data-theme="dark"] .badge-success, [data-theme="midnight"] .badge-success,
+[data-theme="carbon"] .badge-success, [data-theme="mocha"] .badge-success { color: #6ee7b7; }
+[data-theme="dark"] .badge-info, [data-theme="midnight"] .badge-info,
+[data-theme="carbon"] .badge-info, [data-theme="mocha"] .badge-info { color: #7dd3fc; }
+[data-theme="dark"] .badge-warning, [data-theme="midnight"] .badge-warning,
+[data-theme="carbon"] .badge-warning, [data-theme="mocha"] .badge-warning { color: #fcd34d; }
+[data-theme="dark"] .badge-danger, [data-theme="midnight"] .badge-danger,
+[data-theme="carbon"] .badge-danger, [data-theme="mocha"] .badge-danger { color: #fca5a5; }
+[data-theme="dark"] .badge-primary, [data-theme="midnight"] .badge-primary,
+[data-theme="carbon"] .badge-primary, [data-theme="mocha"] .badge-primary { color: var(--primary); }
 
 /* ===========================================
    FLASH MESSAGES
@@ -3913,6 +3923,52 @@ h1, h2, h3, .page-header h1, .welcome-section h1 { font-family: var(--font-displ
 [data-theme="dark"] .modal-content,
 [data-theme="dark"] .cmdk-panel,
 [data-theme="dark"] [role="dialog"][aria-modal="true"] { background: var(--surface-raised); }
+
+/* The other 3 dark-base themes (midnight/carbon/mocha) set --bg-body and
+   --border-color/--border-light correctly earlier in this file, but the
+   unconditional ":root" block above (same specificity as their own
+   "[data-theme=...]" block, declared LATER in source order) silently wins
+   and resets them back to the light defaults — exactly the trap "dark"
+   above was already patched for, just not these three. Re-assert the
+   already-correct values here, and add the surface/shadow tokens "dark"
+   gets that these never had, so menus/dropdowns/modals read above the
+   page here too. */
+[data-theme="midnight"] {
+    --bg-body: #0b1020; --surface-sunken: #0b1020;
+    --surface: #141a2e; --surface-raised: #1c2440;
+    --border-color: #27314d; --border-light: #1c2440;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.4);
+    --shadow-md: 0 8px 24px -8px rgba(0,0,0,0.55);
+    --shadow-lg: 0 20px 48px -12px rgba(0,0,0,0.65);
+    --shadow-xl: 0 32px 64px -16px rgba(0,0,0,0.7);
+}
+[data-theme="carbon"] {
+    --bg-body: #0a0a0b; --surface-sunken: #0a0a0b;
+    --surface: #161618; --surface-raised: #1f1f22;
+    --border-color: #2a2a2e; --border-light: #1f1f22;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.4);
+    --shadow-md: 0 8px 24px -8px rgba(0,0,0,0.55);
+    --shadow-lg: 0 20px 48px -12px rgba(0,0,0,0.65);
+    --shadow-xl: 0 32px 64px -16px rgba(0,0,0,0.7);
+}
+[data-theme="mocha"] {
+    --bg-body: #1d1a17; --surface-sunken: #1d1a17;
+    --surface: #292420; --surface-raised: #3c342c;
+    --border-color: #3c342c; --border-light: #2f2823;
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.4);
+    --shadow-md: 0 8px 24px -8px rgba(0,0,0,0.55);
+    --shadow-lg: 0 20px 48px -12px rgba(0,0,0,0.65);
+    --shadow-xl: 0 32px 64px -16px rgba(0,0,0,0.7);
+}
+[data-theme="midnight"] .dropdown-menu, [data-theme="midnight"] .row-menu,
+[data-theme="midnight"] .menu-panel, [data-theme="midnight"] .modal-content,
+[data-theme="midnight"] .cmdk-panel, [data-theme="midnight"] [role="dialog"][aria-modal="true"],
+[data-theme="carbon"] .dropdown-menu, [data-theme="carbon"] .row-menu,
+[data-theme="carbon"] .menu-panel, [data-theme="carbon"] .modal-content,
+[data-theme="carbon"] .cmdk-panel, [data-theme="carbon"] [role="dialog"][aria-modal="true"],
+[data-theme="mocha"] .dropdown-menu, [data-theme="mocha"] .row-menu,
+[data-theme="mocha"] .menu-panel, [data-theme="mocha"] .modal-content,
+[data-theme="mocha"] .cmdk-panel, [data-theme="mocha"] [role="dialog"][aria-modal="true"] { background: var(--surface-raised); }
 
 /* Luxurious type rhythm: bigger, tighter display headings with airy leading. */
 h1 { letter-spacing: -0.025em; }

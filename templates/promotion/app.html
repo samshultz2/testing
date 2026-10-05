@@ -40,10 +40,19 @@
 .grad-status.tone-secondary{color:var(--text-secondary)}.grad-status.tone-secondary .dot{background:var(--gray-400)}
 /* These hand-picked tints follow the same light/dark pair the global
    .badge-* classes already use (style.css ~L1615), so status text stays
-   readable across every selectable theme, not just the default one. */
-[data-theme="dark"] .grad-status.tone-warning,[data-theme="dark"] .grad-chip.warn{color:#fcd34d}
-[data-theme="dark"] .grad-status.tone-info{color:#7dd3fc}
-[data-theme="dark"] .grad-status.tone-success,[data-theme="dark"] .grad-res.on{color:#6ee7b7}
+   readable across every selectable theme, not just the default one. All 4
+   dark-base themes (dark/midnight/carbon/mocha) share the same tint
+   values, so one dark-mode palette covers all of them. */
+[data-theme="dark"] .grad-status.tone-warning, [data-theme="midnight"] .grad-status.tone-warning,
+[data-theme="carbon"] .grad-status.tone-warning, [data-theme="mocha"] .grad-status.tone-warning,
+[data-theme="dark"] .grad-chip.warn, [data-theme="midnight"] .grad-chip.warn,
+[data-theme="carbon"] .grad-chip.warn, [data-theme="mocha"] .grad-chip.warn{color:#fcd34d}
+[data-theme="dark"] .grad-status.tone-info, [data-theme="midnight"] .grad-status.tone-info,
+[data-theme="carbon"] .grad-status.tone-info, [data-theme="mocha"] .grad-status.tone-info{color:#7dd3fc}
+[data-theme="dark"] .grad-status.tone-success, [data-theme="midnight"] .grad-status.tone-success,
+[data-theme="carbon"] .grad-status.tone-success, [data-theme="mocha"] .grad-status.tone-success,
+[data-theme="dark"] .grad-res.on, [data-theme="midnight"] .grad-res.on,
+[data-theme="carbon"] .grad-res.on, [data-theme="mocha"] .grad-res.on{color:#6ee7b7}
 
 /* WAEC/JAMB as icon pills instead of plain badges — grey + hollow circle
    when missing, green + check when uploaded, so the eye catches gaps fast. */
