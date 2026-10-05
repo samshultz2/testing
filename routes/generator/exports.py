@@ -378,13 +378,24 @@ def export_results(batch_id):
 
     # Total columns: Day label + periods-before + BREAK + periods-after.
     total_cols = 1 + break_after + 1 + (periods_per_day - break_after)
+    break_col = break_after + 2  # 1 (Day) + before-break periods, then BREAK
 
     # A4 Landscape: 297mm x 210mm
     # Safe margins for most printers: 0.5" (12.7mm) each side
     # Usable: ~272mm x 185mm
-    # Always landscape (set per-sheet below) -- heights scaled by sc() so the
-    # grid itself fills a bigger A3 page, not just Excel's print-time fit.
-    total_page_height = sc(500)  # points for A4 landscape height (conservative)
+    # Always landscape (set per-sheet below). Filled to the EXACT usable
+    # height/width (not a conservative under-estimate) so the grid itself
+    # fills the page -- previously the row-height total (a flat "500pt,
+    # conservative for A4") and the column-width total (12/28/8 character
+    # units, independent of any physical measurement) had wildly different
+    # aspect ratios from the actual page, so Excel's own fitToPage, which
+    # applies ONE uniform scale bound by whichever axis is tighter, shrank
+    # to fit the (much too wide) columns and left the rows far short of the
+    # page height -- most of it blank top and bottom once centered. That
+    # mismatch scaled up right along with everything else for A3, which is
+    # why it became obvious there. Sizing both totals to the real usable
+    # dimensions up front removes the mismatch instead of just scaling it.
+    total_page_height = usable_h
     school_header_height = sc(38)
     address_header_height = sc(20) if school_address else 0
     class_title_height = sc(32)
@@ -392,6 +403,24 @@ def export_results(batch_id):
     # 5 day rows get ALL remaining space
     fixed_height = school_header_height + address_header_height + class_title_height + period_header_height
     day_row_height = (total_page_height - fixed_height) / 5
+
+    # Column widths, sized the same way: distribute the EXACT usable width
+    # (not Excel's print-time auto-fit) across columns, keeping the Day /
+    # period / break columns' relative proportions, then convert the
+    # points-wide target back into Excel's "character width" unit (approx.
+    # Calibri 11: ~7px/char + 5px padding, at 96 DPI).
+    DAY_W, PERIOD_W, BREAK_W = 12, 28, 8
+    period_cols = total_cols - 2  # all period columns, before + after break
+    total_weight = DAY_W + period_cols * PERIOD_W + BREAK_W
+    points_per_weight = usable_w / total_weight
+
+    def _col_width_for_pts(target_pts):
+        px = target_pts * 96 / 72
+        return max(1.0, (px - 5) / 7)
+
+    day_col_width = _col_width_for_pts(DAY_W * points_per_weight)
+    period_col_width = _col_width_for_pts(PERIOD_W * points_per_weight)
+    break_col_width = _col_width_for_pts(BREAK_W * points_per_weight)
     
     for key in sorted(timetables.keys()):
         tt = timetables[key]
@@ -523,15 +552,10 @@ def export_results(batch_id):
             ws.row_dimensions[current_row].height = day_row_height
             current_row += 1
         
-        # Column widths - fit within safe printable area, scaled by sc_w()
-        # for A3 so the grid itself is wider, not just Excel's print-time fit.
-        # A4 landscape with 0.5" margins: ~250mm usable width
-        ws.column_dimensions['A'].width = sc_w(12)  # Day column
-        period_col_width = sc_w(28)  # Period columns
-        break_col_width = sc_w(8)   # Break column
-        
+        # Column widths - precomputed above to exactly fill the usable width.
+        ws.column_dimensions['A'].width = day_col_width  # Day column
         for col in range(2, total_cols + 1):
-            if col == 7:  # Break column
+            if col == break_col:
                 ws.column_dimensions[get_column_letter(col)].width = break_col_width
             else:
                 ws.column_dimensions[get_column_letter(col)].width = period_col_width
