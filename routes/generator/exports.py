@@ -37,21 +37,6 @@ def _short_cell(entry, subj, fallback_map, maxlen):
 _XLSX_A4_W_PT, _XLSX_A4_H_PT = 841.89, 595.28    # A4 landscape points (297 x 210mm)
 _XLSX_A3_W_PT, _XLSX_A3_H_PT = 1190.55, 841.89   # A3 landscape points (420 x 297mm)
 
-# Deliberate safety margin applied to the row-height/column-width BUDGET
-# (not to font sizes) before distributing it across the grid. Targeting the
-# literal 100% theoretical page fill assumes every viewer converts Excel's
-# "character width" column unit to physical pixels exactly the way this
-# file's math does, and wraps text at exactly the line-height this file
-# assumes -- Google Sheets in particular doesn't match that precisely, which
-# showed up as real pages: a few extra narrow columns pushed onto a second
-# page at "no scaling", and (since fitToPage applies ONE uniform scale) a
-# slightly-taller-than-expected render forcing the whole page to shrink
-# further, leaving visible blank margin on the sides. Shrinking the budget
-# before allocating it keeps every row/column comfortably inside the true
-# physical page across renderers, and incidentally gives each cell a little
-# breathing room around its text instead of the glyphs touching the border.
-_XLSX_GRID_FILL = 0.93
-
 
 def _xlsx_paper_scale(paper, margin_lr_in=0.5, margin_tb_in=0.4):
     """Real physical-size scale factors for an A4-vs-A3 landscape xlsx sheet
@@ -314,10 +299,19 @@ def export_results(batch_id):
     # blank page. Scale every size up for A3 so the sheet itself already
     # fills the bigger page.
     hscale, wscale, fit_scale, usable_w, usable_h = _xlsx_paper_scale(paper)
-    # Safety margin on the row/column BUDGET only -- fonts (sized via
-    # fit_scale, untouched) stay exactly as tuned; see _XLSX_GRID_FILL.
-    usable_w *= _XLSX_GRID_FILL
-    usable_h *= _XLSX_GRID_FILL
+    # NOT applying _XLSX_GRID_FILL to width here (export_results used to, and
+    # it directly caused subject codes with a wide letter like "M" --
+    # "CHM", "MTH" -- to wrap mid-word even at "no scaling": fitToPage is
+    # set below and rescales the WHOLE sheet by one uniform factor when a
+    # viewer prints with it on, which doesn't change the width:font-size
+    # RATIO a column's text wraps against, so shrinking width specifically
+    # (while fonts, scaled by fit_scale, stayed the same) broke wrapping in
+    # fit-to-page mode too, not just at "no scaling". It also broke the
+    # width:height aspect-ratio match this file depends on for fit-to-page
+    # to fill the page on both axes at once, which is what showed up as
+    # blank margin on the sides. usable_w/usable_h stay at the exact
+    # physical page size; PERIOD_COL_MIN_PT below (not a blanket shrink)
+    # is what guards against "no scaling" overflow instead.
 
     def sc(pt):
         """Scale by page height -- for full-width single-line rows."""
@@ -436,16 +430,54 @@ def export_results(batch_id):
     # mismatch scaled up right along with everything else for A3, which is
     # why it became obvious there. Sizing both totals to the real usable
     # dimensions up front removes the mismatch instead of just scaling it.
-    total_page_height = usable_h
+    # Column widths computed FIRST -- the Day and BREAK columns' content
+    # needs a roughly FIXED physical width regardless of periods_per_day --
+    # "Wed" at day_font size, or "BREAK"/a time like "11:10" at
+    # break_header_font size, take the same room whether there are 6
+    # periods or 9. Splitting the page width by a *proportional share* (as
+    # before) let those two columns get squeezed to near nothing on a day
+    # with many periods, wrapping "Wednesday" letter-by-letter and crushing
+    # the break label. Reserve a fixed floor for each (scaled for A3 like
+    # everything else), then split whatever's left evenly across the
+    # actual period columns.
+    DAY_FLOOR_PT = sc_w(60)    # fits a 3-letter day abbreviation at day_font size
+    BREAK_FLOOR_PT = sc_w(42)  # fits "BREAK" / a time label at break_header_font size
+    period_cols = total_cols - 2  # all period columns, before + after break
+    # A plain character-count average undersells how much room bold text
+    # actually needs once a code contains a wide letter -- "CHM"/"MTH"
+    # (both containing "M", one of the widest letters in most fonts) wrapped
+    # mid-word at a width that fit other, narrower 3-letter codes fine in
+    # the same column. Floored per-character at a generous fraction of
+    # cell_font's own point size, for a 4-char code (covers the built-in
+    # abbreviation fallbacks too, several of which run to 4-5 letters).
+    PERIOD_COL_MIN_PT = cell_font.size * 0.9 * 4
+    period_col_pts = max((usable_w - DAY_FLOOR_PT - BREAK_FLOOR_PT) / period_cols, PERIOD_COL_MIN_PT)
+    natural_width = DAY_FLOOR_PT + BREAK_FLOOR_PT + period_cols * period_col_pts
+
+    day_col_width = _xlsx_col_width_for_pts(DAY_FLOOR_PT)
+    period_col_width = _xlsx_col_width_for_pts(period_col_pts)
+    break_col_width = _xlsx_col_width_for_pts(BREAK_FLOOR_PT)
+
+    # Heights, computed AFTER width -- a dense day (many periods, or codes
+    # with a wide letter) can force natural_width past usable_w via the
+    # floor above. Under "fit to page" that's fine BY ITSELF (Excel/Sheets
+    # still scale the whole sheet down to one page, uniformly, so nothing
+    # wraps worse than it already doesn't) -- but letting width grow while
+    # height stayed at exactly usable_h would make the aspect ratio
+    # narrower than the page's own, so the uniform scale would end up
+    # bound by width and leave the page's TOP and BOTTOM under-filled once
+    # printed. Growing the height budget by that same overflow ratio keeps
+    # the two in proportion, so fit-to-page still fills the whole page on
+    # both axes -- "no scaling" mode simply needs more than one page in
+    # that case, same as it already does width-wise.
+    total_page_height = usable_h * max(1.0, natural_width / usable_w)
     school_header_height = sc(38)
     address_header_height = sc(20) if school_address else 0
     class_title_height = sc(32)
     # Needs to fit 3 wrapped lines at header_font's size (e.g. "P1" /
     # "8:00 AM-" / "8:40 AM") without the text overflowing a fixed row
     # height -- Excel/Sheets center wrap_text vertically and CLIP whatever
-    # doesn't fit, which is what cut the header text off at the top. Sized
-    # with margin above the bare minimum since _XLSX_GRID_FILL then shaves
-    # this down too.
+    # doesn't fit, which is what cut the header text off at the top.
     period_header_height = sc(68)
     # 5 day rows get ALL remaining space, floored against cell_font's own
     # (already A3-scaled) size so a single line of cell text can't end up
@@ -453,24 +485,6 @@ def export_results(batch_id):
     fixed_height = school_header_height + address_header_height + class_title_height + period_header_height
     min_day_row_height = cell_font.size * 1.3
     day_row_height = max((total_page_height - fixed_height) / 5, min_day_row_height)
-
-    # Column widths: the Day and BREAK columns' content needs a roughly
-    # FIXED physical width regardless of periods_per_day -- "Wed" at
-    # day_font size, or "BREAK"/a time like "11:10" at break_header_font
-    # size, take the same room whether there are 6 periods or 9. Splitting
-    # the page width by a *proportional share* (as before) let those two
-    # columns get squeezed to near nothing on a day with many periods,
-    # wrapping "Wednesday" letter-by-letter and crushing the break label.
-    # Reserve a fixed floor for each (scaled for A3 like everything else),
-    # then split whatever's left evenly across the actual period columns.
-    DAY_FLOOR_PT = sc_w(60)    # fits a 3-letter day abbreviation at day_font size
-    BREAK_FLOOR_PT = sc_w(42)  # fits "BREAK" / a time label at break_header_font size
-    period_cols = total_cols - 2  # all period columns, before + after break
-    period_col_pts = max(usable_w - DAY_FLOOR_PT - BREAK_FLOOR_PT, 0) / period_cols
-
-    day_col_width = _xlsx_col_width_for_pts(DAY_FLOOR_PT)
-    period_col_width = _xlsx_col_width_for_pts(period_col_pts)
-    break_col_width = _xlsx_col_width_for_pts(BREAK_FLOOR_PT)
     
     for key in sorted(timetables.keys()):
         tt = timetables[key]
@@ -641,10 +655,19 @@ def export_results_by_day(batch_id):
     # so each block's own height budget is computed further down once
     # days_per_page is known.
     hscale, wscale, fit_scale, usable_w, usable_h = _xlsx_paper_scale(paper)
-    # Safety margin on the row/column BUDGET only -- fonts (sized via
-    # fit_scale, untouched) stay exactly as tuned; see _XLSX_GRID_FILL.
-    usable_w *= _XLSX_GRID_FILL
-    usable_h *= _XLSX_GRID_FILL
+    # NOT applying _XLSX_GRID_FILL to width here (export_results used to, and
+    # it directly caused subject codes with a wide letter like "M" --
+    # "CHM", "MTH" -- to wrap mid-word even at "no scaling": fitToPage is
+    # set below and rescales the WHOLE sheet by one uniform factor when a
+    # viewer prints with it on, which doesn't change the width:font-size
+    # RATIO a column's text wraps against, so shrinking width specifically
+    # (while fonts, scaled by fit_scale, stayed the same) broke wrapping in
+    # fit-to-page mode too, not just at "no scaling". It also broke the
+    # width:height aspect-ratio match this file depends on for fit-to-page
+    # to fill the page on both axes at once, which is what showed up as
+    # blank margin on the sides. usable_w/usable_h stay at the exact
+    # physical page size; PERIOD_COL_MIN_PT below (not a blanket shrink)
+    # is what guards against "no scaling" overflow instead.
 
     def sc(pt):
         """Scale by page height -- for full-width single-line rows."""
@@ -800,14 +823,35 @@ def export_results_by_day(batch_id):
     total_cols = 1 + break_after + 1 + (periods_per_day - break_after)
     break_col = break_after + 2   # 1 (Class) + break_after period columns, then BREAK
 
-    # Heights, filled to the EXACT usable page height (not a conservative
-    # under-estimate), the same approach as export_results -- see its
-    # comment for why: Excel's fitToPage applies ONE uniform scale bound by
-    # whichever axis is tighter, so a content block whose row-height total
-    # and column-width total don't already match the real page's aspect
-    # ratio ends up with a lot of blank space on the looser axis once
-    # printed.
+    # Column widths computed FIRST -- Class and BREAK need a roughly FIXED
+    # physical width regardless of periods_per_day -- see export_results's
+    # comment on the same issue. Reserve a fixed floor for each, split the
+    # rest evenly across the actual period columns -- floored per
+    # export_results's PERIOD_COL_MIN_PT comment, since a plain
+    # character-count average lets a wide letter like "M" wrap a subject
+    # code mid-word.
     num_data_rows = len(class_arms)
+    CLASS_FLOOR_PT = sc_w(50)   # fits a short class code ("S1A") at class_font size
+    BREAK_FLOOR_PT = sc_w(42)   # fits "BREAK" / a time label at break_header_font size
+    period_cols = total_cols - 2
+    PERIOD_COL_MIN_PT = cell_font.size * 0.9 * 4
+    period_col_pts = max((usable_w - CLASS_FLOOR_PT - BREAK_FLOOR_PT) / period_cols, PERIOD_COL_MIN_PT)
+    natural_width = CLASS_FLOOR_PT + BREAK_FLOOR_PT + period_cols * period_col_pts
+    class_col_width = _xlsx_col_width_for_pts(CLASS_FLOOR_PT)
+    period_col_width = _xlsx_col_width_for_pts(period_col_pts)
+
+    # Heights, computed AFTER width -- filled to the EXACT usable page
+    # height (not a conservative under-estimate), the same approach as
+    # export_results -- see its comment for why: Excel's fitToPage applies
+    # ONE uniform scale bound by whichever axis is tighter, so a content
+    # block whose row-height total and column-width total don't already
+    # match the real page's aspect ratio ends up with a lot of blank space
+    # on the looser axis once printed. A dense day (many periods, or codes
+    # with a wide letter) can force natural_width past usable_w via the
+    # floor above -- growing the height budget by that same overflow ratio
+    # keeps the two in proportion so fit-to-page still fills the whole
+    # page.
+    usable_h_for_rows = usable_h * max(1.0, natural_width / usable_w)
     # Rounded to 2dp at the source so every sheet's total (summed in a
     # different order/grouping per sheet) lands on the exact same float --
     # otherwise IEEE754 rounding noise (~1e-13) can make two sheets that are
@@ -817,8 +861,7 @@ def export_results_by_day(batch_id):
     day_header_height = round(sc(45), 2)
     # Needs to fit the 3 stacked period-header lines ("P1" / start / end) at
     # header_font's (now A3-scaled) size without the text overflowing a
-    # fixed row height and getting clipped top and bottom. Sized with margin
-    # above the bare minimum since _XLSX_GRID_FILL then shaves this down too.
+    # fixed row height and getting clipped top and bottom.
     period_header_height = round(sc(68), 2)
     gap_row_height = round(sc(15), 2)  # between stacked day-blocks on a packed page
 
@@ -841,18 +884,7 @@ def export_results_by_day(batch_id):
     # for A3 and the packed layout started splitting the page's height
     # budget across 2 stacked days.
     min_data_row_height = cell_font.size * 1.3
-    data_row_height = round(max((usable_h - _header_rows_height) / (days_per_page * num_data_rows), min_data_row_height), 2)
-
-    # Column widths: Class and BREAK need a roughly FIXED physical width
-    # regardless of periods_per_day -- see export_results's comment on the
-    # same issue. Reserve a fixed floor for each, split the rest evenly
-    # across the actual period columns.
-    CLASS_FLOOR_PT = sc_w(50)   # fits a short class code ("S1A") at class_font size
-    BREAK_FLOOR_PT = sc_w(42)   # fits "BREAK" / a time label at break_header_font size
-    period_cols = total_cols - 2
-    period_col_pts = max(usable_w - CLASS_FLOOR_PT - BREAK_FLOOR_PT, 0) / period_cols
-    class_col_width = _xlsx_col_width_for_pts(CLASS_FLOOR_PT)
-    period_col_width = _xlsx_col_width_for_pts(period_col_pts)
+    data_row_height = round(max((usable_h_for_rows - _header_rows_height) / (days_per_page * num_data_rows), min_data_row_height), 2)
     break_col_width = _xlsx_col_width_for_pts(BREAK_FLOOR_PT)
 
     # No intermediate rounding here -- counterintuitively, that's what makes
@@ -866,25 +898,40 @@ def export_results_by_day(batch_id):
     # rows are the same multiset in a different order (e.g. the school
     # header first vs the padding row last) land on bit-different totals
     # that both merely *display* as the same 2dp number.
-    def _block_height(d, is_first_in_group):
-        """Total row height one day's block takes up, without writing
-        anything -- used to compute the padding below."""
-        h = 0.0
+    def _block_rows(d, is_first_in_group):
+        """The individual row heights one day's block takes up, as a flat
+        list -- one entry per PHYSICAL row that will actually be written,
+        not a pre-summed total. _group_height()/used_height below both
+        reduce lists like this with one plain sum() each, so they add the
+        same values in the same left-to-right order the file is later
+        re-summed in. A pre-summed per-block subtotal (added as one float
+        to an outer accumulator) is a DIFFERENT floating-point expression
+        from summing all those rows flat -- even identical values, same
+        order, round differently once grouped into (a+b+c)+d vs
+        a+(b+c)+d. Likewise num_data_rows*data_row_height is a different
+        operation from adding data_row_height that many times over; this
+        lists the latter explicitly."""
+        rows = []
         if d == 0:
-            h += school_header_height + (address_header_height if school_address else 0)
-        h += day_header_height
+            rows.append(school_header_height)
+            if school_address:
+                rows.append(address_header_height)
+        rows.append(day_header_height)
         if is_first_in_group:
-            h += period_header_height
-        h += num_data_rows * data_row_height
-        return h
+            rows.append(period_header_height)
+        rows.extend([data_row_height] * num_data_rows)
+        return rows
+
+    def _group_rows(group):
+        rows = []
+        for i, day_name in enumerate(group):
+            rows.extend(_block_rows(days.index(day_name), i == 0))
+            if i < len(group) - 1:
+                rows.append(gap_row_height)
+        return rows
 
     def _group_height(group):
-        total = 0.0
-        for i, day_name in enumerate(group):
-            total += _block_height(days.index(day_name), i == 0)
-            if i < len(group) - 1:
-                total += gap_row_height
-        return total
+        return sum(_group_rows(group))
 
     def _write_day_block(ws, d, day_name, start_row, show_period_header=True):
         """Writes one day's grid into ws starting at start_row. Returns the
@@ -1047,19 +1094,19 @@ def export_results_by_day(batch_id):
         ws.page_margins.footer = 0
 
         row = 1
-        used_height = 0.0
+        used_height = sum(_group_rows(group))
         for i, day_name in enumerate(group):
             d = days.index(day_name)
             row = _write_day_block(ws, d, day_name, row, show_period_header=(i == 0))
-            used_height += _block_height(d, i == 0)
             if i < len(group) - 1:
                 ws.row_dimensions[row].height = gap_row_height
-                used_height += gap_row_height
                 row += 1
 
-        # Deliberately NOT rounded -- see _block_height's comment. This raw
+        # Deliberately NOT rounded -- see _block_rows's comment. This raw
         # float subtraction is what makes used_height + remaining reconstruct
-        # target_block_height exactly when the file is re-summed.
+        # target_block_height exactly when the file is re-summed -- which
+        # now actually holds, since used_height (one flat sum()) and the
+        # file's eventual re-summed total use the identical operation.
         remaining = target_block_height - used_height
         if remaining > 0.5:
             ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=total_cols)
