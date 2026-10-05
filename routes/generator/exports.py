@@ -37,6 +37,21 @@ def _short_cell(entry, subj, fallback_map, maxlen):
 _XLSX_A4_W_PT, _XLSX_A4_H_PT = 841.89, 595.28    # A4 landscape points (297 x 210mm)
 _XLSX_A3_W_PT, _XLSX_A3_H_PT = 1190.55, 841.89   # A3 landscape points (420 x 297mm)
 
+# Deliberate safety margin applied to the row-height/column-width BUDGET
+# (not to font sizes) before distributing it across the grid. Targeting the
+# literal 100% theoretical page fill assumes every viewer converts Excel's
+# "character width" column unit to physical pixels exactly the way this
+# file's math does, and wraps text at exactly the line-height this file
+# assumes -- Google Sheets in particular doesn't match that precisely, which
+# showed up as real pages: a few extra narrow columns pushed onto a second
+# page at "no scaling", and (since fitToPage applies ONE uniform scale) a
+# slightly-taller-than-expected render forcing the whole page to shrink
+# further, leaving visible blank margin on the sides. Shrinking the budget
+# before allocating it keeps every row/column comfortably inside the true
+# physical page across renderers, and incidentally gives each cell a little
+# breathing room around its text instead of the glyphs touching the border.
+_XLSX_GRID_FILL = 0.93
+
 
 def _xlsx_paper_scale(paper, margin_lr_in=0.5, margin_tb_in=0.4):
     """Real physical-size scale factors for an A4-vs-A3 landscape xlsx sheet
@@ -299,6 +314,10 @@ def export_results(batch_id):
     # blank page. Scale every size up for A3 so the sheet itself already
     # fills the bigger page.
     hscale, wscale, fit_scale, usable_w, usable_h = _xlsx_paper_scale(paper)
+    # Safety margin on the row/column BUDGET only -- fonts (sized via
+    # fit_scale, untouched) stay exactly as tuned; see _XLSX_GRID_FILL.
+    usable_w *= _XLSX_GRID_FILL
+    usable_h *= _XLSX_GRID_FILL
 
     def sc(pt):
         """Scale by page height -- for full-width single-line rows."""
@@ -424,11 +443,16 @@ def export_results(batch_id):
     # Needs to fit 3 wrapped lines at header_font's size (e.g. "P1" /
     # "8:00 AM-" / "8:40 AM") without the text overflowing a fixed row
     # height -- Excel/Sheets center wrap_text vertically and CLIP whatever
-    # doesn't fit, which is what cut the header text off at the top.
-    period_header_height = sc(62)
-    # 5 day rows get ALL remaining space
+    # doesn't fit, which is what cut the header text off at the top. Sized
+    # with margin above the bare minimum since _XLSX_GRID_FILL then shaves
+    # this down too.
+    period_header_height = sc(68)
+    # 5 day rows get ALL remaining space, floored against cell_font's own
+    # (already A3-scaled) size so a single line of cell text can't end up
+    # taller than its row.
     fixed_height = school_header_height + address_header_height + class_title_height + period_header_height
-    day_row_height = (total_page_height - fixed_height) / 5
+    min_day_row_height = cell_font.size * 1.3
+    day_row_height = max((total_page_height - fixed_height) / 5, min_day_row_height)
 
     # Column widths: the Day and BREAK columns' content needs a roughly
     # FIXED physical width regardless of periods_per_day -- "Wed" at
@@ -617,6 +641,10 @@ def export_results_by_day(batch_id):
     # so each block's own height budget is computed further down once
     # days_per_page is known.
     hscale, wscale, fit_scale, usable_w, usable_h = _xlsx_paper_scale(paper)
+    # Safety margin on the row/column BUDGET only -- fonts (sized via
+    # fit_scale, untouched) stay exactly as tuned; see _XLSX_GRID_FILL.
+    usable_w *= _XLSX_GRID_FILL
+    usable_h *= _XLSX_GRID_FILL
 
     def sc(pt):
         """Scale by page height -- for full-width single-line rows."""
@@ -789,8 +817,9 @@ def export_results_by_day(batch_id):
     day_header_height = round(sc(45), 2)
     # Needs to fit the 3 stacked period-header lines ("P1" / start / end) at
     # header_font's (now A3-scaled) size without the text overflowing a
-    # fixed row height and getting clipped top and bottom.
-    period_header_height = round(sc(62), 2)
+    # fixed row height and getting clipped top and bottom. Sized with margin
+    # above the bare minimum since _XLSX_GRID_FILL then shaves this down too.
+    period_header_height = round(sc(68), 2)
     gap_row_height = round(sc(15), 2)  # between stacked day-blocks on a packed page
 
     # One data-row height for the WHOLE export -- every day, every page, every
@@ -806,7 +835,13 @@ def export_results_by_day(batch_id):
     _header_rows_height = (school_header_height + (address_header_height if school_address else 0)
                            + days_per_page * day_header_height + period_header_height
                            + gap_row_height * (days_per_page - 1))
-    data_row_height = round(max((usable_h - _header_rows_height) / (days_per_page * num_data_rows), 28), 2)
+    # Floor is derived from cell_font's own (already A3-scaled) size, not a
+    # flat historical constant -- a flat "28pt" was tuned for the old A4-only
+    # 24pt font and silently went unsafe once cell_font started scaling up
+    # for A3 and the packed layout started splitting the page's height
+    # budget across 2 stacked days.
+    min_data_row_height = cell_font.size * 1.3
+    data_row_height = round(max((usable_h - _header_rows_height) / (days_per_page * num_data_rows), min_data_row_height), 2)
 
     # Column widths: Class and BREAK need a roughly FIXED physical width
     # regardless of periods_per_day -- see export_results's comment on the
@@ -820,6 +855,17 @@ def export_results_by_day(batch_id):
     period_col_width = _xlsx_col_width_for_pts(period_col_pts)
     break_col_width = _xlsx_col_width_for_pts(BREAK_FLOOR_PT)
 
+    # No intermediate rounding here -- counterintuitively, that's what makes
+    # the final stored totals agree. Each sheet's "remaining" padding row
+    # (below) is computed as target_block_height MINUS this exact (unrounded)
+    # running total, in the SAME left-to-right order the file will later be
+    # summed in. Floating-point subtraction's whole job is to find the
+    # precise delta between two floats, including sub-2dp noise from how
+    # THIS group's particular rows happened to accumulate -- round that delta
+    # away and it stops exactly cancelling that noise, so two sheets whose
+    # rows are the same multiset in a different order (e.g. the school
+    # header first vs the padding row last) land on bit-different totals
+    # that both merely *display* as the same 2dp number.
     def _block_height(d, is_first_in_group):
         """Total row height one day's block takes up, without writing
         anything -- used to compute the padding below."""
@@ -1011,7 +1057,10 @@ def export_results_by_day(batch_id):
                 used_height += gap_row_height
                 row += 1
 
-        remaining = round(target_block_height - used_height, 2)
+        # Deliberately NOT rounded -- see _block_height's comment. This raw
+        # float subtraction is what makes used_height + remaining reconstruct
+        # target_block_height exactly when the file is re-summed.
+        remaining = target_block_height - used_height
         if remaining > 0.5:
             ws.merge_cells(start_row=row, start_column=1, end_row=row, end_column=total_cols)
             ws.row_dimensions[row].height = remaining
