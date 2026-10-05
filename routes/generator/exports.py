@@ -800,8 +800,21 @@ def export_results_by_day(batch_id):
     school_font = Font(bold=True, size=sc_fit(24), color='000000')
     address_font = Font(bold=False, size=sc_fit(12), color='000000')
     day_font = Font(bold=True, size=sc_fit(32), color='000000')
-    header_font = Font(bold=True, size=sc_fit(14), color='000000')
-    class_font = Font(bold=True, size=sc_fit(20), color='000000')
+    # Bumped from 14 -- same complaint as export_results' own period-time
+    # header got earlier this session ("too small, make it bold and
+    # bigger"), just not yet fixed on this by-day export. Matches
+    # export_results' own proven header_font value (sc_fit(20)) exactly, so
+    # period_header_height below is set to that function's matching,
+    # already-verified-safe value instead of re-deriving one from scratch.
+    header_font = Font(bold=True, size=sc_fit(20), color='000000')
+    # Bumped from 20 -- already bold=True in the source, but at the OLD size
+    # that bold weight barely registered once printed: cell_font (the
+    # subject codes next to it, in the same row) just grew to 40, and a
+    # much-smaller bold neighbor doesn't read as bold at all next to a much
+    # bigger one, just thin. Scaled up proportionally with cell_font's own
+    # 24->40 jump (same ~1.7x factor) so "1A" reads as prominently as "PHY"
+    # in the cell beside it, not as a faint label.
+    class_font = Font(bold=True, size=sc_fit(34), color='000000')
     # Bumped from 24 -- the data-row floor below is derived from this size,
     # so a bigger cell_font is what actually grows the printed cell/font
     # size for typical class counts (see min_data_row_height's comment: the
@@ -851,7 +864,11 @@ def export_results_by_day(batch_id):
     # count (doubled again on a packed A3 page, which stacks 2 days'
     # worth of rows into one page) overflows height.
     num_data_rows = len(class_arms)
-    CLASS_FLOOR_PT = sc_w(50)   # fits a short class code ("S1A") at class_font size
+    # Derived from class_font's own size now (same formula as
+    # PERIOD_COL_MIN_PT below), not a flat constant -- a flat 50pt was sized
+    # for the old 20pt class_font and would make the now-bigger "1A"/"S1A"
+    # text wrap mid-code once class_font grew to 34 for its own legibility.
+    CLASS_FLOOR_PT = class_font.size * 0.9 * 3   # fits a short class code ("S1A") at class_font size
     BREAK_FLOOR_PT = sc_w(42)   # fits "BREAK" / a time label at break_header_font size
     period_cols = total_cols - 2
     PERIOD_COL_MIN_PT = cell_font.size * 0.9 * 4
@@ -869,13 +886,14 @@ def export_results_by_day(batch_id):
     # height, just less spare than before, freeing that difference (doubled,
     # on a packed page's 2 day-banners) for the data rows below instead.
     day_header_height = round(sc(42), 2)
-    # Trimmed from 68 -- still fits the 3 stacked period-header lines ("P1" /
-    # start / end) at header_font's (now A3-scaled) size without clipping,
-    # just with less spare margin above/below the text than before. This is
-    # the single biggest fixed-overhead row on the page (bigger than school
-    # + address combined), so it's the main lever -- besides cell_font
-    # itself -- for how much headroom is actually left for data rows.
-    period_header_height = round(sc(52), 2)
+    # header_font just grew (14 -> 20, see its own comment), so this has to
+    # grow back with it to keep fitting the 3 stacked period-header lines
+    # ("P1" / start / end) without clipping -- matches export_results' own
+    # period_header_height (sc(95)) exactly, since it's sized for the exact
+    # same header_font value. This costs back some of the data-row headroom
+    # the trim down to 52 had freed, but the time header being legible is
+    # what was actually asked for.
+    period_header_height = round(sc(95), 2)
     # Trimmed from 15 -- purely a blank spacer row between stacked days, no
     # text to clip, so shrinking it is free room for the data rows below.
     gap_row_height = round(sc(3), 2)  # between stacked day-blocks on a packed page
