@@ -1,210 +1,218 @@
 {% extends "base.html" %}
 {% block title %}{{ level|upper }} Subjects - Generator{% endblock %}
-{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <a href="{{ url_for('generator.level_dashboard', level=level) }}">{{ level|upper }}</a> / <span>Subjects</span>{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Timetable</a> / <a href="{{ url_for('generator.level_dashboard', level=level) }}">{{ level|upper }}</a> / <span>Subjects</span>{% endblock %}
 
 {% block extra_css %}
 <style>
-.subject-actions{display:flex;gap:.25rem}
-.subject-actions .btn{padding:.25rem .5rem;font-size:.75rem}
-.badge-category{font-size:.7rem;padding:.25rem .5rem;border-radius:10px}
-.badge-core{background:#28a745;color:white}
-.badge-science{background:#17a2b8;color:white}
-.badge-arts{background:#6f42c1;color:white}
-.badge-commercial{background:#fd7e14;color:white}
-.badge-vocational{background:#20c997;color:white}
-.config-status{font-size:.75rem}
-.config-status.configured{color:#28a745}
-.config-status.not-configured{color:var(--text-muted)}
+.content-narrow{max-width:860px;margin:0 auto}
+
+.btn-ghost{display:inline-flex;align-items:center;gap:.4em;padding:.5em .9em;border-radius:var(--radius-md);font-size:.8rem;font-weight:600;
+  background:var(--bg-card);border:1px solid var(--border-color);color:var(--text-secondary);text-decoration:none;cursor:pointer}
+.btn-ghost:hover{border-color:var(--primary);color:var(--primary);text-decoration:none !important}
+.btn-outline-danger-sm{display:inline-flex;align-items:center;justify-content:center;width:2.1rem;height:2.1rem;border-radius:var(--radius-md);
+  background:transparent;border:1px solid var(--danger);color:var(--danger);cursor:pointer}
+.btn-outline-danger-sm:hover{background:var(--danger-light)}
+
+/* ---- page head ---- */
+.sp-head{display:flex;align-items:flex-start;gap:.9rem;margin-bottom:1.2rem;flex-wrap:wrap}
+.sp-ic{width:48px;height:48px;border-radius:13px;background:var(--primary-light);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0}
+.sp-head-txt{flex:1 1 10rem;min-width:0}
+.sp-head-txt h1{margin:0;font-size:1.3rem;letter-spacing:-.02em}
+.sp-head-txt p{margin:.2rem 0 0;color:var(--text-muted);font-size:.84rem}
+.sp-actions{display:flex;gap:.5rem;flex-wrap:wrap;width:100%}
+@media(min-width:640px){.sp-actions{width:auto;margin-left:auto}}
+
+/* ---- stat chips ---- */
+.sp-chips{display:flex;gap:.6rem;margin-bottom:1.3rem}
+.sp-chip{flex:1 1 90px;text-align:center;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-md);padding:.65rem .5rem;box-shadow:var(--shadow-sm)}
+.sp-chip b{display:block;font-size:1.25rem;line-height:1.2}
+.sp-chip span{font-size:.66rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.02em}
+
+/* ---- subject cards ---- */
+.sub-list{display:flex;flex-direction:column;gap:.75rem}
+.sub-card{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);overflow:hidden}
+.sub-top{display:flex;align-items:flex-start;gap:.7rem;padding:1rem 1.1rem .8rem;flex-wrap:wrap}
+.sub-name{font-weight:700;font-size:.96rem}
+.sub-short{color:var(--text-muted);font-size:.78rem;font-weight:500}
+.sub-meta{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-top:.3rem}
+.sub-status{font-size:.76rem;display:inline-flex;align-items:center;gap:.3em}
+.sub-status.ok{color:var(--success)}
+.sub-status.no{color:var(--text-muted)}
+.sub-acts{margin-left:auto;display:flex;gap:.4rem;flex-shrink:0}
+
+.sub-cfg{border-top:1px solid var(--border-light);padding:.9rem 1.1rem 1.05rem;background:var(--gray-50)}
+.cfg-fields{display:grid;grid-template-columns:1fr 1fr;gap:.7rem .9rem}
+@media(min-width:480px){.cfg-fields{grid-template-columns:repeat(3,1fr)}}
+@media(min-width:800px){.cfg-fields{grid-template-columns:repeat(5,1fr)}}
+.cfg-field label{display:block;font-size:.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.02em;margin-bottom:.3rem}
+.cfg-field input[type="number"], .cfg-field select{width:100%;padding:.45rem .5rem;border:1px solid var(--border-color);border-radius:var(--radius-sm);
+  background:var(--bg-card);color:var(--text-primary);font-size:.85rem;font-family:inherit}
+.cfg-toggle-row{display:flex;align-items:center;gap:.5rem}
+.tgl{position:relative;display:inline-block;width:36px;height:21px;flex:none}
+.tgl input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
+.tgl .trk{position:absolute;inset:0;background:var(--gray-300);border-radius:999px;transition:background .15s;pointer-events:none}
+.tgl .trk::before{content:'';position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#fff;transition:transform .15s;box-shadow:0 1px 2px rgba(0,0,0,.2)}
+.tgl input:checked + .trk{background:var(--primary)}
+.tgl input:checked + .trk::before{transform:translateX(15px)}
+.cfg-check{display:flex;align-items:center;gap:.4rem;font-size:.82rem;color:var(--text-secondary)}
+.cfg-check input{width:16px;height:16px;accent-color:var(--primary)}
+
+.sp-save{margin-top:1.3rem;padding:1rem 1.1rem;background:var(--bg-card);border:1px solid var(--border-color);
+  border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);display:flex;align-items:center;justify-content:space-between;gap:.75rem;flex-wrap:wrap}
+.sp-save p{margin:0;font-size:.78rem;color:var(--text-muted)}
+
+.sp-empty{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);padding:2.5rem 1.5rem;text-align:center}
+.sp-empty .ic{width:52px;height:52px;border-radius:14px;background:var(--primary-light);color:var(--primary);display:flex;
+  align-items:center;justify-content:center;font-size:1.3rem;margin:0 auto 1rem}
+.sp-empty h3{margin:0 0 .4rem}
+.sp-empty p{margin:0 0 1.1rem;color:var(--text-muted);font-size:.86rem}
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <h1><i class="fas fa-book"></i> {{ level|upper }} Subjects</h1>
-    <div style="display:flex;gap:.5rem;flex-wrap:wrap">
-        <form method="POST" action="{{ url_for('generator.sync_gen_subjects') }}" style="display:inline"
-              data-confirm="Import academic subjects not already listed here into {{ level|upper }}? This only adds subjects; it never changes or removes existing ones, their periods, or teachers.">
-            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-secondary" title="Add academic subjects that aren't here yet (one-way, non-destructive)">
-                <i class="fas fa-sync"></i> Sync from Academic Subjects
-            </button>
-        </form>
-        <a href="{{ url_for('generator.add_gen_subject') }}" class="btn btn-primary">
-            <i class="fas fa-plus"></i> Add Subject
-        </a>
+{% set configured_count = subjects_data|selectattr('config')|list|length %}
+{% set total_count = subjects_data|length %}
+{% set category_badge = {'core':'badge-success','science':'badge-info','arts':'badge-primary','commercial':'badge-warning','vocational':'badge-secondary'} %}
+<div class="content-narrow">
+  <div class="sp-head">
+    <div class="sp-ic"><i class="fas fa-book"></i></div>
+    <div class="sp-head-txt">
+      <h1>{{ level|upper }} Subjects</h1>
+      <p>Manage {{ level|upper }} subjects and how many periods each gets per week.</p>
     </div>
-</div>
-
-<p class="text-muted mb-3">Manage {{ level|upper }} subjects. These are separate from {{ 'SSS' if level == 'jss' else 'JSS' }} subjects.</p>
-
-{% if subjects_data %}
-<!-- Subjects List -->
-<div class="card mb-3">
-    <div class="card-header">
-        <h3><i class="fas fa-list"></i> Subject List ({{ subjects_data|length }})</h3>
+    <div class="sp-actions">
+      <form method="POST" action="{{ url_for('generator.sync_gen_subjects') }}"
+            data-confirm="Import academic subjects not already listed here into {{ level|upper }}? This only adds subjects; it never changes or removes existing ones, their periods, or teachers.">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" class="btn-ghost" title="Add academic subjects that aren't here yet (one-way, non-destructive)">
+          <i class="fas fa-sync"></i> Sync from Academic
+        </button>
+      </form>
+      <a href="{{ url_for('generator.add_gen_subject') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add Subject</a>
     </div>
-    <div class="card-body" style="padding: 0; overflow-x: auto;">
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th>Subject Name</th>
-                    <th>Short</th>
-                    <th>Category</th>
-                    <th>Config Status</th>
-                    <th style="width:120px">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in subjects_data %}
-                <tr>
-                    <td><strong>{{ item.subject.name }}</strong></td>
-                    <td>{{ item.subject.short_name or '-' }}</td>
-                    <td>
-                        <span class="badge-category badge-{{ item.subject.category or 'core' }}">
-                            {{ (item.subject.category or 'core')|capitalize }}
-                        </span>
-                    </td>
-                    <td>
-                        {% if item.config %}
-                        <span class="config-status configured">
-                            <i class="fas fa-check-circle"></i> {{ item.config.periods_per_week }} periods/week
-                        </span>
-                        {% else %}
-                        <span class="config-status not-configured">
-                            <i class="fas fa-circle"></i> Not configured
-                        </span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        <div class="subject-actions">
-                            <a href="{{ url_for('generator.subject_rules', subject_id=item.subject.id) }}"
-                               class="btn btn-sm btn-outline-primary" title="Rules (periods, first/last period, doubles, per-class)">
-                                <i class="fas fa-sliders"></i> Rules
-                            </a>
-                            <a href="{{ url_for('generator.edit_gen_subject', subject_id=item.subject.id) }}"
-                               class="btn btn-sm btn-outline-primary" title="Edit">
-                                <i class="fas fa-edit"></i>
-                            </a>
-                            <form method="POST" action="{{ url_for('generator.delete_gen_subject', subject_id=item.subject.id) }}" 
+  </div>
+
+  {% if subjects_data %}
+  <div class="sp-chips">
+    <div class="sp-chip"><b>{{ total_count }}</b><span>Subjects</span></div>
+    <div class="sp-chip"><b>{{ configured_count }}</b><span>Configured</span></div>
+    <div class="sp-chip"><b>{{ total_count - configured_count }}</b><span>Pending</span></div>
+  </div>
+
+  <form id="saveConfigForm" method="POST" action="{{ url_for('generator.save_subjects_config') }}">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                                  style="display:inline" data-confirm="Delete {{ item.subject.name }}?">
-                                <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            </form>
-                        </div>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
+  </form>
 
-<!-- Period Configuration -->
-<div class="card">
-    <div class="card-header">
-        <h3><i class="fas fa-cog"></i> Period Configuration</h3>
-    </div>
-    <div class="card-body">
-        <p class="text-muted">Configure how many periods each subject should have per week for timetable generation.</p>
-        
-        <form method="POST" action="{{ url_for('generator.save_subjects_config') }}">
-    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-            <div class="table-responsive">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Subject</th>
-                            <th style="width:80px">Periods/Week</th>
-                            <th style="width:80px">Double Period</th>
-                            <th style="width:60px"># Doubles</th>
-                            <th style="width:100px">Preferred Time</th>
-                            <th style="width:60px">Not 1st</th>
-                            <th style="width:60px">Not Last</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for item in subjects_data %}
-                        <tr>
-                            <td>
-                                {{ item.subject.name }}
-                                <input type="hidden" name="subject_id[]" value="{{ item.subject.id }}">
-                            </td>
-                            <td>
-                                <input type="number" name="periods_{{ item.subject.id }}" 
-                                       class="form-control" style="width:70px" min="1" max="10"
-                                       value="{{ item.config.periods_per_week if item.config else 4 }}">
-                            </td>
-                            <td style="text-align:center">
-                                <input type="checkbox" name="double_{{ item.subject.id }}" 
-                                       {% if item.config and item.config.needs_double_period %}checked{% endif %}
-                                       data-call="toggleDouble" data-args="{{ item.subject.id }}|this.checked" data-on="change">
-                            </td>
-                            <td>
-                                <input type="number" name="double_count_{{ item.subject.id }}" 
-                                       id="dc_{{ item.subject.id }}"
-                                       class="form-control" style="width:50px" min="0" max="3"
-                                       value="{{ item.config.double_period_count if item.config else 0 }}"
-                                       {% if not item.config or not item.config.needs_double_period %}disabled{% endif %}>
-                            </td>
-                            <td>
-                                <select name="preferred_{{ item.subject.id }}" class="form-control" style="width:95px">
-                                    <option value="any" {% if not item.config or item.config.preferred_time == 'any' %}selected{% endif %}>Any</option>
-                                    <option value="morning" {% if item.config and item.config.preferred_time == 'morning' %}selected{% endif %}>Morning</option>
-                                    <option value="afternoon" {% if item.config and item.config.preferred_time == 'afternoon' %}selected{% endif %}>Afternoon</option>
-                                </select>
-                            </td>
-                            <td style="text-align:center">
-                                <input type="checkbox" name="not_first_{{ item.subject.id }}" 
-                                       {% if item.config and item.config.not_first_period %}checked{% endif %}>
-                            </td>
-                            <td style="text-align:center">
-                                <input type="checkbox" name="not_last_{{ item.subject.id }}" 
-                                       {% if item.config and item.config.not_last_period %}checked{% endif %}>
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-            
-            <div class="mt-3">
-                <button type="submit" class="btn btn-primary btn-lg">
-                    <i class="fas fa-save"></i> Save Configuration
-                </button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<script nonce="{{ csp_nonce }}">
-function toggleDouble(id, enabled) {
-    var el = document.getElementById('dc_' + id);
-    el.disabled = !enabled;
-    el.value = enabled ? 1 : 0;
-}
-</script>
-
-{% else %}
-<!-- No subjects -->
-<div class="card">
-    <div class="card-body">
-        <div class="empty-state">
-            <i class="fas fa-book"></i>
-            <h3>No {{ level|upper }} Subjects</h3>
-            <p>Add subjects for {{ level|upper }} timetable generation.</p>
-            <a href="{{ url_for('generator.add_gen_subject') }}" class="btn btn-primary">
-                <i class="fas fa-plus"></i> Add First Subject
-            </a>
+  <div class="sub-list">
+    {% for item in subjects_data %}
+    {% set sid = item.subject.id %}
+    {% set cat = item.subject.category or 'core' %}
+    <div class="sub-card">
+      <div class="sub-top">
+        <div>
+          <span class="sub-name">{{ item.subject.name }}</span>
+          {% if item.subject.short_name %}<span class="sub-short">({{ item.subject.short_name }})</span>{% endif %}
+          <div class="sub-meta">
+            <span class="badge {{ category_badge.get(cat, 'badge-secondary') }}">{{ cat|capitalize }}</span>
+            {% if item.config %}
+            <span class="sub-status ok"><i class="fas fa-check-circle"></i> {{ item.config.periods_per_week }} periods/week</span>
+            {% else %}
+            <span class="sub-status no"><i class="fas fa-circle"></i> Not configured</span>
+            {% endif %}
+          </div>
         </div>
+        <div class="sub-acts">
+          <a href="{{ url_for('generator.subject_rules', subject_id=sid) }}" class="btn-ghost" title="Rules (periods, first/last period, doubles, per-class)">
+            <i class="fas fa-sliders"></i>
+          </a>
+          <a href="{{ url_for('generator.edit_gen_subject', subject_id=sid) }}" class="btn-ghost" title="Edit">
+            <i class="fas fa-edit"></i>
+          </a>
+          <form method="POST" action="{{ url_for('generator.delete_gen_subject', subject_id=sid) }}"
+                data-confirm="Delete {{ item.subject.name }}?">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn-outline-danger-sm" title="Delete"><i class="fas fa-trash"></i></button>
+          </form>
+        </div>
+      </div>
+      <div class="sub-cfg">
+        <input type="hidden" name="subject_id[]" value="{{ sid }}" form="saveConfigForm">
+        <div class="cfg-fields">
+          <div class="cfg-field">
+            <label>Periods/week</label>
+            <input type="number" name="periods_{{ sid }}" min="1" max="10" form="saveConfigForm"
+                   value="{{ item.config.periods_per_week if item.config else 4 }}">
+          </div>
+          <div class="cfg-field">
+            <label>Double period</label>
+            <div class="cfg-toggle-row">
+              <span class="tgl">
+                <input type="checkbox" name="double_{{ sid }}" form="saveConfigForm"
+                       {% if item.config and item.config.needs_double_period %}checked{% endif %}
+                       data-call="toggleDouble" data-args="{{ sid }}|this.checked" data-on="change">
+                <span class="trk"></span>
+              </span>
+            </div>
+          </div>
+          <div class="cfg-field">
+            <label># Doubles</label>
+            <input type="number" name="double_count_{{ sid }}" id="dc_{{ sid }}" form="saveConfigForm"
+                   min="0" max="3" value="{{ item.config.double_period_count if item.config else 0 }}"
+                   {% if not item.config or not item.config.needs_double_period %}disabled{% endif %}>
+          </div>
+          <div class="cfg-field">
+            <label>Preferred time</label>
+            <select name="preferred_{{ sid }}" form="saveConfigForm">
+              <option value="any" {% if not item.config or item.config.preferred_time == 'any' %}selected{% endif %}>Any</option>
+              <option value="morning" {% if item.config and item.config.preferred_time == 'morning' %}selected{% endif %}>Morning</option>
+              <option value="afternoon" {% if item.config and item.config.preferred_time == 'afternoon' %}selected{% endif %}>Afternoon</option>
+            </select>
+          </div>
+          <div class="cfg-field">
+            <label>Placement</label>
+            <div style="display:flex;flex-direction:column;gap:.3rem;padding-top:.15rem">
+              <label class="cfg-check">
+                <input type="checkbox" name="not_first_{{ sid }}" form="saveConfigForm"
+                       {% if item.config and item.config.not_first_period %}checked{% endif %}> Not 1st period
+              </label>
+              <label class="cfg-check">
+                <input type="checkbox" name="not_last_{{ sid }}" form="saveConfigForm"
+                       {% if item.config and item.config.not_last_period %}checked{% endif %}> Not last period
+              </label>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
-</div>
-{% endif %}
+    {% endfor %}
+  </div>
 
-<div class="mt-3">
-    <a href="{{ url_for('generator.level_dashboard', level=level) }}" class="btn btn-secondary">
-        <i class="fas fa-arrow-left"></i> Back to {{ level|upper }} Dashboard
+  <div class="sp-save">
+    <p>Changes to periods/week, doubles, and placement apply to all subjects when saved.</p>
+    <button type="submit" form="saveConfigForm" class="btn btn-primary"><i class="fas fa-save"></i> Save Configuration</button>
+  </div>
+
+  <script nonce="{{ csp_nonce }}">
+  function toggleDouble(id, enabled) {
+      var el = document.getElementById('dc_' + id);
+      el.disabled = !enabled;
+      el.value = enabled ? 1 : 0;
+  }
+  </script>
+
+  {% else %}
+  <div class="sp-empty">
+    <div class="ic"><i class="fas fa-book"></i></div>
+    <h3>No {{ level|upper }} Subjects</h3>
+    <p>Add subjects for {{ level|upper }} timetable generation.</p>
+    <a href="{{ url_for('generator.add_gen_subject') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add First Subject</a>
+  </div>
+  {% endif %}
+
+  <div class="mt-3">
+    <a href="{{ url_for('generator.level_dashboard', level=level) }}" class="btn-ghost">
+      <i class="fas fa-arrow-left"></i> Back to {{ level|upper }} Dashboard
     </a>
+  </div>
 </div>
 {% endblock %}

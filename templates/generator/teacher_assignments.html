@@ -1,236 +1,283 @@
 {% extends "base.html" %}
 {% block title %}Teacher Assignments - Generator{% endblock %}
-{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <span>Teacher Assignments</span>{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Timetable</a> / <a href="{{ url_for('generator.level_dashboard', level=level) }}">{{ level|upper }}</a> / <span>Assignments</span>{% endblock %}
 {% block extra_css %}
 <style>
-.arm-chips { display: flex; flex-wrap: wrap; gap: .5rem; padding: .15rem 0; }
-.arm-chip { position: relative; display: inline-flex; cursor: pointer; }
-.arm-chip input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
-.arm-chip span { display: inline-flex; align-items: center; gap: .35rem; padding: .5rem 1rem;
-  border-radius: var(--radius-full); border: 1.5px solid var(--border-color); background: var(--bg-card);
-  color: var(--text-secondary); font-size: .85rem; font-weight: 600; line-height: 1;
-  transition: background .15s, border-color .15s, color .15s; user-select: none; }
-.arm-chip span i { font-size: .7rem; opacity: 0; transition: opacity .15s; }
-.arm-chip input:checked + span { background: var(--primary); border-color: var(--primary); color: #fff; }
-.arm-chip input:checked + span i { opacity: 1; }
-.arm-chip:hover span { border-color: var(--primary); }
-.arm-chip input:focus-visible + span { outline: 2px solid var(--primary); outline-offset: 2px; }
-.arm-chips-empty { font-size: .85rem; color: var(--text-muted); font-style: italic; padding: .4rem 0; }
-/* Its own full-width row, not squeezed into one auto-fit grid column — a
-   class with several arms needs the room to lay them out horizontally. */
-.arm-field { grid-column: 1 / -1; }
-.bulk-bar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: .75rem;
-  flex-wrap: wrap; }
-.bulk-bar .bulk-count { font-weight: 600; color: var(--text-secondary); }
-.assignment-select-col { width: 36px; }
+.content-narrow{max-width:860px;margin:0 auto}
+
+.btn-ghost{display:inline-flex;align-items:center;gap:.4em;padding:.5em .9em;border-radius:var(--radius-md);font-size:.8rem;font-weight:600;
+  background:var(--bg-card);border:1px solid var(--border-color);color:var(--text-secondary);text-decoration:none;cursor:pointer}
+.btn-ghost:hover{border-color:var(--primary);color:var(--primary);text-decoration:none !important}
+
+/* ---- page head ---- */
+.ap-head{display:flex;align-items:flex-start;gap:.9rem;margin-bottom:1.2rem;flex-wrap:wrap}
+.ap-ic{width:48px;height:48px;border-radius:13px;background:var(--primary-light);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0}
+.ap-head-txt{flex:1 1 10rem;min-width:0}
+.ap-head-txt h1{margin:0;font-size:1.3rem;letter-spacing:-.02em}
+.ap-head-txt p{margin:.2rem 0 0;color:var(--text-muted);font-size:.84rem}
+.ap-actions{width:100%}
+@media(min-width:640px){.ap-actions{width:auto;margin-left:auto}}
+
+/* ---- add-assignment card ---- */
+.add-card{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);padding:1.1rem;margin-bottom:1.2rem}
+.add-card h3{margin:0 0 .9rem;font-size:.92rem;display:flex;align-items:center;gap:.5rem}
+.add-card h3 i{color:var(--primary)}
+.add-grid{display:grid;grid-template-columns:1fr;gap:.8rem}
+@media(min-width:560px){.add-grid{grid-template-columns:1fr 1fr}}
+@media(min-width:860px){.add-grid{grid-template-columns:repeat(3,1fr)}}
+.fg label{display:block;font-size:.74rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.02em;margin-bottom:.35rem}
+.fg select{width:100%;padding:.55rem .6rem;border:1px solid var(--border-color);border-radius:var(--radius-sm);background:var(--bg-card);color:var(--text-primary);font-size:.86rem;font-family:inherit}
+.arm-field{grid-column:1/-1}
+.arm-chips{display:flex;flex-wrap:wrap;gap:.5rem;padding:.15rem 0}
+.arm-chip{position:relative;display:inline-flex;cursor:pointer}
+.arm-chip input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
+.arm-chip span{display:inline-flex;align-items:center;gap:.35rem;padding:.5rem 1rem;border-radius:999px;border:1.5px solid var(--border-color);
+  background:var(--bg-card);color:var(--text-secondary);font-size:.85rem;font-weight:600;line-height:1;transition:background .15s,border-color .15s,color .15s;user-select:none}
+.arm-chip span i{font-size:.7rem;opacity:0;transition:opacity .15s}
+.arm-chip input:checked + span{background:var(--primary);border-color:var(--primary);color:#fff}
+.arm-chip input:checked + span i{opacity:1}
+.arm-chip:hover span{border-color:var(--primary)}
+.arm-chip input:focus-visible + span{outline:2px solid var(--primary);outline-offset:2px}
+.arm-chips-empty{font-size:.85rem;color:var(--text-muted);font-style:italic;padding:.4rem 0}
+.arm-hint{display:block;margin-top:.4rem;font-size:.74rem;color:var(--text-muted)}
+.add-submit{grid-column:1/-1;display:flex;justify-content:flex-end}
+
+/* ---- stat chips ---- */
+.ap-chips{display:flex;gap:.6rem;margin-bottom:1.1rem}
+.ap-chip{flex:1 1 90px;text-align:center;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-md);padding:.6rem .5rem;box-shadow:var(--shadow-sm)}
+.ap-chip b{display:block;font-size:1.2rem;line-height:1.2}
+.ap-chip span{font-size:.64rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.02em}
+
+/* ---- bulk bar ---- */
+.bulk-bar{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:.6rem;flex-wrap:wrap;
+  background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-md);padding:.65rem .8rem;margin-bottom:1rem;box-shadow:var(--shadow-sm)}
+.bulk-count{font-weight:600;font-size:.84rem;color:var(--text-secondary)}
+
+/* ---- accordion ---- */
+.acc{display:flex;flex-direction:column;gap:.65rem}
+.acc-item{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);overflow:hidden}
+.acc-item summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:.7rem;padding:.95rem 1.1rem;user-select:none}
+.acc-item summary::-webkit-details-marker{display:none}
+.acc-cls{font-weight:700;font-size:.94rem;flex:1;min-width:0}
+.acc-chevron{color:var(--gray-400);font-size:.85rem;transition:transform .18s;flex-shrink:0}
+.acc-item[open] .acc-chevron{transform:rotate(90deg)}
+.acc-item summary:hover{background:var(--gray-50)}
+.acc-body{border-top:1px solid var(--border-light)}
+.arow{display:flex;align-items:center;gap:.7rem;padding:.75rem 1.1rem;border-bottom:1px solid var(--border-light)}
+.arow:last-child{border-bottom:none}
+.arow .achk{width:17px;height:17px;accent-color:var(--primary);flex-shrink:0}
+.arow .atxt{flex:1;min-width:0;font-size:.85rem}
+.arow .atxt b{font-weight:600}
+.arow .atxt .asub{color:var(--text-muted);display:block;font-size:.76rem;margin-top:.1rem}
+.arow .aarm{font-size:.72rem;color:var(--text-muted);background:var(--gray-50);border:1px solid var(--border-light);padding:.2rem .5rem;border-radius:999px;flex-shrink:0;white-space:nowrap}
+.arow form{display:flex}
+.arow .btn{padding:.35em .55em}
+.acc-empty{padding:1.3rem;text-align:center;color:var(--text-muted);font-size:.84rem}
+.acc-head-row{display:flex;align-items:center;gap:.6rem;padding:.6rem 1.1rem;border-bottom:1px solid var(--border-light);background:var(--gray-50)}
+.acc-head-row label{font-size:.76rem;color:var(--text-muted);display:flex;align-items:center;gap:.4rem}
+
+.ap-empty{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);padding:2.5rem 1.5rem;text-align:center}
+.ap-empty .ic{width:52px;height:52px;border-radius:14px;background:var(--primary-light);color:var(--primary);display:flex;
+  align-items:center;justify-content:center;font-size:1.3rem;margin:0 auto 1rem}
+.ap-empty h3{margin:0 0 .4rem}
+.ap-empty p{margin:0 0 1.1rem;color:var(--text-muted);font-size:.86rem}
 </style>
 {% endblock %}
 {% block content %}
-<div class="page-header">
-    <h1>Teacher Assignments</h1>
-    <div class="page-header-actions">
-        <a href="{{ url_for('generator.teacher_assignment_summary_report') }}" class="btn btn-secondary">
-            <i class="fas fa-clipboard-list"></i> Assignment Report
-        </a>
-    </div>
-</div>
-
-<p class="text-muted mb-3">Assign which teacher teaches which subject to which class. This determines who appears on the timetable.</p>
-
-<!-- Add Assignment Form -->
-<div class="card mb-3">
-    <div class="card-header"><h3>Add Assignment</h3></div>
-    <div class="card-body">
-        <form method="POST" action="{{ url_for('generator.add_teacher_assignment') }}" class="filter-form">
-    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-            <div class="form-group">
-                <label class="form-label">Teacher</label>
-                <select name="teacher_id" id="teacherSelect" class="form-control" required>
-                    <option value="">Select Teacher</option>
-                    {% for teacher in teachers %}
-                    <option value="{{ teacher.id }}">{{ teacher.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Subject</label>
-                <select name="subject_id" id="subjectSelect" class="form-control" required>
-                    <option value="">Select Subject</option>
-                    {% for subject in subjects %}
-                    <option value="{{ subject.id }}">{{ subject.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Class</label>
-                <select name="class_config_id" id="classSelect" class="form-control" required>
-                    <option value="">Select Class</option>
-                    {% for class_config in classes %}
-                    <option value="{{ class_config.id }}">{{ class_config.class_name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="form-group arm-field">
-                <label class="form-label">Arm(s)</label>
-                <div id="armChips" class="arm-chips">
-                    <span class="arm-chips-empty">Select a class first</span>
-                </div>
-                <span class="form-hint">Tap to select one or more arms — leave none selected for "All Arms" (one assignment is created per arm selected).</span>
-            </div>
-            <div class="form-group">
-                <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Add Assignment</button>
-            </div>
-        </form>
-    </div>
-</div>
-
-<!-- Existing Assignments by Class -->
 {% set total_assignments = assignments_by_class.values() | map('length') | sum %}
-{% if total_assignments %}
-<!-- Not wrapped around the class cards below: each row already has its own
-     per-row delete <form>, and HTML forms can't nest. Every checkbox instead
-     associates with this form via its form="bulkDeleteForm" attribute, which
-     works regardless of where the checkbox sits in the document. -->
-<form id="bulkDeleteForm" method="POST" action="{{ url_for('generator.bulk_delete_teacher_assignments') }}"
-      data-confirm="Remove the selected assignment(s)? This cannot be undone.">
-    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-    <div class="card mb-3">
-        <div class="card-body bulk-bar">
-            <span class="bulk-count" id="bulkCount">0 selected</span>
-            <button type="button" class="btn btn-secondary btn-sm" data-call="selectAllAssignments" data-args="true">Select All</button>
-            <button type="button" class="btn btn-secondary btn-sm" data-call="selectAllAssignments" data-args="false">Clear Selection</button>
-            <button type="submit" class="btn btn-danger btn-sm" id="bulkDeleteBtn" disabled>
-                <i class="fas fa-trash"></i> Remove Selected
-            </button>
-        </div>
+{% set ns = namespace(unassigned=0) %}
+{% for cc in classes %}{% if not assignments_by_class[cc.id] %}{% set ns.unassigned = ns.unassigned + 1 %}{% endif %}{% endfor %}
+<div class="content-narrow">
+  <div class="ap-head">
+    <div class="ap-ic"><i class="fas fa-user-tag"></i></div>
+    <div class="ap-head-txt">
+      <h1>Teacher Assignments</h1>
+      <p>Assign which teacher teaches which subject to which class.</p>
     </div>
-</form>
+    <div class="ap-actions">
+      <a href="{{ url_for('generator.teacher_assignment_summary_report') }}" class="btn-ghost">
+        <i class="fas fa-clipboard-list"></i> Assignment Report
+      </a>
+    </div>
+  </div>
 
-{% for class_config in classes %}
-<div class="card mb-3">
-    <div class="card-header">
-        <h3>{{ class_config.class_name }}</h3>
-        <span class="badge badge-primary">{{ assignments_by_class[class_config.id]|length }} assignments</span>
-    </div>
-    <div class="card-body" style="padding: 0;">
+  <div class="add-card">
+    <h3><i class="fas fa-plus-circle"></i> Add Assignment</h3>
+    <form method="POST" action="{{ url_for('generator.add_teacher_assignment') }}">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <div class="add-grid">
+        <div class="fg">
+          <label>Teacher</label>
+          <select name="teacher_id" id="teacherSelect" required>
+            <option value="">Select Teacher</option>
+            {% for teacher in teachers %}<option value="{{ teacher.id }}">{{ teacher.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="fg">
+          <label>Subject</label>
+          <select name="subject_id" id="subjectSelect" required>
+            <option value="">Select Subject</option>
+            {% for subject in subjects %}<option value="{{ subject.id }}">{{ subject.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="fg">
+          <label>Class</label>
+          <select name="class_config_id" id="classSelect" required>
+            <option value="">Select Class</option>
+            {% for class_config in classes %}<option value="{{ class_config.id }}">{{ class_config.class_name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div class="fg arm-field">
+          <label>Arm(s)</label>
+          <div id="armChips" class="arm-chips">
+            <span class="arm-chips-empty">Select a class first</span>
+          </div>
+          <span class="arm-hint">Tap to select one or more arms — leave none selected for "All Arms" (one assignment is created per arm selected).</span>
+        </div>
+        <div class="add-submit">
+          <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Add Assignment</button>
+        </div>
+      </div>
+    </form>
+  </div>
+
+  {% if total_assignments or classes %}
+  <div class="ap-chips">
+    <div class="ap-chip"><b>{{ total_assignments }}</b><span>Assignments</span></div>
+    <div class="ap-chip"><b>{{ classes|length }}</b><span>Classes</span></div>
+    <div class="ap-chip"><b>{{ ns.unassigned }}</b><span>Unassigned</span></div>
+  </div>
+  {% endif %}
+
+  {% if total_assignments %}
+  <!-- Not wrapped around the class accordion below: each row already has its own
+       per-row delete <form>, and HTML forms can't nest. Every checkbox instead
+       associates with this form via its form="bulkDeleteForm" attribute, which
+       works regardless of where the checkbox sits in the document. -->
+  <form id="bulkDeleteForm" method="POST" action="{{ url_for('generator.bulk_delete_teacher_assignments') }}"
+        data-confirm="Remove the selected assignment(s)? This cannot be undone.">
+    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+  </form>
+
+  <div class="bulk-bar">
+    <span class="bulk-count" id="bulkCount">0 selected</span>
+    <button type="button" class="btn btn-secondary btn-sm" data-call="selectAllAssignments" data-args="true">Select All</button>
+    <button type="button" class="btn btn-secondary btn-sm" data-call="selectAllAssignments" data-args="false">Clear</button>
+    <button type="submit" form="bulkDeleteForm" class="btn btn-danger btn-sm" id="bulkDeleteBtn" disabled style="margin-left:auto">
+      <i class="fas fa-trash"></i> Remove Selected
+    </button>
+  </div>
+
+  <div class="acc">
+    {% for class_config in classes %}
+    <details class="acc-item"{% if loop.first %} open{% endif %}>
+      <summary>
+        <span class="acc-cls">{{ class_config.class_name }}</span>
+        <span class="badge {{ 'badge-primary' if assignments_by_class[class_config.id] else 'badge-secondary' }}">
+          {{ assignments_by_class[class_config.id]|length }} assignment{{ 's' if assignments_by_class[class_config.id]|length != 1 else '' }}
+        </span>
+        <i class="fas fa-chevron-right acc-chevron"></i>
+      </summary>
+      <div class="acc-body">
         {% if assignments_by_class[class_config.id] %}
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th class="assignment-select-col">
-                        <input type="checkbox" class="select-class-assignments" title="Select all in this class">
-                    </th>
-                    <th>Subject</th>
-                    <th>Teacher</th>
-                    <th>Arm</th>
-                    <th style="width: 80px;">Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for assignment in assignments_by_class[class_config.id] %}
-                <tr>
-                    <td><input type="checkbox" class="assignment-checkbox" name="assignment_ids[]" value="{{ assignment.id }}" form="bulkDeleteForm"></td>
-                    <td>{{ assignment.subject.name }}</td>
-                    <td>{{ assignment.teacher.name }}</td>
-                    <td>{{ assignment.arm_name or 'All Arms' }}</td>
-                    <td>
-                        <form method="POST" action="{{ url_for('generator.delete_teacher_assignment', assignment_id=assignment.id) }}" style="display: inline;">
-    <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                            <button type="submit" class="btn btn-danger btn-sm" title="Remove"><i class="fas fa-times"></i></button>
-                        </form>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+        <div class="acc-head-row">
+          <label><input type="checkbox" class="select-class-assignments" title="Select all in this class"> Select all in this class</label>
+        </div>
+        {% for assignment in assignments_by_class[class_config.id] %}
+        <div class="arow">
+          <input type="checkbox" class="achk assignment-checkbox" name="assignment_ids[]" value="{{ assignment.id }}" form="bulkDeleteForm">
+          <span class="atxt"><b>{{ assignment.subject.name }}</b><span class="asub">{{ assignment.teacher.name }}</span></span>
+          <span class="aarm">{{ assignment.arm_name or 'All Arms' }}</span>
+          <form method="POST" action="{{ url_for('generator.delete_teacher_assignment', assignment_id=assignment.id) }}">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="btn btn-ghost btn-sm" title="Remove"><i class="fas fa-times"></i></button>
+          </form>
+        </div>
+        {% endfor %}
         {% else %}
-        <div class="empty-state" style="padding: 2rem;">
-            <p class="text-muted">No assignments for this class yet</p>
-        </div>
+        <div class="acc-empty">No assignments for this class yet</div>
         {% endif %}
-    </div>
+      </div>
+    </details>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if not classes %}
+  <div class="ap-empty">
+    <div class="ic"><i class="fas fa-school"></i></div>
+    <h3>No Classes Configured</h3>
+    <p>Add classes first before assigning teachers</p>
+    <a href="{{ url_for('generator.classes_config') }}" class="btn btn-primary">Configure Classes</a>
+  </div>
+  {% endif %}
+
+  <script nonce="{{ csp_nonce }}">
+  document.getElementById('classSelect').addEventListener('change', function() {
+      const classId = this.value;
+      const armChips = document.getElementById('armChips');
+
+      armChips.innerHTML = '';
+
+      if (!classId) {
+          armChips.innerHTML = '<span class="arm-chips-empty">Select a class first</span>';
+          return;
+      }
+      fetch(`/generator/api/class/${classId}/arms`)
+          .then(response => response.json())
+          .then(arms => {
+              if (!arms.length) {
+                  armChips.innerHTML = '<span class="arm-chips-empty">This class has no separate arms</span>';
+                  return;
+              }
+              arms.forEach((arm, i) => {
+                  const label = document.createElement('label');
+                  label.className = 'arm-chip';
+                  const input = document.createElement('input');
+                  input.type = 'checkbox'; input.name = 'arm_names[]'; input.value = arm; input.id = 'arm-chip-' + i;
+                  const span = document.createElement('span');
+                  span.innerHTML = '<i class="fas fa-check" aria-hidden="true"></i>';
+                  span.appendChild(document.createTextNode(arm));
+                  label.appendChild(input); label.appendChild(span);
+                  armChips.appendChild(label);
+              });
+          });
+  });
+
+  function assignmentCheckboxes() {
+      return Array.from(document.querySelectorAll('.assignment-checkbox'));
+  }
+
+  function updateBulkBar() {
+      const checked = assignmentCheckboxes().filter(cb => cb.checked);
+      document.getElementById('bulkCount').textContent = checked.length + ' selected';
+      document.getElementById('bulkDeleteBtn').disabled = checked.length === 0;
+      // Keep each class accordion's own "select all" header checkbox in sync —
+      // checked only when every row in that class is checked, indeterminate
+      // when some (not all) are.
+      document.querySelectorAll('.select-class-assignments').forEach(function (header) {
+          const body = header.closest('.acc-body');
+          const rows = Array.from(body.querySelectorAll('.assignment-checkbox'));
+          const checkedRows = rows.filter(cb => cb.checked);
+          header.checked = rows.length > 0 && checkedRows.length === rows.length;
+          header.indeterminate = checkedRows.length > 0 && checkedRows.length < rows.length;
+      });
+  }
+
+  function selectAllAssignments(selectAll) {
+      assignmentCheckboxes().forEach(cb => { cb.checked = selectAll; });
+      updateBulkBar();
+  }
+
+  document.addEventListener('change', function (e) {
+      if (e.target.matches('.assignment-checkbox')) {
+          updateBulkBar();
+      } else if (e.target.matches('.select-class-assignments')) {
+          const body = e.target.closest('.acc-body');
+          body.querySelectorAll('.assignment-checkbox').forEach(cb => { cb.checked = e.target.checked; });
+          updateBulkBar();
+      }
+  });
+  </script>
 </div>
-{% endfor %}
-{% endif %}
-
-{% if not classes %}
-<div class="card">
-    <div class="card-body">
-        <div class="empty-state">
-            <i class="fas fa-school"></i>
-            <h3>No Classes Configured</h3>
-            <p>Add classes first before assigning teachers</p>
-            <a href="{{ url_for('generator.classes_config') }}" class="btn btn-primary">Configure Classes</a>
-        </div>
-    </div>
-</div>
-{% endif %}
-
-<script nonce="{{ csp_nonce }}">
-document.getElementById('classSelect').addEventListener('change', function() {
-    const classId = this.value;
-    const armChips = document.getElementById('armChips');
-
-    armChips.innerHTML = '';
-
-    if (!classId) {
-        armChips.innerHTML = '<span class="arm-chips-empty">Select a class first</span>';
-        return;
-    }
-    fetch(`/generator/api/class/${classId}/arms`)
-        .then(response => response.json())
-        .then(arms => {
-            if (!arms.length) {
-                armChips.innerHTML = '<span class="arm-chips-empty">This class has no separate arms</span>';
-                return;
-            }
-            arms.forEach((arm, i) => {
-                const label = document.createElement('label');
-                label.className = 'arm-chip';
-                const input = document.createElement('input');
-                input.type = 'checkbox'; input.name = 'arm_names[]'; input.value = arm; input.id = 'arm-chip-' + i;
-                const span = document.createElement('span');
-                span.innerHTML = '<i class="fas fa-check" aria-hidden="true"></i>';
-                span.appendChild(document.createTextNode(arm));
-                label.appendChild(input); label.appendChild(span);
-                armChips.appendChild(label);
-            });
-        });
-});
-
-function assignmentCheckboxes() {
-    return Array.from(document.querySelectorAll('.assignment-checkbox'));
-}
-
-function updateBulkBar() {
-    const checked = assignmentCheckboxes().filter(cb => cb.checked);
-    document.getElementById('bulkCount').textContent = checked.length + ' selected';
-    document.getElementById('bulkDeleteBtn').disabled = checked.length === 0;
-    // Keep each class table's own "select all" header checkbox in sync —
-    // checked only when every row in that table is checked, indeterminate
-    // when some (not all) are.
-    document.querySelectorAll('.select-class-assignments').forEach(function (header) {
-        const table = header.closest('table');
-        const rows = Array.from(table.querySelectorAll('.assignment-checkbox'));
-        const checkedRows = rows.filter(cb => cb.checked);
-        header.checked = rows.length > 0 && checkedRows.length === rows.length;
-        header.indeterminate = checkedRows.length > 0 && checkedRows.length < rows.length;
-    });
-}
-
-function selectAllAssignments(selectAll) {
-    assignmentCheckboxes().forEach(cb => { cb.checked = selectAll; });
-    updateBulkBar();
-}
-
-document.addEventListener('change', function (e) {
-    if (e.target.matches('.assignment-checkbox')) {
-        updateBulkBar();
-    } else if (e.target.matches('.select-class-assignments')) {
-        const table = e.target.closest('table');
-        table.querySelectorAll('.assignment-checkbox').forEach(cb => { cb.checked = e.target.checked; });
-        updateBulkBar();
-    }
-});
-</script>
 {% endblock %}

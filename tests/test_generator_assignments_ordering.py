@@ -70,9 +70,10 @@ def test_assignments_listed_alphabetically_by_subject_within_a_class(app):
     body = r.get_data(as_text=True)
     # The "Add Assignment" form's own Subject <select> already lists every
     # subject alphabetically regardless of this bug, and it renders before
-    # the "Existing Assignments" table — search only the latter, or a
-    # passing test wouldn't mean anything.
-    body = body.split('Existing Assignments by Class')[1]
+    # the per-class accordion — search only the latter (starting at the bulk
+    # action bar that immediately precedes it), or a passing test wouldn't
+    # mean anything.
+    body = body.split('Remove Selected')[1]
 
     apple_idx = body.index(f'Zz{tag}Apple')
     mango_idx = body.index(f'Zz{tag}Mango')
