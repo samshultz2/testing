@@ -1,272 +1,289 @@
 {% extends "base.html" %}
 {% block title %}Timetable Rules - Generator{% endblock %}
-{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <span>Rules</span>{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Timetable</a> / <span>Rules</span>{% endblock %}
+{% block extra_css %}
+<style>
+.content-narrow{max-width:860px;margin:0 auto}
+
+.badge{display:inline-flex;align-items:center;gap:.3em;padding:.3em .65em;font-size:.72rem;font-weight:700;border-radius:999px;border:1px solid rgba(15,23,42,.06)}
+
+/* ---- page head ---- */
+.rl-head{display:flex;align-items:flex-start;gap:.9rem;margin-bottom:.4rem;flex-wrap:wrap}
+.rl-ic{width:48px;height:48px;border-radius:13px;background:var(--primary-light);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0}
+.rl-head-txt{flex:1 1 10rem;min-width:0}
+.rl-head-txt h1{margin:0;font-size:1.3rem;letter-spacing:-.02em}
+.rl-head-txt p{margin:.2rem 0 0;color:var(--text-muted);font-size:.84rem}
+.rl-level{font-weight:700;color:var(--text-primary)}
+
+/* ---- section cards ---- */
+.rl-sec{margin-top:1.4rem;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);overflow:hidden}
+.rl-sec-head{display:flex;align-items:center;gap:.6rem;padding:1rem 1.1rem;border-bottom:1px solid var(--border-light)}
+.rl-sec-ic{width:30px;height:30px;border-radius:9px;background:var(--primary-light);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:.8rem;flex-shrink:0}
+.rl-sec-head h2{margin:0;font-size:.94rem;font-weight:700}
+.rl-sec-body{padding:1.1rem}
+.rl-sec-body > p{margin:0 0 1rem;color:var(--text-muted);font-size:.84rem}
+
+.rl-fields{display:grid;grid-template-columns:1fr;gap:1rem}
+@media(min-width:520px){.rl-fields.cols-2{grid-template-columns:1fr 1fr}}
+@media(min-width:620px){.rl-fields.cols-3{grid-template-columns:repeat(3,1fr)}}
+.rl-field label{display:block;font-size:.78rem;font-weight:700;color:var(--text-secondary);margin-bottom:.4rem}
+.rl-field input[type="number"], .rl-field input[type="time"]{width:100%;padding:.55rem .65rem;border:1px solid var(--border-color);border-radius:var(--radius-sm);
+  background:var(--bg-card);color:var(--text-primary);font-size:.88rem;font-family:inherit}
+.rl-hint{font-size:.76rem;color:var(--text-muted);margin-top:.35rem}
+.rl-end-preview{margin-top:1rem;padding-top:.9rem;border-top:1px solid var(--border-light);font-size:.86rem;color:var(--text-secondary)}
+.rl-end-preview b{color:var(--text-primary);font-size:1rem}
+
+/* ---- toggle rows ---- */
+.rl-toggle-row{display:flex;gap:.9rem;padding:.9rem 0;border-bottom:1px solid var(--border-light)}
+.rl-toggle-row:last-child{border-bottom:none}
+.tgl{position:relative;display:inline-block;width:36px;height:21px;flex:none;margin-top:.1rem}
+.tgl input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
+.tgl .trk{position:absolute;inset:0;background:var(--gray-300);border-radius:999px;transition:background .15s;pointer-events:none}
+.tgl .trk::before{content:'';position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#fff;transition:transform .15s;box-shadow:0 1px 2px rgba(0,0,0,.2)}
+.tgl input:checked + .trk{background:var(--primary)}
+.tgl input:checked + .trk::before{transform:translateX(15px)}
+.rl-toggle-txt b{display:block;font-size:.88rem;font-weight:600}
+.rl-toggle-txt span{display:block;font-size:.78rem;color:var(--text-muted);margin-top:.2rem;line-height:1.5}
+.rl-toggle-txt a{color:var(--primary)}
+
+.rl-subpanel{margin-top:.9rem;padding:1rem;background:var(--gray-50);border:1px solid var(--border-light);border-radius:var(--radius-md)}
+.rl-daypick{display:grid;grid-template-columns:1fr 1fr;gap:.8rem;max-width:420px;margin-bottom:1rem}
+.rl-daypick label{display:block;font-size:.76rem;font-weight:700;color:var(--text-secondary);margin-bottom:.35rem}
+.rl-daypick select{width:100%;padding:.5rem .6rem;border:1px solid var(--border-color);border-radius:var(--radius-sm);background:var(--bg-card);color:var(--text-primary);font-size:.85rem}
+.rl-chip-acts{display:flex;gap:.5rem;margin-bottom:.6rem}
+.rl-subj-chips{display:flex;flex-wrap:wrap;gap:.5rem}
+.rl-schip{position:relative;display:inline-flex;cursor:pointer}
+.rl-schip input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
+.rl-schip span{display:inline-flex;align-items:center;padding:.4rem .8rem;border-radius:999px;border:1.5px solid var(--border-color);
+  background:var(--bg-card);color:var(--text-secondary);font-size:.8rem;font-weight:600}
+.rl-schip input:checked + span{background:var(--primary);border-color:var(--primary);color:#fff}
+
+.rl-maxc{display:flex;align-items:center;gap:.8rem}
+.rl-maxc input{width:90px;padding:.55rem .65rem;border:1px solid var(--border-color);border-radius:var(--radius-sm);background:var(--bg-card);color:var(--text-primary);font-size:.88rem}
+
+/* ---- per-class exceptions ---- */
+.rl-exc-list{display:flex;flex-direction:column;gap:.5rem;margin-bottom:1.1rem}
+.rl-exc-row{display:flex;align-items:center;gap:.7rem;padding:.7rem .85rem;border:1px solid var(--border-color);border-radius:var(--radius-md);background:var(--gray-50);flex-wrap:wrap}
+.rl-exc-row .main{flex:1;min-width:0;font-size:.85rem}
+.rl-exc-row .main b{font-weight:600}
+.rl-exc-row form{display:inline}
+.rl-add-form{display:grid;grid-template-columns:1fr;gap:.8rem;padding-top:1rem;border-top:1px solid var(--border-light)}
+@media(min-width:560px){.rl-add-form{grid-template-columns:1fr 1fr 1fr auto;align-items:end}}
+.rl-add-form label{display:block;font-size:.76rem;font-weight:700;color:var(--text-secondary);margin-bottom:.35rem}
+.rl-add-form select{width:100%;padding:.55rem .6rem;border:1px solid var(--border-color);border-radius:var(--radius-sm);background:var(--bg-card);color:var(--text-primary);font-size:.85rem}
+
+.rl-save{margin-top:1.4rem;padding:1rem 1.1rem;background:var(--bg-card);border:1px solid var(--border-color);
+  border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);display:flex;align-items:center;justify-content:flex-end;gap:.75rem;flex-wrap:wrap}
+</style>
+{% endblock %}
 {% block content %}
-<div class="page-header">
-    <h1>Timetable Rules</h1>
-</div>
+<div class="content-narrow">
+  <div class="rl-head">
+    <div class="rl-ic"><i class="fas fa-cogs"></i></div>
+    <div class="rl-head-txt">
+      <h1>Timetable Rules</h1>
+      <p>Constraints for generation — these apply to <span class="rl-level">{{ 'Junior Secondary (JSS)' if level == 'jss' else 'Senior Secondary (SSS)' }}</span>. Switch level in the menu to configure the other.</p>
+    </div>
+  </div>
 
-<p class="text-muted mb-3">Configure constraints and rules for timetable generation. These settings apply to
-<strong>{{ 'Junior Secondary (JSS)' if level == 'jss' else 'Senior Secondary (SSS)' }}</strong> —
-switch level in the menu to configure the other.</p>
-
-<form method="POST" action="{{ url_for('generator.save_rules') }}">
+  <form method="POST" action="{{ url_for('generator.save_rules') }}">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-    <div class="card mb-3">
-        <div class="card-header"><h3>General Settings</h3></div>
-        <div class="card-body">
-            <div class="form-row">
-                <div class="form-group">
-                    <label class="form-label">Periods Per Day</label>
-                    <input type="number" name="periods_per_day" id="periods_per_day" class="form-control"
-                           value="{{ rules.get('periods_per_day', '8') }}"
-                           min="4" max="12">
-                    <span class="form-hint">Total number of periods in a school day</span>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Break After Period</label>
-                    <input type="number" name="break_after_period" id="break_after_period" class="form-control"
-                           value="{{ rules.get('break_after_period', '4') }}"
-                           min="2" max="6">
-                    <span class="form-hint">Break/recess comes after this period number</span>
-                </div>
-            </div>
+
+    <div class="rl-sec">
+      <div class="rl-sec-head"><span class="rl-sec-ic"><i class="fas fa-sliders"></i></span><h2>General Settings</h2></div>
+      <div class="rl-sec-body">
+        <div class="rl-fields cols-2">
+          <div class="rl-field">
+            <label>Periods per day</label>
+            <input type="number" name="periods_per_day" id="periods_per_day" value="{{ rules.get('periods_per_day', '8') }}" min="4" max="12">
+            <div class="rl-hint">Total number of periods in a school day</div>
+          </div>
+          <div class="rl-field">
+            <label>Break after period</label>
+            <input type="number" name="break_after_period" id="break_after_period" value="{{ rules.get('break_after_period', '4') }}" min="2" max="6">
+            <div class="rl-hint">Break/recess comes after this period number</div>
+          </div>
         </div>
+      </div>
     </div>
 
-    <div class="card mb-3">
-        <div class="card-header"><h3>School Day Timing</h3></div>
-        <div class="card-body">
-            <p class="text-muted mb-3">When the {{ 'JSS' if level == 'jss' else 'SSS' }} day starts and how long
-            periods and break last. The dismissal time is worked out from these — JSS and SSS can start and end
-            at different times.</p>
-            <div class="form-row">
-                <div class="form-group">
-                    <label class="form-label">Day Start Time</label>
-                    <input type="time" name="day_start" id="day_start" class="form-control"
-                           value="{{ day_start_hhmm }}">
-                    <span class="form-hint">When the first period begins</span>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Period Length (minutes)</label>
-                    <input type="number" name="period_minutes" id="period_minutes" class="form-control"
-                           value="{{ rules.get('period_minutes', '40') }}" min="20" max="120">
-                    <span class="form-hint">Duration of each teaching period</span>
-                </div>
-                <div class="form-group">
-                    <label class="form-label">Break Length (minutes)</label>
-                    <input type="number" name="break_minutes" id="break_minutes" class="form-control"
-                           value="{{ rules.get('break_minutes', '30') }}" min="0" max="120">
-                    <span class="form-hint">Length of the mid-day break/recess</span>
-                </div>
-            </div>
-            <p class="mt-2 mb-0">Day ends at <strong id="end_time_preview">{{ end_time }}</strong>
-               <span class="text-muted">(computed)</span></p>
+    <div class="rl-sec">
+      <div class="rl-sec-head"><span class="rl-sec-ic"><i class="fas fa-clock"></i></span><h2>School Day Timing</h2></div>
+      <div class="rl-sec-body">
+        <p>When the {{ 'JSS' if level == 'jss' else 'SSS' }} day starts and how long periods and break last. The dismissal time is worked out from these — JSS and SSS can start and end at different times.</p>
+        <div class="rl-fields cols-3">
+          <div class="rl-field">
+            <label>Day start time</label>
+            <input type="time" name="day_start" id="day_start" value="{{ day_start_hhmm }}">
+            <div class="rl-hint">When the first period begins</div>
+          </div>
+          <div class="rl-field">
+            <label>Period length (min)</label>
+            <input type="number" name="period_minutes" id="period_minutes" value="{{ rules.get('period_minutes', '40') }}" min="20" max="120">
+          </div>
+          <div class="rl-field">
+            <label>Break length (min)</label>
+            <input type="number" name="break_minutes" id="break_minutes" value="{{ rules.get('break_minutes', '30') }}" min="0" max="120">
+          </div>
         </div>
+        <div class="rl-end-preview">Day ends at <b id="end_time_preview">{{ end_time }}</b> <span style="color:var(--text-muted)">(computed)</span></div>
+      </div>
     </div>
 
-    <div class="card mb-3">
-        <div class="card-header"><h3>Scheduling Constraints</h3></div>
-        <div class="card-body">
-            <div class="form-group">
-                <label class="checkbox-label">
-                    <input type="checkbox" name="no_repeat_same_day" 
-                           {% if rules.get('no_repeat_same_day', 'true') == 'true' %}checked{% endif %}>
-                    <span>No subject repeat on same day</span>
-                </label>
-                <span class="form-hint">A subject should not appear twice on the same day for a class</span>
-            </div>
-            
-            <div class="form-group">
-                <label class="checkbox-label">
-                    <input type="checkbox" name="distribute_evenly"
-                           {% if rules.get('distribute_evenly', 'true') == 'true' %}checked{% endif %}>
-                    <span>Distribute subjects evenly across week</span>
-                </label>
-                <span class="form-hint">Try to spread each subject across different days</span>
-            </div>
-
-            <div class="form-group">
-                <label class="checkbox-label">
-                    <input type="checkbox" name="first_period_no_repeat"
-                           {% if rules.get('first_period_no_repeat', 'true') == 'true' %}checked{% endif %}>
-                    <span>A subject can open the day (period 1) on at most one day a week</span>
-                </label>
-                <span class="form-hint">e.g. if Geography takes SSS2 Lily's Monday period 1, it won't also be
-                    given Wednesday's period 1 that week. On by default — if this ever makes a class's load
-                    impossible to fit, turn it off here and generate again.</span>
-            </div>
-
-            <div class="form-group">
-                <label class="checkbox-label">
-                    <input type="checkbox" name="day_separation_enabled" id="day_separation_enabled"
-                           {% if rules.get('day_separation_enabled', 'true') == 'true' %}checked{% endif %}>
-                    <span>Keep subjects off two named days together</span>
-                </label>
-                <span class="form-hint">e.g. with Monday/Friday picked below, Physics for SSS1 Rose can be on
-                    Monday or Friday but never both in the same week — still free on every other day. Off by
-                    default for every subject — tick which subjects it should apply to below (unticked
-                    subjects are unaffected, no need to visit each one's own Subject Settings), or use
-                    <a href="{{ url_for('generator.clash_rules_list') }}">Clash Rules</a> for a custom day-pair
-                    on just one class instead. If a ticked subject is taught every school day, this pairing is
-                    impossible to honour for it — untick it here if generation ever reports that.</span>
-                <div class="form-row mt-2" id="day_separation_days" style="max-width: 420px;">
-                    <div class="form-group">
-                        <label class="form-label">Day A</label>
-                        <select name="day_separation_day_a" class="form-control">
-                            {% for d in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] %}
-                            <option value="{{ loop.index0 }}"
-                                {% if rules.get('day_separation_day_a', '0')|int == loop.index0 %}selected{% endif %}>{{ d }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label class="form-label">Day B</label>
-                        <select name="day_separation_day_b" class="form-control">
-                            {% for d in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] %}
-                            <option value="{{ loop.index0 }}"
-                                {% if rules.get('day_separation_day_b', '4')|int == loop.index0 %}selected{% endif %}>{{ d }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                </div>
-                {% if subjects %}
-                <div class="mt-2">
-                    <label class="form-label">Apply to these subjects</label>
-                    <div class="mb-2">
-                        <button type="button" class="btn btn-secondary btn-sm" data-call="selectAllDaySepSubjects" data-args="true">Select All</button>
-                        <button type="button" class="btn btn-secondary btn-sm" data-call="selectAllDaySepSubjects" data-args="false">Clear All</button>
-                    </div>
-                    <div class="checkbox-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 0.4rem; max-width: 700px;">
-                        {% for subject in subjects %}
-                        <label class="checkbox-label" style="padding: 0.4rem 0.6rem; background: var(--bg-tertiary); border-radius: var(--border-radius-sm);">
-                            <input type="checkbox" name="day_separation_subjects[]" value="{{ subject.id }}"
-                                   {% if subject.id in day_separation_subject_ids %}checked{% endif %}>
-                            <span>{{ subject.name }}</span>
-                        </label>
-                        {% endfor %}
-                    </div>
-                </div>
-                {% endif %}
-                <div class="mt-2">
-                    <label class="checkbox-label">
-                        <input type="checkbox" name="day_separation_auto_probe"
-                               {% if rules.get('day_separation_auto_probe', 'true') == 'true' %}checked{% endif %}>
-                        <span>If generation fails, automatically test which class exemption would fix it</span>
-                    </label>
-                    <span class="form-hint">When a run fails for a reason that isn't a single obvious cause,
-                        re-try it with one class at a time temporarily exempted from this rule (short re-solve
-                        each) and report which exemption, if any, would actually make it solvable — e.g.
-                        "exempting Accounting for SSS1 would work" — instead of you finding that out by
-                        trial and error through Per-Class Exceptions above. Adds extra time to a failed run
-                        (a handful of seconds per class checked); turn it off if you'd rather generation fail
-                        fast and diagnose it yourself.</span>
-                </div>
-            </div>
-
-            <div class="form-group">
-                <label class="form-label">Max Consecutive Periods (per teacher)</label>
-                <input type="number" name="max_consecutive" class="form-control" style="width: 100px;"
-                       value="{{ rules.get('max_consecutive', '3') }}" 
-                       min="1" max="6">
-                <span class="form-hint">Maximum consecutive periods a teacher can take without a break</span>
-            </div>
+    <div class="rl-sec">
+      <div class="rl-sec-head"><span class="rl-sec-ic"><i class="fas fa-ban"></i></span><h2>Scheduling Constraints</h2></div>
+      <div class="rl-sec-body" style="padding-top:.2rem;padding-bottom:.2rem">
+        <div class="rl-toggle-row">
+          <span class="tgl"><input type="checkbox" name="no_repeat_same_day" {% if rules.get('no_repeat_same_day', 'true') == 'true' %}checked{% endif %}><span class="trk"></span></span>
+          <div class="rl-toggle-txt"><b>No subject repeat on same day</b><span>A subject should not appear twice on the same day for a class</span></div>
         </div>
-    </div>
-    
-    <div class="card mb-3">
-        <div class="card-header"><h3>Period Restrictions</h3></div>
-        <div class="card-body">
-            <p class="text-muted mb-3">These are configured per subject in Subject Settings:</p>
-            <ul>
-                <li><strong>Not First Period</strong> - Subject won't be scheduled as the first period</li>
-                <li><strong>Not Last Period</strong> - Subject won't be scheduled as the last period</li>
-                <li><strong>Preferred Time</strong> - Morning, Afternoon, or Any</li>
-            </ul>
-            <a href="{{ url_for('generator.subjects_config') }}" class="btn btn-secondary btn-sm">
-                <i class="fas fa-cog"></i> Go to Subject Settings
-            </a>
+        <div class="rl-toggle-row">
+          <span class="tgl"><input type="checkbox" name="distribute_evenly" {% if rules.get('distribute_evenly', 'true') == 'true' %}checked{% endif %}><span class="trk"></span></span>
+          <div class="rl-toggle-txt"><b>Distribute subjects evenly across week</b><span>Try to spread each subject across different days</span></div>
         </div>
+        <div class="rl-toggle-row">
+          <span class="tgl"><input type="checkbox" name="first_period_no_repeat" {% if rules.get('first_period_no_repeat', 'true') == 'true' %}checked{% endif %}><span class="trk"></span></span>
+          <div class="rl-toggle-txt"><b>A subject can open the day (period 1) on at most one day a week</b>
+            <span>e.g. if Geography takes SSS2 Lily's Monday period 1, it won't also be given Wednesday's period 1 that week. On by default — if this ever makes a class's load impossible to fit, turn it off here and generate again.</span></div>
+        </div>
+        <div class="rl-toggle-row" style="flex-direction:column">
+          <div style="display:flex;gap:.9rem">
+            <span class="tgl"><input type="checkbox" name="day_separation_enabled" id="day_separation_enabled" {% if rules.get('day_separation_enabled', 'true') == 'true' %}checked{% endif %}><span class="trk"></span></span>
+            <div class="rl-toggle-txt"><b>Keep subjects off two named days together</b>
+              <span>e.g. with Monday/Friday picked below, Physics for SSS1 Rose can be on Monday or Friday but never both in the same week — still free on every other day. Off by
+                default for every subject — tick which subjects it should apply to below (unticked subjects are unaffected, no need to visit each one's own Subject Settings), or use
+                <a href="{{ url_for('generator.clash_rules_list') }}">Clash Rules</a> for a custom day-pair on just one class instead. If a ticked subject is taught every school day, this pairing is
+                impossible to honour for it — untick it here if generation ever reports that.</span></div>
+          </div>
+          <div class="rl-subpanel" id="day_separation_days">
+            <div class="rl-daypick">
+              <div><label>Day A</label>
+                <select name="day_separation_day_a">
+                  {% for d in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] %}
+                  <option value="{{ loop.index0 }}" {% if rules.get('day_separation_day_a', '0')|int == loop.index0 %}selected{% endif %}>{{ d }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              <div><label>Day B</label>
+                <select name="day_separation_day_b">
+                  {% for d in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] %}
+                  <option value="{{ loop.index0 }}" {% if rules.get('day_separation_day_b', '4')|int == loop.index0 %}selected{% endif %}>{{ d }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+            </div>
+            {% if subjects %}
+            <label style="display:block;font-size:.78rem;font-weight:700;color:var(--text-secondary);margin-bottom:.5rem">Apply to these subjects</label>
+            <div class="rl-chip-acts">
+              <button type="button" class="btn btn-secondary btn-sm" data-call="selectAllDaySepSubjects" data-args="true">Select All</button>
+              <button type="button" class="btn btn-secondary btn-sm" data-call="selectAllDaySepSubjects" data-args="false">Clear All</button>
+            </div>
+            <div class="rl-subj-chips">
+              {% for subject in subjects %}
+              <label class="rl-schip">
+                <input type="checkbox" name="day_separation_subjects[]" value="{{ subject.id }}" {% if subject.id in day_separation_subject_ids %}checked{% endif %}>
+                <span>{{ subject.name }}</span>
+              </label>
+              {% endfor %}
+            </div>
+            {% endif %}
+            <div class="rl-toggle-row" style="border:none;padding-top:1rem;padding-bottom:0">
+              <span class="tgl"><input type="checkbox" name="day_separation_auto_probe" {% if rules.get('day_separation_auto_probe', 'true') == 'true' %}checked{% endif %}><span class="trk"></span></span>
+              <div class="rl-toggle-txt"><b>If generation fails, automatically test which class exemption would fix it</b>
+                <span>When a run fails for a reason that isn't a single obvious cause, re-try it with one class at a time temporarily exempted from this rule (short re-solve
+                  each) and report which exemption, if any, would actually make it solvable — e.g. "exempting Accounting for SSS1 would work" — instead of you finding that out by
+                  trial and error through Per-Class Exceptions below. Adds extra time to a failed run (a handful of seconds per class checked); turn it off if you'd rather generation fail
+                  fast and diagnose it yourself.</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
-    
-    <div class="page-header-actions">
-        <button type="submit" class="btn btn-primary btn-lg"><i class="fas fa-save"></i> Save Rules</button>
-        <a href="{{ url_for('generator.index') }}" class="btn btn-secondary">Back</a>
+
+    <div class="rl-sec">
+      <div class="rl-sec-head"><span class="rl-sec-ic"><i class="fas fa-user-clock"></i></span><h2>Teacher Load</h2></div>
+      <div class="rl-sec-body">
+        <div class="rl-field" style="max-width:220px">
+          <label>Max consecutive periods (per teacher)</label>
+          <div class="rl-maxc"><input type="number" name="max_consecutive" value="{{ rules.get('max_consecutive', '3') }}" min="1" max="6"></div>
+          <div class="rl-hint">Maximum consecutive periods a teacher can take without a break</div>
+        </div>
+      </div>
     </div>
-</form>
 
-{% if subjects and classes %}
-<div class="card mb-3">
-    <div class="card-header"><h3>Day-Separation: Per-Class Exceptions</h3></div>
-    <div class="card-body">
-        <p class="text-muted mb-3">The subject checklist above decides day-separation for a subject across
-            <em>every</em> class. Use this to override that for one specific class — e.g. Physics is on for
-            every class except SSS1 Rose.</p>
+    <div class="rl-sec">
+      <div class="rl-sec-head"><span class="rl-sec-ic"><i class="fas fa-circle-info"></i></span><h2>Period Restrictions</h2></div>
+      <div class="rl-sec-body">
+        <p style="margin-bottom:.6rem">These are configured per subject, in Subject Settings: <b>Not First Period</b>, <b>Not Last Period</b>, and <b>Preferred Time</b> (Morning/Afternoon/Any).</p>
+        <a href="{{ url_for('generator.subjects_config') }}" class="btn-ghost" style="display:inline-flex;align-items:center;gap:.4em;padding:.5em .9em;border-radius:var(--radius-md);font-size:.8rem;font-weight:600;
+            background:var(--bg-card);border:1px solid var(--border-color);color:var(--text-secondary);text-decoration:none">
+          <i class="fas fa-cog"></i> Go to Subject Settings
+        </a>
+      </div>
+    </div>
 
-        {% if day_separation_class_overrides %}
-        <table class="table mb-3">
-            <thead><tr><th>Subject</th><th>Class</th><th>This class</th><th></th></tr></thead>
-            <tbody>
-                {% for ov in day_separation_class_overrides %}
-                <tr>
-                    <td>{{ ov.subject_name }}</td>
-                    <td>{{ ov.class_name }}</td>
-                    <td>
-                        {% if ov.exempt %}
-                        <span class="badge badge-secondary">Exempt (off)</span>
-                        {% else %}
-                        <span class="badge badge-primary">Included (on)</span>
-                        {% endif %}
-                    </td>
-                    <td>
-                        <form method="POST" action="{{ url_for('generator.set_day_separation_class_override') }}" style="display:inline;">
-                            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                            <input type="hidden" name="subject_id" value="{{ ov.subject_id }}">
-                            <input type="hidden" name="class_id" value="{{ ov.class_config_id }}">
-                            <input type="hidden" name="choice" value="inherit">
-                            <button type="submit" class="btn btn-secondary btn-sm">Remove (inherit default)</button>
-                        </form>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <p class="text-muted">No per-class exceptions yet.</p>
-        {% endif %}
+    <div class="rl-save">
+      <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Rules</button>
+    </div>
+  </form>
 
-        <form method="POST" action="{{ url_for('generator.set_day_separation_class_override') }}" class="form-row" style="align-items: flex-end;">
+  {% if subjects and classes %}
+  <div class="rl-sec">
+    <div class="rl-sec-head"><span class="rl-sec-ic"><i class="fas fa-layer-group"></i></span><h2>Day-Separation: Per-Class Exceptions</h2></div>
+    <div class="rl-sec-body">
+      <p>The subject checklist above decides day-separation for a subject across <em>every</em> class. Use this to override that for one specific class — e.g. Physics is on for every class except SSS1 Rose.</p>
+
+      {% if day_separation_class_overrides %}
+      <div class="rl-exc-list">
+        {% for ov in day_separation_class_overrides %}
+        <div class="rl-exc-row">
+          <span class="main"><b>{{ ov.subject_name }}</b> — {{ ov.class_name }}</span>
+          {% if ov.exempt %}
+          <span class="badge badge-secondary">Exempt (off)</span>
+          {% else %}
+          <span class="badge badge-primary">Included (on)</span>
+          {% endif %}
+          <form method="POST" action="{{ url_for('generator.set_day_separation_class_override') }}">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-            <div class="form-group">
-                <label class="form-label">Subject</label>
-                <select name="subject_id" class="form-control" required>
-                    {% for subject in subjects %}
-                    <option value="{{ subject.id }}">{{ subject.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Class</label>
-                <select name="class_id" class="form-control" required>
-                    {% for cc in classes %}
-                    <option value="{{ cc.id }}">{{ cc.class_name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="form-group">
-                <label class="form-label">For this class</label>
-                <select name="choice" class="form-control" required>
-                    <option value="include">Apply rule (included)</option>
-                    <option value="exempt">Exempt (off)</option>
-                </select>
-            </div>
-            <div class="form-group">
-                <button type="submit" class="btn btn-secondary">Add Exception</button>
-            </div>
-        </form>
+            <input type="hidden" name="subject_id" value="{{ ov.subject_id }}">
+            <input type="hidden" name="class_id" value="{{ ov.class_config_id }}">
+            <input type="hidden" name="choice" value="inherit">
+            <button type="submit" class="btn-ghost">Remove</button>
+          </form>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="rl-hint" style="margin-bottom:1rem">No per-class exceptions yet.</p>
+      {% endif %}
+
+      <form method="POST" action="{{ url_for('generator.set_day_separation_class_override') }}" class="rl-add-form">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <div>
+          <label>Subject</label>
+          <select name="subject_id" required>
+            {% for subject in subjects %}<option value="{{ subject.id }}">{{ subject.name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>Class</label>
+          <select name="class_id" required>
+            {% for cc in classes %}<option value="{{ cc.id }}">{{ cc.class_name }}</option>{% endfor %}
+          </select>
+        </div>
+        <div>
+          <label>For this class</label>
+          <select name="choice" required>
+            <option value="include">Apply rule (included)</option>
+            <option value="exempt">Exempt (off)</option>
+          </select>
+        </div>
+        <div><button type="submit" class="btn btn-secondary">Add Exception</button></div>
+      </form>
     </div>
+  </div>
+  {% endif %}
 </div>
-{% endif %}
 
 <script nonce="{{ csp_nonce }}">
 // Live dismissal-time preview: mirrors utils/generator_times.day_end_time()

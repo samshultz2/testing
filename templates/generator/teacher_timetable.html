@@ -1,305 +1,268 @@
 {% extends "base.html" %}
 {% block title %}Teacher Timetable - Generator{% endblock %}
-{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <span>Teacher Timetable</span>{% endblock %}
-{% block content %}
-<div class="page-header">
-    <h1><i class="fas fa-user-clock"></i> Teacher Timetable</h1>
-</div>
-
-<div class="card mb-3">
-    <div class="card-body">
-        <form method="GET" class="filter-form">
-            <div class="form-group">
-                <label class="form-label">Batch</label>
-                <select name="batch_id" class="form-control">
-                    <option value="">Select Batch</option>
-                    {% for batch in batches %}
-                    <option value="{{ batch.batch_id }}" {% if batch_id == batch.batch_id %}selected{% endif %}>
-                        #{{ batch.batch_id }} ({{ batch.generated_at.strftime('%d %b %Y %H:%M') }})
-                    </option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="form-group">
-                <label class="form-label">Teacher</label>
-                <select name="teacher_id" class="form-control">
-                    <option value="">Select Teacher</option>
-                    {% for teacher in teachers %}
-                    <option value="{{ teacher.id }}" {% if teacher_id == teacher.id %}selected{% endif %}>{{ teacher.name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="form-group">
-                <button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> View</button>
-            </div>
-        </form>
-    </div>
-</div>
-
-{% if batch_id %}
-<div class="page-header-actions mb-3">
-    <a href="{{ url_for('generator.print_all_teacher_timetables_pdf', batch_id=batch_id) }}" class="btn btn-danger">
-        <i class="fas fa-file-pdf"></i> Download All Teachers (PDF)
-    </a>
-</div>
-{% endif %}
-
-{% if selected_teacher and teacher_grid %}
-<!-- Timetable Grid -->
-<div class="card mb-3">
-    <div class="card-header">
-        <h3><i class="fas fa-calendar-alt"></i> {{ selected_teacher.name }}'s Timetable</h3>
-        <div class="btn-group">
-            <a href="{{ url_for('generator.print_teacher_timetable', batch_id=batch_id, teacher_id=selected_teacher.id) }}" class="btn btn-success btn-sm"><i class="fas fa-print"></i> Print</a>
-            <a href="{{ url_for('generator.export_teacher_image', batch_id=batch_id, teacher_id=selected_teacher.id) }}" class="btn btn-info btn-sm"><i class="fas fa-image"></i> Image</a>
-        </div>
-    </div>
-    <div class="card-body" style="padding: 0; overflow-x: auto;">
-        <table class="data-table">
-            <thead>
-                <tr>
-                    <th style="width: 80px;">Period</th>
-                    {% for day in days %}
-                    <th>{{ day }}</th>
-                    {% endfor %}
-                </tr>
-            </thead>
-            <tbody>
-                {% for period in range(1, periods_per_day + 1) %}
-                <tr>
-                    <td><strong>P{{ period }}</strong></td>
-                    {% for day_idx in range(5) %}
-                    {% set entry = teacher_grid[day_idx].get(period) %}
-                    <td style="text-align: center; {% if entry %}background: #e8f5e9;{% endif %}">
-                        {% if entry %}
-                        <strong>{{ entry.class_name }} {{ entry.arm_name }}</strong>
-                        <br><small class="text-muted">{{ (entry.subject.short_name or entry.subject.name) if entry.subject else '-' }}</small>
-                        {% else %}
-                        <span class="text-muted">-</span>
-                        {% endif %}
-                    </td>
-                    {% endfor %}
-                </tr>
-                {% if period == break_after_period %}
-                <tr style="background: #fff3e0;">
-                    <td><strong>☕</strong></td>
-                    {% for day in days %}
-                    <td style="text-align: center; color: #e65100;"><em>BREAK</em></td>
-                    {% endfor %}
-                </tr>
-                {% endif %}
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
-
-<!-- Workload Summary Cards -->
-<div class="stats-grid mb-3">
-    <div class="stat-card">
-        <div class="stat-icon primary"><i class="fas fa-clock"></i></div>
-        <div class="stat-content">
-            <h3>{{ total_periods }}</h3>
-            <p>Total Periods</p>
-        </div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-icon info"><i class="fas fa-book"></i></div>
-        <div class="stat-content">
-            <h3>{{ breakdown.by_subject|length }}</h3>
-            <p>Subjects</p>
-        </div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-icon success"><i class="fas fa-school"></i></div>
-        <div class="stat-content">
-            <h3>{{ breakdown.by_class_arm|length }}</h3>
-            <p>Classes</p>
-        </div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-icon {% if total_periods <= selected_teacher.max_periods_per_week %}success{% else %}danger{% endif %}">
-            <i class="fas fa-{% if total_periods <= selected_teacher.max_periods_per_week %}check{% else %}exclamation-triangle{% endif %}"></i>
-        </div>
-        <div class="stat-content">
-            <h3>{{ total_periods }}/{{ selected_teacher.max_periods_per_week }}</h3>
-            <p>{% if total_periods <= selected_teacher.max_periods_per_week %}Within Limit{% else %}Overloaded{% endif %}</p>
-        </div>
-    </div>
-</div>
-
-<div class="row mb-3">
-    <!-- Detailed Breakdown Table -->
-    <div class="col-md-7">
-        <div class="card h-100">
-            <div class="card-header"><h3><i class="fas fa-list"></i> Detailed Breakdown</h3></div>
-            <div class="card-body" style="padding: 0;">
-                <table class="data-table">
-                    <thead>
-                        <tr>
-                            <th>Class</th>
-                            <th>Arm</th>
-                            <th>Subject</th>
-                            <th>Stream</th>
-                            <th>Periods</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for item in breakdown.details %}
-                        <tr>
-                            <td><strong>{{ item.class }}</strong></td>
-                            <td>{{ item.arm }}</td>
-                            <td>{{ item.subject }}</td>
-                            <td>
-                                {% if item.stream != '-' %}
-                                <span class="badge badge-{% if item.stream == 'Science' %}info{% elif item.stream == 'Arts' %}warning{% else %}success{% endif %}">{{ item.stream }}</span>
-                                {% else %}
-                                -
-                                {% endif %}
-                            </td>
-                            <td><span class="badge badge-primary">{{ item.periods }}</span></td>
-                        </tr>
-                        {% endfor %}
-                        <tr style="background: var(--gray-50); font-weight: bold;">
-                            <td colspan="4">Total</td>
-                            <td><span class="badge badge-dark">{{ total_periods }}</span></td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-    
-    <!-- Summary by Category -->
-    <div class="col-md-5">
-        <!-- By Subject -->
-        <div class="card mb-3">
-            <div class="card-header"><h3><i class="fas fa-book"></i> By Subject</h3></div>
-            <div class="card-body">
-                {% for subject, count in breakdown.by_subject.items()|sort(attribute='1', reverse=true) %}
-                <div class="breakdown-row">
-                    <span class="breakdown-label">{{ subject }}</span>
-                    <div class="breakdown-bar-container">
-                        <div class="breakdown-bar" style="width: {{ (count / total_periods * 100)|round(0) }}%; background: #4e73df;"></div>
-                    </div>
-                    <span class="breakdown-count">{{ count }}</span>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-        
-        <!-- By Class -->
-        <div class="card mb-3">
-            <div class="card-header"><h3><i class="fas fa-school"></i> By Class</h3></div>
-            <div class="card-body">
-                {% for cls, count in breakdown.by_class.items()|sort %}
-                <div class="breakdown-row">
-                    <span class="breakdown-label">{{ cls }}</span>
-                    <div class="breakdown-bar-container">
-                        <div class="breakdown-bar" style="width: {{ (count / total_periods * 100)|round(0) }}%; background: #1cc88a;"></div>
-                    </div>
-                    <span class="breakdown-count">{{ count }}</span>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-        
-        <!-- By Stream -->
-        {% if breakdown.by_stream %}
-        <div class="card mb-3">
-            <div class="card-header"><h3><i class="fas fa-layer-group"></i> By Stream</h3></div>
-            <div class="card-body">
-                {% for stream, count in breakdown.by_stream.items()|sort %}
-                <div class="breakdown-row">
-                    <span class="breakdown-label">{{ stream }}</span>
-                    <div class="breakdown-bar-container">
-                        <div class="breakdown-bar" style="width: {{ (count / total_periods * 100)|round(0) }}%; background: #f6c23e;"></div>
-                    </div>
-                    <span class="breakdown-count">{{ count }}</span>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-        {% endif %}
-        
-        <!-- By Day -->
-        <div class="card">
-            <div class="card-header"><h3><i class="fas fa-calendar-day"></i> By Day</h3></div>
-            <div class="card-body">
-                {% for day in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] %}
-                {% set count = breakdown.by_day.get(day, 0) %}
-                <div class="breakdown-row">
-                    <span class="breakdown-label">{{ day[:3] }}</span>
-                    <div class="breakdown-bar-container">
-                        <div class="breakdown-bar" style="width: {{ (count / periods_per_day * 100)|round(0) }}%; background: #36b9cc;"></div>
-                    </div>
-                    <span class="breakdown-count">{{ count }}</span>
-                </div>
-                {% endfor %}
-            </div>
-        </div>
-    </div>
-</div>
-
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Timetable</a> / <span>Teacher Timetable</span>{% endblock %}
+{% block extra_css %}
 <style>
-.row { display: flex; flex-wrap: wrap; margin: 0 -0.5rem; }
-.col-md-5 { flex: 0 0 41.666%; max-width: 41.666%; padding: 0 0.5rem; }
-.col-md-7 { flex: 0 0 58.333%; max-width: 58.333%; padding: 0 0.5rem; }
-@media (max-width: 992px) { 
-    .col-md-5, .col-md-7 { flex: 0 0 100%; max-width: 100%; margin-bottom: 1rem; } 
-}
-.h-100 { height: 100%; }
+.content-narrow{max-width:1040px;margin:0 auto}
 
-.breakdown-row {
-    display: flex;
-    align-items: center;
-    margin-bottom: 0.5rem;
-}
-.breakdown-label {
-    width: 80px;
-    font-size: 0.85rem;
-    flex-shrink: 0;
-}
-.breakdown-bar-container {
-    flex: 1;
-    height: 12px;
-    background: var(--border-color);
-    border-radius: 6px;
-    margin: 0 0.5rem;
-    overflow: hidden;
-}
-.breakdown-bar {
-    height: 100%;
-    border-radius: 6px;
-    transition: width 0.3s ease;
-}
-.breakdown-count {
-    width: 30px;
-    text-align: right;
-    font-weight: bold;
-    font-size: 0.85rem;
-}
+.badge{display:inline-flex;align-items:center;gap:.3em;padding:.3em .65em;font-size:.72rem;font-weight:700;border-radius:999px;border:1px solid rgba(15,23,42,.06)}
+
+.btn-ghost{display:inline-flex;align-items:center;gap:.4em;padding:.4em .75em;border-radius:var(--radius-md);font-size:.76rem;font-weight:600;
+  background:var(--bg-card);border:1px solid var(--border-color);color:var(--text-secondary);text-decoration:none;cursor:pointer}
+.btn-ghost:hover{border-color:var(--primary);color:var(--primary);text-decoration:none !important}
+
+/* ---- page head ---- */
+.tt-head{display:flex;align-items:flex-start;gap:.9rem;margin-bottom:1.2rem;flex-wrap:wrap}
+.tt-ic{width:48px;height:48px;border-radius:13px;background:var(--primary-light);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0}
+.tt-head-txt{flex:1 1 10rem;min-width:0}
+.tt-head-txt h1{margin:0;font-size:1.3rem;letter-spacing:-.02em}
+.tt-head-txt p{margin:.2rem 0 0;color:var(--text-muted);font-size:.84rem}
+
+/* ---- filter card ---- */
+.tt-filter{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);padding:1.1rem;margin-bottom:1.2rem}
+.tt-filter-grid{display:grid;grid-template-columns:1fr;gap:.8rem}
+@media(min-width:620px){.tt-filter-grid{grid-template-columns:1fr 1fr auto;align-items:end}}
+.tt-filter label{display:block;font-size:.74rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.02em;margin-bottom:.35rem}
+.tt-filter select{width:100%;padding:.55rem .6rem;border:1px solid var(--border-color);border-radius:var(--radius-sm);background:var(--bg-card);color:var(--text-primary);font-size:.86rem}
+
+/* ---- chips ---- */
+.tt-chips{display:flex;gap:.6rem;margin-bottom:1.2rem}
+.tt-chip{flex:1 1 90px;text-align:center;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-md);padding:.65rem .5rem;box-shadow:var(--shadow-sm)}
+.tt-chip.warn{border-color:color-mix(in srgb,var(--danger) 30%,var(--border-color))}
+.tt-chip b{display:block;font-size:1.25rem;line-height:1.2}
+.tt-chip.warn b{color:var(--danger)}
+.tt-chip span{font-size:.64rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.02em}
+
+/* ---- grid card ---- */
+.tt-grid-card{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);margin-bottom:1.2rem;overflow:hidden}
+.tt-grid-head{display:flex;align-items:center;gap:.7rem;padding:1rem 1.1rem;border-bottom:1px solid var(--border-light);flex-wrap:wrap}
+.tt-grid-head h2{margin:0;font-size:.98rem;font-weight:700;flex:1}
+.tt-grid-wrap{overflow-x:auto;padding:1rem}
+.tt-table{width:100%;border-collapse:separate;border-spacing:0 .4rem;min-width:560px}
+.tt-table th{font-size:.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.02em;text-align:center;padding:0 .4rem .3rem}
+.tt-table th:first-child{text-align:left}
+.tt-table td{text-align:center;padding:.6rem .4rem;background:var(--gray-50);border-top:1px solid var(--border-light);border-bottom:1px solid var(--border-light)}
+.tt-table td:first-child{text-align:left;font-weight:700;font-size:.82rem;background:transparent;border:none;width:48px}
+.tt-table td.filled{background:var(--primary-light);border-color:color-mix(in srgb,var(--primary) 20%,transparent)}
+.tt-table td.filled b{display:block;font-size:.78rem}
+.tt-table td.filled small{display:block;font-size:.68rem;color:var(--text-muted);margin-top:.1rem}
+.tt-table tr td:nth-child(2){border-top-left-radius:var(--radius-sm);border-bottom-left-radius:var(--radius-sm)}
+.tt-table tr td:last-child{border-top-right-radius:var(--radius-sm);border-bottom-right-radius:var(--radius-sm)}
+.tt-table tr.brk td{background:var(--warning-light);border:none;font-size:.72rem;color:#92400e;font-weight:700;padding:.4rem}
+[data-theme="dark"] .tt-table tr.brk td, [data-theme="midnight"] .tt-table tr.brk td,
+[data-theme="carbon"] .tt-table tr.brk td, [data-theme="mocha"] .tt-table tr.brk td{color:#fcd34d}
+.tt-table tr.brk td:first-child{background:transparent;color:var(--text-muted)}
+
+/* ---- breakdown layout ---- */
+.tt-cols{display:grid;grid-template-columns:1fr;gap:1.2rem}
+@media(min-width:900px){.tt-cols{grid-template-columns:1.4fr 1fr}}
+
+.tt-panel{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);margin-bottom:1rem;overflow:hidden}
+.tt-panel-head{display:flex;align-items:center;gap:.5rem;padding:.9rem 1.1rem;border-bottom:1px solid var(--border-light);font-size:.92rem;font-weight:700}
+.tt-panel-head i{color:var(--primary);font-size:.82rem}
+.tt-panel-body{padding:1rem 1.1rem}
+
+.tt-det-row{display:flex;align-items:center;gap:.6rem;padding:.6rem 0;border-bottom:1px solid var(--border-light);font-size:.84rem;flex-wrap:wrap}
+.tt-det-row:last-child{border-bottom:none}
+.tt-det-cls{font-weight:600;flex:1 1 7rem;min-width:0}
+.tt-det-sub{color:var(--text-muted);flex:1 1 7rem;min-width:0}
+.tt-det-total{display:flex;justify-content:space-between;padding-top:.7rem;font-weight:700;font-size:.86rem}
+
+.brow{display:flex;align-items:center;gap:.6rem;margin-bottom:.55rem}
+.brow:last-child{margin-bottom:0}
+.brow-label{width:72px;flex-shrink:0;font-size:.8rem;color:var(--text-secondary);font-weight:600}
+.brow-bar-wrap{flex:1;height:10px;background:var(--gray-100);border-radius:999px;overflow:hidden}
+.brow-bar{height:100%;border-radius:999px}
+.brow-count{width:26px;text-align:right;font-weight:700;font-size:.8rem}
+
+.tt-empty{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);padding:2.5rem 1.5rem;text-align:center}
+.tt-empty .ic{width:52px;height:52px;border-radius:14px;background:var(--primary-light);color:var(--primary);display:flex;
+  align-items:center;justify-content:center;font-size:1.3rem;margin:0 auto 1rem}
+.tt-empty h3{margin:0 0 .4rem}
+.tt-empty p{margin:0;color:var(--text-muted);font-size:.86rem}
 </style>
+{% endblock %}
+{% block content %}
+<div class="content-narrow">
+  <div class="tt-head">
+    <div class="tt-ic"><i class="fas fa-user-clock"></i></div>
+    <div class="tt-head-txt">
+      <h1>Teacher Timetable</h1>
+      <p>View a teacher's weekly schedule and workload breakdown for a batch.</p>
+    </div>
+  </div>
 
-{% elif teacher_id and not teacher_grid %}
-<div class="card">
-    <div class="card-body">
-        <div class="empty-state">
-            <i class="fas fa-calendar-times"></i>
-            <h3>No Classes Assigned</h3>
-            <p>This teacher has no classes in the selected batch</p>
-        </div>
+  <form method="GET" class="tt-filter">
+    <div class="tt-filter-grid">
+      <div>
+        <label>Batch</label>
+        <select name="batch_id">
+          <option value="">Select Batch</option>
+          {% for batch in batches %}
+          <option value="{{ batch.batch_id }}" {% if batch_id == batch.batch_id %}selected{% endif %}>
+            #{{ batch.batch_id }} ({{ batch.generated_at.strftime('%d %b %Y %H:%M') }})
+          </option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label>Teacher</label>
+        <select name="teacher_id">
+          <option value="">Select Teacher</option>
+          {% for teacher in teachers %}
+          <option value="{{ teacher.id }}" {% if teacher_id == teacher.id %}selected{% endif %}>{{ teacher.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div><button type="submit" class="btn btn-primary"><i class="fas fa-search"></i> View</button></div>
     </div>
-</div>
-{% else %}
-<div class="card">
-    <div class="card-body">
-        <div class="empty-state">
-            <i class="fas fa-chalkboard-teacher"></i>
-            <h3>Select Teacher</h3>
-            <p>Choose a batch and teacher to view their timetable</p>
-        </div>
+  </form>
+
+  {% if batch_id %}
+  <div style="margin-bottom:1.1rem">
+    <a href="{{ url_for('generator.print_all_teacher_timetables_pdf', batch_id=batch_id) }}" class="btn btn-danger btn-sm">
+      <i class="fas fa-file-pdf"></i> Download All Teachers (PDF)
+    </a>
+  </div>
+  {% endif %}
+
+  {% if selected_teacher and teacher_grid %}
+  <div class="tt-chips">
+    <div class="tt-chip"><b>{{ total_periods }}</b><span>Periods</span></div>
+    <div class="tt-chip"><b>{{ breakdown.by_subject|length }}</b><span>Subjects</span></div>
+    <div class="tt-chip"><b>{{ breakdown.by_class_arm|length }}</b><span>Classes</span></div>
+    <div class="tt-chip {{ '' if total_periods <= selected_teacher.max_periods_per_week else 'warn' }}">
+      <b>{{ total_periods }}/{{ selected_teacher.max_periods_per_week }}</b>
+      <span>{% if total_periods <= selected_teacher.max_periods_per_week %}Within Limit{% else %}Overloaded{% endif %}</span>
     </div>
+  </div>
+
+  <div class="tt-grid-card">
+    <div class="tt-grid-head">
+      <h2><i class="fas fa-calendar-alt" style="color:var(--primary);margin-right:.4em"></i> {{ selected_teacher.name }}'s Timetable</h2>
+      <a href="{{ url_for('generator.print_teacher_timetable', batch_id=batch_id, teacher_id=selected_teacher.id) }}" class="btn-ghost">
+        <i class="fas fa-print"></i> Print
+      </a>
+      <a href="{{ url_for('generator.export_teacher_image', batch_id=batch_id, teacher_id=selected_teacher.id) }}" class="btn-ghost">
+        <i class="fas fa-image"></i> Image
+      </a>
+    </div>
+    <div class="tt-grid-wrap">
+      <table class="tt-table">
+        <thead>
+          <tr>
+            <th>Period</th>
+            {% for day in days %}<th>{{ day }}</th>{% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for period in range(1, periods_per_day + 1) %}
+          <tr>
+            <td>P{{ period }}</td>
+            {% for day_idx in range(5) %}
+            {% set entry = teacher_grid[day_idx].get(period) %}
+            <td class="{{ 'filled' if entry else '' }}">
+              {% if entry %}
+              <b>{{ entry.class_name }} {{ entry.arm_name }}</b>
+              <small>{{ (entry.subject.short_name or entry.subject.name) if entry.subject else '-' }}</small>
+              {% else %}
+              <span style="color:var(--text-muted)">-</span>
+              {% endif %}
+            </td>
+            {% endfor %}
+          </tr>
+          {% if period == break_after_period %}
+          <tr class="brk"><td>☕</td><td colspan="5">BREAK</td></tr>
+          {% endif %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="tt-cols">
+    <div>
+      <div class="tt-panel">
+        <div class="tt-panel-head"><i class="fas fa-list"></i> Detailed Breakdown</div>
+        <div class="tt-panel-body">
+          {% for item in breakdown.details %}
+          <div class="tt-det-row">
+            <span class="tt-det-cls">{{ item.class }} {{ item.arm }}</span>
+            <span class="tt-det-sub">{{ item.subject }}</span>
+            {% if item.stream != '-' %}
+            <span class="badge badge-{% if item.stream == 'Science' %}info{% elif item.stream == 'Arts' %}warning{% else %}success{% endif %}">{{ item.stream }}</span>
+            {% else %}
+            <span style="color:var(--text-muted)">-</span>
+            {% endif %}
+            <span class="badge badge-primary">{{ item.periods }}</span>
+          </div>
+          {% endfor %}
+          <div class="tt-det-total"><span>Total</span><span class="badge" style="background:var(--gray-200);color:var(--text-primary)">{{ total_periods }}</span></div>
+        </div>
+      </div>
+    </div>
+    <div>
+      <div class="tt-panel">
+        <div class="tt-panel-head"><i class="fas fa-book"></i> By Subject</div>
+        <div class="tt-panel-body">
+          {% for subject, count in breakdown.by_subject.items()|sort(attribute='1', reverse=true) %}
+          <div class="brow"><span class="brow-label">{{ subject }}</span>
+            <div class="brow-bar-wrap"><div class="brow-bar" style="width:{{ (count / total_periods * 100)|round(0) }}%;background:var(--primary)"></div></div>
+            <span class="brow-count">{{ count }}</span></div>
+          {% endfor %}
+        </div>
+      </div>
+
+      <div class="tt-panel">
+        <div class="tt-panel-head"><i class="fas fa-school"></i> By Class</div>
+        <div class="tt-panel-body">
+          {% for cls, count in breakdown.by_class.items()|sort %}
+          <div class="brow"><span class="brow-label">{{ cls }}</span>
+            <div class="brow-bar-wrap"><div class="brow-bar" style="width:{{ (count / total_periods * 100)|round(0) }}%;background:var(--success)"></div></div>
+            <span class="brow-count">{{ count }}</span></div>
+          {% endfor %}
+        </div>
+      </div>
+
+      {% if breakdown.by_stream %}
+      <div class="tt-panel">
+        <div class="tt-panel-head"><i class="fas fa-layer-group"></i> By Stream</div>
+        <div class="tt-panel-body">
+          {% for stream, count in breakdown.by_stream.items()|sort %}
+          <div class="brow"><span class="brow-label">{{ stream }}</span>
+            <div class="brow-bar-wrap"><div class="brow-bar" style="width:{{ (count / total_periods * 100)|round(0) }}%;background:var(--accent)"></div></div>
+            <span class="brow-count">{{ count }}</span></div>
+          {% endfor %}
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="tt-panel">
+        <div class="tt-panel-head"><i class="fas fa-calendar-day"></i> By Day</div>
+        <div class="tt-panel-body">
+          {% for day in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'] %}
+          {% set count = breakdown.by_day.get(day, 0) %}
+          <div class="brow"><span class="brow-label">{{ day[:3] }}</span>
+            <div class="brow-bar-wrap"><div class="brow-bar" style="width:{{ (count / periods_per_day * 100)|round(0) }}%;background:var(--info)"></div></div>
+            <span class="brow-count">{{ count }}</span></div>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% elif teacher_id and not teacher_grid %}
+  <div class="tt-empty">
+    <div class="ic"><i class="fas fa-calendar-times"></i></div>
+    <h3>No Classes Assigned</h3>
+    <p>This teacher has no classes in the selected batch</p>
+  </div>
+  {% else %}
+  <div class="tt-empty">
+    <div class="ic"><i class="fas fa-chalkboard-teacher"></i></div>
+    <h3>Select Teacher</h3>
+    <p>Choose a batch and teacher to view their timetable</p>
+  </div>
+  {% endif %}
 </div>
-{% endif %}
 {% endblock %}
