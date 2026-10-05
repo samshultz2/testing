@@ -808,7 +808,17 @@ def export_results_by_day(batch_id):
     # floor is ALREADY the binding constraint for realistic data volumes,
     # not just the dense 15-arm stress case, so raising the baseline here is
     # the one lever that reliably makes cells read bigger on a real page).
-    cell_font = Font(bold=True, size=sc_fit(30), color='000000')
+    # A first pass only went to 30 -- measured against a real print render,
+    # that was NOT visibly different from the original 24 (the uniform
+    # fit-to-page shrink mostly absorbed it, same mechanism as the margin
+    # bug above: a bigger floor also raises overflow_ratio, so the PRINTED
+    # size gains much less than the raw point value suggests, and keeps
+    # diminishing the higher this goes). Went further, to 40, and paired it
+    # with real header-row trims below (not just font) so some of this
+    # actually reaches the page instead of being shrunk back out -- also
+    # re-verified against a real print render, this time against the
+    # previous (pre-this-session) baseline, not just the intermediate 30.
+    cell_font = Font(bold=True, size=sc_fit(40), color='000000')
     break_header_font = Font(bold=True, size=sc_fit(10), color='000000')
     
     thin_border = Border(
@@ -851,19 +861,24 @@ def export_results_by_day(batch_id):
     # different order/grouping per sheet) lands on the exact same float --
     # otherwise IEEE754 rounding noise (~1e-13) can make two sheets that are
     # supposed to be pixel-identical compare unequal.
-    school_header_height = round(sc(35), 2)
-    address_header_height = round(sc(20), 2)
+    # Trimmed from 35/20 -- still has headroom over school_font/address_font's
+    # own (A3-scaled) single-line height, just less spare than before.
+    school_header_height = round(sc(28), 2)
+    address_header_height = round(sc(16), 2)
     # Trimmed from 45 -- still has headroom over day_font's own (A3-scaled)
     # height, just less spare than before, freeing that difference (doubled,
     # on a packed page's 2 day-banners) for the data rows below instead.
     day_header_height = round(sc(42), 2)
-    # Needs to fit the 3 stacked period-header lines ("P1" / start / end) at
-    # header_font's (now A3-scaled) size without the text overflowing a
-    # fixed row height and getting clipped top and bottom.
-    period_header_height = round(sc(68), 2)
+    # Trimmed from 68 -- still fits the 3 stacked period-header lines ("P1" /
+    # start / end) at header_font's (now A3-scaled) size without clipping,
+    # just with less spare margin above/below the text than before. This is
+    # the single biggest fixed-overhead row on the page (bigger than school
+    # + address combined), so it's the main lever -- besides cell_font
+    # itself -- for how much headroom is actually left for data rows.
+    period_header_height = round(sc(52), 2)
     # Trimmed from 15 -- purely a blank spacer row between stacked days, no
     # text to clip, so shrinking it is free room for the data rows below.
-    gap_row_height = round(sc(6), 2)  # between stacked day-blocks on a packed page
+    gap_row_height = round(sc(3), 2)  # between stacked day-blocks on a packed page
 
     # One data-row height for the WHOLE export -- every day, every page, every
     # sheet uses this exact value, so row sizing reads as consistent instead
