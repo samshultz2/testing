@@ -1,160 +1,220 @@
 {% extends "base.html" %}
 {% block title %}Generate Timetable - Generator{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <span>Generate</span>{% endblock %}
-{% block content %}
-<div class="page-header">
-    <h1><i class="fas fa-magic"></i> Generate Timetables</h1>
-</div>
+{% block extra_css %}
+<style>
+/* Generate Timetables page — a compact "review + act" screen: a readiness
+   banner up top, swipeable stat chips, rule chips, a selectable class grid
+   and two method cards, instead of a stack of plain boxes. Every color is a
+   CSS variable so it follows whichever of the app's selectable themes
+   (light or dark-based) is active. */
+.btn-ghost{background:var(--gray-100);color:var(--text-secondary)}
+.btn-ghost:hover:not(:disabled){background:var(--gray-200);color:var(--text-secondary)}
+.gen-head{margin-bottom:1.4rem}
+.gen-head .eyebrow{display:flex;align-items:center;gap:.5rem;color:var(--text-muted);font-size:.82rem;font-weight:600;margin-bottom:.3rem}
+.gen-head h1{margin:0;font-size:1.55rem;font-family:var(--font-display);letter-spacing:-.02em;display:flex;align-items:center;gap:.6rem}
+.gen-head h1 .ic{width:42px;height:42px;border-radius:12px;background:var(--primary-light);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0}
+.gen-head p{margin:.4rem 0 0 3.2rem;color:var(--text-muted);font-size:.9rem}
+@media (max-width:480px){.gen-head p{margin-left:0}}
 
-<!-- Status Summary -->
-<div class="stats-grid mb-3">
-    <div class="stat-card">
-        <div class="stat-icon {% if teachers_count > 0 %}success{% else %}danger{% endif %}">
-            <i class="fas fa-chalkboard-teacher"></i>
-        </div>
-        <div class="stat-content">
-            <h3>{{ teachers_count }}</h3>
-            <p>Teachers</p>
-        </div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-icon {% if subjects_count > 0 %}success{% else %}danger{% endif %}">
-            <i class="fas fa-book"></i>
-        </div>
-        <div class="stat-content">
-            <h3>{{ subjects_count }}</h3>
-            <p>Subjects</p>
-        </div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-icon {% if assignments_count > 0 %}success{% else %}danger{% endif %}">
-            <i class="fas fa-user-tag"></i>
-        </div>
-        <div class="stat-content">
-            <h3>{{ assignments_count }}</h3>
-            <p>Assignments</p>
-        </div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-icon info">
-            <i class="fas fa-school"></i>
-        </div>
-        <div class="stat-content">
-            <h3>{{ classes|length }}</h3>
-            <p>Classes</p>
-        </div>
-    </div>
+.gen-readybar{display:flex;align-items:center;gap:1rem;padding:1.1rem 1.3rem;border-radius:var(--radius-lg);margin-bottom:1.1rem;border:1px solid transparent}
+.gen-readybar.ok{background:linear-gradient(135deg,var(--success-light),color-mix(in srgb,var(--success-light) 55%,var(--bg-card)));border-color:color-mix(in srgb,var(--success) 30%,transparent)}
+.gen-readybar.warn{background:linear-gradient(135deg,var(--warning-light),color-mix(in srgb,var(--warning-light) 55%,var(--bg-card)));border-color:color-mix(in srgb,var(--warning) 30%,transparent)}
+.gen-readybar .ric{width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:1.2rem;flex-shrink:0;color:#fff}
+.gen-readybar.ok .ric{background:var(--success)}
+.gen-readybar.warn .ric{background:var(--warning)}
+.gen-readybar .rt{flex:1;min-width:0}
+.gen-readybar .rt b{display:block;font-size:1.02rem}
+.gen-readybar.ok .rt b{color:#0f5132}
+.gen-readybar.warn .rt b{color:#92400e}
+.gen-readybar .rt span{font-size:.84rem;color:var(--text-secondary)}
+[data-theme="dark"] .gen-readybar.ok .rt b{color:#6ee7b7}
+[data-theme="dark"] .gen-readybar.warn .rt b{color:#fcd34d}
+
+.gen-chips{display:flex;gap:.6rem;flex-wrap:wrap;margin:0 0 1.1rem}
+.gen-chip{display:inline-flex;align-items:center;gap:.5rem;background:var(--bg-card);border:1px solid var(--border-color);
+  border-radius:999px;padding:.45rem .9rem .45rem .55rem;font-size:.82rem;font-weight:600;color:var(--text-secondary)}
+.gen-chip .dot{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:.72rem;flex-shrink:0}
+.gen-chip.on .dot{background:var(--success-light);color:var(--success)}
+.gen-chip.off .dot{background:var(--danger-light);color:var(--danger)}
+.gen-chip b{color:var(--text-primary);font-family:var(--font-display)}
+
+.gen-sec{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);overflow:hidden;margin-bottom:1.1rem}
+.gen-sec-head{display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:1.05rem 1.25rem;border-bottom:1px solid var(--border-light);flex-wrap:wrap}
+.gen-sec-head .ttl{display:flex;align-items:center;gap:.7rem;min-width:0}
+.gen-sec-ic{width:34px;height:34px;border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:.92rem}
+.gen-sec-ic.p{background:var(--primary-light);color:var(--primary)}
+.gen-sec-ic.w{background:var(--warning-light);color:var(--warning)}
+.gen-sec-ic.i{background:var(--info-light);color:var(--info)}
+.gen-sec-head h3{margin:0;font-size:.96rem;font-weight:700}
+.gen-sec-head .meta{font-size:.78rem;color:var(--text-muted)}
+.gen-sec-body{padding:1.15rem 1.25rem}
+
+.gen-issuelist{display:flex;flex-direction:column}
+.gen-issue{display:flex;align-items:center;gap:.85rem;padding:.9rem 1.25rem;border-bottom:1px solid var(--border-light);flex-wrap:wrap}
+.gen-issue:last-child{border-bottom:none}
+.gen-issue .iic{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:.85rem}
+.gen-issue.err .iic{background:var(--danger-light);color:var(--danger)}
+.gen-issue.warn .iic{background:var(--warning-light);color:var(--warning)}
+.gen-issue .ibody{flex:1 1 200px;min-width:0}
+.gen-issue .imsg{font-weight:700;font-size:.87rem}
+.gen-issue .ihint{font-size:.79rem;color:var(--text-muted);margin-top:.1rem}
+.gen-issue .ibtn{flex-shrink:0}
+
+.gen-rules-row{display:flex;flex-wrap:wrap;gap:.6rem}
+.gen-rule-chip{display:flex;align-items:center;gap:.55rem;background:var(--gray-50);border:1px solid var(--border-light);
+  border-radius:var(--radius-md);padding:.6rem .85rem;flex:1 1 150px}
+.gen-rule-chip .ic{width:30px;height:30px;border-radius:8px;background:var(--bg-card);border:1px solid var(--border-light);
+  color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:.78rem;flex-shrink:0}
+.gen-rule-chip .rl{font-size:.7rem;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.02em}
+.gen-rule-chip .rv{font-size:.88rem;font-weight:700;margin-top:.05rem}
+
+.gen-pick-toolbar{display:flex;align-items:center;justify-content:space-between;gap:.6rem;margin-bottom:.9rem;flex-wrap:wrap}
+.gen-pick-count{font-size:.84rem;color:var(--text-secondary)}
+.gen-pick-count b{color:var(--primary);font-family:var(--font-display)}
+.gen-pick-actions{display:flex;gap:.5rem}
+.gen-class-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.75rem}
+.gen-class-card{position:relative;display:flex;align-items:flex-start;gap:.7rem;padding:.9rem 1rem;border:1.5px solid var(--border-color);
+  border-radius:var(--radius-md);cursor:pointer;background:var(--bg-card);transition:border-color .15s,background .15s}
+.gen-class-card input{position:absolute;opacity:0;pointer-events:none}
+.gen-class-card .cbx{width:20px;height:20px;border-radius:6px;border:1.5px solid var(--border-color);flex-shrink:0;margin-top:.1rem;
+  display:flex;align-items:center;justify-content:center;color:#fff;font-size:.68rem;transition:all .15s}
+.gen-class-card.on{border-color:var(--primary);background:var(--primary-light)}
+.gen-class-card.on .cbx{background:var(--primary);border-color:var(--primary)}
+.gen-class-card .cname{font-weight:700;font-size:.88rem}
+.gen-class-card .carm{font-size:.76rem;color:var(--text-muted);margin-top:.15rem}
+.gen-class-card .cbadge{margin-top:.4rem}
+
+.gen-method-grid{display:grid;grid-template-columns:1fr 1fr;gap:.9rem}
+@media (max-width:620px){.gen-method-grid{grid-template-columns:1fr}}
+.gen-method-card{position:relative;border:1.5px solid var(--border-color);border-radius:var(--radius-lg);padding:1.1rem;cursor:pointer;background:var(--bg-card);transition:all .15s}
+.gen-method-card input{position:absolute;opacity:0;pointer-events:none}
+.gen-method-card.on{border-color:var(--primary);box-shadow:0 0 0 3px var(--primary-light)}
+.gen-method-card .mtop{display:flex;align-items:center;justify-content:space-between;margin-bottom:.6rem}
+.gen-method-card .mic{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:1rem}
+.gen-method-card.fast .mic{background:var(--info-light);color:var(--info)}
+.gen-method-card.opt .mic{background:var(--accent-light);color:#92400e}
+.gen-method-card .rbtn{width:20px;height:20px;border-radius:50%;border:1.5px solid var(--border-color);flex-shrink:0;display:flex;align-items:center;justify-content:center}
+.gen-method-card.on .rbtn{border-color:var(--primary)}
+.gen-method-card.on .rbtn::after{content:'';width:10px;height:10px;border-radius:50%;background:var(--primary)}
+.gen-method-card .mtitle{font-weight:700;font-size:.95rem;display:flex;align-items:center;gap:.5rem;flex-wrap:wrap}
+.gen-method-card .mdesc{font-size:.8rem;color:var(--text-muted);margin-top:.35rem;line-height:1.4}
+.gen-tag-rec{font-size:.65rem;font-weight:700;text-transform:uppercase;letter-spacing:.03em;background:var(--accent-light);color:#92400e;
+  padding:.2rem .5rem;border-radius:999px}
+.gen-method-card.disabled{opacity:.55;pointer-events:none}
+/* Mirrors the light/dark pair the global .badge-warning already uses, so this
+   amber text stays readable under a dark-base theme too. */
+[data-theme="dark"] .gen-method-card.opt .mic,[data-theme="dark"] .gen-tag-rec{color:#fcd34d}
+
+.gen-ortools-opts{margin-top:1rem;padding:1rem 1.1rem;background:var(--gray-50);border-radius:var(--radius-md);border:1px solid var(--border-light)}
+.gen-ortools-opts > label{display:block;font-size:.78rem;font-weight:600;color:var(--text-secondary);margin-bottom:.5rem}
+.gen-seg{display:flex;gap:.4rem;flex-wrap:wrap}
+.gen-seg-opt{padding:.5rem .9rem;border-radius:999px;border:1px solid var(--border-color);background:var(--bg-card);font-size:.8rem;
+  font-weight:600;color:var(--text-secondary);cursor:pointer;display:inline-block}
+.gen-seg-opt input{position:absolute;opacity:0;pointer-events:none}
+.gen-seg-opt.on{background:var(--primary);border-color:var(--primary);color:#fff}
+.gen-ortools-opts .hint{font-size:.76rem;color:var(--text-muted);margin-top:.6rem}
+
+.gen-actionbar{padding:.3rem 0 .5rem;display:flex;justify-content:flex-end;gap:.6rem}
+</style>
+{% endblock %}
+{% block content %}
+<div class="gen-head">
+    <div class="eyebrow"><i class="fas fa-graduation-cap"></i> {{ level|upper }} · Timetable Generator</div>
+    <h1><span class="ic"><i class="fas fa-wand-magic-sparkles"></i></span> Generate Timetables</h1>
+    <p>Review your setup below, pick a generation method, and build timetables for the classes you choose.</p>
 </div>
 
 {% if issues %}
 {% set error_count = issues | selectattr('type', 'equalto', 'error') | list | length %}
-<style>
-  .setup-card{border:1px solid #ececf1;border-radius:16px;overflow:hidden;background:#fff;
-              box-shadow:0 1px 2px rgba(16,24,40,.04),0 1px 3px rgba(16,24,40,.06);margin-bottom:1.25rem;}
-  .setup-card__head{display:flex;align-items:center;gap:.85rem;padding:1.05rem 1.25rem;
-                    background:linear-gradient(180deg,#fffaf0,#fff6e6);border-bottom:1px solid #f3ead6;}
-  .setup-card__badge{flex:0 0 auto;width:2.5rem;height:2.5rem;border-radius:12px;display:flex;
-                     align-items:center;justify-content:center;background:#fdecc8;color:#b25e09;font-size:1.05rem;}
-  .setup-card__title{margin:0;font-size:1.05rem;font-weight:700;color:#1f2937;line-height:1.2;}
-  .setup-card__sub{margin:.1rem 0 0;font-size:.85rem;color:#6b7280;}
-  .setup-row{display:flex;align-items:center;gap:1rem;padding:.95rem 1.25rem;border-top:1px solid #f3f4f6;
-             transition:background .15s ease;}
-  .setup-row:hover{background:#fafafa;}
-  .setup-row__ic{flex:0 0 auto;width:2.35rem;height:2.35rem;border-radius:50%;display:flex;
-                 align-items:center;justify-content:center;font-size:.95rem;}
-  .setup-row__ic--error{background:#fee2e2;color:#b42318;}
-  .setup-row__ic--warning{background:#fef3c7;color:#b25e09;}
-  .setup-row__body{flex:1 1 auto;min-width:0;}
-  .setup-row__msg{font-weight:600;color:#111827;line-height:1.25;}
-  .setup-row__hint{font-size:.85rem;color:#6b7280;margin-top:.1rem;}
-  .setup-row__btn{flex:0 0 auto;display:inline-flex;align-items:center;gap:.4rem;white-space:nowrap;
-                  padding:.5rem .95rem;border-radius:9px;font-size:.85rem;font-weight:600;
-                  text-decoration:none;transition:transform .1s ease,filter .15s ease;}
-  .setup-row__btn:hover{filter:brightness(.96);transform:translateY(-1px);}
-  .setup-row__btn--error{background:#dc2626;color:#fff;}
-  .setup-row__btn--warning{background:#fff;color:#b25e09;border:1px solid #f1d599;}
-  @media (max-width:560px){
-    .setup-row{flex-wrap:wrap;}
-    .setup-row__body{flex:1 1 100%;order:2;}
-    .setup-row__btn{order:3;margin-left:3.35rem;}
-  }
-</style>
-<div class="setup-card">
-    <div class="setup-card__head">
-        <span class="setup-card__badge"><i class="fas fa-clipboard-list"></i></span>
-        <div>
-            <h3 class="setup-card__title">Finish setting up this branch</h3>
-            <p class="setup-card__sub">
-                {{ issues|length }} item{{ 's' if issues|length != 1 }} to resolve
-                {%- if error_count %} · {{ error_count }} required before you can generate{% endif %}.
-            </p>
-        </div>
+{% set warn_count = issues|length - error_count %}
+<div class="gen-readybar warn">
+    <span class="ric"><i class="fas fa-triangle-exclamation"></i></span>
+    <div class="rt">
+        <b>{{ issues|length }} item{{ 's' if issues|length != 1 }} need{{ '' if issues|length != 1 }} attention</b>
+        <span>{% if error_count %}{{ error_count }} required before you can generate{% endif %}{% if error_count and warn_count %} · {% endif %}{% if warn_count %}{{ warn_count }} optional warning{{ 's' if warn_count != 1 }}{% endif %}</span>
     </div>
-    {% for issue in issues %}
-    {% set is_err = issue.type == 'error' %}
-    <div class="setup-row">
-        <span class="setup-row__ic setup-row__ic--{{ issue.type }}">
-            <i class="fas {{ 'fa-xmark' if is_err else 'fa-triangle-exclamation' }}"></i>
-        </span>
-        <div class="setup-row__body">
-            <div class="setup-row__msg">{{ issue.msg }}</div>
-            {% if issue.hint %}<div class="setup-row__hint">{{ issue.hint }}</div>{% endif %}
-        </div>
-        {% if issue.url %}
-        <a href="{{ issue.url }}" class="setup-row__btn setup-row__btn--{{ issue.type }}">
-            {{ issue.cta or 'Fix' }} <i class="fas fa-arrow-right" style="font-size:.75rem;"></i>
-        </a>
-        {% endif %}
-    </div>
-    {% endfor %}
-    {% if issues|length >= 15 %}
-    <div class="setup-row" style="color:#6b7280;font-size:.85rem;">
-        <span class="setup-row__ic" style="background:#f3f4f6;color:#6b7280;"><i class="fas fa-ellipsis"></i></span>
-        <div class="setup-row__body">… and possibly more. Resolve these first, then re-check.</div>
-    </div>
-    {% endif %}
+</div>
+{% else %}
+<div class="gen-readybar ok">
+    <span class="ric"><i class="fas fa-check"></i></span>
+    <div class="rt"><b>Everything's set — ready to generate</b><span>All required setup is complete for {{ level|upper }}.</span></div>
 </div>
 {% endif %}
 
-<!-- Rules Summary -->
-<div class="card mb-3">
-    <div class="card-header"><h3>Current Rules</h3></div>
-    <div class="card-body">
-        <div class="info-grid">
-            <div class="info-row"><span class="text-muted">Periods per day</span><strong>{{ rules.get('periods_per_day', '8') }}</strong></div>
-            <div class="info-row"><span class="text-muted">Break after period</span><strong>{{ rules.get('break_after_period', '4') }}</strong></div>
-            <div class="info-row"><span class="text-muted">No repeat same day</span><strong>{{ 'Yes' if rules.get('no_repeat_same_day', 'true') == 'true' else 'No' }}</strong></div>
-            <div class="info-row"><span class="text-muted">Max consecutive</span><strong>{{ rules.get('max_consecutive', '3') }} periods</strong></div>
+{% if issues %}
+<div class="gen-sec">
+    <div class="gen-sec-head"><div class="ttl"><span class="gen-sec-ic w"><i class="fas fa-clipboard-list"></i></span><h3>Finish setting up this branch</h3></div></div>
+    <div class="gen-issuelist">
+        {% for issue in issues %}
+        {% set is_err = issue.type == 'error' %}
+        <div class="gen-issue {{ 'err' if is_err else 'warn' }}">
+            <span class="iic"><i class="fas {{ 'fa-xmark' if is_err else 'fa-triangle-exclamation' }}"></i></span>
+            <div class="ibody">
+                <div class="imsg">{{ issue.msg }}</div>
+                {% if issue.hint %}<div class="ihint">{{ issue.hint }}</div>{% endif %}
+            </div>
+            {% if issue.url %}
+            <a href="{{ issue.url }}" class="btn btn-secondary btn-sm ibtn">{{ issue.cta or 'Fix' }} <i class="fas fa-arrow-right" style="font-size:.7rem"></i></a>
+            {% endif %}
         </div>
-        <a href="{{ url_for('generator.rules_config') }}" class="btn btn-secondary btn-sm mt-2"><i class="fas fa-cog"></i> Edit Rules</a>
+        {% endfor %}
+        {% if issues|length >= 15 %}
+        <div class="gen-issue">
+            <span class="iic" style="background:var(--gray-200);color:var(--text-secondary)"><i class="fas fa-ellipsis"></i></span>
+            <div class="ibody"><div class="ihint">… and possibly more. Resolve these first, then re-check.</div></div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<div class="gen-chips">
+    <span class="gen-chip {{ 'on' if teachers_count > 0 else 'off' }}"><span class="dot"><i class="fas fa-chalkboard-user"></i></span> <b>{{ teachers_count }}</b> teachers</span>
+    <span class="gen-chip {{ 'on' if subjects_count > 0 else 'off' }}"><span class="dot"><i class="fas fa-book"></i></span> <b>{{ subjects_count }}</b> subjects</span>
+    <span class="gen-chip {{ 'on' if assignments_count > 0 else 'off' }}"><span class="dot"><i class="fas fa-user-tag"></i></span> <b>{{ assignments_count }}</b> assignments</span>
+    <span class="gen-chip {{ 'on' if classes|length > 0 else 'off' }}"><span class="dot"><i class="fas fa-school"></i></span> <b>{{ classes|length }}</b> classes</span>
+</div>
+
+<div class="gen-sec">
+    <div class="gen-sec-head"><div class="ttl"><span class="gen-sec-ic i"><i class="fas fa-sliders"></i></span><h3>Current Rules</h3></div>
+        <a href="{{ url_for('generator.rules_config') }}" class="btn btn-ghost btn-sm" style="font-size:.78rem;padding:.4rem .75rem"><i class="fas fa-cog"></i> Edit</a></div>
+    <div class="gen-sec-body">
+        <div class="gen-rules-row">
+            <div class="gen-rule-chip"><span class="ic"><i class="fas fa-layer-group"></i></span><div><div class="rl">Periods/day</div><div class="rv">{{ rules.get('periods_per_day', '8') }}</div></div></div>
+            <div class="gen-rule-chip"><span class="ic"><i class="fas fa-mug-hot"></i></span><div><div class="rl">Break after</div><div class="rv">Period {{ rules.get('break_after_period', '4') }}</div></div></div>
+            <div class="gen-rule-chip"><span class="ic"><i class="fas fa-ban"></i></span><div><div class="rl">No repeat/day</div><div class="rv">{{ 'Yes' if rules.get('no_repeat_same_day', 'true') == 'true' else 'No' }}</div></div></div>
+            <div class="gen-rule-chip"><span class="ic"><i class="fas fa-layer-group"></i></span><div><div class="rl">Max consecutive</div><div class="rv">{{ rules.get('max_consecutive', '3') }} periods</div></div></div>
+        </div>
     </div>
 </div>
 
-<!-- Generate Form -->
 <form method="POST" action="{{ url_for('generator.run_generation') }}" id="generate-form">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-    <div class="card mb-3">
-        <div class="card-header"><h3>Select Classes to Generate</h3></div>
-        <div class="card-body">
+    <div class="gen-sec">
+        <div class="gen-sec-head"><div class="ttl"><span class="gen-sec-ic p"><i class="fas fa-school"></i></span><h3>Select Classes</h3></div>
+            {% if classes %}<span class="meta">Choose which to generate</span>{% endif %}</div>
+        <div class="gen-sec-body">
             {% if classes %}
-            <p class="text-muted mb-3">Select the classes you want to generate timetables for:</p>
-            
-            <div class="checkbox-grid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(250px, 1fr)); gap: 0.5rem;">
+            <div class="gen-pick-toolbar">
+                <div class="gen-pick-count"><b id="picked-count">{{ classes|length }}</b> of {{ classes|length }} selected</div>
+                <div class="gen-pick-actions">
+                    <button type="button" class="btn btn-ghost btn-sm" style="font-size:.78rem;padding:.4rem .75rem" data-call="selectAll" data-args="true">Select all</button>
+                    <button type="button" class="btn btn-ghost btn-sm" style="font-size:.78rem;padding:.4rem .75rem" data-call="selectAll" data-args="false">Deselect all</button>
+                </div>
+            </div>
+            <div class="gen-class-grid">
                 {% for class_config in classes %}
-                <label class="checkbox-label" style="padding: 0.75rem; background: var(--bg-tertiary); border-radius: var(--border-radius-sm);">
-                    <input type="checkbox" name="class_ids[]" value="{{ class_config.id }}" checked>
-                    <span>
-                        <strong>{{ class_config.class_name }}</strong>
-                        <br><small class="text-muted">{{ class_config.arm_count }} arm(s): {{ class_config.arm_names or 'A, B, C...' }}</small>
-                        {% if class_config.has_streams %}<br><small class="badge badge-info">Has Streams</small>{% endif %}
-                    </span>
+                <label class="gen-class-card on">
+                    <input type="checkbox" name="class_ids[]" value="{{ class_config.id }}" checked data-call="toggleClassCard" data-args="this" data-on="change">
+                    <span class="cbx"><i class="fas fa-check"></i></span>
+                    <div>
+                        <div class="cname">{{ class_config.class_name }}</div>
+                        <div class="carm">{{ class_config.arm_count }} arm(s): {{ class_config.arm_names or 'A, B, C...' }}</div>
+                        {% if class_config.has_streams %}<span class="badge badge-info cbadge">Has Streams</span>{% endif %}
+                    </div>
                 </label>
                 {% endfor %}
-            </div>
-            
-            <div class="page-header-actions mt-3">
-                <button type="button" class="btn btn-secondary btn-sm" data-call="selectAll" data-args="true">Select All</button>
-                <button type="button" class="btn btn-secondary btn-sm" data-call="selectAll" data-args="false">Deselect All</button>
             </div>
             {% else %}
             <div class="empty-state">
@@ -166,79 +226,97 @@
             {% endif %}
         </div>
     </div>
-    
-    {% if classes and not issues %}
-    <div class="card mb-3">
-        <div class="card-header"><h3><i class="fas fa-cogs"></i> Generation Method</h3></div>
-        <div class="card-body">
-            <div class="form-group">
-                <label class="checkbox-label" style="padding: 1rem; background: var(--bg-tertiary); border-radius: var(--border-radius-sm); margin-bottom: 0.5rem; display: block;">
-                    <input type="radio" name="method" value="fast" checked data-call="updateFormAction" data-args="this" data-on="change">
-                    <span>
-                        <strong>Fast Generation</strong> (Default)
-                        <br><small class="text-muted">Quick generation using greedy algorithm. Good for most cases.</small>
-                    </span>
+
+    {% if classes %}
+    <div class="gen-sec">
+        <div class="gen-sec-head"><div class="ttl"><span class="gen-sec-ic p"><i class="fas fa-gears"></i></span><h3>Generation Method</h3></div></div>
+        <div class="gen-sec-body">
+            <div class="gen-method-grid">
+                <label class="gen-method-card fast on {{ 'disabled' if issues }}">
+                    <input type="radio" name="method" value="fast" checked data-call="updateFormAction" data-args="this" data-on="change" {{ 'disabled' if issues }}>
+                    <div class="mtop"><span class="mic"><i class="fas fa-bolt"></i></span><span class="rbtn"></span></div>
+                    <div class="mtitle">Fast Generation</div>
+                    <div class="mdesc">Quick greedy algorithm — good for most cases and typically finishes in seconds.</div>
                 </label>
-                <label class="checkbox-label" style="padding: 1rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: var(--border-radius-sm); display: block;">
-                    <input type="radio" name="method" value="ortools" data-call="updateFormAction" data-args="this" data-on="change">
-                    <span>
-                        <strong>⭐ Optimal Generation (OR-Tools)</strong>
-                        <br><small style="opacity: 0.9;">Uses Google's constraint solver for best possible result. May take longer.</small>
-                    </span>
+                <label class="gen-method-card opt {{ 'disabled' if issues }}">
+                    <input type="radio" name="method" value="ortools" data-call="updateFormAction" data-args="this" data-on="change" {{ 'disabled' if issues }}>
+                    <div class="mtop"><span class="mic"><i class="fas fa-brain"></i></span><span class="rbtn"></span></div>
+                    <div class="mtitle">Optimal (OR-Tools) <span class="gen-tag-rec">Best quality</span></div>
+                    <div class="mdesc">Google's constraint solver finds the best possible timetable. Takes longer to run.</div>
                 </label>
             </div>
-            <div id="ortools-options" style="display: none; margin-top: 1rem; padding: 1rem; background: var(--bg-secondary); border-radius: var(--border-radius-sm);">
+            <div id="ortools-options" class="gen-ortools-opts" style="display:none">
                 <label class="form-label">Time Limit</label>
-                <select name="time_limit" class="form-control" style="max-width: 200px;">
-                    <option value="60">60 seconds (quick)</option>
-                    <option value="180">3 minutes</option>
-                    <option value="300" selected>5 minutes (recommended)</option>
-                    <option value="600">10 minutes</option>
-                </select>
-                <small class="text-muted">Longer time = better optimization</small>
+                <div class="gen-seg">
+                    <label class="gen-seg-opt"><input type="radio" name="time_limit" value="60" data-call="selectTimeLimit" data-args="this" data-on="change">60 seconds (quick)</label>
+                    <label class="gen-seg-opt"><input type="radio" name="time_limit" value="180" data-call="selectTimeLimit" data-args="this" data-on="change">3 minutes</label>
+                    <label class="gen-seg-opt on"><input type="radio" name="time_limit" value="300" checked data-call="selectTimeLimit" data-args="this" data-on="change">5 minutes (recommended)</label>
+                    <label class="gen-seg-opt"><input type="radio" name="time_limit" value="600" data-call="selectTimeLimit" data-args="this" data-on="change">10 minutes</label>
+                </div>
+                <div class="hint">A longer time limit lets the solver explore more combinations for a better result.</div>
             </div>
+            {% if issues %}<p class="text-muted text-sm" style="margin:1rem 0 0"><i class="fas fa-circle-info"></i> Fix the issues above to unlock Optimal (OR-Tools) generation and timing options — you can still generate anyway with Fast Generation.</p>{% endif %}
         </div>
     </div>
-    
-    <div class="page-header-actions">
-        <button type="submit" class="btn btn-primary btn-lg" id="generate-btn">
-            <i class="fas fa-magic"></i> Generate Timetables
-        </button>
-    </div>
-    {% elif classes and issues %}
-    <div class="card">
-        <div class="card-body">
-            <p class="text-muted"><i class="fas fa-info-circle"></i> Fix the issues above before generating, or proceed anyway (may have conflicts).</p>
-            <button type="submit" class="btn btn-warning">
-                <i class="fas fa-exclamation-triangle"></i> Generate Anyway
-            </button>
-        </div>
+
+    <div class="gen-actionbar">
+        {% if issues %}
+        <button type="submit" class="btn btn-secondary btn-lg"><i class="fas fa-triangle-exclamation"></i> Generate Anyway</button>
+        {% else %}
+        <button type="submit" class="btn btn-primary btn-lg" id="generate-btn"><i class="fas fa-wand-magic-sparkles"></i> Generate Timetables</button>
+        {% endif %}
     </div>
     {% endif %}
 </form>
 
 <script nonce="{{ csp_nonce }}">
 function selectAll(checked) {
-    document.querySelectorAll('input[name="class_ids[]"]').forEach(cb => cb.checked = checked);
+    document.querySelectorAll('input[name="class_ids[]"]').forEach(cb => {
+        cb.checked = checked;
+        cb.closest('.gen-class-card').classList.toggle('on', checked);
+    });
+    updatePickedCount();
+}
+
+function toggleClassCard(cb) {
+    cb.closest('.gen-class-card').classList.toggle('on', cb.checked);
+    updatePickedCount();
+}
+
+function updatePickedCount() {
+    const el = document.getElementById('picked-count');
+    if (el) el.textContent = document.querySelectorAll('input[name="class_ids[]"]:checked').length;
+}
+
+function selectTimeLimit(radio) {
+    document.querySelectorAll('.gen-seg-opt').forEach(o => o.classList.remove('on'));
+    radio.closest('.gen-seg-opt').classList.add('on');
 }
 
 function updateFormAction(radio) {
     const form = document.getElementById('generate-form');
     const ortoolsOptions = document.getElementById('ortools-options');
     const btn = document.getElementById('generate-btn');
-    
+
+    document.querySelectorAll('.gen-method-card').forEach(c => c.classList.remove('on'));
+    radio.closest('.gen-method-card').classList.add('on');
+
     if (radio.value === 'ortools') {
         form.action = "{{ url_for('generator.run_ortools_generation') }}";
         ortoolsOptions.style.display = 'block';
-        btn.innerHTML = '<i class="fas fa-brain"></i> Generate with OR-Tools';
-        btn.classList.remove('btn-primary');
-        btn.classList.add('btn-success');
+        if (btn) {
+            btn.innerHTML = '<i class="fas fa-brain"></i> Generate with OR-Tools';
+            btn.classList.remove('btn-primary');
+            btn.classList.add('btn-success');
+        }
     } else {
         form.action = "{{ url_for('generator.run_generation') }}";
         ortoolsOptions.style.display = 'none';
-        btn.innerHTML = '<i class="fas fa-magic"></i> Generate Timetables';
-        btn.classList.remove('btn-success');
-        btn.classList.add('btn-primary');
+        if (btn) {
+            btn.innerHTML = '<i class="fas fa-wand-magic-sparkles"></i> Generate Timetables';
+            btn.classList.remove('btn-success');
+            btn.classList.add('btn-primary');
+        }
     }
 }
 
