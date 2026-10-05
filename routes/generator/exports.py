@@ -404,23 +404,27 @@ def export_results(batch_id):
     fixed_height = school_header_height + address_header_height + class_title_height + period_header_height
     day_row_height = (total_page_height - fixed_height) / 5
 
-    # Column widths, sized the same way: distribute the EXACT usable width
-    # (not Excel's print-time auto-fit) across columns, keeping the Day /
-    # period / break columns' relative proportions, then convert the
-    # points-wide target back into Excel's "character width" unit (approx.
-    # Calibri 11: ~7px/char + 5px padding, at 96 DPI).
-    DAY_W, PERIOD_W, BREAK_W = 12, 28, 8
+    # Column widths: the Day and BREAK columns' content needs a roughly
+    # FIXED physical width regardless of periods_per_day -- "Wed" at
+    # day_font size, or "BREAK"/a time like "11:10" at break_header_font
+    # size, take the same room whether there are 6 periods or 9. Splitting
+    # the page width by a *proportional share* (as before) let those two
+    # columns get squeezed to near nothing on a day with many periods,
+    # wrapping "Wednesday" letter-by-letter and crushing the break label.
+    # Reserve a fixed floor for each (scaled for A3 like everything else),
+    # then split whatever's left evenly across the actual period columns.
+    DAY_FLOOR_PT = sc_w(60)    # fits a 3-letter day abbreviation at day_font size
+    BREAK_FLOOR_PT = sc_w(42)  # fits "BREAK" / a time label at break_header_font size
     period_cols = total_cols - 2  # all period columns, before + after break
-    total_weight = DAY_W + period_cols * PERIOD_W + BREAK_W
-    points_per_weight = usable_w / total_weight
+    period_col_pts = max(usable_w - DAY_FLOOR_PT - BREAK_FLOOR_PT, 0) / period_cols
 
     def _col_width_for_pts(target_pts):
         px = target_pts * 96 / 72
         return max(1.0, (px - 5) / 7)
 
-    day_col_width = _col_width_for_pts(DAY_W * points_per_weight)
-    period_col_width = _col_width_for_pts(PERIOD_W * points_per_weight)
-    break_col_width = _col_width_for_pts(BREAK_W * points_per_weight)
+    day_col_width = _col_width_for_pts(DAY_FLOOR_PT)
+    period_col_width = _col_width_for_pts(period_col_pts)
+    break_col_width = _col_width_for_pts(BREAK_FLOOR_PT)
     
     for key in sorted(timetables.keys()):
         tt = timetables[key]
@@ -510,9 +514,11 @@ def export_results(batch_id):
         # Data rows (one per day)
         for day_idx, day_name in enumerate(days):
             col = 1
-            
-            # Day name
-            cell = ws.cell(row=current_row, column=col, value=day_name)
+
+            # Day name -- abbreviated to 3 letters: at day_font's size
+            # (24pt+ bold) the Day column only has room for a short code,
+            # not the full word, without wrapping letter-by-letter.
+            cell = ws.cell(row=current_row, column=col, value=day_name[:3].upper())
             cell.font = day_font
             cell.border = thick_border
             cell.alignment = center_align
