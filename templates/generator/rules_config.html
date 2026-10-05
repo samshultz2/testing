@@ -7,6 +7,10 @@
 
 .badge{display:inline-flex;align-items:center;gap:.3em;padding:.3em .65em;font-size:.72rem;font-weight:700;border-radius:999px;border:1px solid rgba(15,23,42,.06)}
 
+.btn-ghost{display:inline-flex;align-items:center;gap:.4em;padding:.5em .9em;border-radius:var(--radius-md);font-size:.8rem;font-weight:600;
+  background:var(--bg-card);border:1px solid var(--border-color);color:var(--text-secondary);text-decoration:none;cursor:pointer}
+.btn-ghost:hover{border-color:var(--primary);color:var(--primary);text-decoration:none !important}
+
 /* ---- page head ---- */
 .rl-head{display:flex;align-items:flex-start;gap:.9rem;margin-bottom:.4rem;flex-wrap:wrap}
 .rl-ic{width:48px;height:48px;border-radius:13px;background:var(--primary-light);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0}
@@ -215,8 +219,7 @@
       <div class="rl-sec-head"><span class="rl-sec-ic"><i class="fas fa-circle-info"></i></span><h2>Period Restrictions</h2></div>
       <div class="rl-sec-body">
         <p style="margin-bottom:.6rem">These are configured per subject, in Subject Settings: <b>Not First Period</b>, <b>Not Last Period</b>, and <b>Preferred Time</b> (Morning/Afternoon/Any).</p>
-        <a href="{{ url_for('generator.subjects_config') }}" class="btn-ghost" style="display:inline-flex;align-items:center;gap:.4em;padding:.5em .9em;border-radius:var(--radius-md);font-size:.8rem;font-weight:600;
-            background:var(--bg-card);border:1px solid var(--border-color);color:var(--text-secondary);text-decoration:none">
+        <a href="{{ url_for('generator.subjects_config') }}" class="btn-ghost">
           <i class="fas fa-cog"></i> Go to Subject Settings
         </a>
       </div>
