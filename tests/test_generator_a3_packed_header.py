@@ -143,7 +143,7 @@ def test_packed_export_wed_thu_pair_also_has_single_header(app):
     rows = [[c.value for c in row] for row in ws.iter_rows(min_row=1, max_row=10)]
     assert rows[0][0] == 'WEDNESDAY'
     assert rows[1][0] == 'Class'        # Wednesday still gets its header (first of the pair)
-    assert rows[1][1] == 'P1'           # no times -- Wednesday isn't the global day 0
+    assert rows[1][1] == 'P1\n8:00 AM\n8:40 AM'  # times shown here too, not just on Monday's page
     assert rows[2][0] == 'ZzA3PK2Z'
 
     thursday_row_idx = next(i for i, r in enumerate(rows) if r[0] == 'THURSDAY')
