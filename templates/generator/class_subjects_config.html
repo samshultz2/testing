@@ -1,308 +1,236 @@
 {% extends "base.html" %}
 {% block title %}{{ class_config.class_name }} Subjects - Generator{% endblock %}
-{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Generator</a> / <a href="{{ url_for('generator.class_subjects_list') }}">Class Subjects</a> / <span>{{ class_config.class_name }}</span>{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('generator.index') }}">Timetable</a> / <a href="{{ url_for('generator.class_subjects_list') }}">Class Subjects</a> / <span>{{ class_config.class_name }}</span>{% endblock %}
 {% block extra_css %}
 <style>
-.restriction-chip { display: inline-flex; align-items: center; gap: 2px; font-size: 0.75rem;
-  white-space: nowrap; margin-right: 4px; cursor: pointer; }
-.restriction-chip input { margin: 0; }
+.content-narrow{max-width:860px;margin:0 auto}
+
+.btn-ghost{display:inline-flex;align-items:center;gap:.4em;padding:.5em .9em;border-radius:var(--radius-md);font-size:.8rem;font-weight:600;
+  background:var(--bg-card);border:1px solid var(--border-color);color:var(--text-secondary);text-decoration:none;cursor:pointer}
+.btn-ghost:hover{border-color:var(--primary);color:var(--primary);text-decoration:none !important}
+
+.cp-back{display:inline-flex;align-items:center;gap:.4rem;font-size:.8rem;font-weight:600;color:var(--text-muted);
+  text-decoration:none;margin-bottom:.8rem;transition:color .15s}
+.cp-back:hover{color:var(--primary);text-decoration:none !important}
+.cp-back i{font-size:.72rem;transition:transform .15s}
+.cp-back:hover i{transform:translateX(-2px)}
+
+/* ---- page head ---- */
+.cp-head{display:flex;align-items:flex-start;gap:.9rem;margin-bottom:1rem;flex-wrap:wrap}
+.cp-ic{width:48px;height:48px;border-radius:13px;background:var(--primary-light);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:1.25rem;flex-shrink:0}
+.cp-head-txt{flex:1 1 10rem;min-width:0}
+.cp-head-txt h1{margin:0;font-size:1.3rem;letter-spacing:-.02em}
+.cp-head-txt p{margin:.2rem 0 0;color:var(--text-muted);font-size:.84rem}
+
+.cp-streamnote{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;background:var(--info-light);border:1px solid color-mix(in srgb,var(--info) 25%,transparent);
+  border-radius:var(--radius-lg);padding:.8rem 1rem;margin-bottom:1.2rem;font-size:.84rem;color:var(--text-secondary)}
+.cp-streamnote i{color:var(--info)}
+
+/* ---- category sections ---- */
+.csec{margin-top:1.5rem}
+.csec-head{display:flex;align-items:center;gap:.5rem;margin:0 0 .7rem}
+.csec-ic{width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:.82rem;flex-shrink:0}
+.csec-ic.core{background:var(--success-light);color:var(--success)}
+.csec-ic.science{background:var(--info-light);color:var(--info)}
+.csec-ic.arts{background:var(--primary-light);color:var(--primary)}
+.csec-ic.commercial{background:var(--warning-light);color:var(--warning)}
+.csec-ic.vocational{background:var(--gray-200);color:var(--text-secondary)}
+.csec-head h2{margin:0;font-size:.98rem;font-weight:700}
+
+/* ---- subject cards ---- */
+.sub-list{display:flex;flex-direction:column;gap:.75rem}
+.sub-card{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);overflow:hidden;transition:opacity .15s}
+.sub-card.off{opacity:.6}
+.sub-top{display:flex;align-items:center;gap:.8rem;padding:.9rem 1.1rem;flex-wrap:wrap}
+.sub-name{font-weight:700;font-size:.94rem}
+.sub-top .sp{margin-left:auto}
+.tgl{position:relative;display:inline-block;width:36px;height:21px;flex:none}
+.tgl input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
+.tgl .trk{position:absolute;inset:0;background:var(--gray-300);border-radius:999px;transition:background .15s;pointer-events:none}
+.tgl .trk::before{content:'';position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#fff;transition:transform .15s;box-shadow:0 1px 2px rgba(0,0,0,.2)}
+.tgl input:checked + .trk{background:var(--primary)}
+.tgl input:checked + .trk::before{transform:translateX(15px)}
+
+.sub-cfg{border-top:1px solid var(--border-light);padding:.9rem 1.1rem 1.05rem;background:var(--gray-50)}
+.cfg-fields{display:grid;grid-template-columns:1fr 1fr;gap:.7rem .9rem}
+@media(min-width:480px){.cfg-fields{grid-template-columns:repeat(3,1fr)}}
+.cfg-field label{display:block;font-size:.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.02em;margin-bottom:.3rem}
+.cfg-field input[type="number"], .cfg-field input[type="text"]{width:100%;padding:.45rem .5rem;border:1px solid var(--border-color);border-radius:var(--radius-sm);
+  background:var(--bg-card);color:var(--text-primary);font-size:.85rem;font-family:inherit}
+.cfg-field input:disabled{opacity:.6}
+
+.restrict-row{margin-top:.9rem;padding-top:.8rem;border-top:1px solid var(--border-light)}
+.restrict-row label.rlabel{display:block;font-size:.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.02em;margin-bottom:.45rem}
+.rchips{display:flex;flex-wrap:wrap;gap:.45rem;align-items:center}
+.rchip{position:relative;display:inline-flex;align-items:center;gap:.35em;cursor:pointer;padding:.35rem .75rem;border-radius:999px;
+  border:1.5px solid var(--border-color);background:var(--bg-card);color:var(--text-secondary);font-size:.78rem;font-weight:600;transition:background .15s,border-color .15s,color .15s}
+.rchip input{margin:0;cursor:pointer;accent-color:currentColor;width:13px;height:13px;flex-shrink:0}
+.rchip:has(input:checked){background:var(--primary);border-color:var(--primary);color:#fff}
+.rchip:has(input:disabled){opacity:.6;cursor:default}
+.rexcl{display:flex;align-items:center;gap:.4rem}
+.rexcl label{font-size:.78rem;color:var(--text-muted);white-space:nowrap}
+.rexcl input{width:90px;padding:.35rem .5rem;border:1px solid var(--border-color);border-radius:var(--radius-sm);background:var(--bg-card);color:var(--text-primary);font-size:.8rem}
+.rexcl input:disabled{opacity:.6}
+
+.cp-save{margin-top:1.5rem;padding:1rem 1.1rem;background:var(--bg-card);border:1px solid var(--border-color);
+  border-radius:var(--radius-lg);box-shadow:var(--shadow-sm);display:flex;align-items:center;justify-content:space-between;gap:.75rem;flex-wrap:wrap}
+.cp-save p{margin:0;font-size:.78rem;color:var(--text-muted)}
+
+.cp-tips{margin-top:1.3rem;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);padding:1.1rem}
+.cp-tips h3{margin:0 0 .6rem;font-size:.88rem}
+.cp-tips ul{margin:0;padding-left:1.1rem;font-size:.8rem;color:var(--text-secondary);line-height:1.7}
+
+.cp-empty{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-lg);padding:2.5rem 1.5rem;text-align:center}
+.cp-empty p{margin:0;color:var(--text-muted);font-size:.86rem}
 </style>
 {% endblock %}
 {% block content %}
-<div class="page-header">
-    <h1>{{ class_config.class_name }} - Subjects</h1>
-    <div class="page-header-actions">
-        <a href="{{ url_for('generator.class_subjects_list') }}" class="btn btn-secondary">
-            <i class="fas fa-arrow-left"></i> Back to Class Subjects
-        </a>
+{% set categories = [
+  ('core', 'Core Subjects', 'fa-star'),
+  ('science', 'Science Subjects', 'fa-flask'),
+  ('arts', 'Arts Subjects', 'fa-palette'),
+  ('commercial', 'Commercial Subjects', 'fa-briefcase'),
+  ('vocational', 'Vocational Subjects', 'fa-screwdriver-wrench'),
+] %}
+<div class="content-narrow">
+  <a href="{{ url_for('generator.class_subjects_list') }}" class="cp-back">
+    <i class="fas fa-arrow-left"></i> Back to Class Subjects
+  </a>
+
+  <div class="cp-head">
+    <div class="cp-ic"><i class="fas fa-sliders"></i></div>
+    <div class="cp-head-txt">
+      <h1>{{ class_config.class_name }} — Subjects</h1>
+      <p>Select which subjects {{ class_config.class_name }} takes and set periods per week for each.</p>
     </div>
-</div>
+  </div>
 
-<p class="text-muted mb-3">Select which subjects {{ class_config.class_name }} takes and set periods per week for each.</p>
+  {% if class_config.has_streams %}
+  <div class="cp-streamnote">
+    <i class="fas fa-layer-group"></i>
+    <span>These are the class-wide subjects. To vary subjects or periods <b>per arm/stream</b> (e.g. one arm skips a subject, or periods differ between arms), use the per-stream settings.</span>
+    <a href="{{ url_for('generator.class_stream_subjects', class_id=class_config.id) }}" class="btn-ghost" style="margin-left:auto">
+      <i class="fas fa-cog"></i> Stream Subject Periods
+    </a>
+  </div>
+  {% endif %}
 
-{% if class_config.has_streams %}
-<div class="alert alert-info d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
-    <span><i class="fas fa-layer-group"></i> These are the class-wide subjects. To vary subjects or periods <strong>per arm/stream</strong> (e.g. SSS3 Iris skips Physics, or Physics has different periods in Rose vs Lily), use the per-stream settings.</span>
-    <a href="{{ url_for('generator.class_stream_subjects', class_id=class_config.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-cog"></i> Stream Subject Periods</a>
-</div>
-{% endif %}
-
-<form method="POST" action="{{ url_for('generator.save_class_subjects_config', class_id=class_config.id) }}">
+  {% if subjects_data %}
+  <form id="saveConfigForm" method="POST" action="{{ url_for('generator.save_class_subjects_config', class_id=class_config.id) }}">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-    <div class="card">
-        <div class="card-header">
-            <h3>Core Subjects</h3>
-        </div>
-        <div class="card-body" style="padding: 0; overflow-x: auto;">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th style="width: 50px; text-align: center;">Takes</th>
-                        <th>Subject</th>
-                        <th style="text-align: center; width: 100px;">Periods/Wk</th>
-                        <th style="text-align: center; width: 80px;">Double</th>
-                        <th style="text-align: center; width: 80px;"># Doubles</th>
-                        <th style="text-align: center; width: 230px;">Restrictions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for item in subjects_data %}
-                    {% if item.category == 'core' %}
-                    <tr>
-                        <td style="text-align: center;">
-                            <input type="hidden" name="subject_id[]" value="{{ item.subject.id }}">
-                            <input type="checkbox" name="enabled_{{ item.subject.id }}" 
-                                   {% if item.is_enabled %}checked{% endif %}
-                                   data-call="toggleRow" data-args="this|{{ item.subject.id }}" data-on="change">
-                        </td>
-                        <td>
-                            <strong>{{ item.subject.name }}</strong>
-                            {% if item.has_override %}<span class="badge badge-info" style="font-size: 0.7rem;">custom</span>{% endif %}
-                        </td>
-                        <td style="text-align: center;">
-                            <input type="number" name="periods_{{ item.subject.id }}" 
-                                   value="{{ item.periods }}" min="1" max="10"
-                                   class="form-control" style="width: 70px; display: inline-block;"
-                                   id="periods_{{ item.subject.id }}">
-                        </td>
-                        <td style="text-align: center;">
-                            <input type="checkbox" name="double_{{ item.subject.id }}"
-                                   {% if item.needs_double %}checked{% endif %}
-                                   id="double_{{ item.subject.id }}">
-                        </td>
-                        <td style="text-align: center;">
-                            <input type="number" name="double_count_{{ item.subject.id }}"
-                                   value="{{ item.double_count }}" min="0" max="3"
-                                   class="form-control" style="width: 60px; display: inline-block;"
-                                   id="double_count_{{ item.subject.id }}">
-                        </td>
-                        {% include "generator/_class_subject_restrictions_cell.html" %}
-                    </tr>
-                    {% endif %}
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
+  </form>
 
-    {% set has_science = subjects_data|selectattr('category', 'equalto', 'science')|list|length > 0 %}
-    {% set has_arts = subjects_data|selectattr('category', 'equalto', 'arts')|list|length > 0 %}
-    {% set has_commercial = subjects_data|selectattr('category', 'equalto', 'commercial')|list|length > 0 %}
-    {% set has_vocational = subjects_data|selectattr('category', 'equalto', 'vocational')|list|length > 0 %}
-    
-    {% if has_science %}
-    <div class="card mt-3">
-        <div class="card-header" style="background: #d4edda;"><h3>Science Subjects</h3></div>
-        <div class="card-body" style="padding: 0; overflow-x: auto;">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th style="width: 50px; text-align: center;">Takes</th>
-                        <th>Subject</th>
-                        <th style="text-align: center; width: 100px;">Periods/Wk</th>
-                        <th style="text-align: center; width: 80px;">Double</th>
-                        <th style="text-align: center; width: 80px;"># Doubles</th>
-                        <th style="text-align: center; width: 230px;">Restrictions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for item in subjects_data %}
-                    {% if item.category == 'science' %}
-                    <tr>
-                        <td style="text-align: center;">
-                            <input type="hidden" name="subject_id[]" value="{{ item.subject.id }}">
-                            <input type="checkbox" name="enabled_{{ item.subject.id }}" 
-                                   {% if item.is_enabled %}checked{% endif %}>
-                        </td>
-                        <td><strong>{{ item.subject.name }}</strong></td>
-                        <td style="text-align: center;">
-                            <input type="number" name="periods_{{ item.subject.id }}" 
-                                   value="{{ item.periods }}" min="1" max="10"
-                                   class="form-control" style="width: 70px; display: inline-block;">
-                        </td>
-                        <td style="text-align: center;">
-                            <input type="checkbox" name="double_{{ item.subject.id }}"
-                                   {% if item.needs_double %}checked{% endif %}>
-                        </td>
-                        <td style="text-align: center;">
-                            <input type="number" name="double_count_{{ item.subject.id }}"
-                                   value="{{ item.double_count }}" min="0" max="3"
-                                   class="form-control" style="width: 60px; display: inline-block;">
-                        </td>
-                        {% include "generator/_class_subject_restrictions_cell.html" %}
-                    </tr>
-                    {% endif %}
-                    {% endfor %}
-                </tbody>
-            </table>
+  {% for cat_key, cat_label, cat_icon in categories %}
+  {% set cat_items = subjects_data|selectattr('category', 'equalto', cat_key)|list %}
+  {% if cat_items %}
+  <div class="csec">
+    <div class="csec-head"><span class="csec-ic {{ cat_key }}"><i class="fas {{ cat_icon }}"></i></span><h2>{{ cat_label }}</h2></div>
+    <div class="sub-list">
+      {% for item in cat_items %}
+      {% set sid = item.subject.id %}
+      <div class="sub-card {{ '' if item.is_enabled else 'off' }}">
+        <input type="hidden" name="subject_id[]" value="{{ sid }}" form="saveConfigForm">
+        <div class="sub-top">
+          <span class="tgl">
+            <input type="checkbox" name="enabled_{{ sid }}" form="saveConfigForm"
+                   {% if item.is_enabled %}checked{% endif %}
+                   data-call="toggleSubjectCard" data-args="this" data-on="change">
+            <span class="trk"></span>
+          </span>
+          <span class="sub-name">{{ item.subject.name }}</span>
+          <span class="sp"></span>
+          {% if item.has_override %}<span class="badge badge-info">custom</span>{% endif %}
         </div>
-    </div>
-    {% endif %}
-    
-    {% if has_arts %}
-    <div class="card mt-3">
-        <div class="card-header" style="background: #fff3cd;"><h3>Arts Subjects</h3></div>
-        <div class="card-body" style="padding: 0; overflow-x: auto;">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th style="width: 50px; text-align: center;">Takes</th>
-                        <th>Subject</th>
-                        <th style="text-align: center; width: 100px;">Periods/Wk</th>
-                        <th style="text-align: center; width: 80px;">Double</th>
-                        <th style="text-align: center; width: 80px;"># Doubles</th>
-                        <th style="text-align: center; width: 230px;">Restrictions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for item in subjects_data %}
-                    {% if item.category == 'arts' %}
-                    <tr>
-                        <td style="text-align: center;">
-                            <input type="hidden" name="subject_id[]" value="{{ item.subject.id }}">
-                            <input type="checkbox" name="enabled_{{ item.subject.id }}" 
-                                   {% if item.is_enabled %}checked{% endif %}>
-                        </td>
-                        <td><strong>{{ item.subject.name }}</strong></td>
-                        <td style="text-align: center;">
-                            <input type="number" name="periods_{{ item.subject.id }}" 
-                                   value="{{ item.periods }}" min="1" max="10"
-                                   class="form-control" style="width: 70px; display: inline-block;">
-                        </td>
-                        <td style="text-align: center;">
-                            <input type="checkbox" name="double_{{ item.subject.id }}"
-                                   {% if item.needs_double %}checked{% endif %}>
-                        </td>
-                        <td style="text-align: center;">
-                            <input type="number" name="double_count_{{ item.subject.id }}"
-                                   value="{{ item.double_count }}" min="0" max="3"
-                                   class="form-control" style="width: 60px; display: inline-block;">
-                        </td>
-                        {% include "generator/_class_subject_restrictions_cell.html" %}
-                    </tr>
-                    {% endif %}
-                    {% endfor %}
-                </tbody>
-            </table>
+        <div class="sub-cfg">
+          <div class="cfg-fields">
+            <div class="cfg-field">
+              <label>Periods/wk</label>
+              <input type="number" name="periods_{{ sid }}" form="saveConfigForm" min="1" max="10"
+                     value="{{ item.periods }}" {% if not item.is_enabled %}disabled{% endif %}>
+            </div>
+            <div class="cfg-field">
+              <label>Double period</label>
+              <div style="padding-top:.3rem">
+                <span class="tgl">
+                  <input type="checkbox" name="double_{{ sid }}" form="saveConfigForm"
+                         {% if item.needs_double %}checked{% endif %} {% if not item.is_enabled %}disabled{% endif %}>
+                  <span class="trk"></span>
+                </span>
+              </div>
+            </div>
+            <div class="cfg-field">
+              <label># Doubles</label>
+              <input type="number" name="double_count_{{ sid }}" form="saveConfigForm" min="0" max="3"
+                     value="{{ item.double_count }}" {% if not item.is_enabled %}disabled{% endif %}>
+            </div>
+          </div>
+          <div class="restrict-row">
+            <label class="rlabel">Restrictions for this class</label>
+            <div class="rchips">
+              <label class="rchip" title="Never schedule as period 1{% if item.global_not_first %} (already off period 1 school-wide for this subject; checking this has no extra effect){% endif %}">
+                <input type="checkbox" name="not_first_{{ sid }}" form="saveConfigForm"
+                       {% if item.not_first_period %}checked{% endif %} {% if not item.is_enabled %}disabled{% endif %}> 1st{% if item.global_not_first %}*{% endif %}
+              </label>
+              <label class="rchip" title="Never schedule as the last period of the day{% if item.global_not_last %} (already off the last period school-wide for this subject; checking this has no extra effect){% endif %}">
+                <input type="checkbox" name="not_last_{{ sid }}" form="saveConfigForm"
+                       {% if item.not_last_period %}checked{% endif %} {% if not item.is_enabled %}disabled{% endif %}> Last{% if item.global_not_last %}*{% endif %}
+              </label>
+              <label class="rchip" title="Never schedule before the break">
+                <input type="checkbox" name="avoid_morning_{{ sid }}" form="saveConfigForm"
+                       {% if item.avoid_morning %}checked{% endif %} {% if not item.is_enabled %}disabled{% endif %}> AM
+              </label>
+              <label class="rchip" title="Never schedule after the break">
+                <input type="checkbox" name="avoid_afternoon_{{ sid }}" form="saveConfigForm"
+                       {% if item.avoid_afternoon %}checked{% endif %} {% if not item.is_enabled %}disabled{% endif %}> PM
+              </label>
+              <div class="rexcl">
+                <label>Skip periods</label>
+                <input type="text" name="excluded_periods_{{ sid }}" form="saveConfigForm"
+                       value="{{ item.excluded_periods }}" placeholder="e.g. 3,5"
+                       title="Comma-separated period numbers this subject must never use, any day"
+                       {% if not item.is_enabled %}disabled{% endif %}>
+              </div>
+            </div>
+          </div>
         </div>
+      </div>
+      {% endfor %}
     </div>
-    {% endif %}
-    
-    {% if has_commercial %}
-    <div class="card mt-3">
-        <div class="card-header" style="background: #cce5ff;"><h3>Commercial Subjects</h3></div>
-        <div class="card-body" style="padding: 0; overflow-x: auto;">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th style="width: 50px; text-align: center;">Takes</th>
-                        <th>Subject</th>
-                        <th style="text-align: center; width: 100px;">Periods/Wk</th>
-                        <th style="text-align: center; width: 80px;">Double</th>
-                        <th style="text-align: center; width: 80px;"># Doubles</th>
-                        <th style="text-align: center; width: 230px;">Restrictions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for item in subjects_data %}
-                    {% if item.category == 'commercial' %}
-                    <tr>
-                        <td style="text-align: center;">
-                            <input type="hidden" name="subject_id[]" value="{{ item.subject.id }}">
-                            <input type="checkbox" name="enabled_{{ item.subject.id }}" 
-                                   {% if item.is_enabled %}checked{% endif %}>
-                        </td>
-                        <td><strong>{{ item.subject.name }}</strong></td>
-                        <td style="text-align: center;">
-                            <input type="number" name="periods_{{ item.subject.id }}" 
-                                   value="{{ item.periods }}" min="1" max="10"
-                                   class="form-control" style="width: 70px; display: inline-block;">
-                        </td>
-                        <td style="text-align: center;">
-                            <input type="checkbox" name="double_{{ item.subject.id }}"
-                                   {% if item.needs_double %}checked{% endif %}>
-                        </td>
-                        <td style="text-align: center;">
-                            <input type="number" name="double_count_{{ item.subject.id }}"
-                                   value="{{ item.double_count }}" min="0" max="3"
-                                   class="form-control" style="width: 60px; display: inline-block;">
-                        </td>
-                        {% include "generator/_class_subject_restrictions_cell.html" %}
-                    </tr>
-                    {% endif %}
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-    {% endif %}
-    
-    {% if has_vocational %}
-    <div class="card mt-3">
-        <div class="card-header" style="background: #e2d5f1;"><h3>Vocational Subjects</h3></div>
-        <div class="card-body" style="padding: 0; overflow-x: auto;">
-            <table class="data-table">
-                <thead>
-                    <tr>
-                        <th style="width: 50px; text-align: center;">Takes</th>
-                        <th>Subject</th>
-                        <th style="text-align: center; width: 100px;">Periods/Wk</th>
-                        <th style="text-align: center; width: 80px;">Double</th>
-                        <th style="text-align: center; width: 80px;"># Doubles</th>
-                        <th style="text-align: center; width: 230px;">Restrictions</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for item in subjects_data %}
-                    {% if item.category == 'vocational' %}
-                    <tr>
-                        <td style="text-align: center;">
-                            <input type="hidden" name="subject_id[]" value="{{ item.subject.id }}">
-                            <input type="checkbox" name="enabled_{{ item.subject.id }}" 
-                                   {% if item.is_enabled %}checked{% endif %}>
-                        </td>
-                        <td><strong>{{ item.subject.name }}</strong></td>
-                        <td style="text-align: center;">
-                            <input type="number" name="periods_{{ item.subject.id }}" 
-                                   value="{{ item.periods }}" min="1" max="10"
-                                   class="form-control" style="width: 70px; display: inline-block;">
-                        </td>
-                        <td style="text-align: center;">
-                            <input type="checkbox" name="double_{{ item.subject.id }}"
-                                   {% if item.needs_double %}checked{% endif %}>
-                        </td>
-                        <td style="text-align: center;">
-                            <input type="number" name="double_count_{{ item.subject.id }}"
-                                   value="{{ item.double_count }}" min="0" max="3"
-                                   class="form-control" style="width: 60px; display: inline-block;">
-                        </td>
-                        {% include "generator/_class_subject_restrictions_cell.html" %}
-                    </tr>
-                    {% endif %}
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-    {% endif %}
-    
-    <div class="page-header-actions mt-3">
-        <button type="submit" class="btn btn-primary btn-lg"><i class="fas fa-save"></i> Save Configuration</button>
-        <a href="{{ url_for('generator.class_subjects_list') }}" class="btn btn-secondary">Back</a>
-    </div>
-</form>
+  </div>
+  {% endif %}
+  {% endfor %}
 
-<div class="card mt-3">
-    <div class="card-header"><h3>Tips</h3></div>
-    <div class="card-body">
-        <ul>
-            <li><strong>Takes</strong> - Check if {{ class_config.class_name }} offers this subject</li>
-            <li><strong>Periods/Wk</strong> - How many periods per week for this class</li>
-            <li><strong>Double</strong> - Check if subject needs consecutive periods (labs, practicals)</li>
-            <li><strong># Doubles</strong> - How many double periods out of total</li>
-            <li><strong>Restrictions</strong> - Where this subject must NOT land for {{ class_config.class_name }}: never period 1 (<strong>1st</strong>), never the day's last period (<strong>Last</strong>), never before the break (<strong>AM</strong>), never after the break (<strong>PM</strong>), or never a specific period number any day (comma-separated, e.g. "3,5") — these only apply to this class, other classes taking the same subject are unaffected. A "1st"/"Last" marked with <strong>*</strong> is already restricted for every class via the subject's global setting (Subjects page); checking it here has no extra effect, it's just shown for visibility</li>
-        </ul>
-        <p class="text-muted">Example: Physics with 6 periods and 1 double = 4 single periods + 1 double (2 periods)</p>
-    </div>
+  <div class="cp-save">
+    <p>Unchecking a subject's toggle excludes it from {{ class_config.class_name }}'s timetable entirely.</p>
+    <button type="submit" form="saveConfigForm" class="btn btn-primary"><i class="fas fa-save"></i> Save Configuration</button>
+  </div>
+
+  <script nonce="{{ csp_nonce }}">
+  function toggleSubjectCard(cb) {
+      var card = cb.closest('.sub-card');
+      card.classList.toggle('off', !cb.checked);
+      card.querySelectorAll('.sub-cfg input, .sub-cfg select').forEach(function (el) {
+          el.disabled = !cb.checked;
+      });
+  }
+  </script>
+
+  <div class="cp-tips">
+    <h3><i class="fas fa-circle-info" style="color:var(--primary)"></i> Tips</h3>
+    <ul>
+      <li><b>Toggle</b> — whether {{ class_config.class_name }} offers this subject at all</li>
+      <li><b>Periods/wk</b> — how many periods per week for this class</li>
+      <li><b>Double period</b> — whether this subject needs consecutive periods (labs, practicals)</li>
+      <li><b># Doubles</b> — how many double periods out of the total</li>
+      <li><b>Restrictions</b> — where this subject must NOT land for {{ class_config.class_name }}: never period 1 (1st), never the day's last period (Last), never before the break (AM), never after the break (PM), or never a specific period number any day (comma-separated, e.g. "3,5") — these only apply to this class, other classes taking the same subject are unaffected. A restriction marked with <b>*</b> is already applied for every class via the subject's global setting (Subjects page); checking it here has no extra effect, it's just shown for visibility</li>
+    </ul>
+    <p style="margin:.8rem 0 0;color:var(--text-muted)">Example: Physics with 6 periods and 1 double = 4 single periods + 1 double (2 periods)</p>
+  </div>
+
+  {% else %}
+  <div class="cp-empty">
+    <p>No subjects available for this class's level yet. Add subjects first from the Subjects page.</p>
+  </div>
+  {% endif %}
 </div>
 {% endblock %}
