@@ -97,10 +97,10 @@
           <button type="submit" class="btn btn-ghost btn-sm"><i class="fas fa-circle-check"></i> Set as in use</button>
         </form>
         {% endif %}
-        <a href="{{ url_for('generator.print_results', batch_id=batch.batch_id) }}" class="btn btn-success btn-sm">
+        <a href="{{ url_for('generator.print_results', batch_id=batch.batch_id) }}" data-cache-bust class="btn btn-success btn-sm">
           <i class="fas fa-print"></i> Print All
         </a>
-        <a href="{{ url_for('generator.export_results', batch_id=batch.batch_id) }}" class="btn btn-info btn-sm">
+        <a href="{{ url_for('generator.export_results', batch_id=batch.batch_id) }}" data-cache-bust class="btn btn-info btn-sm">
           <i class="fas fa-download"></i> Excel
         </a>
       </div>

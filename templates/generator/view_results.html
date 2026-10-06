@@ -7,7 +7,7 @@
 </div>
 
 <div class="page-header-actions mb-3">
-    <a href="{{ url_for('generator.print_results', batch_id=batch_id) }}" class="btn btn-success"><i class="fas fa-print"></i> Print All</a>
+    <a href="{{ url_for('generator.print_results', batch_id=batch_id) }}" data-cache-bust class="btn btn-success"><i class="fas fa-print"></i> Print All</a>
     <button type="button" class="btn btn-success" data-call="toggleSection" data-args="'print-select-panel'"><i class="fas fa-list-check"></i> Export / Print (choose paper size)…</button>
     <a href="{{ url_for('generator.teacher_timetable', batch_id=batch_id) }}" class="btn btn-secondary"><i class="fas fa-chalkboard-teacher"></i> Teacher View</a>
     <a href="{{ url_for('generator.reports_index', batch_id=batch_id) }}" class="btn btn-secondary"><i class="fas fa-chart-bar"></i> Reports</a>
@@ -75,7 +75,7 @@
             <a href="{{ url_for('generator.edit_timetable', batch_id=batch_id, class_name=tt.class_name, arm_name=tt.arm_name) }}" class="btn btn-primary btn-sm">
                 <i class="fas fa-edit"></i> Edit
             </a>
-            <a href="{{ url_for('generator.print_single_timetable', batch_id=batch_id, class_name=tt.class_name, arm_name=tt.arm_name) }}" class="btn btn-success btn-sm">
+            <a href="{{ url_for('generator.print_single_timetable', batch_id=batch_id, class_name=tt.class_name, arm_name=tt.arm_name) }}" data-cache-bust class="btn btn-success btn-sm">
                 <i class="fas fa-print"></i> Print
             </a>
         </div>

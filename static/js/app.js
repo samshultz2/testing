@@ -227,6 +227,26 @@ function initMobileSearch() {
     });
 }
 
+// A print/export link's URL is otherwise identical on every click (same
+// batch, same params), so the server's own no-store headers only stop a NEW
+// response from being cached going forward -- they can't invalidate an entry
+// the browser already cached under that exact URL from before a route
+// started sending those headers. Any <a data-cache-bust> gets a fresh
+// timestamp query param stamped on right before the browser follows it, so
+// it's a URL that's never been cached under, sidestepping that regardless of
+// which layer (HTTP cache, service worker, PDF viewer) was holding onto it.
+// Delegated on document (not bound per-element) so it keeps working after a
+// soft-nav page swap without needing to be re-initialized.
+function initCacheBustLinks() {
+    document.addEventListener('click', function (e) {
+        var a = e.target.closest && e.target.closest('a[data-cache-bust]');
+        if (!a) return;
+        var url = new URL(a.href, window.location.origin);
+        url.searchParams.set('_cb', Date.now());
+        a.href = url.toString();
+    });
+}
+
 function initThemePicker() {
     var btn = document.getElementById('themeBtn');
     var menu = document.getElementById('themeMenu');
@@ -679,6 +699,9 @@ document.addEventListener('DOMContentLoaded', function() {
     // Profile dropdown + mobile search
     initProfileMenu();
     initMobileSearch();
+
+    // Print/export download links (data-cache-bust) -- see its own comment
+    initCacheBustLinks();
 
     // Themed confirm modal (vanilla data-confirm flows)
     initConfirmModal();
