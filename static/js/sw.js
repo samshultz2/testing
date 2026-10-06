@@ -180,8 +180,11 @@ self.addEventListener('fetch', (e) => {
   if (isPage) {
     e.respondWith(
       // Prefer the navigation-preload response (started by the browser before the
-      // SW woke up) when present, else a normal fetch.
-      Promise.resolve(e.preloadResponse).then((pre) => pre || fetch(req)).then((res) => {
+      // SW woke up) when present, else a normal fetch -- explicitly bypassing the
+      // browser's own HTTP cache (not this SW's Cache API, which is handled
+      // separately below) so a response cached under this URL from before a route
+      // started sending no-store headers can't keep getting served back forever.
+      Promise.resolve(e.preloadResponse).then((pre) => pre || fetch(req, { cache: 'no-store' })).then((res) => {
         // Only cache genuine HTML pages — never files served inline as
         // navigations (PDF previews, downloads), or stale copies get served back.
         const ct = res.headers.get('Content-Type') || '';

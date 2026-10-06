@@ -50,6 +50,7 @@
                     </select>
                 </label>
             </div>
+            <input type="hidden" name="_cb" id="cache-bust-field" value="0">
             <div class="page-header-actions mt-2">
                 <button type="button" class="btn btn-secondary btn-sm" data-call="selectAllArms" data-args="true">Select All</button>
                 <button type="button" class="btn btn-secondary btn-sm" data-call="selectAllArms" data-args="false">Deselect All</button>
@@ -141,5 +142,20 @@ function onPaperChange() {
 }
 const paperSelectEl = document.getElementById('paper-select');
 if (paperSelectEl) paperSelectEl.addEventListener('change', onPaperChange);
+
+// Cache-bust every export/print submission: the server already sends
+// no-store/no-cache headers on these responses, but that only stops a
+// NEW response from being cached going forward -- it does nothing for an
+// entry a browser already cached under this exact URL from before those
+// headers existed (or from the service worker's own navigation handling,
+// which is network-first but can still read the browser's HTTP cache for
+// the fetch itself). A fresh, never-seen-before URL on every click sidesteps
+// that regardless of which layer was holding the stale copy.
+const printSelectFormEl = document.getElementById('print-select-form');
+if (printSelectFormEl) {
+    printSelectFormEl.addEventListener('submit', function () {
+        document.getElementById('cache-bust-field').value = Date.now();
+    });
+}
 </script>
 {% endblock %}
