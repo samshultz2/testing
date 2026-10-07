@@ -1105,7 +1105,7 @@ function Validation({ d }) {
     <>
       <div className="page-header"><h1><i aria-hidden="true" className="fas fa-bullseye" /> Mock → Actual Validation</h1>
         <div className="page-header-actions">
-          {v && !meta.insufficient && <><a href={d.urls.export_pdf} className="btn btn-success" data-native download><i aria-hidden="true" className="fas fa-file-pdf" /> PDF</a>
+          {v && !meta.insufficient && canWrite(d, 'mock_jamb_analytics_export') && <><a href={d.urls.export_pdf} className="btn btn-success" data-native download><i aria-hidden="true" className="fas fa-file-pdf" /> PDF</a>
           <a href={d.urls.export_excel} className="btn btn-secondary" data-native download><i aria-hidden="true" className="fas fa-file-excel" /> Excel</a></>}
           <a href={d.urls.analytics} className="btn btn-outline"><i aria-hidden="true" className="fas fa-chart-line" /> Analytics</a>
         </div>
@@ -1240,9 +1240,11 @@ function Deep({ d }) {
 
   const actions = (
     <>
+      {canWrite(d, 'mock_jamb_analytics_export') && <>
       <a href={d.urls.export_pdf} className="btn btn-danger btn-sm" title="PDF" data-native download><i aria-hidden="true" className="fas fa-file-pdf" /> PDF</a>
       <a href={d.urls.export_excel} className="btn btn-success btn-sm" title="Excel" data-native download><i aria-hidden="true" className="fas fa-file-excel" /> Excel</a>
       <a href={d.urls.export_image} className="btn btn-info btn-sm" title="HD image" data-native download><i aria-hidden="true" className="fas fa-image" /> Image</a>
+      </>}
       {d.urls.items && <a href={d.urls.items} className="btn btn-outline btn-sm" title="Item &amp; topic analysis" data-native><i aria-hidden="true" className="fas fa-microscope" /> Items</a>}
       {d.urls.trends && <a href={d.urls.trends} className="btn btn-outline btn-sm" title="Progress trends"><i aria-hidden="true" className="fas fa-chart-line" /> Trends</a>}
       <a href={d.urls.view} className="btn btn-secondary btn-sm" title="Back"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</a>
@@ -1405,7 +1407,7 @@ function Trends({ d }) {
       <div><h1>Progress Trends — Mock JAMB</h1>
         <p className="text-muted text-sm">Track mean score, subjects, teachers and arms across mocks{t && t.meta.multi_session ? ' and across sessions' : ''}.</p></div>
       <div className="page-header-actions">
-        {!insufficient && <>
+        {!insufficient && canWrite(d, 'mock_jamb_analytics_export') && <>
           <a href={d.urls.export_pdf} className="btn btn-danger btn-sm" data-native download><i aria-hidden="true" className="fas fa-file-pdf" /> PDF</a>
           <a href={d.urls.export_excel} className="btn btn-success btn-sm" data-native download><i aria-hidden="true" className="fas fa-file-excel" /> Excel</a>
           <a href={d.urls.export_image} className="btn btn-info btn-sm" data-native download><i aria-hidden="true" className="fas fa-image" /> Image</a>

@@ -919,3 +919,36 @@ def test_mock_jamb_build_delete_slice(app):
     assert r2.status_code in (302, 303)
     with app.app_context():
         assert db.session.get(MockJAMBPassage, pid) is None   # delete granted -> removed
+
+
+def test_mock_jamb_analytics_view_without_export(app):
+    ssid = _mj_session(app)
+    exam_id = _mj_exam(app, ssid, 211)
+    _make(app, 'mj_an_view', {'external_exams.mock_jamb_analytics_view': 'view'})
+    c = _login(app, 'mj_an_view')
+    assert c.get('/mock-jamb/analytics').status_code == 200
+    assert c.get('/mock-jamb/trends').status_code == 200
+    assert c.get('/mock-jamb/validation').status_code == 200
+    assert c.get('/mock-jamb/mastery').status_code == 200
+    assert c.get(f'/mock-jamb/exam/{exam_id}/deep').status_code == 200
+    assert c.get(f'/mock-jamb/exam/{exam_id}/items').status_code == 200
+    # 'mock_jamb_analytics_export' is a separate slice -> blocked, redirected to
+    # the dashboard (not the in-feature "no data yet" redirect export uses).
+    r = c.get(f'/mock-jamb/exam/{exam_id}/deep/export', follow_redirects=False)
+    assert r.status_code in (302, 303)
+    assert r.headers['Location'].rstrip('/') == ''   # redirected to the dashboard
+
+
+def test_mock_jamb_analytics_export_separate_slice(app):
+    ssid = _mj_session(app)
+    exam_id = _mj_exam(app, ssid, 212)
+    _make(app, 'mj_an_export', {'external_exams.mock_jamb_analytics_view': 'view',
+                                'external_exams.mock_jamb_analytics_export': 'edit'})
+    c = _login(app, 'mj_an_export')
+    # Granted both view + export -> passes the permission gate; the route then
+    # redirects to its own "no data yet" page (not the dashboard), proving the
+    # gate -- not the business logic -- is what's under test here.
+    r = c.get(f'/mock-jamb/exam/{exam_id}/deep/export', follow_redirects=False)
+    assert r.status_code in (302, 303)
+    assert r.headers['Location'].rstrip('/') != ''
+    assert f'/mock-jamb/exam/{exam_id}/deep' in r.headers['Location']

@@ -256,6 +256,8 @@ MODULE_SUBSECTIONS = {
         'mock_jamb_build_view': 'View Mock JAMB Questions',
         'mock_jamb_build_edit': 'Build Mock JAMB Questions',
         'mock_jamb_build_delete': 'Delete Mock JAMB Questions',
+        'mock_jamb_analytics_view': 'View Mock JAMB Analytics',
+        'mock_jamb_analytics_export': 'Export Mock JAMB Analytics',
     },
     'communication': {
         'announcements': 'Announcements',
@@ -598,6 +600,14 @@ _SUBSECTION_ENDPOINTS = {
                                  'mock_jamb.add_mock_question', 'mock_jamb.edit_mock_question',
                                  'mock_jamb.exam_blueprint'},
         'mock_jamb_build_delete': {'mock_jamb.delete_passage', 'mock_jamb.delete_mock_question'},
+        'mock_jamb_analytics_view': {'mock_jamb.analytics', 'mock_jamb.deep', 'mock_jamb.trends',
+                                     'mock_jamb.validation', 'mock_jamb.student_progress',
+                                     'mock_jamb.subject_analysis', 'mock_jamb.items',
+                                     'mock_jamb.mastery', 'mock_jamb.student_mastery_view',
+                                     'mock_jamb.api_exam_stats', 'mock_jamb.api_student_progress'},
+        'mock_jamb_analytics_export': {'mock_jamb.trends_export', 'mock_jamb.deep_export',
+                                       'mock_jamb.items_export', 'mock_jamb.weakness_export',
+                                       'mock_jamb.validation_export'},
     },
     'communication': {
         'announcements': {'announcements', 'add_announcement', 'edit_announcement',
