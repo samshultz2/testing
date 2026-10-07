@@ -10,7 +10,6 @@ from models import (
     ClassArmAssignment, StudentEnrollment, Week, Holiday, Student
 )
 from utils.helpers import login_required, parse_date, get_weeks_in_range
-from utils.access_control import admin_required
 
 academics_bp = Blueprint('academics', __name__, url_prefix='/academics')
 
@@ -546,7 +545,7 @@ def generate_weeks(term_id):
 # ============================================================================
 
 @academics_bp.route('/terms/<int:term_id>/holidays/add', methods=['POST'])
-@admin_required
+@login_required
 def add_holiday(term_id):
     """Add a holiday (single day or a date range, e.g. a one-week mid-term break)."""
     try:
@@ -596,7 +595,7 @@ def add_holiday(term_id):
 
 
 @academics_bp.route('/holidays/<int:holiday_id>/delete', methods=['POST'])
-@admin_required
+@login_required
 def delete_holiday(holiday_id):
     """Delete a holiday"""
     holiday = db.get_or_404(Holiday, holiday_id)

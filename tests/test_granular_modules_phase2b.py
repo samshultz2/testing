@@ -47,8 +47,8 @@ def test_every_mapped_endpoint_is_real(app):
 
 def test_representative_resolution():
     cases = {
-        'academics.add_session': ('academics', 'structure'),
-        'academics.enroll_student': ('academics', 'enrollment'),
+        'academics.add_session': ('academics', 'structure_create'),
+        'academics.enroll_student': ('academics', 'enrollment_create'),
         'subjects.save_scores': ('results', 'scores'),
         'subjects.subjects_list': ('results', 'subjects'),
         'subjects.broadsheet': ('results', 'analytics'),
@@ -60,7 +60,7 @@ def test_representative_resolution():
         'library.issue': ('library', 'circulation'),
         'library.add_book': ('library', 'catalogue'),
         'reports.export_students': ('reports', 'exports'),
-        'events.add_event': ('events', 'manage'),
+        'events.add_event': ('events', 'create'),
         'contributions.add_payment': ('contributions', 'record'),
         'website_admin.media_upload': ('website', 'media'),
         'settings.save_grades': ('settings', 'grading'),

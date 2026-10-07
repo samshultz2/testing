@@ -213,3 +213,114 @@ def test_bulk_delete_students_reachable_by_delete_slice(app):
     assert r.get_json()['deleted'] == 1
     with app.app_context():
         assert Student.query.filter_by(id=sid).first().is_active is False
+
+
+# --- academics partition (Phase 1 of the module-by-module rollout) ---------
+def test_academics_structure_create_without_view_edit_or_delete(app):
+    from models import AcademicSession
+    _make(app, 'acad_create', {'academics.structure_create': 'edit'})
+    c = _login(app, 'acad_create')
+    assert c.get('/academics/sessions/add').status_code == 200
+    token = _ptoken(c)
+    r = c.post('/academics/sessions/add', data={'name': 'ACST-Sess', '_csrf_token': token},
+               follow_redirects=False)
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        sess = AcademicSession.query.filter_by(name='ACST-Sess').first()
+        assert sess is not None
+        sid = sess.id
+    # 'structure_view'/'structure_edit' are separate slices -> blocked
+    assert c.get('/academics/classes', follow_redirects=False).status_code in (302, 303)
+    assert c.get(f'/academics/sessions/{sid}/edit', follow_redirects=False).status_code in (302, 303)
+
+
+def test_academics_holidays_create_without_delete(app):
+    from models import AcademicSession, Term, Holiday
+    with app.app_context():
+        sess = AcademicSession.query.filter_by(name='ACHOL-Sess').first()
+        if not sess:
+            sess = AcademicSession(name='ACHOL-Sess'); db.session.add(sess); db.session.flush()
+            term = Term(session_id=sess.id, term_number=1, name='ACHOL-Term')
+            db.session.add(term); db.session.commit()
+        else:
+            term = Term.query.filter_by(session_id=sess.id).first()
+        term_id = term.id
+    _make(app, 'acad_hol', {'academics.holidays_create': 'edit'})
+    c = _login(app, 'acad_hol')
+    token = _ptoken(c)
+    r = c.post(f'/academics/terms/{term_id}/holidays/add',
+               data={'date': '2030-01-01', 'reason': 'Test Holiday', '_csrf_token': token},
+               follow_redirects=False)
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        hol = Holiday.query.filter_by(term_id=term_id, reason='Test Holiday').first()
+        assert hol is not None
+        hol_id = hol.id
+    r2 = c.post(f'/academics/holidays/{hol_id}/delete', data={'_csrf_token': token},
+                follow_redirects=False)
+    assert r2.status_code in (302, 303)
+    with app.app_context():
+        assert db.session.get(Holiday, hol_id) is not None   # delete not granted -> untouched
+
+
+def test_academics_enrollment_create_without_edit_or_delete(app):
+    from models import (Branch, AcademicSession, Term, SchoolClass, ClassArm,
+                        ClassArmAssignment, Student, StudentEnrollment)
+    with app.app_context():
+        sess = AcademicSession.query.filter_by(name='ACENR-Sess').first()
+        if not sess:
+            bid = Branch.get_default().id
+            sess = AcademicSession(name='ACENR-Sess'); db.session.add(sess); db.session.flush()
+            term = Term(session_id=sess.id, term_number=1, name='ACENR-Term')
+            db.session.add(term); db.session.flush()
+            sc = SchoolClass.query.first(); arm = ClassArm.query.first()
+            caa = ClassArmAssignment(class_id=sc.id, arm_id=arm.id, term_id=term.id, branch_id=bid)
+            db.session.add(caa); db.session.flush()
+            s = Student(student_id='ACENR1', first_name='Acenr', surname='One',
+                        gender='Male', is_active=True, branch_id=bid)
+            db.session.add(s); db.session.commit()
+            caa_id, sid = caa.id, s.id
+        else:
+            term = Term.query.filter_by(session_id=sess.id).first()
+            caa_id = ClassArmAssignment.query.filter_by(term_id=term.id).first().id
+            sid = Student.query.filter_by(student_id='ACENR1').first().id
+    _make(app, 'acad_enr', {'academics.enrollment_create': 'edit'})
+    c = _login(app, 'acad_enr')
+    token = _ptoken(c)
+    r = c.post(f'/academics/assignments/{caa_id}/enroll',
+               data={'student_ids[]': [str(sid)], '_csrf_token': token},
+               follow_redirects=False)
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        en = StudentEnrollment.query.filter_by(
+            student_id=sid, class_arm_assignment_id=caa_id, is_active=True).first()
+        assert en is not None
+        en_id = en.id
+    # 'enrollment_delete' not granted -> removing the enrolment is blocked
+    r2 = c.post(f'/academics/enrollments/{en_id}/remove', data={'_csrf_token': token},
+                follow_redirects=False)
+    assert r2.status_code in (302, 303)
+    with app.app_context():
+        assert StudentEnrollment.query.filter_by(id=en_id, is_active=True).first() is not None
+
+
+# --- events partition -------------------------------------------------------
+def test_events_create_without_edit_delete_or_import(app):
+    from models import SchoolEvent
+    _make(app, 'ev_create', {'events.create': 'edit'})
+    c = _login(app, 'ev_create')
+    assert c.get('/events/add').status_code == 200
+    token = _ptoken(c)
+    r = c.post('/events/add', data={'title': 'Test Event', 'start_date': '2030-01-01',
+                                     '_csrf_token': token}, follow_redirects=False)
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        ev = SchoolEvent.query.filter_by(title='Test Event').first()
+        assert ev is not None
+        ev_id = ev.id
+    assert c.get(f'/events/{ev_id}/edit', follow_redirects=False).status_code in (302, 303)
+    assert c.get('/events/import', follow_redirects=False).status_code in (302, 303)
+    r2 = c.post(f'/events/{ev_id}/delete', data={'_csrf_token': token}, follow_redirects=False)
+    assert r2.status_code in (302, 303)
+    with app.app_context():
+        assert db.session.get(SchoolEvent, ev_id) is not None   # delete not granted -> untouched
