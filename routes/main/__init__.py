@@ -15,6 +15,7 @@ from utils.access_control import (
     login_required, admin_required, central_admin_required, is_admin, is_teacher,
     get_accessible_class_ids, is_sss3_form_teacher, page_can_write
 )
+from utils.spa import current_section_perms
 from utils.audit import log_action
 from utils.helpers import RELIGIONS, parse_date, FlashMessages, WAEC_SUBJECTS, STREAMS, STREAM_WAEC_SUBJECTS
 from utils.search import like_term, escape_like
@@ -1868,9 +1869,15 @@ def _students_payload():
     # form teacher with write access can manage their own class's students (the
     # routes enforce form-class scope); a view-only user gets a read-only list.
     can_manage = page_can_write()
-    # Form teachers may add students too: the add route auto-enrols a teacher's
-    # new student into their own form class, so it lands in their (scoped) list.
-    can_add = can_manage
+    # Computed once here (not just inline in the returned dict below) so
+    # can_add can use its OWN 'create' grant instead of can_manage (which is
+    # whatever subsection THIS route itself belongs to, 'roster' -- unrelated
+    # to whether the user may add a student). Form teachers may add students
+    # too: the add route auto-enrols a teacher's new student into their own
+    # form class, so it lands in their (scoped) list.
+    perms = current_section_perms()
+    can_add = perms['subs'].get('create', {}).get('write', False)
+    can_edit_student = perms['subs'].get('edit', {}).get('write', False)
     students = [{
         'id': s.id,
         'student_id': s.student_id,
@@ -1945,6 +1952,11 @@ def _students_payload():
             'subjects': list(WAEC_SUBJECTS),
             'houses': houses,
         },
+        # Generic per-sub-section {level, write} block (utils.spa) so the React
+        # app can gate each button (Add/Edit/Delete/Trash/Restore/Purge) on its
+        # OWN specific grant via canWrite(d, sub) -- can_manage/can_add above
+        # stay as a coarser fallback other parts of this payload still use.
+        'perms': perms,
         'can_manage': can_manage,
         'can_add': can_add,
         'can_admin': is_admin(),   # admin-only bulk tools (add subject / delete)
@@ -1955,8 +1967,9 @@ def _students_payload():
         'can_sss3': is_admin() or is_sss3_form_teacher(),
         'add_url': url_for('main.add_student'),
         'import_url': url_for('main.import_students'),
-        'update_import_url': url_for('main.update_import_students') if can_manage else None,
-        'enrolment': _student_form_options(with_enrolment=True)['enrolment'] if can_manage else None,
+        'update_import_url': url_for('main.update_import_students') if can_edit_student else None,
+        # Feeds ImportModal (paste-to-CREATE), so this follows 'create', not edit.
+        'enrolment': _student_form_options(with_enrolment=True)['enrolment'] if can_add else None,
         'export_url': url_for('main.export_students_data'),
         'trash_url': url_for('main.students_trash'),
         'waec_by_stream_url': url_for('main.apply_stream_waec'),
@@ -2268,6 +2281,10 @@ def _student_view_payload(student):
         'history': _student_audit_history(sid) if can_manage else None,
         'today': timeutil.today().isoformat(),
         'can_manage': can_manage,
+        # Per-action grants (edit/delete/welfare) so Edit/Delete show only for a
+        # user actually holding THAT specific permission, not just whatever the
+        # 'roster' (view) subsection this page itself belongs to happens to be.
+        'perms': current_section_perms(),
         'urls': {
             'list': url_for('main.students_list'),
             'self': url_for('main.view_student', student_id=sid),
@@ -2473,6 +2490,11 @@ def _trash_payload():
             'purge_url': url_for('main.purge_student', student_id=s.id),
         } for s in students],
         'can_manage': page_can_write(),
+        # Trash-view access (students.trash) is separate from restore/purge
+        # (students.restore / students.purge) -- canWrite(d,'restore'|'purge')
+        # drives each button individually; can_manage above stays as-is for
+        # callers that haven't moved to the per-action checks yet.
+        'perms': current_section_perms(),
         'urls': {
             'list': url_for('main.students_list'),
             'bulk_restore': url_for('main.bulk_restore_students'),

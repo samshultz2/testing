@@ -46,7 +46,7 @@ function Dashboard({ d }) {
     ['green', 'fa-user-graduate', s.admitted, 'Admitted'], ['red', 'fa-percent', s.conversion + '%', 'Conversion']];
   return (
     <>
-      <PageHeader title="Admissions" actions={canWrite(d) ? <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-user-plus" /> New Application</a> : null} />
+      <PageHeader title="Admissions" actions={canWrite(d, 'create') ? <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-user-plus" /> New Application</a> : null} />
       <Tabs d={d} />
       <div className="card mb-3"><div className="card-body">
         <div className="filter-form"><div className="form-group"><label className="form-label">Session</label>
@@ -103,10 +103,10 @@ function Applicants({ d }) {
   return (
     <>
       <PageHeader title="Applicants" actions={<>
-        {d.urls.blank_form && <a href={d.urls.blank_form} data-native className="btn btn-secondary" title="Fillable application form (colour)"><i aria-hidden="true" className="fas fa-file-pdf" /> Blank form</a>}
-        {d.urls.blank_form && <a href={d.urls.blank_form + '?bw=1'} data-native className="btn btn-secondary" title="Fillable application form — black &amp; white, print-friendly"><i aria-hidden="true" className="fas fa-print" /> B&amp;W form</a>}
+        {d.urls.blank_form && canWrite(d, 'download') && <a href={d.urls.blank_form} data-native className="btn btn-secondary" title="Fillable application form (colour)"><i aria-hidden="true" className="fas fa-file-pdf" /> Blank form</a>}
+        {d.urls.blank_form && canWrite(d, 'download') && <a href={d.urls.blank_form + '?bw=1'} data-native className="btn btn-secondary" title="Fillable application form — black &amp; white, print-friendly"><i aria-hidden="true" className="fas fa-print" /> B&amp;W form</a>}
         <a href={d.urls.export} data-native className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-csv" /> Export</a>
-        {canWrite(d) && <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-user-plus" /> New Application</a>}
+        {canWrite(d, 'create') && <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-user-plus" /> New Application</a>}
       </>} />
       <Tabs d={d} />
       <div className="card mb-3"><div className="card-body">
@@ -388,8 +388,8 @@ function ApplicantDetail({ d, notify }) {
         {a.parent_phone && <a href={'tel:' + a.parent_phone} className="btn btn-secondary" aria-label="Call"><i aria-hidden="true" className="fas fa-phone" /></a>}
         {d.urls.pdf && <a href={d.urls.pdf} className="btn btn-secondary" title="Download PDF"><i aria-hidden="true" className="fas fa-file-pdf" /> PDF</a>}
         {d.urls.docx && <a href={d.urls.docx} className="btn btn-secondary" title="Download Word"><i aria-hidden="true" className="fas fa-file-word" /> Word</a>}
-        {canWrite(d) && <a href={d.urls.edit} className="btn btn-primary"><i aria-hidden="true" className="fas fa-edit" /> Edit</a>}
-        {canWrite(d) && d.is_admin && <button type="button" className="btn btn-danger" disabled={busy}
+        {canWrite(d, 'edit') && <a href={d.urls.edit} className="btn btn-primary"><i aria-hidden="true" className="fas fa-edit" /> Edit</a>}
+        {canWrite(d, 'delete') && <button type="button" className="btn btn-danger" disabled={busy}
           onClick={() => act(d.urls.delete, {}, 'Delete this application?')}><i aria-hidden="true" className="fas fa-trash" /></button>}
       </>} />
       <Tabs d={d} />
@@ -408,7 +408,7 @@ function ApplicantDetail({ d, notify }) {
         </div>
       </div></div>
 
-      {canWrite(d) && !a.admitted_student_id && (
+      {canWrite(d, 'edit') && !a.admitted_student_id && (
         <div className="card mb-3" style={{ borderColor: 'var(--primary)' }}>
           <div className="card-header"><h3><i aria-hidden="true" className="fas fa-diagram-project" /> Move through pipeline</h3></div>
           <div className="card-body">
@@ -420,7 +420,7 @@ function ApplicantDetail({ d, notify }) {
         </div>
       )}
 
-      {canWrite(d) && !a.admitted_student_id && d.is_admin && (
+      {canWrite(d, 'convert') && !a.admitted_student_id && (
         <div className="card mb-3" style={{ borderColor: 'var(--success)' }}>
           <div className="card-header"><h3><i aria-hidden="true" className="fas fa-user-graduate" /> Admit &amp; convert to student</h3></div>
           <div className="card-body">

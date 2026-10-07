@@ -14,7 +14,7 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
 from sqlalchemy import func
 
 from models import (db, Applicant, AcademicSession, SchoolClass, ClassArmAssignment)
-from utils.access_control import login_required, admin_required, is_admin
+from utils.access_control import login_required, is_admin
 from utils.branch_scope import scope_query, branch_for_new, require_branch_access, viewing_branch_id
 from utils import admissions
 from utils.security import strip_tags
@@ -437,7 +437,7 @@ def set_status(applicant_id):
 
 
 @adm_bp.route('/applicants/<int:applicant_id>/convert', methods=['POST'])
-@admin_required
+@login_required
 def convert(applicant_id):
     a = db.get_or_404(Applicant, applicant_id)
     require_branch_access(a.branch_id)
@@ -456,7 +456,7 @@ def convert(applicant_id):
 
 
 @adm_bp.route('/applicants/<int:applicant_id>/delete', methods=['POST'])
-@admin_required
+@login_required
 def delete_applicant(applicant_id):
     a = db.get_or_404(Applicant, applicant_id)
     require_branch_access(a.branch_id)   # no cross-branch deletion

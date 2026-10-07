@@ -251,6 +251,23 @@ class User(db.Model):
         if grp is not None and grp.is_active is not False:   # None default => active
             base = dict(grp.permission_map)
         overrides = self.own_permissions
+        # An override on a SUB-KEY (e.g. 'students.purge') only has something to
+        # revoke if `base` already has that exact key. A whole-module grant
+        # (just 'students') never does -- popping a key that was never there is
+        # a no-op, so the override silently fails and subsection_level() falls
+        # straight back to the whole-module grant it was meant to carve an
+        # exception out of. Expand that module grant into every one of its own
+        # sub-keys FIRST (each inheriting the module's level) so the override
+        # below has a concrete entry to remove, without changing the net
+        # effect for every other sub-key.
+        if overrides:
+            from utils.access_control import MODULE_SUBSECTIONS
+            for k in overrides:
+                mod, sep, sub = k.partition('.')
+                if sep and mod in base and mod in MODULE_SUBSECTIONS:
+                    lvl = base.pop(mod)
+                    for s in MODULE_SUBSECTIONS[mod]:
+                        base.setdefault(f'{mod}.{s}', lvl)
         for k, lvl in overrides.items():
             if lvl == 'none':
                 base.pop(k, None)

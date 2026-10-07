@@ -1,7 +1,7 @@
 """Phase 2 granularity: the Students and Attendance modules are now sliced into
 sub-sections that can be granted/revoked independently.
 
-Students : roster | manage | bulk | delete | idcards | welfare
+Students : roster | create | edit | bulk | delete | trash | restore | purge | idcards | welfare
 Attendance: mark | reports | interventions | notify
 
 A user granted a single slice can use only that slice; a user granted the whole
@@ -62,12 +62,17 @@ def _a_student(app, sid='GRN001'):
 # --- catalog ---------------------------------------------------------------
 def test_subsections_registered():
     assert set(MODULE_SUBSECTIONS['students']) == {
-        'roster', 'manage', 'bulk', 'delete', 'idcards', 'welfare'}
+        'roster', 'create', 'edit', 'bulk', 'delete', 'trash', 'restore',
+        'purge', 'idcards', 'welfare'}
     assert set(MODULE_SUBSECTIONS['attendance']) == {
         'mark', 'reports', 'interventions', 'notify'}
     # endpoints resolve, including the welfare blueprint spanning students
     assert subsection_for_endpoint('main.view_student') == ('students', 'roster')
-    assert subsection_for_endpoint('main.add_student') == ('students', 'manage')
+    assert subsection_for_endpoint('main.add_student') == ('students', 'create')
+    assert subsection_for_endpoint('main.edit_student') == ('students', 'edit')
+    assert subsection_for_endpoint('main.students_trash') == ('students', 'trash')
+    assert subsection_for_endpoint('main.restore_student') == ('students', 'restore')
+    assert subsection_for_endpoint('main.purge_student') == ('students', 'purge')
     assert subsection_for_endpoint('welfare.add_discipline') == ('students', 'welfare')
     assert subsection_for_endpoint('attendance.save_attendance') == ('attendance', 'mark')
 
@@ -79,23 +84,75 @@ def test_roster_can_view_but_not_manage(app):
     c = _login(app, 'roster_only')
     assert c.get('/students').status_code == 200
     assert c.get(f'/students/{sid}').status_code == 200
-    # add form lives in the 'manage' slice -> blocked
+    # add form lives in the 'create' slice -> blocked
     assert c.get('/students/add', follow_redirects=False).status_code in (302, 303)
 
 
-def test_manage_can_add_but_not_browse(app):
-    _make_user(app, 'manage_only', {'students.manage': 'edit'})
-    c = _login(app, 'manage_only')
+def test_create_can_add_but_not_browse_or_edit(app):
+    sid = _a_student(app, 'GRN004')
+    _make_user(app, 'create_only', {'students.create': 'edit'})
+    c = _login(app, 'create_only')
     assert c.get('/students/add').status_code == 200
     assert c.get('/students', follow_redirects=False).status_code in (302, 303)
+    # 'create' doesn't imply 'edit' -- the edit form is a separate slice
+    assert c.get(f'/students/{sid}/edit', follow_redirects=False).status_code in (302, 303)
+
+
+def test_edit_without_create(app):
+    sid = _a_student(app, 'GRN005')
+    _make_user(app, 'edit_only', {'students.roster': 'edit', 'students.edit': 'edit'})
+    c = _login(app, 'edit_only')
+    assert c.get(f'/students/{sid}/edit').status_code == 200
+    assert c.get('/students/add', follow_redirects=False).status_code in (302, 303)
 
 
 def test_delete_requires_delete_slice(app):
     sid = _a_student(app, 'GRN002')
-    _make_user(app, 'no_delete', {'students.roster': 'edit', 'students.manage': 'edit'})
+    _make_user(app, 'no_delete', {'students.roster': 'edit', 'students.create': 'edit',
+                                  'students.edit': 'edit'})
     c = _login(app, 'no_delete')
     token = _csrf(c)
     resp = c.post(f'/students/{sid}/delete', data={'_csrf_token': token},
+                  follow_redirects=False)
+    assert resp.status_code in (302, 303)
+    with app.app_context():
+        assert Student.query.filter_by(id=sid).first() is not None  # untouched
+
+
+def test_trash_view_without_restore_or_purge(app):
+    sid = _a_student(app, 'GRN006')
+    with app.app_context():
+        Student.query.filter_by(id=sid).update({'is_active': False})
+        db.session.commit()
+    _make_user(app, 'trash_viewer', {'students.trash': 'edit'})
+    c = _login(app, 'trash_viewer')
+    assert c.get('/students/trash').status_code == 200
+    token = _csrf(c)
+    resp = c.post(f'/students/{sid}/restore', data={'_csrf_token': token},
+                  follow_redirects=False)
+    assert resp.status_code in (302, 303)
+    with app.app_context():
+        assert Student.query.filter_by(id=sid).first().is_active is False  # untouched
+
+
+def test_restore_without_purge(app):
+    sid = _a_student(app, 'GRN007')
+    with app.app_context():
+        Student.query.filter_by(id=sid).update({'is_active': False})
+        db.session.commit()
+    _make_user(app, 'restorer', {'students.trash': 'edit', 'students.restore': 'edit'})
+    c = _login(app, 'restorer')
+    token = _csrf(c)
+    resp = c.post(f'/students/{sid}/restore', data={'_csrf_token': token},
+                  follow_redirects=False)
+    assert resp.status_code in (302, 303, 200)
+    # restore granted -> succeeded
+    with app.app_context():
+        assert Student.query.filter_by(id=sid).first().is_active is True
+        Student.query.filter_by(id=sid).update({'is_active': False})
+        db.session.commit()
+    # purge not granted -> blocked
+    resp = c.post(f'/students/{sid}/purge', data={'_csrf_token': token},
                   follow_redirects=False)
     assert resp.status_code in (302, 303)
     with app.app_context():

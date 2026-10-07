@@ -1251,9 +1251,11 @@ def apply_stream_subjects():
 
 
 @main_bp.route('/students/bulk-delete', methods=['POST'])
-@admin_required
+@login_required
 def bulk_delete_students():
-    """Soft-delete several students at once (sends them to the trash)."""
+    """Soft-delete several students at once (sends them to the trash). Scoped
+    like a single delete_student (branch + form-teacher) now that this is
+    reachable by anyone granted 'students.delete', not just full admins."""
     student_ids = request.form.getlist('student_ids')
     if not student_ids:
         return jsonify({'error': 'No students selected'}), 400
@@ -1261,6 +1263,7 @@ def bulk_delete_students():
         ids = [int(i) for i in student_ids]
     except (TypeError, ValueError):
         return jsonify({'error': 'Invalid student ids'}), 400
+    ids = _manageable_student_ids(ids)
 
     deleted = Student.query.filter(
         Student.id.in_(ids), Student.is_active == True

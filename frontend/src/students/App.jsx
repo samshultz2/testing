@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { apiGet } from '../lib/api';
 import { postForm } from '../lib/forms';
+import { canWrite } from '../lib/perms';
 import ExportModal from './ExportModal';
 import ImportModal from './ImportModal';
 import UpdateImportModal from './UpdateImportModal';
@@ -176,7 +177,9 @@ export default function App({ initial }) {
   const d = data || {};
   const students = d.students || [];
   const filters = d.filters || {};
-  const canManage = !!d.can_manage;
+  const canAdd = canWrite(d, 'create');
+  const canEditStudent = canWrite(d, 'edit');
+  const canDeleteStudent = canWrite(d, 'delete');
   const canAdmin = !!d.can_admin;   // admin-only bulk tools (subject / delete)
   const canBulk = !!d.can_bulk;     // mass-assign gender/stream (admins + teachers, scoped)
   const canSss3 = !!d.can_sss3;     // SSS3-only WAEC subject filter/tools
@@ -267,17 +270,19 @@ export default function App({ initial }) {
   };
 
   // Row-level ⋯ menu (graduate / delete) — shared by the table and the cards.
-  const renderRowMenu = (s) => canManage && (
+  // Graduate-toggle rides on 'edit' (it changes the student's own record);
+  // Delete is its own, independently grantable permission.
+  const renderRowMenu = (s) => (canEditStudent || canDeleteStudent) && (
     <div className="stu-menu-wrap" style={{ position: 'relative' }}>
       <button type="button" className="stu-act stu-act-caret" aria-haspopup="true" aria-expanded={menuFor === s.id}
               aria-label="More actions" onClick={(e) => { e.stopPropagation(); setMenuFor(menuFor === s.id ? null : s.id); }}>
         <i aria-hidden="true" className="fas fa-chevron-down" /></button>
       {menuFor === s.id && (
         <div className="row-menu" role="menu">
-          <button type="button" role="menuitem" onClick={async () => { setMenuFor(null); if (await confirm(`${s.is_graduated ? 'Undo graduation for' : 'Mark as graduate:'} ${s.name}?`)) runAction(s.graduate_url, {}, 'Updated graduation status.'); }}>
-            <i aria-hidden="true" className={'fas ' + (s.is_graduated ? 'fa-rotate-left' : 'fa-user-graduate')} /> {s.is_graduated ? 'Undo graduate' : 'Mark as graduate'}</button>
-          <button type="button" role="menuitem" className="danger" onClick={async () => { setMenuFor(null); if (await confirm({ title: 'Delete student', message: `Delete ${s.name}?`, confirmText: 'Delete', tone: 'danger' })) runAction(s.delete_url, {}, 'Student deleted.'); }}>
-            <i aria-hidden="true" className="fas fa-trash" /> Delete</button>
+          {canEditStudent && <button type="button" role="menuitem" onClick={async () => { setMenuFor(null); if (await confirm(`${s.is_graduated ? 'Undo graduation for' : 'Mark as graduate:'} ${s.name}?`)) runAction(s.graduate_url, {}, 'Updated graduation status.'); }}>
+            <i aria-hidden="true" className={'fas ' + (s.is_graduated ? 'fa-rotate-left' : 'fa-user-graduate')} /> {s.is_graduated ? 'Undo graduate' : 'Mark as graduate'}</button>}
+          {canDeleteStudent && <button type="button" role="menuitem" className="danger" onClick={async () => { setMenuFor(null); if (await confirm({ title: 'Delete student', message: `Delete ${s.name}?`, confirmText: 'Delete', tone: 'danger' })) runAction(s.delete_url, {}, 'Student deleted.'); }}>
+            <i aria-hidden="true" className="fas fa-trash" /> Delete</button>}
         </div>
       )}
     </div>
@@ -285,7 +290,7 @@ export default function App({ initial }) {
   const renderActions = (s) => (
     <>
       <a href={s.url} className="stu-act stu-act-view"><i aria-hidden="true" className="fas fa-eye" /> View</a>
-      {canManage && <a href={s.edit_url} className="stu-act"><i aria-hidden="true" className="fas fa-pen" /> Edit</a>}
+      {canEditStudent && <a href={s.edit_url} className="stu-act"><i aria-hidden="true" className="fas fa-pen" /> Edit</a>}
       {renderRowMenu(s)}
     </>
   );
@@ -295,8 +300,8 @@ export default function App({ initial }) {
       <div className="page-header">
         <div><h1><i aria-hidden="true" className="fas fa-user-graduate" /> Students</h1></div>
         <div className="page-header-actions stu-toolbar">
-          {d.can_add && <a href={d.add_url} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Student</a>}
-          {d.can_add && <button type="button" className="btn btn-outline" onClick={() => setShowImport(true)}><i aria-hidden="true" className="fas fa-paste" /> Import (paste)</button>}
+          {canAdd && <a href={d.add_url} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Student</a>}
+          {canAdd && <button type="button" className="btn btn-outline" onClick={() => setShowImport(true)}><i aria-hidden="true" className="fas fa-paste" /> Import (paste)</button>}
           {d.update_import_url && <button type="button" className="btn btn-outline" onClick={() => setShowUpdateImport(true)}><i aria-hidden="true" className="fas fa-pen-to-square" /> Update (paste)</button>}
           {d.import_photos_url && <button type="button" className="btn btn-outline" onClick={() => setShowImportPhotos(true)}><i aria-hidden="true" className="fas fa-images" /> Import photos</button>}
           {canAdmin && <button type="button" className="btn btn-outline btn-sm" title="Fill WAEC subjects from each student's stream"
@@ -534,7 +539,7 @@ export default function App({ initial }) {
       ) : students.length === 0 ? (
         <Empty icon="fa-users" title="No students found">
           <p>No students match your filters yet.</p>
-          {d.can_add && (
+          {canAdd && (
             <div className="empty-state-actions">
               <a href={d.add_url} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add student</a>
               {d.import_url && <button type="button" className="btn btn-light" onClick={() => setShowImport(true)}><i aria-hidden="true" className="fas fa-paste" /> Import</button>}

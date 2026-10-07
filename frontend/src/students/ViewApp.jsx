@@ -3,6 +3,7 @@ import { apiGet } from '../lib/api';
 import { postForm } from '../lib/forms';
 import { confirm } from '../components/ui';
 import { rememberViewed } from '../lib/studprefs';
+import { canWrite } from '../lib/perms';
 
 function Info({ label, children }) {
   return (
@@ -156,7 +157,7 @@ export default function ViewApp({ initial }) {
   const d = data || {};
   const s = d.student || {};
   const urls = d.urls || {};
-  const canManage = !!d.can_manage;
+  const canEditStudent = canWrite(d, 'edit');
   const initials = (s.full_name || '?').split(' ').filter(Boolean).slice(0, 2)
     .map((w) => w[0]).join('').toUpperCase() || '?';
 
@@ -207,7 +208,7 @@ export default function ViewApp({ initial }) {
           </div>
         </div>
         <div className="sp-actions">
-          {canManage && <button type="button" className={'sp-btn ' + (s.is_graduated ? 'sp-btn-warning' : 'sp-btn-success')} disabled={busy}
+          {canEditStudent && <button type="button" className={'sp-btn ' + (s.is_graduated ? 'sp-btn-warning' : 'sp-btn-success')} disabled={busy}
             onClick={async () => { if (await confirm(`${s.is_graduated ? 'Undo graduation for' : 'Mark as graduate:'} ${s.full_name}?`))
               run(urls.graduate, {}, 'Updated graduation status.'); }}>
             <i aria-hidden="true" className={'fas ' + (s.is_graduated ? 'fa-rotate-left' : 'fa-user-graduate')} /> {s.is_graduated ? 'Undo' : 'Graduate'}
@@ -216,7 +217,7 @@ export default function ViewApp({ initial }) {
           <a href={urls.predictions} className="sp-btn sp-btn-info"><i aria-hidden="true" className="fas fa-chart-line" /> Predictions</a>
           <a href={urls.report_card} className="sp-btn sp-btn-success"><i aria-hidden="true" className="fas fa-file-invoice" /> Report Card</a>
           {urls.id_card && <a href={urls.id_card} className="sp-btn sp-btn-info"><i aria-hidden="true" className="fas fa-id-card" /> ID Card</a>}
-          {canManage && <a href={urls.edit} className="sp-btn sp-btn-primary"><i aria-hidden="true" className="fas fa-pen" /> Edit Profile</a>}
+          {canEditStudent && <a href={urls.edit} className="sp-btn sp-btn-primary"><i aria-hidden="true" className="fas fa-pen" /> Edit Profile</a>}
           <a href={urls.list} className="sp-btn sp-btn-back"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</a>
         </div>
       </div>
@@ -231,7 +232,7 @@ export default function ViewApp({ initial }) {
 
       <div className="profile-grid">
       <Section icon="fa-user" title="Personal Information"
-               action={canManage ? <a href={urls.edit} className="sp-btn sp-btn-sm"><i aria-hidden="true" className="fas fa-pen" /> Edit</a> : null}>
+               action={canEditStudent ? <a href={urls.edit} className="sp-btn sp-btn-sm"><i aria-hidden="true" className="fas fa-pen" /> Edit</a> : null}>
           <div className="info-grid">
             <Info label="Full Name">{s.full_name}</Info>
             <Info label="Gender"><span className={'badge ' + (s.gender === 'Male' ? 'badge-info' : 'badge-warning')}>{s.gender}</span></Info>
