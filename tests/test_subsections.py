@@ -424,3 +424,40 @@ def test_predictions_view_without_config(app):
     c = _login(app, 'pred_view')
     assert c.get('/results/predictions').status_code == 200
     assert c.get('/results/predictions/waec-model', follow_redirects=False).status_code in (302, 303)
+
+
+# --- external_exams analytics partition (Phase 3) ---------------------------
+def test_analytics_view_without_export_or_recompute(app):
+    _make(app, 'analytics_view_only', {'external_exams.analytics_view': 'edit'})
+    c = _login(app, 'analytics_view_only')
+    assert c.get('/results/analytics').status_code == 200
+    assert c.get('/results/waec/broadsheet').status_code == 200
+    # 'analytics_export'/'analytics_recompute' are separate slices -> blocked
+    assert c.get('/results/analytics/export', follow_redirects=False).status_code in (302, 303)
+    token = _ptoken(c)
+    r = c.post('/results/analytics/recompute', data={'_csrf_token': token}, follow_redirects=False)
+    assert r.status_code in (302, 303)
+
+
+def test_grade_distribution_create_without_delete(app):
+    from models import Branch, BranchGradeDistribution
+    with app.app_context():
+        bid = Branch.get_default().id
+        row = BranchGradeDistribution.query.filter_by(
+            branch_id=bid, exam='waec', exam_year=2024, subject='English').first()
+        if not row:
+            row = BranchGradeDistribution(branch_id=bid, exam='waec', exam_year=2024,
+                                          subject='English', candidates=10, band_counts='{}')
+            db.session.add(row); db.session.commit()
+    _make(app, 'gd_create', {'external_exams.grade_distribution_create': 'edit'})
+    c = _login(app, 'gd_create')
+    assert c.get('/results/subject-branch-breakdown/import?exam=waec').status_code == 200
+    token = _ptoken(c)
+    r = c.post('/results/subject-branch-breakdown/import/delete',
+               data={'exam': 'waec', 'branch_id': str(bid), 'exam_year': '2024',
+                     '_csrf_token': token}, follow_redirects=False)
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        # 'grade_distribution_delete' not granted -> row untouched
+        assert BranchGradeDistribution.query.filter_by(
+            branch_id=bid, exam='waec', exam_year=2024, subject='English').first() is not None

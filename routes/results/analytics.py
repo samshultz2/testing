@@ -991,7 +991,7 @@ def api_at_risk():
 
 
 @results_bp.route('/analytics/recompute', methods=['POST'])
-@admin_required
+@login_required
 def recompute_analytics():
     """Backfill/refresh persisted analytics for all in-scope students (and the
     WAEC↔JAMB correlation for recent years). Use after first deploy or a bulk

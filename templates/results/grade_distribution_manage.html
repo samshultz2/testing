@@ -17,7 +17,9 @@
         <p class="text-muted text-sm">Every branch's own {{ band_label|lower }} distribution sheet that's been imported — stored in <code>branch_grade_distributions</code>, separate from individual WAEC/JAMB results.</p>
     </div>
     <div class="page-header-actions">
+        {% if can_write_sub('external_exams', 'grade_distribution_create') %}
         <a href="{{ url_for('results.grade_distribution_import', exam=exam) }}" class="btn btn-primary btn-sm"><i class="fas fa-file-import"></i> Import New</a>
+        {% endif %}
         <a href="{{ url_for('results.subject_branch_breakdown', exam=exam) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back to Grade Breakdown</a>
     </div>
 </div>
@@ -48,7 +50,10 @@
                 {% set edit_args = {'exam': exam, 'branch_id': b.branch_id} %}
                 {% if b.exam_year %}{% set _ = edit_args.update({'exam_year': b.exam_year}) %}
                 {% else %}{% set _ = edit_args.update({'mock_session_id': b.mock_session_id, 'mock_exam_number': b.mock_exam_number}) %}{% endif %}
+                {% if can_write_sub('external_exams', 'grade_distribution_create') %}
                 <a href="{{ url_for('results.grade_distribution_edit', **edit_args) }}" class="btn btn-sm btn-secondary" title="Edit"><i class="fas fa-pen"></i></a>
+                {% endif %}
+                {% if can_write_sub('external_exams', 'grade_distribution_delete') %}
                 <form method="POST" action="{{ url_for('results.grade_distribution_delete') }}"
                       data-confirm="Delete the imported report for {{ b.branch_name }} ({{ b.period_label }})? This cannot be undone.">
                     <input type="hidden" name="exam" value="{{ exam }}">
@@ -60,6 +65,7 @@
                     {% endif %}
                     <button type="submit" class="btn btn-sm btn-danger" title="Delete"><i class="fas fa-trash"></i></button>
                 </form>
+                {% endif %}
             </div>
         </td>
     </tr>
@@ -69,7 +75,10 @@
 </div>
 {% else %}
 <div class="empty-state"><i class="fas fa-file-import"></i><h3>No imported reports yet</h3><p>Branches that don't enter individual results can have their summary sheet imported here.</p>
-<a href="{{ url_for('results.grade_distribution_import', exam=exam) }}" class="btn btn-primary mt-2">Import a Report</a></div>
+{% if can_write_sub('external_exams', 'grade_distribution_create') %}
+<a href="{{ url_for('results.grade_distribution_import', exam=exam) }}" class="btn btn-primary mt-2">Import a Report</a>
+{% endif %}
+</div>
 {% endif %}
 </div></div>
 {% endblock %}

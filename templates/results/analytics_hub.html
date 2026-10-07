@@ -93,10 +93,12 @@ a.exec:hover .go{opacity:1}
         <a href="{{ url_for('results.aspiration_hub') }}" class="btn btn-secondary btn-sm" title="University aspirations, eligibility & admission funnel"><i class="fas fa-graduation-cap"></i> Aspirations</a>
         <a href="{{ url_for('results.readiness_funnel') }}" class="btn btn-secondary btn-sm" title="Cohort admission-readiness funnel"><i class="fas fa-graduation-cap"></i> Readiness</a>
         <a href="{{ url_for('results.cutoffs_list') }}" class="btn btn-secondary btn-sm" title="Manage admission cut-offs"><i class="fas fa-sliders"></i> Cut-offs</a>
+        {% if can_write_sub('external_exams', 'analytics_recompute') %}
         <form method="POST" action="{{ recompute_url }}" class="d-inline" title="Recompute risk &amp; JAMB predictions for all students in view">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-secondary btn-sm"><i class="fas fa-sync"></i> Recompute</button>
         </form>
+        {% endif %}
         <a href="{{ url_for('results.tasks') }}" class="btn btn-secondary btn-sm" title="Background task status"><i class="fas fa-list-check"></i> Tasks</a>
         {% if analytics_refreshed_at %}
         <span class="text-muted text-sm" title="Analytics auto-refresh once a day in the background"><i class="fas fa-clock"></i> Refreshed {{ analytics_refreshed_at[:16]|replace('T', ' ') }}</span>
