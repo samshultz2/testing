@@ -922,7 +922,7 @@ def cancel_schedule(message_id):
 
 
 @comms_bp.route('/process-scheduled', methods=['POST'])
-@admin_required
+@login_required
 def process_scheduled():
     n = comms.dispatch_due_scheduled()
     return _ok(f'Processed {n} due scheduled campaign(s).' if n else 'No campaigns were due.',
@@ -1294,7 +1294,7 @@ def export_recipients(message_id):
 
 
 @comms_bp.route('/messages/<int:message_id>/delete', methods=['POST'])
-@admin_required
+@login_required
 def delete_message(message_id):
     msg = db.get_or_404(Message, message_id)
     require_branch_access(msg.branch_id)
@@ -1391,7 +1391,7 @@ def save_automations():
 
 
 @comms_bp.route('/settings/save', methods=['POST'])
-@admin_required
+@login_required
 def save_settings():
     from utils import sms_gateway
     sms_gateway.save_config(request.form)
@@ -1403,7 +1403,7 @@ def save_settings():
 
 
 @comms_bp.route('/settings/test', methods=['POST'])
-@admin_required
+@login_required
 def test_sms():
     from utils import sms_gateway
     phone = (request.form.get('phone') or '').strip()

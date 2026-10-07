@@ -76,6 +76,10 @@ _ALWAYS_ALLOWED_ENDPOINTS = {
     # Self document download: requires 'hr.self_documents' and only serves a
     # file that belongs to the caller's own staff record (checked in-view).
     'hr.my_document',
+    # Acknowledging an announcement: shown to every logged-in user on the main
+    # dashboard regardless of Communication-module access; only ever inserts
+    # one row scoped to the caller's own id (unique-constrained, idempotent).
+    'comms.ack_announcement',
 }
 
 # Default module set when a non-admin user has no explicit allowed_modules.
@@ -271,10 +275,26 @@ MODULE_SUBSECTIONS = {
         'mock_jamb_bank_analytics_view': 'View Mock JAMB Bank Analytics',
     },
     'communication': {
-        'announcements': 'Announcements',
-        'templates': 'Message Templates',
-        'messages': 'Messages & Compose',
-        'settings': 'SMS Settings',
+        'announcements_view': 'View Announcements',
+        'announcements_create': 'Post Announcements',
+        'announcements_edit': 'Edit Announcements',
+        'announcements_delete': 'Delete Announcements',
+        'templates_view': 'View Message Templates',
+        'templates_create': 'Create Message Templates',
+        'templates_edit': 'Edit Message Templates',
+        'templates_delete': 'Delete Message Templates',
+        'contacts_view': 'View Parent Contacts',
+        'messages_view': 'View Messages & Campaigns',
+        'messages_create': 'Compose Messages',
+        'messages_edit': 'Edit / Manage Sent Messages',
+        'messages_export': 'Export Message Recipients',
+        'messages_delete': 'Delete Messages',
+        'reports_view': 'View Communication Reports',
+        'reports_export': 'Export Communication Reports',
+        'inbox_view': 'View Staff Inbox',
+        'inbox_send': 'Send Staff Inbox Messages',
+        'settings_view': 'View SMS Settings',
+        'settings_edit': 'Edit SMS Settings',
     },
     'results': {
         'subjects': 'Subjects & Class Subjects',
@@ -641,13 +661,28 @@ _SUBSECTION_ENDPOINTS = {
         'mock_jamb_bank_analytics_view': {'mock_jamb.bank_analytics'},
     },
     'communication': {
-        'announcements': {'announcements', 'add_announcement', 'edit_announcement',
-                          'delete_announcement'},
-        'templates': {'templates_list', 'add_template', 'edit_template', 'delete_template'},
-        'messages': {'compose', 'compose_preview', 'students_search', 'cancel_schedule',
-                     'process_scheduled', 'messages_list', 'message_detail', 'mark_sent',
-                     'mark_all_sent', 'export_recipients', 'delete_message', 'send_gateway'},
-        'settings': {'settings', 'save_settings', 'test_sms'},
+        'announcements_view': {'announcements'},
+        'announcements_create': {'add_announcement'},
+        'announcements_edit': {'edit_announcement'},
+        'announcements_delete': {'delete_announcement'},
+        'templates_view': {'templates_list'},
+        'templates_create': {'add_template', 'duplicate_template'},
+        'templates_edit': {'edit_template', 'toggle_favorite'},
+        'templates_delete': {'delete_template'},
+        'contacts_view': {'contacts'},
+        'messages_view': {'messages_list', 'message_detail'},
+        'messages_create': {'compose', 'compose_preview', 'students_search',
+                            'save_group', 'delete_group'},
+        'messages_edit': {'cancel_schedule', 'mark_sent', 'mark_all_sent',
+                          'send_gateway', 'process_scheduled'},
+        'messages_export': {'export_recipients'},
+        'messages_delete': {'delete_message'},
+        'reports_view': {'reports'},
+        'reports_export': {'reports_export'},
+        'inbox_view': {'inbox', 'inbox_users', 'inbox_thread', 'inbox_unread'},
+        'inbox_send': {'inbox_start', 'inbox_send'},
+        'settings_view': {'settings'},
+        'settings_edit': {'save_settings', 'test_sms'},
     },
     'sales': {
         'pos': {'new_sale', 'api_students', 'check_promo', 'receipt'},

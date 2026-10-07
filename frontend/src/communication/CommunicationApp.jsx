@@ -79,9 +79,11 @@ function Dashboard({ d }) {
 
   const s = d.stats || {};
   const quick = [
-    ...(canWrite(d) ? [
+    ...(canWrite(d, 'messages_create') ? [
       [d.urls.compose_sms || d.nav.compose, 'fa-comment-sms', 'Send SMS', 'btn-primary'],
       [d.urls.compose_email || d.nav.compose, 'fa-envelope', 'Send Email', 'btn-secondary'],
+    ] : []),
+    ...(canWrite(d, 'announcements_create') ? [
       [d.nav.announcements, 'fa-bullhorn', 'Announcement', 'btn-secondary'],
     ] : []),
     [d.nav.templates, 'fa-file-lines', 'Templates', 'btn-secondary'],
@@ -101,7 +103,7 @@ function Dashboard({ d }) {
   return (
     <>
       <div className="page-header"><h1>Communication Center</h1>
-        <div className="page-header-actions">{canWrite(d) && <a href={d.nav.compose} className="btn btn-primary"><i aria-hidden="true" className="fas fa-paper-plane" /> New Message</a>}</div>
+        <div className="page-header-actions">{canWrite(d, 'messages_create') && <a href={d.nav.compose} className="btn btn-primary"><i aria-hidden="true" className="fas fa-paper-plane" /> New Message</a>}</div>
       </div>
       <Tabs d={d} />
       <div className="cm-quick d-flex gap-2 flex-wrap mb-3">{quick.map(([href, ic, label, cls]) => (
@@ -141,7 +143,7 @@ function Dashboard({ d }) {
                     <td data-label="Status"><span className={statusBadge(m.status)}>{m.status}</span></td>
                     <td data-label="Sent" className="text-right">{m.sent_count}/{m.recipient_count}</td></tr>))}
                 </tbody></table></div>
-            ) : <Empty icon="fa-paper-plane" title="No campaigns yet">{canWrite(d) && <a href={d.nav.compose} className="btn btn-primary btn-sm mt-2">Send your first message</a>}</Empty>}
+            ) : <Empty icon="fa-paper-plane" title="No campaigns yet">{canWrite(d, 'messages_create') && <a href={d.nav.compose} className="btn btn-primary btn-sm mt-2">Send your first message</a>}</Empty>}
           </div></div>
       </div>
 
@@ -183,6 +185,7 @@ function Announcements({ d, notify }) {
     <>
       <div className="page-header"><h1>Announcements</h1></div>
       <Tabs d={d} />
+      {canWrite(d, 'announcements_create') && (
       <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-plus" /> Post an announcement</h3></div>
         <div className="card-body"><form onSubmit={submit}>
           <div className="form-group"><label className="form-label">Title <span className="required">*</span></label>
@@ -205,6 +208,7 @@ function Announcements({ d, notify }) {
             <AttachField url={d.upload_url} value={att} onChange={setAtt} notify={notify} /></div>
           <button className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-bullhorn" /> Post</button>
         </form></div></div>
+      )}
 
       <div className="card"><div className="card-header"><h3>{d.items.length} announcement(s)</h3></div>
         <div className="card-body">
@@ -216,7 +220,7 @@ function Announcements({ d, notify }) {
                   <span className="badge badge-secondary">{a.audience}</span>{' '}
                   {a.needs_ack && <span className="badge badge-info" title="Requires acknowledgement"><i aria-hidden="true" className="fas fa-circle-check" /> {a.ack_count} ack{a.ack_count === 1 ? '' : 's'}</span>}{' '}
                   {!a.is_active && <span className="badge badge-secondary">Inactive</span>}</div>
-                <button className="btn btn-danger btn-sm" onClick={() => del(a.delete_url)}><i aria-hidden="true" className="fas fa-trash" /></button>
+                {canWrite(d, 'announcements_delete') && <button className="btn btn-danger btn-sm" onClick={() => del(a.delete_url)}><i aria-hidden="true" className="fas fa-trash" /></button>}
               </div>
               {a.body && <div className="text-secondary text-sm mt-1">{a.body}</div>}
               {a.attachment && <div className="mt-1"><a href={a.attachment.url} className="attach-link" data-native><i aria-hidden="true" className="fas fa-paperclip" /> {a.attachment.name}{a.attachment.size ? ` · ${a.attachment.size}` : ''}</a></div>}
@@ -267,6 +271,7 @@ function Templates({ d, notify }) {
     <>
       <div className="page-header"><h1>Message Templates</h1></div>
       <Tabs d={d} />
+      {canWrite(d, 'templates_create') && (
       <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-plus" /> New Template</h3></div>
         <div className="card-body"><form onSubmit={add}>
           <div className="form-row">
@@ -281,6 +286,7 @@ function Templates({ d, notify }) {
             <textarea className="form-control" rows="4" required placeholder="Dear {parent}, …" value={f.body} onChange={(e) => set('body', e.target.value)} /></div>
           <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save Template</button>
         </form></div></div>
+      )}
 
       <div className="card"><div className="card-header d-flex justify-between align-center flex-wrap gap-2">
         <h3>Templates ({d.templates.length})</h3>
@@ -295,14 +301,14 @@ function Templates({ d, notify }) {
             <div className="tpl-card" key={t.id}>
               <div className="d-flex justify-between align-center flex-wrap gap-1">
                 <div>
-                  <button className="tpl-star" title={t.is_favorite ? 'Unfavourite' : 'Favourite'} onClick={() => act(t.favorite_url, 'Could not update.')}>
-                    <i aria-hidden="true" className={(t.is_favorite ? 'fas' : 'far') + ' fa-star' + (t.is_favorite ? ' on' : '')} /></button>
+                  {canWrite(d, 'templates_edit') && <button className="tpl-star" title={t.is_favorite ? 'Unfavourite' : 'Favourite'} onClick={() => act(t.favorite_url, 'Could not update.')}>
+                    <i aria-hidden="true" className={(t.is_favorite ? 'fas' : 'far') + ' fa-star' + (t.is_favorite ? ' on' : '')} /></button>}
                   {' '}<strong>{t.name}</strong> {t.category && <span className="badge badge-secondary">{t.category}</span>} {!t.is_active && <span className="badge badge-warning">Inactive</span>}</div>
                 <div className="d-flex gap-1">
                   <a href={t.use_url} className="btn btn-primary btn-sm" title="Use"><i aria-hidden="true" className="fas fa-paper-plane" /></a>
-                  <button className="btn btn-secondary btn-sm" title="Edit" onClick={() => setEditing(editing === t.id ? null : t.id)}><i aria-hidden="true" className="fas fa-edit" /></button>
-                  <button className="btn btn-secondary btn-sm" title="Duplicate" onClick={() => act(t.duplicate_url, 'Could not duplicate.')}><i aria-hidden="true" className="fas fa-copy" /></button>
-                  <button className="btn btn-danger btn-sm" onClick={() => del(t.delete_url, t.name)}><i aria-hidden="true" className="fas fa-trash" /></button>
+                  {canWrite(d, 'templates_edit') && <button className="btn btn-secondary btn-sm" title="Edit" onClick={() => setEditing(editing === t.id ? null : t.id)}><i aria-hidden="true" className="fas fa-edit" /></button>}
+                  {canWrite(d, 'templates_create') && <button className="btn btn-secondary btn-sm" title="Duplicate" onClick={() => act(t.duplicate_url, 'Could not duplicate.')}><i aria-hidden="true" className="fas fa-copy" /></button>}
+                  {canWrite(d, 'templates_delete') && <button className="btn btn-danger btn-sm" onClick={() => del(t.delete_url, t.name)}><i aria-hidden="true" className="fas fa-trash" /></button>}
                 </div>
               </div>
               <div className="body">{t.body}</div>
@@ -422,8 +428,8 @@ function Messages({ d, notify }) {
       <div className="page-header"><h1>Communication History</h1>
         <div className="page-header-actions">
           <a href={d.urls.reports} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-chart-line" /> Reports</a>
-          {d.is_admin && <button className="btn btn-secondary" title="Send any scheduled campaigns that are now due" onClick={processDue}><i aria-hidden="true" className="fas fa-clock-rotate-left" /> Process due</button>}
-          {canWrite(d) && <a href={d.urls.compose} className="btn btn-primary"><i aria-hidden="true" className="fas fa-paper-plane" /> New Message</a>}
+          {canWrite(d, 'messages_edit') && <button className="btn btn-secondary" title="Send any scheduled campaigns that are now due" onClick={processDue}><i aria-hidden="true" className="fas fa-clock-rotate-left" /> Process due</button>}
+          {canWrite(d, 'messages_create') && <a href={d.urls.compose} className="btn btn-primary"><i aria-hidden="true" className="fas fa-paper-plane" /> New Message</a>}
         </div>
       </div>
       <Tabs d={d} />
@@ -496,8 +502,10 @@ function Reports({ d }) {
     <>
       <div className="page-header"><h1>Communication Reports</h1>
         <div className="page-header-actions">
+          {canWrite(d, 'reports_export') && <>
           <a href={exp('csv')} className="btn btn-secondary" data-native><i aria-hidden="true" className="fas fa-file-csv" /> CSV</a>
           <a href={exp('xlsx')} className="btn btn-secondary" data-native><i aria-hidden="true" className="fas fa-file-excel" /> Excel</a>
+          </>}
         </div>
       </div>
       <Tabs d={d} />
@@ -563,8 +571,8 @@ function MessageDetail({ d, notify }) {
     <>
       <div className="page-header"><h1>{m.title}</h1>
         <div className="page-header-actions">
-          <a href={d.urls.export} className="btn btn-secondary" data-native download><i aria-hidden="true" className="fas fa-file-csv" /> Export CSV</a>
-          {canWrite(d) && <a href={d.urls.compose} className="btn btn-primary"><i aria-hidden="true" className="fas fa-paper-plane" /> New</a>}
+          {canWrite(d, 'messages_export') && <a href={d.urls.export} className="btn btn-secondary" data-native download><i aria-hidden="true" className="fas fa-file-csv" /> Export CSV</a>}
+          {canWrite(d, 'messages_create') && <a href={d.urls.compose} className="btn btn-primary"><i aria-hidden="true" className="fas fa-paper-plane" /> New</a>}
         </div>
       </div>
       <Tabs d={d} />
@@ -578,11 +586,11 @@ function MessageDetail({ d, notify }) {
         <div className="msg-body">{m.body}</div>
         {m.attachment && <div className="mt-2"><a href={m.attachment.url} className="attach-link" data-native><i aria-hidden="true" className="fas fa-paperclip" /> {m.attachment.name}{m.attachment.size ? ` · ${m.attachment.size}` : ''}</a></div>}
         <div className="d-flex gap-2 flex-wrap mt-3 align-center">
-          {m.status === 'Scheduled' && <button className="btn btn-secondary btn-sm" onClick={() => action(d.urls.cancel_schedule, 'Cancel the scheduled send?')}><i aria-hidden="true" className="fas fa-clock" /> Cancel schedule</button>}
-          {d.gateway_ready && d.pending_count > 0 && <button className="btn btn-primary btn-sm" onClick={() => action(d.urls.send_gateway, `Send ${d.pending_count} pending message(s) now via ${d.gateway_label}?`)}><i aria-hidden="true" className="fas fa-tower-broadcast" /> Send all via {d.gateway_label} ({d.pending_count})</button>}
+          {canWrite(d, 'messages_edit') && m.status === 'Scheduled' && <button className="btn btn-secondary btn-sm" onClick={() => action(d.urls.cancel_schedule, 'Cancel the scheduled send?')}><i aria-hidden="true" className="fas fa-clock" /> Cancel schedule</button>}
+          {canWrite(d, 'messages_edit') && d.gateway_ready && d.pending_count > 0 && <button className="btn btn-primary btn-sm" onClick={() => action(d.urls.send_gateway, `Send ${d.pending_count} pending message(s) now via ${d.gateway_label}?`)}><i aria-hidden="true" className="fas fa-tower-broadcast" /> Send all via {d.gateway_label} ({d.pending_count})</button>}
           <button className="btn btn-secondary btn-sm" onClick={copyNumbers}><i aria-hidden="true" className={'fas ' + (copied ? 'fa-check' : 'fa-copy')} /> {copied ? 'Copied!' : 'Copy all numbers'}</button>
-          <button className="btn btn-secondary btn-sm" onClick={() => action(d.urls.mark_all_sent, `Mark all ${m.recipient_count} recipients as sent?`)}><i aria-hidden="true" className="fas fa-check-double" /> Mark all sent</button>
-          {d.is_admin && <button className="btn btn-danger btn-sm" style={{ marginLeft: 'auto' }} onClick={() => action(d.urls.delete, 'Delete this campaign and its log?', true)}><i aria-hidden="true" className="fas fa-trash" /> Delete</button>}
+          {canWrite(d, 'messages_edit') && <button className="btn btn-secondary btn-sm" onClick={() => action(d.urls.mark_all_sent, `Mark all ${m.recipient_count} recipients as sent?`)}><i aria-hidden="true" className="fas fa-check-double" /> Mark all sent</button>}
+          {canWrite(d, 'messages_delete') && <button className="btn btn-danger btn-sm" style={{ marginLeft: 'auto' }} onClick={() => action(d.urls.delete, 'Delete this campaign and its log?', true)}><i aria-hidden="true" className="fas fa-trash" /> Delete</button>}
         </div>
       </div></div>
 
@@ -599,10 +607,10 @@ function MessageDetail({ d, notify }) {
                   {r.read && <span className="badge badge-success" style={{ marginLeft: '.3rem' }} title="Opened"><i aria-hidden="true" className="fas fa-book-open" /> Read</span>}
                   {r.status === 'Failed' && r.error && <div className="text-danger text-sm" title={r.error}>{r.error.slice(0, 40)}</div>}</td>
                 <td className="actions"><div className="act-links">
-                  <a className={'btn btn-sm ' + (m.channel === 'SMS' ? 'btn-secondary' : 'wa-btn')} href={linkFor(r)} target="_blank" rel="noopener" title={m.channel === 'SMS' ? 'Open SMS' : 'Open WhatsApp'} onClick={() => markSent(r)}>
+                  <a className={'btn btn-sm ' + (m.channel === 'SMS' ? 'btn-secondary' : 'wa-btn')} href={linkFor(r)} target="_blank" rel="noopener" title={m.channel === 'SMS' ? 'Open SMS' : 'Open WhatsApp'} onClick={() => canWrite(d, 'messages_edit') && markSent(r)}>
                     <i aria-hidden="true" className={'fa' + (m.channel === 'SMS' ? 's fa-comment-sms' : 'b fa-whatsapp')} /></a>
                   <a className="btn btn-secondary btn-sm" href={'tel:' + r.phone} title="Call"><i aria-hidden="true" className="fas fa-phone" /></a>
-                  {r.status !== 'Sent' && <button className="btn btn-secondary btn-sm" title="Mark sent" onClick={() => markSent(r)}><i aria-hidden="true" className="fas fa-check" /></button>}
+                  {canWrite(d, 'messages_edit') && r.status !== 'Sent' && <button className="btn btn-secondary btn-sm" title="Mark sent" onClick={() => markSent(r)}><i aria-hidden="true" className="fas fa-check" /></button>}
                 </div></td>
               </tr>))}
             </tbody></table></div>
@@ -651,9 +659,9 @@ function Settings({ d, notify }) {
 
       <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-gear" /> Provider Configuration</h3></div>
         <div className="card-body">
-          {!d.is_admin && <p className="text-muted text-sm">Only administrators can change gateway settings.</p>}
+          {!canWrite(d, 'settings_edit') && <p className="text-muted text-sm">You don't have permission to change gateway settings.</p>}
           <form onSubmit={save}>
-            <fieldset disabled={!d.is_admin} style={{ border: 0, padding: 0, margin: 0 }}>
+            <fieldset disabled={!canWrite(d, 'settings_edit')} style={{ border: 0, padding: 0, margin: 0 }}>
               <div className="form-group"><label className="form-label">SMS Provider</label>
                 <select className="form-control" value={cfg.provider} onChange={(e) => set('provider', e.target.value)}>
                   {d.providers.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}</select></div>
@@ -675,7 +683,8 @@ function Settings({ d, notify }) {
 
       <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-vial" /> Send a Test SMS</h3></div>
         <div className="card-body">
-          {d.configured ? (
+          {!canWrite(d, 'settings_edit') ? <p className="text-muted mb-0">You don't have permission to send a test SMS.</p>
+          : d.configured ? (
             <form onSubmit={test} className="d-flex gap-2 align-end flex-wrap">
               <div className="form-group mb-0" style={{ flex: 1, minWidth: 200 }}><label className="form-label">Phone number</label>
                 <input type="text" className="form-control" placeholder="08031234567" required value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
@@ -742,7 +751,7 @@ function Inbox({ d, notify }) {
   return (
     <>
       <div className="page-header"><h1>Inbox</h1>
-        <div className="page-header-actions">{canWrite(d) && <button className="btn btn-primary" onClick={() => setStarting(true)}><i aria-hidden="true" className="fas fa-pen-to-square" /> New conversation</button>}</div>
+        <div className="page-header-actions">{canWrite(d, 'inbox_send') && <button className="btn btn-primary" onClick={() => setStarting(true)}><i aria-hidden="true" className="fas fa-pen-to-square" /> New conversation</button>}</div>
       </div>
       <Tabs d={d} />
       {starting && (
@@ -783,11 +792,13 @@ function Inbox({ d, notify }) {
                 )) : <div className="text-muted text-sm" style={{ padding: '1rem' }}>No messages yet — say hello.</div>}
                 <div ref={endRef} />
               </div>
+              {canWrite(d, 'inbox_send') && (
               <form className="thread-compose" onSubmit={send}>
                 <AttachField url={d.urls.upload} value={att} onChange={setAtt} notify={notify} />
                 <input className="form-control" placeholder="Write a message…" value={text} onChange={(e) => setText(e.target.value)} />
                 <button type="submit" className="btn btn-primary" aria-label="Send"><i aria-hidden="true" className="fas fa-paper-plane" /></button>
               </form>
+              )}
             </>
           ) : <div className="thread-empty"><Empty icon="fa-comment-dots" title="Select a conversation"><p>Or start a new one.</p></Empty></div>}
         </div>

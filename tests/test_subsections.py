@@ -1156,3 +1156,260 @@ def test_mock_jamb_bank_analytics_view_slice(app):
     _make(app, 'mj_bank_an_view', {'external_exams.mock_jamb_bank_analytics_view': 'view'})
     c = _login(app, 'mj_bank_an_view')
     assert c.get('/mock-jamb/bank/analytics').status_code == 200
+
+
+# --- communication partition ------------------------------------------------
+def _cm_announcement(app, title='Test Announcement'):
+    from models import Announcement
+    with app.app_context():
+        a = Announcement(title=title, created_by='tester')
+        db.session.add(a); db.session.commit()
+        return a.id
+
+
+def _cm_template(app, name='Fee Reminder'):
+    from models import MessageTemplate
+    with app.app_context():
+        t = MessageTemplate(name=name, body='Dear {parent}, this is a reminder.')
+        db.session.add(t); db.session.commit()
+        return t.id
+
+
+def _cm_message(app, title='Test Campaign', status='Scheduled'):
+    from models import Message
+    with app.app_context():
+        m = Message(title=title, body='Hello {parent}', channel='SMS', status=status)
+        db.session.add(m); db.session.commit()
+        return m.id
+
+
+def test_announcements_view_without_create(app):
+    _cm_announcement(app, 'View-only ann')
+    _make(app, 'cm_ann_view', {'communication.announcements_view': 'view'})
+    c = _login(app, 'cm_ann_view')
+    assert c.get('/communication/announcements').status_code == 200
+    token = _ptoken(c)
+    r = c.post('/communication/announcements/add', data={'title': 'Nope', '_csrf_token': token},
+               follow_redirects=False)
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        from models import Announcement
+        assert Announcement.query.filter_by(title='Nope').first() is None
+
+
+def test_announcements_create_without_edit_or_delete(app):
+    from models import Announcement
+    aid = _cm_announcement(app, 'Create-slice ann')
+    _make(app, 'cm_ann_create', {'communication.announcements_create': 'edit'})
+    c = _login(app, 'cm_ann_create')
+    token = _ptoken(c)
+    r = c.post('/communication/announcements/add', data={'title': 'Added', '_csrf_token': token},
+               follow_redirects=False)
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        assert Announcement.query.filter_by(title='Added').first() is not None
+    # 'announcements_edit'/'announcements_delete' are separate slices -> blocked
+    r1b = c.post(f'/communication/announcements/{aid}/edit', data={'title': 'Edited', '_csrf_token': token},
+                 follow_redirects=False)
+    assert r1b.status_code in (302, 303)
+    with app.app_context():
+        assert db.session.get(Announcement, aid).title != 'Edited'
+    r2 = c.post(f'/communication/announcements/{aid}/delete', data={'_csrf_token': token},
+                follow_redirects=False)
+    assert r2.status_code in (302, 303)
+    with app.app_context():
+        assert db.session.get(Announcement, aid) is not None
+
+
+def test_announcements_delete_slice(app):
+    from models import Announcement
+    aid = _cm_announcement(app, 'Delete-slice ann')
+    _make(app, 'cm_ann_delete', {'communication.announcements_delete': 'edit'})
+    c = _login(app, 'cm_ann_delete')
+    token = _ptoken(c)
+    # 'announcements_create' not granted -> blocked
+    r = c.post('/communication/announcements/add', data={'title': 'Nope', '_csrf_token': token},
+               follow_redirects=False)
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        assert Announcement.query.filter_by(title='Nope').first() is None
+    r2 = c.post(f'/communication/announcements/{aid}/delete', data={'_csrf_token': token},
+                follow_redirects=False)
+    assert r2.status_code in (302, 303)
+    with app.app_context():
+        assert db.session.get(Announcement, aid) is None   # delete granted -> removed
+
+
+def test_ack_announcement_always_allowed(app):
+    """Regression test for the pre-existing bug: acknowledging an announcement
+    must work even for a user with ZERO communication-module access, since
+    it's shown on the main dashboard to every logged-in user."""
+    aid = _cm_announcement(app, 'Ack-all ann')
+    _make(app, 'cm_no_comms_access', {})
+    c = _login(app, 'cm_no_comms_access')
+    token = _ptoken(c)
+    r = c.post(f'/communication/announcements/{aid}/ack', data={'_csrf_token': token},
+               follow_redirects=False)
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        from models import AnnouncementAck, User
+        uid = User.query.filter_by(username='cm_no_comms_access').first().id
+        assert AnnouncementAck.query.filter_by(announcement_id=aid, user_id=uid).first() is not None
+
+
+def test_templates_create_without_delete(app):
+    from models import MessageTemplate
+    _make(app, 'cm_tpl_create', {'communication.templates_create': 'edit'})
+    c = _login(app, 'cm_tpl_create')
+    token = _ptoken(c)
+    r = c.post('/communication/templates/add',
+               data={'name': 'New Template', 'body': 'Hello {parent}', '_csrf_token': token},
+               follow_redirects=False)
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        t = MessageTemplate.query.filter_by(name='New Template').first()
+        assert t is not None
+        tid = t.id
+    # 'templates_delete' is a separate slice -> blocked
+    r2 = c.post(f'/communication/templates/{tid}/delete', data={'_csrf_token': token},
+                follow_redirects=False)
+    assert r2.status_code in (302, 303)
+    with app.app_context():
+        assert db.session.get(MessageTemplate, tid) is not None
+
+
+def test_templates_delete_slice(app):
+    from models import MessageTemplate
+    tid = _cm_template(app, 'Delete-slice tpl')
+    _make(app, 'cm_tpl_delete', {'communication.templates_delete': 'edit'})
+    c = _login(app, 'cm_tpl_delete')
+    token = _ptoken(c)
+    r2 = c.post(f'/communication/templates/{tid}/delete', data={'_csrf_token': token},
+                follow_redirects=False)
+    assert r2.status_code in (302, 303)
+    with app.app_context():
+        assert db.session.get(MessageTemplate, tid) is None   # delete granted -> removed
+
+
+def test_messages_create_without_view(app):
+    mid = _cm_message(app, 'View-sep campaign')
+    _make(app, 'cm_msg_create', {'communication.messages_create': 'edit'})
+    c = _login(app, 'cm_msg_create')
+    assert c.get('/communication/compose').status_code == 200
+    # 'messages_view' is a separate slice -> blocked
+    assert c.get('/communication/messages').status_code in (302, 303)
+    assert c.get(f'/communication/messages/{mid}').status_code in (302, 303)
+
+
+def test_messages_edit_without_delete(app):
+    from models import Message
+    mid = _cm_message(app, 'Edit-slice campaign', status='Scheduled')
+    _make(app, 'cm_msg_edit', {'communication.messages_view': 'view',
+                               'communication.messages_edit': 'edit'})
+    c = _login(app, 'cm_msg_edit')
+    assert c.get(f'/communication/messages/{mid}').status_code == 200
+    token = _ptoken(c)
+    r = c.post(f'/communication/messages/{mid}/cancel-schedule', data={'_csrf_token': token},
+               follow_redirects=False)
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        assert db.session.get(Message, mid).status == 'Draft'
+    # 'messages_delete' is a separate slice -> blocked
+    r2 = c.post(f'/communication/messages/{mid}/delete', data={'_csrf_token': token},
+                follow_redirects=False)
+    assert r2.status_code in (302, 303)
+    with app.app_context():
+        assert db.session.get(Message, mid) is not None
+
+
+def test_messages_delete_slice(app):
+    from models import Message
+    mid = _cm_message(app, 'Delete-slice campaign')
+    _make(app, 'cm_msg_delete', {'communication.messages_view': 'view',
+                                 'communication.messages_delete': 'edit'})
+    c = _login(app, 'cm_msg_delete')
+    token = _ptoken(c)
+    # 'messages_edit' not granted -> blocked
+    r = c.post(f'/communication/messages/{mid}/cancel-schedule', data={'_csrf_token': token},
+               follow_redirects=False)
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        assert db.session.get(Message, mid).status == 'Scheduled'
+    r2 = c.post(f'/communication/messages/{mid}/delete', data={'_csrf_token': token},
+                follow_redirects=False)
+    assert r2.status_code in (302, 303)
+    with app.app_context():
+        assert db.session.get(Message, mid) is None   # delete granted -> removed
+
+
+def test_messages_view_without_export(app):
+    mid = _cm_message(app, 'Export-sep campaign')
+    _make(app, 'cm_msg_view', {'communication.messages_view': 'view'})
+    c = _login(app, 'cm_msg_view')
+    assert c.get(f'/communication/messages/{mid}').status_code == 200
+    # 'messages_export' is a separate slice -> blocked
+    assert c.get(f'/communication/messages/{mid}/export').status_code in (302, 303)
+
+
+def test_reports_view_without_export(app):
+    _make(app, 'cm_rep_view', {'communication.reports_view': 'view'})
+    c = _login(app, 'cm_rep_view')
+    assert c.get('/communication/reports').status_code == 200
+    assert c.get('/communication/reports/export').status_code in (302, 303)
+
+
+def test_inbox_view_without_send(app):
+    _make(app, 'cm_inbox_view', {'communication.inbox_view': 'view'})
+    c = _login(app, 'cm_inbox_view')
+    assert c.get('/communication/inbox').status_code == 200
+    token = _ptoken(c)
+    r = c.post('/communication/inbox/start', data={'user_ids': '1', '_csrf_token': token},
+               follow_redirects=False)
+    assert r.status_code in (302, 303)
+    assert r.headers['Location'].rstrip('/') == ''   # blocked -> dashboard
+
+
+def test_inbox_send_slice(app):
+    from models import User
+    with app.app_context():
+        other = User(username='cm_inbox_other', role='staff', scope='central', full_name='Other Staff')
+        other.set_password('secret123'); other.set_permissions({})
+        db.session.add(other); db.session.commit()
+        other_id = other.id
+    _make(app, 'cm_inbox_send', {'communication.inbox_view': 'view',
+                                 'communication.inbox_send': 'edit'})
+    c = _login(app, 'cm_inbox_send')
+    token = _ptoken(c)
+    r = c.post('/communication/inbox/start', data={'user_ids': str(other_id), '_csrf_token': token},
+               follow_redirects=False)
+    assert r.status_code in (302, 303)
+    assert r.headers['Location'].rstrip('/') != ''
+    assert '/communication/inbox/' in r.headers['Location']
+    with app.app_context():
+        from models import Conversation
+        assert Conversation.query.count() >= 1
+
+
+def test_settings_view_without_edit(app):
+    _make(app, 'cm_set_view', {'communication.settings_view': 'view'})
+    c = _login(app, 'cm_set_view')
+    assert c.get('/communication/settings').status_code == 200
+    token = _ptoken(c)
+    r = c.post('/communication/settings/save', data={'_csrf_token': token}, follow_redirects=False)
+    assert r.status_code in (302, 303)
+    assert r.headers['Location'].rstrip('/') == ''   # blocked -> dashboard
+
+
+def test_settings_edit_slice(app):
+    _make(app, 'cm_set_edit', {'communication.settings_view': 'view',
+                               'communication.settings_edit': 'edit'})
+    c = _login(app, 'cm_set_edit')
+    token = _ptoken(c)
+    r = c.post('/communication/settings/save', data={'_csrf_token': token}, follow_redirects=False)
+    assert r.status_code in (302, 303)
+    assert '/communication/settings' in r.headers['Location']
+    # 'save_automations' stays admin-only even with full settings_edit granted
+    r2 = c.post('/communication/settings/automations', data={'_csrf_token': token},
+                follow_redirects=False)
+    assert r2.status_code in (302, 303)
+    assert r2.headers['Location'].rstrip('/') == ''   # still blocked -> dashboard
