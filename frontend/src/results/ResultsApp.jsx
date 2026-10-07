@@ -248,7 +248,7 @@ function Cutoffs({ d, notify }) {
           <select className="form-control" style={{ maxWidth: 240 }} value={d.selected} onChange={(ev) => navParams(nav.go, d.self_url, { university: ev.target.value })}>
             {d.universities.map((u) => <option key={u} value={u}>{u}</option>)}</select>
         </form>
-        {d.is_admin && (
+        {canWrite(d, 'cutoffs_write') && (
           <form className="d-flex gap-2 align-center" style={{ marginLeft: 'auto' }} onSubmit={setRefSubmit}>
             <label className="form-label mb-0" title="Which set the advisor uses">Advisor uses</label>
             <select className="form-control" style={{ maxWidth: 240 }} value={ref} onChange={(ev) => setRef(ev.target.value)}>
@@ -258,7 +258,7 @@ function Cutoffs({ d, notify }) {
       </div>
 
       <div className="cut-grid">
-        {d.is_admin && (
+        {canWrite(d, 'cutoffs_write') && (
           <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-pen" /> {e ? 'Edit' : 'Add'} Cut-off</h3></div>
             <div className="card-body"><form onSubmit={save}>
               <div className="form-group"><label className="form-label">University</label>
@@ -287,15 +287,15 @@ function Cutoffs({ d, notify }) {
           <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
             {d.rows.length ? (
               <table className="ctable">
-                <thead><tr><th>Course</th><th>Faculty</th><th>JAMB</th><th>Credits</th><th>Required</th>{d.is_admin && <th />}</tr></thead>
+                <thead><tr><th>Course</th><th>Faculty</th><th>JAMB</th><th>Credits</th><th>Required</th>{(canWrite(d, 'cutoffs_write') || canWrite(d, 'cutoffs_delete')) && <th />}</tr></thead>
                 <tbody>{d.rows.map((r) => (
                   <tr key={r.id}>
                     <td>{r.course_name}</td><td className="text-muted">{r.faculty}</td>
                     <td>{r.jamb_cutoff || '—'}</td><td>{r.min_credits}</td>
                     <td style={{ fontSize: 'var(--text-xs)', color: 'var(--text-muted)' }}>{r.required_subjects.join(', ')}</td>
-                    {d.is_admin && <td style={{ whiteSpace: 'nowrap' }}>
-                      <a href={r.edit_url} className="btn btn-warning btn-sm" aria-label="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>{' '}
-                      <button className="btn btn-danger btn-sm" type="button" onClick={() => del(r.delete_url, r.course_name)}><i aria-hidden="true" className="fas fa-trash" /></button>
+                    {(canWrite(d, 'cutoffs_write') || canWrite(d, 'cutoffs_delete')) && <td style={{ whiteSpace: 'nowrap' }}>
+                      {canWrite(d, 'cutoffs_write') && <a href={r.edit_url} className="btn btn-warning btn-sm" aria-label="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>}{' '}
+                      {canWrite(d, 'cutoffs_delete') && <button className="btn btn-danger btn-sm" type="button" onClick={() => del(r.delete_url, r.course_name)}><i aria-hidden="true" className="fas fa-trash" /></button>}
                     </td>}
                   </tr>))}</tbody>
               </table>

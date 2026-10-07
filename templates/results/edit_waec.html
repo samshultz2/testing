@@ -108,6 +108,7 @@
     </div>
 </div>
 
+{% if can_write_sub('external_exams', 'waec_delete') %}
 <!-- Delete Section -->
 <div style="margin-top: 2rem; padding: 1rem; background: #fff5f5; border: 1px solid #f8d7da; border-radius: 8px;">
     <h4 style="color: #721c24; font-size: 0.9rem; margin-bottom: 0.5rem;">
@@ -116,13 +117,14 @@
     <p style="font-size: 0.85rem; color: #856404; margin-bottom: 0.75rem;">
         Permanently delete all WAEC results for {{ student.full_name }} ({{ year }}). This action cannot be undone.
     </p>
-    <form method="POST" action="{{ url_for('results.delete_waec', student_id=student.id, year=year) }}" 
+    <form method="POST" action="{{ url_for('results.delete_waec', student_id=student.id, year=year) }}"
           data-confirm="Are you sure you want to delete ALL WAEC results for this student in {{ year }}? This cannot be undone.">
         <button type="submit" class="btn btn-danger btn-sm">
             <i class="fas fa-trash"></i> Delete All Results ({{ year }})
         </button>
     </form>
 </div>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}

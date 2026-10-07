@@ -527,7 +527,7 @@ def edit_waec(student_id, year):
 
 
 @results_bp.route('/waec/student/<int:student_id>/delete/<int:year>', methods=['POST'])
-@admin_required
+@login_required
 def delete_waec(student_id, year):
     """Delete all WAEC results for a student in a given year"""
     student = db.get_or_404(Student, student_id)
@@ -552,7 +552,7 @@ def delete_waec(student_id, year):
 
 
 @results_bp.route('/waec/result/<int:result_id>/delete', methods=['POST'])
-@admin_required
+@login_required
 def delete_waec_single(result_id):
     """Delete a single WAEC result entry"""
     result = db.get_or_404(WAECResult, result_id)

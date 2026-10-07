@@ -280,9 +280,11 @@
               <a href="{{ url_for('results.waec_cert_generator', student_id=student.id, year=latest_year) }}" class="btn btn-secondary btn-sm" title="Generate result image / PDF">
                   <i class="fas fa-id-card"></i> Generate
               </a>
+              {% if can_write_sub('external_exams', 'waec_edit') %}
               <a href="{{ url_for('results.edit_waec', student_id=student.id, year=latest_year) }}" class="btn btn-secondary btn-sm" title="Edit results">
                   <i class="fas fa-edit"></i>
               </a>
+              {% endif %}
             </div>
         </div>
         <div class="card-body" style="padding: 0;">
@@ -466,9 +468,11 @@
             <i class="fas fa-file-alt"></i>
             <h3>No WAEC Results</h3>
             <p>No WAEC results have been recorded for this student.</p>
+            {% if can_write_sub('external_exams', 'waec_create') %}
             <a href="{{ url_for('results.add_waec') }}?student_id={{ student.id }}" class="btn btn-primary">
                 <i class="fas fa-plus"></i> Add Results
             </a>
+            {% endif %}
         </div>
     </div>
 </div>

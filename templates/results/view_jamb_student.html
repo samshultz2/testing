@@ -266,7 +266,7 @@
             <div class="profile-name">{{ student.full_name }}</div>
             <div class="profile-id">{{ student.student_id }}</div>
         </div>
-        {% if jamb_summary %}
+        {% if jamb_summary and can_write_sub('external_exams', 'jamb_edit') %}
         <div class="profile-actions">
             <a href="{{ url_for('results.edit_jamb', student_id=student.id, year=jamb_summary[0].exam_year) }}" class="btn btn-light btn-sm" title="Edit">
                 <i class="fas fa-edit"></i>
@@ -394,9 +394,11 @@
                         </span>
                     </td>
                     <td>
+                        {% if can_write_sub('external_exams', 'jamb_edit') %}
                         <a href="{{ url_for('results.edit_jamb', student_id=student.id, year=result.exam_year) }}" class="btn btn-secondary btn-sm">
                             <i class="fas fa-edit"></i>
                         </a>
+                        {% endif %}
                     </td>
                 </tr>
                 {% endfor %}
@@ -406,17 +408,19 @@
 </div>
 {% endif %}
 
+{% if can_write_sub('external_exams', 'jamb_delete') %}
 <!-- Delete Section -->
 <div class="delete-section">
     <h4><i class="fas fa-trash-alt"></i> Delete Result</h4>
     <p>Permanently delete JAMB result for {{ latest.exam_year }}. This cannot be undone.</p>
-    <form method="POST" action="{{ url_for('results.delete_jamb', student_id=student.id, year=latest.exam_year) }}" 
+    <form method="POST" action="{{ url_for('results.delete_jamb', student_id=student.id, year=latest.exam_year) }}"
           data-confirm="Delete JAMB result for {{ student.full_name }} ({{ latest.exam_year }})?">
         <button type="submit" class="btn btn-danger btn-sm">
             <i class="fas fa-trash"></i> Delete {{ latest.exam_year }} Result
         </button>
     </form>
 </div>
+{% endif %}
 
 {% else %}
 <!-- No Results -->
@@ -426,9 +430,11 @@
             <i class="fas fa-file-alt"></i>
             <h3 style="margin: 0.5rem 0;">No JAMB Results</h3>
             <p>No JAMB results have been recorded for this student.</p>
+            {% if can_write_sub('external_exams', 'jamb_create') %}
             <a href="{{ url_for('results.add_jamb') }}?student_id={{ student.id }}" class="btn btn-primary">
                 <i class="fas fa-plus"></i> Add JAMB Result
             </a>
+            {% endif %}
         </div>
     </div>
 </div>

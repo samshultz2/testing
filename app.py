@@ -594,6 +594,17 @@ def create_app(config_class=None):
             except Exception:
                 return True
 
+        def can_write_sub(module, sub):
+            """Sub-key-aware write check for server-rendered templates —
+            the Jinja equivalent of the React canWrite(d, sub) helper
+            (frontend/src/lib/perms.js), for pages too granular for the
+            generic page_can_write() auto-hide to get right button-by-button."""
+            try:
+                from utils.access_control import subsection_level, is_read_only
+                return subsection_level(module, sub) == 'edit' and not is_read_only()
+            except Exception:
+                return True
+
         def can_manage_users():
             try:
                 from utils.access_control import can_manage_users as _cmu
@@ -768,6 +779,7 @@ def create_app(config_class=None):
             'user_permissions': get_user_permissions(),
             'can_access_module': can_access_module,
             'can_write_module': can_write_module,
+            'can_write_sub': can_write_sub,
             'can_manage_users': can_manage_users(),
             'page_can_write': page_can_write(),
             'is_read_only': is_read_only(),

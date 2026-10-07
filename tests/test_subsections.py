@@ -63,9 +63,9 @@ def test_subsection_level_helper(app):
 
 def test_results_subsection_scoping(app):
     # WAEC/JAMB live under the 'external_exams' module (blueprint 'results').
-    _make(app, 'rwaec', {'external_exams.waec': 'view'})
+    _make(app, 'rwaec', {'external_exams.waec_view': 'view'})
     c = _login(app, 'rwaec')
-    assert c.get('/results/waec').status_code == 200                       # waec granted (view)
+    assert c.get('/results/waec').status_code == 200                       # waec_view granted
     assert c.get('/results/jamb', follow_redirects=False).status_code in (302, 303)  # jamb not granted
 
 
@@ -324,3 +324,103 @@ def test_events_create_without_edit_delete_or_import(app):
     assert r2.status_code in (302, 303)
     with app.app_context():
         assert db.session.get(SchoolEvent, ev_id) is not None   # delete not granted -> untouched
+
+
+# --- external_exams partition (Phase 2: core WAEC/JAMB/Cutoffs/Predictions) -
+def _a_waec_result(app, sid='EXWAEC01', year=2024):
+    from models import Student, WAECResult
+    with app.app_context():
+        s = Student.query.filter_by(student_id=sid).first()
+        if not s:
+            s = Student(student_id=sid, first_name='Ext', surname='Waec', gender='Male')
+            db.session.add(s); db.session.flush()
+            db.session.add(WAECResult(student_id=s.id, exam_year=year, subject='English', grade='B2'))
+            db.session.commit()
+        return s.id
+
+
+def _a_jamb_result(app, sid='EXJAMB01', year=2024):
+    from models import Student, JAMBResult
+    with app.app_context():
+        s = Student.query.filter_by(student_id=sid).first()
+        if not s:
+            s = Student(student_id=sid, first_name='Ext', surname='Jamb', gender='Male')
+            db.session.add(s); db.session.flush()
+            db.session.add(JAMBResult(student_id=s.id, exam_year=year, total_score=250))
+            db.session.commit()
+        return s.id
+
+
+def test_waec_create_without_edit_or_delete(app):
+    from models import WAECResult
+    sid = _a_waec_result(app, 'EXWAEC01')
+    _make(app, 'waec_create_only', {'external_exams.waec_create': 'edit'})
+    c = _login(app, 'waec_create_only')
+    assert c.get('/results/waec/add').status_code == 200
+    # 'waec_edit'/'waec_delete' are separate slices -> blocked
+    assert c.get(f'/results/waec/student/{sid}/edit/2024', follow_redirects=False).status_code in (302, 303)
+    token = _ptoken(c)
+    r = c.post(f'/results/waec/student/{sid}/delete/2024', data={'_csrf_token': token},
+               follow_redirects=False)
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        assert WAECResult.query.filter_by(student_id=sid, exam_year=2024).first() is not None
+
+
+def test_waec_edit_without_delete(app):
+    from models import WAECResult
+    sid = _a_waec_result(app, 'EXWAEC02')
+    _make(app, 'waec_edit_only', {'external_exams.waec_view': 'edit', 'external_exams.waec_edit': 'edit'})
+    c = _login(app, 'waec_edit_only')
+    assert c.get(f'/results/waec/student/{sid}/edit/2024').status_code == 200
+    token = _ptoken(c)
+    r = c.post(f'/results/waec/student/{sid}/delete/2024', data={'_csrf_token': token},
+               follow_redirects=False)
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        assert WAECResult.query.filter_by(student_id=sid, exam_year=2024).first() is not None   # untouched
+
+
+def test_jamb_create_without_edit_or_delete(app):
+    from models import JAMBResult
+    sid = _a_jamb_result(app, 'EXJAMB01')
+    _make(app, 'jamb_create_only', {'external_exams.jamb_create': 'edit'})
+    c = _login(app, 'jamb_create_only')
+    assert c.get('/results/jamb/add').status_code == 200
+    assert c.get(f'/results/jamb/student/{sid}/edit/2024', follow_redirects=False).status_code in (302, 303)
+    token = _ptoken(c)
+    r = c.post(f'/results/jamb/student/{sid}/delete/2024', data={'_csrf_token': token},
+               follow_redirects=False)
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        assert JAMBResult.query.filter_by(student_id=sid, exam_year=2024).first() is not None
+
+
+def test_cutoffs_write_without_delete(app):
+    from models import UniversityCutoff
+    _make(app, 'cutoff_write', {'external_exams.cutoffs_view': 'edit',
+                                'external_exams.cutoffs_write': 'edit'})
+    c = _login(app, 'cutoff_write')
+    assert c.get('/results/cutoffs').status_code == 200
+    token = _ptoken(c)
+    r = c.post('/results/cutoffs/save',
+               data={'university_name': 'Test Uni', 'course_name': 'Test Course',
+                     'exam_year': '0', '_csrf_token': token}, follow_redirects=False)
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        row = UniversityCutoff.query.filter_by(university_name='Test Uni',
+                                               course_name='Test Course').first()
+        assert row is not None
+        cid = row.id
+    r2 = c.post(f'/results/cutoffs/{cid}/delete', data={'_csrf_token': token},
+                follow_redirects=False)
+    assert r2.status_code in (302, 303)
+    with app.app_context():
+        assert db.session.get(UniversityCutoff, cid) is not None   # delete not granted -> untouched
+
+
+def test_predictions_view_without_config(app):
+    _make(app, 'pred_view', {'external_exams.predictions_view': 'edit'})
+    c = _login(app, 'pred_view')
+    assert c.get('/results/predictions').status_code == 200
+    assert c.get('/results/predictions/waec-model', follow_redirects=False).status_code in (302, 303)

@@ -41,7 +41,7 @@ def cutoffs_list():
 
 
 @results_bp.route('/cutoffs/save', methods=['POST'])
-@admin_required
+@login_required
 def cutoffs_save():
     cid = request.form.get('id', type=int)
     uni = (request.form.get('university_name') or '').strip() or 'General Requirements'
@@ -74,7 +74,7 @@ def cutoffs_save():
 
 
 @results_bp.route('/cutoffs/<int:cid>/delete', methods=['POST'])
-@admin_required
+@login_required
 def cutoffs_delete(cid):
     obj = db.session.get(UniversityCutoff, cid)
     if obj:
@@ -86,7 +86,7 @@ def cutoffs_delete(cid):
 
 
 @results_bp.route('/cutoffs/reference', methods=['POST'])
-@admin_required
+@login_required
 def cutoffs_reference():
     ref = (request.form.get('reference') or 'General Requirements').strip()
     SchoolSettings.set('admission_reference', ref, 'string',

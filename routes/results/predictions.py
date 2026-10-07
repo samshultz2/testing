@@ -85,7 +85,7 @@ def focus_areas():
 
 
 @results_bp.route('/predictions/waec-model', methods=['GET', 'POST'])
-@admin_required
+@login_required
 def waec_model_config():
     """Admin control for the WAEC grade-band forecaster: choose the engine
     (auto / prior / bins / model) and retrain the per-branch ordinal models once

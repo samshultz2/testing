@@ -182,7 +182,9 @@
         <i class="fas fa-chart-bar fa-3x text-muted mb-3"></i>
         <h3>No WAEC Data Available</h3>
         <p class="text-muted">Add WAEC results to see analytics</p>
+        {% if can_write_sub('external_exams', 'waec_create') %}
         <a href="{{ url_for('results.add_waec') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add WAEC Result</a>
+        {% endif %}
     </div>
 </div>
 {% endif %}
