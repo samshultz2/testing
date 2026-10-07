@@ -507,3 +507,168 @@ def test_cert_presets_separate_from_templates(app):
     assert r.status_code in (302, 303)
     with app.app_context():
         assert WAECCertPreset.query.filter_by(name='Test Preset').first() is not None
+
+
+# --- mock_waec partition (Phase 5) ------------------------------------------
+def _mw_session(app):
+    from models import AcademicSession
+    with app.app_context():
+        s = AcademicSession.query.filter_by(is_active=True).first() or \
+            AcademicSession(name='MW 25/26', is_active=True)
+        db.session.add(s); db.session.commit()
+        return s.id
+
+
+def _mw_exam(app, ssid, n, name=None):
+    from datetime import date
+    from models.mock_waec import MockWAECExam
+    with app.app_context():
+        ex = MockWAECExam(name=name or f'MW Exam {n}', exam_number=n, session_id=ssid,
+                          exam_date=date(2025, 1, 1))
+        db.session.add(ex); db.session.commit()
+        return ex.id
+
+
+def _mw_student(app, sid):
+    from models import Student
+    with app.app_context():
+        s = Student.query.filter_by(student_id=sid).first()
+        if not s:
+            s = Student(student_id=sid, first_name='Mock', surname='Waec', gender='Female')
+            db.session.add(s); db.session.commit()
+        return s.id
+
+
+def _mw_result(app, student_id, exam_id, subject='Mathematics', score=65):
+    from models.mock_waec import MockWAECResult, waec_grade_from_score
+    with app.app_context():
+        r = MockWAECResult(student_id=student_id, mock_exam_id=exam_id,
+                           subject=subject, score=score, grade=waec_grade_from_score(score))
+        db.session.add(r); db.session.commit()
+        return r.id
+
+
+def test_mock_waec_exam_view_without_create(app):
+    ssid = _mw_session(app)
+    exam_id = _mw_exam(app, ssid, 101)
+    _make(app, 'mw_exam_view', {'external_exams.mock_waec_exam_view': 'view'})
+    c = _login(app, 'mw_exam_view')
+    assert c.get('/mock-waec/').status_code == 200
+    assert c.get(f'/mock-waec/exam/{exam_id}').status_code == 200
+    # 'mock_waec_exam_create' is a separate slice -> blocked
+    assert c.get('/mock-waec/exam/create', follow_redirects=False).status_code in (302, 303)
+
+
+def test_mock_waec_exam_create_without_edit_or_delete(app):
+    from models.mock_waec import MockWAECExam
+    ssid = _mw_session(app)
+    _make(app, 'mw_exam_create', {'external_exams.mock_waec_exam_create': 'edit'})
+    c = _login(app, 'mw_exam_create')
+    assert c.get('/mock-waec/exam/create').status_code == 200
+    token = _ptoken(c)
+    r = c.post('/mock-waec/exam/create',
+               data={'session_id': ssid, 'exam_number': 202, 'exam_date': '2025-03-01',
+                     'name': 'Created Mock', '_csrf_token': token}, follow_redirects=False)
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        exam = MockWAECExam.query.filter_by(session_id=ssid, exam_number=202).first()
+        assert exam is not None
+        exam_id = exam.id
+    # 'mock_waec_exam_edit'/'mock_waec_exam_delete' are separate slices -> blocked
+    assert c.get(f'/mock-waec/exam/{exam_id}/edit', follow_redirects=False).status_code in (302, 303)
+    r2 = c.post(f'/mock-waec/exam/{exam_id}/delete', data={'_csrf_token': token},
+                follow_redirects=False)
+    assert r2.status_code in (302, 303)
+    with app.app_context():
+        assert db.session.get(MockWAECExam, exam_id) is not None   # untouched
+
+
+def test_mock_waec_exam_edit_without_delete(app):
+    ssid = _mw_session(app)
+    exam_id = _mw_exam(app, ssid, 103)
+    _make(app, 'mw_exam_edit', {'external_exams.mock_waec_exam_view': 'view',
+                                'external_exams.mock_waec_exam_edit': 'edit'})
+    c = _login(app, 'mw_exam_edit')
+    assert c.get(f'/mock-waec/exam/{exam_id}/edit').status_code == 200
+    token = _ptoken(c)
+    r = c.post(f'/mock-waec/exam/{exam_id}/delete', data={'_csrf_token': token},
+               follow_redirects=False)
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        from models.mock_waec import MockWAECExam
+        assert db.session.get(MockWAECExam, exam_id) is not None   # untouched
+
+
+def test_mock_waec_results_create_without_edit_or_delete(app):
+    from models.mock_waec import MockWAECResult
+    ssid = _mw_session(app)
+    exam_id = _mw_exam(app, ssid, 104)
+    sid = _mw_student(app, 'MWC001')
+    _make(app, 'mw_res_create', {'external_exams.mock_waec_exam_view': 'view',
+                                 'external_exams.mock_waec_results_create': 'edit'})
+    c = _login(app, 'mw_res_create')
+    assert c.get(f'/mock-waec/exam/{exam_id}/results/add').status_code == 200
+    token = _ptoken(c)
+    r = c.post(f'/mock-waec/exam/{exam_id}/results/add',
+               data={'student_id': sid, 'subject[]': ['Mathematics'], 'score[]': ['70'],
+                     'grade[]': [''], '_csrf_token': token}, follow_redirects=False)
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        row = MockWAECResult.query.filter_by(student_id=sid, mock_exam_id=exam_id).first()
+        assert row is not None
+        rid = row.id
+    # 'mock_waec_results_edit'/'mock_waec_results_delete' are separate slices -> blocked
+    assert c.get(f'/mock-waec/exam/{exam_id}/student/{sid}/edit', follow_redirects=False).status_code in (302, 303)
+    r2 = c.post(f'/mock-waec/result/{rid}/delete', data={'_csrf_token': token},
+                follow_redirects=False)
+    assert r2.status_code in (302, 303)
+    with app.app_context():
+        assert db.session.get(MockWAECResult, rid) is not None   # untouched
+
+
+def test_mock_waec_results_edit_without_delete(app):
+    from models.mock_waec import MockWAECResult
+    ssid = _mw_session(app)
+    exam_id = _mw_exam(app, ssid, 105)
+    sid = _mw_student(app, 'MWC002')
+    rid = _mw_result(app, sid, exam_id)
+    _make(app, 'mw_res_edit', {'external_exams.mock_waec_exam_view': 'view',
+                              'external_exams.mock_waec_results_edit': 'edit'})
+    c = _login(app, 'mw_res_edit')
+    assert c.get(f'/mock-waec/exam/{exam_id}/student/{sid}/edit').status_code == 200
+    token = _ptoken(c)
+    r = c.post(f'/mock-waec/result/{rid}/delete', data={'_csrf_token': token},
+               follow_redirects=False)
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        assert db.session.get(MockWAECResult, rid) is not None   # delete not granted -> untouched
+
+
+def test_mock_waec_results_delete_slice(app):
+    from models.mock_waec import MockWAECResult
+    ssid = _mw_session(app)
+    exam_id = _mw_exam(app, ssid, 106)
+    sid = _mw_student(app, 'MWC003')
+    rid = _mw_result(app, sid, exam_id)
+    _make(app, 'mw_res_delete', {'external_exams.mock_waec_exam_view': 'view',
+                                 'external_exams.mock_waec_results_delete': 'edit'})
+    c = _login(app, 'mw_res_delete')
+    # 'mock_waec_results_edit' not granted -> blocked
+    assert c.get(f'/mock-waec/exam/{exam_id}/student/{sid}/edit', follow_redirects=False).status_code in (302, 303)
+    token = _ptoken(c)
+    r = c.post(f'/mock-waec/result/{rid}/delete', data={'_csrf_token': token},
+               follow_redirects=False)
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        assert db.session.get(MockWAECResult, rid) is None   # delete granted -> removed
+
+
+def test_mock_waec_results_view_without_export(app):
+    ssid = _mw_session(app)
+    exam_id = _mw_exam(app, ssid, 107)
+    _make(app, 'mw_res_view', {'external_exams.mock_waec_exam_view': 'view',
+                              'external_exams.mock_waec_results_view': 'view'})
+    c = _login(app, 'mw_res_view')
+    assert c.get(f'/mock-waec/exam/{exam_id}/broadsheet').status_code == 200
+    # 'mock_waec_results_export' is a separate slice -> blocked
+    assert c.get(f'/mock-waec/exam/{exam_id}/export', follow_redirects=False).status_code in (302, 303)

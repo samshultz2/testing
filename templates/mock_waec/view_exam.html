@@ -9,17 +9,25 @@
         <p class="text-muted text-sm">{{ exam.name }} &middot; {{ exam.exam_date.strftime('%d %B %Y') if exam.exam_date else '' }}</p>
     </div>
     <div class="page-header-actions">
+        {% if can_write_sub('external_exams', 'mock_waec_results_view') %}
         <a href="{{ url_for('mock_waec.broadsheet', exam_id=exam.id) }}" class="btn btn-primary btn-sm"><i class="fas fa-table-list"></i> Broadsheet</a>
         <a href="{{ url_for('mock_waec.broadsheet_blank', exam_id=exam.id) }}" class="btn btn-secondary btn-sm" title="Blank recording sheet"><i class="fas fa-table-list"></i> Blank sheet</a>
         <a href="{{ url_for('mock_waec.result_slips_all', exam_id=exam.id) }}" class="btn btn-success btn-sm"><i class="fas fa-print"></i> Print results</a>
         <a href="{{ url_for('mock_waec.analytics', exam_id=exam.id) }}" class="btn btn-info btn-sm"><i class="fas fa-chart-column"></i> Analytics</a>
         <a href="{{ url_for('mock_waec.deep', exam_id=exam.id) }}" class="btn btn-info btn-sm"><i class="fas fa-brain"></i> Deep analytics</a>
+        {% endif %}
+        {% if can_write_sub('external_exams', 'mock_waec_results_create') %}
         <a href="{{ url_for('mock_waec.grid_entry', exam_id=exam.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-table-cells"></i> Grid entry</a>
         <a href="{{ url_for('mock_waec.add_result', exam_id=exam.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-plus"></i> Add result</a>
         <a href="{{ url_for('mock_waec.paste_entry', exam_id=exam.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-paste"></i> Paste / CSV</a>
+        {% endif %}
+        {% if can_write_sub('external_exams', 'mock_waec_results_export') %}
         <a href="{{ url_for('mock_waec.export_results', exam_id=exam.id) }}" class="btn btn-success btn-sm"><i class="fas fa-file-excel"></i> Export</a>
+        {% endif %}
+        {% if can_write_sub('external_exams', 'mock_waec_exam_edit') %}
         <a href="{{ url_for('mock_waec.edit_exam', exam_id=exam.id) }}" class="btn btn-warning btn-sm" title="Edit exam"><i class="fas fa-pen"></i> Edit</a>
-        {% if user_permissions.is_admin %}
+        {% endif %}
+        {% if can_write_sub('external_exams', 'mock_waec_exam_delete') %}
         <form method="post" action="{{ url_for('mock_waec.delete_exam', exam_id=exam.id) }}" style="display:inline;"
               data-confirm="Delete {{ exam.display_name }} and ALL its results? This cannot be undone.">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
@@ -64,9 +72,13 @@
                     {% for r in s.results %}<span title="{{ r.subject }}: {{ r.score }}">{{ r.subject[:4] }} <strong>{{ r.grade }}</strong></span>{% if not loop.last %} &middot; {% endif %}{% endfor %}
                 </td>
                 <td style="white-space:nowrap;">
+                    {% if can_write_sub('external_exams', 'mock_waec_results_edit') %}
                     <a href="{{ url_for('mock_waec.edit_student_results', exam_id=exam.id, student_id=s.student.id) }}" class="btn btn-sm btn-primary" title="Edit / add / remove subjects"><i class="fas fa-pen"></i></a>
+                    {% endif %}
+                    {% if can_write_sub('external_exams', 'mock_waec_results_view') %}
                     <a href="{{ url_for('mock_waec.result_slip', exam_id=exam.id, student_id=s.student.id) }}" class="btn btn-sm btn-success" title="Print result slip"><i class="fas fa-print"></i></a>
                     <a href="{{ url_for('mock_waec.student_progress', student_id=s.student.id) }}" class="btn btn-sm btn-info" title="Progression"><i class="fas fa-chart-line"></i></a>
+                    {% endif %}
                 </td>
             </tr>
             {% endfor %}
@@ -94,8 +106,10 @@
     <i class="fas fa-inbox"></i><h3>No results recorded</h3>
     <p>Add results one student at a time, or paste a batch.</p>
     <div class="d-flex gap-2 justify-center">
+        {% if can_write_sub('external_exams', 'mock_waec_results_create') %}
         <a href="{{ url_for('mock_waec.add_result', exam_id=exam.id) }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add result</a>
         <a href="{{ url_for('mock_waec.paste_entry', exam_id=exam.id) }}" class="btn btn-secondary"><i class="fas fa-paste"></i> Paste import</a>
+        {% endif %}
     </div>
 </div></div></div>
 {% endif %}

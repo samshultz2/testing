@@ -20,7 +20,6 @@ from models.mock_waec import (MockWAECExam, MockWAECResult, MockWAECAnalytics,
 from utils.helpers import (login_required, get_active_session, get_sss3_students,
                            WAEC_SUBJECTS, WAEC_GRADES, WAEC_DEFAULT_SUBJECTS,
                            STREAM_WAEC_SUBJECTS, student_subject_map)
-from utils.access_control import admin_required
 from utils.security import rate_limited
 from utils.branch_scope import require_branch_access, branch_for_new, scope_query
 from utils.csrf import csrf_protect
@@ -147,7 +146,7 @@ def edit_exam(exam_id):
 
 
 @mock_waec_bp.route('/exam/<int:exam_id>/delete', methods=['POST'])
-@admin_required
+@login_required
 @csrf_protect
 def delete_exam(exam_id):
     exam = db.get_or_404(MockWAECExam, exam_id)
