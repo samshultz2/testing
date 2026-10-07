@@ -17,7 +17,6 @@
 </style>
 {% endblock %}
 {% block content %}
-{% set mj_edit = can_write_module('external_exams') %}
 <div class="page-header">
     <div>
         <h1>Questions — {{ exam.display_name }}</h1>
@@ -25,7 +24,9 @@
     </div>
     <div class="page-header-actions">
         <a href="{{ url_for('mock_jamb.bank') }}" class="btn btn-primary btn-sm"><i class="fas fa-database"></i> Central Question Bank</a>
+        {% if can_write_sub('external_exams', 'mock_jamb_build_edit') %}
         <a href="{{ url_for('mock_jamb.exam_blueprint', exam_id=exam.id) }}" class="btn btn-info btn-sm"><i class="fas fa-sliders"></i> Paper blueprint</a>
+        {% endif %}
         <a href="{{ url_for('mock_jamb.items', exam_id=exam.id) }}" class="btn btn-info btn-sm"><i class="fas fa-microscope"></i> Item analysis</a>
         <a href="{{ url_for('mock_jamb.view_exam', exam_id=exam.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back to exam</a>
     </div>
@@ -49,7 +50,7 @@
                 Online sitting: {{ 'OPEN — students can sit it' if exam.is_published else 'Closed' }}</strong>
             <div class="text-muted text-sm">Students sit their registered subjects in one timed session at <code>/exam</code>. Each student gets the questions <strong>and options in a different, shuffled order</strong>{% if exam.questions_per_subject %} — a random {{ exam.questions_per_subject }} per subject{% endif %}.</div>
         </div>
-        {% if mj_edit %}<form method="post" action="{{ url_for('mock_jamb.toggle_publish', exam_id=exam.id) }}" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
+        {% if can_write_sub('external_exams', 'mock_jamb_exam_edit') %}<form method="post" action="{{ url_for('mock_jamb.toggle_publish', exam_id=exam.id) }}" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <label class="text-sm mb-0">Duration</label>
             <input type="number" name="duration_minutes" value="{{ exam.duration_minutes or 120 }}" min="5" max="300" style="width:76px;" class="form-control">
@@ -100,7 +101,7 @@
             <select name="subtopic" class="form-control mjq-subtopic" disabled><option value="">— Topic first —</option></select></div>
     </div>
     <div class="form-group"><label class="form-label">Diagram / figure (optional)</label><input type="file" name="image" accept="image/*" class="form-control"></div>
-    {% if can_write_module('external_exams') %}<button class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add question</button>{% endif %}
+    {% if can_write_sub('external_exams', 'mock_jamb_build_edit') %}<button class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add question</button>{% endif %}
 </form>
 {%- endmacro %}
 
@@ -108,12 +109,16 @@
 <div class="mjq">
     <div style="display:flex;justify-content:space-between;gap:.5rem;">
         <div class="qtxt">{{ n }}. {{ q.question_text | question_html }}</div>
-        {% if can_write_module('external_exams') %}<div style="white-space:nowrap;">
+        {% if can_write_sub('external_exams', 'mock_jamb_build_edit') or can_write_sub('external_exams', 'mock_jamb_build_delete') %}<div style="white-space:nowrap;">
+            {% if can_write_sub('external_exams', 'mock_jamb_build_edit') %}
             <a href="{{ url_for('mock_jamb.edit_mock_question', question_id=q.id) }}" class="btn btn-secondary btn-sm" title="Edit"><i class="fas fa-pen"></i></a>
+            {% endif %}
+            {% if can_write_sub('external_exams', 'mock_jamb_build_delete') %}
             <form method="post" action="{{ url_for('mock_jamb.delete_mock_question', question_id=q.id) }}" style="display:inline;" data-confirm="Delete this question?">
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                 <button class="btn btn-danger btn-sm" title="Delete"><i class="fas fa-trash"></i></button>
             </form>
+            {% endif %}
         </div>{% endif %}
     </div>
     {% if q.image_url %}<img src="{{ q.image_url }}" alt="figure" style="max-height:130px;margin:.4rem 0;border-radius:var(--radius-sm);">{% endif %}
@@ -123,7 +128,7 @@
 {%- endmacro %}
 
 {# ---- Add a comprehension / cloze / summary passage ---- #}
-{% if mj_edit %}
+{% if can_write_sub('external_exams', 'mock_jamb_build_edit') %}
 <div class="card" style="margin-bottom:1rem;">
     <div class="card-header"><h3><i class="fas fa-align-left"></i> Add a passage (comprehension / cloze / summary / oral)</h3></div>
     <div class="card-body">
@@ -156,10 +161,12 @@
         <span class="mjq-kind">{{ p.kind_label }}</span>
         <strong style="flex:1;">{{ p.title or 'Passage' }}</strong>
         <span class="text-muted text-sm">{{ grp.questions|length }} question{{ '' if grp.questions|length == 1 else 's' }}</span>
+        {% if can_write_sub('external_exams', 'mock_jamb_build_delete') %}
         <form method="post" action="{{ url_for('mock_jamb.delete_passage', passage_id=p.id) }}" style="display:inline;" data-confirm="Delete “{{ p.title or 'this passage' }}” and its questions?">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <button class="btn btn-danger btn-sm" title="Delete passage"><i class="fas fa-trash"></i></button>
         </form>
+        {% endif %}
     </div>
     {% if p.image_url %}<img src="{{ p.image_url }}" alt="passage figure" style="max-height:150px;margin:.6rem .9rem;border-radius:var(--radius-sm);">{% endif %}
     <div class="mjq-body">{{ p.body }}</div>

@@ -3,6 +3,7 @@ import { chartPalette } from '../lib/hooks';
 import { submitJson } from '../lib/forms';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, Banner, PageHeader, Empty, SectionShell } from '../components/ui';
+import { canWrite } from '../lib/perms';
 
 const ORD = { 1: '1st', 2: '2nd', 3: '3rd', 4: '4th' };
 
@@ -37,7 +38,7 @@ function Index({ d }) {
         <div><h1>Mock JAMB Examinations</h1><p className="text-muted text-sm mt-1">Track and analyze mock JAMB performance</p></div>
         {!d.derived && (
         <div className="d-flex gap-2">
-          <a href={d.urls.create} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Create Exam</a>
+          {canWrite(d, 'mock_jamb_exam_create') && <a href={d.urls.create} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Create Exam</a>}
           {d.urls.bank && <a href={d.urls.bank} className="btn btn-outline" data-native><i aria-hidden="true" className="fas fa-database" /> Question Bank</a>}
           <a href={d.urls.analytics} className="btn btn-outline"><i aria-hidden="true" className="fas fa-chart-line" /> Analytics</a>
           {d.urls.trends && <a href={d.urls.trends} className="btn btn-outline"><i aria-hidden="true" className="fas fa-chart-line" /> Progress Trends</a>}
@@ -82,13 +83,13 @@ function Index({ d }) {
                 </div>
                 <div className="d-flex gap-2 flex-wrap">
                   {!d.derived && <a href={e.view_url} className="btn btn-sm btn-primary"><i aria-hidden="true" className="fas fa-eye" /> View</a>}
-                  <a href={e.add_url} className="btn btn-sm btn-primary"><i aria-hidden="true" className="fas fa-plus" /> {d.derived ? 'Enter results' : 'Add Results'}</a>
-                  {!d.derived && <a href={e.bulk_url} className="btn btn-sm btn-outline"><i aria-hidden="true" className="fas fa-list" /> Bulk Entry</a>}
+                  {(d.derived || canWrite(d, 'mock_jamb_results_create')) && <a href={e.add_url} className="btn btn-sm btn-primary"><i aria-hidden="true" className="fas fa-plus" /> {d.derived ? 'Enter results' : 'Add Results'}</a>}
+                  {!d.derived && canWrite(d, 'mock_jamb_results_create') && <a href={e.bulk_url} className="btn btn-sm btn-outline"><i aria-hidden="true" className="fas fa-list" /> Bulk Entry</a>}
                   {!d.derived && e.deep_url && <a href={e.deep_url} className="btn btn-sm btn-info"><i aria-hidden="true" className="fas fa-brain" /> Deep</a>}
                 </div>
               </div></div>
             ))}</div>
-          ) : <Empty icon="fa-clipboard-list" title="No mock exams created yet"><a href={d.urls.create} className="btn btn-primary mt-2">Create First Exam</a></Empty>}
+          ) : <Empty icon="fa-clipboard-list" title="No mock exams created yet">{canWrite(d, 'mock_jamb_exam_create') && <a href={d.urls.create} className="btn btn-primary mt-2">Create First Exam</a>}</Empty>}
         </div></div>
     </>
   );
@@ -169,10 +170,12 @@ function EditExam({ d, notify }) {
           <div className="d-flex gap-2"><button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save Changes</button>
             <a href={d.view_url} className="btn btn-secondary">Cancel</a></div>
         </form>
+        {canWrite(d, 'mock_jamb_exam_delete') && (<>
         <hr className="my-4" />
         <div className="text-danger"><h4>Danger Zone</h4>
           <p className="text-sm">Deleting this exam will also delete all student results. This cannot be undone.</p>
           <button type="button" className="btn btn-danger" onClick={del}><i aria-hidden="true" className="fas fa-trash" /> Delete Exam</button></div>
+        </>)}
       </div></div>
     </>
   );
@@ -230,8 +233,10 @@ function EditResult({ d, notify }) {
           <div className="d-flex gap-2 mt-4"><button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save Changes</button>
             <a href={d.view_url} className="btn btn-secondary">Cancel</a></div>
         </form>
+        {canWrite(d, 'mock_jamb_results_delete') && (<>
         <hr className="my-4" />
         <button type="button" className="btn btn-danger btn-sm" onClick={del}><i aria-hidden="true" className="fas fa-trash" /> Delete Result</button>
+        </>)}
       </div></div>
     </>
   );
@@ -456,14 +461,14 @@ function ViewExam({ d, notify }) {
 
   const actions = (
     <>
-      <a href={d.urls.add} className="btn btn-primary btn-sm" title="Add"><i aria-hidden="true" className="fas fa-plus" /></a>
-      <a href={d.urls.bulk} className="btn btn-info btn-sm" title="Bulk"><i aria-hidden="true" className="fas fa-list" /></a>
-      <a href={d.urls.export} className="btn btn-success btn-sm" title="Excel" data-native download><i aria-hidden="true" className="fas fa-file-excel" /></a>
+      {canWrite(d, 'mock_jamb_results_create') && <a href={d.urls.add} className="btn btn-primary btn-sm" title="Add"><i aria-hidden="true" className="fas fa-plus" /></a>}
+      {canWrite(d, 'mock_jamb_results_create') && <a href={d.urls.bulk} className="btn btn-info btn-sm" title="Bulk"><i aria-hidden="true" className="fas fa-list" /></a>}
+      {canWrite(d, 'mock_jamb_results_export') && <a href={d.urls.export} className="btn btn-success btn-sm" title="Excel" data-native download><i aria-hidden="true" className="fas fa-file-excel" /></a>}
       {d.urls.questions && <a href={d.urls.questions} className="btn btn-primary btn-sm" title="Question bank (online sitting)" data-native><i aria-hidden="true" className="fas fa-pen-to-square" /></a>}
       {d.urls.items && <a href={d.urls.items} className="btn btn-info btn-sm" title="Item &amp; topic analysis (online sitting)" data-native><i aria-hidden="true" className="fas fa-microscope" /></a>}
       {d.urls.deep && <a href={d.urls.deep} className="btn btn-info btn-sm" title="Deep analytics"><i aria-hidden="true" className="fas fa-brain" /></a>}
       {d.results.length > 0 && <button onClick={() => setExporting(true)} className="btn btn-secondary btn-sm" title="HD Image"><i aria-hidden="true" className="fas fa-image" /></button>}
-      <a href={d.urls.edit} className="btn btn-warning btn-sm" title="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>
+      {canWrite(d, 'mock_jamb_exam_edit') && <a href={d.urls.edit} className="btn btn-warning btn-sm" title="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>}
       <a href={d.urls.index} className="btn btn-secondary btn-sm" title="Back"><i aria-hidden="true" className="fas fa-arrow-left" /></a>
     </>
   );
@@ -545,8 +550,8 @@ function ViewExam({ d, notify }) {
                 </div>
                 <div className="student-actions">
                   <a href={it.student.progress_url} className="btn btn-info btn-sm" title="Progress"><i aria-hidden="true" className="fas fa-chart-line" /></a>
-                  <a href={it.edit_url} className="btn btn-warning btn-sm" aria-label="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>
-                  <button type="button" className="btn btn-danger btn-sm" onClick={() => delResult(it.delete_url)}><i aria-hidden="true" className="fas fa-trash" /></button>
+                  {canWrite(d, 'mock_jamb_results_edit') && <a href={it.edit_url} className="btn btn-warning btn-sm" aria-label="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>}
+                  {canWrite(d, 'mock_jamb_results_delete') && <button type="button" className="btn btn-danger btn-sm" onClick={() => delResult(it.delete_url)}><i aria-hidden="true" className="fas fa-trash" /></button>}
                 </div>
               </div>
             ))}
@@ -566,8 +571,8 @@ function ViewExam({ d, notify }) {
                   <td><span className={'score-badge score-' + it.perf_class}>{it.performance_level}</span></td>
                   <td><div style={{ display: 'flex', gap: '0.25rem' }}>
                     <a href={it.student.progress_url} className="btn btn-info btn-sm" title="Progress"><i aria-hidden="true" className="fas fa-chart-line" /></a>
-                    <a href={it.edit_url} className="btn btn-warning btn-sm" aria-label="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>
-                    <button type="button" className="btn btn-danger btn-sm" onClick={() => delResult(it.delete_url)}><i aria-hidden="true" className="fas fa-trash" /></button>
+                    {canWrite(d, 'mock_jamb_results_edit') && <a href={it.edit_url} className="btn btn-warning btn-sm" aria-label="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>}
+                    {canWrite(d, 'mock_jamb_results_delete') && <button type="button" className="btn btn-danger btn-sm" onClick={() => delResult(it.delete_url)}><i aria-hidden="true" className="fas fa-trash" /></button>}
                   </div></td>
                 </tr>))}
               </tbody>
@@ -576,15 +581,17 @@ function ViewExam({ d, notify }) {
         </>) : (
           <div className="card-body"><Empty icon="fa-clipboard-list" title="No Results">
             <p>{filters.search ? `No students found matching "${filters.search}"` : 'Add results for this exam'}</p>
-            <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add</a></Empty></div>
+            {canWrite(d, 'mock_jamb_results_create') && <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add</a>}</Empty></div>
         )}
       </div>
 
+      {canWrite(d, 'mock_jamb_exam_delete') && (
       <div className="card mt-3" style={{ borderColor: 'var(--danger)' }}>
         <div className="card-header" style={{ background: 'rgba(220,53,69,0.1)' }}><h3 className="text-danger"><i aria-hidden="true" className="fas fa-exclamation-triangle" /> Danger Zone</h3></div>
         <div className="card-body"><p className="text-muted mb-3">Delete exam and all results permanently.</p>
           <button type="button" className="btn btn-danger" onClick={delExam}><i aria-hidden="true" className="fas fa-trash" /> Delete Exam</button></div>
       </div>
+      )}
 
       {exporting && <ExportModal onClose={() => setExporting(false)} onGenerate={doExport}
                                  hasSubjects={!!(st && st.subject_analysis && st.subject_analysis.length)} />}

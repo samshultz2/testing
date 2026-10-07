@@ -672,3 +672,250 @@ def test_mock_waec_results_view_without_export(app):
     assert c.get(f'/mock-waec/exam/{exam_id}/broadsheet').status_code == 200
     # 'mock_waec_results_export' is a separate slice -> blocked
     assert c.get(f'/mock-waec/exam/{exam_id}/export', follow_redirects=False).status_code in (302, 303)
+
+
+# --- mock_jamb partition (Sub-Phase 1) --------------------------------------
+def _mj_session(app):
+    from models import AcademicSession
+    with app.app_context():
+        s = AcademicSession.query.filter_by(is_active=True).first() or \
+            AcademicSession(name='MJ 25/26', is_active=True)
+        db.session.add(s); db.session.commit()
+        return s.id
+
+
+def _mj_exam(app, ssid, n):
+    from datetime import date
+    from models.mock_jamb import MockJAMBExam
+    with app.app_context():
+        ex = MockJAMBExam(name=f'MJ Exam {n}', exam_number=n, session_id=ssid,
+                          exam_date=date(2025, 1, 1))
+        db.session.add(ex); db.session.commit()
+        return ex.id
+
+
+def _mj_student(app, sid):
+    from models import Student
+    with app.app_context():
+        s = Student.query.filter_by(student_id=sid).first()
+        if not s:
+            s = Student(student_id=sid, first_name='Mock', surname='Jamb', gender='Male')
+            db.session.add(s); db.session.commit()
+        return s.id
+
+
+def _mj_result(app, student_id, exam_id, score=70):
+    from models.mock_jamb import MockJAMBResult
+    with app.app_context():
+        r = MockJAMBResult(student_id=student_id, mock_exam_id=exam_id, total_score=score,
+                           subject1='Mathematics', subject1_score=score)
+        db.session.add(r); db.session.commit()
+        return r.id
+
+
+def _mj_subject(app, name):
+    from models import Subject
+    with app.app_context():
+        s = Subject.query.filter_by(name=name).first() or Subject(name=name, is_active=True)
+        db.session.add(s); db.session.commit()
+        return s.id
+
+
+def _mj_passage(app, exam_id, subject_id):
+    from models.mock_jamb import MockJAMBPassage
+    with app.app_context():
+        p = MockJAMBPassage(mock_exam_id=exam_id, subject_id=subject_id, kind='comprehension',
+                            body='Read this passage and answer.')
+        db.session.add(p); db.session.commit()
+        return p.id
+
+
+def test_mock_jamb_exam_view_without_create(app):
+    ssid = _mj_session(app)
+    exam_id = _mj_exam(app, ssid, 201)
+    _make(app, 'mj_exam_view', {'external_exams.mock_jamb_exam_view': 'view'})
+    c = _login(app, 'mj_exam_view')
+    assert c.get('/mock-jamb/').status_code == 200
+    assert c.get(f'/mock-jamb/exam/{exam_id}').status_code == 200
+    # 'mock_jamb_exam_create' is a separate slice -> blocked
+    assert c.get('/mock-jamb/exam/create', follow_redirects=False).status_code in (302, 303)
+
+
+def test_mock_jamb_exam_create_without_edit_or_delete(app):
+    from models.mock_jamb import MockJAMBExam
+    ssid = _mj_session(app)
+    _make(app, 'mj_exam_create', {'external_exams.mock_jamb_exam_create': 'edit'})
+    c = _login(app, 'mj_exam_create')
+    assert c.get('/mock-jamb/exam/create').status_code == 200
+    token = _ptoken(c)
+    r = c.post('/mock-jamb/exam/create',
+               data={'session_id': ssid, 'exam_number': 202, 'exam_date': '2025-03-01',
+                     'name': 'Created MJ', '_csrf_token': token}, follow_redirects=False)
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        exam = MockJAMBExam.query.filter_by(session_id=ssid, exam_number=202).first()
+        assert exam is not None
+        exam_id = exam.id
+    # 'mock_jamb_exam_edit'/'mock_jamb_exam_delete' are separate slices -> blocked
+    assert c.get(f'/mock-jamb/exam/{exam_id}/edit', follow_redirects=False).status_code in (302, 303)
+    r2 = c.post(f'/mock-jamb/exam/{exam_id}/delete', data={'_csrf_token': token},
+                follow_redirects=False)
+    assert r2.status_code in (302, 303)
+    with app.app_context():
+        assert db.session.get(MockJAMBExam, exam_id) is not None   # untouched
+
+
+def test_mock_jamb_exam_edit_without_delete(app):
+    from models.mock_jamb import MockJAMBExam
+    ssid = _mj_session(app)
+    exam_id = _mj_exam(app, ssid, 203)
+    _make(app, 'mj_exam_edit', {'external_exams.mock_jamb_exam_view': 'view',
+                                'external_exams.mock_jamb_exam_edit': 'edit'})
+    c = _login(app, 'mj_exam_edit')
+    assert c.get(f'/mock-jamb/exam/{exam_id}/edit').status_code == 200
+    token = _ptoken(c)
+    r = c.post(f'/mock-jamb/exam/{exam_id}/delete', data={'_csrf_token': token},
+               follow_redirects=False)
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        assert db.session.get(MockJAMBExam, exam_id) is not None   # untouched
+
+
+def test_mock_jamb_results_create_without_edit_or_delete(app):
+    from models.mock_jamb import MockJAMBResult
+    ssid = _mj_session(app)
+    exam_id = _mj_exam(app, ssid, 204)
+    sid = _mj_student(app, 'MJC001')
+    _make(app, 'mj_res_create', {'external_exams.mock_jamb_exam_view': 'view',
+                                 'external_exams.mock_jamb_results_create': 'edit'})
+    c = _login(app, 'mj_res_create')
+    assert c.get(f'/mock-jamb/exam/{exam_id}/results/add').status_code == 200
+    token = _ptoken(c)
+    r = c.post(f'/mock-jamb/exam/{exam_id}/results/add',
+               data={'student_id': sid, 'subject1': 'Mathematics', 'subject1_score': '70',
+                     '_csrf_token': token}, follow_redirects=False)
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        row = MockJAMBResult.query.filter_by(student_id=sid, mock_exam_id=exam_id).first()
+        assert row is not None
+        rid = row.id
+    # 'mock_jamb_results_edit'/'mock_jamb_results_delete' are separate slices -> blocked
+    assert c.get(f'/mock-jamb/result/{rid}/edit', follow_redirects=False).status_code in (302, 303)
+    r2 = c.post(f'/mock-jamb/result/{rid}/delete', data={'_csrf_token': token},
+                follow_redirects=False)
+    assert r2.status_code in (302, 303)
+    with app.app_context():
+        assert db.session.get(MockJAMBResult, rid) is not None   # untouched
+
+
+def test_mock_jamb_results_edit_without_delete(app):
+    from models.mock_jamb import MockJAMBResult
+    ssid = _mj_session(app)
+    exam_id = _mj_exam(app, ssid, 205)
+    sid = _mj_student(app, 'MJC002')
+    rid = _mj_result(app, sid, exam_id)
+    _make(app, 'mj_res_edit', {'external_exams.mock_jamb_exam_view': 'view',
+                              'external_exams.mock_jamb_results_edit': 'edit'})
+    c = _login(app, 'mj_res_edit')
+    assert c.get(f'/mock-jamb/result/{rid}/edit').status_code == 200
+    token = _ptoken(c)
+    r = c.post(f'/mock-jamb/result/{rid}/delete', data={'_csrf_token': token},
+               follow_redirects=False)
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        assert db.session.get(MockJAMBResult, rid) is not None   # delete not granted -> untouched
+
+
+def test_mock_jamb_results_delete_slice(app):
+    from models.mock_jamb import MockJAMBResult
+    ssid = _mj_session(app)
+    exam_id = _mj_exam(app, ssid, 206)
+    sid = _mj_student(app, 'MJC003')
+    rid = _mj_result(app, sid, exam_id)
+    _make(app, 'mj_res_delete', {'external_exams.mock_jamb_exam_view': 'view',
+                                 'external_exams.mock_jamb_results_delete': 'edit'})
+    c = _login(app, 'mj_res_delete')
+    # 'mock_jamb_results_edit' not granted -> blocked
+    assert c.get(f'/mock-jamb/result/{rid}/edit', follow_redirects=False).status_code in (302, 303)
+    token = _ptoken(c)
+    r = c.post(f'/mock-jamb/result/{rid}/delete', data={'_csrf_token': token},
+               follow_redirects=False)
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        assert db.session.get(MockJAMBResult, rid) is None   # delete granted -> removed
+
+
+def test_mock_jamb_exam_view_without_export(app):
+    ssid = _mj_session(app)
+    exam_id = _mj_exam(app, ssid, 207)
+    _make(app, 'mj_exam_view_noexp', {'external_exams.mock_jamb_exam_view': 'view'})
+    c = _login(app, 'mj_exam_view_noexp')
+    assert c.get(f'/mock-jamb/exam/{exam_id}').status_code == 200
+    # 'mock_jamb_results_export' is a separate slice -> blocked
+    assert c.get(f'/mock-jamb/exam/{exam_id}/export', follow_redirects=False).status_code in (302, 303)
+
+
+def test_mock_jamb_build_view_without_edit(app):
+    ssid = _mj_session(app)
+    exam_id = _mj_exam(app, ssid, 208)
+    _make(app, 'mj_build_view', {'external_exams.mock_jamb_build_view': 'view'})
+    c = _login(app, 'mj_build_view')
+    assert c.get(f'/mock-jamb/exam/{exam_id}/questions').status_code == 200
+    token = _ptoken(c)
+    subj_id = _mj_subject(app, 'MJ Build Subject A')
+    r = c.post(f'/mock-jamb/exam/{exam_id}/passages/add',
+               data={'subject_id': subj_id, 'body': 'A passage', '_csrf_token': token},
+               follow_redirects=False)
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        from models.mock_jamb import MockJAMBPassage
+        assert MockJAMBPassage.query.filter_by(mock_exam_id=exam_id).first() is None   # blocked
+
+
+def test_mock_jamb_build_edit_without_delete(app):
+    from models.mock_jamb import MockJAMBPassage
+    ssid = _mj_session(app)
+    exam_id = _mj_exam(app, ssid, 209)
+    subj_id = _mj_subject(app, 'MJ Build Subject B')
+    _make(app, 'mj_build_edit', {'external_exams.mock_jamb_build_view': 'view',
+                                 'external_exams.mock_jamb_build_edit': 'edit'})
+    c = _login(app, 'mj_build_edit')
+    token = _ptoken(c)
+    r = c.post(f'/mock-jamb/exam/{exam_id}/passages/add',
+               data={'subject_id': subj_id, 'body': 'A passage', '_csrf_token': token},
+               follow_redirects=False)
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        passage = MockJAMBPassage.query.filter_by(mock_exam_id=exam_id).first()
+        assert passage is not None
+        pid = passage.id
+    # 'mock_jamb_build_delete' is a separate slice -> blocked
+    r2 = c.post(f'/mock-jamb/passage/{pid}/delete', data={'_csrf_token': token},
+                follow_redirects=False)
+    assert r2.status_code in (302, 303)
+    with app.app_context():
+        assert db.session.get(MockJAMBPassage, pid) is not None   # untouched
+
+
+def test_mock_jamb_build_delete_slice(app):
+    from models.mock_jamb import MockJAMBPassage
+    ssid = _mj_session(app)
+    exam_id = _mj_exam(app, ssid, 210)
+    subj_id = _mj_subject(app, 'MJ Build Subject C')
+    pid = _mj_passage(app, exam_id, subj_id)
+    _make(app, 'mj_build_delete', {'external_exams.mock_jamb_build_view': 'view',
+                                   'external_exams.mock_jamb_build_delete': 'edit'})
+    c = _login(app, 'mj_build_delete')
+    token = _ptoken(c)
+    # 'mock_jamb_build_edit' not granted -> blocked
+    r = c.post(f'/mock-jamb/exam/{exam_id}/passages/add',
+               data={'subject_id': subj_id, 'body': 'Another passage', '_csrf_token': token},
+               follow_redirects=False)
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        assert MockJAMBPassage.query.filter_by(mock_exam_id=exam_id, body='Another passage').first() is None
+    r2 = c.post(f'/mock-jamb/passage/{pid}/delete', data={'_csrf_token': token},
+                follow_redirects=False)
+    assert r2.status_code in (302, 303)
+    with app.app_context():
+        assert db.session.get(MockJAMBPassage, pid) is None   # delete granted -> removed
