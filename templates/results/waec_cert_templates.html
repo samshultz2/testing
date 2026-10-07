@@ -45,8 +45,12 @@
   <div class="tm-head">
     <h1><i class="fas fa-layer-group" style="color:var(--primary)"></i> WAEC Result Templates</h1>
     <div class="sp">
+      {% if can_write_sub('external_exams', 'cert_generate') %}
       <a class="btn" href="{{ url_for('results.waec_cert_generator') }}"><i class="fas fa-id-card"></i> Generator</a>
+      {% endif %}
+      {% if can_write_sub('external_exams', 'cert_bulk') %}
       <a class="btn" href="{{ url_for('results.waec_cert_bulk') }}"><i class="fas fa-layer-group"></i> Bulk</a>
+      {% endif %}
     </div>
   </div>
 
@@ -118,8 +122,10 @@
                   <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn sm" type="submit">Duplicate</button></form>
                 <form method="post" action="{{ url_for('results.waec_cert_template_status', tpl_id=t.id) }}" style="display:inline">
                   <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn sm" type="submit">{{ 'Archive' if t.status == 'active' else 'Activate' }}</button></form>
+                {% if can_write_sub('external_exams', 'cert_templates_delete') %}
                 <form method="post" action="{{ url_for('results.waec_cert_delete_template', tpl_id=t.id) }}" style="display:inline" onsubmit="return confirm('Delete this template?')">
                   <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn sm danger" type="submit">Delete</button></form>
+                {% endif %}
               </div>
             </td>
           </tr>
@@ -138,8 +144,10 @@
       {% for p in db_presets %}
       <div style="display:flex;align-items:center;gap:10px;padding:7px 0;border-bottom:1px solid var(--border-light)">
         <strong>{{ p.name }}</strong><span class="muted">{{ p.components()|length }} components</span>
+        {% if can_write_sub('external_exams', 'cert_presets') %}
         <form method="post" action="{{ url_for('results.waec_cert_delete_preset', preset_id=p.id) }}" style="margin-left:auto">
           <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn sm danger" type="submit">Delete</button></form>
+        {% endif %}
       </div>
       {% endfor %}
     </div>

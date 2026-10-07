@@ -461,3 +461,49 @@ def test_grade_distribution_create_without_delete(app):
         # 'grade_distribution_delete' not granted -> row untouched
         assert BranchGradeDistribution.query.filter_by(
             branch_id=bid, exam='waec', exam_year=2024, subject='English').first() is not None
+
+
+# --- external_exams certificate generator partition (Phase 4) --------------
+def test_cert_generate_without_templates_or_bulk(app):
+    _make(app, 'cert_gen_only', {'external_exams.cert_generate': 'edit'})
+    c = _login(app, 'cert_gen_only')
+    assert c.get('/results/waec/certificate').status_code == 200
+    assert c.get('/results/waec/certificate/templates', follow_redirects=False).status_code in (302, 303)
+    assert c.get('/results/waec/certificate/bulk', follow_redirects=False).status_code in (302, 303)
+
+
+def test_cert_templates_without_delete(app):
+    from models import WAECCertTemplate
+    _make(app, 'cert_tpl_only', {'external_exams.cert_templates': 'edit'})
+    c = _login(app, 'cert_tpl_only')
+    assert c.get('/results/waec/certificate/templates').status_code == 200
+    token = _ptoken(c)
+    r = c.post('/results/waec/certificate/templates',
+               data={'name': 'Test Template', 'base_layout': 'prestige', '_csrf_token': token},
+               follow_redirects=False)
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        tpl = WAECCertTemplate.query.filter_by(name='Test Template').first()
+        assert tpl is not None
+        tpl_id = tpl.id
+    # 'cert_templates_delete' is a separate slice -> blocked
+    r2 = c.post(f'/results/waec/certificate/templates/{tpl_id}/delete',
+                data={'_csrf_token': token}, follow_redirects=False)
+    assert r2.status_code in (302, 303)
+    with app.app_context():
+        assert db.session.get(WAECCertTemplate, tpl_id) is not None   # untouched
+
+
+def test_cert_presets_separate_from_templates(app):
+    from models import WAECCertPreset
+    _make(app, 'cert_preset_only', {'external_exams.cert_presets': 'edit'})
+    c = _login(app, 'cert_preset_only')
+    # presets don't grant access to template management
+    assert c.get('/results/waec/certificate/templates', follow_redirects=False).status_code in (302, 303)
+    token = _ptoken(c)
+    r = c.post('/results/waec/certificate/presets',
+               data={'name': 'Test Preset', 'c': 'school_name', '_csrf_token': token},
+               follow_redirects=False)
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        assert WAECCertPreset.query.filter_by(name='Test Preset').first() is not None

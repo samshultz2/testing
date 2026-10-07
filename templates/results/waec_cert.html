@@ -141,8 +141,12 @@
     <h1><i class="fas fa-id-card" style="color:var(--primary)"></i> {{ student.full_name }}</h1>
     <span class="who">WAEC Result Generator</span>
     <div style="margin-left:auto;display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      {% if can_write_sub('external_exams', 'cert_templates') %}
       <a class="btn" style="padding:8px 12px;font-size:.82rem" href="{{ manage_url }}"><i class="fas fa-layer-group"></i> Templates</a>
+      {% endif %}
+      {% if can_write_sub('external_exams', 'cert_bulk') %}
       <a class="btn" style="padding:8px 12px;font-size:.82rem" href="{{ bulk_url }}"><i class="fas fa-file-zipper"></i> Bulk</a>
+      {% endif %}
       <form method="get" action="{{ url_for('results.waec_cert_generator') }}">
         <input type="hidden" name="student_id" value="{{ student.id }}">
         <select name="year" onchange="this.form.submit()" aria-label="Exam year" style="margin-left:0">
@@ -185,6 +189,7 @@
           {% for p in presets %}<button type="button" class="wc-preset" data-keys='{{ p["keys"]|tojson }}'>{{ p.label }}</button>{% endfor %}
           <button type="button" class="wc-preset" data-all="1">Everything available</button>
         </div>
+        {% if can_write_sub('external_exams', 'cert_presets') %}
         <form method="post" action="{{ save_preset_url }}" id="savePreset" style="display:flex;gap:6px;margin-top:9px">
           <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="c" id="spC">
@@ -192,6 +197,7 @@
                  style="flex:1;padding:6px 10px;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-body);color:var(--text-primary);font-size:.8rem">
           <button type="submit" class="btn" style="padding:6px 12px;font-size:.8rem"><i class="fas fa-bookmark"></i> Save</button>
         </form>
+        {% endif %}
       </div>
       <div class="wc-sec" style="max-height:none">
         <div class="gl" style="font-size:.72rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Included information</div>

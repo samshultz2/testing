@@ -206,7 +206,7 @@ def waec_cert_preview():
 
 
 @results_bp.route('/waec/certificate/generate', methods=['POST'])
-@admin_required
+@login_required
 def waec_cert_generate():
     student = _load_student(request.form.get('student_id', type=int))
     year = request.form.get('year', type=int)
@@ -233,7 +233,7 @@ def waec_cert_generate():
 #  reusable presets                                                           #
 # --------------------------------------------------------------------------- #
 @results_bp.route('/waec/certificate/presets', methods=['POST'])
-@admin_required
+@login_required
 def waec_cert_save_preset():
     name = (request.form.get('name') or '').strip()
     keys = [k for k in (request.form.get('c') or '').split(',') if k in W._ALL_COMPONENTS]
@@ -250,7 +250,7 @@ def waec_cert_save_preset():
 
 
 @results_bp.route('/waec/certificate/presets/<int:preset_id>/delete', methods=['POST'])
-@admin_required
+@login_required
 def waec_cert_delete_preset(preset_id):
     p = db.session.get(WAECCertPreset, preset_id)
     if p:
@@ -263,7 +263,7 @@ def waec_cert_delete_preset(preset_id):
 #  template management (per-year/branch assignment, status, default, version) #
 # --------------------------------------------------------------------------- #
 @results_bp.route('/waec/certificate/templates')
-@admin_required
+@login_required
 def waec_cert_templates():
     rows = WAECCertTemplate.query.order_by(
         WAECCertTemplate.status, WAECCertTemplate.year.desc(), WAECCertTemplate.name).all()
@@ -290,7 +290,7 @@ def _tpl_options_from_form():
 
 
 @results_bp.route('/waec/certificate/templates', methods=['POST'])
-@admin_required
+@login_required
 def waec_cert_create_template():
     name = (request.form.get('name') or '').strip()
     layout = request.form.get('base_layout')
@@ -325,7 +325,7 @@ def _clear_other_defaults(t):
 
 
 @results_bp.route('/waec/certificate/templates/<int:tpl_id>/edit', methods=['POST'])
-@admin_required
+@login_required
 def waec_cert_edit_template(tpl_id):
     t = db.session.get(WAECCertTemplate, tpl_id) or abort(404)
     require_branch_access(t.branch_id)   # no cross-branch template edits (IDOR guard)
@@ -349,7 +349,7 @@ def waec_cert_edit_template(tpl_id):
 
 
 @results_bp.route('/waec/certificate/templates/<int:tpl_id>/duplicate', methods=['POST'])
-@admin_required
+@login_required
 def waec_cert_duplicate_template(tpl_id):
     t = db.session.get(WAECCertTemplate, tpl_id) or abort(404)
     require_branch_access(t.branch_id)   # no cross-branch template access (IDOR guard)
@@ -363,7 +363,7 @@ def waec_cert_duplicate_template(tpl_id):
 
 
 @results_bp.route('/waec/certificate/templates/<int:tpl_id>/status', methods=['POST'])
-@admin_required
+@login_required
 def waec_cert_template_status(tpl_id):
     t = db.session.get(WAECCertTemplate, tpl_id) or abort(404)
     require_branch_access(t.branch_id)   # no cross-branch status changes (IDOR guard)
@@ -376,7 +376,7 @@ def waec_cert_template_status(tpl_id):
 
 
 @results_bp.route('/waec/certificate/templates/<int:tpl_id>/default', methods=['POST'])
-@admin_required
+@login_required
 def waec_cert_template_default(tpl_id):
     t = db.session.get(WAECCertTemplate, tpl_id) or abort(404)
     require_branch_access(t.branch_id)   # no cross-branch default changes (IDOR guard)
@@ -388,7 +388,7 @@ def waec_cert_template_default(tpl_id):
 
 
 @results_bp.route('/waec/certificate/templates/<int:tpl_id>/delete', methods=['POST'])
-@admin_required
+@login_required
 def waec_cert_delete_template(tpl_id):
     t = db.session.get(WAECCertTemplate, tpl_id) or abort(404)
     require_branch_access(t.branch_id)   # no cross-branch template deletes (IDOR guard)
@@ -401,7 +401,7 @@ def waec_cert_delete_template(tpl_id):
 #  bulk generation → ZIP                                                       #
 # --------------------------------------------------------------------------- #
 @results_bp.route('/waec/certificate/bulk', methods=['GET'])
-@admin_required
+@login_required
 def waec_cert_bulk():
     years = [y[0] for y in db.session.query(WAECResult.exam_year).distinct()
              .order_by(WAECResult.exam_year.desc()).all()]
@@ -424,7 +424,7 @@ def waec_cert_bulk():
 
 
 @results_bp.route('/waec/certificate/bulk', methods=['POST'])
-@admin_required
+@login_required
 def waec_cert_bulk_generate():
     year = request.form.get('year', type=int)
     template = request.form.get('template') or W.DEFAULT_TEMPLATE
