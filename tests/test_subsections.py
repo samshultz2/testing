@@ -952,3 +952,207 @@ def test_mock_jamb_analytics_export_separate_slice(app):
     assert r.status_code in (302, 303)
     assert r.headers['Location'].rstrip('/') != ''
     assert f'/mock-jamb/exam/{exam_id}/deep' in r.headers['Location']
+
+
+# --- mock_jamb central question bank partition (Sub-Phase 3) ---------------
+def _mj_bank_question(app, subject_id, needs_image=False):
+    from models.mock_jamb import MockJAMBQuestion
+    with app.app_context():
+        q = MockJAMBQuestion(mock_exam_id=None, subject_id=subject_id,
+                             question_text='2+2=?', correct_option='A',
+                             option_a='4', option_b='5', option_c='6', option_d='7',
+                             needs_image=needs_image)
+        db.session.add(q); db.session.commit()
+        return q.id
+
+
+def test_mock_jamb_bank_view_without_edit(app):
+    subj_id = _mj_subject(app, 'MJ Bank Subject View')
+    _make(app, 'mj_bank_view', {'external_exams.mock_jamb_bank_view': 'view'})
+    c = _login(app, 'mj_bank_view')
+    assert c.get('/mock-jamb/bank').status_code == 200
+    token = _ptoken(c)
+    r = c.post('/mock-jamb/bank/question/add',
+               data={'subject_id': subj_id, 'question_text': 'Q?', 'correct_option': 'A',
+                     'option_a': '1', '_csrf_token': token}, follow_redirects=False)
+    assert r.status_code in (302, 303)
+    assert r.headers['Location'].rstrip('/') == ''   # blocked -> dashboard
+
+
+def test_mock_jamb_bank_edit_without_delete(app):
+    from models.mock_jamb import MockJAMBQuestion
+    subj_id = _mj_subject(app, 'MJ Bank Subject Edit')
+    _make(app, 'mj_bank_edit', {'external_exams.mock_jamb_bank_view': 'view',
+                               'external_exams.mock_jamb_bank_edit': 'edit'})
+    c = _login(app, 'mj_bank_edit')
+    token = _ptoken(c)
+    r = c.post('/mock-jamb/bank/question/add',
+               data={'subject_id': subj_id, 'question_text': 'Added Q?', 'correct_option': 'A',
+                     'option_a': '1', '_csrf_token': token}, follow_redirects=False)
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        q = MockJAMBQuestion.query.filter_by(subject_id=subj_id, mock_exam_id=None,
+                                             question_text='Added Q?').first()
+        assert q is not None
+        qid = q.id
+    # 'mock_jamb_bank_delete' is a separate slice -> blocked
+    r2 = c.post(f'/mock-jamb/bank/question/{qid}/delete', data={'_csrf_token': token},
+                follow_redirects=False)
+    assert r2.status_code in (302, 303)
+    with app.app_context():
+        assert db.session.get(MockJAMBQuestion, qid) is not None   # untouched
+
+
+def test_mock_jamb_bank_delete_slice(app):
+    from models.mock_jamb import MockJAMBQuestion
+    subj_id = _mj_subject(app, 'MJ Bank Subject Delete')
+    qid = _mj_bank_question(app, subj_id)
+    _make(app, 'mj_bank_delete', {'external_exams.mock_jamb_bank_view': 'view',
+                                 'external_exams.mock_jamb_bank_delete': 'edit'})
+    c = _login(app, 'mj_bank_delete')
+    token = _ptoken(c)
+    # 'mock_jamb_bank_edit' not granted -> blocked
+    r = c.post('/mock-jamb/bank/question/add',
+               data={'subject_id': subj_id, 'question_text': 'Nope?', 'correct_option': 'A',
+                     'option_a': '1', '_csrf_token': token}, follow_redirects=False)
+    assert r.status_code in (302, 303)
+    assert r.headers['Location'].rstrip('/') == ''
+    r2 = c.post(f'/mock-jamb/bank/question/{qid}/delete', data={'_csrf_token': token},
+                follow_redirects=False)
+    assert r2.status_code in (302, 303)
+    with app.app_context():
+        assert db.session.get(MockJAMBQuestion, qid) is None   # delete granted -> removed
+
+
+def test_mock_jamb_bank_syllabus_view_without_edit(app):
+    subj_id = _mj_subject(app, 'MJ Bank Syllabus View')
+    _make(app, 'mj_syl_view', {'external_exams.mock_jamb_bank_syllabus_view': 'view'})
+    c = _login(app, 'mj_syl_view')
+    assert c.get('/mock-jamb/bank/syllabus').status_code == 200
+    token = _ptoken(c)
+    r = c.post('/mock-jamb/bank/syllabus/import',
+               data={'subject_id': subj_id, 'format': 'json', 'text': 'not valid',
+                     '_csrf_token': token}, follow_redirects=False)
+    assert r.status_code in (302, 303)
+    assert r.headers['Location'].rstrip('/') == ''   # blocked -> dashboard
+
+
+def test_mock_jamb_bank_syllabus_edit_without_delete(app):
+    subj_id = _mj_subject(app, 'MJ Bank Syllabus Edit')
+    _make(app, 'mj_syl_edit', {'external_exams.mock_jamb_bank_syllabus_view': 'view',
+                              'external_exams.mock_jamb_bank_syllabus_edit': 'edit'})
+    c = _login(app, 'mj_syl_edit')
+    token = _ptoken(c)
+    # Granted -> passes the permission gate; a malformed import fails business
+    # validation and redirects back to the syllabus page (not the dashboard).
+    r = c.post('/mock-jamb/bank/syllabus/import',
+               data={'subject_id': subj_id, 'format': 'json', 'text': 'not valid',
+                     '_csrf_token': token}, follow_redirects=False)
+    assert r.status_code in (302, 303)
+    assert r.headers['Location'].rstrip('/') != ''
+    assert '/mock-jamb/bank/syllabus' in r.headers['Location']
+    # 'mock_jamb_bank_syllabus_delete' is a separate slice -> blocked
+    r2 = c.post('/mock-jamb/bank/syllabus/clear', data={'subject_id': subj_id, '_csrf_token': token},
+                follow_redirects=False)
+    assert r2.status_code in (302, 303)
+    assert r2.headers['Location'].rstrip('/') == ''
+
+
+def test_mock_jamb_bank_syllabus_delete_slice(app):
+    from models.mock_jamb import MockJAMBSyllabus
+    subj_id = _mj_subject(app, 'MJ Bank Syllabus Delete')
+    with app.app_context():
+        syl = MockJAMBSyllabus(subject_id=subj_id, prefix='MJD')
+        db.session.add(syl); db.session.commit()
+        syl_id = syl.id
+    _make(app, 'mj_syl_delete', {'external_exams.mock_jamb_bank_syllabus_view': 'view',
+                                'external_exams.mock_jamb_bank_syllabus_delete': 'edit'})
+    c = _login(app, 'mj_syl_delete')
+    token = _ptoken(c)
+    # 'mock_jamb_bank_syllabus_edit' not granted -> blocked
+    r = c.post('/mock-jamb/bank/syllabus/import',
+               data={'subject_id': subj_id, 'format': 'json', 'text': 'not valid',
+                     '_csrf_token': token}, follow_redirects=False)
+    assert r.status_code in (302, 303)
+    assert r.headers['Location'].rstrip('/') == ''
+    r2 = c.post('/mock-jamb/bank/syllabus/clear', data={'subject_id': subj_id, '_csrf_token': token},
+                follow_redirects=False)
+    assert r2.status_code in (302, 303)
+    with app.app_context():
+        assert db.session.get(MockJAMBSyllabus, syl_id) is None   # delete granted -> removed
+
+
+def test_mock_jamb_bank_retag_slice(app):
+    subj_id = _mj_subject(app, 'MJ Bank Retag')
+    _make(app, 'mj_bank_retag', {'external_exams.mock_jamb_bank_analytics_view': 'view',
+                                'external_exams.mock_jamb_bank_retag': 'edit'})
+    c = _login(app, 'mj_bank_retag')
+    token = _ptoken(c)
+    # Granted -> passes the gate and redirects to bank_analytics (not the dashboard).
+    r = c.post('/mock-jamb/bank/retag', data={'subject_id': subj_id, '_csrf_token': token},
+               follow_redirects=False)
+    assert r.status_code in (302, 303)
+    assert '/mock-jamb/bank/analytics' in r.headers['Location']
+
+    _make(app, 'mj_bank_noretag', {'external_exams.mock_jamb_bank_analytics_view': 'view'})
+    c2 = _login(app, 'mj_bank_noretag')
+    token2 = _ptoken(c2)
+    r2 = c2.post('/mock-jamb/bank/retag', data={'subject_id': subj_id, '_csrf_token': token2},
+                 follow_redirects=False)
+    assert r2.status_code in (302, 303)
+    assert r2.headers['Location'].rstrip('/') == ''   # not granted -> dashboard
+
+
+def test_mock_jamb_bank_scrape_slice(app):
+    _make(app, 'mj_bank_scrape', {'external_exams.mock_jamb_bank_view': 'view',
+                                 'external_exams.mock_jamb_bank_scrape': 'edit'})
+    c = _login(app, 'mj_bank_scrape')
+    token = _ptoken(c)
+    # Granted, no subjects selected -> passes the gate, fails business validation (400 JSON).
+    r = c.post('/mock-jamb/bank/scrape/start', data={'_csrf_token': token}, follow_redirects=False)
+    assert r.status_code == 400
+
+    _make(app, 'mj_bank_noscrape', {'external_exams.mock_jamb_bank_view': 'view'})
+    c2 = _login(app, 'mj_bank_noscrape')
+    token2 = _ptoken(c2)
+    r2 = c2.post('/mock-jamb/bank/scrape/start', data={'_csrf_token': token2}, follow_redirects=False)
+    assert r2.status_code in (302, 303)
+    assert r2.headers['Location'].rstrip('/') == ''   # not granted -> dashboard
+
+
+def test_mock_jamb_bank_images_view_without_edit(app):
+    subj_id = _mj_subject(app, 'MJ Bank Images View')
+    qid = _mj_bank_question(app, subj_id, needs_image=True)
+    _make(app, 'mj_img_view', {'external_exams.mock_jamb_bank_images_view': 'view'})
+    c = _login(app, 'mj_img_view')
+    assert c.get('/mock-jamb/bank/needs-images').status_code == 200
+    token = _ptoken(c)
+    r = c.post(f'/mock-jamb/bank/question/{qid}/set-image',
+               data={'dismiss': '1', '_csrf_token': token}, follow_redirects=False)
+    assert r.status_code in (302, 303)
+    assert r.headers['Location'].rstrip('/') == ''   # blocked -> dashboard
+    with app.app_context():
+        from models.mock_jamb import MockJAMBQuestion
+        assert db.session.get(MockJAMBQuestion, qid).needs_image is True   # untouched
+
+
+def test_mock_jamb_bank_images_edit_slice(app):
+    from models.mock_jamb import MockJAMBQuestion
+    subj_id = _mj_subject(app, 'MJ Bank Images Edit')
+    qid = _mj_bank_question(app, subj_id, needs_image=True)
+    _make(app, 'mj_img_edit', {'external_exams.mock_jamb_bank_images_view': 'view',
+                              'external_exams.mock_jamb_bank_images_edit': 'edit'})
+    c = _login(app, 'mj_img_edit')
+    token = _ptoken(c)
+    r = c.post(f'/mock-jamb/bank/question/{qid}/set-image',
+               data={'dismiss': '1', '_csrf_token': token}, follow_redirects=False)
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        assert db.session.get(MockJAMBQuestion, qid).needs_image is False   # granted -> applied
+
+
+def test_mock_jamb_bank_analytics_view_slice(app):
+    _mj_subject(app, 'MJ Bank Analytics View')
+    _make(app, 'mj_bank_an_view', {'external_exams.mock_jamb_bank_analytics_view': 'view'})
+    c = _login(app, 'mj_bank_an_view')
+    assert c.get('/mock-jamb/bank/analytics').status_code == 200

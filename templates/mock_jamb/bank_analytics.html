@@ -70,6 +70,7 @@ details.ba > summary{cursor:pointer;font-weight:700;padding:.3rem 0}
 </div>
 {% endif %}
 
+{% if can_write_sub('external_exams', 'mock_jamb_bank_retag') %}
 <div class="card" style="margin-bottom:1rem;border-left:4px solid #7c3aed;">
     <div class="card-header"><h3><i class="fas fa-wand-magic-sparkles"></i> Auto-tag with the syllabus classifier</h3></div>
     <div class="card-body">
@@ -159,6 +160,7 @@ details.ba > summary{cursor:pointer;font-weight:700;padding:.3rem 0}
         {% endif %}
     </div>
 </div>
+{% endif %}
 
 {# ---- Topic breakdown ---- #}
 <div class="card" style="margin-bottom:1rem;">

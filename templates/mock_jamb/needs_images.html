@@ -32,7 +32,7 @@
     </form>
 </div></div>
 
-{% if questions %}
+{% if questions and can_write_sub('external_exams', 'mock_jamb_bank_images_edit') %}
 <div class="card mb-3"><div class="card-body" style="display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;">
     <label style="display:flex;align-items:center;gap:.4rem;font-weight:600;font-size:.85rem;cursor:pointer;">
         <input type="checkbox" id="niSelectAll"> Select all on this page</label>
@@ -66,6 +66,7 @@
     <div style="font-weight:600;">{{ q.question_text | question_html }}</div>
     {% for opt, val in q.options %}{% if val %}<div class="ni-opt {{ 'c' if q.correct_option == opt else '' }}">{{ opt }}. {{ val }}{% if q.correct_option == opt %} <i class="fas fa-check"></i>{% endif %}</div>{% endif %}{% endfor %}
     <div class="ni-act">
+        {% if can_write_sub('external_exams', 'mock_jamb_bank_images_edit') %}
         <form method="post" action="{{ url_for('mock_jamb.bank_set_question_image', question_id=q.id) }}" enctype="multipart/form-data" style="display:flex;gap:.4rem;align-items:center;">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <input type="file" name="image" accept="image/*" class="form-control" required style="max-width:240px;">
@@ -76,7 +77,10 @@
             <input type="hidden" name="dismiss" value="1">
             <button class="btn btn-secondary btn-sm"><i class="fas fa-check"></i> No image needed</button>
         </form>
+        {% endif %}
+        {% if can_write_sub('external_exams', 'mock_jamb_bank_edit') %}
         <a href="{{ url_for('mock_jamb.bank_edit_question', question_id=q.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-pen"></i> Edit</a>
+        {% endif %}
     </div>
 </div>
 {% else %}

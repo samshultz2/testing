@@ -34,6 +34,7 @@
   </select>
 </form>
 
+{% if can_write_sub('external_exams', 'mock_jamb_bank_syllabus_edit') %}
 <div class="card mb-3">
   <div class="card-header"><h3>Import a syllabus{% if subject %} for {{ subject.name }}{% endif %}</h3></div>
   <div class="card-body">
@@ -85,8 +86,10 @@
     </form>
   </div>
 </div>
+{% endif %}
 
 {% if syllabus %}
+{% if can_write_sub('external_exams', 'mock_jamb_bank_syllabus_edit') %}
 <div class="card mb-3">
   <div class="card-header"><h3>AI retag questions to this syllabus</h3></div>
   <div class="card-body">
@@ -157,6 +160,7 @@
     </form>
   </div>
 </div>
+{% endif %}
 
 <script nonce="{{ csp_nonce }}">
 // The Method select routes to the inline or batch endpoint; the checkbox maps to
@@ -212,12 +216,14 @@
     <h3 style="margin:0">Current syllabus <span class="text-muted" style="font-weight:400">
       {{ syllabus.prefix }}{% if syllabus.version %} · v{{ syllabus.version }}{% endif %}
       {% if syllabus.total_questions %} · {{ syllabus.total_questions }} questions{% endif %}</span></h3>
+    {% if can_write_sub('external_exams', 'mock_jamb_bank_syllabus_delete') %}
     <form method="POST" action="{{ url_for('mock_jamb.bank_syllabus_clear') }}"
           data-confirm="Clear the imported syllabus for {{ subject.name }}? Bank questions are not affected.">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <input type="hidden" name="subject_id" value="{{ subject_id }}">
       <button type="submit" class="btn btn-danger btn-sm"><i class="fas fa-trash"></i> Clear syllabus</button>
     </form>
+    {% endif %}
   </div>
   <div class="card-body">
     {% if blueprint %}

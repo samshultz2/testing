@@ -25,7 +25,6 @@
 </style>
 {% endblock %}
 {% block content %}
-{% set mj_edit = can_write_module('external_exams') %}
 <div class="page-header">
     <div>
         <h1>Question Bank</h1>
@@ -75,7 +74,7 @@
     </div>
 </form>
 
-{% if needs_image_count and mj_edit %}
+{% if needs_image_count and can_write_sub('external_exams', 'mock_jamb_bank_images_view') %}
 <div class="card" style="margin-bottom:1rem;border-left:4px solid #b45309;">
     <div class="card-body" style="display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;">
         <i class="fas fa-image" style="color:#b45309;font-size:1.2rem;"></i>
@@ -86,7 +85,7 @@
 {% endif %}
 
 {# ---- One-click download from myschool.ng ---- #}
-{% if mj_edit %}
+{% if can_write_sub('external_exams', 'mock_jamb_bank_scrape') %}
 <details class="card" style="margin-bottom:1rem;border-left:4px solid #7c3aed;">
     <summary class="card-header" style="cursor:pointer;"><h3 style="display:inline;"><i class="fas fa-cloud-arrow-down"></i> Download questions from myschool.ng <span class="text-muted text-sm">— pick subjects &amp; years, it saves straight to the bank</span></h3></summary>
     <div class="card-body">
@@ -184,7 +183,7 @@
             <select name="subtopic" class="form-control mjq-subtopic" disabled><option value="">— Topic first —</option></select></div>
     </div>
     <div class="form-group"><label class="form-label">Diagram / figure (optional)</label><input type="file" name="image" accept="image/*" class="form-control"></div>
-    {% if can_write_module('external_exams') %}<button class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add to bank</button>{% endif %}
+    {% if can_write_sub('external_exams', 'mock_jamb_bank_edit') %}<button class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add to bank</button>{% endif %}
 </form>
 {%- endmacro %}
 
@@ -192,12 +191,16 @@
 <div class="mjq">
     <div style="display:flex;justify-content:space-between;gap:.5rem;">
         <div class="qtxt">{{ n }}. {{ q.question_text | question_html }}</div>
-        {% if can_write_module('external_exams') %}<div style="white-space:nowrap;">
+        {% if can_write_sub('external_exams', 'mock_jamb_bank_edit') or can_write_sub('external_exams', 'mock_jamb_bank_delete') %}<div style="white-space:nowrap;">
+            {% if can_write_sub('external_exams', 'mock_jamb_bank_edit') %}
             <a href="{{ url_for('mock_jamb.bank_edit_question', question_id=q.id) }}" class="btn btn-secondary btn-sm" title="Edit"><i class="fas fa-pen"></i></a>
+            {% endif %}
+            {% if can_write_sub('external_exams', 'mock_jamb_bank_delete') %}
             <form method="post" action="{{ url_for('mock_jamb.bank_delete_question', question_id=q.id) }}" style="display:inline;" data-confirm="Delete this question?">
                 <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                 <button class="btn btn-danger btn-sm" title="Delete"><i class="fas fa-trash"></i></button>
             </form>
+            {% endif %}
         </div>{% endif %}
     </div>
     {% if q.image_url %}<img src="{{ q.image_url }}" alt="figure" style="max-height:130px;margin:.4rem 0;border-radius:var(--radius-sm);">{% endif %}
@@ -207,7 +210,7 @@
 {%- endmacro %}
 
 {# ---- Bulk import ---- #}
-{% if mj_edit %}
+{% if can_write_sub('external_exams', 'mock_jamb_bank_edit') %}
 <details class="card" style="margin-bottom:1rem;">
     <summary class="card-header" style="cursor:pointer;"><h3 style="display:inline;"><i class="fas fa-file-import"></i> Bulk import questions <span class="text-muted text-sm">(paste)</span></h3></summary>
     <div class="card-body">
@@ -234,7 +237,7 @@
 {% endif %}
 
 {# ---- Add a passage (only subjects that actually use passages, e.g. English) ---- #}
-{% if has_passage_sections and mj_edit %}
+{% if has_passage_sections and can_write_sub('external_exams', 'mock_jamb_bank_edit') %}
 <div class="card" style="margin-bottom:1rem;">
     <div class="card-header"><h3><i class="fas fa-align-left"></i> Add a passage (comprehension / cloze / summary / oral)</h3></div>
     <div class="card-body">
@@ -271,7 +274,7 @@
         {% if p.section %}<span class="badge-sec">{{ p.section|replace('_',' ')|title }}</span>{% endif %}
         <strong style="flex:1;">{{ p.title or 'Passage' }}</strong>
         <span class="text-muted text-sm">{{ grp.questions|length }} question{{ '' if grp.questions|length == 1 else 's' }}</span>
-        {% if mj_edit %}<form method="post" action="{{ url_for('mock_jamb.bank_delete_passage', passage_id=p.id) }}" style="display:inline;" data-confirm="Delete “{{ p.title or 'this passage' }}” and its questions?">
+        {% if can_write_sub('external_exams', 'mock_jamb_bank_delete') %}<form method="post" action="{{ url_for('mock_jamb.bank_delete_passage', passage_id=p.id) }}" style="display:inline;" data-confirm="Delete “{{ p.title or 'this passage' }}” and its questions?">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <button class="btn btn-danger btn-sm" title="Delete passage"><i class="fas fa-trash"></i></button>
         </form>{% endif %}
@@ -279,14 +282,14 @@
     {% if p.image_url %}<img src="{{ p.image_url }}" alt="passage figure" style="max-height:150px;margin:.6rem .9rem;border-radius:var(--radius-sm);">{% endif %}
     <div class="mjq-body">{{ p.body | question_html }}</div>
     {% for q in grp.questions %}{{ show_q(q, loop.index) }}{% endfor %}
-    {% if mj_edit %}<details style="margin:.5rem .9rem;"><summary class="text-sm" style="cursor:pointer;color:var(--primary);"><i class="fas fa-plus"></i> Add a question to this passage</summary>
+    <details style="margin:.5rem .9rem;"><summary class="text-sm" style="cursor:pointer;color:var(--primary);"><i class="fas fa-plus"></i> Add a question to this passage</summary>
         {{ qform(url_for('mock_jamb.bank_add_question'), p.id, true) }}
-    </details>{% endif %}
+    </details>
 </div>
 {% endfor %}
 
 {# ---- Novel tagging (English Novel section) ---- #}
-{% if section == 'novel' and mj_edit %}
+{% if section == 'novel' and can_write_sub('external_exams', 'mock_jamb_bank_edit') %}
 <div class="card" style="margin-bottom:1rem;border-left:4px solid #7c3aed;">
     <div class="card-header"><h3><i class="fas fa-book"></i> Assign the approved novel</h3></div>
     <div class="card-body">
@@ -341,14 +344,14 @@
             {% if pagination.has_next %}<a class="btn btn-secondary btn-sm" href="{{ url_for('mock_jamb.bank', page=pagination.next_num, **args) }}">Next <i class="fas fa-chevron-right"></i></a>{% endif %}
         </div>
         {% endif %}
-        {% if mj_edit %}<details {{ 'open' if not standalone else '' }} style="margin:.5rem .9rem;"><summary class="text-sm" style="cursor:pointer;color:var(--primary);"><i class="fas fa-plus"></i> Add a stand-alone question</summary>
+        <details {{ 'open' if not standalone else '' }} style="margin:.5rem .9rem;"><summary class="text-sm" style="cursor:pointer;color:var(--primary);"><i class="fas fa-plus"></i> Add a stand-alone question</summary>
             {{ qform(url_for('mock_jamb.bank_add_question'), none, false) }}
-        </details>{% endif %}
+        </details>
     </div>
 </div>
 
 {# ---- Danger zone: bulk-delete a subject's bank questions ---- #}
-{% if subject and mj_edit %}
+{% if subject and can_write_sub('external_exams', 'mock_jamb_bank_delete') %}
 <details class="card" style="margin-bottom:1rem;border-left:4px solid #dc2626;">
     <summary class="card-header" style="cursor:pointer;"><h3 style="display:inline;color:#dc2626;"><i class="fas fa-trash"></i> Delete questions <span class="text-muted text-sm">— clear this subject and start again</span></h3></summary>
     <div class="card-body">
