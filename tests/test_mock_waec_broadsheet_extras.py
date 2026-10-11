@@ -143,6 +143,24 @@ def test_broadsheet_arm_position_subjects_sat_remark(app):
               'page_numbers=0&printed_on=0&exam_date=0')
     assert r2.status_code == 200 and r2.get_data()[:5] == b'%PDF-'
 
+    # Regression: the "No. offered"/"No. passed"/etc. summary-row labels were
+    # placed at a fixed column index that landed in the Arm column (too
+    # narrow, so the text ran over its neighbours) whenever arm_col was on,
+    # instead of staying under Name like they do with arm_col off. Checked
+    # against the two responses already fetched above (no extra requests).
+    import fitz
+
+    def _label_x0(resp):
+        doc = fitz.open(stream=resp.get_data(), filetype='pdf')
+        try:
+            words = doc[0].get_text('words')
+            hit = next(w for w in words if w[4] == 'offered')
+            return hit[0]
+        finally:
+            doc.close()
+
+    assert _label_x0(r) == pytest.approx(_label_x0(r2), abs=3)
+
 
 def test_broadsheet_preview_exposes_new_toggles(app):
     ssid = _session(app)

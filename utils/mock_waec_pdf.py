@@ -492,7 +492,9 @@ def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape',
                               ('No. failed', lambda d: d['failed']),
                               ('Average score %', lambda d: d['avg_score'] if d['avg_score'] is not None else '—'),
                               ('Average grade', lambda d: d['avg_grade'])):
-                rr = [''] * (lead - 1) + [label]
+                # Label always sits under Name (col 1), same as with no Arm
+                # column, rather than sliding into Arm's narrow cell.
+                rr = [''] + [label] + [''] * (lead - 2)
                 for s in group:
                     rr += [str(fn(ss[s])), ''] if separate_cols else [str(fn(ss[s]))]
                 if tail:
@@ -643,7 +645,9 @@ def blank_broadsheet_pdf(students, offered, subjects, exam, school, opts=None,
         sum0 = len(data)                        # table row of the first summary row
         if show_summary:
             for label in _BLANK_SUMMARY:
-                data.append([''] * (lead - 1) + [Paragraph(pdf_escape(label), _S['name'])]
+                # Label always sits under Name (col 1), same as with no Arm
+                # column, rather than sliding into Arm's narrow cell.
+                data.append([''] + [Paragraph(pdf_escape(label), _S['name'])] + [''] * (lead - 2)
                            + [''] * (2 * len(group)))
 
         widths = [sn_w, name_w] + ([arm_w] if show_arm else []) + [cell_w] * (2 * len(group))
