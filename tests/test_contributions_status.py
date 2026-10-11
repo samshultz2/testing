@@ -89,6 +89,9 @@ def test_defaulters_distinguishes_never_started(app):
 
 
 def test_payments_list_date_range_filter(app):
+    # The test DB is shared for the whole suite run, so scope every assertion
+    # to this test's own student (by its distinctive surname tag) rather than
+    # assuming the payments list is otherwise empty.
     sid = _sss3_student(app, 'DR')
     _pay(app, sid, 1000, '2026-01-05')
     _pay(app, sid, 2000, '2026-01-15')
@@ -96,6 +99,10 @@ def test_payments_list_date_range_filter(app):
     c = _client(app)
     data = c.get('/contributions/payments?from=2026-01-10&to=2026-01-20',
                  headers={'X-Requested-With': 'fetch'}).get_json()
-    amounts = sorted(p['amount'] for p in data['payments'])
-    assert amounts == [2000]
-    assert data['total_amount'] == 2000
+    mine = [p for p in data['payments'] if 'ZzDR' in p['student_name']]
+    assert sorted(p['amount'] for p in mine) == [2000]
+
+    # The out-of-range payments for this same student must not appear.
+    all_data = c.get('/contributions/payments', headers={'X-Requested-With': 'fetch'}).get_json()
+    mine_all = sorted(p['amount'] for p in all_data['payments'] if 'ZzDR' in p['student_name'])
+    assert mine_all == [1000, 2000, 3000]
