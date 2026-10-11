@@ -54,8 +54,8 @@ def test_representative_resolution():
         'subjects.broadsheet': ('results', 'broadsheet_view'),
         'cbt.bank': ('cbt', 'bank_view'),
         'cbt.monitor': ('cbt', 'monitor_view'),
-        'timetable.designer': ('timetable', 'manage'),
-        'timetable.my_timetable': ('timetable', 'view'),
+        'timetable.designer': ('timetable', 'designer_edit'),
+        'timetable.my_timetable': ('timetable', 'class_view'),
         'promotion.graduate_document': ('promotion', 'documents_generate'),
         'library.issue': ('library', 'circulation_issue'),
         'library.add_book': ('library', 'catalogue_create'),
@@ -63,11 +63,13 @@ def test_representative_resolution():
         'events.add_event': ('events', 'create'),
         'contributions.add_payment': ('contributions', 'record'),
         'website_admin.media_upload': ('website', 'media'),
-        'settings.save_grades': ('settings', 'grading'),
-        'settings.backup_page': ('settings', 'backup'),
+        'settings.save_grades': ('settings', 'grades_edit'),
     }
     for ep, expected in cases.items():
         assert subsection_for_endpoint(ep) == expected, ep
+    # settings.backup_page is deliberately NOT independently grantable (stays
+    # hard @central_admin_required) — excluded from the registry entirely.
+    assert subsection_for_endpoint('settings.backup_page') is None
 
 
 def test_graduate_bypass_endpoints_not_subsectioned():
@@ -103,9 +105,9 @@ def test_library_catalogue_vs_circulation(app):
 
 
 def test_settings_grading_slice_cannot_reach_backup(app):
-    """A delegated settings.grading user edits grades but the backup slice stays
-    central-admin only."""
-    _make_user(app, 'set_grade', {'settings.grading': 'edit'})
+    """A delegated settings.grades_edit user edits grades but backup stays
+    central-admin only (not independently grantable at all)."""
+    _make_user(app, 'set_grade', {'settings.grades_view': 'edit', 'settings.grades_edit': 'edit'})
     c = _login(app, 'set_grade')
     assert c.get('/settings/grades').status_code == 200
     assert c.get('/settings/backup', follow_redirects=False).status_code in (302, 303)

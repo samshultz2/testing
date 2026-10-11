@@ -10,7 +10,11 @@ from models import (db, User, Expense, FeePayment, FeeDiscount, FeeItem, FeeStru
                     Book, BookLoan, SchoolSettings,
                     Product, Supplier, PurchaseOrder, PurchaseOrderItem,
                     StockAudit, StockAuditItem, FixedAsset, AssetUnit,
-                    AssetLoan, AssetMaintenance, AssetAudit, PromoCode, SupplierPayment)
+                    AssetLoan, AssetMaintenance, AssetAudit, PromoCode, SupplierPayment,
+                    TimetableSlot, ClassTimetable, TimetableBackup, DesignerTimetable,
+                    GenRoom, GenTeacher, GenClassConfig, GenTeacherAssignment,
+                    GenSubjectClashRule, GenTimetableResult, BehaviouralTrait,
+                    GradeScale, AssessmentType)
 from tests.conftest import login_token
 
 
@@ -3443,5 +3447,414 @@ def test_sales_no_grant_blocked_from_dashboard(app):
     c = _login(app, 'slsnone')
     r = c.get('/sales/', follow_redirects=False)
     assert r.status_code in (302, 303)
+
+
+# ---- Timetable + Generator (19-key granular split across class/designer/
+# backups/generator_* groups; the 'generate' capability's dual-gate with the
+# new 'generator_generate'/'generator_results_manage' ordinary keys is
+# unchanged in mechanism — @timetable_generate_required stays on
+# run_generation/run_ortools_generation/apply_results/set_in_use) ----------
+
+def _gen_room(app, tag):
+    with app.app_context():
+        r = GenRoom(branch_id=Branch.get_default().id, name=f'ZzRoom{tag}')
+        db.session.add(r); db.session.commit()
+        return r.id
+
+
+def _gen_teacher(app, tag):
+    with app.app_context():
+        t = GenTeacher(branch_id=Branch.get_default().id, name=f'ZzTeacher{tag}', school_level='sss')
+        db.session.add(t); db.session.commit()
+        return t.id
+
+
+def _gen_batch(app, tag):
+    with app.app_context():
+        r = GenTimetableResult(branch_id=Branch.get_default().id, batch_id=f'ZzBatch{tag}',
+                               school_level='sss', class_name=f'ZzClass{tag}', arm_name='A',
+                               day_of_week=0, period_number=1)
+        db.session.add(r); db.session.commit()
+        return r.batch_id
+
+
+def test_timetable_class_view_blocked_from_class_edit(app):
+    _make(app, 'ttcv', {'timetable.class_view': 'view'})
+    c = _login(app, 'ttcv')
+    assert c.get('/timetable/').status_code == 200
+    r = c.get('/timetable/edit/1', follow_redirects=False)
+    assert r.status_code in (302, 303)   # class_edit not granted
+
+
+def test_timetable_generator_teachers_only_blocked_from_save_timetable(app):
+    # Regression for the coarse-fallback bug this split closes: before, the
+    # inline check used can_write_module('timetable'), which is true for ANY
+    # edit-level grant anywhere in the module — a generator_teachers-only
+    # holder (unrelated to the live class grid) must now be blocked.
+    with app.app_context():
+        ssn = AcademicSession.query.filter_by(name='TTGTBLK-Sess').first() or AcademicSession(name='TTGTBLK-Sess')
+        db.session.add(ssn); db.session.flush()
+        term = (Term.query.filter_by(name='TTGTBLK-Term').first()
+               or Term(session_id=ssn.id, term_number=1, name='TTGTBLK-Term'))
+        db.session.add(term); db.session.flush()
+        cls = SchoolClass.query.filter_by(name='TTGTBLK-Class').first() or SchoolClass(name='TTGTBLK-Class', level=1)
+        db.session.add(cls); db.session.flush()
+        arm = ClassArm.query.filter_by(name='TTGTBLK-Arm').first() or ClassArm(name='TTGTBLK-Arm', is_active=True)
+        db.session.add(arm); db.session.flush()
+        caa = (ClassArmAssignment.query.filter_by(class_id=cls.id, arm_id=arm.id, term_id=term.id).first()
+              or ClassArmAssignment(class_id=cls.id, arm_id=arm.id, term_id=term.id, branch_id=Branch.get_default().id))
+        db.session.add(caa); db.session.commit()
+        caa_id = caa.id
+
+    _make(app, 'ttgtblk', {'timetable.generator_teachers': 'edit'})
+    c = _login(app, 'ttgtblk')
+    tok = _ptoken(c)
+    with app.app_context():
+        before = ClassTimetable.query.filter_by(class_arm_assignment_id=caa_id).count()
+    r = c.post(f'/timetable/save/{caa_id}', data={'_csrf_token': tok}, follow_redirects=False)
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        assert ClassTimetable.query.filter_by(class_arm_assignment_id=caa_id).count() == before
+
+
+def test_timetable_designer_view_blocked_from_designer_edit(app):
+    _make(app, 'ttdv', {'timetable.designer_view': 'view'})
+    c = _login(app, 'ttdv')
+    assert c.get('/timetable/designer/saved').status_code == 200
+    r = c.get('/timetable/designer', follow_redirects=False)
+    assert r.status_code in (302, 303)   # designer_edit not granted
+
+
+def test_timetable_backups_view_blocked_from_create(app):
+    _make(app, 'ttbv', {'timetable.backups_view': 'view'})
+    c = _login(app, 'ttbv')
+    assert c.get('/timetable/backups').status_code == 200
+    tok = _ptoken(c)
+    with app.app_context():
+        before = TimetableBackup.query.count()
+    c.post('/timetable/backups/create', data={'_csrf_token': tok}, follow_redirects=False)
+    with app.app_context():
+        assert TimetableBackup.query.count() == before   # backups_create not granted
+
+
+def test_timetable_backups_restore_and_delete_independently_grantable(app):
+    with app.app_context():
+        b1 = TimetableBackup(label='ZzB1', entry_count=0)
+        b2 = TimetableBackup(label='ZzB2', entry_count=0)
+        db.session.add_all([b1, b2]); db.session.commit()
+        b1id, b2id = b1.id, b2.id
+
+    _make(app, 'ttbr', {'timetable.backups_restore': 'edit'})
+    c1 = _login(app, 'ttbr')
+    tok1 = _ptoken(c1)
+    c1.post(f'/timetable/backups/{b1id}/delete', data={'_csrf_token': tok1}, follow_redirects=False)
+    with app.app_context():
+        assert db.session.get(TimetableBackup, b1id) is not None   # backups_delete not granted
+
+    _make(app, 'ttbd', {'timetable.backups_delete': 'edit'})
+    c2 = _login(app, 'ttbd')
+    tok2 = _ptoken(c2)
+    c2.post(f'/timetable/backups/{b2id}/restore', data={'_csrf_token': tok2}, follow_redirects=False)
+    c2.post(f'/timetable/backups/{b2id}/delete', data={'_csrf_token': tok2})
+    with app.app_context():
+        assert db.session.get(TimetableBackup, b2id) is None   # backups_delete alone works
+
+
+def test_generator_structure_reaches_rooms_and_add_room(app):
+    _make(app, 'gstr', {'timetable.generator_structure': 'edit'})
+    c = _login(app, 'gstr')
+    assert c.get('/generator/rooms').status_code == 200
+    tok = _ptoken(c)
+    c.post('/generator/rooms/add', data={'name': 'GSTR-Room', '_csrf_token': tok})
+    with app.app_context():
+        assert GenRoom.query.filter_by(name='GSTR-Room').first() is not None
+
+
+def test_generator_structure_blocked_from_teachers(app):
+    _make(app, 'gstrb', {'timetable.generator_structure': 'edit'})
+    c = _login(app, 'gstrb')
+    tok = _ptoken(c)
+    with app.app_context():
+        before = GenTeacher.query.count()
+    c.post('/generator/teachers/add', data={'name': 'GSTRB-Teacher', '_csrf_token': tok},
+           follow_redirects=False)
+    with app.app_context():
+        assert GenTeacher.query.count() == before   # generator_teachers not granted
+
+
+def test_generator_teachers_blocked_from_teachers_bulk(app):
+    tid = _gen_teacher(app, 'TB1')
+    _make(app, 'gtblk', {'timetable.generator_teachers': 'edit'})
+    c = _login(app, 'gtblk')
+    tok = _ptoken(c)
+    c.post('/generator/teachers/bulk-delete', data={'teacher_ids[]': [str(tid)], '_csrf_token': tok},
+           follow_redirects=False)
+    with app.app_context():
+        assert db.session.get(GenTeacher, tid).is_active is True   # generator_teachers_bulk not granted
+
+
+def test_generator_teachers_bulk_grant_can_bulk_delete(app):
+    tid = _gen_teacher(app, 'TB2')
+    _make(app, 'gtblk2', {'timetable.generator_teachers_bulk': 'edit'})
+    c = _login(app, 'gtblk2')
+    tok = _ptoken(c)
+    c.post('/generator/teachers/bulk-delete', data={'teacher_ids[]': [str(tid)], '_csrf_token': tok})
+    with app.app_context():
+        assert db.session.get(GenTeacher, tid).is_active is False
+
+
+def test_generator_rules_view_and_write_share_one_key(app):
+    _make(app, 'grules', {'timetable.generator_rules': 'edit'})
+    c = _login(app, 'grules')
+    assert c.get('/generator/rules').status_code == 200
+    r = c.get('/generator/clash-rules/add', follow_redirects=False)
+    assert r.status_code == 200   # same key covers the add-rule form (GET)
+
+
+def test_generator_rules_no_grant_blocked(app):
+    _make(app, 'grulesno', {})
+    c = _login(app, 'grulesno')
+    r = c.get('/generator/rules', follow_redirects=False)
+    assert r.status_code in (302, 303)
+
+
+def test_generator_assignments_blocked_from_bulk(app):
+    cc_id = None
+    tid = _gen_teacher(app, 'ASG1')
+    with app.app_context():
+        cc = GenClassConfig(branch_id=Branch.get_default().id, class_name='ZzASG1',
+                            school_level='sss', num_arms=1)
+        db.session.add(cc); db.session.flush()
+        from models import GenSubject
+        subj = GenSubject(branch_id=Branch.get_default().id, name='ZzASGSubj', school_level='sss')
+        db.session.add(subj); db.session.flush()
+        a = GenTeacherAssignment(branch_id=Branch.get_default().id, teacher_id=tid,
+                                 subject_id=subj.id, class_config_id=cc.id, arm_name=None)
+        db.session.add(a); db.session.commit()
+        aid = a.id
+
+    _make(app, 'gasg', {'timetable.generator_assignments': 'edit'})
+    c = _login(app, 'gasg')
+    tok = _ptoken(c)
+    c.post('/generator/assignments/bulk-delete', data={'assignment_ids[]': [str(aid)], '_csrf_token': tok},
+           follow_redirects=False)
+    with app.app_context():
+        assert db.session.get(GenTeacherAssignment, aid).is_active is True   # generator_assignments_bulk not granted
+    c.post(f'/generator/assignments/{aid}/delete', data={'_csrf_token': tok})
+    with app.app_context():
+        assert db.session.get(GenTeacherAssignment, aid).is_active is False   # ordinary delete (soft) works
+
+
+def test_generator_generate_requires_both_ordinary_key_and_capability(app):
+    # Holding ONLY the ordinary generator_generate grant (no 'generate'
+    # capability) must still be blocked by @timetable_generate_required.
+    _make(app, 'ggenord', {'timetable.generator_generate': 'edit'})
+    c = _login(app, 'ggenord')
+    assert c.get('/generator/generate').status_code == 200   # page itself: ordinary grant is enough to view
+    tok = _ptoken(c)
+    r = c.post('/generator/generate/run', data={'_csrf_token': tok}, follow_redirects=False)
+    assert r.status_code in (302, 303)   # capability still required for the actual run
+
+
+def test_generator_generate_capability_alone_insufficient_without_ordinary_key(app):
+    # The flip side: holding only the 'generate' capability (no ordinary
+    # generator_generate key) is blocked by the subsection gate before the
+    # capability decorator even runs — this is the intended narrowing vs. the
+    # old coarse module_level() fallback.
+    _make(app, 'ggencap', {'timetable.generate': 'edit'})
+    c = _login(app, 'ggencap')
+    r = c.get('/generator/generate', follow_redirects=False)
+    assert r.status_code in (302, 303)
+
+
+def test_generator_results_view_blocked_from_manage(app):
+    batch_id = _gen_batch(app, 'RV1')
+    _make(app, 'gresv', {'timetable.generator_results_view': 'view'})
+    c = _login(app, 'gresv')
+    assert c.get('/generator/results').status_code == 200
+    assert c.get(f'/generator/results/{batch_id}').status_code == 200
+    tok = _ptoken(c)
+    r = c.post(f'/generator/results/{batch_id}/apply', data={'_csrf_token': tok}, follow_redirects=False)
+    assert r.status_code in (302, 303)   # generator_results_manage (+ capability) not granted
+
+
+def test_generator_results_delete_independent_of_view(app):
+    batch_id = _gen_batch(app, 'RD1')
+    _make(app, 'gresd', {'timetable.generator_results_delete': 'edit'})
+    c = _login(app, 'gresd')
+    tok = _ptoken(c)
+    c.post(f'/generator/results/{batch_id}/delete', data={'_csrf_token': tok})
+    with app.app_context():
+        assert GenTimetableResult.query.filter_by(batch_id=batch_id).count() == 0
+
+
+def test_generator_reports_and_exports_reachable_view_only(app):
+    _make(app, 'grep', {'timetable.generator_reports': 'view'})
+    c = _login(app, 'grep')
+    assert c.get('/generator/reports').status_code == 200
+    r = c.get('/generator/results', follow_redirects=False)
+    assert r.status_code in (302, 303)   # generator_results_view not granted (independent key)
+
+
+# ---- Settings (7 coarse buckets -> ~15 granular keys/capabilities;
+# users/branches/backup/audit are deliberately excluded from the registry
+# entirely — every endpoint in them stays hard @central_admin_required) -----
+
+def test_settings_index_reachable_with_any_single_grant(app):
+    # Regression: 'index' used to be bucketed under 'school', blocking e.g. a
+    # grades-only holder from the Settings landing page itself.
+    _make(app, 'setidx', {'settings.grades_view': 'view'})
+    c = _login(app, 'setidx')
+    assert c.get('/settings/').status_code == 200
+
+
+def test_settings_no_grant_blocked_from_index(app):
+    _make(app, 'setidxno', {})
+    c = _login(app, 'setidxno')
+    r = c.get('/settings/', follow_redirects=False)
+    assert r.status_code in (302, 303)
+
+
+def test_settings_school_info_view_blocks_write(app):
+    _make(app, 'setschv', {})   # no grant at all
+    c = _login(app, 'setschv')
+    r = c.get('/settings/school', follow_redirects=False)
+    assert r.status_code in (302, 303)
+    _make(app, 'setsche', {'settings.school_info': 'edit'})
+    c2 = _login(app, 'setsche')
+    assert c2.get('/settings/school').status_code == 200
+    tok = _ptoken(c2)
+    c2.post('/settings/school', data={'school_name': 'SETSCHE School', '_csrf_token': tok})
+    with app.app_context():
+        assert SchoolSettings.get('school_name') == 'SETSCHE School'
+
+
+def test_settings_academic_config_blocked_without_grant(app):
+    _make(app, 'setacno', {'settings.school_info': 'edit'})   # unrelated key
+    c = _login(app, 'setacno')
+    r = c.get('/settings/academic', follow_redirects=False)
+    assert r.status_code in (302, 303)
+
+
+def test_settings_grades_view_blocked_from_edit(app):
+    _make(app, 'setgv', {'settings.grades_view': 'view'})
+    c = _login(app, 'setgv')
+    assert c.get('/settings/grades').status_code == 200
+    with app.app_context():
+        before = GradeScale.query.count()
+    tok = _ptoken(c)
+    c.post('/settings/grades/save', data={'grade[]': 'ZZ', 'min_score[]': '1',
+           'max_score[]': '2', 'remark[]': 'x', '_csrf_token': tok}, follow_redirects=False)
+    with app.app_context():
+        assert GradeScale.query.count() == before   # grades_edit not granted
+
+
+def test_settings_grades_edit_can_save(app):
+    _make(app, 'setge', {'settings.grades_edit': 'edit'})
+    c = _login(app, 'setge')
+    tok = _ptoken(c)
+    c.post('/settings/grades/save', data={'grade[]': 'ZZSETGE', 'min_score[]': '90',
+           'max_score[]': '100', 'remark[]': 'Great', '_csrf_token': tok})
+    with app.app_context():
+        assert GradeScale.query.filter_by(grade='ZZSETGE').first() is not None
+
+
+def test_settings_traits_view_blocked_from_edit(app):
+    _make(app, 'settv', {'settings.traits_view': 'view'})
+    c = _login(app, 'settv')
+    assert c.get('/settings/traits').status_code == 200
+    with app.app_context():
+        before = BehaviouralTrait.query.count()
+    tok = _ptoken(c)
+    c.post('/settings/traits/save', data={'key[]': 'zz_trait', 'label[]': 'ZZ Trait',
+           '_csrf_token': tok}, follow_redirects=False)
+    with app.app_context():
+        assert BehaviouralTrait.query.count() == before   # traits_edit not granted
+
+
+def test_settings_assessments_view_blocked_from_edit(app):
+    _make(app, 'setasv', {'settings.assessments_view': 'view'})
+    c = _login(app, 'setasv')
+    assert c.get('/settings/assessments').status_code == 200
+    with app.app_context():
+        before = AssessmentType.query.count()
+    tok = _ptoken(c)
+    c.post('/settings/assessments/save', data={'name[]': 'ZZ Assess', 'short_name[]': 'ZA',
+           'max_score[]': '10', '_csrf_token': tok}, follow_redirects=False)
+    with app.app_context():
+        assert AssessmentType.query.count() == before   # assessments_edit not granted
+
+
+def test_settings_term_overrides_view_blocked_from_edit(app):
+    with app.app_context():
+        term = Term.query.first()
+        term_id = term.id if term else None
+    if term_id is None:
+        return   # no term fixture in this test DB; nothing to check
+    _make(app, 'settov', {'settings.term_overrides_view': 'view'})
+    c = _login(app, 'settov')
+    assert c.get('/settings/assessments/terms').status_code == 200
+    tok = _ptoken(c)
+    r = c.post(f'/settings/assessments/terms/{term_id}/save', data={'clear': '1', '_csrf_token': tok},
+               follow_redirects=False)
+    assert r.status_code in (302, 303)   # term_overrides_edit not granted
+
+
+def test_settings_slots_view_edit_generate_independent(app):
+    _make(app, 'setslv', {'settings.slots_view': 'view'})
+    c = _login(app, 'setslv')
+    assert c.get('/settings/timetable-slots').status_code == 200
+    tok = _ptoken(c)
+    r1 = c.post('/settings/timetable-slots/save', data={'_csrf_token': tok}, follow_redirects=False)
+    assert r1.status_code in (302, 303)   # slots_edit not granted
+    r2 = c.post('/settings/timetable-slots/generate', data={'_csrf_token': tok}, follow_redirects=False)
+    assert r2.status_code in (302, 303)   # slots_generate not granted
+
+
+def test_settings_slots_edit_does_not_imply_generate(app):
+    with app.app_context():
+        before = TimetableSlot.query.count()
+    _make(app, 'setsle', {'settings.slots_edit': 'edit'})
+    c = _login(app, 'setsle')
+    tok = _ptoken(c)
+    r = c.post('/settings/timetable-slots/generate', data={'_csrf_token': tok}, follow_redirects=False)
+    assert r.status_code in (302, 303)
+    with app.app_context():
+        assert TimetableSlot.query.count() == before   # slots_generate not granted
+
+
+def test_settings_dead_buckets_not_independently_grantable(app):
+    # users/branches/backup/audit stay hard central-admin-only regardless of
+    # any ordinary settings grant — confirming the dead-bucket removal.
+    _make(app, 'setdead', {'settings.grades_edit': 'edit', 'settings.slots_edit': 'edit',
+                          'settings.school_info': 'edit'})
+    c = _login(app, 'setdead')
+    for path in ('/settings/users', '/settings/branches', '/settings/backup', '/settings/audit'):
+        r = c.get(path, follow_redirects=False)
+        assert r.status_code in (302, 303), path
+
+
+def test_settings_ocr_manage_capability_required(app):
+    # Capabilities are never implied by an ordinary grant alone...
+    _make(app, 'setocrno', {'settings.school_info': 'edit'})   # broad but unrelated
+    c = _login(app, 'setocrno')
+    r = c.get('/settings/ocr', follow_redirects=False)
+    assert r.status_code in (302, 303)
+    # ...but (like every other capability in this app) it works paired with
+    # any ordinary settings grant, which is what actually unlocks the module
+    # for a non-admin (module_level() ignores bare capability keys).
+    _make(app, 'setocryes', {'settings.school_info': 'edit', 'settings.ocr_manage': 'edit'})
+    c2 = _login(app, 'setocryes')
+    assert c2.get('/settings/ocr').status_code == 200
+
+
+def test_settings_payments_manage_capability_required(app):
+    _make(app, 'setpayno', {'settings.school_info': 'edit'})
+    c = _login(app, 'setpayno')
+    r = c.get('/settings/payments', follow_redirects=False)
+    assert r.status_code in (302, 303)
+    _make(app, 'setpayyes', {'settings.school_info': 'edit', 'settings.payments_manage': 'edit'})
+    c2 = _login(app, 'setpayyes')
+    assert c2.get('/settings/payments').status_code == 200
 
 

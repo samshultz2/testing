@@ -52,7 +52,7 @@ function Index({ d }) {
             <div className="card-header">
               <h3>{sel.display_name}</h3>
               <div className="page-header-actions">
-                {canWrite(d) && <A to={d.urls.edit} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-edit" /> Edit</A>}
+                {canWrite(d, 'class_edit') && <A to={d.urls.edit} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-edit" /> Edit</A>}
                 <A to={d.urls.pdf} target="_blank" className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-file-pdf" /> PDF</A>
                 <A to={d.urls.pdf_teachers} target="_blank" className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-file-pdf" /> PDF + teachers</A>
               </div>
@@ -205,7 +205,7 @@ function Backups({ d, notify }) {
             <label className="form-label">Back up the current timetable now</label>
             <input className="form-control" placeholder="Label (e.g. 'Working timetable — Term 1')" value={label} onChange={(e) => setLabel(e.target.value)} />
           </div>
-          <button type="submit" className="btn btn-secondary"><i aria-hidden="true" className="fas fa-floppy-disk" /> Back up now</button>
+          {canWrite(d, 'backups_create') && <button type="submit" className="btn btn-secondary"><i aria-hidden="true" className="fas fa-floppy-disk" /> Back up now</button>}
         </form>
       </div></div>
       <div className="card"><div className="card-body">
@@ -217,8 +217,8 @@ function Backups({ d, notify }) {
                 <tr key={b.id}>
                   <td>{b.when}</td><td>{b.label}</td><td>{b.entry_count}</td>
                   <td className="text-right">
-                    {canWrite(d) && <><button type="button" className="btn btn-primary btn-sm" onClick={() => restore(b)}><i aria-hidden="true" className="fas fa-rotate-left" /> Restore</button>{' '}
-                    <button type="button" className="btn btn-danger btn-sm" onClick={() => del(b)}><i aria-hidden="true" className="fas fa-trash" /></button></>}
+                    {canWrite(d, 'backups_restore') && <button type="button" className="btn btn-primary btn-sm" onClick={() => restore(b)}><i aria-hidden="true" className="fas fa-rotate-left" /> Restore</button>}{' '}
+                    {canWrite(d, 'backups_delete') && <button type="button" className="btn btn-danger btn-sm" onClick={() => del(b)}><i aria-hidden="true" className="fas fa-trash" /></button>}
                   </td>
                 </tr>
               ))}

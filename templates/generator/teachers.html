@@ -88,7 +88,7 @@
         <a href="{{ url_for('generator.level_dashboard', level=level) }}" class="btn btn-ghost">
             <i class="fas fa-arrow-left"></i> Back to {{ level|upper }} Dashboard
         </a>
-        <a href="{{ url_for('generator.add_teacher') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add Teacher</a>
+        {% if can_write_sub('timetable', 'generator_teachers') %}<a href="{{ url_for('generator.add_teacher') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add Teacher</a>{% endif %}
     </div>
 </div>
 
@@ -99,6 +99,7 @@
      carry a form="" attribute pointing at just one of them. Instead, each
      button submits its own empty carrier form, and a script (below) fills in
      teacher_ids[] from whatever's currently checked right before it submits. -->
+{% if can_write_sub('timetable', 'generator_teachers_bulk') %}
 <form id="bulkIncreaseForm" method="POST" action="{{ url_for('generator.bulk_increase_teacher_periods') }}">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
 </form>
@@ -109,12 +110,14 @@
 <form id="bulkSyncForm" method="POST" action="{{ url_for('generator.bulk_sync_teacher_periods') }}">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
 </form>
+{% endif %}
 
 <div class="bulkbar">
     <div class="bulkbar-row">
         <span class="sel-count"><span class="n" id="bulkCount">0</span> selected</span>
         <button type="button" class="linklike" data-call="selectAllTeachers" data-args="true">Select all</button>
         <button type="button" class="linklike" data-call="selectAllTeachers" data-args="false">Clear</button>
+        {% if can_write_sub('timetable', 'generator_teachers_bulk') %}
         <span class="sep"></span>
         <button type="submit" form="bulkSyncForm" class="btn btn-ghost btn-sm" id="bulkSyncBtn" disabled>
             <i class="fas fa-rotate"></i> Sync from Assignments
@@ -130,7 +133,9 @@
         <button type="submit" form="bulkDeleteForm" class="btn btn-danger btn-sm" id="bulkDeleteBtn" disabled>
             <i class="fas fa-trash"></i> Delete Selected
         </button>
+        {% endif %}
     </div>
+    {% if can_write_sub('timetable', 'generator_teachers_bulk') %}
     <div class="hint"><i class="fas fa-circle-info"></i>
         <span>"Sync from Assignments" sets max periods/week to each selected teacher's REAL workload from
             <a href="{{ url_for('generator.teacher_assignments') }}">Teacher Assignments</a> — periods/week per
@@ -139,6 +144,7 @@
             the same way: spread evenly across each teacher's own working days, capped at the school's
             periods-per-day. "Delete" removes the selected teachers.</span>
     </div>
+    {% endif %}
 </div>
 
 <div class="tch-grid">
@@ -164,9 +170,11 @@
             <div class="tmetric"><b>{{ teacher.max_periods_per_day }}</b><span>Max/day</span></div>
             <div class="tmetric"><b>{{ teacher.max_periods_per_week }}</b><span>Max/week</span></div>
         </div>
+        {% if can_write_sub('timetable', 'generator_teachers') %}
         <a href="{{ url_for('generator.edit_teacher', teacher_id=teacher.id) }}" class="btn btn-primary btn-sm edit-btn">
             <i class="fas fa-pen"></i> Edit
         </a>
+        {% endif %}
     </label>
     {% endfor %}
 </div>
@@ -177,7 +185,7 @@
             <i class="fas fa-chalkboard-teacher"></i>
             <h3>No Teachers</h3>
             <p>Add teachers who will be assigned to the timetable</p>
-            <a href="{{ url_for('generator.add_teacher') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add Teacher</a>
+            {% if can_write_sub('timetable', 'generator_teachers') %}<a href="{{ url_for('generator.add_teacher') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add Teacher</a>{% endif %}
         </div>
     </div>
 </div>

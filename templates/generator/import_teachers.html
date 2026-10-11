@@ -6,6 +6,7 @@
     <h1>Import Teachers from CSV</h1>
 </div>
 
+{% if can_write_sub('timetable', 'generator_teachers_bulk') %}
 <div class="card mb-3">
     <div class="card-header"><h3>Upload CSV File</h3></div>
     <div class="card-body">
@@ -20,6 +21,7 @@
         </form>
     </div>
 </div>
+{% endif %}
 
 <div class="card">
     <div class="card-header"><h3>CSV Format</h3></div>

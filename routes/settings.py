@@ -13,8 +13,9 @@ from models import (
     Student, AcademicSession, Term, User
 )
 from utils.helpers import login_required
-from utils.access_control import (admin_required, central_admin_required, is_admin,
-                                  can_access_module)
+from utils.access_control import (central_admin_required, is_admin,
+                                  can_access_module, can_manage_ocr_settings,
+                                  can_manage_payment_settings)
 from utils.security import rate_limited
 from utils.audit import log_action
 
@@ -60,6 +61,7 @@ def index():
     return _render({
         'page': 'index',
         'is_central': is_central(),
+        'is_admin': is_admin(),
         'urls': {
             'school': url_for('settings.school_settings'),
             'academic': url_for('settings.academic_settings'),
@@ -428,7 +430,7 @@ def ocr_settings():
     """Optional Claude-vision OCR for WAEC/JAMB scans — manage the API key, the
     on/off toggle, and the model. The key is stored encrypted at rest (when
     FIELD_ENCRYPTION_KEY is set) and never sent back to the browser in full."""
-    if not is_admin():
+    if not can_manage_ocr_settings():
         return _err('Only an admin can change OCR settings.', url_for('settings.index'))
 
     if request.method == 'POST':
@@ -615,6 +617,8 @@ def payments_settings():
     """This school's OWN Paystack keys, for collecting fees online (parents paying
     tuition/books). Separate from the platform subscription — money goes straight
     to this school's Paystack account. The secret key is stored encrypted."""
+    if not can_manage_payment_settings():
+        return _err('Only an admin can change payment settings.', url_for('settings.index'))
     from utils import payments as pay_gw
     from utils import payment_gateways as gw
     from config import Config
@@ -987,7 +991,6 @@ def save_assessments():
 # ============================================================================
 @settings_bp.route('/assessments/terms')
 @login_required
-@admin_required
 def term_assessments():
     """List terms and whether each has its own (peculiar) assessment settings."""
     from utils.assessments import term_maxes
@@ -998,7 +1001,6 @@ def term_assessments():
 
 @settings_bp.route('/assessments/terms/<int:term_id>')
 @login_required
-@admin_required
 def term_assessment_edit(term_id):
     from utils.assessments import term_maxes
     term = db.get_or_404(Term, term_id)
@@ -1015,7 +1017,6 @@ def term_assessment_edit(term_id):
 
 @settings_bp.route('/assessments/terms/<int:term_id>/save', methods=['POST'])
 @login_required
-@admin_required
 def term_assessment_save(term_id):
     from utils.assessments import save_term_settings
     db.get_or_404(Term, term_id)
@@ -1039,7 +1040,6 @@ def term_assessment_save(term_id):
 
 @settings_bp.route('/assessments/terms/<int:term_id>/copy', methods=['POST'])
 @login_required
-@admin_required
 def term_assessment_copy(term_id):
     from utils.assessments import copy_term_settings
     db.get_or_404(Term, term_id)

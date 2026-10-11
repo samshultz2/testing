@@ -101,6 +101,7 @@
     </div>
   </div>
 
+  {% if can_write_sub('timetable', 'generator_assignments') %}
   <div class="add-card">
     <h3><i class="fas fa-plus-circle"></i> Add Assignment</h3>
     <form method="POST" action="{{ url_for('generator.add_teacher_assignment') }}">
@@ -140,6 +141,7 @@
       </div>
     </form>
   </div>
+  {% endif %}
 
   {% if total_assignments or classes %}
   <div class="ap-chips">
@@ -150,6 +152,7 @@
   {% endif %}
 
   {% if total_assignments %}
+  {% if can_write_sub('timetable', 'generator_assignments_bulk') %}
   <!-- Not wrapped around the class accordion below: each row already has its own
        per-row delete <form>, and HTML forms can't nest. Every checkbox instead
        associates with this form via its form="bulkDeleteForm" attribute, which
@@ -167,6 +170,7 @@
       <i class="fas fa-trash"></i> Remove Selected
     </button>
   </div>
+  {% endif %}
 
   <div class="acc">
     {% for class_config in classes %}
@@ -185,13 +189,15 @@
         </div>
         {% for assignment in assignments_by_class[class_config.id] %}
         <div class="arow">
-          <input type="checkbox" class="achk assignment-checkbox" name="assignment_ids[]" value="{{ assignment.id }}" form="bulkDeleteForm">
+          {% if can_write_sub('timetable', 'generator_assignments_bulk') %}<input type="checkbox" class="achk assignment-checkbox" name="assignment_ids[]" value="{{ assignment.id }}" form="bulkDeleteForm">{% endif %}
           <span class="atxt"><b>{{ assignment.subject.name }}</b><span class="asub">{{ assignment.teacher.name }}</span></span>
           <span class="aarm">{{ assignment.arm_name or 'All Arms' }}</span>
+          {% if can_write_sub('timetable', 'generator_assignments') %}
           <form method="POST" action="{{ url_for('generator.delete_teacher_assignment', assignment_id=assignment.id) }}">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn btn-ghost btn-sm" title="Remove"><i class="fas fa-times"></i></button>
           </form>
+          {% endif %}
         </div>
         {% endfor %}
         {% else %}

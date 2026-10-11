@@ -27,6 +27,7 @@
     </div>
 </div>
 
+{% if can_write_sub('timetable', 'generator_subjects') %}
 <form method="post" action="{{ url_for('generator.save_subject_rules', subject_id=subject.id) }}">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
 
@@ -108,6 +109,7 @@
         <button class="btn btn-primary"><i class="fas fa-save"></i> Save {{ subject.name }} rules</button>
     </div>
 </form>
+{% endif %}
 
 <script nonce="{{ csp_nonce }}">
 // "Use default" greys out a class's override inputs (visual only; the server

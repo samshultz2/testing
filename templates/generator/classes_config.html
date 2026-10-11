@@ -63,10 +63,12 @@
       <p>Configure {{ level|upper }} classes, number of arms{% if level == 'sss' %}, and stream assignments (Science/Arts/Commercial){% endif %}.</p>
     </div>
     <div class="cl-actions">
+      {% if can_write_sub('timetable', 'generator_structure') %}
       {% if level == 'jss' %}
       <a href="{{ url_for('generator.setup_jss') }}" class="btn btn-info"><i class="fas fa-magic"></i> Quick Setup JSS</a>
       {% endif %}
       <a href="{{ url_for('generator.add_class_config') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add Class</a>
+      {% endif %}
     </div>
   </div>
 
@@ -104,9 +106,11 @@
         {% endif %}
       </div>
       <div class="cl-acts">
+        {% if can_write_sub('timetable', 'generator_structure') %}
         <a href="{{ url_for('generator.edit_class_config', class_id=class_config.id) }}" class="btn-ghost">
           <i class="fas fa-edit"></i> Edit
         </a>
+        {% endif %}
         <a href="{{ url_for('generator.class_subjects_config', class_id=class_config.id) }}" class="btn-ghost">
           <i class="fas fa-book"></i> Subjects
         </a>
@@ -126,10 +130,12 @@
     <h3>No {{ level|upper }} Classes</h3>
     <p>Add classes to generate timetables for (e.g., {{ 'JSS1, JSS2, JSS3' if level == 'jss' else 'SSS1, SSS2, SSS3' }})</p>
     <div class="acts">
+      {% if can_write_sub('timetable', 'generator_structure') %}
       {% if level == 'jss' %}
       <a href="{{ url_for('generator.setup_jss') }}" class="btn btn-info"><i class="fas fa-magic"></i> Quick Setup JSS</a>
       {% endif %}
       <a href="{{ url_for('generator.add_class_config') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add Class</a>
+      {% endif %}
     </div>
   </div>
   {% endif %}

@@ -11,14 +11,18 @@
     <button type="button" class="btn btn-success" data-call="toggleSection" data-args="'print-select-panel'"><i class="fas fa-list-check"></i> Export / Print (choose paper size)…</button>
     <a href="{{ url_for('generator.teacher_timetable', batch_id=batch_id) }}" class="btn btn-secondary"><i class="fas fa-chalkboard-teacher"></i> Teacher View</a>
     <a href="{{ url_for('generator.reports_index', batch_id=batch_id) }}" class="btn btn-secondary"><i class="fas fa-chart-bar"></i> Reports</a>
+    {% if can_generate_timetable and can_write_sub('timetable', 'generator_results_manage') %}
     <form method="POST" action="{{ url_for('generator.apply_results', batch_id=batch_id) }}" style="display: inline;" data-confirm="Publish this timetable into the class timetable views for the ACTIVE term? This replaces any existing entries for the classes it covers.">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="btn btn-dark"><i class="fas fa-share-square"></i> Apply to Class Timetables</button>
     </form>
+    {% endif %}
+    {% if can_write_sub('timetable', 'generator_results_delete') %}
     <form method="POST" action="{{ url_for('generator.delete_results', batch_id=batch_id) }}" style="display: inline;" data-confirm="Delete this batch?">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="btn btn-danger"><i class="fas fa-trash"></i> Delete</button>
     </form>
+    {% endif %}
 </div>
 
 <div class="card mb-3" id="print-select-panel" style="display: none;">
@@ -72,9 +76,11 @@
     <div class="card-header">
         <h3>{{ tt.class_name }} {{ tt.arm_name }}</h3>
         <div>
+            {% if can_write_sub('timetable', 'generator_results_manage') %}
             <a href="{{ url_for('generator.edit_timetable', batch_id=batch_id, class_name=tt.class_name, arm_name=tt.arm_name) }}" class="btn btn-primary btn-sm">
                 <i class="fas fa-edit"></i> Edit
             </a>
+            {% endif %}
             <a href="{{ url_for('generator.print_single_timetable', batch_id=batch_id, class_name=tt.class_name, arm_name=tt.arm_name) }}" data-cache-bust class="btn btn-success btn-sm">
                 <i class="fas fa-print"></i> Print
             </a>

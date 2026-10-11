@@ -13,7 +13,7 @@
 <div class="card mb-3">
     <div class="card-header">
         <h3><i class="fas fa-exchange-alt"></i> Subject Clash Rules</h3>
-        <a href="{{ url_for('generator.add_clash_rule') }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add Rule</a>
+        {% if can_write_sub('timetable', 'generator_rules') %}<a href="{{ url_for('generator.add_clash_rule') }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add Rule</a>{% endif %}
     </div>
     <div class="card-body" style="padding: 0;">
         {% if clash_rules %}
@@ -52,18 +52,22 @@
                         {% endif %}
                     </td>
                     <td>
+                        {% if can_write_sub('timetable', 'generator_rules') %}
                         <form method="POST" action="{{ url_for('generator.toggle_clash_rule', rule_id=rule.id) }}" style="display: inline;">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="btn btn-sm {% if rule.is_active %}btn-warning{% else %}btn-success{% endif %}" title="{% if rule.is_active %}Deactivate{% else %}Activate{% endif %}">
                                 <i class="fas fa-{% if rule.is_active %}pause{% else %}play{% endif %}"></i>
                             </button>
                         </form>
+                        {% endif %}
+                        {% if can_write_sub('timetable', 'generator_rules') %}
                         <form method="POST" action="{{ url_for('generator.delete_clash_rule', rule_id=rule.id) }}" style="display: inline;" data-confirm="Delete this rule?">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="btn btn-sm btn-danger" title="Delete">
                                 <i class="fas fa-trash"></i>
                             </button>
                         </form>
+                        {% endif %}
                     </td>
                 </tr>
                 {% endfor %}
@@ -73,7 +77,7 @@
         <div class="empty-state">
             <i class="fas fa-exchange-alt"></i>
             <p>No subject clash rules configured</p>
-            <a href="{{ url_for('generator.add_clash_rule') }}" class="btn btn-primary btn-sm">Add Rule</a>
+            {% if can_write_sub('timetable', 'generator_rules') %}<a href="{{ url_for('generator.add_clash_rule') }}" class="btn btn-primary btn-sm">Add Rule</a>{% endif %}
         </div>
         {% endif %}
     </div>
@@ -83,7 +87,7 @@
 <div class="card mb-3">
     <div class="card-header">
         <h3><i class="fas fa-users"></i> Combined Class Teacher Rules</h3>
-        <a href="{{ url_for('generator.add_combined_rule') }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add Rule</a>
+        {% if can_write_sub('timetable', 'generator_rules') %}<a href="{{ url_for('generator.add_combined_rule') }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add Rule</a>{% endif %}
     </div>
     <div class="card-body" style="padding: 0;">
         {% if combined_rules %}
@@ -122,18 +126,22 @@
                         {% endif %}
                     </td>
                     <td>
+                        {% if can_write_sub('timetable', 'generator_rules') %}
                         <form method="POST" action="{{ url_for('generator.toggle_combined_rule', rule_id=rule.id) }}" style="display: inline;">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="btn btn-sm {% if rule.is_active %}btn-warning{% else %}btn-success{% endif %}" title="{% if rule.is_active %}Deactivate{% else %}Activate{% endif %}">
                                 <i class="fas fa-{% if rule.is_active %}pause{% else %}play{% endif %}"></i>
                             </button>
                         </form>
+                        {% endif %}
+                        {% if can_write_sub('timetable', 'generator_rules') %}
                         <form method="POST" action="{{ url_for('generator.delete_combined_rule', rule_id=rule.id) }}" style="display: inline;" data-confirm="Delete this rule?">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="btn btn-sm btn-danger" title="Delete">
                                 <i class="fas fa-trash"></i>
                             </button>
                         </form>
+                        {% endif %}
                     </td>
                 </tr>
                 {% endfor %}
@@ -143,7 +151,7 @@
         <div class="empty-state">
             <i class="fas fa-users"></i>
             <p>No combined class teacher rules configured</p>
-            <a href="{{ url_for('generator.add_combined_rule') }}" class="btn btn-primary btn-sm">Add Rule</a>
+            {% if can_write_sub('timetable', 'generator_rules') %}<a href="{{ url_for('generator.add_combined_rule') }}" class="btn btn-primary btn-sm">Add Rule</a>{% endif %}
         </div>
         {% endif %}
     </div>
@@ -154,7 +162,7 @@
 <div class="card mb-3">
     <div class="card-header">
         <h3><i class="fas fa-link"></i> Co-Schedule Rules</h3>
-        <a href="{{ url_for('generator.add_coschedule_rule') }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add Rule</a>
+        {% if can_write_sub('timetable', 'generator_rules') %}<a href="{{ url_for('generator.add_coschedule_rule') }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add Rule</a>{% endif %}
     </div>
     <div class="card-body" style="padding: 0;">
         {% if coschedule_rules %}
@@ -190,18 +198,22 @@
                         {% endif %}
                     </td>
                     <td>
+                        {% if can_write_sub('timetable', 'generator_rules') %}
                         <form method="POST" action="{{ url_for('generator.toggle_coschedule_rule', rule_id=rule.id) }}" style="display: inline;">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="btn btn-sm {% if rule.is_active %}btn-warning{% else %}btn-success{% endif %}" title="{% if rule.is_active %}Deactivate{% else %}Activate{% endif %}">
                                 <i class="fas fa-{% if rule.is_active %}pause{% else %}play{% endif %}"></i>
                             </button>
                         </form>
+                        {% endif %}
+                        {% if can_write_sub('timetable', 'generator_rules') %}
                         <form method="POST" action="{{ url_for('generator.delete_coschedule_rule', rule_id=rule.id) }}" style="display: inline;" data-confirm="Delete this rule?">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="btn btn-sm btn-danger" title="Delete">
                                 <i class="fas fa-trash"></i>
                             </button>
                         </form>
+                        {% endif %}
                     </td>
                 </tr>
                 {% endfor %}
@@ -211,7 +223,7 @@
         <div class="empty-state">
             <i class="fas fa-link"></i>
             <p>No co-schedule rules configured</p>
-            <a href="{{ url_for('generator.add_coschedule_rule') }}" class="btn btn-primary btn-sm">Add Rule</a>
+            {% if can_write_sub('timetable', 'generator_rules') %}<a href="{{ url_for('generator.add_coschedule_rule') }}" class="btn btn-primary btn-sm">Add Rule</a>{% endif %}
         </div>
         {% endif %}
     </div>
@@ -221,7 +233,7 @@
 <div class="card mb-3">
     <div class="card-header">
         <h3><i class="fas fa-calendar-week"></i> Day-Separation Rules</h3>
-        <a href="{{ url_for('generator.add_day_separation_rule') }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add Rule</a>
+        {% if can_write_sub('timetable', 'generator_rules') %}<a href="{{ url_for('generator.add_day_separation_rule') }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add Rule</a>{% endif %}
     </div>
     <div class="card-body" style="padding: 0;">
         {% if day_separation_rules %}
@@ -256,18 +268,22 @@
                         {% endif %}
                     </td>
                     <td>
+                        {% if can_write_sub('timetable', 'generator_rules') %}
                         <form method="POST" action="{{ url_for('generator.toggle_day_separation_rule', rule_id=rule.id) }}" style="display: inline;">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="btn btn-sm {% if rule.is_active %}btn-warning{% else %}btn-success{% endif %}" title="{% if rule.is_active %}Deactivate{% else %}Activate{% endif %}">
                                 <i class="fas fa-{% if rule.is_active %}pause{% else %}play{% endif %}"></i>
                             </button>
                         </form>
+                        {% endif %}
+                        {% if can_write_sub('timetable', 'generator_rules') %}
                         <form method="POST" action="{{ url_for('generator.delete_day_separation_rule', rule_id=rule.id) }}" style="display: inline;" data-confirm="Delete this rule?">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="btn btn-sm btn-danger" title="Delete">
                                 <i class="fas fa-trash"></i>
                             </button>
                         </form>
+                        {% endif %}
                     </td>
                 </tr>
                 {% endfor %}
@@ -277,7 +293,7 @@
         <div class="empty-state">
             <i class="fas fa-calendar-week"></i>
             <p>No day-separation rules configured</p>
-            <a href="{{ url_for('generator.add_day_separation_rule') }}" class="btn btn-primary btn-sm">Add Rule</a>
+            {% if can_write_sub('timetable', 'generator_rules') %}<a href="{{ url_for('generator.add_day_separation_rule') }}" class="btn btn-primary btn-sm">Add Rule</a>{% endif %}
         </div>
         {% endif %}
     </div>
@@ -287,7 +303,7 @@
 <div class="card mb-3">
     <div class="card-header">
         <h3><i class="fas fa-thumbtack"></i> Period-Placement Rules</h3>
-        <a href="{{ url_for('generator.add_period_placement_rule') }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add Rule</a>
+        {% if can_write_sub('timetable', 'generator_rules') %}<a href="{{ url_for('generator.add_period_placement_rule') }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add Rule</a>{% endif %}
     </div>
     <div class="card-body" style="padding: 0;">
         {% if period_placement_rules %}
@@ -331,18 +347,22 @@
                         {% endif %}
                     </td>
                     <td>
+                        {% if can_write_sub('timetable', 'generator_rules') %}
                         <form method="POST" action="{{ url_for('generator.toggle_period_placement_rule', rule_id=rule.id) }}" style="display: inline;">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="btn btn-sm {% if rule.is_active %}btn-warning{% else %}btn-success{% endif %}" title="{% if rule.is_active %}Deactivate{% else %}Activate{% endif %}">
                                 <i class="fas fa-{% if rule.is_active %}pause{% else %}play{% endif %}"></i>
                             </button>
                         </form>
+                        {% endif %}
+                        {% if can_write_sub('timetable', 'generator_rules') %}
                         <form method="POST" action="{{ url_for('generator.delete_period_placement_rule', rule_id=rule.id) }}" style="display: inline;" data-confirm="Delete this rule?">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
                             <button type="submit" class="btn btn-sm btn-danger" title="Delete">
                                 <i class="fas fa-trash"></i>
                             </button>
                         </form>
+                        {% endif %}
                     </td>
                 </tr>
                 {% endfor %}
@@ -352,7 +372,7 @@
         <div class="empty-state">
             <i class="fas fa-thumbtack"></i>
             <p>No period-placement rules configured</p>
-            <a href="{{ url_for('generator.add_period_placement_rule') }}" class="btn btn-primary btn-sm">Add Rule</a>
+            {% if can_write_sub('timetable', 'generator_rules') %}<a href="{{ url_for('generator.add_period_placement_rule') }}" class="btn btn-primary btn-sm">Add Rule</a>{% endif %}
         </div>
         {% endif %}
     </div>

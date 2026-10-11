@@ -11,6 +11,7 @@
     </div>
 </div>
 
+{% if can_write_sub('timetable', 'generator_teachers') %}
 <!-- Teacher Details -->
 <div class="card mb-3">
     <div class="card-header"><h3>Teacher Details</h3></div>
@@ -100,7 +101,9 @@
         </form>
     </div>
 </div>
+{% endif %}
 
+{% if can_write_sub('timetable', 'generator_teachers') %}
 <!-- Subjects -->
 <div class="card mb-3">
     <div class="card-header"><h3>Subjects {{ teacher.name }} Can Teach</h3></div>
@@ -121,7 +124,9 @@
         </form>
     </div>
 </div>
+{% endif %}
 
+{% if can_write_sub('timetable', 'generator_teachers') %}
 <!-- Availability Grid -->
 <div class="card mb-3">
     <div class="card-header"><h3>Period Availability</h3></div>
@@ -157,7 +162,9 @@
         </form>
     </div>
 </div>
+{% endif %}
 
+{% if can_write_sub('timetable', 'generator_teachers') %}
 <!-- Delete -->
 <div class="card">
     <div class="card-header"><h3>Danger Zone</h3></div>
@@ -168,4 +175,5 @@
         </form>
     </div>
 </div>
+{% endif %}
 {% endblock %}

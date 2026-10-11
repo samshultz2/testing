@@ -111,7 +111,7 @@
                 school days may become infeasible with a very tight rule.</p>
 
             <div class="form-actions">
-                <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Rule</button>
+                {% if can_write_sub('timetable', 'generator_rules') %}<button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Rule</button>{% endif %}
                 <a href="{{ url_for('generator.clash_rules_list') }}" class="btn btn-secondary">Cancel</a>
             </div>
         </form>

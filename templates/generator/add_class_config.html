@@ -8,6 +8,7 @@
 
 <div class="card">
     <div class="card-body">
+        {% if can_write_sub('timetable', 'generator_structure') %}
         <form method="POST">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
@@ -43,6 +44,7 @@
                 <a href="{{ url_for('generator.classes_config') }}" class="btn btn-secondary">Cancel</a>
             </div>
         </form>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

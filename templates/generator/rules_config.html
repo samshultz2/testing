@@ -226,7 +226,7 @@
     </div>
 
     <div class="rl-save">
-      <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Rules</button>
+      {% if can_write_sub('timetable', 'generator_rules') %}<button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Rules</button>{% endif %}
     </div>
   </form>
 
@@ -246,6 +246,7 @@
           {% else %}
           <span class="badge badge-primary">Included (on)</span>
           {% endif %}
+          {% if can_write_sub('timetable', 'generator_rules') %}
           <form method="POST" action="{{ url_for('generator.set_day_separation_class_override') }}">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <input type="hidden" name="subject_id" value="{{ ov.subject_id }}">
@@ -253,6 +254,7 @@
             <input type="hidden" name="choice" value="inherit">
             <button type="submit" class="btn-ghost">Remove</button>
           </form>
+          {% endif %}
         </div>
         {% endfor %}
       </div>
@@ -260,6 +262,7 @@
       <p class="rl-hint" style="margin-bottom:1rem">No per-class exceptions yet.</p>
       {% endif %}
 
+      {% if can_write_sub('timetable', 'generator_rules') %}
       <form method="POST" action="{{ url_for('generator.set_day_separation_class_override') }}" class="rl-add-form">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <div>
@@ -283,6 +286,7 @@
         </div>
         <div><button type="submit" class="btn btn-secondary">Add Exception</button></div>
       </form>
+      {% endif %}
     </div>
   </div>
   {% endif %}

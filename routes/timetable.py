@@ -11,7 +11,11 @@ from utils.helpers import login_required
 from utils.branch_scope import (
     require_branch_access, scope_query, branch_for_new,
 )
-from utils.access_control import is_admin, can_write_module, get_teacher_profile
+from utils.access_control import is_admin, subsection_level, get_teacher_profile
+
+
+def _can_edit_class_timetable():
+    return is_admin() or subsection_level('timetable', 'class_edit') == 'edit'
 
 timetable_bp = Blueprint('timetable', __name__, url_prefix='/timetable')
 
@@ -22,7 +26,7 @@ def _timetable_form_scope():
 
     A plain teacher with view-only timetable access sees just the class(es) they
     are the *form teacher* of; edit access lifts the restriction entirely."""
-    if is_admin() or can_write_module('timetable'):
+    if _can_edit_class_timetable():
         return None
     teacher = get_teacher_profile()
     return teacher.form_class_ids if teacher else set()
@@ -467,7 +471,7 @@ def edit_timetable(assignment_id):
     require_branch_access(assignment.branch_id)   # no cross-branch timetables
     # Editing requires timetable edit access; view-only teachers are blocked even
     # for their own form class.
-    if not is_admin() and not can_write_module('timetable'):
+    if not _can_edit_class_timetable():
         flash('You do not have permission to edit timetables.', 'error')
         return redirect(url_for('timetable.index'))
 
@@ -514,7 +518,7 @@ def save_timetable(assignment_id):
     """Save timetable entries"""
     assignment = ClassArmAssignment.query.get_or_404(assignment_id)
     require_branch_access(assignment.branch_id)   # no cross-branch writes
-    if not is_admin() and not can_write_module('timetable'):
+    if not _can_edit_class_timetable():
         return jsonify({'success': False, 'error': 'You cannot edit timetables.'}), 403
 
     try:

@@ -89,6 +89,7 @@
       <p>Manage {{ level|upper }} subjects and how many periods each gets per week.</p>
     </div>
     <div class="sp-actions">
+      {% if can_write_sub('timetable', 'generator_subjects') %}
       <form method="POST" action="{{ url_for('generator.sync_gen_subjects') }}"
             data-confirm="Import academic subjects not already listed here into {{ level|upper }}? This only adds subjects; it never changes or removes existing ones, their periods, or teachers.">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
@@ -97,6 +98,7 @@
         </button>
       </form>
       <a href="{{ url_for('generator.add_gen_subject') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add Subject</a>
+      {% endif %}
     </div>
   </div>
 
@@ -107,9 +109,11 @@
     <div class="sp-chip"><b>{{ total_count - configured_count }}</b><span>Pending</span></div>
   </div>
 
+  {% if can_write_sub('timetable', 'generator_subjects') %}
   <form id="saveConfigForm" method="POST" action="{{ url_for('generator.save_subjects_config') }}">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
   </form>
+  {% endif %}
 
   <div class="sub-list">
     {% for item in subjects_data %}
@@ -133,6 +137,7 @@
           <a href="{{ url_for('generator.subject_rules', subject_id=sid) }}" class="btn-ghost" title="Rules (periods, first/last period, doubles, per-class)">
             <i class="fas fa-sliders"></i>
           </a>
+          {% if can_write_sub('timetable', 'generator_subjects') %}
           <a href="{{ url_for('generator.edit_gen_subject', subject_id=sid) }}" class="btn-ghost" title="Edit">
             <i class="fas fa-edit"></i>
           </a>
@@ -141,6 +146,7 @@
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <button type="submit" class="btn-outline-danger-sm" title="Delete"><i class="fas fa-trash"></i></button>
           </form>
+          {% endif %}
         </div>
       </div>
       <div class="sub-cfg">
@@ -197,7 +203,9 @@
 
   <div class="sp-save">
     <p>Changes to periods/week, doubles, and placement apply to all subjects when saved.</p>
+    {% if can_write_sub('timetable', 'generator_subjects') %}
     <button type="submit" form="saveConfigForm" class="btn btn-primary"><i class="fas fa-save"></i> Save Configuration</button>
+    {% endif %}
   </div>
 
   <script nonce="{{ csp_nonce }}">
@@ -213,7 +221,9 @@
     <div class="ic"><i class="fas fa-book"></i></div>
     <h3>No {{ level|upper }} Subjects</h3>
     <p>Add subjects for {{ level|upper }} timetable generation.</p>
+    {% if can_write_sub('timetable', 'generator_subjects') %}
     <a href="{{ url_for('generator.add_gen_subject') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add First Subject</a>
+    {% endif %}
   </div>
   {% endif %}
 </div>

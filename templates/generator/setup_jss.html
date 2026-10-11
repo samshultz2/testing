@@ -22,6 +22,7 @@
     </div>
 </div>
 
+{% if can_write_sub('timetable', 'generator_structure') %}
 <form method="POST" action="{{ url_for('generator.setup_jss') }}">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
     <div class="card mb-3">
@@ -32,7 +33,7 @@
                 <input type="text" name="arm_names" class="form-control" value="{{ suggested_arms }}" placeholder="Iris,Rose,Lily,Tulip" required>
                 <small class="text-muted">Comma-separated arm names (e.g., Iris,Rose,Lily,Tulip)</small>
             </div>
-            
+
             <div class="mt-3 p-3" style="background:var(--gray-50);border-radius:var(--radius-md)">
                 <h4 style="margin:0 0 .5rem;font-size:.9rem">Classes to be created:</h4>
                 <div class="d-flex gap-2 flex-wrap">
@@ -43,12 +44,13 @@
             </div>
         </div>
     </div>
-    
+
     <div class="d-flex gap-2">
         <button type="submit" class="btn btn-primary btn-lg"><i class="fas fa-check"></i> Create JSS Classes</button>
         <a href="{{ url_for('generator.classes_config') }}" class="btn btn-secondary btn-lg">Cancel</a>
     </div>
 </form>
+{% endif %}
 
 <div class="card mt-4">
     <div class="card-header"><h3><i class="fas fa-list-ol"></i> Next Steps After Setup</h3></div>

@@ -11,6 +11,7 @@
     </div>
 </div>
 
+{% if can_write_sub('timetable', 'generator_teachers') %}
 <div class="card">
     <div class="card-body">
         <form method="POST">
@@ -84,4 +85,5 @@
         </form>
     </div>
 </div>
+{% endif %}
 {% endblock %}

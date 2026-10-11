@@ -4,7 +4,7 @@
 {% block content %}
 <div class="page-header">
     <h1>Streams</h1>
-    <a href="{{ url_for('generator.add_stream') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add Stream</a>
+    {% if can_write_sub('timetable', 'generator_structure') %}<a href="{{ url_for('generator.add_stream') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add Stream</a>{% endif %}
 </div>
 
 <p class="text-muted mb-3">Define streams like Science, Arts, Commercial. Each stream has different subjects.</p>
@@ -27,9 +27,11 @@
                     <span>{{ stream.subjects.count() }}</span>
                 </div>
                 <div class="data-card-actions">
+                    {% if can_write_sub('timetable', 'generator_structure') %}
                     <a href="{{ url_for('generator.edit_stream', stream_id=stream.id) }}" class="btn btn-primary btn-sm">
                         <i class="fas fa-edit"></i> Edit
                     </a>
+                    {% endif %}
                 </div>
             </div>
             {% endfor %}
@@ -43,7 +45,7 @@
             <i class="fas fa-layer-group"></i>
             <h3>No Streams</h3>
             <p>Add streams like Science, Arts, Commercial if your school has them</p>
-            <a href="{{ url_for('generator.add_stream') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add Stream</a>
+            {% if can_write_sub('timetable', 'generator_structure') %}<a href="{{ url_for('generator.add_stream') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add Stream</a>{% endif %}
         </div>
     </div>
 </div>

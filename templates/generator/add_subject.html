@@ -9,21 +9,22 @@
 
 <div class="card" style="max-width: 500px;">
     <div class="card-body">
+        {% if can_write_sub('timetable', 'generator_subjects') %}
         <form method="POST">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
                 <label for="name">Subject Name *</label>
-                <input type="text" id="name" name="name" class="form-control" required 
+                <input type="text" id="name" name="name" class="form-control" required
                     placeholder="e.g., Mathematics, Basic Science">
             </div>
-            
+
             <div class="form-group">
                 <label for="short_name">Short Name</label>
                 <input type="text" id="short_name" name="short_name" class="form-control" maxlength="10"
                     placeholder="e.g., MATH, B.SCI">
                 <small class="text-muted">Optional abbreviation (max 10 chars)</small>
             </div>
-            
+
             <div class="form-group">
                 <label for="category">Category</label>
                 <select id="category" name="category" class="form-control">
@@ -34,7 +35,7 @@
                     <option value="vocational">Vocational</option>
                 </select>
             </div>
-            
+
             <div class="d-flex gap-2 mt-4">
                 <button type="submit" class="btn btn-primary">
                     <i class="fas fa-save"></i> Add Subject
@@ -42,6 +43,7 @@
                 <a href="{{ url_for('generator.subjects_config') }}" class="btn btn-secondary">Cancel</a>
             </div>
         </form>
+        {% endif %}
     </div>
 </div>
 

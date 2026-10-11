@@ -220,13 +220,29 @@ MODULE_SUBSECTIONS = {
         'analytics': 'Site Analytics',
     },
     'settings': {
-        'school': 'School Configuration',
-        'grading': 'Grading & Assessments',
-        'slots': 'Timetable Slots',
-        'users': 'User Accounts',
-        'branches': 'Branches',
-        'backup': 'Backup & Restore',
-        'audit': 'Audit Log',
+        'school_info': 'School Info / Logo',
+        'academic_config': 'Academic Config',
+        'grades_view': 'View Grade Scale',
+        'grades_edit': 'Edit Grade Scale',
+        'traits_view': 'View Behavioural Traits',
+        'traits_edit': 'Edit Behavioural Traits',
+        'assessments_view': 'View Assessment Types',
+        'assessments_edit': 'Edit Assessment Types',
+        'term_overrides_view': 'View Per-Term Assessment Overrides',
+        'term_overrides_edit': 'Edit Per-Term Assessment Overrides',
+        'slots_view': 'View Timetable Period/Break Slots',
+        'slots_edit': 'Edit Timetable Period/Break Slots',
+        'slots_generate': 'Auto-Generate Timetable Period/Break Slots',
+        # Sensitive actions granted explicitly (see CAPABILITY_SUBSECTIONS) —
+        # hold a live third-party secret (OCR vision API key / payment
+        # gateway key), so never implied by school_info_edit.
+        'ocr_manage': 'Manage OCR / Vision Settings',
+        'payments_manage': 'Manage Payment Gateway Settings',
+        # NB: user accounts, branches, backup/restore and the audit log are
+        # deliberately left out entirely — every one of those routes stays
+        # hard @central_admin_required and is not independently grantable,
+        # same treatment as HR's device-token reset / Promotion's
+        # set_alumni_password / CBT's settings-passwords.
     },
     'finance': {
         'payments_view': 'View Payments',
@@ -416,9 +432,32 @@ MODULE_SUBSECTIONS = {
         'cards': 'Generate Result Cards',
     },
     'timetable': {
-        'view': 'View & Print Timetables',
-        'manage': 'Edit Timetables',
+        'class_view': 'View & Print Class Timetables',
+        'class_edit': 'Edit Class Timetables (manual grid)',
+        'designer_view': 'View Saved Designer Timetables',
+        'designer_edit': 'Create / Edit Designer Timetables',
+        'backups_view': 'View Timetable Backups',
+        'backups_create': 'Create Timetable Backups',
+        'backups_restore': 'Restore Timetable Backups',
+        'backups_delete': 'Delete Timetable Backups',
+        'generator_structure': 'Generator: Rooms / Streams / Classes Setup',
+        'generator_subjects': 'Generator: Subjects & Subject Rules',
+        'generator_teachers': 'Generator: Teacher Roster',
+        'generator_teachers_bulk': 'Generator: Bulk Teacher Operations / Import',
+        'generator_rules': 'Generator: Scheduling Rules & Settings',
+        'generator_assignments': 'Generator: Teacher Assignments',
+        'generator_assignments_bulk': 'Generator: Bulk-Delete Teacher Assignments',
+        'generator_results_view': 'Generator: View Generated Results',
+        'generator_results_manage': 'Generator: Edit / Apply Generated Results',
+        'generator_results_delete': 'Generator: Delete Generated Results',
+        'generator_reports': 'Generator: Reports',
+        'generator_exports': 'Generator: Exports (PDF / Image)',
+        # Sensitive action granted explicitly (see CAPABILITY_SUBSECTIONS) —
+        # dual-gated with 'generator_generate' below (also requires an
+        # ordinary edit grant on that key, same pattern as Sales'
+        # purchasing_approve + approve_po).
         'generate': 'Generate Timetable',
+        'generator_generate': 'Generator: Run / Open the Generate Page',
     },
     'sales': {
         'pos_view': 'View Receipts',
@@ -477,7 +516,8 @@ CAPABILITY_SUBSECTIONS = {'results.cards', 'timetable.generate',
                           'sales.approve_po', 'sales.signoff_count',
                           'hr.self_attendance', 'hr.self_payroll', 'hr.self_deductions',
                           'hr.self_leave', 'hr.self_loans', 'hr.self_documents',
-                          'library.self_loans', 'sales.self_sales'}
+                          'library.self_loans', 'sales.self_sales',
+                          'settings.ocr_manage', 'settings.payments_manage'}
 
 # Self-scope capabilities: an explicit grant that lets a user act on their OWN
 # record only (never other people's) — the finest permission tier. They ride on
@@ -498,7 +538,8 @@ def self_scope_level(key):
 
 # Capabilities only certain managers may grant. key -> who may set it.
 # 'central' => only a central admin may grant/revoke this capability.
-RESTRICTED_GRANTS = {'results.cards': 'central'}
+RESTRICTED_GRANTS = {'results.cards': 'central',
+                     'settings.ocr_manage': 'central', 'settings.payments_manage': 'central'}
 
 # Which endpoints belong to each sub-section. Entries are bare endpoint names
 # (prefixed with the module's default blueprint below) OR fully-qualified
@@ -604,11 +645,99 @@ _SUBSECTION_ENDPOINTS = {
         'results_export': {'results_export', 'results_export_all', 'item_analysis_export'},
     },
     'timetable': {
-        'view': {'index', 'my_timetable', 'print_timetable', 'api_get_entries',
-                 'designer_load', 'designer_saved'},
-        'manage': {'designer', 'designer_save', 'designer_delete', 'edit_timetable',
-                   'save_timetable', 'copy_timetable', 'backups', 'create_backup',
-                   'delete_backup', 'restore_backup_route'},
+        # Bare names below default to the 'timetable' blueprint
+        # (routes/timetable.py); the generator blueprint's endpoints are
+        # fully-qualified 'generator.<name>' since it shares this module_key
+        # (BLUEPRINT_MODULE['generator'] = 'timetable') but is a different
+        # blueprint — same escape hatch used by students' 'welfare.*' entries.
+        'class_view': {'index', 'my_timetable', 'print_timetable', 'api_get_entries'},
+        'class_edit': {'edit_timetable', 'save_timetable', 'copy_timetable'},
+        'designer_view': {'designer_load', 'designer_saved'},
+        'designer_edit': {'designer', 'designer_save', 'designer_delete'},
+        'backups_view': {'backups'},
+        'backups_create': {'create_backup'},
+        'backups_restore': {'restore_backup_route'},
+        'backups_delete': {'delete_backup'},
+        'generator_structure': {
+            'generator.index', 'generator.setup_guide', 'generator.setup_jss',
+            'generator.copy_subject_config', 'generator.level_dashboard',
+            'generator.api_teacher_subjects', 'generator.api_class_arms',
+            'generator.api_stream_subjects', 'generator.api_swap_slots',
+            'generator.rooms_list', 'generator.add_room', 'generator.delete_room',
+            'generator.streams_list', 'generator.add_stream', 'generator.edit_stream',
+            'generator.update_stream', 'generator.update_stream_subjects',
+            'generator.delete_stream', 'generator.classes_config',
+            'generator.add_class_config', 'generator.edit_class_config',
+            'generator.update_class_config', 'generator.update_arm_streams',
+            'generator.delete_class_config',
+        },
+        'generator_subjects': {
+            'generator.subjects_config', 'generator.add_gen_subject',
+            'generator.sync_gen_subjects', 'generator.delete_gen_subject',
+            'generator.edit_gen_subject', 'generator.save_subjects_config',
+            'generator.class_subjects_list', 'generator.class_subjects_config',
+            'generator.save_class_subjects_config', 'generator.class_stream_subjects',
+            'generator.save_class_stream_subjects', 'generator.subject_rules',
+            'generator.save_subject_rules',
+        },
+        'generator_teachers': {
+            'generator.teachers_list', 'generator.add_teacher', 'generator.edit_teacher',
+            'generator.update_teacher', 'generator.update_teacher_subjects',
+            'generator.update_teacher_availability', 'generator.delete_teacher',
+        },
+        'generator_teachers_bulk': {
+            'generator.bulk_increase_teacher_periods', 'generator.bulk_delete_teachers',
+            'generator.bulk_sync_teacher_periods', 'generator.import_teachers',
+        },
+        'generator_rules': {
+            'generator.rules_config', 'generator.save_rules',
+            'generator.set_day_separation_class_override', 'generator.generator_settings',
+            'generator.save_generator_settings', 'generator.clash_rules_list',
+            'generator.add_clash_rule', 'generator.toggle_clash_rule',
+            'generator.delete_clash_rule', 'generator.add_combined_rule',
+            'generator.toggle_combined_rule', 'generator.delete_combined_rule',
+            'generator.add_coschedule_rule', 'generator.toggle_coschedule_rule',
+            'generator.delete_coschedule_rule', 'generator.add_day_separation_rule',
+            'generator.toggle_day_separation_rule', 'generator.delete_day_separation_rule',
+            'generator.add_period_placement_rule', 'generator.toggle_period_placement_rule',
+            'generator.delete_period_placement_rule',
+        },
+        'generator_assignments': {
+            'generator.teacher_assignments', 'generator.add_teacher_assignment',
+            'generator.delete_teacher_assignment',
+        },
+        'generator_assignments_bulk': {'generator.bulk_delete_teacher_assignments'},
+        # Dual-gated with the 'generate' capability (@timetable_generate_required
+        # stays on run_generation/run_ortools_generation unchanged).
+        'generator_generate': {
+            'generator.generate_page', 'generator.run_generation',
+            'generator.run_ortools_generation',
+        },
+        'generator_results_view': {'generator.results_list', 'generator.view_results'},
+        # Dual-gated with 'generate' on apply_results/set_in_use (unchanged).
+        'generator_results_manage': {
+            'generator.edit_timetable', 'generator.save_timetable_edit',
+            'generator.apply_results', 'generator.set_in_use',
+        },
+        'generator_results_delete': {'generator.delete_results', 'generator.bulk_delete_results'},
+        'generator_reports': {
+            'generator.reports_index', 'generator.period_count_report',
+            'generator.teacher_assignment_summary_report', 'generator.teacher_workload_report',
+            'generator.clash_report', 'generator.unassigned_report',
+            'generator.teacher_timetable', 'generator.master_timetable',
+        },
+        'generator_exports': {
+            'generator.print_results', 'generator.print_single_timetable',
+            'generator.print_single_timetable_pdf', 'generator.export_results',
+            'generator.export_results_by_day', 'generator.export_results_by_day_pdf',
+            'generator.export_image', 'generator.export_image_hd', 'generator.export_image_ultra',
+            'generator.export_teacher_image', 'generator.print_teacher_timetable',
+            'generator.print_all_teacher_timetables_pdf', 'generator.unassigned_report_image',
+            'generator.unassigned_report_pdf', 'generator.teacher_workload_report_image',
+            'generator.teacher_workload_report_pdf', 'generator.period_count_report_image',
+            'generator.period_count_report_pdf', 'generator.teacher_assignment_summary_image',
+            'generator.teacher_assignment_summary_pdf',
+        },
     },
     'promotion': {
         # NB: graduates_list / graduate_profile / graduate_compare are deliberately
@@ -699,17 +828,33 @@ _SUBSECTION_ENDPOINTS = {
         'analytics': {'analytics', 'analytics_export'},
     },
     'settings': {
-        'school': {'index', 'school_settings', 'academic_settings', 'upload_school_logo',
-                   'remove_school_logo', 'ocr_settings', 'payments_settings'},
-        'grading': {'grades_list', 'save_grades', 'assessments_list', 'save_assessments',
-                    'traits_list', 'save_traits', 'term_assessments',
-                    'term_assessment_edit', 'term_assessment_save', 'term_assessment_copy'},
-        'slots': {'timetable_slots', 'save_timetable_slots', 'generate_timetable_slots'},
-        'users': {'users_list', 'add_user', 'edit_user', 'delete_user'},
-        'branches': {'branches', 'add_branch', 'edit_branch'},
-        'backup': {'backup_page', 'create_backup', 'restore_backup', 'download_backup',
-                   'download_backup_file', 'export_json'},
-        'audit': {'audit_log'},
+        # NB: 'index' is deliberately left out — it's the module's pure
+        # navigation/landing page, reachable with any single settings grant,
+        # same treatment as every other module's dashboard (fixes a real bug:
+        # it used to be bucketed under 'school', blocking e.g. a grading-only
+        # holder from the Settings landing page itself).
+        # school_settings/academic_settings are single GET+POST endpoints —
+        # one key each, same view/edit split enforced by request method
+        # (enforce_subsection_access already differentiates GET vs write).
+        'school_info': {'school_settings', 'upload_school_logo', 'remove_school_logo'},
+        'academic_config': {'academic_settings'},
+        'grades_view': {'grades_list'},
+        'grades_edit': {'save_grades'},
+        'traits_view': {'traits_list'},
+        'traits_edit': {'save_traits'},
+        'assessments_view': {'assessments_list'},
+        'assessments_edit': {'save_assessments'},
+        'term_overrides_view': {'term_assessments', 'term_assessment_edit'},
+        'term_overrides_edit': {'term_assessment_save', 'term_assessment_copy'},
+        'slots_view': {'timetable_slots'},
+        'slots_edit': {'save_timetable_slots'},
+        'slots_generate': {'generate_timetable_slots'},
+        # ocr_settings/payments_settings are capabilities (see
+        # CAPABILITY_SUBSECTIONS) checked inline in the route, not mapped
+        # here as ordinary ADMIN-level keys.
+        # NB: users/branches/backup/audit are deliberately excluded entirely
+        # — every endpoint in them stays hard @central_admin_required and is
+        # not independently grantable (see MODULE_SUBSECTIONS note above).
     },
     'finance': {
         'payments_view': {'collections', 'payments_list', 'receipt', 'receipt_pdf', 'statement'},
@@ -1066,6 +1211,25 @@ def can_generate_result_cards():
     if is_admin() and is_central():
         return True
     return has_capability('results.cards')
+
+
+def can_manage_ocr_settings():
+    """Only a central admin, or a user explicitly granted 'settings.ocr_manage'
+    (holds a live, billable third-party vision-API key)."""
+    from utils.branch_scope import is_central
+    if is_admin() and is_central():
+        return True
+    return has_capability('settings.ocr_manage')
+
+
+def can_manage_payment_settings():
+    """Only a central admin, or a user explicitly granted
+    'settings.payments_manage' (holds this school's live payment-gateway
+    secret key — money moves through it)."""
+    from utils.branch_scope import is_central
+    if is_admin() and is_central():
+        return True
+    return has_capability('settings.payments_manage')
 
 
 def can_generate_timetable():

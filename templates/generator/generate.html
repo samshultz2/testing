@@ -272,6 +272,7 @@
         </div>
     </div>
 
+    {% if can_generate_timetable %}
     <div class="gen-actionbar">
         {% if issues %}
         <button type="submit" class="btn btn-secondary btn-lg"><i class="fas fa-triangle-exclamation"></i> Generate Anyway</button>
@@ -279,6 +280,9 @@
         <button type="submit" class="btn btn-primary btn-lg" id="generate-btn"><i class="fas fa-wand-magic-sparkles"></i> Generate Timetables</button>
         {% endif %}
     </div>
+    {% else %}
+    <p class="text-muted text-sm" style="margin-top:1rem"><i class="fas fa-lock"></i> You don't have permission to run the generator. Ask an admin to grant you "Generate Timetable".</p>
+    {% endif %}
     {% endif %}
 </form>
 

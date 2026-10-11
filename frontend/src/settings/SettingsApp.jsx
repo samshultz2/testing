@@ -3,6 +3,7 @@ import { submitJson, postFile, useSave } from '../lib/forms';
 import { csrfToken } from '../lib/api';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, Banner, SectionShell, Empty, FileUpload } from '../components/ui';
+import { canWrite } from '../lib/perms';
 
 // Small helpers ---------------------------------------------------------------
 function Actions({ children }) {
@@ -27,25 +28,32 @@ function Index({ d }) {
     </a>
   );
   const u = d.urls;
+  // Settings is a mix of genuinely delegable slices (gated by actual
+  // subsection grants) and a few that stay hard admin+central only
+  // (branches/users/audit/backup aren't in the grant registry at all) —
+  // those use d.is_admin && d.is_central directly, matching the backend's
+  // own @central_admin_required check, rather than a subsection grant.
+  const hasAny = (...subs) => subs.some((s) => d.perms && d.perms.subs && d.perms.subs[s]);
+  const centralAdmin = d.is_admin && d.is_central;
   return (
     <>
       <div className="page-header"><h1>Settings</h1></div>
       <div className="data-cards" style={{ padding: 0 }}>
-        {card(u.school, 'fa-school', 'School Info', 'Configure school name, address, contact')}
-        {card(u.academic, 'fa-clock', 'Academic', 'School hours, periods, promotion threshold')}
-        {card(u.grades, 'fa-star', 'Grade Scale', 'Configure A+, A, B, C, F grades')}
-        {card(u.traits, 'fa-star-half-stroke', 'Behavioural Traits', 'Affective domain traits on report cards')}
-        {card(u.assessments, 'fa-tasks', 'Assessments', 'CA components, exams, max scores')}
-        {card(u.timetable_slots, 'fa-calendar-alt', 'Timetable Slots', 'Period times and breaks')}
-        {d.is_central && card(u.branches, 'fa-code-branch', 'Branches', 'Manage school branches')}
-        {d.is_central && card(u.users, 'fa-users-cog', 'Users', 'Manage admin and teacher accounts')}
-        {card(u.backup, 'fa-database', 'Backup & Restore', 'Download backup, restore data')}
-        {d.is_central && card(u.audit, 'fa-clipboard-list', 'Audit Log', 'Who changed what, and when')}
-        {card(u.ocr, 'fa-robot', 'AI Vision OCR', 'Optional Claude key for reading result images')}
+        {hasAny('school_info') && card(u.school, 'fa-school', 'School Info', 'Configure school name, address, contact')}
+        {hasAny('academic_config') && card(u.academic, 'fa-clock', 'Academic', 'School hours, periods, promotion threshold')}
+        {hasAny('grades_view', 'grades_edit') && card(u.grades, 'fa-star', 'Grade Scale', 'Configure A+, A, B, C, F grades')}
+        {hasAny('traits_view', 'traits_edit') && card(u.traits, 'fa-star-half-stroke', 'Behavioural Traits', 'Affective domain traits on report cards')}
+        {hasAny('assessments_view', 'assessments_edit') && card(u.assessments, 'fa-tasks', 'Assessments', 'CA components, exams, max scores')}
+        {hasAny('slots_view', 'slots_edit') && card(u.timetable_slots, 'fa-calendar-alt', 'Timetable Slots', 'Period times and breaks')}
+        {centralAdmin && card(u.branches, 'fa-code-branch', 'Branches', 'Manage school branches')}
+        {centralAdmin && card(u.users, 'fa-users-cog', 'Users', 'Manage admin and teacher accounts')}
+        {centralAdmin && card(u.backup, 'fa-database', 'Backup & Restore', 'Download backup, restore data')}
+        {centralAdmin && card(u.audit, 'fa-clipboard-list', 'Audit Log', 'Who changed what, and when')}
+        {hasAny('ocr_manage') && card(u.ocr, 'fa-robot', 'AI Vision OCR', 'Optional Claude key for reading result images')}
         {u.exam_subjects && cardExt(u.exam_subjects, 'fa-file-signature', 'Exam Subjects', 'WAEC/JAMB catalogue, general & per-stream compulsories')}
         {u.notifications && cardExt(u.notifications, 'fa-bell', 'Notifications', 'Choose which channels you receive alerts on')}
-        {d.is_central && u.performance && cardExt(u.performance, 'fa-gauge-high', 'Performance', 'Recent slow requests and SQL queries')}
-        {d.is_central && u.admissions && cardExt(u.admissions, 'fa-graduation-cap', 'Admissions data', 'Universities, courses & JAMB cut-offs')}
+        {centralAdmin && u.performance && cardExt(u.performance, 'fa-gauge-high', 'Performance', 'Recent slow requests and SQL queries')}
+        {centralAdmin && u.admissions && cardExt(u.admissions, 'fa-graduation-cap', 'Admissions data', 'Universities, courses & JAMB cut-offs')}
       </div>
     </>
   );
@@ -94,11 +102,11 @@ function School({ d, notify }) {
     <>
       <div className="page-header"><h1>School Information</h1></div>
       <div className="card"><div className="card-body">
-        <FileUpload
+        {canWrite(d, 'school_info') && <FileUpload
           label={logoUrl ? 'Replace logo' : 'Upload logo'}
           accept="image/png,image/jpeg,image/webp"
           onPick={pickLogo} busy={busy} currentUrl={logoUrl} onClear={removeLogo}
-          hint="PNG, JPG or WEBP. Shown in place of the app name/logo when signed in, and on report cards, Mock-WAEC results, broadsheets and timetables." />
+          hint="PNG, JPG or WEBP. Shown in place of the app name/logo when signed in, and on report cards, Mock-WAEC results, broadsheets and timetables." />}
         <form onSubmit={submit}>
           <div className="form-group"><label className="form-label">School Name</label>
             <input type="text" className="form-control" value={f.school_name} onChange={set('school_name')} placeholder="Enter school name" /></div>
@@ -130,9 +138,9 @@ function School({ d, notify }) {
             </select>
             <span className="form-hint d-block">How period and school-day clock times are shown on timetable pages and in every PDF, image and spreadsheet export. Doesn't affect date/time pickers, which always follow your device.</span></div>
           <Actions>
-            <button type="submit" className={'btn btn-primary' + (saving ? ' is-loading' : '')} disabled={saving} aria-busy={saving || undefined}>
+            {canWrite(d, 'school_info') && <button type="submit" className={'btn btn-primary' + (saving ? ' is-loading' : '')} disabled={saving} aria-busy={saving || undefined}>
               <i aria-hidden="true" className={'fas ' + (saving ? 'fa-spinner fa-spin' : 'fa-save')} /> {saving ? 'Saving…' : 'Save'}
-            </button>
+            </button>}
             <a href={d.back_url} onClick={(e) => { e.preventDefault(); nav.go(d.back_url); }} className="btn btn-secondary">Back</a>
           </Actions>
         </form>
@@ -238,7 +246,7 @@ function Academic({ d, notify }) {
             <small className="text-muted d-block">Turn off if your classes are just SSS1, SSS2… with no arms — then set them up under Academics → Class Setup.</small>
           </div>
           <Actions>
-            <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save</button>
+            {canWrite(d, 'academic_config') && <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save</button>}
             <a href={d.back_url} onClick={(e) => { e.preventDefault(); nav.go(d.back_url); }} className="btn btn-secondary">Back</a>
           </Actions>
         </form>
@@ -277,14 +285,14 @@ function Grades({ d, notify }) {
                   <td><input type="number" className="form-control" value={r.min_score} onChange={set(i, 'min_score')} style={{ width: 80 }} placeholder="80" /></td>
                   <td><input type="number" className="form-control" value={r.max_score} onChange={set(i, 'max_score')} style={{ width: 80 }} placeholder="100" /></td>
                   <td><input type="text" className="form-control" value={r.remark} onChange={set(i, 'remark')} placeholder="Excellent" /></td>
-                  <td><button type="button" className="btn btn-danger btn-sm" onClick={() => del(i)}><i aria-hidden="true" className="fas fa-times" /></button></td>
+                  <td>{canWrite(d, 'grades_edit') && <button type="button" className="btn btn-danger btn-sm" onClick={() => del(i)}><i aria-hidden="true" className="fas fa-times" /></button>}</td>
                 </tr>
               ))}
             </tbody>
           </table></div>
           <Actions>
-            <button type="button" className="btn btn-secondary" onClick={add}><i aria-hidden="true" className="fas fa-plus" /> Add Grade</button>
-            <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save</button>
+            {canWrite(d, 'grades_edit') && <button type="button" className="btn btn-secondary" onClick={add}><i aria-hidden="true" className="fas fa-plus" /> Add Grade</button>}
+            {canWrite(d, 'grades_edit') && <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save</button>}
             <a href={d.back_url} onClick={(e) => { e.preventDefault(); nav.go(d.back_url); }} className="btn btn-secondary">Back</a>
           </Actions>
         </form>
@@ -327,7 +335,9 @@ function Traits({ d, notify }) {
             </tbody>
           </table>
           <div className="mt-3">
+            {canWrite(d, 'traits_edit') && <>
             <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save traits</button>{' '}
+            </>}
             <a href={d.back_url} onClick={(e) => { e.preventDefault(); nav.go(d.back_url); }} className="btn btn-secondary">Back to Settings</a>
           </div>
         </form>
@@ -369,14 +379,14 @@ function Assessments({ d, notify }) {
                   <td><input type="text" className="form-control" value={r.name} onChange={set(i, 'name')} placeholder="Assessment Name" /></td>
                   <td><input type="text" className="form-control" value={r.short_name} onChange={set(i, 'short_name')} style={{ width: 80 }} placeholder="CA1" /></td>
                   <td><input type="number" className="form-control" value={r.max_score} onChange={set(i, 'max_score')} style={{ width: 80 }} min="1" max="100" placeholder="10" /></td>
-                  <td><button type="button" className="btn btn-danger btn-sm" onClick={() => del(i)}><i aria-hidden="true" className="fas fa-times" /></button></td>
+                  <td>{canWrite(d, 'assessments_edit') && <button type="button" className="btn btn-danger btn-sm" onClick={() => del(i)}><i aria-hidden="true" className="fas fa-times" /></button>}</td>
                 </tr>
               ))}
             </tbody>
           </table></div>
           <Actions>
-            <button type="button" className="btn btn-secondary" onClick={add}><i aria-hidden="true" className="fas fa-plus" /> Add</button>
-            <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save</button>
+            {canWrite(d, 'assessments_edit') && <button type="button" className="btn btn-secondary" onClick={add}><i aria-hidden="true" className="fas fa-plus" /> Add</button>}
+            {canWrite(d, 'assessments_edit') && <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save</button>}
             <a href={d.back_url} onClick={(e) => { e.preventDefault(); nav.go(d.back_url); }} className="btn btn-secondary">Back</a>
           </Actions>
         </form>
@@ -409,7 +419,7 @@ function TimetableSlots({ d, notify }) {
   return (
     <>
       <div className="page-header"><h1>Timetable Slots</h1>
-        <button type="button" className="btn btn-secondary" onClick={generate}><i aria-hidden="true" className="fas fa-sync" /> Auto-Generate</button></div>
+        {canWrite(d, 'slots_generate') && <button type="button" className="btn btn-secondary" onClick={generate}><i aria-hidden="true" className="fas fa-sync" /> Auto-Generate</button>}</div>
       <div className="card mb-3"><div className="card-body">
         <p className="text-muted">School hours: {s.school_day_start || '08:20'} - {s.school_day_end || '14:10'} | Period: {s.period_duration || '40'} mins | Break: {s.break_duration || '30'} mins</p>
       </div></div>
@@ -440,7 +450,7 @@ function TimetableSlots({ d, notify }) {
               e.g. a break with "After period" set to 9 will always be placed right after Period 9, even if the
               stored times drift. Only applies to break rows.</p>
             <Actions>
-              <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save Changes</button>
+              {canWrite(d, 'slots_edit') && <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save Changes</button>}
               <a href={d.back_url} onClick={(e) => { e.preventDefault(); nav.go(d.back_url); }} className="btn btn-secondary">Back</a>
             </Actions>
           </form>
@@ -834,7 +844,7 @@ function Ocr({ d, notify }) {
           </div>
 
           <Actions>
-            <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save</button>
+            {canWrite(d, 'ocr_manage') && <button type="submit" className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Save</button>}
             <a href={d.back_url} onClick={(e) => { e.preventDefault(); nav.go(d.back_url); }} className="btn btn-secondary">Back</a>
           </Actions>
         </form>

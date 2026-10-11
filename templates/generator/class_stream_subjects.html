@@ -93,6 +93,7 @@
         <i class="fas fa-chevron-right acc-chevron"></i>
       </summary>
       <div class="acc-body">
+        {% if can_write_sub('timetable', 'generator_subjects') %}
         <form method="POST" action="{{ url_for('generator.save_class_stream_subjects', class_id=class_config.id) }}">
           <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
           <input type="hidden" name="stream_id" value="{{ data.stream.id }}">
@@ -142,6 +143,7 @@
             <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save {{ data.stream.name }} Subjects</button>
           </div>
         </form>
+        {% endif %}
       </div>
     </details>
     {% endfor %}

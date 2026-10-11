@@ -10,25 +10,27 @@
 <div class="card mb-3">
     <div class="card-header"><h3>Stream Details</h3></div>
     <div class="card-body">
+        {% if can_write_sub('timetable', 'generator_structure') %}
         <form method="POST" action="{{ url_for('generator.update_stream', stream_id=stream.id) }}">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <div class="form-group">
                 <label class="form-label">Stream Name <span class="required">*</span></label>
                 <input type="text" name="name" class="form-control" required value="{{ stream.name }}">
             </div>
-            
+
             <div class="form-group">
                 <label class="form-label">Short Name</label>
                 <input type="text" name="short_name" class="form-control" value="{{ stream.short_name or '' }}" maxlength="10">
             </div>
-            
+
             <div class="form-group">
                 <label class="form-label">Description</label>
                 <input type="text" name="description" class="form-control" value="{{ stream.description or '' }}">
             </div>
-            
+
             <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Update Details</button>
         </form>
+        {% endif %}
     </div>
 </div>
 
@@ -36,6 +38,7 @@
 <div class="card mb-3">
     <div class="card-header"><h3>Subjects in {{ stream.name }} Stream</h3></div>
     <div class="card-body">
+        {% if can_write_sub('timetable', 'generator_structure') %}
         <form method="POST" action="{{ url_for('generator.update_stream_subjects', stream_id=stream.id) }}">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <p class="text-muted mb-3">Select subjects for this stream. Set periods per week (leave blank to use global setting).</p>
@@ -104,6 +107,7 @@
                 <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save Subjects</button>
             </div>
         </form>
+        {% endif %}
     </div>
 </div>
 
@@ -111,11 +115,13 @@
 <div class="card">
     <div class="card-header"><h3>Danger Zone</h3></div>
     <div class="card-body">
+        {% if can_write_sub('timetable', 'generator_structure') %}
         <form method="POST" action="{{ url_for('generator.delete_stream', stream_id=stream.id) }}" data-confirm="Are you sure you want to remove this stream?">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <p class="text-muted">Remove this stream from the timetable generator.</p>
             <button type="submit" class="btn btn-danger"><i class="fas fa-trash"></i> Remove Stream</button>
         </form>
+        {% endif %}
     </div>
 </div>
 
