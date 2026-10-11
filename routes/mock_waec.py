@@ -267,6 +267,33 @@ def broadsheet_blank(exam_id):
         back_url=url_for('mock_waec.view_exam', exam_id=exam_id))
 
 
+def _arm_by_student(students):
+    """{student_id: current class arm label} for the active term -- best-effort,
+    same shape as routes/contributions.py's arm lookup. Returns {} rather than
+    raising when the SSS3/term setup can't be resolved."""
+    arm_by_student = {}
+    try:
+        from utils.helpers import get_sss3_class, get_active_term
+        from models import ClassArmAssignment, StudentEnrollment
+        sss3 = get_sss3_class()
+        active_term = get_active_term()
+        if sss3 and active_term and students:
+            assignment_ids = [a.id for a in scope_query(
+                ClassArmAssignment.query.filter_by(class_id=sss3.id, term_id=active_term.id),
+                ClassArmAssignment).all()]
+            if assignment_ids:
+                enrollments = (StudentEnrollment.query
+                    .filter(StudentEnrollment.student_id.in_([s.id for s in students]),
+                            StudentEnrollment.class_arm_assignment_id.in_(assignment_ids),
+                            StudentEnrollment.is_active == True)
+                    .all())
+                for en in enrollments:
+                    arm_by_student[en.student_id] = en.class_arm_assignment.arm_label
+    except Exception:
+        pass
+    return arm_by_student
+
+
 @mock_waec_bp.route('/exam/<int:exam_id>/broadsheet/blank.pdf')
 @login_required
 @rate_limited('export', max_requests=40, window_minutes=10)
@@ -294,7 +321,8 @@ def broadsheet_blank_pdf(exam_id):
     buf = blank_broadsheet_pdf(students, offered, subjects, exam, _school_profile(),
                                opts=_pdf_opts(), per=(per if per and per > 0 else 0),
                                orient=request.args.get('orient', 'landscape'),
-                               size=(size if size in ('A4', 'A3', 'A2') else 'A4'))
+                               size=(size if size in ('A4', 'A3', 'A2') else 'A4'),
+                               arm_by_student=_arm_by_student(students))
     name = f"recording_sheet_{exam.exam_number}_{exam.session.name.replace('/', '-')}.pdf"
     return send_file(buf, mimetype='application/pdf',
                      as_attachment=request.args.get('download') == '1', download_name=name)
@@ -561,14 +589,24 @@ def grid_entry(exam_id):
         touched, saved = set(), 0
         for s in students:
             for subj in cols:
-                raw = (request.form.get(f'score_{s.id}_{_slug(subj)}') or '').strip()
+                key = f'{s.id}_{_slug(subj)}'
+                if request.form.get(f'absent_{key}') == 'on':
+                    # Absence wins over any score left in the box -- a student
+                    # can't be both absent and scored for the same paper.
+                    row = _upsert_result(s.id, exam_id, subj, None, None, existing=existing_map)
+                    row.is_absent = True
+                    touched.add(s.id)
+                    saved += 1
+                    continue
+                raw = (request.form.get(f'score_{key}') or '').strip()
                 if raw == '':
                     continue                       # blank = leave untouched
                 try:
                     score = max(0, min(100, int(round(float(raw)))))
                 except (TypeError, ValueError):
                     continue
-                _upsert_result(s.id, exam_id, subj, score, None, existing=existing_map)
+                row = _upsert_result(s.id, exam_id, subj, score, None, existing=existing_map)
+                row.is_absent = False
                 touched.add(s.id)
                 saved += 1
         db.session.commit()
@@ -590,11 +628,12 @@ def grid_entry(exam_id):
         return redirect(url_for('mock_waec.grid_entry', exam_id=exam_id, col=cols))
 
     # Prefill from existing results.
-    score_map = {(r.student_id, r.subject): r.score
-                 for r in MockWAECResult.query.filter_by(mock_exam_id=exam_id).all()}
+    existing_results = MockWAECResult.query.filter_by(mock_exam_id=exam_id).all()
+    score_map = {(r.student_id, r.subject): r.score for r in existing_results}
+    absent_map = {(r.student_id, r.subject): r.is_absent for r in existing_results}
     return render_template('mock_waec/grid_entry.html',
         exam=exam, students=students, subjects=subjects, all_subjects=WAEC_SUBJECTS,
-        score_map=score_map, slug=_slug)
+        score_map=score_map, absent_map=absent_map, slug=_slug)
 
 
 def _slug(subject):
@@ -972,7 +1011,9 @@ def _slips_for(exam_id, student_id=None):
 
 # Optional blocks for the printed PDFs — each included unless ?<flag>=0.
 _PDF_FLAGS = ('title', 'address', 'contact', 'motto', 'summary', 'signatures', 'grades',
-             'sig_principal', 'sig_hod_sci', 'sig_hod_arts', 'credits', 'average')
+             'sig_principal', 'sig_hod_sci', 'sig_hod_arts', 'credits', 'average',
+             'exam_date', 'arm_col', 'position', 'subjects_sat', 'remark',
+             'watermark', 'page_numbers', 'printed_on')
 
 
 def _pdf_opts():
@@ -987,16 +1028,23 @@ def _signers():
 
 # Detail checkboxes shown on each preview page (param, label) — all on by default.
 _OPTS_BROADSHEET = [('title', '“COMPETENCE RESULT” heading'), ('address', 'School address'),
-                    ('contact', 'Phone / email'), ('motto', 'School motto'),
+                    ('contact', 'Phone / email'), ('motto', 'School motto'), ('exam_date', 'Exam date'),
                     ('summary', 'Subject summary rows'), ('grades', 'Grade key'),
-                    ('credits', 'Credits column'), ('average', 'Average column'),
+                    ('arm_col', 'Class arm column'), ('credits', 'Credits column'),
+                    ('average', 'Average column'), ('position', 'Position column'),
+                    ('subjects_sat', 'Subjects sat column'), ('remark', 'Remark column'),
                     ('sig_principal', 'Principal signature'), ('sig_hod_sci', 'HOD (Sciences) signature'),
-                    ('sig_hod_arts', 'HOD (Arts/Humanities) signature')]
+                    ('sig_hod_arts', 'HOD (Arts/Humanities) signature'),
+                    ('watermark', 'Watermark'), ('page_numbers', 'Page numbers'),
+                    ('printed_on', 'Printed-on footer')]
 _OPTS_BLANK = [('title', '“COMPETENCE RESULT” heading'), ('address', 'School address'),
-               ('contact', 'Phone / email'), ('motto', 'School motto'),
+               ('contact', 'Phone / email'), ('motto', 'School motto'), ('exam_date', 'Exam date'),
                ('summary', 'Blank summary rows'), ('grades', 'Grade key'),
+               ('arm_col', 'Class arm column'),
                ('sig_principal', 'Principal signature'), ('sig_hod_sci', 'HOD (Sciences) signature'),
-               ('sig_hod_arts', 'HOD (Arts/Humanities) signature')]
+               ('sig_hod_arts', 'HOD (Arts/Humanities) signature'),
+               ('watermark', 'Watermark'), ('page_numbers', 'Page numbers'),
+               ('printed_on', 'Printed-on footer')]
 _OPTS_SLIP = [('title', '“COMPETENCE RESULT” heading'), ('address', 'School address'),
               ('contact', 'Phone / email'), ('motto', 'School motto'),
               ('summary', 'Summary box')]

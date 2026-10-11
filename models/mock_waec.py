@@ -125,6 +125,7 @@ class MockWAECResult(db.Model):
     subject = db.Column(db.String(50), nullable=False)
     score = db.Column(db.Integer)            # 0-100
     grade = db.Column(db.String(2))          # A1-F9, derived from score
+    is_absent = db.Column(db.Boolean, default=False)   # sat no paper -> excluded from credits/average
     created_at = db.Column(db.DateTime, default=datetime.now)
     updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
@@ -164,6 +165,7 @@ class MockWAECAnalytics:
         # Which of English/Maths are credited — 5 credits without these don't admit.
         credited = {r.subject for r in results if r.grade in PASS_GRADES}
         missing_core = [s for s in CORE_SUBJECTS if s not in credited]
+        absences = sum(1 for r in results if getattr(r, 'is_absent', False))
         return {
             'subjects': len(results),
             'credits': credits,
@@ -175,6 +177,9 @@ class MockWAECAnalytics:
             'missing_core': missing_core,
             # The admission-grade flag: 5 credits *and* both English and Maths.
             'has_5_incl_core': credits >= 5 and not missing_core,
+            'absences': absences,
+            # Papers actually sat -- excludes rows that only mark an absence.
+            'subjects_sat': len(results) - absences,
         }
 
     @staticmethod
@@ -343,6 +348,31 @@ class MockWAECAnalytics:
             students[r.student_id] = r.student
         subjects = MockWAECAnalytics._ordered_subjects(present)
 
+        # Current class arm per student (best-effort — the broadsheet still
+        # renders without it if the SSS3/term setup can't be resolved, e.g. a
+        # graduated cohort with no active enrollment any more).
+        arm_by_student = {}
+        try:
+            from utils.helpers import get_sss3_class, get_active_term
+            from models.models import ClassArmAssignment, StudentEnrollment
+            from utils.branch_scope import scope_query
+            sss3 = get_sss3_class()
+            active_term = get_active_term()
+            if sss3 and active_term and students:
+                assignment_ids = [a.id for a in scope_query(
+                    ClassArmAssignment.query.filter_by(class_id=sss3.id, term_id=active_term.id),
+                    ClassArmAssignment).all()]
+                if assignment_ids:
+                    enrollments = (StudentEnrollment.query
+                        .filter(StudentEnrollment.student_id.in_(students.keys()),
+                                StudentEnrollment.class_arm_assignment_id.in_(assignment_ids),
+                                StudentEnrollment.is_active == True)
+                        .all())
+                    for en in enrollments:
+                        arm_by_student[en.student_id] = en.class_arm_assignment.arm_label
+        except Exception:
+            pass
+
         # One row per student (admission-register order: surname, first name).
         rows = []
         for sid, student in students.items():
@@ -351,14 +381,33 @@ class MockWAECAnalytics:
             rows.append({
                 'student': student,
                 'cells': cells[sid],                       # {subject: MockWAECResult}
+                'arm': arm_by_student.get(sid, ''),
                 'credits': summary['credits'],
                 'distinctions': summary['distinctions'],
                 'average_score': summary['average_score'],
                 'has_5_incl_core': summary['has_5_incl_core'],
+                'subjects_sat': summary['subjects_sat'],
+                'remark': 'Qualifies' if summary['has_5_incl_core'] else 'Not Qualified',
                 'total_score': sum(r.score for r in srs if r.score is not None),
             })
         rows.sort(key=lambda x: ((x['student'].surname or '').lower(),
                                  (x['student'].first_name or '').lower()))
+
+        # Overall position (competition ranking: ties share a position, the
+        # next distinct average skips ahead by the number tied) — by average
+        # score across every subject the student sat, not just the subjects
+        # shown on any one sheet when a wide subject set splits across pages.
+        ranked = sorted(rows, key=lambda x: (x['average_score'] is None, -(x['average_score'] or 0)))
+        pos, prev_avg, seen = 0, object(), 0
+        for row in ranked:
+            seen += 1
+            if row['average_score'] is None:
+                row['position'] = None
+            else:
+                if row['average_score'] != prev_avg:
+                    pos = seen
+                    prev_avg = row['average_score']
+                row['position'] = pos
 
         # Per-subject summary column (matches the foot of a paper broadsheet).
         subject_summary = {}

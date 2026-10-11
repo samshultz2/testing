@@ -16,6 +16,11 @@
 .ge-input:focus { outline: none; border-color: var(--primary); background: var(--bg-body); }
 .ge-cell { position: relative; }
 .gp { display: block; font-size: .62rem; font-weight: 700; line-height: 1; height: .7rem; }
+.ge-ab { display: flex; align-items: center; justify-content: center; gap: 2px; font-size: .6rem;
+  font-weight: 600; color: var(--text-muted); cursor: pointer; user-select: none; }
+.ge-ab input { width: auto; margin: 0; }
+.ge-input:disabled { background: var(--gray-100, #f0f0f0); color: var(--text-muted); opacity: .6; }
+.ge-cell.ge-absent { background: var(--gray-50, #fafafa); }
 .g-a1 { color: #047857; } .g-b { color: #0d9488; } .g-c { color: #2563eb; }
 .g-d { color: #b45309; } .g-e { color: #c2410c; } .g-f { color: #dc2626; }
 .ge-bar { position: sticky; bottom: 0; background: var(--bg-card); border-top: 1px solid var(--border-color); padding: .6rem; display: flex; gap: .6rem; align-items: center; z-index: 5; }
@@ -76,13 +81,19 @@
                     <td class="sn">{{ loop.index }}</td>
                     <td class="name">{{ st.full_name }}<div class="text-muted" style="font-size:.7rem;">{{ st.student_id }}</div></td>
                     {% for subj in subjects %}
+                    {% set is_ab = absent_map.get((st.id, subj), False) %}
                     <td class="ge-cell">
                         <input class="ge-input" type="number" min="0" max="100" inputmode="numeric"
                                data-col="{{ loop.index0 }}"
                                name="score_{{ st.id }}_{{ slug(subj) }}"
                                value="{{ score_map.get((st.id, subj), '') }}"
+                               {% if is_ab %}disabled{% endif %}
                                aria-label="{{ st.full_name }} — {{ subj }}">
                         <span class="gp"></span>
+                        <label class="ge-ab" title="Mark absent">
+                            <input type="checkbox" class="ge-ab-box" name="absent_{{ st.id }}_{{ slug(subj) }}"
+                                   {% if is_ab %}checked{% endif %}> AB
+                        </label>
                     </td>
                     {% endfor %}
                 </tr>
@@ -91,7 +102,7 @@
         </table></div>
         <div class="ge-bar">
             <button class="btn btn-primary" type="submit"><i class="fas fa-save"></i> Save all</button>
-            <span class="text-muted text-sm">{{ students|length }} students · {{ subjects|length }} subjects. Blank cells are left untouched.</span>
+            <span class="text-muted text-sm">{{ students|length }} students · {{ subjects|length }} subjects. Blank cells are left untouched; check AB to mark a student absent for that paper.</span>
         </div>
     </div>
 </form>
@@ -133,6 +144,22 @@
         next = next.nextElementSibling;
       }
     });
+  });
+
+  // AB checkbox: disables (and clears) the score box for that cell, since a
+  // student can't be both absent and scored for the same paper.
+  var abBoxes = Array.prototype.slice.call(document.querySelectorAll('.ge-ab-box'));
+  abBoxes.forEach(function (box) {
+    var cell = box.closest('.ge-cell');
+    var inp = cell && cell.querySelector('.ge-input');
+    function sync() {
+      if (!inp) return;
+      inp.disabled = box.checked;
+      cell.classList.toggle('ge-absent', box.checked);
+      if (box.checked) { inp.value = ''; paint(inp); }
+    }
+    sync();
+    box.addEventListener('change', sync);
   });
 })();
 </script>
