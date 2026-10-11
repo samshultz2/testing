@@ -5,11 +5,47 @@ import { confirm } from '../components/ui';
 import { rememberViewed } from '../lib/studprefs';
 import { canWrite } from '../lib/perms';
 
-function Info({ label, children }) {
+// Copies `text` to the clipboard and flashes a checkmark for ~1.2s to confirm.
+// Falls back to a hidden-textarea + execCommand when the async Clipboard API
+// isn't available (older browsers, or a non-HTTPS context).
+function CopyBtn({ text }) {
+  const [copied, setCopied] = useState(false);
+  if (!text) return null;
+  const doCopy = async (e) => {
+    e.stopPropagation();
+    try {
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(String(text));
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = String(text);
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1200);
+    } catch (err) { /* clipboard unavailable — silently no-op */ }
+  };
+  return (
+    <button type="button" className="copy-btn" onClick={doCopy}
+            title={copied ? 'Copied!' : 'Copy'} aria-label={copied ? 'Copied' : `Copy ${text}`}>
+      <i aria-hidden="true" className={'fas ' + (copied ? 'fa-check' : 'fa-copy')} />
+    </button>
+  );
+}
+
+// `copy` is the plain-text value to copy; defaults to `children` when that's
+// itself a plain string (so most call sites don't need to pass it twice).
+function Info({ label, children, copy }) {
+  const copyText = copy !== undefined ? copy : (typeof children === 'string' ? children : null);
   return (
     <div className="info-row">
       <span className="text-muted">{label}</span>
-      <strong>{children}</strong>
+      <span className="info-value-wrap"><strong>{children}</strong><CopyBtn text={copyText} /></span>
     </div>
   );
 }
@@ -234,14 +270,14 @@ export default function ViewApp({ initial }) {
       <Section icon="fa-user" title="Personal Information"
                action={canEditStudent ? <a href={urls.edit} className="sp-btn sp-btn-sm"><i aria-hidden="true" className="fas fa-pen" /> Edit</a> : null}>
           <div className="info-grid">
-            <Info label="Full Name">{s.full_name}</Info>
-            <Info label="Gender"><span className={'badge ' + (s.gender === 'Male' ? 'badge-info' : 'badge-warning')}>{s.gender}</span></Info>
-            <Info label="Date of Birth">{s.date_of_birth || 'Not set'}</Info>
-            <Info label="Age">{s.age != null ? s.age + ' years' : 'N/A'}</Info>
-            <Info label="Religion">{s.religion || 'Not set'}</Info>
-            <Info label="Address">{s.home_address || 'Not set'}</Info>
-            <Info label="Hobbies">{s.hobbies || 'Not set'}</Info>
-            <Info label="Stream">{s.stream ? <span className="badge badge-info">{s.stream}</span> : 'Not set'}</Info>
+            <Info label="Full Name" copy={s.full_name}>{s.full_name}</Info>
+            <Info label="Gender" copy={s.gender}><span className={'badge ' + (s.gender === 'Male' ? 'badge-info' : 'badge-warning')}>{s.gender}</span></Info>
+            <Info label="Date of Birth" copy={s.date_of_birth}>{s.date_of_birth || 'Not set'}</Info>
+            <Info label="Age" copy={s.age != null ? String(s.age) : null}>{s.age != null ? s.age + ' years' : 'N/A'}</Info>
+            <Info label="Religion" copy={s.religion}>{s.religion || 'Not set'}</Info>
+            <Info label="Address" copy={s.home_address}>{s.home_address || 'Not set'}</Info>
+            <Info label="Hobbies" copy={s.hobbies}>{s.hobbies || 'Not set'}</Info>
+            <Info label="Stream" copy={s.stream}>{s.stream ? <span className="badge badge-info">{s.stream}</span> : 'Not set'}</Info>
           </div>
       </Section>
 
@@ -297,11 +333,11 @@ export default function ViewApp({ initial }) {
               {d.contacts.map((c, i) => (
                 <div className="data-card" key={i}>
                   <div className="data-card-header">
-                    <div className="data-card-title">{c.name || 'Contact'}</div>
+                    <div className="data-card-title">{c.name || 'Contact'}{c.name && <CopyBtn text={c.name} />}</div>
                     {c.is_primary && <span className="badge badge-success">Primary</span>}
                   </div>
-                  <div className="data-card-row"><span className="data-card-label">Phone</span><span>{c.phone_number}</span></div>
-                  <div className="data-card-row"><span className="data-card-label">Relationship</span><span>{c.relationship}</span></div>
+                  <div className="data-card-row"><span className="data-card-label">Phone</span><span>{c.phone_number}<CopyBtn text={c.phone_number} /></span></div>
+                  <div className="data-card-row"><span className="data-card-label">Relationship</span><span>{c.relationship}<CopyBtn text={c.relationship} /></span></div>
                 </div>
               ))}
             </div>
