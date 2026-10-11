@@ -6,7 +6,7 @@ summary, signatures) are included.
 """
 import io
 
-from reportlab.lib.pagesizes import A4, A3, A2, landscape
+from reportlab.lib.pagesizes import A4, A3, A2, A1, A0, landscape
 from reportlab.lib import colors
 from reportlab.lib.units import mm
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -71,6 +71,8 @@ def _styles():
                                   alignment=TA_CENTER, spaceAfter=0, textColor=_BLACK)
     _S['addr'] = ParagraphStyle('addr', parent=base['Normal'], fontSize=9,
                                 alignment=TA_CENTER, spaceAfter=0)
+    _S['branch'] = ParagraphStyle('branch', parent=base['Normal'], fontSize=10.5,
+                                  alignment=TA_CENTER, spaceAfter=0, fontName='Helvetica-Bold')
     _S['comp'] = ParagraphStyle('comp', parent=base['Normal'], fontSize=14,
                                 alignment=TA_CENTER, spaceBefore=4, spaceAfter=2,
                                 fontName='Helvetica-Bold')
@@ -147,6 +149,9 @@ def _school_header(e, school, opts, subtitle):
     if school.get('name'):
         nm = (school['name'] or '').upper()
         items.append((Paragraph(pdf_escape(nm), _S['school']), nm, 'Helvetica-Bold', 18))
+    if _opt(opts, 'branch_name') and school.get('branch_name'):
+        bn = school['branch_name'].upper()
+        items.append((Paragraph(pdf_escape(bn), _S['branch']), bn, 'Helvetica-Bold', 10.5))
     if _opt(opts, 'address') and school.get('address'):
         items.append((Paragraph(pdf_escape(school['address']), _S['addr']), school['address'], 'Helvetica', 9))
     if _opt(opts, 'contact'):
@@ -176,13 +181,15 @@ def _groups(subjects, per):
             if per and len(subjects) > per else [subjects])
 
 
-_PAPER_SIZES = {'A4': A4, 'A3': A3, 'A2': A2}
+_PAPER_SIZES = {'A4': A4, 'A3': A3, 'A2': A2, 'A1': A1, 'A0': A0}
 
 
 def _pagesize(orient, size='A4'):
     """A4 landscape by default. ``orient='portrait'`` for tall paper;
-    ``size`` is 'A4', 'A3' or 'A2' — a bigger sheet than A4 lets more subject
-    columns fit at full width before the sheet has to split into groups."""
+    ``size`` is 'A4', 'A3', 'A2', 'A1' or 'A0' — a bigger sheet than A4 lets
+    more subject columns fit at full width before the sheet has to split
+    into groups (A1/A0 for a wall-sized print or to merge several sheets
+    into one by hand)."""
     base = _PAPER_SIZES.get((size or 'A4').upper(), A4)
     return base if orient == 'portrait' else landscape(base)
 
@@ -224,18 +231,29 @@ def _broadsheet_signatures(opts, usable):
     return t
 
 
-def _broadsheet_canvasmaker(opts, school_name, page_wh):
+def _broadsheet_canvasmaker(opts, school, page_wh, footer_pos='bottom'):
     """A reportlab Canvas that defers every ``showPage`` so the final page
-    count is known before any per-page footer is drawn — lets the watermark,
-    "Page X of Y" and "Generated on ..." line be independently toggled (see
-    utils/student_export.py's ``Numbered`` for the same defer-until-save
-    technique, minus the watermark)."""
-    show_wm = _opt(opts, 'watermark')
+    count is known before any per-page footer is drawn — lets the watermark
+    (school name text and/or a faint school-logo image, either able to carry
+    the branch name too), "Page X of Y" and "Generated on ..." line all be
+    independently toggled (see utils/student_export.py's ``Numbered`` for the
+    same defer-until-save technique, minus the watermark).
+
+    ``footer_pos`` places the page-number/generated-on line at the bottom
+    (default) or the top of the sheet — printed broadsheets are often spliced
+    into one big sheet by trimming each page's bottom margin and gluing it to
+    the next, which destroys a bottom footer; "top" survives that."""
+    show_wm_name = _opt(opts, 'watermark_name')
+    show_wm_logo = _opt(opts, 'watermark_logo', default=False)
+    show_branch = _opt(opts, 'branch_name', default=False)
     show_pg = _opt(opts, 'page_numbers')
     show_printed = _opt(opts, 'printed_on')
     pw, ph = page_wh
-    wm_text = (school_name or 'OFFICIAL').upper()[:24]
+    wm_text = (school.get('name') or 'OFFICIAL').upper()[:24]
+    branch_text = (school.get('branch_name') or '').upper()[:30] if show_branch else ''
+    logo_path = school.get('logo_path')
     printed_str = timeutil.now().strftime('%d %b %Y, %I:%M %p')
+    footer_y = (ph - 12 * mm) if footer_pos == 'top' else 5 * mm
 
     class _BroadsheetCanvas(_PDFCanvas):
         def __init__(self, *a, **k):
@@ -246,26 +264,46 @@ def _broadsheet_canvasmaker(opts, school_name, page_wh):
             self._bs_saved.append(dict(self.__dict__))
             self._startPage()
 
+        def _draw_watermark_logo(self):
+            try:
+                from PIL import Image as _PILImage
+                from reportlab.lib.utils import ImageReader
+                im = _PILImage.open(logo_path).convert('L')
+                im = im.point(lambda v: int(255 - (255 - v) * 0.10))   # ~10% ink
+                reader = ImageReader(im)
+                ws = min(pw, ph) * 0.55
+                self.saveState()
+                self.drawImage(reader, pw / 2 - ws / 2, ph / 2 - ws / 2,
+                               width=ws, height=ws, mask='auto', preserveAspectRatio=True)
+                self.restoreState()
+            except Exception:
+                pass
+
         def save(self):
             n = len(self._bs_saved)
             for i, state in enumerate(self._bs_saved, 1):
                 self.__dict__.update(state)
-                if show_wm:
+                if show_wm_logo and logo_path:
+                    self._draw_watermark_logo()
+                if show_wm_name:
                     self.saveState()
                     self.translate(pw / 2, ph / 2)
                     self.rotate(30)
                     self.setFillColor(colors.Color(0, 0, 0, alpha=0.06))
-                    self.setFont('Helvetica-Bold', 60)
-                    self.drawCentredString(0, 0, wm_text)
+                    self.setFont('Helvetica-Bold', 56 if branch_text else 60)
+                    self.drawCentredString(0, 16 if branch_text else 0, wm_text)
+                    if branch_text:
+                        self.setFont('Helvetica-Bold', 26)
+                        self.drawCentredString(0, -28, branch_text)
                     self.restoreState()
                 if show_pg or show_printed:
                     self.saveState()
                     self.setFont('Helvetica', 7.5)
                     self.setFillColor(colors.HexColor('#666666'))
                     if show_printed:
-                        self.drawString(8 * mm, 5 * mm, f'Generated on {printed_str}')
+                        self.drawString(8 * mm, footer_y, f'Generated on {printed_str}')
                     if show_pg:
-                        self.drawRightString(pw - 8 * mm, 5 * mm, f'Page {i} of {n}')
+                        self.drawRightString(pw - 8 * mm, footer_y, f'Page {i} of {n}')
                     self.restoreState()
                 super().showPage()
             super().save()
@@ -285,15 +323,17 @@ def _fit_per(usable, sn_w, name_w, reserve, min_w, per, n):
 
 
 def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape',
-                   size='A4', separate_cols=False):
+                   size='A4', separate_cols=False, footer_pos='bottom'):
     """Full score+grade matrix. Wide subject sets split across pages (``per``
     columns each); no admission numbers. ``opts['summary']`` toggles the
     per-subject offered/passed/failed/average rows, led by a "SUMMARY"
     divider spelled into the sheet's own columns (see ``_summary_word_row``).
-    ``orient``/``size`` pick the paper (A4/A3/A2, landscape or portrait),
-    filling the page with an 8mm margin. ``separate_cols`` gives each subject
-    its own Score and Grade sub-columns (like the blank recording sheet)
-    instead of one combined "score grade" column."""
+    ``orient``/``size`` pick the paper (A4/A3/A2/A1/A0, landscape or
+    portrait), filling the page with an 8mm margin. ``separate_cols`` gives
+    each subject its own Score and Grade sub-columns (like the blank
+    recording sheet) instead of one combined "score grade" column.
+    ``footer_pos`` ('bottom' or 'top') places the page-number/generated-on
+    line — see ``_broadsheet_canvasmaker``."""
     _styles()
     page = _pagesize(orient, size)
     buf = io.BytesIO()
@@ -488,16 +528,17 @@ def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape',
                 e.append(sig)
         if not last:
             e.append(PageBreak())
-    doc.build(e, canvasmaker=_broadsheet_canvasmaker(opts, school.get('name'), page))
+    doc.build(e, canvasmaker=_broadsheet_canvasmaker(opts, school, page, footer_pos=footer_pos))
     buf.seek(0)
     return buf
 
 
 def blank_broadsheet_pdf(students, offered, subjects, exam, school, opts=None,
-                         per=0, orient='landscape', size='A4', arm_by_student=None):
+                         per=0, orient='landscape', size='A4', arm_by_student=None,
+                         footer_pos='bottom'):
     """A blank recording sheet: student names down the side, every subject across
     the top with its own **Score** and **Grade** columns to write into.
-    ``orient``/``size`` pick the paper — landscape or portrait, A4/A3/A2.
+    ``orient``/``size`` pick the paper — landscape or portrait, A4/A3/A2/A1/A0.
     (``offered`` is accepted for call compatibility but no longer used —
     cells are left plain rather than shading out non-offered subjects.)
     ``arm_by_student`` is an optional ``{student_id: arm label}`` map for the
@@ -628,7 +669,7 @@ def blank_broadsheet_pdf(students, offered, subjects, exam, school, opts=None,
                 e.append(sig)
         if gi != len(groups) - 1:
             e.append(PageBreak())
-    doc.build(e, canvasmaker=_broadsheet_canvasmaker(opts, school.get('name'), page))
+    doc.build(e, canvasmaker=_broadsheet_canvasmaker(opts, school, page, footer_pos=footer_pos))
     buf.seek(0)
     return buf
 

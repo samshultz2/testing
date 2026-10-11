@@ -216,7 +216,7 @@ def broadsheet_print(exam_id):
     require_branch_access(exam.branch_id)
     return render_template('mock_waec/pdf_preview.html', exam=exam,
         title='Broadsheet (PDF)', show_cols=True, show_orient=True, show_size=True,
-        show_layout_mode=True, options=_OPTS_BROADSHEET,
+        show_layout_mode=True, show_footer_pos=True, options=_OPTS_BROADSHEET,
         pdf_url=url_for('mock_waec.broadsheet_pdf_view', exam_id=exam_id),
         back_url=url_for('mock_waec.broadsheet', exam_id=exam_id))
 
@@ -236,11 +236,14 @@ def broadsheet_pdf_view(exam_id):
     from utils.mock_waec_pdf import broadsheet_pdf
     per = request.args.get('cols', default=8, type=int)
     size = request.args.get('size', 'A4').upper()
-    buf = broadsheet_pdf(bs, exam, _school_profile(),
+    school = _school_profile()
+    school['branch_name'] = _branch_name(exam.branch_id)
+    buf = broadsheet_pdf(bs, exam, school,
                          opts=_pdf_opts(), per=(per if per and per > 0 else 0),
                          orient=request.args.get('orient', 'landscape'),
-                         size=(size if size in ('A4', 'A3', 'A2') else 'A4'),
-                         separate_cols=request.args.get('mode') == 'separate')
+                         size=(size if size in _PAPER_SIZES_OK else 'A4'),
+                         separate_cols=request.args.get('mode') == 'separate',
+                         footer_pos=_footer_pos())
     name = f"broadsheet_{exam.exam_number}_{exam.session.name.replace('/', '-')}.pdf"
     return send_file(buf, mimetype='application/pdf',
                      as_attachment=request.args.get('download') == '1', download_name=name)
@@ -261,7 +264,8 @@ def broadsheet_blank(exam_id):
     candidates = MockWAECAnalytics._ordered_subjects(saved | set(WAEC_DEFAULT_SUBJECTS))
     subject_choices = [{'name': s, 'checked': s in saved} for s in candidates]
     return render_template('mock_waec/pdf_preview.html', exam=exam, show_cols=True,
-        show_orient=True, show_size=True, title='Blank recording sheet (PDF)', options=_OPTS_BLANK,
+        show_orient=True, show_size=True, show_footer_pos=True,
+        title='Blank recording sheet (PDF)', options=_OPTS_BLANK,
         subject_choices=subject_choices,
         pdf_url=url_for('mock_waec.broadsheet_blank_pdf', exam_id=exam_id),
         back_url=url_for('mock_waec.view_exam', exam_id=exam_id))
@@ -318,11 +322,14 @@ def broadsheet_blank_pdf(exam_id):
     from utils.mock_waec_pdf import blank_broadsheet_pdf
     per = request.args.get('cols', default=0, type=int)
     size = request.args.get('size', 'A4').upper()
-    buf = blank_broadsheet_pdf(students, offered, subjects, exam, _school_profile(),
+    school = _school_profile()
+    school['branch_name'] = _branch_name(exam.branch_id)
+    buf = blank_broadsheet_pdf(students, offered, subjects, exam, school,
                                opts=_pdf_opts(), per=(per if per and per > 0 else 0),
                                orient=request.args.get('orient', 'landscape'),
-                               size=(size if size in ('A4', 'A3', 'A2') else 'A4'),
-                               arm_by_student=_arm_by_student(students))
+                               size=(size if size in _PAPER_SIZES_OK else 'A4'),
+                               arm_by_student=_arm_by_student(students),
+                               footer_pos=_footer_pos())
     name = f"recording_sheet_{exam.exam_number}_{exam.session.name.replace('/', '-')}.pdf"
     return send_file(buf, mimetype='application/pdf',
                      as_attachment=request.args.get('download') == '1', download_name=name)
@@ -1013,11 +1020,33 @@ def _slips_for(exam_id, student_id=None):
 _PDF_FLAGS = ('title', 'address', 'contact', 'motto', 'summary', 'signatures', 'grades',
              'sig_principal', 'sig_hod_sci', 'sig_hod_arts', 'credits', 'average',
              'exam_date', 'arm_col', 'position', 'subjects_sat', 'remark',
-             'watermark', 'page_numbers', 'printed_on')
+             'watermark_name', 'watermark_logo', 'branch_name',
+             'page_numbers', 'printed_on')
 
 
 def _pdf_opts():
     return {f: request.args.get(f, '1') != '0' for f in _PDF_FLAGS}
+
+
+def _footer_pos():
+    v = request.args.get('footer_pos', 'bottom')
+    return v if v in ('top', 'bottom') else 'bottom'
+
+
+_PAPER_SIZES_OK = ('A4', 'A3', 'A2', 'A1', 'A0')
+
+
+def _branch_name(branch_id):
+    """The branch's display name, or None — best-effort, mirrors
+    ``_arm_by_student``'s "never raise on a missing/unscoped lookup" shape."""
+    if not branch_id:
+        return None
+    try:
+        from models import Branch
+        b = db.session.get(Branch, branch_id)
+        return b.name if b else None
+    except Exception:
+        return None
 
 
 def _signers():
@@ -1029,22 +1058,26 @@ def _signers():
 # Detail checkboxes shown on each preview page (param, label) — all on by default.
 _OPTS_BROADSHEET = [('title', '“COMPETENCE RESULT” heading'), ('address', 'School address'),
                     ('contact', 'Phone / email'), ('motto', 'School motto'), ('exam_date', 'Exam date'),
+                    ('branch_name', 'Branch name (header + watermark)'),
                     ('summary', 'Subject summary rows'), ('grades', 'Grade key'),
                     ('arm_col', 'Class arm column'), ('credits', 'Credits column'),
                     ('average', 'Average column'), ('position', 'Position column'),
                     ('subjects_sat', 'Subjects sat column'), ('remark', 'Remark column'),
                     ('sig_principal', 'Principal signature'), ('sig_hod_sci', 'HOD (Sciences) signature'),
                     ('sig_hod_arts', 'HOD (Arts/Humanities) signature'),
-                    ('watermark', 'Watermark'), ('page_numbers', 'Page numbers'),
-                    ('printed_on', 'Printed-on footer')]
+                    ('watermark_name', 'Watermark — school name'),
+                    ('watermark_logo', 'Watermark — school logo'),
+                    ('page_numbers', 'Page numbers'), ('printed_on', 'Printed-on footer')]
 _OPTS_BLANK = [('title', '“COMPETENCE RESULT” heading'), ('address', 'School address'),
                ('contact', 'Phone / email'), ('motto', 'School motto'), ('exam_date', 'Exam date'),
+               ('branch_name', 'Branch name (header + watermark)'),
                ('summary', 'Blank summary rows'), ('grades', 'Grade key'),
                ('arm_col', 'Class arm column'),
                ('sig_principal', 'Principal signature'), ('sig_hod_sci', 'HOD (Sciences) signature'),
                ('sig_hod_arts', 'HOD (Arts/Humanities) signature'),
-               ('watermark', 'Watermark'), ('page_numbers', 'Page numbers'),
-               ('printed_on', 'Printed-on footer')]
+               ('watermark_name', 'Watermark — school name'),
+               ('watermark_logo', 'Watermark — school logo'),
+               ('page_numbers', 'Page numbers'), ('printed_on', 'Printed-on footer')]
 _OPTS_SLIP = [('title', '“COMPETENCE RESULT” heading'), ('address', 'School address'),
               ('contact', 'Phone / email'), ('motto', 'School motto'),
               ('summary', 'Summary box')]
