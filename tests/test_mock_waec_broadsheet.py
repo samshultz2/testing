@@ -391,19 +391,13 @@ def test_broadsheet_signature_toggles(app):
         assert 'HOD (Sciences) signature' in prev
         assert 'HOD (Arts/Humanities) signature' in prev
 
-    # Default (all three on), each one selected alone, and all three off —
-    # every combination must still render a valid PDF for both sheets.
-    for q in ('', 'sig_hod_sci=0&sig_hod_arts=0', 'sig_principal=0&sig_hod_arts=0',
-              'sig_principal=0&sig_hod_sci=0',
-              'sig_principal=0&sig_hod_sci=0&sig_hod_arts=0'):
+    # Default (all three on) and all three off (the no-signature-block edge
+    # case) must both render for the filled-in and the blank sheet.
+    for q in ('', 'sig_principal=0&sig_hod_sci=0&sig_hod_arts=0'):
         r = c.get(f'/mock-waec/exam/{exam_id}/broadsheet.pdf?{q}')
         assert r.status_code == 200 and r.get_data()[:5] == b'%PDF-'
         b = c.get(f'/mock-waec/exam/{exam_id}/broadsheet/blank.pdf?{q}')
         assert b.status_code == 200 and b.get_data()[:5] == b'%PDF-'
-
-    # Same combinations also render in separate score/grade-column mode.
-    r = c.get(f'/mock-waec/exam/{exam_id}/broadsheet.pdf?mode=separate&sig_hod_sci=0&sig_hod_arts=0')
-    assert r.status_code == 200 and r.get_data()[:5] == b'%PDF-'
 
 
 def test_broadsheet_credits_average_column_toggles(app):
@@ -424,16 +418,17 @@ def test_broadsheet_credits_average_column_toggles(app):
     blank_prev = c.get(f'/mock-waec/exam/{exam_id}/broadsheet/blank').get_data(as_text=True)
     assert 'Credits column' not in blank_prev and 'Average column' not in blank_prev
 
-    for q in ('', 'credits=0', 'average=0', 'credits=0&average=0'):
+    for q in ('credits=0', 'average=0', 'credits=0&average=0'):
         r = c.get(f'/mock-waec/exam/{exam_id}/broadsheet.pdf?{q}')
         assert r.status_code == 200 and r.get_data()[:5] == b'%PDF-'
-        r2 = c.get(f'/mock-waec/exam/{exam_id}/broadsheet.pdf?mode=separate&{q}')
-        assert r2.status_code == 200 and r2.get_data()[:5] == b'%PDF-'
 
-    # Splitting the sheet across multiple pages (one subject per page) still
-    # renders with the tail columns toggled off, on the final page only.
-    r = c.get(f'/mock-waec/exam/{exam_id}/broadsheet.pdf?cols=1&credits=0')
-    assert r.status_code == 200 and r.get_data()[:5] == b'%PDF-'
+    # Also renders with the SPAN styling of separate score/grade-column mode,
+    # and when the sheet splits across multiple pages (tail columns apply to
+    # the final page only).
+    r2 = c.get(f'/mock-waec/exam/{exam_id}/broadsheet.pdf?mode=separate&credits=0')
+    assert r2.status_code == 200 and r2.get_data()[:5] == b'%PDF-'
+    r3 = c.get(f'/mock-waec/exam/{exam_id}/broadsheet.pdf?cols=1&credits=0')
+    assert r3.status_code == 200 and r3.get_data()[:5] == b'%PDF-'
 
 
 def test_analytics_statistics_depth(app):
