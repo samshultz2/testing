@@ -30,6 +30,52 @@ function Bar({ pct, color = 'var(--success)', height = 8 }) {
   );
 }
 
+function StatusBadge({ status }) {
+  if (status === 'Paid') return <span className="badge badge-success"><i aria-hidden="true" className="fas fa-check" /> Paid</span>;
+  if (status === 'Not Started') return <span className="badge badge-danger">Not Started</span>;
+  return <span className="badge badge-warning">In Progress</span>;
+}
+
+// ---- Persistent quick-nav menu, shown above every screen so any page is one
+// click away -- separate from the breadcrumb (which shows *where you are*,
+// not *where you can go*). Items the user can't write to are hidden rather
+// than disabled, matching the rest of the app's convention.
+const NAV_ITEMS = [
+  { key: 'dashboard', icon: 'fa-gauge-high', label: 'Dashboard', sub: 'record' },
+  { key: 'payments', icon: 'fa-list', label: 'Payments', sub: 'record' },
+  { key: 'quick_entry', icon: 'fa-bolt', label: 'Quick Entry', sub: 'record', write: true },
+  { key: 'add_payment', icon: 'fa-plus', label: 'Add Payment', sub: 'record', write: true },
+  { key: 'defaulters', icon: 'fa-user-times', label: 'Defaulters', sub: 'reports' },
+  { key: 'expenses', icon: 'fa-receipt', label: 'Expenses', sub: 'expenses' },
+  { key: 'report', icon: 'fa-chart-bar', label: 'Report', sub: 'reports' },
+  { key: 'daily_summary', icon: 'fa-calendar-alt', label: 'Daily Summary', sub: 'reports' },
+  { key: 'history', icon: 'fa-history', label: 'History', sub: 'reports' },
+  { key: 'import', icon: 'fa-file-import', label: 'Import', sub: 'record', write: true },
+  { key: 'settings', icon: 'fa-cog', label: 'Settings', sub: 'settings', write: true },
+];
+
+function canView(d, sub) {
+  const p = d && d.perms;
+  if (!p || !p.subs) return true;
+  const s = p.subs[sub];
+  return s ? !!s.level : true;
+}
+
+function ContribNav({ d }) {
+  const u = d.urls;
+  const items = NAV_ITEMS.filter((it) => canView(d, it.sub) && (!it.write || canWrite(d, it.sub)) && u[it.key]);
+  return (
+    <nav className="contrib-nav" aria-label="Contributions sections">
+      {items.map((it) => (
+        <A key={it.key} to={u[it.key]} className={`contrib-nav-item ${d.page === it.key ? 'active' : ''}`}>
+          <i aria-hidden="true" className={`fas ${it.icon}`} /> {it.label}
+        </A>
+      ))}
+      <a href={u.logout} className="contrib-nav-item contrib-nav-exit"><i aria-hidden="true" className="fas fa-sign-out-alt" /> Exit</a>
+    </nav>
+  );
+}
+
 // ---- Dashboard --------------------------------------------------------------
 function Dashboard({ d }) {
   const u = d.urls;
@@ -46,11 +92,9 @@ function Dashboard({ d }) {
       <div className="page-header">
         <h1><i aria-hidden="true" className="fas fa-hand-holding-usd" /> SSS3 Contributions</h1>
         <div className="header-actions">
-          {canWrite(d) && <A to={u.quick_entry} className="btn btn-success"><i aria-hidden="true" className="fas fa-bolt" /> Quick Entry</A>}
-          {canWrite(d) && <A to={u.add_payment} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Payment</A>}
-          {canWrite(d) && <A to={u.import} className="btn btn-warning"><i aria-hidden="true" className="fas fa-file-import" /> Import</A>}
+          {canWrite(d, 'record') && <A to={u.quick_entry} className="btn btn-success"><i aria-hidden="true" className="fas fa-bolt" /> Quick Entry</A>}
+          {canWrite(d, 'record') && <A to={u.add_payment} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Payment</A>}
           <a href={u.export} className="btn btn-info"><i aria-hidden="true" className="fas fa-file-excel" /> Export</a>
-          <a href={u.logout} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-sign-out-alt" /> Exit</a>
         </div>
       </div>
       <div className="stats-grid mb-3">
@@ -60,6 +104,8 @@ function Dashboard({ d }) {
         <Stat icon="fa-receipt" tone="warning" value={money(s.total_expenses)} label="Expenses" />
         <Stat icon="fa-wallet" tone={netTone} value={money(s.net_balance)} label="Net Balance" />
         <Stat icon="fa-check-circle" tone="success" value={`${s.fully_paid_count}/${s.total_students}`} label="Fully Paid" />
+        <Stat icon="fa-hourglass-half" tone="warning" value={s.in_progress_count} label="In Progress" />
+        <Stat icon="fa-ban" tone="danger" value={s.not_started_count} label="Not Started" />
       </div>
       <div className="stats-grid mb-3">
         <Stat icon="fa-exclamation-circle" tone="danger" value={money(s.total_outstanding)} label="Outstanding" />
@@ -167,8 +213,9 @@ function Dashboard({ d }) {
             <select className="form-control" style={{ width: 120 }} value={arm} onChange={(e) => setArm(e.target.value)}>
               <option value="">All Arms</option><option>Iris</option><option>Rose</option><option>Lily</option><option>Daisy</option>
             </select>
-            <select className="form-control" style={{ width: 120 }} value={status} onChange={(e) => setStatus(e.target.value)}>
-              <option value="">All Status</option><option value="Paid">Paid</option><option value="Ongoing">Ongoing</option>
+            <select className="form-control" style={{ width: 140 }} value={status} onChange={(e) => setStatus(e.target.value)}>
+              <option value="">All Status</option><option value="Paid">Paid</option>
+              <option value="In Progress">In Progress</option><option value="Not Started">Not Started</option>
             </select>
           </div>
         </div>
@@ -187,10 +234,10 @@ function Dashboard({ d }) {
                     <Bar pct={st.percentage} color={st.percentage >= 100 ? 'var(--success)' : st.percentage >= 50 ? 'var(--warning)' : 'var(--danger)'} />
                     <small className="text-muted">{st.percentage.toFixed(0)}%</small>
                   </td>
-                  <td>{st.status === 'Paid' ? <span className="badge badge-success"><i aria-hidden="true" className="fas fa-check" /> Paid</span> : <span className="badge badge-warning">Owing</span>}</td>
+                  <td><StatusBadge status={st.status} /></td>
                   <td>
                     <A to={st.detail_url} className="btn btn-sm btn-info" title="View"><i aria-hidden="true" className="fas fa-eye" /></A>{' '}
-                    <A to={st.add_payment_url} className="btn btn-sm btn-success" title="Add Payment"><i aria-hidden="true" className="fas fa-plus" /></A>
+                    {canWrite(d, 'record') && <A to={st.add_payment_url} className="btn btn-sm btn-success" title="Add Payment"><i aria-hidden="true" className="fas fa-plus" /></A>}
                   </td>
                 </tr>
               ))}
@@ -216,7 +263,7 @@ function QuickEntry({ d, notify }) {
   const setAmt = (id, v) => setAmounts((a) => ({ ...a, [id]: v }));
   const shown = d.students.filter((s) =>
     s.name.toLowerCase().includes(search.toLowerCase()) && (!arm || s.arm === arm)
-    && (!statusF || (statusF === 'owing' && s.remaining > 0) || (statusF === 'paid' && s.remaining <= 0)));
+    && (!statusF || s.status === statusF));
   const entered = Object.entries(amounts).filter(([, v]) => parseFloat(v) > 0);
   const total = entered.reduce((t, [, v]) => t + parseFloat(v), 0);
   const submit = (e) => {
@@ -246,7 +293,8 @@ function QuickEntry({ d, notify }) {
               <div className="col-md-4"><select className="form-control" value={arm} onChange={(e) => setArm(e.target.value)}>
                 <option value="">All Arms</option><option>Iris</option><option>Rose</option><option>Lily</option><option>Daisy</option></select></div>
               <div className="col-md-4"><select className="form-control" value={statusF} onChange={(e) => setStatusF(e.target.value)}>
-                <option value="">All Status</option><option value="owing">Owing Only</option><option value="paid">Fully Paid</option></select></div>
+                <option value="">All Status</option><option value="Not Started">Not Started</option>
+                <option value="In Progress">In Progress</option><option value="Paid">Fully Paid</option></select></div>
             </div>
             <div className="students-grid">
               {shown.map((s) => {
@@ -256,7 +304,7 @@ function QuickEntry({ d, notify }) {
                     <div className="student-info">
                       <span className="student-name">{s.name}</span>
                       {s.arm && <span className={`badge badge-${armColor(s.arm)}`}>{s.arm}</span>}
-                      {s.remaining <= 0 && <span className="badge badge-success"><i aria-hidden="true" className="fas fa-check" /></span>}
+                      <StatusBadge status={s.status} />
                     </div>
                     <div className="student-status"><small>Paid: {money(s.total_paid)} | Rem: {money(s.remaining)}</small></div>
                     <div className="student-input">
@@ -347,19 +395,40 @@ function AddPayment({ d, notify }) {
 function PaymentsList({ d, notify }) {
   const nav = useNav();
   const save = useSave(notify);
+  const [from, setFrom] = useState(d.from_date || '');
+  const [to, setTo] = useState(d.to_date || '');
   const del = async (p) => { if (await confirm('Delete this payment?')) save(p.delete_url, {}, () => nav.refresh()); };
   const onFilter = (e) => { const v = e.target.value; nav.go(v ? `${d.urls.payments}?date=${v}` : d.urls.payments); };
+  const applyRange = () => {
+    const p = [];
+    if (from) p.push(`from=${from}`);
+    if (to) p.push(`to=${to}`);
+    nav.go(p.length ? `${d.urls.payments}?${p.join('&')}` : d.urls.payments);
+  };
+  const clearRange = () => { setFrom(''); setTo(''); nav.go(d.urls.payments); };
   return (
     <>
       <div className="page-header"><h1><i aria-hidden="true" className="fas fa-list" /> All Payments</h1>
-        <A to={d.urls.quick_entry} className="btn btn-success"><i aria-hidden="true" className="fas fa-plus" /> Add Payments</A></div>
+        {canWrite(d, 'record') && <A to={d.urls.quick_entry} className="btn btn-success"><i aria-hidden="true" className="fas fa-plus" /> Add Payments</A>}</div>
+      <div className="stats-grid mb-3">
+        <Stat icon="fa-clipboard-list" tone="primary" value={d.payments.length} label="Payments Shown" />
+        <Stat icon="fa-hand-holding-usd" tone="success" value={money(d.total_amount)} label="Total Amount" />
+      </div>
       <div className="card mb-3"><div className="card-body">
         <div className="filter-group">
-          <div className="form-group"><label className="form-label">Filter by Date</label>
+          <div className="form-group"><label className="form-label">Exact Date</label>
             <select className="form-control" value={d.filter_date || ''} onChange={onFilter}>
               <option value="">All Dates</option>
               {d.unique_dates.map((u) => <option key={u.value} value={u.value}>{u.label}</option>)}
             </select></div>
+          <div className="form-group"><label className="form-label">From</label>
+            <input type="date" className="form-control" value={from} onChange={(e) => setFrom(e.target.value)} /></div>
+          <div className="form-group"><label className="form-label">To</label>
+            <input type="date" className="form-control" value={to} onChange={(e) => setTo(e.target.value)} /></div>
+          <div className="form-group" style={{ alignSelf: 'flex-end' }}>
+            <button type="button" className="btn btn-primary btn-sm" onClick={applyRange}><i aria-hidden="true" className="fas fa-filter" /> Apply Range</button>{' '}
+            <button type="button" className="btn btn-secondary btn-sm" onClick={clearRange}>Clear</button>
+          </div>
         </div>
       </div></div>
       <div className="card">
@@ -374,7 +443,7 @@ function PaymentsList({ d, notify }) {
                   <td><A to={p.detail_url}>{p.student_name}</A></td>
                   <td><strong>{money(p.amount)}</strong></td>
                   <td>{p.received_by}</td><td>{p.notes}</td>
-                  <td><button type="button" className="btn btn-sm btn-danger" title="Delete" onClick={() => del(p)}><i aria-hidden="true" className="fas fa-trash" /></button></td>
+                  <td>{canWrite(d, 'record') && <button type="button" className="btn btn-sm btn-danger" title="Delete" onClick={() => del(p)}><i aria-hidden="true" className="fas fa-trash" /></button>}</td>
                 </tr>
               )) : <tr><td colSpan="7" className="text-center text-muted">No payments found</td></tr>}
             </tbody>
@@ -396,7 +465,7 @@ function Expenses({ d, notify }) {
       <div className="page-header"><h1><i aria-hidden="true" className="fas fa-receipt" /> Expenses Management</h1>
         <div className="header-actions">
           <A to={u.dashboard} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</A>
-          {canWrite(d) && <A to={u.add_expense} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Expense</A>}
+          {canWrite(d, 'expenses') && <A to={u.add_expense} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Expense</A>}
         </div></div>
       <div className="stats-grid mb-3">
         <Stat icon="fa-hand-holding-usd" tone="success" value={money(d.total_collected)} label="Total Collected" />
@@ -439,7 +508,7 @@ function Expenses({ d, notify }) {
                   <td>{i + 1}</td><td>{e.date}</td><td><strong>{e.description}</strong></td>
                   <td><strong className="text-danger">{money(e.amount)}</strong></td>
                   <td><small>{e.notes}</small></td>
-                  <td><button type="button" className="btn btn-sm btn-danger" title="Delete" onClick={() => del(e)}><i aria-hidden="true" className="fas fa-trash" /></button></td>
+                  <td>{canWrite(d, 'expenses') && <button type="button" className="btn btn-sm btn-danger" title="Delete" onClick={() => del(e)}><i aria-hidden="true" className="fas fa-trash" /></button>}</td>
                 </tr>
               )) : <tr><td colSpan="6" className="text-center text-muted">No expenses recorded yet</td></tr>}
             </tbody>
@@ -519,7 +588,7 @@ function Report({ d }) {
         return (
           <div className="card mb-3" key={a.name}>
             <div className="card-header"><h3><i aria-hidden="true" className="fas fa-users" /> {a.name || 'All Students'}</h3>
-              <div><span className="badge badge-primary">{a.total_students} students</span> <span className="badge badge-success">{a.fully_paid} paid</span></div></div>
+              <div><span className="badge badge-primary">{a.total_students} students</span> <span className="badge badge-success">{a.fully_paid} paid</span> <span className="badge badge-danger">{a.not_started} not started</span></div></div>
             <div className="card-body">
               <div className="info-grid mb-3">
                 <div className="info-row"><span>Expected:</span><strong>{money(a.total_expected)}</strong></div>
@@ -535,7 +604,7 @@ function Report({ d }) {
                   {a.students.map((s, i) => (
                     <tr key={i}><td>{i + 1}</td><td>{s.name}</td><td><strong>{money(s.total_paid)}</strong></td>
                       <td>{s.remaining > 0 ? money(s.remaining) : '-'}</td>
-                      <td>{s.status === 'Paid' ? <span className="badge badge-success"><i aria-hidden="true" className="fas fa-check" /> Paid</span> : <span className="badge badge-warning">Ongoing</span>}</td></tr>
+                      <td><StatusBadge status={s.status} /></td></tr>
                   ))}
                 </tbody>
               </table>
@@ -550,10 +619,14 @@ function Report({ d }) {
 
 // ---- Defaulters -------------------------------------------------------------
 function Defaulters({ d }) {
+  const [search, setSearch] = useState('');
   const [arm, setArm] = useState('');
+  const [status, setStatus] = useState('');
   const [sort, setSort] = useState('remaining-desc');
   const list = useMemo(() => {
-    let l = d.defaulters.filter((s) => !arm || s.arm === arm);
+    let l = d.defaulters.filter((s) =>
+      s.name.toLowerCase().includes(search.toLowerCase())
+      && (!arm || s.arm === arm) && (!status || s.status === status));
     l = [...l].sort((a, b) => {
       switch (sort) {
         case 'remaining-asc': return a.remaining - b.remaining;
@@ -563,7 +636,7 @@ function Defaulters({ d }) {
       }
     });
     return l;
-  }, [d.defaulters, arm, sort]);
+  }, [d.defaulters, search, arm, status, sort]);
   return (
     <>
       <div className="page-header"><h1><i aria-hidden="true" className="fas fa-user-times" /> Defaulters List</h1>
@@ -573,14 +646,18 @@ function Defaulters({ d }) {
         </div></div>
       <div className="stats-grid mb-3">
         <Stat icon="fa-users" tone="danger" value={d.defaulters.length} label="Total Defaulters" />
+        <Stat icon="fa-ban" tone="danger" value={d.not_started_count} label="Never Started" />
         <Stat icon="fa-coins" tone="warning" value={money(d.total_outstanding)} label="Total Outstanding" />
         <Stat icon="fa-calculator" tone="info" value={money(d.avg_outstanding)} label="Avg. Outstanding" />
       </div>
       <div className="card">
         <div className="card-header"><h3>Students with Outstanding Balance</h3>
           <div className="filter-group">
+            <input type="text" className="form-control" placeholder="Search students..." style={{ width: 180 }} value={search} onChange={(e) => setSearch(e.target.value)} />
             <select className="form-control" style={{ width: 120 }} value={arm} onChange={(e) => setArm(e.target.value)}>
               <option value="">All Arms</option><option>Iris</option><option>Rose</option><option>Lily</option><option>Daisy</option></select>
+            <select className="form-control" style={{ width: 140 }} value={status} onChange={(e) => setStatus(e.target.value)}>
+              <option value="">All Status</option><option value="Not Started">Not Started</option><option value="In Progress">In Progress</option></select>
             <select className="form-control" style={{ width: 150 }} value={sort} onChange={(e) => setSort(e.target.value)}>
               <option value="remaining-desc">Highest Owing</option><option value="remaining-asc">Lowest Owing</option>
               <option value="name-asc">Name A-Z</option><option value="paid-desc">Most Paid</option></select>
@@ -588,20 +665,21 @@ function Defaulters({ d }) {
         </div>
         <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
           <table className="data-table">
-            <thead><tr><th>#</th><th>Name</th><th>Arm</th><th>Paid</th><th>Outstanding</th><th>Progress</th><th>Last Payment</th><th>Actions</th></tr></thead>
+            <thead><tr><th>#</th><th>Name</th><th>Arm</th><th>Status</th><th>Paid</th><th>Outstanding</th><th>Progress</th><th>Last Payment</th><th>Actions</th></tr></thead>
             <tbody>
               {list.length ? list.map((s, i) => (
                 <tr key={s.id}>
                   <td>{i + 1}</td><td><strong>{s.name}</strong></td>
                   <td>{s.arm ? <span className={`badge badge-${armColor(s.arm)}`}>{s.arm}</span> : <span className="text-muted">—</span>}</td>
+                  <td><StatusBadge status={s.status} /></td>
                   <td>{money(s.total_paid)}</td>
                   <td><strong className="text-danger">{money(s.remaining)}</strong></td>
                   <td style={{ width: 100 }}><Bar pct={s.percentage} color={s.percentage >= 50 ? 'var(--warning)' : 'var(--danger)'} /><small>{s.percentage.toFixed(0)}%</small></td>
                   <td><small>{s.last_payment}</small></td>
                   <td><A to={s.detail_url} title="View" className="btn btn-sm btn-info"><i aria-hidden="true" className="fas fa-eye" /></A>{' '}
-                    <A to={s.add_payment_url} title="Add payment" className="btn btn-sm btn-success"><i aria-hidden="true" className="fas fa-plus" /></A></td>
+                    {canWrite(d, 'record') && <A to={s.add_payment_url} title="Add payment" className="btn btn-sm btn-success"><i aria-hidden="true" className="fas fa-plus" /></A>}</td>
                 </tr>
-              )) : <tr><td colSpan="8" className="text-center text-success"><i aria-hidden="true" className="fas fa-check-circle" /> No defaulters! All students have paid in full.</td></tr>}
+              )) : <tr><td colSpan="9" className="text-center text-success"><i aria-hidden="true" className="fas fa-check-circle" /> No defaulters! All students have paid in full.</td></tr>}
             </tbody>
           </table>
         </div>
@@ -729,7 +807,9 @@ function StudentDetail({ d }) {
         <Stat icon="fa-bullseye" tone="primary" value={money(d.max_due)} label="Max Due" />
         <Stat icon="fa-hand-holding-usd" tone="success" value={money(d.total_paid)} label="Total Paid" />
         <Stat icon="fa-calculator" tone={d.remaining > 0 ? 'warning' : 'success'} value={money(d.remaining)} label="Remaining" />
-        <Stat icon={d.status === 'Paid' ? 'fa-check-circle' : 'fa-clock'} tone={d.status === 'Paid' ? 'success' : 'warning'} value={d.status} label="Status" />
+        <Stat icon={d.status === 'Paid' ? 'fa-check-circle' : d.status === 'Not Started' ? 'fa-ban' : 'fa-clock'}
+             tone={d.status === 'Paid' ? 'success' : d.status === 'Not Started' ? 'danger' : 'warning'}
+             value={d.status} label="Status" />
       </div>
       <div className="card mb-3"><div className="card-body">
         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.5rem' }}><span>Payment Progress</span><strong>{pct.toFixed(1)}%</strong></div>
@@ -802,13 +882,13 @@ function Import({ d, notify }) {
           </form>
         </div>
       </div>
-      <div className="card">
+      {canWrite(d, 'settings') && <div className="card">
         <div className="card-header"><h3><i aria-hidden="true" className="fas fa-exclamation-triangle" /> Danger Zone</h3></div>
         <div className="card-body">
           <p className="text-muted">Use this to clear all existing contribution data before re-importing.</p>
           <form onSubmit={clearAll}><button type="submit" className="btn btn-danger"><i aria-hidden="true" className="fas fa-trash" /> Clear All Data</button></form>
         </div>
-      </div>
+      </div>}
     </>
   );
 }
@@ -829,6 +909,7 @@ export default function ContributionsApp({ data }) {
   return (
     <NavCtx.Provider value={{ go, refresh }}>
       <SectionShell go={go}>
+        <ContribNav d={d} />
         {msg && <Banner tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Banner>}
         <Screen d={d} notify={notify} />
       </SectionShell>

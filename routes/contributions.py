@@ -138,10 +138,12 @@ def dashboard():
     total_expected = 0
     total_received = 0
     fully_paid_count = 0
+    not_started_count = 0
+    in_progress_count = 0
     arms_summary = {}
 
     # One batched query for every student's total (was a SUM per student → N+1).
-    from utils.services.contributions import paid_by_student
+    from utils.services.contributions import paid_by_student, payment_status
     paid_map = paid_by_student(active_session.id, [e.student_id for e in enrollments])
 
     for enrollment in enrollments:
@@ -151,11 +153,15 @@ def dashboard():
 
         total_paid = paid_map.get(student.id, 0)
         remaining = max_due - total_paid
-        status = 'Paid' if remaining <= 0 else 'Ongoing'
-        
-        if remaining <= 0:
+        status = payment_status(total_paid, max_due)
+
+        if status == 'Paid':
             fully_paid_count += 1
-        
+        elif status == 'Not Started':
+            not_started_count += 1
+        else:
+            in_progress_count += 1
+
         total_expected += max_due
         total_received += total_paid
         
@@ -229,6 +235,7 @@ def dashboard():
             'total_students': len(students_data), 'total_expected': total_expected,
             'total_received': total_received, 'total_expenses': total_expenses,
             'net_balance': total_received - total_expenses, 'fully_paid_count': fully_paid_count,
+            'not_started_count': not_started_count, 'in_progress_count': in_progress_count,
             'total_outstanding': total_outstanding, 'avg_paid': avg_paid,
             'total_payments': total_payments, 'today_collections': today_collections,
             'week_collections': week_collections, 'collection_rate': collection_rate,
@@ -261,14 +268,16 @@ def quick_entry():
     enrollments = StudentEnrollment.query.filter(StudentEnrollment.class_arm_assignment_id.in_(assignment_ids), StudentEnrollment.is_active == True).all()
     max_due = float(ContributionSettings.get('max_due', 20000))
     
-    from utils.services.contributions import paid_by_student
+    from utils.services.contributions import paid_by_student, payment_status
     paid_map = paid_by_student(active_session.id, [e.student_id for e in enrollments])
     students_list = []
     for enrollment in enrollments:
         student = enrollment.student
         assignment = enrollment.class_arm_assignment
         total_paid = paid_map.get(student.id, 0)
-        students_list.append({'id': student.id, 'name': student.full_name, 'arm': assignment.arm_label, 'total_paid': total_paid, 'remaining': max(0, max_due - total_paid)})
+        students_list.append({'id': student.id, 'name': student.full_name, 'arm': assignment.arm_label,
+                              'total_paid': total_paid, 'remaining': max(0, max_due - total_paid),
+                              'status': payment_status(total_paid, max_due)})
     students_list.sort(key=lambda x: (x['arm'], x['name']))
     
     if request.method == 'POST':
@@ -343,16 +352,6 @@ def add_payment():
             db.session.add(payment)
             db.session.commit()
             student = db.session.get(Student, student_id)
-            from utils import automations
-            if automations.is_enabled('contribution_activity'):
-                try:
-                    from utils.notify import notify_admins
-                    notify_admins('Contribution payment recorded',
-                                  body=f'₦{amount:,.0f} from {student.full_name}' +
-                                       (f' · received by {received_by}' if received_by else ''),
-                                  url=url_for('contributions.payments_list'), category='success')
-                except Exception:
-                    pass
             return _ok(f'Payment of ₦{amount:,.0f} added for {student.full_name}',
                        url_for('contributions.dashboard'))
         except Exception as e:
@@ -374,6 +373,8 @@ def add_payment():
 def payments_list():
     active_session = get_active_session()
     filter_date = request.args.get('date')
+    from_date = request.args.get('from')
+    to_date = request.args.get('to')
     query = ContributionPayment.query.filter_by(session_id=active_session.id if active_session else None)
     if filter_date:
         try:
@@ -381,11 +382,26 @@ def payments_list():
             query = query.filter(ContributionPayment.payment_date == payment_date)
         except Exception:
             pass
+    else:
+        if from_date:
+            try:
+                query = query.filter(ContributionPayment.payment_date >= datetime.strptime(from_date, '%Y-%m-%d').date())
+            except Exception:
+                from_date = None
+        if to_date:
+            try:
+                query = query.filter(ContributionPayment.payment_date <= datetime.strptime(to_date, '%Y-%m-%d').date())
+            except Exception:
+                to_date = None
     payments = query.order_by(ContributionPayment.payment_date.desc(), ContributionPayment.created_at.desc()).all()
     unique_dates = db.session.query(ContributionPayment.payment_date).distinct().order_by(ContributionPayment.payment_date.desc()).all()
+    total_amount = sum(p.amount for p in payments)
     return _render({
         'page': 'payments',
         'filter_date': filter_date,
+        'from_date': from_date,
+        'to_date': to_date,
+        'total_amount': total_amount,
         'unique_dates': [{'value': d[0].strftime('%Y-%m-%d'),
                           'label': d[0].strftime('%a, %d %b %Y')} for d in unique_dates if d[0]],
         'payments': [{'id': p.id, 'date': p.payment_date.strftime('%a, %d %b %Y'),
@@ -437,11 +453,12 @@ def student_detail(student_id):
             weekly_data.append({'week': week_num,
                                 'period': f"{week_start.strftime('%d %b')} - {week_end.strftime('%d %b')}",
                                 'amount': week_total})
+    from utils.services.contributions import payment_status
     return _render({
         'page': 'student_detail',
         'student': {'id': student.id, 'name': student.full_name},
         'total_paid': total_paid, 'remaining': remaining, 'max_due': max_due,
-        'status': 'Paid' if remaining <= 0 else 'Ongoing',
+        'status': payment_status(total_paid, max_due),
         'payments': [{'date': p.payment_date.strftime('%d %b %Y'), 'amount': p.amount,
                       'received_by': p.received_by or '-'} for p in payments],
         'weekly_data': weekly_data,
@@ -502,16 +519,6 @@ def add_expense():
             expense = ContributionExpense(session_id=active_session.id if active_session else None, expense_date=expense_date, description=description, amount=amount, notes=notes)
             db.session.add(expense)
             db.session.commit()
-            from utils import automations
-            if automations.is_enabled('contribution_activity'):
-                try:
-                    from utils.notify import notify_admins
-                    notify_admins('Contribution expense recorded',
-                                  body=f'₦{amount:,.0f} — {description}' if description
-                                       else f'₦{amount:,.0f}',
-                                  url=url_for('contributions.expenses_list'), category='warning')
-                except Exception:
-                    pass
             return _ok(f'Expense of ₦{amount:,.0f} added', url_for('contributions.expenses_list'))
         except Exception as e:
             db.session.rollback()
@@ -570,7 +577,7 @@ def report():
         return redirect(url_for('contributions.dashboard'))
     max_due = float(ContributionSettings.get('max_due', 20000))
     arms_data = {}
-    from utils.services.contributions import paid_by_student
+    from utils.services.contributions import paid_by_student, payment_status
     paid_map = paid_by_student(active_session.id)   # one query for the whole session
     sss3_assignments = scope_query(ClassArmAssignment.query.filter_by(class_id=sss3_class.id, term_id=active_term.id), ClassArmAssignment).all()
     for assignment in sss3_assignments:
@@ -579,16 +586,20 @@ def report():
         arm_students = []
         arm_total_paid = 0
         arm_fully_paid = 0
+        arm_not_started = 0
         for enrollment in enrollments:
             student = enrollment.student
             total_paid = paid_map.get(student.id, 0)
             remaining = max(0, max_due - total_paid)
-            if remaining <= 0:
+            status = payment_status(total_paid, max_due)
+            if status == 'Paid':
                 arm_fully_paid += 1
+            elif status == 'Not Started':
+                arm_not_started += 1
             arm_total_paid += total_paid
-            arm_students.append({'name': student.full_name, 'total_paid': total_paid, 'remaining': remaining, 'status': 'Paid' if remaining <= 0 else 'Ongoing'})
+            arm_students.append({'name': student.full_name, 'total_paid': total_paid, 'remaining': remaining, 'status': status})
         arm_students.sort(key=lambda x: x['name'])
-        arms_data[arm_name] = {'students': arm_students, 'total_students': len(arm_students), 'total_expected': len(arm_students) * max_due, 'total_paid': arm_total_paid, 'fully_paid': arm_fully_paid}
+        arms_data[arm_name] = {'students': arm_students, 'total_students': len(arm_students), 'total_expected': len(arm_students) * max_due, 'total_paid': arm_total_paid, 'fully_paid': arm_fully_paid, 'not_started': arm_not_started}
     return _render({
         'page': 'report', 'max_due': max_due,
         'arms': [{'name': name, **data} for name, data in sorted(arms_data.items())],
@@ -622,7 +633,7 @@ def export_excel():
         sss3_assignments = scope_query(ClassArmAssignment.query.filter_by(class_id=sss3_class.id, term_id=active_term.id), ClassArmAssignment).all()
         assignment_ids = [a.id for a in sss3_assignments]
         enrollments = StudentEnrollment.query.filter(StudentEnrollment.class_arm_assignment_id.in_(assignment_ids), StudentEnrollment.is_active == True).all()
-        from utils.services.contributions import paid_by_student
+        from utils.services.contributions import paid_by_student, payment_status
         paid_map = paid_by_student(active_session.id, [e.student_id for e in enrollments])
         students_data = []
         for enrollment in enrollments:
@@ -630,7 +641,7 @@ def export_excel():
             assignment = enrollment.class_arm_assignment
             total_paid = paid_map.get(student.id, 0)
             remaining = max(0, max_due - total_paid)
-            students_data.append({'name': student.full_name, 'arm': assignment.arm_label, 'max_due': max_due, 'total_paid': total_paid, 'remaining': remaining, 'status': 'Paid' if remaining <= 0 else 'Ongoing'})
+            students_data.append({'name': student.full_name, 'arm': assignment.arm_label, 'max_due': max_due, 'total_paid': total_paid, 'remaining': remaining, 'status': payment_status(total_paid, max_due)})
         students_data.sort(key=lambda x: (x['arm'], x['name']))
         for i, s in enumerate(students_data, 1):
             ws_students.append([i, s['name'], s['arm'], s['max_due'], s['total_paid'], s['remaining'], s['status']])
@@ -921,8 +932,9 @@ def defaulters():
 
     defaulters_list = []
     total_outstanding = 0
+    not_started_count = 0
 
-    from utils.services.contributions import paid_by_student
+    from utils.services.contributions import paid_by_student, payment_status
     student_ids = [e.student_id for e in enrollments]
     paid_map = paid_by_student(active_session.id, student_ids)
     # {student_id: latest payment date} in one query instead of one SELECT per
@@ -942,12 +954,16 @@ def defaulters():
         remaining = max_due - total_paid
 
         if remaining > 0:
+            status = payment_status(total_paid, max_due)
+            if status == 'Not Started':
+                not_started_count += 1
             defaulters_list.append({
                 'id': student.id,
                 'name': student.full_name,
                 'arm': assignment.arm_label,
                 'total_paid': total_paid,
                 'remaining': remaining,
+                'status': status,
                 'percentage': (total_paid / max_due * 100) if max_due > 0 else 0,
                 'last_payment': last_payment_map.get(student.id)
             })
@@ -966,6 +982,7 @@ def defaulters():
         'defaulters': defaulters_list,
         'total_outstanding': total_outstanding,
         'avg_outstanding': avg_outstanding,
+        'not_started_count': not_started_count,
         'max_due': max_due,
         'export_url': url_for('contributions.export_defaulters'),
         'back_url': url_for('contributions.dashboard'),
@@ -1052,16 +1069,16 @@ def export_defaulters():
         ws = wb.active
         ws.title = "Defaulters"
         
-        headers = ['#', 'Name', 'Arm', 'Amount Paid', 'Outstanding', 'Progress %']
+        headers = ['#', 'Name', 'Arm', 'Amount Paid', 'Outstanding', 'Progress %', 'Status']
         ws.append(headers)
-        
+
         header_fill = PatternFill(start_color='dc3545', end_color='dc3545', fill_type='solid')
         header_font = Font(color='FFFFFF', bold=True)
         for cell in ws[1]:
             cell.fill = header_fill
             cell.font = header_font
-        
-        from utils.services.contributions import paid_by_student
+
+        from utils.services.contributions import paid_by_student, payment_status
         paid_map = paid_by_student(active_session.id, [e.student_id for e in enrollments])
         idx = 1
         for enrollment in enrollments:
@@ -1069,9 +1086,9 @@ def export_defaulters():
             assignment = enrollment.class_arm_assignment
 
             total_paid = paid_map.get(student.id, 0)
-            
+
             remaining = max_due - total_paid
-            
+
             if remaining > 0:
                 ws.append([
                     idx,
@@ -1079,7 +1096,8 @@ def export_defaulters():
                     assignment.arm_label,
                     total_paid,
                     remaining,
-                    f"{(total_paid/max_due*100):.1f}%"
+                    f"{(total_paid/max_due*100):.1f}%",
+                    payment_status(total_paid, max_due)
                 ])
                 idx += 1
         

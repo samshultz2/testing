@@ -25,3 +25,14 @@ def paid_by_student(session_id, student_ids=None):
             return {}
         q = q.filter(ContributionPayment.student_id.in_(list(student_ids)))
     return {sid: float(total) for sid, total in q.group_by(ContributionPayment.student_id).all()}
+
+
+def payment_status(total_paid, max_due):
+    """One of 'Not Started' / 'In Progress' / 'Paid' for a single student's
+    contribution progress against the per-student cap -- distinguishes a
+    student who hasn't paid anything yet from one who's partway there."""
+    if not total_paid:
+        return 'Not Started'
+    if max_due and total_paid >= max_due:
+        return 'Paid'
+    return 'In Progress'

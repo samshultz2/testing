@@ -811,10 +811,10 @@ _SUBSECTION_ENDPOINTS = {
     },
     'contributions': {
         'record': {'dashboard', 'quick_entry', 'add_payment', 'delete_payment',
-                   'payments_list', 'student_detail', 'api_student_info'},
+                   'payments_list', 'student_detail', 'api_student_info', 'import_excel'},
         'expenses': {'expenses_list', 'add_expense', 'delete_expense'},
         'reports': {'report', 'daily_summary', 'defaulters', 'export_defaulters',
-                    'export_excel', 'import_excel', 'session_history', 'view_session'},
+                    'export_excel', 'session_history', 'view_session'},
         'settings': {'settings', 'clear_all_data'},
     },
     'website': {

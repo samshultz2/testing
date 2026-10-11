@@ -82,9 +82,6 @@ REGISTRY = [
     ('event_added', 'Event added to calendar',
      "Alert admins when a new event is added to the school calendar.",
      'Events', True),
-    ('contribution_activity', 'Contribution payment/expense recorded',
-     "Alert admins when a contribution payment or expense is recorded.",
-     'Contributions', True),
     ('welfare_record_added', 'Discipline/clinic record added',
      "Alert the branch's admins when a discipline incident or clinic visit is "
      "recorded for a student (names the student only -- no medical or incident "

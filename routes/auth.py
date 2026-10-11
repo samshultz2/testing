@@ -230,6 +230,10 @@ def login():
 
         _record_login_failure(username or None)
         flash('Invalid credentials. Please try again.', 'error')
+        # Never carry a remembered destination across a failed attempt — a
+        # wrong password should land the next successful login on the normal
+        # dashboard, not wherever an earlier bounce happened to point.
+        next_url = None
 
     return render_template('auth/login.html', next_url=next_url,
                            legacy_login=bool(Config.ENABLE_LEGACY_LOGIN and Config.ADMIN_PASSWORD),

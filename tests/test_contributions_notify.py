@@ -1,7 +1,7 @@
-"""Recording a contribution payment or expense should alert admins -- this
-module has no per-branch concept of its own (see routes/contributions.py's
-models), so it's a plain role broadcast (notify_admins), gated by the
-'contribution_activity' automation toggle."""
+"""Contributions is financially sensitive and semi-hidden; recording a payment
+or expense must NEVER post an in-app notification (the automations registry's
+old 'contribution_activity' toggle was removed along with the notify calls —
+this is now an unconditional, not a configurable, behaviour)."""
 import re
 
 from config import Config
@@ -42,48 +42,36 @@ def _make_sss3_student(app, tag):
     return sid
 
 
-def test_recording_payment_notifies_admins(app):
+def test_recording_payment_never_notifies(app):
     sid = _make_sss3_student(app, 'Pay')
     client = _client(app)
     tok = _ptoken(client)
+    with app.app_context():
+        before = Notification.query.count()
     r = client.post('/contributions/add-payment', headers={'X-Requested-With': 'fetch'},
                     data={'student_id': str(sid), 'amount': '5000',
                           'payment_date': '2026-01-10', 'received_by': 'Mrs Bello',
                           '_csrf_token': tok})
     assert r.status_code == 200 and r.get_json()['ok']
     with app.app_context():
-        notes = Notification.query.filter_by(title='Contribution payment recorded', role='admin').all()
-        assert any('Zz' + 'Pay' in (n.body or '') and 'Mrs Bello' in (n.body or '') for n in notes)
+        assert Notification.query.count() == before
 
 
-def test_recording_expense_notifies_admins(app):
+def test_recording_expense_never_notifies(app):
     client = _client(app)
     tok = _ptoken(client)
+    with app.app_context():
+        before = Notification.query.count()
     r = client.post('/contributions/expenses/add', headers={'X-Requested-With': 'fetch'},
                     data={'expense_date': '2026-01-11', 'description': 'ZzBanner printing',
                           'amount': '1500', '_csrf_token': tok})
     assert r.status_code == 200 and r.get_json()['ok']
     with app.app_context():
-        notes = Notification.query.filter_by(title='Contribution expense recorded', role='admin').all()
-        assert any('ZzBanner printing' in (n.body or '') for n in notes)
+        assert Notification.query.count() == before
 
 
-def test_disabling_contribution_activity_automation_skips_notification(app):
-    with app.app_context():
-        from utils import automations
-        automations.set_enabled('contribution_activity', False)
-    try:
-        client = _client(app)
-        tok = _ptoken(client)
-        r = client.post('/contributions/expenses/add', headers={'X-Requested-With': 'fetch'},
-                        data={'expense_date': '2026-01-12', 'description': 'ZzQuiet expense',
-                              'amount': '750', '_csrf_token': tok})
-        assert r.status_code == 200 and r.get_json()['ok']
-        with app.app_context():
-            notes = Notification.query.filter(
-                Notification.body.like('%ZzQuiet expense%')).all()
-            assert not notes
-    finally:
-        with app.app_context():
-            from utils import automations
-            automations.set_enabled('contribution_activity', True)
+def test_contribution_activity_automation_no_longer_registered():
+    """The toggle was removed, not just disabled -- confirm it's gone from the
+    registry rather than lingering as dead config."""
+    from utils import automations
+    assert all(key != 'contribution_activity' for key, *_ in automations.REGISTRY)

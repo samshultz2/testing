@@ -4,6 +4,17 @@
 {% block breadcrumb %}<a href="{{ url_for('contributions.dashboard') }}">Contributions</a>{% if contrib_json.page != 'dashboard' %} / <span>{{ _t.get(contrib_json.page,'Contributions') }}</span>{% endif %}{% endblock %}
 {% block extra_css %}
 <style>
+/* Persistent quick-nav menu shown above every screen -- a horizontally
+   scrollable tab strip so every section is one click away, independent of
+   the breadcrumb (which shows location, not destinations). */
+.contrib-nav { display: flex; gap: 0.35rem; flex-wrap: wrap; align-items: center;
+  margin-bottom: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid var(--border-color); }
+.contrib-nav-item { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.4rem 0.75rem;
+  border-radius: var(--radius-md, 6px); font-size: 0.85rem; font-weight: 600; color: var(--text-secondary);
+  background: var(--gray-50); text-decoration: none; white-space: nowrap; transition: background 0.15s, color 0.15s; }
+.contrib-nav-item:hover { background: var(--gray-100); color: var(--text-primary); }
+.contrib-nav-item.active { background: #1a5f4a; color: #fff; }
+.contrib-nav-exit { margin-left: auto; color: var(--text-muted); }
 .row { display: flex; flex-wrap: wrap; margin: 0 -0.5rem; }
 .col-md-6 { flex: 0 0 50%; max-width: 50%; padding: 0 0.5rem; margin-bottom: 1rem; }
 .col-md-8 { flex: 0 0 66.666%; max-width: 66.666%; padding: 0 0.5rem; }
