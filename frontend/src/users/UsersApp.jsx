@@ -794,7 +794,19 @@ function Groups({ d, notify }) {
   const summary = (perms) => {
     const keys = Object.keys(perms);
     if (!keys.length) return <span className="text-muted">No modules</span>;
-    return keys.map((k) => <span key={k} className="badge badge-secondary" style={{ marginRight: 4 }}>{labelFor(k)}: {perms[k]}</span>);
+    const MAX = 4;
+    const shown = keys.slice(0, MAX);
+    const rest = keys.slice(MAX);
+    return (
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, maxWidth: 260 }}>
+        {shown.map((k) => <span key={k} className="badge badge-secondary">{labelFor(k)}: {perms[k]}</span>)}
+        {rest.length > 0 && (
+          <span className="badge badge-secondary" title={rest.map((k) => `${labelFor(k)}: ${perms[k]}`).join(', ')}>
+            +{rest.length} more
+          </span>
+        )}
+      </div>
+    );
   };
   return (
     <>
