@@ -59,7 +59,7 @@ def test_representative_resolution():
         'promotion.graduate_document': ('promotion', 'documents_generate'),
         'library.issue': ('library', 'circulation_issue'),
         'library.add_book': ('library', 'catalogue_create'),
-        'reports.export_students': ('reports', 'exports'),
+        'reports.export_students': ('reports', 'export'),
         'events.add_event': ('events', 'create'),
         'contributions.add_payment': ('contributions', 'record'),
         'website_admin.media_upload': ('website', 'media'),

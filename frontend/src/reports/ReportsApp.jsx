@@ -3,15 +3,17 @@ import { chartPalette } from '../lib/hooks';
 import { postFile } from '../lib/forms';
 import { useSection, NavCtx, useNav } from '../lib/section';
 import { Banner, PageHeader, Empty, SectionShell } from '../components/ui';
+import { canWrite } from '../lib/perms';
 
 // ---- Index hub -------------------------------------------------------------
 function Index({ d }) {
+  const CARD_PERM = { import: 'import', export_students: 'export', export_template: 'export' };
   const cards = [
     ['summary', 'primary', 'fa-chart-line', 'Summary', 'Overview'],
     ['import', 'success', 'fa-file-import', 'Import', 'From Excel'],
     ['export_students', 'info', 'fa-file-export', 'Export', 'Students'],
     ['export_template', 'secondary', 'fa-file-download', 'Template', 'Download'],
-  ];
+  ].filter(([key]) => !CARD_PERM[key] || canWrite(d, CARD_PERM[key]));
   return (
     <>
       <PageHeader title="Reports" />

@@ -196,7 +196,8 @@ MODULE_SUBSECTIONS = {
     },
     'reports': {
         'dashboards': 'Dashboards',
-        'exports': 'Exports & Imports',
+        'export': 'Export Students Data',
+        'import': 'Bulk-Import Students',
     },
     'events': {
         'view': 'View Calendar',
@@ -626,12 +627,15 @@ _SUBSECTION_ENDPOINTS = {
         'settings': {'settings'},
     },
     'reports': {
-        'dashboards': {'index', 'summary_report', 'api_attendance_trend',
+        # NB: index is deliberately left out — it's a pure navigation hub with
+        # no content of its own, reachable with any 'reports' grant (same
+        # treatment as other modules' landing pages).
+        'dashboards': {'summary_report', 'api_attendance_trend',
                        'api_enrollment_by_class', 'api_gender_distribution',
                        'api_jamb_score_distribution', 'api_religion_distribution',
                        'api_waec_grade_distribution'},
-        'exports': {'export_students', 'export_class_students', 'export_template',
-                    'import_students'},
+        'export': {'export_students', 'export_class_students', 'export_template'},
+        'import': {'import_students'},
     },
     'events': {
         'view': {'calendar', 'agenda'},

@@ -3038,3 +3038,55 @@ def test_library_cross_bucket_helpers_reachable_with_any_grant(app):
     assert c.get('/library/staff-search?q=zzz').status_code == 200
 
 
+# ---- Reports (dashboards / export / import; index left unmapped) ----------
+
+def test_reports_dashboards_view_blocked_from_export(app):
+    _make(app, 'rptdv', {'reports.dashboards': 'view'})
+    c = _login(app, 'rptdv')
+    assert c.get('/reports/summary').status_code == 200
+    assert c.get('/reports/api/charts/gender-distribution').status_code == 200
+    r = c.get('/reports/export/students', follow_redirects=False)
+    assert r.status_code in (302, 303)        # export not granted
+
+
+def test_reports_export_blocked_from_import(app):
+    _make(app, 'rptex', {'reports.export': 'edit'})
+    c = _login(app, 'rptex')
+    assert c.get('/reports/export/students').status_code == 200
+    assert c.get('/reports/export/template').status_code == 200
+    tok = _ptoken(c)
+    data = {'file': (io.BytesIO(b'Surname,First Name\nRptExTest,Kid\n'), 'students.csv'),
+            '_csrf_token': tok}
+    c.post('/reports/import/students', data=data, content_type='multipart/form-data')
+    with app.app_context():
+        assert Student.query.filter_by(surname='RptExTest').first() is None   # import not granted
+
+
+def test_reports_import_can_import_blocked_from_export(app):
+    _make(app, 'rptim', {'reports.import': 'edit'})
+    c = _login(app, 'rptim')
+    tok = _ptoken(c)
+    data = {'file': (io.BytesIO(b'Surname,First Name\nRptImTest,Kid\n'), 'students.csv'),
+            '_csrf_token': tok}
+    c.post('/reports/import/students', data=data, content_type='multipart/form-data')
+    with app.app_context():
+        assert Student.query.filter_by(surname='RptImTest').first() is not None
+    r = c.get('/reports/export/students', follow_redirects=False)
+    assert r.status_code in (302, 303)        # export not granted
+
+
+def test_reports_index_reachable_with_export_only(app):
+    # Regression for the unmapped-index fix: a user holding only 'export' (no
+    # 'dashboards') must still be able to reach the hub page to find their link.
+    _make(app, 'rptidx', {'reports.export': 'view'})
+    c = _login(app, 'rptidx')
+    assert c.get('/reports/').status_code == 200
+
+
+def test_reports_no_grant_blocked_from_index(app):
+    _make(app, 'rptno', {})
+    c = _login(app, 'rptno')
+    r = c.get('/reports/', follow_redirects=False)
+    assert r.status_code in (302, 303)
+
+
