@@ -10,7 +10,7 @@
 <div class="page-header">
     <h1>Question Bank</h1>
     <div class="page-header-actions">
-        <a href="{{ url_for('cbt.bank_import') }}" class="btn btn-secondary"><i class="fas fa-file-import"></i> Import</a>
+        {% if can_write_sub('cbt', 'bank_import') %}<a href="{{ url_for('cbt.bank_import') }}" class="btn btn-secondary"><i class="fas fa-file-import"></i> Import</a>{% endif %}
     </div>
 </div>
 {% include 'cbt/_tabs.html' %}
@@ -26,6 +26,7 @@
     <div class="text-muted text-sm mt-2">{{ total }} question(s) in the bank. Build exams faster by adding from here (Exam → Add from bank).</div>
 </div></div>
 
+{% if can_write_sub('cbt', 'bank_create') %}
 <div class="card mb-3">
     <div class="card-header"><h3><i class="fas fa-plus"></i> Add a question</h3></div>
     <div class="card-body">
@@ -52,6 +53,7 @@
         </form>
     </div>
 </div>
+{% endif %}
 
 <div class="card">
     <div class="card-header"><h3>{{ questions|length }} shown</h3></div>
@@ -62,7 +64,7 @@
                 <div class="d-flex justify-between gap-2">
                     <strong>{{ q.question_text }}</strong>
                     {% if q.image_url %}<div><img src="{{ q.image_url }}" alt="Question figure" style="max-width:200px;max-height:130px;border:1px solid var(--border-color);border-radius:6px;margin:.3rem 0"></div>{% endif %}
-                    <form method="POST" action="{{ url_for('cbt.bank_delete', bank_id=q.id) }}" data-confirm="Remove from bank?"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button></form>
+                    {% if can_write_sub('cbt', 'bank_delete') %}<form method="POST" action="{{ url_for('cbt.bank_delete', bank_id=q.id) }}" data-confirm="Remove from bank?"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button></form>{% endif %}
                 </div>
                 {% for letter, text in q.options %}{% if text %}<div class="o {% if q.correct_option==letter %}c{% endif %}">{{ letter }}. {{ text }}{% if q.correct_option==letter %} <i class="fas fa-check"></i>{% endif %}</div>{% endif %}{% endfor %}
                 <div class="text-muted text-sm mt-1">{{ q.subject.name if q.subject else 'No subject' }}{% if q.topic %} · {{ q.topic }}{% endif %} · {{ q.difficulty }} · {{ q.marks }} mark(s)</div>

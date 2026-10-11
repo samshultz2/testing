@@ -39,8 +39,8 @@ function Dashboard({ d }) {
       <div className="page-header"><h1>CBT / Online Tests</h1>
         <div className="page-header-actions">
           {d.urls.subject_topics && <a href={d.urls.subject_topics} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-diagram-project" /> Subject Topics</a>}
-          <a href={d.urls.export_all} className="btn btn-secondary" data-native download><i aria-hidden="true" className="fas fa-file-excel" /> All Results</a>
-          {canWrite(d) && <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> New Exam</a>}
+          {canWrite(d, 'results_export') && <a href={d.urls.export_all} className="btn btn-secondary" data-native download><i aria-hidden="true" className="fas fa-file-excel" /> All Results</a>}
+          {canWrite(d, 'exams_create') && <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> New Exam</a>}
         </div>
       </div>
       <Tabs d={d} />
@@ -56,7 +56,7 @@ function Dashboard({ d }) {
       <div className="card"><div className="card-header"><h3>All Exams</h3></div>
         <div className="card-body" style={{ padding: 0 }}>
           <Table rowKey={(e) => e.id} rows={d.exams}
-            empty={<Empty icon="fa-file-pen" title="No exams yet"><p>Create an online test, add questions, set the access password and publish.</p>{canWrite(d) && <a href={d.urls.add} className="btn btn-primary mt-2">New Exam</a>}</Empty>}
+            empty={<Empty icon="fa-file-pen" title="No exams yet"><p>Create an online test, add questions, set the access password and publish.</p>{canWrite(d, 'exams_create') && <a href={d.urls.add} className="btn btn-primary mt-2">New Exam</a>}</Empty>}
             columns={[
               { key: 'title', label: 'Title', render: (e) => <a href={e.detail_url}><strong>{e.title}</strong></a> },
               { key: 'subject', label: 'Subject', render: (e) => e.subject },
@@ -239,7 +239,7 @@ function Results({ d }) {
       <div className="page-header"><h1>Results · {e.title}</h1>
         <div className="page-header-actions">
           {d.urls.item_analysis && <a href={d.urls.item_analysis} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-microscope" /> Item analysis</a>}
-          <a href={d.urls.export} className="btn btn-primary" data-native download><i aria-hidden="true" className="fas fa-file-excel" /> Download Excel</a>
+          {canWrite(d, 'results_export') && <a href={d.urls.export} className="btn btn-primary" data-native download><i aria-hidden="true" className="fas fa-file-excel" /> Download Excel</a>}
         </div>
       </div>
       <div className="card mb-3"><div className="card-body d-flex justify-between flex-wrap gap-2">
@@ -394,8 +394,8 @@ function ItemAnalysis({ d }) {
     <>
       <div className="page-header"><h1>Item analysis · {d.exam.title}</h1>
         <div className="page-header-actions">
-          <a href={d.urls.export_pdf} className="btn btn-success" data-native download><i aria-hidden="true" className="fas fa-file-pdf" /> PDF</a>
-          <a href={d.urls.export_excel} className="btn btn-secondary" data-native download><i aria-hidden="true" className="fas fa-file-excel" /> Excel</a>
+          {canWrite(d, 'results_export') && <a href={d.urls.export_pdf} className="btn btn-success" data-native download><i aria-hidden="true" className="fas fa-file-pdf" /> PDF</a>}
+          {canWrite(d, 'results_export') && <a href={d.urls.export_excel} className="btn btn-secondary" data-native download><i aria-hidden="true" className="fas fa-file-excel" /> Excel</a>}
           <a href={d.urls.results} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Results</a>
         </div>
       </div>
@@ -477,7 +477,7 @@ function SubjectTopics({ d }) {
     <>
       <div className="page-header"><h1><i aria-hidden="true" className="fas fa-diagram-project" /> Subject topic mastery</h1>
         <div className="page-header-actions">
-          {a && !meta.insufficient && <a href={d.urls.export_excel} className="btn btn-secondary" data-native download><i aria-hidden="true" className="fas fa-file-excel" /> Excel</a>}
+          {a && !meta.insufficient && canWrite(d, 'syllabus_view') && <a href={d.urls.export_excel} className="btn btn-secondary" data-native download><i aria-hidden="true" className="fas fa-file-excel" /> Excel</a>}
           <a href={d.urls.dashboard} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> CBT</a>
         </div>
       </div>

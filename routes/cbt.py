@@ -441,7 +441,7 @@ def toggle_publish(exam_id):
 
 
 @cbt_bp.route('/exams/<int:exam_id>/delete', methods=['POST'])
-@admin_required
+@login_required
 def delete_exam(exam_id):
     e = _exam_403(exam_id)
     from utils.audit import log_action
@@ -889,7 +889,7 @@ def syllabus():
 
 
 @cbt_bp.route('/syllabus/add', methods=['POST'])
-@admin_required
+@login_required
 def syllabus_add():
     """Add a topic (parent_id blank) or a sub-topic (parent_id set)."""
     from models import SyllabusTopic
@@ -922,7 +922,7 @@ def syllabus_add():
 
 
 @cbt_bp.route('/syllabus/<int:topic_id>/edit', methods=['POST'])
-@admin_required
+@login_required
 def syllabus_edit(topic_id):
     from models import SyllabusTopic
     t = db.get_or_404(SyllabusTopic, topic_id)
@@ -938,7 +938,7 @@ def syllabus_edit(topic_id):
 
 
 @cbt_bp.route('/syllabus/<int:topic_id>/delete', methods=['POST'])
-@admin_required
+@login_required
 def syllabus_delete(topic_id):
     from models import SyllabusTopic
     t = db.get_or_404(SyllabusTopic, topic_id)
@@ -950,7 +950,7 @@ def syllabus_delete(topic_id):
 
 
 @cbt_bp.route('/syllabus/seed', methods=['POST'])
-@admin_required
+@login_required
 def syllabus_seed():
     """One-click starter WAEC/JAMB syllabus for a core subject."""
     from models import SyllabusTopic
@@ -978,7 +978,7 @@ def syllabus_seed():
 
 
 @cbt_bp.route('/syllabus/seed-all', methods=['POST'])
-@admin_required
+@login_required
 def syllabus_seed_all():
     """Seed the full JAMB/WAEC syllabus for every active subject that has one and
     isn't already populated — a one-click curriculum bootstrap for the school."""
@@ -1087,7 +1087,7 @@ def monitor(exam_id):
 
 
 @cbt_bp.route('/attempts/<int:attempt_id>/force-submit', methods=['POST'])
-@admin_required
+@login_required
 def force_submit(attempt_id):
     """Invigilator action: end an in-progress attempt and grade it from the
     answers already saved on the server. The recovery tool for a student whose

@@ -4,7 +4,7 @@ from models import (db, User, Expense, FeePayment, FeeDiscount, FeeItem, FeeStru
                     AdditionalCharge, Student, Term, AcademicSession, SchoolClass, ClassArm,
                     ClassArmAssignment, StudentEnrollment, Branch,
                     StaffMember, Department, LeaveRecord, PayrollRun, JobVacancy, JobApplication,
-                    StaffLoan, StaffAttendance)
+                    StaffLoan, StaffAttendance, Subject, ClassSubject)
 from tests.conftest import login_token
 
 
@@ -1963,3 +1963,400 @@ def test_hr_device_token_stays_admin_only(app):
     tok = _ptoken(c)
     r = c.post('/hr/settings/device-token', data={'_csrf_token': tok}, follow_redirects=False)
     assert r.status_code in (302, 303)
+
+
+# ---- Results/Subjects (15-key granular split + 'cards' capability) --------
+
+def _subj_term_class(app, tag):
+    with app.app_context():
+        term = Term.query.filter_by(name=f'{tag}-Term').first()
+        if not term:
+            ssn = AcademicSession(name=f'{tag}-Sess')
+            db.session.add(ssn); db.session.flush()
+            term = Term(session_id=ssn.id, term_number=1, name=f'{tag}-Term')
+            db.session.add(term); db.session.flush()
+        cls = SchoolClass.query.filter_by(name=f'{tag}-Class').first() or SchoolClass(name=f'{tag}-Class', level=1)
+        db.session.add(cls); db.session.flush()
+        db.session.commit()
+        return term.id, cls.id
+
+
+def _subj_teacher(app, username, perms):
+    # scores_entry/scoresheet_scan/etc. have their own business-logic gate
+    # (can_enter_results()) independent of the subsection system: a non-admin
+    # must have a Teacher profile with can_enter_results=True to even reach
+    # the page. Granting the subsection key alone is not enough for these.
+    from models import Teacher
+    with app.app_context():
+        if not User.query.filter_by(username=username).first():
+            u = User(username=username, role='teacher', scope='central', full_name=username)
+            u.set_password('secret123'); u.set_permissions(perms)
+            db.session.add(u); db.session.flush()
+            db.session.add(Teacher(user_id=u.id, can_enter_results=True))
+            db.session.commit()
+
+
+def test_results_subjects_view_without_create(app):
+    _make(app, 'rssv', {'results.subjects_view': 'view'})
+    c = _login(app, 'rssv')
+    assert c.get('/subjects/').status_code == 200
+    r = c.get('/subjects/add', follow_redirects=False)
+    assert r.status_code in (302, 303)        # subjects_create not granted
+
+
+def test_results_subjects_create_without_edit_or_delete(app):
+    _make(app, 'rssc', {'results.subjects_create': 'edit'})
+    c = _login(app, 'rssc')
+    tok = _ptoken(c)
+    c.post('/subjects/add', data={'name': 'RSSC Subject', '_csrf_token': tok})
+    with app.app_context():
+        subj = Subject.query.filter_by(name='RSSC Subject').first()
+        assert subj is not None
+        sid = subj.id
+    r = c.get(f'/subjects/{sid}/edit', follow_redirects=False)
+    assert r.status_code in (302, 303)
+    c.post(f'/subjects/{sid}/delete', data={'_csrf_token': tok})
+    with app.app_context():
+        assert db.session.get(Subject, sid).is_active is True
+
+
+def test_results_subjects_edit_without_delete(app):
+    term_id, class_id = _subj_term_class(app, 'RSE')
+    with app.app_context():
+        subj = Subject(name='RSE Subject', is_active=True)
+        db.session.add(subj); db.session.flush()
+        cs = ClassSubject(subject_id=subj.id, class_id=class_id, term_id=term_id,
+                          teacher_name=None, is_active=True)
+        db.session.add(cs); db.session.commit()
+        cs_id = cs.id
+    _make(app, 'rsse', {'results.subjects_edit': 'edit'})
+    c = _login(app, 'rsse')
+    tok = _ptoken(c)
+    c.post(f'/subjects/class-subjects/{cs_id}/edit', data={'teacher_name': 'Mr. RSE', '_csrf_token': tok})
+    with app.app_context():
+        assert db.session.get(ClassSubject, cs_id).teacher_name == 'Mr. RSE'
+    c.post(f'/subjects/class-subjects/{cs_id}/delete', data={'_csrf_token': tok})
+    with app.app_context():
+        assert db.session.get(ClassSubject, cs_id).is_active is True   # subjects_delete not granted
+
+
+def test_results_subjects_assign_without_edit(app):
+    term_id, class_id = _subj_term_class(app, 'RSA')
+    with app.app_context():
+        subj = Subject.query.filter_by(name='RSA Subject').first() or Subject(name='RSA Subject', is_active=True)
+        db.session.add(subj); db.session.commit()
+        subj_id = subj.id
+    _make(app, 'rsas', {'results.subjects_assign': 'edit'})
+    c = _login(app, 'rsas')
+    tok = _ptoken(c)
+    c.post('/subjects/class-subjects/assign',
+           data={'term_id': term_id, 'class_id': class_id, 'subject_ids[]': [str(subj_id)],
+                 'teacher_names[]': ['Mrs. RSA'], '_csrf_token': tok})
+    with app.app_context():
+        cs = ClassSubject.query.filter_by(subject_id=subj_id, class_id=class_id, term_id=term_id).first()
+        assert cs is not None
+    # blocked from edit_subject (subjects_edit not granted)
+    r = c.get(f'/subjects/{subj_id}/edit', follow_redirects=False)
+    assert r.status_code in (302, 303)
+
+
+def test_results_scores_view_without_enter(app):
+    _subj_teacher(app, 'rsco_v', {'results.scores_view': 'view'})
+    c = _login(app, 'rsco_v')
+    assert c.get('/subjects/scores').status_code == 200
+    tok = _ptoken(c)
+    r = c.post('/subjects/scores/save', data={'_csrf_token': tok}, follow_redirects=False)
+    assert r.status_code in (302, 303)        # scores_enter not granted
+
+
+def test_results_scores_enter_blocked_from_bulk_import_even_with_unrelated_edit(app):
+    # Regression test for the gap this phase closes: before the split, these 4
+    # bulk-import endpoints were unmapped and rode on whole-module edit access,
+    # so a user granted edit on an unrelated key alone would've reached them.
+    _make(app, 'rsco_e', {'results.scores_enter': 'edit', 'results.subjects_edit': 'edit'})
+    c = _login(app, 'rsco_e')
+    tok = _ptoken(c)
+    r = c.get('/subjects/scores/scan', follow_redirects=False)
+    assert r.status_code in (302, 303)        # scores_bulk_import not granted
+    r2 = c.post('/subjects/scores/broadsheet-import', data={'_csrf_token': tok}, follow_redirects=False)
+    assert r2.status_code in (302, 303)
+
+
+def test_results_scores_bulk_import_without_enter(app):
+    _subj_teacher(app, 'rsco_b', {'results.scores_bulk_import': 'edit'})
+    c = _login(app, 'rsco_b')
+    assert c.get('/subjects/scores/scan').status_code == 200
+    tok = _ptoken(c)
+    r = c.post('/subjects/scores/save', data={'_csrf_token': tok}, follow_redirects=False)
+    assert r.status_code in (302, 303)        # scores_enter not granted
+
+
+def test_results_broadsheet_view_without_export(app):
+    _make(app, 'rsbv', {'results.broadsheet_view': 'view'})
+    c = _login(app, 'rsbv')
+    assert c.get('/subjects/broadsheet').status_code == 200
+    assert c.get('/subjects/broadsheet/explore').status_code == 200   # also closed gap
+    r = c.get('/subjects/broadsheet/export', follow_redirects=False)
+    assert r.status_code in (302, 303)        # broadsheet_export is a separate slice
+    r2 = c.get('/subjects/broadsheet/explore/export', follow_redirects=False)
+    assert r2.status_code in (302, 303)
+
+
+def test_results_reportcard_view_requires_cards_capability_too(app):
+    # Regression test proving the dual gate: holding reportcard_view alone
+    # (without the central-admin-only 'cards' capability) is still blocked.
+    with app.app_context():
+        st = Student.query.filter_by(student_id='RSRC-STU').first()
+        if not st:
+            st = Student(student_id='RSRC-STU', first_name='Rc', surname='Kid',
+                        gender='Male', is_active=True, branch_id=Branch.get_default().id)
+            db.session.add(st); db.session.commit()
+        sid = st.id
+    _make(app, 'rsrc_v', {'results.reportcard_view': 'edit'})
+    c = _login(app, 'rsrc_v')
+    r = c.get(f'/subjects/report-card/{sid}', follow_redirects=False)
+    assert r.status_code in (302, 303)        # 'cards' capability not granted
+
+    _make(app, 'rsrc_v2', {'results.reportcard_view': 'edit', 'results.cards': 'edit'})
+    c2 = _login(app, 'rsrc_v2')
+    assert c2.get(f'/subjects/report-card/{sid}').status_code == 200
+    # still blocked from the batch tier (needs reportcard_batch too)
+    r2 = c2.get('/subjects/report-cards/pdf', follow_redirects=False)
+    assert r2.status_code in (302, 303)
+
+
+def test_results_analytics_view_without_export(app):
+    _make(app, 'rsav', {'results.analytics_view': 'view'})
+    c = _login(app, 'rsav')
+    assert c.get('/subjects/analytics').status_code == 200
+    r = c.get('/subjects/analytics/report.pdf', follow_redirects=False)
+    assert r.status_code in (302, 303)        # analytics_export is a separate slice
+
+
+def test_results_institution_email_stays_admin_only(app):
+    # institution_email / institution_auto_email hard-check is_admin() inline
+    # and stay unmapped by design — confirm a non-admin stays blocked even
+    # holding full analytics_view + analytics_export.
+    _make(app, 'rsie', {'results.analytics_view': 'edit', 'results.analytics_export': 'edit'})
+    c = _login(app, 'rsie')
+    tok = _ptoken(c)
+    r = c.post('/subjects/analytics/institution/email', data={'_csrf_token': tok}, follow_redirects=False)
+    assert r.status_code in (302, 303)
+
+
+def test_results_scores_tools_without_enter(app):
+    term_id, class_id = _subj_term_class(app, 'RST')
+    with app.app_context():
+        arm = ClassArm.query.filter_by(name='RST-Arm').first() or ClassArm(name='RST-Arm', is_active=True)
+        db.session.add(arm); db.session.flush()
+        caa = ClassArmAssignment.query.filter_by(class_id=class_id, term_id=term_id, arm_id=arm.id).first()
+        if not caa:
+            caa = ClassArmAssignment(class_id=class_id, arm_id=arm.id, term_id=term_id,
+                                     branch_id=Branch.get_default().id)
+            db.session.add(caa); db.session.commit()
+        assignment_id = caa.id
+    _make(app, 'rstv', {'results.scores_tools': 'edit'})
+    c = _login(app, 'rstv')
+    tok = _ptoken(c)
+    c.post('/subjects/broadsheet/compute',
+           data={'term_id': term_id, 'assignment_id': assignment_id, '_csrf_token': tok})
+    r = c.post('/subjects/scores/save', data={'_csrf_token': tok}, follow_redirects=False)
+    assert r.status_code in (302, 303)        # scores_enter not granted
+
+
+def test_results_workflow_reachable_with_subjects_view_alone(app):
+    _make(app, 'rswf', {'results.subjects_view': 'view'})
+    c = _login(app, 'rswf')
+    assert c.get('/subjects/workflow').status_code == 200
+
+
+# ---- CBT (20-key granular split; settings/passwords stay admin-only) ------
+
+def _cbt_exam(app, tag, **kw):
+    from models import CBTExam
+    with app.app_context():
+        e = CBTExam.query.filter_by(title=f'{tag}-Exam').first()
+        if not e:
+            e = CBTExam(title=f'{tag}-Exam', access_password='pw12345',
+                        branch_id=Branch.get_default().id, **kw)
+            db.session.add(e); db.session.commit()
+        return e.id
+
+
+def test_cbt_exams_view_without_create(app):
+    _make(app, 'cbtev', {'cbt.exams_view': 'view'})
+    c = _login(app, 'cbtev')
+    assert c.get('/cbt/').status_code == 200
+    r = c.get('/cbt/exams/add', follow_redirects=False)
+    assert r.status_code in (302, 303)        # exams_create not granted
+
+
+def test_cbt_exams_create_without_edit_or_delete(app):
+    _make(app, 'cbtec', {'cbt.exams_create': 'edit'})
+    c = _login(app, 'cbtec')
+    tok = _ptoken(c)
+    c.post('/cbt/exams/add', data={'title': 'CBTEC-Exam', 'access_password': 'secretpw',
+                                   '_csrf_token': tok})
+    with app.app_context():
+        from models import CBTExam
+        exam = CBTExam.query.filter_by(title='CBTEC-Exam').first()
+        assert exam is not None
+        eid = exam.id
+    r = c.get(f'/cbt/exams/{eid}/edit', follow_redirects=False)
+    assert r.status_code in (302, 303)
+    c.post(f'/cbt/exams/{eid}/delete', data={'_csrf_token': tok})
+    with app.app_context():
+        from models import CBTExam
+        assert db.session.get(CBTExam, eid) is not None
+
+
+def test_cbt_exams_edit_blocked_from_publish_even_with_unrelated_edit(app):
+    # Regression test for the gap this phase closes: before the split, the
+    # whole 'exams' bucket conflated metadata edit with publish (makes an
+    # exam live to the whole student body). Confirm exams_edit alone, even
+    # alongside an unrelated edit grant (bank_create), cannot publish.
+    eid = _cbt_exam(app, 'CBTPUB')
+    _make(app, 'cbtpu', {'cbt.exams_edit': 'edit', 'cbt.bank_create': 'edit'})
+    c = _login(app, 'cbtpu')
+    tok = _ptoken(c)
+    c.post(f'/cbt/exams/{eid}/publish', data={'_csrf_token': tok})
+    with app.app_context():
+        from models import CBTExam
+        assert db.session.get(CBTExam, eid).is_published is False
+
+
+def test_cbt_exams_questions_edit_without_bulk(app):
+    eid = _cbt_exam(app, 'CBTQE')
+    _make(app, 'cbtqe', {'cbt.exams_questions_edit': 'edit'})
+    c = _login(app, 'cbtqe')
+    tok = _ptoken(c)
+    with app.app_context():
+        from models import CBTQuestion
+        before = CBTQuestion.query.filter_by(exam_id=eid).count()
+    c.post(f'/cbt/exams/{eid}/questions/add',
+           data={'question_text': 'What is 2+2?', 'correct_option': 'A',
+                 'option_a': '4', 'option_b': '5', '_csrf_token': tok})
+    with app.app_context():
+        from models import CBTQuestion
+        assert CBTQuestion.query.filter_by(exam_id=eid).count() == before + 1
+    r = c.get(f'/cbt/exams/{eid}/import-bank', follow_redirects=False)
+    assert r.status_code in (302, 303)        # exams_questions_bulk not granted
+
+
+def test_cbt_bank_create_without_delete(app):
+    _make(app, 'cbtbc', {'cbt.bank_create': 'edit'})
+    c = _login(app, 'cbtbc')
+    tok = _ptoken(c)
+    c.post('/cbt/bank/add', data={'question_text': 'Bank Q1', 'correct_option': 'A',
+                                  'option_a': 'x', 'option_b': 'y', '_csrf_token': tok})
+    with app.app_context():
+        from models import QuestionBank
+        q = QuestionBank.query.filter_by(question_text='Bank Q1').first()
+        assert q is not None
+        qid = q.id
+    c.post(f'/cbt/bank/{qid}/delete', data={'_csrf_token': tok})
+    with app.app_context():
+        from models import QuestionBank
+        assert db.session.get(QuestionBank, qid) is not None   # bank_delete not granted
+
+
+def test_cbt_syllabus_create_without_delete_or_seed(app):
+    with app.app_context():
+        subj = Subject.query.filter_by(name='CBT-Syl-Subject').first() or Subject(name='CBT-Syl-Subject', is_active=True)
+        db.session.add(subj); db.session.commit()
+        subj_id = subj.id
+    _make(app, 'cbtsc', {'cbt.syllabus_create': 'edit'})
+    c = _login(app, 'cbtsc')
+    tok = _ptoken(c)
+    c.post('/cbt/syllabus/add', data={'subject_id': subj_id, 'title': 'CBT Topic 1', '_csrf_token': tok})
+    with app.app_context():
+        from models import SyllabusTopic
+        topic = SyllabusTopic.query.filter_by(subject_id=subj_id, title='CBT Topic 1').first()
+        assert topic is not None
+        topic_id = topic.id
+    c.post(f'/cbt/syllabus/{topic_id}/delete', data={'_csrf_token': tok})
+    with app.app_context():
+        from models import SyllabusTopic
+        assert db.session.get(SyllabusTopic, topic_id) is not None   # syllabus_delete not granted
+    r = c.post('/cbt/syllabus/seed', data={'subject_id': subj_id, '_csrf_token': tok}, follow_redirects=False)
+    assert r.status_code in (302, 303)        # syllabus_seed not granted
+
+
+def test_cbt_monitor_view_blocked_from_force_submit(app):
+    # Regression test for the closed gap: force_submit was previously hard
+    # admin-only; now it must be blocked by subsection absence for a plain
+    # monitor_view holder, not merely by role.
+    eid = _cbt_exam(app, 'CBTMON')
+    with app.app_context():
+        st = Student.query.filter_by(student_id='CBTMON-STU').first()
+        if not st:
+            st = Student(student_id='CBTMON-STU', first_name='Cbt', surname='Mon',
+                        gender='Male', is_active=True, branch_id=Branch.get_default().id)
+            db.session.add(st); db.session.commit()
+        from models import CBTAttempt
+        att = CBTAttempt(exam_id=eid, student_id=st.id, status='In progress')
+        db.session.add(att); db.session.commit()
+        att_id = att.id
+    _make(app, 'cbtmv', {'cbt.monitor_view': 'view'})
+    c = _login(app, 'cbtmv')
+    assert c.get(f'/cbt/exams/{eid}/monitor').status_code == 200
+    tok = _ptoken(c)
+    c.post(f'/cbt/attempts/{att_id}/force-submit', data={'_csrf_token': tok})
+    with app.app_context():
+        from models import CBTAttempt
+        assert db.session.get(CBTAttempt, att_id).status == 'In progress'
+
+
+def test_cbt_monitor_force_submit_with_view_can_force_submit(app):
+    eid = _cbt_exam(app, 'CBTMON2')
+    with app.app_context():
+        st = Student.query.filter_by(student_id='CBTMON2-STU').first()
+        if not st:
+            st = Student(student_id='CBTMON2-STU', first_name='Cbt', surname='Mon2',
+                        gender='Male', is_active=True, branch_id=Branch.get_default().id)
+            db.session.add(st); db.session.commit()
+        from models import CBTAttempt
+        att = CBTAttempt(exam_id=eid, student_id=st.id, status='In progress')
+        db.session.add(att); db.session.commit()
+        att_id = att.id
+    _make(app, 'cbtmf', {'cbt.monitor_view': 'view', 'cbt.monitor_force_submit': 'edit'})
+    c = _login(app, 'cbtmf')
+    tok = _ptoken(c)
+    c.post(f'/cbt/attempts/{att_id}/force-submit', data={'_csrf_token': tok})
+    with app.app_context():
+        from models import CBTAttempt
+        assert db.session.get(CBTAttempt, att_id).status == 'Submitted'
+
+
+def test_cbt_results_view_without_export(app):
+    eid = _cbt_exam(app, 'CBTRV')
+    _make(app, 'cbtrv', {'cbt.results_view': 'view'})
+    c = _login(app, 'cbtrv')
+    assert c.get(f'/cbt/exams/{eid}/results').status_code == 200
+    r = c.get(f'/cbt/exams/{eid}/results/export', follow_redirects=False)
+    assert r.status_code in (302, 303)        # results_export is a separate slice
+
+
+def test_cbt_settings_and_passwords_stay_admin_only(app):
+    # settings / passwords are deliberately left out of the grant system
+    # (literal secrets: the supervisor-PIN override and student portal
+    # credentials) — confirm a non-admin, non-central-scope user stays
+    # blocked even holding full exams_edit + monitor_force_submit.
+    # (passwords' own check is `is_central() or is_admin()`, so a
+    # central-scoped non-admin would pass — use branch scope to isolate
+    # the admin-only behaviour this test is about.)
+    with app.app_context():
+        u = User.query.filter_by(username='cbtap').first()
+        if not u:
+            u = User(username='cbtap', role='staff', scope='branch',
+                     branch_id=Branch.get_default().id, full_name='cbtap')
+            u.set_password('secret123')
+            db.session.add(u)
+        u.set_permissions({'cbt.exams_edit': 'edit', 'cbt.monitor_force_submit': 'edit'})
+        db.session.commit()
+    c = _login(app, 'cbtap')
+    tok = _ptoken(c)
+    r = c.post('/cbt/settings', data={'_csrf_token': tok}, follow_redirects=False)
+    assert r.status_code in (302, 303)
+    r2 = c.get('/cbt/passwords', follow_redirects=False)
+    assert r2.status_code == 403

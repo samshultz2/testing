@@ -12,11 +12,13 @@
     <div class="page-header-actions">
         <a href="{{ url_for('cbt.monitor', exam_id=e.id) }}" class="btn btn-secondary"><i class="fas fa-tower-broadcast"></i> Live Monitor</a>
         <a href="{{ url_for('cbt.results', exam_id=e.id) }}" class="btn btn-secondary"><i class="fas fa-chart-bar"></i> Results</a>
-        <a href="{{ url_for('cbt.edit_exam', exam_id=e.id) }}" class="btn btn-secondary"><i class="fas fa-edit"></i> Edit</a>
+        {% if can_write_sub('cbt', 'exams_edit') %}<a href="{{ url_for('cbt.edit_exam', exam_id=e.id) }}" class="btn btn-secondary"><i class="fas fa-edit"></i> Edit</a>{% endif %}
+        {% if can_write_sub('cbt', 'exams_publish') %}
         <form method="POST" action="{{ url_for('cbt.toggle_publish', exam_id=e.id) }}">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <button class="btn {{ 'btn-secondary' if e.is_published else 'btn-primary' }}"><i class="fas fa-globe"></i> {{ 'Unpublish' if e.is_published else 'Publish' }}</button>
         </form>
+        {% endif %}
     </div>
 </div>
 
@@ -32,6 +34,7 @@
 
 <div class="card mb-3">
     <div class="card-header"><h3><i class="fas fa-plus"></i> Add Question</h3>
+        {% if can_write_sub('cbt', 'exams_questions_bulk') %}
         <div class="d-flex gap-1">
             <a href="{{ url_for('cbt.import_from_bank', exam_id=e.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-layer-group"></i> From bank</a>
             <a href="{{ url_for('cbt.fill_from_jamb_bank', exam_id=e.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-wand-magic-sparkles"></i> Fill from JAMB bank</a>
@@ -41,7 +44,9 @@
                 <button class="btn btn-secondary btn-sm" title="Import Excel/CSV"><i class="fas fa-file-import"></i></button>
             </form>
         </div>
+        {% endif %}
     </div>
+    {% if can_write_sub('cbt', 'exams_questions_edit') %}
     <div class="card-body">
         <form method="POST" action="{{ url_for('cbt.add_question', exam_id=e.id) }}" enctype="multipart/form-data">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
@@ -95,6 +100,7 @@
             <button class="btn btn-primary"><i class="fas fa-plus"></i> Add Question</button>
         </form>
     </div>
+    {% endif %}
 </div>
 
 <div class="card">
@@ -105,7 +111,7 @@
             <div class="qcard">
                 <div class="d-flex justify-between gap-2">
                     <strong>{{ loop.index }}. {{ q.question_text }}</strong>
-                    <form method="POST" action="{{ url_for('cbt.delete_question', question_id=q.id) }}" data-confirm="Delete this question?"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button></form>
+                    {% if can_write_sub('cbt', 'exams_questions_edit') %}<form method="POST" action="{{ url_for('cbt.delete_question', question_id=q.id) }}" data-confirm="Delete this question?"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button></form>{% endif %}
                 </div>
                 {% if q.image_url %}<div style="margin:.4rem 0"><img src="{{ q.image_url }}" alt="Question figure" style="max-width:260px;max-height:180px;border:1px solid var(--border-color);border-radius:6px"></div>{% endif %}
                 {% for letter, text in q.options %}{% if text %}<div class="qopt {% if q.correct_option==letter %}correct{% endif %}">{{ letter }}. {{ text }}{% if q.correct_option==letter %} <i class="fas fa-check"></i>{% endif %}</div>{% endif %}{% endfor %}
