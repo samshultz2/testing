@@ -1,8 +1,11 @@
 """Sales Phase 14 — granular storekeeper / procurement roles.
 
-Sub-sections slice the Sales module (pos / catalogue / inventory / purchasing /
-reports); two sensitive actions (approve a PO, sign off a stock count) are
-explicit capabilities that broad module access does not imply.
+Sub-sections slice the Sales module into ~35 action-level keys across
+8 groups (pos_* / catalogue_* / stock_* / counts_* / assets_* /
+purchasing_* / reports_* / promos_*); two sensitive actions (approve a
+PO, sign off a stock count) are explicit capabilities that broad module
+access does not imply, and each is additionally dual-gated behind its
+own ordinary key (purchasing_approve / counts_signoff).
 """
 import json
 from config import Config
@@ -34,7 +37,7 @@ def _blocked(resp):
 
 # --- sub-section scoping ----------------------------------------------------
 def test_pos_role_cannot_reach_purchasing(app):
-    _make(app, 'cashier1', {'sales.pos': 'edit'})
+    _make(app, 'cashier1', {'sales.pos_sell': 'edit'})
     c = _login(app, 'cashier1')
     assert c.get('/sales/new').status_code == 200            # POS granted
     assert _blocked(c.get('/sales/suppliers', follow_redirects=False))
@@ -43,7 +46,7 @@ def test_pos_role_cannot_reach_purchasing(app):
 
 
 def test_storekeeper_role_reaches_inventory_only(app):
-    _make(app, 'store1', {'sales.inventory': 'edit'})
+    _make(app, 'store1', {'sales.stock_view': 'edit', 'sales.counts_view': 'edit'})
     c = _login(app, 'store1')
     assert c.get('/sales/movements').status_code == 200
     assert c.get('/sales/audits').status_code == 200
@@ -52,7 +55,7 @@ def test_storekeeper_role_reaches_inventory_only(app):
 
 
 def test_view_only_inventory_blocks_write(app):
-    _make(app, 'store2', {'sales.inventory': 'view'})
+    _make(app, 'store2', {'sales.stock_view': 'view'})
     c = _login(app, 'store2')
     with app.app_context():
         p = Product(branch_id=Branch.get_default().id, name='ZzRoleItem', category='Other',
@@ -79,7 +82,7 @@ def _make_po(app, tag):
 
 
 def test_purchasing_role_without_capability_cannot_approve(app):
-    _make(app, 'buyer1', {'sales.purchasing': 'edit'})       # no approve_po
+    _make(app, 'buyer1', {'sales.purchasing_approve': 'edit'})       # no approve_po
     c = _login(app, 'buyer1')
     poid = _make_po(app, 'CAP1')
     r = c.post(f'/sales/purchases/{poid}/approve', headers={'X-Requested-With': 'fetch'},
@@ -90,7 +93,7 @@ def test_purchasing_role_without_capability_cannot_approve(app):
 
 
 def test_purchasing_role_with_capability_can_approve(app):
-    _make(app, 'buyer2', {'sales.purchasing': 'edit', 'sales.approve_po': 'edit'})
+    _make(app, 'buyer2', {'sales.purchasing_approve': 'edit', 'sales.approve_po': 'edit'})
     c = _login(app, 'buyer2')
     poid = _make_po(app, 'CAP2')
     r = c.post(f'/sales/purchases/{poid}/approve', headers={'X-Requested-With': 'fetch'},
@@ -115,7 +118,7 @@ def _make_audit(app, tag):
 
 
 def test_inventory_role_without_capability_cannot_sign_off(app):
-    _make(app, 'store3', {'sales.inventory': 'edit'})        # no signoff_count
+    _make(app, 'store3', {'sales.counts_signoff': 'edit'})        # no signoff_count
     c = _login(app, 'store3')
     aid, iid, pid = _make_audit(app, 'SO1')
     r = c.post(f'/sales/audits/{aid}/complete', headers={'X-Requested-With': 'fetch'},
@@ -128,7 +131,7 @@ def test_inventory_role_without_capability_cannot_sign_off(app):
 
 
 def test_inventory_role_with_capability_can_sign_off(app):
-    _make(app, 'store4', {'sales.inventory': 'edit', 'sales.signoff_count': 'edit'})
+    _make(app, 'store4', {'sales.counts_signoff': 'edit', 'sales.signoff_count': 'edit'})
     c = _login(app, 'store4')
     aid, iid, pid = _make_audit(app, 'SO2')
     r = c.post(f'/sales/audits/{aid}/complete', headers={'X-Requested-With': 'fetch'},

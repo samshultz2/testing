@@ -21,7 +21,8 @@ from models.models_sales import (PRODUCT_CATEGORIES, SALE_METHODS, CUSTOMER_TYPE
                                  FIXED_ASSET_SECTIONS, UNIT_CONDITIONS,
                                  MAINTENANCE_STATUSES, AUDIT_STATUSES, AUDIT_ITEM_STATES)
 from utils.access_control import (login_required, filter_classes_for_user,
-                                  can_approve_purchase, can_sign_off_count)
+                                  can_approve_purchase, can_sign_off_count,
+                                  is_admin, subsection_level)
 from utils.branch_scope import scope_query, branch_for_new, can_access_branch
 from utils import timeutil
 from utils.helpers import get_active_term, get_active_session, parse_date
@@ -3415,7 +3416,8 @@ def unit_scan(token):
     if not u:
         return render_template('sales/unit_scan.html', unit=None), 404
     logged_in = bool(session.get('logged_in'))
-    can_act = logged_in and can_access_branch(u.branch_id)
+    can_act = (logged_in and can_access_branch(u.branch_id)
+               and (is_admin() or subsection_level('sales', 'assets_edit') == 'edit'))
     return render_template('sales/unit_scan.html', unit=u, asset=u.asset,
                            logged_in=logged_in, can_act=can_act,
                            status_options=FIXED_ASSET_STATUSES,

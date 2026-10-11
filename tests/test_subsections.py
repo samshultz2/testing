@@ -7,7 +7,10 @@ from models import (db, User, Expense, FeePayment, FeeDiscount, FeeItem, FeeStru
                     StaffMember, Department, LeaveRecord, PayrollRun, JobVacancy, JobApplication,
                     StaffLoan, StaffAttendance, Subject, ClassSubject,
                     PromotionRule, PromotionRecord,
-                    Book, BookLoan, SchoolSettings)
+                    Book, BookLoan, SchoolSettings,
+                    Product, Supplier, PurchaseOrder, PurchaseOrderItem,
+                    StockAudit, StockAuditItem, FixedAsset, AssetUnit,
+                    AssetLoan, AssetMaintenance, AssetAudit, PromoCode, SupplierPayment)
 from tests.conftest import login_token
 
 
@@ -3087,6 +3090,358 @@ def test_reports_no_grant_blocked_from_index(app):
     _make(app, 'rptno', {})
     c = _login(app, 'rptno')
     r = c.get('/reports/', follow_redirects=False)
+    assert r.status_code in (302, 303)
+
+
+# ---- Sales (33-key granular split across pos/catalogue/stock/counts/assets/
+# purchasing/reports/promos groups; approve_po/signoff_count/self_sales
+# capabilities unchanged; dashboard + the public unit_scan page left
+# deliberately unmapped) ------------------------------------------------------
+
+def _sales_product(app, tag, **kw):
+    with app.app_context():
+        p = Product(branch_id=Branch.get_default().id, name=f'ZzSub{tag}', category='Other',
+                    unit_price=kw.get('unit_price', 100), cost_price=kw.get('cost_price', 40),
+                    stock_qty=kw.get('stock_qty', 10), is_active=True)
+        db.session.add(p); db.session.commit()
+        return p.id
+
+
+def _sales_po(app, tag):
+    with app.app_context():
+        sup = Supplier(branch_id=Branch.get_default().id, company_name=f'ZzSubSup{tag}')
+        db.session.add(sup); db.session.flush()
+        po = PurchaseOrder(branch_id=Branch.get_default().id, supplier_id=sup.id,
+                           po_number=f'ZSPO{tag}', status='Approved')
+        db.session.add(po); db.session.flush()
+        db.session.add(PurchaseOrderItem(po_id=po.id, description='Thing', quantity=5, unit_cost=10))
+        db.session.commit()
+        return po.id
+
+
+def _sales_audit(app, tag):
+    pid = _sales_product(app, f'Aud{tag}', stock_qty=10)
+    with app.app_context():
+        a = StockAudit(branch_id=Branch.get_default().id, reference=f'ZSSA{tag}', status='Counting')
+        db.session.add(a); db.session.flush()
+        it = StockAuditItem(audit_id=a.id, product_id=pid, product_name=f'ZzSubAud{tag}',
+                            system_qty=10, unit_cost=40)
+        db.session.add(it); db.session.commit()
+        return a.id, it.id, pid
+
+
+def _sales_asset(app, tag, **kw):
+    with app.app_context():
+        a = FixedAsset(branch_id=Branch.get_default().id, name=f'ZzSubAsset{tag}',
+                       category='Other', quantity=kw.get('quantity', 5),
+                       status='In Use', location='Store A')
+        db.session.add(a); db.session.commit()
+        return a.id
+
+
+def test_sales_catalogue_create_blocked_from_purchasing_create(app):
+    _make(app, 'slscc', {'sales.catalogue_create': 'edit'})
+    c = _login(app, 'slscc')
+    tok = _ptoken(c)
+    c.post('/sales/products/add', data={'name': 'SLSCC-Product', 'category': 'Other',
+           'unit_price': '50', 'cost_price': '20', '_csrf_token': tok})
+    with app.app_context():
+        assert Product.query.filter_by(name='SLSCC-Product').first() is not None
+    c.post('/sales/suppliers/add', data={'company_name': 'SLSCC-Supplier', '_csrf_token': tok},
+           follow_redirects=False)
+    with app.app_context():
+        assert Supplier.query.filter_by(company_name='SLSCC-Supplier').first() is None   # purchasing_create not granted
+
+
+def test_sales_purchasing_create_blocked_from_catalogue_create(app):
+    _make(app, 'slspc', {'sales.purchasing_create': 'edit'})
+    c = _login(app, 'slspc')
+    tok = _ptoken(c)
+    c.post('/sales/suppliers/add', data={'company_name': 'SLSPC-Supplier', '_csrf_token': tok})
+    with app.app_context():
+        assert Supplier.query.filter_by(company_name='SLSPC-Supplier').first() is not None
+    c.post('/sales/products/add', data={'name': 'SLSPC-Product', 'category': 'Other',
+           'unit_price': '50', 'cost_price': '20', '_csrf_token': tok}, follow_redirects=False)
+    with app.app_context():
+        assert Product.query.filter_by(name='SLSPC-Product').first() is None   # catalogue_create not granted
+
+
+def test_sales_counts_create_without_signoff_key_blocked_from_complete(app):
+    # Holding the signoff_count *capability* is not enough on its own — the
+    # ordinary counts_signoff key (dual-gated alongside it) must also be granted.
+    _make(app, 'slscns', {'sales.counts_create': 'edit', 'sales.signoff_count': 'edit'})
+    c = _login(app, 'slscns')
+    aid, iid, pid = _sales_audit(app, 'CNS1')
+    tok = _ptoken(c)
+    c.post(f'/sales/audits/{aid}/complete', data={'_csrf_token': tok},
+           follow_redirects=False)
+    with app.app_context():
+        assert db.session.get(StockAudit, aid).status == 'Counting'   # counts_signoff not granted
+
+
+def test_sales_purchasing_create_without_approve_po_key_blocked_from_approve(app):
+    # Same dual-gate check, mirrored for approve_purchase/purchasing_approve.
+    _make(app, 'slspas', {'sales.purchasing_create': 'edit', 'sales.approve_po': 'edit'})
+    c = _login(app, 'slspas')
+    poid = _sales_po(app, 'PAS1')
+    with app.app_context():
+        db.session.get(PurchaseOrder, poid).status = 'Pending Approval'; db.session.commit()
+    tok = _ptoken(c)
+    c.post(f'/sales/purchases/{poid}/approve', data={'_csrf_token': tok}, follow_redirects=False)
+    with app.app_context():
+        assert db.session.get(PurchaseOrder, poid).status == 'Pending Approval'   # purchasing_approve not granted
+
+
+def test_sales_assets_edit_without_delete_can_transfer_blocked_from_delete(app):
+    _make(app, 'slsaed', {'sales.assets_edit': 'edit'})
+    c = _login(app, 'slsaed')
+    aid = _sales_asset(app, 'ED1')
+    tok = _ptoken(c)
+    c.post(f'/sales/assets/{aid}/transfer', data={'location': 'New Store', '_csrf_token': tok})
+    with app.app_context():
+        assert db.session.get(FixedAsset, aid).location == 'New Store'
+    c.post(f'/sales/assets/{aid}/delete', data={'_csrf_token': tok}, follow_redirects=False)
+    with app.app_context():
+        assert db.session.get(FixedAsset, aid) is not None   # assets_delete not granted
+
+
+def test_sales_assets_dispose_and_delete_independently_grantable(app):
+    _make(app, 'slsadsp', {'sales.assets_dispose': 'edit'})
+    _make(app, 'slsadel', {'sales.assets_delete': 'edit'})
+    c1 = _login(app, 'slsadsp')
+    aid1 = _sales_asset(app, 'DSP1')
+    tok1 = _ptoken(c1)
+    c1.post(f'/sales/assets/{aid1}/dispose', data={'_csrf_token': tok1})
+    with app.app_context():
+        assert db.session.get(FixedAsset, aid1).is_disposed is True
+    c1.post(f'/sales/assets/{aid1}/delete', data={'_csrf_token': tok1}, follow_redirects=False)
+    with app.app_context():
+        assert db.session.get(FixedAsset, aid1) is not None   # assets_delete not granted
+
+    c2 = _login(app, 'slsadel')
+    aid2 = _sales_asset(app, 'DEL1')
+    tok2 = _ptoken(c2)
+    c2.post(f'/sales/assets/{aid2}/dispose', data={'_csrf_token': tok2}, follow_redirects=False)
+    with app.app_context():
+        assert db.session.get(FixedAsset, aid2).is_disposed is False   # assets_dispose not granted
+    c2.post(f'/sales/assets/{aid2}/delete', data={'_csrf_token': tok2})
+    with app.app_context():
+        assert db.session.get(FixedAsset, aid2) is None
+
+
+def test_sales_unit_scan_can_act_false_without_assets_edit(app):
+    aid = _sales_asset(app, 'SCAN1')
+    with app.app_context():
+        u = AssetUnit(asset_id=aid, branch_id=Branch.get_default().id, unit_tag='ZSU-SCAN1',
+                      qr_token='zzscantoken1', status='In Use', condition='Good')
+        db.session.add(u); db.session.commit()
+    _make(app, 'slsscan', {'sales.catalogue_view': 'view'})   # branch access, no assets_edit
+    c = _login(app, 'slsscan')
+    r = c.get('/sales/assets/units/scan/zzscantoken1')
+    assert r.status_code == 200
+    assert b"don&#39;t have access to act on it" in r.data or b"don't have access to act on it" in r.data
+
+
+def test_sales_unit_scan_can_act_true_with_assets_edit(app):
+    aid = _sales_asset(app, 'SCAN2')
+    with app.app_context():
+        u = AssetUnit(asset_id=aid, branch_id=Branch.get_default().id, unit_tag='ZSU-SCAN2',
+                      qr_token='zzscantoken2', status='In Use', condition='Good')
+        db.session.add(u); db.session.commit()
+    _make(app, 'slsscan2', {'sales.assets_edit': 'edit'})
+    c = _login(app, 'slsscan2')
+    r = c.get('/sales/assets/units/scan/zzscantoken2')
+    assert r.status_code == 200
+    assert b'Confirm / update location' in r.data
+
+
+def test_sales_catalogue_view_blocked_from_edit(app):
+    pid = _sales_product(app, 'CVE1')
+    _make(app, 'slscv', {'sales.catalogue_view': 'view'})
+    c = _login(app, 'slscv')
+    assert c.get('/sales/products').status_code == 200
+    tok = _ptoken(c)
+    c.post(f'/sales/products/{pid}/edit', data={'name': 'SLSCV-Renamed', '_csrf_token': tok},
+           follow_redirects=False)
+    with app.app_context():
+        assert db.session.get(Product, pid).name != 'SLSCV-Renamed'   # catalogue_edit not granted
+
+
+def test_sales_stock_view_blocked_from_adjust(app):
+    pid = _sales_product(app, 'SVA1')
+    _make(app, 'slssva', {'sales.stock_view': 'view'})
+    c = _login(app, 'slssva')
+    assert c.get('/sales/movements').status_code == 200
+    tok = _ptoken(c)
+    c.post(f'/sales/products/{pid}/adjust', headers={'X-Requested-With': 'fetch'},
+           data={'_csrf_token': tok, 'mode': 'count', 'counted': 2}, follow_redirects=False)
+    with app.app_context():
+        assert db.session.get(Product, pid).stock_qty == 10   # stock_adjust not granted
+
+
+def test_sales_counts_view_blocked_from_create(app):
+    _make(app, 'slscntv', {'sales.counts_view': 'view'})
+    c = _login(app, 'slscntv')
+    assert c.get('/sales/audits').status_code == 200
+    with app.app_context():
+        before = StockAudit.query.count()
+    tok = _ptoken(c)
+    c.post('/sales/audits/new', data={'_csrf_token': tok}, follow_redirects=False)
+    with app.app_context():
+        assert StockAudit.query.count() == before   # counts_create not granted
+
+
+def test_sales_counts_cancel_independent_of_create(app):
+    _make(app, 'slscntc', {'sales.counts_cancel': 'edit'})
+    c = _login(app, 'slscntc')
+    aid, iid, pid = _sales_audit(app, 'CNC1')
+    tok = _ptoken(c)
+    c.post('/sales/audits/new', data={'_csrf_token': tok}, follow_redirects=False)
+    with app.app_context():
+        assert StockAudit.query.filter_by(reference=None).count() == 0   # counts_create not granted (sanity)
+    c.post(f'/sales/audits/{aid}/cancel', data={'_csrf_token': tok})
+    with app.app_context():
+        assert db.session.get(StockAudit, aid).status == 'Cancelled'
+
+
+def test_sales_assets_view_blocked_from_create(app):
+    _make(app, 'slsasv', {'sales.assets_view': 'view'})
+    c = _login(app, 'slsasv')
+    assert c.get('/sales/assets').status_code == 200
+    with app.app_context():
+        before = FixedAsset.query.count()
+    tok = _ptoken(c)
+    c.post('/sales/assets/add', data={'name': 'SLSASV-Asset', '_csrf_token': tok}, follow_redirects=False)
+    with app.app_context():
+        assert FixedAsset.query.count() == before   # assets_create not granted
+
+
+def test_sales_assets_create_blocked_from_edit(app):
+    _make(app, 'slsasc', {'sales.assets_create': 'edit'})
+    c = _login(app, 'slsasc')
+    tok = _ptoken(c)
+    c.post('/sales/assets/add', data={'name': 'SLSASC-Asset', 'quantity': '3', '_csrf_token': tok})
+    with app.app_context():
+        a = FixedAsset.query.filter_by(name='SLSASC-Asset').first()
+        assert a is not None
+        aid = a.id
+    c.post(f'/sales/assets/{aid}/transfer', data={'location': 'Blocked Loc', '_csrf_token': tok},
+           follow_redirects=False)
+    with app.app_context():
+        assert db.session.get(FixedAsset, aid).location != 'Blocked Loc'   # assets_edit not granted
+
+
+def test_sales_assets_loans_blocked_from_edit(app):
+    aid = _sales_asset(app, 'LNE1', quantity=5)
+    _make(app, 'slsaln', {'sales.assets_loans': 'edit'})
+    c = _login(app, 'slsaln')
+    tok = _ptoken(c)
+    c.post(f'/sales/assets/{aid}/checkout', data={'borrower': 'Mr. A', 'quantity': '1',
+           '_csrf_token': tok})
+    with app.app_context():
+        assert AssetLoan.query.filter_by(asset_id=aid).count() == 1
+    c.post(f'/sales/assets/{aid}/transfer', data={'location': 'Blocked Loc', '_csrf_token': tok},
+           follow_redirects=False)
+    with app.app_context():
+        assert db.session.get(FixedAsset, aid).location != 'Blocked Loc'   # assets_edit not granted
+
+
+def test_sales_assets_maintenance_independent_of_edit(app):
+    aid = _sales_asset(app, 'MNT1')
+    _make(app, 'slsmnt', {'sales.assets_maintenance': 'edit'})
+    c = _login(app, 'slsmnt')
+    tok = _ptoken(c)
+    c.post(f'/sales/assets/{aid}/maintenance/add',
+           data={'problem': 'Screen cracked', '_csrf_token': tok})
+    with app.app_context():
+        assert AssetMaintenance.query.filter_by(asset_id=aid).count() == 1
+    c.post(f'/sales/assets/{aid}/transfer', data={'location': 'Blocked Loc', '_csrf_token': tok},
+           follow_redirects=False)
+    with app.app_context():
+        assert db.session.get(FixedAsset, aid).location != 'Blocked Loc'   # assets_edit not granted
+
+
+def test_sales_assets_audit_blocked_from_edit(app):
+    aid = _sales_asset(app, 'AAU1')
+    _make(app, 'slsaau', {'sales.assets_audit': 'edit'})
+    c = _login(app, 'slsaau')
+    tok = _ptoken(c)
+    with app.app_context():
+        before = AssetAudit.query.count()
+    c.post('/sales/assets/audits/create', data={'name': 'SLSAAU Audit', '_csrf_token': tok})
+    with app.app_context():
+        assert AssetAudit.query.count() == before + 1
+    c.post(f'/sales/assets/{aid}/transfer', data={'location': 'Blocked Loc', '_csrf_token': tok},
+           follow_redirects=False)
+    with app.app_context():
+        assert db.session.get(FixedAsset, aid).location != 'Blocked Loc'   # assets_edit not granted
+
+
+def test_sales_assets_export_blocked_without_grant(app):
+    _sales_asset(app, 'EXP1')
+    _make(app, 'slsaex', {'sales.assets_view': 'view'})
+    c = _login(app, 'slsaex')
+    assert c.get('/sales/assets').status_code == 200
+    r = c.get('/sales/assets/export', follow_redirects=False)
+    assert r.status_code in (302, 303)   # assets_export not granted
+
+
+def test_sales_purchasing_view_blocked_from_pay(app):
+    poid = _sales_po(app, 'PV1')
+    with app.app_context():
+        sid = db.session.get(PurchaseOrder, poid).supplier_id
+    _make(app, 'slspv', {'sales.purchasing_view': 'view'})
+    c = _login(app, 'slspv')
+    assert c.get('/sales/suppliers').status_code == 200
+    tok = _ptoken(c)
+    c.post(f'/sales/suppliers/{sid}/pay', data={'amount': '100', '_csrf_token': tok},
+           follow_redirects=False)
+    with app.app_context():
+        assert SupplierPayment.query.filter_by(supplier_id=sid).count() == 0   # purchasing_pay not granted
+
+
+def test_sales_purchasing_receive_blocked_from_cancel(app):
+    poid = _sales_po(app, 'RVC1')
+    _make(app, 'slsprv', {'sales.purchasing_receive': 'edit'})
+    c = _login(app, 'slsprv')
+    tok = _ptoken(c)
+    c.post(f'/sales/purchases/{poid}/cancel', data={'_csrf_token': tok}, follow_redirects=False)
+    with app.app_context():
+        assert db.session.get(PurchaseOrder, poid).status == 'Approved'   # purchasing_cancel not granted
+
+
+def test_sales_reports_view_blocked_from_export(app):
+    _make(app, 'slsrv', {'sales.reports_view': 'view'})
+    c = _login(app, 'slsrv')
+    assert c.get('/sales/history').status_code == 200
+    r = c.get('/sales/history/export', follow_redirects=False)
+    assert r.status_code in (302, 303)   # reports_export not granted
+
+
+def test_sales_promos_view_blocked_from_manage(app):
+    _make(app, 'slspv2', {'sales.promos_view': 'view'})
+    c = _login(app, 'slspv2')
+    assert c.get('/sales/promos').status_code == 200
+    with app.app_context():
+        before = PromoCode.query.count()
+    tok = _ptoken(c)
+    c.post('/sales/promos/add', data={'code': 'SLSPV2CODE', '_csrf_token': tok}, follow_redirects=False)
+    with app.app_context():
+        assert PromoCode.query.count() == before   # promos_manage not granted
+
+
+def test_sales_dashboard_reachable_with_any_grant(app):
+    # Regression: 'dashboard' is deliberately left unmapped so any single
+    # sub-section grant can reach the module's landing page.
+    _make(app, 'slsdash', {'sales.counts_view': 'view'})
+    c = _login(app, 'slsdash')
+    assert c.get('/sales/').status_code == 200
+
+
+def test_sales_no_grant_blocked_from_dashboard(app):
+    _make(app, 'slsnone', {})
+    c = _login(app, 'slsnone')
+    r = c.get('/sales/', follow_redirects=False)
     assert r.status_code in (302, 303)
 
 

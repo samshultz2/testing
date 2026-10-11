@@ -27,7 +27,7 @@ function Dashboard({ d }) {
   return (
     <>
       <PageHeader icon="fa-cart-shopping" title="Sales & Inventory" actions={<>
-        {canWrite(d) && <a href={u.new_sale} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> New Sale</a>}
+        {canWrite(d, 'pos_sell') && <a href={u.new_sale} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> New Sale</a>}
         <a href={u.products} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-boxes-stacked" /> Products</a>
         {u.movements && <a href={u.movements} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-right-left" /> Movements</a>}
         {u.purchases && <a href={u.purchases} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-invoice" /> Purchases</a>}
@@ -221,7 +221,7 @@ function ProductForm({ d, product, onClose, onSaved }) {
               {dupes.map((p) => (
                 <div key={p.id} style={{ display: 'flex', justifyContent: 'space-between', gap: '.5rem', alignItems: 'center', marginTop: '.4rem', flexWrap: 'wrap' }}>
                   <span>{p.name} <span className="text-muted text-sm">({p.stock_qty} in stock)</span></span>
-                  <button type="button" className="btn btn-sm btn-primary" onClick={() => restockDupe(p)}><i aria-hidden="true" className="fas fa-plus" /> Add stock to this</button>
+                  {canWrite(d, 'stock_adjust') && <button type="button" className="btn btn-sm btn-primary" onClick={() => restockDupe(p)}><i aria-hidden="true" className="fas fa-plus" /> Add stock to this</button>}
                 </div>
               ))}
               <div className="text-muted text-sm" style={{ marginTop: '.3rem' }}>Or fill the form to add it as a new product.</div>
@@ -429,11 +429,11 @@ function Products({ d, notify }) {
   return (
     <>
       <PageHeader icon="fa-boxes-stacked" title="Products & Stock" actions={<>
-        {canWrite(d) && <button type="button" className="btn btn-primary" onClick={() => setEditing({})}><i aria-hidden="true" className="fas fa-plus" /> Add product</button>}
+        {canWrite(d, 'catalogue_create') && <button type="button" className="btn btn-primary" onClick={() => setEditing({})}><i aria-hidden="true" className="fas fa-plus" /> Add product</button>}
         {d.urls.movements && <a href={d.urls.movements} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-right-left" /> Movements</a>}
         {d.urls.batches && <a href={d.urls.batches} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-layer-group" /> Batches</a>}
-        {d.labels_url && <button type="button" className="btn btn-secondary" onClick={openLabels}><i aria-hidden="true" className="fas fa-tags" /> Print labels</button>}
-        {d.generate_barcodes_url && <button type="button" className="btn btn-secondary" onClick={genBarcodes} title="Give products without a barcode a scannable internal code"><i aria-hidden="true" className="fas fa-barcode" /> Barcodes</button>}
+        {d.labels_url && canWrite(d, 'catalogue_labels') && <button type="button" className="btn btn-secondary" onClick={openLabels}><i aria-hidden="true" className="fas fa-tags" /> Print labels</button>}
+        {d.generate_barcodes_url && canWrite(d, 'catalogue_labels') && <button type="button" className="btn btn-secondary" onClick={genBarcodes} title="Give products without a barcode a scannable internal code"><i aria-hidden="true" className="fas fa-barcode" /> Barcodes</button>}
         <a href={d.urls.new_sale} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-cart-plus" /> New Sale</a>
       </>} />
 
@@ -455,7 +455,7 @@ function Products({ d, notify }) {
             <div className="table-container">
               <table className="data-table table-stack no-mobile-scroll">
                 <thead><tr><th>Name</th><th>Category</th><th className="text-right">Price</th><th className="text-right">Stock</th><th>Restock</th><th /></tr></thead>
-                <tbody>{shown.map((p) => <ProductRow key={p.id} p={p} onRestock={restock} onEdit={() => setEditing(p)} onAdjust={() => setAdjusting(p)} onConvert={d.urls.assets ? () => setConverting(p) : null} busy={busy} />)}</tbody>
+                <tbody>{shown.map((p) => <ProductRow key={p.id} d={d} p={p} onRestock={restock} onEdit={() => setEditing(p)} onAdjust={() => setAdjusting(p)} onConvert={d.urls.assets ? () => setConverting(p) : null} busy={busy} />)}</tbody>
               </table>
             </div>
           ) : <EmptyState icon="fa-boxes-stacked" title="No products match" />}
@@ -503,11 +503,12 @@ function ConvertAssetModal({ d, product, onClose, onSaved, notify }) {
   );
 }
 
-function ProductRow({ p, onRestock, onEdit, onAdjust, onConvert, busy }) {
+function ProductRow({ d, p, onRestock, onEdit, onAdjust, onConvert, busy }) {
   const [qty, setQty] = useState('');
   const [batch, setBatch] = useState({ batch_no: '', expiry_date: '' });
   const badge = p.out_of_stock ? <span className="badge badge-danger">Out</span>
     : p.low_stock ? <span className="badge badge-warning">Low</span> : null;
+  const canAdjust = canWrite(d, 'stock_adjust');
   return (
     <tr>
       <td data-label="Name">{p.name}{p.sku && <span className="text-muted text-sm"> ({p.sku})</span>}{p.brand && <span className="text-muted text-sm"> · {p.brand}</span>}</td>
@@ -515,21 +516,21 @@ function ProductRow({ p, onRestock, onEdit, onAdjust, onConvert, busy }) {
       <td data-label="Price" className="text-right">{naira(p.unit_price)}</td>
       <td data-label="Stock" className="text-right"><strong style={p.low_stock ? { color: '#e74a3b' } : undefined}>{p.stock_qty}</strong> {badge}</td>
       <td data-label="Restock">
-        <form onSubmit={(e) => { e.preventDefault(); onRestock(p, Number(qty) || 0, p.batch_tracked ? batch : {}); setQty(''); }} style={{ display: 'flex', gap: '.3rem', flexWrap: 'wrap' }}>
+        {canAdjust ? <form onSubmit={(e) => { e.preventDefault(); onRestock(p, Number(qty) || 0, p.batch_tracked ? batch : {}); setQty(''); }} style={{ display: 'flex', gap: '.3rem', flexWrap: 'wrap' }}>
           <input type="number" className="form-control" style={{ width: 80 }} placeholder="+qty" value={qty} onChange={(e) => setQty(e.target.value)} />
           {p.batch_tracked && <>
             <input className="form-control" style={{ width: 90 }} placeholder="Batch no" value={batch.batch_no} onChange={(e) => setBatch((s) => ({ ...s, batch_no: e.target.value }))} />
             <input type="date" className="form-control" style={{ width: 140 }} title="Expiry" value={batch.expiry_date} onChange={(e) => setBatch((s) => ({ ...s, expiry_date: e.target.value }))} />
           </>}
           <button className="btn btn-sm btn-secondary" disabled={busy}>Add</button>
-        </form>
+        </form> : '—'}
       </td>
       <td data-label="">
         <div style={{ display: 'flex', gap: '.3rem' }}>
           {p.batch_tracked && <span className="badge badge-info" title="Batch/lot tracked">lot</span>}
-          <button type="button" className="btn btn-sm btn-light" onClick={onAdjust} title="Record a stock movement or count"><i aria-hidden="true" className="fas fa-right-left" /> Adjust</button>
-          {onConvert && p.stock_qty > 0 && <button type="button" className="btn btn-sm btn-light" onClick={onConvert} title="Convert units into a fixed asset"><i aria-hidden="true" className="fas fa-building-columns" /></button>}
-          <button type="button" className="btn btn-sm btn-light" onClick={onEdit}><i aria-hidden="true" className="fas fa-pen" /> Edit</button>
+          {canAdjust && <button type="button" className="btn btn-sm btn-light" onClick={onAdjust} title="Record a stock movement or count"><i aria-hidden="true" className="fas fa-right-left" /> Adjust</button>}
+          {onConvert && p.stock_qty > 0 && canWrite(d, 'assets_create') && <button type="button" className="btn btn-sm btn-light" onClick={onConvert} title="Convert units into a fixed asset"><i aria-hidden="true" className="fas fa-building-columns" /></button>}
+          {canWrite(d, 'catalogue_edit') && <button type="button" className="btn btn-sm btn-light" onClick={onEdit}><i aria-hidden="true" className="fas fa-pen" /> Edit</button>}
         </div>
       </td>
     </tr>
@@ -808,8 +809,8 @@ function History({ d }) {
       <div className="page-header">
         <h1><i aria-hidden="true" className="fas fa-clock-rotate-left" /> Sales History</h1>
         <div style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap' }}>
-          <a className="btn btn-secondary btn-sm" href={exportUrl('csv')}><i aria-hidden="true" className="fas fa-file-csv" /> CSV</a>
-          <a className="btn btn-secondary btn-sm" href={exportUrl('excel')}><i aria-hidden="true" className="fas fa-file-excel" /> Excel</a>
+          {canWrite(d, 'reports_export') && <a className="btn btn-secondary btn-sm" href={exportUrl('csv')}><i aria-hidden="true" className="fas fa-file-csv" /> CSV</a>}
+          {canWrite(d, 'reports_export') && <a className="btn btn-secondary btn-sm" href={exportUrl('excel')}><i aria-hidden="true" className="fas fa-file-excel" /> Excel</a>}
           <button type="button" className="btn btn-secondary btn-sm" onClick={() => window.print()}><i aria-hidden="true" className="fas fa-print" /> Print</button>
         </div>
       </div>
@@ -1016,7 +1017,7 @@ function Suppliers({ d }) {
   return (
     <>
       <PageHeader icon="fa-truck-field" title="Suppliers" actions={<>
-        {canWrite(d) && <button type="button" className="btn btn-primary" onClick={() => setEditing({})}><i aria-hidden="true" className="fas fa-plus" /> Add supplier</button>}
+        {canWrite(d, 'purchasing_create') && <button type="button" className="btn btn-primary" onClick={() => setEditing({})}><i aria-hidden="true" className="fas fa-plus" /> Add supplier</button>}
         <a href={d.urls.purchases} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-invoice" /> Purchases</a>
       </>} />
       <div className="card"><div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
@@ -1030,7 +1031,7 @@ function Suppliers({ d }) {
                 <td className="text-right">{naira(s.received_value)}</td>
                 <td className="text-right">{naira(s.paid)}</td>
                 <td className="text-right"><strong style={s.outstanding > 0 ? { color: '#e74a3b' } : undefined}>{naira(s.outstanding)}</strong></td>
-                <td><button type="button" className="btn btn-sm btn-light" onClick={() => setEditing(s)}><i aria-hidden="true" className="fas fa-pen" /></button></td>
+                <td>{canWrite(d, 'purchasing_edit') && <button type="button" className="btn btn-sm btn-light" onClick={() => setEditing(s)}><i aria-hidden="true" className="fas fa-pen" /></button>}</td>
               </tr>
             ))}</tbody></table>
         ) : <EmptyState icon="fa-truck-field" title="No suppliers yet">Add your first supplier.</EmptyState>}
@@ -1060,13 +1061,13 @@ function SupplierDetail({ d, notify }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: '.6rem', marginBottom: '1rem' }}>
         {tiles.map(([v, l]) => <div className="card" key={l}><div className="card-body"><div style={{ fontSize: 'var(--text-lg)', fontWeight: 700 }}>{v}</div><div className="text-muted text-sm">{l}</div></div></div>)}
       </div>
-      <div className="card mb-3"><div className="card-header"><h3>Record payment</h3></div>
+      {canWrite(d, 'purchasing_pay') && <div className="card mb-3"><div className="card-header"><h3>Record payment</h3></div>
         <div className="card-body" style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
           <input type="number" className="form-control" style={{ maxWidth: 140 }} placeholder="Amount" value={pay.amount} onChange={(e) => setP('amount', e.target.value)} />
           <select className="form-control" style={{ maxWidth: 150 }} value={pay.method} onChange={(e) => setP('method', e.target.value)}>{(d.methods || []).map((m) => <option key={m}>{m}</option>)}</select>
           <input type="text" className="form-control" style={{ maxWidth: 160 }} placeholder="Reference" value={pay.reference} onChange={(e) => setP('reference', e.target.value)} />
           <button type="button" className="btn btn-primary" onClick={doPay}><i aria-hidden="true" className="fas fa-money-bill" /> Pay</button>
-        </div></div>
+        </div></div>}
       <div className="card mb-3"><div className="card-header"><h3>Purchase orders</h3></div>
         <div className="card-body" style={{ padding: 0 }}>
           {d.orders.length ? <table className="data-table"><thead><tr><th>PO</th><th>Status</th><th className="text-right">Total</th><th>When</th></tr></thead>
@@ -1143,7 +1144,7 @@ function Purchases({ d }) {
   return (
     <>
       <PageHeader icon="fa-file-invoice" title="Purchase Orders" actions={<>
-        {canWrite(d) && <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}><i aria-hidden="true" className="fas fa-plus" /> New PO</button>}
+        {canWrite(d, 'purchasing_create') && <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}><i aria-hidden="true" className="fas fa-plus" /> New PO</button>}
         <a href={d.urls.suppliers} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-truck-field" /> Suppliers</a>
       </>} />
       {d.awaiting_delivery > 0 && <div className="alert alert-info"><i aria-hidden="true" className="fas fa-truck" /> {d.awaiting_delivery} order(s) awaiting delivery.</div>}
@@ -1179,7 +1180,8 @@ function PurchaseDetail({ d, notify }) {
     act(u.receive, { invoice_number: invoice, items });
   };
   const canApprove = (po.status === 'Draft' || po.status === 'Pending Approval') && d.can_approve !== false;
-  const canReceive = ['Approved', 'Ordered', 'Partially Received'].includes(po.status);
+  const canReceive = ['Approved', 'Ordered', 'Partially Received'].includes(po.status) && canWrite(d, 'purchasing_receive');
+  const canCancel = canWrite(d, 'purchasing_cancel');
   return (
     <>
       <PageHeader icon="fa-file-invoice" title={po.po_number} actions={<>
@@ -1194,7 +1196,7 @@ function PurchaseDetail({ d, notify }) {
         {po.approved_by && <span className="text-muted text-sm">Approved by {po.approved_by}</span>}
         <span style={{ marginLeft: 'auto', display: 'flex', gap: '.4rem' }}>
           {canApprove && <button type="button" className="btn btn-success btn-sm" onClick={() => act(u.approve)}><i aria-hidden="true" className="fas fa-check" /> Approve</button>}
-          {po.is_open && <button type="button" className="btn btn-danger btn-sm" onClick={() => act(u.cancel)}><i aria-hidden="true" className="fas fa-ban" /> Cancel</button>}
+          {po.is_open && canCancel && <button type="button" className="btn btn-danger btn-sm" onClick={() => act(u.cancel)}><i aria-hidden="true" className="fas fa-ban" /> Cancel</button>}
         </span>
       </div></div>
       <div className="card"><div className="card-header"><h3>Items</h3></div>
@@ -1239,8 +1241,8 @@ function Reports({ d }) {
   return (
     <>
       <PageHeader icon="fa-file-lines" title="Reports" actions={<>
-        <a className="btn btn-secondary btn-sm" href={exportUrl('csv')}><i aria-hidden="true" className="fas fa-file-csv" /> CSV</a>
-        <a className="btn btn-secondary btn-sm" href={exportUrl('excel')}><i aria-hidden="true" className="fas fa-file-excel" /> Excel</a>
+        {canWrite(d, 'reports_export') && <a className="btn btn-secondary btn-sm" href={exportUrl('csv')}><i aria-hidden="true" className="fas fa-file-csv" /> CSV</a>}
+        {canWrite(d, 'reports_export') && <a className="btn btn-secondary btn-sm" href={exportUrl('excel')}><i aria-hidden="true" className="fas fa-file-excel" /> Excel</a>}
         <button type="button" className="btn btn-secondary btn-sm" onClick={() => window.print()}><i aria-hidden="true" className="fas fa-print" /> Print</button>
         <a href={d.urls.dashboard} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</a>
       </>} />
@@ -1309,7 +1311,7 @@ function Promos({ d, notify }) {
           <Field label="Expires"><input type="date" className="form-control" value={f.expires_on} onChange={(e) => set('expires_on', e.target.value)} /></Field>
           <Field label="Usage limit"><input type="number" className="form-control" placeholder="∞" value={f.usage_limit} onChange={(e) => set('usage_limit', e.target.value)} /></Field>
           <Field label="Description"><input className="form-control" value={f.description} onChange={(e) => set('description', e.target.value)} /></Field>
-          <button type="button" className="btn btn-primary" onClick={add}>Add</button>
+          {canWrite(d, 'promos_manage') && <button type="button" className="btn btn-primary" onClick={add}>Add</button>}
         </div></div>
       <div className="card"><div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
         {d.promos.length ? (
@@ -1321,7 +1323,7 @@ function Promos({ d, notify }) {
                 <td className="text-muted text-sm">{p.min_purchase > 0 ? `min ${naira(p.min_purchase)} · ` : ''}{p.category || 'any category'}{p.expires_on ? ` · till ${p.expires_on}` : ''}{p.usage_limit != null ? ` · limit ${p.usage_limit}` : ''}</td>
                 <td className="text-right">{p.used_count}</td>
                 <td><span className={'badge ' + (p.is_active ? 'badge-success' : 'badge-secondary')}>{p.is_active ? 'Active' : 'Off'}</span></td>
-                <td><button type="button" className="btn btn-sm btn-light" onClick={() => toggle(p)}>{p.is_active ? 'Deactivate' : 'Activate'}</button></td>
+                <td>{canWrite(d, 'promos_manage') && <button type="button" className="btn btn-sm btn-light" onClick={() => toggle(p)}>{p.is_active ? 'Deactivate' : 'Activate'}</button>}</td>
               </tr>
             ))}</tbody></table>
         ) : <EmptyState icon="fa-tags" title="No promo codes yet">Create one above.</EmptyState>}
@@ -1349,7 +1351,7 @@ function Audits({ d, notify }) {
           <Field label="Category (optional)"><select className="form-control" value={scope.category} onChange={(e) => set('category', e.target.value)}><option value="">All categories</option>{(d.categories || []).map((c) => <option key={c}>{c}</option>)}</select></Field>
           <Field label="Location (optional)"><select className="form-control" value={scope.location} onChange={(e) => set('location', e.target.value)}><option value="">All locations</option>{(d.locations || []).map((l) => <option key={l}>{l}</option>)}</select></Field>
           <Field label="Note"><input className="form-control" value={scope.note} onChange={(e) => set('note', e.target.value)} placeholder="e.g. End-of-term count" /></Field>
-          <button type="button" className="btn btn-primary" onClick={start}><i aria-hidden="true" className="fas fa-clipboard-list" /> Start count</button>
+          {canWrite(d, 'counts_create') && <button type="button" className="btn btn-primary" onClick={start}><i aria-hidden="true" className="fas fa-clipboard-list" /> Start count</button>}
         </div></div>
       <div className="card"><div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
         {d.audits.length ? (
@@ -1413,7 +1415,7 @@ function AuditDetail({ d, notify }) {
   return (
     <>
       <PageHeader icon="fa-clipboard-check" title={d.reference} actions={<>
-        <a className="btn btn-secondary btn-sm" href={d.export_url}><i aria-hidden="true" className="fas fa-file-excel" /> Export</a>
+        {canWrite(d, 'counts_export') && <a className="btn btn-secondary btn-sm" href={d.export_url}><i aria-hidden="true" className="fas fa-file-excel" /> Export</a>}
         <a href={d.urls.audits} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-arrow-left" /> All counts</a>
       </>} />
       <div className="card mb-3"><div className="card-body" style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
@@ -1429,9 +1431,9 @@ function AuditDetail({ d, notify }) {
       {open && <div className="alert alert-info"><i aria-hidden="true" className="fas fa-circle-info" /> Enter the physical count for each item, then Save (to continue later) or Sign off (to apply corrections). Blank = not counted yet.</div>}
       <div className="card"><div className="card-header"><h3>Items ({d.items.length})</h3>
         {open && <span style={{ display: 'flex', gap: '.4rem' }}>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={save}><i aria-hidden="true" className="fas fa-floppy-disk" /> Save</button>
-          {d.can_signoff !== false && <button type="button" className="btn btn-success btn-sm" onClick={complete}><i aria-hidden="true" className="fas fa-check-double" /> Sign off</button>}
-          <button type="button" className="btn btn-danger btn-sm" onClick={cancel}><i aria-hidden="true" className="fas fa-ban" /> Cancel</button>
+          {canWrite(d, 'counts_create') && <button type="button" className="btn btn-secondary btn-sm" onClick={save}><i aria-hidden="true" className="fas fa-floppy-disk" /> Save</button>}
+          {d.can_signoff !== false && canWrite(d, 'counts_signoff') && <button type="button" className="btn btn-success btn-sm" onClick={complete}><i aria-hidden="true" className="fas fa-check-double" /> Sign off</button>}
+          {canWrite(d, 'counts_cancel') && <button type="button" className="btn btn-danger btn-sm" onClick={cancel}><i aria-hidden="true" className="fas fa-ban" /> Cancel</button>}
         </span>}</div>
         <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
           <table className="data-table"><thead><tr><th>Product</th><th>Category</th><th className="text-right">System</th><th style={{ width: 110 }} className="text-right">Counted</th><th className="text-right">Variance</th><th className="text-right">Value</th></tr></thead>
@@ -1537,8 +1539,8 @@ function Assets({ d, notify }) {
   return (
     <>
       <PageHeader icon="fa-building-columns" title="Fixed Assets" actions={<>
-        <button type="button" className="btn btn-primary" onClick={() => setEditing({})}><i aria-hidden="true" className="fas fa-plus" /> Register asset</button>
-        <a className="btn btn-secondary" href={d.export_url}><i aria-hidden="true" className="fas fa-file-excel" /> Export</a>
+        {canWrite(d, 'assets_create') && <button type="button" className="btn btn-primary" onClick={() => setEditing({})}><i aria-hidden="true" className="fas fa-plus" /> Register asset</button>}
+        {canWrite(d, 'assets_export') && <a className="btn btn-secondary" href={d.export_url}><i aria-hidden="true" className="fas fa-file-excel" /> Export</a>}
         <a href={d.urls.products} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-boxes-stacked" /> Products</a>
       </>} />
       <div className="card mb-3" style={{ padding: '.25rem' }}>
@@ -1573,7 +1575,7 @@ function Assets({ d, notify }) {
             <select className="form-control" value={status} onChange={(e) => setStatus(e.target.value)} style={{ maxWidth: 160 }}><option value="">All statuses</option>{d.statuses.map((st) => <option key={st}>{st}</option>)}</select>
             <select className="form-control" value={section} onChange={(e) => setSection(e.target.value)} style={{ maxWidth: 180 }}><option value="">All sections</option>{d.sections.map((sc) => <option key={sc.key} value={sc.key}>{sc.label}</option>)}</select>
           </div></div>
-          {selectedIds.length > 0 && (
+          {selectedIds.length > 0 && canWrite(d, 'assets_bulk') && (
             <div className="card mb-3" style={{ borderColor: 'var(--primary)' }}>
               <div className="card-body" style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap', alignItems: 'center' }}>
                 <strong style={{ marginRight: '.25rem' }}>{selectedIds.length} selected</strong>
@@ -1630,26 +1632,26 @@ function Assets({ d, notify }) {
                       </td>
                       <td><div style={{ display: 'flex', gap: '.3rem' }}>
                         <button type="button" className="btn btn-sm btn-light" onClick={() => setViewingHistory(a)} title="History"><i aria-hidden="true" className="fas fa-clock-rotate-left" /></button>
-                        <button type="button" className={'btn btn-sm ' + (a.maintenance_overdue ? 'btn-danger' : a.next_maintenance_due ? 'btn-warning' : 'btn-light')}
+                        {canWrite(d, 'assets_maintenance') && <button type="button" className={'btn btn-sm ' + (a.maintenance_overdue ? 'btn-danger' : a.next_maintenance_due ? 'btn-warning' : 'btn-light')}
                                 onClick={() => setViewingMaintenance(a)}
                                 title={a.maintenance_overdue ? `Maintenance overdue (due ${a.next_maintenance_due})`
                                      : a.next_maintenance_due ? `Next maintenance due ${a.next_maintenance_due}` : 'Maintenance'}>
                           <i aria-hidden="true" className="fas fa-wrench" />
-                        </button>
+                        </button>}
                         {a.is_individually_tracked
                           ? <button type="button" className="btn btn-sm btn-primary" onClick={() => setManagingUnits(a)} title="Manage physical units"><i aria-hidden="true" className="fas fa-qrcode" /> Units</button>
                           : !a.is_disposed && <>
-                            <button type="button" className="btn btn-sm btn-light" onClick={() => setTransferring(a)} title="Transfer location"><i aria-hidden="true" className="fas fa-truck-ramp-box" /></button>
-                            <button type="button" className="btn btn-sm btn-light" onClick={() => setAssigning(a)} title="Assign custodian"><i aria-hidden="true" className="fas fa-user-tag" /></button>
-                            <button type="button" className="btn btn-sm btn-light" onClick={() => setMovingStatus(a)} title="Move quantity between statuses (e.g. some to Under Repair)"><i aria-hidden="true" className="fas fa-right-left" /></button>
-                            <button type="button" className={'btn btn-sm ' + (a.on_loan_quantity > 0 ? 'btn-info' : 'btn-light')} onClick={() => setCheckingOut(a)}
+                            {canWrite(d, 'assets_edit') && <button type="button" className="btn btn-sm btn-light" onClick={() => setTransferring(a)} title="Transfer location"><i aria-hidden="true" className="fas fa-truck-ramp-box" /></button>}
+                            {canWrite(d, 'assets_edit') && <button type="button" className="btn btn-sm btn-light" onClick={() => setAssigning(a)} title="Assign custodian"><i aria-hidden="true" className="fas fa-user-tag" /></button>}
+                            {canWrite(d, 'assets_edit') && <button type="button" className="btn btn-sm btn-light" onClick={() => setMovingStatus(a)} title="Move quantity between statuses (e.g. some to Under Repair)"><i aria-hidden="true" className="fas fa-right-left" /></button>}
+                            {canWrite(d, 'assets_loans') && <button type="button" className={'btn btn-sm ' + (a.on_loan_quantity > 0 ? 'btn-info' : 'btn-light')} onClick={() => setCheckingOut(a)}
                                     title={a.on_loan_quantity > 0 ? `${a.on_loan_quantity} currently checked out — click to check out more` : 'Check out to someone temporarily'}>
                               <i aria-hidden="true" className="fas fa-right-from-bracket" />{a.on_loan_quantity > 0 ? ` ${a.on_loan_quantity}` : ''}
-                            </button>
+                            </button>}
                           </>}
-                        <button type="button" className="btn btn-sm btn-light" onClick={() => setEditing(a)} title="Edit"><i aria-hidden="true" className="fas fa-pen" /></button>
-                        {!a.is_disposed && <button type="button" className="btn btn-sm btn-light" onClick={() => setDisposing(a)} title="Dispose / retire"><i aria-hidden="true" className="fas fa-box-archive" /></button>}
-                        <button type="button" className="btn btn-sm btn-light" onClick={() => doDelete(a)} title="Delete permanently"><i aria-hidden="true" className="fas fa-trash text-danger" /></button>
+                        {canWrite(d, 'assets_edit') && <button type="button" className="btn btn-sm btn-light" onClick={() => setEditing(a)} title="Edit"><i aria-hidden="true" className="fas fa-pen" /></button>}
+                        {!a.is_disposed && canWrite(d, 'assets_dispose') && <button type="button" className="btn btn-sm btn-light" onClick={() => setDisposing(a)} title="Dispose / retire"><i aria-hidden="true" className="fas fa-box-archive" /></button>}
+                        {canWrite(d, 'assets_delete') && <button type="button" className="btn btn-sm btn-light" onClick={() => doDelete(a)} title="Delete permanently"><i aria-hidden="true" className="fas fa-trash text-danger" /></button>}
                       </div></td>
                     </tr>
                   ))}</tbody></table>
@@ -1892,7 +1894,7 @@ function AssetUnitsModal({ asset, d, onClose, onSaved, notify }) {
            footer={<Button variant="secondary" onClick={onClose}>Close</Button>}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
         <span className="text-muted text-sm">{units ? `${units.filter((u) => !u.is_disposed).length} active, ${units.filter((u) => u.is_disposed).length} disposed` : 'Loading…'}</span>
-        <Button variant="primary" onClick={() => setAddMode((s) => !s)}><i aria-hidden="true" className="fas fa-plus" /> Add unit(s)</Button>
+        {canWrite(d, 'assets_create') && <Button variant="primary" onClick={() => setAddMode((s) => !s)}><i aria-hidden="true" className="fas fa-plus" /> Add unit(s)</Button>}
       </div>
       {addMode && (
         <div className="card mb-3" style={{ borderColor: 'var(--primary)' }}>
@@ -1944,20 +1946,20 @@ function AssetUnitsModal({ asset, d, onClose, onSaved, notify }) {
               )}
               {!u.is_disposed && (
                 <div style={{ display: 'flex', gap: '.25rem', flexWrap: 'wrap', marginTop: '.4rem' }}>
-                  <UnitInlineAction label="Transfer" icon="fa-truck-ramp-box"
+                  {canWrite(d, 'assets_edit') && <UnitInlineAction label="Transfer" icon="fa-truck-ramp-box"
                     fields={[{ name: 'location', placeholder: 'New location', required: true }]}
-                    onSubmit={(p) => doAct(u.transfer_url, p)} />
-                  <UnitInlineAction label="Assign" icon="fa-user-tag"
+                    onSubmit={(p) => doAct(u.transfer_url, p)} />}
+                  {canWrite(d, 'assets_edit') && <UnitInlineAction label="Assign" icon="fa-user-tag"
                     fields={[{ name: 'custodian', placeholder: 'Custodian (blank = unassign)' }]}
-                    onSubmit={(p) => doAct(u.assign_url, p)} />
-                  <UnitInlineAction label="Status" icon="fa-circle-half-stroke"
+                    onSubmit={(p) => doAct(u.assign_url, p)} />}
+                  {canWrite(d, 'assets_edit') && <UnitInlineAction label="Status" icon="fa-circle-half-stroke"
                     fields={[
                       { name: 'status', type: 'select', options: (d.statuses || []).filter((s) => s !== 'Disposed') },
                       { name: 'condition', type: 'select', options: d.unit_conditions || ['Good', 'Fair', 'Poor'] },
                       { name: 'note', placeholder: 'Note (optional)' },
                     ]}
-                    onSubmit={(p) => doAct(u.status_url, p)} />
-                  {u.on_loan
+                    onSubmit={(p) => doAct(u.status_url, p)} />}
+                  {canWrite(d, 'assets_loans') && (u.on_loan
                     ? <button type="button" className="btn btn-sm btn-info" onClick={() => doReturn(u)} title="Mark returned"><i aria-hidden="true" className="fas fa-right-to-bracket" /> Return</button>
                     : <UnitInlineAction label="Checkout" icon="fa-right-from-bracket"
                         fields={[
@@ -1965,11 +1967,11 @@ function AssetUnitsModal({ asset, d, onClose, onSaved, notify }) {
                           { name: 'purpose', placeholder: 'Purpose (optional)' },
                           { name: 'due_back', placeholder: 'Due back YYYY-MM-DD (optional)' },
                         ]}
-                        onSubmit={(p) => doAct(u.checkout_url, p)} />}
+                        onSubmit={(p) => doAct(u.checkout_url, p)} />)}
                   <button type="button" className="btn btn-sm btn-light" title="History"
                     onClick={() => setViewingUnitHistory(u)}><i aria-hidden="true" className="fas fa-clock-rotate-left" /></button>
-                  <button type="button" className="btn btn-sm btn-light text-danger" title="Delete unit"
-                    onClick={async () => { if (await confirm(`Delete ${u.unit_tag}?`)) doAct(u.delete_url, {}); }}><i aria-hidden="true" className="fas fa-trash" /></button>
+                  {canWrite(d, 'assets_delete') && <button type="button" className="btn btn-sm btn-light text-danger" title="Delete unit"
+                    onClick={async () => { if (await confirm(`Delete ${u.unit_tag}?`)) doAct(u.delete_url, {}); }}><i aria-hidden="true" className="fas fa-trash" /></button>}
                 </div>
               )}
             </div>
@@ -2274,7 +2276,7 @@ function AssetLoans({ d, notify }) {
                   <td>{l.is_out
                     ? <span className={`badge ${l.is_overdue ? 'b-bad' : 'b-warn'}`}>{l.is_overdue ? 'Overdue' : 'Out'}</span>
                     : <span className="badge b-ok">Returned {l.returned_at}</span>}</td>
-                  <td>{l.is_out && <button type="button" className="btn btn-sm btn-primary" onClick={() => doReturn(l)}><i aria-hidden="true" className="fas fa-check" /> Return</button>}</td>
+                  <td>{l.is_out && canWrite(d, 'assets_loans') && <button type="button" className="btn btn-sm btn-primary" onClick={() => doReturn(l)}><i aria-hidden="true" className="fas fa-check" /> Return</button>}</td>
                 </tr>
               ))}</tbody>
             </table>
@@ -2394,8 +2396,8 @@ function AssetAudits({ d, notify }) {
         <div className="page-header">
           <h1>{activeAudit.name}</h1>
           <div className="page-header-actions">
-            {detail?.status === 'Draft' && <Button variant="primary" onClick={() => doAct(activeAudit.start_url, 'Audit started.')}><i aria-hidden="true" className="fas fa-play" /> Start audit</Button>}
-            {detail?.status === 'In Progress' && <Button variant="warning" onClick={async () => { if (await confirm('Mark all remaining Pending items as Missing and complete the audit?')) doAct(activeAudit.complete_url, 'Audit completed.'); }}><i aria-hidden="true" className="fas fa-flag-checkered" /> Complete</Button>}
+            {detail?.status === 'Draft' && canWrite(d, 'assets_audit') && <Button variant="primary" onClick={() => doAct(activeAudit.start_url, 'Audit started.')}><i aria-hidden="true" className="fas fa-play" /> Start audit</Button>}
+            {detail?.status === 'In Progress' && canWrite(d, 'assets_audit') && <Button variant="warning" onClick={async () => { if (await confirm('Mark all remaining Pending items as Missing and complete the audit?')) doAct(activeAudit.complete_url, 'Audit completed.'); }}><i aria-hidden="true" className="fas fa-flag-checkered" /> Complete</Button>}
             <Button variant="secondary" onClick={() => { setActiveAudit(null); setDetail(null); }}><i aria-hidden="true" className="fas fa-arrow-left" /> Back</Button>
           </div>
         </div>
@@ -2416,7 +2418,7 @@ function AssetAudits({ d, notify }) {
             {item.expected_location && <div className="text-muted text-sm"><i aria-hidden="true" className="fas fa-location-dot" /> Expected: {item.expected_location}</div>}
             {item.found_location && item.found_location !== item.expected_location && <div className="text-muted text-sm" style={{ color: 'var(--warn)' }}><i aria-hidden="true" className="fas fa-location-dot" /> Found: {item.found_location}</div>}
             {item.note && <div className="text-sm" style={{ marginTop: '.15rem' }}>{item.note}</div>}
-            {detail?.status !== 'Completed' && item.state === 'Pending' && (
+            {detail?.status !== 'Completed' && item.state === 'Pending' && canWrite(d, 'assets_audit') && (
               <div style={{ display: 'flex', gap: '.25rem', flexWrap: 'wrap', marginTop: '.4rem' }}>
                 <button type="button" className="btn btn-sm btn-primary" onClick={() => markItem(item, 'Verified')}><i aria-hidden="true" className="fas fa-check" /> Verified</button>
                 <button type="button" className="btn btn-sm btn-warning" onClick={() => markItem(item, 'Damaged', { note: 'Reported damaged during audit' })}><i aria-hidden="true" className="fas fa-triangle-exclamation" /> Damaged</button>
@@ -2426,7 +2428,7 @@ function AssetAudits({ d, notify }) {
                   onSubmit={(p) => markItem(item, 'Wrong Location', p)} />
               </div>
             )}
-            {detail?.status !== 'Completed' && item.state !== 'Pending' && (
+            {detail?.status !== 'Completed' && item.state !== 'Pending' && canWrite(d, 'assets_audit') && (
               <button type="button" className="btn btn-sm btn-light" style={{ marginTop: '.4rem' }} onClick={() => markItem(item, 'Pending')}>Reset to Pending</button>
             )}
           </div>
@@ -2439,7 +2441,7 @@ function AssetAudits({ d, notify }) {
     <>
       <div className="page-header"><h1>Asset Audits</h1>
         <div className="page-header-actions">
-          <Button variant="primary" onClick={() => setCreating((s) => !s)}><i aria-hidden="true" className="fas fa-plus" /> New audit</Button>
+          {canWrite(d, 'assets_audit') && <Button variant="primary" onClick={() => setCreating((s) => !s)}><i aria-hidden="true" className="fas fa-plus" /> New audit</Button>}
         </div>
       </div>
       {creating && (
@@ -2478,9 +2480,9 @@ function AssetAudits({ d, notify }) {
           </div>
           <div style={{ display: 'flex', gap: '.3rem', marginTop: '.4rem' }}>
             <Button variant="secondary" onClick={() => loadDetail(audit)}><i aria-hidden="true" className="fas fa-eye" /> View</Button>
-            {audit.status === 'Draft' && <Button variant="primary" onClick={() => doAct(audit.start_url, 'Started.')}><i aria-hidden="true" className="fas fa-play" /> Start</Button>}
-            {audit.status === 'In Progress' && <Button variant="warning" onClick={async () => { if (await confirm('Complete and mark all Pending as Missing?')) doAct(audit.complete_url, 'Completed.'); }}>Complete</Button>}
-            <button type="button" className="btn btn-sm btn-light text-danger" onClick={async () => { if (await confirm(`Delete audit "${audit.name}"?`)) doAct(audit.delete_url, 'Deleted.'); }}><i aria-hidden="true" className="fas fa-trash" /></button>
+            {audit.status === 'Draft' && canWrite(d, 'assets_audit') && <Button variant="primary" onClick={() => doAct(audit.start_url, 'Started.')}><i aria-hidden="true" className="fas fa-play" /> Start</Button>}
+            {audit.status === 'In Progress' && canWrite(d, 'assets_audit') && <Button variant="warning" onClick={async () => { if (await confirm('Complete and mark all Pending as Missing?')) doAct(audit.complete_url, 'Completed.'); }}>Complete</Button>}
+            {canWrite(d, 'assets_audit') && <button type="button" className="btn btn-sm btn-light text-danger" onClick={async () => { if (await confirm(`Delete audit "${audit.name}"?`)) doAct(audit.delete_url, 'Deleted.'); }}><i aria-hidden="true" className="fas fa-trash" /></button>}
           </div>
         </div>
       ))}

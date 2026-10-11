@@ -58,7 +58,7 @@ def test_sales_user_gets_personal_ping(app):
     with app.app_context():
         if not User.query.filter_by(username='storealert').first():
             u = User(username='storealert', role='staff', scope='central', full_name='Store')
-            u.set_password('secret123'); u.set_permissions({'sales.inventory': 'edit'})
+            u.set_password('secret123'); u.set_permissions({'sales.stock_view': 'edit'})
             db.session.add(u); db.session.commit()
         uid = User.query.filter_by(username='storealert').first().id
     _product(app, 'PING', stock=0, reorder=3)
