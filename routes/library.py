@@ -14,7 +14,7 @@ from flask import (Blueprint, render_template, request, redirect, url_for,
 from sqlalchemy import func
 
 from models import db, Book, BookLoan, Student, SchoolSettings
-from utils.access_control import login_required, admin_required, is_admin
+from utils.access_control import login_required, admin_required, is_admin, subsection_level
 from utils.security import rate_limited
 from utils.branch_scope import (scope_query, scope_by_student, require_branch_access,
                                 can_access_branch)
@@ -342,7 +342,7 @@ def edit_book(book_id):
 
 
 @library_bp.route('/books/<int:book_id>/delete', methods=['POST'])
-@admin_required
+@login_required
 def delete_book(book_id):
     b = db.get_or_404(Book, book_id)
     require_branch_access(b.branch_id)
@@ -979,7 +979,7 @@ def remind_overdue():
         return _err('None of those students have a parent phone number on file.',
                     url_for('library.loans') + '?status=Overdue', info=True)
     return _ok(f'Drafted reminders for {msg.recipient_count} parent(s) — review and send.',
-               url_for('comms.message_detail', message_id=msg.id))
+               url_for('library.loans') + '?status=Overdue')
 
 
 _IMPORT_ALIASES = {
@@ -1079,7 +1079,7 @@ def export():
 @login_required
 def settings():
     if request.method == 'POST':
-        if not is_admin():
+        if subsection_level('library', 'settings') != 'edit' and not is_admin():
             return _err('Admins only.', url_for('library.settings'))
         SchoolSettings.set('library_loan_days', request.form.get('loan_days') or '14',
                            'int', 'Library loan period (days)')

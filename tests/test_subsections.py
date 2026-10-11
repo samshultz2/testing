@@ -1,11 +1,13 @@
 """Sub-section permissions (e.g. Finance: payments but not expenses)."""
 import re
+import io
 from models import (db, User, Expense, FeePayment, FeeDiscount, FeeItem, FeeStructure,
                     AdditionalCharge, Student, Term, AcademicSession, SchoolClass, ClassArm,
                     ClassArmAssignment, StudentEnrollment, Branch,
                     StaffMember, Department, LeaveRecord, PayrollRun, JobVacancy, JobApplication,
                     StaffLoan, StaffAttendance, Subject, ClassSubject,
-                    PromotionRule, PromotionRecord)
+                    PromotionRule, PromotionRecord,
+                    Book, BookLoan, SchoolSettings)
 from tests.conftest import login_token
 
 
@@ -2735,5 +2737,304 @@ def test_promotion_alumni_bulk_email_reaches_handler_blocked_from_export(app):
     assert '/promotion/alumni' in (r.headers.get('Location') or '')
     r2 = c.get('/promotion/alumni/export', follow_redirects=False)
     assert r2.status_code in (302, 303)        # alumni_export not granted
+
+
+# ---- Library (20-key granular split; self_loans unchanged) ----------------
+
+def _lib_book(app, tag, **kw):
+    with app.app_context():
+        b = Book.query.filter_by(title=f'{tag}-Book').first()
+        if not b:
+            b = Book(title=f'{tag}-Book', copies_total=2, copies_available=2,
+                     branch_id=Branch.get_default().id, **kw)
+            db.session.add(b); db.session.commit()
+        return b.id
+
+
+def _lib_student(app, tag):
+    with app.app_context():
+        st = Student.query.filter_by(student_id=f'{tag}-STU').first()
+        if not st:
+            st = Student(student_id=f'{tag}-STU', first_name='Lib', surname=tag,
+                        gender='Male', is_active=True, branch_id=Branch.get_default().id)
+            db.session.add(st); db.session.commit()
+        return st.id
+
+
+def test_library_catalogue_view_blocked_from_create(app):
+    _make(app, 'libcv', {'library.catalogue_view': 'view'})
+    c = _login(app, 'libcv')
+    assert c.get('/library/books').status_code == 200
+    r = c.get('/library/books/add', follow_redirects=False)
+    assert r.status_code in (302, 303)        # catalogue_create not granted
+
+
+def test_library_catalogue_create_add_copies_blocked_from_delete(app):
+    _make(app, 'libcc', {'library.catalogue_create': 'edit'})
+    c = _login(app, 'libcc')
+    tok = _ptoken(c)
+    c.post('/library/books/add', data={'title': 'LIBCC-Book', 'copies_total': '1', '_csrf_token': tok})
+    with app.app_context():
+        b = Book.query.filter_by(title='LIBCC-Book').first()
+        assert b is not None
+        bid = b.id
+    c.post(f'/library/books/{bid}/add-copies', data={'count': '2', '_csrf_token': tok})
+    with app.app_context():
+        assert db.session.get(Book, bid).copies_total == 3
+    c.post(f'/library/books/{bid}/delete', data={'_csrf_token': tok})
+    with app.app_context():
+        assert db.session.get(Book, bid).is_active is True   # catalogue_delete not granted
+
+
+def test_library_catalogue_delete_blocked_from_create(app):
+    # Regression for the decorator-shadowing bug this phase closes: delete_book
+    # was @admin_required even though it's mapped into a grantable bucket.
+    bid = _lib_book(app, 'LIBDEL')
+    _make(app, 'libdel', {'library.catalogue_delete': 'edit'})
+    c = _login(app, 'libdel')
+    tok = _ptoken(c)
+    c.post(f'/library/books/{bid}/delete', data={'_csrf_token': tok})
+    with app.app_context():
+        assert db.session.get(Book, bid).is_active is False
+    with app.app_context():
+        before = Book.query.count()
+    c.post('/library/books/add', data={'title': 'LIBDEL-New', '_csrf_token': tok})
+    with app.app_context():
+        assert Book.query.count() == before   # catalogue_create not granted
+
+
+def test_library_catalogue_import_blocked_from_export(app):
+    _make(app, 'libimp', {'library.catalogue_import': 'edit'})
+    c = _login(app, 'libimp')
+    tok = _ptoken(c)
+    data = {'file': (io.BytesIO(b'Title\nLIBIMP Imported Book\n'), 'books.csv'), '_csrf_token': tok}
+    c.post('/library/import', data=data, content_type='multipart/form-data')
+    with app.app_context():
+        assert Book.query.filter_by(title='LIBIMP Imported Book').first() is not None
+    r = c.get('/library/export', follow_redirects=False)
+    assert r.status_code in (302, 303)        # catalogue_export not granted
+
+
+def test_library_catalogue_export_blocked_from_import(app):
+    _make(app, 'libexp', {'library.catalogue_export': 'edit'})
+    c = _login(app, 'libexp')
+    assert c.get('/library/export').status_code == 200
+    tok = _ptoken(c)
+    data = {'file': (io.BytesIO(b'Title\nLIBEXP Book\n'), 'b.csv'), '_csrf_token': tok}
+    c.post('/library/import', data=data, content_type='multipart/form-data')
+    with app.app_context():
+        assert Book.query.filter_by(title='LIBEXP Book').first() is None   # catalogue_import not granted
+
+
+def test_library_circulation_view_blocked_from_issue(app):
+    _make(app, 'libcirv', {'library.circulation_view': 'view'})
+    c = _login(app, 'libcirv')
+    assert c.get('/library/loans').status_code == 200
+    r = c.get('/library/issue', follow_redirects=False)
+    assert r.status_code in (302, 303)        # circulation_issue not granted
+
+
+def test_library_circulation_issue_blocked_from_return(app):
+    bid = _lib_book(app, 'LIBISS')
+    sid = _lib_student(app, 'LIBISS')
+    _make(app, 'libiss', {'library.circulation_issue': 'edit'})
+    c = _login(app, 'libiss')
+    tok = _ptoken(c)
+    c.post('/library/issue', data={'book_id': bid, 'borrower_type': 'student',
+                                   'student_id': sid, '_csrf_token': tok})
+    with app.app_context():
+        loan = BookLoan.query.filter_by(book_id=bid, student_id=sid).first()
+        assert loan is not None
+        loan_id = loan.id
+    c.post(f'/library/loans/{loan_id}/return', data={'_csrf_token': tok})
+    with app.app_context():
+        assert db.session.get(BookLoan, loan_id).status == 'Borrowed'   # circulation_return not granted
+
+
+def test_library_circulation_return_blocked_from_issue(app):
+    from datetime import date
+    bid = _lib_book(app, 'LIBRET')
+    sid = _lib_student(app, 'LIBRET')
+    with app.app_context():
+        loan = BookLoan(book_id=bid, borrower_type='student', student_id=sid,
+                        borrowed_date=date.today(), due_date=date.today(), status='Borrowed')
+        db.session.add(loan); db.session.commit()
+        loan_id = loan.id
+    _make(app, 'libret', {'library.circulation_return': 'edit'})
+    c = _login(app, 'libret')
+    tok = _ptoken(c)
+    c.post(f'/library/loans/{loan_id}/renew', data={'_csrf_token': tok})
+    with app.app_context():
+        assert db.session.get(BookLoan, loan_id).renew_count == 1
+    with app.app_context():
+        before = BookLoan.query.count()
+    c.post('/library/issue', data={'book_id': bid, 'borrower_type': 'student',
+                                   'student_id': sid, '_csrf_token': tok})
+    with app.app_context():
+        assert BookLoan.query.count() == before   # circulation_issue not granted
+
+
+def test_library_circulation_remind_blocked_from_issue(app):
+    # Regression: remind_overdue's success/business-error redirect now stays
+    # inside the library module (library.loans) instead of bouncing into
+    # comms.message_detail, which a circulation_remind holder may not reach.
+    _make(app, 'librem', {'library.circulation_remind': 'edit'})
+    c = _login(app, 'librem')
+    tok = _ptoken(c)
+    r = c.post('/library/remind-overdue', data={'_csrf_token': tok}, follow_redirects=False)
+    assert r.status_code in (302, 303)
+    assert '/library/' in (r.headers.get('Location') or '')
+    bid = _lib_book(app, 'LIBREMX')
+    sid = _lib_student(app, 'LIBREMX')
+    with app.app_context():
+        before = BookLoan.query.count()
+    c.post('/library/issue', data={'book_id': bid, 'borrower_type': 'student',
+                                   'student_id': sid, '_csrf_token': tok})
+    with app.app_context():
+        assert BookLoan.query.count() == before   # circulation_issue not granted
+
+
+def test_library_borrowers_view(app):
+    sid = _lib_student(app, 'LIBBOR')
+    _make(app, 'libbor', {'library.borrowers_view': 'view'})
+    c = _login(app, 'libbor')
+    assert c.get('/library/borrowers').status_code == 200
+    assert c.get(f'/library/borrower/student/{sid}').status_code == 200
+
+
+def test_library_reservations_view_blocked_from_create(app):
+    from models import BookReservation
+    _make(app, 'libresv', {'library.reservations_view': 'view'})
+    c = _login(app, 'libresv')
+    assert c.get('/library/reservations').status_code == 200
+    bid = _lib_book(app, 'LIBRESVX')
+    sid = _lib_student(app, 'LIBRESVX')
+    tok = _ptoken(c)
+    c.post('/library/reserve', data={'book_id': bid, 'borrower_type': 'student',
+                                     'student_id': sid, '_csrf_token': tok})
+    with app.app_context():
+        assert BookReservation.query.filter_by(book_id=bid).first() is None   # reservations_create not granted
+
+
+def test_library_reservations_create_blocked_from_cancel(app):
+    from models import BookReservation
+    bid = _lib_book(app, 'LIBRC')
+    sid = _lib_student(app, 'LIBRC')
+    _make(app, 'librc', {'library.reservations_create': 'edit'})
+    c = _login(app, 'librc')
+    tok = _ptoken(c)
+    c.post('/library/reserve', data={'book_id': bid, 'borrower_type': 'student',
+                                     'student_id': sid, '_csrf_token': tok})
+    with app.app_context():
+        r = BookReservation.query.filter_by(book_id=bid).first()
+        assert r is not None
+        rid = r.id
+    c.post(f'/library/reservations/{rid}/cancel', data={'_csrf_token': tok})
+    with app.app_context():
+        assert db.session.get(BookReservation, rid).status != 'Cancelled'   # reservations_cancel not granted
+
+
+def test_library_reservations_fulfill_blocked_from_cancel(app):
+    from models import BookReservation
+    bid = _lib_book(app, 'LIBRF')
+    sid = _lib_student(app, 'LIBRF')
+    with app.app_context():
+        r = BookReservation(book_id=bid, borrower_type='student', student_id=sid, status='Ready')
+        db.session.add(r); db.session.commit()
+        rid = r.id
+    _make(app, 'librf', {'library.reservations_fulfill': 'edit'})
+    c = _login(app, 'librf')
+    tok = _ptoken(c)
+    c.post(f'/library/reservations/{rid}/fulfill', data={'_csrf_token': tok})
+    with app.app_context():
+        assert db.session.get(BookReservation, rid).status == 'Fulfilled'
+        assert BookLoan.query.filter_by(book_id=bid, student_id=sid).first() is not None
+    with app.app_context():
+        r2 = BookReservation(book_id=bid, borrower_type='student', student_id=sid, status='Queued')
+        db.session.add(r2); db.session.commit()
+        rid2 = r2.id
+    c.post(f'/library/reservations/{rid2}/cancel', data={'_csrf_token': tok})
+    with app.app_context():
+        assert db.session.get(BookReservation, rid2).status != 'Cancelled'   # reservations_cancel not granted
+
+
+def test_library_reading_lists_view_blocked_from_manage(app):
+    from models import ReadingListItem
+    _make(app, 'librlv', {'library.reading_lists_view': 'view'})
+    c = _login(app, 'librlv')
+    assert c.get('/library/reading-lists').status_code == 200
+    bid = _lib_book(app, 'LIBRLX')
+    with app.app_context():
+        cls = SchoolClass.query.filter_by(name='LIBRL-Class').first() or SchoolClass(name='LIBRL-Class', level=1)
+        db.session.add(cls); db.session.commit()
+        cls_id = cls.id
+    tok = _ptoken(c)
+    c.post('/library/reading-lists/add', data={'class_id': cls_id, 'book_id': bid, '_csrf_token': tok})
+    with app.app_context():
+        assert ReadingListItem.query.filter_by(class_id=cls_id, book_id=bid).first() is None
+
+
+def test_library_reading_lists_manage_add_remove(app):
+    from models import ReadingListItem
+    bid = _lib_book(app, 'LIBRLM')
+    with app.app_context():
+        cls = SchoolClass.query.filter_by(name='LIBRLM-Class').first() or SchoolClass(name='LIBRLM-Class', level=1)
+        db.session.add(cls); db.session.commit()
+        cls_id = cls.id
+    _make(app, 'librlm', {'library.reading_lists_manage': 'edit'})
+    c = _login(app, 'librlm')
+    tok = _ptoken(c)
+    c.post('/library/reading-lists/add', data={'class_id': cls_id, 'book_id': bid, '_csrf_token': tok})
+    with app.app_context():
+        item = ReadingListItem.query.filter_by(class_id=cls_id, book_id=bid).first()
+        assert item is not None
+        item_id = item.id
+    c.post(f'/library/reading-lists/{item_id}/remove', data={'_csrf_token': tok})
+    with app.app_context():
+        assert db.session.get(ReadingListItem, item_id) is None
+
+
+def test_library_reports_view_blocked_from_export(app):
+    _make(app, 'librpv', {'library.reports_view': 'view'})
+    c = _login(app, 'librpv')
+    assert c.get('/library/reports').status_code == 200
+    r = c.get('/library/reports/export', follow_redirects=False)
+    assert r.status_code in (302, 303)        # reports_export not granted
+
+
+def test_library_settings_grant_now_works(app):
+    # Regression: before this phase, 'settings' was a real subsection key that
+    # enforce_subsection_access already honored, but the route itself still
+    # hard-blocked non-admins with its own inline check — a grant that could
+    # never actually be used. Confirm it's fixed, and that a user with no
+    # library access at all stays blocked.
+    _make(app, 'libset', {'library.settings': 'edit'})
+    c = _login(app, 'libset')
+    tok = _ptoken(c)
+    c.post('/library/settings', data={'loan_days': '21', 'fine_per_day': '5', '_csrf_token': tok})
+    with app.app_context():
+        assert SchoolSettings.get('library_loan_days') == 21
+
+    _make(app, 'libsetn', {})
+    c2 = _login(app, 'libsetn')
+    tok2 = _ptoken(c2)
+    c2.post('/library/settings', data={'loan_days': '30', '_csrf_token': tok2})
+    with app.app_context():
+        assert SchoolSettings.get('library_loan_days') != 30
+
+
+def test_library_cross_bucket_helpers_reachable_with_any_grant(app):
+    # Regression for the cross-bucket helper fix: book_search / barcode_lookup
+    # / student_search / staff_search are shared read-only lookups used from
+    # several buckets' pages, so they're deliberately left unmapped — any
+    # library grant (here just circulation_issue) must be enough to reach them.
+    _lib_book(app, 'LIBHLP')
+    _lib_student(app, 'LIBHLP')
+    _make(app, 'libhlp', {'library.circulation_issue': 'edit'})
+    c = _login(app, 'libhlp')
+    assert c.get('/library/book-search?q=LIBHLP').status_code == 200
+    assert c.get('/library/barcode-lookup?code=nope').status_code == 200
+    assert c.get('/library/student-search?q=LIBHLP').status_code == 200
+    assert c.get('/library/staff-search?q=zzz').status_code == 200
 
 

@@ -56,21 +56,19 @@ function Dashboard({ d }) {
     ['amber', 'fa-screwdriver-wrench', d.damaged, 'Damaged', d.urls.loans + '?status=Damaged'],
   ];
   const quick = [
-    ...(canWrite(d) ? [
-      [d.urls.add_book, 'fa-plus', 'Register book', 'btn-primary'],
-      [d.urls.issue, 'fa-hand-holding', 'Issue', 'btn-secondary'],
-      [d.urls.loans + '?status=Borrowed', 'fa-rotate-left', 'Return', 'btn-secondary'],
-    ] : []),
+    ...(canWrite(d, 'catalogue_create') ? [[d.urls.add_book, 'fa-plus', 'Register book', 'btn-primary']] : []),
+    ...(canWrite(d, 'circulation_issue') ? [[d.urls.issue, 'fa-hand-holding', 'Issue', 'btn-secondary']] : []),
+    ...(canWrite(d, 'circulation_return') ? [[d.urls.loans + '?status=Borrowed', 'fa-rotate-left', 'Return', 'btn-secondary']] : []),
     [d.urls.loans + '?status=Overdue', 'fa-clock', 'Overdue', 'btn-secondary'],
     [d.urls.books, 'fa-magnifying-glass', 'Search books', 'btn-secondary'],
-    [d.urls.export, 'fa-file-csv', 'Export', 'btn-secondary', true],
+    ...(canWrite(d, 'catalogue_export') ? [[d.urls.export, 'fa-file-csv', 'Export', 'btn-secondary', true]] : []),
   ];
   return (
     <>
-      <PageHeader title="Library" actions={canWrite(d) ? <>
-        <a href={d.urls.issue} className="btn btn-primary"><i aria-hidden="true" className="fas fa-hand-holding" /> Issue Book</a>
-        <a href={d.urls.add_book} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-plus" /> Add Book</a>
-      </> : null} />
+      <PageHeader title="Library" actions={<>
+        {canWrite(d, 'circulation_issue') && <a href={d.urls.issue} className="btn btn-primary"><i aria-hidden="true" className="fas fa-hand-holding" /> Issue Book</a>}
+        {canWrite(d, 'catalogue_create') && <a href={d.urls.add_book} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-plus" /> Add Book</a>}
+      </>} />
       <Tabs urls={d.urls} page="dashboard" />
       <div className="d-flex gap-2 flex-wrap mb-3">
         {quick.map(([href, ic, label, cls, native]) => (
@@ -162,10 +160,10 @@ function Books({ d, notify }) {
   return (
     <>
       <PageHeader title="Catalogue" actions={<>
-        {canWrite(d) && <input type="file" ref={fileRef} accept=".csv,text/csv" style={{ display: 'none' }} onChange={onImport} />}
-        {canWrite(d) && <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => fileRef.current && fileRef.current.click()}><i aria-hidden="true" className="fas fa-file-import" /> Import CSV</button>}
-        <a href={d.urls.export} data-native className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-csv" /> Export</a>
-        {canWrite(d) && <a href={d.urls.add_book} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Book</a>}
+        {canWrite(d, 'catalogue_import') && <input type="file" ref={fileRef} accept=".csv,text/csv" style={{ display: 'none' }} onChange={onImport} />}
+        {canWrite(d, 'catalogue_import') && <button type="button" className="btn btn-secondary" disabled={busy} onClick={() => fileRef.current && fileRef.current.click()}><i aria-hidden="true" className="fas fa-file-import" /> Import CSV</button>}
+        {canWrite(d, 'catalogue_export') && <a href={d.urls.export} data-native className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-csv" /> Export</a>}
+        {canWrite(d, 'catalogue_create') && <a href={d.urls.add_book} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Book</a>}
       </>} />
       <Tabs urls={d.urls} page="books" />
       {reserving && <ReserveModal d={d} book={reserving} onClose={() => setReserving(null)}
@@ -190,7 +188,7 @@ function Books({ d, notify }) {
         <div className="card-header"><h3>{shown.length} title(s)</h3></div>
         <div className="card-body" style={{ padding: 0 }}>
           <Table rowKey={(b) => b.id} rows={shown} pageSize={25} sticky maxHeight="65vh"
-            empty={<Empty icon="fa-book" title="No books"><p>Add titles to the catalogue.</p>{canWrite(d) && <a href={d.urls.add_book} className="btn btn-primary mt-2">Add Book</a>}</Empty>}
+            empty={<Empty icon="fa-book" title="No books"><p>Add titles to the catalogue.</p>{canWrite(d, 'catalogue_create') && <a href={d.urls.add_book} className="btn btn-primary mt-2">Add Book</a>}</Empty>}
             columns={[
               { key: 'title', label: 'Title', sortable: true, sortValue: (b) => b.title, render: (b) => <><strong>{b.title}</strong>{b.reference_only && <span className="badge badge-warning" style={{ marginLeft: '.3rem' }}>Reference</span>}{b.status === 'Withdrawn' && <span className="badge badge-secondary" style={{ marginLeft: '.3rem' }}>Withdrawn</span>}{(b.isbn || b.barcode) && <div className="text-muted text-sm">{b.isbn || b.barcode}</div>}</> },
               { key: 'author', label: 'Author', sortable: true, sortValue: (b) => b.author || '', render: (b) => b.author || '—' },
@@ -199,10 +197,10 @@ function Books({ d, notify }) {
               { key: 'avail', label: 'Avail/Total', align: 'right', render: (b) => <><span className={'badge ' + (b.copies_available ? 'badge-success' : 'badge-danger')}>{b.copies_available}</span> / {b.copies_total}</> },
               { key: 'act', label: '', render: (b) => (
                 <div className="d-flex gap-1 justify-end">
-                  {b.copies_available > 0 && !b.reference_only && <a href={b.issue_url} className="btn btn-primary btn-sm" title="Issue"><i aria-hidden="true" className="fas fa-hand-holding" /></a>}
-                  {!b.reference_only && <button type="button" className="btn btn-secondary btn-sm" title="Reserve / hold" onClick={() => setReserving(b)}><i aria-hidden="true" className="fas fa-bookmark" /></button>}
-                  <a href={b.edit_url} className="btn btn-secondary btn-sm" aria-label="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>
-                  {d.is_admin && <button type="button" className="btn btn-danger btn-sm" disabled={busy} onClick={() => del(b)}><i aria-hidden="true" className="fas fa-trash" /></button>}
+                  {b.copies_available > 0 && !b.reference_only && canWrite(d, 'circulation_issue') && <a href={b.issue_url} className="btn btn-primary btn-sm" title="Issue"><i aria-hidden="true" className="fas fa-hand-holding" /></a>}
+                  {!b.reference_only && canWrite(d, 'reservations_create') && <button type="button" className="btn btn-secondary btn-sm" title="Reserve / hold" onClick={() => setReserving(b)}><i aria-hidden="true" className="fas fa-bookmark" /></button>}
+                  {canWrite(d, 'catalogue_edit') && <a href={b.edit_url} className="btn btn-secondary btn-sm" aria-label="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>}
+                  {canWrite(d, 'catalogue_delete') && <button type="button" className="btn btn-danger btn-sm" disabled={busy} onClick={() => del(b)}><i aria-hidden="true" className="fas fa-trash" /></button>}
                 </div>) },
             ]} />
         </div>
@@ -412,7 +410,7 @@ function BookForm({ d, notify }) {
           <div className="form-group"><label className="form-label">Notes</label>
             <textarea className="form-control" rows="2" value={f.notes} onChange={(e) => set('notes', e.target.value)} /></div>
           <div className="page-header-actions">
-            <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> {editing ? 'Save' : 'Add Book'}</button>
+            {canWrite(d, editing ? 'catalogue_edit' : 'catalogue_create') && <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> {editing ? 'Save' : 'Add Book'}</button>}
             <a href={d.urls.books} className="btn btn-secondary">Cancel</a>
           </div>
         </form>
@@ -538,9 +536,10 @@ function Loans({ d, notify }) {
 
   return (
     <>
-      <PageHeader title="Loans" actions={canWrite(d) ? <>
-        {d.status === 'Overdue' && <button type="button" className="btn btn-secondary" onClick={remind}><i aria-hidden="true" className="fas fa-comment-sms" /> Remind parents</button>}
-        <a href={d.urls.issue} className="btn btn-primary"><i aria-hidden="true" className="fas fa-hand-holding" /> Issue Book</a></> : null} />
+      <PageHeader title="Loans" actions={<>
+        {d.status === 'Overdue' && canWrite(d, 'circulation_remind') && <button type="button" className="btn btn-secondary" onClick={remind}><i aria-hidden="true" className="fas fa-comment-sms" /> Remind parents</button>}
+        {canWrite(d, 'circulation_issue') && <a href={d.urls.issue} className="btn btn-primary"><i aria-hidden="true" className="fas fa-hand-holding" /> Issue Book</a>}
+      </>} />
       <Tabs urls={d.urls} page="loans" />
       <div className="card mb-3"><div className="card-body">
         <div className="filter-form"><div className="form-group"><label className="form-label">Show</label>
@@ -563,12 +562,12 @@ function Loans({ d, notify }) {
               { key: 'status', label: 'Status', render: (l) => statusBadge(l) },
               { key: 'fine', label: 'Fine / cost', render: (l) => (l.fine || l.replacement_cost) ? naira(l.fine || l.replacement_cost) : '—' },
               { key: 'act', label: '', render: (l) => l.status === 'Borrowed'
-                ? <div className="d-flex gap-1 justify-end">
+                ? (canWrite(d, 'circulation_return') ? <div className="d-flex gap-1 justify-end">
                     <button type="button" className="btn btn-primary btn-sm" disabled={busy} title="Return" onClick={() => ret(l)}><i aria-hidden="true" className="fas fa-rotate-left" /></button>
                     <button type="button" className="btn btn-secondary btn-sm" disabled={busy} title="Renew" onClick={() => act(l.renew_url, {})}><i aria-hidden="true" className="fas fa-arrows-rotate" /></button>
                     <button type="button" className="btn btn-secondary btn-sm" disabled={busy} title="Mark lost" onClick={() => markLost(l)}><i aria-hidden="true" className="fas fa-triangle-exclamation" /></button>
                     <button type="button" className="btn btn-secondary btn-sm" disabled={busy} title="Mark damaged" onClick={() => markDamaged(l)}><i aria-hidden="true" className="fas fa-screwdriver-wrench" /></button>
-                  </div>
+                  </div> : '—')
                 : <span className="text-muted text-sm">{l.returned}</span> },
             ]} />
         </div>
@@ -605,7 +604,7 @@ function Settings({ d, notify }) {
                 <input type="number" className="form-control" min="0" step="1" value={fine} onChange={(e) => setFine(e.target.value)} />
                 <span className="form-hint d-block">0 to disable fines.</span></div>
             </div>
-            <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save</button>
+            {canWrite(d, 'settings') && <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save</button>}
           </form>
         </div>
       </div>
@@ -632,10 +631,10 @@ function Reports({ d }) {
   };
   return (
     <>
-      <PageHeader title="Reports" actions={<>
+      <PageHeader title="Reports" actions={canWrite(d, 'reports_export') ? <>
         <a href={`${d.urls.export}?format=csv&${qs()}`} data-native className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-csv" /> CSV</a>
         <a href={`${d.urls.export}?format=xlsx&${qs()}`} data-native className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-excel" /> Excel</a>
-      </>} />
+      </> : null} />
       <Tabs urls={d.urls} page="reports" />
       <div className="card mb-3"><div className="card-body">
         <div className="filter-form">
@@ -737,11 +736,11 @@ function Borrower({ d, notify }) {
     { key: 'borrowed', label: 'Borrowed', render: (l) => l.borrowed },
     { key: 'due', label: 'Due', render: (l) => <>{l.due}{l.is_overdue && <span className="text-danger text-sm"> ({l.days_overdue}d)</span>}</> },
     { key: 'status', label: 'Status', render: (l) => statusBadge(l) },
-    ...(withActions ? [{ key: 'act', label: '', render: (l) => (
+    ...(withActions ? [{ key: 'act', label: '', render: (l) => (canWrite(d, 'circulation_return') ?
       <div className="d-flex gap-1 justify-end">
         <button type="button" className="btn btn-primary btn-sm" disabled={busy} title="Return" onClick={() => act(l.return_url, {}, `Return '${l.book}'?`)}><i aria-hidden="true" className="fas fa-rotate-left" /></button>
         <button type="button" className="btn btn-secondary btn-sm" disabled={busy} title="Renew" onClick={() => act(l.renew_url, {})}><i aria-hidden="true" className="fas fa-arrows-rotate" /></button>
-      </div>) }] : [{ key: 'closed', label: '', render: (l) => <span className="text-muted text-sm">{l.returned}{l.fine ? ` · ${naira(l.fine)}` : ''}{l.replacement_cost ? ` · ${naira(l.replacement_cost)}` : ''}</span> }]),
+      </div> : null) }] : [{ key: 'closed', label: '', render: (l) => <span className="text-muted text-sm">{l.returned}{l.fine ? ` · ${naira(l.fine)}` : ''}{l.replacement_cost ? ` · ${naira(l.replacement_cost)}` : ''}</span> }]),
   ];
   return (
     <>
@@ -843,8 +842,8 @@ function Reservations({ d, notify }) {
               { key: 'status', label: 'Status', render: (r) => <>{resBadge(r.status)}{r.status === 'Ready' && r.expires && <div className="text-muted text-sm">expires {r.expires}</div>}</> },
               { key: 'act', label: '', render: (r) => (r.status === 'Queued' || r.status === 'Ready')
                 ? <div className="d-flex gap-1 justify-end">
-                    {r.available > 0 && <button type="button" className="btn btn-primary btn-sm" disabled={busy} title="Issue now" onClick={() => act(r.fulfill_url, `Issue “${r.book}” to ${r.borrower}?`)}><i aria-hidden="true" className="fas fa-hand-holding" /></button>}
-                    <button type="button" className="btn btn-secondary btn-sm" disabled={busy} title="Cancel" onClick={() => act(r.cancel_url, 'Cancel this reservation?')}><i aria-hidden="true" className="fas fa-xmark" /></button>
+                    {r.available > 0 && canWrite(d, 'reservations_fulfill') && <button type="button" className="btn btn-primary btn-sm" disabled={busy} title="Issue now" onClick={() => act(r.fulfill_url, `Issue “${r.book}” to ${r.borrower}?`)}><i aria-hidden="true" className="fas fa-hand-holding" /></button>}
+                    {canWrite(d, 'reservations_cancel') && <button type="button" className="btn btn-secondary btn-sm" disabled={busy} title="Cancel" onClick={() => act(r.cancel_url, 'Cancel this reservation?')}><i aria-hidden="true" className="fas fa-xmark" /></button>}
                   </div>
                 : '—' },
             ]} />
@@ -883,7 +882,7 @@ function ReadingLists({ d, notify }) {
     <>
       <PageHeader title="Reading lists" />
       <Tabs urls={d.urls} page="reading_lists" />
-      <div className="card mb-3">
+      {canWrite(d, 'reading_lists_manage') && <div className="card mb-3">
         <div className="card-header"><h3><i aria-hidden="true" className="fas fa-plus" /> Recommend a book to a class</h3></div>
         <div className="card-body">
           <form onSubmit={add}><div className="form-row">
@@ -898,7 +897,7 @@ function ReadingLists({ d, notify }) {
               <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-plus" /> Add</button></div>
           </div></form>
         </div>
-      </div>
+      </div>}
       <div className="card mb-3"><div className="card-body">
         <div className="filter-form"><div className="form-group"><label className="form-label">Filter by class</label>
           <select className="form-control" value={d.class_id || ''} onChange={(e) => onClassFilter(e.target.value)}>
@@ -914,7 +913,7 @@ function ReadingLists({ d, notify }) {
               { key: 'book', label: 'Book', sortable: true, sortValue: (it) => it.book, render: (it) => <><strong>{it.book}</strong>{it.author && <div className="text-muted text-sm">{it.author}</div>}</> },
               { key: 'note', label: 'Note', render: (it) => it.note || '—' },
               { key: 'by', label: 'Added by', render: (it) => it.by || '—' },
-              { key: 'act', label: '', render: (it) => <button type="button" className="btn btn-danger btn-sm" disabled={busy} aria-label="Remove" onClick={() => remove(it)}><i aria-hidden="true" className="fas fa-trash" /></button> },
+              { key: 'act', label: '', render: (it) => canWrite(d, 'reading_lists_manage') && <button type="button" className="btn btn-danger btn-sm" disabled={busy} aria-label="Remove" onClick={() => remove(it)}><i aria-hidden="true" className="fas fa-trash" /></button> },
             ]} />
         </div>
       </div>

@@ -79,7 +79,9 @@ def test_remind_overdue_drafts_campaign(app):
     client = _admin(app)
     r = client.post('/library/remind-overdue', headers={'X-Requested-With': 'fetch'},
                     data={'_csrf_token': _ptoken(client)}).get_json()
-    assert r['ok'] and '/communication/messages/' in r['redirect']
+    # Redirects back into the library module (not into Communication) so a
+    # circulation_remind holder without a communication grant isn't bounced.
+    assert r['ok'] and '/library/loans' in r['redirect']
     with app.app_context():
         assert Message.query.filter_by(title='Library overdue reminder').count() >= 1
 

@@ -57,8 +57,8 @@ def test_representative_resolution():
         'timetable.designer': ('timetable', 'manage'),
         'timetable.my_timetable': ('timetable', 'view'),
         'promotion.graduate_document': ('promotion', 'documents_generate'),
-        'library.issue': ('library', 'circulation'),
-        'library.add_book': ('library', 'catalogue'),
+        'library.issue': ('library', 'circulation_issue'),
+        'library.add_book': ('library', 'catalogue_create'),
         'reports.export_students': ('reports', 'exports'),
         'events.add_event': ('events', 'create'),
         'contributions.add_payment': ('contributions', 'record'),
@@ -92,8 +92,8 @@ def test_capabilities_are_not_in_reverse_map():
 
 # --- live partition checks -------------------------------------------------
 def test_library_catalogue_vs_circulation(app):
-    _make_user(app, 'lib_cat', {'library.catalogue': 'edit'})
-    _make_user(app, 'lib_circ', {'library.circulation': 'edit'})
+    _make_user(app, 'lib_cat', {'library.catalogue_view': 'edit'})
+    _make_user(app, 'lib_circ', {'library.circulation_view': 'edit'})
     c1 = _login(app, 'lib_cat')
     assert c1.get('/library/books').status_code == 200
     assert c1.get('/library/loans', follow_redirects=False).status_code in (302, 303)
