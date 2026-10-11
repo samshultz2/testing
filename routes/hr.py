@@ -508,7 +508,7 @@ def edit_staff(staff_id):
 
 
 @hr_bp.route('/staff/<int:staff_id>/salary', methods=['POST'])
-@admin_required
+@login_required
 def adjust_salary(staff_id):
     """Record a salary increment / adjustment and update the current salary."""
     s = db.get_or_404(StaffMember, staff_id)
@@ -532,7 +532,7 @@ def adjust_salary(staff_id):
 
 
 @hr_bp.route('/staff/<int:staff_id>/promote', methods=['POST'])
-@admin_required
+@login_required
 def promote_staff(staff_id):
     """Record a promotion: update the job title (and optionally the salary, which
     also lands in salary history) and log a lifecycle event."""
@@ -563,7 +563,7 @@ def promote_staff(staff_id):
 
 
 @hr_bp.route('/staff/<int:staff_id>/transfer', methods=['POST'])
-@admin_required
+@login_required
 def transfer_staff(staff_id):
     """Transfer a staff member to another branch (central admins only) and log it."""
     s = db.get_or_404(StaffMember, staff_id)
@@ -594,7 +594,7 @@ def transfer_staff(staff_id):
 
 
 @hr_bp.route('/staff/<int:staff_id>/confirm', methods=['POST'])
-@admin_required
+@login_required
 def confirm_staff(staff_id):
     """Confirm a staff member off probation (sets the confirmation date)."""
     s = db.get_or_404(StaffMember, staff_id)
@@ -767,7 +767,7 @@ def delete_training(staff_id, train_id):
 
 
 @hr_bp.route('/staff/<int:staff_id>/reviews', methods=['POST'])
-@admin_required
+@login_required
 def add_review(staff_id):
     s = db.get_or_404(StaffMember, staff_id)
     from utils.branch_scope import require_branch_access
@@ -790,7 +790,7 @@ def add_review(staff_id):
 
 
 @hr_bp.route('/staff/<int:staff_id>/reviews/<int:review_id>/delete', methods=['POST'])
-@admin_required
+@login_required
 def delete_review(staff_id, review_id):
     from models import PerformanceReview
     r = db.get_or_404(PerformanceReview, review_id)
@@ -804,7 +804,7 @@ def delete_review(staff_id, review_id):
 
 
 @hr_bp.route('/staff/<int:staff_id>/delete', methods=['POST'])
-@admin_required
+@login_required
 def delete_staff(staff_id):
     s = db.get_or_404(StaffMember, staff_id)
     from utils.branch_scope import require_branch_access
@@ -843,7 +843,7 @@ def delete_staff(staff_id):
 
 
 @hr_bp.route('/staff/<int:staff_id>/deductions', methods=['POST'])
-@admin_required
+@login_required
 def set_staff_deduction(staff_id):
     """Set (or clear) a staff member's per-staff amount for a recurring
     deduction type — e.g. this person's Welfare is ₦10,000/month. A blank or
@@ -942,7 +942,7 @@ def departments():
 
 
 @hr_bp.route('/departments/add', methods=['POST'])
-@admin_required
+@login_required
 def add_department():
     name = (request.form.get('name') or '').strip()
     if not name:
@@ -955,7 +955,7 @@ def add_department():
 
 
 @hr_bp.route('/departments/<int:dept_id>/edit', methods=['POST'])
-@admin_required
+@login_required
 def edit_department(dept_id):
     d = db.get_or_404(Department, dept_id)
     d.name = (request.form.get('name') or d.name).strip()
@@ -965,7 +965,7 @@ def edit_department(dept_id):
 
 
 @hr_bp.route('/departments/<int:dept_id>/delete', methods=['POST'])
-@admin_required
+@login_required
 def delete_department(dept_id):
     d = db.get_or_404(Department, dept_id)
     if StaffMember.query.filter_by(department_id=dept_id).count():
@@ -1109,7 +1109,7 @@ def payroll_list():
 
 
 @hr_bp.route('/payroll/create', methods=['POST'])
-@admin_required
+@login_required
 def create_payroll():
     year = request.form.get('year', type=int)
     month = request.form.get('month', type=int)
@@ -1165,7 +1165,7 @@ def payroll_detail(run_id):
 
 
 @hr_bp.route('/payroll/<int:run_id>/payslip/<int:slip_id>/edit', methods=['POST'])
-@admin_required
+@login_required
 def edit_payslip(run_id, slip_id):
     ps = db.get_or_404(Payslip, slip_id)
     if ps.run_id != run_id:
@@ -1181,7 +1181,7 @@ def edit_payslip(run_id, slip_id):
 
 
 @hr_bp.route('/payroll/<int:run_id>/finalize', methods=['POST'])
-@admin_required
+@login_required
 def finalize_payroll(run_id):
     run = db.get_or_404(PayrollRun, run_id)
     _require_payroll_run_access(run)
@@ -1239,7 +1239,7 @@ def finalize_payroll(run_id):
 
 
 @hr_bp.route('/payroll/<int:run_id>/mark-paid', methods=['POST'])
-@admin_required
+@login_required
 def mark_paid(run_id):
     run = db.get_or_404(PayrollRun, run_id)
     _require_payroll_run_access(run)
@@ -1250,7 +1250,7 @@ def mark_paid(run_id):
 
 
 @hr_bp.route('/payroll/<int:run_id>/delete', methods=['POST'])
-@admin_required
+@login_required
 def delete_payroll(run_id):
     run = db.get_or_404(PayrollRun, run_id)
     _require_payroll_run_access(run)
@@ -1274,7 +1274,7 @@ def print_payslip(run_id, slip_id):
 
 
 @hr_bp.route('/payroll/<int:run_id>/sync-deductions', methods=['POST'])
-@admin_required
+@login_required
 def sync_deductions(run_id):
     run = db.get_or_404(PayrollRun, run_id)
     _require_payroll_run_access(run)
@@ -1477,7 +1477,7 @@ def my_document(doc_id):
 
 
 @hr_bp.route('/attendance/qr')
-@admin_required
+@login_required
 def checkin_qr():
     """Admin display of today's rotating QR code for staff to scan and check in."""
     from flask import request as _rq
@@ -1658,7 +1658,7 @@ _IMPORT_ALIASES = {
 
 
 @hr_bp.route('/staff/import', methods=['POST'])
-@admin_required
+@login_required
 def import_staff():
     """Bulk-create staff from a CSV. Header row maps common column names; first
     name + surname required. Departments are matched (case-insensitive) or created."""
@@ -1814,7 +1814,7 @@ def _read_vacancy(v):
 
 
 @hr_bp.route('/recruitment/add', methods=['POST'])
-@admin_required
+@login_required
 def vacancy_add():
     if not (request.form.get('title') or '').strip():
         return _err('Enter a job title.', url_for('hr.recruitment'))
@@ -1881,7 +1881,7 @@ def vacancy_detail(vac_id):
 
 
 @hr_bp.route('/recruitment/<int:vac_id>/edit', methods=['POST'])
-@admin_required
+@login_required
 def vacancy_edit(vac_id):
     v = db.get_or_404(JobVacancy_, vac_id)
     require_branch_access(v.branch_id)
@@ -1891,7 +1891,7 @@ def vacancy_edit(vac_id):
 
 
 @hr_bp.route('/recruitment/<int:vac_id>/delete', methods=['POST'])
-@admin_required
+@login_required
 def vacancy_delete(vac_id):
     v = db.get_or_404(JobVacancy_, vac_id)
     require_branch_access(v.branch_id)
@@ -1949,7 +1949,7 @@ def application_status(app_id):
 
 
 @hr_bp.route('/applications/<int:app_id>/delete', methods=['POST'])
-@admin_required
+@login_required
 def application_delete(app_id):
     a = db.get_or_404(JobApplication_, app_id)
     require_branch_access(a.vacancy.branch_id)
@@ -2007,7 +2007,7 @@ def interview_outcome(intv_id):
 
 
 @hr_bp.route('/applications/<int:app_id>/hire', methods=['POST'])
-@admin_required
+@login_required
 def hire_applicant(app_id):
     """Convert a candidate into a StaffMember (the HR record of truth) and close
     out the pipeline. Idempotent — a candidate already hired isn't re-created."""
@@ -2068,7 +2068,7 @@ def settings():
 
 
 @hr_bp.route('/settings/deductions/add', methods=['POST'])
-@admin_required
+@login_required
 def add_deduction_type():
     from models import PayrollDeductionType
     from utils.branch_scope import branch_for_new
@@ -2088,7 +2088,6 @@ def add_deduction_type():
 
 @hr_bp.route('/settings/deductions/<int:type_id>/amounts', methods=['GET', 'POST'])
 @login_required
-@admin_required
 def deduction_amounts(type_id):
     """Set every staff member's own monthly amount for one deduction item in a
     single screen — e.g. Welfare: ₦5,000 for one person, ₦15,000 for another.
@@ -2142,7 +2141,7 @@ def deduction_amounts(type_id):
 
 
 @hr_bp.route('/settings/deductions/<int:type_id>/toggle', methods=['POST'])
-@admin_required
+@login_required
 def toggle_deduction_type(type_id):
     from models import PayrollDeductionType
     from utils.branch_scope import require_branch_access
@@ -2154,7 +2153,7 @@ def toggle_deduction_type(type_id):
 
 
 @hr_bp.route('/settings/deductions/<int:type_id>/delete', methods=['POST'])
-@admin_required
+@login_required
 def delete_deduction_type(type_id):
     from models import PayrollDeductionType
     from utils.branch_scope import require_branch_access
@@ -2165,7 +2164,7 @@ def delete_deduction_type(type_id):
 
 
 @hr_bp.route('/settings/save', methods=['POST'])
-@admin_required
+@login_required
 def save_hr_settings():
     hr.save_settings(request.form)
     hr.save_leave_allowances(request.form)
@@ -2184,7 +2183,6 @@ def _loan_staff():
 
 @hr_bp.route('/loans')
 @login_required
-@admin_required
 def loans_list():
     from utils.branch_scope import scope_query
     from utils import staff_loans
@@ -2194,7 +2192,6 @@ def loans_list():
 
 @hr_bp.route('/loans/settings', methods=['POST'])
 @login_required
-@admin_required
 def loans_settings():
     from utils import staff_loans
     staff_loans.save_settings(
@@ -2208,7 +2205,6 @@ def loans_settings():
 
 @hr_bp.route('/loans/new', methods=['GET', 'POST'])
 @login_required
-@admin_required
 def loan_new():
     from utils import staff_loans
     from utils.branch_scope import branch_for_new, require_branch_access
@@ -2262,7 +2258,6 @@ def loan_new():
 
 @hr_bp.route('/loans/<int:loan_id>')
 @login_required
-@admin_required
 def loan_detail(loan_id):
     from utils.branch_scope import require_branch_access
     loan = db.get_or_404(StaffLoan, loan_id)
@@ -2272,7 +2267,6 @@ def loan_detail(loan_id):
 
 @hr_bp.route('/loans/<int:loan_id>/guarantor/<int:staff_id>/act', methods=['POST'])
 @login_required
-@admin_required
 def loan_guarantor_act(loan_id, staff_id):
     from utils import staff_loans
     from utils.branch_scope import require_branch_access
@@ -2287,7 +2281,6 @@ def loan_guarantor_act(loan_id, staff_id):
 
 @hr_bp.route('/loans/<int:loan_id>/repay', methods=['POST'])
 @login_required
-@admin_required
 def loan_repay(loan_id):
     from utils import staff_loans
     from utils.branch_scope import require_branch_access
@@ -2308,7 +2301,6 @@ def loan_repay(loan_id):
 
 @hr_bp.route('/loans/<int:loan_id>/cancel', methods=['POST'])
 @login_required
-@admin_required
 def loan_cancel(loan_id):
     from utils.branch_scope import require_branch_access
     loan = db.get_or_404(StaffLoan, loan_id)

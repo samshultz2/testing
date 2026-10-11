@@ -93,7 +93,7 @@ function Dashboard({ d }) {
   return (
     <>
       <div className="page-header"><h1>Staff &amp; HR</h1>
-        <div className="page-header-actions">{canWrite(d) && <a href={d.urls.add_staff} className="btn btn-primary"><i aria-hidden="true" className="fas fa-user-plus" /> Add Staff</a>}</div>
+        <div className="page-header-actions">{canWrite(d, 'staff_create') && <a href={d.urls.add_staff} className="btn btn-primary"><i aria-hidden="true" className="fas fa-user-plus" /> Add Staff</a>}</div>
       </div>
       <Tabs d={d} />
       <div className="d-flex gap-2 flex-wrap mb-3">
@@ -134,7 +134,7 @@ function Dashboard({ d }) {
                 <tbody>{d.recent.map((s) => (
                   <tr key={s.id}><td data-label="Name"><a href={s.url}>{s.full_name}</a></td><td data-label="Designation" className="text-muted text-sm">{s.designation}</td><td data-label="Dept">{s.department}</td></tr>))}</tbody>
               </table></div>
-            ) : <Empty icon="fa-user-plus" title="" style={{ padding: '1.4rem' }}><p>No staff yet</p>{canWrite(d) && <a href={d.urls.add_staff} className="btn btn-primary btn-sm mt-2">Add staff</a>}</Empty>}
+            ) : <Empty icon="fa-user-plus" title="" style={{ padding: '1.4rem' }}><p>No staff yet</p>{canWrite(d, 'staff_create') && <a href={d.urls.add_staff} className="btn btn-primary btn-sm mt-2">Add staff</a>}</Empty>}
           </div>
         </div>
       </div>
@@ -208,10 +208,10 @@ function Staff({ d, notify }) {
       <div className="page-header"><h1>Staff Directory</h1>
         <div className="page-header-actions">
           <input type="file" ref={fileRef} accept=".csv,text/csv" style={{ display: 'none' }} onChange={onImport} />
-          {canWrite(d) && d.is_admin !== false && <button type="button" className="sp-btn" disabled={busy} onClick={() => fileRef.current && fileRef.current.click()}><i aria-hidden="true" className="fas fa-file-import" /> Import</button>}
-          <button type="button" className="sp-btn" onClick={() => setNotifyOpen(true)}><i aria-hidden="true" className="fas fa-bullhorn" /> Notify</button>
-          <a href={d.urls.export} className="sp-btn" data-native download><i aria-hidden="true" className="fas fa-file-csv" /> Export</a>
-          {canWrite(d) && <a href={d.urls.add} className="sp-btn sp-btn-fill"><i aria-hidden="true" className="fas fa-user-plus" /> Add Staff</a>}
+          {canWrite(d, 'staff_import') && <button type="button" className="sp-btn" disabled={busy} onClick={() => fileRef.current && fileRef.current.click()}><i aria-hidden="true" className="fas fa-file-import" /> Import</button>}
+          {canWrite(d, 'staff_notify') && <button type="button" className="sp-btn" onClick={() => setNotifyOpen(true)}><i aria-hidden="true" className="fas fa-bullhorn" /> Notify</button>}
+          {canWrite(d, 'staff_export') && <a href={d.urls.export} className="sp-btn" data-native download><i aria-hidden="true" className="fas fa-file-csv" /> Export</a>}
+          {canWrite(d, 'staff_create') && <a href={d.urls.add} className="sp-btn sp-btn-fill"><i aria-hidden="true" className="fas fa-user-plus" /> Add Staff</a>}
         </div>
       </div>
       <Tabs d={d} />
@@ -273,7 +273,7 @@ function Staff({ d, notify }) {
                   <td className="actions"><a href={s.url} className="sp-btn sp-btn-sm"><i aria-hidden="true" className="fas fa-eye" /> View</a></td>
                 </tr>))}</tbody>
             </table></div>
-          ) : <Empty icon="fa-users" title="No staff found"><p>Add your first staff member or adjust filters.</p>{canWrite(d) && <a href={d.urls.add} className="btn btn-primary mt-2">Add Staff</a>}</Empty>}
+          ) : <Empty icon="fa-users" title="No staff found"><p>Add your first staff member or adjust filters.</p>{canWrite(d, 'staff_create') && <a href={d.urls.add} className="btn btn-primary mt-2">Add Staff</a>}</Empty>}
         </div></div>
     </>
   );
@@ -504,8 +504,8 @@ function StaffDetail({ d, notify }) {
         <div className="ph-actions">
           {s.phone && <><a href={'tel:' + s.phone} className="sp-btn sp-btn-success" aria-label="Call"><i aria-hidden="true" className="fas fa-phone" /> Call</a>
             <a href={'https://wa.me/' + s.wa_intl} target="_blank" rel="noopener" className="sp-btn sp-btn-success" aria-label="WhatsApp"><i aria-hidden="true" className="fab fa-whatsapp" /> WhatsApp</a></>}
-          {canWrite(d) && <a href={d.urls.edit} className="sp-btn sp-btn-primary"><i aria-hidden="true" className="fas fa-pen" /> Edit</a>}
-          {d.is_admin && <button className="sp-btn sp-btn-danger" onClick={() => act(d.urls.delete, {}, `Delete ${s.full_name}? If they have payroll/attendance/leave history or a login, they'll be deactivated (hidden everywhere) instead of removed.`, true)}><i aria-hidden="true" className="fas fa-trash" /> Delete</button>}
+          {canWrite(d, 'staff_edit') && <a href={d.urls.edit} className="sp-btn sp-btn-primary"><i aria-hidden="true" className="fas fa-pen" /> Edit</a>}
+          {canWrite(d, 'staff_delete') && <button className="sp-btn sp-btn-danger" onClick={() => act(d.urls.delete, {}, `Delete ${s.full_name}? If they have payroll/attendance/leave history or a login, they'll be deactivated (hidden everywhere) instead of removed.`, true)}><i aria-hidden="true" className="fas fa-trash" /> Delete</button>}
         </div>
       </div>
 
@@ -591,12 +591,12 @@ function DeductionsSection({ d, notify }) {
   return (
     <div className="card mt-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-hand-holding-dollar" /> Recurring deductions &amp; contributions</h3></div>
       <div className="card-body" style={{ padding: 0 }}><div className="table-container"><table className="data-table table-stack no-mobile-scroll">
-        <thead><tr><th>Item</th><th className="text-right">Monthly</th><th className="text-right">Contributed so far</th><th>Since / last</th>{d.is_admin && <th />}</tr></thead>
+        <thead><tr><th>Item</th><th className="text-right">Monthly</th><th className="text-right">Contributed so far</th><th>Since / last</th>{canWrite(d, 'deductions_assign') && <th />}</tr></thead>
         <tbody>{dd.items.map((i, k) => (
           <tr key={k}>
             <td data-label="Item">{i.name}{i.assigned && <span className="badge badge-info ml-1" title="A per-staff amount is set for this person">custom</span>}{!i.type_id && <span className="badge badge-secondary ml-1" title="This deduction item is no longer active">archived</span>}</td>
             <td data-label="Monthly" className="text-right">
-              {d.is_admin && i.type_id
+              {canWrite(d, 'deductions_assign') && i.type_id
                 ? <span className="d-inline-flex gap-1" style={{ justifyContent: 'flex-end' }}>
                     <input type="number" min="0" step="100" inputMode="decimal" className="form-control form-control-sm text-right" style={{ maxWidth: 120 }}
                       value={val(i)} placeholder="0" aria-label={`${i.name} monthly amount`}
@@ -607,16 +607,16 @@ function DeductionsSection({ d, notify }) {
             </td>
             <td data-label="Contributed so far" className="text-right"><strong>{naira(i.contributed)}</strong>{i.months ? <span className="text-muted text-sm"> · {i.months} mo</span> : null}</td>
             <td data-label="Since / last">{i.last || '—'}</td>
-            {d.is_admin && <td />}
+            {canWrite(d, 'deductions_assign') && <td />}
           </tr>))}</tbody>
         <tfoot><tr>
           <th>Total</th>
           <th className="text-right">{naira(dd.total_monthly)}<span className="text-muted text-sm">/mo</span></th>
           <th className="text-right">{naira(dd.total_contributed)}</th>
-          <th />{d.is_admin && <th />}
+          <th />{canWrite(d, 'deductions_assign') && <th />}
         </tr></tfoot>
       </table></div></div>
-      {d.is_admin && <div className="card-footer text-muted text-sm"><i aria-hidden="true" className="fas fa-circle-info" /> Set a per-staff monthly amount (e.g. Welfare ₦10,000). Leave blank to use the item's default. Changes apply to payroll generated from now on. “Contributed so far” counts finalized &amp; paid payslips.</div>}
+      {canWrite(d, 'deductions_assign') && <div className="card-footer text-muted text-sm"><i aria-hidden="true" className="fas fa-circle-info" /> Set a per-staff monthly amount (e.g. Welfare ₦10,000). Leave blank to use the item's default. Changes apply to payroll generated from now on. “Contributed so far” counts finalized &amp; paid payslips.</div>}
     </div>
   );
 }
@@ -637,10 +637,10 @@ function LifecycleTimeline({ d, act }) {
   return (
     <div className="card mt-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-timeline" /> Employment timeline</h3>
       <div className="d-flex gap-1 flex-wrap">
-        {d.is_admin && <button type="button" className="btn btn-secondary btn-sm" onClick={() => toggle('promote', { designation: s.designation || '', new_salary: s.salary || '', effective_date: d.today })}><i aria-hidden="true" className="fas fa-arrow-trend-up" /> Promote</button>}
-        {d.is_admin && branches.length > 0 && <button type="button" className="btn btn-secondary btn-sm" onClick={() => toggle('transfer', { effective_date: d.today })}><i aria-hidden="true" className="fas fa-arrows-left-right" /> Transfer</button>}
-        {d.is_admin && !s.confirmation_date && <button type="button" className="btn btn-secondary btn-sm" onClick={() => toggle('confirm', { effective_date: d.today })}><i aria-hidden="true" className="fas fa-user-check" /> Confirm</button>}
-        <button type="button" className="btn btn-secondary btn-sm" onClick={() => toggle('note', { effective_date: d.today })}><i aria-hidden="true" className="fas fa-note-sticky" /> Note</button>
+        {canWrite(d, 'staff_lifecycle') && <button type="button" className="btn btn-secondary btn-sm" onClick={() => toggle('promote', { designation: s.designation || '', new_salary: s.salary || '', effective_date: d.today })}><i aria-hidden="true" className="fas fa-arrow-trend-up" /> Promote</button>}
+        {canWrite(d, 'staff_lifecycle') && branches.length > 0 && <button type="button" className="btn btn-secondary btn-sm" onClick={() => toggle('transfer', { effective_date: d.today })}><i aria-hidden="true" className="fas fa-arrows-left-right" /> Transfer</button>}
+        {canWrite(d, 'staff_lifecycle') && !s.confirmation_date && <button type="button" className="btn btn-secondary btn-sm" onClick={() => toggle('confirm', { effective_date: d.today })}><i aria-hidden="true" className="fas fa-user-check" /> Confirm</button>}
+        {canWrite(d, 'staff_edit') && <button type="button" className="btn btn-secondary btn-sm" onClick={() => toggle('note', { effective_date: d.today })}><i aria-hidden="true" className="fas fa-note-sticky" /> Note</button>}
       </div>
     </div>
       <div className="card-body">
@@ -818,9 +818,9 @@ function ReviewsSection({ d, act, notify }) {
   const ratingBadge = (r) => 'badge ' + (r === 'Excellent' ? 'badge-success' : r === 'Good' ? 'badge-info' : r === 'Poor' ? 'badge-danger' : 'badge-warning');
   return (
     <div className="card mt-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-star-half-stroke" /> Performance reviews</h3>
-      {d.is_admin && <button type="button" className="btn btn-secondary btn-sm" onClick={() => setOpen(!open)}><i aria-hidden="true" className="fas fa-plus" /> Add review</button>}</div>
+      {canWrite(d, 'reviews_edit') && <button type="button" className="btn btn-secondary btn-sm" onClick={() => setOpen(!open)}><i aria-hidden="true" className="fas fa-plus" /> Add review</button>}</div>
       <div className="card-body">
-        {open && d.is_admin && (
+        {open && canWrite(d, 'reviews_edit') && (
           <form onSubmit={submit} className="lc-form" style={{ flexDirection: 'column', alignItems: 'stretch' }}>
             <div className="form-row">
               <div className="form-group mb-0"><label className="form-label">Period</label><input type="text" className="form-control" placeholder="e.g. 2024/2025" value={f.period} onChange={(e) => set('period', e.target.value)} /></div>
@@ -844,7 +844,7 @@ function ReviewsSection({ d, act, notify }) {
               <div className="d-flex gap-1 align-center">
                 {r.score != null && <span className="badge badge-primary">{r.score}</span>}
                 {r.rating && <span className={ratingBadge(r.rating)}>{r.rating}</span>}
-                {d.is_admin && <button className="btn btn-danger btn-sm" onClick={() => act(r.delete_url, {}, `Delete the ${r.period} review?`)}><i aria-hidden="true" className="fas fa-trash" /></button>}
+                {canWrite(d, 'reviews_edit') && <button className="btn btn-danger btn-sm" onClick={() => act(r.delete_url, {}, `Delete the ${r.period} review?`)}><i aria-hidden="true" className="fas fa-trash" /></button>}
               </div>
             </div>
             {r.strengths && <div className="text-sm mt-1"><strong>Strengths:</strong> {r.strengths}</div>}
@@ -864,7 +864,7 @@ function SalarySection({ d, act }) {
   return (
     <div className="card mt-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-money-bill-trend-up" /> Salary &amp; increments</h3><span className="badge badge-primary" style={{ alignSelf: 'center' }}>Current: {naira(s.salary)}</span></div>
       <div className="card-body">
-        {d.is_admin && (
+        {canWrite(d, 'staff_lifecycle') && (
           <form onSubmit={submit} className="d-flex gap-2 align-end flex-wrap mb-3">
             <div className="form-group mb-0"><label className="form-label">New salary (₦)</label><input type="number" className="form-control" min="0" step="500" required value={f.new_salary} onChange={(e) => set('new_salary', e.target.value)} /></div>
             <div className="form-group mb-0"><label className="form-label">Effective</label><input type="date" className="form-control" value={f.effective_date} onChange={(e) => set('effective_date', e.target.value)} /></div>
@@ -894,6 +894,7 @@ function LeaveSection({ d, act }) {
   return (
     <div className="card mt-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-plane-departure" /> Leave history</h3></div>
       <div className="card-body">
+        {canWrite(d, 'leave_create') && (
         <form onSubmit={add} className="d-flex gap-2 align-end flex-wrap mb-3">
           <div className="form-group mb-0"><label className="form-label">Type</label><select className="form-control" value={f.leave_type} onChange={(e) => set('leave_type', e.target.value)}>{d.leave_types.map((t) => <option key={t}>{t}</option>)}</select></div>
           <div className="form-group mb-0"><label className="form-label">From</label><input type="date" className="form-control" required value={f.start_date} onChange={(e) => set('start_date', e.target.value)} /></div>
@@ -901,6 +902,7 @@ function LeaveSection({ d, act }) {
           <div className="form-group mb-0" style={{ flex: 1, minWidth: 160 }}><label className="form-label">Reason</label><input type="text" className="form-control" value={f.reason} onChange={(e) => set('reason', e.target.value)} /></div>
           <button className="btn btn-secondary"><i aria-hidden="true" className="fas fa-plus" /> Add</button>
         </form>
+        )}
         {d.leaves.length ? (
           <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
             <thead><tr><th>Type</th><th>Dates</th><th>Days</th><th>Status</th><th /></tr></thead>
@@ -908,9 +910,9 @@ function LeaveSection({ d, act }) {
               <tr key={lv.id}><td data-label="Type">{lv.leave_type}</td><td data-label="Dates">{lv.dates}</td><td data-label="Days">{lv.days}</td>
                 <td data-label="Status"><span className={leaveBadge(lv.status)}>{lv.status}</span></td>
                 <td className="actions"><div className="d-flex gap-1 justify-end">
-                  {lv.status !== 'Approved' && <button className="btn btn-success btn-sm" title="Approve" onClick={() => act(lv.approve_url, { status: 'Approved' })}><i aria-hidden="true" className="fas fa-check" /></button>}
-                  {lv.status !== 'Rejected' && <button className="btn btn-secondary btn-sm" title="Reject" onClick={() => act(lv.approve_url, { status: 'Rejected' })}><i aria-hidden="true" className="fas fa-xmark" /></button>}
-                  <button className="btn btn-danger btn-sm" onClick={() => act(lv.delete_url, {}, 'Delete leave record?')}><i aria-hidden="true" className="fas fa-trash" /></button>
+                  {canWrite(d, 'leave_approve') && lv.status !== 'Approved' && <button className="btn btn-success btn-sm" title="Approve" onClick={() => act(lv.approve_url, { status: 'Approved' })}><i aria-hidden="true" className="fas fa-check" /></button>}
+                  {canWrite(d, 'leave_approve') && lv.status !== 'Rejected' && <button className="btn btn-secondary btn-sm" title="Reject" onClick={() => act(lv.approve_url, { status: 'Rejected' })}><i aria-hidden="true" className="fas fa-xmark" /></button>}
+                  {canWrite(d, 'leave_delete') && <button className="btn btn-danger btn-sm" onClick={() => act(lv.delete_url, {}, 'Delete leave record?')}><i aria-hidden="true" className="fas fa-trash" /></button>}
                 </div></td></tr>))}</tbody>
           </table></div>
         ) : <p className="text-muted mb-0">No leave records.</p>}
@@ -938,7 +940,7 @@ function Departments({ d, notify }) {
     <>
       <div className="page-header"><h1>Departments</h1></div>
       <Tabs d={d} />
-      {d.is_admin && (
+      {canWrite(d, 'departments_create') && (
         <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-plus" /> Add Department</h3></div>
           <div className="card-body"><form onSubmit={add} className="d-flex gap-2 align-end flex-wrap">
             <div className="form-group mb-0" style={{ flex: 1, minWidth: 200 }}><label className="form-label">Name</label><input type="text" className="form-control" placeholder="e.g., Sports" required value={name} onChange={(e) => setName(e.target.value)} /></div>
@@ -947,19 +949,19 @@ function Departments({ d, notify }) {
       )}
       <div className="card"><div className="card-header"><h3>Departments ({d.departments.length})</h3></div>
         <div className="card-body" style={{ padding: 0 }}><div className="table-container"><table className="data-table table-stack no-mobile-scroll">
-          <thead><tr><th>Name</th><th className="text-right">Staff</th><th>Status</th>{d.is_admin && <th />}</tr></thead>
+          <thead><tr><th>Name</th><th className="text-right">Staff</th><th>Status</th>{(canWrite(d, 'departments_edit') || canWrite(d, 'departments_delete')) && <th />}</tr></thead>
           <tbody>{d.departments.map((dep) => (
             <React.Fragment key={dep.id}>
               <tr>
                 <td data-label="Name"><strong>{dep.name}</strong></td>
                 <td data-label="Staff" className="text-right">{dep.count}</td>
                 <td data-label="Status">{dep.is_active ? <span className="badge badge-success">Active</span> : <span className="badge badge-secondary">Inactive</span>}</td>
-                {d.is_admin && <td className="actions"><div className="d-flex gap-1 justify-end">
-                  <button className="btn btn-secondary btn-sm" onClick={() => setEditing(editing === dep.id ? null : dep.id)}><i aria-hidden="true" className="fas fa-edit" /></button>
-                  <button className="btn btn-danger btn-sm" onClick={() => act(dep.delete_url, {}, `Delete ${dep.name}?`)}><i aria-hidden="true" className="fas fa-trash" /></button>
+                {(canWrite(d, 'departments_edit') || canWrite(d, 'departments_delete')) && <td className="actions"><div className="d-flex gap-1 justify-end">
+                  {canWrite(d, 'departments_edit') && <button className="btn btn-secondary btn-sm" onClick={() => setEditing(editing === dep.id ? null : dep.id)}><i aria-hidden="true" className="fas fa-edit" /></button>}
+                  {canWrite(d, 'departments_delete') && <button className="btn btn-danger btn-sm" onClick={() => act(dep.delete_url, {}, `Delete ${dep.name}?`)}><i aria-hidden="true" className="fas fa-trash" /></button>}
                 </div></td>}
               </tr>
-              {d.is_admin && editing === dep.id && (
+              {canWrite(d, 'departments_edit') && editing === dep.id && (
                 <tr><td colSpan={4} className="stack-full" style={{ background: 'var(--gray-50)' }}>
                   <DeptEdit dep={dep} notify={notify} onDone={() => { setEditing(null); nav.refresh(); }} />
                 </td></tr>)}
@@ -1068,6 +1070,7 @@ function Leave({ d, notify }) {
     <>
       <div className="page-header"><h1>Leave Management</h1></div>
       <Tabs d={d} />
+      {canWrite(d, 'leave_create') && (
       <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-plus" /> Record Leave</h3></div>
         <div className="card-body"><form onSubmit={add} className="d-flex gap-2 align-end flex-wrap">
           <div className="form-group mb-0" style={{ flex: 1, minWidth: 200 }}><label className="form-label">Staff</label>
@@ -1077,6 +1080,7 @@ function Leave({ d, notify }) {
           <div className="form-group mb-0"><label className="form-label">To</label><input type="date" className="form-control" required value={f.end_date} onChange={(e) => set('end_date', e.target.value)} /></div>
           <button className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Add</button>
         </form></div></div>
+      )}
 
       <div className="card mb-3"><div className="card-body">
         <div className="d-flex justify-between align-end flex-wrap gap-2">
@@ -1104,9 +1108,9 @@ function Leave({ d, notify }) {
                   <td data-label="Dates">{lv.dates}</td><td data-label="Days">{lv.days}</td>
                   <td data-label="Status"><span className={leaveBadge(lv.status)}>{lv.status}</span></td>
                   <td className="actions"><div className="d-flex gap-1 justify-end">
-                    {lv.status !== 'Approved' && <button className="btn btn-success btn-sm" onClick={() => act(lv.approve_url, { status: 'Approved' })}><i aria-hidden="true" className="fas fa-check" /></button>}
-                    {lv.status !== 'Rejected' && <button className="btn btn-secondary btn-sm" onClick={() => act(lv.approve_url, { status: 'Rejected' })}><i aria-hidden="true" className="fas fa-xmark" /></button>}
-                    <button className="btn btn-danger btn-sm" onClick={() => act(lv.delete_url, {}, 'Delete?')}><i aria-hidden="true" className="fas fa-trash" /></button>
+                    {canWrite(d, 'leave_approve') && lv.status !== 'Approved' && <button className="btn btn-success btn-sm" onClick={() => act(lv.approve_url, { status: 'Approved' })}><i aria-hidden="true" className="fas fa-check" /></button>}
+                    {canWrite(d, 'leave_approve') && lv.status !== 'Rejected' && <button className="btn btn-secondary btn-sm" onClick={() => act(lv.approve_url, { status: 'Rejected' })}><i aria-hidden="true" className="fas fa-xmark" /></button>}
+                    {canWrite(d, 'leave_delete') && <button className="btn btn-danger btn-sm" onClick={() => act(lv.delete_url, {}, 'Delete?')}><i aria-hidden="true" className="fas fa-trash" /></button>}
                   </div></td></tr>))}</tbody>
             </table></div>
           ) : <Empty icon="fa-plane-departure" title="No leave records"><p>Record staff leave above.</p></Empty>}
@@ -1129,7 +1133,7 @@ function Payroll({ d, notify }) {
     <>
       <div className="page-header"><h1>Payroll</h1></div>
       <Tabs d={d} />
-      {d.is_admin && (
+      {canWrite(d, 'payroll_create') && (
         <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-plus" /> Generate Payroll</h3></div>
           <div className="card-body">
             <p className="text-muted text-sm">Creates a payslip for every active staff member using their monthly salary. You can adjust allowances/deductions afterwards.</p>
@@ -1173,12 +1177,14 @@ function PayrollDetail({ d, notify }) {
       <div className="page-header"><h1>Payroll · {run.period_label}</h1>
         <div className="page-header-actions">
           <span className={runBadge(run.status)} style={{ alignSelf: 'center' }}>{run.status}</span>
-          {d.is_admin && run.status === 'Draft' && <>
+          {canWrite(d, 'payroll_edit') && run.status === 'Draft' && (
             <button className="btn btn-secondary" onClick={() => act(d.urls.sync_deductions, {}, "Refresh every payslip's deductions from this month's attendance?")}><i aria-hidden="true" className="fas fa-rotate" /> Refresh deductions from attendance</button>
+          )}
+          {canWrite(d, 'payroll_finalize') && run.status === 'Draft' && (
             <button className="btn btn-primary" onClick={() => act(d.urls.finalize, { post_expense: '1' }, 'Finalize this payroll? You can optionally post the total to Finance.')}><i aria-hidden="true" className="fas fa-lock" /> Finalize &amp; post to Finance</button>
-          </>}
-          {d.is_admin && run.status === 'Finalized' && <button className="btn btn-success" onClick={() => act(d.urls.mark_paid, {})}><i aria-hidden="true" className="fas fa-check-double" /> Mark paid</button>}
-          {d.is_admin && <button className="btn btn-danger" onClick={() => act(d.urls.delete, {}, 'Delete this payroll run and all payslips?', true)}><i aria-hidden="true" className="fas fa-trash" /></button>}
+          )}
+          {canWrite(d, 'payroll_finalize') && run.status === 'Finalized' && <button className="btn btn-success" onClick={() => act(d.urls.mark_paid, {})}><i aria-hidden="true" className="fas fa-check-double" /> Mark paid</button>}
+          {canWrite(d, 'payroll_delete') && <button className="btn btn-danger" onClick={() => act(d.urls.delete, {}, 'Delete this payroll run and all payslips?', true)}><i aria-hidden="true" className="fas fa-trash" /></button>}
         </div>
       </div>
       <Tabs d={d} />
@@ -1204,10 +1210,10 @@ function PayrollDetail({ d, notify }) {
                     <td data-label="Net" className="text-right"><strong>{naira(ps.net)}</strong></td>
                     <td className="actions"><div className="d-flex gap-1 justify-end">
                       <a href={ps.print_url} className="btn btn-secondary btn-sm" title="Payslip" data-native><i aria-hidden="true" className="fas fa-print" /></a>
-                      {d.is_admin && run.status === 'Draft' && <button className="btn btn-secondary btn-sm" title="Edit" onClick={() => setEditing(editing === ps.id ? null : ps.id)}><i aria-hidden="true" className="fas fa-edit" /></button>}
+                      {canWrite(d, 'payroll_edit') && run.status === 'Draft' && <button className="btn btn-secondary btn-sm" title="Edit" onClick={() => setEditing(editing === ps.id ? null : ps.id)}><i aria-hidden="true" className="fas fa-edit" /></button>}
                     </div></td>
                   </tr>
-                  {d.is_admin && run.status === 'Draft' && editing === ps.id && (
+                  {canWrite(d, 'payroll_edit') && run.status === 'Draft' && editing === ps.id && (
                     <tr><td colSpan={8} className="stack-full" style={{ background: 'var(--gray-50)' }}>
                       <PayslipEdit ps={ps} notify={notify} onDone={() => { setEditing(null); nav.refresh(); }} />
                       <div className="text-muted text-sm" style={{ marginTop: '.5rem' }}>
@@ -1261,7 +1267,7 @@ function Attendance({ d, notify }) {
       <div className="page-header"><h1>Staff Attendance</h1>
         <div className="page-header-actions">
           <a href={d.checkin_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-location-crosshairs" /> Self check-in</a>
-          <a href={d.qr_url} className="btn btn-primary"><i aria-hidden="true" className="fas fa-qrcode" /> Show QR</a>
+          {canWrite(d, 'attendance_qr') && <a href={d.qr_url} className="btn btn-primary"><i aria-hidden="true" className="fas fa-qrcode" /> Show QR</a>}
         </div>
       </div>
       <Tabs d={d} />
@@ -1283,7 +1289,7 @@ function Attendance({ d, notify }) {
 
       <form onSubmit={save}>
         <div className="card"><div className="card-header"><h3>{rows.length} staff · {d.day_label}</h3>
-          <button type="submit" className="btn btn-primary btn-sm" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save</button></div>
+          {canWrite(d, 'attendance_mark') && <button type="submit" className="btn btn-primary btn-sm" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save</button>}</div>
           <div className="card-body" style={{ padding: 0 }}>
             {rows.length ? (
               <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
@@ -1291,15 +1297,15 @@ function Attendance({ d, notify }) {
                 <tbody>{rows.map((r) => (
                   <tr key={r.id}>
                     <td data-label="Staff">{r.full_name}</td>
-                    <td data-label="Status" className="att-status"><select className="form-control" value={r.status} onChange={(e) => setRow(r.id, 'status', e.target.value)}>{d.att_statuses.map((st) => <option key={st} value={st}>{st}</option>)}</select></td>
-                    <td data-label="Clock-in"><input type="time" className="form-control" style={{ maxWidth: 130 }} value={r.clock_in} onChange={(e) => setRow(r.id, 'clock_in', e.target.value)} /></td>
+                    <td data-label="Status" className="att-status"><select className="form-control" disabled={!canWrite(d, 'attendance_mark')} value={r.status} onChange={(e) => setRow(r.id, 'status', e.target.value)}>{d.att_statuses.map((st) => <option key={st} value={st}>{st}</option>)}</select></td>
+                    <td data-label="Clock-in"><input type="time" className="form-control" style={{ maxWidth: 130 }} disabled={!canWrite(d, 'attendance_mark')} value={r.clock_in} onChange={(e) => setRow(r.id, 'clock_in', e.target.value)} /></td>
                     <td data-label="Late">{r.minutes_late ? <span className="badge badge-warning">{r.minutes_late} min</span> : '—'}</td>
                     <td data-label="Deduction" className="text-right">{r.deduction ? <span style={{ color: 'var(--danger)' }}>{naira(r.deduction)}</span> : '—'}</td>
                   </tr>))}</tbody>
               </table></div>
             ) : <Empty icon="fa-user-clock" title="No active staff"><p>Add staff to mark attendance.</p></Empty>}
           </div></div>
-        {rows.length > 0 && <div className="page-header-actions mt-3"><button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save Attendance</button></div>}
+        {rows.length > 0 && canWrite(d, 'attendance_mark') && <div className="page-header-actions mt-3"><button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save Attendance</button></div>}
       </form>
       <p className="text-muted text-sm mt-2"><i aria-hidden="true" className="fas fa-circle-info" /> Lateness deductions are calculated from the clock-in time vs the resumption time set in <a href={d.settings_url}>Settings</a>, and flow into that month's payroll automatically.</p>
     </>
@@ -1372,7 +1378,7 @@ function Settings({ d, notify }) {
       <Tabs d={d} />
       <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-user-clock" /> Attendance &amp; Deductions</h3></div>
         <div className="card-body"><form onSubmit={saveSettings}>
-          <fieldset disabled={!d.is_admin} style={{ border: 0, padding: 0, margin: 0 }}>
+          <fieldset disabled={!canWrite(d, 'settings_edit')} style={{ border: 0, padding: 0, margin: 0 }}>
             <div className="form-row">
               <div className="form-group"><label className="form-label">Resumption time</label><input type="time" className="form-control" value={s.late_time} onChange={(e) => set('late_time', e.target.value)} /><span className="form-hint d-block">Staff clocking in after this time are marked late.</span></div>
               <div className="form-group"><label className="form-label">Lateness rate (₦ per minute)</label><input type="number" className="form-control" min="0" step="1" value={s.late_rate} onChange={(e) => set('late_rate', e.target.value)} /><span className="form-hint d-block">e.g. 10 → ₦10 for every minute after the resumption time.</span></div>
@@ -1394,7 +1400,7 @@ function Settings({ d, notify }) {
       <div className="card mt-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-money-bill-trend-up" /> Recurring Deductions</h3></div>
         <div className="card-body">
           <p className="text-muted text-sm" style={{ marginTop: 0 }}>Deductions applied to staff payslips each month — e.g. pension (a % of basic) or welfare (a fixed amount). The value below is the <strong>default</strong> for everyone; use <strong>Per-staff amounts</strong> to set a different amount per person (Welfare ₦5,000 for one, ₦15,000 for another).</p>
-          {d.is_admin && (
+          {canWrite(d, 'deduction_types_edit') && (
             <form onSubmit={addDed} className="d-flex gap-2 align-end flex-wrap mb-3">
               <div className="form-group mb-0" style={{ flex: 2, minWidth: 160 }}><label className="form-label">Name</label><input type="text" className="form-control" placeholder="e.g. Pension, Welfare, Union dues" required value={ded.name} onChange={(e) => setDed((x) => ({ ...x, name: e.target.value }))} /></div>
               <div className="form-group mb-0"><label className="form-label">Type</label><select className="form-control" value={ded.kind} onChange={(e) => setDed((x) => ({ ...x, kind: e.target.value }))}><option value="percent">% of basic</option><option value="fixed">Fixed ₦</option></select></div>
@@ -1411,9 +1417,9 @@ function Settings({ d, notify }) {
                   <td data-label="Deduction">{dd.kind === 'percent' ? `${Math.round(dd.value * 100) / 100}% of basic` : `${naira(dd.value)} fixed`}</td>
                   <td data-label="Status">{dd.is_active ? <span className="badge badge-success">Active</span> : <span className="badge badge-warning">Inactive</span>}</td>
                   <td className="actions"><div className="d-flex gap-1 justify-end">
-                    <a className="btn btn-secondary btn-sm" title="Set each staff member's amount" href={dd.amounts_url} data-native><i aria-hidden="true" className="fas fa-user-pen" /> Per-staff amounts</a>
-                    <button className="btn btn-secondary btn-sm" title="Toggle active" onClick={() => act(dd.toggle_url, {})}><i aria-hidden="true" className="fas fa-power-off" /></button>
-                    <button className="btn btn-danger btn-sm" title="Delete" onClick={() => act(dd.delete_url, {}, 'Remove this deduction?')}><i aria-hidden="true" className="fas fa-trash" /></button>
+                    {canWrite(d, 'deductions_assign') && <a className="btn btn-secondary btn-sm" title="Set each staff member's amount" href={dd.amounts_url} data-native><i aria-hidden="true" className="fas fa-user-pen" /> Per-staff amounts</a>}
+                    {canWrite(d, 'deduction_types_edit') && <button className="btn btn-secondary btn-sm" title="Toggle active" onClick={() => act(dd.toggle_url, {})}><i aria-hidden="true" className="fas fa-power-off" /></button>}
+                    {canWrite(d, 'deduction_types_edit') && <button className="btn btn-danger btn-sm" title="Delete" onClick={() => act(dd.delete_url, {}, 'Remove this deduction?')}><i aria-hidden="true" className="fas fa-trash" /></button>}
                   </div></td>
                 </tr>))}</tbody>
             </table>
@@ -1424,7 +1430,7 @@ function Settings({ d, notify }) {
         <div className="card-body">
           <p className="text-muted text-sm" style={{ marginTop: 0 }}>Annual entitlement (days) per leave type. Balances on each staff profile count approved leave against these.</p>
           <form onSubmit={saveAllowances}>
-            <fieldset disabled={!d.is_admin} style={{ border: 0, padding: 0, margin: 0 }}>
+            <fieldset disabled={!canWrite(d, 'settings_edit')} style={{ border: 0, padding: 0, margin: 0 }}>
               <div className="form-row" style={{ flexWrap: 'wrap' }}>
                 {(d.leave_types || []).map((t) => (
                   <div className="form-group" key={t} style={{ minWidth: 110 }}><label className="form-label">{t}</label>
@@ -1647,10 +1653,10 @@ function Recruitment({ d, notify }) {
   return (
     <>
       <div className="page-header"><h1>Recruitment</h1>
-        <div className="page-header-actions">{d.is_admin && <button className="btn btn-primary" onClick={() => setOpen(!open)}><i aria-hidden="true" className="fas fa-plus" /> Post Vacancy</button>}</div>
+        <div className="page-header-actions">{canWrite(d, 'recruitment_create') && <button className="btn btn-primary" onClick={() => setOpen(!open)}><i aria-hidden="true" className="fas fa-plus" /> Post Vacancy</button>}</div>
       </div>
       <Tabs d={d} />
-      {open && d.is_admin && (
+      {open && canWrite(d, 'recruitment_create') && (
         <div className="card mb-3"><div className="card-header"><h3>New vacancy</h3></div><div className="card-body">
           <form onSubmit={add}>
             <div className="form-row">
@@ -1718,7 +1724,7 @@ function Vacancy({ d, notify }) {
     <>
       <div className="page-header"><h1>{v.title}</h1>
         <div className="page-header-actions"><a href={d.urls.back} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Vacancies</a>
-          {d.is_admin && <button className="btn btn-danger" onClick={() => act(d.urls.delete, {}, 'Delete this vacancy and its applications?', true)}><i aria-hidden="true" className="fas fa-trash" /></button>}</div>
+          {canWrite(d, 'recruitment_delete') && <button className="btn btn-danger" onClick={() => act(d.urls.delete, {}, 'Delete this vacancy and its applications?', true)}><i aria-hidden="true" className="fas fa-trash" /></button>}</div>
       </div>
       <Tabs d={d} />
       <div className="card mb-3"><div className="card-body">
@@ -1730,7 +1736,7 @@ function Vacancy({ d, notify }) {
         </div>
         {v.description && <p className="mb-1">{v.description}</p>}
         {v.requirements && <p className="text-muted text-sm mb-0"><strong>Requirements:</strong> {v.requirements}</p>}
-        {d.is_admin && (
+        {canWrite(d, 'recruitment_edit') && (
           <div className="d-flex gap-1 mt-2 flex-wrap">
             {d.statuses.filter((s) => s !== v.status).map((s) => (
               <button key={s} className="btn btn-secondary btn-sm" onClick={() => act(d.urls.edit, { title: v.title, department_id: v.department_id, staff_type: v.staff_type, employment_type: v.employment_type, positions: v.positions, closing_date: v.closing_date, description: v.description, requirements: v.requirements, status: s })}>Mark {s}</button>))}
@@ -1739,9 +1745,9 @@ function Vacancy({ d, notify }) {
 
       <div className="d-flex justify-between align-center mb-2">
         <h3 style={{ margin: 0 }}>Applications ({d.applications.length})</h3>
-        <button className="btn btn-primary btn-sm" onClick={() => setAddOpen(!addOpen)}><i aria-hidden="true" className="fas fa-plus" /> Add applicant</button>
+        {canWrite(d, 'recruitment_create') && <button className="btn btn-primary btn-sm" onClick={() => setAddOpen(!addOpen)}><i aria-hidden="true" className="fas fa-plus" /> Add applicant</button>}
       </div>
-      {addOpen && (
+      {addOpen && canWrite(d, 'recruitment_create') && (
         <div className="card mb-3"><div className="card-body"><form onSubmit={addApp}>
           <div className="form-row">
             <div className="form-group"><label className="form-label">First name <span className="required">*</span></label><input type="text" className="form-control" value={af.first_name} onChange={(e) => setA('first_name', e.target.value)} /></div>
@@ -1768,12 +1774,12 @@ function Vacancy({ d, notify }) {
               {a.resume_url && <a href={a.resume_url} data-native className="btn btn-secondary btn-sm" title="CV"><i aria-hidden="true" className="fas fa-file-lines" /></a>}
               {a.staff_url && <a href={a.staff_url} className="btn btn-success btn-sm"><i aria-hidden="true" className="fas fa-id-badge" /> Staff</a>}
               {a.status !== 'Hired' && a.status !== 'Rejected' && <>
-                {a.status === 'Applied' && <button className="btn btn-secondary btn-sm" onClick={() => act(a.status_url, { status: 'Shortlisted' })}>Shortlist</button>}
-                <button className="btn btn-secondary btn-sm" onClick={() => setIntvFor(intvFor === a.id ? null : a.id)}><i aria-hidden="true" className="fas fa-calendar-day" /> Interview</button>
-                {d.is_admin && <button className="btn btn-primary btn-sm" onClick={() => act(a.hire_url, {}, `Hire ${a.name} and add them to staff?`, true)}><i aria-hidden="true" className="fas fa-user-check" /> Hire</button>}
-                <button className="btn btn-secondary btn-sm" onClick={() => act(a.status_url, { status: 'Rejected' }, `Reject ${a.name}?`)}>Reject</button>
+                {a.status === 'Applied' && canWrite(d, 'recruitment_edit') && <button className="btn btn-secondary btn-sm" onClick={() => act(a.status_url, { status: 'Shortlisted' })}>Shortlist</button>}
+                {canWrite(d, 'recruitment_edit') && <button className="btn btn-secondary btn-sm" onClick={() => setIntvFor(intvFor === a.id ? null : a.id)}><i aria-hidden="true" className="fas fa-calendar-day" /> Interview</button>}
+                {canWrite(d, 'recruitment_hire') && <button className="btn btn-primary btn-sm" onClick={() => act(a.hire_url, {}, `Hire ${a.name} and add them to staff?`, true)}><i aria-hidden="true" className="fas fa-user-check" /> Hire</button>}
+                {canWrite(d, 'recruitment_edit') && <button className="btn btn-secondary btn-sm" onClick={() => act(a.status_url, { status: 'Rejected' }, `Reject ${a.name}?`)}>Reject</button>}
               </>}
-              {d.is_admin && <button className="btn btn-danger btn-sm" onClick={() => act(a.delete_url, {}, 'Delete this application?')}><i aria-hidden="true" className="fas fa-trash" /></button>}
+              {canWrite(d, 'recruitment_delete') && <button className="btn btn-danger btn-sm" onClick={() => act(a.delete_url, {}, 'Delete this application?')}><i aria-hidden="true" className="fas fa-trash" /></button>}
             </div>
           </div>
           {a.cover_note && <p className="text-muted text-sm mt-1 mb-0">{a.cover_note}</p>}
@@ -1783,7 +1789,7 @@ function Vacancy({ d, notify }) {
                 <span className="text-sm"><i aria-hidden="true" className="fas fa-calendar-day" /> {iv.when || 'TBD'} · {iv.mode}{iv.location ? ` · ${iv.location}` : ''}{iv.interviewer ? ` · ${iv.interviewer}` : ''}</span>
                 <span className="d-flex gap-1 align-center">
                   <span className={'badge ' + (iv.outcome === 'Passed' ? 'badge-success' : iv.outcome === 'Failed' ? 'badge-danger' : 'badge-warning')}>{iv.outcome}</span>
-                  {iv.outcome === 'Pending' && <>
+                  {iv.outcome === 'Pending' && canWrite(d, 'recruitment_edit') && <>
                     <button className="btn btn-success btn-sm" onClick={() => act(iv.outcome_url, { outcome: 'Passed' })}><i aria-hidden="true" className="fas fa-check" /></button>
                     <button className="btn btn-secondary btn-sm" onClick={() => act(iv.outcome_url, { outcome: 'Failed' })}><i aria-hidden="true" className="fas fa-xmark" /></button>
                   </>}

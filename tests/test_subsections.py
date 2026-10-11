@@ -2,7 +2,9 @@
 import re
 from models import (db, User, Expense, FeePayment, FeeDiscount, FeeItem, FeeStructure,
                     AdditionalCharge, Student, Term, AcademicSession, SchoolClass, ClassArm,
-                    ClassArmAssignment, StudentEnrollment, Branch)
+                    ClassArmAssignment, StudentEnrollment, Branch,
+                    StaffMember, Department, LeaveRecord, PayrollRun, JobVacancy, JobApplication,
+                    StaffLoan, StaffAttendance)
 from tests.conftest import login_token
 
 
@@ -1692,3 +1694,272 @@ def test_finance_installments_edit_without_delete(app):
     with app.app_context():
         plan = get_plan(term_id, None)
         assert len(plan) == 1   # installments_delete not granted, still there
+
+
+# ---- HR (40-key granular split) --------------------------------------------
+
+def _hr_staff(app, tag, **kw):
+    with app.app_context():
+        s = StaffMember(staff_id=f'HR{tag}', first_name='Hr', surname=f'Zz{tag}',
+                        staff_type='Teaching', status='Active', is_active=True,
+                        branch_id=Branch.get_default().id, **kw)
+        db.session.add(s); db.session.commit()
+        return s.id
+
+
+def test_hr_staff_view_without_create(app):
+    _make(app, 'hrsv', {'hr.staff_view': 'view'})
+    c = _login(app, 'hrsv')
+    assert c.get('/hr/staff').status_code == 200
+    r = c.get('/hr/staff/add', follow_redirects=False)
+    assert r.status_code in (302, 303)        # staff_create not granted
+
+
+def test_hr_staff_create_without_edit_or_delete(app):
+    _make(app, 'hrsc', {'hr.staff_create': 'edit'})
+    c = _login(app, 'hrsc')
+    tok = _ptoken(c)
+    with app.app_context():
+        before = StaffMember.query.count()
+    c.post('/hr/staff/add', data={'first_name': 'New', 'surname': 'Hire', 'gender': 'Male',
+                                  'staff_type': 'Teaching', '_csrf_token': tok})
+    with app.app_context():
+        staff = StaffMember.query.filter_by(surname='Hire').first()
+        assert staff is not None
+        sid = staff.id
+        assert StaffMember.query.count() == before + 1
+    # blocked from edit_staff (even the GET form page)
+    r = c.get(f'/hr/staff/{sid}/edit', follow_redirects=False)
+    assert r.status_code in (302, 303)
+    # blocked from delete_staff
+    c.post(f'/hr/staff/{sid}/delete', data={'_csrf_token': tok})
+    with app.app_context():
+        assert db.session.get(StaffMember, sid) is not None
+
+
+def test_hr_staff_edit_without_lifecycle_even_with_unrelated_edit(app):
+    # Regression test for the gap this phase closes: before the 40-key split,
+    # module_level('hr') returned 'edit' for ANY edit grant anywhere in HR,
+    # which incorrectly unlocked salary adjustment / promote / transfer for a
+    # user who only had plain staff_edit. Confirm that's closed, even
+    # alongside an unrelated edit grant (leave_approve).
+    sid = _hr_staff(app, 'SE1', designation='Teacher', salary=80000)
+    _make(app, 'hrse', {'hr.staff_edit': 'edit', 'hr.leave_approve': 'edit'})
+    c = _login(app, 'hrse')
+    tok = _ptoken(c)
+    c.post(f'/hr/staff/{sid}/salary',
+           data={'new_salary': '150000', 'effective_date': '2024-01-10', '_csrf_token': tok})
+    with app.app_context():
+        s = db.session.get(StaffMember, sid)
+        assert s.salary == 80000        # staff_lifecycle not granted -> unchanged
+
+
+def test_hr_staff_lifecycle_without_delete(app):
+    sid = _hr_staff(app, 'SL1', designation='Teacher', salary=80000)
+    _make(app, 'hrsl', {'hr.staff_lifecycle': 'edit'})
+    c = _login(app, 'hrsl')
+    tok = _ptoken(c)
+    c.post(f'/hr/staff/{sid}/confirm', data={'effective_date': '2024-01-10', '_csrf_token': tok})
+    with app.app_context():
+        s = db.session.get(StaffMember, sid)
+        assert s.confirmation_date is not None
+    c.post(f'/hr/staff/{sid}/delete', data={'_csrf_token': tok})
+    with app.app_context():
+        assert db.session.get(StaffMember, sid) is not None   # staff_delete not granted
+
+
+def test_hr_departments_edit_without_delete(app):
+    with app.app_context():
+        dep = Department(name='HR-Dept-1', is_active=True)
+        db.session.add(dep); db.session.commit()
+        dep_id = dep.id
+    _make(app, 'hrde', {'hr.departments_view': 'view', 'hr.departments_edit': 'edit'})
+    c = _login(app, 'hrde')
+    tok = _ptoken(c)
+    c.post(f'/hr/departments/{dep_id}/edit', data={'name': 'HR-Dept-1-Renamed', '_csrf_token': tok})
+    with app.app_context():
+        dep = db.session.get(Department, dep_id)
+        assert dep.name == 'HR-Dept-1-Renamed'
+    c.post(f'/hr/departments/{dep_id}/delete', data={'_csrf_token': tok})
+    with app.app_context():
+        assert db.session.get(Department, dep_id) is not None   # departments_delete not granted
+
+
+def test_hr_leave_create_without_approve(app):
+    sid = _hr_staff(app, 'LV1')
+    _make(app, 'hrlc', {'hr.leave_create': 'edit'})
+    c = _login(app, 'hrlc')
+    tok = _ptoken(c)
+    c.post('/hr/leave/add', data={'staff_id': sid, 'leave_type': 'Annual',
+                                  'start_date': '2024-02-01', 'end_date': '2024-02-03',
+                                  '_csrf_token': tok})
+    with app.app_context():
+        lv = LeaveRecord.query.filter_by(staff_id=sid).first()
+        assert lv is not None
+        lv_id = lv.id
+    c.post(f'/hr/leave/{lv_id}/status', data={'status': 'Approved', '_csrf_token': tok})
+    with app.app_context():
+        lv = db.session.get(LeaveRecord, lv_id)
+        assert lv.status == 'Pending'   # leave_approve not granted
+
+
+def test_hr_payroll_create_without_finalize(app):
+    _make(app, 'hrpc', {'hr.payroll_create': 'edit'})
+    c = _login(app, 'hrpc')
+    tok = _ptoken(c)
+    c.post('/hr/payroll/create', data={'year': '2099', 'month': '5', '_csrf_token': tok})
+    with app.app_context():
+        run = PayrollRun.query.filter_by(year=2099, month=5).first()
+        assert run is not None
+        run_id = run.id
+    c.post(f'/hr/payroll/{run_id}/finalize', data={'_csrf_token': tok})
+    with app.app_context():
+        run = db.session.get(PayrollRun, run_id)
+        assert run.status == 'Draft'   # payroll_finalize not granted
+
+
+def test_hr_payroll_edit_blocked_from_finalize_and_delete(app):
+    # Regression test, same shape as the staff_edit one above: plain
+    # payroll_edit must not imply the higher-trust finalize/delete tiers.
+    with app.app_context():
+        run = PayrollRun(year=2099, month=6, status='Draft', branch_id=Branch.get_default().id)
+        db.session.add(run); db.session.commit()
+        run_id = run.id
+    _make(app, 'hrpe', {'hr.payroll_edit': 'edit'})
+    c = _login(app, 'hrpe')
+    tok = _ptoken(c)
+    c.post(f'/hr/payroll/{run_id}/finalize', data={'_csrf_token': tok})
+    with app.app_context():
+        assert db.session.get(PayrollRun, run_id).status == 'Draft'
+    c.post(f'/hr/payroll/{run_id}/delete', data={'_csrf_token': tok})
+    with app.app_context():
+        assert db.session.get(PayrollRun, run_id) is not None
+
+
+def test_hr_attendance_view_without_mark_or_qr(app):
+    _make(app, 'hrav', {'hr.attendance_view': 'view'})
+    c = _login(app, 'hrav')
+    assert c.get('/hr/attendance').status_code == 200
+    tok = _ptoken(c)
+    r = c.post('/hr/attendance/save', data={'date': '2024-01-10', '_csrf_token': tok},
+               follow_redirects=False)
+    assert r.status_code in (302, 303)        # attendance_mark not granted
+    r2 = c.get('/hr/attendance/qr', follow_redirects=False)
+    assert r2.status_code in (302, 303)        # attendance_qr not granted
+
+
+def test_hr_settings_view_without_edit(app):
+    _make(app, 'hrstv', {'hr.settings_view': 'view'})
+    c = _login(app, 'hrstv')
+    assert c.get('/hr/settings').status_code == 200
+    tok = _ptoken(c)
+    r = c.post('/hr/settings/save', data={'_csrf_token': tok}, follow_redirects=False)
+    assert r.status_code in (302, 303)        # settings_edit not granted
+    r2 = c.post('/hr/settings/deductions/add',
+                data={'name': 'Welfare', 'kind': 'fixed', 'value': '500', '_csrf_token': tok},
+                follow_redirects=False)
+    assert r2.status_code in (302, 303)        # deduction_types_edit not granted
+
+
+def test_hr_reports_view_without_export(app):
+    _make(app, 'hrrv', {'hr.reports_view': 'view'})
+    c = _login(app, 'hrrv')
+    assert c.get('/hr/reports').status_code == 200
+    r = c.get('/hr/reports/export', follow_redirects=False)
+    assert r.status_code in (302, 303)        # reports_export is a separate slice
+
+
+def test_hr_recruitment_view_blocked_from_hire_even_with_edit(app):
+    # The actual security gap this phase closes: before the split, edit on ANY
+    # HR subsection could reach hire_applicant (converts a candidate into a real
+    # StaffMember) via module_level('hr') == 'edit'. Confirm recruitment_view +
+    # recruitment_edit together still don't imply recruitment_hire.
+    with app.app_context():
+        v = JobVacancy(title='HR Vac 1', status='Open', branch_id=Branch.get_default().id)
+        db.session.add(v); db.session.flush()
+        a = JobApplication(vacancy_id=v.id, first_name='App', surname='One', status='Shortlisted')
+        db.session.add(a); db.session.commit()
+        app_id = a.id
+    _make(app, 'hrrcv', {'hr.recruitment_view': 'view', 'hr.recruitment_edit': 'edit'})
+    c = _login(app, 'hrrcv')
+    tok = _ptoken(c)
+    c.post(f'/hr/applications/{app_id}/hire', data={'_csrf_token': tok})
+    with app.app_context():
+        a = db.session.get(JobApplication, app_id)
+        assert a.status == 'Shortlisted'   # recruitment_hire not granted
+        assert a.hired_staff_id is None
+
+
+def test_hr_recruitment_create_without_delete(app):
+    _make(app, 'hrrcc', {'hr.recruitment_create': 'edit'})
+    c = _login(app, 'hrrcc')
+    tok = _ptoken(c)
+    c.post('/hr/recruitment/add', data={'title': 'HR Vac 2', '_csrf_token': tok})
+    with app.app_context():
+        v = JobVacancy.query.filter_by(title='HR Vac 2').first()
+        assert v is not None
+        vac_id = v.id
+    c.post(f'/hr/recruitment/{vac_id}/delete', data={'_csrf_token': tok})
+    with app.app_context():
+        assert db.session.get(JobVacancy, vac_id) is not None   # recruitment_delete not granted
+
+
+def test_hr_loans_view_blocked_from_create_and_manage(app):
+    # Regression test confirming the whole Loans feature (previously 100%
+    # admin-only and totally unmapped, riding on whole-module access) is
+    # properly gated now, not accidentally wide open via whole-module fallback.
+    sid = _hr_staff(app, 'LN1')
+    with app.app_context():
+        loan = StaffLoan(staff_id=sid, branch_id=Branch.get_default().id, principal=10000,
+                         total_repayable=10500, monthly_amount=1050, status='active')
+        db.session.add(loan); db.session.commit()
+        loan_id = loan.id
+    _make(app, 'hrlv', {'hr.loans_view': 'view'})
+    c = _login(app, 'hrlv')
+    assert c.get('/hr/loans').status_code == 200
+    tok = _ptoken(c)
+    r = c.get('/hr/loans/new', follow_redirects=False)
+    assert r.status_code in (302, 303)        # loans_create not granted
+    c.post(f'/hr/loans/{loan_id}/repay', data={'amount': '500', '_csrf_token': tok})
+    with app.app_context():
+        loan = db.session.get(StaffLoan, loan_id)
+        assert loan.amount_repaid == 0   # loans_manage not granted
+
+
+def test_hr_self_service_unaffected_by_module_split(app):
+    # The self_* capability keys are orthogonal to the granular module split —
+    # confirm a user with ZERO ordinary HR module grants can still clock in via
+    # their own linked StaffMember using only the self_attendance capability.
+    with app.app_context():
+        u = User(username='hrself1', role='staff', scope='branch',
+                 branch_id=Branch.get_default().id, full_name='hrself1')
+        u.set_password('secret123'); u.set_permissions({'hr.self_attendance': 'edit'})
+        db.session.add(u); db.session.flush()
+        s = StaffMember(staff_id='HRSELF1', first_name='Self', surname='Service',
+                        is_active=True, status='Active', staff_type='Teaching',
+                        branch_id=Branch.get_default().id, user_id=u.id)
+        db.session.add(s); db.session.commit()
+    c = _login(app, 'hrself1')
+    with app.app_context():
+        from utils import hr
+        code = hr.day_code()
+    r = c.post('/hr/checkin/self', data={'method': 'qr', 'code': code, '_csrf_token': _ptoken(c)},
+               follow_redirects=False)
+    assert r.status_code in (200, 302, 303)
+    with app.app_context():
+        s = StaffMember.query.filter_by(staff_id='HRSELF1').first()
+        assert StaffAttendance.query.filter_by(staff_id=s.id).first() is not None
+    # still fully blocked from ordinary HR module pages
+    assert c.get('/hr/staff', follow_redirects=False).status_code in (302, 303)
+
+
+def test_hr_device_token_stays_admin_only(app):
+    # regenerate_device_token is deliberately left out of the grant system
+    # (same precedent as Settings' Users/Branches/Backup) — confirm a non-admin
+    # stays blocked even holding full settings_edit + attendance_mark.
+    _make(app, 'hrdt', {'hr.settings_view': 'view', 'hr.settings_edit': 'edit',
+                        'hr.attendance_view': 'view', 'hr.attendance_mark': 'edit'})
+    c = _login(app, 'hrdt')
+    tok = _ptoken(c)
+    r = c.post('/hr/settings/device-token', data={'_csrf_token': tok}, follow_redirects=False)
+    assert r.status_code in (302, 303)

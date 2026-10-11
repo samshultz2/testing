@@ -21,14 +21,14 @@
       <tr><td><strong>Outstanding</strong></td><td class="text-right"><strong>{{ '{:,.2f}'.format(loan.outstanding) }}</strong></td></tr>
     </table>
     {% if loan.purpose %}<p class="text-muted text-sm">Purpose: {{ loan.purpose }}</p>{% endif %}
-    {% if loan.status in ('pending','active') and not loan.amount_repaid %}
+    {% if loan.status in ('pending','active') and not loan.amount_repaid and can_write_sub('hr', 'loans_manage') %}
     <form method="POST" action="{{ url_for('hr.loan_cancel', loan_id=loan.id) }}" data-confirm="Cancel this loan?" style="margin-top:.5rem">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <button class="btn btn-sm btn-danger"><i class="fas fa-ban"></i> Cancel loan</button>
     </form>{% endif %}
   </div></div>
 
-  {% if loan.status == 'active' %}
+  {% if loan.status == 'active' and can_write_sub('hr', 'loans_manage') %}
   <div class="card mb-3"><div class="card-header"><h3>Record a repayment</h3></div><div class="card-body">
     <p class="text-muted text-sm">Salary deductions are booked automatically when payroll is finalized. Use this only for
       an extra/manual repayment.</p>
@@ -52,7 +52,7 @@
             {% if g.status == 'approved' %}<i class="fas fa-check-circle" style="color:var(--success)"></i> Approved{% if g.acted_by %} by {{ g.acted_by }}{% endif %}
             {% elif g.status == 'declined' %}<i class="fas fa-times-circle" style="color:var(--danger)"></i> Declined
             {% else %}Awaiting approval{% endif %}</div></div>
-        {% if loan.status == 'pending' and g.status == 'pending' %}
+        {% if loan.status == 'pending' and g.status == 'pending' and can_write_sub('hr', 'loans_manage') %}
         <div class="d-flex gap-2">
           <form method="POST" action="{{ url_for('hr.loan_guarantor_act', loan_id=loan.id, staff_id=g.staff_id) }}">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="action" value="approve">
