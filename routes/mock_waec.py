@@ -971,7 +971,8 @@ def _slips_for(exam_id, student_id=None):
 
 
 # Optional blocks for the printed PDFs — each included unless ?<flag>=0.
-_PDF_FLAGS = ('title', 'address', 'contact', 'motto', 'summary', 'signatures', 'grades')
+_PDF_FLAGS = ('title', 'address', 'contact', 'motto', 'summary', 'signatures', 'grades',
+             'sig_principal', 'sig_hod_sci', 'sig_hod_arts', 'credits', 'average')
 
 
 def _pdf_opts():
@@ -987,10 +988,15 @@ def _signers():
 # Detail checkboxes shown on each preview page (param, label) — all on by default.
 _OPTS_BROADSHEET = [('title', '“COMPETENCE RESULT” heading'), ('address', 'School address'),
                     ('contact', 'Phone / email'), ('motto', 'School motto'),
-                    ('summary', 'Subject summary rows'), ('grades', 'Grade key')]
+                    ('summary', 'Subject summary rows'), ('grades', 'Grade key'),
+                    ('credits', 'Credits column'), ('average', 'Average column'),
+                    ('sig_principal', 'Principal signature'), ('sig_hod_sci', 'HOD (Sciences) signature'),
+                    ('sig_hod_arts', 'HOD (Arts/Humanities) signature')]
 _OPTS_BLANK = [('title', '“COMPETENCE RESULT” heading'), ('address', 'School address'),
                ('contact', 'Phone / email'), ('motto', 'School motto'),
-               ('summary', 'Blank summary rows'), ('grades', 'Grade key')]
+               ('summary', 'Blank summary rows'), ('grades', 'Grade key'),
+               ('sig_principal', 'Principal signature'), ('sig_hod_sci', 'HOD (Sciences) signature'),
+               ('sig_hod_arts', 'HOD (Arts/Humanities) signature')]
 _OPTS_SLIP = [('title', '“COMPETENCE RESULT” heading'), ('address', 'School address'),
               ('contact', 'Phone / email'), ('motto', 'School motto'),
               ('summary', 'Summary box')]

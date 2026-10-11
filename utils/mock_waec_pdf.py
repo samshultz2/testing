@@ -195,6 +195,26 @@ def _grade_key_table(usable):
     return t
 
 
+def _broadsheet_signatures(opts, usable):
+    """Up to 3 independently-toggled signature lines for the broadsheet
+    footer — Principal, HOD (Sciences), HOD (Arts/Humanities) — all three
+    included by default."""
+    labels = []
+    if _opt(opts, 'sig_principal'):
+        labels.append('Principal')
+    if _opt(opts, 'sig_hod_sci'):
+        labels.append('HOD (Sciences)')
+    if _opt(opts, 'sig_hod_arts'):
+        labels.append('HOD (Arts/Humanities)')
+    if not labels:
+        return None
+    cols = [Paragraph(f'_______________________<br/>{lab}', _S['cell']) for lab in labels]
+    w = min(70 * mm, usable / len(cols))
+    t = Table([cols], colWidths=[w] * len(cols))
+    t.setStyle(TableStyle([('ALIGN', (0, 0), (-1, -1), 'CENTER')]))
+    return t
+
+
 def _fit_per(usable, sn_w, name_w, reserve, min_w, per, n):
     """Largest subjects-per-sheet that keeps each subject column at least ``min_w``
     wide, so headers never collapse into an un-renderable sliver. A requested
@@ -243,7 +263,13 @@ def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape',
             sub += f' (Sheet {gi + 1} of {len(groups)})'
         _school_header(e, school, opts, sub)
 
-        tail = 2 if last else 0
+        tail_cols = []
+        if last:
+            if _opt(opts, 'credits'):
+                tail_cols.append('credits')
+            if _opt(opts, 'average'):
+                tail_cols.append('average')
+        tail = len(tail_cols)
         n_subj_cols = 2 * len(group) if separate_cols else len(group)
         # Every individual column (each subject sub-column, and each tail
         # column) is one "unit" wide. In separate-columns mode a subject's 2
@@ -259,15 +285,15 @@ def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape',
             for s in group:
                 h1 += [_VHead(s), '']
                 h2 += [_VHead('Score', size=7), _VHead('Grade', size=7)]
-            if last:
-                h1 += [_VHead('Credits'), _VHead('Average %')]
-                h2 += ['', '']
+            for tc in tail_cols:
+                h1.append(_VHead('Credits' if tc == 'credits' else 'Average %'))
+                h2.append('')
             data = [h1, h2]
         else:
             header = [Paragraph('S/N', _S['colhead']), Paragraph('Name of Student', _S['colhead'])]
             header += [_VHead(s) for s in group]
-            if last:
-                header += [_VHead('Credits'), _VHead('Average %')]
+            for tc in tail_cols:
+                header.append(_VHead('Credits' if tc == 'credits' else 'Average %'))
             data = [header]
 
         for i, row in enumerate(bs['rows'], 1):
@@ -279,9 +305,11 @@ def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape',
                     line += [str(r.score), r.grade] if has else ['', '']
                 else:
                     line.append(f'{r.score} {r.grade}' if has else '')
-            if last:
-                line += [str(row['credits']),
-                         (str(row['average_score']) if row['average_score'] is not None else '')]
+            for tc in tail_cols:
+                if tc == 'credits':
+                    line.append(str(row['credits']))
+                else:
+                    line.append(str(row['average_score']) if row['average_score'] is not None else '')
             data.append(line)
 
         ncols = 2 + n_subj_cols + tail
@@ -310,8 +338,8 @@ def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape',
                 rr = ['', label]
                 for s in group:
                     rr += [str(fn(ss[s])), ''] if separate_cols else [str(fn(ss[s]))]
-                if last:
-                    rr += ['', '']
+                if tail:
+                    rr += [''] * tail
                 data.append(rr)
 
         widths = [sn_w, name_w] + [unit] * n_subj_cols
@@ -341,10 +369,10 @@ def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape',
             for j in range(len(group)):
                 c0 = 2 + j * 2
                 style.append(('SPAN', (c0, 0), (c0 + 1, 0)))
-            if last:
+            if tail:
                 last_col = 2 + n_subj_cols
-                style += [('SPAN', (last_col, 0), (last_col, 1)),
-                         ('SPAN', (last_col + 1, 0), (last_col + 1, 1))]
+                for k in range(tail):
+                    style.append(('SPAN', (last_col + k, 0), (last_col + k, 1)))
         if show_summary:
             style.append(('FONTSIZE', (0, sum0), (-1, -1), 8.5))
             style.append(('LINEABOVE', (0, summary_heading_row), (-1, summary_heading_row), 1.6, _BLACK))
@@ -361,6 +389,11 @@ def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape',
         if _opt(opts, 'grades'):
             e.append(Spacer(1, 6))
             e.append(_grade_key_table(usable))
+        if last:
+            sig = _broadsheet_signatures(opts, usable)
+            if sig:
+                e.append(Spacer(1, 14))
+                e.append(sig)
         if not last:
             e.append(PageBreak())
     doc.build(e)
@@ -481,6 +514,11 @@ def blank_broadsheet_pdf(students, offered, subjects, exam, school, opts=None,
         if _opt(opts, 'grades'):              # WASSCE grade-band reference
             e.append(Spacer(1, 6))
             e.append(_grade_key_table(usable))
+        if gi == len(groups) - 1:
+            sig = _broadsheet_signatures(opts, usable)
+            if sig:
+                e.append(Spacer(1, 14))
+                e.append(sig)
         if gi != len(groups) - 1:
             e.append(PageBreak())
     doc.build(e)

@@ -369,6 +369,73 @@ def test_subject_outlook_from_mock_waec(app):
         assert ol['summary']['overall_outlook'] in ('Excellent', 'Good', 'Fair', 'Needs Improvement')
 
 
+def test_broadsheet_signature_toggles(app):
+    """Principal / HOD (Sciences) / HOD (Arts-Humanities) signatures are
+    independently toggleable on both the filled-in and blank broadsheets, all
+    three on by default."""
+    ssid = _session(app)
+    exam_id = _exam(app, ssid, n=50)
+    sid = _student(app, 'SG' + uuid.uuid4().hex[:5].upper(), 'Sig', 'Nature')
+    enroll_sss3(app, sid)
+    with app.app_context():
+        db.session.get(Student, sid).waec_subjects = 'Mathematics,English Language'
+        db.session.commit()
+    _seed_results(app, exam_id, sid, {'Mathematics': 70, 'English Language': 60})
+    c = _admin(app)
+
+    # Preview pages for both sheets expose the three signature checkboxes.
+    print_prev = c.get(f'/mock-waec/exam/{exam_id}/broadsheet/print').get_data(as_text=True)
+    blank_prev = c.get(f'/mock-waec/exam/{exam_id}/broadsheet/blank').get_data(as_text=True)
+    for prev in (print_prev, blank_prev):
+        assert 'Principal signature' in prev
+        assert 'HOD (Sciences) signature' in prev
+        assert 'HOD (Arts/Humanities) signature' in prev
+
+    # Default (all three on), each one selected alone, and all three off —
+    # every combination must still render a valid PDF for both sheets.
+    for q in ('', 'sig_hod_sci=0&sig_hod_arts=0', 'sig_principal=0&sig_hod_arts=0',
+              'sig_principal=0&sig_hod_sci=0',
+              'sig_principal=0&sig_hod_sci=0&sig_hod_arts=0'):
+        r = c.get(f'/mock-waec/exam/{exam_id}/broadsheet.pdf?{q}')
+        assert r.status_code == 200 and r.get_data()[:5] == b'%PDF-'
+        b = c.get(f'/mock-waec/exam/{exam_id}/broadsheet/blank.pdf?{q}')
+        assert b.status_code == 200 and b.get_data()[:5] == b'%PDF-'
+
+    # Same combinations also render in separate score/grade-column mode.
+    r = c.get(f'/mock-waec/exam/{exam_id}/broadsheet.pdf?mode=separate&sig_hod_sci=0&sig_hod_arts=0')
+    assert r.status_code == 200 and r.get_data()[:5] == b'%PDF-'
+
+
+def test_broadsheet_credits_average_column_toggles(app):
+    """Credits and Average columns on the filled-in broadsheet are
+    independently toggleable; the blank sheet has no such columns."""
+    ssid = _session(app)
+    exam_id = _exam(app, ssid, n=51)
+    sid = _student(app, 'CA' + uuid.uuid4().hex[:5].upper(), 'Col', 'Toggle')
+    enroll_sss3(app, sid)
+    with app.app_context():
+        db.session.get(Student, sid).waec_subjects = 'Mathematics,English Language'
+        db.session.commit()
+    _seed_results(app, exam_id, sid, {'Mathematics': 70, 'English Language': 60})
+    c = _admin(app)
+
+    print_prev = c.get(f'/mock-waec/exam/{exam_id}/broadsheet/print').get_data(as_text=True)
+    assert 'Credits column' in print_prev and 'Average column' in print_prev
+    blank_prev = c.get(f'/mock-waec/exam/{exam_id}/broadsheet/blank').get_data(as_text=True)
+    assert 'Credits column' not in blank_prev and 'Average column' not in blank_prev
+
+    for q in ('', 'credits=0', 'average=0', 'credits=0&average=0'):
+        r = c.get(f'/mock-waec/exam/{exam_id}/broadsheet.pdf?{q}')
+        assert r.status_code == 200 and r.get_data()[:5] == b'%PDF-'
+        r2 = c.get(f'/mock-waec/exam/{exam_id}/broadsheet.pdf?mode=separate&{q}')
+        assert r2.status_code == 200 and r2.get_data()[:5] == b'%PDF-'
+
+    # Splitting the sheet across multiple pages (one subject per page) still
+    # renders with the tail columns toggled off, on the final page only.
+    r = c.get(f'/mock-waec/exam/{exam_id}/broadsheet.pdf?cols=1&credits=0')
+    assert r.status_code == 200 and r.get_data()[:5] == b'%PDF-'
+
+
 def test_analytics_statistics_depth(app):
     """Mock WAEC analytics carries the deeper stats ported from real WAEC:
     std-dev, quartiles (overall, per-student, per-subject) and top/bottom lists."""
