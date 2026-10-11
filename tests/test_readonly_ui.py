@@ -35,7 +35,7 @@ def test_edit_page_not_readonly(app):
 
 def test_subsection_readonly_per_page(app):
     # Granular user: edit Payments, view Expenses. Each page reflects its own level.
-    _make(app, 'ro_sub', {'finance.payments': 'edit', 'finance.expenses': 'view'})
+    _make(app, 'ro_sub', {'finance.payments_view': 'edit', 'finance.expenses_view': 'view'})
     c = _login(app, 'ro_sub')
     payments = c.get('/finance/payments').get_data(as_text=True)
     expenses = c.get('/finance/expenses').get_data(as_text=True)

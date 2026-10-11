@@ -1,6 +1,8 @@
 """Sub-section permissions (e.g. Finance: payments but not expenses)."""
 import re
-from models import db, User, Expense
+from models import (db, User, Expense, FeePayment, FeeDiscount, FeeItem, FeeStructure,
+                    AdditionalCharge, Student, Term, AcademicSession, SchoolClass, ClassArm,
+                    ClassArmAssignment, StudentEnrollment, Branch)
 from tests.conftest import login_token
 
 
@@ -26,17 +28,17 @@ def _ptoken(c):
 
 
 def test_granular_finance_access(app):
-    _make(app, 'fpart', {'finance.payments': 'edit', 'finance.expenses': 'view'})
+    _make(app, 'fpart', {'finance.payments_view': 'view', 'finance.expenses_view': 'view'})
     c = _login(app, 'fpart')
     # granted sub-sections reachable
-    assert c.get('/finance/payments').status_code == 200          # payments (edit)
-    assert c.get('/finance/expenses').status_code == 200          # expenses (view)
+    assert c.get('/finance/payments').status_code == 200          # payments_view
+    assert c.get('/finance/expenses').status_code == 200          # expenses_view
     # ungranted sub-section blocked
     assert c.get('/finance/defaulters', follow_redirects=False).status_code in (302, 303)
 
 
 def test_view_subsection_blocks_write(app):
-    _make(app, 'fpart2', {'finance.payments': 'edit', 'finance.expenses': 'view'})
+    _make(app, 'fpart2', {'finance.payments_view': 'view', 'finance.expenses_view': 'view'})
     c = _login(app, 'fpart2')
     with app.app_context():
         before = Expense.query.count()
@@ -44,20 +46,20 @@ def test_view_subsection_blocks_write(app):
            data={'description': 'Tape', 'amount': 300, '_csrf_token': _ptoken(c)},
            follow_redirects=True)
     with app.app_context():
-        assert Expense.query.count() == before        # expenses is view-only -> blocked
+        assert Expense.query.count() == before        # 'expenses_create' not granted -> blocked
 
 
 def test_subsection_level_helper(app):
     from flask import session
     from utils.access_control import subsection_level, module_level
-    _make(app, 'fpart3', {'finance.payments': 'edit'})
+    _make(app, 'fpart3', {'finance.payments_create': 'edit'})
     with app.app_context():
         uid = User.query.filter_by(username='fpart3').first().id
     with app.test_request_context('/'):
         session['logged_in'] = True; session['user_id'] = uid
         session['role'] = 'staff'; session['scope'] = 'central'
-        assert subsection_level('finance', 'payments') == 'edit'
-        assert subsection_level('finance', 'expenses') is None   # not granted
+        assert subsection_level('finance', 'payments_create') == 'edit'
+        assert subsection_level('finance', 'expenses_view') is None   # not granted
         assert module_level('finance') == 'edit'                 # module visible
 
 
@@ -1413,3 +1415,280 @@ def test_settings_edit_slice(app):
                 follow_redirects=False)
     assert r2.status_code in (302, 303)
     assert r2.headers['Location'].rstrip('/') == ''   # still blocked -> dashboard
+
+
+# ---- Finance (32-key granular split) ---------------------------------------
+
+def _fin_term_student(app, tag, sid, enrol=False):
+    with app.app_context():
+        ssn = AcademicSession.query.filter_by(name=f'{tag}-Sess').first() or AcademicSession(name=f'{tag}-Sess')
+        db.session.add(ssn); db.session.flush()
+        term = Term.query.filter_by(name=f'{tag}-Term').first() or Term(session_id=ssn.id, term_number=1, name=f'{tag}-Term')
+        db.session.add(term); db.session.flush()
+        st = Student.query.filter_by(student_id=sid).first()
+        if not st:
+            st = Student(student_id=sid, first_name='F', surname='N', gender='Male',
+                         is_active=True, branch_id=Branch.get_default().id)
+            db.session.add(st); db.session.flush()
+        if enrol:
+            cls = SchoolClass.query.filter_by(name=f'{tag}-Class').first() or SchoolClass(name=f'{tag}-Class', level=1)
+            db.session.add(cls); db.session.flush()
+            arm = ClassArm.query.filter_by(name=f'{tag}-Arm').first() or ClassArm(name=f'{tag}-Arm', is_active=True)
+            db.session.add(arm); db.session.flush()
+            caa = (ClassArmAssignment.query.filter_by(class_id=cls.id, arm_id=arm.id, term_id=term.id).first()
+                   or ClassArmAssignment(class_id=cls.id, arm_id=arm.id, term_id=term.id, branch_id=Branch.get_default().id))
+            db.session.add(caa); db.session.flush()
+            if not StudentEnrollment.query.filter_by(student_id=st.id, class_arm_assignment_id=caa.id).first():
+                db.session.add(StudentEnrollment(student_id=st.id, class_arm_assignment_id=caa.id, is_active=True))
+        db.session.commit()
+        return term.id, st.id
+
+
+def test_finance_payments_view_without_create(app):
+    _make(app, 'finpv', {'finance.payments_view': 'view'})
+    c = _login(app, 'finpv')
+    assert c.get('/finance/collections').status_code == 200
+    assert c.get('/finance/payments').status_code == 200
+    r = c.get('/finance/payments/record', follow_redirects=False)
+    assert r.status_code in (302, 303)        # payments_create not granted
+
+
+def test_finance_payments_create_without_edit_or_delete(app):
+    term_id, sid = _fin_term_student(app, 'FPC', 'FPC-STU')
+    _make(app, 'finpc', {'finance.payments_create': 'edit'})
+    c = _login(app, 'finpc')
+    tok = _ptoken(c)
+    c.post('/finance/payments/record',
+           data={'student_id': sid, 'term_id': term_id, 'amount': '1000',
+                 'payment_date': '2024-01-10', 'method': 'Cash', '_csrf_token': tok})
+    with app.app_context():
+        payment = FeePayment.query.filter_by(student_id=sid, term_id=term_id).first()
+        assert payment is not None
+        pid = payment.id
+    # blocked from edit_payment (even the GET form page)
+    r = c.get(f'/finance/payments/{pid}/edit', follow_redirects=False)
+    assert r.status_code in (302, 303)
+    # blocked from delete_payment
+    c.post(f'/finance/payments/{pid}/delete', data={'_csrf_token': tok})
+    with app.app_context():
+        assert db.session.get(FeePayment, pid) is not None
+
+
+def test_finance_payments_delete_without_create(app):
+    term_id, sid = _fin_term_student(app, 'FPD', 'FPD-STU')
+    with app.app_context():
+        p = FeePayment(student_id=sid, term_id=term_id, amount=500, method='Cash',
+                       receipt_no='FPD-RCP-1', branch_id=Branch.get_default().id)
+        db.session.add(p); db.session.commit()
+        pid = p.id
+    _make(app, 'finpd', {'finance.payments_delete': 'edit'})
+    c = _login(app, 'finpd')
+    tok = _ptoken(c)
+    with app.app_context():
+        before = FeePayment.query.filter_by(student_id=sid, term_id=term_id).count()
+    c.post('/finance/payments/record',
+           data={'student_id': sid, 'term_id': term_id, 'amount': '700',
+                 'payment_date': '2024-01-10', 'method': 'Cash', '_csrf_token': tok})
+    with app.app_context():
+        assert FeePayment.query.filter_by(student_id=sid, term_id=term_id).count() == before
+    c.post(f'/finance/payments/{pid}/delete', data={'_csrf_token': tok})
+    with app.app_context():
+        assert db.session.get(FeePayment, pid) is None
+
+
+def test_finance_discounts_create_without_delete(app):
+    term_id, sid = _fin_term_student(app, 'FDC', 'FDC-STU')
+    _make(app, 'findc', {'finance.discounts_create': 'edit'})
+    c = _login(app, 'findc')
+    tok = _ptoken(c)
+    c.post('/finance/discounts/add',
+           data={'student_id': sid, 'term_id': term_id, 'amount': '200',
+                 'reason': 'Sibling', '_csrf_token': tok})
+    with app.app_context():
+        disc = FeeDiscount.query.filter_by(student_id=sid, term_id=term_id).first()
+        assert disc is not None
+        did = disc.id
+    c.post(f'/finance/discounts/{did}/delete', data={'_csrf_token': tok})
+    with app.app_context():
+        assert db.session.get(FeeDiscount, did) is not None   # delete not granted
+
+
+def test_finance_structure_edit_without_bulk_or_delete(app):
+    term_id, sid = _fin_term_student(app, 'FSE', 'FSE-STU', enrol=True)
+    with app.app_context():
+        caa = StudentEnrollment.query.filter_by(student_id=sid, is_active=True).first().class_arm_assignment
+        class_id = caa.class_id
+        item = FeeItem.query.filter_by(name='FSE-Tuition').first() or FeeItem(name='FSE-Tuition')
+        db.session.add(item); db.session.commit()
+        item_id = item.id
+    _make(app, 'finse', {'finance.structure_view': 'view', 'finance.structure_edit': 'edit'})
+    c = _login(app, 'finse')
+    tok = _ptoken(c)
+    c.post('/finance/structure/save',
+           data={'term_id': term_id, 'class_id': class_id, f'amount_{item_id}': '3000',
+                 '_csrf_token': tok})
+    with app.app_context():
+        row = FeeStructure.query.filter_by(term_id=term_id, class_id=class_id, fee_item_id=item_id).first()
+        assert row is not None and row.amount == 3000
+    # blocked from copy_structure
+    c.post('/finance/structure/copy',
+           data={'from_term_id': term_id, 'to_term_id': term_id + 999999, '_csrf_token': tok})
+    with app.app_context():
+        assert FeeStructure.query.filter_by(term_id=term_id + 999999).count() == 0
+    # blocked from clear_structure
+    c.post('/finance/structure/clear',
+           data={'term_id': term_id, 'class_id': class_id, '_csrf_token': tok})
+    with app.app_context():
+        assert FeeStructure.query.filter_by(term_id=term_id, class_id=class_id, fee_item_id=item_id).first() is not None
+
+
+def test_finance_structure_bulk_without_edit(app):
+    term_id, sid = _fin_term_student(app, 'FSB', 'FSB-STU', enrol=True)
+    with app.app_context():
+        caa = StudentEnrollment.query.filter_by(student_id=sid, is_active=True).first().class_arm_assignment
+        class_id = caa.class_id
+        item = FeeItem.query.filter_by(name='FSB-Tuition').first() or FeeItem(name='FSB-Tuition')
+        db.session.add(item); db.session.flush()
+        if not FeeStructure.query.filter_by(term_id=term_id, class_id=class_id, fee_item_id=item.id).first():
+            db.session.add(FeeStructure(term_id=term_id, class_id=class_id, arm_id=None,
+                                        fee_item_id=item.id, amount=4000))
+        ssn2 = AcademicSession.query.filter_by(name='FSB-Sess2').first() or AcademicSession(name='FSB-Sess2')
+        db.session.add(ssn2); db.session.flush()
+        term2 = Term.query.filter_by(name='FSB-Term2').first() or Term(session_id=ssn2.id, term_number=1, name='FSB-Term2')
+        db.session.add(term2); db.session.commit()
+        to_term_id = term2.id
+        item_id = item.id
+    _make(app, 'finsb', {'finance.structure_view': 'view', 'finance.structure_bulk': 'edit'})
+    c = _login(app, 'finsb')
+    tok = _ptoken(c)
+    c.post('/finance/structure/copy',
+           data={'from_term_id': term_id, 'to_term_id': to_term_id, '_csrf_token': tok})
+    with app.app_context():
+        assert FeeStructure.query.filter_by(term_id=to_term_id, class_id=class_id, fee_item_id=item_id).first() is not None
+    # blocked from save_structure
+    c.post('/finance/structure/save',
+           data={'term_id': term_id, 'class_id': class_id, f'amount_{item_id}': '9999', '_csrf_token': tok})
+    with app.app_context():
+        row = FeeStructure.query.filter_by(term_id=term_id, class_id=class_id, fee_item_id=item_id).first()
+        assert row.amount == 4000   # unchanged, save_structure not granted
+
+
+def test_finance_expenses_create_without_delete(app):
+    _make(app, 'finec', {'finance.expenses_create': 'edit'})
+    c = _login(app, 'finec')
+    tok = _ptoken(c)
+    with app.app_context():
+        before = Expense.query.count()
+    c.post('/finance/expenses/add', data={'description': 'FEC Chalk', 'amount': '150', '_csrf_token': tok})
+    with app.app_context():
+        assert Expense.query.count() == before + 1
+        eid = Expense.query.filter_by(description='FEC Chalk').first().id
+    c.post(f'/finance/expenses/{eid}/delete', data={'_csrf_token': tok})
+    with app.app_context():
+        assert db.session.get(Expense, eid) is not None   # delete not granted
+
+
+def test_finance_defaulters_view_without_notify(app):
+    _make(app, 'findv', {'finance.defaulters_view': 'view'})
+    c = _login(app, 'findv')
+    assert c.get('/finance/defaulters').status_code == 200
+    tok = _ptoken(c)
+    r = c.post('/finance/installments/notify-overdue', data={'_csrf_token': tok}, follow_redirects=False)
+    assert r.status_code in (302, 303)        # defaulters_notify not granted
+
+
+def test_finance_reports_view_without_export(app):
+    _make(app, 'finrv', {'finance.reports_view': 'view'})
+    c = _login(app, 'finrv')
+    assert c.get('/finance/reports').status_code == 200
+    r = c.get('/finance/reports/export', follow_redirects=False)
+    assert r.status_code in (302, 303)        # reports_export is a separate slice
+
+
+def test_finance_overview_sync_blocked_even_with_unrelated_edit(app):
+    # Regression test for the gap this phase closes: before the 32-key split,
+    # module_level('finance') returned 'edit' for ANY edit grant anywhere in
+    # Finance, which incorrectly unlocked ledger_sync for a user who only held
+    # e.g. defaulters_notify edit. Confirm that's closed, with and without an
+    # unrelated edit grant present.
+    _make(app, 'finov', {'finance.overview_view': 'view'})
+    c = _login(app, 'finov')
+    assert c.get('/finance/overview').status_code == 200
+    tok = _ptoken(c)
+    r = c.post('/finance/ledger/sync', data={'_csrf_token': tok}, follow_redirects=False)
+    assert r.status_code in (302, 303)
+
+    _make(app, 'finov2', {'finance.overview_view': 'view', 'finance.defaulters_notify': 'edit'})
+    c2 = _login(app, 'finov2')
+    tok2 = _ptoken(c2)
+    r2 = c2.post('/finance/ledger/sync', data={'_csrf_token': tok2}, follow_redirects=False)
+    assert r2.status_code in (302, 303)
+
+
+def test_finance_billing_tools_view_blocked_from_bulk_charge(app):
+    # The actual security gap this phase closes: before the split, a user with
+    # edit on ANY finance subsection could mass-create charges/penalties via
+    # module_level('finance') == 'edit'. Confirm billing_tools_view alone, even
+    # alongside an unrelated edit grant, cannot reach bulk_charge/apply_penalties.
+    term_id, sid = _fin_term_student(app, 'FBV', 'FBV-STU', enrol=True)
+    _make(app, 'finbv', {'finance.billing_tools_view': 'view', 'finance.expenses_create': 'edit'})
+    c = _login(app, 'finbv')
+    assert c.get(f'/finance/billing-tools?term_id={term_id}').status_code == 200
+    tok = _ptoken(c)
+    with app.app_context():
+        before = AdditionalCharge.query.filter_by(term_id=term_id).count()
+    c.post('/finance/billing-tools/bulk-charge',
+           data={'term_id': term_id, 'kind': 'charge', 'amount': '500', '_csrf_token': tok})
+    c.post('/finance/billing-tools/penalties',
+           data={'term_id': term_id, 'ptype': 'fixed', 'value': '500', '_csrf_token': tok})
+    with app.app_context():
+        assert AdditionalCharge.query.filter_by(term_id=term_id).count() == before
+
+
+def test_finance_billing_tools_create_without_delete(app):
+    term_id, sid = _fin_term_student(app, 'FBC', 'FBC-STU', enrol=True)
+    _make(app, 'finbc', {'finance.billing_tools_create': 'edit'})
+    c = _login(app, 'finbc')
+    tok = _ptoken(c)
+    c.post('/finance/billing-tools/bulk-charge',
+           data={'term_id': term_id, 'kind': 'charge', 'category': 'Excursion',
+                 'amount': '800', '_csrf_token': tok})
+    with app.app_context():
+        ch = AdditionalCharge.query.filter_by(term_id=term_id, category='Excursion').first()
+        assert ch is not None
+        cid = ch.id
+    c.post(f'/finance/billing-tools/charge/{cid}/remove', data={'_csrf_token': tok})
+    with app.app_context():
+        assert db.session.get(AdditionalCharge, cid) is not None   # delete not granted
+
+
+def test_finance_installments_view_without_edit(app):
+    term_id, sid = _fin_term_student(app, 'FIV', 'FIV-STU')
+    _make(app, 'finiv', {'finance.installments_view': 'view'})
+    c = _login(app, 'finiv')
+    assert c.get(f'/finance/installments?term_id={term_id}').status_code == 200
+    tok = _ptoken(c)
+    c.post('/finance/installments/save',
+           data={'term_id': term_id, 'label': ['1st'], 'percent': ['50'], 'due': ['2024-01-01'],
+                 '_csrf_token': tok})
+    with app.app_context():
+        from utils.finance_installments import get_plan
+        assert get_plan(term_id, None) == []      # installments_edit not granted
+
+
+def test_finance_installments_edit_without_delete(app):
+    term_id, sid = _fin_term_student(app, 'FIE', 'FIE-STU')
+    _make(app, 'finie', {'finance.installments_edit': 'edit'})
+    c = _login(app, 'finie')
+    tok = _ptoken(c)
+    c.post('/finance/installments/save',
+           data={'term_id': term_id, 'label': ['1st'], 'percent': ['50'], 'due': ['2024-01-01'],
+                 '_csrf_token': tok})
+    with app.app_context():
+        from utils.finance_installments import get_plan
+        plan = get_plan(term_id, None)
+        assert len(plan) == 1 and plan[0].percent == 50
+    c.post('/finance/installments/clear', data={'term_id': term_id, '_csrf_token': tok})
+    with app.app_context():
+        plan = get_plan(term_id, None)
+        assert len(plan) == 1   # installments_delete not granted, still there

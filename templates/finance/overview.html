@@ -38,10 +38,12 @@
   {% set fin_active = 'overview' %}{% include 'finance/_header.html' %}
   <div class="page-header"><h1>Financial Overview</h1>
     <div class="page-header-actions">
+      {% if can_write_sub('finance', 'overview_sync') %}
       <form method="post" action="{{ sync_url }}" style="display:inline" onsubmit="return confirm('Sync existing payments, expenses and sales into the ledger?');">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <button type="submit" class="btn btn-secondary"><i aria-hidden="true" class="fas fa-rotate"></i> Sync existing data</button>
       </form>
+      {% endif %}
     </div>
   </div>
 
@@ -69,8 +71,10 @@
     <div class="fo-actions">
       <button type="submit" class="btn btn-primary btn-sm"><i aria-hidden="true" class="fas fa-filter"></i> Apply</button>
       <a href="{{ url_for('finance.overview') }}" class="btn btn-link btn-sm">Reset</a>
+      {% if can_write_sub('finance', 'overview_export') %}
       <a href="{{ export_url }}?{{ request.query_string.decode() }}" class="btn btn-secondary btn-sm" data-native><i aria-hidden="true" class="fas fa-file-csv"></i> CSV</a>
       <a href="{{ export_url }}?format=xlsx&amp;{{ request.query_string.decode() }}" class="btn btn-secondary btn-sm" data-native><i aria-hidden="true" class="fas fa-file-excel"></i> Excel</a>
+      {% endif %}
     </div>
   </form>
 

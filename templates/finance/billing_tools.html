@@ -38,6 +38,7 @@
   </form>
 
   <div class="cards">
+    {% if can_write_sub('finance', 'billing_tools_create') %}
     <div class="card2"><h3>Bulk charge / credit</h3><div class="bd">
       <form method="post" action="{{ url_for('finance.bulk_charge') }}">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
@@ -57,7 +58,9 @@
         <div style="margin-top:12px"><button type="submit" class="btn btn-primary"><i aria-hidden="true" class="fas fa-layer-group"></i> Apply to students</button></div>
       </form>
     </div></div>
+    {% endif %}
 
+    {% if can_write_sub('finance', 'billing_tools_create') %}
     <div class="card2"><h3>Late-payment penalty</h3><div class="bd">
       <form method="post" action="{{ url_for('finance.apply_penalties') }}"
             onsubmit="return confirm('Apply this penalty to every student who still owes for the term?');">
@@ -72,6 +75,7 @@
         <div style="margin-top:12px"><button type="submit" class="btn btn-primary"><i aria-hidden="true" class="fas fa-gavel"></i> Apply penalty</button></div>
       </form>
     </div></div>
+    {% endif %}
   </div>
 
   <div class="card2"><h3>Charges &amp; credit notes this term</h3><div class="bd" style="padding:0">
@@ -85,9 +89,9 @@
           <td><span class="tag {{ c.kind }}">{{ 'Charge' if c.kind=='charge' else 'Credit' }}</span></td>
           <td>{{ c.category }}</td><td>{{ c.description }}</td>
           <td class="num">₦{{ '{:,.0f}'.format(c.amount) }}</td><td>{{ c.by }}</td>
-          <td><form method="post" action="{{ url_for('finance.remove_charge', charge_id=c.id) }}" onsubmit="return confirm('Remove this line?');" style="display:inline">
+          <td>{% if can_write_sub('finance', 'billing_tools_delete') %}<form method="post" action="{{ url_for('finance.remove_charge', charge_id=c.id) }}" onsubmit="return confirm('Remove this line?');" style="display:inline">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-link btn-sm" title="Remove"><i aria-hidden="true" class="fas fa-trash"></i></button></form></td>
+            <button type="submit" class="btn btn-link btn-sm" title="Remove"><i aria-hidden="true" class="fas fa-trash"></i></button></form>{% endif %}</td>
         </tr>
         {% else %}<tr><td colspan="8" class="empty">No additional charges or credit notes for this term yet.</td></tr>{% endfor %}
       </tbody>

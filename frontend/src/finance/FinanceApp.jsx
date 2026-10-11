@@ -75,7 +75,7 @@ function Dashboard({ d }) {
     <>
       <div className="page-header"><h1>Finance &amp; Fees</h1>
         <div className="page-header-actions">
-          {canWrite(d, 'payments') && <a href={d.urls.record_payment} className="sp-btn sp-btn-fill"><i aria-hidden="true" className="fas fa-cash-register" /> Record Payment</a>}
+          {canWrite(d, 'payments_create') && <a href={d.urls.record_payment} className="sp-btn sp-btn-fill"><i aria-hidden="true" className="fas fa-cash-register" /> Record Payment</a>}
           <a href={d.urls.defaulters} className="sp-btn"><i aria-hidden="true" className="fas fa-triangle-exclamation" /> Defaulters</a>
         </div>
       </div>
@@ -178,7 +178,7 @@ function Items({ d, notify }) {
         <div className="page-header-actions"><a href={d.structure_url} className="sp-btn"><i aria-hidden="true" className="fas fa-table-list" /> Fee Structure</a></div>
       </div>
       <Tabs d={d} />
-      {d.is_admin && (
+      {canWrite(d, 'structure_create') && (
         <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-plus" /> Add Fee Item</h3></div>
           <div className="card-body"><form onSubmit={add} className="d-flex gap-2 align-end flex-wrap">
             <div className="form-group mb-0" style={{ flex: 1, minWidth: 180 }}><label className="form-label">Name <span className="required">*</span></label>
@@ -192,19 +192,19 @@ function Items({ d, notify }) {
         <div className="card-body" style={{ padding: 0 }}>
           {d.items.length ? (
             <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
-              <thead><tr><th>Name</th><th>Description</th><th>Status</th>{d.is_admin && <th>Actions</th>}</tr></thead>
+              <thead><tr><th>Name</th><th>Description</th><th>Status</th>{(canWrite(d, 'structure_edit') || canWrite(d, 'structure_delete')) && <th>Actions</th>}</tr></thead>
               <tbody>{d.items.map((it) => (
                 <React.Fragment key={it.id}>
                   <tr>
                     <td data-label="Name"><strong>{it.name}</strong></td>
                     <td data-label="Description" className="text-muted">{it.description || '—'}</td>
                     <td data-label="Status">{it.is_active ? <span className="badge badge-success">Active</span> : <span className="badge badge-secondary">Inactive</span>}</td>
-                    {d.is_admin && <td className="actions"><div className="d-flex gap-1">
-                      <button className="sp-btn sp-btn-sm" onClick={() => setEditing(editing === it.id ? null : it.id)}><i aria-hidden="true" className="fas fa-edit" /></button>
-                      <button className="sp-btn sp-btn-sm sp-btn-danger" onClick={() => act(it.delete_url, {}, `Delete fee item ${it.name}?`)}><i aria-hidden="true" className="fas fa-trash" /></button>
+                    {(canWrite(d, 'structure_edit') || canWrite(d, 'structure_delete')) && <td className="actions"><div className="d-flex gap-1">
+                      {canWrite(d, 'structure_edit') && <button className="sp-btn sp-btn-sm" onClick={() => setEditing(editing === it.id ? null : it.id)}><i aria-hidden="true" className="fas fa-edit" /></button>}
+                      {canWrite(d, 'structure_delete') && <button className="sp-btn sp-btn-sm sp-btn-danger" onClick={() => act(it.delete_url, {}, `Delete fee item ${it.name}?`)}><i aria-hidden="true" className="fas fa-trash" /></button>}
                     </div></td>}
                   </tr>
-                  {d.is_admin && editing === it.id && (
+                  {canWrite(d, 'structure_edit') && editing === it.id && (
                     <tr><td colSpan={4} className="stack-full" style={{ background: 'var(--gray-50)' }}>
                       <ItemEdit it={it} notify={notify} onDone={() => { setEditing(null); nav.refresh(); }} />
                     </td></tr>)}
@@ -292,19 +292,19 @@ function Structure({ d, notify }) {
                 </div>))}
             </div>
               <div className="page-header-actions mt-3">
-                {d.is_admin ? <button type="submit" className="sp-btn sp-btn-fill"><i aria-hidden="true" className="fas fa-save" /> Save Structure</button>
-                  : <p className="text-muted">Only admins can edit the fee structure.</p>}
+                {canWrite(d, 'structure_edit') ? <button type="submit" className="sp-btn sp-btn-fill"><i aria-hidden="true" className="fas fa-save" /> Save Structure</button>
+                  : <p className="text-muted">You don't have permission to edit the fee structure.</p>}
               </div>
             </div></div>
         </form>
-        {d.is_admin && d.has_current && <div className="mt-2"><button className="sp-btn sp-btn-sm sp-btn-danger" onClick={clear}><i aria-hidden="true" className="fas fa-trash" /> Clear this class's fees</button></div>}
+        {canWrite(d, 'structure_delete') && d.has_current && <div className="mt-2"><button className="sp-btn sp-btn-sm sp-btn-danger" onClick={clear}><i aria-hidden="true" className="fas fa-trash" /> Clear this class's fees</button></div>}
       </>) : (
         <div className="card"><div className="card-body"><Empty icon="fa-tags" title="No fee items"><p>Create fee items first, then set their amounts here.</p><a href={d.items_url} className="sp-btn sp-btn-fill">Add Fee Items</a></Empty></div></div>
       )) : (
         <div className="card"><div className="card-body"><Empty icon="fa-hand-pointer" title="Select a class"><p>Choose a term and class to set its fees.</p></Empty></div></div>
       )}
 
-      {d.is_admin && d.term_id && (
+      {canWrite(d, 'structure_bulk') && d.term_id && (
         <div className="card mt-3" style={{ borderColor: 'var(--info)' }}><div className="card-header"><h3><i aria-hidden="true" className="fas fa-copy" /> Copy structure from another term</h3></div>
           <div className="card-body"><form onSubmit={copy} className="d-flex gap-2 align-end flex-wrap">
             <div className="form-group mb-0"><label className="form-label">Copy all classes from</label>
@@ -331,7 +331,7 @@ function Payments({ d, notify }) {
   return (
     <>
       <div className="page-header"><h1>Payments</h1>
-        <div className="page-header-actions"><a href={d.record_url} className="sp-btn sp-btn-fill"><i aria-hidden="true" className="fas fa-cash-register" /> Record Payment</a></div>
+        <div className="page-header-actions">{canWrite(d, 'payments_create') && <a href={d.record_url} className="sp-btn sp-btn-fill"><i aria-hidden="true" className="fas fa-cash-register" /> Record Payment</a>}</div>
       </div>
       <Tabs d={d} />
       <div className="card mb-3"><div className="card-body">
@@ -358,8 +358,8 @@ function Payments({ d, notify }) {
               { key: 'act', label: '', render: (p) => (
                 <div className="d-flex gap-1">
                   <a href={p.receipt_url} className="sp-btn sp-btn-sm" title="Receipt" data-native><i aria-hidden="true" className="fas fa-receipt" /></a>
-                  <a href={p.edit_url} className="sp-btn sp-btn-sm" title="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>
-                  {d.is_admin && <button className="sp-btn sp-btn-sm sp-btn-danger" onClick={() => del(p.delete_url, p.receipt_no, p.amount)}><i aria-hidden="true" className="fas fa-trash" /></button>}
+                  {canWrite(d, 'payments_edit') && <a href={p.edit_url} className="sp-btn sp-btn-sm" title="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>}
+                  {canWrite(d, 'payments_delete') && <button className="sp-btn sp-btn-sm sp-btn-danger" onClick={() => del(p.delete_url, p.receipt_no, p.amount)}><i aria-hidden="true" className="fas fa-trash" /></button>}
                 </div>) },
             ]} />
         </div></div>
@@ -527,8 +527,8 @@ function Statement({ d, notify }) {
     <>
       <div className="page-header"><h1>Fee Statement</h1>
         <div className="page-header-actions">
-          <a href={d.urls.record_payment} className="sp-btn sp-btn-fill"><i aria-hidden="true" className="fas fa-cash-register" /> Record Payment</a>
-          {d.pay_enabled && bill && bill.balance > 0.005 && (
+          {canWrite(d, 'payments_create') && <a href={d.urls.record_payment} className="sp-btn sp-btn-fill"><i aria-hidden="true" className="fas fa-cash-register" /> Record Payment</a>}
+          {canWrite(d, 'payments_create') && d.pay_enabled && bill && bill.balance > 0.005 && (
             <button className="sp-btn" onClick={() => act(d.urls.payment_link, { term_id: d.term_id }, null, true)}><i aria-hidden="true" className="fas fa-link" /> Online Payment Link</button>)}
         </div>
       </div>
@@ -570,12 +570,12 @@ function Statement({ d, notify }) {
                   <tbody>{d.payments.map((p) => (
                     <tr key={p.id}><td data-label="Date">{p.date}</td><td data-label="Receipt"><a href={p.receipt_url} data-native>{p.receipt_no}</a></td>
                       <td data-label="Method"><span className="badge badge-info">{p.method}</span></td><td data-label="Amount" className="text-right">{naira(p.amount)}</td>
-                      <td className="actions"><a href={p.edit_url} className="sp-btn sp-btn-sm" title="Edit"><i aria-hidden="true" className="fas fa-edit" /></a></td></tr>))}</tbody>
+                      <td className="actions">{canWrite(d, 'payments_edit') && <a href={p.edit_url} className="sp-btn sp-btn-sm" title="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>}</td></tr>))}</tbody>
                 </table></div>
               ) : <Empty icon="fa-receipt" title="" style={{ padding: '1rem' }}><p>No payments yet</p></Empty>}
             </div></div>
         </div>
-        {d.is_admin && <Discounts d={d} act={act} />}
+        <Discounts d={d} act={act} />
       </>) : (
         <div className="card"><div className="card-body"><Empty icon="fa-hand-pointer" title=""><p>Select a term.</p></Empty></div></div>
       )}
@@ -586,6 +586,8 @@ function Statement({ d, notify }) {
 function Discounts({ d, act }) {
   const [f, setF] = useState({ amount: '', reason: '' });
   const [editing, setEditing] = useState(null);
+  const canEdit = canWrite(d, 'discounts_edit');
+  const canDelete = canWrite(d, 'discounts_delete');
   return (
     <div className="card mt-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-tag" /> Discounts / Waivers</h3></div>
       <div className="card-body">
@@ -597,22 +599,24 @@ function Discounts({ d, act }) {
                 <tr>
                   <td data-label="Reason">{dc.reason || '—'}</td>
                   <td data-label="Amount" className="text-right">{naira(dc.amount)}</td>
-                  <td className="actions"><div className="d-flex gap-1 justify-end">
-                    <button className="sp-btn sp-btn-sm" onClick={() => setEditing(editing === dc.id ? null : dc.id)}><i aria-hidden="true" className="fas fa-edit" /></button>
-                    <button className="sp-btn sp-btn-sm sp-btn-danger" onClick={() => act(dc.delete_url, {}, 'Remove this discount?')}><i aria-hidden="true" className="fas fa-trash" /></button>
-                  </div></td>
+                  <td className="actions">{(canEdit || canDelete) && <div className="d-flex gap-1 justify-end">
+                    {canEdit && <button className="sp-btn sp-btn-sm" onClick={() => setEditing(editing === dc.id ? null : dc.id)}><i aria-hidden="true" className="fas fa-edit" /></button>}
+                    {canDelete && <button className="sp-btn sp-btn-sm sp-btn-danger" onClick={() => act(dc.delete_url, {}, 'Remove this discount?')}><i aria-hidden="true" className="fas fa-trash" /></button>}
+                  </div>}</td>
                 </tr>
-                {editing === dc.id && (
+                {canEdit && editing === dc.id && (
                   <tr><td colSpan={3} className="stack-full" style={{ background: 'var(--gray-50)' }}>
                     <DiscountEdit dc={dc} act={act} />
                   </td></tr>)}
               </React.Fragment>))}</tbody>
           </table>)}
+        {canWrite(d, 'discounts_create') && (
         <form onSubmit={(e) => { e.preventDefault(); act(d.urls.add_discount, { ...f, student_id: d.student_id, term_id: d.term_id }); }} className="d-flex gap-2 align-end flex-wrap">
           <div className="form-group mb-0"><label className="form-label">Amount (₦)</label><input type="number" className="form-control" min="0" step="100" required value={f.amount} onChange={(e) => setF((s) => ({ ...s, amount: e.target.value }))} /></div>
           <div className="form-group mb-0" style={{ flex: 1, minWidth: 200 }}><label className="form-label">Reason</label><input type="text" className="form-control" placeholder="e.g., Sibling discount, Staff ward, Scholarship" value={f.reason} onChange={(e) => setF((s) => ({ ...s, reason: e.target.value }))} /></div>
           <button type="submit" className="sp-btn"><i aria-hidden="true" className="fas fa-plus" /> Add Discount</button>
         </form>
+        )}
       </div></div>
   );
 }
@@ -687,7 +691,7 @@ function Collections({ d }) {
   return (
     <>
       <div className="page-header"><h1>Collections</h1>
-        <div className="page-header-actions"><a href={d.export_url} className="sp-btn sp-btn-fill" data-native download><i aria-hidden="true" className="fas fa-file-csv" /> Export</a></div>
+        <div className="page-header-actions">{canWrite(d, 'payments_export') && <a href={d.export_url} className="sp-btn sp-btn-fill" data-native download><i aria-hidden="true" className="fas fa-file-csv" /> Export</a>}</div>
       </div>
       <Tabs d={d} />
       <div className="card mb-3"><div className="card-body">
@@ -774,6 +778,7 @@ function Expenses({ d, notify }) {
           </div>)}
       </div></div>
 
+      {canWrite(d, 'expenses_create') && (
       <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-plus" /> Record Expense</h3></div>
         <div className="card-body"><form onSubmit={add}>
           <div className="exp-fields">
@@ -786,6 +791,7 @@ function Expenses({ d, notify }) {
           </div>
           <div className="mt-3"><button type="submit" className="sp-btn sp-btn-fill"><i aria-hidden="true" className="fas fa-save" /> Record Expense</button></div>
         </form></div></div>
+      )}
 
       <div className="card"><div className="card-header"><h3>Expenses ({d.expenses.length})</h3><span className="badge badge-danger">{naira(d.total)}</span></div>
         <div className="card-body" style={{ padding: 0 }}>
@@ -802,11 +808,11 @@ function Expenses({ d, notify }) {
                     <td data-label="Method"><span className="badge badge-info">{e.method}</span></td>
                     <td data-label="Amount" className="text-right"><strong>{naira(e.amount)}</strong></td>
                     <td className="actions"><div className="d-flex gap-1 justify-end">
-                      <button className="sp-btn sp-btn-sm" onClick={() => setEditing(editing === e.id ? null : e.id)}><i aria-hidden="true" className="fas fa-edit" /></button>
-                      {d.is_admin && <button className="sp-btn sp-btn-sm sp-btn-danger" onClick={() => act(e.delete_url, {}, `Delete this expense (${naira(e.amount)})?`)}><i aria-hidden="true" className="fas fa-trash" /></button>}
+                      {canWrite(d, 'expenses_edit') && <button className="sp-btn sp-btn-sm" onClick={() => setEditing(editing === e.id ? null : e.id)}><i aria-hidden="true" className="fas fa-edit" /></button>}
+                      {canWrite(d, 'expenses_delete') && <button className="sp-btn sp-btn-sm sp-btn-danger" onClick={() => act(e.delete_url, {}, `Delete this expense (${naira(e.amount)})?`)}><i aria-hidden="true" className="fas fa-trash" /></button>}
                     </div></td>
                   </tr>
-                  {editing === e.id && (
+                  {canWrite(d, 'expenses_edit') && editing === e.id && (
                     <tr><td colSpan={7} className="stack-full" style={{ background: 'var(--gray-50)' }}>
                       <ExpenseEdit e={e} cats={d.categories} methods={d.methods} notify={notify} onDone={() => { setEditing(null); nav.refresh(); }} />
                     </td></tr>)}
@@ -815,17 +821,19 @@ function Expenses({ d, notify }) {
           ) : <Empty icon="fa-money-bill-wave" title="No expenses recorded"><p>Record school expenditure to track your net position.</p></Empty>}
         </div></div>
 
-      {d.is_admin && (
+      {(canWrite(d, 'expenses_create') || canWrite(d, 'expenses_delete')) && (
         <div className="card mt-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-folder-tree" /> Expense Categories</h3></div>
           <div className="card-body">
             <div className="chip-row mb-3">{d.categories.map((c) => (
               <span className="chip d-flex align-center gap-1" key={c.id}>{c.name}
-                <button className="sp-btn sp-btn-sm sp-btn-danger" style={{ padding: '.1rem .35rem' }} onClick={() => act(c.delete_url, {}, `Delete category ${c.name}?`)}><i aria-hidden="true" className="fas fa-times" /></button>
+                {canWrite(d, 'expenses_delete') && <button className="sp-btn sp-btn-sm sp-btn-danger" style={{ padding: '.1rem .35rem' }} onClick={() => act(c.delete_url, {}, `Delete category ${c.name}?`)}><i aria-hidden="true" className="fas fa-times" /></button>}
               </span>))}</div>
+            {canWrite(d, 'expenses_create') && (
             <form onSubmit={addCat} className="d-flex gap-2 align-end flex-wrap">
               <div className="form-group mb-0" style={{ flex: 1, minWidth: 180 }}><label className="form-label">New category</label><input type="text" className="form-control" placeholder="e.g., Security" required value={cat} onChange={(e) => setCat(e.target.value)} /></div>
               <button type="submit" className="sp-btn"><i aria-hidden="true" className="fas fa-plus" /> Add</button>
             </form>
+            )}
           </div></div>
       )}
     </>
@@ -860,7 +868,7 @@ function Reports({ d }) {
   return (
     <>
       <div className="page-header"><h1>Finance Reports</h1>
-        <div className="page-header-actions">{d.export_url && <a href={d.export_url} className="sp-btn sp-btn-fill" data-native download><i aria-hidden="true" className="fas fa-file-excel" /> Export to Excel</a>}</div>
+        <div className="page-header-actions">{canWrite(d, 'reports_export') && d.export_url && <a href={d.export_url} className="sp-btn sp-btn-fill" data-native download><i aria-hidden="true" className="fas fa-file-excel" /> Export to Excel</a>}</div>
       </div>
       <Tabs d={d} />
       <div className="card mb-3"><div className="card-body"><form className="filter-form">
@@ -954,7 +962,7 @@ function EditPayment({ d, notify }) {
           <div className="page-header-actions">
             <button type="submit" className="sp-btn sp-btn-fill" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save Changes</button>
             <a href={d.receipt_url} className="sp-btn" data-native>Cancel</a>
-            {d.is_admin && <button type="button" className="sp-btn sp-btn-danger" style={{ marginLeft: 'auto' }} onClick={del}><i aria-hidden="true" className="fas fa-trash" /> Delete</button>}
+            {canWrite(d, 'payments_delete') && <button type="button" className="sp-btn sp-btn-danger" style={{ marginLeft: 'auto' }} onClick={del}><i aria-hidden="true" className="fas fa-trash" /> Delete</button>}
           </div>
         </form>
       </div></div>

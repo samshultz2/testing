@@ -35,7 +35,9 @@
   {% set fin_active = 'accounting' %}{% include 'finance/_header.html' %}
   <div class="page-header"><h1>Accounting</h1>
     <div class="page-header-actions">
+      {% if can_write_sub('finance', 'accounting_export') %}
       <a href="{{ export_url }}?{{ request.query_string.decode() }}" class="btn btn-secondary" data-native><i aria-hidden="true" class="fas fa-file-excel"></i> Export statements</a>
+      {% endif %}
     </div>
   </div>
   <p class="ac-note"><i aria-hidden="true" class="fas fa-circle-info"></i> These statements are generated automatically from every recorded payment, sale and expense — no manual bookkeeping. Cash-basis.</p>
