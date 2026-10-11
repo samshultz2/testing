@@ -7,11 +7,11 @@ from utils.helpers import get_active_session
 from models import (
     db, Student, StudentEnrollment, ClassArmAssignment, PromotionRule, PromotionRecord,
     Term, AcademicSession, SchoolClass, StudentScore, ClassSubject, Subject,
-    SchoolSettings, ClassArm
+    SchoolSettings, ClassArm, RESTRICTED_STATUSES
 )
 from utils.helpers import login_required, get_sss3_enrolled_students, safe_redirect
 from utils.access_control import (
-    admin_required, graduates_access_required, assert_graduate_access,
+    admin_required, graduates_access_required, assert_graduate_access, is_admin,
 )
 from utils.branch_scope import scope_query, scope_by_student, can_access_branch
 from utils.db_tx import safe_transaction
@@ -120,7 +120,7 @@ def graduates_list():
 
 
 @promotion_bp.route('/graduate/<int:student_id>', methods=['POST'])
-@admin_required
+@login_required
 def mark_graduate(student_id):
     """Mark a single (SSS3) student as graduated."""
     from utils.branch_scope import require_branch_access
@@ -143,7 +143,7 @@ def mark_graduate(student_id):
 
 
 @promotion_bp.route('/ungraduate/<int:student_id>', methods=['POST'])
-@admin_required
+@login_required
 def unmark_graduate(student_id):
     """Reverse a graduation (in case it was marked by mistake)."""
     from utils.branch_scope import require_branch_access
@@ -163,10 +163,11 @@ def unmark_graduate(student_id):
 
 
 @promotion_bp.route('/graduates/<int:student_id>/status', methods=['POST'])
-@admin_required
+@login_required
 def change_graduate_status(student_id):
-    """Advance a graduate's lifecycle status. Elevated (admin) only, and every
-    change is written to the GraduateAudit trail with old/new value + reason."""
+    """Advance a graduate's lifecycle status. Every change is written to the
+    GraduateAudit trail with old/new value + reason. Restricted statuses
+    (e.g. 'Deceased') require a full admin, regardless of subsection grant."""
     from utils.branch_scope import require_branch_access
     from models import GraduateAudit, GRADUATE_STATUSES
     from utils.access_control import get_current_user
@@ -179,6 +180,8 @@ def change_graduate_status(student_id):
     reason = (request.form.get('reason') or '').strip()
     if new_status not in GRADUATE_STATUSES:
         return _err('Choose a valid graduate status.', prof_url)
+    if new_status in RESTRICTED_STATUSES and not is_admin():
+        return _err('Only an administrator can set this status.', prof_url)
     old_status = student.graduate_status or 'Graduated'
     if new_status == old_status:
         return _ok('Status is already set to that.', prof_url)
@@ -198,7 +201,7 @@ def change_graduate_status(student_id):
 
 
 @promotion_bp.route('/graduate-sss3/preview')
-@admin_required
+@login_required
 def graduate_sss3_preview():
     """Review which SSS3 students will be graduated before committing."""
     enrolled = get_sss3_enrolled_students()
@@ -214,7 +217,7 @@ def graduate_sss3_preview():
 
 
 @promotion_bp.route('/graduate-sss3', methods=['POST'])
-@admin_required
+@login_required
 def graduate_sss3():
     """Mark every current SSS3 student (active term) as a graduate in one click."""
     active_session = get_active_session()
@@ -240,7 +243,7 @@ def graduate_sss3():
 
 
 @promotion_bp.route('/graduates/<int:student_id>/document/<doc_type>')
-@admin_required
+@login_required
 def graduate_document(student_id, doc_type):
     """Issue (or reprint) a graduate document and return the PDF. Records the
     issuance in the GraduateAudit trail and logs the action."""
@@ -271,7 +274,7 @@ def graduate_document(student_id, doc_type):
 
 
 @promotion_bp.route('/graduates/<int:student_id>/document/<doc_type>/revoke', methods=['POST'])
-@admin_required
+@login_required
 def revoke_document(student_id, doc_type):
     """Toggle a document's revoked flag. A revoked document verifies as invalid on
     the public portal. Logged + audited."""
@@ -300,7 +303,7 @@ def revoke_document(student_id, doc_type):
 
 
 @promotion_bp.route('/graduates/documents/bulk')
-@admin_required
+@login_required
 @rate_limited('grad_bulk_docs', max_requests=6, window_minutes=15)
 def bulk_documents():
     """Generate one document type for a whole graduating cohort as a ZIP of PDFs.
@@ -454,7 +457,7 @@ def doc_templates():
 
 
 @promotion_bp.route('/doc-templates/branding', methods=['POST'])
-@admin_required
+@login_required
 def set_doc_branding():
     """Save per-school document branding (colours, motto, verification). Stored in
     the tenant's SchoolSettings KV, so every design preview updates instantly."""
@@ -484,7 +487,7 @@ def set_doc_branding():
 
 
 @promotion_bp.route('/doc-templates/<doc_type>/default', methods=['POST'])
-@admin_required
+@login_required
 def set_doc_template(doc_type):
     from utils import graduate_docs
     from utils.access_control import get_current_user
@@ -610,7 +613,8 @@ def alumni_directory():
         'note': r.note, 'requested_at': r.requested_at.strftime('%d %b %Y') if r.requested_at else '',
         'fulfil_url': url_for('promotion.fulfill_request', req_id=r.id),
         'decline_url': url_for('promotion.decline_request', req_id=r.id),
-        'profile_url': url_for('promotion.graduate_profile', student_id=r.student_id),
+        'profile_url': (url_for('promotion.graduate_profile', student_id=r.student_id)
+                        if r.student_id else None),
     } for r in pend]
     total = scope_query(Student.query.filter_by(is_graduated=True), Student).count()
     contactable = sum(1 for r in rows if r['email'])
@@ -731,7 +735,7 @@ def alumni_export():
 
 
 @promotion_bp.route('/alumni/bulk-email', methods=['POST'])
-@admin_required
+@login_required
 @rate_limited('alumni_bulk_email', max_requests=10, window_minutes=60)
 def alumni_bulk_email():
     """Email every alumnus in the filtered set who has an email address. Sent
@@ -773,7 +777,7 @@ def alumni_bulk_email():
 
 
 @promotion_bp.route('/graduates/<int:student_id>/alumni', methods=['POST'])
-@admin_required
+@login_required
 def save_alumni_profile(student_id):
     """Admin edit of a graduate's alumni profile."""
     from utils.branch_scope import require_branch_access
@@ -817,7 +821,7 @@ def set_alumni_password(student_id):
 
 
 @promotion_bp.route('/alumni/requests/<int:req_id>/fulfil')
-@admin_required
+@login_required
 def fulfill_request(req_id):
     """Fulfil a document request: issue the document and return the PDF."""
     from flask import send_file
@@ -848,7 +852,7 @@ def fulfill_request(req_id):
 
 
 @promotion_bp.route('/alumni/requests/<int:req_id>/decline', methods=['POST'])
-@admin_required
+@login_required
 def decline_request(req_id):
     from utils.branch_scope import require_branch_access
     from utils.access_control import get_current_user
@@ -936,6 +940,7 @@ def graduate_profile(student_id):
                     .order_by(DocumentRequest.requested_at.desc()).limit(30).all())
     return _render({
         'page': 'graduate_profile',
+        'is_admin': is_admin(),
         'alumni': _alumni_json(alumni_prof),
         'alumni_fields': list(AlumniProfile.EDITABLE),
         'alumni_save_url': url_for('promotion.save_alumni_profile', student_id=student.id),

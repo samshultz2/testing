@@ -61,7 +61,7 @@ function Rules({ d, notify }) {
   };
   return (
     <>
-      <PageHeader title="Promotion Rules" actions={canWrite(d) ? <a href={d.add_url} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Rule</a> : null} />
+      <PageHeader title="Promotion Rules" actions={canWrite(d, 'promote_rules') ? <a href={d.add_url} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Rule</a> : null} />
       {d.rules.length ? (
         <div className="card"><div className="card-body" style={{ padding: 0 }}><div className="data-cards" style={{ padding: '1rem' }}>
           {d.rules.map((r) => (
@@ -71,7 +71,7 @@ function Rules({ d, notify }) {
               <div className="data-card-row"><span className="data-card-label">Min Average</span><span>{r.min_average}%</span></div>
               <div className="data-card-row"><span className="data-card-label">Priority</span><span>{r.priority}</span></div>
               {r.required_count > 0 && <div className="data-card-row"><span className="data-card-label">Required Subjects</span><span>{r.required_count} subjects</span></div>}
-              {canWrite(d) && <div className="data-card-actions">
+              {canWrite(d, 'promote_rules') && <div className="data-card-actions">
                 <button type="button" className="btn btn-danger btn-sm w-100" disabled={busy} onClick={() => del(r)}><i aria-hidden="true" className="fas fa-trash" /> Delete</button>
               </div>}
             </div>
@@ -80,7 +80,7 @@ function Rules({ d, notify }) {
       ) : (
         <div className="card"><div className="card-body"><Empty icon="fa-list-alt" title="No Rules">
           <p>Add promotion rules to define how students are promoted</p>
-          {canWrite(d) && <a href={d.add_url} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Rule</a>}</Empty></div></div>
+          {canWrite(d, 'promote_rules') && <a href={d.add_url} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Rule</a>}</Empty></div></div>
       )}
       <div className="card mt-3"><div className="card-header"><h3>How Rules Work</h3></div>
         <div className="card-body">
@@ -320,7 +320,7 @@ function Process({ d, notify }) {
                 );
               })}</tbody></table>
           </div></div>
-          {canWrite(d) && <div className="card-body"><div className="page-header-actions">
+          {canWrite(d, 'promote_execute') && <div className="card-body"><div className="page-header-actions">
             <button type="button" className="btn btn-primary" disabled={busy} onClick={submit}><i aria-hidden="true" className="fas fa-save" /> Save Promotions</button>
           </div></div>}
         </div>
@@ -395,7 +395,7 @@ function Graduates({ d }) {
         {d.doc_templates_url && <a href={d.doc_templates_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-swatchbook" /> Designs</a>}
         {d.verifications_url && <a href={d.verifications_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-shield-halved" /> Verifications</a>}
         {d.compare_url && <a href={d.compare_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-chart-column" /> Compare with SSS3</a>}
-        {canWrite(d) && <a href={d.preview_url} className="btn btn-success"><i aria-hidden="true" className="fas fa-user-graduate" /> Graduate current SSS3</a>}
+        {canWrite(d, 'graduates_sss3') && <a href={d.preview_url} className="btn btn-success"><i aria-hidden="true" className="fas fa-user-graduate" /> Graduate current SSS3</a>}
       </>} />
 
       <div className="stats-grid mb-3">
@@ -435,7 +435,7 @@ function Graduates({ d }) {
 
         <div className="card"><div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '.5rem' }}>
           <h3>Graduates ({shown.length}{shown.length !== d.graduates.length ? ` of ${d.graduates.length}` : ''})</h3>
-          {canWrite(d) && docTypes.length > 0 && d.bulk_url && <div style={{ display: 'flex', gap: '.4rem', alignItems: 'center', flexWrap: 'wrap', maxWidth: '100%' }}>
+          {canWrite(d, 'documents_bulk_generate') && docTypes.length > 0 && d.bulk_url && <div style={{ display: 'flex', gap: '.4rem', alignItems: 'center', flexWrap: 'wrap', maxWidth: '100%' }}>
             <select className="form-control" style={{ width: 'auto', maxWidth: '220px' }} value={bulkType} onChange={(e) => setBulkType(e.target.value)}>
               {docTypes.map((t) => <option key={t.type} value={t.type}>{t.label}</option>)}</select>
             <a href={bulkHref} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-file-zipper" /> Bulk issue</a>
@@ -483,7 +483,7 @@ function Graduates({ d }) {
       {/* mobile-only: thumb-reachable FAB carries the primary action instead
           of a header button that scrolls out of reach; mirrors the page
           header's "Graduate current SSS3" action (same perm gate) */}
-      {canWrite(d) && <a href={d.preview_url} className="grad-fab"><i aria-hidden="true" className="fas fa-user-graduate" /> Graduate</a>}
+      {canWrite(d, 'graduates_sss3') && <a href={d.preview_url} className="grad-fab"><i aria-hidden="true" className="fas fa-user-graduate" /> Graduate</a>}
     </>
   );
 }
@@ -510,8 +510,8 @@ function GraduatePreview({ d, notify }) {
               <thead><tr><th>#</th><th>Student ID</th><th>Name</th><th>Gender</th></tr></thead>
               <tbody>{d.students.map((s, i) => <tr key={i}><td>{i + 1}</td><td>{s.student_id}</td><td>{s.full_name}</td><td>{s.gender}</td></tr>)}</tbody>
             </table></div>
-            <button type="button" className="btn btn-primary" style={{ marginTop: '1rem' }} disabled={busy} onClick={doGraduate}>
-              <i aria-hidden="true" className="fas fa-user-graduate" /> Confirm — graduate {d.students.length} student(s)</button>
+            {canWrite(d, 'graduates_sss3') && <button type="button" className="btn btn-primary" style={{ marginTop: '1rem' }} disabled={busy} onClick={doGraduate}>
+              <i aria-hidden="true" className="fas fa-user-graduate" /> Confirm — graduate {d.students.length} student(s)</button>}
           </>) : <Empty icon="fa-circle-check" title=""><p>No new SSS3 students to graduate — they're all already graduated, or no SSS3 class is set up for the active term.</p></Empty>}
           {d.already_count > 0 && <p className="text-muted text-sm" style={{ marginTop: '1rem' }}><i aria-hidden="true" className="fas fa-info-circle" /> {d.already_count} SSS3 student(s) are already graduates and will be skipped.</p>}
         </div></div>
@@ -621,7 +621,7 @@ function GraduateProfile({ d, notify }) {
         <div className="ph-actions">
           <a href={d.urls.graduates} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back to Graduates</a>
           <a href={d.urls.full_profile} className="btn btn-primary"><i aria-hidden="true" className="fas fa-user" /> Full Profile</a>
-          {d.urls.ungraduate && <button type="button" className="btn btn-danger" disabled={busy} onClick={undoGraduate}>
+          {d.urls.ungraduate && canWrite(d, 'promote_graduate_status') && <button type="button" className="btn btn-danger" disabled={busy} onClick={undoGraduate}>
             <i aria-hidden="true" className="fas fa-rotate-left" /> Un-graduate</button>}
         </div>
       </div>
@@ -644,7 +644,7 @@ function GraduateProfile({ d, notify }) {
             </div>
           </div>
 
-          {d.urls.change_status && <div className="gp-sec">
+          {d.urls.change_status && canWrite(d, 'promote_graduate_status') && <div className="gp-sec">
             <div className="gp-sec-head"><div className="ttl"><span className="gp-sec-ic a"><i aria-hidden="true" className="fas fa-arrows-turn-right" /></span><h3>Update Status</h3></div></div>
             <div className="gp-sec-body">
               <div className="gp-status-now"><span className="dot" aria-hidden="true" /><b>Currently: {d.status || 'Graduated'}</b></div>
@@ -657,7 +657,7 @@ function GraduateProfile({ d, notify }) {
             </div>
           </div>}
 
-          {d.set_password_url && <div className="gp-sec">
+          {d.set_password_url && d.is_admin && <div className="gp-sec">
             <div className="gp-sec-head"><div className="ttl"><span className="gp-sec-ic i"><i aria-hidden="true" className="fas fa-key" /></span><h3>Portal Access</h3></div></div>
             <div className="gp-sec-body">
               <p style={{ margin: '0 0 .8rem', fontSize: '.78rem', color: 'var(--text-muted)' }}>Set a password so this graduate can sign in to the alumni portal. They can also log in with a verification code from any document you issued them.</p>
@@ -711,9 +711,9 @@ function GraduateProfile({ d, notify }) {
                       {doc.verify_url && <>· <a href={doc.verify_url} target="_blank" rel="noopener noreferrer">verify link</a></>}
                     </div>}
                     <div className="gp-dt-actions">
-                      <a href={doc.download_url} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm">
-                        <i aria-hidden="true" className={'fas ' + (doc.number ? 'fa-rotate' : 'fa-download')} /> {doc.number ? 'Re-issue' : 'Generate'}</a>
-                      {doc.number && doc.revoke_url && <button type="button" className="btn btn-secondary btn-sm" onClick={() => revokeDoc(doc)}>
+                      {canWrite(d, 'documents_generate') && <a href={doc.download_url} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm">
+                        <i aria-hidden="true" className={'fas ' + (doc.number ? 'fa-rotate' : 'fa-download')} /> {doc.number ? 'Re-issue' : 'Generate'}</a>}
+                      {doc.number && doc.revoke_url && canWrite(d, 'documents_generate') && <button type="button" className="btn btn-secondary btn-sm" onClick={() => revokeDoc(doc)}>
                         <i aria-hidden="true" className={'fas ' + (doc.revoked ? 'fa-rotate-left' : 'fa-ban')} /> {doc.revoked ? 'Reinstate' : 'Revoke'}</button>}
                     </div>
                   </div>
@@ -733,10 +733,10 @@ function GraduateProfile({ d, notify }) {
                   <div className="rbody"><div className="rtitle">{r.label}</div><div className="rsub">Requested {r.requested_at}{r.note ? ` · "${r.note}"` : ''}</div></div>
                   {r.status === 'pending' ? <>
                     <span className="badge badge-warning">pending</span>
-                    <div className="ractions">
+                    {canWrite(d, 'documents_requests') && <div className="ractions">
                       <button type="button" className="btn btn-primary btn-sm" onClick={() => fulfilReq(r)}><i aria-hidden="true" className="fas fa-file-arrow-down" /></button>
                       <button type="button" className="btn btn-secondary btn-sm" onClick={() => declineReq(r)}><i aria-hidden="true" className="fas fa-xmark" /></button>
-                    </div>
+                    </div>}
                   </> : <span className="rval">{r.response_note || (r.status === 'fulfilled' ? 'Issued' : r.status === 'declined' ? 'Declined' : r.status)}</span>}
                 </div>
               ))}
@@ -744,7 +744,7 @@ function GraduateProfile({ d, notify }) {
           </div>}
 
           {/* ---- Alumni details ---- */}
-          {d.alumni_save_url && <div className="gp-sec">
+          {d.alumni_save_url && canWrite(d, 'graduates_alumni_edit') && <div className="gp-sec">
             <div className="gp-sec-head"><div className="ttl"><span className="gp-sec-ic i"><i aria-hidden="true" className="fas fa-id-badge" /></span><h3>Alumni Details</h3></div>
               {d.alumni && d.alumni.updated_at && <span className="meta">Updated {d.alumni.updated_at}{d.alumni.updated_by ? ` by ${d.alumni.updated_by}` : ''}</span>}</div>
             <div className="gp-sec-body">
@@ -1118,8 +1118,8 @@ function Alumni({ d, notify }) {
       <PageHeader title="Alumni" actions={<>
         <a href={d.graduates} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Graduates</a>
         {d.analytics_url && <a href={d.analytics_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-chart-pie" /> Analytics</a>}
-        <a href={exportUrl} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-csv" /> Export CSV</a>
-        <button type="button" className="btn btn-primary" onClick={() => setMail((m) => ({ ...m, open: !m.open }))}><i aria-hidden="true" className="fas fa-envelope" /> Bulk email</button>
+        {canWrite(d, 'alumni_export') && <a href={exportUrl} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-csv" /> Export CSV</a>}
+        {canWrite(d, 'alumni_bulk_email') && <button type="button" className="btn btn-primary" onClick={() => setMail((m) => ({ ...m, open: !m.open }))}><i aria-hidden="true" className="fas fa-envelope" /> Bulk email</button>}
       </>} />
       <div className="stats-grid mb-3">
         <div className="stat-card"><div className="stat-icon success"><i aria-hidden="true" className="fas fa-user-graduate" /></div><div className="stat-content"><h3>{d.total}</h3><p>Graduates</p></div></div>
@@ -1146,8 +1146,10 @@ function Alumni({ d, notify }) {
               <td><a href={r.profile_url}>{r.student_name}</a><br /><span className="text-muted text-sm">{r.admission_no}</span></td>
               <td>{r.label}</td><td>{r.note || '—'}</td><td>{r.requested_at}</td>
               <td style={{ whiteSpace: 'nowrap' }}>
-                <button type="button" className="btn btn-success btn-sm" onClick={() => fulfilReq(r)}><i aria-hidden="true" className="fas fa-file-arrow-down" /> Issue</button>{' '}
-                <button type="button" className="btn btn-danger btn-sm" onClick={() => declineReq(r)}><i aria-hidden="true" className="fas fa-xmark" /> Decline</button>
+                {canWrite(d, 'documents_requests') && <>
+                  <button type="button" className="btn btn-success btn-sm" onClick={() => fulfilReq(r)}><i aria-hidden="true" className="fas fa-file-arrow-down" /> Issue</button>{' '}
+                  <button type="button" className="btn btn-danger btn-sm" onClick={() => declineReq(r)}><i aria-hidden="true" className="fas fa-xmark" /> Decline</button>
+                </>}
               </td>
             </tr>))}</tbody>
         </table></div></div></div>}
@@ -1296,11 +1298,11 @@ function BrandingStudio({ d, notify }) {
           <input type="checkbox" checked={verify} onChange={(e) => setVerify(e.target.checked)} />
           Show QR verification block on issued documents
         </label>
-        <div style={{ marginTop: '.9rem' }}>
+        {canWrite(d, 'documents_templates') && <div style={{ marginTop: '.9rem' }}>
           <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={save}>
             <i aria-hidden="true" className="fas fa-save" /> {busy ? 'Saving…' : 'Save branding'}</button>
           <span className="text-muted text-sm" style={{ marginLeft: '.6rem' }}>Previews update after saving.</span>
-        </div>
+        </div>}
       </div>}
     </div></div>
   );
@@ -1357,9 +1359,9 @@ function DocTemplates({ d, notify }) {
             <div className="data-card-actions">
               <a href={t.preview_url} target="_blank" rel="noopener noreferrer" className="btn btn-secondary btn-sm w-100">
                 <i aria-hidden="true" className="fas fa-eye" /> Preview</a>
-              <button type="button" className="btn btn-primary btn-sm w-100" style={{ marginTop: '.4rem' }}
+              {canWrite(d, 'documents_templates') && <button type="button" className="btn btn-primary btn-sm w-100" style={{ marginTop: '.4rem' }}
                 disabled={t.is_default || busy === t.key} onClick={() => setDefault(t)}>
-                <i aria-hidden="true" className="fas fa-star" /> {t.is_default ? 'Current default' : 'Set as default'}</button>
+                <i aria-hidden="true" className="fas fa-star" /> {t.is_default ? 'Current default' : 'Set as default'}</button>}
             </div>
           </div>))}
       </div>

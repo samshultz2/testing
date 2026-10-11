@@ -4,7 +4,8 @@ from models import (db, User, Expense, FeePayment, FeeDiscount, FeeItem, FeeStru
                     AdditionalCharge, Student, Term, AcademicSession, SchoolClass, ClassArm,
                     ClassArmAssignment, StudentEnrollment, Branch,
                     StaffMember, Department, LeaveRecord, PayrollRun, JobVacancy, JobApplication,
-                    StaffLoan, StaffAttendance, Subject, ClassSubject)
+                    StaffLoan, StaffAttendance, Subject, ClassSubject,
+                    PromotionRule, PromotionRecord)
 from tests.conftest import login_token
 
 
@@ -2360,3 +2361,379 @@ def test_cbt_settings_and_passwords_stay_admin_only(app):
     assert r.status_code in (302, 303)
     r2 = c.get('/cbt/passwords', follow_redirects=False)
     assert r2.status_code == 403
+
+
+# ---- Promotion (14-key granular split; set_alumni_password stays admin-only) --
+
+def _promo_classes(app, tag):
+    with app.app_context():
+        from_cls = (SchoolClass.query.filter_by(name=f'{tag}-From').first()
+                    or SchoolClass(name=f'{tag}-From', level=1))
+        db.session.add(from_cls); db.session.flush()
+        to_cls = (SchoolClass.query.filter_by(name=f'{tag}-To').first()
+                  or SchoolClass(name=f'{tag}-To', level=2))
+        db.session.add(to_cls); db.session.commit()
+        return from_cls.id, to_cls.id
+
+
+def _promo_enrolled_student(app, tag):
+    """A student actively enrolled in ``tag``'s own session/term/class, so
+    execute_promotion can find a 'current enrollment' to act on."""
+    with app.app_context():
+        ssn = AcademicSession.query.filter_by(name=f'{tag}-Sess').first() or AcademicSession(name=f'{tag}-Sess')
+        db.session.add(ssn); db.session.flush()
+        term = Term.query.filter_by(name=f'{tag}-Term').first() or Term(session_id=ssn.id, term_number=1, name=f'{tag}-Term')
+        db.session.add(term); db.session.flush()
+        cls = SchoolClass.query.filter_by(name=f'{tag}-Class').first() or SchoolClass(name=f'{tag}-Class', level=3)
+        db.session.add(cls); db.session.flush()
+        arm = ClassArm.query.filter_by(name=f'{tag}-Arm').first() or ClassArm(name=f'{tag}-Arm', is_active=True)
+        db.session.add(arm); db.session.flush()
+        caa = (ClassArmAssignment.query.filter_by(class_id=cls.id, arm_id=arm.id, term_id=term.id).first()
+               or ClassArmAssignment(class_id=cls.id, arm_id=arm.id, term_id=term.id, branch_id=Branch.get_default().id))
+        db.session.add(caa); db.session.flush()
+        st = Student.query.filter_by(student_id=f'{tag}-STU').first()
+        if not st:
+            st = Student(student_id=f'{tag}-STU', first_name='Promo', surname=tag,
+                         gender='Male', is_active=True, branch_id=Branch.get_default().id)
+            db.session.add(st); db.session.flush()
+        if not StudentEnrollment.query.filter_by(student_id=st.id, class_arm_assignment_id=caa.id).first():
+            db.session.add(StudentEnrollment(student_id=st.id, class_arm_assignment_id=caa.id, is_active=True))
+        db.session.commit()
+        return st.id, ssn.id
+
+
+def _promo_graduate(app, tag):
+    with app.app_context():
+        st = Student.query.filter_by(student_id=f'{tag}-GRAD').first()
+        if not st:
+            st = Student(student_id=f'{tag}-GRAD', first_name='Grad', surname=tag,
+                        gender='Female', is_active=True, is_graduated=True,
+                        graduate_status='Graduated', branch_id=Branch.get_default().id)
+            db.session.add(st); db.session.commit()
+        return st.id
+
+
+def _promo_sss3_teacher(app, tag, perms):
+    """A non-admin SSS3 form teacher, so they pass @graduates_access_required
+    (admin-or-SSS3-form-teacher) and the subsection grant under test actually
+    matters — an admin would bypass the subsection check entirely."""
+    from models import Teacher, TeacherClassAssignment
+    with app.app_context():
+        ssn = AcademicSession.query.filter_by(name=f'{tag}-Sess').first() or AcademicSession(name=f'{tag}-Sess')
+        db.session.add(ssn); db.session.flush()
+        term = Term.query.filter_by(name=f'{tag}-Term').first() or Term(session_id=ssn.id, term_number=1, name=f'{tag}-Term')
+        db.session.add(term); db.session.flush()
+        sss3 = SchoolClass.query.filter_by(name='SSS3').first() or SchoolClass(name='SSS3', level=9)
+        db.session.add(sss3); db.session.flush()
+        arm = ClassArm.query.filter_by(name=f'{tag}-Arm').first() or ClassArm(name=f'{tag}-Arm', is_active=True)
+        db.session.add(arm); db.session.flush()
+        caa = (ClassArmAssignment.query.filter_by(class_id=sss3.id, arm_id=arm.id, term_id=term.id).first()
+               or ClassArmAssignment(class_id=sss3.id, arm_id=arm.id, term_id=term.id, branch_id=Branch.get_default().id))
+        db.session.add(caa); db.session.flush()
+        username = tag.lower()
+        u = User.query.filter_by(username=username).first()
+        if not u:
+            u = User(username=username, role='teacher', scope='central', full_name=username)
+            u.set_password('secret123')
+            db.session.add(u); db.session.flush()
+        teacher = Teacher.query.filter_by(user_id=u.id).first()
+        if not teacher:
+            teacher = Teacher(user_id=u.id)
+            db.session.add(teacher); db.session.flush()
+        if not TeacherClassAssignment.query.filter_by(
+                teacher_id=teacher.id, class_arm_assignment_id=caa.id).first():
+            db.session.add(TeacherClassAssignment(
+                teacher_id=teacher.id, class_arm_assignment_id=caa.id,
+                is_form_teacher=True, is_active=True))
+        u.set_permissions(perms)
+        db.session.commit()
+        return username
+
+
+def test_promotion_view_blocked_from_rules_edit(app):
+    _make(app, 'pview', {'promotion.promote_view': 'view'})
+    c = _login(app, 'pview')
+    assert c.get('/promotion/').status_code == 200
+    assert c.get('/promotion/history').status_code == 200
+    r = c.get('/promotion/rules/add', follow_redirects=False)
+    assert r.status_code in (302, 303)        # promote_rules not granted
+
+
+def test_promotion_rules_create_delete_blocked_from_execute(app):
+    from_id, to_id = _promo_classes(app, 'PRUL')
+    sid, ssn_id = _promo_enrolled_student(app, 'PRULX')
+    _make(app, 'prul', {'promotion.promote_rules': 'edit'})
+    c = _login(app, 'prul')
+    tok = _ptoken(c)
+    c.post('/promotion/rules/add', data={'from_class_id': from_id, 'to_class_id': to_id,
+                                         'min_average': '50', 'priority': '0', '_csrf_token': tok})
+    with app.app_context():
+        rule = PromotionRule.query.filter_by(from_class_id=from_id, to_class_id=to_id).first()
+        assert rule is not None and rule.is_active is True
+        rule_id = rule.id
+    c.post(f'/promotion/rules/{rule_id}/delete', data={'_csrf_token': tok})
+    with app.app_context():
+        assert db.session.get(PromotionRule, rule_id).is_active is False
+    # Regression: before the split, any 'promote' edit grant implied the whole
+    # bucket (including running the actual promotion). Confirm rules-only can't.
+    with app.app_context():
+        before = PromotionRecord.query.count()
+    c.post('/promotion/execute', data={
+        'from_session_id': ssn_id, 'to_session_id': ssn_id, 'student_id[]': [str(sid)], 'action[]': ['graduated'],
+        '_csrf_token': tok,
+    })
+    with app.app_context():
+        assert PromotionRecord.query.count() == before
+
+
+def test_promotion_execute_can_run_blocked_from_rules_edit(app):
+    sid, ssn_id = _promo_enrolled_student(app, 'PEXE')
+    from_id, to_id = _promo_classes(app, 'PEXER')
+    _make(app, 'pexe', {'promotion.promote_execute': 'edit'})
+    c = _login(app, 'pexe')
+    tok = _ptoken(c)
+    c.post('/promotion/execute', data={
+        'from_session_id': ssn_id, 'to_session_id': ssn_id, 'student_id[]': [str(sid)], 'action[]': ['graduated'],
+        '_csrf_token': tok,
+    })
+    with app.app_context():
+        record = PromotionRecord.query.filter_by(student_id=sid, from_session_id=ssn_id).first()
+        assert record is not None and record.status == 'graduated'
+        assert db.session.get(Student, sid).is_graduated is True
+    with app.app_context():
+        before = PromotionRule.query.count()
+    c.post('/promotion/rules/add', data={'from_class_id': from_id, 'to_class_id': to_id,
+                                         'min_average': '50', '_csrf_token': tok})
+    with app.app_context():
+        assert PromotionRule.query.count() == before      # promote_rules not granted
+
+
+def test_promotion_graduate_status_mark_unmark_blocked_from_execute(app):
+    with app.app_context():
+        st = Student.query.filter_by(student_id='PGSM-STU').first()
+        if not st:
+            st = Student(student_id='PGSM-STU', first_name='Mark', surname='Me',
+                        gender='Male', is_active=True, branch_id=Branch.get_default().id)
+            db.session.add(st); db.session.commit()
+        sid = st.id
+    _make(app, 'pgsm', {'promotion.promote_graduate_status': 'edit'})
+    c = _login(app, 'pgsm')
+    tok = _ptoken(c)
+    c.post(f'/promotion/graduate/{sid}', data={'_csrf_token': tok})
+    with app.app_context():
+        assert db.session.get(Student, sid).is_graduated is True
+    c.post(f'/promotion/ungraduate/{sid}', data={'_csrf_token': tok})
+    with app.app_context():
+        assert db.session.get(Student, sid).is_graduated is False
+    exec_sid, ssn_id = _promo_enrolled_student(app, 'PGSMX')
+    with app.app_context():
+        before = PromotionRecord.query.count()
+    c.post('/promotion/execute', data={
+        'from_session_id': ssn_id, 'to_session_id': ssn_id, 'student_id[]': [str(exec_sid)], 'action[]': ['graduated'],
+        '_csrf_token': tok,
+    })
+    with app.app_context():
+        assert PromotionRecord.query.count() == before    # promote_execute not granted
+
+
+def test_promotion_change_graduate_status_blocks_deceased_for_non_admin(app):
+    # Regression test closing the dormant RESTRICTED_STATUSES gap: before this
+    # phase, change_graduate_status was hard admin-only; once it becomes an
+    # ordinary grantable action, a non-admin holder must still be unable to
+    # set a graduate's status to 'Deceased'.
+    sid = _promo_graduate(app, 'PGSD')
+    _make(app, 'pgsd', {'promotion.promote_graduate_status': 'edit'})
+    c = _login(app, 'pgsd')
+    tok = _ptoken(c)
+    c.post(f'/promotion/graduates/{sid}/status',
+           data={'status': 'Deceased', 'reason': 'test', '_csrf_token': tok})
+    with app.app_context():
+        assert db.session.get(Student, sid).graduate_status != 'Deceased'
+    # a non-restricted status change still works with the same grant
+    c.post(f'/promotion/graduates/{sid}/status',
+           data={'status': 'Certificate Issued', 'reason': 'test', '_csrf_token': tok})
+    with app.app_context():
+        assert db.session.get(Student, sid).graduate_status == 'Certificate Issued'
+
+
+def test_promotion_change_graduate_status_allows_deceased_for_admin(app):
+    sid = _promo_graduate(app, 'PGSA')
+    with app.app_context():
+        u = User.query.filter_by(username='pgsa').first()
+        if not u:
+            u = User(username='pgsa', role='admin', scope='central', full_name='pgsa')
+            u.set_password('secret123')
+            db.session.add(u); db.session.commit()
+    c = _login(app, 'pgsa')
+    tok = _ptoken(c)
+    c.post(f'/promotion/graduates/{sid}/status',
+           data={'status': 'Deceased', 'reason': 'test', '_csrf_token': tok})
+    with app.app_context():
+        assert db.session.get(Student, sid).graduate_status == 'Deceased'
+
+
+def test_promotion_graduates_sss3_view_blocked_from_alumni_edit(app):
+    _make(app, 'pgs3', {'promotion.graduates_sss3': 'edit'})
+    c = _login(app, 'pgs3')
+    assert c.get('/promotion/graduate-sss3/preview').status_code == 200
+    sid = _promo_graduate(app, 'PGS3X')
+    tok = _ptoken(c)
+    c.post(f'/promotion/graduates/{sid}/alumni', data={'occupation': 'Engineer', '_csrf_token': tok})
+    with app.app_context():
+        from models import AlumniProfile
+        prof = AlumniProfile.query.filter_by(student_id=sid).first()
+        assert prof is None or prof.occupation != 'Engineer'   # graduates_alumni_edit not granted
+
+
+def test_promotion_alumni_edit_blocked_from_sss3(app):
+    sid = _promo_graduate(app, 'PAED')
+    _make(app, 'paed', {'promotion.graduates_alumni_edit': 'edit'})
+    c = _login(app, 'paed')
+    tok = _ptoken(c)
+    c.post(f'/promotion/graduates/{sid}/alumni', data={'occupation': 'Pilot', '_csrf_token': tok})
+    with app.app_context():
+        from models import AlumniProfile
+        prof = AlumniProfile.query.filter_by(student_id=sid).first()
+        assert prof is not None and prof.occupation == 'Pilot'
+    r = c.get('/promotion/graduate-sss3/preview', follow_redirects=False)
+    assert r.status_code in (302, 303)        # graduates_sss3 not granted
+
+
+def test_promotion_set_alumni_password_stays_admin_only(app):
+    # Credential write (alumni portal login) — stays hard admin-only, same
+    # treatment as HR's device-token and CBT's settings/passwords, even for a
+    # user holding every other promotion key.
+    sid = _promo_graduate(app, 'PSAP')
+    _make(app, 'psap', {'promotion.promote_view': 'edit', 'promotion.promote_rules': 'edit',
+                        'promotion.promote_execute': 'edit', 'promotion.promote_graduate_status': 'edit',
+                        'promotion.graduates_sss3': 'edit', 'promotion.graduates_alumni_edit': 'edit',
+                        'promotion.documents_generate': 'edit', 'promotion.documents_bulk_generate': 'edit',
+                        'promotion.documents_templates': 'edit', 'promotion.documents_requests': 'edit',
+                        'promotion.alumni_view': 'edit', 'promotion.alumni_export': 'edit',
+                        'promotion.alumni_bulk_email': 'edit'})
+    c = _login(app, 'psap')
+    tok = _ptoken(c)
+    c.post(f'/promotion/graduates/{sid}/portal-password',
+           data={'password': 'secretpw1', '_csrf_token': tok})
+    with app.app_context():
+        st = db.session.get(Student, sid)
+        assert not st.check_portal_password('secretpw1')
+
+
+def test_promotion_documents_generate_blocked_from_bulk(app):
+    sid = _promo_graduate(app, 'PDGN')
+    _make(app, 'pdgn', {'promotion.documents_generate': 'edit'})
+    c = _login(app, 'pdgn')
+    r = c.get(f'/promotion/graduates/{sid}/document/statement')
+    assert r.status_code == 200
+    tok = _ptoken(c)
+    c.post(f'/promotion/graduates/{sid}/document/statement/revoke', data={'_csrf_token': tok})
+    with app.app_context():
+        from models import GraduateDocument
+        doc = GraduateDocument.query.filter_by(student_id=sid, doc_type='statement').first()
+        assert doc is not None and doc.revoked is True
+    r2 = c.get('/promotion/graduates/documents/bulk?doc_type=statement', follow_redirects=False)
+    assert r2.status_code in (302, 303)        # documents_bulk_generate not granted
+
+
+def test_promotion_documents_bulk_generate_blocked_from_single(app):
+    _promo_graduate(app, 'PDBG')
+    _make(app, 'pdbg', {'promotion.documents_bulk_generate': 'edit'})
+    c = _login(app, 'pdbg')
+    assert c.get('/promotion/graduates/documents/bulk?doc_type=statement').status_code == 200
+    sid2 = _promo_graduate(app, 'PDBG2')
+    r = c.get(f'/promotion/graduates/{sid2}/document/statement', follow_redirects=False)
+    assert r.status_code in (302, 303)         # documents_generate not granted
+
+
+def test_promotion_documents_templates_blocked_from_requests(app):
+    # doc_templates is additionally gated by @graduates_access_required
+    # (admin-or-SSS3-form-teacher); use a non-admin SSS3 form teacher so the
+    # documents_templates grant itself is actually what's being tested.
+    username = _promo_sss3_teacher(app, 'PDTE', {'promotion.documents_templates': 'edit'})
+    c = _login(app, username)
+    assert c.get('/promotion/doc-templates').status_code == 200
+    tok = _ptoken(c)
+    c.post('/promotion/doc-templates/branding', data={'motto': 'Test Motto', '_csrf_token': tok})
+    with app.app_context():
+        from models import SchoolSettings
+        assert SchoolSettings.get('school_motto') == 'Test Motto'
+    from models import DocumentRequest
+    sid = _promo_graduate(app, 'PDTEX')
+    with app.app_context():
+        req = DocumentRequest(student_id=sid, doc_type='statement', status='pending')
+        db.session.add(req); db.session.commit()
+        req_id = req.id
+    r = c.get(f'/promotion/alumni/requests/{req_id}/fulfil', follow_redirects=False)
+    assert r.status_code in (302, 303)        # documents_requests not granted
+
+
+def test_promotion_documents_requests_fulfil_decline(app):
+    from models import DocumentRequest
+    sid = _promo_graduate(app, 'PDRQ')
+    with app.app_context():
+        req1 = DocumentRequest(student_id=sid, doc_type='statement', status='pending')
+        req2 = DocumentRequest(student_id=sid, doc_type='transcript', status='pending')
+        db.session.add_all([req1, req2]); db.session.commit()
+        req1_id, req2_id = req1.id, req2.id
+    _make(app, 'pdrq', {'promotion.documents_requests': 'edit'})
+    c = _login(app, 'pdrq')
+    assert c.get(f'/promotion/alumni/requests/{req1_id}/fulfil').status_code == 200
+    with app.app_context():
+        assert db.session.get(DocumentRequest, req1_id).status == 'fulfilled'
+    tok = _ptoken(c)
+    c.post(f'/promotion/alumni/requests/{req2_id}/decline', data={'_csrf_token': tok})
+    with app.app_context():
+        assert db.session.get(DocumentRequest, req2_id).status == 'declined'
+    # blocked from documents_generate's direct-issue endpoint
+    r = c.get(f'/promotion/graduates/{sid}/document/conduct', follow_redirects=False)
+    assert r.status_code in (302, 303)
+
+
+def test_promotion_documents_verifications_view(app):
+    # document_verifications is additionally gated by @graduates_access_required.
+    username = _promo_sss3_teacher(app, 'PDVE', {'promotion.documents_verifications': 'view'})
+    c = _login(app, username)
+    assert c.get('/promotion/graduates/documents/verifications').status_code == 200
+
+
+def test_promotion_alumni_view_blocked_from_export(app):
+    # alumni_directory/alumni_analytics are additionally gated by
+    # @graduates_access_required; use a non-admin SSS3 form teacher so the
+    # alumni_view grant itself is actually what's being tested.
+    username = _promo_sss3_teacher(app, 'PAVE', {'promotion.alumni_view': 'view'})
+    c = _login(app, username)
+    assert c.get('/promotion/alumni').status_code == 200
+    assert c.get('/promotion/alumni/analytics').status_code == 200
+    r = c.get('/promotion/alumni/export', follow_redirects=False)
+    assert r.status_code in (302, 303)        # alumni_export not granted
+
+
+def test_promotion_alumni_export_blocked_from_bulk_email(app):
+    # alumni_export is additionally gated by @graduates_access_required.
+    username = _promo_sss3_teacher(app, 'PAEX', {'promotion.alumni_export': 'edit'})
+    c = _login(app, username)
+    assert c.get('/promotion/alumni/export').status_code == 200
+    tok = _ptoken(c)
+    r = c.post('/promotion/alumni/bulk-email',
+              data={'subject': 'Hi', 'body': 'Hello', '_csrf_token': tok}, follow_redirects=False)
+    # Blocked by the subsection gate (-> main dashboard), not by the
+    # unrelated "email not configured" business check (-> alumni directory).
+    assert r.status_code in (302, 303)
+    assert '/promotion/alumni' not in (r.headers.get('Location') or '')
+
+
+def test_promotion_alumni_bulk_email_reaches_handler_blocked_from_export(app):
+    _make(app, 'pabe', {'promotion.alumni_bulk_email': 'edit'})
+    c = _login(app, 'pabe')
+    tok = _ptoken(c)
+    r = c.post('/promotion/alumni/bulk-email',
+              data={'subject': 'Hi', 'body': 'Hello', '_csrf_token': tok}, follow_redirects=False)
+    # Permission passed through to the view (redirects back to the alumni
+    # page, not the dashboard) even though sending itself fails without SMTP.
+    assert r.status_code in (302, 303)
+    assert '/promotion/alumni' in (r.headers.get('Location') or '')
+    r2 = c.get('/promotion/alumni/export', follow_redirects=False)
+    assert r2.status_code in (302, 303)        # alumni_export not granted
+
+

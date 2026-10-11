@@ -56,7 +56,7 @@ def test_representative_resolution():
         'cbt.monitor': ('cbt', 'monitor_view'),
         'timetable.designer': ('timetable', 'manage'),
         'timetable.my_timetable': ('timetable', 'view'),
-        'promotion.graduate_document': ('promotion', 'documents'),
+        'promotion.graduate_document': ('promotion', 'documents_generate'),
         'library.issue': ('library', 'circulation'),
         'library.add_book': ('library', 'catalogue'),
         'reports.export_students': ('reports', 'exports'),
