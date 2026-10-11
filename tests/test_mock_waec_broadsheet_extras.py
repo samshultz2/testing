@@ -271,6 +271,34 @@ def test_broadsheet_and_blank_accept_a1_and_a0_paper_sizes(app):
         doc.close()
 
 
+def test_faint_logo_image_background_is_transparent_not_a_box():
+    """Regression: reportlab's ``mask='auto'`` only honours an image's own
+    alpha channel. The first cut of the logo watermark just lightened a flat
+    (no-alpha) image and passed ``mask='auto'`` -- with nothing for "auto" to
+    mask on, the whole rectangle (background included) drew fully opaque, as
+    a hard grey box instead of a faint watermark. The derived image's
+    background corner must stay far more transparent than its ink."""
+    import os
+    import tempfile
+    from PIL import Image, ImageDraw
+    from utils.mock_waec_pdf import _faint_logo_image
+
+    im = Image.new('RGB', (200, 200), 'white')
+    ImageDraw.Draw(im).ellipse([40, 40, 160, 160], fill='black')
+    fd, path = tempfile.mkstemp(suffix='.png')
+    os.close(fd)
+    try:
+        im.save(path)
+        wm = _faint_logo_image(path)
+        assert wm.mode == 'RGBA'
+        corner_alpha = wm.getpixel((2, 2))[3]     # background, outside the ellipse
+        center_alpha = wm.getpixel((100, 100))[3]  # ink, inside the ellipse
+        assert corner_alpha < 5                    # background stays (near-)invisible
+        assert center_alpha > corner_alpha * 5      # ink is visibly faint, not an opaque box
+    finally:
+        os.remove(path)
+
+
 def test_broadsheet_shows_ab_for_absent_subject(app):
     ssid = _session(app)
     exam_id = _exam(app, ssid, n=95)

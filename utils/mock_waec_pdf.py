@@ -231,6 +231,32 @@ def _broadsheet_signatures(opts, usable):
     return t
 
 
+def _faint_logo_image(logo_path, strength=0.16):
+    """A neutral-gray, mostly-transparent RGBA version of a school logo for
+    use as a watermark.
+
+    ``mask='auto'`` (reportlab's way of honouring an image's own
+    transparency) only works when the image actually *has* an alpha
+    channel — simply lightening a flat 'L' (grayscale, no alpha) image and
+    passing ``mask='auto'`` draws it fully opaque, since there is nothing
+    for "auto" to mask on. That drew a hard, boxy rectangle (the logo's own
+    background included) instead of a faint watermark.
+
+    Here the alpha channel is derived from how dark each pixel is — near-
+    white background pixels become fully transparent and only the ink/crest
+    itself fades in at ``strength`` — so a flat logo with no transparency of
+    its own still watermarks cleanly. Any real transparency the logo
+    already has is preserved by multiplying it in too."""
+    from PIL import Image as _PILImage, ImageChops as _ImageChops
+    im = _PILImage.open(logo_path).convert('RGBA')
+    gray = im.convert('L')
+    orig_alpha = im.getchannel('A')
+    darkness = _PILImage.eval(gray, lambda v: 255 - v)
+    combined = _ImageChops.multiply(darkness, orig_alpha)
+    faint_alpha = combined.point(lambda v: int(v * strength))
+    return _PILImage.merge('RGBA', (gray, gray, gray, faint_alpha))
+
+
 def _broadsheet_canvasmaker(opts, school, page_wh, footer_pos='bottom'):
     """A reportlab Canvas that defers every ``showPage`` so the final page
     count is known before any per-page footer is drawn — lets the watermark
@@ -255,6 +281,15 @@ def _broadsheet_canvasmaker(opts, school, page_wh, footer_pos='bottom'):
     printed_str = timeutil.now().strftime('%d %b %Y, %I:%M %p')
     footer_y = (ph - 12 * mm) if footer_pos == 'top' else 5 * mm
 
+    # Built once (not per page) — same faint image reused for every page.
+    logo_reader = None
+    if show_wm_logo and logo_path:
+        try:
+            from reportlab.lib.utils import ImageReader
+            logo_reader = ImageReader(_faint_logo_image(logo_path))
+        except Exception:
+            logo_reader = None
+
     class _BroadsheetCanvas(_PDFCanvas):
         def __init__(self, *a, **k):
             super().__init__(*a, **k)
@@ -265,25 +300,17 @@ def _broadsheet_canvasmaker(opts, school, page_wh, footer_pos='bottom'):
             self._startPage()
 
         def _draw_watermark_logo(self):
-            try:
-                from PIL import Image as _PILImage
-                from reportlab.lib.utils import ImageReader
-                im = _PILImage.open(logo_path).convert('L')
-                im = im.point(lambda v: int(255 - (255 - v) * 0.10))   # ~10% ink
-                reader = ImageReader(im)
-                ws = min(pw, ph) * 0.55
-                self.saveState()
-                self.drawImage(reader, pw / 2 - ws / 2, ph / 2 - ws / 2,
-                               width=ws, height=ws, mask='auto', preserveAspectRatio=True)
-                self.restoreState()
-            except Exception:
-                pass
+            ws = min(pw, ph) * 0.55
+            self.saveState()
+            self.drawImage(logo_reader, pw / 2 - ws / 2, ph / 2 - ws / 2,
+                           width=ws, height=ws, mask='auto', preserveAspectRatio=True)
+            self.restoreState()
 
         def save(self):
             n = len(self._bs_saved)
             for i, state in enumerate(self._bs_saved, 1):
                 self.__dict__.update(state)
-                if show_wm_logo and logo_path:
+                if logo_reader:
                     self._draw_watermark_logo()
                 if show_wm_name:
                     self.saveState()
