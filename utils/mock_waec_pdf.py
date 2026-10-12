@@ -187,6 +187,23 @@ def _groups(subjects, per):
 
 
 _PAPER_SIZES = {'A4': A4, 'A3': A3, 'A2': A2, 'A1': A1, 'A0': A0}
+# A3 and bigger have enough spare vertical room that a couple of rows'
+# worth of it is better spent on slightly taller, more comfortable rows
+# than on cramming in the extra students that height would otherwise fit —
+# fewer students per page, a touch more breathing room per row.
+_BIG_SIZES = {'A3', 'A2', 'A1', 'A0'}
+
+
+def _row_pad(size):
+    """Cell TOPPADDING/BOTTOMPADDING (points) for the main table — a touch
+    taller on A3+."""
+    return 3.3 if (size or 'A4').upper() in _BIG_SIZES else 2.5
+
+
+def _row_h(size, base_mm):
+    """A fixed row height (e.g. the blank sheet's per-student row) — a touch
+    taller on A3+."""
+    return (base_mm + 0.9) * mm if (size or 'A4').upper() in _BIG_SIZES else base_mm * mm
 
 
 def _pagesize(orient, size='A4'):
@@ -544,8 +561,8 @@ def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape',
             ('ALIGN', (1, 0), (1, -1), 'LEFT'),
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('VALIGN', (0, 0), (-1, header_rows - 1), 'BOTTOM'),
-            ('TOPPADDING', (0, 0), (-1, -1), 2.5),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 2.5),
+            ('TOPPADDING', (0, 0), (-1, -1), _row_pad(size)),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), _row_pad(size)),
         ]
         if separate_cols:
             style += [('SPAN', (0, 0), (0, 1)), ('SPAN', (1, 0), (1, 1)),
@@ -675,9 +692,10 @@ def blank_broadsheet_pdf(students, offered, subjects, exam, school, opts=None,
                            + [''] * (2 * len(group)))
 
         widths = [sn_w, name_w] + ([arm_w] if show_arm else []) + [cell_w] * (2 * len(group))
-        heights = ([None, None] + [8.5 * mm] * nstud + [8.5 * mm] * _EXTRA_ROWS
-                   + ([10 * mm] if show_summary else [])
-                   + ([8.5 * mm] * len(_BLANK_SUMMARY) if show_summary else []))
+        row_h = _row_h(size, 8.5)
+        heights = ([None, None] + [row_h] * nstud + [row_h] * _EXTRA_ROWS
+                   + ([row_h + 1.5 * mm] if show_summary else [])
+                   + ([row_h] * len(_BLANK_SUMMARY) if show_summary else []))
         # repeatRows=0: the column labels (subjects, Score/Grade, S/N, Name) appear
         # only on the first page — when the roster overflows onto further pages the
         # students continue without the header band repeating.
@@ -690,8 +708,8 @@ def blank_broadsheet_pdf(students, offered, subjects, exam, school, opts=None,
             ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
             ('SPAN', (0, 0), (0, 1)),          # S/N spans both header rows
             ('SPAN', (1, 0), (1, 1)),          # Name spans both header rows
-            ('TOPPADDING', (0, 0), (-1, -1), 2.5),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 2.5),
+            ('TOPPADDING', (0, 0), (-1, -1), _row_pad(size)),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), _row_pad(size)),
             ('LEFTPADDING', (lead, 0), (-1, -1), 1),    # narrow score/grade columns
             ('RIGHTPADDING', (lead, 0), (-1, -1), 1),
         ]

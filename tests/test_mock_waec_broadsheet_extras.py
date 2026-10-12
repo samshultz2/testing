@@ -363,6 +363,36 @@ def test_faint_logo_image_background_is_transparent_not_a_box():
         os.remove(path)
 
 
+def test_big_paper_sizes_get_taller_rows_than_a4():
+    """A3 and bigger have enough spare vertical room that a request to "make
+    the rows a tiny bit taller" is better served by slightly more generous
+    padding/row-height than by precisely computing how many fewer students
+    fit per page -- reportlab's own automatic Table pagination then fits
+    fewer rows per page as a natural side effect. Pure unit check of the
+    helpers (no PDF render / HTTP call needed, and they're otherwise only
+    exercised indirectly): A3 and up must be taller than A4, and every big
+    size must agree with every other (not just A3 specifically)."""
+    from reportlab.lib.units import mm
+    from utils.mock_waec_pdf import _BIG_SIZES, _row_pad, _row_h
+
+    assert _BIG_SIZES == {'A3', 'A2', 'A1', 'A0'}
+
+    a4_pad = _row_pad('A4')
+    a4_h = _row_h('A4', 8.5)
+    assert a4_h == pytest.approx(8.5 * mm)
+    for big in _BIG_SIZES:
+        assert _row_pad(big) > a4_pad
+        assert _row_h(big, 8.5) > a4_h
+        assert _row_h(big, 8.5) == pytest.approx(9.4 * mm)
+        # Every big size behaves the same as every other -- this isn't an
+        # A3-only special case.
+        assert _row_pad(big) == _row_pad('A3')
+
+    # Falls back to the A4 (not-big) behaviour for an unrecognised/blank size.
+    assert _row_pad(None) == a4_pad
+    assert _row_pad('') == a4_pad
+
+
 def test_broadsheet_shows_ab_for_absent_subject(app):
     ssid = _session(app)
     exam_id = _exam(app, ssid, n=95)
