@@ -53,14 +53,6 @@
             </select>
         </label>
         {% endif %}
-        {% if show_footer_pos %}
-        <label style="display:flex;align-items:center;gap:.4rem;margin:0;">Page no. / date footer:
-            <select id="footerPosSel" class="form-control" style="width:auto;">
-                <option value="bottom">Bottom (default)</option>
-                <option value="top">Top — survives trimming the bottom margin when gluing sheets together</option>
-            </select>
-        </label>
-        {% endif %}
         {% if show_cols %}
         <label style="display:flex;align-items:center;gap:.4rem;margin:0;">Layout:
             <select id="colsSel" class="form-control" style="width:auto;">
@@ -138,7 +130,6 @@
   var colsSel = document.getElementById('colsSel');
   var orientSel = document.getElementById('orientSel');
   var sizeSel = document.getElementById('sizeSel');
-  var footerPosSel = document.getElementById('footerPosSel');
   var layoutModeSel = document.getElementById('layoutModeSel');
   var signersSel = document.getElementById('signersSel');
   var bwOpt = document.getElementById('bwOpt');
@@ -155,7 +146,6 @@
     }
     if (orientSel) p.push('orient=' + orientSel.value);
     if (sizeSel) p.push('size=' + sizeSel.value);
-    if (footerPosSel) p.push('footer_pos=' + footerPosSel.value);
     if (layoutModeSel) p.push('mode=' + layoutModeSel.value);
     if (signersSel) p.push('signers=' + signersSel.value);
     if (colsSel && colsSel.value !== '') p.push('cols=' + colsSel.value);
@@ -279,7 +269,6 @@
   if (colsSel) colsSel.addEventListener('change', refresh);
   if (orientSel) orientSel.addEventListener('change', refresh);
   if (sizeSel) sizeSel.addEventListener('change', refresh);
-  if (footerPosSel) footerPosSel.addEventListener('change', refresh);
   if (layoutModeSel) layoutModeSel.addEventListener('change', refresh);
   if (bwOpt) bwOpt.addEventListener('change', refresh);
   if (signersSel) signersSel.addEventListener('change', refresh);

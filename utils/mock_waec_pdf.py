@@ -35,6 +35,11 @@ _EXTRA_ROWS = 3        # blank rows before the summary, for hand-written additio
 # summary columns (broadsheet_pdf's ``tail_cols``).
 _TAIL_LABELS = {'credits': 'Credits', 'average': 'Average %', 'position': 'Position',
                 'subjects_sat': 'Subjects Sat', 'remark': 'Remark'}
+# Relative width of each tail column, as a fraction of the standard 1-unit
+# width every other column gets. Credits/Average only ever hold a couple of
+# digits, so they read fine narrower; Position/Subjects Sat/Remark keep the
+# full unit (Remark in particular needs the room to wrap "Not Qualified").
+_TAIL_WEIGHT = {'credits': 0.6, 'average': 0.6}
 
 
 class _VHead(Flowable):
@@ -257,7 +262,7 @@ def _faint_logo_image(logo_path, strength=0.16):
     return _PILImage.merge('RGBA', (gray, gray, gray, faint_alpha))
 
 
-def _broadsheet_canvasmaker(opts, school, page_wh, footer_pos='bottom'):
+def _broadsheet_canvasmaker(opts, school, page_wh):
     """A reportlab Canvas that defers every ``showPage`` so the final page
     count is known before any per-page footer is drawn — lets the watermark
     (school name text and/or a faint school-logo image, either able to carry
@@ -265,10 +270,15 @@ def _broadsheet_canvasmaker(opts, school, page_wh, footer_pos='bottom'):
     independently toggled (see utils/student_export.py's ``Numbered`` for the
     same defer-until-save technique, minus the watermark).
 
-    ``footer_pos`` places the page-number/generated-on line at the bottom
-    (default) or the top of the sheet — printed broadsheets are often spliced
-    into one big sheet by trimming each page's bottom margin and gluing it to
-    the next, which destroys a bottom footer; "top" survives that."""
+    "Page X of Y" and "Generated on ..." run vertically in the left/right
+    page margins rather than horizontally across the top or bottom. The
+    table always fills exactly the width between the margins (see
+    ``broadsheet_pdf``/``blank_broadsheet_pdf``), so margin text can never
+    overlap it — unlike a top/bottom placement, which collided with the
+    table's own top edge on any page where the roster overflows onto a
+    continuation page (no school header there to leave clear space for it).
+    It also survives a printed sheet being trimmed and glued to the next,
+    since that trims the top/bottom edge, not the sides."""
     show_wm_name = _opt(opts, 'watermark_name')
     show_wm_logo = _opt(opts, 'watermark_logo', default=False)
     show_branch = _opt(opts, 'branch_name', default=False)
@@ -279,7 +289,6 @@ def _broadsheet_canvasmaker(opts, school, page_wh, footer_pos='bottom'):
     branch_text = (school.get('branch_name') or '').upper()[:30] if show_branch else ''
     logo_path = school.get('logo_path')
     printed_str = timeutil.now().strftime('%d %b %Y, %I:%M %p')
-    footer_y = (ph - 12 * mm) if footer_pos == 'top' else 5 * mm
 
     # Built once (not per page) — same faint image reused for every page.
     logo_reader = None
@@ -323,14 +332,21 @@ def _broadsheet_canvasmaker(opts, school, page_wh, footer_pos='bottom'):
                         self.setFont('Helvetica-Bold', 26)
                         self.drawCentredString(0, -28, branch_text)
                     self.restoreState()
-                if show_pg or show_printed:
+                if show_printed:
                     self.saveState()
                     self.setFont('Helvetica', 7.5)
                     self.setFillColor(colors.HexColor('#666666'))
-                    if show_printed:
-                        self.drawString(8 * mm, footer_y, f'Generated on {printed_str}')
-                    if show_pg:
-                        self.drawRightString(pw - 8 * mm, footer_y, f'Page {i} of {n}')
+                    self.translate(4 * mm, ph / 2)
+                    self.rotate(90)
+                    self.drawCentredString(0, 0, f'Generated on {printed_str}')
+                    self.restoreState()
+                if show_pg:
+                    self.saveState()
+                    self.setFont('Helvetica', 7.5)
+                    self.setFillColor(colors.HexColor('#666666'))
+                    self.translate(pw - 4 * mm, ph / 2)
+                    self.rotate(90)
+                    self.drawCentredString(0, 0, f'Page {i} of {n}')
                     self.restoreState()
                 super().showPage()
             super().save()
@@ -350,7 +366,7 @@ def _fit_per(usable, sn_w, name_w, reserve, min_w, per, n):
 
 
 def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape',
-                   size='A4', separate_cols=False, footer_pos='bottom'):
+                   size='A4', separate_cols=False):
     """Full score+grade matrix. Wide subject sets split across pages (``per``
     columns each); no admission numbers. ``opts['summary']`` toggles the
     per-subject offered/passed/failed/average rows, led by a "SUMMARY"
@@ -358,9 +374,7 @@ def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape',
     ``orient``/``size`` pick the paper (A4/A3/A2/A1/A0, landscape or
     portrait), filling the page with an 8mm margin. ``separate_cols`` gives
     each subject its own Score and Grade sub-columns (like the blank
-    recording sheet) instead of one combined "score grade" column.
-    ``footer_pos`` ('bottom' or 'top') places the page-number/generated-on
-    line — see ``_broadsheet_canvasmaker``."""
+    recording sheet) instead of one combined "score grade" column."""
     _styles()
     page = _pagesize(orient, size)
     buf = io.BytesIO()
@@ -407,11 +421,15 @@ def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape',
         tail = len(tail_cols)
         n_subj_cols = 2 * len(group) if separate_cols else len(group)
         # Every individual column (each subject sub-column, and each tail
-        # column) is one "unit" wide. In separate-columns mode a subject's 2
-        # sub-columns and the 2 tail columns are each reserved 2 units total,
-        # so both keep the same footprint as one full subject block —
-        # matching combined mode, where every column is simply 1 unit.
-        tail_units = (2 if separate_cols else 1) * tail
+        # column) is one "unit" wide, except Credits/Average which are
+        # narrower (see _TAIL_WEIGHT). In separate-columns mode a subject's 2
+        # sub-columns and each tail column's own weighted share are each
+        # reserved out of 2 units total, so a full-weight (1.0) tail column
+        # keeps the same footprint as one full subject block — matching
+        # combined mode, where every full-weight column is simply 1 unit.
+        base_per_tail = 2 if separate_cols else 1
+        tail_weights = [_TAIL_WEIGHT.get(tc, 1.0) for tc in tail_cols]
+        tail_units = base_per_tail * sum(tail_weights)
         unit = (usable - sn_w - name_w - arm_w) / (n_subj_cols + tail_units)
 
         if separate_cols:
@@ -504,12 +522,13 @@ def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape',
         widths = [sn_w, name_w] + ([arm_w] if show_arm else []) + [unit] * n_subj_cols
         if tail:
             # Matches the divisor above: in separate-columns mode a tail
-            # column reserves 2 units (same footprint as a subject's
-            # Score+Grade pair), not 1 -- using 1 here left that second unit
-            # of width unallocated, shrinking the table and (since reportlab
-            # centres an under-width table in its frame) padding out both
-            # margins instead of just the right one.
-            widths += [unit * (2 if separate_cols else 1)] * tail
+            # column reserves its weighted share out of 2 units (same
+            # footprint as a subject's Score+Grade pair for a full-weight
+            # column), not 1 -- using 1 here left part of that width
+            # unallocated, shrinking the table and (since reportlab centres
+            # an under-width table in its frame) padding out both margins
+            # instead of just the right one.
+            widths += [unit * base_per_tail * w for w in tail_weights]
         heights = ([None] * header_rows + [None] * nrows + [7.5 * mm] * _EXTRA_ROWS
                    + ([9.5 * mm] if show_summary else [])
                    + ([None] * len(_BLANK_SUMMARY) if show_summary else []))
@@ -563,14 +582,13 @@ def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape',
                 e.append(sig)
         if not last:
             e.append(PageBreak())
-    doc.build(e, canvasmaker=_broadsheet_canvasmaker(opts, school, page, footer_pos=footer_pos))
+    doc.build(e, canvasmaker=_broadsheet_canvasmaker(opts, school, page))
     buf.seek(0)
     return buf
 
 
 def blank_broadsheet_pdf(students, offered, subjects, exam, school, opts=None,
-                         per=0, orient='landscape', size='A4', arm_by_student=None,
-                         footer_pos='bottom'):
+                         per=0, orient='landscape', size='A4', arm_by_student=None):
     """A blank recording sheet: student names down the side, every subject across
     the top with its own **Score** and **Grade** columns to write into.
     ``orient``/``size`` pick the paper — landscape or portrait, A4/A3/A2/A1/A0.
@@ -706,7 +724,7 @@ def blank_broadsheet_pdf(students, offered, subjects, exam, school, opts=None,
                 e.append(sig)
         if gi != len(groups) - 1:
             e.append(PageBreak())
-    doc.build(e, canvasmaker=_broadsheet_canvasmaker(opts, school, page, footer_pos=footer_pos))
+    doc.build(e, canvasmaker=_broadsheet_canvasmaker(opts, school, page))
     buf.seek(0)
     return buf
 

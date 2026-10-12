@@ -195,8 +195,7 @@ def test_broadsheet_preview_exposes_new_toggles(app):
                   'Branch name (header + watermark)',
                   'Watermark — school name', 'Watermark — school logo',
                   'Page numbers', 'Printed-on footer',
-                  'A1 — large format', 'A0 — largest format',
-                  'Page no. / date footer'):
+                  'A1 — large format', 'A0 — largest format'):
         assert label in prev
     blank_prev = _admin(app).get(f'/mock-waec/exam/{exam_id}/broadsheet/blank').get_data(as_text=True)
     assert 'Class arm column' in blank_prev and 'Watermark — school name' in blank_prev
@@ -252,10 +251,14 @@ def test_broadsheet_branch_name_in_header_and_watermark(app):
     assert tag.upper() in text_on
 
 
-def test_broadsheet_footer_position_top_vs_bottom(app):
-    """``footer_pos=top`` moves the page-number/generated-on line near the top
-    margin instead of the bottom -- lets a printed sheet be trimmed along its
-    bottom edge and glued to the next without losing that line."""
+def test_broadsheet_footer_sits_in_margins_not_overlapping_table(app):
+    """Regression: "Generated on ..." and "Page X of Y" used to run
+    horizontally across the top or bottom of the sheet -- on any page where
+    the roster overflows onto a continuation page (no school header there,
+    so the table starts right at the top margin) that collided with the
+    table's own top edge. They now run vertically in the left/right margins
+    instead, a region the table (which fills exactly the space between the
+    margins) never reaches on any page."""
     import fitz
     ssid = _session(app)
     exam_id = _exam(app, ssid, n=97)
@@ -264,27 +267,46 @@ def test_broadsheet_footer_position_top_vs_bottom(app):
     _seed_results(app, exam_id, sid, {'Mathematics': 60})
     c = _admin(app)
 
-    def _generated_y(resp):
-        doc = fitz.open(stream=resp.get_data(), filetype='pdf')
-        try:
-            page = doc[0]
-            page_h = page.rect.height
-            words = page.get_text('words')
-            hit = next(w for w in words if w[4] == 'Generated')
-            return hit[1] / page_h          # normalised y0 (0 = top, 1 = bottom)
-        finally:
-            doc.close()
+    r = c.get(f'/mock-waec/exam/{exam_id}/broadsheet.pdf?printed_on=1&page_numbers=1&'
+             'summary=0&grades=0&sig_principal=0&sig_hod_sci=0&sig_hod_arts=0')
+    assert r.status_code == 200
+    doc = fitz.open(stream=r.get_data(), filetype='pdf')
+    try:
+        page = doc[0]
+        pw = page.rect.width
+        words = page.get_text('words')
+        generated = next(w for w in words if w[4] == 'Generated')
+        page_word = next(w for w in words if w[4] == 'Page')
 
-    r_bottom = c.get(f'/mock-waec/exam/{exam_id}/broadsheet.pdf?printed_on=1&footer_pos=bottom')
-    assert r_bottom.status_code == 200
-    y_bottom = _generated_y(r_bottom)
+        # Also checked against this same response (no extra request): Credits
+        # and Average should render narrower than the other columns (Arm,
+        # Mathematics, Position, Subjects Sat, Remark are all full-weight and
+        # default on alongside Credits/Average here).
+        verts = []
+        for d in page.get_drawings():
+            for item in d['items']:
+                if item[0] == 'l':
+                    x0, y0 = item[1]
+                    x1, y1 = item[2]
+                    if abs(x0 - x1) < 0.01 and abs(y0 - y1) > 5:
+                        verts.append((round(x0, 1), round(min(y0, y1), 1), round(max(y0, y1), 1)))
+        longest = max(v[2] - v[1] for v in verts)
+        cols = sorted(set(v[0] for v in verts if v[2] - v[1] > longest - 5))
+        col_widths = [cols[i + 1] - cols[i] for i in range(len(cols) - 1)]
+        # S/N, Name, Arm, Mathematics, Credits, Average, Position, Subjects Sat, Remark
+        full_width = col_widths[3]              # Mathematics -- a full-weight column
+        credits_w, average_w = col_widths[4], col_widths[5]
+    finally:
+        doc.close()
 
-    r_top = c.get(f'/mock-waec/exam/{exam_id}/broadsheet.pdf?printed_on=1&footer_pos=top')
-    assert r_top.status_code == 200
-    y_top = _generated_y(r_top)
+    margin = 22.68   # 8mm in points -- where the table itself begins/ends
+    assert generated[2] < margin              # "Generated" stays left of the table
+    assert page_word[0] > pw - margin         # "Page" stays right of the table
 
-    assert y_bottom > 0.85           # hugs the bottom margin
-    assert y_top < 0.15              # hugs the top margin
+    assert credits_w < full_width * 0.8
+    assert average_w < full_width * 0.8
+    assert col_widths[6] == pytest.approx(full_width, abs=1)   # Position stays full-weight
+    assert col_widths[8] == pytest.approx(full_width, abs=1)   # Remark stays full-weight
 
 
 def test_broadsheet_and_blank_accept_a1_and_a0_paper_sizes(app):
