@@ -503,7 +503,13 @@ def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape',
 
         widths = [sn_w, name_w] + ([arm_w] if show_arm else []) + [unit] * n_subj_cols
         if tail:
-            widths += [unit] * tail
+            # Matches the divisor above: in separate-columns mode a tail
+            # column reserves 2 units (same footprint as a subject's
+            # Score+Grade pair), not 1 -- using 1 here left that second unit
+            # of width unallocated, shrinking the table and (since reportlab
+            # centres an under-width table in its frame) padding out both
+            # margins instead of just the right one.
+            widths += [unit * (2 if separate_cols else 1)] * tail
         heights = ([None] * header_rows + [None] * nrows + [7.5 * mm] * _EXTRA_ROWS
                    + ([9.5 * mm] if show_summary else [])
                    + ([None] * len(_BLANK_SUMMARY) if show_summary else []))

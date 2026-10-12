@@ -135,7 +135,7 @@ def test_broadsheet_arm_position_subjects_sat_remark(app):
     # route is rate-limited -- see the broadsheet rate-limit lesson in
     # test_mock_waec_broadsheet.py).
     r = c.get(f'/mock-waec/exam/{exam_id}/broadsheet.pdf?'
-             'arm_col=1&position=1&subjects_sat=1&remark=1&exam_date=1')
+             'arm_col=1&position=1&subjects_sat=1&remark=1&exam_date=1&mode=separate')
     assert r.status_code == 200 and r.get_data()[:5] == b'%PDF-'
     r2 = c.get(f'/mock-waec/exam/{exam_id}/broadsheet.pdf?'
               'arm_col=0&position=0&subjects_sat=0&remark=0&'
@@ -160,6 +160,30 @@ def test_broadsheet_arm_position_subjects_sat_remark(app):
             doc.close()
 
     assert _label_x0(r) == pytest.approx(_label_x0(r2), abs=3)
+
+    # Regression: in mode=separate with several tail columns active (credits,
+    # average, position, subjects_sat, remark -- all on in `r` above), each
+    # tail column reserved a 2-unit footprint in the width calculation but
+    # the column-width list only allocated it 1, leaving part of the page
+    # unused; reportlab centres an under-width table in its frame, padding
+    # out BOTH margins. Checked against the `r` response already fetched
+    # above (no extra request).
+    doc = fitz.open(stream=r.get_data(), filetype='pdf')
+    try:
+        page = doc[0]
+        xs = []
+        for d in page.get_drawings():
+            for item in d['items']:
+                if item[0] == 'l':
+                    xs += [item[1].x, item[2].x]
+                elif item[0] == 're':
+                    xs += [item[1].x0, item[1].x1]
+        left_margin = min(xs)
+        right_margin = page.rect.width - max(xs)
+    finally:
+        doc.close()
+    assert left_margin == pytest.approx(22.68, abs=2)    # 8mm
+    assert right_margin == pytest.approx(22.68, abs=2)
 
 
 def test_broadsheet_preview_exposes_new_toggles(app):
