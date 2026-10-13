@@ -1019,7 +1019,8 @@ _PDF_FLAGS = ('title', 'address', 'contact', 'motto', 'summary', 'signatures', '
              'sig_principal', 'sig_hod_sci', 'sig_hod_arts', 'credits', 'average',
              'exam_date', 'arm_col', 'position', 'subjects_sat', 'remark',
              'watermark_name', 'watermark_logo', 'branch_name',
-             'page_numbers', 'printed_on')
+             'page_numbers', 'printed_on',
+             'logo', 'score', 'grade', 'ribbon_exam', 'ribbon_statement')
 
 
 def _pdf_opts():
@@ -1071,8 +1072,10 @@ _OPTS_BLANK = [('title', '“COMPETENCE RESULT” heading'), ('address', 'School
                ('watermark_name', 'Watermark — school name'),
                ('watermark_logo', 'Watermark — school logo'),
                ('page_numbers', 'Page numbers'), ('printed_on', 'Printed-on footer')]
-_OPTS_SLIP = [('title', '“COMPETENCE RESULT” heading'), ('address', 'School address'),
-              ('contact', 'Phone / email'), ('motto', 'School motto'),
+_OPTS_SLIP = [('title', '“COMPETENCE RESULT” heading'), ('logo', 'School logo'),
+              ('address', 'School address'), ('contact', 'Phone / email'), ('motto', 'School motto'),
+              ('ribbon_exam', 'Banner — exam name'), ('ribbon_statement', 'Banner — “Statement of Result”'),
+              ('score', 'Score column'), ('grade', 'Grade column'), ('remark', 'Remark column'),
               ('summary', 'Summary box')]
 
 

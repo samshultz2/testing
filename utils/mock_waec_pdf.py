@@ -855,7 +855,7 @@ def _draw_competence_slip(c, PW, PH, student, s, exam, school, opts, signers, F,
     c.roundRect(14, 14, PW - 28, PH - 28, 6, stroke=1, fill=0)
 
     # faint crest watermark behind the table (grayscale, print-friendly)
-    logo0 = (school or {}).get('logo_path')
+    logo0 = (school or {}).get('logo_path') if _opt(opts, 'logo') else None
     if bw and logo0 and _os.path.exists(logo0):
         try:
             from PIL import Image as _PILImage
@@ -873,7 +873,7 @@ def _draw_competence_slip(c, PW, PH, student, s, exam, school, opts, signers, F,
     # ---- Masthead ----------------------------------------------------------
     box_w = 120
     box_x = PW - M - box_w
-    logo = (school or {}).get('logo_path')
+    logo = (school or {}).get('logo_path') if _opt(opts, 'logo') else None
     name_x = M
     if logo and _os.path.exists(logo):
         try:
@@ -954,20 +954,28 @@ def _draw_competence_slip(c, PW, PH, student, s, exam, school, opts, signers, F,
         y -= 40
 
     # ---- ribbon banner -----------------------------------------------------
-    sub = '%s — Statement of Result' % exam.display_name
-    c.setFont(serb, 11.5)
-    rw = min(stringWidth(sub, serb, 11.5) + 60, PW - 2 * M)
-    rx = PW / 2 - rw / 2; rh2 = 26; ry = y - rh2
-    notch = 10
-    c.setFillColor(NAVY)
-    c.rect(rx, ry, rw, rh2, stroke=0, fill=1)
-    p = c.beginPath(); p.moveTo(rx, ry); p.lineTo(rx - notch, ry + rh2 / 2); p.lineTo(rx, ry + rh2); p.close()
-    c.drawPath(p, stroke=0, fill=1)
-    p = c.beginPath(); p.moveTo(rx + rw, ry); p.lineTo(rx + rw + notch, ry + rh2 / 2); p.lineTo(rx + rw, ry + rh2); p.close()
-    c.drawPath(p, stroke=0, fill=1)
-    c.setFillColor(WHITE); c.setFont(serb, 11.5)
-    c.drawCentredString(PW / 2, ry + 8, sub)
-    y = ry - 16
+    # Exam name and "Statement of Result" are independently toggleable —
+    # either half alone, both, or (if neither is wanted) no banner at all.
+    ribbon_parts = []
+    if _opt(opts, 'ribbon_exam'):
+        ribbon_parts.append(exam.display_name)
+    if _opt(opts, 'ribbon_statement'):
+        ribbon_parts.append('Statement of Result')
+    sub = ' — '.join(ribbon_parts)
+    if sub:
+        c.setFont(serb, 11.5)
+        rw = min(stringWidth(sub, serb, 11.5) + 60, PW - 2 * M)
+        rx = PW / 2 - rw / 2; rh2 = 26; ry = y - rh2
+        notch = 10
+        c.setFillColor(NAVY)
+        c.rect(rx, ry, rw, rh2, stroke=0, fill=1)
+        p = c.beginPath(); p.moveTo(rx, ry); p.lineTo(rx - notch, ry + rh2 / 2); p.lineTo(rx, ry + rh2); p.close()
+        c.drawPath(p, stroke=0, fill=1)
+        p = c.beginPath(); p.moveTo(rx + rw, ry); p.lineTo(rx + rw + notch, ry + rh2 / 2); p.lineTo(rx + rw, ry + rh2); p.close()
+        c.drawPath(p, stroke=0, fill=1)
+        c.setFillColor(WHITE); c.setFont(serb, 11.5)
+        c.drawCentredString(PW / 2, ry + 8, sub)
+        y = ry - 16
 
     # ---- student info bar --------------------------------------------------
     bar_h = 52
@@ -1009,15 +1017,40 @@ def _draw_competence_slip(c, PW, PH, student, s, exam, school, opts, signers, F,
     y -= bar_h + 14
 
     # ---- results table -----------------------------------------------------
+    # Score, Grade and Remark are each independently toggleable — "#" and
+    # "SUBJECT" always stay (there's no useful statement of result without
+    # the subject list); whichever of the three is hidden, Subject simply
+    # absorbs its width rather than leaving a gap.
     results = (s or {}).get('results') or []
-    cols = [34, PW - 2 * M - 34 - 96 - 92 - 118, 96, 92, 118]  # #, Subject, Score, Grade, Remark
-    headers = ['#', 'SUBJECT', 'SCORE (%)', 'GRADE', 'REMARK']
+    show_score = _opt(opts, 'score')
+    show_grade = _opt(opts, 'grade')
+    show_remark = _opt(opts, 'remark')
+    fixed_w = {'score': 96, 'grade': 92, 'remark': 118}
+    kinds = ['num', 'subject']
+    if show_score:
+        kinds.append('score')
+    if show_grade:
+        kinds.append('grade')
+    if show_remark:
+        kinds.append('remark')
+    subject_w = PW - 2 * M - 34 - sum(fixed_w[k] for k in kinds if k in fixed_w)
+    width_of = dict(fixed_w, num=34, subject=subject_w)
+    header_of = {'num': '#', 'subject': 'SUBJECT', 'score': 'SCORE (%)',
+                'grade': 'GRADE', 'remark': 'REMARK'}
+    align_of = {'num': 'c', 'subject': 'l', 'score': 'c', 'grade': 'c', 'remark': 'c'}
+    cols = [width_of[k] for k in kinds]
+    headers = [header_of[k] for k in kinds]
+    aligns = [align_of[k] for k in kinds]
     x0 = M
+    x_of = {}
+    xp = x0
+    for k, w in zip(kinds, cols):
+        x_of[k] = xp
+        xp += w
     hh = 28
     c.setFillColor(NAVY); c.rect(x0, y - hh, sum(cols), hh, stroke=0, fill=1)
     cxp = x0
     c.setFont(serb, 10.5); c.setFillColor(WHITE)
-    aligns = ['c', 'l', 'c', 'c', 'c']
     for w, h, al in zip(cols, headers, aligns):
         if al == 'l':
             c.drawString(cxp + 14, y - hh + 9, h)
@@ -1032,29 +1065,33 @@ def _draw_competence_slip(c, PW, PH, student, s, exam, school, opts, signers, F,
             c.setFillColor(ZEBRA); c.rect(x0, yy - rh, sum(cols), rh, stroke=0, fill=1)
         mid = yy - rh / 2
         c.setFillColor(INK); c.setFont(serb, 11)
-        c.drawCentredString(x0 + cols[0] / 2, mid - 4, str(i))
-        c.setFont(ser, 11)
-        c.drawString(x0 + cols[0] + 14, mid - 4, str(r.subject)[:34])
-        c.drawCentredString(x0 + cols[0] + cols[1] + cols[2] / 2, mid - 4,
-                            '' if r.score is None else str(r.score))
-        # grade badge
-        bgc, fgc, bdc = _grade_badge_colors(r.grade, bw)
-        bw2 = 40; bh2 = 20
-        bcx = x0 + cols[0] + cols[1] + cols[2] + cols[3] / 2
-        c.setFillColor(bgc)
-        if bdc is not None:
-            c.setStrokeColor(bdc); c.setLineWidth(0.8)
-        c.roundRect(bcx - bw2 / 2, mid - bh2 / 2, bw2, bh2, 4,
-                    stroke=(1 if bdc is not None else 0), fill=1)
-        c.setFillColor(fgc); c.setFont(serb, 10.5)
-        c.drawCentredString(bcx, mid - 4, (r.grade or '—'))
-        # remark — WAEC band descriptor (Excellent / Very Good / Good / Credit /
-        # Pass / Fail). A fail (F9) is emphasised.
-        rk = _waec_remark(r.grade)
-        is_fail = (rk == 'Fail')
-        remark_col = (_SL['RED'] if (is_fail and not bw) else INK)
-        c.setFillColor(remark_col); c.setFont(serb if is_fail else ser, 11)
-        c.drawCentredString(x0 + cols[0] + cols[1] + cols[2] + cols[3] + cols[4] / 2, mid - 4, rk)
+        c.drawCentredString(x_of['num'] + width_of['num'] / 2, mid - 4, str(i))
+        c.setFillColor(INK); c.setFont(ser, 11)
+        c.drawString(x_of['subject'] + 14, mid - 4, str(r.subject)[:34])
+        if show_score:
+            c.setFillColor(INK); c.setFont(ser, 11)
+            c.drawCentredString(x_of['score'] + width_of['score'] / 2, mid - 4,
+                                '' if r.score is None else str(r.score))
+        if show_grade:
+            # grade badge
+            bgc, fgc, bdc = _grade_badge_colors(r.grade, bw)
+            bw2 = 40; bh2 = 20
+            bcx = x_of['grade'] + width_of['grade'] / 2
+            c.setFillColor(bgc)
+            if bdc is not None:
+                c.setStrokeColor(bdc); c.setLineWidth(0.8)
+            c.roundRect(bcx - bw2 / 2, mid - bh2 / 2, bw2, bh2, 4,
+                        stroke=(1 if bdc is not None else 0), fill=1)
+            c.setFillColor(fgc); c.setFont(serb, 10.5)
+            c.drawCentredString(bcx, mid - 4, (r.grade or '—'))
+        if show_remark:
+            # remark — WAEC band descriptor (Excellent / Very Good / Good /
+            # Credit / Pass / Fail). A fail (F9) is emphasised.
+            rk = _waec_remark(r.grade)
+            is_fail = (rk == 'Fail')
+            remark_color = (_SL['RED'] if (is_fail and not bw) else INK)
+            c.setFillColor(remark_color); c.setFont(serb if is_fail else ser, 11)
+            c.drawCentredString(x_of['remark'] + width_of['remark'] / 2, mid - 4, rk)
         c.setStrokeColor(LINE); c.setLineWidth(0.6)
         c.line(x0, yy - rh, x0 + sum(cols), yy - rh)
         yy -= rh

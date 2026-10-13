@@ -210,6 +210,9 @@ def test_result_slip_and_print_views(app):
     # Preview wrappers (HTML) offer the COMPETENCE-heading toggle + embed the PDF.
     prev = c.get(f'/mock-waec/exam/{exam_id}/student/{sid}/slip').get_data(as_text=True)
     assert 'COMPETENCE RESULT' in prev and '/slip.pdf' in prev
+    # Logo, ribbon halves and Score/Grade/Remark are each their own checkbox too.
+    for param in ('logo', 'ribbon_exam', 'ribbon_statement', 'score', 'grade', 'remark'):
+        assert f'data-param="{param}"' in prev
     assert c.get(f'/mock-waec/exam/{exam_id}/slips').status_code == 200
     assert 'COMPETENCE RESULT' in c.get(f'/mock-waec/exam/{exam_id}/broadsheet/print').get_data(as_text=True)
 
@@ -234,6 +237,26 @@ def test_result_slip_and_print_views(app):
     # the preview page offers the black & white toggle
     assert 'bwOpt' in prev
 
+    # The ribbon banner's exam-name / "Statement of Result" halves, the
+    # header logo, and the Score/Grade/Remark columns are each independently
+    # selectable, mirroring the broadsheet's include/exclude pattern.
+    import fitz
+    toggled = c.get(f'/mock-waec/exam/{exam_id}/student/{sid}/slip.pdf?'
+                     'ribbon_statement=0&score=0&logo=0')
+    assert toggled.status_code == 200 and toggled.get_data()[:5] == b'%PDF-'
+    doc = fitz.open(stream=toggled.get_data(), filetype='pdf')
+    try:
+        text = doc[0].get_text()
+    finally:
+        doc.close()
+    with app.app_context():
+        exam_name = db.session.get(MockWAECExam, exam_id).display_name
+    assert exam_name in text                 # ribbon_exam stayed on (default)
+    assert 'Statement of Result' not in text  # ribbon_statement=0 dropped it
+    assert 'SCORE (%)' not in text            # score=0
+    assert 'GRADE' in text                    # grade untouched (default on)
+    assert 'REMARK' in text                   # remark untouched (default on)
+
 
 def test_blank_recording_sheet_and_pdf_options(app):
     ssid = _session(app)
@@ -257,7 +280,24 @@ def test_blank_recording_sheet_and_pdf_options(app):
     _seed_results(app, exam_id, sid, {'Mathematics': 70})
     for q in ('address=0&contact=0&motto=0&summary=0&title=0',):
         assert c.get(f'/mock-waec/exam/{exam_id}/broadsheet.pdf?{q}').status_code == 200
-        assert c.get(f'/mock-waec/exam/{exam_id}/student/{sid}/slip.pdf?{q}&signatures=0').status_code == 200
+        slip_r = c.get(f'/mock-waec/exam/{exam_id}/student/{sid}/slip.pdf?{q}'
+                       '&signatures=0&ribbon_exam=0&ribbon_statement=0&grade=0&remark=0')
+        assert slip_r.status_code == 200
+
+    # Both ribbon halves off leaves no banner at all; Grade/Remark off leaves
+    # only #/SUBJECT/SCORE (reuses the response just fetched above, no extra
+    # HTTP call against the shared 'export' rate-limit bucket).
+    import fitz
+    doc = fitz.open(stream=slip_r.get_data(), filetype='pdf')
+    try:
+        text = doc[0].get_text()
+    finally:
+        doc.close()
+    assert 'Statement of Result' not in text
+    assert 'Mock WAEC' not in text        # the exam-name ribbon half is also off
+    assert 'SCORE (%)' in text            # score untouched (default on)
+    assert 'GRADE' not in text
+    assert 'REMARK' not in text
 
 
 def test_exam_crud_controls(app):
