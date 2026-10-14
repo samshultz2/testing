@@ -97,6 +97,30 @@ def test_two_live_devices_flagged(app):
     assert len(data['rows'][0]['concurrent_devices']) == 2
 
 
+def test_supervisor_unlock_pin_is_rate_limited(app):
+    """The exam-pause supervisor PIN is a short, shared secret guarded only by
+    a direct comparison -- guessing it must be throttled per attempt."""
+    import routes.cbt as cbt
+    from models import db, SchoolSettings, CBTAttempt
+    from utils.security import login_limiter
+    eid, sid = _exam_with_student(app, 'STUSUP1')
+    with app.app_context():
+        SchoolSettings.set('cbt_supervisor_pin', '4827')
+        attempt_id = CBTAttempt.query.filter_by(exam_id=eid, student_id=sid).first().id
+        for _ in range(8):
+            login_limiter.record_attempt(f'cbt_sup_unlock:{attempt_id}')
+    c = app.test_client()
+    with c.session_transaction() as sess:
+        sess[cbt.PORTAL_KEY] = sid
+        sess['_csrf_token'] = 'tok'
+    # A correct PIN is still rejected once the per-attempt cap is hit.
+    r = c.post(f'/exam/{eid}/supervisor-unlock', data={'pin': '4827', '_csrf_token': 'tok'})
+    assert r.status_code == 429
+    assert 'Too many attempts' in r.get_json()['error']
+    with app.app_context():
+        assert db.session.get(CBTAttempt, attempt_id).paused_until is None
+
+
 def test_sequential_reuse_not_flagged(app):
     """Old device stale (pinged long ago) + one fresh device => NOT concurrent."""
     from models import db, CBTDeviceSession

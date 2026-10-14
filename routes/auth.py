@@ -637,11 +637,19 @@ def mfa_confirm():
     user = _self_user()
     if not user or not user.mfa_secret:
         return redirect(url_for('auth.security_settings'))
+    # Throttle code guessing during setup — same cap/window as the login-time
+    # 2FA check (auth.verify_mfa), which guards the identical 6-digit TOTP code.
+    rkey = f'mfa_confirm:{user.id}'
+    if login_limiter.is_rate_limited(rkey, Config.LOGIN_ACCT_MAX_ATTEMPTS, Config.LOGIN_LOCKOUT_MINUTES):
+        flash(f'Too many attempts. Try again in {Config.LOGIN_LOCKOUT_MINUTES} minutes.', 'error')
+        return redirect(url_for('auth.mfa_setup'))
     from utils import totp
     code = (request.form.get('code') or '').strip()
     if not totp.verify(user.mfa_secret, code):
+        login_limiter.record_attempt(rkey)
         flash('That code didn’t match. Make sure your phone’s time is correct and try again.', 'error')
         return redirect(url_for('auth.mfa_setup'))
+    login_limiter.clear_attempts(rkey)
     display, hashes = _make_backup_codes()
     user.mfa_enabled = True
     user.set_mfa_backup_codes(hashes)
@@ -655,9 +663,16 @@ def mfa_disable():
     user = _self_user()
     if not user:
         return redirect(url_for('auth.login'))
+    # Throttle current-password guessing — same shape as change_password's guard.
+    ckey = f'mfa_disable:{user.id}:' + (request.remote_addr or 'unknown')
+    if login_limiter.is_rate_limited(ckey, max_attempts=8, window_minutes=15):
+        flash('Too many attempts. Please wait a few minutes and try again.', 'error')
+        return redirect(url_for('auth.security_settings'))
     if not user.check_password(request.form.get('password') or ''):
+        login_limiter.record_attempt(ckey)
         flash('Password is incorrect — 2FA was not changed.', 'error')
         return redirect(url_for('auth.security_settings'))
+    login_limiter.clear_attempts(ckey)
     user.disable_mfa()
     db.session.commit()
     flash('Two-factor authentication has been turned off.', 'success')
@@ -669,9 +684,16 @@ def mfa_backup_codes():
     user = _self_user()
     if not user or not user.mfa_enabled:
         return redirect(url_for('auth.security_settings'))
+    # Throttle current-password guessing — same shape as change_password's guard.
+    ckey = f'mfa_backup:{user.id}:' + (request.remote_addr or 'unknown')
+    if login_limiter.is_rate_limited(ckey, max_attempts=8, window_minutes=15):
+        flash('Too many attempts. Please wait a few minutes and try again.', 'error')
+        return redirect(url_for('auth.security_settings'))
     if not user.check_password(request.form.get('password') or ''):
+        login_limiter.record_attempt(ckey)
         flash('Password is incorrect — codes were not regenerated.', 'error')
         return redirect(url_for('auth.security_settings'))
+    login_limiter.clear_attempts(ckey)
     display, hashes = _make_backup_codes()
     user.set_mfa_backup_codes(hashes)
     db.session.commit()

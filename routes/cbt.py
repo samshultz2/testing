@@ -1834,10 +1834,20 @@ def supervisor_unlock(exam_id):
     attempt = CBTAttempt.query.filter_by(exam_id=exam_id, student_id=student.id).first()
     if not attempt or attempt.status != 'In progress':
         return jsonify({'ok': False}), 400
+    from utils.security import login_limiter
+    # Throttle PIN guessing — it's a short, school-wide shared secret, so an
+    # unlimited client-side check is brute-forceable. Keyed by attempt (not
+    # just IP), so one student hammering their own exam can't be masked by a
+    # classroom's shared network address resetting a global counter.
+    rkey = f'cbt_sup_unlock:{attempt.id}'
+    if login_limiter.is_rate_limited(rkey, max_attempts=8, window_minutes=15):
+        return jsonify({'ok': False, 'error': 'Too many attempts. Please wait a few minutes.'}), 429
     pin = (request.form.get('pin') or '').strip()
     real = (SchoolSettings.get('cbt_supervisor_pin', '') or '').strip()
     if not real or not hmac.compare_digest(pin, real):
+        login_limiter.record_attempt(rkey)
         return jsonify({'ok': False, 'error': 'Wrong supervisor PIN'}), 403
+    login_limiter.clear_attempts(rkey)
     minutes = request.form.get('minutes', type=int) or 3
     minutes = max(1, min(minutes, 15))
     from datetime import timedelta

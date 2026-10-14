@@ -121,6 +121,57 @@ def test_self_disable_requires_password(app):
         assert not User.query.filter_by(username='disabler').first().mfa_enabled
 
 
+def test_mfa_confirm_is_rate_limited(app):
+    """Code-guessing during 2FA setup is throttled the same way the login-time
+    2FA check already is (auth.verify_mfa) -- confirming a correct code is
+    still blocked once the per-user attempt cap is hit."""
+    from utils.security import login_limiter
+    _staff(app, 'confirmlimited')
+    c = _login_pw(app, 'confirmlimited')
+    c.get('/security/2fa/setup')
+    with app.app_context():
+        u = User.query.filter_by(username='confirmlimited').first()
+        secret, uid = u.mfa_secret, u.id
+        for _ in range(Config.LOGIN_ACCT_MAX_ATTEMPTS):
+            login_limiter.record_attempt(f'mfa_confirm:{uid}')
+    r = c.post('/security/2fa/confirm', data={'code': totp.totp_at(secret), '_csrf_token': auth_csrf(c)},
+              follow_redirects=True)
+    assert 'Too many attempts' in r.get_data(as_text=True)
+    with app.app_context():
+        assert not User.query.filter_by(username='confirmlimited').first().mfa_enabled
+
+
+def test_mfa_disable_is_rate_limited(app):
+    """Current-password guessing on the disable form is throttled like
+    change_password's current-password guard."""
+    from utils.security import login_limiter
+    _staff(app, 'disablelimited', mfa=True)
+    c = _login_pw_mfa(app, 'disablelimited')
+    with app.app_context():
+        uid = User.query.filter_by(username='disablelimited').first().id
+        for _ in range(8):
+            login_limiter.record_attempt(f'mfa_disable:{uid}:127.0.0.1')
+    r = c.post('/security/2fa/disable', data={'password': _PW, '_csrf_token': auth_csrf(c)},
+              follow_redirects=True)
+    assert 'Too many attempts' in r.get_data(as_text=True)
+    with app.app_context():
+        assert User.query.filter_by(username='disablelimited').first().mfa_enabled  # blocked -> unchanged
+
+
+def test_mfa_backup_codes_is_rate_limited(app):
+    """Same throttle on the backup-codes regeneration form."""
+    from utils.security import login_limiter
+    _staff(app, 'backuplimited', mfa=True)
+    c = _login_pw_mfa(app, 'backuplimited')
+    with app.app_context():
+        uid = User.query.filter_by(username='backuplimited').first().id
+        for _ in range(8):
+            login_limiter.record_attempt(f'mfa_backup:{uid}:127.0.0.1')
+    r = c.post('/security/2fa/backup-codes', data={'password': _PW, '_csrf_token': auth_csrf(c)},
+              follow_redirects=True)
+    assert 'Too many attempts' in r.get_data(as_text=True)
+
+
 def test_admin_reset_mfa(app):
     uid = _staff(app, 'lockedout', mfa=True)
     admin = app.test_client()
