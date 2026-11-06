@@ -570,10 +570,19 @@ function ViewAssignment({ d, notify }) {
   const [moveSel, setMoveSel] = useState(() => new Set());
   const [moveTo, setMoveTo] = useState({ session_id: a.session_id ? String(a.session_id) : '', class_id: '', arm_id: '' });
   const [moveBusy, setMoveBusy] = useState(false);
+  // Session filter for "Add students": '' = everyone, 'none' = never enrolled
+  // in any class (new students), else a session id (were in a class then).
+  const [sessFilter, setSessFilter] = useState('');
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return d.available_students.filter((s) => !q || (`${s.full_name} ${s.student_id}`).toLowerCase().includes(q));
-  }, [search, d.available_students]);
+    return d.available_students.filter((s) => {
+      if (q && !(`${s.full_name} ${s.student_id}`).toLowerCase().includes(q)) return false;
+      const cls = s.classes || {};
+      if (sessFilter === 'none') return Object.keys(cls).length === 0;
+      if (sessFilter) return !!cls[sessFilter];
+      return true;
+    });
+  }, [search, sessFilter, d.available_students]);
   const toggle = (id) => setPicked((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
   const remove = async (url) => {
     if (!await confirm('Remove student?')) return;
@@ -656,6 +665,11 @@ function ViewAssignment({ d, notify }) {
             <form onSubmit={enroll}>
               <div className="enroll-toolbar">
                 <div className="enroll-search"><i aria-hidden="true" className="fas fa-search" /><input type="text" className="form-control" placeholder="Search name or ID…" autoComplete="off" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
+                <select className="form-control" style={{ maxWidth: 260 }} value={sessFilter} onChange={(e) => setSessFilter(e.target.value)} aria-label="Filter by academic session">
+                  <option value="">All sessions</option>
+                  {d.sessions.map((x) => <option key={x.id} value={String(x.id)}>In a class in {x.name}</option>)}
+                  <option value="none">Never enrolled (new students)</option>
+                </select>
                 <div className="enroll-toolbar-actions">
                   <button type="button" className="btn btn-secondary btn-sm" onClick={() => setPicked(new Set(filtered.map((s) => s.id)))}><i aria-hidden="true" className="fas fa-check-double" /> Select all</button>
                   <button type="button" className="btn btn-secondary btn-sm" onClick={() => setPicked(new Set())}><i aria-hidden="true" className="fas fa-eraser" /> Clear</button>
@@ -665,11 +679,12 @@ function ViewAssignment({ d, notify }) {
                 {filtered.map((s) => (
                   <label className={'student-option' + (picked.has(s.id) ? ' checked' : '')} key={s.id}>
                     <input type="checkbox" checked={picked.has(s.id)} onChange={() => toggle(s.id)} />
-                    <span className="student-option-body"><span className="student-option-name">{s.full_name}</span><span className="badge badge-light">{s.student_id}</span></span>
+                    <span className="student-option-body"><span className="student-option-name">{s.full_name}</span><span className="badge badge-light">{s.student_id}</span>
+                      {sessFilter && sessFilter !== 'none' && s.classes && s.classes[sessFilter] && <span className="text-muted" style={{ fontSize: 'var(--text-xs)' }}>was in {s.classes[sessFilter]}</span>}</span>
                   </label>))}
-                {filtered.length === 0 && <p className="text-muted text-center" style={{ padding: '1rem' }}>No students match your search.</p>}
+                {filtered.length === 0 && <p className="text-muted text-center" style={{ padding: '1rem' }}>No students match your search{sessFilter ? ' and session filter' : ''}.</p>}
               </div>
-              <div className="enroll-footer"><span className="text-muted">{picked.size} selected</span>
+              <div className="enroll-footer"><span className="text-muted">{picked.size} selected{filtered.length !== d.available_students.length ? ` · showing ${filtered.length} of ${d.available_students.length}` : ''}</span>
                 <button type="submit" className="btn btn-primary" disabled={busy || !picked.size}><i aria-hidden="true" className="fas fa-plus" /> Enroll selected</button></div>
             </form>
           ) : <Empty icon="fa-user-check" title=""><p>Every active student is already assigned to a class this term. Remove a student from their class to reassign them.</p></Empty>}

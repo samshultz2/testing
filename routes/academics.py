@@ -1012,6 +1012,20 @@ def view_assignment(assignment_id):
         q = q.filter(Student.branch_id == assignment.branch_id)
     available_students = q.order_by(Student.surname, Student.first_name).all()
 
+    # For the "Add students" session filter: the class each available student
+    # was in, per session ({session_id: "JSS2 Gold"}; the last term wins).
+    from models import Term
+    by_session = {}
+    av_ids = [s.id for s in available_students]
+    if av_ids:
+        rows = (db.session.query(StudentEnrollment.student_id, Term.session_id, ClassArmAssignment)
+                .join(ClassArmAssignment, ClassArmAssignment.id == StudentEnrollment.class_arm_assignment_id)
+                .join(Term, Term.id == ClassArmAssignment.term_id)
+                .filter(StudentEnrollment.student_id.in_(av_ids))
+                .order_by(Term.session_id, Term.term_number).all())
+        for sid, sess_id, caa in rows:
+            by_session.setdefault(sid, {})[str(sess_id)] = caa.display_name
+
     sessions = AcademicSession.query.order_by(AcademicSession.start_date.desc()).all()
     classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all()
     arms = ClassArm.query.filter_by(is_active=True).filter(ClassArm.is_default.isnot(True)).order_by(ClassArm.name).all()
@@ -1026,7 +1040,8 @@ def view_assignment(assignment_id):
                          'student_no': e.student.student_id, 'gender': e.student.gender or '',
                          'remove_url': url_for('academics.remove_enrollment', enrollment_id=e.id)}
                         for e in enrollments],
-        'available_students': [{'id': s.id, 'full_name': s.full_name, 'student_id': s.student_id}
+        'available_students': [{'id': s.id, 'full_name': s.full_name, 'student_id': s.student_id,
+                                'classes': by_session.get(s.id, {})}
                                for s in available_students],
         'sessions': [{'id': s.id, 'name': s.name} for s in sessions],
         'classes': [{'id': c.id, 'name': c.name} for c in classes],
