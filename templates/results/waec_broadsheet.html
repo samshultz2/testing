@@ -181,6 +181,13 @@
         <label style="display:flex;align-items:center;gap:.4rem;"><input type="checkbox" class="bs-stream" value="{{ st }}"> {{ st }}</label>
         {% endfor %}
       </div>
+      <div style="font-weight:600;margin:.2rem 0 .3rem;">Names to show</div>
+      <div style="display:flex;flex-wrap:wrap;gap:.4rem 1.1rem;margin-bottom:.35rem;">
+        <label style="display:flex;align-items:center;gap:.4rem;"><input type="checkbox" class="bs-name" value="surname" checked> Surname</label>
+        <label style="display:flex;align-items:center;gap:.4rem;"><input type="checkbox" class="bs-name" value="first" checked> First name</label>
+        <label style="display:flex;align-items:center;gap:.4rem;"><input type="checkbox" class="bs-name" value="middle" checked> Middle name</label>
+      </div>
+      <label style="display:flex;align-items:center;gap:.4rem;margin-bottom:.7rem;"><input type="checkbox" id="bsMidInit"> Middle name as initial (e.g. Okafor John C.)</label>
       <div style="font-weight:600;margin:.2rem 0 .3rem;display:flex;gap:.6rem;align-items:center;">
         Subjects
         <button type="button" id="bsSubjAll" class="btn btn-secondary btn-sm">All</button>
@@ -272,6 +279,10 @@
       var streams = picked('bs-stream'); if (streams.length) p.set('streams', streams.join(','));
       var subs = picked('bs-subj'); if (subs.length) p.set('subjects', subs.join(','));
       var ttl = (document.getElementById('bsTitle') || {}).value; if (ttl && ttl.trim()) p.set('title', ttl.trim());
+      var nm = picked('bs-name');
+      if (!nm.length) { alert('Tick at least one name to show.'); return; }
+      p.set('names', nm.join(','));
+      if ((document.getElementById('bsMidInit') || {}).checked) p.set('mid_init', '1');
       var url = base + (base.indexOf('?') > -1 ? '&' : '?') + p.toString();
       if (fmt === 'image') { downloadImages(url); } else { window.location.href = url; }
       hide();

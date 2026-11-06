@@ -606,6 +606,7 @@ class AcademicAnalytics:
                 # JSON-serialisable and can be memoised in AnalyticsCache
                 'student': {'id': student.id, 'full_name': student.full_name,
                             'surname': student.surname or '', 'first_name': student.first_name or '',
+                            'middle_name': student.middle_name or '',
                             'stream': student.stream or ''},
                 'cells': gmap,                                 # {subject: grade}
                 'credits': credits,

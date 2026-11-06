@@ -1258,9 +1258,12 @@ def waec_broadsheet_download():
 
     # Spreadsheet/CSV keep the full subject names (they aren't width-constrained).
     full_headers = ['S/N', 'Student'] + subjects + ['Credits', 'Avg grade']
+    # Optional name format (surname / first / middle, middle as initial).
+    from utils.name_display import name_opts, format_name
+    nfmt = name_opts(request.args)
     full_rows = []
     for i, r in enumerate(rows, 1):
-        line = [str(i), formula_guard(r['student']['full_name'])]
+        line = [str(i), formula_guard(format_name(r['student'], nfmt))]
         line += [r['cells'].get(subj, '–') for subj in subjects]
         line += [str(r['credits']), r['avg_grade']]
         full_rows.append(line)

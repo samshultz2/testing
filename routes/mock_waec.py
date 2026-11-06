@@ -215,7 +215,7 @@ def broadsheet_print(exam_id):
     exam = db.get_or_404(MockWAECExam, exam_id)
     require_branch_access(exam.branch_id)
     return render_template('mock_waec/pdf_preview.html', exam=exam,
-        title='Broadsheet (PDF)', show_cols=True, show_orient=True, show_size=True,
+        title='Broadsheet (PDF)', show_cols=True, show_orient=True, show_size=True, show_names=True,
         show_layout_mode=True, options=_OPTS_BROADSHEET,
         pdf_url=url_for('mock_waec.broadsheet_pdf_view', exam_id=exam_id),
         back_url=url_for('mock_waec.broadsheet', exam_id=exam_id))
@@ -263,7 +263,7 @@ def broadsheet_blank(exam_id):
     candidates = MockWAECAnalytics._ordered_subjects(saved | set(WAEC_DEFAULT_SUBJECTS))
     subject_choices = [{'name': s, 'checked': s in saved} for s in candidates]
     return render_template('mock_waec/pdf_preview.html', exam=exam, show_cols=True,
-        show_orient=True, show_size=True,
+        show_orient=True, show_size=True, show_names=True,
         title='Blank recording sheet (PDF)', options=_OPTS_BLANK,
         subject_choices=subject_choices,
         pdf_url=url_for('mock_waec.broadsheet_blank_pdf', exam_id=exam_id),
@@ -1024,7 +1024,10 @@ _PDF_FLAGS = ('title', 'address', 'contact', 'motto', 'summary', 'signatures', '
 
 
 def _pdf_opts():
-    return {f: request.args.get(f, '1') != '0' for f in _PDF_FLAGS}
+    from utils.name_display import name_opts
+    out = {f: request.args.get(f, '1') != '0' for f in _PDF_FLAGS}
+    out['name_fmt'] = name_opts(request.args)   # chosen name parts (None = default)
+    return out
 
 
 _PAPER_SIZES_OK = ('A4', 'A3', 'A2', 'A1', 'A0')

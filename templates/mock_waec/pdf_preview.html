@@ -13,6 +13,17 @@
     </div>
 </div>
 
+{% if show_names %}
+<div class="card mb-2"><div class="card-body">
+    <div style="font-weight:600;margin-bottom:.5rem;">Names to show</div>
+    <div style="display:flex;flex-wrap:wrap;gap:.6rem 1.4rem;align-items:center;">
+        <label style="display:flex;align-items:center;gap:.4rem;margin:0;"><input type="checkbox" class="pdf-name" value="surname" checked> Surname</label>
+        <label style="display:flex;align-items:center;gap:.4rem;margin:0;"><input type="checkbox" class="pdf-name" value="first" checked> First name</label>
+        <label style="display:flex;align-items:center;gap:.4rem;margin:0;"><input type="checkbox" class="pdf-name" value="middle"> Middle name</label>
+        <label style="display:flex;align-items:center;gap:.4rem;margin:0;"><input type="checkbox" id="pdfMidInit"> Middle name as initial (e.g. Okafor John C.)</label>
+    </div>
+</div></div>
+{% endif %}
 <div class="card mb-2"><div class="card-body">
     <div style="font-weight:600;margin-bottom:.5rem;">Include in the PDF</div>
     <div style="display:flex;flex-wrap:wrap;gap:.6rem 1.4rem;align-items:center;">
@@ -150,6 +161,13 @@
     if (signersSel) p.push('signers=' + signersSel.value);
     if (colsSel && colsSel.value !== '') p.push('cols=' + colsSel.value);
     if (bwOpt && bwOpt.checked) p.push('bw=1');
+    var nameBoxes = Array.prototype.slice.call(document.querySelectorAll('.pdf-name'));
+    if (nameBoxes.length) {
+      var parts = nameBoxes.filter(function (b) { return b.checked; }).map(function (b) { return b.value; });
+      if (parts.length) p.push('names=' + parts.join(','));
+      var mi = document.getElementById('pdfMidInit');
+      if (mi && mi.checked) p.push('mid_init=1');
+    }
     if (extra) p.push(extra);
     return base + (p.length ? ('?' + p.join('&')) : '');
   }
@@ -272,6 +290,7 @@
   if (layoutModeSel) layoutModeSel.addEventListener('change', refresh);
   if (bwOpt) bwOpt.addEventListener('change', refresh);
   if (signersSel) signersSel.addEventListener('change', refresh);
+  document.querySelectorAll('.pdf-name, #pdfMidInit').forEach(function (b) { b.addEventListener('change', refresh); });
   refresh();
 })();
 </script>

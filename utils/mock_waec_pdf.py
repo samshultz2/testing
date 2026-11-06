@@ -142,6 +142,13 @@ def _short_name(st):
     return ' '.join(p for p in parts if p).strip() or st.full_name
 
 
+def _disp_name(st, opts):
+    """The name column: the user's chosen name parts (opts['name_fmt'], see
+    utils.name_display) or, by default, surname + first name."""
+    from utils.name_display import format_name
+    return format_name(st, (opts or {}).get('name_fmt'), _short_name)
+
+
 def _school_header(e, school, opts, subtitle):
     """School identity block + optional COMPETENCE RESULT banner + a subtitle.
 
@@ -471,7 +478,7 @@ def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape',
             data = [header]
 
         for i, row in enumerate(bs['rows'], 1):
-            line = [str(i), Paragraph(pdf_escape(_short_name(row['student'])), _S['name'])]
+            line = [str(i), Paragraph(pdf_escape(_disp_name(row['student'], opts)), _S['name'])]
             if show_arm:
                 line.append(row.get('arm') or '—')
             for s in group:
@@ -663,7 +670,7 @@ def blank_broadsheet_pdf(students, offered, subjects, exam, school, opts=None,
             h2 += [_VHead('Score', size=7), _VHead('Grade', size=7)]   # vertical sub-labels
         data = [h1, h2]
         for i, st in enumerate(students, 1):
-            line = [str(i), Paragraph(pdf_escape(_short_name(st)), _S['name'])]
+            line = [str(i), Paragraph(pdf_escape(_disp_name(st, opts)), _S['name'])]
             if show_arm:
                 line.append(arm_by_student.get(st.id) or '—')
             line += ['', ''] * len(group)
