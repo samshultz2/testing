@@ -1,0 +1,97 @@
+{% extends "school_exams/_base.html" %}
+{% block page_title %}Add result · {{ scheme.exam_name }}{% endblock %}
+{% block crumb %} / <span>Add result</span>{% endblock %}
+
+{% block sx_content %}
+{% if not students %}
+<div class="card"><div class="card-body"><div class="empty-state">
+  <i class="fas fa-users"></i><h3>No {{ L.class_label }} students found</h3>
+  <p>Create the {{ L.class_label }} class and enrol students for the active term (Academics → Classes). Students promoted out of {{ L.class_label }} last session are included automatically.</p>
+</div></div></div>
+{% else %}
+<form method="get" class="card mb-3"><div class="card-body d-flex gap-2" style="flex-wrap:wrap;align-items:flex-end">
+  <div><label class="form-label">Candidate</label>
+    <select name="student_id" class="form-control" data-autosubmit style="min-width:260px">
+      <option value="">— choose a {{ L.class_label }} student —</option>
+      {% for s in students %}<option value="{{ s.id }}" {% if s.id == student_id %}selected{% endif %}>{{ s.full_name }} ({{ s.student_id }})</option>{% endfor %}
+    </select></div>
+  <div><label class="form-label">Exam year</label><input type="number" name="year" class="form-control" value="{{ year }}" min="2000" max="2100" style="width:110px"></div>
+  <button class="btn btn-secondary btn-sm" type="submit">Load</button>
+</div></form>
+
+{% if student_id %}
+<form method="post">
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="student_id" value="{{ student_id }}">
+  <input type="hidden" name="exam_year" value="{{ year }}">
+  <div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-id-card"></i> Sitting details — {{ scheme.exam_name }} {{ year }}</h3></div>
+    <div class="card-body"><div class="sx-kpis" style="gap:.75rem">
+      <div><label class="form-label">Exam number</label><input name="exam_number" class="form-control" value="{{ cand.exam_number if cand and cand.exam_number else '' }}" maxlength="40"></div>
+      <div><label class="form-label">Centre</label><input name="centre" class="form-control" value="{{ cand.centre if cand and cand.centre else '' }}" maxlength="120"></div>
+      <div><label class="form-label">Total score <span class="sx-muted">(if published)</span></label><input name="total_score" type="number" step="any" class="form-control" value="{{ cand.total_score if cand and cand.total_score is not none else '' }}"></div>
+      <div><label class="form-label">Admitted / placed?</label>
+        <select name="admitted" class="form-control">
+          <option value="" {% if not cand or cand.admitted is none %}selected{% endif %}>Not known yet</option>
+          <option value="yes" {% if cand and cand.admitted %}selected{% endif %}>Yes</option>
+          <option value="no" {% if cand and cand.admitted == false %}selected{% endif %}>No</option>
+        </select></div>
+      <div style="grid-column:span 2"><label class="form-label">{{ L.outcome_label }}</label><input name="placement" class="form-control" value="{{ cand.placement if cand and cand.placement else '' }}" maxlength="150"></div>
+      <div style="grid-column:span 2"><label class="form-label">Remarks</label><input name="remarks" class="form-control" value="{{ cand.remarks if cand and cand.remarks else '' }}" maxlength="255"></div>
+    </div></div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-list-ol"></i> Subject results</h3></div>
+    <div class="card-body">
+      <p class="sx-muted">Enter a score (out of {{ scheme.max_score|round(0)|int }}) and the grade is worked out for you, or pick the grade directly if the board only published grades. Leave a subject blank if the candidate didn't sit it — blank subjects are removed on save.</p>
+      <div class="table-responsive"><table class="data-table" id="sxRows">
+        <thead><tr><th>Subject</th><th style="width:130px">Score</th><th style="width:170px">Grade</th></tr></thead>
+        <tbody>
+        {% for subj in subjects %}{% set ex = existing.get(subj) %}
+          <tr>
+            <td><input type="hidden" name="subject[]" value="{{ subj }}">{{ subj }}</td>
+            <td><input type="number" step="any" min="0" max="{{ scheme.max_score }}" name="score[]" class="form-control sx-score" value="{{ ex.score|round(2) if ex and ex.score is not none else '' }}"></td>
+            <td><select name="grade[]" class="form-control sx-grade">
+              <option value="">{{ '— auto from score —' }}</option>
+              {% for b in scheme.bands %}<option value="{{ b.grade }}" {% if ex and ex.grade == b.grade and ex.score is none %}selected{% endif %}>{{ b.grade }} — {{ b.label }}</option>{% endfor %}
+            </select><div class="sx-muted sx-auto" aria-live="polite"></div></td>
+          </tr>
+        {% endfor %}
+          <tr><td><input name="subject[]" class="form-control" placeholder="Other subject…" maxlength="80"></td>
+              <td><input type="number" step="any" min="0" name="score[]" class="form-control sx-score"></td>
+              <td><select name="grade[]" class="form-control sx-grade"><option value="">— auto from score —</option>{% for b in scheme.bands %}<option value="{{ b.grade }}">{{ b.grade }} — {{ b.label }}</option>{% endfor %}</select><div class="sx-muted sx-auto"></div></td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </div>
+  <div class="d-flex gap-2">
+    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save results</button>
+    <a href="{{ url_for(bp ~ '.dashboard', body=body, year=year) }}" class="btn btn-secondary">Cancel</a>
+  </div>
+</form>
+{% endif %}
+{% endif %}
+{% endblock %}
+
+{% block page_js %}
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var bands = {{ scheme.bands|tojson }}, max = {{ scheme.max_score }};
+  function gradeFor(v) {
+    if (v === '' || isNaN(v)) return null;
+    var p = Math.max(0, Math.min(100, parseFloat(v) / max * 100));
+    for (var i = 0; i < bands.length; i++) if (p + 1e-9 >= bands[i].min) return bands[i];
+    return bands[bands.length - 1];
+  }
+  document.querySelectorAll('.sx-score').forEach(function (inp) {
+    function upd() {
+      var row = inp.closest('tr'), out = row && row.querySelector('.sx-auto'), sel = row && row.querySelector('.sx-grade');
+      var b = gradeFor(inp.value);
+      if (out) out.textContent = (b && sel && !sel.value) ? ('→ ' + b.grade + ' (' + b.label + ')') : '';
+    }
+    inp.addEventListener('input', upd); upd();
+  });
+})();
+</script>
+{% endblock %}

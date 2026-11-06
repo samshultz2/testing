@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}External Exams by Level - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<span>External Exams</span>{% endblock %}
+{% block extra_css %}
+<style>
+.level-selector{display:grid;grid-template-columns:1fr;gap:1.25rem;max-width:1150px;margin:0 auto}
+@media(min-width:900px){.level-selector{grid-template-columns:repeat(3,1fr)}}
+.level-card{background:var(--bg-card);border-radius:var(--radius-lg);border:2px solid var(--border-color);overflow:hidden;transition:all .25s ease;color:inherit;display:flex;flex-direction:column}
+.level-card:hover{transform:translateY(-3px);box-shadow:0 12px 40px rgba(0,0,0,.12);border-color:var(--primary)}
+.level-card-header{padding:1.5rem;text-align:center;color:#fff;text-decoration:none;display:block}
+.level-icon{font-size:2.6rem;margin-bottom:.6rem}
+.level-title{font-size:1.4rem;font-weight:700;margin:0;color:#fff}
+.level-subtitle{font-size:.85rem;opacity:.92;margin-top:.2rem}
+.level-card-body{padding:1.1rem 1.25rem;flex:1}
+.level-exam{border:1px solid var(--border-light);border-radius:var(--radius-md);padding:.65rem .75rem;margin-bottom:.6rem}
+.level-exam h4{margin:0 0 .35rem;font-size:.92rem;display:flex;justify-content:space-between;gap:.5rem}
+.level-mini{display:grid;grid-template-columns:repeat(3,1fr);gap:.4rem;text-align:center}
+.level-mini .v{font-weight:700;font-size:1.05rem}.level-mini .l{font-size:.65rem;color:var(--text-muted);text-transform:uppercase}
+.level-actions{padding:.8rem 1.25rem;background:var(--gray-50);display:flex;gap:.5rem;flex-wrap:wrap}
+.page-intro{text-align:center;margin-bottom:1.5rem}
+.page-intro p{color:var(--text-muted);max-width:620px;margin:0 auto}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-intro">
+  <h1><i class="fas fa-layer-group"></i> External Examinations</h1>
+  <p>Each class that sits a public examination has its own self-contained area — results, analytics and settings never mix between levels.</p>
+</div>
+<div class="level-selector">
+  <div class="level-card">
+    <a class="level-card-header" style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%)" href="{{ url_for('results.index') }}">
+      <div class="level-icon"><i class="fas fa-graduation-cap"></i></div>
+      <h2 class="level-title">SSS3</h2><div class="level-subtitle">WAEC · JAMB · Mock WAEC · Mock JAMB</div>
+    </a>
+    <div class="level-card-body">
+      <div class="level-exam"><h4>WAEC (WASSCE)</h4><div class="level-mini"><div><div class="v">{{ sss3.waec }}</div><div class="l">results</div></div></div></div>
+      <div class="level-exam"><h4>JAMB (UTME)</h4><div class="level-mini"><div><div class="v">{{ sss3.jamb }}</div><div class="l">results</div></div></div></div>
+    </div>
+    <div class="level-actions">
+      <a class="btn btn-sm btn-primary" href="{{ url_for('results.waec_list') }}">WAEC</a>
+      <a class="btn btn-sm btn-primary" href="{{ url_for('results.jamb_list') }}">JAMB</a>
+      <a class="btn btn-sm btn-secondary" href="{{ url_for('results.analytics_hub') }}">Analytics</a>
+    </div>
+  </div>
+  {% for lv in levels %}{% set L = lv.meta %}
+  <div class="level-card">
+    <a class="level-card-header" style="background:{{ L.gradient }}" href="{{ url_for(lv.bp ~ '.dashboard') }}">
+      <div class="level-icon"><i class="fas {{ L.icon }}"></i></div>
+      <h2 class="level-title">{{ L.class_label }}</h2><div class="level-subtitle">{{ L.bodies.state.name }} · {{ L.bodies.federal.name }}</div>
+    </a>
+    <div class="level-card-body">
+      <p class="text-muted" style="font-size:.8rem;margin-top:0">
+        {% if lv.class_name %}Class <strong>{{ lv.class_name }}</strong> · {{ lv.students }} enrolled this term{% else %}<i class="fas fa-exclamation-circle"></i> No {{ L.class_label }} class found — create one in Academics.{% endif %}
+      </p>
+      {% for b in ['state', 'federal'] %}{% set o = lv.overview[b] %}
+      <div class="level-exam">
+        <h4><a href="{{ url_for(lv.bp ~ '.dashboard', body=b) }}">{{ L.bodies[b].name }}</a><span class="text-muted" style="font-weight:400;font-size:.75rem">{{ b|title }}{% if o.latest %} · {{ o.latest }}{% endif %}</span></h4>
+        {% if o.kpis %}
+        <div class="level-mini">
+          <div><div class="v">{{ o.kpis.candidates }}</div><div class="l">candidates</div></div>
+          <div><div class="v">{{ o.kpis.core_credit_rate }}%</div><div class="l">Eng+Maths</div></div>
+          <div><div class="v">{{ o.kpis.benchmark_rate }}%</div><div class="l">benchmark</div></div>
+        </div>
+        {% else %}<div class="text-muted" style="font-size:.8rem">No results yet</div>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    <div class="level-actions">
+      <a class="btn btn-sm btn-primary" href="{{ url_for(lv.bp ~ '.dashboard') }}">Dashboard</a>
+      <a class="btn btn-sm btn-secondary" href="{{ url_for(lv.bp ~ '.analytics') }}">Analytics</a>
+      <a class="btn btn-sm btn-secondary" href="{{ url_for(lv.bp ~ '.compare') }}">State vs Federal</a>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

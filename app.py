@@ -12,6 +12,7 @@ from routes.generator import generator_bp
 from routes.contributions import contributions_bp
 from routes.mock_jamb import mock_jamb_bp, mock_jamb_portal_bp
 from routes.mock_waec import mock_waec_bp
+from routes.school_exams import jss3_exams_bp, basic6_exams_bp, exam_levels_bp
 from routes.finance import finance_bp
 from routes.communication import comms_bp
 from routes.hr import hr_bp
@@ -253,6 +254,9 @@ def create_app(config_class=None):
     app.register_blueprint(mock_jamb_bp)
     app.register_blueprint(mock_jamb_portal_bp)
     app.register_blueprint(mock_waec_bp)
+    app.register_blueprint(jss3_exams_bp)
+    app.register_blueprint(basic6_exams_bp)
+    app.register_blueprint(exam_levels_bp)
     app.register_blueprint(users_bp)
     app.register_blueprint(staff_onb_bp)
     app.register_blueprint(setup_bp)

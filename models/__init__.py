@@ -25,6 +25,7 @@ from .models_contributions import ContributionSettings, ContributionPayment, Con
 from .models_finance import (FeeItem, FeeStructure, FeePayment, FeeDiscount,
                              ExpenseCategory, Expense, FinanceTransaction, AdditionalCharge, InstallmentPlan)
 from .models_comms import MessageTemplate, Message, MessageRecipient, Announcement, Notification, RecipientGroup, AnnouncementAck, CommAttachment, NotificationPreference, PushSubscription
+from .models_school_exams import SchoolExamConfig, SchoolExamResult, SchoolExamCandidate
 from .models_university import University, Course, UniversityCourse, StudentScholarship, effective_cutoff
 from .models_chat import Conversation, ConversationMember, ChatMessage
 from .models_hr import (Department, StaffMember, StaffEvent, LeaveRecord, PayrollRun, Payslip,

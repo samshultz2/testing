@@ -54,6 +54,9 @@ BLUEPRINT_MODULE = {
     'sales': 'sales', 'welfare': 'students',
     # Previously ungated staff surfaces — now permission-checked like the rest.
     'contributions': 'contributions', 'mock_waec': 'external_exams',
+    # JSS3 (BECE) / Basic 6 (Common Entrance) exams + the exam-level selector.
+    'jss3_exams': 'external_exams', 'basic6_exams': 'external_exams',
+    'exam_levels': 'external_exams',
     'settings': 'settings', 'website_admin': 'website',
 }
 
@@ -193,6 +196,8 @@ MODULE_SUBSECTIONS = {
         'analytics': 'Analytics & Reports',
         'cutoffs': 'Cut-offs',
         'imports': 'Bulk Import',
+        'jss3': 'JSS3 Exams (State / NECO BECE)',
+        'basic6': 'Basic 6 Exams (State Common Entrance / NCEE)',
     },
     'communication': {
         'announcements': 'Announcements',
@@ -256,9 +261,16 @@ def self_scope_level(key):
 # 'central' => only a central admin may grant/revoke this capability.
 RESTRICTED_GRANTS = {'results.cards': 'central'}
 
+# Endpoint names shared by the per-level JSS3 / Basic 6 exam blueprints.
+_SCHOOL_EXAM_ENDPOINTS = {
+    'dashboard', 'analytics', 'compare', 'subject', 'add_result', 'grid_entry',
+    'import_results', 'student', 'delete_student_year', 'export', 'settings',
+}
+
 # Which endpoints belong to each sub-section. Entries are bare endpoint names
 # (prefixed with the module's default blueprint below) OR fully-qualified
 # 'blueprint.endpoint' strings for modules whose endpoints span two blueprints.
+
 _SUBSECTION_ENDPOINTS = {
     'students': {
         'roster': {'students_list', 'api_students', 'view_student',
@@ -452,6 +464,9 @@ _SUBSECTION_ENDPOINTS = {
                       'subject_enrolment_detail', 'student_report'},
         'cutoffs': {'cutoffs_list', 'cutoffs_save', 'cutoffs_delete', 'cutoffs_reference'},
         'imports': {'import_results', 'import_template', 'import_results_run'},
+        # Fully-qualified: these live on their own per-level blueprints.
+        'jss3': {f'jss3_exams.{e}' for e in _SCHOOL_EXAM_ENDPOINTS},
+        'basic6': {f'basic6_exams.{e}' for e in _SCHOOL_EXAM_ENDPOINTS},
     },
     'communication': {
         'announcements': {'announcements', 'add_announcement', 'edit_announcement',

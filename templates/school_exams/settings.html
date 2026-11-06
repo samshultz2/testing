@@ -1,0 +1,56 @@
+{% extends "school_exams/_base.html" %}
+{% block page_title %}Settings · {{ scheme.exam_name }}{% endblock %}
+{% block crumb %} / <span>Settings</span>{% endblock %}
+
+{% block sx_content %}
+<form method="post">
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="body" value="{{ body }}">
+  <div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-sliders"></i> {{ body_meta.full }}</h3></div>
+    <div class="card-body">
+      <div class="sx-kpis" style="gap:.75rem">
+        <div style="grid-column:span 2"><label class="form-label">Exam name (as your board calls it)</label><input name="exam_name" class="form-control" value="{{ scheme.exam_name }}" maxlength="120"></div>
+        <div><label class="form-label">Maximum score per subject</label><input name="max_score" type="number" step="any" min="1" class="form-control" value="{{ scheme.max_score|round(2) }}"></div>
+        <div><label class="form-label">Benchmark: credits incl. Eng &amp; Maths</label><input name="benchmark_credits" type="number" min="0" max="20" class="form-control" value="{{ scheme.benchmark_credits if scheme.benchmark_credits is not none else '' }}"></div>
+        <div><label class="form-label">Admission cut-off (total score)</label><input name="cutoff" type="number" step="any" class="form-control" value="{{ scheme.cutoff if scheme.cutoff is not none else '' }}" placeholder="optional"></div>
+      </div>
+      <p class="sx-muted mt-2">The benchmark is what counts as a "good result" on the dashboard — e.g. {{ scheme.benchmark_credits }} credits including English and Mathematics. The cut-off is compared with each candidate's total (as published, or the sum of their subject scores){% if level == 'basic6' %} — set it to your state's or the NCEE cut-off{% endif %}.</p>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-ranking-star"></i> Grade bands</h3></div>
+    <div class="card-body">
+      <p class="sx-muted">Highest first. A score earns the first band whose minimum (as % of the maximum score) it reaches. <em>Kind</em> tells the analytics how to count the grade.</p>
+      <div class="table-responsive"><table class="data-table">
+        <thead><tr><th>Grade</th><th>Label</th><th>Minimum %</th><th>Kind</th></tr></thead>
+        <tbody>
+        {% for b in scheme.bands + [{'grade':'','label':'','min':'','kind':'credit'}, {'grade':'','label':'','min':'','kind':'credit'}] %}
+          <tr>
+            <td><input name="band_grade" class="form-control" value="{{ b.grade }}" maxlength="4" style="width:80px"></td>
+            <td><input name="band_label" class="form-control" value="{{ b.label }}" maxlength="40"></td>
+            <td><input name="band_min" type="number" step="any" min="0" max="100" class="form-control" value="{{ b.min|round(1) if b.min != '' else '' }}" style="width:110px"></td>
+            <td><select name="band_kind" class="form-control">{% for kk in kinds %}<option value="{{ kk }}" {% if kk == b.kind %}selected{% endif %}>{{ kk|title }}</option>{% endfor %}</select></td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+      <p class="sx-muted">Leave a row's grade empty to remove it.</p>
+    </div>
+  </div>
+
+  <div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-book"></i> Subjects offered</h3></div>
+    <div class="card-body">
+      <textarea name="subjects" rows="8" class="form-control">{{ scheme.subjects|join('\n') }}</textarea>
+      <p class="sx-muted mt-1">One per line. These drive the entry forms and the grid columns.</p>
+    </div>
+  </div>
+
+  <div class="d-flex gap-2">
+    <button class="btn btn-primary" type="submit"><i class="fas fa-save"></i> Save settings</button>
+    <button class="btn btn-secondary" type="submit" name="action" value="reset" data-confirm="Reset {{ scheme.exam_name }} settings to the defaults?"><i class="fas fa-rotate-left"></i> Reset to defaults</button>
+  </div>
+</form>
+{% endblock %}

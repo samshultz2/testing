@@ -1,0 +1,127 @@
+{% extends "school_exams/_base.html" %}
+{% from "school_exams/_macros.html" import kind_chip, kind_meter, kind_legend, pct %}
+{% block page_title %}{{ scheme.exam_name }} {{ year }}{% endblock %}
+{% block crumb %} / <span>{{ scheme.exam_name }}</span>{% endblock %}
+
+{% block sx_content %}
+{% set k = stats.kpis %}
+<div class="d-flex gap-2 mb-3" style="flex-wrap:wrap">
+  <a href="{{ url_for(bp ~ '.grid_entry', body=body, year=year) }}" class="btn btn-primary btn-sm"><i class="fas fa-table-cells"></i> Enter results for the class</a>
+  <a href="{{ url_for(bp ~ '.add_result', body=body, year=year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-plus"></i> Add one candidate</a>
+  <a href="{{ url_for(bp ~ '.import_results', body=body, year=year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-paste"></i> Paste / CSV</a>
+  {% if k.candidates %}
+  <a href="{{ url_for(bp ~ '.analytics', body=body, year=year) }}" class="btn btn-info btn-sm"><i class="fas fa-chart-pie"></i> Full analytics</a>
+  <a href="{{ url_for(bp ~ '.export', body=body, year=year) }}" class="btn btn-secondary btn-sm" data-native download><i class="fas fa-file-excel"></i> Export broadsheet</a>
+  {% endif %}
+</div>
+
+{% if not k.candidates %}
+<div class="card"><div class="card-body"><div class="empty-state">
+  <i class="fas {{ L.icon }}"></i>
+  <h3>No {{ scheme.exam_name }} results for {{ year }}</h3>
+  <p>Enter the {{ L.class_label }} candidates' {{ scheme.exam_name }} results to unlock the dashboard and analytics.
+  {% if other_years %}<br>There are <a href="{{ url_for(bp ~ '.dashboard', body=other) }}">{{ L.bodies[other].name }}</a> results on record.{% endif %}</p>
+  <a href="{{ url_for(bp ~ '.grid_entry', body=body, year=year) }}" class="btn btn-primary"><i class="fas fa-table-cells"></i> Start entering results</a>
+</div></div></div>
+{% else %}
+
+<div class="sx-kpis wide">
+  <div class="sx-kpi"><div class="l">Candidates</div><div class="v">{{ k.candidates }}</div><div class="s">{{ k.entries }} subject entries</div></div>
+  <div class="sx-kpi"><div class="l">Average score</div><div class="v">{{ pct(k.avg_pct) }}</div><div class="s">{% if k.median_pct is not none %}median {{ k.median_pct }}%{% else %}grades only{% endif %}</div></div>
+  <div class="sx-kpi"><div class="l">Credit in Eng &amp; Maths</div><div class="v">{{ k.core_credit_rate }}%</div><div class="s">{{ k.core_credit }} candidate(s)</div></div>
+  <div class="sx-kpi"><div class="l">{{ scheme.benchmark_credits }}+ credits incl. Eng &amp; Maths</div><div class="v">{{ k.benchmark_rate }}%</div><div class="s">{{ k.benchmark }} met the benchmark</div></div>
+  <div class="sx-kpi"><div class="l">Subject credit rate</div><div class="v">{{ k.subject_credit_rate }}%</div><div class="s">pass rate {{ k.subject_pass_rate }}%</div></div>
+  {% if scheme.cutoff is not none and k.cutoff_known %}
+  <div class="sx-kpi"><div class="l">Above cut-off ({{ scheme.cutoff|round(0)|int }})</div><div class="v">{{ k.cutoff_rate }}%</div><div class="s">{{ k.above_cutoff }} of {{ k.cutoff_known }}</div></div>
+  {% elif k.admission_known %}
+  <div class="sx-kpi"><div class="l">Admitted / placed</div><div class="v">{{ k.admission_rate }}%</div><div class="s">{{ k.admitted }} of {{ k.admission_known }} known</div></div>
+  {% else %}
+  <div class="sx-kpi"><div class="l">Passed every subject</div><div class="v">{{ k.all_pass_rate }}%</div><div class="s">{{ k.all_pass }} candidate(s)</div></div>
+  {% endif %}
+</div>
+
+<div class="sx-grid two">
+  <div class="card">
+    <div class="card-header"><h3><i class="fas fa-chart-column"></i> Grade distribution</h3></div>
+    <div class="card-body">
+      {{ kind_legend() }}
+      <div class="sx-chart"><canvas aria-label="Grade distribution" role="img" data-sx-chart='{{ ch.grade_dist(stats)|tojson|forceescape }}'></canvas></div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="card-header"><h3><i class="fas fa-chart-line"></i> Year-on-year</h3></div>
+    <div class="card-body">
+      {% if trend|length > 1 %}
+      <div class="sx-chart"><canvas aria-label="Year-on-year trend" role="img" data-sx-chart='{{ ch.trend(trend, [("core_credit_rate", "Credit in Eng & Maths %"), ("benchmark_rate", "Met benchmark %")])|tojson|forceescape }}'></canvas></div>
+      {% else %}
+      <p class="sx-muted">The trend appears once a second year of {{ scheme.exam_name }} results is recorded.</p>
+      <table class="data-table"><tbody>
+        <tr><td>Distinctions (any subject)</td><td class="num">{{ k.with_distinction }}</td></tr>
+        <tr><td>Average credits per candidate</td><td class="num">{{ k.avg_credits }}</td></tr>
+        <tr><td>Passed every subject</td><td class="num">{{ k.all_pass }} ({{ k.all_pass_rate }}%)</td></tr>
+        {% if k.avg_total is not none %}<tr><td>Average total score</td><td class="num">{{ k.avg_total }}</td></tr>{% endif %}
+      </tbody></table>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="card mb-3">
+  <div class="card-header d-flex" style="justify-content:space-between;align-items:center">
+    <h3><i class="fas fa-book"></i> Subjects</h3>
+    <a class="btn btn-sm btn-secondary" href="{{ url_for(bp ~ '.analytics', body=body, year=year) }}#subjects">Detailed subject analysis</a>
+  </div>
+  <div class="table-responsive"><table class="data-table">
+    <thead><tr><th>#</th><th>Subject</th><th class="num">Entries</th><th style="min-width:140px">Outcome mix</th><th class="num">Credit %</th><th class="num">Pass %</th><th class="num">Mean %</th></tr></thead>
+    <tbody>
+    {% for r in stats.subjects %}
+      <tr>
+        <td>{{ r.rank }}</td>
+        <td><a href="{{ url_for(bp ~ '.subject', body=body, subject=r.subject, year=year) }}">{{ r.subject }}</a>{% if r.core %} <span class="badge badge-info">core</span>{% endif %}</td>
+        <td class="num">{{ r.entries }}</td>
+        <td>{{ kind_meter(r) }}</td>
+        <td class="num"><strong>{{ r.credit_rate }}%</strong></td>
+        <td class="num">{{ r.pass_rate }}%</td>
+        <td class="num">{{ pct(r.mean_pct) }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+
+<div class="card">
+  <div class="card-header d-flex" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem">
+    <h3><i class="fas fa-users"></i> Candidates ({{ candidates|length }})</h3>
+    <form method="get" class="d-flex gap-2">
+      <input type="hidden" name="body" value="{{ body }}"><input type="hidden" name="year" value="{{ year }}">
+      <input type="search" name="q" value="{{ search }}" class="form-control" placeholder="Search name, ID or exam no." style="max-width:240px">
+    </form>
+  </div>
+  <div class="table-responsive"><table class="data-table">
+    <thead><tr><th>Pos</th><th>Candidate</th><th>Exam no.</th><th class="num">Subj.</th><th class="num">D</th><th class="num">C</th><th class="num">P</th><th class="num">F</th><th class="num">Avg %</th><th class="num">Total</th><th>Eng+Maths</th><th>Benchmark</th><th>{{ 'Placement' if level == 'jss3' else 'Admission' }}</th><th></th></tr></thead>
+    <tbody>
+    {% for c in candidates %}
+      <tr>
+        <td>{{ c.position }}</td>
+        <td><a href="{{ url_for(bp ~ '.student', body=body, student_id=c.id) }}"><strong>{{ c.name }}</strong></a><div class="sx-muted">{{ c.student_code }}{% if c.arm %} · {{ c.arm }}{% endif %}</div></td>
+        <td>{{ c.exam_number or '—' }}</td>
+        <td class="num">{{ c.subjects }}</td>
+        <td class="num">{{ c.distinctions }}</td>
+        <td class="num">{{ c.credits - c.distinctions }}</td>
+        <td class="num">{{ c.passes - c.credits }}</td>
+        <td class="num">{{ c.fails }}</td>
+        <td class="num">{{ pct(c.avg_pct) }}</td>
+        <td class="num">{{ c.total if c.total is not none else '—' }}</td>
+        <td>{% if c.core_credits %}<span class="badge badge-success"><i class="fas fa-check"></i> Yes</span>{% else %}<span class="badge badge-danger">No</span>{% endif %}</td>
+        <td>{% if c.meets_benchmark %}<span class="badge badge-success"><i class="fas fa-check"></i> Met</span>{% else %}<span class="badge badge-warning">Not met</span>{% endif %}</td>
+        <td>{% if c.admitted %}<span class="badge badge-success">Admitted</span> {% elif c.admitted == false %}<span class="badge badge-secondary">Not admitted</span> {% endif %}<span class="sx-muted">{{ c.placement or '' }}</span></td>
+        <td><a class="btn btn-sm btn-secondary" title="Edit" href="{{ url_for(bp ~ '.add_result', body=body, student_id=c.id, year=year) }}"><i class="fas fa-pen"></i></a></td>
+      </tr>
+    {% else %}
+      <tr><td colspan="14" class="sx-muted">No candidate matches “{{ search }}”.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+{% endif %}
+{% endblock %}
