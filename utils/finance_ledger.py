@@ -268,6 +268,7 @@ _ADDED_COLUMNS = {
         'house': 'VARCHAR(40)', 'boarding_status': 'VARCHAR(10)',
         'nin': 'VARCHAR(20)', 'jamb_reg_number': 'VARCHAR(30)', 'jamb_profile_code': 'VARCHAR(30)',
         'waec_reg_number': 'VARCHAR(30)', 'serial_number': 'VARCHAR(30)', 'waec_epin': 'VARCHAR(30)',
+        'neco_reg_number': 'VARCHAR(30)', 'neco_epin': 'VARCHAR(30)',
         'blood_group': 'VARCHAR(6)', 'genotype': 'VARCHAR(6)', 'allergies': 'TEXT',
         'medical_conditions': 'TEXT', 'disabilities': 'TEXT', 'medications': 'TEXT',
         'medical_notes': 'TEXT', 'emergency_medical': 'TEXT',
@@ -414,7 +415,8 @@ def ensure_tables(bind=None):
                         GraduateDocument, AlumniProfile, DocumentRequest, DocTemplatePref,
                         DocumentVerification, StudentPhoto,
                         WAECCertTemplate, WAECCertPreset, WAECCertIssue)
-    tables = [FinanceTransaction.__table__, AdditionalCharge.__table__,
+    from models import NECOResult
+    tables = [NECOResult.__table__, FinanceTransaction.__table__, AdditionalCharge.__table__,
               InstallmentPlan.__table__, RecipientGroup.__table__,
               AnnouncementAck.__table__, CommAttachment.__table__,
               Conversation.__table__, ConversationMember.__table__,

@@ -39,6 +39,7 @@ _AUDIT_STUDENT_FIELDS = {
     'nin': 'NIN', 'jamb_reg_number': 'JAMB reg number', 'jamb_profile_code': 'JAMB profile code',
     'waec_reg_number': 'WAEC reg number', 'serial_number': 'Serial number',
     'waec_epin': 'WAEC e-PIN',
+    'neco_reg_number': 'NECO reg number', 'neco_epin': 'NECO token / e-PIN',
     'blood_group': 'Blood group', 'genotype': 'Genotype', 'allergies': 'Allergies',
     'medical_conditions': 'Medical conditions', 'disabilities': 'Disabilities',
     'medications': 'Medications',
@@ -839,6 +840,7 @@ def edit_student(student_id):
             'jamb_profile_code': student.jamb_profile_code or '',
             'waec_reg_number': student.waec_reg_number or '', 'serial_number': student.serial_number or '',
             'waec_epin': student.waec_epin or '',
+            'neco_reg_number': student.neco_reg_number or '', 'neco_epin': student.neco_epin or '',
             'blood_group': student.blood_group or '', 'genotype': student.genotype or '',
             'allergies': student.allergies or '', 'medical_conditions': student.medical_conditions or '',
             'disabilities': student.disabilities or '', 'medications': student.medications or '',
@@ -1509,6 +1511,8 @@ def export_students_data():
             data['JAMB Reg Number'] = student.jamb_reg_number or ''
         if 'waec_reg_number' in fields:
             data['WAEC Reg Number'] = student.waec_reg_number or ''
+        if 'neco_reg_number' in fields:
+            data['NECO Reg Number'] = student.neco_reg_number or ''
 
         student_data.append(data)
 
@@ -1516,7 +1520,8 @@ def export_students_data():
     field_order = ['Student ID', 'Surname', 'First Name', 'Middle Name', 'Gender',
                    'Class', 'Date of Birth', 'Age', 'Religion', 'Home Address',
                    'Hobbies', 'Parent Phone',
-                   'NIN', 'JAMB Profile Code', 'JAMB Reg Number', 'WAEC Reg Number']
+                   'NIN', 'JAMB Profile Code', 'JAMB Reg Number', 'WAEC Reg Number',
+                   'NECO Reg Number']
     export_fields = [f for f in field_order if f in student_data[0]] if student_data else []
     
     if format_type == 'csv':

@@ -292,6 +292,8 @@ export default function ViewApp({ initial }) {
               {d.identity && d.identity.waec_reg_number && <Info label="WAEC Reg. Number">{d.identity.waec_reg_number}</Info>}
               {d.identity && d.identity.serial_number && <Info label="Serial Number">{d.identity.serial_number}</Info>}
               {d.identity && d.identity.waec_epin && <Info label="WAEC e-PIN">{d.identity.waec_epin}</Info>}
+              {d.identity && d.identity.neco_reg_number && <Info label="NECO Reg. Number">{d.identity.neco_reg_number}</Info>}
+              {d.identity && d.identity.neco_epin && <Info label="NECO Token / e-PIN">{d.identity.neco_epin}</Info>}
               {d.identity && d.identity.jamb_profile_code && <Info label="JAMB Profile Code">{d.identity.jamb_profile_code}</Info>}
               {s.house && <Info label="House">{s.house}</Info>}
               {s.boarding_status && <Info label="Boarding">{s.boarding_status}</Info>}
@@ -376,6 +378,19 @@ export default function ViewApp({ initial }) {
             </div>
           ) : <p className="text-muted">No WAEC results yet.</p>}
       </Section>
+
+      {d.neco && (
+        <Section icon="fa-file-lines" title="NECO"
+                 badge={d.neco.count ? <span className="badge badge-secondary">{d.neco.count}</span> : null}
+                 action={<a href={d.neco.add_url} className="sp-btn sp-btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add</a>}>
+          {d.neco.count ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '.75rem', flexWrap: 'wrap' }}>
+              <span>{d.neco.count} subject{d.neco.count === 1 ? '' : 's'} recorded</span>
+              <a href={d.neco.view_url} className="sp-btn sp-btn-sm sp-btn-primary"><i aria-hidden="true" className="fas fa-eye" /> View details</a>
+            </div>
+          ) : <p className="text-muted">No NECO results yet.</p>}
+        </Section>
+      )}
 
       <Section icon="fa-file-contract" title="JAMB"
                badge={(d.jamb || {}).latest ? <span className="badge badge-secondary">{d.jamb.latest.score}/400</span> : null}

@@ -14,12 +14,19 @@ def index():
     jamb_years = db.session.query(JAMBResult.exam_year).distinct().order_by(JAMBResult.exam_year.desc()).all()
     waec_years = [y[0] for y in waec_years]
     jamb_years = [y[0] for y in jamb_years]
+    from models import NECOResult
+    neco_count = NECOResult.query.count()
+    neco_years = [y[0] for y in db.session.query(NECOResult.exam_year).distinct()
+                  .order_by(NECOResult.exam_year.desc()).all()]
 
     return _render({
         'page': 'index',
         'waec_count': waec_count, 'jamb_count': jamb_count,
         'waec_years': waec_years, 'jamb_years': jamb_years,
+        'neco_count': neco_count, 'neco_years': neco_years,
         'urls': {
+            'neco_dashboard': url_for('results.neco_list'), 'add_neco': url_for('results.add_neco'),
+            'export_neco': url_for('results.export_neco', year=neco_years[0]) if neco_years else '',
             'waec_dashboard': url_for('results.waec_list'), 'add_waec': url_for('results.add_waec'),
             'jamb_dashboard': url_for('results.jamb_list'), 'add_jamb': url_for('results.add_jamb'),
             'export_waec': url_for('results.export_waec', year=waec_years[0]) if waec_years else '',
@@ -141,6 +148,19 @@ def student_report(student_id):
             y['distinctions'] += 1
     waec_years = sorted(waec_by_year.items(), reverse=True)
 
+    # NECO — the same grouping on the NECO table.
+    from models import NECOResult
+    neco = student.neco_results.order_by(NECOResult.exam_year.desc(), NECOResult.subject).all()
+    neco_by_year = {}
+    for r in neco:
+        y = neco_by_year.setdefault(r.exam_year, {'rows': [], 'credits': 0, 'distinctions': 0})
+        y['rows'].append(r)
+        if r.grade in pass_grades:
+            y['credits'] += 1
+        if r.grade in distinction_grades:
+            y['distinctions'] += 1
+    neco_years = sorted(neco_by_year.items(), reverse=True)
+
     # JAMB results (most recent first), with subject breakdown.
     jamb = student.jamb_results.order_by(JAMBResult.exam_year.desc()).all()
     jamb_list = []
@@ -184,10 +204,17 @@ def student_report(student_id):
                         'sub': f'{exam_level}_create',
                         'url': url_for(f'{exam_level}_exams.add_result', body=body,
                                        student_id=student.id, year=exam_year)})
-        elif exam_level == 'sss3' or waec or jamb:
+        elif exam_level == 'sss3' or waec or jamb or neco:
             if not any(r.exam_year == exam_year for r in waec):
                 missing.append({'label': 'WAEC', 'sub': 'waec_create',
                                 'url': url_for('results.add_waec', student_id=student.id, year=exam_year)})
+            # NECO only where the school uses it (any NECO results on record, or
+            # this candidate has a NECO number) — not every school sits NECO.
+            if (not any(r.exam_year == exam_year for r in neco)
+                    and (neco or student.neco_reg_number
+                         or db.session.query(NECOResult.id).first() is not None)):
+                missing.append({'label': 'NECO', 'sub': 'neco_create',
+                                'url': url_for('results.add_neco', student_id=student.id, year=exam_year)})
             if not any(r.exam_year == exam_year for r in jamb):
                 missing.append({'label': 'JAMB', 'sub': 'jamb_create',
                                 'url': url_for('results.add_jamb', student_id=student.id, year=exam_year)})
@@ -196,13 +223,13 @@ def student_report(student_id):
     if exam_level in ('jss3', 'basic6'):
         sss3_view = False
     else:
-        sss3_view = bool(waec or jamb or mock_rows) or exam_level == 'sss3' or (
+        sss3_view = bool(waec or neco or jamb or mock_rows) or exam_level == 'sss3' or (
             exam_level is None and (student.is_graduated or not junior_sittings))
     if not sss3_view:
         return render_template('results/student_report.html', student=student,
             sss3_view=False, exam_level=exam_level, junior_sittings=junior_sittings,
             missing=missing, exam_year=exam_year,
-            waec_years=[], jamb_list=[], mock_progress=[], prediction=None, admission=None,
+            waec_years=[], neco_years=[], jamb_list=[], mock_progress=[], prediction=None, admission=None,
             readiness=None, jamb_combo=None, standing=None, aspiration=None,
             recommendations=None, subject_diag=None, generated=_date.today())
 
@@ -247,6 +274,7 @@ def student_report(student_id):
     return render_template('results/student_report.html',
         student=student,
         waec_years=waec_years,
+        neco_years=neco_years,
         jamb_list=jamb_list,
         mock_progress=mock_progress,
         prediction=prediction,
@@ -1143,7 +1171,24 @@ _WAEC_GRADE_CLASS = {
 }
 
 
+def _bname():
+    from utils import exam_board as _board
+    return _board.current().name
+
+
+def _bkey():
+    from utils import exam_board as _board
+    return _board.current().key
+
+
+def _burl(endpoint, **kw):
+    from utils import exam_board as _board
+    return _board.url_for(endpoint, **kw)
+
+
 def _waec_broadsheet_years():
+    from utils import exam_board as _board
+    WAECResult = _board.model()   # WAEC or NECO, per route
     years = [y[0] for y in db.session.query(WAECResult.exam_year).distinct()
              .order_by(WAECResult.exam_year.desc()).all()]
     return years
@@ -1154,7 +1199,7 @@ def _waec_broadsheet_cached(year, branch_id):
     namespace (so the existing bust/refresh invalidation covers it too)."""
     from routes.results import _cached_school_stats
     return _cached_school_stats(
-        'waec_bs', year, branch_id,
+        'waec_bs', year, branch_id,   # key gets a neco_ prefix on NECO pages
         lambda: AcademicAnalytics.get_waec_broadsheet(year, branch_id))
 
 
@@ -1166,7 +1211,8 @@ def _broadsheet_etag(bs, year, branch_id, *extra):
     from utils.http_cache import strong_etag
     fp = json.dumps([[r['student']['id'], r['cells']] for r in bs['rows']],
                     sort_keys=True, separators=(',', ':'))
-    return strong_etag('waec_bs', year, branch_id, *extra, fp)
+    from utils import exam_board as _board
+    return strong_etag(_board.current().key + '_bs', year, branch_id, *extra, fp)
 
 
 @results_bp.route('/waec/broadsheet')
@@ -1205,8 +1251,8 @@ def waec_broadsheet_pdf():
     year = resolve_exam_year(request.args.get('year', type=int), years)
     bs = _waec_broadsheet_cached(year, viewing_branch_id()) if year else None
     if not bs or not bs['rows']:
-        flash('No WAEC results recorded for that year.', 'warning')
-        return redirect(url_for('results.waec_broadsheet', year=year))
+        flash(f'No {_bname()} results recorded for that year.', 'warning')
+        return redirect(_burl('results.waec_broadsheet', year=year))
     per = request.args.get('cols', default=0, type=int)
     orient = request.args.get('orient', 'landscape')
     size = request.args.get('size', 'A4').upper()
@@ -1223,7 +1269,7 @@ def waec_broadsheet_pdf():
     school.setdefault('logo_path', logo_path())
     buf = _mk(bs, year, school, opts={'title': False},
               per=(per if per and per > 0 else 0), orient=orient, size=size)
-    name = f'waec_broadsheet_{year}.pdf'
+    name = f'{_bkey()}_broadsheet_{year}.pdf'
     resp = send_file(buf, mimetype='application/pdf',
                      as_attachment=request.args.get('download') == '1', download_name=name)
     return stamp(resp, etag)
@@ -1240,8 +1286,8 @@ def waec_broadsheet_export():
     year = resolve_exam_year(request.args.get('year', type=int), years)
     bs = _waec_broadsheet_cached(year, viewing_branch_id()) if year else None
     if not bs or not bs['rows']:
-        flash('No WAEC results recorded for that year.', 'warning')
-        return redirect(url_for('results.waec_broadsheet', year=year))
+        flash(f'No {_bname()} results recorded for that year.', 'warning')
+        return redirect(_burl('results.waec_broadsheet', year=year))
     from utils.http_cache import if_none_match
     etag = _broadsheet_etag(bs, year, viewing_branch_id(), 'xlsx')
     not_modified = if_none_match(etag)
@@ -1251,7 +1297,7 @@ def waec_broadsheet_export():
 
     wb = Workbook()
     ws = wb.active
-    ws.title = f'WAEC {year}'
+    ws.title = f'{_bname()} {year}'
     ws.append(['S/N', 'Student'] + subjects + ['Credits', 'Avg grade'])
     for i, row in enumerate(bs['rows'], 1):
         line = [i, row['student']['full_name']]
@@ -1269,7 +1315,7 @@ def waec_broadsheet_export():
     _summary_row('Average grade', lambda d: d['avg_grade'])
 
     from utils.http_cache import stamp
-    return stamp(xlsx_response(wb, f'waec_broadsheet_{year}.xlsx'), etag)
+    return stamp(xlsx_response(wb, f'{_bkey()}_broadsheet_{year}.xlsx'), etag)
 
 
 @results_bp.route('/waec/broadsheet/download')
@@ -1285,8 +1331,8 @@ def waec_broadsheet_download():
     year = resolve_exam_year(request.args.get('year', type=int), years)
     bs = _waec_broadsheet_cached(year, viewing_branch_id()) if year else None
     if not bs or not bs['rows']:
-        flash('No WAEC results recorded for that year.', 'warning')
-        return redirect(url_for('results.waec_broadsheet', year=year))
+        flash(f'No {_bname()} results recorded for that year.', 'warning')
+        return redirect(_burl('results.waec_broadsheet', year=year))
 
     all_subjects = bs['subjects']
     want_subj = [s.strip() for s in (request.args.get('subjects') or '').split(',') if s.strip()]
@@ -1298,12 +1344,12 @@ def waec_broadsheet_download():
         rows = [r for r in rows if (r['student'].get('stream') or '').lower() in want_streams]
     if not rows:
         flash('No students match the selected streams for that year.', 'warning')
-        return redirect(url_for('results.waec_broadsheet', year=year))
+        return redirect(_burl('results.waec_broadsheet', year=year))
 
     stream_label = ', '.join(sorted(s.title() for s in want_streams)) if want_streams else 'All streams'
-    subtitle = f'WAEC Broadsheet {year} · {stream_label} · {len(rows)} student(s)'
+    subtitle = f'{_bname()} Broadsheet {year} · {stream_label} · {len(rows)} student(s)'
     # Optional custom heading typed by the user (e.g. "SSS3 SCIENCE MERIT LIST").
-    title = (request.args.get('title') or '').strip() or f'WAEC Broadsheet {year}'
+    title = (request.args.get('title') or '').strip() or f'{_bname()} Broadsheet {year}'
     from utils.school import logo_path as _logo_path, school_profile as _school_profile
     _lp = _logo_path()
     _sname = (_school_profile() or {}).get('name') or None
@@ -1325,7 +1371,7 @@ def waec_broadsheet_download():
 
     if fmt in ('excel', 'xlsx'):
         wb = bx.combo_xlsx(full_headers, full_rows, title, subtitle)
-        return xlsx_response(wb, f'waec_broadsheet_{year}.xlsx')
+        return xlsx_response(wb, f'{_bkey()}_broadsheet_{year}.xlsx')
     if fmt == 'csv':
         import csv as _csv
         from io import StringIO
@@ -1333,7 +1379,7 @@ def waec_broadsheet_download():
         for dr in full_rows:
             w.writerow(dr)
         return Response(buf.getvalue(), mimetype='text/csv', headers={
-            'Content-Disposition': f'attachment; filename="waec_broadsheet_{year}.csv"'})
+            'Content-Disposition': f'attachment; filename="{_bkey()}_broadsheet_{year}.csv"'})
 
     # PDF / image: short subject codes + a legend, so a wide sheet fits A4 legibly.
     codes, legend = bx.abbreviate_subjects(subjects)
@@ -1345,12 +1391,22 @@ def waec_broadsheet_download():
         page = max(1, min(page, len(pages)))
         suffix = '' if len(pages) == 1 else f'_p{page}'
         return Response(pages[page - 1], mimetype='image/png', headers={
-            'Content-Disposition': f'attachment; filename="waec_broadsheet_{year}{suffix}.png"',
+            'Content-Disposition': f'attachment; filename="{_bkey()}_broadsheet_{year}{suffix}.png"',
             'X-Total-Pages': str(len(pages)), 'Access-Control-Expose-Headers': 'X-Total-Pages'})
     data = bx.combo_pdf(headers, full_rows, title, subtitle, numeric_from=2, legend=legend,
                         logo_path=_lp, school_name=_sname)
     return Response(data, mimetype='application/pdf', headers={
-        'Content-Disposition': f'attachment; filename="waec_broadsheet_{year}.pdf"'})
+        'Content-Disposition': f'attachment; filename="{_bkey()}_broadsheet_{year}.pdf"'})
+
+
+# NECO broadsheet — the WAEC broadsheet pages above, on the NECO table.
+from utils import exam_board as _exam_board  # noqa: E402
+_exam_board.register_twins(results_bp, [
+    ('/waec/broadsheet', 'waec_broadsheet', waec_broadsheet, ['GET']),
+    ('/waec/broadsheet.pdf', 'waec_broadsheet_pdf', waec_broadsheet_pdf, ['GET']),
+    ('/waec/broadsheet/export', 'waec_broadsheet_export', waec_broadsheet_export, ['GET']),
+    ('/waec/broadsheet/download', 'waec_broadsheet_download', waec_broadsheet_download, ['GET']),
+])
 
 
 # =============================================================================

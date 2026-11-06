@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% block title %}Edit WAEC Results - {{ student.full_name }}{% endblock %}
+{% block title %}Edit {{ board.name }} Results - {{ student.full_name }}{% endblock %}
 {% block breadcrumb %}
-<a href="{{ url_for('results.index') }}">Results</a>
-<a href="{{ url_for('results.waec_list') }}">WAEC</a>
-<a href="{{ url_for('results.view_waec_student', student_id=student.id) }}">{{ student.full_name }}</a>
+<a href="{{ burl('results.index') }}">Results</a>
+<a href="{{ burl('results.waec_list') }}">{{ board.name }}</a>
+<a href="{{ burl('results.view_waec_student', student_id=student.id) }}">{{ student.full_name }}</a>
 <span>Edit {{ year }}</span>
 {% endblock %}
 
@@ -43,7 +43,7 @@
 
 {% block content %}
 <div class="page-header">
-    <h1>Edit WAEC Results</h1>
+    <h1>Edit {{ board.name }} Results</h1>
 </div>
 
 <div class="card">
@@ -51,7 +51,7 @@
         <h3>{{ student.full_name }} - {{ year }}</h3>
     </div>
     <div class="card-body">
-        <form method="POST" action="{{ url_for('results.edit_waec', student_id=student.id, year=year) }}" id="editForm">
+        <form method="POST" action="{{ burl('results.edit_waec', student_id=student.id, year=year) }}" id="editForm">
             <div id="subjectsContainer">
                 {% for subject in subjects %}
                 {% if subject in results_dict %}
@@ -100,7 +100,7 @@
                 <button type="submit" class="btn btn-primary">
                     <i class="fas fa-save"></i> Save Changes
                 </button>
-                <a href="{{ url_for('results.view_waec_student', student_id=student.id) }}" class="btn btn-secondary">
+                <a href="{{ burl('results.view_waec_student', student_id=student.id) }}" class="btn btn-secondary">
                     Cancel
                 </a>
             </div>
@@ -108,17 +108,17 @@
     </div>
 </div>
 
-{% if can_write_sub('external_exams', 'waec_delete') %}
+{% if can_write_sub('external_exams', board.key ~ '_delete') %}
 <!-- Delete Section -->
 <div style="margin-top: 2rem; padding: 1rem; background: #fff5f5; border: 1px solid #f8d7da; border-radius: 8px;">
     <h4 style="color: #721c24; font-size: 0.9rem; margin-bottom: 0.5rem;">
         <i class="fas fa-trash-alt"></i> Delete All Results
     </h4>
     <p style="font-size: 0.85rem; color: #856404; margin-bottom: 0.75rem;">
-        Permanently delete all WAEC results for {{ student.full_name }} ({{ year }}). This action cannot be undone.
+        Permanently delete all {{ board.name }} results for {{ student.full_name }} ({{ year }}). This action cannot be undone.
     </p>
-    <form method="POST" action="{{ url_for('results.delete_waec', student_id=student.id, year=year) }}"
-          data-confirm="Are you sure you want to delete ALL WAEC results for this student in {{ year }}? This cannot be undone.">
+    <form method="POST" action="{{ burl('results.delete_waec', student_id=student.id, year=year) }}"
+          data-confirm="Are you sure you want to delete ALL {{ board.name }} results for this student in {{ year }}? This cannot be undone.">
         <button type="submit" class="btn btn-danger btn-sm">
             <i class="fas fa-trash"></i> Delete All Results ({{ year }})
         </button>

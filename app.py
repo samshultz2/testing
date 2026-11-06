@@ -497,6 +497,9 @@ def create_app(config_class=None):
         return Response('User-agent: *\nDisallow: /\n', mimetype='text/plain')
     
     # Template context processors
+    from utils import exam_board as _exam_board
+    _exam_board.init_app(app)     # `board` / `burl` for the WAEC & NECO pages
+
     @app.context_processor
     def utility_processor():
         from models import AcademicSession, Term

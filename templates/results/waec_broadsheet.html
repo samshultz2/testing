@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% block title %}WAEC Broadsheet — {{ app_name }}{% endblock %}
-{% block breadcrumb %}<a href="{{ url_for('results.index') }}">Results</a> / <a href="{{ url_for('results.analytics_hub') }}">Exam Analytics</a> / <span>WAEC Broadsheet</span>{% endblock %}
+{% block title %}{{ board.name }} Broadsheet — {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ burl('results.index') }}">Results</a> / <a href="{{ burl('results.analytics_hub') }}">Exam Analytics</a> / <span>{{ board.name }} Broadsheet</span>{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -39,8 +39,8 @@
 {% block content %}
 <div class="page-header">
     <div>
-        <h1>WAEC Broadsheet{% if selected_year %} — {{ selected_year }}{% endif %}</h1>
-        <p class="text-muted text-sm">Full WASSCE grade matrix for the cohort, with per-subject and school summaries</p>
+        <h1>{{ board.name }} Broadsheet{% if selected_year %} — {{ selected_year }}{% endif %}</h1>
+        <p class="text-muted text-sm">Full {{ 'WASSCE' if board.is_waec else 'NECO SSCE' }} grade matrix for the cohort, with per-subject and school summaries</p>
     </div>
     {% if bs and bs.rows %}
     <div class="page-header-actions">
@@ -51,11 +51,11 @@
                 <option value="A2">A2 — fits the most columns per sheet</option>
             </select>
         </label>
-        <a id="bsPrintLink" href="{{ url_for('results.waec_broadsheet_pdf', year=selected_year) }}" target="_blank" rel="noopener" class="btn btn-primary btn-sm"><i class="fas fa-print"></i> Print / PDF</a>
-        <a id="bsDownloadLink" href="{{ url_for('results.waec_broadsheet_pdf', year=selected_year, download=1) }}" class="btn btn-outline btn-sm"><i class="fas fa-file-pdf"></i> Download PDF</a>
-        <a href="{{ url_for('results.waec_broadsheet_export', year=selected_year) }}" class="btn btn-success btn-sm"><i class="fas fa-file-excel"></i> Excel</a>
+        <a id="bsPrintLink" href="{{ burl('results.waec_broadsheet_pdf', year=selected_year) }}" target="_blank" rel="noopener" class="btn btn-primary btn-sm"><i class="fas fa-print"></i> Print / PDF</a>
+        <a id="bsDownloadLink" href="{{ burl('results.waec_broadsheet_pdf', year=selected_year, download=1) }}" class="btn btn-outline btn-sm"><i class="fas fa-file-pdf"></i> Download PDF</a>
+        <a href="{{ burl('results.waec_broadsheet_export', year=selected_year) }}" class="btn btn-success btn-sm"><i class="fas fa-file-excel"></i> Excel</a>
         <button type="button" id="bsCustomBtn" class="btn btn-secondary btn-sm no-print"><i class="fas fa-sliders"></i> Custom download</button>
-        <a href="{{ url_for('results.analytics_hub', year=selected_year) }}" class="btn btn-info btn-sm no-print"><i class="fas fa-chart-column"></i> Analytics</a>
+        <a href="{{ burl('results.analytics_hub', year=selected_year) }}" class="btn btn-info btn-sm no-print"><i class="fas fa-chart-column"></i> Analytics</a>
     </div>
     <script nonce="{{ csp_nonce }}">
     (function () {
@@ -91,11 +91,11 @@
 
 {% if not bs or not bs.rows %}
 <div class="card"><div class="card-body"><div class="empty-state">
-    <i class="fas fa-table"></i><h3>No WAEC results recorded</h3>
-    <p>Enter or import WAEC results for {{ selected_year or 'a year' }}, then the broadsheet builds itself.</p>
+    <i class="fas fa-table"></i><h3>No {{ board.name }} results recorded</h3>
+    <p>Enter or import {{ board.name }} results for {{ selected_year or 'a year' }}, then the broadsheet builds itself.</p>
     <div class="d-flex gap-2 justify-center">
-        <a href="{{ url_for('results.add_waec') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add WAEC results</a>
-        <a href="{{ url_for('results.waec_list') }}" class="btn btn-secondary"><i class="fas fa-list"></i> WAEC results</a>
+        <a href="{{ burl('results.add_waec') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add {{ board.name }} results</a>
+        <a href="{{ burl('results.waec_list') }}" class="btn btn-secondary"><i class="fas fa-list"></i> {{ board.name }} results</a>
     </div>
 </div></div></div>
 {% else %}
@@ -217,7 +217,7 @@
   // Portal the modal to <body> so position:fixed centres against the viewport,
   // not a transformed ancestor (which would push it to the bottom of the page).
   if (modal.parentNode !== document.body) document.body.appendChild(modal);
-  var base = "{{ url_for('results.waec_broadsheet_download', year=selected_year) }}";
+  var base = "{{ burl('results.waec_broadsheet_download', year=selected_year) }}";
   function show() { modal.style.display = 'flex'; }
   function hide() { modal.style.display = 'none'; }
   openBtn.addEventListener('click', show);

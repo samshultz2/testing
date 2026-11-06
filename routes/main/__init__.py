@@ -2247,7 +2247,9 @@ def _student_view_payload(student):
                       'jamb_profile_code': student.jamb_profile_code,
                       'waec_reg_number': student.waec_reg_number,
                       'serial_number': student.serial_number,
-                      'waec_epin': student.waec_epin}
+                      'waec_epin': student.waec_epin,
+                      'neco_reg_number': student.neco_reg_number,
+                      'neco_epin': student.neco_epin}
                      if student.has_identity else None),
         'medical': ({'blood_group': student.blood_group, 'genotype': student.genotype,
                      'allergies': student.allergies, 'medical_conditions': student.medical_conditions,
@@ -2263,6 +2265,9 @@ def _student_view_payload(student):
         'waec': {'count': len(waec_results),
                  'add_url': url_for('results.add_waec') + f'?student_id={sid}',
                  'view_url': url_for('results.view_waec_student', student_id=sid)},
+        # NECO: shown when the candidate has NECO results / a NECO number, or the
+        # school records NECO at all (not every school sits it).
+        'neco': _student_neco_card(student),
         'jamb': {'latest': ({'year': latest_jamb.exam_year, 'score': latest_jamb.total_score}
                             if latest_jamb else None),
                  'add_url': url_for('results.add_jamb') + f'?student_id={sid}'},
@@ -2311,12 +2316,23 @@ def _student_view_payload(student):
 
 
 
+
+def _student_neco_card(student):
+    from models import NECOResult
+    count = student.neco_results.count()
+    if not (count or student.neco_reg_number
+            or db.session.query(NECOResult.id).first() is not None):
+        return None
+    return {'count': count,
+            'add_url': url_for('results.add_neco') + f'?student_id={student.id}',
+            'view_url': url_for('results.view_neco_student', student_id=student.id)}
+
 # Optional pastoral / identity / medical fields, shared by add + edit so the two
 # code paths can never drift. Plain-text fields are stripped; identity numbers
 # stay searchable; medical free-text lands in encrypted columns.
 _OPTIONAL_STUDENT_FIELDS = (
     'house', 'boarding_status', 'nin', 'jamb_reg_number', 'jamb_profile_code',
-    'waec_reg_number', 'serial_number', 'waec_epin',
+    'waec_reg_number', 'serial_number', 'waec_epin', 'neco_reg_number', 'neco_epin',
     'blood_group', 'genotype', 'allergies', 'medical_conditions', 'disabilities',
     'medications', 'medical_notes', 'emergency_medical',
 )

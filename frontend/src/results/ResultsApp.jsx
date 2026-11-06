@@ -39,13 +39,16 @@ function Index({ d }) {
       <div className="page-header"><h1>Results Management</h1></div>
       <div className="results-overview">
         <Card kind="waec" title="WAEC Results" sub="West African Examinations Council" count={d.waec_count} years={d.waec_years} dash={u.waec_dashboard} add={u.add_waec} />
+        {d.neco_years && <Card kind="neco" title="NECO Results" sub="National Examinations Council (SSCE)" count={d.neco_count} years={d.neco_years} dash={u.neco_dashboard} add={u.add_neco} />}
         <Card kind="jamb" title="JAMB Results" sub="Joint Admissions and Matriculation Board" count={d.jamb_count} years={d.jamb_years} dash={u.jamb_dashboard} add={u.add_jamb} />
       </div>
       <div className="card"><div className="card-header"><h3>Quick Actions</h3></div>
         <div className="card-body"><div className="quick-actions">
           <a href={u.add_waec} className="quick-action-card"><div className="quick-action-icon"><i aria-hidden="true" className="fas fa-plus-circle" /></div><div className="quick-action-label">Add WAEC Result</div></a>
+          {u.add_neco && <a href={u.add_neco} className="quick-action-card"><div className="quick-action-icon"><i aria-hidden="true" className="fas fa-plus-circle" /></div><div className="quick-action-label">Add NECO Result</div></a>}
           <a href={u.add_jamb} className="quick-action-card"><div className="quick-action-icon"><i aria-hidden="true" className="fas fa-plus-circle" /></div><div className="quick-action-label">Add JAMB Result</div></a>
           {d.waec_years.length > 0 && <a href={u.export_waec} className="quick-action-card" data-native download><div className="quick-action-icon"><i aria-hidden="true" className="fas fa-file-excel" /></div><div className="quick-action-label">Export WAEC {d.waec_years[0]}</div></a>}
+          {d.neco_years && d.neco_years.length > 0 && <a href={u.export_neco} className="quick-action-card" data-native download><div className="quick-action-icon"><i aria-hidden="true" className="fas fa-file-excel" /></div><div className="quick-action-label">Export NECO {d.neco_years[0]}</div></a>}
           {d.jamb_years.length > 0 && <a href={u.export_jamb} className="quick-action-card" data-native download><div className="quick-action-icon"><i aria-hidden="true" className="fas fa-file-excel" /></div><div className="quick-action-label">Export JAMB {d.jamb_years[0]}</div></a>}
         </div></div></div>
       <div className="card"><div className="card-header"><h3>Analytics Features</h3></div>

@@ -52,6 +52,33 @@ class WAECResult(db.Model):
         return f'<WAECResult {self.student.full_name} - {self.subject}: {self.grade}>'
 
 
+class NECOResult(db.Model):
+    """NECO (SSCE internal) examination results — the same shape and A1…F9
+    grading as WAEC, kept in its own table so WAEC figures never mix with
+    NECO ones."""
+    __tablename__ = 'neco_results'
+
+    id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.id'), nullable=False)
+    exam_year = db.Column(db.Integer, nullable=False)
+    subject = db.Column(db.String(50), nullable=False)
+    grade = db.Column(db.String(2), nullable=False)
+    created_at = db.Column(db.DateTime, default=local_now)
+    updated_at = db.Column(db.DateTime, default=local_now, onupdate=local_now)
+
+    __table_args__ = (
+        db.UniqueConstraint('student_id', 'exam_year', 'subject', name='unique_neco_result'),
+    )
+
+    VALID_GRADES = WAECResult.VALID_GRADES
+    grade_to_points = staticmethod(WAECResult.grade_to_points)
+    grade_to_average_points = staticmethod(WAECResult.grade_to_average_points)
+    is_pass = staticmethod(WAECResult.is_pass)
+
+    def __repr__(self):
+        return f'<NECOResult {self.student_id} - {self.subject}: {self.grade}>'
+
+
 class JAMBResult(db.Model):
     """JAMB examination results"""
     __tablename__ = 'jamb_results'

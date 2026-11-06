@@ -33,7 +33,7 @@
 
 {% block content %}
 <div class="page-header no-print">
-    <div><h1>Exam Report</h1><p class="text-muted text-sm">{% if sss3_view %}Consolidated WAEC, JAMB and Mock JAMB record{% elif exam_level == 'jss3' %}JSS3 — State BECE and NECO BECE record{% else %}Common Entrance record{% endif %}</p></div>
+    <div><h1>Exam Report</h1><p class="text-muted text-sm">{% if sss3_view %}Consolidated WAEC{% if neco_years %}, NECO{% endif %}, JAMB and Mock JAMB record{% elif exam_level == 'jss3' %}JSS3 — State BECE and NECO BECE record{% else %}Common Entrance record{% endif %}</p></div>
     <div class="page-header-actions">
         <button data-print class="btn btn-primary btn-sm"><i class="fas fa-file-pdf"></i> Print / Save PDF</button>
         <a href="{{ url_for('main.view_student', student_id=student.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>
@@ -96,6 +96,36 @@
         {% endfor %}
         {% else %}<p class="muted">No WAEC results recorded.</p>{% endif %}
     </div>
+
+    {% if neco_years %}
+    <!-- NECO (only when the candidate has NECO results) -->
+    <div class="rsection">
+        <h2><i class="fas fa-file-lines"></i> NECO</h2>
+        {% if neco_years %}
+        {% for year, data in neco_years %}
+        <div style="margin-bottom:.75rem;">
+            <strong>{{ year }}</strong>
+            <div class="summary-chips">
+                <span class="chip">{{ data.rows|length }} subjects</span>
+                <span class="chip">{{ data.credits }} credits</span>
+                <span class="chip">{{ data.distinctions }} distinctions</span>
+            </div>
+            <table class="rtable" style="margin-top:.4rem;">
+                <thead><tr><th>Subject</th><th style="width:90px;">Grade</th></tr></thead>
+                <tbody>
+                {% for r in data.rows %}
+                <tr>
+                    <td>{{ r.subject }}</td>
+                    <td><span class="pill {% if r.grade in ['A1','B2','B3'] %}g-dist{% elif r.grade in ['C4','C5','C6'] %}g-credit{% else %}g-fail{% endif %}">{{ r.grade }}</span></td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endfor %}
+        {% else %}<p class="muted">No NECO results recorded.</p>{% endif %}
+    </div>
+    {% endif %}
 
     <!-- JAMB -->
     <div class="rsection">

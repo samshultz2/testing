@@ -559,6 +559,11 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a href="{{ url_for('results.neco_list') }}" class="nav-link {% if request.endpoint and 'neco' in request.endpoint %}active{% endif %}">
+                            <i class="fas fa-file-lines"></i><span>NECO</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="{{ url_for('results.jamb_list') }}" class="nav-link">
                             <i class="fas fa-file-contract"></i><span>JAMB</span>
                         </a>
@@ -625,6 +630,11 @@
                     <li class="nav-item">
                         <a href="{{ url_for('results.waec_list') }}" class="nav-link {% if request.endpoint == 'results.waec_list' %}active{% endif %}">
                             <i class="fas fa-file-alt"></i><span>WAEC</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('results.neco_list') }}" class="nav-link {% if request.endpoint == 'results.neco_list' %}active{% endif %}">
+                            <i class="fas fa-file-lines"></i><span>NECO</span>
                         </a>
                     </li>
                     <li class="nav-item">

@@ -698,7 +698,9 @@ def _heal_levels():
 def index():
     """Level selector: SSS3 (WAEC/JAMB) · JSS3 (BECE) · Basic 6 (Common Entrance)."""
     from models import WAECResult, JAMBResult
-    sss3 = {'waec': WAECResult.query.count(), 'jamb': JAMBResult.query.count()}
+    from models import NECOResult
+    sss3 = {'waec': WAECResult.query.count(), 'neco': NECOResult.query.count(),
+            'jamb': JAMBResult.query.count()}
     levels = []
     for level in ('jss3', 'basic6'):
         cls = svc.find_level_class(level)

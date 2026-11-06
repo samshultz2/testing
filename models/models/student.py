@@ -46,6 +46,8 @@ class Student(db.Model):
     waec_reg_number = db.Column(db.String(30), index=True)
     serial_number = db.Column(db.String(30))
     waec_epin = db.Column(db.String(30))                # WAEC e-PIN (registration/result PIN)
+    neco_reg_number = db.Column(db.String(30), index=True)  # NECO SSCE registration number
+    neco_epin = db.Column(db.String(30))                # NECO token / e-PIN
 
     # Optional medical record. Structured fields stay plain (shown on ID cards /
     # needed fast in an emergency); the free-text notes are encrypted at rest.
@@ -106,6 +108,7 @@ class Student(db.Model):
     parent_contacts = db.relationship('ParentContact', backref='student', lazy='dynamic', cascade='all, delete-orphan')
     enrollments = db.relationship('StudentEnrollment', backref='student', lazy='dynamic', cascade='all, delete-orphan')
     waec_results = db.relationship('WAECResult', backref='student', lazy='dynamic', cascade='all, delete-orphan')
+    neco_results = db.relationship('NECOResult', backref='student', lazy='dynamic', cascade='all, delete-orphan')
     jamb_results = db.relationship('JAMBResult', backref='student', lazy='dynamic', cascade='all, delete-orphan')
     graduation_session = db.relationship('AcademicSession', foreign_keys=[graduation_session_id])
     target_university = db.relationship('University', foreign_keys=[target_university_id])
@@ -163,7 +166,8 @@ class Student(db.Model):
     @property
     def has_identity(self):
         return any([self.nin, self.jamb_reg_number, self.jamb_profile_code,
-                    self.waec_reg_number, self.serial_number, self.waec_epin])
+                    self.waec_reg_number, self.serial_number, self.waec_epin,
+                    self.neco_reg_number, self.neco_epin])
 
     @property
     def age(self):

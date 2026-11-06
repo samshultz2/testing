@@ -1,6 +1,6 @@
 {% extends "base.html" %}
-{% block title %}WAEC Analytics - {{ app_name }}{% endblock %}
-{% block breadcrumb %}<a href="{{ url_for('results.waec_list') }}">WAEC</a> / <span>Analytics</span>{% endblock %}
+{% block title %}{{ board.name }} Analytics - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ burl('results.waec_list') }}">{{ board.name }}</a> / <span>Analytics</span>{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -46,8 +46,8 @@
 {% block content %}
 <div class="page-header">
     <div>
-        <h1><i class="fas fa-chart-bar"></i> WAEC Analytics</h1>
-        <p class="text-muted">Comprehensive analysis of WAEC performance</p>
+        <h1><i class="fas fa-chart-bar"></i> {{ board.name }} Analytics</h1>
+        <p class="text-muted">Comprehensive analysis of {{ board.name }} performance</p>
     </div>
     <form method="GET" class="d-flex gap-2">
         <select name="year" class="form-control" data-autosubmit style="width:auto">
@@ -180,10 +180,10 @@
 <div class="card">
     <div class="card-body text-center py-5">
         <i class="fas fa-chart-bar fa-3x text-muted mb-3"></i>
-        <h3>No WAEC Data Available</h3>
-        <p class="text-muted">Add WAEC results to see analytics</p>
-        {% if can_write_sub('external_exams', 'waec_create') %}
-        <a href="{{ url_for('results.add_waec') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add WAEC Result</a>
+        <h3>No {{ board.name }} Data Available</h3>
+        <p class="text-muted">Add {{ board.name }} results to see analytics</p>
+        {% if can_write_sub('external_exams', board.key ~ '_create') %}
+        <a href="{{ burl('results.add_waec') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add {{ board.name }} Result</a>
         {% endif %}
     </div>
 </div>

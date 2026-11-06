@@ -2,6 +2,8 @@
 from routes.results import *  # noqa: F401,F403
 from utils.search import like_term
 from utils.broadsheet_export import _abbr_one
+from utils import exam_board as _board
+from utils.exam_board import url_for  # noqa: F811 — follows the board (WAEC / NECO)
 
 
 # Student-list orderings on the WAEC dashboard: key -> (label, sort key).
@@ -32,6 +34,7 @@ def waec_sort_key(sort_by, order=None):
 @login_required
 def waec_list():
     """Comprehensive WAEC dashboard with filtering and analytics"""
+    WAECResult = _board.model()   # WAEC or NECO, per route
     exam_year = request.args.get('year', type=int)
     min_a1 = request.args.get('min_a1', type=int)
     min_credits = request.args.get('min_credits', type=int)
@@ -252,6 +255,7 @@ def waec_subject(subject):
     """Full analysis of a single WAEC subject for a year — grade distribution
     (A1…F9), credit/distinction/pass/fail rates, average grade points and the
     candidate list per grade. Branch/arm scoped."""
+    WAECResult = _board.model()   # WAEC or NECO, per route
     exam_year = request.args.get('year', type=int)
     years = [y[0] for y in db.session.query(WAECResult.exam_year)
              .distinct().order_by(WAECResult.exam_year.desc()).all()]
@@ -275,6 +279,7 @@ def waec_subject(subject):
 @login_required
 def add_waec():
     """Add WAEC results for a student"""
+    WAECResult = _board.model()   # WAEC or NECO, per route
     # External exams are session-based: default to the active academic session's
     # exam year (2025/2026 → 2026), not the raw calendar year.
     exam_year = (request.args.get('year', type=int)
@@ -329,7 +334,7 @@ def add_waec():
             
             db.session.commit()
             recompute_student_safe(student_id)   # refresh persisted analytics
-            flash(f'{results_added} WAEC results saved!', 'success')
+            flash(f'{results_added} {_board.current().name} results saved!', 'success')
             return redirect(url_for('results.view_waec_student', student_id=student_id))
             
         except Exception as e:
@@ -354,6 +359,7 @@ def _review_students(students, year, matched=None):
     """Student dropdown for the scan / paste review: only students still
     without WAEC results for ``year``, plus the student the slip matched (so a
     re-scan can still update them)."""
+    WAECResult = _board.model()   # WAEC or NECO, per route
     out = students_needing_result(students, WAECResult, year)
     if (matched is not None and any(s.id == matched.id for s in students)
             and all(s.id != matched.id for s in out)):
@@ -502,6 +508,7 @@ def waec_quick_entry():
 
     Candidates not in SSS3 for the exam year's session are moved into it, and
     names not on the register are added — both listed for one approval."""
+    WAECResult = _board.model()   # WAEC or NECO, per route
     from utils.quick_results import parse_quick_lines, waec_spec
     from utils.helpers import session_exam_year
     from utils import roster_placement as rp
@@ -538,10 +545,10 @@ def waec_quick_entry():
                 db.session.commit()
                 for sid in touched:
                     recompute_student_safe(sid)
-                log_action('results.waec_quick_entry',
+                log_action(f'results.{_board.current().key}_quick_entry',
                            detail=f'{year}: {saved} result(s), {len(touched)} candidate(s), '
                                   f'{created} new student(s), {moved} moved to SSS3')
-                flash(f'Saved {saved} WAEC result(s) for {len(touched)} candidate(s).'
+                flash(f'Saved {saved} {_board.current().name} result(s) for {len(touched)} candidate(s).'
                       + (f' Added {created} new student(s).' if created else '')
                       + (f' Moved {moved} student(s) into SSS3.' if moved else ''), 'success')
                 return redirect(url_for('results.waec_list', year=year))
@@ -551,6 +558,7 @@ def waec_quick_entry():
 
 def _save_waec_rows(student_id, exam_year, subjects, grades):
     """Upsert one student's WAEC subject/grade rows. Returns the count saved."""
+    WAECResult = _board.model()   # WAEC or NECO, per route
     n = 0
     for i, subject in enumerate(subjects):
         if subject and i < len(grades) and grades[i] in WAEC_GRADES:
@@ -622,10 +630,10 @@ def waec_paste_save():
     n = _save_waec_rows(st.id, year, subjects, grades)
     db.session.commit()
     recompute_student_safe(st.id)
-    log_action('results.waec_paste_save', detail=f'{year}: {n} result(s)'
+    log_action(f'results.{_board.current().key}_paste_save', detail=f'{year}: {n} result(s)'
                + ('; new student' if created else '') + ('; moved to SSS3' if moved else ''),
                target=st)
-    flash(f'{n} WAEC result(s) saved for {st.full_name}.'
+    flash(f'{n} {_board.current().name} result(s) saved for {st.full_name}.'
           + (' Added to the register and placed in SSS3.' if created else '')
           + (' Moved into SSS3.' if moved else ''), 'success')
     return redirect(url_for('results.view_waec_student', student_id=st.id))
@@ -657,6 +665,7 @@ def view_waec_student(student_id):
 @login_required
 def edit_waec(student_id, year):
     """Edit WAEC results for a student/year"""
+    WAECResult = _board.model()   # WAEC or NECO, per route
     student = db.get_or_404(Student, student_id)
     require_branch_access(student.branch_id)
     _assert_exam_student(student_id)
@@ -680,8 +689,8 @@ def edit_waec(student_id, year):
             
             db.session.commit()
             recompute_student_safe(student_id)
-            log_action('results.waec_edit', detail=f'{year}', target=student)
-            flash('WAEC results updated!', 'success')
+            log_action(f'results.{_board.current().key}_edit', detail=f'{year}', target=student)
+            flash(f'{_board.current().name} results updated!', 'success')
             return redirect(url_for('results.view_waec_student', student_id=student_id, year=year))
             
         except Exception as e:
@@ -704,6 +713,7 @@ def edit_waec(student_id, year):
 @login_required
 def delete_waec(student_id, year):
     """Delete all WAEC results for a student in a given year"""
+    WAECResult = _board.model()   # WAEC or NECO, per route
     student = db.get_or_404(Student, student_id)
     require_branch_access(student.branch_id)
     
@@ -713,8 +723,8 @@ def delete_waec(student_id, year):
         recompute_student_safe(student_id)
 
         if deleted:
-            log_action('results.waec_delete', detail=f'{deleted} result(s), {year}', target=student)
-            flash(f'Deleted {deleted} WAEC results for {student.full_name} ({year}).', 'success')
+            log_action(f'results.{_board.current().key}_delete', detail=f'{deleted} result(s), {year}', target=student)
+            flash(f'Deleted {deleted} {_board.current().name} results for {student.full_name} ({year}).', 'success')
         else:
             flash('No results found to delete.', 'warning')
             
@@ -747,6 +757,7 @@ def _bulk_student_ids():
 @login_required
 def delete_waec_bulk():
     """Delete the WAEC results of several students for one year at once."""
+    WAECResult = _board.model()   # WAEC or NECO, per route
     year = request.form.get('year', type=int)
     students = _bulk_student_ids()
     if not year or not students:
@@ -760,9 +771,9 @@ def delete_waec_bulk():
         db.session.commit()
         for sid in ids:
             recompute_student_safe(sid)
-        log_action('results.waec_delete_bulk',
+        log_action(f'results.{_board.current().key}_delete_bulk',
                    detail=f'{deleted} result(s), {len(ids)} student(s), {year}')
-        flash(f'Deleted {deleted} WAEC result(s) for {len(ids)} student(s) ({year}).', 'success')
+        flash(f'Deleted {deleted} {_board.current().name} result(s) for {len(ids)} student(s) ({year}).', 'success')
     except Exception as e:
         db.session.rollback()
         flash(f'Error deleting results: {e}', 'error')
@@ -773,6 +784,7 @@ def delete_waec_bulk():
 @login_required
 def delete_waec_single(result_id):
     """Delete a single WAEC result entry"""
+    WAECResult = _board.model()   # WAEC or NECO, per route
     result = db.get_or_404(WAECResult, result_id)
     require_branch_access(result.student.branch_id)   # no cross-branch deletes by guessed id
     student_id = result.student_id
@@ -795,6 +807,7 @@ def delete_waec_single(result_id):
 @login_required
 def api_waec_grade_distribution(year):
     """Get WAEC grade distribution for charts"""
+    WAECResult = _board.model()   # WAEC or NECO, per route
     results = scope_by_student(WAECResult.query.filter_by(exam_year=year), WAECResult).all()
     distribution = {g: sum(1 for r in results if r.grade == g) for g in WAEC_GRADES}
     return jsonify(distribution)
@@ -812,6 +825,7 @@ def api_waec_subject_stats(year):
 
 def _waec_students_rows(year):
     """Per-student WAEC aggregates for the year (branch-scoped), name-sorted."""
+    WAECResult = _board.model()   # WAEC or NECO, per route
     from utils.branch_scope import scope_query
     students = scope_query(
         db.session.query(Student).join(WAECResult).filter(WAECResult.exam_year == year),
@@ -840,6 +854,7 @@ def _waec_students_rows(year):
 
 def _waec_subject_rows(year):
     """Per-subject grade breakdown for the year (branch-scoped)."""
+    WAECResult = _board.model()   # WAEC or NECO, per route
     from utils.branch_scope import scope_by_student
     counts = defaultdict(lambda: {g: 0 for g in WAEC_GRADES})
     for r in scope_by_student(WAECResult.query.filter_by(exam_year=year), WAECResult).all():
@@ -928,17 +943,17 @@ def _waec_branded_export(year, fmt):
     total = len(rows)
     if fmt == 'pdf':
         data = students_pdf(rows, headers, school, total=total)
-        return pdf_response(BytesIO(data), 'waec_results_%s.pdf' % year, inline=False)
+        return pdf_response(BytesIO(data), '%s_results_%s.pdf' % (_board.current().key, year), inline=False)
     if fmt == 'word':
         return students_word(rows, headers, school, total=total,
-                             filename='waec_results_%s.docx' % year)
+                             filename='%s_results_%s.docx' % (_board.current().key, year))
     # image — one A4 page per request; client loops via X-Total-Pages
     pages = students_image_pages(rows, headers, school, total=total)
     page = request.args.get('page', type=int) or 1
     page = max(1, min(page, len(pages)))
     suffix = '' if len(pages) == 1 else ('_p%d' % page)
     return Response(pages[page - 1], mimetype='image/png', headers={
-        'Content-Disposition': 'attachment; filename="waec_results_%s%s.png"' % (year, suffix),
+        'Content-Disposition': 'attachment; filename="%s_results_%s%s.png"' % (_board.current().key, year, suffix),
         'X-Total-Pages': str(len(pages)), 'Access-Control-Expose-Headers': 'X-Total-Pages'})
 
 
@@ -947,6 +962,7 @@ def _waec_branded_export(year, fmt):
 @rate_limited('export', max_requests=40, window_minutes=10)
 def export_waec():
     """Export WAEC results — Excel (matrix) or a branded PDF / image / Word."""
+    WAECResult = _board.model()   # WAEC or NECO, per route
     from openpyxl import Workbook
     from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
     from io import BytesIO
@@ -956,7 +972,7 @@ def export_waec():
         flash('Please select a year to export.', 'error')
         return redirect(url_for('results.waec_list'))
     fmt = request.args.get('format', 'excel')
-    log_action('data.export_results', detail=f'WAEC {year} ({fmt})')
+    log_action('data.export_results', detail=f'{_board.current().name} {year} ({fmt})')
 
     if fmt in ('pdf', 'image', 'word'):
         return _waec_branded_export(year, fmt)
@@ -968,7 +984,7 @@ def export_waec():
 
     wb = Workbook()
     ws = wb.active
-    ws.title = f"WAEC {year}"
+    ws.title = f"{_board.current().name} {year}"
     
     header_fill = PatternFill(start_color='4472C4', end_color='4472C4', fill_type='solid')
     header_font = Font(bold=True, color='FFFFFF')
@@ -978,7 +994,7 @@ def export_waec():
     )
     
     ws.merge_cells('A1:L1')
-    ws['A1'] = f'WAEC RESULTS - {year}'
+    ws['A1'] = f'{_board.current().name} RESULTS - {year}'
     ws['A1'].font = Font(bold=True, size=14)
     ws['A1'].alignment = Alignment(horizontal='center')
     
@@ -991,7 +1007,7 @@ def export_waec():
     
     for idx, student in enumerate(students_with_results, 1):
         row = idx + 3
-        results = {r.subject: r.grade for r in student.waec_results.filter_by(exam_year=year).all()}
+        results = {r.subject: r.grade for r in _board.results_of(student).filter_by(exam_year=year).all()}
         
         ws.cell(row=row, column=1, value=idx).border = border
         ws.cell(row=row, column=2, value=student.student_id).border = border
@@ -1023,13 +1039,14 @@ def export_waec():
     ws.column_dimensions['C'].width = 25
 
     ws.delete_cols(2)        # drop the admission-number column from the printout
-    return xlsx_response(wb, f'waec_results_{year}.xlsx')
+    return xlsx_response(wb, f'{_board.current().key}_results_{year}.xlsx')
 
 
 @results_bp.route('/waec/analytics')
 @login_required
 def waec_analytics():
     """Enhanced WAEC analytics dashboard"""
+    WAECResult = _board.model()   # WAEC or NECO, per route
     from utils.exam_analytics import WAECAnalytics
     
     year = request.args.get('year', type=int)
@@ -1073,3 +1090,28 @@ def waec_student_analysis(student_id):
         waec_analysis=waec_analysis,
         jamb_prediction=jamb_prediction
     )
+
+
+# --------------------------------------------------------------------------- #
+# NECO — a carbon copy of every WAEC page above, served from /results/neco/…
+# with its own results table (see utils/exam_board.py).
+# --------------------------------------------------------------------------- #
+_board.register_twins(results_bp, [
+    ('/waec', 'waec_list', waec_list, ['GET']),
+    ('/waec/subject/<subject>', 'waec_subject', waec_subject, ['GET']),
+    ('/waec/add', 'add_waec', add_waec, ['GET', 'POST']),
+    ('/waec/scan', 'scan_waec', scan_waec, ['GET', 'POST']),
+    ('/waec/paste', 'paste_waec', paste_waec, ['GET', 'POST']),
+    ('/waec/quick', 'waec_quick_entry', waec_quick_entry, ['GET', 'POST']),
+    ('/waec/paste/save', 'waec_paste_save', waec_paste_save, ['POST']),
+    ('/waec/student/<int:student_id>', 'view_waec_student', view_waec_student, ['GET']),
+    ('/waec/student/<int:student_id>/edit/<int:year>', 'edit_waec', edit_waec, ['GET', 'POST']),
+    ('/waec/student/<int:student_id>/delete/<int:year>', 'delete_waec', delete_waec, ['POST']),
+    ('/waec/delete-bulk', 'delete_waec_bulk', delete_waec_bulk, ['POST']),
+    ('/waec/result/<int:result_id>/delete', 'delete_waec_single', delete_waec_single, ['POST']),
+    ('/api/waec/grade-distribution/<int:year>', 'api_waec_grade_distribution',
+     api_waec_grade_distribution, ['GET']),
+    ('/api/waec/subject-stats/<int:year>', 'api_waec_subject_stats', api_waec_subject_stats, ['GET']),
+    ('/waec/export', 'export_waec', export_waec, ['GET']),
+    ('/waec/analytics', 'waec_analytics', waec_analytics, ['GET']),
+])

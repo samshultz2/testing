@@ -30,14 +30,16 @@
   <div class="level-card">
     <a class="level-card-header" style="background:linear-gradient(135deg,#667eea 0%,#764ba2 100%)" href="{{ url_for('results.index') }}">
       <div class="level-icon"><i class="fas fa-graduation-cap"></i></div>
-      <h2 class="level-title">SSS3</h2><div class="level-subtitle">WAEC · JAMB · Mock WAEC · Mock JAMB</div>
+      <h2 class="level-title">SSS3</h2><div class="level-subtitle">WAEC · NECO · JAMB · Mock WAEC · Mock JAMB</div>
     </a>
     <div class="level-card-body">
       <div class="level-exam"><h4>WAEC (WASSCE)</h4><div class="level-mini"><div><div class="v">{{ sss3.waec }}</div><div class="l">results</div></div></div></div>
+      <div class="level-exam"><h4>NECO (SSCE)</h4><div class="level-mini"><div><div class="v">{{ sss3.neco }}</div><div class="l">results</div></div></div></div>
       <div class="level-exam"><h4>JAMB (UTME)</h4><div class="level-mini"><div><div class="v">{{ sss3.jamb }}</div><div class="l">results</div></div></div></div>
     </div>
     <div class="level-actions">
       <a class="btn btn-sm btn-primary" href="{{ url_for('results.waec_list') }}">WAEC</a>
+      <a class="btn btn-sm btn-primary" href="{{ url_for('results.neco_list') }}">NECO</a>
       <a class="btn btn-sm btn-primary" href="{{ url_for('results.jamb_list') }}">JAMB</a>
       <a class="btn btn-sm btn-secondary" href="{{ url_for('results.analytics_hub') }}">Analytics</a>
     </div>

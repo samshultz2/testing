@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% from "components/searchable_select.html" import searchable_select with context %}
-{% block title %}Add WAEC - {{ app_name }}{% endblock %}
-{% block breadcrumb %}<a href="{{ url_for('results.waec_list') }}">WAEC</a> / <span>Add Results</span>{% endblock %}
+{% block title %}Add {{ board.name }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ burl('results.waec_list') }}">{{ board.name }}</a> / <span>Add Results</span>{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -15,12 +15,12 @@
 {% block content %}
 <div class="page-header">
     <div>
-        <h1>Add WAEC Results</h1>
+        <h1>Add {{ board.name }} Results</h1>
         <p class="text-muted text-sm">SSS3 students &middot; current exam year</p>
     </div>
     <div class="page-header-actions">
-        <a href="{{ url_for('results.scan_waec') }}" class="btn btn-info btn-sm"><i class="fas fa-camera"></i> Scan from Image</a>
-        <a href="{{ url_for('results.waec_list') }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>
+        <a href="{{ burl('results.scan_waec') }}" class="btn btn-info btn-sm"><i class="fas fa-camera"></i> Scan from Image</a>
+        <a href="{{ burl('results.waec_list') }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>
     </div>
 </div>
 
@@ -71,7 +71,7 @@
             <h3 class="mb-1">Subject Grades</h3>
             <div class="entry-hint">
                 <i class="fas fa-circle-info"></i>
-                <span>Common subjects are pre-selected. Pick a student who has saved WAEC subjects and the list fills from their profile &mdash; edit any row freely.</span>
+                <span>Common subjects are pre-selected. Pick a student who has saved {{ board.name }} subjects and the list fills from their profile &mdash; edit any row freely.</span>
             </div>
 
             {% for i in range(9) %}
@@ -93,14 +93,14 @@
 
             <div class="page-header-actions mt-3">
                 <button type="submit" class="btn btn-primary btn-lg"><i class="fas fa-save"></i> Save</button>
-                <a href="{{ url_for('results.waec_list') }}" class="btn btn-secondary btn-lg">Cancel</a>
+                <a href="{{ burl('results.waec_list') }}" class="btn btn-secondary btn-lg">Cancel</a>
             </div>
         </form>
         {% else %}
         <div class="empty-state">
             <i class="fas fa-user-slash"></i>
             <p>No SSS3 students found for the current term. Set up SSS3 class enrolment first.</p>
-            <a href="{{ url_for('results.waec_list') }}" class="btn btn-primary">Back to WAEC</a>
+            <a href="{{ burl('results.waec_list') }}" class="btn btn-primary">Back to {{ board.name }}</a>
         </div>
         {% endif %}
     </div>
@@ -123,7 +123,7 @@
 
     function subjectsForStudent(entry) {
         if (!entry) return DEFAULTS;
-        // 1) explicit saved WAEC subjects win
+        // 1) explicit saved {{ board.name }} subjects win
         if (entry.waec && entry.waec.length) return entry.waec;
         // 2) otherwise fall back to the student's stream defaults
         if (entry.stream && STREAM_DEFAULTS[entry.stream]) return STREAM_DEFAULTS[entry.stream];
@@ -136,7 +136,7 @@
         studentSelect.addEventListener('change', function () {
             applySubjects(subjectsForStudent(SUBJECT_MAP[this.value]));
         });
-        // Arrived from a student's profile ("Add" under WAEC) — select them
+        // Arrived from a student's profile ("Add" under {{ board.name }}) — select them
         // automatically instead of leaving the picker on "Select Student".
         if (PRESELECT && studentSelect.querySelector('option[value="' + PRESELECT + '"]')) {
             studentSelect.value = String(PRESELECT);

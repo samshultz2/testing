@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% from "components/bulk_delete.html" import bulk_bar, bulk_check with context %}
-{% block title %}WAEC Results - {{ app_name }}{% endblock %}
-{% block breadcrumb %}<a href="{{ url_for('results.index') }}">Results</a> <span>WAEC</span>{% endblock %}
+{% block title %}{{ board.name }} Results - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ burl('results.index') }}">Results</a> <span>{{ board.name }}</span>{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -420,19 +420,19 @@
 {% block content %}
 <!-- Page Header -->
 <div class="page-header">
-    <h1>WAEC Results</h1>
+    <h1>{{ board.name }} Results</h1>
     <div class="page-actions">
-        <a href="{{ url_for('results.waec_analytics') }}" class="btn btn-info btn-sm" title="Analytics"><i class="fas fa-chart-bar"></i></a>
-        <a href="{{ url_for('results.waec_broadsheet', year=selected_year) }}" class="btn btn-secondary btn-sm" title="Full grade matrix — print / download"><i class="fas fa-table-cells"></i> Broadsheet</a>
-        <a href="{{ url_for('results.waec_cert_generator') }}" class="btn btn-secondary btn-sm" title="Design & download result images/PDF"><i class="fas fa-id-card"></i> Result Generator</a>
-        {% if can_write_sub('external_exams', 'waec_create') %}
-        <a href="{{ url_for('results.add_waec') }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add</a>
-        <a href="{{ url_for('results.scan_waec') }}" class="btn btn-info btn-sm" title="Scan result image"><i class="fas fa-camera"></i> Scan</a>
-        <a href="{{ url_for('results.paste_waec') }}" class="btn btn-secondary btn-sm" title="Paste result text (from an AI) — no OCR"><i class="fas fa-clipboard"></i> Paste</a>
-        <a href="{{ url_for('results.waec_quick_entry', year=selected_year) }}" class="btn btn-secondary btn-sm" title="Many students at once: Name, Eng A1, Maths B2"><i class="fas fa-bolt"></i> Quick entry</a>
+        <a href="{{ burl('results.waec_analytics') }}" class="btn btn-info btn-sm" title="Analytics"><i class="fas fa-chart-bar"></i></a>
+        <a href="{{ burl('results.waec_broadsheet', year=selected_year) }}" class="btn btn-secondary btn-sm" title="Full grade matrix — print / download"><i class="fas fa-table-cells"></i> Broadsheet</a>
+        {% if board.is_waec %}<a href="{{ burl('results.waec_cert_generator') }}" class="btn btn-secondary btn-sm" title="Design & download result images/PDF"><i class="fas fa-id-card"></i> Result Generator</a>{% endif %}
+        {% if can_write_sub('external_exams', board.key ~ '_create') %}
+        <a href="{{ burl('results.add_waec') }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add</a>
+        <a href="{{ burl('results.scan_waec') }}" class="btn btn-info btn-sm" title="Scan result image"><i class="fas fa-camera"></i> Scan</a>
+        <a href="{{ burl('results.paste_waec') }}" class="btn btn-secondary btn-sm" title="Paste result text (from an AI) — no OCR"><i class="fas fa-clipboard"></i> Paste</a>
+        <a href="{{ burl('results.waec_quick_entry', year=selected_year) }}" class="btn btn-secondary btn-sm" title="Many students at once: Name, Eng A1, Maths B2"><i class="fas fa-bolt"></i> Quick entry</a>
         {% endif %}
-        {% if selected_year and can_write_sub('external_exams', 'waec_export') %}
-        <a href="{{ url_for('results.export_waec', year=selected_year) }}" class="btn btn-secondary btn-sm" title="Export Excel"><i class="fas fa-file-excel"></i></a>
+        {% if selected_year and can_write_sub('external_exams', board.key ~ '_export') %}
+        <a href="{{ burl('results.export_waec', year=selected_year) }}" class="btn btn-secondary btn-sm" title="Export Excel"><i class="fas fa-file-excel"></i></a>
         <button type="button" data-call="openExportModal" class="btn btn-secondary btn-sm" title="Export image or PDF"><i class="fas fa-file-export"></i></button>
         {% endif %}
     </div>
@@ -440,13 +440,13 @@
 
 <!-- View Tabs -->
 <div class="tabs">
-    <a href="{{ url_for('results.waec_list', year=selected_year, view='students', search=search) }}" class="tab {% if view_mode == 'students' %}active{% endif %}">
+    <a href="{{ burl('results.waec_list', year=selected_year, view='students', search=search) }}" class="tab {% if view_mode == 'students' %}active{% endif %}">
         <i class="fas fa-users"></i> Students
     </a>
-    <a href="{{ url_for('results.waec_list', year=selected_year, view='subjects', search=search) }}" class="tab {% if view_mode == 'subjects' %}active{% endif %}">
+    <a href="{{ burl('results.waec_list', year=selected_year, view='subjects', search=search) }}" class="tab {% if view_mode == 'subjects' %}active{% endif %}">
         <i class="fas fa-book"></i> Subjects
     </a>
-    <a href="{{ url_for('results.waec_list', year=selected_year, view='top', search=search) }}" class="tab {% if view_mode == 'top' %}active{% endif %}">
+    <a href="{{ burl('results.waec_list', year=selected_year, view='top', search=search) }}" class="tab {% if view_mode == 'top' %}active{% endif %}">
         <i class="fas fa-trophy"></i> Top Performers
     </a>
 </div>
@@ -475,7 +475,7 @@
 
 <!-- Filters -->
 <div class="filters-card">
-    <form method="GET" action="{{ url_for('results.waec_list', search=search) }}">
+    <form method="GET" action="{{ burl('results.waec_list', search=search) }}">
         <input type="hidden" name="view" value="{{ view_mode }}">
         <div class="filter-group filter-search">
             <label>Search by name or ID</label>
@@ -553,7 +553,7 @@
                     <span class="top-value">
                         <span class="grade-badge grade-{{ g|lower }}">{{ student.grade_counts[g] }} {{ g }}</span>
                     </span>
-                    <a href="{{ url_for('results.view_waec_student', student_id=student.id) }}" class="btn btn-secondary btn-sm" style="padding: 0.2rem 0.4rem;">
+                    <a href="{{ burl('results.view_waec_student', student_id=student.id) }}" class="btn btn-secondary btn-sm" style="padding: 0.2rem 0.4rem;">
                         <i class="fas fa-eye"></i>
                     </a>
                 </li>
@@ -572,10 +572,10 @@
     <div class="card-header">
         <h3 class="card-title">Subjects by Grade Count</h3>
         <div class="sort-btns">
-            <a href="{{ url_for('results.waec_list', year=selected_year, view='top', sort='subject_a1', order='desc', search=search) }}" class="sort-btn {% if sort_by == 'subject_a1' %}active{% endif %}">A1</a>
-            <a href="{{ url_for('results.waec_list', year=selected_year, view='top', sort='subject_b2', order='desc', search=search) }}" class="sort-btn {% if sort_by == 'subject_b2' %}active{% endif %}">B2</a>
-            <a href="{{ url_for('results.waec_list', year=selected_year, view='top', sort='subject_credits', order='desc', search=search) }}" class="sort-btn {% if sort_by == 'subject_credits' %}active{% endif %}">Credits</a>
-            <a href="{{ url_for('results.waec_list', year=selected_year, view='top', sort='subject_pass', order='desc', search=search) }}" class="sort-btn {% if sort_by == 'subject_pass' %}active{% endif %}">Pass%</a>
+            <a href="{{ burl('results.waec_list', year=selected_year, view='top', sort='subject_a1', order='desc', search=search) }}" class="sort-btn {% if sort_by == 'subject_a1' %}active{% endif %}">A1</a>
+            <a href="{{ burl('results.waec_list', year=selected_year, view='top', sort='subject_b2', order='desc', search=search) }}" class="sort-btn {% if sort_by == 'subject_b2' %}active{% endif %}">B2</a>
+            <a href="{{ burl('results.waec_list', year=selected_year, view='top', sort='subject_credits', order='desc', search=search) }}" class="sort-btn {% if sort_by == 'subject_credits' %}active{% endif %}">Credits</a>
+            <a href="{{ burl('results.waec_list', year=selected_year, view='top', sort='subject_pass', order='desc', search=search) }}" class="sort-btn {% if sort_by == 'subject_pass' %}active{% endif %}">Pass%</a>
         </div>
     </div>
     <div class="card-body" style="padding: 0; overflow-x: auto;">
@@ -633,8 +633,8 @@
     <div class="card-header">
         <h3 class="card-title">Subject Analysis</h3>
         <div class="sort-btns">
-            <a href="{{ url_for('results.waec_list', year=selected_year, view='subjects', sort='subject_a1', order='desc', search=search) }}" class="sort-btn {% if sort_by == 'subject_a1' %}active{% endif %}">By A1</a>
-            <a href="{{ url_for('results.waec_list', year=selected_year, view='subjects', sort='subject_pass', order='desc', search=search) }}" class="sort-btn {% if sort_by == 'subject_pass' %}active{% endif %}">By Pass%</a>
+            <a href="{{ burl('results.waec_list', year=selected_year, view='subjects', sort='subject_a1', order='desc', search=search) }}" class="sort-btn {% if sort_by == 'subject_a1' %}active{% endif %}">By A1</a>
+            <a href="{{ burl('results.waec_list', year=selected_year, view='subjects', sort='subject_pass', order='desc', search=search) }}" class="sort-btn {% if sort_by == 'subject_pass' %}active{% endif %}">By Pass%</a>
         </div>
     </div>
     <div class="card-body" style="padding: 0; overflow-x: auto;">
@@ -657,7 +657,7 @@
             <tbody>
                 {% for subj in subjects_by_grade %}
                 <tr>
-                    <td><a href="{{ url_for('results.waec_subject', subject=subj.subject, year=selected_year) }}"
+                    <td><a href="{{ burl('results.waec_subject', subject=subj.subject, year=selected_year) }}"
                            style="color:#0d6a4e;font-weight:600" title="Full analysis for {{ subj.subject }}">{{ subj.subject[:15] }} <i class="fas fa-arrow-up-right-from-square" style="font-size:.7em;opacity:.6"></i></a></td>
                     {% for g in grades %}
                     <td><span class="grade-badge grade-{{ g|lower }}">{{ subj.grades[g] }}</span></td>
@@ -692,7 +692,7 @@
 {# Sort links keep every other filter (year, search, subject, grade, min_a1…). #}
 {% macro waec_sort_url(key) -%}
 {%- set a = request.args.to_dict() -%}{%- set _ = a.update({'sort': key, 'view': 'students'}) -%}{%- set _ = a.pop('order', none) -%}
-{{- url_for('results.waec_list', **a) -}}
+{{- burl('results.waec_list', **a) -}}
 {%- endmacro %}
 {% macro waec_sort_th(key, label, title=None, active=None) -%}
 {%- set on = (student_sort == key) if active is none else active -%}
@@ -712,14 +712,14 @@
     </div>
     
     {% if students %}
-    {% if can_write_sub('external_exams', 'waec_delete') %}{{ bulk_bar('bulkDel', url_for('results.delete_waec_bulk'), {'year': selected_year}, 'student', 'WAEC results') }}{% endif %}
+    {% if can_write_sub('external_exams', board.key ~ '_delete') %}{{ bulk_bar('bulkDel', burl('results.delete_waec_bulk'), {'year': selected_year}, 'student', board.name ~ ' results') }}{% endif %}
     <div class="cap-list">
     <!-- Mobile: Card View -->
     <div class="students-list" style="padding: 0.5rem;">
         {% for s in students %}
         <div class="student-card" data-search="{{ (s.name ~ ' ' ~ s.student_id)|lower }}">
             <div class="student-card-header">
-                {% if can_write_sub('external_exams', 'waec_delete') %}{{ bulk_check('bulkDel', s.id, s.name) }}{% endif %}
+                {% if can_write_sub('external_exams', board.key ~ '_delete') %}{{ bulk_check('bulkDel', s.id, s.name) }}{% endif %}
                 <div>
                     <div class="student-name">{{ s.name }}</div>
                     <div class="student-id">{{ s.student_id }}</div>
@@ -751,12 +751,12 @@
                 {% for r in s.results %}<span class="grade-badge grade-{{ r.grade|lower }}" title="{{ r.subject }}">{{ r.grade }}</span>{% endfor %}
             </div>
             <div class="student-actions">
-                <a href="{{ url_for('results.view_waec_student', student_id=s.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-eye"></i></a>
-                {% if can_write_sub('external_exams', 'waec_edit') %}
-                <a href="{{ url_for('results.edit_waec', student_id=s.id, year=selected_year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-edit"></i></a>
+                <a href="{{ burl('results.view_waec_student', student_id=s.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-eye"></i></a>
+                {% if can_write_sub('external_exams', board.key ~ '_edit') %}
+                <a href="{{ burl('results.edit_waec', student_id=s.id, year=selected_year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-edit"></i></a>
                 {% endif %}
-                {% if can_write_sub('external_exams', 'waec_delete') %}
-                <form method="POST" action="{{ url_for('results.delete_waec', student_id=s.id, year=selected_year) }}" style="display: inline;" data-confirm="Delete all WAEC results for {{ s.name }}?">
+                {% if can_write_sub('external_exams', board.key ~ '_delete') %}
+                <form method="POST" action="{{ burl('results.delete_waec', student_id=s.id, year=selected_year) }}" style="display: inline;" data-confirm="Delete all {{ board.name }} results for {{ s.name }}?">
                     <button type="submit" class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button>
                 </form>
                 {% endif %}
@@ -770,7 +770,7 @@
         <table>
             <thead>
                 <tr>
-                    {% if can_write_sub('external_exams', 'waec_delete') %}<th style="width:32px"></th>{% endif %}
+                    {% if can_write_sub('external_exams', board.key ~ '_delete') %}<th style="width:32px"></th>{% endif %}
                     <th>#</th>
                     {{ waec_sort_th('name_desc' if student_sort == 'name' else 'name', 'Student', active=student_sort in ('name', 'name_desc')) }}
                     {{ waec_sort_th('a1', 'A1', 'Most A1s') }}
@@ -786,7 +786,7 @@
             <tbody>
                 {% for s in students %}
                 <tr data-search="{{ (s.name ~ ' ' ~ s.student_id)|lower }}">
-                    {% if can_write_sub('external_exams', 'waec_delete') %}<td>{{ bulk_check('bulkDel', s.id, s.name) }}</td>{% endif %}
+                    {% if can_write_sub('external_exams', board.key ~ '_delete') %}<td>{{ bulk_check('bulkDel', s.id, s.name) }}</td>{% endif %}
                     <td>{{ loop.index }}</td>
                     <td><strong>{{ s.name }}</strong><br><small style="color:#666;">{{ s.student_id }}</small></td>
                     <td><span class="grade-badge grade-a1">{{ s.a1_count }}</span></td>
@@ -798,12 +798,12 @@
                     <td>{% for r in s.results %}<span class="grade-badge grade-{{ r.grade|lower }}" title="{{ r.subject }}">{{ r.grade }}</span>{% endfor %}</td>
                     <td>
                         <div style="display: flex; gap: 0.25rem;">
-                            <a href="{{ url_for('results.view_waec_student', student_id=s.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-eye"></i></a>
-                            {% if can_write_sub('external_exams', 'waec_edit') %}
-                            <a href="{{ url_for('results.edit_waec', student_id=s.id, year=selected_year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-edit"></i></a>
+                            <a href="{{ burl('results.view_waec_student', student_id=s.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-eye"></i></a>
+                            {% if can_write_sub('external_exams', board.key ~ '_edit') %}
+                            <a href="{{ burl('results.edit_waec', student_id=s.id, year=selected_year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-edit"></i></a>
                             {% endif %}
-                            {% if can_write_sub('external_exams', 'waec_delete') %}
-                            <form method="POST" action="{{ url_for('results.delete_waec', student_id=s.id, year=selected_year) }}" style="display: inline;" data-confirm="Delete?">
+                            {% if can_write_sub('external_exams', board.key ~ '_delete') %}
+                            <form method="POST" action="{{ burl('results.delete_waec', student_id=s.id, year=selected_year) }}" style="display: inline;" data-confirm="Delete?">
                                 <button type="submit" class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button>
                             </form>
                             {% endif %}
@@ -825,8 +825,8 @@
     <div style="text-align: center; padding: 2rem; color: #666;">
         <i class="fas fa-file-alt" style="font-size: 2rem; margin-bottom: 0.5rem;"></i>
         <p>No results found</p>
-        {% if can_write_sub('external_exams', 'waec_create') %}
-        <a href="{{ url_for('results.add_waec') }}" class="btn btn-primary btn-sm">Add Results</a>
+        {% if can_write_sub('external_exams', board.key ~ '_create') %}
+        <a href="{{ burl('results.add_waec') }}" class="btn btn-primary btn-sm">Add Results</a>
         {% endif %}
     </div>
     {% endif %}
@@ -839,7 +839,7 @@
         <div style="text-align: center; margin: 0 0 10px 0; padding-bottom: 8px; border-bottom: 2px solid #007bff;">
             <div style="font-size: 17px; font-weight: 800; color: #0f172a; letter-spacing: .3px; line-height: 1.2;">{{ school_brand.name|upper }}</div>
             {% if export_branch %}<div style="font-size: 12px; font-weight: 700; color: #334155; margin-top: 2px;">{{ export_branch|upper }}</div>{% endif %}
-            <div style="font-size: 12px; font-weight: 600; color: #007bff; margin-top: 4px;">WAEC{% if selected_year %} {{ selected_year - 1 }}/{{ selected_year }}{% endif %} RESULTS</div>
+            <div style="font-size: 12px; font-weight: 600; color: #007bff; margin-top: 4px;">{{ board.name }}{% if selected_year %} {{ selected_year - 1 }}/{{ selected_year }}{% endif %} RESULTS</div>
         </div>
         <p id="waecExportSummary" style="text-align: center; color: #666; margin: 0 0 10px 0; font-size: 11px;"></p>
         <table id="waecExportTable" style="width: 100%; border-collapse: collapse; font-size: 11px;">
@@ -854,7 +854,7 @@
 <div id="exportModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999; padding: 0.5rem; overflow-y: auto;">
     <div style="background: white; border-radius: 12px; max-width: 500px; margin: 1rem auto; max-height: calc(100vh - 2rem); overflow-y: auto;">
         <div style="padding: 1rem; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; background: white; z-index: 1;">
-            <h3 style="margin: 0; font-size: 1rem;"><i class="fas fa-file-export"></i> Export WAEC Results</h3>
+            <h3 style="margin: 0; font-size: 1rem;"><i class="fas fa-file-export"></i> Export {{ board.name }} Results</h3>
             <button data-call="closeExportModal" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #666;">&times;</button>
         </div>
         <div style="padding: 1rem;">
@@ -1225,7 +1225,7 @@ function waecClientExport(format) {
                 html += '<div style="max-width:760px;margin:0 auto 16px auto;">' +
                     (multi ? '<div style="color:#cbd5e1;font-size:12px;margin:0 0 4px 2px;">Page ' + (i + 1) + ' of ' + pages.length + '</div>' : '') +
                     '<a href="' + data + '" download="' + fname + '" style="display:inline-block;margin-bottom:6px;padding:7px 16px;background:#007bff;color:white;border-radius:6px;font-size:13px;text-decoration:none;"><i class="fas fa-download"></i> Download</a>' +
-                    '<img src="' + data + '" style="width:100%;border-radius:8px;display:block;" alt="WAEC Results page ' + (i + 1) + '">' +
+                    '<img src="' + data + '" style="width:100%;border-radius:8px;display:block;" alt="{{ board.name }} Results page ' + (i + 1) + '">' +
                     '</div>';
             });
             modal.innerHTML = html;
@@ -1247,7 +1247,7 @@ function generateWAECExport() {
         waecClientExport(format);
         return;
     }
-    var base = "{{ url_for('results.export_waec') }}";
+    var base = "{{ burl('results.export_waec') }}";
     var p = new URLSearchParams();
     p.set('year', selectedYear);
     p.set('format', format);

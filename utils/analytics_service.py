@@ -3,6 +3,7 @@ Comprehensive Analytics Service
 Provides all statistical calculations, metrics, and ML predictions
 """
 import math
+from utils import exam_board as _exam_board
 from utils.helpers import get_active_term
 from collections import defaultdict
 from typing import Dict, List, Tuple
@@ -33,6 +34,7 @@ class AcademicAnalytics:
     @staticmethod
     def get_student_waec_summary(student_id: int, exam_year: int = None) -> Dict:
         """Get comprehensive WAEC summary for a student"""
+        WAECResult = _exam_board.model()   # WAEC or NECO, per route
         query = WAECResult.query.filter_by(student_id=student_id)
         if exam_year:
             query = query.filter_by(exam_year=exam_year)
@@ -115,6 +117,7 @@ class AcademicAnalytics:
     @staticmethod
     def calculate_student_risk_score(student_id: int) -> Dict:
         """Calculate comprehensive risk assessment for a student"""
+        WAECResult = _exam_board.model()   # WAEC or NECO, per route
         student = db.session.get(Student, student_id)
         if not student:
             return None
@@ -123,7 +126,7 @@ class AcademicAnalytics:
         risk_scores = {'academic': 0, 'attendance': 0, 'trend': 0}
         
         # Academic risk from WAEC
-        waec_results = student.waec_results.all()
+        waec_results = _exam_board.results_of(student).all()
         if waec_results:
             latest_year = max(r.exam_year for r in waec_results)
             latest_results = [r for r in waec_results if r.exam_year == latest_year]
@@ -239,6 +242,7 @@ class AcademicAnalytics:
         (A1…F9 counts + %), credit/distinction/pass/fail rates, average grade
         points (A1 = 9 … F9 = 1) and the candidate list per grade. Branch/arm
         scoped. Returns None when there are no results."""
+        WAECResult = _exam_board.model()   # WAEC or NECO, per route
         q = WAECResult.query.filter_by(exam_year=exam_year, subject=subject)
         q = AcademicAnalytics._by_branch(q, WAECResult, branch_id)
         if student_ids is not None:
@@ -350,6 +354,7 @@ class AcademicAnalytics:
     @staticmethod
     def get_waec_school_statistics(exam_year: int, branch_id=None) -> Dict:
         """Get comprehensive school-wide WAEC statistics"""
+        WAECResult = _exam_board.model()   # WAEC or NECO, per route
         results = AcademicAnalytics._by_branch(
             WAECResult.query.filter_by(exam_year=exam_year), WAECResult, branch_id).all()
         if not results:
@@ -441,6 +446,7 @@ class AcademicAnalytics:
         credit rate and the F9 (fail) rate move across years. One point per year
         that has results, oldest→newest, capped to the most recent ``limit_years``.
         Branch-scoped when a branch is given."""
+        WAECResult = _exam_board.model()   # WAEC or NECO, per route
         from collections import defaultdict
         q = WAECResult.query.with_entities(
             WAECResult.exam_year, WAECResult.student_id, WAECResult.subject, WAECResult.grade)
@@ -519,6 +525,7 @@ class AcademicAnalytics:
         """Per-subject WAEC credit-rate (C6+) across years, plus the biggest
         improvers/decliners (latest year vs the year before). Lets a school see
         which subjects are gaining or losing ground, not just the cohort totals."""
+        WAECResult = _exam_board.model()   # WAEC or NECO, per route
         from collections import defaultdict
         q = WAECResult.query.with_entities(
             WAECResult.exam_year, WAECResult.subject, WAECResult.grade)
@@ -573,7 +580,8 @@ class AcademicAnalytics:
         per-subject and whole-cohort summaries, mirroring the mock-WAEC
         broadsheet. Scoped to a branch when given. Returns ``None`` when there
         are no results for the year."""
-        from models import Student, WAECResult
+        WAECResult = _exam_board.model()   # WAEC or NECO, per route
+        from models import Student
         q = WAECResult.query.filter_by(exam_year=exam_year).join(Student)
         if branch_id is not None:
             q = q.filter(Student.branch_id == branch_id)
@@ -760,6 +768,7 @@ class AcademicAnalytics:
     @staticmethod
     def calculate_waec_jamb_correlation(exam_year: int, branch_id=None) -> Dict:
         """Calculate correlation between WAEC and JAMB performance"""
+        WAECResult = _exam_board.model()   # WAEC or NECO, per route
         # Get students with both WAEC and JAMB results for the year
         q = db.session.query(Student).join(
             WAECResult, Student.id == WAECResult.student_id
@@ -780,7 +789,7 @@ class AcademicAnalytics:
         jamb_scores = []
         
         for student in students_with_both:
-            waec = student.waec_results.filter_by(exam_year=exam_year).all()
+            waec = _exam_board.results_of(student).filter_by(exam_year=exam_year).all()
             jamb = student.jamb_results.filter_by(exam_year=exam_year).first()
             
             if waec and jamb and jamb.total_score is not None:
@@ -846,6 +855,7 @@ class AcademicAnalytics:
     @staticmethod
     def get_year_over_year_comparison(branch_id=None) -> Dict:
         """Compare performance metrics across years"""
+        WAECResult = _exam_board.model()   # WAEC or NECO, per route
         years = db.session.query(WAECResult.exam_year).distinct().order_by(WAECResult.exam_year.desc()).all()
         years = [y[0] for y in years][:5]  # Last 5 years
 
@@ -906,6 +916,7 @@ class AcademicAnalytics:
         limit: int = 100
     ) -> List[Dict]:
         """Advanced filtering for students based on multiple criteria"""
+        WAECResult = _exam_board.model()   # WAEC or NECO, per route
         
         # Start with base query
         query = Student.query.filter_by(is_active=True)
@@ -981,11 +992,12 @@ class AcademicAnalytics:
     @staticmethod
     def predict_jamb_score(student_id: int) -> Dict:
         """Predict JAMB score based on WAEC performance"""
+        WAECResult = _exam_board.model()   # WAEC or NECO, per route
         student = db.session.get(Student, student_id)
         if not student:
             return None
         
-        waec_results = student.waec_results.order_by(WAECResult.exam_year.desc()).all()
+        waec_results = _exam_board.results_of(student).order_by(WAECResult.exam_year.desc()).all()
         if not waec_results:
             return {'error': 'No WAEC results available for prediction'}
         
@@ -1028,7 +1040,7 @@ class AcademicAnalytics:
             'score_range': score_range,
             'confidence': round(confidence, 2),
             'performance_level': AcademicAnalytics._jamb_performance_level(int(predicted_score)),
-            'explanation': f"Based on {len(latest_results)} WAEC subjects with average grade points of {avg_points:.1f}. "
+            'explanation': f"Based on {len(latest_results)} {_exam_board.current().name} subjects with average grade points of {avg_points:.1f}. "
                           f"Student has {a1_count} A1 grade(s).",
             'factors': {
                 'waec_avg_points': round(avg_points, 2),

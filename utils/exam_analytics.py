@@ -3,6 +3,7 @@ Enhanced Exam Analytics Service
 Comprehensive statistical analysis for WAEC, JAMB, and Mock JAMB results
 Includes predictive analytics for Mock JAMB -> Real JAMB/WAEC correlation
 """
+from utils import exam_board as _exam_board
 from collections import defaultdict
 import math
 from sqlalchemy.orm import joinedload
@@ -552,6 +553,7 @@ class WAECAnalytics(ExamAnalytics):
     @staticmethod
     def get_year_statistics(year):
         """Get comprehensive statistics for a WAEC year"""
+        WAECResult = _exam_board.model()   # WAEC or NECO, per route
         results = scope_by_student(WAECResult.query.filter_by(exam_year=year), WAECResult).all()
         
         if not results:
@@ -654,6 +656,7 @@ class WAECAnalytics(ExamAnalytics):
     @staticmethod
     def get_student_waec_analysis(student_id, year=None):
         """Get detailed WAEC analysis for a student"""
+        WAECResult = _exam_board.model()   # WAEC or NECO, per route
         query = WAECResult.query.filter_by(student_id=student_id)
         if year:
             query = query.filter_by(exam_year=year)
@@ -707,6 +710,7 @@ class WAECAnalytics(ExamAnalytics):
     @staticmethod
     def compare_years(years=None):
         """Compare WAEC performance across multiple years"""
+        WAECResult = _exam_board.model()   # WAEC or NECO, per route
         if not years:
             years = [y[0] for y in db.session.query(WAECResult.exam_year).distinct().order_by(WAECResult.exam_year.desc()).limit(5).all()]
         
@@ -918,6 +922,7 @@ class WAECJAMBCorrelation(ExamAnalytics):
         Predict JAMB score based on WAEC performance.
         Useful for students who have WAEC results but haven't taken JAMB.
         """
+        WAECResult = _exam_board.model()   # WAEC or NECO, per route
         query = WAECResult.query.filter_by(student_id=student_id)
         if year:
             query = query.filter_by(exam_year=year)
@@ -981,7 +986,7 @@ class WAECJAMBCorrelation(ExamAnalytics):
                                     'Average' if predicted_total >= 180 else
                                     'Below Average',
             },
-            'note': 'This prediction is based on WAEC grades and may vary based on actual JAMB preparation.',
+            'note': f'This prediction is based on {_exam_board.current().name} grades and may vary based on actual JAMB preparation.',
         }
     
     @staticmethod
@@ -1016,6 +1021,7 @@ class WAECJAMBCorrelation(ExamAnalytics):
         Analyze correlation between Mock JAMB and actual WAEC results for students who have both.
         This helps validate and improve predictions.
         """
+        WAECResult = _exam_board.model()   # WAEC or NECO, per route
         # Find students with both Mock JAMB and WAEC results
         mock_students = db.session.query(MockJAMBResult.student_id).distinct().all()
         mock_student_ids = [s[0] for s in mock_students]

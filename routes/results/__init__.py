@@ -189,6 +189,9 @@ def _cached_school_stats(kind, year, branch_id, compute):
     Best-effort: any cache error falls through to a live computation so the hub
     never breaks because of the cache layer."""
     from models.analytics_models import AnalyticsCache
+    from utils import exam_board as _board
+    if _board.is_neco():          # NECO pages reuse the WAEC computations
+        kind = 'neco_' + kind
     key = _stats_cache_key(kind, year, branch_id)
     try:
         hit = AnalyticsCache.get(key)
