@@ -4,6 +4,30 @@ from utils.search import like_term
 from utils.broadsheet_export import _abbr_one
 
 
+# Student-list orderings on the WAEC dashboard: key -> (label, sort key).
+# Distinctions are A1, B2 and B3; credits are A1–C6. Ties end in name.
+WAEC_SORTS = {
+    'name': ('Name A–Z', lambda x: (x['name'].lower(),)),
+    'name_desc': ('Name Z–A', lambda x: (x['name'].lower(),)),
+    'distinctions': ('Most distinctions (A1–B3)', lambda x: (
+        -x['distinction_count'], -x['a1_count'], -x['credit_count'], -x['avg_points'], x['name'].lower())),
+    'a1': ('Most A1s', lambda x: (-x['a1_count'], -x['distinction_count'], -x['credit_count'], x['name'].lower())),
+    'credits': ('Most credits (A1–C6)', lambda x: (
+        -x['credit_count'], -x['distinction_count'], -x['avg_points'], x['name'].lower())),
+    'points': ('Best average points', lambda x: (-x['avg_points'], -x['credit_count'], x['name'].lower())),
+    # Kept for old links; not offered in the dropdown.
+    'b2': ('', lambda x: (-x['b2_count'], x['name'].lower())),
+    'b3': ('', lambda x: (-x['b3_count'], x['name'].lower())),
+}
+
+
+def waec_sort_key(sort_by, order=None):
+    """Normalise ?sort=&order= (incl. the old button links) to a WAEC_SORTS key."""
+    if sort_by == 'name' and order == 'desc':
+        return 'name_desc'
+    return sort_by if sort_by in WAEC_SORTS else 'name'
+
+
 @results_bp.route('/waec')
 @login_required
 def waec_list():
@@ -16,6 +40,7 @@ def waec_list():
     search = request.args.get('search', '').strip()
     sort_by = request.args.get('sort', 'name')
     sort_order = request.args.get('order', 'asc')
+    student_sort = waec_sort_key(sort_by, sort_order)   # the students list's ordering
     view_mode = request.args.get('view', 'students')
     
     years = db.session.query(WAECResult.exam_year).distinct().order_by(WAECResult.exam_year.desc()).all()
@@ -147,6 +172,7 @@ def waec_list():
                 'a1_count': a1_count,
                 'b2_count': b2_count,
                 'b3_count': b3_count,
+                'distinction_count': a1_count + b2_count + b3_count,   # A1–B3
                 'grade_counts': grade_counts,
                 'credit_count': credit_count,
                 'total_points': total_points,
@@ -167,20 +193,9 @@ def waec_list():
             )[:10]
             top_by_grade[grade] = sorted_students
         
-        # Sort students based on parameters
-        if sort_by == 'a1':
-            students_data.sort(key=lambda x: x['a1_count'], reverse=(sort_order == 'desc'))
-        elif sort_by == 'b2':
-            students_data.sort(key=lambda x: x['b2_count'], reverse=(sort_order == 'desc'))
-        elif sort_by == 'b3':
-            students_data.sort(key=lambda x: x['b3_count'], reverse=(sort_order == 'desc'))
-        elif sort_by == 'credits':
-            students_data.sort(key=lambda x: x['credit_count'], reverse=(sort_order == 'desc'))
-        elif sort_by == 'points':
-            students_data.sort(key=lambda x: x['avg_points'], reverse=(sort_order != 'desc'))
-        else:
-            students_data.sort(key=lambda x: x['name'], reverse=(sort_order == 'desc'))
-    
+        # Sort students based on parameters (see WAEC_SORTS)
+        students_data.sort(key=WAEC_SORTS[student_sort][1], reverse=(student_sort == 'name_desc'))
+
     from utils.branch_scope import viewing_branch_id
     if scope_ids is not None:
         # Arm-only view: derive the grade spread from this arm's students and skip
@@ -219,6 +234,8 @@ def waec_list():
         min_credits=min_credits,
         sort_by=sort_by,
         sort_order=sort_order,
+        student_sort=student_sort,
+        waec_sorts=[(k, v[0]) for k, v in WAEC_SORTS.items() if v[0]],
         view_mode=view_mode,
         school_stats=school_stats,
         subject_stats=subject_stats,

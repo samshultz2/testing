@@ -95,3 +95,31 @@ def test_waec_student_page_can_open_and_edit_every_year(app):
     with app.app_context():
         got = {w.exam_year: w.grade for w in WAECResult.query.filter_by(student_id=sid)}
     assert got == {2023: 'B2', 2024: 'C5', 2025: 'B3'}
+
+
+def test_waec_dashboard_sorts_by_name_and_distinctions(app):
+    from models import WAECResult
+    from tests.conftest import enroll_sss3
+    zed, _ = _student(app, 'Sortwaec', 'Zed')      # 2 distinctions
+    amy, _ = _student(app, 'Sortwaec', 'Amy')      # none
+    with app.app_context():
+        for sid, grades in ((zed, ('A1', 'B3', 'C4')), (amy, ('C5', 'C6', 'D7'))):
+            for subj, g in zip(('Mathematics', 'English Language', 'Biology'), grades):
+                db.session.add(WAECResult(student_id=sid, exam_year=2038, subject=subj, grade=g))
+        db.session.commit()
+    for sid in (zed, amy):
+        enroll_sss3(app, sid)
+    c = _admin(app)
+
+    def amy_first(qs):
+        html = c.get(f'/results/waec?year=2038&search=Sortwaec&{qs}').get_data(as_text=True)
+        assert 'id="waecSort"' in html
+        html = html[html.index('id="waecStudentList"'):]
+        return html.index('Sortwaec Amy') < html.index('Sortwaec Zed')
+    assert amy_first('sort=name') is True
+    assert amy_first('sort=name_desc') is False
+    assert amy_first('sort=name&order=desc') is False          # old button links still work
+    assert amy_first('sort=distinctions') is False
+    html = c.get('/results/waec?year=2038&search=Sortwaec&sort=distinctions').get_data(as_text=True)
+    assert '<option value="distinctions" selected>' in html
+    assert 'search=Sortwaec' in html[html.index('id="waecStudentList"'):]  # sort links keep the search

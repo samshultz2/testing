@@ -290,7 +290,7 @@
 
 .student-stats {
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, 1fr);
     gap: 0.35rem;
     text-align: center;
     padding: 0.5rem 0;
@@ -689,16 +689,26 @@
     </div>
 </div>
 
+{# Sort links keep every other filter (year, search, subject, grade, min_a1…). #}
+{% macro waec_sort_url(key) -%}
+{%- set a = request.args.to_dict() -%}{%- set _ = a.update({'sort': key, 'view': 'students'}) -%}{%- set _ = a.pop('order', none) -%}
+{{- url_for('results.waec_list', **a) -}}
+{%- endmacro %}
+{% macro waec_sort_th(key, label, title=None, active=None) -%}
+{%- set on = (student_sort == key) if active is none else active -%}
+<th {% if on %}aria-sort="{{ 'descending' if student_sort == 'name_desc' else 'ascending' }}"{% endif %}><a href="{{ waec_sort_url(key) }}" title="Sort by {{ title or label }}" style="color:inherit;text-decoration:none;white-space:nowrap">{{ label }}{% if on %} <i class="fas fa-sort-{{ 'up' if student_sort == 'name_desc' else 'down' }}" aria-hidden="true"></i>{% endif %}</a></th>
+{%- endmacro %}
 <div class="card" id="waecStudentList">
-    <div class="card-header">
+    <div class="card-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem">
         <span class="card-title">Students ({{ students|length }})</span>
-        <div class="sort-btns">
-            <a href="{{ url_for('results.waec_list', year=selected_year, view='students', sort='a1', order='desc', search=search) }}" class="sort-btn {% if sort_by == 'a1' %}active{% endif %}">A1</a>
-            <a href="{{ url_for('results.waec_list', year=selected_year, view='students', sort='b2', order='desc', search=search) }}" class="sort-btn {% if sort_by == 'b2' %}active{% endif %}">B2</a>
-            <a href="{{ url_for('results.waec_list', year=selected_year, view='students', sort='credits', order='desc', search=search) }}" class="sort-btn {% if sort_by == 'credits' %}active{% endif %}">Credits</a>
-            <a href="{{ url_for('results.waec_list', year=selected_year, view='students', sort='points', order='asc', search=search) }}" class="sort-btn {% if sort_by == 'points' %}active{% endif %}">Avg</a>
-            <a href="{{ url_for('results.waec_list', year=selected_year, view='students', sort='name', order='asc', search=search) }}" class="sort-btn {% if sort_by == 'name' %}active{% endif %}">Name</a>
-        </div>
+        <form method="get" style="display:flex;gap:.4rem;align-items:center;margin:0">
+            {% for k, v in request.args.items() if k not in ('sort', 'order', 'view') %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+            <input type="hidden" name="view" value="students">
+            <label for="waecSort" style="margin:0;font-size:.8rem;color:var(--text-muted)">Sort by</label>
+            <select id="waecSort" name="sort" class="form-control" data-autosubmit style="max-width:220px;font-size:.85rem">
+                {% for k, lab in waec_sorts %}<option value="{{ k }}" {% if k == student_sort %}selected{% endif %}>{{ lab }}</option>{% endfor %}
+            </select>
+        </form>
     </div>
     
     {% if students %}
@@ -723,6 +733,10 @@
                 <div>
                     <div class="student-stat-value" style="color: #17a2b8;">{{ s.b2_count }}</div>
                     <div class="student-stat-label">B2</div>
+                </div>
+                <div>
+                    <div class="student-stat-value">{{ s.distinction_count }}</div>
+                    <div class="student-stat-label">Dist.</div>
                 </div>
                 <div>
                     <div class="student-stat-value" style="color: #007bff;">{{ s.credit_count }}</div>
@@ -758,12 +772,13 @@
                 <tr>
                     {% if can_write_sub('external_exams', 'waec_delete') %}<th style="width:32px"></th>{% endif %}
                     <th>#</th>
-                    <th>Student</th>
-                    <th>A1</th>
-                    <th>B2</th>
-                    <th>B3</th>
-                    <th>Credits</th>
-                    <th>Avg</th>
+                    {{ waec_sort_th('name_desc' if student_sort == 'name' else 'name', 'Student', active=student_sort in ('name', 'name_desc')) }}
+                    {{ waec_sort_th('a1', 'A1', 'Most A1s') }}
+                    {{ waec_sort_th('b2', 'B2', 'Most B2s') }}
+                    {{ waec_sort_th('b3', 'B3', 'Most B3s') }}
+                    {{ waec_sort_th('distinctions', 'Dist.', 'Most distinctions (A1–B3)') }}
+                    {{ waec_sort_th('credits', 'Credits', 'Most credits (A1–C6)') }}
+                    {{ waec_sort_th('points', 'Avg', 'Best average points') }}
                     <th>Grades</th>
                     <th>Actions</th>
                 </tr>
@@ -777,6 +792,7 @@
                     <td><span class="grade-badge grade-a1">{{ s.a1_count }}</span></td>
                     <td><span class="grade-badge grade-b2">{{ s.b2_count }}</span></td>
                     <td><span class="grade-badge grade-b3">{{ s.b3_count }}</span></td>
+                    <td><strong>{{ s.distinction_count }}</strong></td>
                     <td>{{ s.credit_count }}</td>
                     <td>{{ s.avg_points }}</td>
                     <td>{% for r in s.results %}<span class="grade-badge grade-{{ r.grade|lower }}" title="{{ r.subject }}">{{ r.grade }}</span>{% endfor %}</td>
