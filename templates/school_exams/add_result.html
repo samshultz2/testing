@@ -3,7 +3,16 @@
 {% block crumb %} / <span>Add result</span>{% endblock %}
 
 {% block sx_content %}
-{% if not students %}
+{% if not students and hidden_entered %}
+<div class="card"><div class="card-body"><div class="empty-state">
+  <i class="fas fa-circle-check"></i><h3>Every {{ L.class_label }} candidate already has {{ scheme.exam_name }} {{ year }} results</h3>
+  <p>All {{ hidden_entered }} have been entered. To change someone's results, use the edit button on the <a href="{{ url_for(bp ~ '.dashboard', body=body, year=year) }}">dashboard</a>, or pick another year below.</p>
+  <form method="get" class="d-flex gap-2" style="justify-content:center;align-items:flex-end">
+    <div><label class="form-label">Exam year</label><input type="number" name="year" class="form-control" value="{{ year }}" min="2000" max="2100" style="width:110px"></div>
+    <button class="btn btn-secondary btn-sm" type="submit">Load</button>
+  </form>
+</div></div></div>
+{% elif not students %}
 <div class="card"><div class="card-body"><div class="empty-state">
   <i class="fas fa-users"></i><h3>No {{ L.class_label }} students found</h3>
   <p>Create the {{ L.class_label }} class and enrol students for the active term (Academics → Classes). Students promoted out of {{ L.class_label }} last session are included automatically.</p>
@@ -17,6 +26,7 @@
     </select></div>
   <div><label class="form-label">Exam year</label><input type="number" name="year" class="form-control" value="{{ year }}" min="2000" max="2100" style="width:110px"></div>
   <button class="btn btn-secondary btn-sm" type="submit">Load</button>
+  {% if hidden_entered %}<div class="sx-muted" style="flex-basis:100%">{{ hidden_entered }} student(s) who already have {{ scheme.exam_name }} {{ year }} results are not listed — edit them from the <a href="{{ url_for(bp ~ '.dashboard', body=body, year=year) }}">dashboard</a>.</div>{% endif %}
 </div></form>
 
 {% if student_id %}

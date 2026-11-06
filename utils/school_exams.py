@@ -156,6 +156,22 @@ def student_arm_map(level, student_ids):
 # --------------------------------------------------------------------------- #
 # Loading
 # --------------------------------------------------------------------------- #
+def entered_ids(level, body, year, student_ids):
+    """Of ``student_ids``, those who already have results (or a sitting record)
+    for this level / exam body / year — hidden from the "pick a student to
+    enter" lists."""
+    ids = list(student_ids or [])
+    if not ids or not year:
+        return set()
+    out = {r[0] for r in db.session.query(SchoolExamResult.student_id).filter(
+        SchoolExamResult.student_id.in_(ids), SchoolExamResult.level == level,
+        SchoolExamResult.body == body, SchoolExamResult.exam_year == year).distinct()}
+    out |= {r[0] for r in db.session.query(SchoolExamCandidate.student_id).filter(
+        SchoolExamCandidate.student_id.in_(ids), SchoolExamCandidate.level == level,
+        SchoolExamCandidate.body == body, SchoolExamCandidate.exam_year == year).distinct()}
+    return out
+
+
 def years_for(level, body=None):
     q = db.session.query(SchoolExamResult.exam_year).filter(SchoolExamResult.level == level)
     if body:

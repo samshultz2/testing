@@ -194,9 +194,14 @@ def make_blueprint(level):
             cand = SchoolExamCandidate.query.filter_by(
                 student_id=sid, level=level, body=body, exam_year=year).first()
         subjects = list(scheme.subjects) + [s for s in existing if s not in scheme.subjects]
+        # Only offer students still without results for this exam + year; the
+        # student opened via an Edit link stays so their results can be changed.
+        done = svc.entered_ids(level, body, year, allowed)
+        pick = [s for s in students if s.id not in done or s.id == sid]
         return render_template('school_exams/add_result.html', **_ctx(
-            level, bp_name, body, students=students, student_id=sid, year=year,
-            existing=existing, cand=cand, subjects=subjects))
+            level, bp_name, body, students=pick, student_id=sid, year=year,
+            existing=existing, cand=cand, subjects=subjects,
+            hidden_entered=len(done - {sid}), roster_total=len(students)))
 
     # ------------------------------------------------------------------ #
     # Grid entry (whole class at once)
@@ -235,8 +240,16 @@ def make_blueprint(level):
             log_action(f'{bp_name}.grid_save', detail=f'{scheme.exam_name} {year}: '
                        f'{saved_students} student(s), {saved_rows} result(s)')
             flash(f'Saved {saved_rows} result(s) for {saved_students} candidate(s).', 'success')
-            return redirect(url_for(f'{bp_name}.grid_entry', body=body, year=year, col=cols, mode=mode))
+            return redirect(url_for(f'{bp_name}.grid_entry', body=body, year=year, col=cols, mode=mode,
+                                    show=request.values.get('show') or None))
 
+        # Students who already have results for this exam + year are hidden
+        # unless ?show=all (to correct them in the grid).
+        show_all = request.args.get('show') == 'all'
+        done = svc.entered_ids(level, body, year, [s.id for s in students])
+        hidden_entered = 0 if show_all else len(done)
+        if not show_all:
+            students = [s for s in students if s.id not in done]
         ids = [s.id for s in students]
         existing = {}
         for r in SchoolExamResult.query.filter(
@@ -249,7 +262,8 @@ def make_blueprint(level):
         arms = svc.student_arm_map(level, ids)
         return render_template('school_exams/grid_entry.html', **_ctx(
             level, bp_name, body, students=students, year=year, cols=cols, mode=mode,
-            existing=existing, cands=cands, arms=arms))
+            existing=existing, cands=cands, arms=arms, show_all=show_all,
+            hidden_entered=hidden_entered, entered_total=len(done)))
 
     # ------------------------------------------------------------------ #
     # Paste / CSV import

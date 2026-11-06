@@ -135,7 +135,14 @@ def plan(rows, level, year, roster):
     allowed = can_change_roster()
     no_match = f'No {label}'
 
-    # 1. Unmatched names → anyone else active in the school (branch-scoped).
+    # 1. Unmatched names — and names with only a weak match in the class —
+    # are looked up across the rest of the school (branch-scoped), so an exact
+    # match outside the class (e.g. the pupil is still in SSS2) beats a loose
+    # in-class look-alike instead of becoming a duplicate "new" student.
+    for r in rows:
+        if r.get('student') is not None and (r.get('score') or 0) < SCHOOL_WIDE_MATCH:
+            r['_weak'] = (r['student'], r.get('score') or 0)
+            r['student'], r['score'] = None, 0.0
     unmatched = [r for r in rows if r.get('student') is None]
     if unmatched:
         roster_ids = {s.id for s in roster}
@@ -159,6 +166,14 @@ def plan(rows, level, year, roster):
                 row['student'], row['score'] = st, sc
                 row['errors'] = [e for e in row['errors'] if not e.startswith(no_match)
                                  and 'candidate matches' not in e]
+
+    # No better match outside the class: fall back to the weak in-class one
+    # (offered as a suggestion below, never trusted on its own).
+    for r in rows:
+        weak = r.pop('_weak', None)
+        if weak and r.get('student') is None:
+            r['student'], r['score'] = weak
+            r['errors'] = [e for e in r['errors'] if 'candidate matches' not in e]
 
     # 2. Matched but not in the class for that session → move.
     matched = [r for r in rows if r.get('student') is not None]

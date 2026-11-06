@@ -350,6 +350,17 @@ def add_waec():
     )
 
 
+def _review_students(students, year, matched=None):
+    """Student dropdown for the scan / paste review: only students still
+    without WAEC results for ``year``, plus the student the slip matched (so a
+    re-scan can still update them)."""
+    out = students_needing_result(students, WAECResult, year)
+    if (matched is not None and any(s.id == matched.id for s in students)
+            and all(s.id != matched.id for s in out)):
+        out = [matched] + out
+    return out
+
+
 @results_bp.route('/waec/scan', methods=['GET', 'POST'])
 @login_required
 @rate_limited('ocr', max_requests=30, window_minutes=10)
@@ -432,7 +443,7 @@ def scan_waec():
         matched, score = match_student(parsed['name'], students)
 
         return render_template('results/waec_scan_review.html',
-            students=students,
+            students=_review_students(students, parsed.get('year') or _date.today().year, matched),
             subjects=WAEC_SUBJECTS,
             grades=WAEC_GRADES,
             parsed=parsed,
@@ -476,7 +487,8 @@ def paste_waec():
         placement = rp.plan([prow], 'sss3', current_year, students)
         placement['row'] = prow
         return render_template('results/waec_scan_review.html',
-            students=students, subjects=WAEC_SUBJECTS, grades=WAEC_GRADES,
+            students=_review_students(students, current_year, prow.get('student')),
+            subjects=WAEC_SUBJECTS, grades=WAEC_GRADES,
             parsed=parsed, matched=prow.get('student'), match_score=score, preview='',
             current_year=current_year, raw_text=text, placement=placement)
     return render_template('results/waec_paste.html', subjects=WAEC_SUBJECTS, current_year=_date.today().year)

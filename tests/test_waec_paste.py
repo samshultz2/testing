@@ -123,3 +123,28 @@ def test_waec_dashboard_sorts_by_name_and_distinctions(app):
     html = c.get('/results/waec?year=2038&search=Sortwaec&sort=distinctions').get_data(as_text=True)
     assert '<option value="distinctions" selected>' in html
     assert 'search=Sortwaec' in html[html.index('id="waecStudentList"'):]  # sort links keep the search
+
+
+def test_waec_pickers_hide_students_who_already_have_results(app, monkeypatch):
+    from models import WAECResult
+    done, done_name = _student(app, 'Pickdone', 'Ada')
+    todo, _ = _student(app, 'Picktodo', 'Ben')
+    with app.app_context():
+        db.session.add(WAECResult(student_id=done, exam_year=2039, subject='Mathematics', grade='B3'))
+        db.session.commit()
+    import types
+    fn = lambda: Student.query.filter(Student.id.in_([done, todo])).all()
+    for mod in [RR] + [getattr(RR, n) for n in dir(RR) if isinstance(getattr(RR, n), types.ModuleType)]:
+        if hasattr(mod, 'get_sss3_students'):
+            monkeypatch.setattr(mod, 'get_sss3_students', fn, raising=False)
+    c = _admin(app)
+    html = c.get('/results/waec/add?year=2039').get_data(as_text=True)
+    assert f'value="{todo}"' in html and f'value="{done}"' not in html
+    assert f'value="{done}"' in c.get('/results/waec/add?year=2040').get_data(as_text=True)
+    # Paste review: hidden too, unless the slip is for that student.
+    r = c.post('/results/waec/paste', data={'_csrf_token': auth_csrf(c), 'exam_year': 2039,
+               'data': 'Someone Else Entirely\nMathematics, A1'}).get_data(as_text=True)
+    assert f'value="{done}"' not in r and f'value="{todo}"' in r
+    r = c.post('/results/waec/paste', data={'_csrf_token': auth_csrf(c), 'exam_year': 2039,
+               'data': done_name + '\nMathematics, A1'}).get_data(as_text=True)
+    assert f'value="{done}" selected' in r

@@ -265,3 +265,26 @@ def test_dashboard_sorts_alphabetically_and_by_distinction(app):
     assert order('distinctions') is False
     html = c.get('/jss3-exams/?body=state&year=2037&sort=distinctions').get_data(as_text=True)
     assert '<option value="distinctions" selected>' in html and 'aria-sort=' in html
+
+
+def test_entered_students_are_hidden_from_add_and_grid(app):
+    c = _admin(app)
+    done, _ = _student(app, 'Doneentry')
+    todo, _ = _student(app, 'Todoentry')
+    for sid in (done, todo):
+        _enroll(app, 'JSS3', 3, sid)
+    tok = auth_csrf(c)
+    c.post('/jss3-exams/state/add', data={'_csrf_token': tok, 'student_id': done, 'exam_year': 2039,
+           'subject[]': ['Mathematics'], 'score[]': ['60'], 'grade[]': ['']})
+    opt = lambda sid: f'<option value="{sid}"'
+    html = c.get('/jss3-exams/state/add?year=2039').get_data(as_text=True)
+    assert opt(todo) in html and opt(done) not in html and 'are not listed' in html
+    # Another exam body or year still lists them.
+    assert opt(done) in c.get('/jss3-exams/federal/add?year=2039').get_data(as_text=True)
+    assert opt(done) in c.get('/jss3-exams/state/add?year=2040').get_data(as_text=True)
+    # Opening them via Edit keeps them selectable.
+    assert opt(done) in c.get(f'/jss3-exams/state/add?year=2039&student_id={done}').get_data(as_text=True)
+    # Grid: hidden by default, back with ?show=all.
+    grid = c.get('/jss3-exams/state/grid?year=2039').get_data(as_text=True)
+    assert f'exam_number_{todo}' in grid and f'exam_number_{done}' not in grid and 'are hidden' in grid
+    assert f'exam_number_{done}' in c.get('/jss3-exams/state/grid?year=2039&show=all').get_data(as_text=True)

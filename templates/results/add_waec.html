@@ -40,11 +40,25 @@
                 <div class="form-group">
                     <label class="form-label">Session <span class="required">*</span></label>
                     {% if sessions %}
-                    <select name="exam_year" class="form-control" required>
+                    <select name="exam_year" class="form-control" required id="examYearSel">
                         {% for ey, label in sessions %}
                         <option value="{{ ey }}" {{ 'selected' if ey == current_year else '' }}>{{ label }} (exam year {{ ey }})</option>
                         {% endfor %}
                     </select>
+                    <div class="text-muted" style="font-size:.75rem;margin-top:.25rem">Students who already have results for the chosen session are not listed.</div>
+                    <script nonce="{{ csp_nonce }}">
+                    (function () {
+                      /* The student list only offers students still without results for the
+                         chosen session, so reload it when the session changes. */
+                      var sel = document.getElementById('examYearSel');
+                      if (!sel) return;
+                      sel.addEventListener('change', function () {
+                        var u = new URL(window.location.href);
+                        u.searchParams.set('year', sel.value);
+                        window.location.assign(u.toString());
+                      });
+                    })();
+                    </script>
                     {% else %}
                     <input type="number" name="exam_year" class="form-control" min="2000" max="2100" value="{{ current_year }}" required>
                     {% endif %}

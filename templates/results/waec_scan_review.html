@@ -74,7 +74,7 @@ details.raw pre{white-space:pre-wrap;background:var(--gray-50);padding:.75rem;bo
                     <select name="student_id" class="form-control" required id="waecStudentSel">
                         <option value="">Select Student</option>
                         {% if pr and not pr.blocked %}
-                          {% if pr.placement == 'create' %}<option value="new" selected data-roster="new">➕ New student: {{ pr.new_name|join(' ') }}</option>{% endif %}
+                          {% if pr.placement == 'create' %}<option value="new" selected data-roster="new">➕ New student: {{ pr.new_name|select|join(' ') }}</option>{% endif %}
                           {% if pr.suggest %}<option value="{{ pr.suggest.id }}" {% if not pr.suggest_inside %}data-roster="move"{% endif %}>{{ pr.suggest.full_name }} ({{ pr.suggest.student_id }}) — similar name{% if not pr.suggest_inside %}, will be moved into SSS3{% endif %}</option>{% endif %}
                           {% if pr.placement == 'move' %}<option value="{{ pr.student.id }}" selected data-roster="move">{{ pr.student.full_name }} ({{ pr.student.student_id }}) — will be moved into SSS3</option>{% endif %}
                         {% endif %}

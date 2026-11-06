@@ -112,7 +112,7 @@ def test_waec_quick_entry_moves_into_sss3(app):
     sid = _student_in(app, caas['SSS2'], 'Adaeze', 'Rpwaec')
     c = _admin(app)
     tok = auth_csrf(c)
-    data = {'_csrf_token': tok, 'year': YEAR, 'data': 'Rpwaec Adaeze, Eng A1, Maths B2\nRpwnew Chika Ada, Bio C4'}
+    data = {'_csrf_token': tok, 'year': YEAR, 'data': 'Rpwaec Adaeze, Eng A1, Maths B2\nRpwnew Chikarpx Adarpx, Bio C4'}
     html = c.post('/results/waec/quick', data=dict(data, action='preview')).get_data(as_text=True)
     assert 'into SSS3' in html and 'Add to the register (1)' in html
     r = c.post('/results/waec/quick', data=dict(data, action='confirm', approve_roster='1', inc=['1', '2']))
@@ -120,7 +120,7 @@ def test_waec_quick_entry_moves_into_sss3(app):
     assert _active_classes(app, sid) == {'SSS3'}
     with app.app_context():
         new = Student.query.filter_by(surname='Rpwnew').one()
-        assert (new.first_name, new.middle_name) == ('Chika', 'Ada')
+        assert (new.first_name, new.middle_name) == ('Chikarpx', 'Adarpx')
         assert {w.subject: w.grade for w in WAECResult.query.filter_by(student_id=sid, exam_year=YEAR)} == {
             'English Language': 'A1', 'Mathematics': 'B2'}
         assert WAECResult.query.filter_by(student_id=new.id, exam_year=YEAR, subject='Biology').one().grade == 'C4'
@@ -293,3 +293,26 @@ def test_approval_panel_rerenders_with_several_arms_and_keeps_choice(app):
     with app.app_context():
         e = StudentEnrollment.query.filter_by(student_id=sid, is_active=True).one()
         assert e.class_arm_assignment.arm_id == arm2_id
+
+
+def test_exact_match_outside_class_beats_loose_lookalike_inside_it(app):
+    """A pupil still in JSS2 whose name is typed exactly must be MOVED, not
+    added as a duplicate, even when JSS3 holds a loosely similar name."""
+    from tests.test_school_exams import _enroll
+    caas = _setup(app)
+    with app.app_context():                                        # in the live JSS3 roster
+        look = Student(student_id='LA' + uuid.uuid4().hex[:6], first_name='Zed',
+                       surname='Lookalikerp', gender='Male')
+        db.session.add(look); db.session.commit()
+        look_id = look.id
+    _enroll(app, 'JSS3', 3, look_id)                               # shares a word (score ~0.72)
+    real = _student_in(app, caas['JSS2'], 'Precious', 'Lookalikerpx')
+    c = _admin(app)
+    tok = auth_csrf(c)
+    data = {'_csrf_token': tok, 'year': YEAR, 'data': 'Lookalikerpx Precious, Eng A'}
+    html = c.post('/jss3-exams/state/quick', data=dict(data, action='preview')).get_data(as_text=True)
+    assert 'Move into JSS3 (1)' in html and 'Add to the register' not in html
+    c.post('/jss3-exams/state/quick', data=dict(data, action='confirm', approve_roster='1', inc=['1']))
+    with app.app_context():
+        assert Student.query.filter_by(surname='Lookalikerpx').count() == 1   # no duplicate
+    assert _active_classes(app, real) == {'JSS3'}

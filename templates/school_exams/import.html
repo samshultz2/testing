@@ -33,7 +33,7 @@ STU002,Musa Bello,BECE/123/002,55,A,48,</pre>
       <thead><tr><th>Line</th><th>Candidate</th>{% for s in preview.subjects %}<th>{{ s }}</th>{% endfor %}<th>Sitting</th></tr></thead>
       <tbody>{% for r in preview.rows %}{% set m = {} %}{% for subj, sc, gr in r.subjects %}{% set _ = m.update({subj: (gr or scheme.grade_from_score(sc|float)) ~ ((' (' ~ sc ~ ')') if sc else '')}) %}{% endfor %}
         <tr><td>{{ r.line }}</td><td>
-          {% if r.placement == 'create' and not r.blocked %}<span class="badge badge-info">new</span> <strong>{{ r.new_name|join(' ') }}</strong>{% if r.suggest %} <span class="sx-muted">(or {{ r.suggest.full_name }}?)</span>{% endif %}
+          {% if r.placement == 'create' and not r.blocked %}<span class="badge badge-info">new</span> <strong>{{ r.new_name|select|join(' ') }}</strong>{% if r.suggest %} <span class="sx-muted">(or {{ r.suggest.full_name }}?)</span>{% endif %}
           {% elif r.student %}<strong>{{ r.student.full_name }}</strong> <span class="sx-muted">{{ r.student.student_id }}</span>{% if r.placement == 'move' and not r.blocked %} <span class="badge badge-info">move to {{ L.class_label }}</span>{% else %} <span class="badge badge-success">ready</span>{% endif %}
           {% else %}<span class="badge badge-danger">not found</span> {{ r.name }}{% endif %}
           {% for e in r.errors %}<div class="text-sm" style="color:var(--danger)">{{ e }}</div>{% endfor %}

@@ -27,6 +27,7 @@
   <div class="card-body">
     <form method="get">
       <input type="hidden" name="body" value="{{ body }}">
+      {% if show_all %}<input type="hidden" name="show" value="all">{% endif %}
       <div class="d-flex gap-2 mb-2" style="flex-wrap:wrap;align-items:flex-end">
         <div><label class="form-label">Exam year</label><input type="number" name="year" value="{{ year }}" class="form-control" style="width:110px"></div>
         <div><label class="form-label">Enter</label><select name="mode" class="form-control">
@@ -42,7 +43,19 @@
   </div>
 </details>
 
-{% if not students %}
+{% set _show_url = url_for(bp ~ '.grid_entry', body=body, year=year, col=cols, mode=mode, show='all') %}
+{% set _hide_url = url_for(bp ~ '.grid_entry', body=body, year=year, col=cols, mode=mode) %}
+{% if hidden_entered %}
+<div class="sx-muted mb-2"><i class="fas fa-eye-slash"></i> {{ hidden_entered }} student(s) who already have {{ scheme.exam_name }} {{ year }} results are hidden. <a href="{{ _show_url }}">Show them to correct their results</a></div>
+{% elif show_all and entered_total %}
+<div class="sx-muted mb-2"><i class="fas fa-eye"></i> Showing everyone, including the {{ entered_total }} already entered. <a href="{{ _hide_url }}">Hide students who already have results</a></div>
+{% endif %}
+{% if not students and hidden_entered %}
+<div class="card"><div class="card-body"><div class="empty-state">
+  <i class="fas fa-circle-check"></i><h3>Every {{ L.class_label }} candidate already has {{ scheme.exam_name }} {{ year }} results</h3>
+  <p><a href="{{ _show_url }}">Show all {{ hidden_entered }}</a> to correct results, or choose another year above.</p>
+</div></div></div>
+{% elif not students %}
 <div class="card"><div class="card-body"><div class="empty-state">
   <i class="fas fa-users"></i><h3>No {{ L.class_label }} students</h3>
   <p>Set up the {{ L.class_label }} class and enrol students for the active term to enter results.</p>
