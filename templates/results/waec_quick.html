@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}WAEC Quick Entry - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('results.waec_list') }}">WAEC</a> / <span>Quick entry</span>{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>WAEC Quick Entry</h1>
+    <p class="text-muted text-sm">Enter many SSS3 candidates at once — one line each.</p>
+  </div>
+  <div class="page-header-actions">
+    <a href="{{ url_for('results.add_waec') }}" class="btn btn-secondary btn-sm"><i class="fas fa-keyboard"></i> One student (form)</a>
+    <a href="{{ url_for('results.waec_list', year=year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back to WAEC</a>
+  </div>
+</div>
+{% with example="John Caleb Matthew, Eng A1, Maths B2, Biology C4, Civic Education B3\nAda Obi, English Language C5, Mathematics A1, Physics B3, Chemistry C6",
+        grade_note="WAEC grades are A1, B2, B3, C4, C5, C6, D7, E8 and F9.",
+        exam_label="SSS3" %}
+{% include "components/quick_results.html" %}
+{% endwith %}
+{% endblock %}

@@ -558,7 +558,7 @@ RESTRICTED_GRANTS = {'results.cards': 'central',
 # gets its own action sub-sections so access can be granted per level.
 _SCHOOL_EXAM_ACTIONS = {
     'view': ('dashboard', 'analytics', 'compare', 'subject', 'student'),
-    'create': ('add_result', 'grid_entry', 'import_results'),
+    'create': ('add_result', 'grid_entry', 'import_results', 'quick_entry'),
     'delete': ('delete_student_year',),
     'export': ('export',),
     'settings': ('settings',),
@@ -966,7 +966,7 @@ _SUBSECTION_ENDPOINTS = {
         'waec_view': {'waec_list', 'waec_subject', 'view_waec_student', 'waec_analytics',
                       'waec_student_analysis', 'api_waec_grade_distribution',
                       'api_waec_subject_stats'},
-        'waec_create': {'add_waec', 'scan_waec', 'paste_waec'},
+        'waec_create': {'add_waec', 'scan_waec', 'paste_waec', 'waec_quick_entry'},
         'waec_edit': {'edit_waec'},
         'waec_delete': {'delete_waec', 'delete_waec_single'},
         'waec_export': {'export_waec'},
@@ -1966,6 +1966,7 @@ def exam_student_scope():
 _SSS3_EXAM_ENDPOINTS = {
     'results.index',
     'results.waec_list', 'results.add_waec', 'results.scan_waec', 'results.paste_waec',
+    'results.waec_quick_entry',
     'results.view_waec_student', 'results.edit_waec', 'results.waec_student_analysis',
     'results.jamb_list', 'results.add_jamb', 'results.scan_jamb', 'results.paste_jamb',
     'results.scan_batch', 'results.view_jamb_student', 'results.edit_jamb',

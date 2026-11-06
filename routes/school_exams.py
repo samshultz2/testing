@@ -278,6 +278,41 @@ def make_blueprint(level):
             level, bp_name, body, year=year, text=text, preview=preview))
 
     # ------------------------------------------------------------------ #
+    # Quick entry: "Name, Eng A, Maths B" — one line per candidate
+    # ------------------------------------------------------------------ #
+    @bp.route('/<body>/quick', methods=['GET', 'POST'])
+    @login_required
+    def quick_entry(body):
+        from utils.quick_results import parse_quick_lines, school_exam_spec
+        _body_or_404(body)
+        scheme = get_scheme(level, body)
+        year = request.values.get('year', type=int) or _default_year(svc.years_for(level, body))
+        text = request.form.get('data', '')
+        preview = None
+        if request.method == 'POST':
+            students = svc.level_students(level)
+            preview = parse_quick_lines(text, students,
+                                        school_exam_spec(scheme, L['class_label']))
+            if request.form.get('action') == 'confirm' and preview['n_ready']:
+                saved = cands = 0
+                for row in preview['rows']:
+                    if row['student'] is None or not row['items']:
+                        continue
+                    saved += svc.save_student_results(
+                        scheme, row['student'].id, year,
+                        [(subj, score, grade) for subj, score, grade, _raw in row['items']])
+                    cands += 1
+                db.session.commit()
+                log_action(f'{bp_name}.quick_entry', detail=f'{scheme.exam_name} {year}: '
+                           f'{cands} candidate(s), {saved} result(s)')
+                flash(f'Saved {saved} {scheme.exam_name} result(s) for {cands} candidate(s).',
+                      'success')
+                return redirect(url_for(f'{bp_name}.dashboard', body=body, year=year))
+        return render_template('school_exams/quick.html', **_ctx(
+            level, bp_name, body, year=year, text=text, preview=preview,
+            roster_count=len(svc.level_students(level))))
+
+    # ------------------------------------------------------------------ #
     # Student record
     # ------------------------------------------------------------------ #
     @bp.route('/<body>/student/<int:student_id>')

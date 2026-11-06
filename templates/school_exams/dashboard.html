@@ -7,6 +7,7 @@
 {% set k = stats.kpis %}
 <div class="d-flex gap-2 mb-3" style="flex-wrap:wrap">
   <a href="{{ url_for(bp ~ '.grid_entry', body=body, year=year) }}" class="btn btn-primary btn-sm"><i class="fas fa-table-cells"></i> Enter results for the class</a>
+  <a href="{{ url_for(bp ~ '.quick_entry', body=body, year=year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-bolt"></i> Quick entry (Name, Eng A, Maths B)</a>
   <a href="{{ url_for(bp ~ '.add_result', body=body, year=year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-plus"></i> Add one candidate</a>
   <a href="{{ url_for(bp ~ '.import_results', body=body, year=year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-paste"></i> Paste / CSV</a>
   {% if k.candidates %}

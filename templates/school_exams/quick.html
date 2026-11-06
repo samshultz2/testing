@@ -1,0 +1,12 @@
+{% extends "school_exams/_base.html" %}
+{% block page_title %}Quick entry · {{ scheme.exam_name }}{% endblock %}
+{% block crumb %} / <span>Quick entry</span>{% endblock %}
+{% block sx_content %}
+{% set g = scheme.grades %}
+{% set s = scheme.subjects %}
+{% with example="John Caleb Matthew, " ~ (s[0] if s else 'Eng') ~ " " ~ g[0] ~ ", Maths " ~ g[1] ~ ", " ~ (s[2] if s|length > 2 else 'Social Studies') ~ " " ~ g[2 if g|length > 2 else 1] ~ "\nAda Obi, Eng " ~ g[1] ~ ", Mathematics " ~ g[0] ~ ", " ~ (s[3] if s|length > 3 else 'Civic Education') ~ " 64",
+        grade_note=scheme.exam_name ~ " uses plain letter grades (" ~ g|join(', ') ~ "), not WAEC's A1/B2… You can also type a score (e.g. Maths 72) and the grade is worked out from your grade bands.",
+        grades=g, exam_label=L.class_label %}
+{% include "components/quick_results.html" %}
+{% endwith %}
+{% endblock %}

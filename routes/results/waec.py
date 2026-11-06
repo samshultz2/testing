@@ -457,6 +457,47 @@ def paste_waec():
     return render_template('results/waec_paste.html', subjects=WAEC_SUBJECTS, current_year=_date.today().year)
 
 
+@results_bp.route('/waec/quick', methods=['GET', 'POST'])
+@login_required
+def waec_quick_entry():
+    """Quick entry for many SSS3 candidates at once — one line each, e.g.
+    ``John Caleb Matthew, Eng A1, Maths B2``. Preview first, then save."""
+    from utils.quick_results import parse_quick_lines, waec_spec
+    from utils.helpers import session_exam_year
+    students = get_sss3_students()
+    year = request.values.get('year', type=int) or session_exam_year() or _date.today().year
+    text = request.form.get('data', '')
+    preview = None
+    if request.method == 'POST':
+        preview = parse_quick_lines(text, students, waec_spec())
+        if request.form.get('action') == 'confirm' and preview['n_ready']:
+            saved = 0
+            touched = []
+            for row in preview['rows']:
+                st = row['student']
+                if st is None or not row['items'] or not _student_in_scope(st.id):
+                    continue
+                for subject, _score, grade, _raw in row['items']:
+                    r = WAECResult.query.filter_by(student_id=st.id, exam_year=year,
+                                                   subject=subject).first()
+                    if r:
+                        r.grade = grade
+                    else:
+                        db.session.add(WAECResult(student_id=st.id, exam_year=year,
+                                                  subject=subject, grade=grade))
+                    saved += 1
+                touched.append(st.id)
+            db.session.commit()
+            for sid in touched:
+                recompute_student_safe(sid)
+            log_action('results.waec_quick_entry', detail=f'{year}: {saved} result(s), '
+                       f'{len(touched)} candidate(s)')
+            flash(f'Saved {saved} WAEC result(s) for {len(touched)} candidate(s).', 'success')
+            return redirect(url_for('results.waec_list', year=year))
+    return render_template('results/waec_quick.html', text=text, year=year, preview=preview,
+                           grades=WAEC_GRADES, roster_count=len(students))
+
+
 @results_bp.route('/waec/student/<int:student_id>')
 @login_required
 def view_waec_student(student_id):
