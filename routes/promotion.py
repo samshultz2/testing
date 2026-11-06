@@ -200,46 +200,121 @@ def change_graduate_status(student_id):
     return _ok(f'Status updated to "{new_status}".', prof_url)
 
 
+def _sss3_cohort(session_id):
+    """Active students enrolled in SSS3 in any term of ``session_id``
+    (branch-scoped), sorted by name — the candidates for batch graduation."""
+    from models import ClassArmAssignment, StudentEnrollment, Term
+    from utils.helpers import get_sss3_class
+    cls = get_sss3_class()
+    if not cls or not session_id:
+        return []
+    q = (Student.query
+         .join(StudentEnrollment, StudentEnrollment.student_id == Student.id)
+         .join(ClassArmAssignment, ClassArmAssignment.id == StudentEnrollment.class_arm_assignment_id)
+         .join(Term, Term.id == ClassArmAssignment.term_id)
+         .filter(ClassArmAssignment.class_id == cls.id, Term.session_id == session_id,
+                 StudentEnrollment.is_active == True, Student.is_active == True)   # noqa: E712
+         .distinct())
+    return sorted(scope_query(q, Student).all(),
+                  key=lambda s: ((s.surname or '').lower(), (s.first_name or '').lower()))
+
+
+def _session_last_day(sess):
+    """The last day of an academic session: its end date, else the latest
+    end date of its terms. None when neither is set."""
+    from models import Term
+    if sess is None:
+        return None
+    if sess.end_date:
+        return sess.end_date
+    ends = [t.end_date for t in Term.query.filter_by(session_id=sess.id).all() if t.end_date]
+    return max(ends) if ends else None
+
+
+def _chosen_session():
+    sid = request.values.get('session_id', type=int)
+    sess = db.session.get(AcademicSession, sid) if sid else None
+    return sess or get_active_session()
+
+
 @promotion_bp.route('/graduate-sss3/preview')
 @login_required
 def graduate_sss3_preview():
-    """Review which SSS3 students will be graduated before committing."""
-    enrolled = get_sss3_enrolled_students()
-    students = [s for s in enrolled if not s.is_graduated]
-    already = [s for s in enrolled if s.is_graduated]
+    """Batch graduation: pick the session, tick the SSS3 students to graduate
+    and choose the graduation date (last day of that session, or today)."""
+    sess = _chosen_session()
+    cohort = _sss3_cohort(sess.id) if sess else []
+    students = [s for s in cohort if not s.is_graduated]
+    already = [s for s in cohort if s.is_graduated]
+    last_day = _session_last_day(sess)
+    today = timeutil.today()
     return _render({
         'page': 'graduate_preview', 'already_count': len(already),
         'confirm_url': url_for('promotion.graduate_sss3'),
-        'urls': {'graduates': url_for('promotion.graduates_list')},
-        'students': [{'student_id': s.student_id, 'full_name': s.full_name, 'gender': s.gender}
-                     for s in students],
+        'preview_url': url_for('promotion.graduate_sss3_preview'),
+        'urls': {'graduates': url_for('promotion.graduates_list'),
+                 'sessions': url_for('academics.sessions_list')},
+        'sessions': _sessions_json(),
+        'session': {'id': sess.id, 'name': sess.name} if sess else None,
+        'session_end': last_day.isoformat() if last_day else None,
+        'session_end_label': last_day.strftime('%d %B %Y') if last_day else None,
+        'today': today.isoformat(), 'today_label': today.strftime('%d %B %Y'),
+        'students': [{'id': s.id, 'student_id': s.student_id, 'full_name': s.full_name,
+                      'gender': s.gender} for s in students],
     })
 
 
 @promotion_bp.route('/graduate-sss3', methods=['POST'])
 @login_required
 def graduate_sss3():
-    """Mark every current SSS3 student (active term) as a graduate in one click."""
-    active_session = get_active_session()
-    students = get_sss3_enrolled_students()
-    graduated = 0
+    """Graduate SSS3 students in one go.
+
+    Form fields: ``session_id`` (default: active session), ``student_ids``
+    (repeated; default: every not-yet-graduated SSS3 student of that session)
+    and ``date_mode`` — ``session_end`` (last day of that session) or
+    ``today`` (the day the graduation is processed, the default)."""
+    back = url_for('promotion.graduate_sss3_preview')
+    sess = _chosen_session()
+    if sess is None:
+        return _err('Set up an academic session first.', back)
+    cohort = {s.id: s for s in _sss3_cohort(sess.id) if not s.is_graduated}
+    raw_ids = request.form.getlist('student_ids')
+    if raw_ids:
+        wanted = set()
+        for v in raw_ids:
+            try:
+                wanted.add(int(v))
+            except (TypeError, ValueError):
+                pass
+        students = [cohort[i] for i in wanted if i in cohort]   # only real SSS3 candidates
+    else:
+        students = list(cohort.values())
+    mode = request.form.get('date_mode') or 'today'
+    if mode == 'session_end':
+        grad_date = _session_last_day(sess)
+        if grad_date is None:
+            return _err(f'{sess.name} has no end date — set it under Academics → Sessions, '
+                        f'or choose "the day the graduation is processed".', back)
+    elif mode == 'today':
+        grad_date = timeutil.today()
+    else:
+        return _err('Choose the graduation date.', back)
+    if not students:
+        return _err('Tick at least one student to graduate.', back)
     try:
         for student in students:
-            if not student.is_graduated:
-                student.is_graduated = True
-                student.graduation_date = timeutil.today()
-                student.graduate_status = student.graduate_status or 'Graduated'
-                if active_session:
-                    student.graduation_session_id = active_session.id
-                graduated += 1
+            student.is_graduated = True
+            student.graduation_date = grad_date
+            student.graduate_status = student.graduate_status or 'Graduated'
+            student.graduation_session_id = sess.id
         db.session.commit()
-        log_action('graduate_sss3', f'{graduated} students')
-        msg = (f'{graduated} SSS3 student(s) marked as graduates.' if graduated
-               else 'No new SSS3 students to graduate.')
-        return _ok(msg, url_for('promotion.graduates_list'))
+        log_action('graduate_sss3', f'{len(students)} students, {sess.name}, '
+                   f'graduated {grad_date.isoformat()} ({mode})')
+        return _ok(f'{len(students)} SSS3 student(s) graduated ({sess.name}, graduation date '
+                   f'{grad_date.strftime("%d %b %Y")}).', url_for('promotion.graduates_list'))
     except Exception as e:
         db.session.rollback()
-        return _err(f'Error: {str(e)}', url_for('promotion.graduates_list'))
+        return _err(f'Error: {str(e)}', back)
 
 
 @promotion_bp.route('/graduates/<int:student_id>/document/<doc_type>')

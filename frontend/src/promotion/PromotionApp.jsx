@@ -395,7 +395,7 @@ function Graduates({ d }) {
         {d.doc_templates_url && <a href={d.doc_templates_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-swatchbook" /> Designs</a>}
         {d.verifications_url && <a href={d.verifications_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-shield-halved" /> Verifications</a>}
         {d.compare_url && <a href={d.compare_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-chart-column" /> Compare with SSS3</a>}
-        {canWrite(d, 'graduates_sss3') && <a href={d.preview_url} className="btn btn-success"><i aria-hidden="true" className="fas fa-user-graduate" /> Graduate current SSS3</a>}
+        {canWrite(d, 'graduates_sss3') && <a href={d.preview_url} className="btn btn-success"><i aria-hidden="true" className="fas fa-user-graduate" /> Batch graduate</a>}
       </>} />
 
       <div className="stats-grid mb-3">
@@ -488,32 +488,82 @@ function Graduates({ d }) {
   );
 }
 
-// ---- Graduate preview ------------------------------------------------------
+// ---- Batch graduation ------------------------------------------------------
+// Pick the session, tick the SSS3 students to graduate and choose the
+// graduation date: the last day of that session, or the day it's processed.
 function GraduatePreview({ d, notify }) {
   const nav = useNav();
   const [busy, setBusy] = useState(false);
+  const [picked, setPicked] = useState(() => new Set(d.students.map((s) => s.id)));
+  const [mode, setMode] = useState(d.session_end ? 'session_end' : 'today');
+  const [q, setQ] = useState('');
+  const shown = useMemo(() => {
+    const t = q.trim().toLowerCase();
+    return t ? d.students.filter((s) => (s.full_name + ' ' + s.student_id).toLowerCase().includes(t)) : d.students;
+  }, [q, d.students]);
+  const allShownPicked = shown.length > 0 && shown.every((s) => picked.has(s.id));
+  const toggle = (id) => setPicked((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n; });
+  const toggleShown = () => setPicked((p) => {
+    const n = new Set(p);
+    shown.forEach((s) => (allShownPicked ? n.delete(s.id) : n.add(s.id)));
+    return n;
+  });
+  const dateLabel = mode === 'session_end' ? d.session_end_label : d.today_label;
   const doGraduate = async () => {
-    if (!await confirm(`Mark these ${d.students.length} SSS3 student(s) as graduates?`)) return;
+    const ids = d.students.filter((s) => picked.has(s.id)).map((s) => s.id);
+    if (!ids.length) { notify('error', 'Tick at least one student to graduate.'); return; }
+    if (!await confirm(`Graduate ${ids.length} SSS3 student(s) of ${d.session ? d.session.name : 'this session'}? Their graduation date will be ${dateLabel}.`)) return;
     setBusy(true);
-    const r = await submitJson(d.confirm_url, {});
+    const r = await submitJson(d.confirm_url, { session_id: d.session && d.session.id, date_mode: mode, student_ids: ids });
     setBusy(false);
     if (r.ok) nav.go(r.redirect); else notify('error', r.error || 'Could not graduate students.');
   };
+  const pickSession = (e) => nav.go(d.preview_url + '?session_id=' + encodeURIComponent(e.target.value));
   return (
     <>
-      <PageHeader title={<><i aria-hidden="true" className="fas fa-user-graduate" /> Graduate SSS3 — Review</>}
-        actions={<a href={d.urls.graduates} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</a>} />
-      <div className="card"><div className="card-header"><h3>Will be graduated ({d.students.length})</h3></div>
+      <PageHeader title={<><i aria-hidden="true" className="fas fa-user-graduate" /> Batch graduate SSS3</>}
+        actions={<a href={d.urls.graduates} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-arrow-left" /> Graduates</a>} />
+      <div className="card"><div className="card-body" style={{ display: 'grid', gap: '1rem', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
+        <div className="form-group" style={{ margin: 0 }}>
+          <label className="form-label" htmlFor="gradSess">SSS3 class of session</label>
+          <select id="gradSess" className="form-control" value={d.session ? d.session.id : ''} onChange={pickSession}>
+            {d.sessions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+          </select>
+        </div>
+        <fieldset style={{ border: 0, margin: 0, padding: 0 }}>
+          <legend className="form-label" style={{ marginBottom: '.35rem' }}>Graduation date</legend>
+          <label style={{ display: 'flex', gap: '.5rem', alignItems: 'flex-start', marginBottom: '.4rem', opacity: d.session_end ? 1 : 0.55 }}>
+            <input type="radio" name="gradMode" value="session_end" checked={mode === 'session_end'} disabled={!d.session_end} onChange={() => setMode('session_end')} />
+            <span>Last day of {d.session ? d.session.name : 'the session'}{' '}
+              {d.session_end ? <strong>— {d.session_end_label}</strong>
+                : <span className="text-muted text-sm">(no end date set — <a href={d.urls.sessions}>set it under Sessions</a>)</span>}</span>
+          </label>
+          <label style={{ display: 'flex', gap: '.5rem', alignItems: 'flex-start' }}>
+            <input type="radio" name="gradMode" value="today" checked={mode === 'today'} onChange={() => setMode('today')} />
+            <span>The day the graduation is processed <strong>— {d.today_label}</strong></span>
+          </label>
+        </fieldset>
+      </div></div>
+
+      <div className="card"><div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '.5rem' }}>
+        <h3>SSS3 students not yet graduated ({d.students.length})</h3>
+        {d.students.length > 0 && <input type="search" className="form-control" style={{ maxWidth: 240 }} placeholder="Search name or ID" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search students" />}
+      </div>
         <div className="card-body">
           {d.students.length ? (<>
             <div className="table-container" style={{ border: 'none' }}><table className="data-table">
-              <thead><tr><th>#</th><th>Student ID</th><th>Name</th><th>Gender</th></tr></thead>
-              <tbody>{d.students.map((s, i) => <tr key={i}><td>{i + 1}</td><td>{s.student_id}</td><td>{s.full_name}</td><td>{s.gender}</td></tr>)}</tbody>
+              <thead><tr>
+                <th style={{ width: 36 }}><input type="checkbox" checked={allShownPicked} onChange={toggleShown} aria-label="Select all shown students" /></th>
+                <th>#</th><th>Student ID</th><th>Name</th><th>Gender</th></tr></thead>
+              <tbody>{shown.map((s, i) => (
+                <tr key={s.id} onClick={() => toggle(s.id)} style={{ cursor: 'pointer' }}>
+                  <td><input type="checkbox" checked={picked.has(s.id)} onChange={() => toggle(s.id)} onClick={(e) => e.stopPropagation()} aria-label={'Graduate ' + s.full_name} /></td>
+                  <td>{i + 1}</td><td>{s.student_id}</td><td>{s.full_name}</td><td>{s.gender}</td></tr>))}</tbody>
             </table></div>
-            {canWrite(d, 'graduates_sss3') && <button type="button" className="btn btn-primary" style={{ marginTop: '1rem' }} disabled={busy} onClick={doGraduate}>
-              <i aria-hidden="true" className="fas fa-user-graduate" /> Confirm — graduate {d.students.length} student(s)</button>}
-          </>) : <Empty icon="fa-circle-check" title=""><p>No new SSS3 students to graduate — they're all already graduated, or no SSS3 class is set up for the active term.</p></Empty>}
-          {d.already_count > 0 && <p className="text-muted text-sm" style={{ marginTop: '1rem' }}><i aria-hidden="true" className="fas fa-info-circle" /> {d.already_count} SSS3 student(s) are already graduates and will be skipped.</p>}
+            {canWrite(d, 'graduates_sss3') && <button type="button" className="btn btn-primary" style={{ marginTop: '1rem' }} disabled={busy || picked.size === 0} onClick={doGraduate}>
+              <i aria-hidden="true" className="fas fa-user-graduate" /> Graduate {picked.size} student(s) — graduation date {dateLabel}</button>}
+          </>) : <Empty icon="fa-circle-check" title=""><p>No SSS3 students to graduate for {d.session ? d.session.name : 'this session'} — they're all already graduated, or no SSS3 class is set up for that session.</p></Empty>}
+          {d.already_count > 0 && <p className="text-muted text-sm" style={{ marginTop: '1rem' }}><i aria-hidden="true" className="fas fa-info-circle" /> {d.already_count} SSS3 student(s) of this session are already graduates and are not listed.</p>}
         </div></div>
     </>
   );
