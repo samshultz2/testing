@@ -331,3 +331,13 @@ def test_broadsheet_page_and_exports_like_waec(app):
         with app.app_context():
             RateLimitHit.query.filter(RateLimitHit.id > top).delete(synchronize_session=False)
             db.session.commit()
+
+
+def test_add_result_student_dropdown_is_searchable(app):
+    c = _admin(app)
+    for path in ('/jss3-exams/federal/add', '/jss3-exams/state/add', '/basic6-exams/state/add',
+                 '/basic6-exams/federal/add'):
+        html = c.get(path).get_data(as_text=True)
+        if 'id="sxStudentSel"' not in html:          # no students on this roster yet
+            continue
+        assert '.ss-wrap' in html and 'Search name or admission no.' in html, path

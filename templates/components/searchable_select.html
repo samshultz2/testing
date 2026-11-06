@@ -1,0 +1,98 @@
+{# Searchable dropdown: progressively enhances a normal <select> into a
+   type-to-search combobox. The <select> stays in the form (hidden) and is the
+   source of truth — picking an item sets its value and fires "change", so
+   data-autosubmit and normal form posts keep working. Without JavaScript the
+   plain <select> shows as before.
+
+   Usage:  {% from "components/searchable_select.html" import searchable_select %}
+           {{ searchable_select('studentSel', 'Search name or admission no.…') }}
+   (call it after the <select id="studentSel"> in the page). #}
+{% macro searchable_select(select_id, placeholder='Type to search…') -%}
+<style>
+.ss-wrap{position:relative;min-width:280px}
+.ss-wrap .ss-input{width:100%}
+.ss-list{position:absolute;left:0;right:0;top:calc(100% + 2px);z-index:50;max-height:300px;overflow:auto;
+  background:var(--bg-card);border:1px solid var(--border-color);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);
+  margin:0;padding:.25rem 0;list-style:none}
+.ss-list[hidden]{display:none}
+.ss-list li{padding:.45rem .7rem;cursor:pointer;font-size:.9rem}
+.ss-list li[aria-selected="true"],.ss-list li:hover{background:var(--gray-100)}
+.ss-list li.ss-empty{color:var(--text-muted);cursor:default}
+.ss-list mark{background:transparent;color:inherit;font-weight:700;text-decoration:underline}
+</style>
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var sel = document.getElementById({{ select_id|tojson }});
+  if (!sel || sel.dataset.ssDone) return;
+  sel.dataset.ssDone = '1';
+  var uid = 'ss-' + sel.id;
+  var wrap = document.createElement('div'); wrap.className = 'ss-wrap';
+  var input = document.createElement('input');
+  input.type = 'text'; input.className = 'form-control ss-input'; input.autocomplete = 'off';
+  input.placeholder = {{ placeholder|tojson }};
+  input.setAttribute('role', 'combobox'); input.setAttribute('aria-autocomplete', 'list');
+  input.setAttribute('aria-expanded', 'false'); input.setAttribute('aria-controls', uid + '-list');
+  var lbl = sel.id && document.querySelector('label[for="' + sel.id + '"]');
+  if (lbl) { lbl.setAttribute('for', uid + '-input'); }
+  input.id = uid + '-input';
+  var list = document.createElement('ul'); list.id = uid + '-list'; list.className = 'ss-list';
+  list.setAttribute('role', 'listbox'); list.hidden = true;
+  wrap.appendChild(input); wrap.appendChild(list);
+  sel.parentNode.insertBefore(wrap, sel);
+  sel.style.display = 'none';
+
+  var opts = Array.prototype.slice.call(sel.options).filter(function (o) { return o.value; })
+    .map(function (o) { return { value: o.value, text: o.text, key: o.text.toLowerCase() }; });
+  var shown = [], active = -1;
+  function current() { var o = sel.options[sel.selectedIndex]; return o && o.value ? o.text : ''; }
+  input.value = current();
+
+  function esc(s) { return s.replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function render(q) {
+    var words = q.toLowerCase().split(/\s+/).filter(Boolean);
+    shown = opts.filter(function (o) { return words.every(function (w) { return o.key.indexOf(w) > -1; }); }).slice(0, 80);
+    list.innerHTML = '';
+    if (!shown.length) {
+      var li = document.createElement('li'); li.className = 'ss-empty'; li.textContent = 'No match';
+      list.appendChild(li);
+    }
+    shown.forEach(function (o, i) {
+      var li = document.createElement('li');
+      li.id = uid + '-o' + i; li.setAttribute('role', 'option'); li.dataset.i = i;
+      var html = esc(o.text);
+      words.forEach(function (w) {
+        var at = html.toLowerCase().indexOf(esc(w));
+        if (at > -1) html = html.slice(0, at) + '<mark>' + html.slice(at, at + esc(w).length) + '</mark>' + html.slice(at + esc(w).length);
+      });
+      li.innerHTML = html;
+      li.addEventListener('mousedown', function (e) { e.preventDefault(); pick(i); });
+      list.appendChild(li);
+    });
+    active = shown.length ? 0 : -1; mark();
+    open(true);
+  }
+  function mark() {
+    Array.prototype.forEach.call(list.children, function (li, i) {
+      li.setAttribute('aria-selected', i === active ? 'true' : 'false');
+      if (i === active) li.scrollIntoView({ block: 'nearest' });
+    });
+    input.setAttribute('aria-activedescendant', active > -1 ? uid + '-o' + active : '');
+  }
+  function open(on) { list.hidden = !on; input.setAttribute('aria-expanded', on ? 'true' : 'false'); }
+  function pick(i) {
+    var o = shown[i]; if (!o) return;
+    sel.value = o.value; input.value = o.text; open(false);
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+  input.addEventListener('focus', function () { input.select(); render(''); });
+  input.addEventListener('input', function () { render(input.value); });
+  input.addEventListener('keydown', function (e) {
+    if (e.key === 'ArrowDown') { e.preventDefault(); if (list.hidden) render(input.value); active = Math.min(active + 1, shown.length - 1); mark(); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); active = Math.max(active - 1, 0); mark(); }
+    else if (e.key === 'Enter') { if (!list.hidden && active > -1) { e.preventDefault(); pick(active); } }
+    else if (e.key === 'Escape') { open(false); input.value = current(); }
+  });
+  input.addEventListener('blur', function () { setTimeout(function () { open(false); if (!list.contains(document.activeElement)) input.value = current(); }, 120); });
+})();
+</script>
+{%- endmacro %}
