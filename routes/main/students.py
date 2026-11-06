@@ -1559,10 +1559,11 @@ def duplicate_merge():
     from models import SchoolClass
     class_id = request.args.get('class_id', type=int)
     search = (request.args.get('q') or '').strip()
-    groups = find_groups(class_id=class_id, search=search)
+    loose = request.args.get('loose') == '1'
+    groups = find_groups(class_id=class_id, search=search, min_score=0.34 if loose else 0.5)
     classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level, SchoolClass.name).all()
     return render_template('students/duplicates.html', groups=groups, classes=classes,
-                           class_id=class_id, search=search)
+                           class_id=class_id, search=search, loose=loose)
 
 
 @main_bp.route('/students/duplicates/merge', methods=['POST'])
@@ -1576,7 +1577,7 @@ def duplicate_merge_run():
     from utils.branch_scope import can_access_branch
     from utils.audit import log_action
     back = url_for('main.duplicate_merge', class_id=request.form.get('class_id') or None,
-                   q=request.form.get('q') or None)
+                   q=request.form.get('q') or None, loose=request.form.get('loose') or None)
     keys = request.form.getlist('group')
     if not keys:
         flash('Tick at least one group to merge.', 'warning')

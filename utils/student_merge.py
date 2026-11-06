@@ -183,13 +183,45 @@ def _tok(s):
     return re.sub(r'[^a-z]', '', (s or '').lower())
 
 
+def _tokens(*parts):
+    """Lower-case name words; hyphenated / joined names split into words."""
+    out = []
+    for p in parts:
+        out += [w for w in re.split(r'[^a-z]+', (p or '').lower()) if len(w) > 1]
+    return out
+
+
+def _word_match(a, b):
+    """Same name word, allowing a small spelling difference ("osargue" ≈
+    "osarogue") for words of 4+ letters."""
+    if a == b:
+        return True
+    if min(len(a), len(b)) < 4:
+        return False
+    import difflib
+    return difflib.SequenceMatcher(None, a, b).ratio() >= 0.85
+
+
+def name_similarity(a_words, b_words):
+    """Share of the SHORTER list's names found in the longer one (0..1)."""
+    if not a_words or not b_words:
+        return 0.0
+    small, big = (a_words, b_words) if len(a_words) <= len(b_words) else (b_words, a_words)
+    hits = sum(1 for w in small if any(_word_match(w, x) for x in big))
+    return hits / len(small)
+
+
 def name_key(st):
-    """Duplicate key: surname + first name, ignoring case, punctuation and
-    their order. The middle name is ignored (one record may lack it)."""
-    a, b = _tok(st.surname), _tok(st.first_name)
-    if not a or not b:
-        return None
-    return tuple(sorted((a, b)))
+    """The surname's first word, normalised — the first test for "same
+    person" (so "ABDULWAHAB ILUEDO" typed into the surname box still groups
+    with "Abdulwahab")."""
+    words = _tokens(st.surname)
+    return words[0] if words else None
+
+
+def _given(st):
+    """Every other name word: the rest of the surname box, first and middle."""
+    return _tokens(st.surname)[1:] + _tokens(st.first_name, st.middle_name)
 
 
 def is_all_caps(st):
@@ -220,19 +252,62 @@ _SUMMARY = [('waec_results', 'WAEC'), ('jamb_results', 'JAMB'),
             ('student_enrollments', 'Enrolments'), ('fee_payments', 'Payments')]
 
 
-def find_groups(class_id=None, search=None):
-    """Groups of 2+ active students that look like the same person, each with
-    a suggested keeper (proper case before ALL CAPS, then the one with more
-    saved data, then the older record)."""
+def find_groups(class_id=None, search=None, min_score=0.5):
+    """Groups of 2+ active students that look like the same person:
+
+    * same surname (ignoring capitals / punctuation), and their other names
+      (first + middle) overlap — at least ``min_score`` of the shorter list
+      matches, small spelling differences allowed. "Abdulwahab Ismail" and
+      "ABDULWAHAB ILUEDO AKHTAR-OZOMOYA ISMAIL" match; siblings "Okafor Ada"
+      and "Okafor Chidi" don't;
+    * or surname and first name swapped ("ADA OKAFOR" vs "Okafor Ada").
+
+    Each group gets a suggested keeper (proper case before ALL CAPS, then the
+    one with more saved data, then the older record) and a match score."""
     from utils.branch_scope import scope_query
     from models import ClassArmAssignment, StudentEnrollment
     students = scope_query(Student.query.filter(Student.is_active == True), Student).all()  # noqa: E712
-    buckets = defaultdict(list)
+    by_surname = defaultdict(list)
     for s in students:
         k = name_key(s)
         if k:
-            buckets[k].append(s)
-    groups = [g for g in buckets.values() if len(g) > 1]
+            by_surname[k].append(s)
+
+    # Union-find over matching pairs; remember the best score per pair.
+    parent = {}
+
+    def find(x):
+        parent.setdefault(x, x)
+        while parent[x] != x:
+            parent[x] = parent[parent[x]]
+            x = parent[x]
+        return x
+
+    pair_score = {}
+
+    def link(a, b, sc):
+        pair_score[(min(a.id, b.id), max(a.id, b.id))] = max(sc, pair_score.get((min(a.id, b.id), max(a.id, b.id)), 0))
+        parent[find(a.id)] = find(b.id)
+
+    for bucket in by_surname.values():
+        for i in range(len(bucket)):
+            for j in range(i + 1, len(bucket)):
+                sc = name_similarity(_given(bucket[i]), _given(bucket[j]))
+                if sc >= min_score:
+                    link(bucket[i], bucket[j], sc)
+    # Surname <-> first name swapped.
+    for s in students:
+        sur = name_key(s)
+        firsts = _tokens(s.first_name)
+        for o in by_surname.get(firsts[0] if firsts else '', []):
+            if o.id != s.id and sur and sur in _tokens(o.first_name):
+                link(s, o, 1.0)
+
+    comps = defaultdict(list)
+    by_id = {s.id: s for s in students}
+    for sid in list(parent):
+        comps[find(sid)].append(by_id[sid])
+    groups = [g for g in comps.values() if len(g) > 1]
     if not groups:
         return []
     ids = [s.id for g in groups for s in g]
@@ -271,8 +346,12 @@ def find_groups(class_id=None, search=None):
             warn.append('These records are in different classes right now')
         if len(dobs) > 1:
             warn.append('These records have different dates of birth')
+        ids_g = [s.id for s in g]
+        scores = [v for (x, y), v in pair_score.items() if x in ids_g and y in ids_g]
+        score = int(round(100 * (min(scores) if scores else 1)))
         out.append({'key': '-'.join(sorted(str(m['id']) for m in members)),
                     'members': members, 'keeper_id': keeper['id'], 'warnings': warn,
+                    'score': score,
                     'has_caps_dup': (any(m['all_caps'] for m in members[1:]) and not keeper['all_caps']
                                      and not warn)})
     out.sort(key=lambda g: g['members'][0]['student'].full_name.lower())

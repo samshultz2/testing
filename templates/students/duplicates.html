@@ -28,7 +28,7 @@
 <div class="page-header">
   <div>
     <h1>Merge Duplicate Students</h1>
-    <p class="text-muted text-sm">Students with the same surname and first name (ignoring capitals, word order and middle name). For each group choose the record to <strong>keep</strong> — everything saved for the others (WAEC, JAMB, BECE / Common Entrance, mock exams, scores, class enrolments, attendance, fees …) is moved onto it, any blank details (e.g. middle name) are copied across, and the other records are deleted.</p>
+    <p class="text-muted text-sm">Students with the <strong>same surname</strong> whose other names are the closest match (capitals, spelling slips and a missing middle name are ignored — e.g. “ABDULWAHAB ILUEDO AKHTAR-OZOMOYA ISMAIL” and “Abdulwahab Ismail”). Brothers and sisters with different first names are not grouped. For each group choose the record to <strong>keep</strong> — everything saved for the others (WAEC, JAMB, BECE / Common Entrance, mock exams, scores, class enrolments, attendance, fees …) is moved onto it, any blank details (e.g. middle name) are copied across, and the other records are deleted.</p>
   </div>
 </div>
 
@@ -40,19 +40,20 @@
     </select></div>
   <div><label class="form-label" for="dupQ">Search</label>
     <input id="dupQ" type="search" name="q" value="{{ search }}" class="form-control" placeholder="Name or ID"></div>
+  <label class="d-flex gap-2" style="align-items:center;margin:0 0 .45rem"><input type="checkbox" name="loose" value="1" data-autosubmit {% if loose %}checked{% endif %}> Looser matching (show weaker candidates)</label>
   <button class="btn btn-secondary btn-sm" type="submit">Find</button>
 </div></form>
 
 {% if not groups %}
 <div class="card"><div class="card-body"><div class="empty-state">
   <i class="fas fa-user-check"></i><h3>No duplicates found</h3>
-  <p>No two {% if class_id %}students in this class{% else %}students{% endif %} share the same surname and first name.</p>
+  <p>No {% if class_id %}students in this class{% else %}students{% endif %} share a surname with closely matching other names.{% if not loose %} Try <a href="{{ url_for('main.duplicate_merge', class_id=class_id, q=search or none, loose=1) }}">looser matching</a>.{% endif %}</p>
 </div></div></div>
 {% else %}
 <form method="post" action="{{ url_for('main.duplicate_merge_run') }}" id="dupForm"
       data-confirm="Merge the ticked groups? The records not kept are deleted after everything saved for them is moved to the kept student. This cannot be undone.">
   <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-  <input type="hidden" name="class_id" value="{{ class_id or '' }}"><input type="hidden" name="q" value="{{ search }}">
+  <input type="hidden" name="class_id" value="{{ class_id or '' }}"><input type="hidden" name="q" value="{{ search }}"><input type="hidden" name="loose" value="{{ '1' if loose else '' }}">
   <div class="d-flex gap-2 mb-2" style="flex-wrap:wrap;align-items:center">
     <strong>{{ groups|length }} group(s) of possible duplicates</strong>
     <button type="button" class="btn btn-sm btn-primary" id="dupCaps"><i class="fas fa-font"></i> Select all ALL-CAPS duplicates ({{ groups|selectattr('has_caps_dup')|list|length }})</button>
@@ -67,6 +68,7 @@
     <div class="dup-head">
       <label><input type="checkbox" name="group" value="{{ g.key }}" class="dup-pick"> Merge this group</label>
       <span class="text-muted text-sm">{{ g.members|length }} records · tick the one to keep</span>
+      <span class="dup-tag {{ 'keep' if g.score >= 75 else 'caps' }}" style="margin-left:auto" title="How closely the names match">{{ g.score }}% name match</span>
     </div>
     {% if g.warnings %}<div class="dup-warn"><i class="fas fa-triangle-exclamation"></i> {{ g.warnings|join('; ') }} — they may be two different students with the same name. Only merge if you're sure it's one person.</div>{% endif %}
     <div class="dup-members">

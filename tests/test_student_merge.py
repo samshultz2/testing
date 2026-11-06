@@ -146,3 +146,44 @@ def test_namesakes_in_different_classes_are_flagged_not_auto_selected(app):
         session['role'] = 'super_admin'
         g = next(g for g in find_groups(search='Namesakerp') if {m['id'] for m in g['members']} == set(ids))
         assert g['warnings'] and not g['has_caps_dup']
+
+
+def test_surname_first_then_closest_other_names(app):
+    """Grouped by surname, then the closest other names: a missing middle
+    name, extra names, ALL CAPS, small misspellings and the whole name typed
+    into the surname box all match — siblings don't."""
+    from utils.student_merge import find_groups
+    from flask import session
+    people = [
+        # (tag, surname, first, middle)
+        ('a1', 'Abdulwahabrp', 'Ismail', None),
+        ('a2', 'ABDULWAHABRP', 'ILUEDO', 'AKHTAR-OZOMOYA ISMAIL'),
+        ('b1', 'Asemotarp', 'Osarogue', 'Nora'),
+        ('b2', 'ASEMOTARP', 'OSARGUE', 'NORA'),             # misspelt first name
+        ('c1', 'Okaforrpz', 'Ada', None),
+        ('c2', 'Okaforrpz', 'Chidi', None),                 # sibling: must NOT group
+        ('d1', 'Aigberp', 'Divine', 'Izoduwa'),
+        ('d2', 'AIGBERP DIVINE', 'IZODUWA', None),          # whole name in the surname box
+    ]
+    with app.app_context():
+        ids = {}
+        for tag, sur, first, mid in people:
+            st = Student(student_id='SG' + uuid.uuid4().hex[:6], surname=sur, first_name=first,
+                         middle_name=mid, gender='Male')
+            db.session.add(st); db.session.flush()
+            ids[tag] = st.id
+        db.session.commit()
+    with app.test_request_context():
+        session['role'] = 'super_admin'
+        sets = [frozenset(m['id'] for m in g['members']) for g in find_groups()]
+    for a, b in (('a1', 'a2'), ('b1', 'b2'), ('d1', 'd2')):
+        assert frozenset({ids[a], ids[b]}) in sets, (a, b)
+    assert not any(ids['c1'] in s and ids['c2'] in s for s in sets)
+
+
+def test_name_similarity_rules():
+    from utils.student_merge import name_similarity
+    assert name_similarity(['ismail'], ['iluedo', 'akhtar', 'ozomoya', 'ismail']) == 1.0
+    assert name_similarity(['osarogue', 'nora'], ['osargue', 'nora']) == 1.0
+    assert name_similarity(['ada'], ['chidi']) == 0.0
+    assert name_similarity(['ada'], ['adam']) == 0.0          # short names must match exactly
