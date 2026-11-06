@@ -717,14 +717,16 @@ def parse_import(scheme, text, students):
     reader = list(csv.reader(io.StringIO(text), delimiter=delim))
     header = [h.strip() for h in reader[0]]
     meta, subj_cols, errors = {}, {}, []
-    known = {s.lower(): s for s in scheme.subjects}
+    from utils.quick_results import make_subject_resolver
+    from models.models_school_exams import KNOWN_BASIC_SUBJECTS
+    resolve = make_subject_resolver(scheme.subjects, KNOWN_BASIC_SUBJECTS)
     for i, h in enumerate(header):
         hl = h.lower()
         mk = next((k for k, names in _META_COLS.items() if hl in names), None)
         if mk:
             meta[mk] = i
-        elif hl in known:
-            subj_cols[i] = known[hl]
+        elif h and resolve(h):            # "PVS", "Nat Val", "Eng" → the subject
+            subj_cols[i] = resolve(h)
         elif h:
             # Unknown subject column: accept it under the header's own name.
             subj_cols[i] = h.strip()

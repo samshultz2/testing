@@ -141,6 +141,19 @@ _SCHOOL_ALIASES = {
     'QR': 'quantitative reasoning', 'QUANT': 'quantitative reasoning',
     'VR': 'verbal reasoning', 'VERBAL': 'verbal reasoning',
     'GP': 'general paper', 'GEN PAPER': 'general paper',
+    # Revised Basic Education Curriculum names.
+    'NAT VAL': 'national values education', 'NAT VALUE': 'national values education',
+    'NAT VALUES': 'national values education', 'NATIONAL VALUE': 'national values education',
+    'NATIONAL VALUES': 'national values education', 'NV': 'national values education',
+    'NVE': 'national values education',
+    'PVS': 'pre vocational studies', 'PRE VOC': 'pre vocational studies',
+    'PREVOC': 'pre vocational studies', 'PRE VOCATIONAL': 'pre vocational studies',
+    'PREVOCATIONAL STUDIES': 'pre vocational studies',
+    'RNV': 'religion and national values',
+    'BDL': 'basic digital literacy', 'DIGITAL LITERACY': 'basic digital literacy',
+    'CULTURAL': 'cultural and creative arts', 'CREATIVE': 'cultural and creative arts',
+    'BINI': 'edo', 'NIG LANG': 'nigerian language', 'NIGERIAN LANG': 'nigerian language',
+    'ENTREP': 'entrepreneurship',
 }
 _STOP = {'AND', '&', 'OF', 'IN', 'THE'}
 
@@ -149,16 +162,18 @@ def _words(s):
     return [w for w in re.sub(r'[^A-Za-z0-9 ]+', ' ', (s or '').upper()).split() if w]
 
 
-def make_subject_resolver(subjects):
-    """Resolve a typed subject against an exam's configured subject list:
-    exact → alias → initials (BST, CCA, CRS) → word-prefix (Eng, Basic Sci).
+def make_subject_resolver(subjects, fallback=None):
+    """Resolve a typed subject: first against the exam's configured subject
+    list, then (if given) against ``fallback`` — the built-in list of Basic
+    Education subjects — so a subject missing from a school's saved list
+    ("PVS", "Edo") is still recognised. Each list is tried as
+    exact → alias → initials (BST, CCA, PVS) → word-prefix (Eng, Nat Val).
     Returns None when nothing (or more than one subject) matches."""
-    by_norm = {' '.join(_words(s)): s for s in subjects}
-
     def initials(s):
         return ''.join(w[0] for w in _words(s) if w not in _STOP)
 
-    def resolve(raw):
+    def resolve_in(pool, raw):
+        by_norm = {' '.join(_words(s)): s for s in pool}
         w = _words(raw)
         if not w:
             return None
@@ -168,15 +183,15 @@ def make_subject_resolver(subjects):
         target = _SCHOOL_ALIASES.get(key)
         if target:
             tw = _words(target)
-            for s in subjects:            # alias → the configured spelling
+            for s in pool:                # alias → the configured spelling
                 sw = _words(s)
                 if sw == tw or (len(tw) == 1 and sw and sw[0] == tw[0]):
                     return s
-        cands = [s for s in subjects if len(key) >= 2 and ' ' not in key and initials(s) == key]
+        cands = [s for s in pool if len(key) >= 2 and ' ' not in key and initials(s) == key]
         if len(cands) == 1:
             return cands[0]
         cands = []
-        for s in subjects:
+        for s in pool:
             sw = [x for x in _words(s) if x not in _STOP]
             iw = [x for x in w if x not in _STOP]
             if iw and len(iw) <= len(sw) and all(sw[i].startswith(iw[i]) for i in range(len(iw))):
@@ -188,6 +203,12 @@ def make_subject_resolver(subjects):
             if len(exact) == 1:
                 return exact[0]
         return None
+
+    configured = list(subjects)
+    extra = [s for s in (fallback or []) if s.lower() not in {c.lower() for c in configured}]
+
+    def resolve(raw):
+        return resolve_in(configured, raw) or (resolve_in(extra, raw) if extra else None)
 
     return resolve
 
@@ -210,5 +231,7 @@ def school_exam_spec(scheme, label):
                                 f'plain letters ({letters}).')
         return None, None, f'"{raw}" is not a {scheme.exam_name} grade (use {letters} or a score).'
 
-    return {'label': label, 'resolve_subject': make_subject_resolver(scheme.subjects),
+    from models.models_school_exams import KNOWN_BASIC_SUBJECTS
+    return {'label': label,
+            'resolve_subject': make_subject_resolver(scheme.subjects, KNOWN_BASIC_SUBJECTS),
             'parse_value': parse_value}

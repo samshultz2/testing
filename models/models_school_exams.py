@@ -62,13 +62,23 @@ LEVEL_META = {
     },
 }
 
+# The revised 9-year Basic Education Curriculum (JSS): core subjects first,
+# so the whole-class grid's default columns are the ones every candidate sits.
 JSS3_SUBJECTS = [
     'English Studies', 'Mathematics', 'Basic Science', 'Basic Technology',
-    'Social Studies', 'Civic Education', 'Christian Religious Studies',
-    'Islamic Studies', 'Cultural and Creative Arts', 'Business Studies',
-    'Agricultural Science', 'Home Economics', 'Physical and Health Education',
-    'Computer Studies', 'French', 'Yoruba', 'Igbo', 'Hausa', 'Arabic',
-    'History', 'Security Education',
+    'National Values Education', 'Pre-Vocational Studies', 'Cultural and Creative Arts',
+    'Christian Religious Studies', 'Islamic Studies', 'Business Studies', 'French',
+    'Edo', 'Yoruba', 'Igbo', 'Hausa', 'Arabic',
+    'Basic Digital Literacy', 'History', 'Social Studies', 'Civic Education',
+    'Security Education', 'Agricultural Science', 'Home Economics',
+    'Physical and Health Education', 'Computer Studies',
+]
+
+# Nigerian languages offered as the "Nigerian Language" subject.
+NIGERIAN_LANGUAGES = [
+    'Edo', 'Yoruba', 'Igbo', 'Hausa', 'Esan', 'Etsako', 'Urhobo', 'Isoko', 'Itsekiri',
+    'Ijaw', 'Efik', 'Ibibio', 'Tiv', 'Idoma', 'Igala', 'Ebira', 'Nupe', 'Kanuri',
+    'Fulfulde', 'Gwari',
 ]
 
 BASIC6_STATE_SUBJECTS = [
@@ -81,6 +91,16 @@ BASIC6_FEDERAL_SUBJECTS = [
     'English Studies', 'Mathematics', 'Basic Science and Technology',
     'Social Studies', 'Quantitative Reasoning', 'Verbal Reasoning',
 ]
+
+# Every subject the JSS3 / Basic 6 entry forms recognise even when a school's
+# saved subject list doesn't include it (so "PVS" or "Edo" still resolve).
+KNOWN_BASIC_SUBJECTS = list(dict.fromkeys(
+    JSS3_SUBJECTS + BASIC6_STATE_SUBJECTS + BASIC6_FEDERAL_SUBJECTS + NIGERIAN_LANGUAGES + [
+        'Basic Science and Technology', 'Religion and National Values', 'Nigerian Language',
+        'Entrepreneurship', 'Music', 'Fine Art', 'Literature in English', 'Nigerian History',
+        'Handwriting', 'Phonics',
+    ]))
+
 
 # Five-band scheme widely used by state boards; four-band NECO BECE scheme.
 _FIVE_BANDS = [

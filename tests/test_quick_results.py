@@ -144,3 +144,44 @@ def test_jss3_and_basic6_quick_entry_save(app):
             got = {x.subject: x.grade for x in SchoolExamResult.query.filter_by(
                 student_id=sid, level=level, body=body, exam_year=2031)}
         assert got == want, level
+
+
+SAMPLE = """ABDULWAHAB ILUEDO AKHTAR-OZOMOYA ISMAIL, Eng B, Maths B, Basic Sci A, Nat Val A, Cultural A, EDO B, PVS A, CRS A, Bus A, French A
+AJAYI GREATOVERCOMER OLUWATUNWASE, Eng A, Maths A, Basic Sci A, Nat Val A, Cultural A, EDO A, PVS A, CRS A, Bus A, French B"""
+
+WANT = {'English Studies', 'Mathematics', 'Basic Science', 'National Values Education',
+        'Cultural and Creative Arts', 'Edo', 'Pre-Vocational Studies',
+        'Christian Religious Studies', 'Business Studies', 'French'}
+
+
+def test_revised_curriculum_subjects_from_a_real_jss3_list():
+    """The user's Edo State BECE list: every subject resolves (none dropped)."""
+    roster = [_S(10, 'Iluedo', 'Abdulwahab', 'Akhtar-Ozomoya Ismail'),
+              _S(11, 'Greatovercomer', 'Ajayi', 'Oluwatunwase')]
+    out = parse_quick_lines(SAMPLE, roster, school_exam_spec(ExamScheme('jss3', 'state'), 'JSS3'))
+    for r in out['rows']:
+        assert not r['errors'], r['errors']
+        assert {s for s, *_ in r['items']} == WANT
+    assert out['n_results'] == 20
+
+
+def test_subjects_resolve_even_when_a_schools_saved_list_predates_them():
+    class Row:   # a school that saved Settings with the old subject list
+        exam_name = 'State BECE'; bands_json = None; max_score = 100
+        benchmark_credits = None; cutoff = None
+        subjects_json = '["English Studies", "Mathematics", "Basic Science", "Social Studies"]'
+    sc = ExamScheme('jss3', 'state', Row())
+    r = parse_quick_lines(SAMPLE.splitlines()[0], [_S(10, 'Iluedo', 'Abdulwahab', 'Akhtar-Ozomoya Ismail')],
+                          school_exam_spec(sc, 'JSS3'))['rows'][0]
+    assert not r['errors'] and {s for s, *_ in r['items']} == WANT
+
+
+def test_csv_headers_accept_the_same_shortcuts():
+    from utils.school_exams import parse_import
+    roster = [_S(12, 'Prosper', 'Abusomwan', 'Goodluck')]
+    rows, errors, subjects = parse_import(
+        ExamScheme('jss3', 'state'),
+        'Name,Eng,Nat Val,PVS,EDO,Cultural\nABUSOMWAN PROSPER GOODLUCK,B,A,A,B,A', roster)
+    assert not errors and subjects == ['English Studies', 'National Values Education',
+                                       'Pre-Vocational Studies', 'Edo', 'Cultural and Creative Arts']
+    assert rows[0]['student'].id == 12
