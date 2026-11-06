@@ -376,3 +376,22 @@ def test_exam_report_shows_bece_for_a_jss3_pupil(app):
     html = c.get(f'/results/student/{s3}/report').get_data(as_text=True)
     assert '<h2><i class="fas fa-file-alt"></i> WAEC</h2>' in html
     assert 'Earlier exams — BECE / Common Entrance' in html and 'State BECE 2048' in html
+
+
+def test_exam_report_shows_common_entrance_for_a_basic6_pupil(app):
+    c = _admin(app)
+    sid, _ = _student(app, 'Reportbasic')
+    _enroll(app, 'Primary 6', 90, sid)
+    tok = auth_csrf(c)
+    c.post('/basic6-exams/federal/add', data={
+        '_csrf_token': tok, 'student_id': sid, 'exam_year': 2051, 'exam_number': 'NCEE/5',
+        'subject[]': ['English Studies', 'Mathematics', 'Quantitative Reasoning', 'Verbal Reasoning'],
+        'score[]': ['71', '66', '58', '62'], 'grade[]': [''] * 4,
+        'total_score': '257', 'admitted': 'yes', 'placement': 'FGC Ijanikin'})
+    html = c.get(f'/results/student/{sid}/report').get_data(as_text=True)
+    assert 'Common Entrance record' in html and 'NCEE 2051' in html and 'NCEE/5' in html
+    assert 'Basic 6 · Federal' in html
+    assert 'JSS1 Placement' in html and 'Admitted — FGC Ijanikin' in html
+    assert 'Meets the benchmark' in html
+    assert 'Suggested SSS stream' not in html                 # JSS3-only
+    assert '<h2><i class="fas fa-file-alt"></i> WAEC</h2>' not in html

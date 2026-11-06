@@ -344,12 +344,18 @@
         {% else %}
         <h2><i class="fas fa-school"></i> JSS1 Placement <span class="muted" style="font-size:.75rem;font-weight:400;">(from {{ sit.name }} {{ sit.year }})</span></h2>
         {% endif %}
-        <div class="pred" style="text-align:left;background:{{ 'linear-gradient(135deg,#11998e,#38ef7d)' if n.meets else 'linear-gradient(135deg,#f2994a,#eb5757)' }}">
+        {# Common Entrance: admission first, then the cut-off, then the benchmark. #}
+        {% if sit.level != 'jss3' and n.admitted is not none %}{% set good = n.admitted %}
+            {% set headline = ('Admitted' ~ ((' — ' ~ n.placement) if n.placement else '')) if n.admitted else 'Not admitted' %}
+        {% elif sit.level != 'jss3' and n.above_cutoff is not none %}{% set good = n.above_cutoff %}
+            {% set headline = ('Above' if n.above_cutoff else 'Below') ~ ' the cut-off — total ' ~ n.total ~ ' vs ' ~ (n.cutoff|round(0)|int) %}
+        {% else %}{% set good = n.meets %}{% set headline = 'Meets the benchmark' if n.meets else 'Below the benchmark' %}{% endif %}
+        <div class="pred" style="text-align:left;background:{{ 'linear-gradient(135deg,#11998e,#38ef7d)' if good else 'linear-gradient(135deg,#f2994a,#eb5757)' }}">
             <div style="font-size:1.15rem;font-weight:700;">
-                {% if n.meets %}<i class="fas fa-circle-check"></i> Meets the benchmark{% else %}<i class="fas fa-triangle-exclamation"></i> Below the benchmark{% endif %}
+                <i class="fas {{ 'fa-circle-check' if good else 'fa-triangle-exclamation' }}"></i> {{ headline }}
             </div>
             <div style="font-size:.88rem;opacity:.95;margin-top:.2rem;">
-                Benchmark: {{ n.benchmark }}+ credits including English &amp; Mathematics · has {{ n.credits }} credit(s).
+                {% if sit.level != 'jss3' %}{{ 'Meets' if n.meets else 'Below' }} the benchmark · {% endif %}Benchmark: {{ n.benchmark }}+ credits including English &amp; Mathematics · has {{ n.credits }} credit(s).
                 {% if not n.meets %}
                     {% if n.credits_short %}Needs {{ n.credits_short }} more credit(s).{% endif %}
                     {% if n.missing_core %}No credit yet in {{ n.missing_core|join(' & ') }}.{% endif %}
