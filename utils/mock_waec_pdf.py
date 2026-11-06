@@ -213,6 +213,37 @@ def _row_h(size, base_mm):
     return (base_mm + 0.9) * mm if (size or 'A4').upper() in _BIG_SIZES else base_mm * mm
 
 
+# Room added above and below a student's row when their name wraps onto a
+# second / third line (e.g. surname + first + middle name all shown), so the
+# name never touches — or spills over — the row's lines.
+_NAME_WRAP_EXTRA = 2.4      # points, each side
+_CELL_HPAD = 12             # reportlab's default left + right cell padding
+
+
+def _name_height(par, col_w):
+    """Height (points) the name paragraph needs in a column ``col_w`` wide."""
+    try:
+        return par.wrap(col_w - _CELL_HPAD, 10000)[1]
+    except Exception:
+        return 0
+
+
+def _name_wraps(par, col_w):
+    return _name_height(par, col_w) > _S['name'].leading * 1.3
+
+
+def _wrapped_name_padding(data, first, count, col_w, pad):
+    """TableStyle commands giving rows whose name wraps a little extra
+    vertical padding (rows size themselves; this adds the breathing room)."""
+    cmds = []
+    for r in range(first, first + count):
+        par = data[r][1] if r < len(data) and len(data[r]) > 1 else None
+        if par is not None and hasattr(par, 'wrap') and _name_wraps(par, col_w):
+            cmds += [('TOPPADDING', (0, r), (-1, r), pad + _NAME_WRAP_EXTRA),
+                     ('BOTTOMPADDING', (0, r), (-1, r), pad + _NAME_WRAP_EXTRA)]
+    return cmds
+
+
 def _pagesize(orient, size='A4'):
     """A4 landscape by default. ``orient='portrait'`` for tall paper;
     ``size`` is 'A4', 'A3', 'A2', 'A1' or 'A0' — a bigger sheet than A4 lets
@@ -594,6 +625,7 @@ def broadsheet_pdf(bs, exam, school, opts=None, per=8, orient='landscape',
                     for j in range(len(group)):
                         c0 = lead + j * 2
                         style.append(('SPAN', (c0, sum0 + k), (c0 + 1, sum0 + k)))
+        style += _wrapped_name_padding(data, header_rows, nrows, name_w, _row_pad(size))
         t.setStyle(TableStyle(style))
         e.append(t)
         if _opt(opts, 'grades'):
@@ -700,7 +732,15 @@ def blank_broadsheet_pdf(students, offered, subjects, exam, school, opts=None,
 
         widths = [sn_w, name_w] + ([arm_w] if show_arm else []) + [cell_w] * (2 * len(group))
         row_h = _row_h(size, 8.5)
-        heights = ([None, None] + [row_h] * nstud + [row_h] * _EXTRA_ROWS
+        # A fixed height per student row, grown for a name that wraps onto
+        # more lines (all three names shown) so it can't spill over the line.
+        pad = _row_pad(size)
+        stud_h = []
+        for r in range(2, 2 + nstud):
+            par = data[r][1]
+            need = _name_height(par, name_w) + 2 * (pad + _NAME_WRAP_EXTRA) if _name_wraps(par, name_w) else 0
+            stud_h.append(max(row_h, need))
+        heights = ([None, None] + stud_h + [row_h] * _EXTRA_ROWS
                    + ([row_h + 1.5 * mm] if show_summary else [])
                    + ([row_h] * len(_BLANK_SUMMARY) if show_summary else []))
         # repeatRows=0: the column labels (subjects, Score/Grade, S/N, Name) appear

@@ -9,6 +9,7 @@ from reportlab.platypus import (SimpleDocTemplate, Table, TableStyle, Paragraph,
                                 Spacer, PageBreak)
 from utils.web_exports import pdf_escape
 from utils.mock_waec_pdf import (
+    _wrapped_name_padding,
     _styles, _S, _opt, _school_header, _groups, _pagesize,
     _grade_key_table, _fit_per, _VHead, _EXTRA_ROWS, _BLACK,
     _summary_word_row, _triple_rule,
@@ -130,6 +131,7 @@ def waec_broadsheet_pdf(bs, year, school, opts=None, per=8, orient='landscape', 
             style.append(('LINEBELOW', (0, summary_heading_row), (-1, summary_heading_row), 1.6, _BLACK))
             if summary_heading_spans_full:
                 style.append(('SPAN', (0, summary_heading_row), (ncols - 1, summary_heading_row)))
+        style += _wrapped_name_padding(data, 1, nrows, name_w, 2.5)
         t.setStyle(TableStyle(style))
         e.append(t)
         if (grade_key if grade_key is not None else _opt(opts, 'grades')):

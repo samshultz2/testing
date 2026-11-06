@@ -2,8 +2,8 @@
 
 A broadsheet can show any of the name parts — surname, first name, middle
 name — always in that order (the school's register order), optionally with the
-middle name shortened to its initial(s): ``OKAFOR John M.``-style output is
-``Okafor John M.``.
+middle name shortened to its initial(s), which then sits between the surname
+and the first name: ``Okafor C. John``.
 
 Query-string form (shared by the WAEC and Mock WAEC broadsheets):
     names=surname,first,middle   which parts to show (any non-empty subset)
@@ -70,9 +70,12 @@ def format_name(st, opts, default=None):
     vals = {'surname': (_get(st, 'surname') or '').strip(),
             'first': (_get(st, 'first_name') or '').strip(),
             'middle': _middle(st)}
+    order = list(opts['parts'])
     if opts.get('mid_init') and vals['middle']:
         vals['middle'] = initials(vals['middle'])
-    name = ' '.join(vals[p] for p in opts['parts'] if vals[p])
+        # The initial sits in the middle: "Okafor C. John".
+        order = [p for p in ('surname', 'middle', 'first') if p in order]
+    name = ' '.join(vals[p] for p in order if vals[p])
     return name or (_get(st, 'full_name') or '').strip()
 
 
