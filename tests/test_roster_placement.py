@@ -167,3 +167,99 @@ def test_weak_match_defaults_to_new_but_can_use_existing(app):
         zed = Student.query.filter_by(surname='Zed', first_name='Kwamerp').one()
         assert SchoolExamResult.query.filter_by(student_id=zed.id, exam_year=YEAR).one().grade == 'C'
     assert _active_classes(app, bola) == {'JSS3'}
+
+
+# --------------------------------------------------------------------------- #
+# WAEC paste page (one result slip) and Basic 6
+# --------------------------------------------------------------------------- #
+SLIP = "{name}\nEnglish Language, B3\nMathematics, C4"
+
+
+def _paste(c, tok, name):
+    return c.post('/results/waec/paste', data={'_csrf_token': tok, 'exam_year': YEAR,
+                                               'data': SLIP.format(name=name)}).get_data(as_text=True)
+
+
+def _save(c, tok, **extra):
+    data = {'_csrf_token': tok, 'exam_year': YEAR,
+            'subject[]': ['English Language', 'Mathematics'], 'grade[]': ['B3', 'C4']}
+    data.update(extra)
+    return c.post('/results/waec/paste/save', data=data)
+
+
+def test_waec_paste_unknown_name_is_added_to_sss3_after_approval(app):
+    _setup(app)
+    c = _admin(app)
+    tok = auth_csrf(c)
+    html = _paste(c, tok, 'Pasteonly Chiamaka Grace')
+    assert 'not on the register' in html and 'value="new" selected' in html
+    assert 'value="Pasteonly"' in html and 'value="Chiamaka"' in html and 'value="Grace"' in html
+    new = dict(student_id='new', new_surname='Pasteonly', new_first='Chiamaka', new_middle='Grace',
+               new_gender='Female')
+    _save(c, tok, **new)                                    # no approval tick → nothing
+    with app.app_context():
+        assert Student.query.filter_by(surname='Pasteonly').count() == 0
+    r = _save(c, tok, approve_roster='1', **new)
+    assert r.status_code == 302
+    with app.app_context():
+        st = Student.query.filter_by(surname='Pasteonly', first_name='Chiamaka').one()
+        assert st.middle_name == 'Grace' and st.gender == 'Female'
+        assert {w.subject: w.grade for w in WAECResult.query.filter_by(student_id=st.id, exam_year=YEAR)} == {
+            'English Language': 'B3', 'Mathematics': 'C4'}
+        sid = st.id
+    assert _active_classes(app, sid) == {'SSS3'}
+
+
+def test_waec_paste_moves_existing_student_into_sss3(app):
+    caas = _setup(app)
+    sid = _student_in(app, caas['SSS2'], 'Ifeanyi', 'Pastemover')
+    c = _admin(app)
+    tok = auth_csrf(c)
+    html = _paste(c, tok, 'Pastemover Ifeanyi')
+    assert 'moved into SSS3' in html and f'value="{sid}" selected data-roster="move"' in html
+    _save(c, tok, student_id=str(sid))                      # no tick → refused, not moved
+    assert _active_classes(app, sid) == {'SSS2'}
+    with app.app_context():
+        assert WAECResult.query.filter_by(student_id=sid, exam_year=YEAR).count() == 0
+    r = _save(c, tok, student_id=str(sid), approve_roster='1')
+    assert r.status_code == 302
+    assert _active_classes(app, sid) == {'SSS3'}
+    with app.app_context():
+        assert WAECResult.query.filter_by(student_id=sid, exam_year=YEAR).count() == 2
+
+
+def test_basic6_quick_entry_moves_and_adds(app):
+    caas = _setup(app)
+    with app.app_context():
+        from models import Term
+        ssn = AcademicSession.query.filter_by(name='2040/2041').one()
+        term = Term.query.filter_by(session_id=ssn.id, term_number=2).one()
+        arm = ClassArm.query.filter_by(name='Placement').one()
+        out = {}
+        for cname, lvl in (('Primary 5', 91), ('Primary 6', 90)):
+            cls = SchoolClass.query.filter_by(name=cname).first() or SchoolClass(name=cname, level=lvl)
+            db.session.add(cls); db.session.flush()
+            caa = (ClassArmAssignment.query.filter_by(class_id=cls.id, term_id=term.id).first()
+                   or ClassArmAssignment(class_id=cls.id, arm_id=arm.id, term_id=term.id))
+            db.session.add(caa); db.session.flush()
+            out[cname] = caa.id
+        db.session.commit()
+    sid = _student_in(app, out['Primary 5'], 'Tobi', 'Basicmover')
+    c = _admin(app)
+    tok = auth_csrf(c)
+    data = {'_csrf_token': tok, 'year': YEAR,
+            'data': 'Basicmover Tobi, Eng A, QR B\nBasicnew Emeka Paul, Maths 81, VR C'}
+    html = c.post('/basic6-exams/federal/quick', data=dict(data, action='preview')).get_data(as_text=True)
+    assert 'Move into Basic 6 (1)' in html and 'Add to the register (1)' in html
+    r = c.post('/basic6-exams/federal/quick', data=dict(data, action='confirm', approve_roster='1',
+                                                        inc=['1', '2']))
+    assert r.status_code == 302
+    assert _active_classes(app, sid) == {'Primary 6'}
+    with app.app_context():
+        new = Student.query.filter_by(surname='Basicnew', first_name='Emeka').one()
+        assert new.middle_name == 'Paul'
+        got = {x.subject: x.grade for x in SchoolExamResult.query.filter_by(
+            student_id=new.id, level='basic6', body='federal', exam_year=YEAR)}
+        assert got == {'Mathematics': 'A', 'Verbal Reasoning': 'C'}
+        new_id = new.id
+    assert _active_classes(app, new_id) == {'Primary 6'}

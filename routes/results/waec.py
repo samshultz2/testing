@@ -450,10 +450,18 @@ def paste_waec():
             return render_template('results/waec_paste.html', subjects=WAEC_SUBJECTS, pasted=text, current_year=_date.today().year)
         year = request.form.get('exam_year', type=int)
         matched, score = match_student(parsed.get('name'), students)
+        current_year = year or parsed.get('year') or _date.today().year
+        # Not in SSS3 for that session / not on the register at all → offer to
+        # move / add them (one approval on the review screen).
+        from utils import roster_placement as rp
+        prow = {'line': 1, 'name': parsed.get('name') or '', 'student': matched,
+                'score': score if matched else 0.0, 'items': parsed['subjects'], 'errors': []}
+        placement = rp.plan([prow], 'sss3', current_year, students)
+        placement['row'] = prow
         return render_template('results/waec_scan_review.html',
             students=students, subjects=WAEC_SUBJECTS, grades=WAEC_GRADES,
-            parsed=parsed, matched=matched, match_score=score, preview='',
-            current_year=year or parsed.get('year') or _date.today().year, raw_text=text)
+            parsed=parsed, matched=prow.get('student'), match_score=score, preview='',
+            current_year=current_year, raw_text=text, placement=placement)
     return render_template('results/waec_paste.html', subjects=WAEC_SUBJECTS, current_year=_date.today().year)
 
 
@@ -510,6 +518,88 @@ def waec_quick_entry():
                 return redirect(url_for('results.waec_list', year=year))
     return render_template('results/waec_quick.html', text=text, year=year, preview=preview,
                            roster=roster, grades=WAEC_GRADES, roster_count=len(students))
+
+
+def _save_waec_rows(student_id, exam_year, subjects, grades):
+    """Upsert one student's WAEC subject/grade rows. Returns the count saved."""
+    n = 0
+    for i, subject in enumerate(subjects):
+        if subject and i < len(grades) and grades[i] in WAEC_GRADES:
+            r = WAECResult.query.filter_by(student_id=student_id, exam_year=exam_year,
+                                           subject=subject).first()
+            if r:
+                r.grade = grades[i]
+            else:
+                db.session.add(WAECResult(student_id=student_id, exam_year=exam_year,
+                                          subject=subject, grade=grades[i]))
+            n += 1
+    return n
+
+
+@results_bp.route('/waec/paste/save', methods=['POST'])
+@login_required
+def waec_paste_save():
+    """Save the reviewed pasted result. The student is an SSS3 candidate, an
+    existing student to move into SSS3 for the exam year's session, or a new
+    student to add (``student_id=new``) — the last two need the approval tick."""
+    from utils import roster_placement as rp
+    year = request.form.get('exam_year', type=int)
+    choice = (request.form.get('student_id') or '').strip()
+    subjects, grades = request.form.getlist('subject[]'), request.form.getlist('grade[]')
+    back = url_for('results.paste_waec')
+    if not year or not choice:
+        flash('Student and exam year are required.', 'error')
+        return redirect(back)
+    target = rp.placement_target('sss3', year)
+    created = moved = False
+    if choice == 'new':
+        surname, first = request.form.get('new_surname'), request.form.get('new_first')
+        if not rp.can_change_roster():
+            flash('Only staff who can edit Students may add a new student.', 'error')
+            return redirect(back)
+        if not (surname or '').strip() or not (first or '').strip():
+            flash('A new student needs a surname and a first name.', 'error')
+            return redirect(back)
+        if 'error' in target:
+            flash(target['error'], 'error')
+            return redirect(back)
+        if not request.form.get('approve_roster'):
+            flash('Tick "I approve" to add the new student to SSS3, then save.', 'error')
+            return redirect(back)
+        st = rp.create_student(surname, first, request.form.get('new_middle'),
+                               request.form.get('new_gender'))
+        created = True
+    else:
+        try:
+            st = _student_in_scope(int(choice))
+        except ValueError:
+            st = None
+        if st is None:
+            flash('That student is not in your branch.', 'error')
+            return redirect(back)
+        needs_move = ('error' not in target and
+                      st.id not in rp.in_class_ids(target['cls'], target['session'].id, {st.id}))
+        if needs_move and rp.can_change_roster():
+            if not request.form.get('approve_roster'):
+                flash(f'{st.full_name} is not in SSS3 for {target["session"].name} — tick '
+                      f'"I approve" to move them, then save.', 'error')
+                return redirect(back)
+            moved = True
+    if created or moved:
+        if not rp.place(st, target, request.form.get('arm_id', type=int)):
+            db.session.rollback()
+            flash('SSS3 has no class arm in this student\'s branch for that session.', 'error')
+            return redirect(back)
+    n = _save_waec_rows(st.id, year, subjects, grades)
+    db.session.commit()
+    recompute_student_safe(st.id)
+    log_action('results.waec_paste_save', detail=f'{year}: {n} result(s)'
+               + ('; new student' if created else '') + ('; moved to SSS3' if moved else ''),
+               target=st)
+    flash(f'{n} WAEC result(s) saved for {st.full_name}.'
+          + (' Added to the register and placed in SSS3.' if created else '')
+          + (' Moved into SSS3.' if moved else ''), 'success')
+    return redirect(url_for('results.view_waec_student', student_id=st.id))
 
 
 @results_bp.route('/waec/student/<int:student_id>')

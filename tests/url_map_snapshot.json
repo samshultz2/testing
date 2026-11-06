@@ -6234,6 +6234,13 @@
 ]
 ],
 [
+"results.waec_paste_save",
+"/results/waec/paste/save",
+[
+"POST"
+]
+],
+[
 "results.waec_quick_entry",
 "/results/waec/quick",
 [

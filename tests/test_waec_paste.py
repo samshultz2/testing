@@ -46,7 +46,7 @@ def test_paste_waec_preview_matches_and_renders_grid(app, monkeypatch):
     r = c.post('/results/waec/paste', data={'_csrf_token': auth_csrf(c), 'exam_year': 2024, 'data': text})
     assert r.status_code == 200
     body = r.get_data(as_text=True)
-    assert '/waec/add' in body                 # rendered the review grid that saves
+    assert '/waec/paste/save' in body          # rendered the review grid that saves
     assert 'value="2024"' in body and 'B3' in body and 'A1' in body
     assert f'value="{sid}" selected' in body   # student matched on name
 

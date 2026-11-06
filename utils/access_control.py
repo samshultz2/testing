@@ -966,7 +966,7 @@ _SUBSECTION_ENDPOINTS = {
         'waec_view': {'waec_list', 'waec_subject', 'view_waec_student', 'waec_analytics',
                       'waec_student_analysis', 'api_waec_grade_distribution',
                       'api_waec_subject_stats'},
-        'waec_create': {'add_waec', 'scan_waec', 'paste_waec', 'waec_quick_entry'},
+        'waec_create': {'add_waec', 'scan_waec', 'paste_waec', 'waec_paste_save', 'waec_quick_entry'},
         'waec_edit': {'edit_waec'},
         'waec_delete': {'delete_waec', 'delete_waec_single'},
         'waec_export': {'export_waec'},
@@ -1966,7 +1966,7 @@ def exam_student_scope():
 _SSS3_EXAM_ENDPOINTS = {
     'results.index',
     'results.waec_list', 'results.add_waec', 'results.scan_waec', 'results.paste_waec',
-    'results.waec_quick_entry',
+    'results.waec_quick_entry', 'results.waec_paste_save',
     'results.view_waec_student', 'results.edit_waec', 'results.waec_student_analysis',
     'results.jamb_list', 'results.add_jamb', 'results.scan_jamb', 'results.paste_jamb',
     'results.scan_batch', 'results.view_jamb_student', 'results.edit_jamb',

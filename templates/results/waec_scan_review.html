@@ -37,7 +37,9 @@ details.raw pre{white-space:pre-wrap;background:var(--gray-50);padding:.75rem;bo
     </div>
 
     <div class="card"><div class="card-body">
-        {% if matched %}
+        {% set pr = placement.row if placement is defined else None %}
+        {% if pr and pr.placement and not pr.blocked %}
+        {% elif matched %}
         <div class="match-note match-ok">
             <i class="fas fa-circle-check"></i>
             <span>Read name: <strong>{{ parsed.name or '—' }}</strong>. Best match: <strong>{{ matched.full_name }}</strong> ({{ (match_score*100)|round|int }}% confidence) — confirm or change below.</span>
@@ -49,12 +51,33 @@ details.raw pre{white-space:pre-wrap;background:var(--gray-50);padding:.75rem;bo
         </div>
         {% endif %}
 
-        <form method="POST" action="{{ url_for('results.add_waec') }}">
+        {% if pr and pr.placement == 'create' and not pr.blocked %}
+        <div class="match-note match-warn">
+            <i class="fas fa-user-plus"></i>
+            <span><strong>{{ pr.name }}</strong> is not on the register{% if pr.suggest %} (closest: {{ pr.suggest.full_name }}, only a partial match){% endif %}. It will be <strong>added as a new student</strong> and placed in SSS3 for {{ placement.target.session.name }} — check the name split below, or pick an existing student instead.</span>
+        </div>
+        {% elif pr and pr.placement == 'move' and not pr.blocked %}
+        <div class="match-note match-warn">
+            <i class="fas fa-right-left"></i>
+            <span><strong>{{ pr.student.full_name }}</strong> is {% if pr.from_class %}in {{ pr.from_class }}{% else %}not in a class{% endif %}, not SSS3, for {{ placement.target.session.name }}. They will be <strong>moved into SSS3</strong> when you approve and save.</span>
+        </div>
+        {% elif pr and (pr.errors or pr.warnings) %}
+        <div class="match-note match-warn"><i class="fas fa-triangle-exclamation"></i>
+            <span>{% for e in (pr.errors or []) + (pr.warnings or []) %}{{ e }} {% endfor %}</span></div>
+        {% endif %}
+
+        <form method="POST" action="{{ url_for('results.waec_paste_save') if placement is defined else url_for('results.add_waec') }}" id="waecReviewForm">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Student <span class="required">*</span></label>
-                    <select name="student_id" class="form-control" required>
+                    <select name="student_id" class="form-control" required id="waecStudentSel">
                         <option value="">Select Student</option>
+                        {% if pr and not pr.blocked %}
+                          {% if pr.placement == 'create' %}<option value="new" selected data-roster="new">➕ New student: {{ pr.new_name|join(' ') }}</option>{% endif %}
+                          {% if pr.suggest %}<option value="{{ pr.suggest.id }}" {% if not pr.suggest_inside %}data-roster="move"{% endif %}>{{ pr.suggest.full_name }} ({{ pr.suggest.student_id }}) — similar name{% if not pr.suggest_inside %}, will be moved into SSS3{% endif %}</option>{% endif %}
+                          {% if pr.placement == 'move' %}<option value="{{ pr.student.id }}" selected data-roster="move">{{ pr.student.full_name }} ({{ pr.student.student_id }}) — will be moved into SSS3</option>{% endif %}
+                        {% endif %}
                         {% for s in students %}
                         <option value="{{ s.id }}" {% if matched and s.id == matched.id %}selected{% endif %}>{{ s.full_name }} ({{ s.student_id }})</option>
                         {% endfor %}
@@ -65,6 +88,29 @@ details.raw pre{white-space:pre-wrap;background:var(--gray-50);padding:.75rem;bo
                     <input type="number" name="exam_year" class="form-control" min="2000" max="2100" value="{{ current_year }}" required>
                 </div>
             </div>
+
+            {% if pr and not pr.blocked and (pr.placement or pr.suggest) %}
+            {% set t = placement.target %}
+            <div id="waecNewFields" class="card mb-2" style="border:1px dashed var(--border-color){% if pr.placement != 'create' %};display:none{% endif %}"><div class="card-body">
+                <div class="text-muted text-sm mb-1">New student — the typed name split on spaces as Surname · First · Middle. Correct it if needed.</div>
+                <div class="form-row">
+                    <div class="form-group"><label class="form-label" for="nsS">Surname</label><input id="nsS" name="new_surname" class="form-control" maxlength="50" value="{{ pr.new_name[0] if pr.new_name else '' }}"></div>
+                    <div class="form-group"><label class="form-label" for="nsF">First name</label><input id="nsF" name="new_first" class="form-control" maxlength="50" value="{{ pr.new_name[1] if pr.new_name else '' }}"></div>
+                    <div class="form-group"><label class="form-label" for="nsM">Middle name</label><input id="nsM" name="new_middle" class="form-control" maxlength="50" value="{{ (pr.new_name[2] or '') if pr.new_name else '' }}"></div>
+                    <div class="form-group"><label class="form-label" for="nsG">Gender</label><select id="nsG" name="new_gender" class="form-control"><option value="">Not set</option><option>Male</option><option>Female</option></select></div>
+                </div>
+            </div></div>
+            <div id="waecApprove" class="card mb-2" style="border:2px solid var(--warning){% if not pr.placement %};display:none{% endif %}"><div class="card-body">
+                {% if t.arms|length > 1 %}
+                <div class="form-group" style="max-width:300px"><label class="form-label" for="waecArm">Place in arm</label>
+                  <select id="waecArm" name="arm_id" class="form-control">{% for a in t.arms %}<option value="{{ a.arm_id }}">{{ a.display_name if a.display_name is defined else (t.cls.name ~ ' ' ~ a.arm.name) }}</option>{% endfor %}</select></div>
+                {% else %}<input type="hidden" name="arm_id" value="{{ t.arms[0].arm_id }}">{% endif %}
+                <label class="d-flex gap-2" style="align-items:center;font-weight:600">
+                    <input type="checkbox" name="approve_roster" value="1">
+                    <span id="waecApproveText">I approve {{ 'adding this student and placing them' if pr.placement == 'create' else 'moving this student' }} into SSS3 for {{ t.session.name }}.</span>
+                </label>
+            </div></div>
+            {% endif %}
 
             <hr class="my-3">
             <h3 class="mb-2">Subjects &amp; Grades <span class="text-muted" style="font-size:.8rem;font-weight:400;">({{ parsed.subjects|length }} read)</span></h3>
@@ -95,4 +141,23 @@ details.raw pre{white-space:pre-wrap;background:var(--gray-50);padding:.75rem;bo
         </form>
     </div></div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var sel = document.getElementById('waecStudentSel');
+  var nf = document.getElementById('waecNewFields'), ap = document.getElementById('waecApprove');
+  var txt = document.getElementById('waecApproveText');
+  if (!sel || !ap) return;
+  var session = {{ (placement.target.session.name if placement is defined and placement.target.session is defined else '')|tojson }};
+  function sync() {
+    var o = sel.options[sel.selectedIndex], r = o && o.getAttribute('data-roster');
+    if (nf) nf.style.display = r === 'new' ? '' : 'none';
+    ap.style.display = r ? '' : 'none';
+    if (txt) txt.textContent = 'I approve ' + (r === 'new' ? 'adding this student and placing them' : 'moving this student') + ' into SSS3 for ' + session + '.';
+  }
+  sel.addEventListener('change', sync); sync();
+})();
+</script>
 {% endblock %}

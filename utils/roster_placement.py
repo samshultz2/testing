@@ -231,14 +231,53 @@ def _current_class_names(student_ids, target):
     return out
 
 
+def create_student(surname, first, middle=None, gender=None):
+    """Add a student to the register (current branch, generated ID). Flushes."""
+    from utils.branch_scope import branch_for_new
+    bid = branch_for_new()
+    st = Student(surname=(surname or '').strip()[:50].title(), first_name=(first or '').strip()[:50].title(),
+                 middle_name=((middle or '').strip()[:50].title() or None),
+                 gender=(gender if gender in ('Male', 'Female') else ''), branch_id=bid,
+                 is_active=True, student_id=Student.generate_student_id(bid))
+    db.session.add(st)
+    db.session.flush()
+    return st
+
+
+def place(student, target, arm_id=None):
+    """Enrol ``student`` in the target class for the placement term, switching
+    off any other active enrolment that term. Returns False when the class has
+    no arm in the student's branch."""
+    from models import StudentEnrollment, ClassArmAssignment
+    cands = [a for a in target['arms'] if a.branch_id in (student.branch_id, None)] or \
+            ([] if student.branch_id else target['arms'])
+    caa = next((a for a in cands if arm_id and a.arm_id == arm_id), None) or (cands[0] if cands else None)
+    if caa is None:
+        return False
+    for e in (StudentEnrollment.query.join(ClassArmAssignment,
+              ClassArmAssignment.id == StudentEnrollment.class_arm_assignment_id)
+              .filter(StudentEnrollment.student_id == student.id,
+                      StudentEnrollment.is_active == True,             # noqa: E712
+                      ClassArmAssignment.term_id == target['term'].id,
+                      StudentEnrollment.class_arm_assignment_id != caa.id).all()):
+        e.is_active = False
+    e = StudentEnrollment.query.filter_by(student_id=student.id, class_arm_assignment_id=caa.id).first()
+    if e is None:
+        db.session.add(StudentEnrollment(student_id=student.id, class_arm_assignment_id=caa.id,
+                                         is_active=True))
+    else:
+        e.is_active = True
+    db.session.flush()
+    return True
+
+
 def apply(plan_summary, include, arm_id=None, genders=None, use_existing=None):
     """Create / move the approved rows. ``include`` is the set of row line
     numbers ticked on the approval list; ``arm_id`` the ClassArm to place them
     in (else the class's first arm); ``genders`` {line: 'Male'|'Female'} for new
-    students. Returns ``(created, moved, skipped_lines)``; rows that could not be
-    placed get ``student`` cleared so their results are not saved."""
-    from models import StudentEnrollment, ClassArmAssignment
-    from utils.branch_scope import branch_for_new
+    students; ``use_existing`` lines whose possible match the approver chose.
+    Returns ``(created, moved, skipped_lines)``; rows that could not be placed
+    get ``student`` cleared so their results are not saved."""
     target = plan_summary['target']
     if 'error' in target:
         return 0, 0, []
@@ -246,16 +285,6 @@ def apply(plan_summary, include, arm_id=None, genders=None, use_existing=None):
     use_existing = use_existing or set()
     created = moved = 0
     skipped = []
-
-    def assignment_for(st_branch):
-        cands = [a for a in target['arms'] if a.branch_id in (st_branch, None)] or \
-                ([] if st_branch else target['arms'])
-        if arm_id:
-            pick = [a for a in cands if a.arm_id == arm_id]
-            if pick:
-                return pick[0]
-        return cands[0] if cands else None
-
     for row in plan_summary['creates'] + plan_summary['moves']:
         if row['line'] not in include:
             row['student'] = None
@@ -263,44 +292,19 @@ def apply(plan_summary, include, arm_id=None, genders=None, use_existing=None):
             continue
         if row['placement'] == 'create' and row['line'] in use_existing and row.get('suggest'):
             # The approver said the possible match IS this student.
-            row['student'] = row['suggest']
-            row['placement'] = 'move'
+            row['student'], row['placement'] = row['suggest'], 'move'
             if row.get('suggest_inside'):
                 continue                      # already in the class — just save results
         elif row['placement'] == 'create':
-            surname, first, middle = row['new_name']
-            bid = branch_for_new()
-            st = Student(surname=surname, first_name=first, middle_name=middle,
-                         gender=(genders.get(row['line']) or '')[:10], branch_id=bid,
-                         is_active=True, student_id=Student.generate_student_id(bid))
-            db.session.add(st)
-            db.session.flush()
-            row['student'] = st
+            row['student'] = create_student(*row['new_name'], gender=genders.get(row['line']))
             created += 1
-        st = row['student']
-        caa = assignment_for(st.branch_id)
-        if caa is None:
+        if not place(row['student'], target, arm_id):
             row['errors'].append(f'No {plan_summary["label"]} arm in this student\'s branch.')
             row['student'] = None
             skipped.append(row['line'])
             continue
-        # One class per term: deactivate any other active enrolment that term.
-        for e in (StudentEnrollment.query.join(ClassArmAssignment,
-                  ClassArmAssignment.id == StudentEnrollment.class_arm_assignment_id)
-                  .filter(StudentEnrollment.student_id == st.id,
-                          StudentEnrollment.is_active == True,         # noqa: E712
-                          ClassArmAssignment.term_id == target['term'].id,
-                          StudentEnrollment.class_arm_assignment_id != caa.id).all()):
-            e.is_active = False
-        e = StudentEnrollment.query.filter_by(student_id=st.id, class_arm_assignment_id=caa.id).first()
-        if e is None:
-            db.session.add(StudentEnrollment(student_id=st.id, class_arm_assignment_id=caa.id,
-                                             is_active=True))
-        else:
-            e.is_active = True
         if row['placement'] == 'move':
             moved += 1
-    db.session.flush()
     return created, moved, skipped
 
 
