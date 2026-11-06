@@ -293,3 +293,47 @@ def test_score_entry_exposes_blank_sheet_link(app):
     c = _admin(app)
     html = c.get(f"/subjects/scores?term_id={ids['term']}&assignment_id={ids['asg']}").get_data(as_text=True)
     assert '/subjects/broadsheet/blank-sheet' in html
+
+
+def _pdf_text(data):
+    import fitz
+    with fitz.open(stream=data, filetype='pdf') as doc:
+        return ' '.join(p.get_text() for p in doc)
+
+
+def test_blank_sheet_only_has_the_subjects_own_columns(app):
+    """P.E/M.E is printed only for subjects that have a practical."""
+    from utils.broadsheet_export import score_columns
+    from utils.assessments import apply_practical, is_midterm
+    ids = _seed(app)
+    with app.app_context():
+        mid = next((at for at in AssessmentType.query.filter_by(is_active=True).all() if is_midterm(at)), None)
+        if mid is None:
+            mid = AssessmentType(name='Midterm Exam', short_name='MTE', max_score=10, order=5, is_active=True)
+            db.session.add(mid); db.session.flush()
+        term = db.session.get(Term, ids['term'])
+        caa = db.session.get(ClassArmAssignment, ids['asg'])
+        made = {}
+        for name, prac in (('BlankNoPrac', False), ('BlankWithPrac', True)):
+            subj = Subject(name=name, is_active=True, has_practical=prac)
+            db.session.add(subj); db.session.flush()
+            apply_practical(db, subj)
+            cs = ClassSubject(subject_id=subj.id, class_id=caa.class_id, arm_id=caa.arm_id,
+                              term_id=term.id, is_active=True)
+            db.session.add(cs); db.session.flush()
+            made[name] = (subj, cs.id)
+        db.session.commit()
+        no_prac = [c['label'] for c in score_columns(made['BlankNoPrac'][0], term.id)]
+        with_prac = [c['label'] for c in score_columns(made['BlankWithPrac'][0], term.id)]
+        generic = [c['label'] for c in score_columns()]
+        cs_no, cs_with = made['BlankNoPrac'][1], made['BlankWithPrac'][1]
+    assert 'P.E/M.E' in generic and 'P.E/M.E' in with_prac and 'P.E/M.E' not in no_prac
+    assert set(no_prac) < set(with_prac)
+    c = _admin(app)
+    base = f"/subjects/broadsheet/blank-sheet?term_id={ids['term']}&assignment_id={ids['asg']}"
+    txt_no = _pdf_text(c.get(f'{base}&class_subject_id={cs_no}').get_data())
+    txt_with = _pdf_text(c.get(f'{base}&class_subject_id={cs_with}').get_data())
+    assert 'P.E/M.E' not in txt_no and 'BlankNoPrac' in txt_no
+    assert 'P.E/M.E' in txt_with
+    # The subject name alone (older links) also works.
+    assert 'P.E/M.E' not in _pdf_text(c.get(f'{base}&subject=BlankNoPrac').get_data())

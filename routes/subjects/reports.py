@@ -1544,7 +1544,19 @@ def blank_score_sheet():
         flash('You do not have access to that class.', 'error')
         return redirect(url_for('subjects.broadsheet'))
 
-    data = blank_sheet_pdf(term_id, assignment_id, subject_name=subject_name)
+    # A specific subject → only the columns it uses (no P.E/M.E for a subject
+    # without a practical, etc.). Without one, the generic all-columns sheet.
+    from models import ClassSubject, Subject
+    subject = None
+    cs_id = request.args.get('class_subject_id', type=int)
+    if cs_id:
+        cs = db.session.get(ClassSubject, cs_id)
+        subject = cs.subject if cs else None
+    if subject is None and subject_name:
+        subject = Subject.query.filter(db.func.lower(Subject.name) == subject_name.lower()).first()
+    if subject is not None and not subject_name:
+        subject_name = subject.name
+    data = blank_sheet_pdf(term_id, assignment_id, subject_name=subject_name, subject=subject)
     if not data:
         flash('Could not build the score sheet.', 'error')
         return redirect(url_for('subjects.broadsheet', term_id=term_id, assignment_id=assignment_id))

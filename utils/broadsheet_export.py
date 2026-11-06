@@ -36,14 +36,29 @@ def _is_ha(at):
     return code in ('HA', 'HW') or 'HOLIDAY' in name or 'ASSIGNMENT' in name
 
 
-def score_columns():
+def score_columns(subject=None, term_id=None):
     """Ordered blank-sheet score columns from the active assessment types.
 
     Returns a list of dicts ``{'label', 'max', 'kind'}`` where ``kind`` is one of
     ca / ha / peme / cbt / theory / other, deduplicated by short name and ordered
-    as CAs → HA → Practical/Mid-term → CBT → Theory → anything else."""
+    as CAs → HA → Practical/Mid-term → CBT → Theory → anything else.
+
+    With a ``subject``, only the columns that subject actually uses are kept:
+    an assessment whose effective max is 0 for it (e.g. P.E/M.E for a subject
+    without a practical) is dropped, using the same precedence as score entry
+    (term setting → the subject's override → the global default)."""
     types = AssessmentType.query.filter_by(is_active=True).order_by(
         AssessmentType.order, AssessmentType.id).all()
+    if subject is not None:
+        from utils.assessments import effective_max, term_maxes
+        from models import SubjectAssessmentOverride
+        overrides = {o.assessment_type_id: o.max_score for o in SubjectAssessmentOverride.query
+                     .filter_by(subject_id=subject.id, is_active=True).all()}
+        tset = term_maxes(term_id)
+        maxes = {at.id: effective_max(subject, at, overrides, term_id, tset) for at in types}
+        types = [at for at in types if (maxes.get(at.id) or 0) > 0]
+    else:
+        maxes = {}
     seen, uniq = set(), []
     for at in types:
         key = (at.short_name or at.name or '').upper()
@@ -76,7 +91,8 @@ def score_columns():
             kind = 'theory'
         else:
             kind = 'other'
-        buckets[kind].append({'label': label_for(at, kind), 'max': at.max_score, 'kind': kind})
+        buckets[kind].append({'label': label_for(at, kind), 'max': maxes.get(at.id, at.max_score),
+                              'kind': kind})
     ordered = (buckets['ca'] + buckets['ha'] + buckets['peme'] + buckets['other']
                + buckets['cbt'] + buckets['theory'])
     return ordered
@@ -371,7 +387,7 @@ def broadsheet_png(term_id, assignment_id, dpi=200, min_score=None, filter_field
 # Blank score-entry sheet (A4, one subject) — reportlab
 # --------------------------------------------------------------------------- #
 
-def blank_sheet_pdf(term_id, assignment_id, subject_name=''):
+def blank_sheet_pdf(term_id, assignment_id, subject_name='', subject=None):
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm
     from reportlab.lib import colors
@@ -388,7 +404,7 @@ def blank_sheet_pdf(term_id, assignment_id, subject_name=''):
                 .filter_by(class_arm_assignment_id=assignment_id, is_active=True)
                 .join(Student).options(contains_eager(StudentEnrollment.student))
                 .order_by(Student.surname, Student.first_name).all())]
-    cols = score_columns()
+    cols = score_columns(subject=subject, term_id=term_id)
     # Plain black-and-white — no fills or shading (clean to photocopy).
     styles = getSampleStyleSheet()
     h = ParagraphStyle('h', parent=styles['Title'], fontSize=15, textColor=colors.black, spaceAfter=1)

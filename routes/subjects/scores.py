@@ -147,7 +147,8 @@ def scores_entry():
                  'broadsheet_import': url_for('subjects.broadsheet_import', term_id=term_id or '', assignment_id=assignment_id or ''),
                  'subject_sheet_import': url_for('subjects.subject_sheet_import', term_id=term_id or '', assignment_id=assignment_id or '', class_subject_id=class_subject_id or ''),
                  'blank_sheet': (url_for('subjects.blank_score_sheet', term_id=term_id or '', assignment_id=assignment_id or '',
-                                         subject=selected_class_subject.subject.name if selected_class_subject else '')
+                                         subject=selected_class_subject.subject.name if selected_class_subject else '',
+                                         class_subject_id=selected_class_subject.id if selected_class_subject else None)
                                  if term_id and assignment_id else '')},
     })
 
