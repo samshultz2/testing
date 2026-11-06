@@ -1,0 +1,154 @@
+{% extends "base.html" %}
+{# Shared shell for the JSS3 and Basic 6 exam modules. Each level renders through
+   its own blueprint (``bp``) so the two stay fully separate, like the JSS / SSS
+   timetable generator. #}
+{% block title %}{% block page_title %}{{ L.name }}{% endblock %} · {{ L.name }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('exam_levels.index') }}">Exam Levels</a> / <a href="{{ url_for(bp ~ '.dashboard', body=body if body is defined else 'state') }}">{{ L.name }}</a>{% block crumb %}{% endblock %}{% endblock %}
+
+{% block extra_css %}
+<style>
+.sx-root{
+  --sx-dist:#008300;--sx-credit:#2a78d6;--sx-pass:#c98500;--sx-fail:#d03b2f;
+  --sx-s1:#2a78d6;--sx-s2:#eb6834;--sx-accent:{{ L.color }};
+}
+:root[data-theme="dark"] .sx-root{--sx-dist:#2f9e2f;--sx-credit:#3987e5;--sx-pass:#c98500;--sx-fail:#e5584b;--sx-s1:#3987e5;--sx-s2:#d95926}
+@media (prefers-color-scheme: dark){:root:where(:not([data-theme="light"])) .sx-root{--sx-dist:#2f9e2f;--sx-credit:#3987e5;--sx-fail:#e5584b;--sx-s1:#3987e5;--sx-s2:#d95926}}
+.sx-hero{border-radius:var(--radius-lg,14px);color:#fff;padding:1.1rem 1.25rem;margin-bottom:1rem;display:flex;flex-wrap:wrap;gap:.75rem;align-items:center;justify-content:space-between}
+.sx-hero h1{margin:0;font-size:1.4rem;color:#fff}
+.sx-hero p{margin:.15rem 0 0;opacity:.92;font-size:.85rem}
+.sx-hero .sx-hero-icon{font-size:2rem;opacity:.9;margin-right:.75rem}
+.sx-tabs{display:flex;flex-wrap:wrap;gap:.35rem;margin-bottom:.9rem;border-bottom:1px solid var(--border-color);padding-bottom:.6rem}
+.sx-tabs a{padding:.42rem .8rem;border-radius:var(--radius-full,999px);font-size:.82rem;text-decoration:none;color:var(--text-secondary);border:1px solid transparent}
+.sx-tabs a:hover{background:var(--gray-50)}
+.sx-tabs a.active{background:var(--sx-accent);color:#fff}
+.sx-bar{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;justify-content:space-between;margin-bottom:1rem}
+.sx-body{display:inline-flex;border:1px solid var(--border-color);border-radius:var(--radius-full,999px);overflow:hidden}
+.sx-body a{padding:.4rem .95rem;font-size:.82rem;text-decoration:none;color:var(--text-secondary);background:var(--bg-card)}
+.sx-body a.active{background:var(--sx-accent);color:#fff;font-weight:600}
+.sx-year{display:flex;gap:.4rem;align-items:center}
+.sx-year select{max-width:120px}
+.sx-kpis{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.6rem;margin-bottom:1rem}
+@media(min-width:768px){.sx-kpis{grid-template-columns:repeat(4,minmax(0,1fr))}}
+@media(min-width:1200px){.sx-kpis.wide{grid-template-columns:repeat(6,minmax(0,1fr))}}
+.sx-kpi{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-md,10px);padding:.8rem .9rem}
+.sx-kpi .v{font-size:1.55rem;font-weight:700;line-height:1.15;color:var(--text-primary)}
+.sx-kpi .l{font-size:.72rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.02em}
+.sx-kpi .s{font-size:.75rem;color:var(--text-secondary);margin-top:.15rem}
+.sx-grid{display:grid;grid-template-columns:1fr;gap:1rem;margin-bottom:1rem}
+@media(min-width:992px){.sx-grid.two{grid-template-columns:1fr 1fr}.sx-grid.wide-left{grid-template-columns:2fr 1fr}}
+.sx-grid > .card{margin-bottom:0}
+.sx-chart{position:relative;height:260px}
+.sx-chart.tall{height:340px}
+.sx-chip{display:inline-block;min-width:1.9rem;text-align:center;padding:.08rem .4rem;border-radius:6px;font-weight:700;font-size:.78rem;color:#fff}
+.sx-k-distinction{background:var(--sx-dist)}.sx-k-credit{background:var(--sx-credit)}
+.sx-k-pass{background:var(--sx-pass);color:#0b0b0b}.sx-k-fail{background:var(--sx-fail)}
+.sx-dot{display:inline-block;width:.65rem;height:.65rem;border-radius:3px;margin-right:.3rem;vertical-align:middle}
+.sx-meter{height:7px;border-radius:999px;background:var(--gray-100);overflow:hidden;margin-top:.25rem;display:flex;gap:2px}
+.sx-meter > span{display:block;height:100%}
+.sx-up{color:var(--success)}.sx-down{color:var(--danger)}
+.sx-muted{color:var(--text-muted);font-size:.8rem}
+.data-table td.num,.data-table th.num{text-align:right;white-space:nowrap}
+.sx-legend{display:flex;flex-wrap:wrap;gap:.75rem;font-size:.78rem;color:var(--text-secondary);margin:.25rem 0 .5rem}
+</style>
+{% block page_css %}{% endblock %}
+{% endblock %}
+
+
+{% block content %}
+<div class="sx-root">
+<div class="sx-hero" style="background:{{ L.gradient }}">
+  <div class="d-flex align-center">
+    <i class="fas {{ L.icon }} sx-hero-icon" aria-hidden="true"></i>
+    <div>
+      <h1>{{ L.name }}</h1>
+      <p>{{ L.long_name }}{% if body is defined %} · <strong>{{ body_meta.full }}</strong>{% endif %}</p>
+    </div>
+  </div>
+  <a href="{{ url_for('exam_levels.index') }}" class="btn btn-sm" style="background:rgba(255,255,255,.18);color:#fff;border:1px solid rgba(255,255,255,.4)"><i class="fas fa-layer-group"></i> Switch level</a>
+</div>
+
+{% set _b = body if body is defined else 'state' %}
+{% set _ep = request.endpoint.split('.')[-1] %}
+<nav class="sx-tabs" aria-label="{{ L.name }} sections">
+  <a href="{{ url_for(bp ~ '.dashboard', body=_b) }}" class="{{ 'active' if _ep in ('dashboard','student') }}"><i class="fas fa-gauge"></i> Dashboard</a>
+  <a href="{{ url_for(bp ~ '.analytics', body=_b) }}" class="{{ 'active' if _ep in ('analytics','subject') }}"><i class="fas fa-chart-pie"></i> Analytics</a>
+  <a href="{{ url_for(bp ~ '.compare') }}" class="{{ 'active' if _ep == 'compare' }}"><i class="fas fa-scale-balanced"></i> State vs Federal</a>
+  <a href="{{ url_for(bp ~ '.grid_entry', body=_b) }}" class="{{ 'active' if _ep == 'grid_entry' }}"><i class="fas fa-table-cells"></i> Grid entry</a>
+  <a href="{{ url_for(bp ~ '.add_result', body=_b) }}" class="{{ 'active' if _ep == 'add_result' }}"><i class="fas fa-plus"></i> Add result</a>
+  <a href="{{ url_for(bp ~ '.import_results', body=_b) }}" class="{{ 'active' if _ep == 'import_results' }}"><i class="fas fa-paste"></i> Paste / CSV</a>
+  <a href="{{ url_for(bp ~ '.settings', body=_b) }}" class="{{ 'active' if _ep == 'settings' }}"><i class="fas fa-sliders"></i> Settings</a>
+</nav>
+
+{% if body is defined or years is defined %}
+<div class="sx-bar">
+  {% if body is defined and body_links %}
+  <div class="sx-body" role="tablist" aria-label="Exam body">
+    {% for b in bodies %}<a role="tab" href="{{ body_links[b] }}" class="{{ 'active' if b == body }}" aria-selected="{{ 'true' if b == body else 'false' }}">{{ L.bodies[b].name }} <span class="sx-muted" style="color:inherit;opacity:.8">({{ b|title }})</span></a>{% endfor %}
+  </div>
+  {% else %}<div></div>{% endif %}
+  {% if years is defined %}
+  <form method="get" class="sx-year">
+    {% for k, v in request.args.items() if k not in ('year',) %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+    <label class="form-label mb-0" for="sx-year">Exam year</label>
+    <select id="sx-year" name="year" class="form-control" data-autosubmit>
+      {% set ys = years if year in years else ([year] + years) %}
+      {% for y in ys|sort(reverse=True) %}<option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}{% if y not in years %} (no data){% endif %}</option>{% endfor %}
+    </select>
+  </form>
+  {% endif %}
+</div>
+{% endif %}
+
+{% block sx_content %}{% endblock %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script nonce="{{ csp_nonce }}">
+/* Shared Chart.js renderer for the school-exam pages. Each <canvas data-sx-chart>
+   carries its config as JSON; colours are resolved from CSS custom properties
+   (var(--sx-*)) so light/dark themes both work. Safe to re-run under spa-nav. */
+(function () {
+  if (typeof Chart === 'undefined') return;
+  var root = document.querySelector('.sx-root') || document.body;
+  var css = getComputedStyle(root);
+  function col(v) {
+    if (typeof v === 'string' && v.indexOf('var(') === 0) {
+      return (css.getPropertyValue(v.slice(4, -1)) || '#888').trim();
+    }
+    if (Array.isArray(v)) return v.map(col);
+    return v;
+  }
+  var grid = (css.getPropertyValue('--border-color') || '#e5e7eb').trim();
+  var text = (css.getPropertyValue('--text-muted') || '#6b7280').trim();
+  document.querySelectorAll('canvas[data-sx-chart]').forEach(function (cv) {
+    var cfg;
+    try { cfg = JSON.parse(cv.getAttribute('data-sx-chart')); } catch (e) { return; }
+    var prev = Chart.getChart(cv); if (prev) prev.destroy();
+    (cfg.data.datasets || []).forEach(function (ds) {
+      ['backgroundColor', 'borderColor', 'pointBackgroundColor'].forEach(function (k) { if (ds[k]) ds[k] = col(ds[k]); });
+      if (cfg.type === 'bar') { ds.borderRadius = ds.borderRadius == null ? 4 : ds.borderRadius; ds.borderSkipped = false; ds.maxBarThickness = ds.maxBarThickness || 38; }
+      if (cfg.type === 'line') { ds.borderWidth = 2; ds.pointRadius = 4; ds.pointHoverRadius = 6; ds.tension = .25; ds.fill = false; }
+    });
+    var o = cfg.options = cfg.options || {};
+    o.responsive = true; o.maintainAspectRatio = false;
+    o.plugins = o.plugins || {};
+    o.plugins.legend = o.plugins.legend || { display: (cfg.data.datasets || []).length > 1, labels: { color: text, boxWidth: 12 } };
+    o.plugins.tooltip = Object.assign({ mode: cfg.type === 'line' ? 'index' : 'nearest', intersect: cfg.type !== 'line' }, o.plugins.tooltip || {});
+    if (cfg.type !== 'doughnut' && cfg.type !== 'pie') {
+      o.scales = o.scales || {};
+      ['x', 'y'].forEach(function (a) {
+        o.scales[a] = Object.assign({ grid: { color: grid, drawBorder: false }, ticks: { color: text } }, o.scales[a] || {});
+        o.scales[a].grid = Object.assign({ color: grid }, o.scales[a].grid || {});
+        o.scales[a].ticks = Object.assign({ color: text }, o.scales[a].ticks || {});
+      });
+    } else {
+      o.plugins.legend = { display: true, position: 'bottom', labels: { color: text, boxWidth: 12 } };
+      (cfg.data.datasets || []).forEach(function (ds) { ds.borderColor = (css.getPropertyValue('--bg-card') || '#fff').trim(); ds.borderWidth = 2; });
+    }
+    new Chart(cv, cfg);
+  });
+})();
+</script>
+{% block page_js %}{% endblock %}
+{% endblock %}

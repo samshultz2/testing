@@ -1,0 +1,54 @@
+{% extends "school_exams/_base.html" %}
+{% from "school_exams/_macros.html" import kind_chip, pct %}
+{% block page_title %}{{ student.full_name }}{% endblock %}
+{% block crumb %} / <span>{{ student.full_name }}</span>{% endblock %}
+
+{% block sx_content %}
+<div class="card mb-3"><div class="card-body d-flex" style="justify-content:space-between;flex-wrap:wrap;gap:.75rem;align-items:center">
+  <div>
+    <h2 style="margin:0">{{ student.full_name }}</h2>
+    <div class="sx-muted">{{ student.student_id }} · {{ student.gender }}{% if arm %} · {{ L.class_label }} {{ arm }}{% endif %}</div>
+  </div>
+  <div class="d-flex gap-2">
+    {% for b in bodies %}<a class="btn btn-sm {{ 'btn-primary' if b == body else 'btn-secondary' }}" href="{{ url_for(bp ~ '.add_result', body=b, student_id=student.id) }}"><i class="fas fa-plus"></i> {{ L.bodies[b].name }} result</a>{% endfor %}
+  </div>
+</div></div>
+
+{% if not sittings %}
+<div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-file"></i><h3>No {{ L.exam_short }} results recorded</h3></div></div></div>
+{% endif %}
+
+{% for x in sittings %}{% set s = x.s %}{% set sc = x.scheme %}
+<div class="card mb-3">
+  <div class="card-header d-flex" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem">
+    <h3><i class="fas fa-file-lines"></i> {{ x.name }} {{ x.year }} <span class="badge badge-secondary">{{ x.body|title }}</span></h3>
+    <div class="d-flex gap-2">
+      <a class="btn btn-sm btn-secondary" href="{{ url_for(bp ~ '.add_result', body=x.body, student_id=student.id, year=x.year) }}"><i class="fas fa-pen"></i> Edit</a>
+      {% if user_permissions.is_admin %}
+      <form method="post" action="{{ url_for(bp ~ '.delete_student_year', body=x.body, student_id=student.id, year=x.year) }}" data-confirm="Delete {{ student.full_name }}'s {{ x.name }} {{ x.year }} results? This cannot be undone.">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <button class="btn btn-sm btn-danger" type="submit" title="Delete"><i class="fas fa-trash"></i></button>
+      </form>
+      {% endif %}
+    </div>
+  </div>
+  <div class="card-body">
+    <div class="sx-kpis wide">
+      <div class="sx-kpi"><div class="l">Position</div><div class="v">{{ s.position }}<span class="sx-muted" style="font-size:.9rem"> / {{ s.cohort }}</span></div></div>
+      <div class="sx-kpi"><div class="l">Credits or better</div><div class="v">{{ s.credits }}<span class="sx-muted" style="font-size:.9rem"> / {{ s.subjects }}</span></div><div class="s">{{ s.distinctions }} distinction(s)</div></div>
+      <div class="sx-kpi"><div class="l">Average score</div><div class="v">{{ pct(s.avg_pct) }}</div><div class="s">grade points {{ s.avg_points }}</div></div>
+      <div class="sx-kpi"><div class="l">Total</div><div class="v">{{ s.total if s.total is not none else '—' }}</div><div class="s">{% if s.above_cutoff is not none %}{{ 'above' if s.above_cutoff else 'below' }} cut-off {{ sc.cutoff|round(1) }}{% endif %}</div></div>
+      <div class="sx-kpi"><div class="l">Eng &amp; Maths credit</div><div class="v">{{ 'Yes' if s.core_credits else 'No' }}</div></div>
+      <div class="sx-kpi"><div class="l">Benchmark ({{ sc.benchmark_credits }}+)</div><div class="v">{{ 'Met' if s.meets_benchmark else 'Not met' }}</div></div>
+    </div>
+    {% if s.exam_number or s.centre or s.placement or s.admitted is not none or s.remarks %}
+    <p class="sx-muted">{% if s.exam_number %}Exam no. <strong>{{ s.exam_number }}</strong> · {% endif %}{% if s.centre %}Centre {{ s.centre }} · {% endif %}{% if s.admitted is not none %}{{ 'Admitted' if s.admitted else 'Not admitted' }} · {% endif %}{% if s.placement %}{{ L.outcome_label }}: <strong>{{ s.placement }}</strong>{% endif %}{% if s.remarks %} · {{ s.remarks }}{% endif %}</p>
+    {% endif %}
+    <div class="table-responsive"><table class="data-table">
+      <thead><tr><th>Subject</th><th class="num">Score</th><th>Grade</th><th>Remark</th></tr></thead>
+      <tbody>{% for r in s.results %}<tr><td>{{ r.subject }}</td><td class="num">{{ r.score|round(1) if r.score is not none else '—' }}</td><td>{{ kind_chip(sc, r.grade) }}</td><td>{{ (sc.band_for_grade(r.grade) or {}).get('label', '') }}</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}

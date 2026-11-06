@@ -1,0 +1,167 @@
+{% extends "school_exams/_base.html" %}
+{% from "school_exams/_macros.html" import kind_chip, kind_meter, kind_legend, delta, pct %}
+{% block page_title %}Analytics · {{ scheme.exam_name }} {{ year }}{% endblock %}
+{% block crumb %} / <span>Analytics</span>{% endblock %}
+
+{% block sx_content %}
+{% set k = stats.kpis %}
+{% if not k.candidates %}
+<div class="card"><div class="card-body"><div class="empty-state">
+  <i class="fas fa-chart-pie"></i><h3>No {{ scheme.exam_name }} results for {{ year }}</h3>
+  <p>Analytics appear as soon as results are entered.</p>
+  <a href="{{ url_for(bp ~ '.grid_entry', body=body, year=year) }}" class="btn btn-primary"><i class="fas fa-table-cells"></i> Enter results</a>
+</div></div></div>
+{% else %}
+
+{# ---------------- Headline KPIs ---------------- #}
+<div class="sx-kpis wide">
+  <div class="sx-kpi"><div class="l">Candidates</div><div class="v">{{ k.candidates }}</div><div class="s">{{ k.entries }} entries · {{ stats.subjects|length }} subjects</div></div>
+  <div class="sx-kpi"><div class="l">Average score</div><div class="v">{{ pct(k.avg_pct) }}</div><div class="s">{% if k.sd_pct is not none %}spread ±{{ k.sd_pct }}{% else %}grades only{% endif %}</div></div>
+  <div class="sx-kpi"><div class="l">Avg credits / candidate</div><div class="v">{{ k.avg_credits }}</div><div class="s">grade points {{ k.avg_points }} / {{ scheme.bands|length }}</div></div>
+  <div class="sx-kpi"><div class="l">Credit in Eng &amp; Maths</div><div class="v">{{ k.core_credit_rate }}%</div><div class="s">{{ k.core_credit }} candidate(s)</div></div>
+  <div class="sx-kpi"><div class="l">Met benchmark</div><div class="v">{{ k.benchmark_rate }}%</div><div class="s">{{ scheme.benchmark_credits }}+ credits incl. Eng &amp; Maths</div></div>
+  <div class="sx-kpi"><div class="l">Passed every subject</div><div class="v">{{ k.all_pass_rate }}%</div><div class="s">{{ k.all_pass }} candidate(s)</div></div>
+  <div class="sx-kpi"><div class="l">Subject distinction rate</div><div class="v">{{ k.subject_distinction_rate }}%</div><div class="s">{{ k.with_distinction }} with ≥1 distinction</div></div>
+  <div class="sx-kpi"><div class="l">Subject credit rate</div><div class="v">{{ k.subject_credit_rate }}%</div><div class="s">credit or better</div></div>
+  <div class="sx-kpi"><div class="l">Subject pass rate</div><div class="v">{{ k.subject_pass_rate }}%</div><div class="s">pass or better</div></div>
+  <div class="sx-kpi"><div class="l">Average total</div><div class="v">{{ k.avg_total if k.avg_total is not none else '—' }}</div><div class="s">{% if k.highest_total is not none %}high {{ k.highest_total }} · low {{ k.lowest_total }}{% else %}no totals{% endif %}</div></div>
+  <div class="sx-kpi"><div class="l">Above cut-off</div><div class="v">{{ (k.cutoff_rate ~ '%') if k.cutoff_known else '—' }}</div><div class="s">{% if scheme.cutoff is not none %}cut-off {{ scheme.cutoff|round(1) }}{% else %}<a href="{{ url_for(bp ~ '.settings', body=body) }}">set a cut-off</a>{% endif %}</div></div>
+  <div class="sx-kpi"><div class="l">Admitted / placed</div><div class="v">{{ (k.admission_rate ~ '%') if k.admission_known else '—' }}</div><div class="s">{{ k.admitted }} of {{ k.admission_known }} known</div></div>
+</div>
+
+{# ---------------- Distribution ---------------- #}
+<div class="sx-grid wide-left">
+  <div class="card"><div class="card-header"><h3><i class="fas fa-chart-column"></i> Grade distribution (all entries)</h3></div>
+    <div class="card-body">{{ kind_legend() }}<div class="sx-chart"><canvas role="img" aria-label="Grade distribution" data-sx-chart='{{ ch.grade_dist(stats)|tojson|forceescape }}'></canvas></div></div></div>
+  <div class="card"><div class="card-header"><h3><i class="fas fa-chart-pie"></i> Outcome mix</h3></div>
+    <div class="card-body"><div class="sx-chart"><canvas role="img" aria-label="Outcome mix" data-sx-chart='{{ ch.kind_mix(stats)|tojson|forceescape }}'></canvas></div>
+    <table class="data-table mt-2"><tbody>
+      {% for kk in kinds %}<tr><td><span class="sx-dot sx-k-{{ kk }}"></span>{{ kk|title }}</td><td class="num">{{ stats.kind_counts[kk] }}</td><td class="num">{{ ((stats.kind_counts[kk] / k.entries * 100) if k.entries else 0)|round(1) }}%</td></tr>{% endfor %}
+    </tbody></table></div></div>
+</div>
+
+{# ---------------- Subjects ---------------- #}
+<div class="card mb-3" id="subjects">
+  <div class="card-header"><h3><i class="fas fa-book-open"></i> Subject performance</h3></div>
+  <div class="card-body">
+    {{ kind_legend() }}
+    <div class="sx-chart" style="height:{{ [220, stats.subjects|length * 30 + 60]|max }}px"><canvas role="img" aria-label="Outcome mix per subject" data-sx-chart='{{ ch.subject_stack(stats.subjects)|tojson|forceescape }}'></canvas></div>
+  </div>
+  <div class="table-responsive"><table class="data-table">
+    <thead><tr><th>Rank</th><th>Subject</th><th class="num">Entries</th>
+      {% for g in scheme.grades %}<th class="num">{{ kind_chip(scheme, g) }}</th>{% endfor %}
+      <th class="num">Dist. %</th><th class="num">Credit %</th><th class="num">Pass %</th><th class="num">Fail %</th><th class="num">Mean %</th><th class="num">High / Low</th>
+      <th class="num">vs {{ stats.prev_year or 'last yr' }}</th></tr></thead>
+    <tbody>
+    {% for r in stats.subjects %}
+      <tr>
+        <td>{{ r.rank }}</td>
+        <td><a href="{{ url_for(bp ~ '.subject', body=body, subject=r.subject, year=year) }}"><strong>{{ r.subject }}</strong></a>{% if r.core %} <span class="badge badge-info">core</span>{% endif %}</td>
+        <td class="num">{{ r.entries }}</td>
+        {% for g in scheme.grades %}<td class="num">{{ r.grades.get(g, 0) or '' }}</td>{% endfor %}
+        <td class="num">{{ r.distinction_rate }}%</td>
+        <td class="num"><strong>{{ r.credit_rate }}%</strong></td>
+        <td class="num">{{ r.pass_rate }}%</td>
+        <td class="num">{{ r.fail_rate }}%</td>
+        <td class="num">{{ pct(r.mean_pct) }}</td>
+        <td class="num">{% if r.high_pct is not none %}{{ r.high_pct }} / {{ r.low_pct }}{% else %}—{% endif %}</td>
+        <td class="num">{{ delta(r.credit_delta if r.credit_delta is defined else none) }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+
+{# ---------------- Core subjects + histograms ---------------- #}
+<div class="sx-grid two">
+  <div class="card"><div class="card-header"><h3><i class="fas fa-star"></i> Core subjects (English &amp; Mathematics)</h3></div>
+    <div class="card-body">
+      {% if stats.core %}
+      <table class="data-table"><thead><tr><th>Subject</th><th class="num">Entries</th><th style="min-width:120px">Mix</th><th class="num">Credit %</th><th class="num">Mean %</th></tr></thead><tbody>
+        {% for r in stats.core %}<tr><td>{{ r.subject }}</td><td class="num">{{ r.entries }}</td><td>{{ kind_meter(r) }}</td><td class="num"><strong>{{ r.credit_rate }}%</strong></td><td class="num">{{ pct(r.mean_pct) }}</td></tr>{% endfor %}
+      </tbody></table>
+      <p class="sx-muted mt-2">{{ k.core_credit }} of {{ k.candidates }} candidates ({{ k.core_credit_rate }}%) have a credit or better in <em>both</em> English and Mathematics — the requirement every SSS1 / JSS1 admission checks first.</p>
+      {% else %}<p class="sx-muted">No English or Mathematics results recorded.</p>{% endif %}
+    </div></div>
+  <div class="card"><div class="card-header"><h3><i class="fas fa-layer-group"></i> Credits per candidate</h3></div>
+    <div class="card-body"><div class="sx-chart"><canvas role="img" aria-label="Number of candidates by credits earned" data-sx-chart='{{ ch.histogram(stats.credit_hist, "credits", "count", "Candidates")|tojson|forceescape }}'></canvas></div>
+    <p class="sx-muted mt-1">Number of candidates (y) by how many credits-or-better they earned (x).</p></div></div>
+</div>
+
+{% if stats.has_scores %}
+<div class="card mb-3"><div class="card-header"><h3><i class="fas fa-chart-area"></i> Average-score distribution</h3></div>
+  <div class="card-body"><div class="sx-chart"><canvas role="img" aria-label="Candidates by average score band" data-sx-chart='{{ ch.histogram(stats.pct_hist, "label", "count", "Candidates")|tojson|forceescape }}'></canvas></div></div></div>
+{% endif %}
+
+{# ---------------- Arm / gender ---------------- #}
+<div class="sx-grid two">
+  {% for title, icon, groups in [('Class arms', 'fa-door-open', stats.by_arm), ('Gender', 'fa-venus-mars', stats.by_gender)] %}
+  <div class="card"><div class="card-header"><h3><i class="fas {{ icon }}"></i> By {{ title|lower }}</h3></div>
+    <div class="card-body">
+      {% if groups|length > 1 %}
+      <div class="sx-chart"><canvas role="img" aria-label="{{ title }} comparison" data-sx-chart='{{ ch.group_bars(groups, [("core_credit_rate", "Eng & Maths credit %"), ("benchmark_rate", "Met benchmark %")])|tojson|forceescape }}'></canvas></div>
+      {% endif %}
+      <div class="table-responsive"><table class="data-table mt-2"><thead><tr><th>{{ title[:-1] if title.endswith('s') else title }}</th><th class="num">Cand.</th><th class="num">Avg %</th><th class="num">Avg credits</th><th class="num">Eng+Maths</th><th class="num">Benchmark</th></tr></thead><tbody>
+      {% for g in groups %}<tr><td>{{ g.group }}</td><td class="num">{{ g.candidates }}</td><td class="num">{{ pct(g.avg_pct) }}</td><td class="num">{{ g.avg_credits }}</td><td class="num">{{ g.core_credit_rate }}%</td><td class="num"><strong>{{ g.benchmark_rate }}%</strong></td></tr>{% endfor %}
+      </tbody></table></div>
+    </div></div>
+  {% endfor %}
+</div>
+
+{# ---------------- Trends ---------------- #}
+<div class="card mb-3"><div class="card-header"><h3><i class="fas fa-chart-line"></i> Year-on-year trend</h3></div>
+  <div class="card-body">
+    {% if trend|length > 1 %}
+    <div class="sx-grid two" style="margin-bottom:0">
+      <div><h4 class="sx-muted">Candidate outcomes</h4><div class="sx-chart"><canvas role="img" aria-label="Candidate outcome trend" data-sx-chart='{{ ch.trend(trend, [("core_credit_rate", "Eng & Maths credit %"), ("benchmark_rate", "Met benchmark %")])|tojson|forceescape }}'></canvas></div></div>
+      <div><h4 class="sx-muted">Subject entries</h4><div class="sx-chart"><canvas role="img" aria-label="Subject rate trend" data-sx-chart='{{ ch.trend(trend, [("subject_credit_rate", "Credit rate %"), ("subject_pass_rate", "Pass rate %")])|tojson|forceescape }}'></canvas></div></div>
+    </div>
+    {% endif %}
+    <div class="table-responsive"><table class="data-table mt-2">
+      <thead><tr><th>Year</th><th class="num">Candidates</th><th class="num">Avg %</th><th class="num">Avg credits</th><th class="num">Eng+Maths</th><th class="num">Benchmark</th><th class="num">Credit rate</th><th class="num">Pass rate</th><th class="num">Admitted</th></tr></thead>
+      <tbody>{% for t in trend|reverse %}<tr class="{{ 'font-weight-bold' if t.year == year }}"><td><a href="{{ url_for(bp ~ '.analytics', body=body, year=t.year) }}">{{ t.year }}</a></td><td class="num">{{ t.candidates }}</td><td class="num">{{ pct(t.avg_pct) }}</td><td class="num">{{ t.avg_credits }}</td><td class="num">{{ t.core_credit_rate }}%</td><td class="num">{{ t.benchmark_rate }}%</td><td class="num">{{ t.subject_credit_rate }}%</td><td class="num">{{ t.subject_pass_rate }}%</td><td class="num">{{ t.admission_rate }}%</td></tr>{% endfor %}</tbody>
+    </table></div>
+  </div></div>
+
+{# ---------------- Internal vs external ---------------- #}
+<div class="card mb-3"><div class="card-header"><h3><i class="fas fa-arrows-left-right"></i> School assessment vs {{ scheme.exam_name }}</h3></div>
+  <div class="card-body">
+  {% if ive %}
+    <div class="sx-kpis">
+      <div class="sx-kpi"><div class="l">Candidates compared</div><div class="v">{{ ive.n }}</div></div>
+      <div class="sx-kpi"><div class="l">Avg school score ({{ L.class_label }})</div><div class="v">{{ ive.avg_internal }}%</div></div>
+      <div class="sx-kpi"><div class="l">Avg external score</div><div class="v">{{ ive.avg_external }}%</div></div>
+      <div class="sx-kpi"><div class="l">Correlation</div><div class="v">{{ ive.corr if ive.corr is not none else '—' }}</div><div class="s">{% if ive.corr is none %}need 3+ candidates{% elif ive.corr >= 0.7 %}strong — school marks predict the exam well{% elif ive.corr >= 0.4 %}moderate{% else %}weak — review internal assessment{% endif %}</div></div>
+    </div>
+    <div class="sx-grid wide-left" style="margin-bottom:0">
+      <div class="sx-chart tall"><canvas role="img" aria-label="School average vs external average per candidate" data-sx-chart='{{ ch.scatter(ive.points, "School average (" ~ L.class_label ~ ") %", scheme.exam_name ~ " average %")|tojson|forceescape }}'></canvas></div>
+      <div>
+        <h4 class="sx-muted">Outperformed school marks</h4>
+        <table class="data-table"><tbody>{% for p in ive.over %}<tr><td>{{ p.name }}</td><td class="num sx-up">+{{ p.gap }}</td></tr>{% endfor %}</tbody></table>
+        <h4 class="sx-muted mt-2">Underperformed school marks</h4>
+        <table class="data-table"><tbody>{% for p in ive.under %}<tr><td>{{ p.name }}</td><td class="num sx-down">{{ p.gap }}</td></tr>{% endfor %}</tbody></table>
+      </div>
+    </div>
+  {% else %}
+    <p class="sx-muted">This compares each candidate's average in the school's own {{ L.class_label }} term results with their {{ scheme.exam_name }} average. It needs subject <em>scores</em> (not grades only) and saved {{ L.class_label }} term results.</p>
+  {% endif %}
+  </div></div>
+
+{# ---------------- Candidates ---------------- #}
+<div class="sx-grid two">
+  {% for title, icon, rows in [('Top candidates', 'fa-trophy', stats.top), ('Need most support', 'fa-hands-helping', stats.struggling)] %}
+  <div class="card"><div class="card-header"><h3><i class="fas {{ icon }}"></i> {{ title }}</h3></div>
+    <div class="table-responsive"><table class="data-table"><thead><tr><th>Pos</th><th>Candidate</th><th class="num">D / C / P / F</th><th class="num">Avg %</th></tr></thead><tbody>
+    {% for c in rows %}<tr><td>{{ c.position }}</td><td><a href="{{ url_for(bp ~ '.student', body=body, student_id=c.id) }}">{{ c.name }}</a>{% if c.arm %}<div class="sx-muted">{{ c.arm }}</div>{% endif %}</td><td class="num">{{ c.distinctions }} / {{ c.credits - c.distinctions }} / {{ c.passes - c.credits }} / {{ c.fails }}</td><td class="num">{{ pct(c.avg_pct) }}</td></tr>{% endfor %}
+    </tbody></table></div></div>
+  {% endfor %}
+</div>
+
+{% if stats.placements %}
+<div class="card"><div class="card-header"><h3><i class="fas fa-school"></i> {{ L.outcome_label }}</h3></div>
+  <div class="table-responsive"><table class="data-table"><thead><tr><th>Placement</th><th class="num">Candidates</th><th class="num">Share</th></tr></thead><tbody>
+  {% for name, n in stats.placements %}<tr><td>{{ name }}</td><td class="num">{{ n }}</td><td class="num">{{ (n / k.candidates * 100)|round(1) }}%</td></tr>{% endfor %}
+  </tbody></table></div></div>
+{% endif %}
+{% endif %}
+{% endblock %}

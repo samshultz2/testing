@@ -1,0 +1,57 @@
+{% extends "school_exams/_base.html" %}
+{% from "school_exams/_macros.html" import kind_chip, kind_meter, kind_legend, pct %}
+{% block page_title %}{{ subject }} · {{ scheme.exam_name }} {{ year }}{% endblock %}
+{% block crumb %} / <a href="{{ url_for(bp ~ '.analytics', body=body, year=year) }}">Analytics</a> / <span>{{ subject }}</span>{% endblock %}
+
+{% block sx_content %}
+{% if not d %}
+<div class="card"><div class="card-body"><div class="empty-state">
+  <i class="fas fa-book"></i><h3>No {{ subject }} results in {{ scheme.exam_name }} {{ year }}</h3>
+  <a href="{{ url_for(bp ~ '.analytics', body=body, year=year) }}" class="btn btn-secondary">Back to analytics</a>
+</div></div></div>
+{% else %}
+{% set r = d.row %}
+<h2 style="margin:.25rem 0 1rem">{{ subject }}{% if r.core %} <span class="badge badge-info">core</span>{% endif %}</h2>
+<div class="sx-kpis wide">
+  <div class="sx-kpi"><div class="l">Entries</div><div class="v">{{ r.entries }}</div></div>
+  <div class="sx-kpi"><div class="l">Distinction rate</div><div class="v">{{ r.distinction_rate }}%</div><div class="s">{{ r.distinctions }} candidate(s)</div></div>
+  <div class="sx-kpi"><div class="l">Credit rate</div><div class="v">{{ r.credit_rate }}%</div><div class="s">{{ r.credits }} credit or better</div></div>
+  <div class="sx-kpi"><div class="l">Pass rate</div><div class="v">{{ r.pass_rate }}%</div><div class="s">{{ r.fails }} failed</div></div>
+  <div class="sx-kpi"><div class="l">Mean score</div><div class="v">{{ pct(r.mean_pct) }}</div><div class="s">{% if r.high_pct is not none %}high {{ r.high_pct }} · low {{ r.low_pct }}{% else %}grades only{% endif %}</div></div>
+  <div class="sx-kpi"><div class="l">Vs. their other subjects</div><div class="v">{% if d.relative_gap is none %}—{% elif d.relative_gap > 0 %}+{{ d.relative_gap }}{% else %}{{ d.relative_gap }}{% endif %}</div><div class="s">{% if d.relative_gap is none %}no other subjects{% elif d.relative_gap > 0.25 %}a relative strength{% elif d.relative_gap < -0.25 %}a relative weakness{% else %}in line{% endif %} (grade points)</div></div>
+</div>
+
+<div class="sx-grid two">
+  <div class="card"><div class="card-header"><h3><i class="fas fa-chart-column"></i> Grade distribution</h3></div>
+    <div class="card-body">{{ kind_legend() }}<div class="sx-chart"><canvas role="img" aria-label="{{ subject }} grade distribution" data-sx-chart='{{ ch.grade_dist({"scheme": scheme, "grade_dist": r.grades})|tojson|forceescape }}'></canvas></div></div></div>
+  <div class="card"><div class="card-header"><h3><i class="fas fa-chart-line"></i> {{ subject }} over the years</h3></div>
+    <div class="card-body">
+    {% if d.trend|length > 1 %}
+      <div class="sx-chart"><canvas role="img" aria-label="{{ subject }} trend" data-sx-chart='{{ ch.trend(d.trend, [("credit_rate", "Credit rate %"), ("pass_rate", "Pass rate %")])|tojson|forceescape }}'></canvas></div>
+    {% endif %}
+      <table class="data-table mt-2"><thead><tr><th>Year</th><th class="num">Entries</th><th class="num">Credit %</th><th class="num">Pass %</th><th class="num">Mean %</th></tr></thead>
+      <tbody>{% for t in d.trend|reverse %}<tr><td><a href="{{ url_for(bp ~ '.subject', body=body, subject=subject, year=t.year) }}">{{ t.year }}</a></td><td class="num">{{ t.entries }}</td><td class="num">{{ t.credit_rate }}%</td><td class="num">{{ t.pass_rate }}%</td><td class="num">{{ pct(t.mean_pct) }}</td></tr>{% endfor %}</tbody></table>
+    </div></div>
+</div>
+
+<div class="sx-grid two">
+  {% for title, groups in [('Class arm', d.by_arm), ('Gender', d.by_gender)] %}
+  <div class="card"><div class="card-header"><h3>By {{ title|lower }}</h3></div>
+    <div class="table-responsive"><table class="data-table"><thead><tr><th>{{ title }}</th><th class="num">Entries</th><th class="num">Credit %</th><th class="num">Pass %</th><th class="num">Mean %</th></tr></thead>
+    <tbody>{% for g in groups %}<tr><td>{{ g.group }}</td><td class="num">{{ g.entries }}</td><td class="num"><strong>{{ g.credit_rate }}%</strong></td><td class="num">{{ g.pass_rate }}%</td><td class="num">{{ pct(g.mean_pct) }}</td></tr>{% endfor %}</tbody></table></div></div>
+  {% endfor %}
+</div>
+
+<div class="card"><div class="card-header"><h3><i class="fas fa-users"></i> Candidates by grade</h3></div>
+  <div class="card-body">
+  {% for g in scheme.grades %}{% set lst = d.by_grade.get(g, []) %}{% if lst %}
+    <details class="mb-2" {% if loop.first %}open{% endif %}>
+      <summary style="cursor:pointer">{{ kind_chip(scheme, g) }} <strong>{{ scheme.band_for_grade(g).label }}</strong> — {{ lst|length }}</summary>
+      <div class="table-responsive"><table class="data-table mt-1"><tbody>
+      {% for x in lst %}<tr><td><a href="{{ url_for(bp ~ '.student', body=body, student_id=x.student_id) }}">{{ x.student.full_name }}</a></td><td class="num">{{ x.score|round(1) if x.score is not none else '' }}</td></tr>{% endfor %}
+      </tbody></table></div>
+    </details>
+  {% endif %}{% endfor %}
+  </div></div>
+{% endif %}
+{% endblock %}

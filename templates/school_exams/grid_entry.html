@@ -1,0 +1,117 @@
+{% extends "school_exams/_base.html" %}
+{% block page_title %}Grid entry · {{ scheme.exam_name }} {{ year }}{% endblock %}
+{% block crumb %} / <span>Grid entry</span>{% endblock %}
+{% block page_css %}
+<style>
+.ge-wrap{overflow:auto;max-height:70vh;border:1px solid var(--border-color);border-radius:var(--radius-md)}
+.ge-table{border-collapse:collapse;width:100%;font-size:.82rem}
+.ge-table th,.ge-table td{border:1px solid var(--border-color);padding:2px 4px;text-align:center}
+.ge-table thead th{background:var(--bg-card);position:sticky;top:0;z-index:3;height:120px;vertical-align:bottom}
+.ge-table th.subj span{writing-mode:vertical-rl;transform:rotate(180deg);white-space:nowrap;font-weight:600}
+.ge-table td.name,.ge-table th.name{text-align:left;min-width:170px;position:sticky;left:0;background:var(--bg-card);z-index:2}
+.ge-table thead th.name{z-index:4}
+.ge-input{width:52px;border:1px solid transparent;background:transparent;text-align:center;padding:4px 2px;border-radius:4px;color:var(--text-primary)}
+.ge-input.wide{width:96px}
+.ge-input:focus{outline:none;border-color:var(--sx-accent);background:var(--bg-body)}
+.gp{display:block;font-size:.62rem;font-weight:700;line-height:1;height:.7rem}
+.gp.distinction{color:var(--sx-dist)}.gp.credit{color:var(--sx-credit)}.gp.pass{color:var(--sx-pass)}.gp.fail{color:var(--sx-fail)}
+.ge-cols{display:flex;flex-wrap:wrap;gap:.4rem .9rem}
+.ge-cols label{font-size:.82rem;display:flex;align-items:center;gap:.3rem}
+.ge-bar{position:sticky;bottom:0;background:var(--bg-card);border-top:1px solid var(--border-color);padding:.6rem;display:flex;gap:.6rem;align-items:center;z-index:5}
+</style>
+{% endblock %}
+
+{% block sx_content %}
+<details class="card mb-3" {% if not students %}open{% endif %}>
+  <summary class="card-header" style="cursor:pointer;list-style:none"><h3 style="display:inline"><i class="fas fa-table-columns"></i> Year, columns &amp; entry mode</h3> <span class="sx-muted">{{ cols|length }} subject column(s) · {{ 'scores' if mode == 'score' else 'grades' }} · {{ year }}</span></summary>
+  <div class="card-body">
+    <form method="get">
+      <input type="hidden" name="body" value="{{ body }}">
+      <div class="d-flex gap-2 mb-2" style="flex-wrap:wrap;align-items:flex-end">
+        <div><label class="form-label">Exam year</label><input type="number" name="year" value="{{ year }}" class="form-control" style="width:110px"></div>
+        <div><label class="form-label">Enter</label><select name="mode" class="form-control">
+          <option value="score" {% if mode == 'score' %}selected{% endif %}>Scores (grade derived)</option>
+          <option value="grade" {% if mode == 'grade' %}selected{% endif %}>Grades only</option></select></div>
+      </div>
+      <div class="ge-cols mb-2">
+        {% for s in scheme.subjects %}<label><input type="checkbox" name="col" value="{{ s }}" {% if s in cols %}checked{% endif %}> {{ s }}</label>{% endfor %}
+      </div>
+      <button class="btn btn-primary btn-sm" type="submit"><i class="fas fa-check"></i> Apply</button>
+      <a class="btn btn-secondary btn-sm" href="{{ url_for(bp ~ '.settings', body=body) }}">Edit subject list</a>
+    </form>
+  </div>
+</details>
+
+{% if not students %}
+<div class="card"><div class="card-body"><div class="empty-state">
+  <i class="fas fa-users"></i><h3>No {{ L.class_label }} students</h3>
+  <p>Set up the {{ L.class_label }} class and enrol students for the active term to enter results.</p>
+</div></div></div>
+{% else %}
+<form method="post" id="sxGrid">
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="year" value="{{ year }}"><input type="hidden" name="mode" value="{{ mode }}">
+  {% for s in cols %}<input type="hidden" name="col" value="{{ s }}">{% endfor %}
+  <div class="card">
+    <div class="ge-wrap"><table class="ge-table">
+      <thead><tr><th class="name">Candidate</th><th class="subj"><span>Exam number</span></th>
+        {% for subj in cols %}<th class="subj"><span>{{ subj }}</span></th>{% endfor %}
+        <th class="subj"><span>Total (optional)</span></th></tr></thead>
+      <tbody>
+      {% for st in students %}{% set c = cands.get(st.id) %}
+        <tr>
+          <td class="name">{{ st.full_name }}<div class="sx-muted" style="font-size:.7rem">{{ st.student_id }}{% if arms.get(st.id) %} · {{ arms[st.id] }}{% endif %}</div></td>
+          <td><input class="ge-input wide" name="exam_number_{{ st.id }}" value="{{ c.exam_number if c and c.exam_number else '' }}" maxlength="40" aria-label="{{ st.full_name }} exam number"></td>
+          {% for subj in cols %}{% set ex = existing.get((st.id, subj)) %}
+          <td>
+            {% if mode == 'grade' %}
+            <input class="ge-input" name="v_{{ st.id }}_{{ loop.index0 }}" list="sxGrades" value="{{ ex.grade if ex else '' }}" maxlength="4" aria-label="{{ st.full_name }} {{ subj }} grade">
+            {% else %}
+            <input class="ge-input sx-g" type="number" step="any" min="0" max="{{ scheme.max_score }}" inputmode="decimal" name="v_{{ st.id }}_{{ loop.index0 }}" value="{{ ex.score|round(2) if ex and ex.score is not none else '' }}" aria-label="{{ st.full_name }} {{ subj }} score">
+            <span class="gp {{ scheme.kind_of(ex.grade) if ex else '' }}">{{ ex.grade if ex else '' }}</span>
+            {% endif %}
+          </td>
+          {% endfor %}
+          <td><input class="ge-input" type="number" step="any" name="total_{{ st.id }}" value="{{ c.total_score if c and c.total_score is not none else '' }}" aria-label="{{ st.full_name }} total"></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    <div class="ge-bar">
+      <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Save all</button>
+      <span class="sx-muted">{{ students|length }} candidate(s). Blank cells are left unchanged. Grades: {% for b in scheme.bands %}{{ b.grade }}={{ b.label }}{% if b.min %} (≥{{ b.min|round(0)|int }}%){% endif %}{{ ', ' if not loop.last }}{% endfor %}.</span>
+    </div>
+  </div>
+  <datalist id="sxGrades">{% for g in scheme.grades %}<option value="{{ g }}">{% endfor %}</datalist>
+</form>
+{% endif %}
+{% endblock %}
+
+{% block page_js %}
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var bands = {{ scheme.bands|tojson }}, max = {{ scheme.max_score }};
+  function band(v) {
+    if (v === '' || isNaN(v)) return null;
+    var p = Math.max(0, Math.min(100, parseFloat(v) / max * 100));
+    for (var i = 0; i < bands.length; i++) if (p + 1e-9 >= bands[i].min) return bands[i];
+    return bands[bands.length - 1];
+  }
+  var form = document.getElementById('sxGrid');
+  if (!form) return;
+  form.addEventListener('input', function (e) {
+    var t = e.target; if (!t.classList.contains('sx-g')) return;
+    var b = band(t.value), out = t.nextElementSibling;
+    if (out) { out.textContent = b ? b.grade : ''; out.className = 'gp ' + (b ? b.kind : ''); }
+  });
+  // Enter moves down the column (like a spreadsheet).
+  form.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' || !e.target.classList.contains('ge-input')) return;
+    e.preventDefault();
+    var td = e.target.closest('td'), tr = td.parentElement, idx = Array.prototype.indexOf.call(tr.children, td);
+    var next = tr.nextElementSibling && tr.nextElementSibling.children[idx];
+    var inp = next && next.querySelector('input'); if (inp) { inp.focus(); inp.select && inp.select(); }
+  });
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,33 @@
+{% macro kind_chip(scheme, grade) -%}
+{%- set k = scheme.kind_of(grade) or 'fail' -%}
+<span class="sx-chip sx-k-{{ k }}" title="{{ (scheme.band_for_grade(grade) or {}).get('label', grade) }}">{{ grade }}</span>
+{%- endmacro %}
+
+{% macro kind_meter(r) -%}
+{%- set n = r.entries if r.entries is defined else r.subjects -%}
+{%- if n -%}
+<div class="sx-meter" role="img" aria-label="{{ r.kinds.get('distinction',0) }} distinction, {{ r.kinds.get('credit',0) }} credit, {{ r.kinds.get('pass',0) }} pass, {{ r.kinds.get('fail',0) }} fail">
+{%- for k, cls in [('distinction','sx-k-distinction'),('credit','sx-k-credit'),('pass','sx-k-pass'),('fail','sx-k-fail')] -%}
+{%- set c = r.kinds.get(k, 0) -%}{%- if c %}<span class="{{ cls }}" style="width:{{ (c / n * 100)|round(1) }}%"></span>{% endif -%}
+{%- endfor -%}
+</div>
+{%- endif -%}
+{%- endmacro %}
+
+{% macro delta(v) -%}
+{%- if v is none -%}<span class="sx-muted">—</span>
+{%- elif v > 0 -%}<span class="sx-up"><i class="fas fa-arrow-up" aria-hidden="true"></i> {{ v }}</span>
+{%- elif v < 0 -%}<span class="sx-down"><i class="fas fa-arrow-down" aria-hidden="true"></i> {{ v|abs }}</span>
+{%- else -%}<span class="sx-muted">0</span>{%- endif -%}
+{%- endmacro %}
+
+{% macro kind_legend() -%}
+<div class="sx-legend">
+  <span><span class="sx-dot sx-k-distinction"></span>Distinction</span>
+  <span><span class="sx-dot sx-k-credit"></span>Credit</span>
+  <span><span class="sx-dot sx-k-pass"></span>Pass</span>
+  <span><span class="sx-dot sx-k-fail"></span>Fail</span>
+</div>
+{%- endmacro %}
+
+{% macro pct(v) -%}{{ '—' if v is none else (v ~ '%') }}{%- endmacro %}

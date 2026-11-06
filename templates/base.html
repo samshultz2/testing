@@ -560,6 +560,21 @@
                         </a>
                     </li>
                     <li class="nav-item">
+                        <a href="{{ url_for('jss3_exams.dashboard') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('jss3_exams.') %}active{% endif %}">
+                            <i class="fas fa-user-graduate"></i><span>JSS3 Exams (BECE)</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('basic6_exams.dashboard') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('basic6_exams.') %}active{% endif %}">
+                            <i class="fas fa-child"></i><span>Basic 6 Exams</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
+                        <a href="{{ url_for('exam_levels.index') }}" class="nav-link {% if request.endpoint == 'exam_levels.index' %}active{% endif %}">
+                            <i class="fas fa-layer-group"></i><span>All Exam Levels</span>
+                        </a>
+                    </li>
+                    <li class="nav-item">
                         <a href="{{ url_for('results.analytics_hub') }}" class="nav-link {% if request.endpoint == 'results.analytics_hub' %}active{% endif %}">
                             <i class="fas fa-chart-pie"></i><span>Exam Analytics</span>
                         </a>

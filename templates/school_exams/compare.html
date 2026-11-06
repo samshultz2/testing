@@ -1,0 +1,62 @@
+{% extends "school_exams/_base.html" %}
+{% from "school_exams/_macros.html" import pct, delta %}
+{% block page_title %}State vs Federal {{ year }}{% endblock %}
+{% block crumb %} / <span>State vs Federal</span>{% endblock %}
+
+{% block sx_content %}
+{% set s, f = cmp.state, cmp.federal %}
+{% if not s.candidates and not f.candidates %}
+<div class="card"><div class="card-body"><div class="empty-state">
+  <i class="fas fa-scale-balanced"></i><h3>No results for {{ year }}</h3>
+  <p>Enter {{ cmp.state_name }} and/or {{ cmp.federal_name }} results to compare the two examinations.</p>
+</div></div></div>
+{% else %}
+<div class="card mb-3">
+  <div class="card-header"><h3><i class="fas fa-scale-balanced"></i> {{ cmp.state_name }} vs {{ cmp.federal_name }} — {{ year }}</h3></div>
+  <div class="table-responsive"><table class="data-table">
+    <thead><tr><th>Measure</th><th class="num"><span class="sx-dot" style="background:var(--sx-s1)"></span>{{ cmp.state_name }} (State)</th><th class="num"><span class="sx-dot" style="background:var(--sx-s2)"></span>{{ cmp.federal_name }} (Federal)</th><th class="num">State − Federal</th></tr></thead>
+    <tbody>
+    {% for key, label, unit in [('candidates','Candidates',''),('avg_pct','Average score','%'),('avg_credits','Average credits',''),
+                                ('core_credit_rate','Credit in Eng & Maths','%'),('benchmark_rate','Met benchmark','%'),
+                                ('subject_credit_rate','Subject credit rate','%'),('subject_pass_rate','Subject pass rate','%'),
+                                ('all_pass_rate','Passed every subject','%'),('admission_rate','Admitted / placed','%')] %}
+      {% set a, b = s.get(key), f.get(key) %}
+      <tr><td>{{ label }}</td>
+        <td class="num">{{ '—' if a is none or (not s.candidates) else (a ~ unit) }}</td>
+        <td class="num">{{ '—' if b is none or (not f.candidates) else (b ~ unit) }}</td>
+        <td class="num">{% if s.candidates and f.candidates and a is not none and b is not none %}{{ delta(((a - b) * 10)|round / 10) }}{% else %}—{% endif %}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+</div>
+
+{% if cmp.subjects %}
+<div class="card mb-3">
+  <div class="card-header"><h3><i class="fas fa-book"></i> Subject credit rate — both examinations</h3></div>
+  <div class="card-body"><div class="sx-chart tall"><canvas role="img" aria-label="Subject credit rate, state vs federal" data-sx-chart='{{ ch.paired_bars(cmp.subjects, "subject", "state_credit", "federal_credit", cmp.state_name ~ " (State)", cmp.federal_name ~ " (Federal)")|tojson|forceescape }}'></canvas></div></div>
+  <div class="table-responsive"><table class="data-table">
+    <thead><tr><th>Subject</th><th class="num">State credit %</th><th class="num">Federal credit %</th><th class="num">Gap</th><th class="num">State mean %</th><th class="num">Federal mean %</th></tr></thead>
+    <tbody>{% for r in cmp.subjects|sort(attribute='diff') %}<tr><td>{{ r.subject }}</td><td class="num">{{ r.state_credit }}%</td><td class="num">{{ r.federal_credit }}%</td><td class="num">{{ delta(r.diff) }}</td><td class="num">{{ pct(r.state_mean) }}</td><td class="num">{{ pct(r.federal_mean) }}</td></tr>{% endfor %}</tbody>
+  </table></div>
+</div>
+{% endif %}
+
+<div class="sx-grid two">
+  <div class="card"><div class="card-header"><h3><i class="fas fa-people-arrows"></i> Candidates who sat both</h3></div>
+    <div class="card-body">
+      <div class="sx-kpis" style="grid-template-columns:repeat(2,minmax(0,1fr))">
+        <div class="sx-kpi"><div class="l">Sat both</div><div class="v">{{ cmp.both }}</div></div>
+        <div class="sx-kpi"><div class="l">Result correlation</div><div class="v">{{ cmp.corr if cmp.corr is not none else '—' }}</div><div class="s">{% if cmp.corr is none %}needs 3+ shared candidates{% elif cmp.corr >= 0.7 %}strong agreement{% elif cmp.corr >= 0.4 %}moderate agreement{% else %}weak agreement{% endif %}</div></div>
+      </div>
+      <p class="sx-muted">Correlation of each shared candidate's average grade point in the two examinations (scaled to each exam's own grading scheme).</p>
+    </div></div>
+  <div class="card"><div class="card-header"><h3><i class="fas fa-chart-line"></i> Met-benchmark trend</h3></div>
+    <div class="card-body">
+    {% set yrs = (trend_state|map(attribute='year')|list + trend_federal|map(attribute='year')|list)|unique|list %}
+    {% if yrs|length > 1 %}
+      <div class="sx-chart"><canvas role="img" aria-label="Benchmark trend, state vs federal" data-sx-chart='{{ ch.dual_trend(trend_state, trend_federal, "benchmark_rate", cmp.state_name ~ " (State)", cmp.federal_name ~ " (Federal)")|tojson|forceescape }}'></canvas></div>
+    {% else %}<p class="sx-muted">Appears once two or more years are on record.</p>{% endif %}
+    </div></div>
+</div>
+{% endif %}
+{% endblock %}

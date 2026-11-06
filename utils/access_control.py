@@ -54,6 +54,9 @@ BLUEPRINT_MODULE = {
     'sales': 'sales', 'welfare': 'students',
     # Previously ungated staff surfaces — now permission-checked like the rest.
     'contributions': 'contributions', 'mock_waec': 'external_exams',
+    # JSS3 (BECE) / Basic 6 (Common Entrance) exams + the exam-level selector.
+    'jss3_exams': 'external_exams', 'basic6_exams': 'external_exams',
+    'exam_levels': 'external_exams',
     'settings': 'settings', 'website_admin': 'website',
 }
 
@@ -390,6 +393,16 @@ MODULE_SUBSECTIONS = {
         'mock_jamb_bank_images_view': 'View Mock JAMB Bank Image Queue',
         'mock_jamb_bank_images_edit': 'Manage Mock JAMB Bank Image Queue',
         'mock_jamb_bank_analytics_view': 'View Mock JAMB Bank Analytics',
+        'jss3_view': 'View JSS3 Exams & Analytics (State / NECO BECE)',
+        'jss3_create': 'Enter / Import JSS3 Exam Results',
+        'jss3_delete': 'Delete JSS3 Exam Results',
+        'jss3_export': 'Export JSS3 Exam Results',
+        'jss3_settings': 'JSS3 Exam Settings (grading, subjects, cut-off)',
+        'basic6_view': 'View Basic 6 Exams & Analytics (State Common Entrance / NCEE)',
+        'basic6_create': 'Enter / Import Basic 6 Exam Results',
+        'basic6_delete': 'Delete Basic 6 Exam Results',
+        'basic6_export': 'Export Basic 6 Exam Results',
+        'basic6_settings': 'Basic 6 Exam Settings (grading, subjects, cut-off)',
     },
     'communication': {
         'announcements_view': 'View Announcements',
@@ -541,9 +554,25 @@ def self_scope_level(key):
 RESTRICTED_GRANTS = {'results.cards': 'central',
                      'settings.ocr_manage': 'central', 'settings.payments_manage': 'central'}
 
+# The per-level JSS3 / Basic 6 exam blueprints share endpoint names; each level
+# gets its own action sub-sections so access can be granted per level.
+_SCHOOL_EXAM_ACTIONS = {
+    'view': ('dashboard', 'analytics', 'compare', 'subject', 'student'),
+    'create': ('add_result', 'grid_entry', 'import_results'),
+    'delete': ('delete_student_year',),
+    'export': ('export',),
+    'settings': ('settings',),
+}
+
+
+def _school_exam_subsections(level):
+    return {f'{level}_{action}': {f'{level}_exams.{e}' for e in eps}
+            for action, eps in _SCHOOL_EXAM_ACTIONS.items()}
+
 # Which endpoints belong to each sub-section. Entries are bare endpoint names
 # (prefixed with the module's default blueprint below) OR fully-qualified
 # 'blueprint.endpoint' strings for modules whose endpoints span two blueprints.
+
 _SUBSECTION_ENDPOINTS = {
     'students': {
         'roster': {'students_list', 'api_students', 'view_student',
@@ -1043,6 +1072,10 @@ _SUBSECTION_ENDPOINTS = {
         'mock_jamb_bank_images_edit': {'mock_jamb.bank_set_question_image',
                                        'mock_jamb.bank_needs_images_bulk'},
         'mock_jamb_bank_analytics_view': {'mock_jamb.bank_analytics'},
+        # JSS3 / Basic 6 exams live on their own per-level blueprints, so every
+        # entry is fully-qualified (see _school_exam_subsections).
+        **_school_exam_subsections('jss3'),
+        **_school_exam_subsections('basic6'),
     },
     'communication': {
         'announcements_view': {'announcements'},
