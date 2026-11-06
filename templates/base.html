@@ -109,6 +109,13 @@
                             <i class="fas fa-trash-can"></i><span>Deleted Students</span>
                         </a>
                     </li>
+                    {% if user_permissions.is_admin %}
+                    <li class="nav-item">
+                        <a href="{{ url_for('main.duplicate_merge') }}" class="nav-link {% if request.endpoint == 'main.duplicate_merge' %}active{% endif %}">
+                            <i class="fas fa-object-group"></i><span>Merge Duplicates</span>
+                        </a>
+                    </li>
+                    {% endif %}
                     {% endif %}
                     {% if can_access_module('admissions') %}
                     <li class="nav-item">

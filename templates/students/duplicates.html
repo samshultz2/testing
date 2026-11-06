@@ -1,0 +1,134 @@
+{% extends "base.html" %}
+{% block title %}Merge Duplicate Students - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('main.students_list') }}">Students</a> / <span>Merge duplicates</span>{% endblock %}
+{% block extra_css %}
+<style>
+.dup-group{border:1px solid var(--border-color);border-radius:var(--radius-md,10px);margin-bottom:.75rem;background:var(--bg-card);overflow:hidden}
+.dup-group.picked{border-color:var(--primary);box-shadow:0 0 0 1px var(--primary)}
+.dup-head{display:flex;gap:.6rem;align-items:center;padding:.55rem .8rem;background:var(--gray-50);border-bottom:1px solid var(--border-light)}
+.dup-head label{display:flex;gap:.5rem;align-items:center;margin:0;font-weight:600;cursor:pointer}
+.dup-members{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:.6rem;padding:.7rem .8rem}
+.dup-m{border:1px solid var(--border-light);border-radius:8px;padding:.55rem .7rem;display:flex;gap:.55rem;align-items:flex-start;cursor:pointer}
+.dup-m.keep{border-color:var(--success);background:rgba(25,135,84,.06)}
+.dup-m.drop{opacity:.85}
+.dup-m .nm{font-weight:600}
+.dup-m .meta{font-size:.78rem;color:var(--text-muted)}
+.dup-tag{display:inline-block;font-size:.68rem;font-weight:700;padding:.05rem .4rem;border-radius:5px;margin-left:.25rem}
+.dup-tag.caps{background:#fde68a;color:#78350f}
+.dup-tag.keep{background:#d1fae5;color:#065f46}
+.dup-tag.drop{background:#fee2e2;color:#991b1b}
+.dup-tag[hidden]{display:none}
+.dup-warn{padding:.45rem .8rem;background:#fff7ed;color:#9a3412;font-size:.82rem;border-bottom:1px solid var(--border-light)}
+.dup-chips{display:flex;flex-wrap:wrap;gap:.25rem;margin-top:.3rem}
+.dup-chips span{font-size:.7rem;background:var(--gray-100);border-radius:5px;padding:.05rem .35rem}
+.dup-bar{position:sticky;bottom:0;background:var(--bg-card);border-top:1px solid var(--border-color);padding:.6rem .8rem;display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;z-index:5}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Merge Duplicate Students</h1>
+    <p class="text-muted text-sm">Students with the same surname and first name (ignoring capitals, word order and middle name). For each group choose the record to <strong>keep</strong> — everything saved for the others (WAEC, JAMB, BECE / Common Entrance, mock exams, scores, class enrolments, attendance, fees …) is moved onto it, any blank details (e.g. middle name) are copied across, and the other records are deleted.</p>
+  </div>
+</div>
+
+<form method="get" class="card mb-3"><div class="card-body d-flex gap-2" style="flex-wrap:wrap;align-items:flex-end">
+  <div><label class="form-label" for="dupClass">Class</label>
+    <select id="dupClass" name="class_id" class="form-control" data-autosubmit style="min-width:180px">
+      <option value="">All classes</option>
+      {% for c in classes %}<option value="{{ c.id }}" {% if c.id == class_id %}selected{% endif %}>{{ c.name }}</option>{% endfor %}
+    </select></div>
+  <div><label class="form-label" for="dupQ">Search</label>
+    <input id="dupQ" type="search" name="q" value="{{ search }}" class="form-control" placeholder="Name or ID"></div>
+  <button class="btn btn-secondary btn-sm" type="submit">Find</button>
+</div></form>
+
+{% if not groups %}
+<div class="card"><div class="card-body"><div class="empty-state">
+  <i class="fas fa-user-check"></i><h3>No duplicates found</h3>
+  <p>No two {% if class_id %}students in this class{% else %}students{% endif %} share the same surname and first name.</p>
+</div></div></div>
+{% else %}
+<form method="post" action="{{ url_for('main.duplicate_merge_run') }}" id="dupForm"
+      data-confirm="Merge the ticked groups? The records not kept are deleted after everything saved for them is moved to the kept student. This cannot be undone.">
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="class_id" value="{{ class_id or '' }}"><input type="hidden" name="q" value="{{ search }}">
+  <div class="d-flex gap-2 mb-2" style="flex-wrap:wrap;align-items:center">
+    <strong>{{ groups|length }} group(s) of possible duplicates</strong>
+    <button type="button" class="btn btn-sm btn-primary" id="dupCaps"><i class="fas fa-font"></i> Select all ALL-CAPS duplicates ({{ groups|selectattr('has_caps_dup')|list|length }})</button>
+    {% set _warned = groups|selectattr('warnings')|list|length %}
+    {% if _warned %}<span class="text-muted text-sm">{{ _warned }} group(s) flagged as possibly different students are not included.</span>{% endif %}
+    <button type="button" class="btn btn-sm btn-secondary" id="dupAll">Select all</button>
+    <button type="button" class="btn btn-sm btn-secondary" id="dupNone">Clear</button>
+  </div>
+
+  {% for g in groups %}
+  <div class="dup-group" data-caps="{{ '1' if g.has_caps_dup else '0' }}">
+    <div class="dup-head">
+      <label><input type="checkbox" name="group" value="{{ g.key }}" class="dup-pick"> Merge this group</label>
+      <span class="text-muted text-sm">{{ g.members|length }} records · tick the one to keep</span>
+    </div>
+    {% if g.warnings %}<div class="dup-warn"><i class="fas fa-triangle-exclamation"></i> {{ g.warnings|join('; ') }} — they may be two different students with the same name. Only merge if you're sure it's one person.</div>{% endif %}
+    <div class="dup-members">
+      {% for m in g.members %}{% set s = m.student %}
+      <label class="dup-m {{ 'keep' if m.id == g.keeper_id else 'drop' }}">
+        <input type="radio" name="keep_{{ g.key }}" value="{{ m.id }}" {% if m.id == g.keeper_id %}checked{% endif %} aria-label="Keep {{ s.full_name }}">
+        <span>
+          <span class="nm">{{ s.full_name }}</span>
+          {% if m.all_caps %}<span class="dup-tag caps">ALL CAPS</span>{% endif %}
+          <span class="dup-tag keep" {% if m.id != g.keeper_id %}hidden{% endif %}>KEEP</span>
+          <span class="dup-tag drop" {% if m.id == g.keeper_id %}hidden{% endif %}>MERGE &amp; DELETE</span>
+          <div class="meta">{{ s.student_id }}{% if m.class %} · {{ m.class }}{% else %} · no current class{% endif %}{% if s.date_of_birth %} · born {{ s.date_of_birth.strftime('%d %b %Y') }}{% endif %}{% if s.is_graduated %} · graduated{% endif %}</div>
+          <div class="dup-chips">
+            {% for label, n in m.summary %}<span>{{ label }} {{ n }}</span>{% endfor %}
+            <span>{{ m.total }} linked record(s)</span>
+          </div>
+        </span>
+      </label>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
+
+  <div class="dup-bar">
+    <button type="submit" class="btn btn-danger" id="dupGo" disabled><i class="fas fa-object-group"></i> <span>Merge selected</span></button>
+    <span class="text-muted text-sm">The kept record keeps its own admission number. This cannot be undone.</span>
+  </div>
+</form>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var form = document.getElementById('dupForm');
+  if (!form) return;
+  var go = document.getElementById('dupGo');
+  function picks() { return Array.prototype.slice.call(form.querySelectorAll('.dup-pick')); }
+  function sync() {
+    var n = picks().filter(function (b) { return b.checked; }).length;
+    go.disabled = n === 0;
+    go.querySelector('span').textContent = n ? ('Merge ' + n + ' group' + (n === 1 ? '' : 's')) : 'Merge selected';
+    form.querySelectorAll('.dup-group').forEach(function (g) {
+      g.classList.toggle('picked', g.querySelector('.dup-pick').checked);
+      g.querySelectorAll('.dup-m').forEach(function (m) {
+        var keep = m.querySelector('input[type=radio]').checked;
+        m.classList.toggle('keep', keep); m.classList.toggle('drop', !keep);
+        m.querySelector('.dup-tag.keep').hidden = !keep;
+        m.querySelector('.dup-tag.drop').hidden = keep;
+      });
+    });
+  }
+  form.addEventListener('change', sync);
+  document.getElementById('dupCaps').addEventListener('click', function () {
+    form.querySelectorAll('.dup-group').forEach(function (g) {
+      g.querySelector('.dup-pick').checked = g.getAttribute('data-caps') === '1';
+    });
+    sync();
+  });
+  document.getElementById('dupAll').addEventListener('click', function () { picks().forEach(function (b) { b.checked = true; }); sync(); });
+  document.getElementById('dupNone').addEventListener('click', function () { picks().forEach(function (b) { b.checked = false; }); sync(); });
+  sync();
+})();
+</script>
+{% endblock %}

@@ -1544,3 +1544,90 @@ def export_students_data():
     else:
         flash('Invalid export format.', 'error')
         return redirect(url_for('main.students_list'))
+
+
+# ============================================================================
+# MERGE DUPLICATE STUDENTS
+# ============================================================================
+@main_bp.route('/students/duplicates')
+@admin_required
+def duplicate_merge():
+    """Students that look like the same person (same surname + first name,
+    ignoring capitals, order and middle name) — pick which record to keep and
+    merge the rest into it."""
+    from utils.student_merge import find_groups
+    from models import SchoolClass
+    class_id = request.args.get('class_id', type=int)
+    search = (request.args.get('q') or '').strip()
+    groups = find_groups(class_id=class_id, search=search)
+    classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level, SchoolClass.name).all()
+    return render_template('students/duplicates.html', groups=groups, classes=classes,
+                           class_id=class_id, search=search)
+
+
+@main_bp.route('/students/duplicates/merge', methods=['POST'])
+@admin_required
+def duplicate_merge_run():
+    """Merge each ticked group: everything saved for the other records moves
+    onto the chosen keeper, then the duplicates are deleted. One group at a
+    time, so a problem with one never half-merges another."""
+    from flask import current_app
+    from utils.student_merge import merge_students
+    from utils.branch_scope import can_access_branch
+    from utils.audit import log_action
+    back = url_for('main.duplicate_merge', class_id=request.form.get('class_id') or None,
+                   q=request.form.get('q') or None)
+    keys = request.form.getlist('group')
+    if not keys:
+        flash('Tick at least one group to merge.', 'warning')
+        return redirect(back)
+    merged = failed = 0
+    names = []
+    for key in keys:
+        try:
+            ids = [int(x) for x in key.split('-') if x]
+        except ValueError:
+            continue
+        keeper = request.form.get(f'keep_{key}', type=int)
+        if keeper not in ids or len(ids) < 2:
+            failed += 1
+            continue
+        studs = Student.query.filter(Student.id.in_(ids)).all()
+        if len(studs) != len(ids) or not all(can_access_branch(s.branch_id) for s in studs):
+            failed += 1
+            continue
+        try:
+            report = merge_students(keeper, [i for i in ids if i != keeper])
+            db.session.commit()
+        except Exception as e:  # pragma: no cover — reported to the user
+            db.session.rollback()
+            current_app.logger.exception('Student merge failed for %s', key)
+            failed += 1
+            flash(f'Could not merge {key}: {e}', 'error')
+            continue
+        merged += len(report['merged'])
+        names.append(report['keeper'])
+        log_action('students.merge_duplicates',
+                   detail=f"kept {report['keeper']} (id {keeper}); merged "
+                          + ', '.join(f"{m['name']} ({m['student_id']})" for m in report['merged'])
+                          + (f"; filled {', '.join(sorted(set(report['filled'])))}" if report['filled'] else ''))
+    # Exam dashboards / analytics are cached — refresh them.
+    try:
+        from routes.results import bust_school_stats
+        bust_school_stats()
+    except Exception:
+        pass
+    try:
+        from utils.analytics_engine import recompute_student_safe
+        for key in keys:
+            k = request.form.get(f'keep_{key}', type=int)
+            if k:
+                recompute_student_safe(k)
+    except Exception:
+        pass
+    if merged:
+        flash(f'Merged {merged} duplicate record(s) into {len(names)} student(s). '
+              f'All their results, scores and other records were moved across.', 'success')
+    if failed:
+        flash(f'{failed} group(s) could not be merged (no student chosen to keep, or no access).', 'error')
+    return redirect(back)
