@@ -40,6 +40,8 @@ def _own_rate_hits(app):
     the shared test admin's export allowance used by later tests."""
     from models.models import RateLimitHit
     with app.app_context():
+        RateLimitHit.query.filter(RateLimitHit.rkey.like('%export%')).delete(synchronize_session=False)
+        db.session.commit()
         top = db.session.query(db.func.max(RateLimitHit.id)).scalar() or 0
     try:
         yield

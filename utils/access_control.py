@@ -557,10 +557,10 @@ RESTRICTED_GRANTS = {'results.cards': 'central',
 # The per-level JSS3 / Basic 6 exam blueprints share endpoint names; each level
 # gets its own action sub-sections so access can be granted per level.
 _SCHOOL_EXAM_ACTIONS = {
-    'view': ('dashboard', 'analytics', 'compare', 'subject', 'student'),
+    'view': ('dashboard', 'analytics', 'compare', 'subject', 'student', 'broadsheet'),
     'create': ('add_result', 'grid_entry', 'import_results', 'quick_entry'),
     'delete': ('delete_student_year', 'delete_bulk'),
-    'export': ('export',),
+    'export': ('export', 'broadsheet_pdf', 'broadsheet_download'),
     'settings': ('settings',),
 }
 

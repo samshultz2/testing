@@ -580,7 +580,7 @@
                     </li>
                     <li class="nav-item">
                         <a href="{{ url_for('basic6_exams.dashboard') }}" class="nav-link {% if request.endpoint and request.endpoint.startswith('basic6_exams.') %}active{% endif %}">
-                            <i class="fas fa-child"></i><span>Basic 6 Exams</span>
+                            <i class="fas fa-child"></i><span>{{ ce_exams_label() }}</span>
                         </a>
                     </li>
                     <li class="nav-item">

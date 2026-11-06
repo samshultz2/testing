@@ -13,7 +13,8 @@
   <a href="{{ url_for(bp ~ '.import_results', body=body, year=year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-paste"></i> Paste / CSV</a>
   {% if k.candidates %}
   <a href="{{ url_for(bp ~ '.analytics', body=body, year=year) }}" class="btn btn-info btn-sm"><i class="fas fa-chart-pie"></i> Full analytics</a>
-  <a href="{{ url_for(bp ~ '.export', body=body, year=year) }}" class="btn btn-secondary btn-sm" data-native download><i class="fas fa-file-excel"></i> Export broadsheet</a>
+  <a href="{{ url_for(bp ~ '.broadsheet', body=body, year=year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-table-list"></i> Broadsheet &amp; downloads</a>
+  <a href="{{ url_for(bp ~ '.export', body=body, year=year) }}" class="btn btn-secondary btn-sm" data-native download><i class="fas fa-file-excel"></i> Excel</a>
   {% endif %}
 </div>
 

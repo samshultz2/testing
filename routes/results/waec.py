@@ -607,7 +607,7 @@ def waec_paste_save():
             flash('That student is not in your branch.', 'error')
             return redirect(back)
         needs_move = ('error' not in target and
-                      st.id not in rp.in_class_ids(target['cls'], target['session'].id, {st.id}))
+                      st.id not in rp.in_class_ids(target['classes'], target['session'].id, {st.id}))
         if needs_move and rp.can_change_roster():
             if not request.form.get('approve_roster'):
                 flash(f'{st.full_name} is not in SSS3 for {target["session"].name} — tick '

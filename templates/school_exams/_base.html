@@ -73,6 +73,7 @@
   <a href="{{ url_for(bp ~ '.dashboard', body=_b) }}" class="{{ 'active' if _ep in ('dashboard','student') }}"><i class="fas fa-gauge"></i> Dashboard</a>
   <a href="{{ url_for(bp ~ '.analytics', body=_b) }}" class="{{ 'active' if _ep in ('analytics','subject') }}"><i class="fas fa-chart-pie"></i> Analytics</a>
   <a href="{{ url_for(bp ~ '.compare') }}" class="{{ 'active' if _ep == 'compare' }}"><i class="fas fa-scale-balanced"></i> State vs Federal</a>
+  <a href="{{ url_for(bp ~ '.broadsheet', body=_b) }}" class="{{ 'active' if _ep == 'broadsheet' }}"><i class="fas fa-table-list"></i> Broadsheet</a>
   <a href="{{ url_for(bp ~ '.grid_entry', body=_b) }}" class="{{ 'active' if _ep == 'grid_entry' }}"><i class="fas fa-table-cells"></i> Grid entry</a>
   <a href="{{ url_for(bp ~ '.quick_entry', body=_b) }}" class="{{ 'active' if _ep == 'quick_entry' }}"><i class="fas fa-bolt"></i> Quick entry</a>
   <a href="{{ url_for(bp ~ '.add_result', body=_b) }}" class="{{ 'active' if _ep == 'add_result' }}"><i class="fas fa-plus"></i> Add result</a>

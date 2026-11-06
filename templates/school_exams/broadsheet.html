@@ -1,0 +1,181 @@
+{% extends "school_exams/_base.html" %}
+{% from "school_exams/_macros.html" import kind_chip %}
+{% block page_title %}Broadsheet · {{ scheme.exam_name }} {{ year }}{% endblock %}
+{% block crumb %} / <span>Broadsheet</span>{% endblock %}
+{% block page_css %}
+<style>
+.bs-wrap{overflow:auto;max-height:72vh}
+.bs-table{border-collapse:collapse;width:100%;font-size:.8rem}
+.bs-table th,.bs-table td{border:1px solid var(--border-color);padding:3px 5px;text-align:center;white-space:nowrap}
+.bs-table thead th{position:sticky;top:0;background:var(--bg-card);z-index:2;vertical-align:bottom}
+.bs-table th.subj{height:118px}
+.bs-table th.subj span{writing-mode:vertical-rl;transform:rotate(180deg);font-weight:600}
+.bs-table td.name,.bs-table th.name{text-align:left;position:sticky;left:0;background:var(--bg-card);z-index:1}
+.bs-table tfoot td{background:var(--gray-50);font-weight:600}
+.bs-table tfoot td.lab{text-align:left}
+.bs-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center}
+.bs-modal .card{max-width:540px;width:94%;max-height:88vh;overflow:auto}
+.bs-checks{display:flex;flex-wrap:wrap;gap:.35rem 1rem;margin-bottom:.7rem}
+.bs-checks label{display:flex;align-items:center;gap:.4rem;margin:0}
+</style>
+{% endblock %}
+
+{% block sx_content %}
+{% if not bs.rows %}
+<div class="card"><div class="card-body"><div class="empty-state">
+  <i class="fas fa-table"></i><h3>No {{ scheme.exam_name }} results for {{ year }}</h3>
+  <p>Enter results and the broadsheet builds itself.</p>
+  <a href="{{ url_for(bp ~ '.quick_entry', body=body, year=year) }}" class="btn btn-primary"><i class="fas fa-bolt"></i> Quick entry</a>
+</div></div></div>
+{% else %}
+{% set k = bs.kpis %}
+<div class="d-flex gap-2 mb-3 no-print" style="flex-wrap:wrap;align-items:center">
+  <label class="d-flex gap-2" style="align-items:center;margin:0;font-size:.85rem">Paper size:
+    <select id="bsSize" class="form-control" style="width:auto;max-width:230px">
+      <option value="A4">A4</option><option value="A3">A3 — more columns per sheet</option><option value="A2">A2 — the most columns</option>
+    </select></label>
+  <a id="bsPrint" href="{{ url_for(bp ~ '.broadsheet_pdf', body=body, year=year) }}" target="_blank" rel="noopener" class="btn btn-primary btn-sm"><i class="fas fa-print"></i> Print / PDF</a>
+  <a id="bsDl" href="{{ url_for(bp ~ '.broadsheet_pdf', body=body, year=year, download=1) }}" class="btn btn-outline btn-sm"><i class="fas fa-file-pdf"></i> Download PDF</a>
+  <a href="{{ url_for(bp ~ '.export', body=body, year=year) }}" class="btn btn-success btn-sm" data-native download><i class="fas fa-file-excel"></i> Excel</a>
+  <button type="button" id="bsCustomBtn" class="btn btn-secondary btn-sm"><i class="fas fa-sliders"></i> Custom download</button>
+  <a href="{{ url_for(bp ~ '.analytics', body=body, year=year) }}" class="btn btn-info btn-sm"><i class="fas fa-chart-column"></i> Analytics</a>
+</div>
+
+<div class="sx-kpis">
+  <div class="sx-kpi"><div class="l">Candidates</div><div class="v">{{ k.candidates }}</div></div>
+  <div class="sx-kpi"><div class="l">Avg credits</div><div class="v">{{ k.avg_credits }}</div></div>
+  <div class="sx-kpi"><div class="l">Credit in Eng &amp; Maths</div><div class="v">{{ k.core_credit_rate }}%</div></div>
+  <div class="sx-kpi"><div class="l">Met benchmark</div><div class="v">{{ k.benchmark_rate }}%</div><div class="s">{{ scheme.benchmark_credits }}+ credits incl. Eng &amp; Maths</div></div>
+</div>
+
+<div class="card"><div class="bs-wrap"><table class="bs-table">
+  <thead><tr><th>S/N</th><th class="name">Name of Candidate</th>
+    {% for subj in bs.subjects %}<th class="subj"><span>{{ subj }}</span></th>{% endfor %}
+    <th>Cr</th><th>Avg</th></tr></thead>
+  <tbody>
+  {% for row in bs.rows %}
+    <tr><td>{{ loop.index }}</td><td class="name">{{ row.student.full_name }}{% if row.student.arm %} <span class="sx-muted">· {{ row.student.arm }}</span>{% endif %}</td>
+      {% for subj in bs.subjects %}{% set g = row.grades.get(subj) %}
+      <td>{% if g %}{{ kind_chip(scheme, g) }}{% set c = row.cells[subj] %}{% if '(' in c %} <span class="sx-muted">{{ c.split('(')[1].rstrip(')') }}</span>{% endif %}{% endif %}</td>
+      {% endfor %}
+      <td><strong>{{ row.credits }}</strong></td><td>{{ row.avg_grade or '–' }}</td></tr>
+  {% endfor %}
+  </tbody>
+  <tfoot>
+    <tr><td class="lab" colspan="2">No. offered</td>{% for subj in bs.subjects %}<td>{{ bs.subject_summary[subj].offered }}</td>{% endfor %}<td colspan="2"></td></tr>
+    <tr><td class="lab" colspan="2">No. passed</td>{% for subj in bs.subjects %}<td>{{ bs.subject_summary[subj].passed }}</td>{% endfor %}<td colspan="2"></td></tr>
+    <tr><td class="lab" colspan="2">No. failed</td>{% for subj in bs.subjects %}<td>{{ bs.subject_summary[subj].failed }}</td>{% endfor %}<td colspan="2"></td></tr>
+    <tr><td class="lab" colspan="2">Average %</td>{% for subj in bs.subjects %}<td>{{ bs.subject_summary[subj].avg_grade }}</td>{% endfor %}<td colspan="2"></td></tr>
+  </tfoot>
+</table></div></div>
+
+<div id="bsModal" class="bs-modal no-print" role="dialog" aria-modal="true" aria-labelledby="bsModalTitle">
+  <div class="card">
+    <div class="card-header"><h3 id="bsModalTitle"><i class="fas fa-sliders"></i> Custom broadsheet download</h3></div>
+    <div class="card-body">
+      <p class="sx-muted">Choose which candidates and subjects to include, then pick a format.</p>
+      <div style="font-weight:600;margin:.2rem 0 .3rem">Heading <span class="sx-muted" style="font-weight:400">(optional)</span></div>
+      <input type="text" id="bsTitle" class="form-control" style="margin-bottom:.7rem" maxlength="120" placeholder="e.g. {{ L.class_label|upper }} {{ scheme.exam_name|upper }} {{ year }} RESULTS">
+      {% if bs.arms|length > 1 %}
+      <div style="font-weight:600;margin:.2rem 0 .3rem">Class arms <span class="sx-muted" style="font-weight:400">(none ticked = all)</span></div>
+      <div class="bs-checks">{% for a in bs.arms %}<label><input type="checkbox" class="bs-arm" value="{{ a }}"> {{ a }}</label>{% endfor %}</div>
+      {% endif %}
+      <div style="font-weight:600;margin:.2rem 0 .3rem">Names to show</div>
+      <div class="bs-checks">
+        <label><input type="checkbox" class="bs-name" value="surname" checked> Surname</label>
+        <label><input type="checkbox" class="bs-name" value="first" checked> First name</label>
+        <label><input type="checkbox" class="bs-name" value="middle" checked> Middle name</label>
+        <label><input type="checkbox" id="bsMidInit"> Middle name as initial</label>
+      </div>
+      <div style="font-weight:600;margin:.2rem 0 .3rem">Order</div>
+      <div class="bs-checks">
+        <label><input type="radio" name="bsOrder" value="name" checked> Alphabetical</label>
+        <label><input type="radio" name="bsOrder" value="position"> By position (best first)</label>
+      </div>
+      <div style="font-weight:600;margin:.2rem 0 .3rem;display:flex;gap:.6rem;align-items:center">Subjects
+        <button type="button" id="bsSubjAll" class="btn btn-secondary btn-sm">All</button>
+        <button type="button" id="bsSubjNone" class="btn btn-secondary btn-sm">None</button></div>
+      <div class="bs-checks" style="max-height:30vh;overflow:auto">
+        {% for subj in bs.subjects %}<label><input type="checkbox" class="bs-subj" value="{{ subj }}" checked> {{ subj }}</label>{% endfor %}
+      </div>
+      <div class="d-flex gap-2" style="flex-wrap:wrap">
+        <button type="button" class="btn btn-danger btn-sm" data-fmt="pdf"><i class="fas fa-file-pdf"></i> PDF</button>
+        <button type="button" class="btn btn-primary btn-sm" data-fmt="image"><i class="fas fa-file-image"></i> Image</button>
+        <button type="button" class="btn btn-success btn-sm" data-fmt="excel"><i class="fas fa-file-excel"></i> Excel</button>
+        <button type="button" class="btn btn-secondary btn-sm" data-fmt="csv">CSV</button>
+        <button type="button" class="btn btn-link btn-sm" id="bsCancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block page_js %}
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var size = document.getElementById('bsSize'), pr = document.getElementById('bsPrint'), dl = document.getElementById('bsDl');
+  if (size && pr && dl) {
+    var pb = pr.getAttribute('href'), db = dl.getAttribute('href');
+    size.addEventListener('change', function () {
+      var q = size.value === 'A4' ? '' : '&size=' + size.value;
+      pr.setAttribute('href', pb + q); dl.setAttribute('href', db + q);
+    });
+  }
+  var modal = document.getElementById('bsModal');
+  if (!modal) return;
+  var base = {{ url_for(bp ~ '.broadsheet_download', body=body, year=year)|tojson }};
+  var fname = {{ (level ~ '_' ~ body ~ '_broadsheet_' ~ year)|tojson }};
+  function show() { modal.style.display = 'flex'; }
+  function hide() { modal.style.display = 'none'; }
+  document.getElementById('bsCustomBtn').addEventListener('click', show);
+  document.getElementById('bsCancel').addEventListener('click', hide);
+  modal.addEventListener('click', function (e) { if (e.target === modal) hide(); });
+  function picked(cls) {
+    return Array.prototype.slice.call(document.querySelectorAll('.' + cls))
+      .filter(function (b) { return b.checked; }).map(function (b) { return b.value; });
+  }
+  document.getElementById('bsSubjAll').addEventListener('click', function () { document.querySelectorAll('.bs-subj').forEach(function (b) { b.checked = true; }); });
+  document.getElementById('bsSubjNone').addEventListener('click', function () { document.querySelectorAll('.bs-subj').forEach(function (b) { b.checked = false; }); });
+  function saveBlob(blob, name) {
+    var u = URL.createObjectURL(blob);
+    var a = document.createElement('a'); a.href = u; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(u); }, 4000);
+  }
+  // Images can span several pages — fetch and save each page as its own file.
+  function downloadImages(url) {
+    var page = 1;
+    function next() {
+      fetch(url + '&page=' + page, { credentials: 'same-origin' }).then(function (res) {
+        var total = parseInt(res.headers.get('X-Total-Pages') || '1', 10) || 1;
+        return res.blob().then(function (blob) {
+          saveBlob(blob, total > 1 ? fname + '_p' + page + '.png' : fname + '.png');
+          page += 1;
+          if (page <= total) setTimeout(next, 400);
+        });
+      });
+    }
+    next();
+  }
+  modal.querySelectorAll('[data-fmt]').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      var fmt = btn.getAttribute('data-fmt');
+      var p = new URLSearchParams();
+      p.set('format', fmt);
+      var arms = picked('bs-arm'); if (arms.length) p.set('arms', arms.join(','));
+      var subs = picked('bs-subj'); if (subs.length) p.set('subjects', subs.join(','));
+      var t = (document.getElementById('bsTitle') || {}).value; if (t && t.trim()) p.set('title', t.trim());
+      var nm = picked('bs-name');
+      if (!nm.length) { alert('Tick at least one name to show.'); return; }
+      p.set('names', nm.join(','));
+      if (document.getElementById('bsMidInit').checked) p.set('mid_init', '1');
+      var ord = document.querySelector('input[name=bsOrder]:checked'); if (ord) p.set('order', ord.value);
+      var url = base + (base.indexOf('?') > -1 ? '&' : '?') + p.toString();
+      if (fmt === 'image') { downloadImages(url); } else { window.location.href = url; }
+      hide();
+    });
+  });
+})();
+</script>
+{% endblock %}

@@ -316,3 +316,68 @@ def test_exact_match_outside_class_beats_loose_lookalike_inside_it(app):
     with app.app_context():
         assert Student.query.filter_by(surname='Lookalikerpx').count() == 1   # no duplicate
     assert _active_classes(app, real) == {'JSS3'}
+
+
+def _set_ce(app, value):
+    from models import SchoolSettings
+    with app.app_context():
+        SchoolSettings.set('common_entrance_classes', value)
+        db.session.commit()
+
+
+def test_common_entrance_from_basic5(app):
+    """A school that sits Common Entrance from Basic 5: Basic 5 pupils are the
+    candidates (not moved into Basic 6) and the area is labelled Basic 5."""
+    caas = _setup(app)
+    with app.app_context():
+        from models import Term
+        term = Term.query.join(AcademicSession).filter(AcademicSession.name == '2040/2041',
+                                                       Term.term_number == 2).one()
+        arm = ClassArm.query.filter_by(name='Placement').one()
+        ids = {}
+        for cname, lvl in (('Primary 5', 91), ('Primary 6', 90)):
+            cls = SchoolClass.query.filter_by(name=cname).first() or SchoolClass(name=cname, level=lvl)
+            db.session.add(cls); db.session.flush()
+            caa = (ClassArmAssignment.query.filter_by(class_id=cls.id, term_id=term.id).first()
+                   or ClassArmAssignment(class_id=cls.id, arm_id=arm.id, term_id=term.id))
+            db.session.add(caa); db.session.flush()
+            ids[cname] = caa.id
+        db.session.commit()
+    p5 = _student_in(app, ids['Primary 5'], 'Femi', 'Basicfiverp')
+    c = _admin(app)
+    tok = auth_csrf(c)
+    data = {'_csrf_token': tok, 'year': YEAR, 'data': 'Basicfiverp Femi, Eng A, QR B'}
+    try:
+        # Default (Basic 6): a Basic 5 pupil would be moved into Basic 6.
+        html = c.post('/basic6-exams/state/quick', data=dict(data, action='preview')).get_data(as_text=True)
+        assert 'Move into Basic 6 (1)' in html
+        # Basic 5 sits Common Entrance: already a candidate — nothing to move.
+        _set_ce(app, 'basic5')
+        html = c.post('/basic6-exams/state/quick', data=dict(data, action='preview')).get_data(as_text=True)
+        assert 'Needs your approval' not in html and 'Basic 5 Exams' in html
+        r = c.post('/basic6-exams/state/quick', data=dict(data, action='confirm'))
+        assert r.status_code == 302
+        assert _active_classes(app, p5) == {'Primary 5'}
+        with app.app_context():
+            assert SchoolExamResult.query.filter_by(student_id=p5, level='basic6').count() == 2
+        # Both: Basic 5 still counts; a brand-new name goes into Basic 6.
+        _set_ce(app, 'both')
+        html = c.post('/basic6-exams/state/quick', data=dict(
+            data, data='Basicfiverp Femi, Eng A\nBasicnewsix Tola Ann, Eng B', action='preview')).get_data(as_text=True)
+        assert 'Move into' not in html and 'Add to the register (1)' in html
+        assert 'into Basic 5 / 6' in html
+        c.post('/basic6-exams/state/quick', data=dict(
+            data, data='Basicnewsix Tola Ann, Eng B', action='confirm', approve_roster='1', inc=['1']))
+        with app.app_context():
+            new = Student.query.filter_by(surname='Basicnewsix').one()
+            new_id = new.id
+        assert _active_classes(app, new_id) == {'Primary 6'}
+        # The setting is on the Settings page.
+        html = c.get('/basic6-exams/settings').get_data(as_text=True)
+        assert 'Who sits Common Entrance?' in html and 'value="both" checked' in html
+        c.post('/basic6-exams/settings', data={'_csrf_token': tok, 'body': 'state', 'ce_classes': 'basic5'})
+        with app.app_context():
+            from models import SchoolSettings
+            assert SchoolSettings.get('common_entrance_classes') == 'basic5'
+    finally:
+        _set_ce(app, 'basic6')

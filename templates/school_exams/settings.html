@@ -6,6 +6,20 @@
 <form method="post">
   <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
   <input type="hidden" name="body" value="{{ body }}">
+  {% if level == 'basic6' %}
+  <div class="card mb-3">
+    <div class="card-header"><h3><i class="fas fa-child"></i> Who sits Common Entrance?</h3></div>
+    <div class="card-body">
+      <p class="sx-muted" style="margin-top:0">Some schools write Common Entrance from Basic 5, others from Basic 6. This decides which class's pupils are listed as candidates, which class arms the analytics use, and where a pupil is placed when results are entered for someone not yet in the class. It applies to both the State exam and NCEE.</p>
+      <div class="d-flex gap-2" style="flex-wrap:wrap">
+        {% for k, lab in ce_choices.items() %}
+        <label class="d-flex gap-2" style="align-items:center;margin:0 1rem 0 0"><input type="radio" name="ce_classes" value="{{ k }}" {% if k == ce_value %}checked{% endif %}> {{ lab }}</label>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
   <div class="card mb-3">
     <div class="card-header"><h3><i class="fas fa-sliders"></i> {{ body_meta.full }}</h3></div>
     <div class="card-body">

@@ -25,7 +25,30 @@ from models.models_school_exams import (
 from utils.access_control import login_required
 from utils.branch_scope import require_branch_access
 from utils.audit import log_action
+from utils.security import rate_limited
 from utils import school_exams as svc
+
+
+class _LiveMeta(dict):
+    """LEVEL_META for a level, with the Common Entrance class label / name
+    following the school's setting (Basic 6, Basic 5, or Basic 5 / 6)."""
+
+    def __init__(self, level):
+        super().__init__(LEVEL_META[level])
+        self.level = level
+
+    def __getitem__(self, key):
+        if self.level == 'basic6' and key in ('class_label', 'name', 'long_name'):
+            lab = svc.level_class_label('basic6')
+            return {'class_label': lab, 'name': f'{lab} Exams',
+                    'long_name': f'Primary / {lab} — Common Entrance Examination'}[key]
+        return super().__getitem__(key)
+
+    def get(self, key, default=None):
+        try:
+            return self[key]
+        except KeyError:
+            return default
 
 
 def _default_year(years):
@@ -40,7 +63,7 @@ def _body_or_404(body):
 
 
 def _ctx(level, bp_name, body=None, **extra):
-    L = LEVEL_META[level]
+    L = _LiveMeta(level)
     ctx = {'L': L, 'level': level, 'bp': bp_name, 'bodies': BODIES, 'kinds': KINDS,
            'ch': svc.charts}
     ctx['body_links'] = _body_links()
@@ -82,7 +105,7 @@ def _student_or_404(level, student_id):
 def make_blueprint(level):
     bp_name = f'{level}_exams'
     bp = Blueprint(bp_name, __name__, url_prefix=f'/{level}-exams')
-    L = LEVEL_META[level]
+    L = _LiveMeta(level)
 
     @bp.before_request
     def _heal():
@@ -498,6 +521,122 @@ def make_blueprint(level):
         return xlsx_response(wb, f'{level}_{body}_{year}.xlsx')
 
     # ------------------------------------------------------------------ #
+    # Broadsheet — same pattern as the WAEC broadsheet (page + print PDF with
+    # paper sizes + custom download in PDF / image / Excel / CSV)
+    # ------------------------------------------------------------------ #
+    def _bs_args(body):
+        years = svc.years_for(level, body)
+        year = _default_year(years)
+        arms = [a for a in (request.args.get('arms') or '').split(',') if a.strip()]
+        subjects = [x for x in (request.args.get('subjects') or '').split(',') if x.strip()]
+        order = 'position' if request.args.get('order') == 'position' else 'name'
+        return years, year, svc.broadsheet(level, body, year, arms=arms, subjects=subjects, order=order)
+
+    def _bs_titles(body, year, bs):
+        scheme = bs['scheme']
+        heading = f'{scheme.exam_name} {year} — {L["class_label"]} Broadsheet'
+        return heading, scheme
+
+    @bp.route('/<body>/broadsheet')
+    @login_required
+    def broadsheet(body):
+        _body_or_404(body)
+        years, year, bs = _bs_args(body)
+        return render_template('school_exams/broadsheet.html', **_ctx(
+            level, bp_name, body, years=years, year=year, bs=bs))
+
+    @bp.route('/<body>/broadsheet.pdf')
+    @login_required
+    @rate_limited('export', max_requests=40, window_minutes=10)
+    def broadsheet_pdf(body):
+        """Print-ready broadsheet PDF (A4 / A3 / A2, landscape or portrait,
+        columns per sheet). Previews inline; ?download=1 to save."""
+        from flask import send_file
+        from utils.school import school_profile, logo_path
+        from utils.waec_broadsheet_pdf import waec_broadsheet_pdf as _mk
+        from utils.name_display import name_opts
+        _body_or_404(body)
+        _years, year, bs = _bs_args(body)
+        if not bs['rows']:
+            flash('No results recorded for that year.', 'warning')
+            return redirect(url_for(f'{bp_name}.broadsheet', body=body, year=year))
+        heading, scheme = _bs_titles(body, year, bs)
+        size = request.args.get('size', 'A4').upper()
+        school = dict(school_profile() or {})
+        school.setdefault('logo_path', logo_path())
+        per = request.args.get('cols', default=0, type=int)
+        buf = _mk(bs, year, school, opts={'title': False, 'name_fmt': name_opts(request.args)},
+                  per=(per if per and per > 0 else 0), orient=request.args.get('orient', 'landscape'),
+                  size=(size if size in ('A4', 'A3', 'A2') else 'A4'), heading=heading,
+                  tail_labels=('Credits', 'Avg %'),
+                  summary_labels=('No. offered', 'No. passed', 'No. failed', 'Average %'),
+                  grade_key=False)
+        log_action('data.export_results', detail=f'{scheme.exam_name} {year} broadsheet PDF')
+        return send_file(buf, mimetype='application/pdf',
+                         as_attachment=request.args.get('download') == '1',
+                         download_name=f'{level}_{body}_broadsheet_{year}.pdf')
+
+    @bp.route('/<body>/broadsheet/download')
+    @login_required
+    @rate_limited('export', max_requests=40, window_minutes=10)
+    def broadsheet_download(body):
+        """Custom broadsheet download: arms, subjects, heading, names and
+        order chosen in the page's "Custom download" box; format = pdf |
+        image | excel | csv (same as the WAEC broadsheet)."""
+        from flask import Response
+        from utils import broadsheet_export as bx
+        from utils.name_display import name_opts, format_name
+        from utils.school import logo_path as _logo_path, school_profile as _school_profile
+        from utils.web_exports import xlsx_response, formula_guard
+        _body_or_404(body)
+        _years, year, bs = _bs_args(body)
+        if not bs['rows']:
+            flash('No candidates match the selection for that year.', 'warning')
+            return redirect(url_for(f'{bp_name}.broadsheet', body=body, year=year))
+        heading, scheme = _bs_titles(body, year, bs)
+        title = (request.args.get('title') or '').strip()[:120] or heading
+        arms = request.args.get('arms') or ''
+        subtitle = (f'{scheme.exam_name} {year} · {arms.replace(",", ", ") or "All arms"} · '
+                    f'{len(bs["rows"])} candidate(s)')
+        nfmt = name_opts(request.args)
+        subjects = bs['subjects']
+        full_headers = ['S/N', 'Candidate'] + subjects + ['Credits', 'Avg %']
+        full_rows = []
+        for i, r in enumerate(bs['rows'], 1):
+            line = [str(i), formula_guard(format_name(r['student'], nfmt))]
+            line += [r['cells'].get(subj, '–') for subj in subjects]
+            line += [str(r['credits']), r['avg_grade'] or '–']
+            full_rows.append(line)
+        fname = f'{level}_{body}_broadsheet_{year}'
+        fmt = (request.args.get('format') or 'pdf').lower()
+        log_action('data.export_results', detail=f'{scheme.exam_name} {year} broadsheet ({fmt})')
+        if fmt in ('excel', 'xlsx'):
+            return xlsx_response(bx.combo_xlsx(full_headers, full_rows, title, subtitle), f'{fname}.xlsx')
+        if fmt == 'csv':
+            import csv as _csv
+            from io import StringIO
+            buf = StringIO(); w = _csv.writer(buf); w.writerow(full_headers)
+            for dr in full_rows:
+                w.writerow(dr)
+            return Response(buf.getvalue(), mimetype='text/csv', headers={
+                'Content-Disposition': f'attachment; filename="{fname}.csv"'})
+        codes, legend = bx.abbreviate_subjects(subjects)
+        headers = ['S/N', 'Candidate'] + codes + ['Cred', 'Avg']
+        lp, sname = _logo_path(), (_school_profile() or {}).get('name') or None
+        if fmt in ('image', 'png'):
+            pages = bx.combo_png_pages(headers, full_rows, title, subtitle, legend=legend,
+                                       logo_path=lp, school_name=sname)
+            page = max(1, min(request.args.get('page', type=int) or 1, len(pages)))
+            suffix = '' if len(pages) == 1 else f'_p{page}'
+            return Response(pages[page - 1], mimetype='image/png', headers={
+                'Content-Disposition': f'attachment; filename="{fname}{suffix}.png"',
+                'X-Total-Pages': str(len(pages)), 'Access-Control-Expose-Headers': 'X-Total-Pages'})
+        data = bx.combo_pdf(headers, full_rows, title, subtitle, numeric_from=2, legend=legend,
+                            logo_path=lp, school_name=sname)
+        return Response(data, mimetype='application/pdf', headers={
+            'Content-Disposition': f'attachment; filename="{fname}.pdf"'})
+
+    # ------------------------------------------------------------------ #
     # Settings
     # ------------------------------------------------------------------ #
     @bp.route('/settings', methods=['GET', 'POST'])
@@ -511,6 +650,10 @@ def make_blueprint(level):
                 db.session.commit()
                 flash('Settings reset to the defaults.', 'success')
                 return redirect(url_for(f'{bp_name}.settings', body=body))
+            if level == 'basic6' and request.form.get('ce_classes') in svc.CE_CHOICES:
+                from models import SchoolSettings
+                SchoolSettings.set(svc.CE_SETTING_KEY, request.form['ce_classes'],
+                                   description='Class(es) that sit Common Entrance')
             ok, msg = svc.save_scheme(level, body, request.form)
             if ok:
                 db.session.commit()
@@ -520,7 +663,8 @@ def make_blueprint(level):
                 db.session.rollback()
                 flash(msg, 'error')
             return redirect(url_for(f'{bp_name}.settings', body=body))
-        return render_template('school_exams/settings.html', **_ctx(level, bp_name, body))
+        return render_template('school_exams/settings.html', **_ctx(
+            level, bp_name, body, ce_choices=svc.CE_CHOICES, ce_value=svc.ce_classes_setting()))
 
     return bp
 
@@ -529,6 +673,19 @@ jss3_exams_bp = make_blueprint('jss3')
 basic6_exams_bp = make_blueprint('basic6')
 
 exam_levels_bp = Blueprint('exam_levels', __name__, url_prefix='/exam-levels')
+
+
+@exam_levels_bp.app_context_processor
+def _ce_nav():
+    """``ce_exams_label()`` for the sidebar: "Basic 6 Exams", "Basic 5 Exams"
+    or "Basic 5 / 6 Exams" — a callable, so pages that don't show the
+    sidebar never query the setting."""
+    def ce_exams_label():
+        try:
+            return f"{svc.level_class_label('basic6')} Exams"
+        except Exception:
+            return 'Basic 6 Exams'
+    return {'ce_exams_label': ce_exams_label}
 
 
 @exam_levels_bp.before_request
@@ -545,7 +702,7 @@ def index():
     levels = []
     for level in ('jss3', 'basic6'):
         cls = svc.find_level_class(level)
-        levels.append({'meta': LEVEL_META[level], 'bp': f'{level}_exams',
+        levels.append({'meta': _LiveMeta(level), 'bp': f'{level}_exams',
                        'class_name': cls.name if cls else None,
                        'students': len(svc.level_students(level, include_with_results=False)),
                        'overview': svc.level_overview(level)})

@@ -47,7 +47,63 @@ _CLASS_NAMES = {
              'basic9', 'jhs3', 'year9'},
     'basic6': {'basic6', 'primary6', 'pry6', 'pri6', 'p6', 'prim6', 'grade6', 'year6',
                'bas6', 'b6'},
+    'basic5': {'basic5', 'primary5', 'pry5', 'pri5', 'p5', 'prim5', 'grade5', 'year5',
+               'bas5', 'b5'},
 }
+
+# Some schools write Common Entrance from Basic 5, others from Basic 6 (or
+# both). Stored once per school; the "basic6" exams area follows it.
+CE_SETTING_KEY = 'common_entrance_classes'
+CE_CHOICES = {'basic6': 'Basic 6', 'basic5': 'Basic 5', 'both': 'Basic 5 and Basic 6'}
+
+
+def ce_classes_setting():
+    """'basic6' (default), 'basic5' or 'both'."""
+    from models import SchoolSettings
+    try:
+        v = SchoolSettings.get(CE_SETTING_KEY, 'basic6')
+    except Exception:
+        db.session.rollback()
+        v = 'basic6'
+    return v if v in CE_CHOICES else 'basic6'
+
+
+def level_class_keys(level):
+    """The class-name keys that count for ``level`` (Basic 6 first)."""
+    if level != 'basic6':
+        return [level]
+    return {'basic6': ['basic6'], 'basic5': ['basic5'], 'both': ['basic6', 'basic5']}[ce_classes_setting()]
+
+
+def level_class_label(level):
+    """'JSS3', 'Basic 6', 'Basic 5' or 'Basic 5 / 6'."""
+    if level == 'jss3':
+        return 'JSS3'
+    return {'basic6': 'Basic 6', 'basic5': 'Basic 5', 'both': 'Basic 5 / 6'}[ce_classes_setting()]
+
+
+def _find_class_by_key(key):
+    from models import SchoolClass
+    wanted = _CLASS_NAMES[key]
+    for c in SchoolClass.query.order_by(SchoolClass.id).all():
+        if _norm(c.name) in wanted:
+            return c
+    return None
+
+
+def level_classes(level):
+    """Every SchoolClass whose pupils sit this level's exam (for Common
+    Entrance: Basic 6, Basic 5 or both, per the school's setting)."""
+    out = []
+    for key in level_class_keys(level):
+        c = _find_class_by_key(key)
+        if c is not None:
+            out.append(c)
+    return out
+
+
+def level_class_ids(level):
+    return [c.id for c in level_classes(level)]
 
 
 def _norm(name):
@@ -55,14 +111,11 @@ def _norm(name):
 
 
 def find_level_class(level):
-    """The SchoolClass for ``level`` ('jss3' / 'basic6') matched tolerantly by
-    name (JSS3 / JS 3 / Junior Secondary 3; Basic 6 / Primary 6 / Pry 6 …)."""
-    from models import SchoolClass
-    wanted = _CLASS_NAMES[level]
-    for c in SchoolClass.query.order_by(SchoolClass.id).all():
-        if _norm(c.name) in wanted:
-            return c
-    return None
+    """The main SchoolClass for ``level`` (JSS3; Basic 6 — or Basic 5 when the
+    school sits Common Entrance from Basic 5). Matched tolerantly by name
+    (JSS 3, Junior Secondary 3, Primary 6, Pry 6 …)."""
+    cls = level_classes(level)
+    return cls[0] if cls else None
 
 
 def _enrolled_rows(level, term_id=None):
@@ -70,16 +123,16 @@ def _enrolled_rows(level, term_id=None):
     from models import ClassArmAssignment, StudentEnrollment, ClassArm
     from utils.helpers import get_active_term
     from utils.branch_scope import scope_query
-    cls = find_level_class(level)
+    cls_ids = level_class_ids(level)
     term = get_active_term() if term_id is None else None
     tid = term_id or (term.id if term else None)
-    if not cls or not tid:
+    if not cls_ids or not tid:
         return []
     q = (db.session.query(Student, ClassArm.name)
          .join(StudentEnrollment, StudentEnrollment.student_id == Student.id)
          .join(ClassArmAssignment, ClassArmAssignment.id == StudentEnrollment.class_arm_assignment_id)
          .join(ClassArm, ClassArm.id == ClassArmAssignment.arm_id)
-         .filter(ClassArmAssignment.class_id == cls.id,
+         .filter(ClassArmAssignment.class_id.in_(cls_ids),
                  ClassArmAssignment.term_id == tid,
                  StudentEnrollment.is_active == True,     # noqa: E712
                  Student.is_active == True))              # noqa: E712
@@ -92,9 +145,9 @@ def _recent_cohort(level):
     from models import ClassArmAssignment, StudentEnrollment, Term, AcademicSession
     from utils.helpers import get_active_session
     from utils.branch_scope import scope_query
-    cls = find_level_class(level)
+    cls_ids = level_class_ids(level)
     cur = get_active_session()
-    if not cls or not cur:
+    if not cls_ids or not cur:
         return []
     sessions = [cur.id]
     prev = (AcademicSession.query.filter(AcademicSession.id < cur.id)
@@ -105,7 +158,7 @@ def _recent_cohort(level):
          .join(StudentEnrollment, StudentEnrollment.student_id == Student.id)
          .join(ClassArmAssignment, ClassArmAssignment.id == StudentEnrollment.class_arm_assignment_id)
          .join(Term, Term.id == ClassArmAssignment.term_id)
-         .filter(ClassArmAssignment.class_id == cls.id, Term.session_id.in_(sessions),
+         .filter(ClassArmAssignment.class_id.in_(cls_ids), Term.session_id.in_(sessions),
                  Student.is_active == True)                # noqa: E712
          .distinct())
     return scope_query(q, Student).all()
@@ -136,20 +189,22 @@ def level_students(level, include_with_results=True):
 
 def student_arm_map(level, student_ids):
     """{student_id: arm name} from each student's most recent enrolment in the
-    level class (any term), so arm comparisons survive promotion."""
-    from models import ClassArmAssignment, StudentEnrollment, ClassArm
-    cls = find_level_class(level)
-    if not cls or not student_ids:
+    level's class(es), any term, so arm comparisons survive promotion. When
+    two classes count (Basic 5 and 6) the class is included: "Basic 5 Gold"."""
+    from models import ClassArmAssignment, StudentEnrollment, ClassArm, SchoolClass
+    cls_ids = level_class_ids(level)
+    if not cls_ids or not student_ids:
         return {}
-    rows = (db.session.query(StudentEnrollment.student_id, ClassArm.name)
+    rows = (db.session.query(StudentEnrollment.student_id, ClassArm.name, SchoolClass.name)
             .join(ClassArmAssignment, ClassArmAssignment.id == StudentEnrollment.class_arm_assignment_id)
             .join(ClassArm, ClassArm.id == ClassArmAssignment.arm_id)
-            .filter(ClassArmAssignment.class_id == cls.id,
+            .join(SchoolClass, SchoolClass.id == ClassArmAssignment.class_id)
+            .filter(ClassArmAssignment.class_id.in_(cls_ids),
                     StudentEnrollment.student_id.in_(list(student_ids)))
             .order_by(ClassArmAssignment.term_id).all())
     out = {}
-    for sid, arm in rows:
-        out[sid] = arm               # later terms overwrite earlier ones
+    for sid, arm, cname in rows:
+        out[sid] = f'{cname} {arm}' if len(cls_ids) > 1 else arm   # later terms win
     return out
 
 
@@ -683,14 +738,14 @@ def internal_vs_external(level, summaries):
     with their external average %. Shows whether school assessment predicts
     the external exam, and flags the biggest over/under-performers."""
     from models import TermSummary, StudentEnrollment, ClassArmAssignment
-    cls = find_level_class(level)
+    cls_ids = level_class_ids(level)
     ids = [s['id'] for s in summaries if s['avg_pct'] is not None]
-    if not cls or not ids:
+    if not cls_ids or not ids:
         return None
     rows = (db.session.query(TermSummary.student_id, TermSummary.average_score, TermSummary.term_id)
             .join(StudentEnrollment, StudentEnrollment.id == TermSummary.enrollment_id)
             .join(ClassArmAssignment, ClassArmAssignment.id == StudentEnrollment.class_arm_assignment_id)
-            .filter(ClassArmAssignment.class_id == cls.id,
+            .filter(ClassArmAssignment.class_id.in_(cls_ids),
                     TermSummary.student_id.in_(ids),
                     TermSummary.average_score.isnot(None)).all())
     internal = defaultdict(list)
@@ -924,3 +979,57 @@ class charts:
                     {'label': a_label, 'data': [r[a_key] for r in rows], 'backgroundColor': 'var(--sx-s1)'},
                     {'label': b_label, 'data': [r[b_key] for r in rows], 'backgroundColor': 'var(--sx-s2)'}]},
                 'options': {'scales': {'y': dict(_PCT_AXIS)}}}
+
+
+# --------------------------------------------------------------------------- #
+# Broadsheet (grade matrix) — same shape as the WAEC broadsheet, so the WAEC
+# print-PDF builder and the shared export helpers render it unchanged.
+# --------------------------------------------------------------------------- #
+def broadsheet(level, body, year, arms=None, subjects=None, order='name'):
+    """Grade matrix for one level / exam body / year.
+
+    ``arms``: only candidates in these arm labels; ``subjects``: only these
+    columns; ``order``: 'name' (register order) or 'position' (best first).
+    Cells read "A (72)" when a score is known, else just the grade."""
+    st = year_stats(level, body, year)
+    scheme = st['scheme']
+    cands = st['candidates']
+    if arms:
+        want = {a.lower() for a in arms}
+        cands = [c for c in cands if (c.get('arm') or 'Unassigned').lower() in want]
+    present = {r.subject for c in cands for r in c['results']}
+    ordered = [s for s in scheme.subjects if s in present] + sorted(present - set(scheme.subjects))
+    if subjects:
+        ordered = [s for s in ordered if s in set(subjects)] or ordered
+    if order == 'position':
+        cands = sorted(cands, key=lambda c: c['position'])
+    else:
+        cands = sorted(cands, key=lambda c: c['name'].lower())
+    rows = []
+    for c in cands:
+        s = c['student']
+        cells = {}
+        for r in c['results']:
+            cells[r.subject] = f'{r.grade} ({r.score:g})' if r.score is not None else r.grade
+        rows.append({
+            'student': {'id': s.id, 'full_name': s.full_name, 'surname': s.surname or '',
+                        'first_name': s.first_name or '', 'middle_name': s.middle_name or '',
+                        'arm': c.get('arm') or ''},
+            'cells': cells, 'grades': {r.subject: r.grade for r in c['results']},
+            'credits': c['credits'], 'distinctions': c['distinctions'],
+            'avg_grade': '' if c['avg_pct'] is None else f"{c['avg_pct']:g}%",
+            'position': c['position'], 'total': c['total'],
+            'meets_benchmark': c['meets_benchmark'],
+        })
+    srows = {r['subject']: r for r in subject_rows(scheme, [x for c in cands for x in c['results']])}
+    summary = {}
+    for subj in ordered:
+        r = srows.get(subj)
+        summary[subj] = {'offered': r['entries'] if r else 0, 'passed': r['passes'] if r else 0,
+                         'failed': r['fails'] if r else 0,
+                         'avg_grade': (f"{r['mean_pct']:g}%" if r and r['mean_pct'] is not None
+                                       else (f"{r['credit_rate']:g}% cr" if r else ''))}
+    arm_names = sorted({(c.get('arm') or 'Unassigned') for c in st['candidates']})
+    return {'subjects': ordered, 'rows': rows, 'subject_summary': summary,
+            'scheme': scheme, 'kpis': _kpis_from(cands), 'arms': arm_names,
+            'grade_dist': st['grade_dist']}

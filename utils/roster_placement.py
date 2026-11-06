@@ -26,7 +26,22 @@ import re
 
 from models import db, Student
 
-LEVEL_LABEL = {'sss3': 'SSS3', 'jss3': 'JSS3', 'basic6': 'Basic 6'}
+def label_for(level):
+    """'SSS3', 'JSS3', or the Common Entrance class(es): 'Basic 6' / 'Basic 5' /
+    'Basic 5 / 6' per the school's setting."""
+    if level == 'sss3':
+        return 'SSS3'
+    from utils.school_exams import level_class_label
+    return level_class_label(level)
+
+
+def level_classes(level):
+    """Every class that counts as "in the class" for ``level``."""
+    if level == 'sss3':
+        c = level_class(level)
+        return [c] if c else []
+    from utils.school_exams import level_classes as _lc
+    return _lc(level)
 SCHOOL_WIDE_MATCH = 0.92
 
 
@@ -59,7 +74,7 @@ def placement_target(level, year):
     from models import Term, ClassArmAssignment
     from utils.helpers import get_active_term
     from utils.branch_scope import scope_query
-    label = LEVEL_LABEL[level]
+    label = label_for(level)
     cls = level_class(level)
     if cls is None:
         return {'error': f'There is no {label} class yet — create it under Academics first.'}
@@ -79,19 +94,24 @@ def placement_target(level, year):
         return {'error': f'{label} has no class arm set up for {term.name} ({sess.name}) — '
                          f'add one under Academics first.'}
     arms.sort(key=lambda a: (a.arm.name if a.arm else ''))
-    return {'cls': cls, 'session': sess, 'term': term, 'arms': arms}
+    # New / moved pupils go into the main class (Basic 6 when both 5 and 6
+    # sit Common Entrance); a pupil in ANY of the level's classes counts as in.
+    return {'cls': cls, 'classes': level_classes(level) or [cls], 'session': sess,
+            'term': term, 'arms': arms}
 
 
 def in_class_ids(cls, session_id, student_ids):
-    """Of ``student_ids``, those actively enrolled in ``cls`` in any term of the
-    session (graduates keep their enrolment, so they count)."""
+    """Of ``student_ids``, those actively enrolled in ``cls`` (a class or a list
+    of classes) in any term of the session (graduates keep their enrolment,
+    so they count)."""
     from models import ClassArmAssignment, StudentEnrollment, Term
     if not student_ids:
         return set()
+    cls_ids = [c.id for c in (cls if isinstance(cls, (list, tuple)) else [cls]) if c is not None]
     rows = (db.session.query(StudentEnrollment.student_id)
             .join(ClassArmAssignment, ClassArmAssignment.id == StudentEnrollment.class_arm_assignment_id)
             .join(Term, Term.id == ClassArmAssignment.term_id)
-            .filter(ClassArmAssignment.class_id == cls.id, Term.session_id == session_id,
+            .filter(ClassArmAssignment.class_id.in_(cls_ids or [-1]), Term.session_id == session_id,
                     StudentEnrollment.is_active == True,               # noqa: E712
                     StudentEnrollment.student_id.in_(list(student_ids)))
             .distinct().all())
@@ -130,7 +150,7 @@ def plan(rows, level, year, roster):
     summary ``{'target', 'moves', 'creates', 'allowed', 'error'}``."""
     from utils.waec_ocr import match_students_unique
     from utils.branch_scope import scope_query
-    label = LEVEL_LABEL[level]
+    label = label_for(level)
     target = placement_target(level, year)
     allowed = can_change_roster()
     no_match = f'No {label}'
@@ -179,7 +199,7 @@ def plan(rows, level, year, roster):
     matched = [r for r in rows if r.get('student') is not None]
     inside = set()
     if 'error' not in target:
-        inside = in_class_ids(target['cls'], target['session'].id, {r['student'].id for r in matched})
+        inside = in_class_ids(target['classes'], target['session'].id, {r['student'].id for r in matched})
     # A move changes someone's class, so it needs a near-certain name match
     # wherever the match came from (the roster can be the whole school before
     # the class is set up). A weaker match to someone outside the class is

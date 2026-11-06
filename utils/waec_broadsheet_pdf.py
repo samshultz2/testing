@@ -25,12 +25,26 @@ def _bs_name(st):
     return ' '.join(p for p in parts if p).strip() or st.get('full_name') or ''
 
 
-def waec_broadsheet_pdf(bs, year, school, opts=None, per=8, orient='landscape', size='A4'):
+def _disp_name(st, opts):
+    from utils.name_display import format_name
+    return format_name(st, (opts or {}).get('name_fmt'), _bs_name)
+
+
+def waec_broadsheet_pdf(bs, year, school, opts=None, per=8, orient='landscape', size='A4',
+                        heading=None, tail_labels=('Credits', 'Avg grade'),
+                        summary_labels=('No. offered', 'No. passed (C6+)', 'No. failed', 'Average grade'),
+                        grade_key=None):
     """Full grade matrix for a WAEC exam year. Wide subject sets split across
     pages (``per`` columns each). ``opts['summary']`` toggles the per-subject
     offered/passed/failed/average-grade rows, led by a "SUMMARY" divider
     spelled into the sheet's own columns. ``orient``/``size`` pick the paper
-    (A4/A3/A2, landscape or portrait) with an 8mm margin."""
+    (A4/A3/A2, landscape or portrait) with an 8mm margin.
+
+    Also renders the JSS3 (BECE) / Basic 6 (Common Entrance) broadsheets:
+    ``heading`` replaces the "WAEC / WASSCE <year> — Broadsheet" line,
+    ``tail_labels`` / ``summary_labels`` rename the two end columns and the
+    four summary rows, and ``grade_key=False`` drops the A1–F9 key.
+    ``opts['name_fmt']`` (utils.name_display) picks the name parts shown."""
     _styles()
     page = _pagesize(orient, size)
     import io
@@ -48,7 +62,7 @@ def waec_broadsheet_pdf(bs, year, school, opts=None, per=8, orient='landscape', 
     e = []
     for gi, group in enumerate(groups):
         last = gi == len(groups) - 1
-        sub = f'WAEC / WASSCE {year} — Broadsheet'
+        sub = heading or f'WAEC / WASSCE {year} — Broadsheet'
         if len(groups) > 1:
             sub += f' (Sheet {gi + 1} of {len(groups)})'
         _school_header(e, school, opts, sub)
@@ -59,10 +73,10 @@ def waec_broadsheet_pdf(bs, year, school, opts=None, per=8, orient='landscape', 
         header = [Paragraph('S/N', _S['colhead']), Paragraph('Name of Student', _S['colhead'])]
         header += [_VHead(s) for s in group]
         if last:
-            header += [_VHead('Credits'), _VHead('Avg grade')]
+            header += [_VHead(tail_labels[0]), _VHead(tail_labels[1])]
         data = [header]
         for i, row in enumerate(bs['rows'], 1):
-            line = [str(i), Paragraph(pdf_escape(_bs_name(row['student'])), _S['name'])]
+            line = [str(i), Paragraph(pdf_escape(_disp_name(row['student'], opts)), _S['name'])]
             for s in group:
                 line.append(row['cells'].get(s, ''))
             if last:
@@ -87,10 +101,8 @@ def waec_broadsheet_pdf(bs, year, school, opts=None, per=8, orient='landscape', 
 
         sum0 = len(data)
         if show_summary:
-            for label, fn in (('No. offered', lambda d: d['offered']),
-                              ('No. passed (C6+)', lambda d: d['passed']),
-                              ('No. failed', lambda d: d['failed']),
-                              ('Average grade', lambda d: d['avg_grade'])):
+            for label, fn in zip(summary_labels, (lambda d: d['offered'], lambda d: d['passed'],
+                                                  lambda d: d['failed'], lambda d: d['avg_grade'])):
                 rr = ['', label] + [str(fn(ss[s])) for s in group]
                 if last:
                     rr += ['', '']
@@ -120,7 +132,7 @@ def waec_broadsheet_pdf(bs, year, school, opts=None, per=8, orient='landscape', 
                 style.append(('SPAN', (0, summary_heading_row), (ncols - 1, summary_heading_row)))
         t.setStyle(TableStyle(style))
         e.append(t)
-        if _opt(opts, 'grades'):
+        if (grade_key if grade_key is not None else _opt(opts, 'grades')):
             e.append(Spacer(1, 6))
             e.append(_grade_key_table(usable))
         if not last:

@@ -288,3 +288,46 @@ def test_entered_students_are_hidden_from_add_and_grid(app):
     grid = c.get('/jss3-exams/state/grid?year=2039').get_data(as_text=True)
     assert f'exam_number_{todo}' in grid and f'exam_number_{done}' not in grid and 'are hidden' in grid
     assert f'exam_number_{done}' in c.get('/jss3-exams/state/grid?year=2039&show=all').get_data(as_text=True)
+
+
+def test_broadsheet_page_and_exports_like_waec(app):
+    import fitz
+    from models.models import RateLimitHit
+    c = _admin(app)
+    a, _ = _student(app, 'Bsheetada')
+    b, _ = _student(app, 'Bsheetben', gender='Male')
+    for sid in (a, b):
+        _enroll(app, 'JSS3', 3, sid)
+    tok = auth_csrf(c)
+    for sid, scores in ((a, ['72', '66']), (b, ['48', '55'])):
+        c.post('/jss3-exams/state/add', data={'_csrf_token': tok, 'student_id': sid, 'exam_year': 2049,
+               'subject[]': ['Mathematics', 'English Studies'], 'score[]': scores, 'grade[]': ['', '']})
+    with app.app_context():
+        # Start from a clean export allowance (earlier tests share this admin).
+        RateLimitHit.query.filter(RateLimitHit.rkey.like('%export%')).delete(synchronize_session=False)
+        db.session.commit()
+        top = db.session.query(db.func.max(RateLimitHit.id)).scalar() or 0
+    try:
+        html = c.get('/jss3-exams/state/broadsheet?year=2049').get_data(as_text=True)
+        assert 'Tester Bsheetada' in html and 'Custom download' in html and 'id="bsSize"' in html
+        pdf = c.get('/jss3-exams/state/broadsheet.pdf?year=2049&size=A3')
+        assert pdf.status_code == 200 and pdf.data[:4] == b'%PDF'
+        with fitz.open(stream=pdf.data, filetype='pdf') as d:
+            txt = ' '.join(p.get_text() for p in d)
+        assert 'Broadsheet' in txt and 'Tester Bsheetada' in txt and 'Avg %' in txt
+        base = '/jss3-exams/state/broadsheet/download?year=2049'
+        csv = c.get(base + '&format=csv&order=position&names=first').get_data(as_text=True)
+        lines = csv.strip().splitlines()
+        assert lines[0].startswith('S/N,Candidate,English Studies,Mathematics')
+        assert 'Bsheetada' in lines[1] and 'A (72)' in lines[1]             # best first
+        assert 'Tester' not in csv                                          # first name only
+        assert c.get(base + '&format=excel').data[:2] == b'PK'
+        assert c.get(base + '&format=pdf').data[:4] == b'%PDF'
+        img = c.get(base + '&format=image')
+        assert img.data[:4] == b'\x89PNG' and img.headers.get('X-Total-Pages')
+        # Basic 6 has its own broadsheet too.
+        assert c.get('/basic6-exams/federal/broadsheet').status_code == 200
+    finally:
+        with app.app_context():
+            RateLimitHit.query.filter(RateLimitHit.id > top).delete(synchronize_session=False)
+            db.session.commit()
