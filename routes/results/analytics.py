@@ -119,6 +119,16 @@ def student_report(student_id):
     pass_grades = set(AcademicAnalytics.PASS_GRADES)
     distinction_grades = set(AcademicAnalytics.DISTINCTION_GRADES)
 
+    # JSS3 (BECE) / Basic 5-6 (Common Entrance) sittings — the junior-level
+    # equivalent of WAEC / JAMB, shown for those pupils (and as history for
+    # an SSS3 student who sat them earlier).
+    from utils import school_exams as sx
+    exam_level = sx.student_exam_level(student)
+    junior_sittings = sx.student_sittings(student)
+    for sit in junior_sittings:
+        sit['next'] = sx.readiness_after(sit)
+        sit['level_label'] = 'JSS3' if sit['level'] == 'jss3' else sx.level_class_label('basic6')
+
     # WAEC grouped by year with summary counts.
     waec = student.waec_results.order_by(WAECResult.exam_year.desc(), WAECResult.subject).all()
     waec_by_year = {}
@@ -152,6 +162,22 @@ def student_report(student_id):
     active_session = get_active_session()
     if active_session:
         prediction = MockJAMBAnalytics.predict_real_jamb(student_id, active_session.id)
+
+    # SSS3 sections (WAEC, JAMB, mocks, admission, university) apply to SSS3
+    # students, graduates and anyone with SSS3 exam data; a JSS3 / Basic 5-6
+    # pupil gets their own BECE / Common Entrance report instead.
+    # The pupil's current class decides: JSS3 / Basic 5-6 → junior report.
+    if exam_level in ('jss3', 'basic6'):
+        sss3_view = False
+    else:
+        sss3_view = bool(waec or jamb or mock_rows) or exam_level == 'sss3' or (
+            exam_level is None and (student.is_graduated or not junior_sittings))
+    if not sss3_view:
+        return render_template('results/student_report.html', student=student,
+            sss3_view=False, exam_level=exam_level, junior_sittings=junior_sittings,
+            waec_years=[], jamb_list=[], mock_progress=[], prediction=None, admission=None,
+            readiness=None, jamb_combo=None, standing=None, aspiration=None,
+            recommendations=None, subject_diag=None, generated=_date.today())
 
     from utils.admission import assess_admission
     admission = assess_admission(student)
@@ -204,6 +230,7 @@ def student_report(student_id):
         aspiration=aspiration,
         recommendations=recommendations,
         subject_diag=subject_diag,
+        sss3_view=True, exam_level=exam_level, junior_sittings=junior_sittings,
         generated=_date.today()
     )
 

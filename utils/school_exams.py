@@ -1033,3 +1033,113 @@ def broadsheet(level, body, year, arms=None, subjects=None, order='name'):
     return {'subjects': ordered, 'rows': rows, 'subject_summary': summary,
             'scheme': scheme, 'kpis': _kpis_from(cands), 'arms': arm_names,
             'grade_dist': st['grade_dist']}
+
+
+# --------------------------------------------------------------------------- #
+# Per-student views (student page + the consolidated exam report)
+# --------------------------------------------------------------------------- #
+def student_sittings(student, levels=('jss3', 'basic6')):
+    """Every BECE / Common Entrance sitting of ``student``: one dict per
+    (level, body, year) with the scheme, the candidate summary (credits,
+    distinctions, avg %, position …) and the cohort size. Newest first."""
+    out = []
+    for level in levels:
+        for body in BODIES:
+            years = ({r[0] for r in db.session.query(SchoolExamResult.exam_year).filter_by(
+                student_id=student.id, level=level, body=body).distinct()}
+                | {r[0] for r in db.session.query(SchoolExamCandidate.exam_year).filter_by(
+                    student_id=student.id, level=level, body=body).distinct()})
+            if not years:
+                continue
+            scheme = get_scheme(level, body)
+            for y in sorted(years, reverse=True):
+                res, cands = load(level, body, y)
+                summ = candidate_summaries(scheme, res, cands)
+                me = next((s for s in summ if s['id'] == student.id), None)
+                if me is None:          # outside the viewer's branch scope
+                    continue
+                me['cohort'] = len(summ)
+                out.append({'level': level, 'body': body, 'year': y, 'scheme': scheme,
+                            'name': scheme.exam_name, 's': me})
+    out.sort(key=lambda x: (-x['year'], x['level'], x['body']))
+    return out
+
+
+def student_exam_level(student):
+    """'sss3', 'jss3', 'basic6' (Common Entrance class per the setting) or
+    None — from the student's class this term (latest active enrolment)."""
+    from models import ClassArmAssignment, StudentEnrollment
+    from utils.helpers import get_sss3_class, get_active_term
+    term = get_active_term()
+    q = (db.session.query(ClassArmAssignment.class_id)
+         .join(StudentEnrollment, StudentEnrollment.class_arm_assignment_id == ClassArmAssignment.id)
+         .filter(StudentEnrollment.student_id == student.id, StudentEnrollment.is_active == True))  # noqa: E712
+    if term is not None:
+        row = q.filter(ClassArmAssignment.term_id == term.id).first()
+        row = row or q.order_by(ClassArmAssignment.term_id.desc()).first()
+    else:
+        row = q.order_by(ClassArmAssignment.term_id.desc()).first()
+    if not row:
+        return None
+    cid = row[0]
+    sss3 = get_sss3_class()
+    if sss3 is not None and cid == sss3.id:
+        return 'sss3'
+    for level in ('jss3', 'basic6'):
+        if cid in level_class_ids(level):
+            return level
+    return None
+
+
+# Subject families for the (guidance-only) SSS stream suggestion after BECE.
+_SCIENCE = ('mathematics', 'basic science', 'basic technology', 'basic science and technology',
+            'computer', 'basic digital literacy', 'agricultural science')
+_COMMERCIAL = ('business studies', 'mathematics', 'pre-vocational studies', 'home economics')
+_ARTS = ('english', 'social studies', 'civic education', 'national values', 'christian religious',
+         'islamic', 'cultural and creative arts', 'history', 'french', 'literature', 'arabic',
+         'edo', 'yoruba', 'igbo', 'hausa')
+
+
+def _family_score(results, scheme, family):
+    pts = [scheme.grade_points(r.grade) / max(1, len(scheme.bands))
+           for r in results if any(r.subject.lower().startswith(f) for f in family)]
+    return (sum(pts) / len(pts), len(pts)) if pts else (None, 0)
+
+
+def readiness_after(sitting):
+    """What a BECE / Common Entrance result means for the next step.
+
+    JSS3 → SSS1 readiness: benchmark (N credits incl. English & Maths) met or
+    not, what is missing, strongest / weakest subjects and a suggested SSS
+    stream (guidance only). Basic 5/6 → JSS1 placement: cut-off and outcome."""
+    s, scheme = sitting['s'], sitting['scheme']
+    rows = s['results']
+    ranked = sorted(rows, key=lambda r: (-scheme.grade_points(r.grade), -(r.score or 0), r.subject))
+    missing_core = []
+    has = {core_key(r.subject): scheme.is_credit(r.grade) for r in rows if core_key(r.subject)}
+    for key, label in (('english', 'English'), ('mathematics', 'Mathematics')):
+        if not has.get(key):
+            missing_core.append(label)
+    bench = scheme.benchmark_credits
+    out = {
+        'meets': s['meets_benchmark'], 'benchmark': bench, 'credits': s['credits'],
+        'credits_short': max(0, (bench or 0) - s['credits']), 'missing_core': missing_core,
+        'strongest': [r for r in ranked if scheme.is_credit(r.grade)][:3],
+        'weakest': [r for r in reversed(ranked) if not scheme.is_credit(r.grade)][:3],
+        'above_cutoff': s['above_cutoff'], 'cutoff': scheme.cutoff, 'total': s['total'],
+        'admitted': s['admitted'], 'placement': s['placement'],
+    }
+    if sitting['level'] == 'jss3':
+        fams = {'Science': _family_score(rows, scheme, _SCIENCE),
+                'Commercial': _family_score(rows, scheme, _COMMERCIAL),
+                'Arts': _family_score(rows, scheme, _ARTS)}
+        scored = [(k, v[0]) for k, v in fams.items() if v[0] is not None and v[1] >= 2]
+        if scored:
+            best = max(scored, key=lambda kv: kv[1])
+            # Science needs a Maths credit — otherwise suggest the next best.
+            if best[0] == 'Science' and not has.get('mathematics'):
+                others = [kv for kv in scored if kv[0] != 'Science']
+                best = max(others, key=lambda kv: kv[1]) if others else best
+            out['stream'] = best[0]
+            out['stream_scores'] = {k: round(v * 100) for k, v in scored}
+    return out

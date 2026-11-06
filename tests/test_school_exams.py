@@ -341,3 +341,38 @@ def test_add_result_student_dropdown_is_searchable(app):
         if 'id="sxStudentSel"' not in html:          # no students on this roster yet
             continue
         assert '.ss-wrap' in html and 'Search name or admission no.' in html, path
+
+
+def test_exam_report_shows_bece_for_a_jss3_pupil(app):
+    from tests.conftest import enroll_sss3
+    c = _admin(app)
+    sid, _ = _student(app, 'Reportjss')
+    _enroll(app, 'JSS3', 3, sid)
+    tok = auth_csrf(c)
+    subjects = ['English Studies', 'Mathematics', 'Basic Science', 'Basic Technology',
+                'Social Studies', 'Business Studies']
+    c.post('/jss3-exams/federal/add', data={
+        '_csrf_token': tok, 'student_id': sid, 'exam_year': 2050, 'exam_number': 'NB/77',
+        'subject[]': subjects, 'score[]': ['75', '45', '80', '72', '52', '58'], 'grade[]': [''] * 6,
+        'placement': 'SSS1 Science'})
+    html = c.get(f'/results/student/{sid}/report').get_data(as_text=True)
+    assert 'NECO BECE 2050' in html and 'NB/77' in html
+    assert 'SSS1 Readiness' in html and 'Below the benchmark' in html     # Maths only a pass
+    assert 'No credit yet in Mathematics' in html
+    assert 'Suggested SSS stream' in html
+    assert '<h2><i class="fas fa-file-alt"></i> WAEC</h2>' not in html     # no SSS3 sections
+    assert 'Admission Readiness' not in html
+
+    # An SSS3 student keeps the WAEC report, with their BECE as history.
+    s3, _ = _student(app, 'Reportsss')
+    _enroll(app, 'JSS3', 3, s3)
+    c.post('/jss3-exams/state/add', data={'_csrf_token': tok, 'student_id': s3, 'exam_year': 2048,
+           'subject[]': ['Mathematics'], 'score[]': ['70'], 'grade[]': ['']})
+    with app.app_context():
+        from models import StudentEnrollment
+        StudentEnrollment.query.filter_by(student_id=s3).update({'is_active': False})
+        db.session.commit()
+    enroll_sss3(app, s3)
+    html = c.get(f'/results/student/{s3}/report').get_data(as_text=True)
+    assert '<h2><i class="fas fa-file-alt"></i> WAEC</h2>' in html
+    assert 'Earlier exams — BECE / Common Entrance' in html and 'State BECE 2048' in html

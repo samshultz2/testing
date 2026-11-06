@@ -15,6 +15,7 @@
 .rtable th{background:var(--gray-50)}
 .pill{display:inline-block;padding:.1rem .5rem;border-radius:var(--radius-full);font-size:.75rem;font-weight:600}
 .g-dist{background:#d4edda;color:#155724}.g-credit{background:#cce5ff;color:#004085}.g-fail{background:#f8d7da;color:#721c24}
+.g-pass{background:#fff3cd;color:#856404}
 .summary-chips{display:flex;gap:.5rem;flex-wrap:wrap;margin-top:.4rem}
 .chip{background:var(--gray-50);border:1px solid var(--border-color);border-radius:var(--radius-full);padding:.15rem .6rem;font-size:.78rem}
 .pred{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border-radius:var(--radius-md);padding:1rem;text-align:center}
@@ -32,7 +33,7 @@
 
 {% block content %}
 <div class="page-header no-print">
-    <div><h1>Exam Report</h1><p class="text-muted text-sm">Consolidated WAEC, JAMB and Mock JAMB record</p></div>
+    <div><h1>Exam Report</h1><p class="text-muted text-sm">{% if sss3_view %}Consolidated WAEC, JAMB and Mock JAMB record{% elif exam_level == 'jss3' %}JSS3 — State BECE and NECO BECE record{% else %}Common Entrance record{% endif %}</p></div>
     <div class="page-header-actions">
         <button data-print class="btn btn-primary btn-sm"><i class="fas fa-file-pdf"></i> Print / Save PDF</button>
         <a href="{{ url_for('main.view_student', student_id=student.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>
@@ -46,11 +47,13 @@
             <div class="meta">
                 {% if student.gender %}{{ student.gender }}{% endif %}{% if student.stream %} · {{ student.stream }}{% endif %}
                 {% if student.is_graduated %} · Graduate{% endif %}
+                {% if exam_level == 'jss3' %} · JSS3{% elif exam_level == 'basic6' and junior_sittings %} · {{ junior_sittings[0].level_label }}{% elif exam_level == 'sss3' %} · SSS3{% endif %}
             </div>
         </div>
         <div class="meta">Generated {{ generated.strftime('%d %b %Y') }}</div>
     </div>
 
+    {% if sss3_view %}
     <!-- WAEC -->
     <div class="rsection">
         <h2><i class="fas fa-file-alt"></i> WAEC</h2>
@@ -296,6 +299,79 @@
         </div>
         {% endif %}
     </div>
+    {% endif %}
+    {% endif %}{# /sss3_view #}
+
+    {% if junior_sittings or not sss3_view %}
+    <!-- BECE / Common Entrance -->
+    <div class="rsection">
+        <h2><i class="fas fa-user-graduate"></i> {% if sss3_view %}Earlier exams — BECE / Common Entrance{% elif exam_level == 'jss3' %}BECE — State &amp; NECO{% else %}Common Entrance{% endif %}</h2>
+        {% if not junior_sittings %}
+        <p class="muted">No {% if exam_level == 'jss3' %}State BECE or NECO BECE{% else %}Common Entrance{% endif %} results recorded yet.</p>
+        {% endif %}
+        {% for sit in junior_sittings %}{% set x = sit.s %}{% set sc = sit.scheme %}
+        <div style="margin-bottom:1rem;">
+            <strong>{{ sit.name }} {{ sit.year }}</strong> <span class="muted">({{ sit.level_label }} · {{ 'State' if sit.body == 'state' else 'Federal' }})</span>
+            <div class="summary-chips">
+                <span class="chip">Position <strong>{{ x.position }}</strong> of {{ x.cohort }}</span>
+                <span class="chip">{{ x.subjects }} subjects</span>
+                <span class="chip">{{ x.credits }} credits</span>
+                <span class="chip">{{ x.distinctions }} distinctions</span>
+                {% if x.avg_pct is not none %}<span class="chip">Average {{ x.avg_pct }}%</span>{% endif %}
+                {% if x.total is not none %}<span class="chip">Total {{ x.total }}</span>{% endif %}
+                <span class="chip">Eng &amp; Maths credit: <strong>{{ 'Yes' if x.core_credits else 'No' }}</strong></span>
+                {% if x.exam_number %}<span class="chip">Exam no. {{ x.exam_number }}</span>{% endif %}
+            </div>
+            <table class="rtable" style="margin-top:.4rem;">
+                <thead><tr><th>Subject</th><th style="width:80px;">Score</th><th style="width:80px;">Grade</th><th>Remark</th></tr></thead>
+                <tbody>
+                {% for r in x.results %}{% set k = sc.kind_of(r.grade) %}
+                <tr><td>{{ r.subject }}</td><td>{{ r.score|round(1) if r.score is not none else '—' }}</td>
+                    <td><span class="pill {% if k == 'distinction' %}g-dist{% elif k == 'credit' %}g-credit{% elif k == 'pass' %}g-pass{% else %}g-fail{% endif %}">{{ r.grade }}</span></td>
+                    <td>{{ (sc.band_for_grade(r.grade) or {}).get('label', '') }}</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endfor %}
+    </div>
+
+    {% if junior_sittings and not sss3_view %}{% set sit = junior_sittings[0] %}{% set n = sit.next %}
+    <!-- Next step -->
+    <div class="rsection">
+        {% if sit.level == 'jss3' %}
+        <h2><i class="fas fa-stairs"></i> SSS1 Readiness <span class="muted" style="font-size:.75rem;font-weight:400;">(from {{ sit.name }} {{ sit.year }} · guidance only)</span></h2>
+        {% else %}
+        <h2><i class="fas fa-school"></i> JSS1 Placement <span class="muted" style="font-size:.75rem;font-weight:400;">(from {{ sit.name }} {{ sit.year }})</span></h2>
+        {% endif %}
+        <div class="pred" style="text-align:left;background:{{ 'linear-gradient(135deg,#11998e,#38ef7d)' if n.meets else 'linear-gradient(135deg,#f2994a,#eb5757)' }}">
+            <div style="font-size:1.15rem;font-weight:700;">
+                {% if n.meets %}<i class="fas fa-circle-check"></i> Meets the benchmark{% else %}<i class="fas fa-triangle-exclamation"></i> Below the benchmark{% endif %}
+            </div>
+            <div style="font-size:.88rem;opacity:.95;margin-top:.2rem;">
+                Benchmark: {{ n.benchmark }}+ credits including English &amp; Mathematics · has {{ n.credits }} credit(s).
+                {% if not n.meets %}
+                    {% if n.credits_short %}Needs {{ n.credits_short }} more credit(s).{% endif %}
+                    {% if n.missing_core %}No credit yet in {{ n.missing_core|join(' & ') }}.{% endif %}
+                {% endif %}
+            </div>
+        </div>
+        <div class="summary-chips" style="margin-top:.6rem;">
+            {% if n.stream %}<span class="chip">Suggested SSS stream: <strong>{{ n.stream }}</strong>{% if n.stream_scores %} <span class="muted">({% for k, v in n.stream_scores.items() %}{{ k }} {{ v }}%{{ ', ' if not loop.last }}{% endfor %})</span>{% endif %}</span>{% endif %}
+            {% if n.cutoff is not none and n.total is not none %}<span class="chip">Total {{ n.total }} vs cut-off {{ n.cutoff|round(0)|int }}: <strong>{{ 'above' if n.above_cutoff else 'below' }}</strong></span>{% endif %}
+            {% if n.admitted is not none %}<span class="chip">{{ 'Admitted / placed' if n.admitted else 'Not admitted' }}</span>{% endif %}
+            {% if n.placement %}<span class="chip">{{ 'Placement' if sit.level == 'jss3' else 'School offered' }}: <strong>{{ n.placement }}</strong></span>{% endif %}
+        </div>
+        {% if n.strongest or n.weakest %}
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:.75rem;margin-top:.6rem;">
+            <div><div class="muted" style="font-size:.8rem;margin-bottom:.2rem;">Strongest subjects</div>
+                {% for r in n.strongest %}<span class="pill g-dist" style="margin:2px;display:inline-block;">{{ r.subject }} · {{ r.grade }}</span>{% else %}<span class="muted">—</span>{% endfor %}</div>
+            <div><div class="muted" style="font-size:.8rem;margin-bottom:.2rem;">Needs most work</div>
+                {% for r in n.weakest %}<span class="pill g-fail" style="margin:2px;display:inline-block;">{{ r.subject }} · {{ r.grade }}</span>{% else %}<span class="muted">No subject below credit</span>{% endfor %}</div>
+        </div>
+        {% endif %}
+    </div>
+    {% endif %}
     {% endif %}
 </div>
 {% endblock %}
