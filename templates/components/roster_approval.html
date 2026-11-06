@@ -16,7 +16,7 @@
     {% if t.arms|length > 1 %}
     <div class="mb-2" style="max-width:320px"><label class="form-label" for="ra-arm">Place them in arm</label>
       <select id="ra-arm" name="arm_id" class="form-control">
-        {% for a in t.arms %}<option value="{{ a.arm_id }}" {% if request.form.get('arm_id', type=int) == a.arm_id %}selected{% endif %}>{{ a.display_name if a.display_name is defined else (t.cls.name ~ ' ' ~ a.arm.name) }}</option>{% endfor %}
+        {% for a in t.arms %}<option value="{{ a.arm_id }}" {% if (request.form.get('arm_id') or '') == (a.arm_id|string) %}selected{% endif %}>{{ a.display_name if a.display_name is defined else (t.cls.name ~ ' ' ~ a.arm.name) }}</option>{% endfor %}
       </select></div>
     {% else %}<input type="hidden" name="arm_id" value="{{ t.arms[0].arm_id }}">{% endif %}
 

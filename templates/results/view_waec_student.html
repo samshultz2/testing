@@ -247,7 +247,9 @@
 
 {% if waec_summary %}
 {% set years_list = waec_summary.keys()|list|sort(reverse=true) %}
-{% set latest_year = years_list[0] %}
+{# ?year= picks which sitting to show / edit; default the most recent. #}
+{% set _req_year = (request.args.get('year') or 0)|int %}
+{% set latest_year = _req_year if _req_year in years_list else years_list[0] %}
 {% set summary = waec_summary[latest_year] %}
 
 <!-- Stats Cards -->
@@ -276,13 +278,22 @@
     <div class="card">
         <div class="card-header">
             <h3>Results ({{ latest_year }})</h3>
+            {% if years_list|length > 1 %}
+            <div class="year-switch" role="tablist" aria-label="WAEC sitting" style="display:flex;gap:4px;flex-wrap:wrap">
+              {% for y in years_list %}
+              <a role="tab" aria-selected="{{ 'true' if y == latest_year else 'false' }}"
+                 href="{{ url_for('results.view_waec_student', student_id=student.id, year=y) }}"
+                 class="btn btn-sm {{ 'btn-primary' if y == latest_year else 'btn-secondary' }}">{{ y }}</a>
+              {% endfor %}
+            </div>
+            {% endif %}
             <div style="display:flex;gap:6px">
               <a href="{{ url_for('results.waec_cert_generator', student_id=student.id, year=latest_year) }}" class="btn btn-secondary btn-sm" title="Generate result image / PDF">
                   <i class="fas fa-id-card"></i> Generate
               </a>
               {% if can_write_sub('external_exams', 'waec_edit') %}
-              <a href="{{ url_for('results.edit_waec', student_id=student.id, year=latest_year) }}" class="btn btn-secondary btn-sm" title="Edit results">
-                  <i class="fas fa-edit"></i>
+              <a href="{{ url_for('results.edit_waec', student_id=student.id, year=latest_year) }}" class="btn btn-secondary btn-sm" title="Edit {{ latest_year }} results">
+                  <i class="fas fa-edit"></i> Edit {{ latest_year }}
               </a>
               {% endif %}
             </div>
@@ -484,7 +495,9 @@
 <script nonce="{{ csp_nonce }}">
 {% if waec_summary %}
 {% set years_list = waec_summary.keys()|list|sort(reverse=true) %}
-{% set latest_year = years_list[0] %}
+{# ?year= picks which sitting to show / edit; default the most recent. #}
+{% set _req_year = (request.args.get('year') or 0)|int %}
+{% set latest_year = _req_year if _req_year in years_list else years_list[0] %}
 {% set summary = waec_summary[latest_year] %}
 document.addEventListener('DOMContentLoaded', function() {
     const gradeDistribution = {{ summary.grade_distribution|tojson }};

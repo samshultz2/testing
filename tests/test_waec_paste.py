@@ -71,3 +71,27 @@ def test_paste_waec_empty_warns(app):
                follow_redirects=True)
     assert r.status_code == 200
     assert b'No subjects' in r.data or b'Paste WAEC Result' in r.data
+
+
+def test_waec_student_page_can_open_and_edit_every_year(app):
+    """Every WAEC sitting is reachable and editable from the student page, not
+    only the latest one."""
+    from models import WAECResult
+    sid, _ = _student(app, 'Multiyear', 'Kemi')
+    with app.app_context():
+        for y, g in ((2023, 'C6'), (2024, 'C5'), (2025, 'B3')):
+            db.session.add(WAECResult(student_id=sid, exam_year=y, subject='Mathematics', grade=g))
+        db.session.commit()
+    c = _admin(app)
+    html = c.get(f'/results/waec/student/{sid}').get_data(as_text=True)
+    assert f'/results/waec/student/{sid}/edit/2025' in html            # latest by default
+    for y in (2023, 2024):
+        assert f'/results/waec/student/{sid}?year={y}' in html          # year switcher
+    html = c.get(f'/results/waec/student/{sid}?year=2023').get_data(as_text=True)
+    assert 'Results (2023)' in html and f'/results/waec/student/{sid}/edit/2023' in html
+    r = c.post(f'/results/waec/student/{sid}/edit/2023', data={
+        '_csrf_token': auth_csrf(c), 'subject[]': ['Mathematics'], 'grade[]': ['B2']})
+    assert r.headers['Location'].endswith(f'/results/waec/student/{sid}?year=2023')
+    with app.app_context():
+        got = {w.exam_year: w.grade for w in WAECResult.query.filter_by(student_id=sid)}
+    assert got == {2023: 'B2', 2024: 'C5', 2025: 'B3'}

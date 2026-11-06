@@ -263,3 +263,33 @@ def test_basic6_quick_entry_moves_and_adds(app):
         assert got == {'Mathematics': 'A', 'Verbal Reasoning': 'C'}
         new_id = new.id
     assert _active_classes(app, new_id) == {'Primary 6'}
+
+
+def test_approval_panel_rerenders_with_several_arms_and_keeps_choice(app):
+    """With 2+ arms the arm picker shows; re-checking after choosing an arm
+    (or saving without the approval tick) must re-render, keeping the choice."""
+    caas = _setup(app)
+    with app.app_context():
+        from models import Term
+        term = Term.query.join(AcademicSession).filter(AcademicSession.name == '2040/2041',
+                                                       Term.term_number == 2).one()
+        jss3 = SchoolClass.query.filter_by(name='JSS3').first()
+        arm2 = ClassArm.query.filter_by(name='Placement B').first() or ClassArm(name='Placement B', is_active=True)
+        db.session.add(arm2); db.session.flush()
+        if not ClassArmAssignment.query.filter_by(class_id=jss3.id, term_id=term.id, arm_id=arm2.id).first():
+            db.session.add(ClassArmAssignment(class_id=jss3.id, arm_id=arm2.id, term_id=term.id))
+        db.session.commit()
+        arm2_id = arm2.id
+    sid = _student_in(app, caas['JSS2'], 'Arm', 'Rpmultiarm')
+    c = _admin(app)
+    tok = auth_csrf(c)
+    data = {'_csrf_token': tok, 'year': YEAR, 'data': 'Rpmultiarm Arm, Eng A', 'arm_id': str(arm2_id)}
+    for action in ('preview', 'confirm'):                   # confirm without the tick
+        r = c.post('/jss3-exams/state/quick', data=dict(data, action=action, inc=['1']))
+        assert r.status_code == 200, action
+        assert f'value="{arm2_id}" selected' in r.get_data(as_text=True)
+    r = c.post('/jss3-exams/state/quick', data=dict(data, action='confirm', inc=['1'], approve_roster='1'))
+    assert r.status_code == 302
+    with app.app_context():
+        e = StudentEnrollment.query.filter_by(student_id=sid, is_active=True).one()
+        assert e.class_arm_assignment.arm_id == arm2_id

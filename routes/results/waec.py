@@ -653,7 +653,7 @@ def edit_waec(student_id, year):
             recompute_student_safe(student_id)
             log_action('results.waec_edit', detail=f'{year}', target=student)
             flash('WAEC results updated!', 'success')
-            return redirect(url_for('results.view_waec_student', student_id=student_id))
+            return redirect(url_for('results.view_waec_student', student_id=student_id, year=year))
             
         except Exception as e:
             db.session.rollback()
@@ -715,7 +715,7 @@ def delete_waec_single(result_id):
         db.session.rollback()
         flash(f'Error: {str(e)}', 'error')
     
-    return redirect(url_for('results.view_waec_student', student_id=student_id))
+    return redirect(url_for('results.view_waec_student', student_id=student_id, year=year))
 
 
 @results_bp.route('/api/waec/grade-distribution/<int:year>')
