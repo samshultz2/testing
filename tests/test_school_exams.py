@@ -226,3 +226,42 @@ def test_each_level_is_its_own_permission_subsection():
     assert subsection_for_endpoint('basic6_exams.delete_student_year') == ('external_exams', 'basic6_delete')
     assert subsection_for_endpoint('basic6_exams.settings') == ('external_exams', 'basic6_settings')
     assert BLUEPRINT_MODULE['exam_levels'] == 'external_exams'
+
+
+def test_candidate_sorting_helper():
+    from utils.school_exams import sort_candidates
+    c = [dict(name='Bello Ada', position=2, distinctions=3, credits=8, avg_pct=70.0, total=600),
+         dict(name='Adams Wealth', position=3, distinctions=5, credits=7, avg_pct=65.0, total=None),
+         dict(name='Okafor Jide', position=1, distinctions=5, credits=9, avg_pct=80.0, total=700)]
+    names = lambda key: [x['name'] for x in sort_candidates(c, key)[0]]
+    assert names('position') == ['Okafor Jide', 'Bello Ada', 'Adams Wealth']
+    assert names('name') == ['Adams Wealth', 'Bello Ada', 'Okafor Jide']
+    assert names('name_desc') == ['Okafor Jide', 'Bello Ada', 'Adams Wealth']
+    # most distinctions first; tie (5 each) broken by credits
+    assert names('distinctions') == ['Okafor Jide', 'Adams Wealth', 'Bello Ada']
+    assert names('total')[-1] == 'Adams Wealth'                  # no total sorts last
+    assert sort_candidates(c, 'bogus')[1] == 'position'
+
+
+def test_dashboard_sorts_alphabetically_and_by_distinction(app):
+    c = _admin(app)
+    zed, _ = _student(app, 'Zed', gender='Male')
+    amy, _ = _student(app, 'Amy')
+    for sid in (zed, amy):
+        _enroll(app, 'JSS3', 3, sid)
+    tok = auth_csrf(c)
+    # Zed: 2 distinctions; Amy: none — but "Tester Amy" < "Tester Zed" alphabetically.
+    for sid, scores in ((zed, ['80', '75']), (amy, ['55', '52'])):
+        c.post('/jss3-exams/state/add', data={'_csrf_token': tok, 'student_id': sid, 'exam_year': 2037,
+               'subject[]': ['Mathematics', 'English Studies'], 'score[]': scores, 'grade[]': ['', '']})
+
+    def order(sort):
+        html = c.get(f'/jss3-exams/?body=state&year=2037&sort={sort}').get_data(as_text=True)
+        assert 'id="sxSort"' in html
+        html = html[html.index('Candidates ('):]        # the table, not flash messages
+        return html.index('Tester Amy') < html.index('Tester Zed')
+    assert order('name') is True
+    assert order('name_desc') is False
+    assert order('distinctions') is False
+    html = c.get('/jss3-exams/?body=state&year=2037&sort=distinctions').get_data(as_text=True)
+    assert '<option value="distinctions" selected>' in html and 'aria-sort=' in html

@@ -531,6 +531,33 @@ def year_stats(level, body, year, student_ids=None):
     }
 
 
+# Candidate-list orderings for the dashboard: key -> (label, sort key).
+# Every ordering ends in name so ties are stable and predictable.
+CANDIDATE_SORTS = {
+    'position': ('Position (best first)', lambda c: (c['position'],)),
+    'name': ('Name A–Z', lambda c: (c['name'].lower(),)),
+    'name_desc': ('Name Z–A', None),
+    'distinctions': ('Most distinctions', lambda c: (-c['distinctions'], -c['credits'],
+                                                     -(c['avg_pct'] or 0), c['name'].lower())),
+    'credits': ('Most credits', lambda c: (-c['credits'], -c['distinctions'],
+                                           -(c['avg_pct'] or 0), c['name'].lower())),
+    'avg': ('Highest average %', lambda c: (-(c['avg_pct'] if c['avg_pct'] is not None else -1),
+                                            c['name'].lower())),
+    'total': ('Highest total', lambda c: (-(c['total'] if c['total'] is not None else -1),
+                                          c['name'].lower())),
+}
+
+
+def sort_candidates(cands, key):
+    """Order dashboard candidates by ``key`` (see CANDIDATE_SORTS). Unknown
+    keys fall back to position. Returns (sorted list, key actually used)."""
+    if key not in CANDIDATE_SORTS:
+        key = 'position'
+    if key == 'name_desc':
+        return sorted(cands, key=lambda c: c['name'].lower(), reverse=True), key
+    return sorted(cands, key=CANDIDATE_SORTS[key][1]), key
+
+
 def trend(level, body, student_ids=None):
     """Year-over-year headline KPIs (oldest first) for the trend charts."""
     out = []

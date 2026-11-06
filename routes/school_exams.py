@@ -104,10 +104,12 @@ def make_blueprint(level):
             cands = [c for c in cands if search in c['name'].lower()
                      or search in (c['student_code'] or '').lower()
                      or search in (c['exam_number'] or '').lower()]
+        cands, sort = svc.sort_candidates(cands, request.args.get('sort', 'position'))
         other = 'federal' if body == 'state' else 'state'
         return render_template('school_exams/dashboard.html', **_ctx(
             level, bp_name, body, years=years, year=year, stats=stats,
-            candidates=cands, search=search, other=other,
+            candidates=cands, search=search, other=other, sort=sort,
+            sorts=[(k, v[0]) for k, v in svc.CANDIDATE_SORTS.items()],
             other_years=svc.years_for(level, other),
             trend=svc.trend(level, body)))
 

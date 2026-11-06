@@ -94,15 +94,25 @@
 <div class="card">
   <div class="card-header d-flex" style="justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem">
     <h3><i class="fas fa-users"></i> Candidates ({{ candidates|length }})</h3>
-    <form method="get" class="d-flex gap-2">
+    <form method="get" class="d-flex gap-2" style="flex-wrap:wrap;align-items:center">
       <input type="hidden" name="body" value="{{ body }}"><input type="hidden" name="year" value="{{ year }}">
+      <label class="sx-muted" for="sxSort" style="margin:0">Sort by</label>
+      <select id="sxSort" name="sort" class="form-control" data-autosubmit style="max-width:200px">
+        {% for k, lab in sorts %}<option value="{{ k }}" {% if k == sort %}selected{% endif %}>{{ lab }}</option>{% endfor %}
+      </select>
       <input type="search" name="q" value="{{ search }}" class="form-control" placeholder="Search name, ID or exam no." style="max-width:240px">
     </form>
   </div>
+  {% macro sort_th(key, label, cls='', title=None, active=None) -%}
+  {%- set on = (sort == key) if active is none else active -%}
+  <th class="{{ cls }}" {% if on %}aria-sort="{{ 'descending' if sort == 'name_desc' else 'ascending' }}"{% endif %}>
+    <a href="{{ url_for(bp ~ '.dashboard', body=body, year=year, sort=key, q=search or none) }}" title="Sort by {{ title or label }}"
+       style="color:inherit;text-decoration:none;white-space:nowrap">{{ label }}{% if on %} <i class="fas fa-sort-{{ 'up' if sort == 'name_desc' else 'down' }}" aria-hidden="true"></i>{% endif %}</a></th>
+  {%- endmacro %}
   {% set can_del = can_write_sub('external_exams', level ~ '_delete') %}
   {% if can_del %}{{ bulk_bar('bulkDel', url_for(bp ~ '.delete_bulk', body=body), {'year': year}, 'candidate', scheme.exam_name ~ ' ' ~ year ~ ' results') }}{% endif %}
   <div class="table-responsive"><table class="data-table">
-    <thead><tr>{% if can_del %}<th style="width:32px"></th>{% endif %}<th>Pos</th><th>Candidate</th><th>Exam no.</th><th class="num">Subj.</th><th class="num">D</th><th class="num">C</th><th class="num">P</th><th class="num">F</th><th class="num">Avg %</th><th class="num">Total</th><th>Eng+Maths</th><th>Benchmark</th><th>{{ 'Placement' if level == 'jss3' else 'Admission' }}</th><th></th></tr></thead>
+    <thead><tr>{% if can_del %}<th style="width:32px"></th>{% endif %}{{ sort_th('position', 'Pos') }}{{ sort_th('name_desc' if sort == 'name' else 'name', 'Candidate', active=sort in ('name', 'name_desc')) }}<th>Exam no.</th><th class="num">Subj.</th>{{ sort_th('distinctions', 'D', 'num', title='Distinctions') }}{{ sort_th('credits', 'C', 'num', title='Credits') }}<th class="num">P</th><th class="num">F</th>{{ sort_th('avg', 'Avg %', 'num') }}{{ sort_th('total', 'Total', 'num') }}<th>Eng+Maths</th><th>Benchmark</th><th>{{ 'Placement' if level == 'jss3' else 'Admission' }}</th><th></th></tr></thead>
     <tbody>
     {% for c in candidates %}
       <tr>
