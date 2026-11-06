@@ -166,6 +166,32 @@ def student_report(student_id):
     # SSS3 sections (WAEC, JAMB, mocks, admission, university) apply to SSS3
     # students, graduates and anyone with SSS3 exam data; a JSS3 / Basic 5-6
     # pupil gets their own BECE / Common Entrance report instead.
+    # "Add missing results" buttons: exams with nothing recorded for the
+    # current exam year (WAEC / JAMB for SSS3; State + Federal for JSS3 and
+    # Basic 5-6), each linking to that exam's Add page with the student set.
+    from utils.helpers import session_exam_year
+    # Same rule as the WAEC / JAMB Add pages: the session's exam year, else
+    # this calendar year.
+    exam_year = session_exam_year(get_active_session()) or _date.today().year
+    missing = []
+    if exam_year:
+        if exam_level in ('jss3', 'basic6'):
+            have = {(x['level'], x['body']) for x in junior_sittings if x['year'] == exam_year}
+            for body in ('state', 'federal'):
+                if (exam_level, body) not in have:
+                    missing.append({
+                        'label': sx.get_scheme(exam_level, body).exam_name,
+                        'sub': f'{exam_level}_create',
+                        'url': url_for(f'{exam_level}_exams.add_result', body=body,
+                                       student_id=student.id, year=exam_year)})
+        elif exam_level == 'sss3' or waec or jamb:
+            if not any(r.exam_year == exam_year for r in waec):
+                missing.append({'label': 'WAEC', 'sub': 'waec_create',
+                                'url': url_for('results.add_waec', student_id=student.id, year=exam_year)})
+            if not any(r.exam_year == exam_year for r in jamb):
+                missing.append({'label': 'JAMB', 'sub': 'jamb_create',
+                                'url': url_for('results.add_jamb', student_id=student.id, year=exam_year)})
+
     # The pupil's current class decides: JSS3 / Basic 5-6 → junior report.
     if exam_level in ('jss3', 'basic6'):
         sss3_view = False
@@ -175,6 +201,7 @@ def student_report(student_id):
     if not sss3_view:
         return render_template('results/student_report.html', student=student,
             sss3_view=False, exam_level=exam_level, junior_sittings=junior_sittings,
+            missing=missing, exam_year=exam_year,
             waec_years=[], jamb_list=[], mock_progress=[], prediction=None, admission=None,
             readiness=None, jamb_combo=None, standing=None, aspiration=None,
             recommendations=None, subject_diag=None, generated=_date.today())
@@ -231,6 +258,7 @@ def student_report(student_id):
         recommendations=recommendations,
         subject_diag=subject_diag,
         sss3_view=True, exam_level=exam_level, junior_sittings=junior_sittings,
+        missing=missing, exam_year=exam_year,
         generated=_date.today()
     )
 

@@ -53,6 +53,21 @@
         <div class="meta">Generated {{ generated.strftime('%d %b %Y') }}</div>
     </div>
 
+    {% if exam_year and missing is defined %}
+    <div class="no-print" style="display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin:-.25rem 0 1rem;padding:.6rem .8rem;border:1px dashed var(--border-color);border-radius:var(--radius-md)">
+      {% if missing %}
+        <span class="muted" style="font-size:.85rem"><i class="fas fa-circle-exclamation"></i> No {{ exam_year }} results yet for:</span>
+        {% for m in missing %}
+          {% if can_write_sub('external_exams', m.sub) %}
+          <a href="{{ m.url }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add {{ m.label }} result</a>
+          {% else %}<span class="chip">{{ m.label }}</span>{% endif %}
+        {% endfor %}
+      {% else %}
+        <span class="muted" style="font-size:.85rem"><i class="fas fa-circle-check" style="color:var(--success)"></i> All {{ exam_year }} exam results are recorded.</span>
+      {% endif %}
+    </div>
+    {% endif %}
+
     {% if sss3_view %}
     <!-- WAEC -->
     <div class="rsection">

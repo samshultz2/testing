@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "components/searchable_select.html" import searchable_select with context %}
 {% block title %}Add WAEC - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('results.waec_list') }}">WAEC</a> / <span>Add Results</span>{% endblock %}
 
@@ -23,7 +24,7 @@
     </div>
 </div>
 
-<div class="card waec-form">
+<div class="card waec-form" style="overflow:visible">
     <div class="card-body">
         {% if students %}
         <form method="POST">
@@ -36,6 +37,7 @@
                         <option value="{{ s.id }}">{{ s.full_name }} ({{ s.student_id }})</option>
                         {% endfor %}
                     </select>
+                    {{ searchable_select('studentSelect', 'Search name or admission no.…') }}
                 </div>
                 <div class="form-group">
                     <label class="form-label">Session <span class="required">*</span></label>

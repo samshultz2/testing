@@ -395,3 +395,37 @@ def test_exam_report_shows_common_entrance_for_a_basic6_pupil(app):
     assert 'Meets the benchmark' in html
     assert 'Suggested SSS stream' not in html                 # JSS3-only
     assert '<h2><i class="fas fa-file-alt"></i> WAEC</h2>' not in html
+
+
+def test_exam_report_offers_buttons_for_missing_results(app):
+    from utils.helpers import session_exam_year, get_active_session
+    c = _admin(app)
+    sid, _ = _student(app, 'Missingbtn')
+    _enroll(app, 'JSS3', 3, sid)
+    from datetime import date
+    with app.test_request_context():
+        year = session_exam_year(get_active_session()) or date.today().year
+    tok = auth_csrf(c)
+    html = c.get(f'/results/student/{sid}/report').get_data(as_text=True)
+    assert f'No {year} results yet for' in html
+    assert f'/jss3-exams/state/add?student_id={sid}&amp;year={year}' in html
+    assert f'/jss3-exams/federal/add?student_id={sid}&amp;year={year}' in html
+    # Enter the NECO BECE → only the State BECE button remains.
+    c.post('/jss3-exams/federal/add', data={'_csrf_token': tok, 'student_id': sid, 'exam_year': year,
+           'subject[]': ['Mathematics'], 'score[]': ['70'], 'grade[]': ['']})
+    html = c.get(f'/results/student/{sid}/report').get_data(as_text=True)
+    assert f'/jss3-exams/state/add?student_id={sid}' in html
+    assert f'/jss3-exams/federal/add?student_id={sid}' not in html
+    # The button lands on the Add page with the student chosen.
+    page = c.get(f'/jss3-exams/state/add?student_id={sid}&year={year}').get_data(as_text=True)
+    assert f'<option value="{sid}" selected>' in page
+
+
+def test_waec_and_jamb_add_dropdowns_are_searchable(app):
+    from tests.conftest import enroll_sss3
+    sid, _ = _student(app, 'Searchwaec')
+    enroll_sss3(app, sid)
+    c = _admin(app)
+    for path in ('/results/waec/add', '/results/jamb/add'):
+        html = c.get(path).get_data(as_text=True)
+        assert 'id="studentSelect"' in html and '.ss-wrap' in html and 'Search name or admission no.' in html, path

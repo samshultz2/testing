@@ -84,8 +84,22 @@
     sel.value = o.value; input.value = o.text; open(false);
     sel.dispatchEvent(new Event('change', { bubbles: true }));
   }
+  // Keep the box in step when the page sets the <select> itself (e.g. a
+  // pre-selected student), and handle "required" ourselves: a hidden required
+  // <select> would silently block the form with nothing to focus.
+  sel.addEventListener('change', function () { if (document.activeElement !== input) input.value = current(); input.setCustomValidity(''); });
+  if (sel.required) {
+    sel.required = false;
+    if (sel.form) sel.form.addEventListener('submit', function (e) {
+      if (!sel.value) {
+        e.preventDefault();
+        input.setCustomValidity('Please choose from the list.');
+        input.reportValidity();
+      }
+    });
+  }
   input.addEventListener('focus', function () { input.select(); render(''); });
-  input.addEventListener('input', function () { render(input.value); });
+  input.addEventListener('input', function () { input.setCustomValidity(''); render(input.value); });
   input.addEventListener('keydown', function (e) {
     if (e.key === 'ArrowDown') { e.preventDefault(); if (list.hidden) render(input.value); active = Math.min(active + 1, shown.length - 1); mark(); }
     else if (e.key === 'ArrowUp') { e.preventDefault(); active = Math.max(active - 1, 0); mark(); }
