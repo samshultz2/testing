@@ -3,6 +3,8 @@
 {% block crumb %} / <span>Paste / CSV import</span>{% endblock %}
 
 {% block sx_content %}
+<form method="post">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
 <div class="card mb-3">
   <div class="card-header"><h3><i class="fas fa-paste"></i> Paste results from a spreadsheet</h3></div>
   <div class="card-body">
@@ -10,30 +12,32 @@
     <pre class="sx-muted" style="background:var(--gray-50);padding:.6rem;border-radius:8px;overflow:auto;font-size:.78rem">Student ID,Name,Exam Number,{{ scheme.subjects[:3]|join(',') }},Total
 STU001,Ada Obi,BECE/123/001,72,64,B,
 STU002,Musa Bello,BECE/123/002,55,A,48,</pre>
-    <form method="post">
-      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <div class="d-flex gap-2 mb-2" style="align-items:flex-end">
         <div><label class="form-label">Exam year</label><input type="number" name="year" value="{{ year }}" class="form-control" style="width:110px"></div>
       </div>
       <textarea name="data" class="form-control" rows="10" placeholder="Paste here…" style="font-family:monospace">{{ text }}</textarea>
       <div class="mt-2 d-flex gap-2">
-        <button class="btn btn-secondary" name="action" value="preview" type="submit"><i class="fas fa-eye"></i> Preview</button>
-        {% if preview and preview.rows %}<button class="btn btn-primary" name="action" value="confirm" type="submit"><i class="fas fa-check"></i> Import {{ preview.rows|length }} candidate(s)</button>{% endif %}
+        <button class="btn btn-secondary" name="action" value="preview" type="submit" formnovalidate><i class="fas fa-eye"></i> Preview</button>
       </div>
-    </form>
   </div>
 </div>
 
 {% if preview %}
-<div class="card">
-  <div class="card-header"><h3>Preview — {{ preview.rows|length }} candidate(s) ready</h3></div>
+{% include "components/roster_approval.html" %}
+<div class="card mb-3">
+  <div class="card-header"><h3>Preview — {{ preview.n_ready }} of {{ preview.rows|length }} candidate(s) ready</h3></div>
   <div class="card-body">
     {% if preview.errors %}<div class="alert alert-warning"><ul class="mb-0">{% for e in preview.errors %}<li>{{ e }}</li>{% endfor %}</ul></div>{% endif %}
     {% if preview.rows %}
     <div class="table-responsive"><table class="data-table">
       <thead><tr><th>Line</th><th>Candidate</th>{% for s in preview.subjects %}<th>{{ s }}</th>{% endfor %}<th>Sitting</th></tr></thead>
       <tbody>{% for r in preview.rows %}{% set m = {} %}{% for subj, sc, gr in r.subjects %}{% set _ = m.update({subj: (gr or scheme.grade_from_score(sc|float)) ~ ((' (' ~ sc ~ ')') if sc else '')}) %}{% endfor %}
-        <tr><td>{{ r.line }}</td><td><strong>{{ r.student.full_name }}</strong> <span class="sx-muted">{{ r.student.student_id }}</span> <span class="badge badge-success">ready</span></td>
+        <tr><td>{{ r.line }}</td><td>
+          {% if r.placement == 'create' and not r.blocked %}<span class="badge badge-info">new</span> <strong>{{ r.new_name|join(' ') }}</strong>{% if r.suggest %} <span class="sx-muted">(or {{ r.suggest.full_name }}?)</span>{% endif %}
+          {% elif r.student %}<strong>{{ r.student.full_name }}</strong> <span class="sx-muted">{{ r.student.student_id }}</span>{% if r.placement == 'move' and not r.blocked %} <span class="badge badge-info">move to {{ L.class_label }}</span>{% else %} <span class="badge badge-success">ready</span>{% endif %}
+          {% else %}<span class="badge badge-danger">not found</span> {{ r.name }}{% endif %}
+          {% for e in r.errors %}<div class="text-sm" style="color:var(--danger)">{{ e }}</div>{% endfor %}
+          {% for e in r.warnings or [] %}<div class="text-sm" style="color:var(--warning)">{{ e }}</div>{% endfor %}</td>
         {% for s in preview.subjects %}<td>{{ m.get(s, '') }}</td>{% endfor %}
         <td class="sx-muted">{% for k, v in r.candidate.items() %}{{ k|replace('_',' ') }}: {{ v }}{{ '; ' if not loop.last }}{% endfor %}</td></tr>
       {% endfor %}</tbody>
@@ -41,5 +45,9 @@ STU002,Musa Bello,BECE/123/002,55,A,48,</pre>
     {% endif %}
   </div>
 </div>
+{% if preview.n_ready %}
+<div class="d-flex gap-2 mb-3"><button class="btn btn-primary" name="action" value="confirm" type="submit"><i class="fas fa-check"></i> {% if roster and (roster.creates or roster.moves) %}Approve &amp; import{% else %}Import{% endif %} {{ preview.n_ready }} candidate(s)</button></div>
 {% endif %}
+{% endif %}
+</form>
 {% endblock %}

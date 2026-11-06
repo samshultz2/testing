@@ -182,7 +182,7 @@ def test_paste_import_preview_and_confirm(app):
     r = c.post('/basic6-exams/federal/import',
                data={'_csrf_token': tok, 'year': 2026, 'data': text, 'action': 'preview'})
     html = r.get_data(as_text=True)
-    assert 'Tester Chi' in html and 'no BASIC6 student matches' in html
+    assert 'Tester Chi' in html and 'needs at least a surname and a first name' in html
     r = c.post('/basic6-exams/federal/import',
                data={'_csrf_token': tok, 'year': 2026, 'data': text, 'action': 'confirm'})
     assert r.status_code == 302

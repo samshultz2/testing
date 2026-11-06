@@ -259,23 +259,39 @@ def make_blueprint(level):
         scheme = get_scheme(level, body)
         year = request.values.get('year', type=int) or _default_year(svc.years_for(level, body))
         text = request.form.get('data', '')
-        preview = None
+        preview = roster = None
         if request.method == 'POST':
+            from utils import roster_placement as rp
             students = svc.level_students(level)
             rows, errors, subjects = svc.parse_import(scheme, text, students)
-            if request.form.get('action') == 'confirm' and rows:
-                n = 0
-                for row in rows:
-                    n += svc.save_student_results(scheme, row['student'].id, year,
-                                                  row['subjects'], candidate=row['candidate'])
-                db.session.commit()
-                log_action(f'{bp_name}.import', detail=f'{scheme.exam_name} {year}: '
-                           f'{len(rows)} candidate(s), {n} result(s)')
-                flash(f'Imported {n} result(s) for {len(rows)} candidate(s).', 'success')
-                return redirect(url_for(f'{bp_name}.dashboard', body=body, year=year))
-            preview = {'rows': rows, 'errors': errors, 'subjects': subjects}
+            roster = rp.plan(rows, level, year, students)
+            ready = [r for r in rows if r.get('student') is not None
+                     or (r.get('placement') == 'create' and not r.get('blocked'))]
+            if request.form.get('action') == 'confirm' and ready:
+                approved, include, arm_id, genders, use_existing = rp.approval_from_form(request.form)
+                if (roster['creates'] or roster['moves']) and not approved:
+                    flash('Tick "I approve" to add / move the listed students, then import.', 'error')
+                else:
+                    created, moved, _skipped = rp.apply(roster, include, arm_id, genders, use_existing)
+                    n = cands = 0
+                    for row in rows:
+                        if row.get('student') is None:
+                            continue
+                        n += svc.save_student_results(scheme, row['student'].id, year,
+                                                      row['subjects'], candidate=row['candidate'])
+                        cands += 1
+                    db.session.commit()
+                    log_action(f'{bp_name}.import', detail=f'{scheme.exam_name} {year}: '
+                               f'{cands} candidate(s), {n} result(s), {created} new student(s), '
+                               f'{moved} moved to {L["class_label"]}')
+                    flash(f'Imported {n} result(s) for {cands} candidate(s).'
+                          + (f' Added {created} new student(s).' if created else '')
+                          + (f' Moved {moved} student(s) into {L["class_label"]}.' if moved else ''),
+                          'success')
+                    return redirect(url_for(f'{bp_name}.dashboard', body=body, year=year))
+            preview = {'rows': rows, 'errors': errors, 'subjects': subjects, 'n_ready': len(ready)}
         return render_template('school_exams/import.html', **_ctx(
-            level, bp_name, body, year=year, text=text, preview=preview))
+            level, bp_name, body, year=year, text=text, preview=preview, roster=roster))
 
     # ------------------------------------------------------------------ #
     # Quick entry: "Name, Eng A, Maths B" — one line per candidate
@@ -284,32 +300,43 @@ def make_blueprint(level):
     @login_required
     def quick_entry(body):
         from utils.quick_results import parse_quick_lines, school_exam_spec
+        from utils import roster_placement as rp
         _body_or_404(body)
         scheme = get_scheme(level, body)
         year = request.values.get('year', type=int) or _default_year(svc.years_for(level, body))
         text = request.form.get('data', '')
-        preview = None
+        preview = roster = None
         if request.method == 'POST':
             students = svc.level_students(level)
             preview = parse_quick_lines(text, students,
                                         school_exam_spec(scheme, L['class_label']))
+            roster = rp.plan(preview['rows'], level, year, students)
+            rp.recount(preview)
             if request.form.get('action') == 'confirm' and preview['n_ready']:
-                saved = cands = 0
-                for row in preview['rows']:
-                    if row['student'] is None or not row['items']:
-                        continue
-                    saved += svc.save_student_results(
-                        scheme, row['student'].id, year,
-                        [(subj, score, grade) for subj, score, grade, _raw in row['items']])
-                    cands += 1
-                db.session.commit()
-                log_action(f'{bp_name}.quick_entry', detail=f'{scheme.exam_name} {year}: '
-                           f'{cands} candidate(s), {saved} result(s)')
-                flash(f'Saved {saved} {scheme.exam_name} result(s) for {cands} candidate(s).',
-                      'success')
-                return redirect(url_for(f'{bp_name}.dashboard', body=body, year=year))
+                approved, include, arm_id, genders, use_existing = rp.approval_from_form(request.form)
+                if (roster['creates'] or roster['moves']) and not approved:
+                    flash('Tick "I approve" to add / move the listed students, then save.', 'error')
+                else:
+                    created, moved, _skipped = rp.apply(roster, include, arm_id, genders, use_existing)
+                    saved = cands = 0
+                    for row in preview['rows']:
+                        if row.get('student') is None or not row['items']:
+                            continue
+                        saved += svc.save_student_results(
+                            scheme, row['student'].id, year,
+                            [(subj, score, grade) for subj, score, grade, _raw in row['items']])
+                        cands += 1
+                    db.session.commit()
+                    log_action(f'{bp_name}.quick_entry', detail=f'{scheme.exam_name} {year}: '
+                               f'{cands} candidate(s), {saved} result(s), {created} new student(s), '
+                               f'{moved} moved to {L["class_label"]}')
+                    flash(f'Saved {saved} {scheme.exam_name} result(s) for {cands} candidate(s).'
+                          + (f' Added {created} new student(s).' if created else '')
+                          + (f' Moved {moved} student(s) into {L["class_label"]}.' if moved else ''),
+                          'success')
+                    return redirect(url_for(f'{bp_name}.dashboard', body=body, year=year))
         return render_template('school_exams/quick.html', **_ctx(
-            level, bp_name, body, year=year, text=text, preview=preview,
+            level, bp_name, body, year=year, text=text, preview=preview, roster=roster,
             roster_count=len(svc.level_students(level))))
 
     # ------------------------------------------------------------------ #

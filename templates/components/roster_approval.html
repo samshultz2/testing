@@ -1,0 +1,66 @@
+{# Approval panel for list-entered results: new students to add and students
+   to move into the exam class. Rendered INSIDE the save form.
+   Expects `roster` = utils.roster_placement.plan(...) summary. #}
+{% if roster and (roster.creates or roster.moves) %}
+{% set t = roster.target %}
+<div class="card mb-3" style="border:2px solid var(--warning)">
+  <div class="card-header"><h3><i class="fas fa-user-check"></i> Needs your approval —
+    {% if roster.creates %}{{ roster.creates|length }} new student{{ 's' if roster.creates|length != 1 }}{% endif %}{% if roster.creates and roster.moves %} and {% endif %}{% if roster.moves %}{{ roster.moves|length }} student{{ 's' if roster.moves|length != 1 }} to move{% endif %}
+    into {{ roster.label }}</h3></div>
+  <div class="card-body">
+    <p class="text-muted text-sm" style="margin-top:0">
+      To save these results, the candidates must be in <strong>{{ roster.label }}</strong> for
+      <strong>{{ t.session.name }}</strong> (the session for exam year {{ roster.year }}). They will be placed in
+      <strong>{{ t.term.name }}</strong>. Untick anyone you don't want — their results are then skipped.
+    </p>
+    {% if t.arms|length > 1 %}
+    <div class="mb-2" style="max-width:320px"><label class="form-label" for="ra-arm">Place them in arm</label>
+      <select id="ra-arm" name="arm_id" class="form-control">
+        {% for a in t.arms %}<option value="{{ a.arm_id }}" {% if request.form.get('arm_id', type=int) == a.arm_id %}selected{% endif %}>{{ a.display_name if a.display_name is defined else (t.cls.name ~ ' ' ~ a.arm.name) }}</option>{% endfor %}
+      </select></div>
+    {% else %}<input type="hidden" name="arm_id" value="{{ t.arms[0].arm_id }}">{% endif %}
+
+    {% if roster.creates %}
+    <h4 style="font-size:.95rem;margin:.75rem 0 .35rem"><i class="fas fa-user-plus"></i> Add to the register ({{ roster.creates|length }})</h4>
+    <p class="text-muted text-sm" style="margin:.1rem 0 .4rem">Names are split on spaces as <em>Surname · First name · Middle name(s)</em>. A student ID is generated for each. Where a similar (but not exact) name already exists you can choose that student instead.</p>
+    <div class="table-responsive"><table class="data-table">
+      <thead><tr><th style="width:40px">Add</th><th>Line</th><th>Typed</th><th>Surname</th><th>First name</th><th>Middle name</th><th>Gender</th><th>Already on the register?</th></tr></thead>
+      <tbody>{% for r in roster.creates %}
+        <tr><td><input type="checkbox" name="inc" value="{{ r.line }}" {% if not request.form.get('approve_roster') or (r.line|string) in request.form.getlist('inc') %}checked{% endif %} aria-label="Add {{ r.name }}"></td>
+          <td>{{ r.line }}</td><td>{{ r.name }}</td>
+          <td><strong>{{ r.new_name[0] }}</strong></td><td>{{ r.new_name[1] }}</td><td>{{ r.new_name[2] or '—' }}</td>
+          <td><select name="g_{{ r.line }}" class="form-control" style="min-width:100px">
+            {% set gsel = request.form.get('g_' ~ r.line, '') %}
+            <option value="" {% if not gsel %}selected{% endif %}>Not set</option>
+            <option {% if gsel == 'Male' %}selected{% endif %}>Male</option>
+            <option {% if gsel == 'Female' %}selected{% endif %}>Female</option></select></td>
+          <td>{% if r.suggest %}{% set usel = request.form.get('use_' ~ r.line, 'new') %}
+            <select name="use_{{ r.line }}" class="form-control" style="min-width:220px" aria-label="New or existing student for line {{ r.line }}">
+              <option value="new" {% if usel != 'existing' %}selected{% endif %}>No — add as a new student</option>
+              <option value="existing" {% if usel == 'existing' %}selected{% endif %}>Yes — it's {{ r.suggest.full_name }} ({{ r.suggest.student_id }})</option>
+            </select>
+            <div class="text-muted text-sm">Similar name found — only a partial match.</div>
+          {% else %}<span class="text-muted">No similar name</span>{% endif %}</td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    {% endif %}
+
+    {% if roster.moves %}
+    <h4 style="font-size:.95rem;margin:.9rem 0 .35rem"><i class="fas fa-right-left"></i> Move into {{ roster.label }} ({{ roster.moves|length }})</h4>
+    <div class="table-responsive"><table class="data-table">
+      <thead><tr><th style="width:40px">Move</th><th>Line</th><th>Student</th><th>Currently in</th><th></th></tr></thead>
+      <tbody>{% for r in roster.moves %}
+        <tr><td><input type="checkbox" name="inc" value="{{ r.line }}" {% if not request.form.get('approve_roster') or (r.line|string) in request.form.getlist('inc') %}checked{% endif %} aria-label="Move {{ r.student.full_name }}"></td>
+          <td>{{ r.line }}</td><td><strong>{{ r.student.full_name }}</strong> <span class="text-muted text-sm">{{ r.student.student_id }}</span></td>
+          <td>{{ r.from_class or 'no class' }}</td><td><i class="fas fa-arrow-right"></i> {{ roster.label }}</td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    {% endif %}
+
+    <label class="d-flex gap-2 mt-3" style="align-items:center;font-weight:600">
+      <input type="checkbox" name="approve_roster" value="1" required>
+      I approve{% if roster.creates %} adding the ticked new students{% endif %}{% if roster.creates and roster.moves %} and{% endif %}{% if roster.moves %} moving the ticked students{% endif %} into {{ roster.label }} for {{ t.session.name }}.
+    </label>
+  </div>
+</div>
+{% endif %}

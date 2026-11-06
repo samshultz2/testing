@@ -461,41 +461,55 @@ def paste_waec():
 @login_required
 def waec_quick_entry():
     """Quick entry for many SSS3 candidates at once — one line each, e.g.
-    ``John Caleb Matthew, Eng A1, Maths B2``. Preview first, then save."""
+    ``John Caleb Matthew, Eng A1, Maths B2``. Preview first, then save.
+
+    Candidates not in SSS3 for the exam year's session are moved into it, and
+    names not on the register are added — both listed for one approval."""
     from utils.quick_results import parse_quick_lines, waec_spec
     from utils.helpers import session_exam_year
+    from utils import roster_placement as rp
     students = get_sss3_students()
     year = request.values.get('year', type=int) or session_exam_year() or _date.today().year
     text = request.form.get('data', '')
-    preview = None
+    preview = roster = None
     if request.method == 'POST':
         preview = parse_quick_lines(text, students, waec_spec())
+        roster = rp.plan(preview['rows'], 'sss3', year, students)
+        rp.recount(preview)
         if request.form.get('action') == 'confirm' and preview['n_ready']:
-            saved = 0
-            touched = []
-            for row in preview['rows']:
-                st = row['student']
-                if st is None or not row['items'] or not _student_in_scope(st.id):
-                    continue
-                for subject, _score, grade, _raw in row['items']:
-                    r = WAECResult.query.filter_by(student_id=st.id, exam_year=year,
-                                                   subject=subject).first()
-                    if r:
-                        r.grade = grade
-                    else:
-                        db.session.add(WAECResult(student_id=st.id, exam_year=year,
-                                                  subject=subject, grade=grade))
-                    saved += 1
-                touched.append(st.id)
-            db.session.commit()
-            for sid in touched:
-                recompute_student_safe(sid)
-            log_action('results.waec_quick_entry', detail=f'{year}: {saved} result(s), '
-                       f'{len(touched)} candidate(s)')
-            flash(f'Saved {saved} WAEC result(s) for {len(touched)} candidate(s).', 'success')
-            return redirect(url_for('results.waec_list', year=year))
+            approved, include, arm_id, genders, use_existing = rp.approval_from_form(request.form)
+            if (roster['creates'] or roster['moves']) and not approved:
+                flash('Tick "I approve" to add / move the listed students, then save.', 'error')
+            else:
+                created, moved, _skipped = rp.apply(roster, include, arm_id, genders, use_existing)
+                saved = 0
+                touched = []
+                for row in preview['rows']:
+                    st = row.get('student')
+                    if st is None or not row['items'] or not _student_in_scope(st.id):
+                        continue
+                    for subject, _score, grade, _raw in row['items']:
+                        r = WAECResult.query.filter_by(student_id=st.id, exam_year=year,
+                                                       subject=subject).first()
+                        if r:
+                            r.grade = grade
+                        else:
+                            db.session.add(WAECResult(student_id=st.id, exam_year=year,
+                                                      subject=subject, grade=grade))
+                        saved += 1
+                    touched.append(st.id)
+                db.session.commit()
+                for sid in touched:
+                    recompute_student_safe(sid)
+                log_action('results.waec_quick_entry',
+                           detail=f'{year}: {saved} result(s), {len(touched)} candidate(s), '
+                                  f'{created} new student(s), {moved} moved to SSS3')
+                flash(f'Saved {saved} WAEC result(s) for {len(touched)} candidate(s).'
+                      + (f' Added {created} new student(s).' if created else '')
+                      + (f' Moved {moved} student(s) into SSS3.' if moved else ''), 'success')
+                return redirect(url_for('results.waec_list', year=year))
     return render_template('results/waec_quick.html', text=text, year=year, preview=preview,
-                           grades=WAEC_GRADES, roster_count=len(students))
+                           roster=roster, grades=WAEC_GRADES, roster_count=len(students))
 
 
 @results_bp.route('/waec/student/<int:student_id>')

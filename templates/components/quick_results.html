@@ -1,6 +1,8 @@
 {# Shared "one line per candidate" quick-entry form + preview.
    Expects: text, year, preview (or None), example (str), grades (list),
    grade_note (str), exam_label (str), roster_count (int). #}
+<form method="post">
+<input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
 <div class="card mb-3">
   <div class="card-header"><h3><i class="fas fa-bolt"></i> Quick entry — one line per candidate</h3></div>
   <div class="card-body">
@@ -9,8 +11,6 @@
       Subjects can be abbreviated (Eng, Maths, Bio, CRS…) and names can be in any order. {{ grade_note }}
     </p>
     <pre class="text-sm" style="background:var(--gray-50);padding:.6rem .75rem;border-radius:8px;overflow:auto;margin-bottom:.75rem">{{ example }}</pre>
-    <form method="post">
-      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
       <div class="d-flex gap-2 mb-2" style="align-items:flex-end;flex-wrap:wrap">
         <div><label class="form-label" for="qe-year">Exam year</label>
           <input id="qe-year" type="number" name="year" value="{{ year }}" min="2000" max="2100" class="form-control" style="width:110px" required></div>
@@ -18,17 +18,14 @@
       </div>
       <textarea name="data" class="form-control" rows="10" style="font-family:ui-monospace,monospace" placeholder="{{ example.splitlines()[0] }}" required>{{ text }}</textarea>
       <div class="d-flex gap-2 mt-2" style="flex-wrap:wrap">
-        <button class="btn btn-secondary" type="submit" name="action" value="preview"><i class="fas fa-eye"></i> Check</button>
-        {% if preview and preview.n_ready %}
-        <button class="btn btn-primary" type="submit" name="action" value="confirm"><i class="fas fa-save"></i> Save {{ preview.n_results }} result(s) for {{ preview.n_ready }} candidate(s)</button>
-        {% endif %}
+        <button class="btn btn-secondary" type="submit" name="action" value="preview" formnovalidate><i class="fas fa-eye"></i> Check</button>
       </div>
-    </form>
   </div>
 </div>
 
 {% if preview %}
-<div class="card">
+{% include "components/roster_approval.html" %}
+<div class="card mb-3">
   <div class="card-header"><h3><i class="fas fa-list-check"></i> Check before saving — {{ preview.n_ready }} of {{ preview.rows|length }} line(s) ready</h3></div>
   <div class="table-responsive"><table class="data-table">
     <thead><tr><th>Line</th><th>Typed name</th><th>Matched candidate</th><th>Results to save</th><th>Problems</th></tr></thead>
@@ -37,9 +34,9 @@
       <tr>
         <td>{{ r.line }}</td>
         <td>{{ r.name }}</td>
-        <td>{% if r.student %}<strong>{{ r.student.full_name }}</strong> <span class="text-muted text-sm">{{ r.student.student_id }}</span>{% if r.score < 0.9 %} <span class="badge badge-warning" title="Fuzzy match — check it is the right student">check</span>{% endif %}{% else %}<span class="badge badge-danger">not found</span>{% endif %}</td>
+        <td>{% if r.placement == 'create' and not r.blocked %}<span class="badge badge-info">new</span> {{ r.new_name|join(' ') }}{% if r.suggest %} <span class="text-muted text-sm">(or {{ r.suggest.full_name }}?)</span>{% endif %}{% elif r.student %}<strong>{{ r.student.full_name }}</strong>{% if r.placement == 'move' and not r.blocked %} <span class="badge badge-info">move to {{ roster.label }}</span>{% endif %} <span class="text-muted text-sm">{{ r.student.student_id }}</span>{% if r.score < 0.9 %} <span class="badge badge-warning" title="Fuzzy match — check it is the right student">check</span>{% endif %}{% else %}<span class="badge badge-danger">not found</span>{% endif %}</td>
         <td>{% for subj, sc, gr, raw in r['items'] %}<span class="badge badge-secondary" style="margin:.1rem">{{ subj }}: {{ gr }}{% if sc is not none %} ({{ sc|round(1) }}){% endif %}</span>{% else %}<span class="text-muted">—</span>{% endfor %}</td>
-        <td>{% if r.errors %}<ul class="text-sm" style="margin:0;padding-left:1rem;color:var(--danger)">{% for e in r.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% else %}<span class="badge badge-success">ok</span>{% endif %}</td>
+        <td>{% if r.errors %}<ul class="text-sm" style="margin:0;padding-left:1rem;color:var(--danger)">{% for e in r.errors %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}{% if r.warnings %}<ul class="text-sm" style="margin:0;padding-left:1rem;color:var(--warning)">{% for e in r.warnings %}<li>{{ e }}</li>{% endfor %}</ul>{% endif %}{% if not r.errors and not r.warnings %}<span class="badge badge-success">ok</span>{% endif %}</td>
       </tr>
     {% endfor %}
     </tbody>
@@ -47,3 +44,7 @@
   <div class="card-body text-muted text-sm">Only matched candidates are saved, and only the subjects listed under “Results to save”. A subject a candidate already has for that year is overwritten; their other subjects are left as they are.</div>
 </div>
 {% endif %}
+{% if preview and preview.n_ready %}
+<div class="d-flex gap-2 mb-3"><button class="btn btn-primary" type="submit" name="action" value="confirm"><i class="fas fa-save"></i> {% if roster and (roster.creates or roster.moves) %}Approve &amp; save{% else %}Save{% endif %} {{ preview.n_results }} result(s) for {{ preview.n_ready }} candidate(s)</button></div>
+{% endif %}
+</form>

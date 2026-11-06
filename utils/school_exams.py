@@ -747,9 +747,11 @@ def parse_import(scheme, text, students):
         if st is None and cell('name'):
             st = by_name.get(_norm(cell('name')))
         label = cell('student_id') or cell('name')
+        row_errors = []
         if st is None:
-            errors.append(f'Line {ln}: no {scheme.level.upper()} student matches "{label}".')
-            continue
+            # Kept as a row (not dropped) so the caller can offer to add the
+            # student to the register or move them into the class.
+            row_errors.append(f'No {scheme.level.upper()} candidate matches "{label}".')
         subjects = []
         for i, subj in subj_cols.items():
             v = raw[i].strip() if i < len(raw) else ''
@@ -763,7 +765,9 @@ def parse_import(scheme, text, students):
                 errors.append(f'Line {ln}: "{v}" is not a score or a valid grade for {subj}.')
         cand = {k: cell(k) for k in ('exam_number', 'centre', 'total_score', 'placement',
                                        'admitted', 'remarks') if k in meta and cell(k)}
-        rows.append({'student': st, 'subjects': subjects, 'candidate': cand, 'line': ln})
+        rows.append({'student': st, 'subjects': subjects, 'candidate': cand, 'line': ln,
+                     'name': cell('name') or label, 'code': cell('student_id'), 'errors': row_errors, 'score': 1.0 if st else 0.0,
+                     'items': subjects})
     return rows, errors, list(subj_cols.values())
 
 
