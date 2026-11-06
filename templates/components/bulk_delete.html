@@ -1,0 +1,55 @@
+{# Bulk delete for results lists.
+   bulk_bar() renders a standalone form (outside any table, so it never nests
+   inside the per-row delete forms) plus a toolbar; bulk_check() renders a row
+   checkbox bound to that form with the HTML `form` attribute. A page may
+   render the same student twice (mobile card + desktop row): duplicates are
+   kept in sync and counted once. #}
+{% macro bulk_bar(form_id, action, hidden={}, noun='student', what='results') -%}
+<form method="post" action="{{ action }}" id="{{ form_id }}" class="bulk-del" data-noun="{{ noun }}" data-what="{{ what }}"
+      data-confirm="Delete the {{ what }} for the selected {{ noun }}s? This cannot be undone.">
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+  {% for k, v in hidden.items() %}<input type="hidden" name="{{ k }}" value="{{ v }}">{% endfor %}
+  <div class="bulk-del-bar" style="display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;padding:.5rem .75rem;border-bottom:1px solid var(--border-color);background:var(--gray-50)">
+    <label style="display:flex;gap:.4rem;align-items:center;margin:0;font-size:.85rem;cursor:pointer">
+      <input type="checkbox" data-bulk-all="{{ form_id }}" aria-label="Select every {{ noun }} in this list"> Select all
+    </label>
+    <span class="bulk-del-count text-muted" style="font-size:.85rem" aria-live="polite">None selected</span>
+    <button type="submit" class="btn btn-danger btn-sm" disabled><i class="fas fa-trash"></i> <span class="bulk-del-label">Delete selected</span></button>
+  </div>
+</form>
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var form = document.getElementById({{ form_id|tojson }});
+  if (!form || form.dataset.bound) return;
+  form.dataset.bound = '1';
+  var all = document.querySelector('[data-bulk-all="' + form.id + '"]');
+  var btn = form.querySelector('button[type=submit]');
+  var count = form.querySelector('.bulk-del-count'), label = form.querySelector('.bulk-del-label');
+  var noun = form.dataset.noun, what = form.dataset.what;
+  function boxes() { return document.querySelectorAll('input[type=checkbox][name=ids][form="' + form.id + '"]'); }
+  function sync() {
+    var picked = {}, total = {};
+    boxes().forEach(function (b) { total[b.value] = 1; if (b.checked) picked[b.value] = 1; });
+    var n = Object.keys(picked).length, t = Object.keys(total).length;
+    btn.disabled = n === 0;
+    count.textContent = n ? (n + ' of ' + t + ' selected') : 'None selected';
+    label.textContent = n ? ('Delete ' + what + ' for ' + n + ' ' + noun + (n === 1 ? '' : 's')) : 'Delete selected';
+    form.setAttribute('data-confirm', 'Delete the ' + what + ' for ' + n + ' selected ' + noun + (n === 1 ? '' : 's') + '? This cannot be undone.');
+    if (all) { all.checked = n > 0 && n === t; all.indeterminate = n > 0 && n < t; }
+  }
+  document.addEventListener('change', function (e) {
+    var b = e.target;
+    if (b === all) { boxes().forEach(function (x) { x.checked = all.checked; }); return sync(); }
+    if (b.name === 'ids' && b.getAttribute('form') === form.id) {
+      boxes().forEach(function (x) { if (x.value === b.value) x.checked = b.checked; });
+      sync();
+    }
+  });
+  sync();
+})();
+</script>
+{%- endmacro %}
+
+{% macro bulk_check(form_id, value, label) -%}
+<input type="checkbox" name="ids" value="{{ value }}" form="{{ form_id }}" aria-label="Select {{ label }}" style="width:1.05rem;height:1.05rem;cursor:pointer">
+{%- endmacro %}

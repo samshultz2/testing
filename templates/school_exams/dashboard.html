@@ -1,5 +1,6 @@
 {% extends "school_exams/_base.html" %}
 {% from "school_exams/_macros.html" import kind_chip, kind_meter, kind_legend, pct %}
+{% from "components/bulk_delete.html" import bulk_bar, bulk_check with context %}
 {% block page_title %}{{ scheme.exam_name }} {{ year }}{% endblock %}
 {% block crumb %} / <span>{{ scheme.exam_name }}</span>{% endblock %}
 
@@ -98,11 +99,14 @@
       <input type="search" name="q" value="{{ search }}" class="form-control" placeholder="Search name, ID or exam no." style="max-width:240px">
     </form>
   </div>
+  {% set can_del = can_write_sub('external_exams', level ~ '_delete') %}
+  {% if can_del %}{{ bulk_bar('bulkDel', url_for(bp ~ '.delete_bulk', body=body), {'year': year}, 'candidate', scheme.exam_name ~ ' ' ~ year ~ ' results') }}{% endif %}
   <div class="table-responsive"><table class="data-table">
-    <thead><tr><th>Pos</th><th>Candidate</th><th>Exam no.</th><th class="num">Subj.</th><th class="num">D</th><th class="num">C</th><th class="num">P</th><th class="num">F</th><th class="num">Avg %</th><th class="num">Total</th><th>Eng+Maths</th><th>Benchmark</th><th>{{ 'Placement' if level == 'jss3' else 'Admission' }}</th><th></th></tr></thead>
+    <thead><tr>{% if can_del %}<th style="width:32px"></th>{% endif %}<th>Pos</th><th>Candidate</th><th>Exam no.</th><th class="num">Subj.</th><th class="num">D</th><th class="num">C</th><th class="num">P</th><th class="num">F</th><th class="num">Avg %</th><th class="num">Total</th><th>Eng+Maths</th><th>Benchmark</th><th>{{ 'Placement' if level == 'jss3' else 'Admission' }}</th><th></th></tr></thead>
     <tbody>
     {% for c in candidates %}
       <tr>
+        {% if can_del %}<td>{{ bulk_check('bulkDel', c.id, c.name) }}</td>{% endif %}
         <td>{{ c.position }}</td>
         <td><a href="{{ url_for(bp ~ '.student', body=body, student_id=c.id) }}"><strong>{{ c.name }}</strong></a><div class="sx-muted">{{ c.student_code }}{% if c.arm %} · {{ c.arm }}{% endif %}</div></td>
         <td>{{ c.exam_number or '—' }}</td>
@@ -119,7 +123,7 @@
         <td><a class="btn btn-sm btn-secondary" title="Edit" href="{{ url_for(bp ~ '.add_result', body=body, student_id=c.id, year=year) }}"><i class="fas fa-pen"></i></a></td>
       </tr>
     {% else %}
-      <tr><td colspan="14" class="sx-muted">No candidate matches “{{ search }}”.</td></tr>
+      <tr><td colspan="15" class="sx-muted">No candidate matches “{{ search }}”.</td></tr>
     {% endfor %}
     </tbody>
   </table></div>

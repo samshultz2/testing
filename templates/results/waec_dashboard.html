@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "components/bulk_delete.html" import bulk_bar, bulk_check with context %}
 {% block title %}WAEC Results - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('results.index') }}">Results</a> <span>WAEC</span>{% endblock %}
 
@@ -701,12 +702,14 @@
     </div>
     
     {% if students %}
+    {% if can_write_sub('external_exams', 'waec_delete') %}{{ bulk_bar('bulkDel', url_for('results.delete_waec_bulk'), {'year': selected_year}, 'student', 'WAEC results') }}{% endif %}
     <div class="cap-list">
     <!-- Mobile: Card View -->
     <div class="students-list" style="padding: 0.5rem;">
         {% for s in students %}
         <div class="student-card" data-search="{{ (s.name ~ ' ' ~ s.student_id)|lower }}">
             <div class="student-card-header">
+                {% if can_write_sub('external_exams', 'waec_delete') %}{{ bulk_check('bulkDel', s.id, s.name) }}{% endif %}
                 <div>
                     <div class="student-name">{{ s.name }}</div>
                     <div class="student-id">{{ s.student_id }}</div>
@@ -753,6 +756,7 @@
         <table>
             <thead>
                 <tr>
+                    {% if can_write_sub('external_exams', 'waec_delete') %}<th style="width:32px"></th>{% endif %}
                     <th>#</th>
                     <th>Student</th>
                     <th>A1</th>
@@ -767,6 +771,7 @@
             <tbody>
                 {% for s in students %}
                 <tr data-search="{{ (s.name ~ ' ' ~ s.student_id)|lower }}">
+                    {% if can_write_sub('external_exams', 'waec_delete') %}<td>{{ bulk_check('bulkDel', s.id, s.name) }}</td>{% endif %}
                     <td>{{ loop.index }}</td>
                     <td><strong>{{ s.name }}</strong><br><small style="color:#666;">{{ s.student_id }}</small></td>
                     <td><span class="grade-badge grade-a1">{{ s.a1_count }}</span></td>

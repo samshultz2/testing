@@ -569,6 +569,32 @@ def delete_jamb(student_id, year):
     return redirect(url_for('results.jamb_list', year=year))
 
 
+@results_bp.route('/jamb/delete-bulk', methods=['POST'])
+@login_required
+def delete_jamb_bulk():
+    """Delete the JAMB results of several students for one year at once."""
+    from routes.results.waec import _bulk_student_ids
+    year = request.form.get('year', type=int)
+    students = _bulk_student_ids()
+    if not year or not students:
+        flash('Select at least one student to delete.', 'warning')
+        return redirect(url_for('results.jamb_list', year=year))
+    try:
+        ids = [st.id for st in students]
+        deleted = (JAMBResult.query.filter(JAMBResult.student_id.in_(ids),
+                                           JAMBResult.exam_year == year)
+                   .delete(synchronize_session=False))
+        db.session.commit()
+        for sid in ids:
+            recompute_student_safe(sid)
+        log_action('results.jamb_delete_bulk', detail=f'{deleted} result(s), {year}')
+        flash(f'Deleted {deleted} JAMB result(s) ({year}).', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting results: {e}', 'error')
+    return redirect(url_for('results.jamb_list', year=year))
+
+
 @results_bp.route('/api/jamb/score-distribution/<int:year>')
 @login_required
 def api_jamb_score_distribution(year):

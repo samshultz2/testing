@@ -696,6 +696,50 @@ def delete_waec(student_id, year):
     return redirect(url_for('results.waec_list', year=year))
 
 
+def _bulk_student_ids():
+    """The posted ``ids`` as in-scope students (branch + SSS3-arm scope),
+    de-duplicated; ids the user may not touch are silently dropped."""
+    out, seen = [], set()
+    for raw in request.form.getlist('ids'):
+        try:
+            sid = int(raw)
+        except (TypeError, ValueError):
+            continue
+        if sid in seen:
+            continue
+        seen.add(sid)
+        st = _student_in_scope(sid)
+        if st is not None:
+            out.append(st)
+    return out
+
+
+@results_bp.route('/waec/delete-bulk', methods=['POST'])
+@login_required
+def delete_waec_bulk():
+    """Delete the WAEC results of several students for one year at once."""
+    year = request.form.get('year', type=int)
+    students = _bulk_student_ids()
+    if not year or not students:
+        flash('Select at least one student to delete.', 'warning')
+        return redirect(url_for('results.waec_list', year=year))
+    try:
+        ids = [st.id for st in students]
+        deleted = (WAECResult.query.filter(WAECResult.student_id.in_(ids),
+                                           WAECResult.exam_year == year)
+                   .delete(synchronize_session=False))
+        db.session.commit()
+        for sid in ids:
+            recompute_student_safe(sid)
+        log_action('results.waec_delete_bulk',
+                   detail=f'{deleted} result(s), {len(ids)} student(s), {year}')
+        flash(f'Deleted {deleted} WAEC result(s) for {len(ids)} student(s) ({year}).', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Error deleting results: {e}', 'error')
+    return redirect(url_for('results.waec_list', year=year))
+
+
 @results_bp.route('/waec/result/<int:result_id>/delete', methods=['POST'])
 @login_required
 def delete_waec_single(result_id):

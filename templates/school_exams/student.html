@@ -24,7 +24,7 @@
     <h3><i class="fas fa-file-lines"></i> {{ x.name }} {{ x.year }} <span class="badge badge-secondary">{{ x.body|title }}</span></h3>
     <div class="d-flex gap-2">
       <a class="btn btn-sm btn-secondary" href="{{ url_for(bp ~ '.add_result', body=x.body, student_id=student.id, year=x.year) }}"><i class="fas fa-pen"></i> Edit</a>
-      {% if user_permissions.is_admin %}
+      {% if can_write_sub('external_exams', level ~ '_delete') %}
       <form method="post" action="{{ url_for(bp ~ '.delete_student_year', body=x.body, student_id=student.id, year=x.year) }}" data-confirm="Delete {{ student.full_name }}'s {{ x.name }} {{ x.year }} results? This cannot be undone.">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
         <button class="btn btn-sm btn-danger" type="submit" title="Delete"><i class="fas fa-trash"></i></button>

@@ -22,7 +22,7 @@ from models import db, Student
 from models.models_school_exams import (
     LEVEL_META, BODIES, KINDS, SchoolExamResult, SchoolExamCandidate, get_scheme,
 )
-from utils.access_control import login_required, admin_required
+from utils.access_control import login_required
 from utils.branch_scope import require_branch_access
 from utils.audit import log_action
 from utils import school_exams as svc
@@ -368,7 +368,7 @@ def make_blueprint(level):
             arm=svc.student_arm_map(level, [st.id]).get(st.id)))
 
     @bp.route('/<body>/student/<int:student_id>/<int:year>/delete', methods=['POST'])
-    @admin_required
+    @login_required
     def delete_student_year(body, student_id, year):
         _body_or_404(body)
         st = _student_or_404(level, student_id)
@@ -379,6 +379,44 @@ def make_blueprint(level):
         db.session.commit()
         log_action(f'{bp_name}.delete', detail=f'{body} {year}: {n} result(s)', target=st)
         flash(f'Deleted {n} result(s) for {st.full_name} ({year}).', 'success')
+        return redirect(url_for(f'{bp_name}.dashboard', body=body, year=year))
+
+    @bp.route('/<body>/delete-bulk', methods=['POST'])
+    @login_required
+    def delete_bulk(body):
+        """Delete several candidates' results (and sitting records) for one
+        exam body + year at once. Gated by the level's Delete permission."""
+        from utils.branch_scope import can_access_branch
+        _body_or_404(body)
+        year = request.form.get('year', type=int)
+        ids = set()
+        for raw in request.form.getlist('ids'):
+            try:
+                ids.add(int(raw))
+            except (TypeError, ValueError):
+                pass
+        students = [st for st in Student.query.filter(Student.id.in_(ids or [-1])).all()
+                    if can_access_branch(st.branch_id)]
+        if not year or not students:
+            flash('Select at least one candidate to delete.', 'warning')
+            return redirect(url_for(f'{bp_name}.dashboard', body=body, year=year))
+        sids = [st.id for st in students]
+        n = (SchoolExamResult.query.filter(SchoolExamResult.student_id.in_(sids),
+                                           SchoolExamResult.level == level,
+                                           SchoolExamResult.body == body,
+                                           SchoolExamResult.exam_year == year)
+             .delete(synchronize_session=False))
+        SchoolExamCandidate.query.filter(SchoolExamCandidate.student_id.in_(sids),
+                                         SchoolExamCandidate.level == level,
+                                         SchoolExamCandidate.body == body,
+                                         SchoolExamCandidate.exam_year == year
+                                         ).delete(synchronize_session=False)
+        db.session.commit()
+        scheme = get_scheme(level, body)
+        log_action(f'{bp_name}.delete_bulk', detail=f'{scheme.exam_name} {year}: '
+                   f'{n} result(s), {len(sids)} candidate(s)')
+        flash(f'Deleted {n} {scheme.exam_name} result(s) for {len(sids)} candidate(s) ({year}).',
+              'success')
         return redirect(url_for(f'{bp_name}.dashboard', body=body, year=year))
 
     # ------------------------------------------------------------------ #

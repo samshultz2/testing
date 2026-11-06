@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "components/bulk_delete.html" import bulk_bar, bulk_check with context %}
 {% block title %}JAMB Results - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('results.index') }}">Results</a> <span>JAMB</span>{% endblock %}
 
@@ -691,12 +692,14 @@
     </div>
     
     {% if students %}
+    {% if can_write_sub('external_exams', 'jamb_delete') %}{{ bulk_bar('bulkDel', url_for('results.delete_jamb_bulk'), {'year': selected_year}, 'student', 'JAMB result') }}{% endif %}
     <div class="cap-list">
     <!-- Mobile: Card View -->
     <div class="students-list">
         {% for s in students %}
         <div class="student-card" data-search="{{ (s.name ~ ' ' ~ s.student_id)|lower }}">
             <div class="student-card-header">
+                {% if can_write_sub('external_exams', 'jamb_delete') %}{{ bulk_check('bulkDel', s.id, s.name) }}{% endif %}
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
                     <span class="student-rank {% if s.rank == 1 %}gold{% elif s.rank == 2 %}silver{% elif s.rank == 3 %}bronze{% endif %}">{{ s.rank }}</span>
                     <div>
@@ -737,6 +740,7 @@
         <table>
             <thead>
                 <tr>
+                    {% if can_write_sub('external_exams', 'jamb_delete') %}<th style="width:32px"></th>{% endif %}
                     <th>Rank</th>
                     <th>Student</th>
                     <th>Score</th>
@@ -751,6 +755,7 @@
             <tbody>
                 {% for s in students %}
                 <tr data-search="{{ (s.name ~ ' ' ~ s.student_id)|lower }}">
+                    {% if can_write_sub('external_exams', 'jamb_delete') %}<td>{{ bulk_check('bulkDel', s.id, s.name) }}</td>{% endif %}
                     <td>
                         <span class="student-rank {% if s.rank == 1 %}gold{% elif s.rank == 2 %}silver{% elif s.rank == 3 %}bronze{% endif %}" style="width: 24px; height: 24px; font-size: 0.7rem;">{{ s.rank }}</span>
                     </td>
