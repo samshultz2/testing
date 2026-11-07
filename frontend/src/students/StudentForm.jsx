@@ -107,6 +107,48 @@ function Combo({ items, initialLabel, placeholder, onPick }) {
   );
 }
 
+// Tabs for the Identity & Pastoral card: Identity · WAEC · NECO · JAMB.
+// Each tab shows how many of its fields are filled ("2/3"), so nothing
+// entered on a hidden tab is out of sight.
+const ID_TABS = [
+  { key: 'identity', label: 'Identity', icon: 'fa-user', fields: ['photo', 'nin', 'boarding_status', 'house'] },
+  { key: 'waec', label: 'WAEC', icon: 'fa-file-alt', fields: ['waec_reg_number', 'serial_number', 'waec_epin'] },
+  { key: 'neco', label: 'NECO', icon: 'fa-file-lines', fields: ['neco_reg_number', 'neco_epin'] },
+  { key: 'jamb', label: 'JAMB', icon: 'fa-file-contract', fields: ['jamb_reg_number', 'jamb_profile_code'] },
+];
+
+function IdTabs({ f, tab, setTab }) {
+  const refs = useRef({});
+  const onKey = (e, i) => {
+    const d = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+    if (!d) return;
+    e.preventDefault();
+    const next = ID_TABS[(i + d + ID_TABS.length) % ID_TABS.length].key;
+    setTab(next);
+    if (refs.current[next]) refs.current[next].focus();
+  };
+  return (
+    <div className="idt-tabs" role="tablist" aria-label="Identity and exam numbers">
+      {ID_TABS.map((t, i) => {
+        const filled = t.fields.filter((k) => String(f[k] || '').trim()).length;
+        const on = tab === t.key;
+        return (
+          <button key={t.key} type="button" role="tab" id={'idt-' + t.key} aria-selected={on}
+                  aria-controls={'idp-' + t.key} tabIndex={on ? 0 : -1}
+                  ref={(el) => { refs.current[t.key] = el; }}
+                  className={'idt-tab' + (on ? ' on' : '')} onClick={() => setTab(t.key)}
+                  onKeyDown={(e) => onKey(e, i)}>
+            <i aria-hidden="true" className={'fas ' + t.icon} />
+            <span>{t.label}</span>
+            <span className={'idt-count' + (filled ? ' has' : '')}
+                  aria-label={filled + ' of ' + t.fields.length + ' filled'}>{filled}/{t.fields.length}</span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 export default function StudentForm({ data }) {
   const isEdit = data.mode === 'edit';
   const opt = data.options || {};
@@ -149,6 +191,7 @@ export default function StudentForm({ data }) {
       .map((c) => ({ name: c.name || '', phone_number: c.phone_number || '', email: c.email || '', relationship: c.relationship || 'Father' })));
   const [waec, setWaec] = useState(() => new Set(stu.waec_subjects || []));
   const [jamb, setJamb] = useState(() => new Set(stu.jamb_subjects || []));
+  const [idTab, setIdTab] = useState('identity');
   const [scholarships, setScholarships] = useState(() =>
     (stu.scholarships || []).map((s) => ({ name: s.name || '', provider: s.provider || '',
       amount: s.amount != null ? String(s.amount) : '', status: s.status || '' })));
@@ -612,44 +655,61 @@ export default function StudentForm({ data }) {
       )}
 
       <FormCard icon="fa-id-card" title="Identity &amp; Pastoral" note="(optional)" collapsible
-                defaultOpen={isEdit && !!(stu.nin || stu.jamb_reg_number || stu.house || stu.boarding_status || stu.photo_url)}>
-        <div className="sf-row" style={{ alignItems: 'flex-start' }}>
-          <div className="form-group" style={{ flex: '1 1 100%' }}>
-            <label className="form-label">Passport photo <span className="text-muted">(optional)</span></label>
-            <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
-              {f.photo
-                ? <img src={f.photo} alt="Student" style={{ width: 64, height: 80, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border-color,#cbd5e1)' }} />
-                : <div style={{ width: 64, height: 80, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--gray-50,#f1f5f9)', border: '1px dashed #cbd5e1', borderRadius: 6, fontSize: '.6rem', color: '#94a3b8', textAlign: 'center' }}>No photo</div>}
-              <div>
-                <label className="sp-btn sp-btn-sm" style={{ cursor: 'pointer', margin: 0 }}>
-                  <i aria-hidden="true" className="fas fa-camera" /> {f.photo ? 'Change' : 'Upload'}
-                  <input type="file" accept="image/png,image/jpeg,image/webp" onChange={onPhotoFile} style={{ display: 'none' }} />
-                </label>
-                {f.photo && <button type="button" className="sp-btn sp-btn-sm" style={{ marginLeft: '.4rem' }} onClick={() => set('photo', '')}><i aria-hidden="true" className="fas fa-times" /> Remove</button>}
-                <div className="text-muted" style={{ fontSize: '.75rem', marginTop: '.35rem' }}>JPG/PNG — large photos are compressed automatically; auto-cropped to a passport photo and shown on the ID card.</div>
+                defaultOpen={isEdit && !!(stu.nin || stu.jamb_reg_number || stu.waec_reg_number || stu.neco_reg_number || stu.house || stu.boarding_status || stu.photo_url)}>
+        <IdTabs f={f} tab={idTab} setTab={setIdTab} />
+        {idTab === 'identity' && (
+          <div role="tabpanel" id="idp-identity" aria-labelledby="idt-identity">
+            <div className="sf-row" style={{ alignItems: 'flex-start' }}>
+              <div className="form-group" style={{ flex: '1 1 100%' }}>
+                <label className="form-label">Passport photo <span className="text-muted">(optional)</span></label>
+                <div style={{ display: 'flex', gap: '1rem', alignItems: 'center' }}>
+                  {f.photo
+                    ? <img src={f.photo} alt="Student" style={{ width: 64, height: 80, objectFit: 'cover', borderRadius: 6, border: '1px solid var(--border-color,#cbd5e1)' }} />
+                    : <div style={{ width: 64, height: 80, flex: '0 0 64px', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--gray-50,#f1f5f9)', border: '1px dashed #cbd5e1', borderRadius: 6, fontSize: '.6rem', color: '#94a3b8', textAlign: 'center' }}>No photo</div>}
+                  <div>
+                    <label className="sp-btn sp-btn-sm" style={{ cursor: 'pointer', margin: 0 }}>
+                      <i aria-hidden="true" className="fas fa-camera" /> {f.photo ? 'Change' : 'Upload'}
+                      <input type="file" accept="image/png,image/jpeg,image/webp" onChange={onPhotoFile} style={{ display: 'none' }} />
+                    </label>
+                    {f.photo && <button type="button" className="sp-btn sp-btn-sm" style={{ marginLeft: '.4rem' }} onClick={() => set('photo', '')}><i aria-hidden="true" className="fas fa-times" /> Remove</button>}
+                    <div className="text-muted" style={{ fontSize: '.75rem', marginTop: '.35rem' }}>JPG/PNG — large photos are compressed automatically; auto-cropped to a passport photo and shown on the ID card.</div>
+                  </div>
+                </div>
               </div>
             </div>
+            <div className="sf-row">
+              <TextField label="NIN" value={f.nin} onChange={(v) => set('nin', v)} placeholder="National Identification Number" autoComplete="off" />
+              <SelectField label="Boarding status" value={f.boarding_status} onChange={(v) => set('boarding_status', v)}
+                           placeholder="—" options={['Day', 'Boarding']} />
+            </div>
+            <TextField label="House" value={f.house} onChange={(v) => set('house', v)} placeholder="e.g. Red House / Zik House" autoComplete="off" />
           </div>
-        </div>
-        <div className="sf-row">
-          <TextField label="NIN" value={f.nin} onChange={(v) => set('nin', v)} placeholder="National Identification Number" autoComplete="off" />
-          <SelectField label="Boarding status" value={f.boarding_status} onChange={(v) => set('boarding_status', v)}
-                       placeholder="—" options={['Day', 'Boarding']} />
-        </div>
-        <div className="sf-row">
-          <TextField label="JAMB Reg. Number" value={f.jamb_reg_number} onChange={(v) => set('jamb_reg_number', v)} placeholder="JAMB registration number" autoComplete="off" />
-          <TextField label="JAMB Profile Code" value={f.jamb_profile_code} onChange={(v) => set('jamb_profile_code', v)} placeholder="JAMB profile code" autoComplete="off" />
-        </div>
-        <div className="sf-row">
-          <TextField label="WAEC Reg. Number" value={f.waec_reg_number} onChange={(v) => set('waec_reg_number', v)} placeholder="WAEC examination number" autoComplete="off" />
-          <TextField label="Serial Number" value={f.serial_number} onChange={(v) => set('serial_number', v)} placeholder="Candidate serial number" autoComplete="off" />
-          <TextField label="WAEC e-PIN" value={f.waec_epin} onChange={(v) => set('waec_epin', v)} placeholder="WAEC e-PIN" autoComplete="off" />
-        </div>
-        <div className="sf-row">
-          <TextField label="NECO Reg. Number" value={f.neco_reg_number} onChange={(v) => set('neco_reg_number', v)} placeholder="NECO examination number" autoComplete="off" />
-          <TextField label="NECO Token / e-PIN" value={f.neco_epin} onChange={(v) => set('neco_epin', v)} placeholder="NECO result token" autoComplete="off" />
-        </div>
-        <TextField label="House" value={f.house} onChange={(v) => set('house', v)} placeholder="e.g. Red House / Zik House" autoComplete="off" />
+        )}
+        {idTab === 'waec' && (
+          <div role="tabpanel" id="idp-waec" aria-labelledby="idt-waec">
+            <div className="sf-row">
+              <TextField label="WAEC Reg. Number" value={f.waec_reg_number} onChange={(v) => set('waec_reg_number', v)} placeholder="WAEC examination number" autoComplete="off" />
+              <TextField label="Serial Number" value={f.serial_number} onChange={(v) => set('serial_number', v)} placeholder="Candidate serial number" autoComplete="off" />
+            </div>
+            <TextField label="WAEC e-PIN" value={f.waec_epin} onChange={(v) => set('waec_epin', v)} placeholder="WAEC e-PIN" autoComplete="off" />
+          </div>
+        )}
+        {idTab === 'neco' && (
+          <div role="tabpanel" id="idp-neco" aria-labelledby="idt-neco">
+            <div className="sf-row">
+              <TextField label="NECO Reg. Number" value={f.neco_reg_number} onChange={(v) => set('neco_reg_number', v)} placeholder="NECO examination number" autoComplete="off" />
+              <TextField label="NECO Token / e-PIN" value={f.neco_epin} onChange={(v) => set('neco_epin', v)} placeholder="NECO result token" autoComplete="off" />
+            </div>
+          </div>
+        )}
+        {idTab === 'jamb' && (
+          <div role="tabpanel" id="idp-jamb" aria-labelledby="idt-jamb">
+            <div className="sf-row">
+              <TextField label="JAMB Reg. Number" value={f.jamb_reg_number} onChange={(v) => set('jamb_reg_number', v)} placeholder="JAMB registration number" autoComplete="off" />
+              <TextField label="JAMB Profile Code" value={f.jamb_profile_code} onChange={(v) => set('jamb_profile_code', v)} placeholder="JAMB profile code" autoComplete="off" />
+            </div>
+          </div>
+        )}
       </FormCard>
 
       <FormCard icon="fa-notes-medical" title="Medical Information" note="(optional, confidential)" collapsible

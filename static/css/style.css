@@ -2853,6 +2853,11 @@ a:not(.btn):not(.nav-link):not(.fin-tab) { text-decoration-color: transparent; t
 }
 .empty-state h3 { font-weight: var(--fw-semibold); }
 .empty-state p { color: var(--text-muted); }
+/* …only the state's own icon: icons inside its buttons / links stay inline. */
+.empty-state .btn i, .empty-state button i, .empty-state a i {
+    display: inline; width: auto; height: auto; margin: 0; font-size: inherit;
+    opacity: 1; color: inherit; background: none; border-radius: 0;
+}
 
 /* 9. Badges: hairline definition + tidy icon gap */
 .badge { border: 1px solid rgba(15,23,42,0.06); }
@@ -4312,3 +4317,22 @@ body .bill-line span:last-child, body .pl-row span:last-child { font-variant-num
 /* Keyboard "Skip to content" link: hidden until focused (was always visible). */
 .skip-link{position:absolute;left:-9999px;top:.5rem;z-index:2000;padding:.5rem .9rem;border-radius:8px;background:var(--primary);color:#fff;font-weight:600;text-decoration:none}
 .skip-link:focus{left:.75rem}
+
+/* Student form — Identity & Pastoral tabs (Identity · WAEC · NECO · JAMB) */
+.idt-tabs{display:flex;gap:.3rem;padding:.3rem;margin:0 0 1.1rem;background:var(--gray-50,#f8fafc);
+  border:1px solid var(--border-color,#e2e8f0);border-radius:12px;overflow-x:auto;scrollbar-width:none}
+.idt-tabs::-webkit-scrollbar{display:none}
+.idt-tab{flex:1 0 auto;display:inline-flex;align-items:center;justify-content:center;gap:.45rem;
+  padding:.55rem .8rem;border:none;border-radius:9px;background:transparent;color:var(--text-muted);
+  font:inherit;font-size:.86rem;font-weight:600;cursor:pointer;white-space:nowrap;transition:background .15s,color .15s}
+.idt-tab i{font-size:.8rem;opacity:.8}
+@media (hover:hover){.idt-tab:hover{color:var(--text-primary)}}
+.idt-tab.on{background:var(--bg-card,#fff);color:var(--primary);box-shadow:0 1px 3px rgba(15,23,42,.12)}
+.idt-tab:focus-visible{outline:2px solid var(--primary);outline-offset:1px}
+.idt-count{font-size:.68rem;font-weight:700;padding:.08rem .4rem;border-radius:999px;
+  background:var(--border-color,#e2e8f0);color:var(--text-muted)}
+.idt-count.has{background:var(--success-light,#d1fae5);color:var(--success,#047857)}
+@media (max-width:480px){
+  .idt-tab{flex:1 1 0;flex-direction:column;gap:.15rem;padding:.45rem .3rem;font-size:.78rem}
+  .idt-tab i{display:none}
+}

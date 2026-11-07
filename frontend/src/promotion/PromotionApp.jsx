@@ -901,6 +901,20 @@ function GraduateProfile({ d, notify }) {
           </div>
 
           <div className="gp-sec">
+            <div className="gp-sec-head"><div className="ttl"><span className="gp-sec-ic p"><i aria-hidden="true" className="fas fa-file-lines" /></span><h3>NECO Results</h3></div>
+              {canWrite(d) && <a href={d.urls.add_neco} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add</a>}</div>
+            <div className="gp-sec-body">{(d.neco_by_year || []).length ? d.neco_by_year.map((data, i) => (
+              <div className="gp-examblock" key={i}>
+                <div className="gp-examhead"><b>{data.exam_year}</b>{data.exam_number && <span className="muted">Reg No: {data.exam_number}</span>}</div>
+                <div className="subjects-grid" style={{ padding: '.85rem .95rem' }}>
+                  {data.subjects.map((r, j) => (
+                    <div className="subject-item" key={j}><span>{r.subject}</span><span className={'badge ' + (WAEC_GRADE_BADGE[r.grade] || 'badge-secondary')}>{r.grade}</span></div>))}
+                </div>
+              </div>
+            )) : <Empty icon="fa-file-lines" title=""><p>No NECO results recorded</p>{canWrite(d) && <a href={d.urls.add_neco} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add NECO Result</a>}</Empty>}</div>
+          </div>
+
+          <div className="gp-sec">
             <div className="gp-sec-head"><div className="ttl"><span className="gp-sec-ic a"><i aria-hidden="true" className="fas fa-file-contract" /></span><h3>JAMB Results</h3></div>
               {canWrite(d) && <a href={d.urls.add_jamb} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add</a>}</div>
             <div className="gp-sec-body">{d.jamb_results.length ? d.jamb_results.map((j, i) => (

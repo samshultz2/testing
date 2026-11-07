@@ -30,3 +30,22 @@ def test_graduates_list_flags_neco_results(app):
     rows = {ids[g['id']]: g for g in data['graduates'] if g['id'] in ids}
     assert rows['a']['has_neco'] is True and rows['a']['has_waec'] is False and rows['a']['has_jamb'] is False
     assert rows['b']['has_neco'] is False and rows['b']['has_waec'] is True
+
+
+def test_graduate_profile_lists_neco_results(app):
+    with app.app_context():
+        tag = uuid.uuid4().hex[:6].upper()
+        s = Student(student_id='GP' + tag, first_name='Necoprof', surname='Grad', gender='Male',
+                    is_graduated=True, neco_reg_number='NR' + tag)
+        db.session.add(s); db.session.flush()
+        db.session.add_all([NECOResult(student_id=s.id, exam_year=2025, subject='Mathematics', grade='A1'),
+                            NECOResult(student_id=s.id, exam_year=2025, subject='Biology', grade='C5')])
+        db.session.commit()
+        sid = s.id
+    c = _admin(app)
+    body = c.get(f'/promotion/graduates/{sid}', headers={'X-Requested-With': 'fetch'}).get_json()
+    data = body.get('data', body)
+    assert data['neco_by_year'] == [{'exam_year': 2025, 'exam_number': 'NR' + tag,
+                                     'subjects': [{'subject': 'Biology', 'grade': 'C5'},
+                                                  {'subject': 'Mathematics', 'grade': 'A1'}]}]
+    assert 'student_id=%d' % sid in data['urls']['add_neco']

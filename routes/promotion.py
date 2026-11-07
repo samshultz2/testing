@@ -986,6 +986,13 @@ def graduate_profile(student_id):
             }
         waec_by_year[key]['subjects'].append(result)
     
+    # NECO results, grouped by exam year (same shape as WAEC)
+    from models import NECOResult
+    neco_by_year = {}
+    for r in NECOResult.query.filter_by(student_id=student_id).order_by(
+            NECOResult.exam_year.desc(), NECOResult.subject).all():
+        neco_by_year.setdefault(r.exam_year, []).append({'subject': r.subject, 'grade': r.grade})
+
     # Get JAMB results
     jamb_results = JAMBResult.query.filter_by(student_id=student_id).order_by(
         JAMBResult.exam_year.desc()
@@ -1056,6 +1063,8 @@ def graduate_profile(student_id):
         'waec_by_year': [{'exam_year': v['exam_year'], 'exam_number': v['exam_number'],
                           'subjects': [{'subject': r.subject, 'grade': r.grade} for r in v['subjects']]}
                          for v in waec_by_year.values()],
+        'neco_by_year': [{'exam_year': y, 'exam_number': student.neco_reg_number, 'subjects': subs}
+                         for y, subs in neco_by_year.items()],
         'jamb_results': [{'exam_year': j.exam_year, 'total_score': j.total_score,
                           'registration_number': student.jamb_reg_number,
                           'subjects': [{'name': j.subject1, 'score': j.subject1_score},
@@ -1069,6 +1078,7 @@ def graduate_profile(student_id):
                  'ungraduate': url_for('promotion.unmark_graduate', student_id=student.id),
                  'change_status': url_for('promotion.change_graduate_status', student_id=student.id),
                  'add_waec': url_for('results.add_waec') + f'?student_id={student.id}',
+                 'add_neco': url_for('results.add_neco') + f'?student_id={student.id}',
                  'add_jamb': url_for('results.add_jamb') + f'?student_id={student.id}'},
     })
 
