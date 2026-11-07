@@ -20,6 +20,7 @@ import math
 from utils import student_list_export as SLE
 
 KINDS = ('d', 'c', 'p', 'f')        # distinction, credit, pass, fail
+SIZE_SCALE = {'s': .9, 'm': 1.0, 'l': 1.14}   # export text size: Small / Medium / Large
 FAIL = '#b91c1c'
 PASS_INK = '#94a3b8'
 DASH = '#cbd5e1'
@@ -401,7 +402,9 @@ def render_pdf(doc):
     INK, INK2, MUTED, LINE, LINE2, BG, ZEBRA = (SLE.INK, SLE.INK2, SLE.MUTED, SLE.LINE, SLE.LINE2,
                                                SLE.BG, SLE.ZEBRA)
     students = doc['type'] == 'students'
-    fs = 8.4 if students else 8.0
+    size = doc.get('size') if doc.get('size') in SIZE_SCALE else 'm'
+    K = SIZE_SCALE[size]                      # text-size factor (Small / Medium / Large)
+    fs = (8.8 if students else 8.0) * K
     margin = 34
     esc = SLE._esc
 
@@ -411,9 +414,9 @@ def render_pdf(doc):
     per_row = _per_row(max_subj) if max_subj else 0
     chip_w = 0
     if students and per_row:
-        codes_w = max((stringWidth(g[0], F['BodyBold'], 5.2) for r in rows for g in r['grades']), default=10)
-        grade_w = max((stringWidth(g[1], F['Display'], 8.4) for r in rows for g in r['grades']), default=8)
-        chip_w = max(codes_w, grade_w) + 4.5
+        codes_w = max((stringWidth(g[0], F['BodyBold'], 5.4 * K) for r in rows for g in r['grades']), default=10)
+        grade_w = max((stringWidth(g[1], F['Display'], 9 * K) for r in rows for g in r['grades']), default=8)
+        chip_w = max(codes_w, grade_w) + 4.5 * K
 
     def head_w(label):
         return stringWidth(label.upper(), F['BodyBold'], fs * .78) + 9
@@ -428,6 +431,7 @@ def render_pdf(doc):
         k = col['kind']
         w = {'pos': 28, 'rank': 18, 'num': 24, 'gcount': 14, 'frac': 38, 'dec': 34,
              'flag': 44, 'pctb': 42, 'pct': 39, 'delta': 36, 'spread': 68}.get(k)
+        w = w * K if w else w
         if k == 'grades':
             w = per_row * chip_w + 8
         elif k == 'text':
@@ -439,19 +443,26 @@ def render_pdf(doc):
         fixed[col['key']] = w
     if students:
         names = [stringWidth(r['name'][0], F['BodyBold'], fs * 1.02) for r in rows] + [70]
-        name_need = min(max(names) + 12, 170)
+        name_need = min(max(names) + 12, 170 * K)
     else:
         names = [stringWidth(r['subject'][0], F['BodyBold'], fs) + (24 if r['subject'][1] else 0) for r in rows]
-        name_need = min(max(names + [80]) + 10, 128)
+        name_need = min(max(names + [80]) + 10, 128 * K)
     need = sum(fixed.values()) + name_need
     PW, PH = A4
+    if students and 'grades' in fixed and need > PW - 2 * margin and per_row > math.ceil(max_subj / 2):
+        # Stay portrait: put the subject grades on two lines instead.
+        nonlocal_rows = math.ceil(max_subj / 2)
+        need -= (per_row - nonlocal_rows) * chip_w
+        fixed['grades'] -= (per_row - nonlocal_rows) * chip_w
+        per_row = nonlocal_rows
     if need > PW - 2 * margin:
         PW, PH = landscape(A4)
     avail_w = PW - 2 * margin
-    flex_w = max(name_need, avail_w - sum(fixed.values()))
-    if sum(fixed.values()) + flex_w > avail_w:          # still too wide: squeeze evenly
-        scale = (avail_w - flex_w) / sum(fixed.values())
-        fixed = {k: v * scale for k, v in fixed.items()}
+    flex_w = max(name_need, min(avail_w - sum(fixed.values()), name_need + 50 * K))
+    # Spare width goes to every column evenly (no single over-wide column);
+    # too little width squeezes them evenly.
+    scale = (avail_w - flex_w) / sum(fixed.values()) if fixed else 1
+    fixed = {k: v * scale for k, v in fixed.items()}
     col_w = [flex_w if c['key'] == flex_key else fixed[c['key']] for c in doc['columns']]
 
     head_h, foot_h, head2_h = 112, 40, 46
@@ -523,18 +534,19 @@ def render_pdf(doc):
 
         def wrap(self, aw, ah):
             self.aw = aw
-            return aw, 15
+            return aw, 15 * K
 
         def draw(self):
             cv = self.canv
-            x = (self.aw - 20) / 2
+            bw = 20 * K
+            x = (self.aw - bw) / 2
             if isinstance(self.n, int) and self.n <= 3:
-                cv.setFillColor(hx(C['soft'])); cv.roundRect(x, 0, 20, 15, 4.5, stroke=0, fill=1)
+                cv.setFillColor(hx(C['soft'])); cv.roundRect(x, 0, bw, 15 * K, 4.5, stroke=0, fill=1)
                 cv.setFillColor(hx(C['primary']))
             else:
                 cv.setFillColor(hx(INK2))
-            cv.setFont(F['Display'], 8.6)
-            cv.drawCentredString(x + 10, 4.3, str(self.n))
+            cv.setFont(F['Display'], 8.8 * K)
+            cv.drawCentredString(x + bw / 2, 4.3 * K, str(self.n))
 
     class Grades(Flowable):
         def __init__(self, items):
@@ -543,20 +555,21 @@ def render_pdf(doc):
 
         def wrap(self, aw, ah):
             lines = max(1, math.ceil(len(self.items) / per_row)) if per_row else 1
-            self.h = lines * 17.5 - 1.5
-            return per_row * chip_w, self.h
+            self.h = lines * 19 * K - 1.5
+            self.cw = min(aw / per_row, chip_w * 1.3)
+            return per_row * self.cw, self.h
 
         def draw(self):
             cv = self.canv
             for i, (code, g, kind) in enumerate(self.items):
                 row, col = divmod(i, per_row)
-                x = col * chip_w + chip_w / 2
-                y = self.h - row * 17.5
-                cv.setFillColor(hx(MUTED)); cv.setFont(F['BodyBold'], 5.2)
-                cv.drawCentredString(x, y - 5.6, code)
+                x = col * self.cw + self.cw / 2
+                y = self.h - row * 19 * K
+                cv.setFillColor(hx(MUTED)); cv.setFont(F['BodyBold'], 5.4 * K)
+                cv.drawCentredString(x, y - 5.8 * K, code)
                 cv.setFillColor(hx(_grade_color(kind, C)))
-                cv.setFont(F['Display'] if kind != 'p' else F['BodyBold'], 8.4)
-                cv.drawCentredString(x, y - 14.6, g)
+                cv.setFont(F['Display'] if kind != 'p' else F['BodyBold'], 9 * K)
+                cv.drawCentredString(x, y - 15.6 * K, g)
 
     class Flag(Flowable):
         def __init__(self, ok, yes, no):
@@ -649,29 +662,34 @@ def render_pdf(doc):
             self.data, self.title, self.w = data, title, w
 
         def wrap(self, aw, ah):
-            return self.w, 114
+            # Grow into the space left on the page (above the highlight cards)
+            # so the page doesn't end in a blank band.
+            room = ah - (72 if doc.get('insights') else 0)
+            self.h = max(120, min(175, room))
+            return self.w, self.h
 
         def draw(self):
             cv = self.canv
             cv.setStrokeColor(hx(LINE)); cv.setFillColor(colors.white); cv.setLineWidth(.8)
-            cv.roundRect(0, 0, self.w, 114, 9, stroke=1, fill=1)
-            cv.setFillColor(hx(MUTED)); cv.setFont(F['BodyBold'], 6.6)
-            cv.drawString(12, 101, self.title.upper(), charSpace=.7)
+            cv.roundRect(0, 0, self.w, self.h, 9, stroke=1, fill=1)
+            cv.setFillColor(hx(MUTED)); cv.setFont(F['BodyBold'], 6.8)
+            cv.drawString(14, self.h - 18, self.title.upper(), charSpace=.7)
             n = len(self.data)
             inner = self.w - 24
             gap = 6 if n > 10 else 10
-            bw = (inner - gap * (n - 1)) / n
-            base, top = 18, 92
+            bw = min(40, (inner - gap * (n - 1)) / n)
+            x0 = 12 + (inner - (bw * n + gap * (n - 1))) / 2
+            base, top = 20, self.h - 24
             cv.setStrokeColor(hx(LINE)); cv.line(12, base, self.w - 12, base)
             top3 = sorted(range(n), key=lambda i: -self.data[i][1])[:3]
             for i, (code, v) in enumerate(self.data):
-                x = 12 + i * (bw + gap)
+                x = x0 + i * (bw + gap)
                 h = (top - base - 10) * max(0, min(100, v)) / 100
                 cv.setFillColor(hx(C['primary'] if i in top3 else '#cbd5e1'))
                 cv.roundRect(x, base, bw, max(h, 1), min(3, bw / 3), stroke=0, fill=1)
                 cv.rect(x, base, bw, min(3, h), stroke=0, fill=1)
-                cv.setFillColor(hx(INK)); cv.setFont(F['BodyBold'], 6.4)
-                cv.drawCentredString(x + bw / 2, base + h + 3, '%d' % round(v))
+                cv.setFillColor(hx(INK)); cv.setFont(F['BodyBold'], 7)
+                cv.drawCentredString(x + bw / 2, base + h + 3.5, '%d%%' % round(v) if n <= 12 else '%d' % round(v))
                 cv.setFillColor(hx(MUTED)); cv.setFont(F['BodyBold'], 5.6 if n > 12 else 6.2)
                 cv.drawCentredString(x + bw / 2, base - 8, code)
 
@@ -768,8 +786,8 @@ def render_pdf(doc):
         ('LINEBELOW', (0, 1), (-1, -1), .5, hx(LINE2)),
         ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('TOPPADDING', (0, 0), (-1, 0), 6), ('BOTTOMPADDING', (0, 0), (-1, 0), 6),
-        ('TOPPADDING', (0, 1), (-1, -1), 4.2 if students else 3.6),
-        ('BOTTOMPADDING', (0, 1), (-1, -1), 4.2 if students else 3.6),
+        ('TOPPADDING', (0, 1), (-1, -1), (4.6 if students else 4.2) * K),
+        ('BOTTOMPADDING', (0, 1), (-1, -1), (4.6 if students else 4.2) * K),
         ('LEFTPADDING', (0, 0), (-1, -1), pad), ('RIGHTPADDING', (0, 0), (-1, -1), pad),
     ]
     for i in range(2, len(rows) + 1, 2):
@@ -808,14 +826,14 @@ def render_pdf(doc):
                                   ('TOPPADDING', (0, 0), (-1, -1), 6), ('BOTTOMPADDING', (0, 0), (-1, -1), 6)]))
         story += [Spacer(1, 10), note]
     if doc.get('chart'):
-        story += [Spacer(1, 12), KeepTogether([Chart(doc['chart'], doc['chart_title'], avail_w)])]
+        story += [Spacer(1, 14), Chart(doc['chart'], doc['chart_title'], avail_w)]
     if doc.get('insights'):
         n = len(doc['insights'])
         iw = (avail_w - gap * (n - 1)) / n
         it = Table([[Insight(x, iw) for x in doc['insights']]], colWidths=[iw + gap] * (n - 1) + [iw])
         it.setStyle(TableStyle([('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
                                 ('TOPPADDING', (0, 0), (-1, -1), 0), ('BOTTOMPADDING', (0, 0), (-1, -1), 0)]))
-        story += [Spacer(1, 10), it]
+        story += [Spacer(1, 12), it]
 
     buf = io.BytesIO()
     d = BaseDocTemplate(buf, pagesize=(PW, PH), leftMargin=margin, rightMargin=margin,
@@ -872,6 +890,7 @@ def render_docx(doc):
     from docx.shared import Pt, Cm, RGBColor
 
     C = doc['colors']
+    K = SIZE_SCALE.get(doc.get('size'), 1.0)
     if '_orientation' not in doc:
         render_pdf(doc)          # decides portrait / landscape like the PDF
     rgb = lambda h: RGBColor(*SLE._hex(h))   # noqa: E731
@@ -977,7 +996,7 @@ def render_docx(doc):
             k = c['kind']
 
             def run(text, size=8.5, bold=is_total, color=SLE.INK2):
-                rr = p.add_run(str(text)); rr.font.size = Pt(size); rr.bold = bold; rr.font.color.rgb = rgb(color)
+                rr = p.add_run(str(text)); rr.font.size = Pt(size * K); rr.bold = bold; rr.font.color.rgb = rgb(color)
                 return rr
             if k == 'name':
                 run(v[0], 9, True, SLE.INK)
@@ -1053,6 +1072,8 @@ def file_response(doc, fmt, stem):
     """Flask response for ``fmt`` in pdf / word / image (image: ``?page=``)."""
     from flask import Response, request
     from utils.web_exports import pdf_response
+    if request.args.get('size') in SIZE_SCALE:
+        doc['size'] = request.args['size']
     if fmt == 'pdf':
         return pdf_response(io.BytesIO(render_pdf(doc)), stem + '.pdf', inline=False)
     if fmt == 'word':

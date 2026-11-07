@@ -14,6 +14,12 @@
         <label class="sxe-opt"><input type="radio" name="sxFormat" value="image"><span><i class="fas fa-image"></i> Image</span></label>
         <label class="sxe-opt"><input type="radio" name="sxFormat" value="word"><span><i class="fas fa-file-word"></i> Word</span></label>
       </div>
+      <div class="sxe-label">Text size:</div>
+      <div class="sxe-size" role="radiogroup" aria-label="Text size">
+        <label><input type="radio" name="sxSize" value="s"><span>Small</span></label>
+        <label><input type="radio" name="sxSize" value="m" checked><span>Medium</span></label>
+        <label><input type="radio" name="sxSize" value="l"><span>Large</span></label>
+      </div>
       <div class="sxe-label">Export Type:</div>
       <div class="sxe-grid2">
         <label class="sxe-opt"><input type="radio" name="sxType" value="students" checked data-call="sxToggleExport" data-on="change"><span>Students List</span></label>
@@ -63,6 +69,12 @@
 .exp-check{display:flex;align-items:center;gap:.5rem;padding:.4rem .5rem;background:var(--gray-50);border-radius:4px;cursor:pointer;font-size:.8rem}
 .exp-check:hover{background:var(--border-color)}
 .exp-check input{margin:0}
+.sxe-size{display:inline-flex;background:var(--gray-50,#f8f9fa);border:1px solid var(--border-color,#ddd);border-radius:10px;padding:3px;gap:2px;margin-bottom:1rem}
+.sxe-size label{cursor:pointer}
+.sxe-size input{position:absolute;opacity:0;pointer-events:none}
+.sxe-size span{display:block;padding:.4rem .9rem;border-radius:7px;font-size:.8rem;font-weight:600;color:var(--text-muted)}
+.sxe-size input:checked+span{background:var(--bg-card,#fff);color:var(--primary);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.sxe-size input:focus-visible+span{outline:2px solid var(--primary);outline-offset:1px}
 .sxe-note{font-size:.75rem;color:var(--text-muted);margin:0 0 1rem}
 .sxe-actions{display:flex;gap:.5rem}.sxe-actions .btn{flex:1}
 @media (max-width:600px){

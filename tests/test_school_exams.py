@@ -514,6 +514,17 @@ def test_dashboard_export_dialog_and_branded_exports_follow_scheme(app):
         assert 'Subject Analysis' in txt and 'Strongest subject'.upper() in txt
         img = c.get(base + '&format=image&type=subjects')
         assert img.data[:4] == b'\x89PNG' and img.headers.get('X-Total-Pages') == '1'
+        # Text size: Small / Medium / Large (as on the student exports).
+        assert 'name="sxSize" value="l"' in html
+        import fitz as _fz
+        sizes = {}
+        for sz in ('s', 'l'):
+            r = c.get(base + '&format=pdf&type=students&size=' + sz)
+            with _fz.open(stream=r.data, filetype='pdf') as d:
+                spans = [sp['size'] for b in d[0].get_text('dict')['blocks'] for ln in b.get('lines', [])
+                         for sp in ln['spans'] if 'Expoada' in sp['text']]
+            sizes[sz] = max(spans)
+        assert sizes['l'] > sizes['s']
         assert c.get(base).data[:2] == b'PK'                                # Excel unchanged
         assert 'id="sxExportModal"' not in c.get('/basic6-exams/?body=federal&year=1999').get_data(as_text=True)
     finally:

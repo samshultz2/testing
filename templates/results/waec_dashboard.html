@@ -924,6 +924,16 @@
                 </div>
             </div>
 
+            <!-- Text size -->
+            <div style="margin-bottom: 1rem;">
+                <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.5rem;">Text size:</label>
+                <div class="exp-size" role="radiogroup" aria-label="Text size">
+                    <label><input type="radio" name="exportSize" value="s"><span>Small</span></label>
+                    <label><input type="radio" name="exportSize" value="m" checked><span>Medium</span></label>
+                    <label><input type="radio" name="exportSize" value="l"><span>Large</span></label>
+                </div>
+            </div>
+
             <!-- Export Type -->
             <div style="margin-bottom: 1rem;">
                 <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.5rem;">Export Type:</label>
@@ -1001,6 +1011,12 @@
 }
 .exp-check:hover { background: var(--border-color); }
 .exp-check input { margin: 0; }
+.exp-size { display: inline-flex; background: var(--gray-50); border: 1px solid var(--border-color); border-radius: 10px; padding: 3px; gap: 2px; }
+.exp-size label { cursor: pointer; }
+.exp-size input { position: absolute; opacity: 0; pointer-events: none; }
+.exp-size span { display: block; padding: .4rem .9rem; border-radius: 7px; font-size: .8rem; font-weight: 600; color: var(--text-muted); }
+.exp-size input:checked + span { background: var(--bg-card); color: var(--primary); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+.exp-size input:focus-visible + span { outline: 2px solid var(--primary); outline-offset: 1px; }
 </style>
 {% endblock %}
 
@@ -1122,6 +1138,8 @@ function generateWAECExport() {
     p.set('format', format);
     p.set('type', type);
     p.set('cols', waecExportCols(type));
+    var sz = document.querySelector('input[name="exportSize"]:checked');
+    p.set('size', sz ? sz.value : 'm');
     var url = base + '?' + p.toString();
     closeExportModal();
     if (format === 'image') {

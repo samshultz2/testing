@@ -69,6 +69,11 @@ def test_waec_branded_exports_all_formats(app):
     r = c.get('/results/neco/export', query_string={'year': 2033, 'format': 'pdf', 'type': 'students'})
     assert r.status_code in (200, 302)
 
+    r = c.get('/results/waec/export', query_string={'year': 2033, 'format': 'word', 'type': 'subjects', 'size': 'l'})
+    assert r.status_code == 200 and r.data[:2] == b'PK'
+    html = c.get('/results/waec?year=2033').get_data(as_text=True)
+    assert 'name="exportSize" value="s"' in html and "p.set('size'" in html
+
     # Excel path still works
     r = c.get('/results/waec/export', query_string={'year': 2033, 'format': 'excel'})
     assert r.status_code == 200 and r.data[:2] == b'PK'

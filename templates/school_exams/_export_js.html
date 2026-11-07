@@ -52,6 +52,8 @@ function sxGenerateExport() {
   var p = new URLSearchParams();
   p.set('year', sxExport.year); p.set('format', format); p.set('type', type);
   p.set('cols', sxCols(type).join(','));
+  var sz = document.querySelector('input[name="sxSize"]:checked');
+  p.set('size', sz ? sz.value : 'm');
   var url = sxExport.url + '?' + p.toString();
   sxCloseExport();
   if (format === 'image') sxDownloadImages(url); else window.location.href = url;
