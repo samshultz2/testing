@@ -1000,10 +1000,7 @@ def render_pdf(doc):
     kt.setStyle(TableStyle([('LEFTPADDING', (0, 0), (-1, -1), 0), ('RIGHTPADDING', (0, 0), (-1, -1), 0),
                             ('TOPPADDING', (0, 0), (-1, -1), 0), ('BOTTOMPADDING', (0, 0), (-1, -1), 0)]))
     story += [kt, Spacer(1, 10), Legend(doc['key'], avail_w), Spacer(1, 8)]
-    if rows:
-        story.append(t)
-    else:
-        story.append(Paragraph('No results have been recorded for this exam year.', st_sub))
+    # Subject key up front (page 1), so every code in the table is named first.
     if doc.get('codes'):
         st_note = ParagraphStyle('nt', parent=st_cell, fontSize=7.4, leading=10)
         txt = '<font name="%s" color="%s">Subject codes:</font> %s' % (
@@ -1012,7 +1009,11 @@ def render_pdf(doc):
         note.setStyle(TableStyle([('BOX', (0, 0), (-1, -1), .7, hx(LINE), None, (2, 2)),
                                   ('LEFTPADDING', (0, 0), (-1, -1), 8), ('RIGHTPADDING', (0, 0), (-1, -1), 8),
                                   ('TOPPADDING', (0, 0), (-1, -1), 6), ('BOTTOMPADDING', (0, 0), (-1, -1), 6)]))
-        story += [Spacer(1, 10), note]
+        story += [note, Spacer(1, 8)]
+    if rows:
+        story.append(t)
+    else:
+        story.append(Paragraph('No results have been recorded for this exam year.', st_sub))
     if doc.get('chart'):
         story += [Spacer(1, 14), Chart(doc['chart'], doc['chart_title'], avail_w)]
     if doc.get('insights'):
@@ -1153,6 +1154,9 @@ def render_docx(doc):
         r = p.add_run(label + ' '); r.bold = True; r.font.size = Pt(8.5); r.font.color.rgb = rgb(_grade_color(kind, C))
         r = p.add_run((item[2] if len(item) > 2 else KIND_NAMES[kind]) + '    '); r.font.size = Pt(8.5); r.font.color.rgb = rgb(SLE.INK2)
 
+    if doc.get('codes'):
+        para('Subject codes: ' + ' · '.join('%s %s' % c for c in doc['codes']), 7.5, False, SLE.INK2,
+             space_after=4).paragraph_format.space_before = Pt(2)
     cols = doc['columns']
     rows = list(doc['rows']) + ([doc['total']] if doc.get('total') else [])
     t = d.add_table(rows=1 + len(rows), cols=len(cols))
@@ -1223,9 +1227,6 @@ def render_docx(doc):
                 run(v, 9, True, C['primary'] if isinstance(v, int) and v <= 3 else SLE.INK2)
             else:
                 run('' if v is None else v)
-    if doc.get('codes'):
-        para('Subject codes: ' + ' · '.join('%s %s' % c for c in doc['codes']), 7.5, False, SLE.INK2,
-             space_after=4).paragraph_format.space_before = Pt(8)
     if doc.get('chart'):
         para(doc['chart_title'], 8, True, SLE.MUTED).paragraph_format.space_before = Pt(10)
         ct = d.add_table(rows=1, cols=len(doc['chart']))
