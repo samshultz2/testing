@@ -243,3 +243,15 @@ def test_waec_and_neco_subject_extras_and_best_overall(app):
         assert 'Best Overall' in html
         best = html[html.index('Best Overall'):]
         assert best.index('Extrastar Ola') < best.index('Extraweak Tobi')
+
+
+def test_exam_report_always_has_neco_section(app):
+    """A school that has not entered any NECO results yet still sees the NECO
+    section (empty) and the 'Add NECO result' prompt, like WAEC and JAMB."""
+    sid = _student(app, 'Necoeleven', 'Uche')
+    enroll_sss3(app, sid)
+    c = _admin(app)
+    html = c.get(f'/results/student/{sid}/report').get_data(as_text=True)
+    assert '<!-- NECO -->' in html and 'No NECO results recorded.' in html
+    assert 'Consolidated WAEC, NECO, JAMB' in html
+    assert 'Add NECO result' in html

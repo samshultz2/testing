@@ -208,11 +208,7 @@ def student_report(student_id):
             if not any(r.exam_year == exam_year for r in waec):
                 missing.append({'label': 'WAEC', 'sub': 'waec_create',
                                 'url': url_for('results.add_waec', student_id=student.id, year=exam_year)})
-            # NECO only where the school uses it (any NECO results on record, or
-            # this candidate has a NECO number) — not every school sits NECO.
-            if (not any(r.exam_year == exam_year for r in neco)
-                    and (neco or student.neco_reg_number
-                         or db.session.query(NECOResult.id).first() is not None)):
+            if not any(r.exam_year == exam_year for r in neco):
                 missing.append({'label': 'NECO', 'sub': 'neco_create',
                                 'url': url_for('results.add_neco', student_id=student.id, year=exam_year)})
             if not any(r.exam_year == exam_year for r in jamb):
