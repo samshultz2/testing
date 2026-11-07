@@ -169,13 +169,40 @@
 /* keep the dashboard within the viewport width on a phone */
 #mj-app{max-width:100%}
 #mj-app .card{min-width:0}
+/* Results export dialog (same design as the WAEC / JAMB export dialogs) */
+.mjx-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100000;padding:.5rem;overflow-y:auto}
+.mjx-dialog{background:var(--bg-card,#fff);color:var(--text-primary,#0f172a);border-radius:12px;max-width:520px;margin:1rem auto;max-height:calc(100vh - 2rem);overflow-y:auto;box-shadow:0 20px 50px rgba(15,23,42,.3)}
+.mjx-head{padding:1rem;border-bottom:1px solid var(--border-color,#eee);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--bg-card,#fff);z-index:1}
+.mjx-head h3{margin:0;font-size:1rem}.mjx-head h3 i{color:var(--primary)}
+.mjx-x{background:none;border:none;font-size:1.5rem;cursor:pointer;color:var(--text-muted,#666);line-height:1}
+.mjx-body{padding:1rem}
+.mjx-label{font-size:.85rem;font-weight:600;margin:0 0 .5rem}
+.mjx-grid3,.mjx-grid2{display:grid;gap:.5rem;margin-bottom:1rem}
+.mjx-grid3{grid-template-columns:repeat(3,1fr)}.mjx-grid2{grid-template-columns:1fr 1fr}
+.mjx-opt{display:flex;align-items:center;gap:.45rem;padding:.65rem;background:var(--gray-50,#f8f9fa);border:2px solid var(--border-color,#ddd);border-radius:8px;cursor:pointer;font-size:.82rem;font-weight:500}
+.mjx-opt.on{border-color:var(--primary);background:var(--primary-alpha,rgba(13,110,253,.08))}
+.mjx-size{display:inline-flex;background:var(--gray-50,#f8f9fa);border:1px solid var(--border-color,#ddd);border-radius:10px;padding:3px;gap:2px;margin-bottom:1rem}
+.mjx-size label{cursor:pointer}
+.mjx-size input{position:absolute;opacity:0;pointer-events:none}
+.mjx-size span{display:block;padding:.4rem .9rem;border-radius:7px;font-size:.8rem;font-weight:600;color:var(--text-muted)}
+.mjx-size input:checked+span{background:var(--bg-card,#fff);color:var(--primary);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.mjx-size input:focus-visible+span{outline:2px solid var(--primary);outline-offset:1px}
+.mjx-checks{display:grid;grid-template-columns:1fr 1fr;gap:.25rem;margin-bottom:1rem}
+.mjx-check{display:flex;align-items:center;gap:.5rem;padding:.4rem .5rem;background:var(--gray-50);border-radius:4px;cursor:pointer;font-size:.8rem}
+.mjx-check:hover{background:var(--border-color)}
+.mjx-check input{margin:0}
+.mjx-note{font-size:.75rem;color:var(--text-muted);margin:0 0 1rem}
+.mjx-actions{display:flex;gap:.5rem}.mjx-actions .btn{flex:1}
+@media (max-width:600px){
+  .mjx-backdrop{padding:0}
+  .mjx-dialog{position:absolute;left:0;right:0;bottom:0;margin:0;max-width:none;border-radius:18px 18px 0 0;max-height:92vh}
+  .mjx-actions{position:sticky;bottom:0;background:var(--bg-card,#fff);padding:.6rem 0 .25rem}
+}
 </style>
 {% endblock %}
 {% block content %}
 <div id="mj-app"><p class="text-muted" style="padding:2rem 0">Loading…</p></div>
 <script type="application/json" id="mj-data">{{ mj_json|tojson }}</script>
 <script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
-<script src="{{ url_for('static', filename='vendor/html2canvas.min.js') }}"></script>
-<script src="{{ url_for('static', filename='vendor/jspdf.umd.min.js') }}"></script>
 <script src="{{ bundle_url('js/react/mock-jamb-app.js') }}" defer></script>
 {% endblock %}

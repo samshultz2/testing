@@ -1,0 +1,159 @@
+{# Shared results export dialog (PDF / Image / Word, text size, Students List
+   or Subjects Analysis, column picker) — the design used by the WAEC / NECO,
+   JSS3 / Basic, JAMB, Mock JAMB and Mock WAEC exports.
+   Context: rx_title, rx_url (export endpoint; may already carry a query),
+   rx_cols {'students': [(key, label, default)], 'subjects': [...]},
+   rx_stem (download file name stem), rx_range (max score → show a score
+   range filter) and rx_note (optional). #}
+<div id="rxExportModal" class="rxe-backdrop" style="display:none" role="dialog" aria-modal="true" aria-labelledby="rxExportTitle">
+  <div class="rxe-dialog">
+    <div class="rxe-head">
+      <h3 id="rxExportTitle"><i class="fas fa-file-export"></i> {{ rx_title }}</h3>
+      <button type="button" class="rxe-x" data-call="rxCloseExport" aria-label="Close">&times;</button>
+    </div>
+    <div class="rxe-body">
+      <div class="rxe-label">Format:</div>
+      <div class="rxe-grid3">
+        <label class="rxe-opt"><input type="radio" name="rxFormat" value="pdf" checked><span><i class="fas fa-file-pdf"></i> PDF</span></label>
+        <label class="rxe-opt"><input type="radio" name="rxFormat" value="image"><span><i class="fas fa-image"></i> Image</span></label>
+        <label class="rxe-opt"><input type="radio" name="rxFormat" value="word"><span><i class="fas fa-file-word"></i> Word</span></label>
+      </div>
+      <div class="rxe-label">Text size:</div>
+      <div class="rxe-size" role="radiogroup" aria-label="Text size">
+        <label><input type="radio" name="rxSize" value="s"><span>Small</span></label>
+        <label><input type="radio" name="rxSize" value="m" checked><span>Medium</span></label>
+        <label><input type="radio" name="rxSize" value="l"><span>Large</span></label>
+      </div>
+      <div class="rxe-label">Export Type:</div>
+      <div class="rxe-grid2">
+        <label class="rxe-opt"><input type="radio" name="rxType" value="students" checked data-call="rxToggleExport" data-on="change"><span>Students List</span></label>
+        <label class="rxe-opt"><input type="radio" name="rxType" value="subjects" data-call="rxToggleExport" data-on="change"><span>Subjects Analysis</span></label>
+      </div>
+      <div id="rxExpStudents">
+        <div class="rxe-label">Student Columns:</div>
+        <div class="rxe-checks">
+          <label class="exp-check"><input type="checkbox" checked disabled><span>Name (required)</span></label>
+          {% for key, label, on in rx_cols.students %}
+          <label class="exp-check"><input type="checkbox" data-rx-col="students" value="{{ key }}" {{ 'checked' if on }}><span>{{ label }}</span></label>
+          {% endfor %}
+        </div>
+      </div>
+      <div id="rxExpSubjects" style="display:none">
+        <div class="rxe-label">Subject Columns:</div>
+        <div class="rxe-checks">
+          <label class="exp-check"><input type="checkbox" checked disabled><span>Subject (required)</span></label>
+          {% for key, label, on in rx_cols.subjects %}
+          <label class="exp-check"><input type="checkbox" data-rx-col="subjects" value="{{ key }}" {{ 'checked' if on }}><span>{{ label }}</span></label>
+          {% endfor %}
+        </div>
+      </div>
+      {% if rx_range %}
+      <div class="rxe-label">Only include total scores in this range <span class="rxe-opt-hint">(optional)</span>:</div>
+      <div class="rxe-grid2">
+        <input type="number" class="form-control" id="rxMin" min="0" max="{{ rx_range }}" placeholder="Min, e.g. 200" aria-label="Minimum score">
+        <input type="number" class="form-control" id="rxMax" min="0" max="{{ rx_range }}" placeholder="Max, e.g. 300" aria-label="Maximum score">
+      </div>
+      {% endif %}
+      {% if rx_note %}<p class="rxe-note"><i class="fas fa-circle-info"></i> {{ rx_note }}</p>{% endif %}
+      <div class="rxe-actions">
+        <button type="button" data-call="rxCloseExport" class="btn btn-secondary">Cancel</button>
+        <button type="button" data-call="rxGenerateExport" class="btn btn-primary"><i class="fas fa-download"></i> Export</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.rxe-backdrop{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100000;padding:.5rem;overflow-y:auto}
+.rxe-dialog{background:var(--bg-card,#fff);color:var(--text-primary,#0f172a);border-radius:12px;max-width:520px;margin:1rem auto;max-height:calc(100vh - 2rem);overflow-y:auto;box-shadow:0 20px 50px rgba(15,23,42,.3)}
+.rxe-head{padding:1rem;border-bottom:1px solid var(--border-color,#eee);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--bg-card,#fff);z-index:1}
+.rxe-head h3{margin:0;font-size:1rem}
+.rxe-head h3 i{color:var(--primary)}
+.rxe-x{background:none;border:none;font-size:1.5rem;cursor:pointer;color:var(--text-muted,#666);line-height:1}
+.rxe-body{padding:1rem}
+.rxe-label{font-size:.85rem;font-weight:600;margin:0 0 .5rem}
+.rxe-grid3,.rxe-grid2{display:grid;gap:.5rem;margin-bottom:1rem}
+.rxe-grid3{grid-template-columns:repeat(3,1fr)}.rxe-grid2{grid-template-columns:1fr 1fr}
+.rxe-opt{display:flex;align-items:center;gap:.45rem;padding:.65rem;background:var(--gray-50,#f8f9fa);border:2px solid var(--border-color,#ddd);border-radius:8px;cursor:pointer;font-size:.82rem;font-weight:500}
+.rxe-opt:has(input:checked){border-color:var(--primary);background:var(--primary-alpha,rgba(13,110,253,.08))}
+.rxe-checks{display:grid;grid-template-columns:1fr 1fr;gap:.25rem;margin-bottom:1rem}
+.rxe-dialog .exp-check{display:flex;align-items:center;gap:.5rem;padding:.4rem .5rem;background:var(--gray-50);border-radius:4px;cursor:pointer;font-size:.8rem}
+.rxe-dialog .exp-check:hover{background:var(--border-color)}
+.rxe-dialog .exp-check input{margin:0}
+.rxe-size{display:inline-flex;background:var(--gray-50,#f8f9fa);border:1px solid var(--border-color,#ddd);border-radius:10px;padding:3px;gap:2px;margin-bottom:1rem}
+.rxe-size label{cursor:pointer}
+.rxe-size input{position:absolute;opacity:0;pointer-events:none}
+.rxe-size span{display:block;padding:.4rem .9rem;border-radius:7px;font-size:.8rem;font-weight:600;color:var(--text-muted)}
+.rxe-size input:checked+span{background:var(--bg-card,#fff);color:var(--primary);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.rxe-size input:focus-visible+span{outline:2px solid var(--primary);outline-offset:1px}
+.rxe-opt-hint{font-weight:400;color:var(--text-muted)}
+.rxe-grid2 input.form-control{min-width:0}
+.rxe-note{font-size:.75rem;color:var(--text-muted);margin:0 0 1rem}
+.rxe-actions{display:flex;gap:.5rem}.rxe-actions .btn{flex:1}
+@media (max-width:600px){
+  .rxe-backdrop{padding:0}
+  .rxe-dialog{position:absolute;left:0;right:0;bottom:0;margin:0;max-width:none;border-radius:18px 18px 0 0;max-height:92vh}
+  .rxe-actions{position:sticky;bottom:0;background:var(--bg-card,#fff);padding:.6rem 0 .25rem}
+  .rxe-dialog .exp-check{font-size:.78rem;padding:.4rem}
+}
+</style>
+
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var URL_BASE = {{ rx_url|tojson }}, STEM = {{ (rx_stem or 'results')|tojson }};
+  function modal() { return document.getElementById('rxExportModal'); }
+  window.rxOpenExport = function () {
+    var m = modal();
+    if (m.parentNode !== document.body) document.body.appendChild(m);   // above sticky headers
+    m.style.display = 'block';
+  };
+  window.rxCloseExport = function () { modal().style.display = 'none'; };
+  window.rxToggleExport = function () {
+    var t = document.querySelector('input[name="rxType"]:checked').value;
+    document.getElementById('rxExpStudents').style.display = t === 'students' ? 'block' : 'none';
+    document.getElementById('rxExpSubjects').style.display = t === 'subjects' ? 'block' : 'none';
+  };
+  modal().addEventListener('click', function (e) { if (e.target === this) window.rxCloseExport(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && modal()) window.rxCloseExport(); });
+  function cols(type) {
+    return Array.prototype.map.call(
+      document.querySelectorAll('input[data-rx-col="' + type + '"]:checked'), function (el) { return el.value; });
+  }
+  function saveBlob(blob, name) {
+    var u = URL.createObjectURL(blob);
+    var a = document.createElement('a'); a.href = u; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(u); }, 4000);
+  }
+  function downloadImages(url, stem) {
+    var page = 1, total = 1;
+    function next() {
+      return fetch(url + '&page=' + page, { credentials: 'same-origin' }).then(function (res) {
+        if (!res.ok) return;
+        total = parseInt(res.headers.get('X-Total-Pages') || '1', 10) || 1;
+        return res.blob().then(function (blob) {
+          saveBlob(blob, stem + (total > 1 ? ('_p' + page) : '') + '.png');
+          page += 1;
+          if (page <= total) return next();
+        });
+      });
+    }
+    return next();
+  }
+  window.rxGenerateExport = function () {
+    var type = document.querySelector('input[name="rxType"]:checked').value;
+    var format = document.querySelector('input[name="rxFormat"]:checked').value;
+    var sz = document.querySelector('input[name="rxSize"]:checked');
+    var p = new URLSearchParams();
+    p.set('format', format); p.set('type', type); p.set('cols', cols(type).join(','));
+    p.set('size', sz ? sz.value : 'm');
+    var mn = document.getElementById('rxMin'), mx = document.getElementById('rxMax');
+    if (mn && mn.value !== '') p.set('min_score', mn.value);
+    if (mx && mx.value !== '') p.set('max_score', mx.value);
+    var url = URL_BASE + (URL_BASE.indexOf('?') === -1 ? '?' : '&') + p.toString();
+    window.rxCloseExport();
+    if (format === 'image') downloadImages(url, STEM + (type === 'subjects' ? '_subjects' : ''));
+    else window.location.href = url;
+  };
+})();
+</script>

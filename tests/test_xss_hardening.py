@@ -81,9 +81,9 @@ def test_client_sinks_are_escaped():
     assert 'esc(r.name)' in monitor and 'esc(r.sid)' in monitor
     assert '>\'+r.name+\'' not in monitor           # no raw name interpolation
 
+    # JAMB exports are built on the server too: no raw name sink client-side.
     jamb = _read('templates/results/jamb_dashboard.html')
-    assert 'window.escapeHtml(s.name)' in jamb
-    assert '${s.name}' not in jamb
+    assert '${s.name}' not in jamb and 'html2canvas' not in jamb
 
     # The WAEC dashboard builds its exports on the server, so no student name is
     # interpolated into client-side HTML — assert there is no raw name sink.

@@ -22,7 +22,8 @@
         <a href="{{ url_for('mock_waec.paste_entry', exam_id=exam.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-paste"></i> Paste / CSV</a>
         {% endif %}
         {% if can_write_sub('external_exams', 'mock_waec_results_export') %}
-        <a href="{{ url_for('mock_waec.export_results', exam_id=exam.id) }}" class="btn btn-success btn-sm"><i class="fas fa-file-excel"></i> Export</a>
+        <button type="button" class="btn btn-secondary btn-sm" data-call="rxOpenExport"><i class="fas fa-file-export"></i> Export</button>
+        <a href="{{ url_for('mock_waec.export_results', exam_id=exam.id) }}" class="btn btn-success btn-sm" data-native download><i class="fas fa-file-excel"></i> Excel</a>
         {% endif %}
         {% if can_write_sub('external_exams', 'mock_waec_exam_edit') %}
         <a href="{{ url_for('mock_waec.edit_exam', exam_id=exam.id) }}" class="btn btn-warning btn-sm" title="Edit exam"><i class="fas fa-pen"></i> Edit</a>
@@ -112,5 +113,8 @@
         {% endif %}
     </div>
 </div></div></div>
+{% endif %}
+{% if can_write_sub('external_exams', 'mock_waec_results_export') %}
+{% with rx_title='Export ' ~ exam.display_name ~ ' Results', rx_url=url_for('mock_waec.export_results', exam_id=exam.id), rx_cols=waec_export_cols, rx_stem='mock_waec_' ~ exam.exam_number, rx_note='Grades follow the WAEC scale: A1–B3 distinction, C4–C6 credit, D7–E8 pass, F9 fail.' %}{% include "components/results_export.html" %}{% endwith %}
 {% endif %}
 {% endblock %}

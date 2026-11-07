@@ -178,7 +178,9 @@ def jamb_list():
         _branches = Branch.query.all()
         export_branch = _branches[0].name if len(_branches) == 1 else 'All Branches'
 
+    from utils.exam_results_doc import SCORE_COLS
     return render_template('results/jamb_dashboard.html',
+        jamb_export_cols=SCORE_COLS,
         students=students_data,
         years=years,
         selected_year=exam_year,
@@ -615,6 +617,45 @@ def api_jamb_score_distribution(year):
     return jsonify(distribution)
 
 
+def _jamb_branded_export(year, fmt):
+    """JAMB results as the branded Students List / Subject Analysis document
+    (utils.exam_results_doc) in PDF, image or Word."""
+    from collections import defaultdict
+    from utils import exam_results_doc as ERD
+    etype = 'subjects' if request.args.get('type') == 'subjects' else 'students'
+    cols = ERD.picked(request.args.get('cols'), ERD.SCORE_COLS[etype])
+    q = scope_by_student(JAMBResult.query.filter_by(exam_year=year), JAMBResult)
+    lo, hi = request.args.get('min_score', type=int), request.args.get('max_score', type=int)
+    if lo is not None:
+        q = q.filter(JAMBResult.total_score >= lo)
+    if hi is not None:
+        q = q.filter(JAMBResult.total_score <= hi)
+    results = q.options(joinedload(JAMBResult.student)).all()
+    ctx = ERD.export_ctx('JAMB RESULTS', 'UTME %s' % year)
+    if etype == 'subjects':
+        by = defaultdict(list)
+        for r in results:
+            for s, v in ERD.jamb_pairs(r):
+                by[s].append(v)
+        years = [y for (y,) in db.session.query(JAMBResult.exam_year).distinct()]
+        prev = max((y for y in years if y < year), default=None)
+        prev_avg = {}
+        if prev:
+            pb = defaultdict(list)
+            for r in scope_by_student(JAMBResult.query.filter_by(exam_year=prev), JAMBResult).all():
+                for s, v in ERD.jamb_pairs(r):
+                    if v is not None:
+                        pb[s].append(v)
+            prev_avg = {s: sum(v) / len(v) for s, v in pb.items() if v}
+        ctx['candidates'] = len(results)
+        doc = ERD.score_subjects_doc(ctx, by, cols, prev_avg, prev)
+    else:
+        cands = [{'name': r.student.full_name, 'student_id': r.student.student_id, 'total': r.total_score,
+                  'results': ERD.jamb_pairs(r)} for r in results]
+        doc = ERD.score_students_doc(ctx, cands, cols)
+    return ERD.file_response(doc, fmt, 'jamb_%s_%s' % ('subject_analysis' if etype == 'subjects' else 'results', year))
+
+
 @results_bp.route('/jamb/export')
 @login_required
 @rate_limited('export', max_requests=40, window_minutes=10)
@@ -629,6 +670,10 @@ def export_jamb():
         flash('Please select a year to export.', 'error')
         return redirect(url_for('results.jamb_list'))
     log_action('data.export_results', detail=f'JAMB {year}')
+
+    fmt = request.args.get('format', 'excel')
+    if fmt in ('pdf', 'image', 'word'):
+        return _jamb_branded_export(year, fmt)
 
     results = (scope_by_student(JAMBResult.query.filter_by(exam_year=year), JAMBResult)
                .options(joinedload(JAMBResult.student)).join(Student)

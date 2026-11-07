@@ -435,29 +435,34 @@ function ViewExam({ d, notify }) {
     if (r.ok) nav.go(r.redirect); else notify('error', r.error || 'Could not delete.');
   };
 
+  // Every format is the server's branded results document (same design as the
+  // JAMB / WAEC exports); images arrive one A4 page per request.
   const doExport = async (opts) => {
     setExporting(false);
-    const node = buildExportNode(d, st, opts);
-    document.body.appendChild(node);
+    const p = new URLSearchParams({ format: opts.format, type: opts.type, cols: opts.cols.join(','), size: opts.size });
+    if (filters.min_score !== '' && filters.min_score != null) p.set('min_score', filters.min_score);
+    if (filters.max_score !== '' && filters.max_score != null) p.set('max_score', filters.max_score);
+    const url = d.urls.export + (d.urls.export.includes('?') ? '&' : '?') + p.toString();
+    if (opts.format !== 'image') { window.location.href = url; return; }
+    const stem = 'mock_jamb_' + (opts.type === 'subjects' ? 'subject_analysis' : 'results');
     try {
-      const root = node.firstChild;
-      const canvas = await window.html2canvas(root, { scale: opts.quality, backgroundColor: '#ffffff' });
-      // Break A4 pages on real row boundaries so no student row is cut in half.
-      const breaks = mjRowBreaks(root, canvas.width / root.offsetWidth);
-      const pages = mjSliceA4(canvas, breaks);
-      const base = (d.exam.display_name || 'mock-jamb').replace(/[^\w-]+/g, '_');
-      if (opts.format === 'pdf') {
-        canvasPagesToPdf(pages, base + '.pdf');
-      } else {
-        setSaveImg({ pages, name: base });
-      }
+      let page = 1, total = 1;
+      do {
+        const res = await fetch(url + '&page=' + page, { credentials: 'same-origin' });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        total = parseInt(res.headers.get('X-Total-Pages') || '1', 10) || 1;
+        const blob = await res.blob();
+        const u = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = u; a.download = stem + (total > 1 ? '_p' + page : '') + '.png';
+        document.body.appendChild(a); a.click(); a.remove();
+        setTimeout(() => URL.revokeObjectURL(u), 4000);
+        page += 1;
+      } while (page <= total);
     } catch (err) {
-      notify('error', 'Could not generate ' + (opts.format === 'pdf' ? 'PDF' : 'image') + '.');
-    } finally {
-      document.body.removeChild(node);
+      notify('error', 'Could not generate the image.');
     }
   };
-  const [saveImg, setSaveImg] = useState(null);
 
   const actions = (
     <>
@@ -467,7 +472,7 @@ function ViewExam({ d, notify }) {
       {d.urls.questions && <a href={d.urls.questions} className="btn btn-primary btn-sm" title="Question bank (online sitting)" data-native><i aria-hidden="true" className="fas fa-pen-to-square" /></a>}
       {d.urls.items && <a href={d.urls.items} className="btn btn-info btn-sm" title="Item &amp; topic analysis (online sitting)" data-native><i aria-hidden="true" className="fas fa-microscope" /></a>}
       {d.urls.deep && <a href={d.urls.deep} className="btn btn-info btn-sm" title="Deep analytics"><i aria-hidden="true" className="fas fa-brain" /></a>}
-      {d.results.length > 0 && <button onClick={() => setExporting(true)} className="btn btn-secondary btn-sm" title="HD Image"><i aria-hidden="true" className="fas fa-image" /></button>}
+      {d.results.length > 0 && canWrite(d, 'mock_jamb_results_export') && <button onClick={() => setExporting(true)} className="btn btn-secondary btn-sm" title="Export PDF, image or Word"><i aria-hidden="true" className="fas fa-file-export" /></button>}
       {canWrite(d, 'mock_jamb_exam_edit') && <a href={d.urls.edit} className="btn btn-warning btn-sm" title="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>}
       <a href={d.urls.index} className="btn btn-secondary btn-sm" title="Back"><i aria-hidden="true" className="fas fa-arrow-left" /></a>
     </>
@@ -593,237 +598,73 @@ function ViewExam({ d, notify }) {
       </div>
       )}
 
-      {exporting && <ExportModal onClose={() => setExporting(false)} onGenerate={doExport}
+      {exporting && <ExportModal onClose={() => setExporting(false)} onGenerate={doExport} spec={d.export_cols}
                                  hasSubjects={!!(st && st.subject_analysis && st.subject_analysis.length)} />}
-      {saveImg && <SaveModal pages={saveImg.pages} name={saveImg.name} onClose={() => setSaveImg(null)} />}
     </>
   );
 }
 
-function ExportModal({ onClose, onGenerate, hasSubjects }) {
-  const [opts, setOpts] = useState({ format: 'image', type: 'students',
-    rank: true, studentId: true, subjects: true, level: false,
-    summary: true, distribution: true, timestamp: true,
-    subjCount: true, subjAvg: true, subjMax: true, subjMin: true, subjThresholds: true,
-    quality: 3 });
-  const set = (k, v) => setOpts((o) => ({ ...o, [k]: v }));
-  const Check = ({ k, label }) => (
-    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.5rem', background: 'var(--gray-50)', borderRadius: 6, marginBottom: '0.5rem', cursor: 'pointer' }}>
-      <input type="checkbox" checked={opts[k]} onChange={(e) => set(k, e.target.checked)} /><span style={{ fontSize: 'var(--text-sm)' }}>{label}</span></label>
+function ExportModal({ onClose, onGenerate, hasSubjects, spec }) {
+  const defaults = (t) => (spec[t] || []).filter((c) => c[2]).map((c) => c[0]);
+  const [format, setFormat] = useState('pdf');
+  const [size, setSize] = useState('m');
+  const [type, setType] = useState('students');
+  const [cols, setCols] = useState({ students: defaults('students'), subjects: defaults('subjects') });
+  const toggle = (k) => setCols((c) => ({ ...c, [type]: c[type].includes(k) ? c[type].filter((x) => x !== k) : [...c[type], k] }));
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  const Opt = ({ val, cur, set, children }) => (
+    <label className={'mjx-opt' + (cur === val ? ' on' : '')}>
+      <input type="radio" checked={cur === val} onChange={() => set(val)} /><span>{children}</span></label>
   );
-  const Radio = ({ group, val, label, icon }) => (
-    <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', padding: '0.6rem',
-      background: opts[group] === val ? 'var(--primary-050, #e3f2fd)' : 'var(--gray-50)',
-      border: '2px solid ' + (opts[group] === val ? 'var(--primary)' : 'var(--border-color)'),
-      borderRadius: 8, cursor: 'pointer', flex: 1 }}>
-      <input type="radio" checked={opts[group] === val} onChange={() => set(group, val)} />
-      <span style={{ fontSize: 'var(--text-sm)', fontWeight: 500 }}>{icon && <i aria-hidden="true" className={'fas ' + icon} />} {label}</span></label>
-  );
-  const isPdf = opts.format === 'pdf';
   return (
-    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', zIndex: 9999, padding: '1rem', overflowY: 'auto' }}>
-      <div style={{ background: 'var(--bg-card)', borderRadius: 12, maxWidth: 400, margin: '2rem auto', maxHeight: '90vh', overflowY: 'auto' }}>
-        <div style={{ padding: '1rem', borderBottom: '1px solid var(--border-light)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <h3 style={{ margin: 0, fontSize: 'var(--text-lg)' }}><i aria-hidden="true" className="fas fa-file-export" /> Export Results</h3>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 'var(--text-2xl)', cursor: 'pointer', color: 'var(--text-muted)' }}>&times;</button>
+    <div className="mjx-backdrop" role="dialog" aria-modal="true" aria-labelledby="mjxTitle"
+         onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="mjx-dialog">
+        <div className="mjx-head">
+          <h3 id="mjxTitle"><i aria-hidden="true" className="fas fa-file-export" /> Export Results</h3>
+          <button type="button" className="mjx-x" onClick={onClose} aria-label="Close">&times;</button>
         </div>
-        <div style={{ padding: '1rem' }}>
-          <p style={{ fontSize: 'var(--text-sm)', fontWeight: 600, marginBottom: '0.5rem' }}>Format:</p>
-          <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
-            <Radio group="format" val="image" label="Image" icon="fa-image" />
-            <Radio group="format" val="pdf" label="PDF" icon="fa-file-pdf" />
+        <div className="mjx-body">
+          <div className="mjx-label">Format:</div>
+          <div className="mjx-grid3">
+            <Opt val="pdf" cur={format} set={setFormat}><i aria-hidden="true" className="fas fa-file-pdf" /> PDF</Opt>
+            <Opt val="image" cur={format} set={setFormat}><i aria-hidden="true" className="fas fa-image" /> Image</Opt>
+            <Opt val="word" cur={format} set={setFormat}><i aria-hidden="true" className="fas fa-file-word" /> Word</Opt>
+          </div>
+          <div className="mjx-label">Text size:</div>
+          <div className="mjx-size" role="radiogroup" aria-label="Text size">
+            {[['s', 'Small'], ['m', 'Medium'], ['l', 'Large']].map(([v, l]) => (
+              <label key={v}><input type="radio" name="mjxSize" checked={size === v} onChange={() => setSize(v)} /><span>{l}</span></label>
+            ))}
           </div>
           {hasSubjects && (<>
-            <p style={{ fontSize: 'var(--text-sm)', fontWeight: 600, marginBottom: '0.5rem' }}>Export type:</p>
-            <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
-              <Radio group="type" val="students" label="Students" />
-              <Radio group="type" val="subjects" label="Subjects" />
+            <div className="mjx-label">Export Type:</div>
+            <div className="mjx-grid2">
+              <Opt val="students" cur={type} set={setType}>Students List</Opt>
+              <Opt val="subjects" cur={type} set={setType}>Subjects Analysis</Opt>
             </div>
           </>)}
-          {opts.type === 'students' ? (<>
-            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Columns:</p>
-            <div style={{ marginBottom: '1rem' }}>
-              <Check k="rank" label="Rank" /><Check k="studentId" label="Student ID" /><Check k="subjects" label="Subject Scores" /><Check k="level" label="Performance Level" /></div>
-          </>) : (<>
-            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Subject columns:</p>
-            <div style={{ marginBottom: '1rem' }}>
-              <Check k="subjCount" label="Candidates" /><Check k="subjAvg" label="Average" /><Check k="subjMax" label="Highest" /><Check k="subjMin" label="Lowest" /><Check k="subjThresholds" label="≥70 / ≥50 counts" /></div>
-          </>)}
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Stats to include:</p>
-          <div style={{ marginBottom: '1rem' }}>
-            <Check k="summary" label="Summary Stats" /><Check k="distribution" label="Score Distribution" /><Check k="timestamp" label="Timestamp" /></div>
-          <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', marginBottom: '0.5rem' }}>Quality:</p>
-          <select value={opts.quality} onChange={(e) => set('quality', parseInt(e.target.value, 10))}
-                  style={{ width: '100%', padding: '0.5rem', border: '1px solid var(--border-color)', borderRadius: 6, marginBottom: '1rem' }}>
-            <option value="2">Standard (2x)</option><option value="3">HD (3x)</option><option value="4">Ultra HD (4x)</option>
-          </select>
-          <button onClick={() => onGenerate(opts)} className="btn btn-primary" style={{ width: '100%' }}><i aria-hidden="true" className="fas fa-download" /> {isPdf ? 'Generate PDF' : 'Generate Image'}</button>
+          <div className="mjx-label">{type === 'students' ? 'Student Columns:' : 'Subject Columns:'}</div>
+          <div className="mjx-checks">
+            <label className="mjx-check"><input type="checkbox" checked disabled /><span>{type === 'students' ? 'Name & total score (required)' : 'Subject (required)'}</span></label>
+            {(spec[type] || []).map(([k, label]) => (
+              <label key={k} className="mjx-check"><input type="checkbox" checked={cols[type].includes(k)} onChange={() => toggle(k)} /><span>{label}</span></label>
+            ))}
+          </div>
+          <p className="mjx-note"><i aria-hidden="true" className="fas fa-circle-info" /> Subject scores are out of 100 and totals out of 400. Any score filter on this page is applied to the export.</p>
+          <div className="mjx-actions">
+            <button type="button" className="btn btn-secondary" onClick={onClose}>Cancel</button>
+            <button type="button" className="btn btn-primary" onClick={() => onGenerate({ format, size, type, cols: cols[type] })}>
+              <i aria-hidden="true" className="fas fa-download" /> Export</button>
+          </div>
         </div>
       </div>
     </div>
   );
-}
-
-function SaveModal({ pages, name, onClose }) {
-  const multi = pages.length > 1;
-  return (
-    <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.9)', zIndex: 10000, padding: '1rem', overflowY: 'auto' }}>
-      <div style={{ maxWidth: '100%', margin: '1rem auto', textAlign: 'center' }}>
-        <p style={{ color: 'white', marginBottom: '1rem' }}>
-          {multi ? `${pages.length} pages — tap “Download” on each (or long-press it) to save.`
-                 : 'Tap “Download” (or long-press the image) to save.'}</p>
-        <button onClick={onClose} style={{ padding: '0.6rem 2rem', background: '#dc3545', color: 'white', border: 'none', borderRadius: 8, fontWeight: 600, cursor: 'pointer' }}>Close</button>
-        {pages.map((src, i) => (
-          <div key={i} style={{ maxWidth: 760, margin: '16px auto 0' }}>
-            {multi && <div style={{ color: '#cbd5e1', fontSize: 12, margin: '0 0 4px 2px' }}>Page {i + 1} of {pages.length}</div>}
-            <a href={src} download={`${name}${multi ? '_p' + (i + 1) : ''}.png`} style={{ display: 'inline-block', marginBottom: 6, padding: '7px 16px', background: '#11998e', color: 'white', borderRadius: 6, fontSize: 13, textDecoration: 'none' }}><i aria-hidden="true" className="fas fa-download" /> Download</a>
-            <img src={src} alt={`Results page ${i + 1}`} style={{ maxWidth: '100%', borderRadius: 8, display: 'block', boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }} />
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// Row boundaries (canvas px) so page breaks never cut through a student row.
-function mjRowBreaks(root, scale) {
-  const top = root.getBoundingClientRect().top;
-  const breaks = [];
-  root.querySelectorAll('tr').forEach((r) => breaks.push(Math.round((r.getBoundingClientRect().bottom - top) * scale)));
-  return breaks;
-}
-
-// Slice a tall canvas into A4-portrait pages, breaking on row boundaries; the
-// leftover space below the last full row becomes a clean white bottom margin.
-function mjSliceA4(canvas, breaks) {
-  const w = canvas.width, pageH = Math.round(w * 297 / 210);
-  if (canvas.height <= pageH) return [canvas.toDataURL('image/png', 1.0)];
-  const sorted = (breaks || []).slice().sort((a, b) => a - b);
-  const pages = []; let y = 0;
-  while (y < canvas.height) {
-    let end = Math.min(y + pageH, canvas.height);
-    if (end < canvas.height) {
-      let best = -1;
-      for (let i = 0; i < sorted.length; i++) {
-        if (sorted[i] > y && sorted[i] <= end) best = sorted[i];
-        else if (sorted[i] > end) break;
-      }
-      if (best > y) end = best;
-    }
-    const sliceH = end - y;
-    const pc = document.createElement('canvas'); pc.width = w; pc.height = pageH;
-    const ctx = pc.getContext('2d');
-    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, pc.width, pc.height);
-    ctx.drawImage(canvas, 0, y, w, sliceH, 0, 0, w, sliceH);
-    pages.push(pc.toDataURL('image/png', 1.0)); y = end;
-  }
-  return pages;
-}
-
-// Build a PDF from pre-sliced A4 page images (each already A4-portrait).
-function canvasPagesToPdf(pages, filename) {
-  const JsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
-  const pdf = new JsPDF('p', 'mm', 'a4');
-  const pageW = pdf.internal.pageSize.getWidth();
-  const pageH = pdf.internal.pageSize.getHeight();
-  pages.forEach((data, i) => { if (i > 0) pdf.addPage(); pdf.addImage(data, 'PNG', 0, 0, pageW, pageH); });
-  pdf.save(filename);
-}
-
-// Build an off-screen node for html2canvas to snapshot (ported from the Jinja version).
-function buildExportNode(d, st, o) {
-  const wrap = document.createElement('div');
-  wrap.style.cssText = 'position:absolute;left:-9999px;width:700px;';
-  const dist = (st && st.distribution) || {};
-  const stats = (st && st.statistics) || {};
-  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-
-  // Masthead: school name + branch (kept in the green the page uses), then the
-  // exam name, date and session — same established pattern as JAMB/WAEC.
-  const masthead = (title) => `<div style="text-align:center;margin:0 0 10px 0;padding-bottom:8px;border-bottom:2px solid #11998e;">
-      <div style="font-size:18px;font-weight:800;color:#11998e;letter-spacing:.3px;line-height:1.2;">${esc((d.exam.school_name || '').toUpperCase())}</div>
-      ${d.exam.branch_name ? `<div style="font-size:12px;font-weight:700;color:#334155;margin-top:2px;">${esc(d.exam.branch_name.toUpperCase())}</div>` : ''}
-      <div style="font-size:13px;font-weight:700;color:#0f172a;margin-top:4px;">${esc(title)}</div>
-      <div style="font-size:11px;color:#666;margin-top:2px;">${esc(d.exam.exam_date)}${d.exam.session_name ? ' | ' + esc(d.exam.session_name) : ''}</div>
-    </div>`;
-
-  // Subjects-analysis export: one row per JAMB subject.
-  if (o.type === 'subjects') {
-    const rows = (st && st.subject_analysis) || [];
-    let sh = '<tr style="background:#11998e;color:white;"><th style="padding:6px;text-align:left;">Subject</th>';
-    if (o.subjCount) sh += '<th style="padding:6px;">N</th>';
-    if (o.subjAvg) sh += '<th style="padding:6px;">Avg</th>';
-    if (o.subjMax) sh += '<th style="padding:6px;">Max</th>';
-    if (o.subjMin) sh += '<th style="padding:6px;">Min</th>';
-    if (o.subjThresholds) sh += '<th style="padding:6px;">&ge;70</th><th style="padding:6px;">&ge;50</th>';
-    sh += '</tr>';
-    let sb = '';
-    rows.forEach((r, i) => {
-      const bg = i % 2 === 0 ? '#fff' : '#f8f9fa';
-      const ac = r.average >= 70 ? '#28a745' : r.average >= 50 ? '#856404' : '#dc3545';
-      sb += `<tr style="background:${bg};"><td style="padding:5px;font-size:10px;font-weight:500;">${esc(r.subject)}</td>`;
-      if (o.subjCount) sb += `<td style="padding:5px;text-align:center;">${r.count}</td>`;
-      if (o.subjAvg) sb += `<td style="padding:5px;text-align:center;font-weight:bold;color:${ac};">${r1(r.average)}</td>`;
-      if (o.subjMax) sb += `<td style="padding:5px;text-align:center;color:#28a745;">${r.max}</td>`;
-      if (o.subjMin) sb += `<td style="padding:5px;text-align:center;color:#dc3545;">${r.min}</td>`;
-      if (o.subjThresholds) sb += `<td style="padding:5px;text-align:center;">${r.above_70}</td><td style="padding:5px;text-align:center;">${r.above_50}</td>`;
-      sb += '</tr>';
-    });
-    const sfoot = o.timestamp ? `Generated: ${new Date().toLocaleString()}` : '';
-    wrap.innerHTML = `<div style="padding:12px;background:white;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-      ${masthead(d.exam.display_name + ' — Subject Analysis')}
-      ${o.summary && st ? `<p style="text-align:center;color:#666;margin:0 0 10px 0;font-size:11px;">${st.student_count} students</p>` : ''}
-      <table style="width:100%;border-collapse:collapse;font-size:11px;"><thead>${sh}</thead><tbody>${sb}</tbody></table>
-      <p style="text-align:center;margin:8px 0 0 0;color:#999;font-size:9px;">${sfoot}</p>
-    </div>`;
-    return wrap;
-  }
-
-  let thead = '<tr style="background:#11998e;color:white;">';
-  if (o.rank) thead += '<th style="padding:6px;text-align:center;">#</th>';
-  thead += '<th style="padding:6px;">Name</th>';
-  if (o.studentId) thead += '<th style="padding:6px;">ID</th>';
-  thead += '<th style="padding:6px;text-align:center;">Score</th>';
-  if (o.subjects) thead += '<th style="padding:6px;text-align:center;">S1</th><th style="padding:6px;text-align:center;">S2</th><th style="padding:6px;text-align:center;">S3</th><th style="padding:6px;text-align:center;">S4</th>';
-  if (o.level) thead += '<th style="padding:6px;text-align:center;">Level</th>';
-  thead += '</tr>';
-
-  let tbody = '';
-  d.results.forEach((r, i) => {
-    const bg = i % 2 === 0 ? '#fff' : '#f8f9fa';
-    const sc = scoreColor(r.total_score);
-    tbody += `<tr style="background:${bg};">`;
-    if (o.rank) tbody += `<td style="padding:7px 6px;text-align:center;font-weight:bold;font-size:18px;">${r.rank}</td>`;
-    tbody += `<td style="padding:7px 6px;font-size:18px;font-weight:500;">${esc(r.student.full_name)}</td>`;
-    if (o.studentId) tbody += `<td style="padding:7px 6px;font-size:13px;color:#666;">${esc(r.student.student_id)}</td>`;
-    tbody += `<td style="padding:7px 6px;text-align:center;font-weight:bold;font-size:18px;color:${sc};">${r.total_score}</td>`;
-    // Per-subject cell (JAMB-style): short CAPITAL code above the score.
-    if (o.subjects) {
-      for (let k = 0; k < 4; k++) {
-        const s = r.subjects[k];
-        if (s) tbody += `<td style="padding:7px 6px;text-align:center;"><span style="font-size:11px;color:#666;font-weight:600;">${esc(s.code || String(s.name).substring(0, 3).toUpperCase())}</span><br><strong style="font-size:17px;">${s.score}</strong></td>`;
-        else tbody += '<td style="padding:7px 6px;text-align:center;color:#ccc;font-size:16px;">-</td>';
-      }
-    }
-    if (o.level) tbody += `<td style="padding:7px 6px;font-size:13px;text-align:center;">${esc(r.performance_level)}</td>`;
-    tbody += '</tr>';
-  });
-
-  const summary = o.summary
-    ? `Students: ${st ? st.student_count : 0} | Avg: ${r1(stats.average)} | High: ${stats.max || 0} | Low: ${stats.min || 0}` : '';
-  const below = (dist['180-199'] || 0) + (dist['0-179'] || 0);
-  const distHtml = o.distribution
-    ? `<div style="font-size:10px;font-weight:bold;margin-bottom:4px;">Distribution:</div><div style="font-size:9px;display:flex;gap:8px;flex-wrap:wrap;"><span style="color:var(--success);">300+: ${dist['300-400'] || 0}</span><span style="color:var(--info);">250-299: ${dist['250-299'] || 0}</span><span style="color:var(--warning);">200-249: ${dist['200-249'] || 0}</span><span style="color:var(--danger);">&lt;200: ${below}</span></div>` : '';
-  const footer = o.timestamp ? `Generated: ${new Date().toLocaleString()}` : '';
-
-  wrap.innerHTML = `<div style="padding:12px;background:white;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-    ${masthead(d.exam.display_name)}
-    <p style="text-align:center;color:#666;margin:0 0 10px 0;font-size:13px;">${summary}</p>
-    <table style="width:100%;border-collapse:collapse;font-size:14px;"><thead>${thead}</thead><tbody>${tbody}</tbody></table>
-    ${o.distribution ? `<div style="margin-top:10px;padding:8px;background:#f8f9fa;border-radius:6px;">${distHtml}</div>` : ''}
-    <p style="text-align:center;margin:8px 0 0 0;color:#999;font-size:9px;">${footer}</p>
-  </div>`;
-  return wrap;
 }
 
 // ---- Student progress ------------------------------------------------------

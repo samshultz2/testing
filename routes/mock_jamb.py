@@ -6,6 +6,7 @@ from flask import (Blueprint, request, redirect, url_for, flash, jsonify, Respon
                    render_template, current_app)
 from sqlalchemy.exc import IntegrityError
 from utils.helpers import get_active_term, get_active_session
+from utils.exam_results_doc import SCORE_COLS
 from datetime import datetime
 from io import BytesIO
 import os
@@ -346,6 +347,7 @@ def view_exam(exam_id):
         'filters': {'search': search, 'min_score': min_score or '', 'max_score': max_score or '',
                     'sort': sort_by, 'order': sort_order},
         'has_filter': bool(search or min_score or max_score),
+        'export_cols': SCORE_COLS,
         'urls': {'add': url_for('mock_jamb.add_result', exam_id=exam.id),
                  'bulk': url_for('mock_jamb.bulk_entry', exam_id=exam.id),
                  'export': url_for('mock_jamb.export_results', exam_id=exam.id),
@@ -2461,6 +2463,43 @@ def delete_mock_question(question_id):
 # EXPORT FUNCTIONALITY
 # =============================================================================
 
+def _branded_export(exam, results, fmt):
+    """The mock's results as the JAMB-style branded document (Students List or
+    Subject Analysis) in PDF, image or Word — same design as the JAMB export."""
+    from collections import defaultdict
+    from utils import exam_results_doc as ERD
+    etype = 'subjects' if request.args.get('type') == 'subjects' else 'students'
+    cols = ERD.picked(request.args.get('cols'), ERD.SCORE_COLS[etype])
+    lo, hi = request.args.get('min_score', type=int), request.args.get('max_score', type=int)
+    results = [r for r in results if (lo is None or r.total_score >= lo) and (hi is None or r.total_score <= hi)]
+    session = exam.session.name if getattr(exam, 'session', None) else ''
+    ctx = ERD.export_ctx('MOCK JAMB RESULTS', ('%s %s' % (exam.display_name, session)).strip())
+    if etype == 'subjects':
+        by = defaultdict(list)
+        for r in results:
+            for s_, v in ERD.jamb_pairs(r):
+                by[s_].append(v)
+        prev = (MockJAMBExam.query.filter(MockJAMBExam.id != exam.id, MockJAMBExam.branch_id == exam.branch_id,
+                                          MockJAMBExam.exam_date < exam.exam_date)
+                .order_by(MockJAMBExam.exam_date.desc()).first()) if exam.exam_date else None
+        prev_avg = {}
+        if prev:
+            pb = defaultdict(list)
+            for r in MockJAMBResult.query.filter_by(mock_exam_id=prev.id).all():
+                for s_, v in ERD.jamb_pairs(r):
+                    if v is not None:
+                        pb[s_].append(v)
+            prev_avg = {k: sum(v) / len(v) for k, v in pb.items() if v}
+        ctx['candidates'] = len(results)
+        doc = ERD.score_subjects_doc(ctx, by, cols, prev_avg, ('Mock %d' % prev.exam_number) if prev else None)
+    else:
+        cands = [{'name': r.student.full_name, 'student_id': r.student.student_id, 'total': r.total_score,
+                  'results': ERD.jamb_pairs(r)} for r in results]
+        doc = ERD.score_students_doc(ctx, cands, cols)
+    stem = 'mock_jamb_%s_%s' % (exam.exam_number, 'subject_analysis' if etype == 'subjects' else 'results')
+    return ERD.file_response(doc, fmt, stem)
+
+
 @mock_jamb_bp.route('/exam/<int:exam_id>/export')
 @login_required
 def export_results(exam_id):
@@ -2473,7 +2512,10 @@ def export_results(exam_id):
     results = (MockJAMBResult.query.filter_by(mock_exam_id=exam_id).join(Student)
                .options(contains_eager(MockJAMBResult.student))
                .order_by(MockJAMBResult.total_score.desc()).all())
-    
+    fmt = request.args.get('format', 'excel')
+    if fmt in ('pdf', 'image', 'word'):
+        return _branded_export(exam, results, fmt)
+
     wb = Workbook()
     ws = wb.active
     ws.title = "Mock JAMB Results"

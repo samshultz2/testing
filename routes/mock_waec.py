@@ -187,7 +187,9 @@ def view_exam(exam_id):
                          'results': sorted(info['results'], key=lambda x: x.subject),
                          **summary})
     students.sort(key=lambda s: (s['credits'], s['average_score'] or 0), reverse=True)
-    return render_template('mock_waec/view_exam.html', exam=exam, stats=stats, students=students)
+    from utils.exam_results_doc import WAEC_COLS
+    return render_template('mock_waec/view_exam.html', exam=exam, stats=stats, students=students,
+                           waec_export_cols=WAEC_COLS)
 
 
 # =============================================================================
@@ -1161,11 +1163,65 @@ def student_progress(student_id):
 # EXPORT
 # =============================================================================
 
+def _branded_export(exam, fmt):
+    """The mock's results as the WAEC-style branded document (Students List or
+    Subject Analysis) in PDF, image or Word — same design as the WAEC export."""
+    from collections import defaultdict
+    from utils import exam_results_doc as ERD
+    etype = 'subjects' if request.args.get('type') == 'subjects' else 'students'
+    spec = ERD.WAEC_COLS[etype]
+    cols = ERD.picked(request.args.get('cols'), spec)
+    results = (MockWAECResult.query.filter_by(mock_exam_id=exam.id)
+               .join(Student).options(contains_eager(MockWAECResult.student)).all())
+    results = [r for r in results if not r.is_absent and r.grade]
+    session = exam.session.name if exam.session else ''
+    ctx = ERD.export_ctx('MOCK WAEC RESULTS', ('%s %s' % (exam.display_name, session)).strip())
+    if etype == 'subjects':
+        by, scores = defaultdict(list), defaultdict(list)
+        for r in results:
+            by[r.subject].append(r.grade)
+            if r.score is not None:
+                scores[r.subject].append(r.score)
+        prev = (MockWAECExam.query.filter(MockWAECExam.id != exam.id, MockWAECExam.branch_id == exam.branch_id,
+                                          MockWAECExam.exam_date < exam.exam_date)
+                .order_by(MockWAECExam.exam_date.desc()).first()) if exam.exam_date else None
+        prev_rates = {}
+        if prev:
+            pg = defaultdict(list)
+            for r in MockWAECResult.query.filter_by(mock_exam_id=prev.id).all():
+                if not r.is_absent and r.grade:
+                    pg[r.subject].append(r.grade)
+            prev_rates = {k: round(sum(1 for g in v if ERD.WAEC_SCALE.kind(g) in ('d', 'c')) / len(v) * 100, 1)
+                          for k, v in pg.items() if v}
+        ctx['candidates'] = len({r.student_id for r in results})
+        doc = ERD.subjects_doc(ctx, by, cols, ERD.WAEC_SCALE, prev_rates,
+                               ('Mock %d' % prev.exam_number) if prev else None,
+                               mean_pct={k: round(sum(v) / len(v), 1) for k, v in scores.items() if v})
+    else:
+        legacy = {'a1': 'g:A1', 'b2': 'g:B2', 'b3': 'g:B3'}
+        cols = {legacy.get(c, c) for c in cols}
+        per = defaultdict(list)
+        for r in results:
+            per[r.student].append(r)
+        cands = []
+        for st, rs in per.items():
+            sc = [r.score for r in rs if r.score is not None]
+            cands.append({'name': st.full_name, 'student_id': st.student_id, 'gender': st.gender or '',
+                          'results': [(r.subject, r.grade) for r in rs],
+                          'avg_pct': round(sum(sc) / len(sc), 1) if sc else None})
+        doc = ERD.students_doc(ctx, cands, cols, ERD.WAEC_SCALE)
+    stem = 'mock_waec_%s_%s' % (exam.exam_number, 'subject_analysis' if etype == 'subjects' else 'results')
+    return ERD.file_response(doc, fmt, stem)
+
+
 @mock_waec_bp.route('/exam/<int:exam_id>/export')
 @login_required
 def export_results(exam_id):
     exam = db.get_or_404(MockWAECExam, exam_id)
     require_branch_access(exam.branch_id)
+    fmt = request.args.get('format', 'excel')
+    if fmt in ('pdf', 'image', 'word'):
+        return _branded_export(exam, fmt)
     wb = Workbook()
     ws = wb.active
     ws.title = 'Mock WAEC'

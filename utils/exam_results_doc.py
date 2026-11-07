@@ -377,6 +377,183 @@ def subjects_doc(ctx, by_subject, cols, scale, prev_rates=None, prev_year=None, 
 
 
 # --------------------------------------------------------------------------- #
+# Score-based exams (JAMB UTME / Mock JAMB): subject scores out of 100,
+# total out of 400 — same document design, score bands instead of grades.
+# --------------------------------------------------------------------------- #
+SCORE_KEY = [('70–100', 'd', 'Strong'), ('50–69', 'c', 'Good'), ('40–49', 'p', 'Fair'), ('0–39', 'f', 'Weak')]
+SCORE_BANDS = [('70+', 'd'), ('50–69', 'c'), ('40–49', 'p'), ('<40', 'f')]
+
+
+def score_kind(v):
+    if v is None:
+        return 'f'
+    return 'd' if v >= 70 else 'c' if v >= 50 else 'p' if v >= 40 else 'f'
+
+
+def score_level(total):
+    if total is None:
+        return ''
+    return ('Excellent' if total >= 300 else 'Very good' if total >= 250 else 'Good' if total >= 200
+            else 'Fair' if total >= 180 else 'Below 180')
+
+
+def score_students_doc(ctx, cands, cols):
+    """Students List for a score exam. ``cands``: name, student_id, total,
+    results [(subject, score)]. ``cols``: rank, student_id, subjects, level,
+    cutoff. ``ctx`` as for :func:`students_doc` plus ``cutoff`` (default 200)
+    and ``max_total`` (default 400)."""
+    from utils.broadsheet_export import abbreviate_subjects
+    cols = set(cols)
+    cut = ctx.get('cutoff') or 200
+    top = ctx.get('max_total') or 400
+    subjects = sorted({s for c in cands for s, _v in c['results'] if s})
+    codes, legend = abbreviate_subjects(subjects)
+    code_of = dict(zip(subjects, codes))
+    rows = sorted(cands, key=lambda c: (-(c.get('total') or 0), c['name'].lower()))
+    columns = []
+    if 'rank' in cols:
+        columns.append({'key': 'pos', 'label': 'Pos', 'kind': 'pos'})
+    columns.append({'key': 'name', 'label': 'Candidate', 'kind': 'name'})
+    columns.append({'key': 'total', 'label': 'Score', 'kind': 'frac'})
+    if 'subjects' in cols:
+        columns.append({'key': 'grades', 'label': 'Subject scores', 'kind': 'grades'})
+    if 'level' in cols:
+        columns.append({'key': 'level', 'label': 'Level', 'kind': 'text', 'center': True})
+    if 'cutoff' in cols:
+        columns.append({'key': 'cut', 'label': '%d+' % cut, 'kind': 'flag', 'yes': 'Yes', 'no': 'No'})
+    out = []
+    for i, c in enumerate(rows, 1):
+        sub = c.get('student_id') if 'student_id' in cols else ''
+        res = [(s, v) for s, v in c['results'] if s]
+        out.append({'pos': i, 'name': (c['name'], sub or ''), 'total': (c.get('total') or 0, top),
+                    'grades': [(code_of[s], '' if v is None else str(v), score_kind(v)) for s, v in res],
+                    'level': score_level(c.get('total')), 'cut': (c.get('total') or 0) >= cut})
+    totals = [c.get('total') or 0 for c in rows]
+    n = len(rows)
+    above = sum(1 for t in totals if t >= cut)
+    best = rows[0] if rows else None
+    kpis = [
+        {'v': str(n), 'l': 'Candidates', 's': '%d subject scores' % sum(len(c['results']) for c in rows)},
+        {'v': ('%.1f' % (sum(totals) / n)) if n else '—', 'l': 'Average score', 's': 'out of %d' % top},
+        {'v': str(max(totals)) if n else '—', 'l': 'Highest score', 's': best['name'] if best else ''},
+        {'v': '%.1f%%' % _pct(above, n), 'l': 'Scored %d and above' % cut, 's': '%d of %d candidates' % (above, n)},
+    ]
+    used = [x for x in legend if x[0] in {g[0] for r in out for g in r['grades']}]
+    bits = [ctx.get('cls'), ctx.get('detail'), 'ranked by total score']
+    return {
+        'type': 'students', 'school': ctx['school'], 'colors': ctx['colors'],
+        'generated': ctx.get('generated'), 'prepared_by': ctx.get('prepared_by'),
+        'doc_tag': ctx.get('tag') or 'EXAM RESULTS',
+        'title': '%s — Results' % ctx['exam'], 'subtitle': ' · '.join(b for b in bits if b),
+        'footer_title': ' · '.join(b for b in (ctx['exam'], ctx.get('cls')) if b),
+        'kpis': kpis, 'key': SCORE_KEY, 'key_title': 'SCORE KEY', 'columns': columns, 'rows': out,
+        'codes': used if 'subjects' in cols else [],
+    }
+
+
+def score_subjects_doc(ctx, by_subject, cols, prev_avg=None, prev_label=None):
+    """Subject Analysis for a score exam. ``by_subject``: {subject: [score…]}.
+    ``prev_avg``: {subject: average} of the previous sitting (``prev_label``).
+    ``cols``: total, bands, spread, avg, high, low, pass, delta, chart."""
+    from utils.broadsheet_export import abbreviate_subjects
+    cols = set(cols)
+    prev_avg = prev_avg or {}
+    rows = []
+    for subject, scores in by_subject.items():
+        scores = [v for v in scores if v is not None]
+        if not subject or not scores:
+            continue
+        n = len(scores)
+        k = {kk: sum(1 for v in scores if score_kind(v) == kk) for kk in KINDS}
+        avg = round(sum(scores) / n, 1)
+        rows.append({'subject': subject, 'core': (subject or '').strip().lower().startswith('use of english'),
+                     'n': n, 'k': k, 'avg': avg, 'hi': max(scores), 'lo': min(scores),
+                     'pass': _pct(k['d'] + k['c'], n),
+                     'delta': round(avg - prev_avg[subject], 1) if subject in prev_avg else None})
+    rows.sort(key=lambda r: (-r['avg'], r['subject']))
+    codes, _l = abbreviate_subjects([r['subject'] for r in rows])
+    for r, c in zip(rows, codes):
+        r['code'] = c
+    has_prev = any(r['delta'] is not None for r in rows)
+    columns = [{'key': 'rank', 'label': '#', 'kind': 'rank'},
+               {'key': 'subject', 'label': 'Subject', 'kind': 'subject'}]
+    if 'total' in cols:
+        columns.append({'key': 'n', 'label': 'Entries', 'kind': 'num'})
+    if 'bands' in cols:
+        for i, (label, _kk) in enumerate(SCORE_BANDS):
+            columns.append({'key': 'b%d' % i, 'label': label, 'kind': 'gcount', 'w': 27})
+    if 'spread' in cols:
+        columns.append({'key': 'spread', 'label': 'Spread', 'kind': 'spread'})
+    if 'avg' in cols:
+        columns.append({'key': 'avg', 'label': 'Avg', 'kind': 'decb'})
+    if 'high' in cols:
+        columns.append({'key': 'hi', 'label': 'High', 'kind': 'dec'})
+    if 'low' in cols:
+        columns.append({'key': 'lo', 'label': 'Low', 'kind': 'dec'})
+    if 'pass' in cols:
+        columns.append({'key': 'pass', 'label': '50+ %', 'kind': 'pct'})
+    if 'delta' in cols and has_prev:
+        columns.append({'key': 'delta', 'label': 'vs %s' % prev_label, 'kind': 'delta'})
+
+    def as_row(r, rank):
+        row = {'rank': rank, 'subject': (r['subject'], r['core']), 'n': r['n'],
+               'spread': tuple(r['k'][kk] for kk in KINDS), 'avg': '%.1f' % r['avg'],
+               'hi': str(r['hi']), 'lo': str(r['lo']), 'pass': r['pass'], 'delta': r['delta']}
+        for i, (_l, kk) in enumerate(SCORE_BANDS):
+            row['b%d' % i] = r['k'][kk]
+        return row
+
+    out = [as_row(r, i) for i, r in enumerate(rows, 1)]
+    N = sum(r['n'] for r in rows)
+    K = {kk: sum(r['k'][kk] for r in rows) for kk in KINDS}
+    all_avg = (sum(r['avg'] * r['n'] for r in rows) / N) if N else 0
+    overall_delta = None
+    if has_prev:
+        both = [r for r in rows if r['delta'] is not None]
+        nb = sum(r['n'] for r in both)
+        overall_delta = round(sum(r['delta'] * r['n'] for r in both) / nb, 1) if nb else None
+    total = {'rank': '', 'subject': ('All subjects', False), 'n': N,
+             'spread': tuple(K[kk] for kk in KINDS), 'avg': '%.1f' % all_avg,
+             'hi': str(max((r['hi'] for r in rows), default='')), 'lo': str(min((r['lo'] for r in rows), default='')),
+             'pass': _pct(K['d'] + K['c'], N), 'delta': overall_delta}
+    for i, (_l, kk) in enumerate(SCORE_BANDS):
+        total['b%d' % i] = K[kk]
+    kpis = [
+        {'v': str(len(rows)), 'l': 'Subjects', 's': '%d subject scores' % N},
+        {'v': '%.1f' % all_avg, 'l': 'Average subject score',
+         's': ('%s vs %s' % (_signed(overall_delta), prev_label)) if overall_delta is not None else 'out of 100'},
+        {'v': '%.1f%%' % _pct(K['d'], N), 'l': 'Scores of 70+', 's': '%d scores' % K['d']},
+        {'v': '%.1f%%' % _pct(K['f'], N), 'l': 'Scores below 40', 's': '%d scores' % K['f']},
+    ]
+    insights, chart = [], None
+    if 'chart' in cols and rows:
+        chart = [(r['code'], r['avg']) for r in rows]
+        best, worst = rows[0], rows[-1]
+        insights.append(('Strongest subject', best['subject'], 'average %.1f · %d scored 70+' % (best['avg'], best['k']['d'])))
+        if len(rows) > 1:
+            insights.append(('Needs attention', worst['subject'], 'average %.1f · %d below 40' % (worst['avg'], worst['k']['f'])))
+        imp = max((r for r in rows if r['delta'] is not None), key=lambda r: r['delta'], default=None)
+        if imp is not None and imp['delta'] > 0:
+            insights.append(('Most improved', imp['subject'], '%s on %s' % (_signed(imp['delta']), prev_label)))
+        else:
+            most = max(rows, key=lambda r: (r['k']['d'], r['avg']))
+            insights.append(('Most 70+ scores', most['subject'], '%d candidates' % most['k']['d']))
+    bits = [ctx.get('cls'), '%d candidates' % ctx['candidates'] if ctx.get('candidates') else None,
+            '%d subjects' % len(rows), 'ranked by average score',
+            ('compared with %s' % prev_label) if has_prev else None]
+    return {
+        'type': 'subjects', 'school': ctx['school'], 'colors': ctx['colors'],
+        'generated': ctx.get('generated'), 'prepared_by': ctx.get('prepared_by'),
+        'doc_tag': 'SUBJECT ANALYSIS',
+        'title': '%s — Subject Analysis' % ctx['exam'], 'subtitle': ' · '.join(b for b in bits if b),
+        'footer_title': ' · '.join(b for b in (ctx['exam'], ctx.get('cls')) if b),
+        'kpis': kpis, 'key': SCORE_KEY, 'key_title': 'SCORE KEY', 'columns': columns, 'rows': out, 'total': total,
+        'chart': chart, 'chart_title': 'Average score by subject (out of 100)', 'chart_suffix': '',
+        'insights': insights,
+    }
+
+
+# --------------------------------------------------------------------------- #
 # PDF
 # --------------------------------------------------------------------------- #
 def _grade_color(kind, C):
@@ -430,8 +607,10 @@ def render_pdf(doc):
     for col in doc['columns']:
         k = col['kind']
         w = {'pos': 28, 'rank': 18, 'num': 24, 'gcount': 14, 'frac': 38, 'dec': 34,
-             'flag': 44, 'pctb': 42, 'pct': 39, 'delta': 36, 'spread': 68}.get(k)
+             'flag': 44, 'pctb': 42, 'pct': 39, 'delta': 36, 'spread': 68, 'decb': 36}.get(k)
         w = w * K if w else w
+        if col.get('w'):
+            w = col['w'] * K
         if k == 'grades':
             w = per_row * chip_w + 8
         elif k == 'text':
@@ -455,9 +634,13 @@ def render_pdf(doc):
         need -= (per_row - nonlocal_rows) * chip_w
         fixed['grades'] -= (per_row - nonlocal_rows) * chip_w
         per_row = nonlocal_rows
-    if need > PW - 2 * margin:
+    # A subject analysis that is only slightly too wide stays portrait (the
+    # columns squeeze a little) so the table, chart and highlights share a page.
+    if need > PW - 2 * margin and (students or need > (PW - 2 * margin) * 1.2):
         PW, PH = landscape(A4)
     avail_w = PW - 2 * margin
+    if not students and name_need + sum(fixed.values()) > avail_w:
+        name_need = max(90 * K, min(name_need, avail_w - sum(fixed.values()) * .85))
     flex_w = max(name_need, min(avail_w - sum(fixed.values()), name_need + 50 * K))
     # Spare width goes to every column evenly (no single over-wide column);
     # too little width squeezes them evenly.
@@ -514,9 +697,12 @@ def render_pdf(doc):
         def draw(self):
             cv = self.canv
             cv.setFillColor(hx(MUTED)); cv.setFont(F['BodyBold'], 6.6)
-            cv.drawString(0, 5, 'GRADE KEY', charSpace=.8)
-            x = stringWidth('GRADE KEY', F['BodyBold'], 6.6) + 8 * .8 + 12
-            for label, kind in self.key:
+            title = doc.get('key_title') or 'GRADE KEY'
+            cv.drawString(0, 5, title, charSpace=.8)
+            x = stringWidth(title, F['BodyBold'], 6.6) + len(title) * .8 + 12
+            for item in self.key:
+                label, kind = item[0], item[1]
+                name = item[2] if len(item) > 2 else KIND_NAMES[kind]
                 w = stringWidth(label, F['Display'], 7.6) + 10
                 cv.setStrokeColor(hx(LINE)); cv.setFillColor(colors.white); cv.setLineWidth(.7)
                 cv.roundRect(x, 0, w, 14, 4, stroke=1, fill=1)
@@ -524,8 +710,8 @@ def render_pdf(doc):
                 cv.drawCentredString(x + w / 2, 4.2, label)
                 x += w + 5
                 cv.setFillColor(hx(INK2)); cv.setFont(F['Body'], 8)
-                cv.drawString(x, 4.2, KIND_NAMES[kind])
-                x += stringWidth(KIND_NAMES[kind], F['Body'], 8) + 14
+                cv.drawString(x, 4.2, name)
+                x += stringWidth(name, F['Body'], 8) + 14
 
     class Pos(Flowable):
         def __init__(self, n):
@@ -689,7 +875,7 @@ def render_pdf(doc):
                 cv.roundRect(x, base, bw, max(h, 1), min(3, bw / 3), stroke=0, fill=1)
                 cv.rect(x, base, bw, min(3, h), stroke=0, fill=1)
                 cv.setFillColor(hx(INK)); cv.setFont(F['BodyBold'], 7)
-                cv.drawCentredString(x + bw / 2, base + h + 3.5, '%d%%' % round(v) if n <= 12 else '%d' % round(v))
+                cv.drawCentredString(x + bw / 2, base + h + 3.5, ('%d' + doc.get('chart_suffix', '%%')) % round(v) if n <= 12 else '%d' % round(v))
                 cv.setFillColor(hx(MUTED)); cv.setFont(F['BodyBold'], 5.6 if n > 12 else 6.2)
                 cv.drawCentredString(x + bw / 2, base - 8, code)
 
@@ -749,6 +935,8 @@ def render_pdf(doc):
                 F['Display'], INK, n, fs * .76, MUTED, of), st_ctr)
         if k == 'dec':
             return Paragraph('<font name="%s">%s</font>' % (b if bold else F['Body'], esc(v)), st_ctr if students else st_rt)
+        if k == 'decb':
+            return Paragraph('<font name="%s" color="%s">%s</font>' % (F['Display'], INK, esc(v)), st_rt)
         if k == 'grades':
             return Grades(v)
         if k == 'flag':
@@ -770,7 +958,7 @@ def render_pdf(doc):
     def head(col):
         k = col['kind']
         st = st_head_c if k in ('pos', 'num', 'gcount', 'frac', 'flag', 'rank') or (students and k == 'dec') \
-            or col.get('center') else st_head_r if k in ('pctb', 'pct', 'dec', 'delta') else st_head
+            or col.get('center') else st_head_r if k in ('pctb', 'pct', 'dec', 'decb', 'delta') else st_head
         return Paragraph(esc(col['label'].upper()), st)
 
     data = [[head(c) for c in doc['columns']]]
@@ -959,17 +1147,18 @@ def render_docx(doc):
 
     p = para(space_after=4)
     p.paragraph_format.space_before = Pt(6)
-    r = p.add_run('GRADE KEY   '); r.bold = True; r.font.size = Pt(7); r.font.color.rgb = rgb(SLE.MUTED)
-    for label, kind in doc['key']:
+    r = p.add_run((doc.get('key_title') or 'GRADE KEY') + '   '); r.bold = True; r.font.size = Pt(7); r.font.color.rgb = rgb(SLE.MUTED)
+    for item in doc['key']:
+        label, kind = item[0], item[1]
         r = p.add_run(label + ' '); r.bold = True; r.font.size = Pt(8.5); r.font.color.rgb = rgb(_grade_color(kind, C))
-        r = p.add_run(KIND_NAMES[kind] + '    '); r.font.size = Pt(8.5); r.font.color.rgb = rgb(SLE.INK2)
+        r = p.add_run((item[2] if len(item) > 2 else KIND_NAMES[kind]) + '    '); r.font.size = Pt(8.5); r.font.color.rgb = rgb(SLE.INK2)
 
     cols = doc['columns']
     rows = list(doc['rows']) + ([doc['total']] if doc.get('total') else [])
     t = d.add_table(rows=1 + len(rows), cols=len(cols))
     t.alignment = WD_TABLE_ALIGNMENT.CENTER
     borders(t)
-    right = {'pctb', 'pct', 'delta'} | ({'dec'} if doc['type'] == 'subjects' else set())
+    right = {'pctb', 'pct', 'delta', 'decb'} | ({'dec'} if doc['type'] == 'subjects' else set())
     center = {'pos', 'rank', 'num', 'gcount', 'frac', 'flag'} | ({'dec'} if doc['type'] == 'students' else set())
     for cell, c in zip(t.rows[0].cells, cols):
         shade(cell, SLE.BG)
@@ -1085,3 +1274,58 @@ def file_response(doc, fmt, stem):
     return Response(pages[0], mimetype='image/png', headers={
         'Content-Disposition': 'attachment; filename="%s%s.png"' % (stem, suffix),
         'X-Total-Pages': str(total), 'Access-Control-Expose-Headers': 'X-Total-Pages'})
+
+
+# Export-dialog column choices for score exams (JAMB / Mock JAMB) and the
+# WAEC-graded mock: [(key, label, ticked by default)].
+SCORE_COLS = {
+    'students': [('rank', 'Position', True), ('student_id', 'Student ID', True),
+                 ('subjects', 'Subject scores', True), ('level', 'Performance level', False),
+                 ('cutoff', 'Scored 200+', True)],
+    'subjects': [('total', 'Candidates', True), ('bands', 'Score bands (70+ / 50–69 / 40–49 / <40)', True),
+                 ('spread', 'Score spread bar', True), ('avg', 'Average', True), ('high', 'Highest', True),
+                 ('low', 'Lowest', True), ('pass', '50+ %', True), ('delta', 'Change vs last sitting', True),
+                 ('chart', 'Chart & highlights', True)],
+}
+
+WAEC_COLS = {
+    'students': [('rank', 'Position', True), ('student_id', 'Student ID', True)]
+                + [('g:' + g, '%s count' % g, g in ('A1', 'B2', 'B3')) for g in WAEC_SCALE.grades]
+                + [('distinctions', 'Distinctions (A1–B3)', False), ('credits', 'Credits (A1–C6)', True),
+                   ('passes', 'Passes (A1–E8)', False), ('fails', 'Fails (F9)', False),
+                   ('avg', 'Avg points', True), ('avgpct', 'Avg score %', False),
+                   ('grades', 'Subject grades', True), ('core', 'English + Maths credit', False),
+                   ('benchmark', '5 credits incl. Eng + Maths', True)],
+    'subjects': [('total', 'Entries', True)] + [('g:' + g, '%s count' % g, True) for g in WAEC_SCALE.grades]
+                + [('spread', 'Grade spread bar', True), ('crate', 'Credit rate % (A1–C6)', True),
+                   ('drate', 'Distinction %', False), ('prate', 'Pass % (A1–E8)', True),
+                   ('frate', 'Fail % (F9)', False), ('mean', 'Mean score %', False),
+                   ('avgpts', 'Avg points', True), ('delta', 'Change vs last sitting', True),
+                   ('chart', 'Chart & highlights', True)],
+}
+
+
+def picked(cols_arg, spec):
+    """Selected column keys from a ``cols=a,b`` query arg; defaults when empty."""
+    cols = set((cols_arg or '').split(',')) - {''}
+    return cols or {k for k, _l, d in spec if d}
+
+
+def export_ctx(tag, exam, cls='SSS3', detail=None):
+    """Common document context: school, colours, author, tag, exam title."""
+    from utils.access_control import get_current_user
+    from utils.school import school_profile, document_branding
+    u = get_current_user()
+    return {'school': school_profile(), 'colors': SLE.colors_for(document_branding()),
+            'prepared_by': (getattr(u, 'full_name', None) or getattr(u, 'username', None) or '') if u else '',
+            'tag': tag, 'exam': exam, 'cls': cls, 'detail': detail}
+
+
+def jamb_pairs(r):
+    """[(subject, score)] from a JAMB / Mock JAMB result row (subject1..4)."""
+    out = []
+    for i in range(1, 5):
+        s = getattr(r, 'subject%d' % i, None)
+        if s:
+            out.append((s, getattr(r, 'subject%d_score' % i, None)))
+    return out
