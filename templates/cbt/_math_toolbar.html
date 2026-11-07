@@ -74,6 +74,22 @@
 .mr-chip:hover .mr-chip-x,.mr-chip.is-editing .mr-chip-x{display:inline-flex}
 @media (pointer:coarse){.mr-chip-x{width:1.5rem;height:1.5rem;top:-.75rem;right:-.75rem;font-size:1rem}.mr-chip.is-editing .mr-chip-x{display:inline-flex}}
 .mr-edit[contenteditable="false"]{cursor:default}
+/* Touch: "Edit formula" panel (cbt-math-editor.js openSheet) + MathLive keyboard */
+:root{--keyboard-zindex:4100}
+.mr-sheet{position:fixed;inset:0;z-index:4000;background:rgba(15,23,42,.45);display:flex;align-items:flex-start;justify-content:center;padding:.75rem;padding-top:max(.75rem,env(safe-area-inset-top))}
+.mr-sheet[hidden]{display:none}
+.mr-sheet-card{width:100%;max-width:640px;background:var(--bg-card,#fff);border-radius:14px;box-shadow:0 12px 32px rgba(0,0,0,.25);padding:.85rem}
+.mr-sheet-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:.25rem .75rem;margin-bottom:.6rem}
+.mr-sheet-head strong{font-size:1rem}
+.mr-sheet-hint{font-size:.76rem;color:var(--text-muted,#6b7280)}
+.mr-sheet-field math-field{display:block;width:100%;min-height:3.4rem;padding:.55rem .7rem;font-size:1.35rem;border:1.5px solid var(--primary,#0d6a4e);border-radius:10px;background:var(--bg-card,#fff);--caret-color:var(--primary,#0d6a4e);--placeholder-color:var(--primary,#0d6a4e)}
+.mr-sheet-field math-field::part(menu-toggle),.mr-sheet-field math-field::part(virtual-keyboard-toggle){display:none}
+.mr-sheet-actions{display:flex;align-items:center;gap:.5rem;margin-top:.75rem}
+.mr-sheet-actions .btn{margin:0;min-height:2.6rem;padding-left:1rem;padding-right:1rem}
+.mr-sheet-gap{flex:1}
+.mr-sheet-del{background:transparent;border:1px solid var(--border-color,#dfe3ea);color:var(--danger,#dc2626)}
+html.mr-sheet-open,html.mr-sheet-open body{overflow:hidden}
+@media (pointer:coarse){.mr-chip{cursor:pointer}.mr-chip math-field{pointer-events:none}.mr-chip-x{display:inline-flex}}
 .mx-target strong{color:var(--primary,#0d6a4e)}
 .mx-tabs{display:flex;gap:.15rem;overflow-x:auto;padding:0 .5rem;border-bottom:1px solid var(--border-color,#e6e9ef);scrollbar-width:thin}
 .mx-tab{flex:none;border:none;background:none;padding:.5rem .7rem;font-size:.82rem;font-weight:500;color:var(--text-muted,#6b7280);border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap}

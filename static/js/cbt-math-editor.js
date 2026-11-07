@@ -105,7 +105,10 @@
     wrap.dataset.latex = latex || '';
     if (display) wrap.dataset.display = '1';
     var mf = new window.MathfieldElement();
-    mf.mathVirtualKeyboardPolicy = TOUCH ? 'auto' : 'manual';
+    mf.mathVirtualKeyboardPolicy = 'manual';
+    // Touch screens edit formulas in the "Edit formula" panel (see openSheet):
+    // inline they are display-only, so a tap never fights the text box.
+    if (TOUCH) { mf.setAttribute('read-only', ''); mf.tabIndex = -1; }
     mf.smartMode = false;
     mf.setAttribute('aria-label', 'Formula — type to edit; Backspace on an empty formula removes it');
     wrap.appendChild(mf);
@@ -155,6 +158,94 @@
     return cand && cand.classList && cand.classList.contains('mr-chip') ? cand : null;
   }
 
+  // ---- Touch: the "Edit formula" panel ------------------------------------
+  // A standalone formula box (MathLive's best-supported setup on phones) with
+  // the on-screen maths keyboard, pinned to the top so the keyboard below
+  // never hides it. Done writes the formula back; Delete removes it.
+  var sheet = null;
+  function getSheet() {
+    if (sheet && sheet.isConnected) return sheet;
+    sheet = document.createElement('div');
+    sheet.className = 'mr-sheet';
+    sheet.hidden = true;
+    sheet.setAttribute('role', 'dialog');
+    sheet.setAttribute('aria-modal', 'true');
+    sheet.setAttribute('aria-label', 'Edit formula');
+    sheet.innerHTML =
+      '<div class="mr-sheet-card">' +
+        '<div class="mr-sheet-head"><strong>Edit formula</strong>' +
+          '<span class="mr-sheet-hint">Use the keyboard below · tap a blank to fill it</span></div>' +
+        '<div class="mr-sheet-field"></div>' +
+        '<div class="mr-sheet-actions">' +
+          '<button type="button" class="btn btn-sm mr-sheet-del"><i class="fas fa-trash" aria-hidden="true"></i> Delete</button>' +
+          '<span class="mr-sheet-gap"></span>' +
+          '<button type="button" class="btn btn-secondary btn-sm mr-sheet-cancel">Cancel</button>' +
+          '<button type="button" class="btn btn-primary btn-sm mr-sheet-done"><i class="fas fa-check" aria-hidden="true"></i> Done</button>' +
+        '</div>' +
+      '</div>';
+    var mf = new window.MathfieldElement();
+    mf.mathVirtualKeyboardPolicy = 'manual';
+    mf.smartMode = false;
+    mf.setAttribute('aria-label', 'Formula');
+    sheet.querySelector('.mr-sheet-field').appendChild(mf);
+    sheet.mf = mf;
+    document.body.appendChild(sheet);
+    function showKeyboard() {
+      if (window.mathVirtualKeyboard) { try { window.mathVirtualKeyboard.show(); } catch (e) { /* ignore */ } }
+    }
+    mf.addEventListener('focus', showKeyboard);
+    mf.addEventListener('pointerdown', function () { setTimeout(showKeyboard, 0); });
+    sheet.querySelector('.mr-sheet-done').addEventListener('click', function () { closeSheet('done'); });
+    sheet.querySelector('.mr-sheet-cancel').addEventListener('click', function () { closeSheet('cancel'); });
+    sheet.querySelector('.mr-sheet-del').addEventListener('click', function () { closeSheet('delete'); });
+    mf.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') { ev.preventDefault(); closeSheet('done'); }
+      else if (ev.key === 'Escape') { ev.preventDefault(); closeSheet('cancel'); }
+    }, true);
+    return sheet;
+  }
+
+  function sheetOpenFor(ed) { return !!(sheet && !sheet.hidden && sheet._ed === ed); }
+
+  function openSheet(ed, chip, isNew, then) {
+    var sh = getSheet(), mf = sh.mf;
+    sh._ed = ed; sh._chip = chip; sh._isNew = !!isNew;
+    sh._before = chip.dataset.latex || '';
+    try { mf.value = sh._before; } catch (e) { /* ignore */ }
+    sh.hidden = false;
+    document.documentElement.classList.add('mr-sheet-open');
+    chip.classList.add('is-editing');
+    if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    focusField(mf, function () {
+      if (window.mathVirtualKeyboard) { try { window.mathVirtualKeyboard.show(); } catch (e) { /* ignore */ } }
+      if (then) then(mf);
+    });
+  }
+
+  function closeSheet(how) {
+    var sh = sheet;
+    if (!sh || sh.hidden) return;
+    var ed = sh._ed, chip = sh._chip, mf = sh.mf;
+    var latex = '';
+    try { latex = (mf.getValue('latex-without-placeholders') || '').trim(); } catch (e) { latex = ''; }
+    if (how === 'done' && latex) {
+      chip.dataset.latex = latex;
+      var inline = chip.querySelector('math-field');
+      try { inline.value = latex; } catch (e) { /* ignore */ }
+    }
+    var drop = how === 'delete' || (how === 'done' && !latex) || (how === 'cancel' && sh._isNew && !sh._before);
+    sh.hidden = true;
+    document.documentElement.classList.remove('mr-sheet-open');
+    if (window.mathVirtualKeyboard) { try { window.mathVirtualKeyboard.hide(); } catch (e) { /* ignore */ } }
+    try { mf.blur(); } catch (e) { /* ignore */ }
+    if (chip.isConnected) {
+      chip.classList.remove('is-editing');
+      if (drop) removeChip(ed, chip, false);
+      else { tidy(ed); sync(ed); }
+    }
+    sh._ed = sh._chip = null;
+  }
+
   function initChip(ed, chip) {
     var mf = chip.querySelector('math-field');
     if (!mf || mf.dataset.mrInit) return mf;
@@ -178,8 +269,15 @@
       }, 0);
     });
     chip.querySelector('.mr-chip-x').addEventListener('click', function (ev) {
-      ev.preventDefault(); ev.stopPropagation(); removeChip(ed, chip, true);
+      ev.preventDefault(); ev.stopPropagation(); removeChip(ed, chip, !TOUCH);
     });
+    if (TOUCH) {
+      chip.addEventListener('click', function (ev) {
+        if (ev.target.closest && ev.target.closest('.mr-chip-x')) return;
+        ev.preventDefault(); ev.stopPropagation();
+        openSheet(ed, chip, false);
+      });
+    }
     mf.addEventListener('move-out', function (ev) {
       var d = ev.detail && ev.detail.direction;
       if (d === 'forward' || d === 'backward') { ev.preventDefault(); caretBeside(ed, chip, d === 'forward'); }
@@ -393,10 +491,22 @@
         return;
       }
       if (ev.target.closest && ev.target.closest('.mr-chip-x')) return;
+      if (TOUCH) return;                         // opens the Edit formula panel on click
       ed.contentEditable = 'false';
       var mf = chip.querySelector('math-field');
       setTimeout(function () { if (document.activeElement !== mf) { try { mf.focus(); } catch (e) { /* ignore */ } } }, 0);
     }, true);
+
+    // Phone keyboards (Android especially) don't send Backspace/Delete key
+    // events, only "beforeinput" — remove a neighbouring formula there too.
+    ed.addEventListener('beforeinput', function (ev) {
+      if (ev.target !== ed) return;
+      var t = ev.inputType;
+      if (t !== 'deleteContentBackward' && t !== 'deleteContentForward' &&
+          t !== 'deleteWordBackward' && t !== 'deleteWordForward') return;
+      var c = chipBeside(ed, /Backward$/.test(t) ? -1 : 1);
+      if (c) { ev.preventDefault(); removeChip(ed, c, true); }
+    });
 
     ed.addEventListener('keydown', function (ev) {
       if (ev.target !== ed) return;              // keys inside a formula belong to it
@@ -493,6 +603,7 @@
   function insert(field, item, caretMark, opts) {
     var ed = field.mrEditor;
     opts = opts || {};
+    if (TOUCH) { insertTouch(ed, item, caretMark); return; }
     var mf = activeChipField(ed);
     if (item.type === 'sym') {
       if (mf) { mf.executeCommand(['insert', item.insert]); mf.focus(); }
@@ -524,6 +635,21 @@
     focusField(mf);
     if (chip) chip.dataset.latex = chipLatex(chip);
     sync(ed);
+  }
+
+  function insertTouch(ed, item, caretMark) {
+    var upright = item.insert === '\\mathrm{' + caretMark + '}';
+    var snip = toML(item.insert, caretMark);
+    function put(mf) {
+      if (upright) { try { mf.applyStyle({ variantStyle: 'up' }); } catch (e) { /* ignore */ } return; }
+      if (item.type === 'sym') mf.executeCommand(['insert', item.insert]);
+      else if (snip.replace('#0', '')) mf.executeCommand(['insert', snip, { insertionMode: 'replaceSelection', selectionMode: 'placeholder' }]);
+    }
+    if (sheetOpenFor(ed)) { put(sheet.mf); sheet.mf.focus(); return; }
+    if (item.type === 'sym') { insertText(ed, item.insert); return; }
+    var res = insertChipAt(ed, '');
+    if (res.selected) snip = snip.indexOf('#0') > -1 ? snip.replace('#0', res.selected) : snip + res.selected;
+    openSheet(ed, res.chip, true, put);
   }
 
   function refresh(field) { if (field && field.mrEditor) fill(field.mrEditor, field.value); }
