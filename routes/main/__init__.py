@@ -2330,11 +2330,8 @@ def _student_view_payload(student):
 
 
 def _student_neco_card(student):
-    from models import NECOResult
+    """NECO card on the student profile — always shown, like WAEC and JAMB."""
     count = student.neco_results.count()
-    if not (count or student.neco_reg_number
-            or db.session.query(NECOResult.id).first() is not None):
-        return None
     return {'count': count,
             'add_url': url_for('results.add_neco') + f'?student_id={student.id}',
             'view_url': url_for('results.view_neco_student', student_id=student.id)}

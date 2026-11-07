@@ -49,3 +49,16 @@ def test_graduate_profile_lists_neco_results(app):
                                      'subjects': [{'subject': 'Biology', 'grade': 'C5'},
                                                   {'subject': 'Mathematics', 'grade': 'A1'}]}]
     assert 'student_id=%d' % sid in data['urls']['add_neco']
+
+
+def test_student_profile_always_has_neco_card(app):
+    with app.app_context():
+        s = Student(student_id='NP' + uuid.uuid4().hex[:6].upper(), first_name='Noneco', surname='Pupil',
+                    gender='Female')
+        db.session.add(s); db.session.commit()
+        sid = s.id
+    c = _admin(app)
+    body = c.get(f'/api/students/{sid}').get_json()
+    data = body.get('data', body)
+    assert data['neco']['count'] == 0
+    assert 'student_id=%d' % sid in data['neco']['add_url']
