@@ -181,7 +181,7 @@
   </div>
   {% endif %}
 
-  {% if hr_self.contributions and hr_self.contributions.items %}
+  {% if hr_self.contributions and hr_self.contributions['items'] %}
   <div class="card mb-3">
     <div class="card-header"><h3><i class="fas fa-hand-holding-dollar"></i> My contributions</h3></div>
     <div class="card-body">
@@ -190,7 +190,7 @@
         <table class="data-table" style="margin:0;min-width:420px">
           <thead><tr><th>Item</th><th style="text-align:right">Monthly</th><th style="text-align:right">Total so far</th><th>Last</th></tr></thead>
           <tbody>
-            {% for c in hr_self.contributions.items %}
+            {% for c in hr_self.contributions['items'] %}
             <tr>
               <td>{{ c.name }}</td>
               <td style="text-align:right">{% if c.monthly %}₦{{ '{:,.2f}'.format(c.monthly) }}{% else %}—{% endif %}</td>
