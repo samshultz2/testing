@@ -492,25 +492,29 @@ def test_dashboard_export_dialog_and_branded_exports_follow_scheme(app):
         html = c.get('/jss3-exams/?body=state&year=2051').get_data(as_text=True)
         assert 'id="sxExportModal"' in html and 'Students List' in html and 'Subjects Analysis' in html
         for g in grades:                                   # one count column per scheme grade
-            assert f'<span>{g} count</span>' in html
-        assert 'Expoada' in html and 'sxClientExport' in html
+            assert f'value="g:{g}"' in html
+        assert 'value="arm"' not in html and 'Class arm' not in html   # arm is not offered
         base = '/jss3-exams/state/export?year=2051'
-        pdf = c.get(base + '&format=pdf&type=students&cols=rank,student_id,g0,credits,avg,grades')
+        pdf = c.get(base + '&format=pdf&type=students&cols=rank,student_id,g:%s,credits,avg,grades,benchmark' % grades[0])
         assert pdf.status_code == 200 and pdf.data[:4] == b'%PDF'
         with fitz.open(stream=pdf.data, filetype='pdf') as d:
-            txt = ' '.join(p.get_text() for p in d)
-        txt = ' '.join(txt.split())
-        assert 'Tester Expoada' in txt and 'Avg' in txt and 'Results' in txt
+            txt = ' '.join(' '.join(p.get_text() for p in d).split())
+        assert 'Tester Expoada' in txt and 'Results' in txt and 'GRADE KEY' in txt
+        assert 'Subject codes:' in txt and 'Distinction' in txt
         assert txt.index('Tester Expoada') < txt.index('Tester Expoben')    # ranked best first
-        doc = c.get(base + '&format=word&type=subjects&cols=total,' + ','.join(f'g{i}' for i in range(len(grades))) + ',crate')
+        doc = c.get(base + '&format=word&type=subjects&cols=total,' + ','.join('g:' + g for g in grades) + ',crate,chart')
         assert doc.status_code == 200
-        t = Document(BytesIO(doc.data)).tables[0]
+        t = Document(BytesIO(doc.data)).tables[1]                       # [0] = summary tiles
         head = [cell.text for cell in t.rows[0].cells]
-        assert head[:2] == ['Subject', 'Entries'] and head[2:2 + len(grades)] == grades and 'Credit %' in head
+        assert head[:3] == ['#', 'SUBJECT', 'ENTRIES'] and head[3:3 + len(grades)] == grades and 'CREDIT' in head
+        assert t.rows[-1].cells[1].text == 'All subjects'
+        sub = c.get(base + '&format=pdf&type=subjects')
+        with fitz.open(stream=sub.data, filetype='pdf') as d:
+            txt = ' '.join(' '.join(p.get_text() for p in d).split())
+        assert 'Subject Analysis' in txt and 'Strongest subject'.upper() in txt
         img = c.get(base + '&format=image&type=subjects')
         assert img.data[:4] == b'\x89PNG' and img.headers.get('X-Total-Pages') == '1'
         assert c.get(base).data[:2] == b'PK'                                # Excel unchanged
-        # Basic 6 uses its own scheme too.
         assert 'id="sxExportModal"' not in c.get('/basic6-exams/?body=federal&year=1999').get_data(as_text=True)
     finally:
         with app.app_context():

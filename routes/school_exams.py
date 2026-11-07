@@ -103,49 +103,24 @@ def _student_or_404(level, student_id):
 
 
 def _branded_export(level, body, year, stats, fmt):
-    """Branded PDF / image / Word export of a school-exam year — the same
-    document design and column picker as the WAEC / NECO export, with the
-    grade columns taken from this exam's own grading scheme."""
-    from io import BytesIO
-    from flask import Response
-    from utils.web_exports import pdf_response
-    from utils.school import school_profile
-    from utils.student_export import students_pdf, students_image_pages, students_word
+    """Branded PDF / image / Word results document (Students List or Subject
+    Analysis) — the same design as the WAEC / NECO export, graded on this
+    exam's own scale."""
+    from utils.access_control import get_current_user
+    from utils.school import school_profile, document_branding
+    from utils.student_list_export import colors_for
+    from utils import exam_results_doc as ERD
 
-    scheme = stats['scheme']
-    etype = request.args.get('type', 'students')
+    etype = 'subjects' if request.args.get('type') == 'subjects' else 'students'
     cols = set((request.args.get('cols') or '').split(',')) - {''}
-    headers, rows = svc.export_table(scheme, stats, etype, cols)
-    stem = '%s_%s_%s' % (level, body, year)
-    title = '%s %s Results' % (scheme.exam_name, year)
-    if etype == 'subjects':
-        title = '%s %s Subject Analysis' % (scheme.exam_name, year)
-    school = school_profile()
-    total = len(stats['candidates'])           # masthead counts candidates, not subjects
-    if fmt == 'pdf':
-        data = students_pdf(rows, headers, school, total=total, title=title)
-        return pdf_response(BytesIO(data), stem + '.pdf', inline=False)
-    if fmt == 'word':
-        return students_word(rows, headers, school, total=total, filename=stem + '.docx', title=title)
-    pages = students_image_pages(rows, headers, school, total=total, title=title)
-    page = request.args.get('page', type=int) or 1
-    page = max(1, min(page, len(pages)))
-    suffix = '' if len(pages) == 1 else ('_p%d' % page)
-    return Response(pages[page - 1], mimetype='image/png', headers={
-        'Content-Disposition': 'attachment; filename="%s%s.png"' % (stem, suffix),
-        'X-Total-Pages': str(len(pages)), 'Access-Control-Expose-Headers': 'X-Total-Pages'})
-
-
-def _export_branch_name():
-    """Branch name for the export masthead (same rule as the WAEC export)."""
-    from models.models_branch import Branch
-    from utils.branch_scope import viewing_branch_id
-    bid = viewing_branch_id()
-    if bid and bid not in (None, -1):
-        b = db.session.get(Branch, bid)
-        return b.name if b else ''
-    branches = Branch.query.all()
-    return branches[0].name if len(branches) == 1 else 'All Branches'
+    u = get_current_user()
+    L = _LiveMeta(level)
+    ctx = {'school': school_profile(), 'colors': colors_for(document_branding()),
+           'prepared_by': (getattr(u, 'full_name', None) or getattr(u, 'username', None) or '') if u else '',
+           'tag': 'EXAM RESULTS', 'cls': L['class_label'], 'detail': body.title()}
+    doc = svc.export_doc(level, body, year, stats, etype, cols, ctx)
+    stem = '%s_%s_%s_%s' % (level, body, 'subject_analysis' if etype == 'subjects' else 'results', year)
+    return ERD.file_response(doc, fmt, stem)
 
 
 def make_blueprint(level):
@@ -196,8 +171,6 @@ def make_blueprint(level):
             subject_names=sorted(r['subject'] for r in stats['subjects']),
             subjects_sorted=subjects, ssort=ssort, subject_sorts=svc.subject_sorts(stats['scheme']),
             top_grades=svc.top_by_grade(stats['scheme'], stats['candidates']),
-            export_branch=_export_branch_name(),
-            export_data=svc.export_client_data(stats),
             export_cols=svc.export_columns(stats['scheme'])))
 
     # ------------------------------------------------------------------ #

@@ -1,17 +1,10 @@
-<script src="{{ url_for('static', filename='vendor/html2canvas.min.js') }}"></script>
-<script src="{{ url_for('static', filename='vendor/jspdf.umd.min.js') }}"></script>
 <script nonce="{{ csp_nonce }}">
-/* JSS3 / Basic exam export — same flow as the WAEC / NECO export: students
-   PDF / image render client-side as the subject-grade grid; Word and the
-   subjects analysis come from the server's branded document. */
+/* JSS3 / Basic exam export — same flow as the WAEC / NECO export: every
+   format is the server's branded results document. */
 var sxExport = {
-  data: {{ export_data|tojson }},
-  grades: {{ scheme.grades|tojson }},
   year: {{ year|tojson }},
   stem: {{ (level ~ '_' ~ body ~ '_' ~ year)|tojson }},
-  title: {{ (scheme.exam_name ~ ' ' ~ year)|tojson }},
-  url: {{ url_for(bp ~ '.export', body=body)|tojson }},
-  creditSpan: {{ export_cols.students | selectattr(0, 'equalto', 'credits') | map(attribute=1) | first | tojson }}
+  url: {{ url_for(bp ~ '.export', body=body)|tojson }}
 };
 function sxOpenExport() {
   var m = document.getElementById('sxExportModal');
@@ -44,7 +37,7 @@ function sxDownloadImages(url) {
       if (!res.ok) return;
       total = parseInt(res.headers.get('X-Total-Pages') || '1', 10) || 1;
       return res.blob().then(function (blob) {
-        sxSaveBlob(blob, sxExport.stem + (total > 1 ? ('_p' + page) : '') + '.png');
+        sxSaveBlob(blob, sxExport.stem + (url.indexOf('type=subjects') !== -1 ? '_subjects' : '') + (total > 1 ? ('_p' + page) : '') + '.png');
         page += 1;
         if (page <= total) return next();
       });
@@ -53,166 +46,9 @@ function sxDownloadImages(url) {
   return next();
 }
 
-var _SX_TH = 'padding:5px;background:#007bff;color:white;border:1px solid #0056b3;font-size:12px;white-space:nowrap;';
-var _SX_TD = 'padding:5px;border:1px solid #ddd;font-size:12px;';
-function sxKindColor(kind) {
-  return { distinction: '#28a745', credit: '#1d4ed8', pass: '#856404' }[kind] || '#dc3545';
-}
-function sxMaxSubjects() {
-  var m = 0;
-  sxExport.data.forEach(function (s) { m = Math.max(m, (s.results || []).length); });
-  return Math.min(Math.max(m, 1), 12);
-}
-function sxBuildTable() {
-  var cols = sxCols('students'), on = function (k) { return cols.indexOf(k) !== -1; };
-  var esc = window.escapeHtml || function (v) { return String(v).replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); };
-  var th = _SX_TH, td = _SX_TD, nSub = sxMaxSubjects(), G = sxExport.grades;
-  var simple = { student_id: 'ID', exam_no: 'Exam No', gender: 'Sex', arm: 'Arm',
-                 distinctions: 'Dist', credits: 'Cred', passes: 'Pass', fails: 'Fail',
-                 avg: 'Avg', avgpct: 'Avg %', total: 'Total', core: 'Eng+Ma', benchmark: 'Bench', placement: 'Placement' };
-  var head = '<tr>';
-  if (on('rank')) head += '<th style="' + th + '">#</th>';
-  head += '<th style="' + th + 'text-align:left;">Name</th>';
-  cols.forEach(function (k) {
-    if (simple[k]) head += '<th style="' + th + '">' + simple[k] + '</th>';
-    else if (/^g\d+$/.test(k)) head += '<th style="' + th + '">' + esc(G[+k.slice(1)]) + '</th>';
-    else if (k === 'allgrades') G.forEach(function (g) { head += '<th style="' + th + '">' + esc(g) + '</th>'; });
-  });
-  if (on('grades')) for (var i = 1; i <= nSub; i++) head += '<th style="' + th + '">S' + i + '</th>';
-  head += '</tr>';
-  document.getElementById('sxExportHead').innerHTML = head;
-
-  var yn = function (v) { return v ? 'Yes' : 'No'; };
-  var body = '';
-  sxExport.data.forEach(function (s, idx) {
-    body += '<tr style="background:' + (idx % 2 ? '#f9f9f9' : '#ffffff') + '">';
-    if (on('rank')) body += '<td style="' + td + 'text-align:center;font-weight:600;font-size:14px;">' + s.position + '</td>';
-    body += '<td style="' + td + 'font-size:14px;font-weight:500;">' + esc(s.name) + '</td>';
-    var val = { student_id: s.student_id, exam_no: s.exam_number, gender: (s.gender || '').charAt(0),
-                arm: s.arm, distinctions: s.distinctions, credits: s.credits, passes: s.passes,
-                fails: s.fails, avg: s.avg_points, avgpct: s.avg_pct == null ? '—' : s.avg_pct,
-                total: s.total == null ? '—' : s.total, core: yn(s.core), benchmark: yn(s.benchmark),
-                placement: s.placement };
-    cols.forEach(function (k) {
-      if (simple[k]) {
-        var bold = k === 'credits' ? 'font-weight:600;' : '';
-        var small = (k === 'student_id' || k === 'exam_no' || k === 'placement') ? 'font-size:11px;' : 'text-align:center;';
-        body += '<td style="' + td + small + bold + '">' + esc(val[k] == null ? '' : val[k]) + '</td>';
-      } else if (/^g\d+$/.test(k)) {
-        body += '<td style="' + td + 'text-align:center;">' + (s.grade_counts[G[+k.slice(1)]] || 0) + '</td>';
-      } else if (k === 'allgrades') {
-        G.forEach(function (g) {
-          var c = s.grade_counts[g] || 0;
-          body += '<td style="' + td + 'text-align:center;' + (c ? '' : 'color:#ccc;') + '">' + (c || '-') + '</td>';
-        });
-      }
-    });
-    if (on('grades')) {
-      var res = s.results || [];
-      for (var j = 0; j < nSub; j++) {
-        if (res[j]) {
-          body += '<td style="' + td + 'text-align:center;"><span style="font-size:9px;color:#666;font-weight:600;">' + esc(res[j].code) +
-                  '</span><br><strong style="font-size:14px;color:' + sxKindColor(res[j].kind) + ';">' + esc(res[j].grade) + '</strong></td>';
-        } else {
-          body += '<td style="' + td + 'text-align:center;color:#ccc;font-size:13px;">-</td>';
-        }
-      }
-    }
-    body += '</tr>';
-  });
-  document.getElementById('sxExportBody').innerHTML = body;
-}
-function sxRowBreaks(container, scale) {
-  var top = container.getBoundingClientRect().top, breaks = [];
-  container.querySelectorAll('tr').forEach(function (r) { breaks.push(Math.round((r.getBoundingClientRect().bottom - top) * scale)); });
-  return breaks;
-}
-function sxSliceA4(canvas, breaks) {
-  var w = canvas.width, pageH = Math.round(w * 297 / 210);
-  if (canvas.height <= pageH) return [canvas.toDataURL('image/png', 1.0)];
-  var sorted = (breaks || []).slice().sort(function (a, b) { return a - b; });
-  var pages = [], y = 0;
-  while (y < canvas.height) {
-    var end = Math.min(y + pageH, canvas.height);
-    if (end < canvas.height) {
-      var best = -1;
-      for (var i = 0; i < sorted.length; i++) {
-        if (sorted[i] > y && sorted[i] <= end) best = sorted[i];
-        else if (sorted[i] > end) break;
-      }
-      if (best > y) end = best;
-    }
-    var pc = document.createElement('canvas');
-    pc.width = w; pc.height = pageH;
-    var ctx = pc.getContext('2d');
-    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, w, pageH);
-    ctx.drawImage(canvas, 0, y, w, end - y, 0, 0, w, end - y);
-    pages.push(pc.toDataURL('image/png', 1.0));
-    y = end;
-  }
-  return pages;
-}
-function sxSavePdf(canvas, breaks) {
-  var jsPDF = (window.jspdf && window.jspdf.jsPDF) || window.jsPDF;
-  var pdf = new jsPDF('p', 'mm', 'a4');
-  var pw = pdf.internal.pageSize.getWidth(), ph = pdf.internal.pageSize.getHeight();
-  sxSliceA4(canvas, breaks).forEach(function (d, i) { if (i > 0) pdf.addPage(); pdf.addImage(d, 'PNG', 0, 0, pw, ph); });
-  pdf.save(sxExport.stem + '.pdf');
-}
-function sxClientExport(format) {
-  if (!sxExport.data.length) { alert('No candidates to export.'); return; }
-  sxBuildTable();
-  var n = sxExport.data.length;
-  var top = sxExport.data.reduce(function (a, s) { return a + (s.distinctions || 0); }, 0);
-  var cred = sxExport.data.reduce(function (a, s) { return a + (s.credits || 0); }, 0);
-  document.getElementById('sxExportSummary').innerHTML = 'Candidates: <strong>' + n + '</strong> | Distinctions: <strong>' + top +
-    '</strong> | Total ' + (sxExport.creditSpan || 'Credits') + ': <strong>' + cred + '</strong>';
-  var now = new Date();
-  document.getElementById('sxExportFooter').textContent = 'Generated ' + now.toLocaleDateString() + ' ' + now.toLocaleTimeString();
-  sxCloseExport();
-  var loading = document.createElement('div');
-  loading.id = 'sxExportLoading';
-  loading.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:99999;display:flex;align-items:center;justify-content:center;color:white;font-size:18px;';
-  loading.textContent = 'Generating ' + (format === 'pdf' ? 'PDF' : 'image') + '…';
-  document.body.appendChild(loading);
-  var c = document.getElementById('sxExportContainer'), W = 720;
-  c.style.position = 'fixed'; c.style.left = '0'; c.style.top = '0'; c.style.zIndex = '9999';
-  function restore() {
-    c.style.position = 'absolute'; c.style.left = '-9999px';
-    var l = document.getElementById('sxExportLoading'); if (l) l.remove();
-  }
-  setTimeout(function () {
-    html2canvas(c, { scale: 3, useCORS: true, allowTaint: true, backgroundColor: '#ffffff', width: W, windowWidth: W })
-    .then(function (canvas) {
-      var breaks = sxRowBreaks(c, canvas.width / c.offsetWidth);
-      restore();
-      if (format === 'pdf') {
-        try { sxSavePdf(canvas, breaks); } catch (e) { alert('Error generating PDF: ' + e.message); }
-        return;
-      }
-      var pages = sxSliceA4(canvas, breaks), multi = pages.length > 1;
-      var m = document.createElement('div');
-      m.id = 'sxSaveImageModal';
-      m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.9);z-index:99999;padding:10px;overflow:auto;';
-      var html = '<div style="text-align:center;margin-bottom:10px;"><p style="color:white;margin:0 0 10px 0;font-size:14px;">' +
-        (multi ? (pages.length + ' pages — tap “Download” on each (or long-press it) to save.') : 'Tap “Download” (or long-press the image) to save.') +
-        '</p><button data-remove-target="sxSaveImageModal" style="padding:8px 20px;background:#dc3545;color:white;border:none;border-radius:6px;font-size:14px;">Close</button></div>';
-      pages.forEach(function (d, i) {
-        var fname = sxExport.stem + (multi ? ('_p' + (i + 1)) : '') + '.png';
-        html += '<div style="max-width:760px;margin:0 auto 16px auto;">' +
-          (multi ? '<div style="color:#cbd5e1;font-size:12px;margin:0 0 4px 2px;">Page ' + (i + 1) + ' of ' + pages.length + '</div>' : '') +
-          '<a href="' + d + '" download="' + fname + '" style="display:inline-block;margin-bottom:6px;padding:7px 16px;background:#007bff;color:white;border-radius:6px;font-size:13px;text-decoration:none;"><i class="fas fa-download"></i> Download</a>' +
-          '<img src="' + d + '" style="width:100%;border-radius:8px;display:block;" alt="Results page ' + (i + 1) + '"></div>';
-      });
-      m.innerHTML = html;
-      document.body.appendChild(m);
-    }).catch(function (err) { restore(); alert('Error generating export: ' + err.message); });
-  }, 100);
-}
 function sxGenerateExport() {
   var type = document.querySelector('input[name="sxType"]:checked').value;
   var format = document.querySelector('input[name="sxFormat"]:checked').value;
-  if (type === 'students' && (format === 'image' || format === 'pdf')) { sxClientExport(format); return; }
   var p = new URLSearchParams();
   p.set('year', sxExport.year); p.set('format', format); p.set('type', type);
   p.set('cols', sxCols(type).join(','));

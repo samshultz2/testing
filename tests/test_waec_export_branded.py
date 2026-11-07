@@ -46,6 +46,29 @@ def test_waec_branded_exports_all_formats(app):
     r = c.get('/results/waec/export', query_string={'year': 2033, 'format': 'pdf', 'type': 'subjects'})
     assert r.status_code == 200 and r.data[:4] == b'%PDF'
 
+    # The results design: ranked by credits, WAEC grade key, subject codes,
+    # benchmark; subject analysis with grade columns, totals and highlights.
+    import fitz
+    r = c.get('/results/waec/export', query_string={
+        'year': 2033, 'format': 'pdf', 'type': 'students',
+        'cols': 'rank,student_id,a1,b2,b3,credits,avg,grades,benchmark'})
+    with fitz.open(stream=r.data, filetype='pdf') as d:
+        txt = ' '.join(' '.join(p.get_text() for p in d).split())
+    assert 'WASSCE 2033 — Results' in txt and 'A1–B3' in txt and 'C4–C6' in txt and 'F9' in txt
+    assert txt.index('Obi Ada') < txt.index('Bello Musa') or txt.index('Ada Obi') < txt.index('Musa Bello')
+    assert 'Subject codes:' in txt and 'Not met' in txt and 'WX-A' in txt
+    r = c.get('/results/waec/export', query_string={
+        'year': 2033, 'format': 'pdf', 'type': 'subjects', 'cols': 'total,a1,c456,passrate,chart'})
+    with fitz.open(stream=r.data, filetype='pdf') as d:
+        txt = ' '.join(' '.join(p.get_text() for p in d).split())
+    head = txt.split('Fail', 1)[1].split('All subjects')[0]
+    assert 'Subject Analysis' in txt and 'All subjects' in txt
+    assert 'ENTRIES A1 C4 C5 C6 CREDIT' in head          # only the picked grade columns
+    assert 'STRONGEST SUBJECT' in txt
+    # NECO uses the same document with its own title.
+    r = c.get('/results/neco/export', query_string={'year': 2033, 'format': 'pdf', 'type': 'students'})
+    assert r.status_code in (200, 302)
+
     # Excel path still works
     r = c.get('/results/waec/export', query_string={'year': 2033, 'format': 'excel'})
     assert r.status_code == 200 and r.data[:2] == b'PK'

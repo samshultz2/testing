@@ -201,37 +201,17 @@ def _fit_widths(natural, avail, kinds, blank_cols, fs):
     return [sn] + widths + [blank_w] * blank_cols
 
 
-def render_pdf(spec):
-    """Bytes of the branded A4 PDF."""
-    _register_fonts()
-    from reportlab.lib.pagesizes import A4, landscape
+def numbered_canvas(spec, PW, PH, margin, head_h, title,
+                    note_text='Contains personal data — handle confidentially'):
+    """A reportlab canvas class that draws the letterhead (page 1), the small
+    running header (later pages) and the footer with "Page n of N"."""
     from reportlab.lib import colors
-    from reportlab.lib.styles import ParagraphStyle
     from reportlab.lib.utils import ImageReader
     from reportlab.pdfgen import canvas as rl_canvas
-    from reportlab.platypus import (BaseDocTemplate, Frame, PageTemplate, Paragraph, Table,
-                                    TableStyle, Spacer, Flowable, KeepTogether, Image)
     from reportlab.pdfbase.pdfmetrics import stringWidth
-
     C = spec['colors']
     school = spec['school']
-    fs = SIZES.get(spec.get('size') or 'm', 9.6)
-    margin = 34
-    spec['_natural_w'] = (sum(_natural_widths(spec, fs)) + fs * 2.6
-                          + spec.get('blank_cols', 0) * fs * 4.2)
-    avail = {'portrait': A4[0] - 2 * margin}
-    PW, PH = _page_size(spec, avail)
-    spec['_orientation'] = 'landscape' if PW > PH else 'portrait'
-    avail_w = PW - 2 * margin
-    kinds = [c['kind'] for c in spec['columns']]
-    col_w = _fit_widths(_natural_widths(spec, fs), avail_w, kinds, spec.get('blank_cols', 0), fs)
-
-    head_h = 112      # first-page letterhead
-    head2_h = 46      # later pages
-    foot_h = 40
-    title = spec.get('title') or 'Student List'
     gen = spec.get('generated') or _now()
-
     # ---- canvas: letterhead, later-page header, footer with "Page n of N" ----
     logo = None
     if school.get('logo_path') and os.path.exists(school['logo_path']):
@@ -316,7 +296,7 @@ def render_pdf(spec):
         cv.setFont(F['Body'], 7.4); cv.setFillColor(colors.HexColor(MUTED))
         rest = ' · ' + title + (' · prepared by ' + spec['prepared_by'] if spec.get('prepared_by') else '')
         cv.drawString(margin + stringWidth(nm, F['BodyBold'], 7.4), y, rest)
-        note = 'Contains personal data — handle confidentially'
+        note = note_text
         left_end = margin + stringWidth(nm + rest, F['Body'], 7.4) + 20
         nw = stringWidth(note, F['Body'], 7.4)
         if left_end + nw + 90 < PW - margin:
@@ -345,6 +325,42 @@ def render_pdf(spec):
                 footer(self, self._pageNumber, total)
                 super().showPage()
             super().save()
+
+    return NumberedCanvas
+
+
+def render_pdf(spec):
+    """Bytes of the branded A4 PDF."""
+    _register_fonts()
+    from reportlab.lib.pagesizes import A4, landscape
+    from reportlab.lib import colors
+    from reportlab.lib.styles import ParagraphStyle
+    from reportlab.lib.utils import ImageReader
+    from reportlab.pdfgen import canvas as rl_canvas
+    from reportlab.platypus import (BaseDocTemplate, Frame, PageTemplate, Paragraph, Table,
+                                    TableStyle, Spacer, Flowable, KeepTogether, Image)
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+
+    C = spec['colors']
+    school = spec['school']
+    fs = SIZES.get(spec.get('size') or 'm', 9.6)
+    margin = 34
+    spec['_natural_w'] = (sum(_natural_widths(spec, fs)) + fs * 2.6
+                          + spec.get('blank_cols', 0) * fs * 4.2)
+    avail = {'portrait': A4[0] - 2 * margin}
+    PW, PH = _page_size(spec, avail)
+    spec['_orientation'] = 'landscape' if PW > PH else 'portrait'
+    avail_w = PW - 2 * margin
+    kinds = [c['kind'] for c in spec['columns']]
+    col_w = _fit_widths(_natural_widths(spec, fs), avail_w, kinds, spec.get('blank_cols', 0), fs)
+
+    head_h = 112      # first-page letterhead
+    head2_h = 46      # later pages
+    foot_h = 40
+    title = spec.get('title') or 'Student List'
+    gen = spec.get('generated') or _now()
+
+    NumberedCanvas = numbered_canvas(spec, PW, PH, margin, head_h, title)
 
     # ---- styles -------------------------------------------------------------
     st_title = ParagraphStyle('t', fontName=F['Display'], fontSize=20, leading=24, textColor=colors.HexColor(INK))

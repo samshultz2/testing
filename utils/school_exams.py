@@ -1234,16 +1234,15 @@ def _grade_span(scheme, kinds):
 
 
 def export_columns(scheme):
-    """The selectable columns for both export types, with their defaults:
+    """The selectable export columns, with their defaults:
     {'students': [(key, label, default)], 'subjects': [...]}. Grade columns
-    are one per grade of the scheme (keys g0, g1, … in band order)."""
+    are keyed ``g:<grade>`` (one per grade of the scheme)."""
     top = {g for g in scheme.grades if scheme.kind_of(g) == 'distinction'}
-    grades = [('g%d' % i, '%s count' % g, g in top) for i, g in enumerate(scheme.grades)]
+    grades = [('g:' + g, '%s count' % g, g in top) for g in scheme.grades]
     cspan = _grade_span(scheme, ('distinction', 'credit'))
     pspan = _grade_span(scheme, ('distinction', 'credit', 'pass'))
     students = ([('rank', 'Position', True), ('student_id', 'Student ID', True),
-                 ('exam_no', 'Exam number', False), ('gender', 'Gender', False),
-                 ('arm', 'Class arm', False)] + grades +
+                 ('exam_no', 'Exam number', False), ('gender', 'Gender', False)] + grades +
                 [('distinctions', 'Distinctions', False),
                  ('credits', 'Credits (%s)' % cspan if cspan else 'Credits', True),
                  ('passes', 'Passes (%s)' % pspan if pspan else 'Passes', False),
@@ -1251,109 +1250,48 @@ def export_columns(scheme):
                  ('avg', 'Avg points', True), ('avgpct', 'Avg %', False), ('total', 'Total score', False),
                  ('allgrades', 'All grades (%s)' % _grade_span(scheme, KINDS), False),
                  ('grades', 'Subject grades', True),
-                 ('core', 'English + Maths credit', False), ('benchmark', 'Meets benchmark', False),
+                 ('core', 'English + Maths credit', False),
+                 ('benchmark', benchmark_label(scheme), True),
                  ('placement', 'Placement', False)])
-    subjects = ([('total', 'Total students', True)] + grades +
-                [('drate', 'Distinction %', False), ('crate', 'Credit %', True),
-                 ('prate', 'Pass %', False), ('frate', 'Fail %', False),
-                 ('mean', 'Mean score %', False), ('avgpts', 'Avg points', False)])
+    subjects = ([('total', 'Entries', True)] + [(k, l, True) for k, l, _d in grades] +
+                [('spread', 'Grade spread bar', True), ('crate', 'Credit rate %', True),
+                 ('drate', 'Distinction %', False), ('prate', 'Pass %', True),
+                 ('frate', 'Fail %', False), ('mean', 'Mean score %', False),
+                 ('avgpts', 'Avg points', True), ('delta', 'Change vs last year', True),
+                 ('chart', 'Chart & highlights', True)])
     return {'students': students, 'subjects': subjects}
 
 
-def export_table(scheme, stats, etype, cols):
-    """(headers, rows) of strings for the branded PDF / image / Word export.
-    Empty ``cols`` means the defaults (mirrors the on-screen table)."""
-    from utils.broadsheet_export import _abbr_one
+def benchmark_label(scheme):
+    n = scheme.benchmark_credits
+    return ('%d+ credits incl. Eng + Maths' % n) if n else 'Credit in Eng + Maths'
+
+
+def export_doc(level, body, year, stats, etype, cols, ctx):
+    """The branded results document (utils.exam_results_doc) for a school-exam
+    year — Students List or Subject Analysis, in the exam's own grading."""
+    from utils import exam_results_doc as ERD
+    scheme = stats['scheme']
+    scale = ERD.scale_from_scheme(scheme)
     spec = export_columns(scheme)['subjects' if etype == 'subjects' else 'students']
     if not cols:
         cols = {k for k, _l, d in spec if d}
-    grades = scheme.grades
-
-    def gkey(i):
-        return 'g%d' % i
-
-    def short(label):
-        return {'Position': 'Pos', 'Student ID': 'Student ID', 'Exam number': 'Exam No',
-                'Class arm': 'Arm', 'Total students': 'Entries', 'Total score': 'Total',
-                'English + Maths credit': 'Eng+Maths', 'Meets benchmark': 'Benchmark',
-                'Mean score %': 'Mean %', 'Subject grades': 'Subject Grades',
-                'Avg points': 'Avg Pts'}.get(label, label.split(' (')[0])
-
+    ctx = dict(ctx, exam='%s %s' % (scheme.exam_name, year), bench_label=benchmark_label(scheme),
+               bench_head='Benchmark')
     if etype == 'subjects':
-        headers = ['Subject']
-        for k, label, _d in spec:
-            if k in cols:
-                headers.append(grades[int(k[1:])] if k.startswith('g') and k[1:].isdigit() else short(label))
-        rows = []
-        for r in sorted(stats['subjects'], key=lambda r: r['rank']):
-            cell = {'total': r['entries'], 'drate': '%s%%' % r['distinction_rate'],
-                    'crate': '%s%%' % r['credit_rate'], 'prate': '%s%%' % r['pass_rate'],
-                    'frate': '%s%%' % r['fail_rate'],
-                    'mean': '—' if r['mean_pct'] is None else '%s%%' % r['mean_pct'],
-                    'avgpts': r['avg_points']}
-            for i, g in enumerate(grades):
-                cell[gkey(i)] = r['grades'].get(g, 0)
-            rows.append([r['subject']] + [str(cell[k]) for k, _l, _d in spec if k in cols])
-        return headers, rows
-
-    headers = []
-    for k, label, _d in spec:
-        if k not in cols:
-            continue
-        if k == 'rank':
-            headers.append('Pos')
-            headers.append('Name')          # name always follows position
-        elif k == 'allgrades':
-            headers += list(grades)
-        elif k.startswith('g') and k[1:].isdigit():
-            headers.append(grades[int(k[1:])])
-        else:
-            headers.append(short(label))
-    if 'rank' not in cols:
-        headers.insert(0, 'Name')
-    yn = {True: 'Yes', False: 'No'}
-    rows = []
-    for s in stats['candidates']:
-        cell = {'rank': s['position'], 'student_id': s['student_code'] or '',
-                'exam_no': s['exam_number'] or '', 'gender': s['gender'],
-                'arm': s.get('arm') or '', 'distinctions': s['distinctions'],
-                'credits': s['credits'], 'passes': s['passes'], 'fails': s['fails'],
-                'avg': s['avg_points'], 'avgpct': '—' if s['avg_pct'] is None else s['avg_pct'],
-                'total': '—' if s['total'] is None else s['total'],
-                'grades': ' '.join('%s:%s' % (_abbr_one(r.subject), r.grade) for r in s['results']),
-                'core': yn[bool(s['core_credits'])], 'benchmark': yn[bool(s['meets_benchmark'])],
-                'placement': s['placement'] or ''}
-        for i, g in enumerate(grades):
-            cell[gkey(i)] = s['grades'].get(g, 0)
-        row = [] if 'rank' in cols else [s['name']]
-        for k, _l, _d in spec:
-            if k not in cols:
-                continue
-            if k == 'rank':
-                row += [str(cell['rank']), s['name']]
-            elif k == 'allgrades':
-                row += [str(s['grades'].get(g, 0)) for g in grades]
-            else:
-                row.append(str(cell[k]))
-        rows.append(row)
-    return headers, rows
-
-
-def export_client_data(stats):
-    """Compact candidate rows for the client-side (subject-grid) PDF / image."""
-    from utils.broadsheet_export import _abbr_one
-    scheme = stats['scheme']
-    out = []
-    for s in stats['candidates']:
-        out.append({
-            'position': s['position'], 'name': s['name'], 'student_id': s['student_code'] or '',
-            'exam_number': s['exam_number'] or '', 'gender': s['gender'], 'arm': s.get('arm') or '',
-            'grade_counts': {g: s['grades'].get(g, 0) for g in scheme.grades},
-            'distinctions': s['distinctions'], 'credits': s['credits'], 'passes': s['passes'],
-            'fails': s['fails'], 'avg_points': s['avg_points'], 'avg_pct': s['avg_pct'],
-            'total': s['total'], 'core': bool(s['core_credits']),
-            'benchmark': bool(s['meets_benchmark']), 'placement': s['placement'] or '',
-            'results': [{'subject': r.subject, 'code': _abbr_one(r.subject), 'grade': r.grade,
-                         'kind': scheme.kind_of(r.grade) or 'fail'} for r in s['results']],
-        })
-    return out
+        by = {r['subject']: [g for g, n in r['grades'].items() for _ in range(n)] for r in stats['subjects']}
+        mean = {r['subject']: r['mean_pct'] for r in stats['subjects'] if r['mean_pct'] is not None}
+        prev_year = max((y for y in years_for(level, body) if y < year), default=None)
+        prev = {}
+        if prev_year:
+            prev = {r['subject']: r['credit_rate'] for r in year_stats(level, body, prev_year)['subjects']}
+        ctx['candidates'] = len(stats['candidates'])
+        return ERD.subjects_doc(ctx, by, cols, scale, prev, prev_year, mean_pct=mean)
+    cands = [{'name': c['name'], 'student_id': c['student_code'] or '', 'exam_no': c['exam_number'] or '',
+              'gender': c['gender'], 'position': c['position'],
+              'results': [(r.subject, r.grade) for r in c['results']],
+              'avg_pct': c['avg_pct'], 'total': c['total'], 'placement': c['placement'],
+              'core': bool(c['core_credits']), 'bench': bool(c['meets_benchmark'])}
+             for c in stats['candidates']]
+    return ERD.students_doc(dict(ctx, sort=False, rank_note='ranked by average grade points'),
+                            cands, cols, scale)

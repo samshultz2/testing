@@ -1,21 +1,6 @@
 {# Export dialog for the JSS3 / Basic exam dashboards — the WAEC / NECO export
    (PDF / Image / Word; Students list or Subjects analysis; pick the columns),
    with the grade columns taken from this exam's grading scheme. #}
-<div id="sxExportContainer" style="position:absolute;left:-9999px;width:720px;">
-  <div style="padding:12px;background:#fff;color:#0f172a;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
-    <div style="text-align:center;margin:0 0 10px 0;padding-bottom:8px;border-bottom:2px solid #007bff;">
-      <div style="font-size:17px;font-weight:800;color:#0f172a;letter-spacing:.3px;line-height:1.2;">{{ school_brand.name|upper }}</div>
-      {% if export_branch %}<div style="font-size:12px;font-weight:700;color:#334155;margin-top:2px;">{{ export_branch|upper }}</div>{% endif %}
-      <div style="font-size:12px;font-weight:600;color:#007bff;margin-top:4px;">{{ scheme.exam_name|upper }} {{ year }} RESULTS · {{ L.class_label|upper }}</div>
-    </div>
-    <p id="sxExportSummary" style="text-align:center;color:#666;margin:0 0 10px 0;font-size:11px;"></p>
-    <table style="width:100%;border-collapse:collapse;font-size:11px;">
-      <thead id="sxExportHead"></thead><tbody id="sxExportBody"></tbody>
-    </table>
-    <p id="sxExportFooter" style="text-align:center;margin:8px 0 0 0;color:#999;font-size:9px;"></p>
-  </div>
-</div>
-
 <div id="sxExportModal" class="sxe-backdrop" style="display:none" role="dialog" aria-modal="true" aria-labelledby="sxExportTitle">
   <div class="sxe-dialog">
     <div class="sxe-head">

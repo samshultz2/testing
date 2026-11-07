@@ -909,91 +909,61 @@ def _waec_subject_rows(year):
 
 
 def _waec_branded_export(year, fmt):
-    """Branded WAEC PDF / image / Word export sharing the students design."""
-    from io import BytesIO
-    from flask import Response
-    from utils.web_exports import pdf_response
-    from utils.school import school_profile
-    from utils.student_export import students_pdf, students_image_pages, students_word
-    from utils.broadsheet_export import _abbr_one
+    """WAEC / NECO results as a branded PDF / image / Word document — the
+    Students List or the Subject Analysis (utils.exam_results_doc design)."""
+    from utils.access_control import get_current_user
+    from utils.school import school_profile, document_branding
+    from utils.branch_scope import scope_query, scope_by_student
+    from utils import exam_results_doc as ERD
+    from utils.student_list_export import colors_for
 
+    WAECResult = _board.model()   # WAEC or NECO, per route
+    board = _board.current()
     etype = request.args.get('type', 'students')
     cols = set((request.args.get('cols') or '').split(',')) - {''}
+    exam = ('WASSCE %s' if board.key == 'waec' else 'NECO SSCE %s') % year
+    u = get_current_user()
+    ctx = {'school': school_profile(), 'colors': colors_for(document_branding()),
+           'prepared_by': (getattr(u, 'full_name', None) or getattr(u, 'username', None) or '') if u else '',
+           'tag': '%s RESULTS' % board.name, 'exam': exam, 'cls': 'SSS3'}
+    scale = ERD.WAEC_SCALE
+    stem = '%s_%s_%s' % (board.key, 'subject_analysis' if etype == 'subjects' else 'results', year)
 
+    results = scope_by_student(WAECResult.query.filter_by(exam_year=year), WAECResult).all()
     if etype == 'subjects':
+        legacy = {'a1': ['g:A1'], 'b2': ['g:B2'], 'b3': ['g:B3'], 'c456': ['g:C4', 'g:C5', 'g:C6'],
+                  'd7f9': ['g:D7', 'g:E8', 'g:F9'], 'passrate': ['crate']}
         if not cols:
-            cols = {'total', 'a1', 'b2', 'b3', 'passrate'}
-        headers = ['Subject']
-        specs = [('total', 'N'), ('a1', 'A1'), ('b2', 'B2'), ('b3', 'B3'),
-                 ('c456', 'C4-6'), ('d7f9', 'D7-F9'), ('passrate', 'Pass %')]
-        headers += [label for key, label in specs if key in cols]
-        rows = []
-        for sub in _waec_subject_rows(year):
-            g = sub['grades']
-            cell = {'total': sub['total'], 'a1': g.get('A1', 0), 'b2': g.get('B2', 0),
-                    'b3': g.get('B3', 0), 'c456': g.get('C4', 0) + g.get('C5', 0) + g.get('C6', 0),
-                    'd7f9': g.get('D7', 0) + g.get('E8', 0) + g.get('F9', 0),
-                    'passrate': '%s%%' % sub['pass_rate']}
-            rows.append([sub['subject']] + [str(cell[k]) for k, _l in specs if k in cols])
+            cols = {'total', 'spread', 'crate', 'prate', 'avgpts', 'delta', 'chart'} | {'g:' + g for g in scale.grades}
+        cols = set().union(*[legacy.get(c, [c]) for c in cols])
+        by = defaultdict(list)
+        for r in results:
+            by[r.subject].append(r.grade)
+        years = [y for (y,) in db.session.query(WAECResult.exam_year).distinct()]
+        prev_year = max((y for y in years if y < year), default=None)
+        prev = {}
+        if prev_year:
+            pg = defaultdict(list)
+            for r in scope_by_student(WAECResult.query.filter_by(exam_year=prev_year), WAECResult).all():
+                pg[r.subject].append(r.grade)
+            prev = {k: round(sum(1 for g in v if scale.kind(g) in ('d', 'c')) / len(v) * 100, 1)
+                    for k, v in pg.items() if v}
+        ctx['candidates'] = len({r.student_id for r in results})
+        doc = ERD.subjects_doc(ctx, by, cols, scale, prev, prev_year)
     else:
         if not cols:
-            # Mirror the on-screen students table by default.
-            cols = {'rank', 'student_id', 'a1', 'b2', 'b3', 'credits', 'avg', 'grades'}
-        headers = []
-        if 'rank' in cols:
-            headers.append('S/N')
-        headers.append('Name')
-        if 'student_id' in cols:
-            headers.append('Student ID')
-        grade_specs = [('a1', 'A1'), ('b2', 'B2'), ('b3', 'B3')]
-        headers += [label for key, label in grade_specs if key in cols]
-        if 'allgrades' in cols:
-            headers += list(WAEC_GRADES)
-        if 'credits' in cols:
-            headers.append('Credits')
-        if 'avg' in cols:
-            headers.append('Avg Pts')
-        if 'grades' in cols:
-            headers.append('Subject Grades')
-        rows = []
-        for i, s in enumerate(_waec_students_rows(year), 1):
-            gc = s['grade_counts']
-            row = []
-            if 'rank' in cols:
-                row.append(str(i))
-            row.append(s['name'])
-            if 'student_id' in cols:
-                row.append(s['student_id'] or '')
-            for key, label in grade_specs:
-                if key in cols:
-                    row.append(str(gc.get(label, 0)))
-            if 'allgrades' in cols:
-                row += [str(gc.get(g, 0)) for g in WAEC_GRADES]
-            if 'credits' in cols:
-                row.append(str(s['credit_count']))
-            if 'avg' in cols:
-                row.append(str(s['avg_points']))
-            if 'grades' in cols:
-                row.append(' '.join('%s:%s' % (_abbr_one(r['subject']), r['grade'])
-                                    for r in s['results']))
-            rows.append(row)
-
-    school = school_profile()
-    total = len(rows)
-    if fmt == 'pdf':
-        data = students_pdf(rows, headers, school, total=total)
-        return pdf_response(BytesIO(data), '%s_results_%s.pdf' % (_board.current().key, year), inline=False)
-    if fmt == 'word':
-        return students_word(rows, headers, school, total=total,
-                             filename='%s_results_%s.docx' % (_board.current().key, year))
-    # image — one A4 page per request; client loops via X-Total-Pages
-    pages = students_image_pages(rows, headers, school, total=total)
-    page = request.args.get('page', type=int) or 1
-    page = max(1, min(page, len(pages)))
-    suffix = '' if len(pages) == 1 else ('_p%d' % page)
-    return Response(pages[page - 1], mimetype='image/png', headers={
-        'Content-Disposition': 'attachment; filename="%s_results_%s%s.png"' % (_board.current().key, year, suffix),
-        'X-Total-Pages': str(len(pages)), 'Access-Control-Expose-Headers': 'X-Total-Pages'})
+            cols = {'rank', 'student_id', 'a1', 'b2', 'b3', 'credits', 'avg', 'grades', 'benchmark'}
+        legacy = {'a1': 'g:A1', 'b2': 'g:B2', 'b3': 'g:B3'}
+        cols = {legacy.get(c, c) for c in cols}
+        by_student = defaultdict(list)
+        for r in results:
+            by_student[r.student_id].append((r.subject, r.grade))
+        students = scope_query(Student.query.filter(Student.id.in_(list(by_student) or [-1])), Student).all()
+        cands = [{'name': st.full_name, 'student_id': st.student_id,
+                  'exam_no': getattr(st, board.reg_attr, None) or '', 'gender': st.gender or '',
+                  'results': by_student[st.id]} for st in students]
+        doc = ERD.students_doc(ctx, cands, cols, scale)
+    return ERD.file_response(doc, fmt, stem)
 
 
 @results_bp.route('/waec/export')
