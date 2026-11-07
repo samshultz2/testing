@@ -10,7 +10,7 @@ function Index({ d }) {
   const links = [
     ['rules', 'fa-list-alt', 'Promotion Rules', 'Configure promotion criteria and streams'],
     ['process', 'fa-user-graduate', 'Process Promotions', 'Review and promote students'],
-    ['graduates', 'fa-graduation-cap', 'Graduates', 'View graduated students with WAEC/JAMB results'],
+    ['graduates', 'fa-graduation-cap', 'Graduates', 'View graduated students with WAEC/NECO/JAMB results'],
     ['history', 'fa-history', 'Promotion History', 'View past promotion records'],
   ];
   return (
@@ -370,7 +370,7 @@ function Graduates({ d }) {
   const [sortBy, setSortBy] = useState('name');
   const males = d.graduates.filter((g) => g.gender === 'Male').length;
   const females = d.graduates.filter((g) => g.gender === 'Female').length;
-  const noResults = d.graduates.filter((g) => !g.has_waec && !g.has_jamb).length;
+  const noResults = d.graduates.filter((g) => !g.has_waec && !g.has_neco && !g.has_jamb).length;
   const hasFilters = !!(d.session_id || d.status);
   // Live search + client-side sort over the loaded graduates — matches name,
   // student ID, session or status.
@@ -465,6 +465,7 @@ function Graduates({ d }) {
                     </div>
                     <div className="f-results">
                       <span className={'grad-res' + (s.has_waec ? ' on' : '')}><i aria-hidden="true" className={'fas fa-' + (s.has_waec ? 'circle-check' : 'circle')} /> WAEC</span>
+                      <span className={'grad-res' + (s.has_neco ? ' on' : '')}><i aria-hidden="true" className={'fas fa-' + (s.has_neco ? 'circle-check' : 'circle')} /> NECO</span>
                       <span className={'grad-res' + (s.has_jamb ? ' on' : '')}><i aria-hidden="true" className={'fas fa-' + (s.has_jamb ? 'circle-check' : 'circle')} /> JAMB</span>
                     </div>
                     <div className="f-actions">

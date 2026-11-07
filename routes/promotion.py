@@ -95,6 +95,19 @@ def graduates_list():
         db.session.rollback()
         photo_ids = set()
 
+    # Which graduates have WAEC / NECO / JAMB results — one query per exam,
+    # not three counts per row.
+    has = {'waec': set(), 'neco': set(), 'jamb': set()}
+    try:
+        from models import WAECResult, NECOResult, JAMBResult
+        gids = [s.id for s in graduates]
+        if gids:
+            for key, model in (('waec', WAECResult), ('neco', NECOResult), ('jamb', JAMBResult)):
+                has[key] = {sid for (sid,) in db.session.query(model.student_id)
+                            .filter(model.student_id.in_(gids)).distinct().all()}
+    except Exception:
+        db.session.rollback()
+
     return _render({
         'page': 'graduates', 'session_id': session_id or '', 'sessions': _sessions_json(),
         'status': status, 'statuses': GRADUATE_STATUSES,
@@ -112,7 +125,7 @@ def graduates_list():
             'status': s.graduate_status or 'Graduated',
             'graduation_date': s.graduation_date.strftime('%d %b %Y') if s.graduation_date else None,
             'graduation_session': s.graduation_session.name if s.graduation_session else None,
-            'has_waec': s.waec_results.count() > 0, 'has_jamb': s.jamb_results.count() > 0,
+            'has_waec': s.id in has['waec'], 'has_neco': s.id in has['neco'], 'has_jamb': s.id in has['jamb'],
             'photo_url': url_for('main.student_photo', student_id=s.id) if s.id in photo_ids else '',
             'profile_url': url_for('promotion.graduate_profile', student_id=s.id),
         } for s in graduates],

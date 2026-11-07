@@ -54,7 +54,7 @@
 [data-theme="dark"] .grad-res.on, [data-theme="midnight"] .grad-res.on,
 [data-theme="carbon"] .grad-res.on, [data-theme="mocha"] .grad-res.on{color:#6ee7b7}
 
-/* WAEC/JAMB as icon pills instead of plain badges — grey + hollow circle
+/* WAEC/NECO/JAMB as icon pills instead of plain badges — grey + hollow circle
    when missing, green + check when uploaded, so the eye catches gaps fast. */
 .grad-res{display:inline-flex;align-items:center;gap:.35rem;font-size:.72rem;font-weight:600;
   padding:.3rem .6rem;border-radius:var(--radius-full);background:var(--gray-100);color:var(--text-muted)}
@@ -79,9 +79,11 @@
 .grad-row .f-results{grid-area:results;display:flex;gap:.45rem;flex-wrap:wrap;min-width:0}
 .grad-row .f-actions{grid-area:actions;justify-self:end;align-self:center}
 @media (min-width:900px){
-  .grad-row{grid-template-columns:2.2fr 1.6fr 1.3fr 1.1fr auto;
+  .grad-row{grid-template-columns:2.4fr 1.3fr 1fr minmax(13.5rem,1.4fr) auto;
     grid-template-areas:"who meta status results actions";align-items:center;padding:.7rem 1.1rem}
   .grad-row .meta{flex-wrap:nowrap}
+  .grad-row .f-results{flex-wrap:nowrap;gap:.35rem}
+  .grad-row .grad-res{padding:.3rem .5rem}
   .grad-row .f-status{justify-self:start;align-self:center}
 }
 
