@@ -32,7 +32,7 @@
   <div class="mx-tabs" role="tablist" aria-label="Symbol groups"></div>
   <div class="mx-pal" role="tabpanel"></div>
 </div>
-<script src="{{ url_for('static', filename='js/cbt-math-editor.js') }}"></script>
+<script src="{{ bundle_url('js/cbt-math-editor.js') }}"></script>
 <script type="application/json" id="{{ tid }}_mxdata">{{ mx.palettes|tojson }}</script>
 <style>
 .mx{min-width:0;max-width:100%;border:1px solid var(--border-color,#dfe3ea);border-bottom:none;border-radius:10px 10px 0 0;background:var(--bg-card,#fff)}
@@ -89,7 +89,27 @@
 .mr-sheet-gap{flex:1}
 .mr-sheet-del{background:transparent;border:1px solid var(--border-color,#dfe3ea);color:var(--danger,#dc2626)}
 html.mr-sheet-open,html.mr-sheet-open body{overflow:hidden}
-@media (pointer:coarse){.mr-chip{cursor:pointer}.mr-chip math-field{pointer-events:none}.mr-chip-x{display:inline-flex}}
+.mr-chip{cursor:pointer;min-height:2rem}
+.mr-chip math-field{pointer-events:none;cursor:pointer}
+.mr-chip:hover{background:var(--primary-light,#e8f5f1)}
+html.mr-touch .mr-chip-x{display:inline-flex}
+@media (pointer:coarse){.mr-chip-x{display:inline-flex}}
+.mr-sheet{align-items:flex-start}
+@media (min-width:700px) and (pointer:fine){.mr-sheet{align-items:center}}
+.mr-sheet-card{display:flex;flex-direction:column;max-height:100%;overflow-y:auto;overscroll-behavior:contain}
+.mr-sheet{box-sizing:border-box;height:100%}
+html.mr-touch .mr-sheet-actions{order:-1;margin:0 0 .65rem}
+html.mr-touch .mr-sheet-head{order:-2}
+html.mr-touch .mr-sheet-tools .mx-pal{max-height:5.4rem}
+html.mr-touch .mr-sheet-field math-field{font-size:2.1rem;min-height:5rem;padding:.6rem .9rem}
+.mr-sheet-tools .mx{margin-top:.7rem;border-bottom:1px solid var(--border-color,#dfe3ea);border-radius:10px}
+.mr-sheet-tools .mx-right{display:none}
+.mr-sheet-tools .mx-pal{max-height:7.2rem}
+html.mr-touch .mr-sheet-tools .mx-head{padding:.4rem .6rem}
+.mr-sheet-kbd{background:transparent;border:1px solid var(--border-color,#dfe3ea);color:var(--text-secondary,#4b5563)}
+.mr-sheet-kbd[aria-pressed="true"]{background:var(--primary-light,#e8f5f1);color:var(--primary,#0d6a4e);border-color:var(--primary,#0d6a4e)}
+@media (max-width:420px){.mr-sheet-kbd-l{display:none}}
+.mr-sheet-field math-field::part(placeholder){min-width:1.4em;min-height:1.4em}
 .mx-target strong{color:var(--primary,#0d6a4e)}
 .mx-tabs{display:flex;gap:.15rem;overflow-x:auto;padding:0 .5rem;border-bottom:1px solid var(--border-color,#e6e9ef);scrollbar-width:thin}
 .mx-tab{flex:none;border:none;background:none;padding:.5rem .7rem;font-size:.82rem;font-weight:500;color:var(--text-muted,#6b7280);border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap}
