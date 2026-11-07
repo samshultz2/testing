@@ -13,8 +13,7 @@ from datetime import datetime
 from models.models import db
 
 # Standard WASSCE grade boundaries (score out of 100 -> grade).
-PASS_GRADES = {'A1', 'B2', 'B3', 'C4', 'C5', 'C6'}        # credit or better
-DISTINCTION_GRADES = {'A1', 'B2', 'B3'}
+from utils.exam_rules import CREDIT_GRADES as PASS_GRADES, DISTINCTION_GRADES  # noqa: E402 — shared rule
 GRADE_POINTS = {'A1': 1, 'B2': 2, 'B3': 3, 'C4': 4, 'C5': 5,
                 'C6': 6, 'D7': 7, 'E8': 8, 'F9': 9}
 

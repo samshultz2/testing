@@ -487,27 +487,23 @@ def analytics_hub():
     # JAMB mean projection (simple linear fit) computed directly from JAMB years.
     projection = None
     jamb_means = []
-    for jy in sorted(set(jamb_years)):
-        rs = scope_by_student(JAMBResult.query.filter_by(exam_year=jy), JAMBResult).all()
-        if rs:
-            jamb_means.append({'year': jy, 'mean_score': round(sum(r.total_score for r in rs) / len(rs), 1)})
-    if len(jamb_means) >= 2:
-        xs = [t['year'] for t in jamb_means]
-        ys = [t['mean_score'] for t in jamb_means]
-        n = len(xs)
-        mean_x = sum(xs) / n
-        mean_y = sum(ys) / n
-        denom = sum((x - mean_x) ** 2 for x in xs)
-        slope = (sum((xs[i] - mean_x) * (ys[i] - mean_y) for i in range(n)) / denom) if denom else 0
-        next_year = max(xs) + 1
-        projected = round(mean_y + slope * (next_year - mean_x), 1)
-        projected = max(0, min(400, projected))
+    # One grouped query (mean per year) instead of loading every result per year.
+    from utils.branch_scope import scope_by_student as _sbs
+    from utils.stats_guard import projection as _proj
+    for jy, mean in (_sbs(db.session.query(JAMBResult.exam_year, func.avg(JAMBResult.total_score)), JAMBResult)
+                     .group_by(JAMBResult.exam_year).order_by(JAMBResult.exam_year).all()):
+        if mean is not None:
+            jamb_means.append({'year': jy, 'mean_score': round(float(mean), 1)})
+    p = _proj([(t['year'], t['mean_score']) for t in jamb_means], lo=0, hi=400)
+    if p:
         projection = {
-            'next_year': next_year,
-            'projected_mean': projected,
-            'direction': 'up' if slope > 0.5 else 'down' if slope < -0.5 else 'flat',
-            'slope_per_year': round(slope, 1),
-            'latest_mean': ys[-1],
+            'next_year': p['next_year'],
+            'projected_mean': p['projected'],
+            'low': p['low'], 'high': p['high'],
+            'confidence': p['confidence'], 'years': p['years'],
+            'direction': 'up' if p['slope'] > 0.5 else 'down' if p['slope'] < -0.5 else 'flat',
+            'slope_per_year': p['slope'],
+            'latest_mean': jamb_means[-1]['mean_score'],
         }
 
     # University-cutoff readiness (JAMB >= 200) for the selected year.
@@ -578,24 +574,31 @@ def analytics_hub():
 
         pairs = []
         # Use TermSummary rows from the selected session's terms so the internal
-        # performance data matches the session we're analysing, not today's live term.
-        for r in scope_by_student(JAMBResult.query.filter_by(exam_year=year), JAMBResult).all():
+        # performance data matches the session we're analysing, not today's live
+        # term. Two grouped queries (not one per student).
+        jrows = scope_by_student(JAMBResult.query.filter_by(exam_year=year), JAMBResult).all()
+        ids = list({r.student_id for r in jrows})
+        latest = {}
+        if ids:
+            tq = TermSummary.query.filter(TermSummary.student_id.in_(ids),
+                                          TermSummary.average_score.isnot(None))
             if year_terms:
-                term_ids = [t.id for t in year_terms]
-                ts = (TermSummary.query.filter(TermSummary.student_id == r.student_id,
-                                               TermSummary.term_id.in_(term_ids))
-                      .order_by(TermSummary.term_id.desc()).first())
-            else:
-                ts = (TermSummary.query.filter_by(student_id=r.student_id)
-                      .order_by(TermSummary.term_id.desc()).first())
-            if ts and ts.average_score is not None:
-                pairs.append((ts.average_score, r.total_score))
-        if len(pairs) >= 5:
+                tq = tq.filter(TermSummary.term_id.in_([t.id for t in year_terms]))
+            for ts in tq.order_by(TermSummary.term_id).all():
+                latest[ts.student_id] = ts.average_score          # last (newest) term wins
+        for r in jrows:
+            if r.student_id in latest and r.total_score is not None:
+                pairs.append((latest[r.student_id], r.total_score))
+        from utils.stats_guard import MIN_CORRELATION_N, correlation_ci, confidence as _conf
+        if len(pairs) >= MIN_CORRELATION_N:
             xs = [p[0] for p in pairs]
             ys = [p[1] for p in pairs]
+            r_val = AcademicAnalytics._pearson_correlation(xs, ys)
             internal_corr = {
                 'n': len(pairs),
-                'r': round(AcademicAnalytics._pearson_correlation(xs, ys), 3),
+                'r': round(r_val, 3),
+                'ci': correlation_ci(r_val, len(pairs)),
+                'confidence': _conf(len(pairs), kind='correlation'),
                 'mean_internal': round(sum(xs) / len(xs), 1),
                 'mean_jamb': round(sum(ys) / len(ys), 1),
             }
@@ -691,6 +694,60 @@ def analytics_hub():
         mock_waec_trend=mock_waec_trend,
         recompute_url=url_for('results.recompute_analytics'),
     )
+
+
+@results_bp.route('/analytics/insights')
+@login_required
+def analytics_insights():
+    """Deeper insights: value added, mock accuracy, BECE → WAEC, near-credit,
+    subject combinations, teachers, fairness gaps, attendance bands, intake
+    cohorts, readiness through the session, weak topics, weekly at-risk changes
+    and data health — every figure with its sample size and confidence."""
+    from utils import exam_deep_insights as DI, data_health
+    from utils.insights_snapshots import weekly_changes, frozen
+    from utils.branch_scope import viewing_branch_id
+    from utils.helpers import session_for_exam_year
+    from utils.access_control import exam_student_scope
+    if exam_student_scope() is not None:      # arm-only staff: no school-wide figures
+        flash('Insights cover the whole school, so they need full analytics access.', 'warning')
+        return redirect(url_for('results.analytics_hub'))
+    waec_years = sorted({y for (y,) in db.session.query(WAECResult.exam_year).distinct()}, reverse=True)
+    year = resolve_exam_year(request.args.get('year', type=int), waec_years)
+    bid = viewing_branch_id()
+    data = DI.build(year, bid, waec_years) if year else {'errors': {}}
+    sess = session_for_exam_year(year) if year else None
+    try:
+        risk = weekly_changes(session_id=sess.id if sess else None, branch_id=bid)
+    except Exception:
+        db.session.rollback()
+        current_app.logger.exception('weekly at-risk changes failed')
+        risk = None
+    return render_template('results/analytics_insights.html', d=data, year=year, years=waec_years,
+                           health=data_health.run(year, bid), risk=risk,
+                           frozen=frozen(year, bid) if year else None)
+
+
+@results_bp.route('/analytics/insights/freeze', methods=['POST'])
+@login_required
+def analytics_freeze_year():
+    """Freeze (or unfreeze) a year's headline numbers for stable comparisons."""
+    from utils.insights_snapshots import freeze, unfreeze
+    from utils.branch_scope import viewing_branch_id
+    from utils.access_control import get_current_user
+    year = request.form.get('year', type=int)
+    bid = viewing_branch_id()
+    try:
+        if request.form.get('action') == 'unfreeze':
+            unfreeze(year, bid)
+            flash(f'{year} numbers unfrozen — comparisons use live results again.', 'success')
+        else:
+            u = get_current_user()
+            freeze(year, bid, by=(getattr(u, 'full_name', None) or getattr(u, 'username', '')) if u else '')
+            log_action('analytics.freeze_year', detail=str(year))
+            flash(f'{year} headline numbers frozen. Year comparisons will use these figures.', 'success')
+    except ValueError as e:
+        flash(str(e), 'warning')
+    return redirect(url_for('results.analytics_insights', year=year))
 
 
 @results_bp.route('/analytics/by-class')

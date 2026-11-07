@@ -8,6 +8,7 @@ from utils.helpers import get_active_term
 from collections import defaultdict
 from typing import Dict, List, Tuple
 from sqlalchemy import func
+from utils import exam_rules as _rules
 from models.models import (
     db, Student, WAECResult, JAMBResult, StudentEnrollment, ClassArmAssignment,
     Attendance
@@ -24,8 +25,9 @@ class AcademicAnalytics:
     # average grade-point means stronger performance. GRADE_POINTS (A1 = 1) stays
     # the WAEC ordinal used for ranking/prediction where lower = better.
     GRADE_AVERAGE_POINTS = {'A1': 9, 'B2': 8, 'B3': 7, 'C4': 6, 'C5': 5, 'C6': 4, 'D7': 3, 'E8': 2, 'F9': 1}
-    PASS_GRADES = ['A1', 'B2', 'B3', 'C4', 'C5', 'C6']
-    DISTINCTION_GRADES = ['A1', 'B2', 'B3']
+    # Shared definitions (utils.exam_rules) — one rule for every page.
+    PASS_GRADES = [g for g in _rules.WAEC_GRADES if g in _rules.CREDIT_GRADES]
+    DISTINCTION_GRADES = [g for g in _rules.WAEC_GRADES if g in _rules.DISTINCTION_GRADES]
     
     # ========================================================================
     # STUDENT-LEVEL ANALYTICS
@@ -781,26 +783,29 @@ class AcademicAnalytics:
         if branch_id is not None:
             q = q.filter(Student.branch_id == branch_id)
         students_with_both = q.distinct().all()
-        
-        if len(students_with_both) < 5:
-            return {'error': 'Insufficient data for correlation analysis', 'sample_size': len(students_with_both)}
-        
-        waec_points = []
-        jamb_scores = []
-        
-        for student in students_with_both:
-            waec = _exam_board.results_of(student).filter_by(exam_year=exam_year).all()
-            jamb = student.jamb_results.filter_by(exam_year=exam_year).first()
-            
-            if waec and jamb and jamb.total_score is not None:
-                total_points = sum(AcademicAnalytics.GRADE_POINTS.get(r.grade, 9) for r in waec)
-                avg_points = total_points / len(waec)
-                waec_points.append(avg_points)
-                jamb_scores.append(jamb.total_score)
-        
-        if len(waec_points) < 5:
+        from utils.stats_guard import MIN_CORRELATION_N, correlation_ci, confidence
+        if len(students_with_both) < MIN_CORRELATION_N:
+            return {'error': 'Insufficient data for correlation analysis (needs %d students with both '
+                             'results)' % MIN_CORRELATION_N, 'sample_size': len(students_with_both)}
+
+        # Two grouped queries instead of two per student.
+        ids = [s.id for s in students_with_both]
+        pts = {}
+        for r in WAECResult.query.filter(WAECResult.student_id.in_(ids), WAECResult.exam_year == exam_year):
+            pts.setdefault(r.student_id, []).append(AcademicAnalytics.GRADE_POINTS.get(r.grade, 9))
+        jamb = {}
+        for r in JAMBResult.query.filter(JAMBResult.student_id.in_(ids), JAMBResult.exam_year == exam_year):
+            if r.total_score is not None and r.student_id not in jamb:
+                jamb[r.student_id] = r.total_score
+        waec_points, jamb_scores = [], []
+        for sid in ids:
+            if pts.get(sid) and sid in jamb:
+                waec_points.append(sum(pts[sid]) / len(pts[sid]))
+                jamb_scores.append(jamb[sid])
+
+        if len(waec_points) < MIN_CORRELATION_N:
             return {'error': 'Insufficient paired data', 'sample_size': len(waec_points)}
-        
+
         # Calculate Pearson correlation
         correlation = AcademicAnalytics._pearson_correlation(waec_points, jamb_scores)
         
@@ -823,7 +828,9 @@ class AcademicAnalytics:
             'interpretation': interpretation,
             'mean_waec_points': round(sum(waec_points) / len(waec_points), 2),
             'mean_jamb_score': round(sum(jamb_scores) / len(jamb_scores), 1),
-            'predictive_power': 'HIGH' if abs(correlation) >= 0.5 else 'MODERATE' if abs(correlation) >= 0.3 else 'LOW'
+            'predictive_power': 'HIGH' if abs(correlation) >= 0.5 else 'MODERATE' if abs(correlation) >= 0.3 else 'LOW',
+            'ci': correlation_ci(correlation, len(waec_points)),
+            'confidence': confidence(len(waec_points), kind='correlation'),
         }
     
     @staticmethod

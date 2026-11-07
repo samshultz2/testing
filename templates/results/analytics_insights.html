@@ -1,0 +1,335 @@
+{% extends "base.html" %}
+{% block title %}Deeper Insights {{ year or '' }} - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('results.analytics_hub', year=year) }}">Exam Analytics</a> / <span>Deeper insights</span>{% endblock %}
+
+{% macro r(x) -%}
+{% if x %}<span class="rt" title="Likely range {{ x.lo }}–{{ x.hi }}% · {{ x.n }} students">{{ x.pct }}%</span>{% if x.small %}<span class="small-n" title="Fewer than 10 — read with caution">small group</span>{% endif %}{% else %}—{% endif %}
+{%- endmacro %}
+{% macro rng(x) -%}{% if x %}<span class="rng">{{ x.lo }}–{{ x.hi }}%</span>{% endif %}{%- endmacro %}
+{% macro va(v) -%}<span class="{{ 'up' if v > 0.25 else 'dn' if v < -0.25 else 'flat' }}">{{ '+' if v > 0 else '' }}{{ v }}</span>{%- endmacro %}
+{% macro verdict(v) -%}{% if v %}<span class="vd {{ 'vd-real' if v.real else 'vd-chance' }}" title="{% if v.p is not none %}p = {{ v.p }}{% endif %}">{{ v.label }}</span>{% endif %}{%- endmacro %}
+{% macro empty(msg) -%}<p class="text-muted mb-0"><i class="fas fa-circle-info"></i> {{ msg }}</p>{%- endmacro %}
+
+{% block extra_css %}
+<style>
+.ix-nav{position:sticky;top:0;z-index:4;background:var(--bg-body,var(--bg-card));display:flex;gap:.35rem;flex-wrap:wrap;padding:.5rem 0;margin-bottom:.5rem;border-bottom:1px solid var(--border-color)}
+.ix-nav a{font-size:.78rem;font-weight:600;padding:.3rem .65rem;border-radius:999px;background:var(--gray-50);color:var(--text-primary);text-decoration:none;border:1px solid var(--border-light)}
+.ix-nav a:hover{border-color:var(--primary);color:var(--primary)}
+.ix-sec{scroll-margin-top:4rem;margin-top:1.4rem}
+.ix-sec>h2{font-size:1.1rem;font-weight:700;display:flex;gap:.5rem;align-items:center;margin:0 0 .25rem}
+.ix-sec>h2 i{color:var(--primary)}
+.ix-sec>.lede{font-size:.85rem;color:var(--text-muted);margin:0 0 .75rem;max-width:70rem}
+.two{display:grid;grid-template-columns:1fr;gap:1rem}
+@media(min-width:992px){.two{grid-template-columns:1fr 1fr}}
+.tbl{width:100%;border-collapse:collapse;font-size:.82rem}
+.tbl th,.tbl td{padding:.45rem .6rem;border-bottom:1px solid var(--border-light);text-align:left;vertical-align:top}
+.tbl th{background:var(--gray-50);font-weight:600;font-size:.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.03em}
+.tbl .num{text-align:right;white-space:nowrap}
+.tbl-wrap{overflow-x:auto}
+.rng{display:block;font-size:.7rem;color:var(--text-muted)}
+.small-n{display:inline-block;font-size:.66rem;color:var(--warning,#b7791f);font-weight:700;margin-left:.3rem;cursor:help;white-space:nowrap}
+.up{color:var(--success,#198754);font-weight:700}.dn{color:var(--danger,#dc3545);font-weight:700}.flat{color:var(--text-muted);font-weight:600}
+.vd{display:inline-block;font-size:.7rem;font-weight:700;padding:.08rem .45rem;border-radius:6px;white-space:nowrap}
+.vd-real{background:rgba(220,53,69,.1);color:var(--danger,#dc3545)}
+.vd-chance{background:var(--gray-100);color:var(--text-muted)}
+.tagv{font-size:.72rem;font-weight:700;padding:.08rem .45rem;border-radius:6px;white-space:nowrap}
+.tagv.good{background:rgba(25,135,84,.12);color:var(--success,#198754)}
+.tagv.bad{background:rgba(220,53,69,.1);color:var(--danger,#dc3545)}
+.tagv.mid{background:var(--gray-100);color:var(--text-muted)}
+.kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:.6rem;margin-bottom:.75rem}
+@media(min-width:768px){.kpis{grid-template-columns:repeat(4,1fr)}}
+.kp{border:1px solid var(--border-color);border-radius:var(--radius-md,10px);padding:.75rem .9rem;background:var(--bg-card)}
+.kp .v{font-size:1.45rem;font-weight:800;line-height:1.1}
+.kp .l{font-size:.7rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;font-weight:600;margin-top:.15rem}
+.kp .s{font-size:.75rem;color:var(--text-muted);margin-top:.15rem}
+.hc{border:1px solid var(--border-color);border-left:4px solid var(--success,#198754);border-radius:var(--radius-md,10px);padding:.7rem .9rem;background:var(--bg-card)}
+.hc.warn{border-left-color:var(--warning,#f59e0b)}.hc.bad{border-left-color:var(--danger,#dc3545)}
+.hc .t{display:flex;gap:.5rem;align-items:center;font-weight:700;font-size:.88rem}
+.hc .n{margin-left:auto;font-size:.78rem;font-weight:700;padding:.1rem .5rem;border-radius:999px;background:var(--gray-100)}
+.hc .h{font-size:.78rem;color:var(--text-muted);margin:.25rem 0}
+.hc ul{margin:.3rem 0 .2rem 1.1rem;padding:0;font-size:.78rem;max-height:9rem;overflow:auto}
+.hgrid{display:grid;grid-template-columns:1fr;gap:.6rem}
+@media(min-width:768px){.hgrid{grid-template-columns:1fr 1fr}}
+.bar{height:8px;border-radius:999px;background:var(--gray-100);overflow:hidden;min-width:70px}
+.bar i{display:block;height:100%;background:var(--primary)}
+.chips{display:flex;flex-wrap:wrap;gap:.25rem}
+.chips span{font-size:.72rem;background:var(--gray-100);border-radius:5px;padding:.05rem .4rem}
+.risk-cols{display:grid;grid-template-columns:1fr;gap:.75rem}
+@media(min-width:992px){.risk-cols{grid-template-columns:repeat(4,1fr)}}
+.risk-col h4{font-size:.85rem;margin:0 0 .4rem}
+.risk-col ul{list-style:none;margin:0;padding:0;font-size:.8rem;max-height:14rem;overflow:auto}
+.risk-col li{padding:.3rem 0;border-bottom:1px solid var(--border-light)}
+.risk-col li small{display:block;color:var(--text-muted)}
+.note{font-size:.75rem;color:var(--text-muted);margin-top:.5rem}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Deeper Insights{% if year %} — WAEC {{ year }}{% endif %}</h1>
+    <p class="text-muted text-sm">Every rate shows how many students it is based on and a likely range; groups under 10 are marked “small group”, and gaps say whether they are a real difference or could be chance.</p>
+  </div>
+  <div class="page-header-actions no-print">
+    <form method="GET" class="d-flex gap-2 align-center">
+      <label class="form-label mb-0" for="ixYear">Year</label>
+      <select id="ixYear" name="year" class="form-control" style="max-width:130px" data-autosubmit>
+        {% for y in years %}<option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>{% endfor %}
+      </select>
+    </form>
+    {% if year and can_write_sub('external_exams', 'analytics_recompute') %}
+    <form method="POST" action="{{ url_for('results.analytics_freeze_year') }}" class="d-inline"
+          data-confirm="{% if frozen %}Unfreeze {{ year }}? Comparisons will use live results again.{% else %}Freeze {{ year }}'s headline numbers? Year comparisons will keep using them even if records are edited later.{% endif %}">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="year" value="{{ year }}">
+      {% if frozen %}<input type="hidden" name="action" value="unfreeze">
+      <button class="btn btn-secondary btn-sm" type="submit"><i class="fas fa-lock-open"></i> Unfreeze {{ year }}</button>
+      {% else %}<button class="btn btn-secondary btn-sm" type="submit"><i class="fas fa-lock"></i> Freeze {{ year }} numbers</button>{% endif %}
+    </form>
+    {% endif %}
+    <a href="{{ url_for('results.analytics_hub', year=year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Analytics</a>
+  </div>
+</div>
+{% if frozen %}<div class="alert alert-info"><i class="fas fa-lock"></i> {{ year }} headline numbers were frozen{% if frozen._frozen_at %} on {{ frozen._frozen_at.strftime('%d %b %Y') }}{% endif %}{% if frozen._frozen_by %} by {{ frozen._frozen_by }}{% endif %}. Year comparisons use those figures.</div>{% endif %}
+
+{% if not year %}
+<div class="card"><div class="card-body">{{ empty('No WAEC results yet — insights appear once a year of results is entered.') }}</div></div>
+{% else %}
+<nav class="ix-nav no-print" aria-label="Sections">
+  <a href="#health">Data health</a><a href="#risk">At-risk this week</a><a href="#va">Value added</a>
+  <a href="#near">Near credit</a><a href="#mock">Mock accuracy</a><a href="#bece">BECE → WAEC</a>
+  <a href="#combo">Subject choices</a><a href="#teach">Teachers</a><a href="#fair">Fairness</a>
+  <a href="#att">Attendance</a><a href="#cohort">Cohorts</a><a href="#ready">Readiness</a><a href="#topics">Weak topics</a>
+</nav>
+{% if d.errors %}<div class="alert alert-warning">Some sections could not be calculated: {{ d.errors|join(', ') }}.</div>{% endif %}
+
+{# ---------------- Data health ---------------- #}
+<section class="ix-sec" id="health">
+  <h2><i class="fas fa-stethoscope"></i> Data health</h2>
+  <p class="lede">Problems in the records that make the numbers wrong. Fixing these first makes every other figure on this page more trustworthy.</p>
+  <div class="hgrid">
+  {% for c in health %}
+    <div class="hc {{ c.severity }}">
+      <div class="t">{% if c.severity == 'ok' %}<i class="fas fa-circle-check" style="color:var(--success)"></i>{% else %}<i class="fas fa-triangle-exclamation" style="color:var(--{{ 'danger' if c.severity == 'bad' else 'warning' }})"></i>{% endif %}
+        {{ c.label }}<span class="n">{{ c.count }}</span></div>
+      {% if c.help %}<div class="h">{{ c.help }}</div>{% endif %}
+      {% if c['items'] %}<ul>{% for it in c['items'] %}<li>{{ it }}</li>{% endfor %}{% if c.count > c['items']|length %}<li>… and {{ c.count - c['items']|length }} more</li>{% endif %}</ul>{% endif %}
+      {% if c.count and c.fix %}<a href="{{ c.fix }}" class="btn btn-sm btn-secondary mt-1">{{ c.fix_label }} <i class="fas fa-arrow-right"></i></a>{% endif %}
+    </div>
+  {% endfor %}
+  </div>
+</section>
+
+{# ---------------- At-risk this week ---------------- #}
+<section class="ix-sec" id="risk">
+  <h2><i class="fas fa-triangle-exclamation"></i> At-risk SSS3 students — this week</h2>
+  <p class="lede">Who moved into or out of risk since {% if risk and risk.previous_week %}the week of {{ risk.previous_week.strftime('%d %b') }}{% else %}last week{% endif %}, and why. Saved automatically each week this page is opened.</p>
+  {% if risk %}
+  <div class="kpis">
+    <div class="kp"><div class="v">{{ risk.total }}</div><div class="l">At risk now</div></div>
+    <div class="kp"><div class="v dn">{{ risk.new|length }}</div><div class="l">New this week</div></div>
+    <div class="kp"><div class="v up">{{ risk.left|length }}</div><div class="l">No longer at risk</div></div>
+    <div class="kp"><div class="v">{{ risk.worse|length }} / {{ risk.better|length }}</div><div class="l">Worse / better</div></div>
+  </div>
+  {% if not risk.previous_week %}<p class="note"><i class="fas fa-circle-info"></i> This is the first saved week — changes appear from next week. Students at risk now: <a href="{{ url_for('results.at_risk_watchlist') }}">watchlist</a>.</p>{% endif %}
+  <div class="risk-cols">
+    {% for title, rows, icon in [('New this week', risk.new, 'fa-arrow-trend-down'), ('Got worse', risk.worse, 'fa-arrow-down'), ('Got better', risk.better, 'fa-arrow-up'), ('No longer at risk', risk.left, 'fa-circle-check')] %}
+    <div class="card risk-col"><div class="card-body">
+      <h4><i class="fas {{ icon }}"></i> {{ title }} ({{ rows|length }})</h4>
+      {% if rows %}<ul>{% for s in rows %}<li><a href="{{ url_for('results.student_report', student_id=s.student_id) }}">{{ s.name }}</a>
+        <small>{{ s.class or '' }}{% if s.was and s.was != s.status %} · {{ s.was|replace('_', ' ')|title }} → {{ (s.status or 'on track')|replace('_', ' ')|title }}{% elif s.status %} · {{ s.status|replace('_', ' ')|title }}{% endif %}{% if s.blockers %} · {{ s.blockers[:2]|join('; ') }}{% endif %}</small></li>{% endfor %}</ul>
+      {% else %}<p class="text-muted text-sm mb-0">None.</p>{% endif %}
+    </div></div>
+    {% endfor %}
+  </div>
+  {% else %}{{ empty('The at-risk list could not be calculated (no SSS3 mock results this session?).') }}{% endif %}
+</section>
+
+{# ---------------- Value added ---------------- #}
+{% set v = d.value_added %}
+<section class="ix-sec" id="va">
+  <h2><i class="fas fa-arrow-up-right-dots"></i> Value added — did teaching move students?</h2>
+  <p class="lede">Each student's WAEC grade compared with what their own SSS3 class scores predicted. Positive = better than expected. This is the fairest way to compare subjects and teachers, because it allows for the students each one started with.</p>
+  {% if v and v.enough %}
+  <div class="kpis">
+    <div class="kp"><div class="v">{{ v.n }}</div><div class="l">Student-subject pairs</div></div>
+    <div class="kp"><div class="v">{{ v.r }}</div><div class="l">Class score ↔ WAEC (r)</div>{% if v.ci %}<div class="s">likely {{ v.ci[0] }} to {{ v.ci[1] }}</div>{% endif %}</div>
+  </div>
+  <div class="two">
+    <div class="card"><div class="card-header"><h3>By subject</h3></div><div class="tbl-wrap"><table class="tbl">
+      <thead><tr><th>Subject</th><th class="num">Students</th><th class="num">Value added</th><th class="num">Credit rate</th><th>Verdict</th></tr></thead><tbody>
+      {% for s in v.subjects %}<tr><td>{{ s.name }}</td><td class="num">{{ s.n }}</td><td class="num">{{ va(s.va) }} <span class="rng">grade points</span></td><td class="num">{{ r(s.credit) }}{{ rng(s.credit) }}</td>
+        <td><span class="tagv {{ 'good' if s.verdict == 'Above expectation' else 'bad' if s.verdict == 'Below expectation' else 'mid' }}">{{ s.verdict }}</span></td></tr>{% endfor %}
+    </tbody></table></div></div>
+    <div class="card"><div class="card-header"><h3>By teacher</h3></div><div class="tbl-wrap"><table class="tbl">
+      <thead><tr><th>Teacher — subject</th><th class="num">Students</th><th class="num">Value added</th><th>Verdict</th></tr></thead><tbody>
+      {% for s in v.teachers %}<tr><td>{{ s.name }}</td><td class="num">{{ s.n }}</td><td class="num">{{ va(s.va) }}</td>
+        <td><span class="tagv {{ 'good' if s.verdict == 'Above expectation' else 'bad' if s.verdict == 'Below expectation' else 'mid' }}">{{ s.verdict }}</span></td></tr>{% endfor %}
+    </tbody></table></div></div>
+  </div>
+  <p class="note">Value added is in WAEC grade points (A1 = 9 … F9 = 1): +1 means one grade better than predicted. Verdicts need 10+ students and a gap of half a grade.</p>
+  {% else %}{{ empty('Needs at least 15 student-subject pairs with both an SSS3 term result and a WAEC grade for %s (%s so far). Enter SSS3 scores for this session to unlock it.'|format(year, v.n if v else 0)) }}{% endif %}
+</section>
+
+{# ---------------- Near credit ---------------- #}
+{% set nc = d.near_credit %}
+<section class="ix-sec" id="near">
+  <h2><i class="fas fa-bullseye"></i> One grade short — the cheapest wins</h2>
+  <p class="lede">D7s are one grade from a credit. These subjects and students are where extra lessons pay off most.</p>
+  {% if nc and (nc.subjects or nc.students) %}
+  <div class="kpis">
+    <div class="kp"><div class="v">{{ r(nc.meets) }}</div><div class="l">5 credits incl. Eng &amp; Maths</div></div>
+    <div class="kp"><div class="v">{{ nc.students_total }}</div><div class="l">One D7 short of it</div></div>
+    <div class="kp"><div class="v">{{ r(nc.meets_if_one_more) }}</div><div class="l">If those D7s were C6</div></div>
+  </div>
+  <div class="two">
+    <div class="card"><div class="card-header"><h3>D7s by subject</h3></div><div class="tbl-wrap"><table class="tbl">
+      <thead><tr><th>Subject</th><th class="num">Entries</th><th class="num">D7</th><th class="num">Credit now</th><th class="num">If D7 → C6</th></tr></thead><tbody>
+      {% for s in nc.subjects %}<tr><td>{{ s.subject }}</td><td class="num">{{ s.entries }}</td><td class="num"><strong>{{ s.d7 }}</strong></td><td class="num">{{ r(s.credit) }}</td><td class="num">{{ r(s.credit_if_d7) }}</td></tr>{% endfor %}
+    </tbody></table></div></div>
+    <div class="card"><div class="card-header"><h3>Students one grade from 5 credits</h3></div><div class="tbl-wrap"><table class="tbl">
+      <thead><tr><th>Student</th><th class="num">Credits</th><th>D7 in</th></tr></thead><tbody>
+      {% for s in nc.students %}<tr><td><a href="{{ url_for('results.student_report', student_id=s.id) }}">{{ s.name }}</a> <span class="text-muted text-sm">{{ s.code }}</span></td><td class="num">{{ s.credits }}</td><td><div class="chips">{% for x in s.d7 %}<span>{{ x }}</span>{% endfor %}</div></td></tr>
+      {% else %}<tr><td colspan="3" class="text-muted">None this year.</td></tr>{% endfor %}
+    </tbody></table></div></div>
+  </div>
+  {% else %}{{ empty('No D7 grades for %s.'|format(year)) }}{% endif %}
+</section>
+
+{# ---------------- Mock accuracy ---------------- #}
+{% set m = d.mock_accuracy %}
+<section class="ix-sec" id="mock">
+  <h2><i class="fas fa-scale-balanced"></i> Mock → real accuracy</h2>
+  <p class="lede">The last mock WAEC of the session against the real WAEC, subject by subject. A big gap means that mock paper (or its marking) was too hard or too easy — fix it so next year's predictions can be trusted.</p>
+  {% if m and m.subjects %}
+  <p class="text-sm"><strong>Compared:</strong> {{ m.exam }} vs WASSCE {{ year }} · {{ m.n }} student-subject pairs.</p>
+  <div class="card"><div class="tbl-wrap"><table class="tbl">
+    <thead><tr><th>Subject</th><th class="num">Pairs</th><th class="num">WAEC vs mock</th><th class="num">Avg miss</th><th class="num">Same grade</th><th class="num">Credit call right</th><th>Verdict</th></tr></thead><tbody>
+    {% for s in m.subjects %}<tr><td>{{ s.subject }}{% if s.small %}<span class="small-n">small group</span>{% endif %}</td><td class="num">{{ s.n }}</td><td class="num">{{ va(s.bias) }}</td><td class="num">{{ s.mae }}</td><td class="num">{{ r(s.exact) }}</td><td class="num">{{ r(s.credit_agree) }}</td>
+      <td><span class="tagv {{ 'mid' if s.verdict == 'Mock well matched' else 'bad' }}">{{ s.verdict }}</span></td></tr>{% endfor %}
+  </tbody></table></div></div>
+  <p class="note">“WAEC vs mock” in grade points: +1 = students did one grade better in WAEC than in the mock (mock too hard).</p>
+  {% else %}{{ empty('Needs a mock WAEC in the %s session for students who also have WAEC results.'|format(year)) }}{% endif %}
+</section>
+
+{# ---------------- BECE → WAEC ---------------- #}
+{% set b = d.bece_to_waec %}
+<section class="ix-sec" id="bece">
+  <h2><i class="fas fa-route"></i> BECE (JSS3) → WAEC</h2>
+  <p class="lede">Do strong JSS3 students stay strong? Students are grouped by their BECE results and compared with their WAEC outcome.</p>
+  {% if b and b.bands %}
+  <div class="card"><div class="tbl-wrap"><table class="tbl">
+    <thead><tr><th>At BECE</th><th class="num">Students</th><th class="num">Avg WAEC points</th><th class="num">5 credits incl. Eng &amp; Maths</th></tr></thead><tbody>
+    {% for x in b.bands %}<tr><td>{{ x.band }}</td><td class="num">{{ x.n }}</td><td class="num">{{ x.avg_points }}</td><td class="num">{{ r(x.five_credit) }}{{ rng(x.five_credit) }}</td></tr>{% endfor %}
+  </tbody></table></div></div>
+  {% if b.r is not none %}<p class="note">Link between BECE and WAEC: r = {{ b.r }}{% if b.ci %} (likely {{ b.ci[0] }} to {{ b.ci[1] }}){% endif %}, {{ b.n }} students.</p>{% else %}<p class="note">{{ b.n }} students so far — the correlation appears from 15.</p>{% endif %}
+  {% else %}{{ empty('No WAEC %s candidates have JSS3 BECE results in the app yet.'|format(year)) }}{% endif %}
+</section>
+
+{# ---------------- Subject choices ---------------- #}
+{% set c = d.combinations %}
+<section class="ix-sec" id="combo">
+  <h2><i class="fas fa-shapes"></i> Subject choices</h2>
+  <p class="lede">Which electives and full subject combinations go with reaching 5 credits incl. English and Maths. These are associations, not causes — a strong combination may simply attract strong students.</p>
+  {% if c and (c.electives or c.combos) %}
+  <div class="two">
+    <div class="card"><div class="card-header"><h3>Electives: takers vs everyone else</h3></div><div class="tbl-wrap"><table class="tbl">
+      <thead><tr><th>Elective</th><th class="num">Takers</th><th class="num">Others</th><th class="num">Gap</th><th>Real?</th></tr></thead><tbody>
+      {% for e in c.electives %}<tr><td>{{ e.subject }}</td><td class="num">{{ r(e.takers) }}</td><td class="num">{{ r(e.others) }}</td><td class="num">{{ va(e.gap) }}</td><td>{{ verdict(e.verdict) }}</td></tr>
+      {% else %}<tr><td colspan="5" class="text-muted">Needs 10+ students taking and not taking an elective.</td></tr>{% endfor %}
+    </tbody></table></div></div>
+    <div class="card"><div class="card-header"><h3>Full combinations (5+ students)</h3></div><div class="tbl-wrap"><table class="tbl">
+      <thead><tr><th>Electives</th><th class="num">Students</th><th class="num">5 credits</th></tr></thead><tbody>
+      {% for x in c.combos[:12] %}<tr><td><div class="chips">{% for s in x.subjects %}<span>{{ s }}</span>{% endfor %}</div></td><td class="num">{{ x.n }}</td><td class="num">{{ r(x.five_credit) }}{{ rng(x.five_credit) }}</td></tr>
+      {% else %}<tr><td colspan="3" class="text-muted">No combination is shared by 5 or more students.</td></tr>{% endfor %}
+    </tbody></table></div></div>
+  </div>
+  {% else %}{{ empty('Not enough WAEC candidates to compare subject choices.') }}{% endif %}
+</section>
+
+{# ---------------- Teachers ---------------- #}
+{% set t = d.teachers %}
+<section class="ix-sec" id="teach">
+  <h2><i class="fas fa-chalkboard-user"></i> Teachers across the years</h2>
+  <p class="lede">Credit rate of each teacher's SSS3 students in their subject, year by year (from the subject teacher set on the SSS3 class). Read it together with value added above.</p>
+  {% if t %}
+  {% set ys = [] %}{% for row in t %}{% for y in row.years %}{% if y not in ys %}{% set _ = ys.append(y) %}{% endif %}{% endfor %}{% endfor %}
+  <div class="card"><div class="tbl-wrap"><table class="tbl">
+    <thead><tr><th>Teacher</th><th>Subject</th>{% for y in ys|sort %}<th class="num">{{ y }}</th>{% endfor %}<th class="num">Change</th></tr></thead><tbody>
+    {% for row in t %}<tr><td>{{ row.teacher }}</td><td>{{ row.subject }}</td>
+      {% for y in ys|sort %}<td class="num">{{ r(row.years.get(y)) if row.years.get(y) else '—' }}</td>{% endfor %}
+      <td class="num">{% if row.trend is not none %}{{ va(row.trend) }}{% else %}—{% endif %}</td></tr>{% endfor %}
+  </tbody></table></div></div>
+  {% else %}{{ empty('Set the subject teachers on the SSS3 class (Subjects → class subjects) to see this.') }}{% endif %}
+</section>
+
+{# ---------------- Fairness ---------------- #}
+<section class="ix-sec" id="fair">
+  <h2><i class="fas fa-people-arrows"></i> Fairness — gaps between groups</h2>
+  <p class="lede">5 credits incl. English and Maths for each group compared with everyone else. Only gaps marked “Real difference” are unlikely to be chance.</p>
+  {% if d.fairness %}
+  <div class="two">
+  {% for dim in d.fairness %}
+    <div class="card"><div class="card-header"><h3>{{ dim.dimension }}</h3></div><div class="tbl-wrap"><table class="tbl">
+      <thead><tr><th>Group</th><th class="num">5 credits</th><th class="num">Gap vs rest</th><th>Real?</th></tr></thead><tbody>
+      {% for g in dim.rows %}<tr><td>{{ g.group }}</td><td class="num">{{ r(g.rate) }}{{ rng(g.rate) }}</td><td class="num">{{ va(g.gap) }}</td><td>{{ verdict(g.verdict) }}</td></tr>{% endfor %}
+    </tbody></table></div></div>
+  {% endfor %}
+  </div>
+  {% else %}{{ empty('Not enough WAEC candidates in two or more groups to compare.') }}{% endif %}
+</section>
+
+{# ---------------- Attendance ---------------- #}
+{% set a = d.attendance %}
+<section class="ix-sec" id="att">
+  <h2><i class="fas fa-calendar-check"></i> Attendance and results</h2>
+  <p class="lede">SSS3 attendance in the exam session against reaching 5 credits incl. English and Maths.</p>
+  {% if a and a.bands %}
+  {% if a.threshold %}<div class="insight"><i class="fas fa-lightbulb"></i><span>Students attending <strong>85% or more</strong> reached 5 credits {{ a.threshold.above.pct }}% of the time, against {{ a.threshold.below.pct }}% below 85% — {{ a.threshold.verdict.label|lower }}.</span></div>{% endif %}
+  <div class="card"><div class="tbl-wrap"><table class="tbl">
+    <thead><tr><th>Attendance</th><th class="num">Students</th><th class="num">5 credits incl. Eng &amp; Maths</th><th style="width:30%"></th></tr></thead><tbody>
+    {% for x in a.bands %}<tr><td>{{ x.band }}</td><td class="num">{{ x.n }}</td><td class="num">{{ r(x.five_credit) }}{{ rng(x.five_credit) }}</td><td><div class="bar"><i style="width:{{ x.five_credit.pct }}%"></i></div></td></tr>{% endfor %}
+  </tbody></table></div></div>
+  {% else %}{{ empty('No attendance marked for %s WAEC candidates in their SSS3 session.'|format(year)) }}{% endif %}
+</section>
+
+{# ---------------- Cohorts ---------------- #}
+<section class="ix-sec" id="cohort">
+  <h2><i class="fas fa-users-line"></i> Intake cohorts</h2>
+  <p class="lede">Each JSS1 intake followed through to WAEC: how many stayed, left or joined later, and how the year group did. Separates “this year's class was different” from “teaching changed”.</p>
+  {% if d.cohorts %}
+  <div class="card"><div class="tbl-wrap"><table class="tbl">
+    <thead><tr><th>JSS1 intake</th><th class="num">Started</th><th class="num">Still here</th><th class="num">Graduated</th><th class="num">Left</th><th class="num">Joined later</th><th class="num">WAEC year</th><th class="num">Sat WAEC</th><th class="num">5 credits</th></tr></thead><tbody>
+    {% for x in d.cohorts %}<tr><td>{{ x.intake }}</td><td class="num">{{ x.started }}</td><td class="num">{{ x.still_here }}</td><td class="num">{{ x.graduated }}</td><td class="num">{{ x.left }}</td><td class="num">{{ x.joined }}</td><td class="num">{{ x.waec_year }}</td><td class="num">{{ x.sat_waec }}</td><td class="num">{{ r(x.five_credit) if x.five_credit else '—' }}</td></tr>{% endfor %}
+  </tbody></table></div></div>
+  {% else %}{{ empty('Needs JSS1 class enrolments in the app — cohorts appear once a JSS1 intake has been recorded.') }}{% endif %}
+</section>
+
+{# ---------------- Readiness over time ---------------- #}
+<section class="ix-sec" id="ready">
+  <h2><i class="fas fa-chart-line"></i> Readiness through the session</h2>
+  <p class="lede">The share of SSS3 on track at each mock, then in the real exams.</p>
+  {% if d.readiness %}
+  <div class="card"><div class="tbl-wrap"><table class="tbl">
+    <thead><tr><th>Sitting</th><th>Measure</th><th class="num">Students</th><th class="num">On track</th><th style="width:30%"></th></tr></thead><tbody>
+    {% for p in d.readiness %}<tr><td>{{ p.label }}{% if p.date %} <span class="text-muted text-sm">{{ p.date.strftime('%d %b') }}</span>{% endif %}</td><td>{{ p.measure }}</td><td class="num">{{ p.rate.n }}</td><td class="num">{{ r(p.rate) }}{{ rng(p.rate) }}</td><td><div class="bar"><i style="width:{{ p.rate.pct }}%"></i></div></td></tr>{% endfor %}
+  </tbody></table></div></div>
+  {% else %}{{ empty('No mock or exam results for the %s session yet.'|format(year)) }}{% endif %}
+</section>
+
+{# ---------------- Weak topics ---------------- #}
+<section class="ix-sec" id="topics">
+  <h2><i class="fas fa-magnifying-glass-chart"></i> Weakest topics by subject</h2>
+  <p class="lede">From mock JAMB answers this session: the topics students get wrong most (10+ answers each).</p>
+  {% if d.weak_topics %}
+  <div class="hgrid">
+  {% for s in d.weak_topics %}
+    <div class="card"><div class="card-body"><strong>{{ s.subject }}</strong>
+      <table class="tbl mt-1"><tbody>{% for tpc in s.topics %}<tr><td>{{ tpc.topic }}</td><td class="num">{{ r(tpc.correct) }} correct</td><td class="num text-muted">{{ tpc.answers }} answers</td></tr>{% endfor %}</tbody></table>
+    </div></div>
+  {% endfor %}
+  </div>
+  {% else %}{{ empty('Needs online mock JAMB sittings with topic-tagged questions this session.') }}{% endif %}
+</section>
+{% endif %}
+{% endblock %}

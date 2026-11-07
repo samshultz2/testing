@@ -316,6 +316,9 @@ def create_app(config_class=None):
     # central FinanceTransaction ledger — the single source of truth.
     from utils.finance_ledger import register_ledger_hooks, ensure_tables
     register_ledger_hooks()
+    # Exam analytics: drop cached hub statistics whenever results change.
+    from utils.exam_cache_hooks import register_exam_cache_hooks
+    register_exam_cache_hooks()
     # Ensure the finance tables exist even under SKIP_CREATE_ALL (Alembic-managed
     # production) — they were added after the schema baseline.
     try:

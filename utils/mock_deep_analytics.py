@@ -29,8 +29,7 @@ import math
 import re
 import datetime
 
-PASS_GRADES = {'A1', 'B2', 'B3', 'C4', 'C5', 'C6'}          # WAEC credit or better
-DISTINCTION_GRADES = {'A1', 'B2', 'B3'}
+from utils.exam_rules import CREDIT_GRADES as PASS_GRADES, DISTINCTION_GRADES  # noqa: E402 — shared rule
 JAMB_SUBJECT_PASS = 50           # a JAMB subject score (out of 100) counts as a pass
 JAMB_SUBJECT_STRONG = 70
 MIN_TEACHER_ENTRIES = 8          # below this a teacher verdict stays "watch the sample"

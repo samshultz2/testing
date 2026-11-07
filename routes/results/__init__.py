@@ -295,13 +295,22 @@ def year_comparison(year, compare_year, branch_id):
     from utils import exam_compare
     if not compare_year or compare_year == year:
         return None
-    a = exam_compare.headline_metrics(jamb_school_stats(year, branch_id),
-                                      waec_school_stats(year, branch_id))
-    b = exam_compare.headline_metrics(jamb_school_stats(compare_year, branch_id),
-                                      waec_school_stats(compare_year, branch_id))
+    # A frozen year's headline numbers (Insights → Freeze year) win over a
+    # live recompute, so later edits to student records can't rewrite history.
+    from utils.insights_snapshots import frozen
+
+    def metrics(y):
+        f = frozen(y, branch_id)
+        if f:
+            return f, True
+        return exam_compare.headline_metrics(jamb_school_stats(y, branch_id),
+                                             waec_school_stats(y, branch_id)), False
+    a, a_frozen = metrics(year)
+    b, b_frozen = metrics(compare_year)
     if not (a['has_data'] and b['has_data']):
         return None
     return {'year': year, 'compare_year': compare_year,
+            'frozen': {year: a_frozen, compare_year: b_frozen},
             'metrics': exam_compare.compare_years(a, b)}
 
 

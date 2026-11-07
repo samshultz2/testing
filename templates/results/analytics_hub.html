@@ -68,6 +68,11 @@ a.exec:hover .go{opacity:1}
     .card,.kpi,.proj-card{break-inside:avoid}
     .chart-wrap{height:200px}
 }
+.conf{display:inline-block;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;padding:.05rem .4rem;border-radius:5px}
+.conf-high{background:rgba(25,135,84,.12);color:var(--success,#198754)}
+.conf-medium{background:rgba(13,110,253,.1);color:var(--info,#0d6efd)}
+.conf-low{background:rgba(220,53,69,.1);color:var(--danger,#dc3545)}
+.small-n{font-size:.7rem;color:var(--warning,#b7791f);font-weight:600;margin-left:.25rem;cursor:help}
 </style>
 {% endblock %}
 
@@ -92,6 +97,7 @@ a.exec:hover .go{opacity:1}
             {% endif %}
         </form>
         <a href="{{ url_for('results.waec_broadsheet', year=selected_year) }}" class="btn btn-secondary btn-sm" title="Full WAEC grade matrix — print / download"><i class="fas fa-table-cells"></i> WAEC broadsheet</a>
+        <a href="{{ url_for('results.analytics_insights', year=selected_year) }}" class="btn btn-primary btn-sm" title="Value added, mock accuracy, near-credit, teachers, fairness, cohorts, data health"><i class="fas fa-microscope"></i> Deeper insights</a>
         <a href="{{ url_for('results.analytics_trends') }}" class="btn btn-secondary btn-sm" title="Cross-year WAEC & JAMB trends"><i class="fas fa-chart-line"></i> Trends</a>
         <a href="{{ url_for('results.at_risk_watchlist') }}" class="btn btn-secondary btn-sm" title="Live at-risk SSS3 watchlist, by class"><i class="fas fa-triangle-exclamation"></i> Watchlist</a>
         <a href="{{ url_for('results.aspiration_hub') }}" class="btn btn-secondary btn-sm" title="University aspirations, eligibility & admission funnel"><i class="fas fa-graduation-cap"></i> Aspirations</a>
@@ -188,7 +194,7 @@ a.exec:hover .go{opacity:1}
 
 {% if year_compare %}
 <div id="sec-compare-year" class="card scroll-mt" style="margin-bottom:1rem;">
-    <div class="card-header"><h3><i class="fas fa-code-compare"></i> Cohort comparison &mdash; {{ year_compare.year }} vs {{ year_compare.compare_year }}</h3></div>
+    <div class="card-header"><h3><i class="fas fa-code-compare"></i> Cohort comparison &mdash; {{ year_compare.year }} vs {{ year_compare.compare_year }}{% for y, f in (year_compare.frozen or {}).items() if f %} <span class="conf conf-high" title="Headline numbers frozen on the Insights page">{{ y }} frozen</span>{% endfor %}</h3></div>
     <div class="card-body" style="padding:0;overflow-x:auto;">
         <table class="cmp-table no-mobile-scroll">
             <thead><tr><th>Metric</th><th>{{ year_compare.year }}</th><th>{{ year_compare.compare_year }}</th><th>Change</th></tr></thead>
@@ -497,7 +503,7 @@ a.exec:hover .go{opacity:1}
                 <thead><tr><th>Gender</th><th class="num">Candidates</th><th class="num">Mean</th><th class="num">≥200</th><th class="num">≥200 %</th><th class="num">Top</th></tr></thead>
                 <tbody>
                 {% for g in jamb_gender_stats %}
-                <tr><td>{{ g.gender }}</td><td class="num">{{ g.candidates }}</td><td class="num"><strong>{{ g.mean_score }}</strong></td><td class="num">{{ g.above_200 }}</td><td class="num">{{ g.above_200_rate }}%</td><td class="num">{{ g.max_score }}</td></tr>
+                <tr><td>{{ g.gender }}{% if g.candidates < 10 %}<span class="small-n" title="Fewer than 10 — read with caution">small group</span>{% endif %}</td><td class="num">{{ g.candidates }}</td><td class="num"><strong>{{ g.mean_score }}</strong></td><td class="num">{{ g.above_200 }}</td><td class="num">{{ g.above_200_rate }}%</td><td class="num">{{ g.max_score }}</td></tr>
                 {% endfor %}
                 </tbody>
             </table>
@@ -513,7 +519,7 @@ a.exec:hover .go{opacity:1}
                 <thead><tr><th>Gender</th><th class="num">Entries</th><th class="num">Pass %</th><th class="num">Distinction %</th><th class="num">Mean Pts</th></tr></thead>
                 <tbody>
                 {% for g in waec_gender_stats %}
-                <tr><td>{{ g.gender }}</td><td class="num">{{ g.entries }}</td><td class="num"><strong>{{ g.pass_rate }}%</strong></td><td class="num">{{ g.distinction_rate }}%</td><td class="num">{{ g.mean_points }}</td></tr>
+                <tr><td>{{ g.gender }}{% if g.entries < 10 %}<span class="small-n" title="Fewer than 10 — read with caution">small group</span>{% endif %}</td><td class="num">{{ g.entries }}</td><td class="num"><strong>{{ g.pass_rate }}%</strong></td><td class="num">{{ g.distinction_rate }}%</td><td class="num">{{ g.mean_points }}</td></tr>
                 {% endfor %}
                 </tbody>
             </table>
@@ -529,7 +535,7 @@ a.exec:hover .go{opacity:1}
                 <thead><tr><th>Gender</th><th class="num">Entries</th><th class="num">Pass %</th><th class="num">Distinction %</th><th class="num">Mean Pts</th></tr></thead>
                 <tbody>
                 {% for g in neco_gender_stats %}
-                <tr><td>{{ g.gender }}</td><td class="num">{{ g.entries }}</td><td class="num"><strong>{{ g.pass_rate }}%</strong></td><td class="num">{{ g.distinction_rate }}%</td><td class="num">{{ g.mean_points }}</td></tr>
+                <tr><td>{{ g.gender }}{% if g.entries < 10 %}<span class="small-n" title="Fewer than 10 — read with caution">small group</span>{% endif %}</td><td class="num">{{ g.entries }}</td><td class="num"><strong>{{ g.pass_rate }}%</strong></td><td class="num">{{ g.distinction_rate }}%</td><td class="num">{{ g.mean_points }}</td></tr>
                 {% endfor %}
                 </tbody>
             </table>
@@ -550,6 +556,7 @@ a.exec:hover .go{opacity:1}
         <div class="kpi"><div class="v">{{ correlation.mean_jamb_score }}</div><div class="l">Mean JAMB</div></div>
         <div class="kpi"><div class="v">{{ correlation.sample_size }}</div><div class="l">Paired Students</div></div>
     </div>
+    {% if correlation.ci %}<p class="text-muted text-sm mb-0 mt-2"><i class="fas fa-ruler-horizontal"></i> Likely range of r: {{ correlation.ci[0] }} to {{ correlation.ci[1] }} &middot; confidence: <span class="conf conf-{{ correlation.confidence }}">{{ correlation.confidence }}</span> ({{ correlation.sample_size }} students).</p>{% endif %}
     {% else %}
     <p class="text-muted mb-0"><i class="fas fa-info-circle"></i> Not enough students have <strong>both</strong> WAEC and JAMB results for {{ selected_year }} to compute a correlation{% if correlation and correlation.sample_size is defined %} (only {{ correlation.sample_size }} so far){% endif %}.</p>
     {% endif %}
@@ -568,7 +575,7 @@ a.exec:hover .go{opacity:1}
                 <thead><tr><th>Arm</th><th class="num">JAMB n</th><th class="num">JAMB mean</th><th class="num">WAEC pass %</th>{% if neco_stats %}<th class="num">NECO pass %</th>{% endif %}</tr></thead>
                 <tbody>
                 {% for c in class_compare %}
-                <tr><td>{{ c.arm }}</td><td class="num">{{ c.jamb_count }}</td><td class="num"><strong>{{ c.jamb_mean }}</strong></td><td class="num">{{ c.waec_pass_rate }}%</td>{% if neco_stats %}<td class="num">{{ (c.neco_pass_rate ~ '%') if c.neco_pass_rate is not none else '—' }}</td>{% endif %}</tr>
+                <tr><td>{{ c.arm }}{% if c.jamb_count < 10 and c.waec_entries < 10 %}<span class="small-n" title="Fewer than 10 — read with caution">small group</span>{% endif %}</td><td class="num">{{ c.jamb_count }}</td><td class="num"><strong>{{ c.jamb_mean }}</strong></td><td class="num">{{ c.waec_pass_rate }}%</td>{% if neco_stats %}<td class="num">{{ (c.neco_pass_rate ~ '%') if c.neco_pass_rate is not none else '—' }}</td>{% endif %}</tr>
                 {% endfor %}
                 </tbody>
             </table>
@@ -579,6 +586,7 @@ a.exec:hover .go{opacity:1}
         <div class="card-header"><h3><i class="fas fa-link"></i> Internal Average ↔ JAMB</h3></div>
         <div class="card-body">
             {% if internal_corr %}
+            {% if internal_corr.ci %}<p class="text-muted text-sm">Likely range of r: {{ internal_corr.ci[0] }} to {{ internal_corr.ci[1] }} &middot; confidence: <span class="conf conf-{{ internal_corr.confidence }}">{{ internal_corr.confidence }}</span></p>{% endif %}
             <div class="insight"><i class="fas fa-lightbulb"></i><span>Across {{ internal_corr.n }} students, the correlation between term average and JAMB score is <strong>{{ internal_corr.r }}</strong>{% if internal_corr.r >= 0.5 %} — a strong link{% elif internal_corr.r >= 0.3 %} — a moderate link{% else %} — a weak link{% endif %}.</span></div>
             <div class="kpi-grid">
                 <div class="kpi"><div class="v">{{ internal_corr.r }}</div><div class="l">Pearson r</div></div>
@@ -587,7 +595,7 @@ a.exec:hover .go{opacity:1}
                 <div class="kpi"><div class="v">{{ internal_corr.n }}</div><div class="l">Students</div></div>
             </div>
             {% else %}
-            <p class="text-muted mb-0"><i class="fas fa-info-circle"></i> Need at least 5 students who have both a term result (internal average) and a JAMB score for {{ selected_year }}.</p>
+            <p class="text-muted mb-0"><i class="fas fa-info-circle"></i> Need at least 15 students who have both a term result (internal average) and a JAMB score for {{ selected_year }}.</p>
             {% endif %}
         </div>
     </div>
@@ -609,11 +617,12 @@ a.exec:hover .go{opacity:1}
     <div class="proj-card">
         <div style="font-size:.85rem;opacity:.9;margin-bottom:.25rem;">Projected JAMB mean for {{ projection.next_year }}</div>
         <div class="big">{{ projection.projected_mean }}</div>
+        {% if projection.low is defined %}<div style="font-size:.8rem;opacity:.9;">likely {{ projection.low }}–{{ projection.high }} &middot; confidence: <strong>{{ projection.confidence }}</strong> ({{ projection.years }} year{{ '' if projection.years == 1 else 's' }} of data)</div>{% endif %}
         <div style="font-size:.85rem;opacity:.9;margin-top:.5rem;">
             {% if projection.direction == 'up' %}<i class="fas fa-arrow-trend-up"></i> Trending up{% elif projection.direction == 'down' %}<i class="fas fa-arrow-trend-down"></i> Trending down{% else %}<i class="fas fa-minus"></i> Holding steady{% endif %}
             ({{ projection.slope_per_year }}/yr) &middot; last actual {{ projection.latest_mean }}
         </div>
-        <div style="font-size:.72rem;opacity:.75;margin-top:.75rem;">Linear projection from historical means &mdash; a guide, not a guarantee.</div>
+        <div style="font-size:.72rem;opacity:.75;margin-top:.75rem;">Linear projection from historical means, yearly change capped &mdash; a guide, not a guarantee.{% if projection.confidence == 'low' %} Fewer than 4 years of data: treat as a rough indication.{% endif %}</div>
     </div>
     {% else %}
     <div class="card"><div class="card-body text-muted"><i class="fas fa-info-circle"></i> Need at least two years of JAMB data to project a trend.</div></div>

@@ -8,7 +8,7 @@ as guidance, not a guarantee.
 """
 from collections import defaultdict
 
-PASS_GRADES = {'A1', 'B2', 'B3', 'C4', 'C5', 'C6'}
+from utils.exam_rules import CREDIT_GRADES as PASS_GRADES  # noqa: E402 — shared rule
 
 # Broad course categories with their typical SSC credit requirements and an
 # indicative JAMB cut-off.

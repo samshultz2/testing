@@ -14,8 +14,7 @@ One batched enrolment fetch + two result fetches; no N+1.
 """
 from __future__ import annotations
 
-PASS_GRADES = {'A1', 'B2', 'B3', 'C4', 'C5', 'C6'}
-DISTINCTION_GRADES = {'A1', 'B2', 'B3'}
+from utils.exam_rules import CREDIT_GRADES as PASS_GRADES, DISTINCTION_GRADES  # noqa: E402 — shared rule
 
 
 def _is_core(subject):
