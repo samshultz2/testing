@@ -565,6 +565,9 @@ def _per_row(n):
 
 
 def render_pdf(doc):
+    if doc.get('type') == 'compare':
+        from utils.exam_compare_doc import render_pdf as compare_pdf
+        return compare_pdf(doc)
     SLE._register_fonts()
     F = SLE.F
     from reportlab.lib.pagesizes import A4, landscape

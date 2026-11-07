@@ -495,6 +495,28 @@ def make_blueprint(level):
               'success')
         return redirect(url_for(f'{bp_name}.dashboard', body=body, year=year))
 
+    @bp.route('/compare/export')
+    @login_required
+    @rate_limited('export', max_requests=40, window_minutes=10)
+    def compare_export():
+        """State vs Federal comparison as a branded PDF or image (PNG pages)."""
+        from utils.access_control import get_current_user
+        from utils.school import school_profile, document_branding
+        from utils.student_list_export import colors_for
+        from utils import exam_results_doc as ERD
+        from utils.exam_compare_doc import compare_doc
+        fmt = request.args.get('format', 'pdf')
+        if fmt not in ('pdf', 'image'):
+            abort(400)
+        years = sorted(set(svc.years_for(level, 'state')) | set(svc.years_for(level, 'federal')),
+                       reverse=True)
+        year = _default_year(years)
+        u = get_current_user()
+        ctx = {'school': school_profile(), 'colors': colors_for(document_branding()),
+               'prepared_by': (getattr(u, 'full_name', None) or getattr(u, 'username', None) or '') if u else ''}
+        doc = compare_doc(level, year, ctx)
+        return ERD.file_response(doc, fmt, '%s_state_vs_federal_%s' % (level, year))
+
     # ------------------------------------------------------------------ #
     # Export
     # ------------------------------------------------------------------ #

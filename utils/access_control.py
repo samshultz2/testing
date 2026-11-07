@@ -565,7 +565,7 @@ _SCHOOL_EXAM_ACTIONS = {
     'view': ('dashboard', 'analytics', 'compare', 'subject', 'student', 'broadsheet'),
     'create': ('add_result', 'grid_entry', 'import_results', 'quick_entry'),
     'delete': ('delete_student_year', 'delete_bulk'),
-    'export': ('export', 'broadsheet_pdf', 'broadsheet_download'),
+    'export': ('export', 'compare_export', 'broadsheet_pdf', 'broadsheet_download'),
     'settings': ('settings',),
 }
 

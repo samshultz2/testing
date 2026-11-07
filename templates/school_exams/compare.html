@@ -12,7 +12,8 @@
 </div></div></div>
 {% else %}
 <div class="card mb-3">
-  <div class="card-header"><h3><i class="fas fa-scale-balanced"></i> {{ cmp.state_name }} vs {{ cmp.federal_name }} — {{ year }}</h3></div>
+  <div class="card-header cx-head"><h3><i class="fas fa-scale-balanced"></i> {{ cmp.state_name }} vs {{ cmp.federal_name }} — {{ year }}</h3>
+    <button type="button" class="btn btn-primary btn-sm" data-call="cxOpenExport"><i class="fas fa-file-export"></i> Export PDF / Image</button></div>
   <div class="table-responsive"><table class="data-table">
     <thead><tr><th>Measure</th><th class="num"><span class="sx-dot" style="background:var(--sx-s1)"></span>{{ cmp.state_name }} (State)</th><th class="num"><span class="sx-dot" style="background:var(--sx-s2)"></span>{{ cmp.federal_name }} (Federal)</th><th class="num">State − Federal</th></tr></thead>
     <tbody>
@@ -58,5 +59,9 @@
     {% else %}<p class="sx-muted">Appears once two or more years are on record.</p>{% endif %}
     </div></div>
 </div>
+{% include "school_exams/_compare_export.html" %}
+<style>.cx-head{display:flex;justify-content:space-between;align-items:center;gap:.6rem;flex-wrap:wrap}</style>
 {% endif %}
 {% endblock %}
+
+{% block page_js %}{% if cmp.state.candidates or cmp.federal.candidates %}{% include "school_exams/_compare_export_js.html" %}{% endif %}{% endblock %}

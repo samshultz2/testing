@@ -1,0 +1,79 @@
+<script nonce="{{ csp_nonce }}">
+/* State vs Federal export: the server draws both formats (PDF, or the same
+   pages as PNG images fetched one by one). */
+var cxExport = {
+  year: {{ year|tojson }},
+  stem: {{ (level ~ '_state_vs_federal_' ~ year)|tojson }},
+  url: {{ url_for(bp ~ '.compare_export')|tojson }}
+};
+function cxModal() { return document.getElementById('cxExportModal'); }
+function cxFormat() { return document.querySelector('input[name="cxFormat"]:checked').value; }
+function cxStatus(msg, err) {
+  var s = document.getElementById('cxStatus');
+  s.textContent = msg || ''; s.className = 'cxe-status' + (err ? ' err' : '');
+}
+function cxSyncButton() {
+  document.querySelector('#cxGo span').textContent = cxFormat() === 'image' ? 'Download images' : 'Download PDF';
+}
+function cxBusy(on) {
+  var b = document.getElementById('cxGo');
+  b.disabled = !!on;
+  b.querySelector('i').className = on ? 'fas fa-spinner fa-spin' : 'fas fa-download';
+}
+function cxOpenExport() {
+  var m = cxModal();
+  if (m.parentNode !== document.body) document.body.appendChild(m);   // above sticky headers
+  m.style.display = 'block';
+  cxStatus(''); cxBusy(false); cxSyncButton();
+  var first = m.querySelector('input[name="cxFormat"]:checked');
+  if (first) first.focus();
+}
+function cxCloseExport() { cxModal().style.display = 'none'; }
+cxModal().addEventListener('click', function (e) { if (e.target === this) cxCloseExport(); });
+cxModal().addEventListener('change', function (e) { if (e.target.name === 'cxFormat') cxSyncButton(); });
+document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && cxModal().style.display !== 'none') cxCloseExport(); });
+
+function cxSave(blob, name) {
+  var u = URL.createObjectURL(blob);
+  var a = document.createElement('a'); a.href = u; a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(function () { URL.revokeObjectURL(u); }, 4000);
+}
+function cxFetch(url) {
+  return fetch(url, { credentials: 'same-origin' }).then(function (res) {
+    if (!res.ok) throw new Error(res.status === 429 ? 'Too many exports — please wait a minute.' : 'The export could not be prepared.');
+    return res;
+  });
+}
+function cxGenerateExport() {
+  var format = cxFormat();
+  var sz = document.querySelector('input[name="cxSize"]:checked');
+  var p = new URLSearchParams({ year: cxExport.year, format: format, size: sz ? sz.value : 'm' });
+  var url = cxExport.url + '?' + p.toString();
+  cxBusy(true);
+  var done;
+  if (format === 'pdf') {
+    cxStatus('Preparing the PDF…');
+    done = cxFetch(url).then(function (r) { return r.blob(); })
+      .then(function (b) { cxSave(b, cxExport.stem + '.pdf'); });
+  } else {
+    var page = 1, total = 1;
+    var next = function () {
+      cxStatus(total > 1 ? ('Preparing image ' + page + ' of ' + total + '…') : 'Preparing the image…');
+      return cxFetch(url + '&page=' + page).then(function (res) {
+        total = parseInt(res.headers.get('X-Total-Pages') || '1', 10) || 1;
+        return res.blob().then(function (b) {
+          cxSave(b, cxExport.stem + (total > 1 ? '_p' + page : '') + '.png');
+          page += 1;
+          if (page <= total) return next();
+        });
+      });
+    };
+    done = next();
+  }
+  done.then(function () {
+    cxBusy(false); cxStatus('Downloaded.');
+    setTimeout(cxCloseExport, 700);
+  }).catch(function (e) { cxBusy(false); cxStatus(e.message, true); });
+}
+</script>

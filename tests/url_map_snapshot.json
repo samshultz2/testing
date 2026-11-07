@@ -871,6 +871,13 @@
 ]
 ],
 [
+"basic6_exams.compare_export",
+"/basic6-exams/compare/export",
+[
+"GET"
+]
+],
+[
 "basic6_exams.dashboard",
 "/basic6-exams/",
 [
@@ -3612,6 +3619,13 @@
 [
 "jss3_exams.compare",
 "/jss3-exams/compare",
+[
+"GET"
+]
+],
+[
+"jss3_exams.compare_export",
+"/jss3-exams/compare/export",
 [
 "GET"
 ]

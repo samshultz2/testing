@@ -531,3 +531,52 @@ def test_dashboard_export_dialog_and_branded_exports_follow_scheme(app):
         with app.app_context():
             RateLimitHit.query.filter(RateLimitHit.id > top).delete(synchronize_session=False)
             db.session.commit()
+
+
+def test_compare_page_exports_state_vs_federal_as_pdf_and_image(app):
+    import fitz
+    from models.models import RateLimitHit
+    c = _admin(app)
+    a, _ = _student(app, 'Cmpada')
+    b, _ = _student(app, 'Cmpben', gender='Male')
+    for sid in (a, b):
+        _enroll(app, 'JSS3', 3, sid)
+    tok = auth_csrf(c)
+    for body, scores in (('state', (['80', '72'], ['48', '55'])), ('federal', (['66', '58'], ['42', '61']))):
+        for sid, sc in zip((a, b), scores):
+            c.post('/jss3-exams/%s/add' % body, data={'_csrf_token': tok, 'student_id': sid, 'exam_year': 2052,
+                   'subject[]': ['Mathematics', 'English Studies'], 'score[]': sc, 'grade[]': ['', '']})
+    with app.app_context():
+        RateLimitHit.query.filter(RateLimitHit.rkey.like('%export%')).delete(synchronize_session=False)
+        db.session.commit()
+        top = db.session.query(db.func.max(RateLimitHit.id)).scalar() or 0
+    try:
+        html = c.get('/jss3-exams/compare?year=2052').get_data(as_text=True)
+        assert 'id="cxExportModal"' in html and 'data-call="cxOpenExport"' in html
+        assert 'name="cxFormat" value="pdf"' in html and 'name="cxFormat" value="image"' in html
+        assert 'name="cxSize" value="l"' in html and '/jss3-exams/compare/export' in html
+        pdf = c.get('/jss3-exams/compare/export?year=2052&format=pdf')
+        assert pdf.status_code == 200 and pdf.data[:4] == b'%PDF'
+        assert 'jss3_state_vs_federal_2052.pdf' in pdf.headers['Content-Disposition']
+        with fitz.open(stream=pdf.data, filetype='pdf') as d:
+            txt = ' '.join(' '.join(p.get_text() for p in d).split())
+        for want in ('State vs Federal 2052', 'HEAD TO HEAD', 'Credit in English & Maths', 'Mathematics',
+                     'English Studies', 'SUBJECT CREDIT RATE', 'SAT BOTH EXAMINATIONS', '2 candidates'):
+            assert want in txt, want
+        img = c.get('/jss3-exams/compare/export?year=2052&format=image&page=1')
+        assert img.status_code == 200 and img.data[:4] == b'\x89PNG'
+        total = int(img.headers['X-Total-Pages'])
+        assert total >= 1
+        assert c.get('/jss3-exams/compare/export?year=2052&format=image&page=%d' % total).data[:4] == b'\x89PNG'
+        # Text size changes the document.
+        sm = c.get('/jss3-exams/compare/export?year=2052&format=pdf&size=s').data
+        lg = c.get('/jss3-exams/compare/export?year=2052&format=pdf&size=l').data
+        assert sm != lg
+        assert c.get('/jss3-exams/compare/export?year=2052&format=word').status_code == 400
+        # A year with results for one body only still exports (no subject comparison).
+        one = c.get('/basic6-exams/compare/export?year=1999&format=pdf')
+        assert one.status_code == 200 and one.data[:4] == b'%PDF'
+    finally:
+        with app.app_context():
+            RateLimitHit.query.filter(RateLimitHit.id > top).delete(synchronize_session=False)
+            db.session.commit()
