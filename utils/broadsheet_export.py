@@ -811,7 +811,10 @@ _SUBJECT_ABBR = {
     'Music': 'MUS', 'Livestock Farming': 'LVF', 'Digital Technologies': 'DGT',
     'Health Education': 'HED', 'Physical Education': 'PHE', 'Book Keeping': 'BKP',
     'Catering Craft Practice': 'CCP', 'Animal Husbandry': 'ANH', 'Insurance': 'INS',
+    'English Studies': 'ENG', 'English': 'ENG', 'Basic Science': 'BST',
+    'Business Studies': 'BUS', 'Pre-Vocational Studies': 'PVS', 'Prevocational Studies': 'PVS',
 }
+_SUBJECT_ABBR_CI = {k.lower(): v for k, v in _SUBJECT_ABBR.items()}
 
 
 def _abbr_one(name):
@@ -820,8 +823,9 @@ def _abbr_one(name):
     name = (name or '').strip()
     if not name:
         return '?'
-    if name in _SUBJECT_ABBR:
-        return _SUBJECT_ABBR[name]
+    known = _SUBJECT_ABBR.get(name) or _SUBJECT_ABBR_CI.get(' '.join(name.lower().split()))
+    if known:
+        return known
     stop = {'in', 'of', 'and', 'the', '&'}
     words = [w for w in name.replace('/', ' ').split() if w.lower() not in stop]
     if len(words) >= 2:
