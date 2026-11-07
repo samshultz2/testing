@@ -26,12 +26,28 @@ def roster_order():
     return (gender_rank, Student.surname, Student.first_name)
 
 
+def on_register():
+    """SQL condition: the enrolled student belongs on this class's register —
+    active, and not a graduate of an earlier session (a pupil who graduated in
+    a past session never reappears on a current class register, even if a
+    stray enrolment points at them). The query must ``.join(Student)`` and be
+    over ``StudentEnrollment``."""
+    from sqlalchemy import or_, select
+    from models import ClassArmAssignment, Term
+    term_session = (select(Term.session_id)
+                    .join(ClassArmAssignment, ClassArmAssignment.term_id == Term.id)
+                    .where(ClassArmAssignment.id == StudentEnrollment.class_arm_assignment_id)
+                    .scalar_subquery())
+    return (Student.is_active == True) & or_(  # noqa: E712
+        Student.is_graduated.isnot(True), Student.graduation_session_id == term_session)
+
+
 def _active_enrollments(class_arm_assignment_id):
     """Active enrollments for a class arm, with each student eager-loaded and
     ordered as a register (boys first then girls, each alphabetical by surname)."""
     return (StudentEnrollment.query
             .filter_by(class_arm_assignment_id=class_arm_assignment_id, is_active=True)
-            .join(Student).filter(Student.is_active == True)   # exclude departed/deleted
+            .join(Student).filter(on_register())   # exclude departed / past graduates
             .options(joinedload(StudentEnrollment.student))
             .order_by(*roster_order())
             .all())

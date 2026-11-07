@@ -1696,6 +1696,69 @@ def duplicate_merge():
                            class_id=class_id, search=search, loose=loose)
 
 
+@main_bp.route('/students/move-records', methods=['GET', 'POST'])
+@admin_required
+def move_class_records():
+    """Move class records (enrolment + attendance, scores, term results) from
+    one student to another — e.g. to undo a merge of two different pupils."""
+    from flask import current_app
+    from utils.student_merge import move_class_records as _move, linked_counts
+    from utils.branch_scope import scope_query, can_access_branch
+    from utils.audit import log_action
+    from models import StudentEnrollment, Attendance
+    src_id = request.values.get('from', type=int)
+    dst_id = request.values.get('to', type=int)
+    if request.method == 'POST':
+        ids = [int(x) for x in request.form.getlist('enrollment') if x.isdigit()]
+        src, dst = db.session.get(Student, src_id or 0), db.session.get(Student, dst_id or 0)
+        if not (src and dst and ids) or src.id == dst.id:
+            flash('Choose two different students and tick at least one class.', 'warning')
+            return redirect(url_for('main.move_class_records', **{'from': src_id, 'to': dst_id}))
+        if not (can_access_branch(src.branch_id) and can_access_branch(dst.branch_id)):
+            abort(403)
+        try:
+            rep = _move(src.id, dst.id, ids)
+            db.session.commit()
+        except Exception as e:  # pragma: no cover — reported to the user
+            db.session.rollback()
+            current_app.logger.exception('Moving class records failed')
+            flash(f'Could not move the records: {e}', 'error')
+            return redirect(url_for('main.move_class_records', **{'from': src_id, 'to': dst_id}))
+        log_action('students.move_class_records',
+                   detail=f"{', '.join(rep['classes'])}: {src.full_name} ({src.student_id}) → "
+                          f"{dst.full_name} ({dst.student_id}); {rep['attendance']} attendance day(s), "
+                          f"{rep['scores']} score(s)")
+        try:
+            from utils.analytics_engine import recompute_student_safe
+            recompute_student_safe(src.id); recompute_student_safe(dst.id)
+        except Exception:
+            pass
+        flash(f"Moved {', '.join(rep['classes'])} — {rep['attendance']} attendance day(s) and "
+              f"{rep['scores']} score(s) — from {src.full_name} to {dst.full_name}.", 'success')
+        return redirect(url_for('main.move_class_records', **{'from': src.id, 'to': dst.id}))
+
+    students = scope_query(Student.query, Student).order_by(Student.surname, Student.first_name).all()
+    src = next((x for x in students if x.id == src_id), None)
+    dst = next((x for x in students if x.id == dst_id), None)
+    rows = []
+    for who in (src, dst):
+        if who is None:
+            rows.append([])
+            continue
+        lst = []
+        for e in (StudentEnrollment.query.filter_by(student_id=who.id)
+                  .join(ClassArmAssignment).order_by(ClassArmAssignment.term_id.desc()).all()):
+            caa = e.class_arm_assignment
+            lst.append({'id': e.id, 'class': caa.display_name if caa else '?',
+                        'term': (f'{caa.term.name}, {caa.term.session.name}'
+                                 if caa and caa.term and caa.term.session else ''),
+                        'active': e.is_active,
+                        'attendance': Attendance.query.filter_by(enrollment_id=e.id).count()})
+        rows.append(lst)
+    return render_template('students/move_records.html', students=students, src=src, dst=dst,
+                           src_rows=rows[0], dst_rows=rows[1])
+
+
 @main_bp.route('/students/duplicates/merge', methods=['POST'])
 @admin_required
 def duplicate_merge_run():

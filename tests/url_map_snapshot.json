@@ -4244,6 +4244,14 @@
 ]
 ],
 [
+"main.move_class_records",
+"/students/move-records",
+[
+"GET",
+"POST"
+]
+],
+[
 "main.purge_student",
 "/students/<int:student_id>/purge",
 [

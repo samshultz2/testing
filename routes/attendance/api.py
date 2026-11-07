@@ -1,6 +1,7 @@
 """attendance blueprint — api routes (split from the former routes/attendance.py)."""
 from routes.attendance import *  # noqa: F401,F403
 from utils import timeutil
+from utils.calculations import on_register
 
 
 @attendance_bp.route('/api/summary/<int:assignment_id>/<date_str>')
@@ -116,7 +117,7 @@ def api_roster():
     from sqlalchemy.orm import contains_eager
     enrollments = (StudentEnrollment.query
                    .filter_by(class_arm_assignment_id=assignment_id, is_active=True)
-                   .join(Student).filter(Student.is_active == True)  # noqa: E712  exclude departed
+                   .join(Student).filter(on_register())  # noqa: E712  exclude departed
                    .options(contains_eager(StudentEnrollment.student))
                    .order_by(*roster_order()).all())
     existing = {a.enrollment_id: a for a in Attendance.query.filter(
@@ -173,7 +174,7 @@ def api_mark():
 
     enrollments = (StudentEnrollment.query.filter_by(
         class_arm_assignment_id=assignment_id, is_active=True)
-        .join(Student).filter(Student.is_active == True).all())  # noqa: E712  exclude departed
+        .join(Student).filter(on_register()).all())  # noqa: E712  exclude departed
     enroll_ids = [e.id for e in enrollments]
     valid = set(enroll_ids)
 
@@ -276,7 +277,7 @@ def api_week():
     from sqlalchemy.orm import contains_eager
     enrollments = (StudentEnrollment.query
                    .filter_by(class_arm_assignment_id=assignment_id, is_active=True)
-                   .join(Student).filter(Student.is_active == True)  # noqa: E712  exclude departed
+                   .join(Student).filter(on_register())  # noqa: E712  exclude departed
                    .options(contains_eager(StudentEnrollment.student))
                    .order_by(*roster_order()).all())
     recs = {}
@@ -316,7 +317,7 @@ def api_week_mark():
     valid_days = {d.isoformat() for d in _week_school_days(week, holidays)}
     enroll_ids = {e.id for e in StudentEnrollment.query.filter_by(
         class_arm_assignment_id=caa.id, is_active=True)
-        .join(Student).filter(Student.is_active == True).all()}  # noqa: E712  exclude departed
+        .join(Student).filter(on_register()).all()}  # noqa: E712  exclude departed
     existing = {(r.enrollment_id, r.date.isoformat()): r for r in Attendance.query.filter(
         Attendance.enrollment_id.in_(list(enroll_ids) or [-1]),
         Attendance.week_id == week.id).all()}
@@ -370,7 +371,7 @@ def api_copy_previous():
         prev -= timedelta(days=1); n += 1
     enrollments = (StudentEnrollment.query.filter_by(
         class_arm_assignment_id=caa.id, is_active=True)
-        .join(Student).filter(Student.is_active == True).all())  # noqa: E712  exclude departed
+        .join(Student).filter(on_register()).all())  # noqa: E712  exclude departed
     prevmap = {a.enrollment_id: a for a in Attendance.query.filter(
         Attendance.enrollment_id.in_([e.id for e in enrollments] or [-1]),
         Attendance.date == prev).all()}
@@ -532,7 +533,7 @@ def api_report_alerts():
         enrollments = (StudentEnrollment.query
                        .filter(StudentEnrollment.class_arm_assignment_id.in_(list(class_by_id)),
                                StudentEnrollment.is_active == True)  # noqa: E712
-                       .join(Student).filter(Student.is_active == True)  # noqa: E712  exclude departed
+                       .join(Student).filter(on_register())  # noqa: E712  exclude departed
                        .options(contains_eager(StudentEnrollment.student))
                        .all())
         present_by_enrollment = {}
@@ -680,7 +681,7 @@ def api_absentees():
     from sqlalchemy.orm import contains_eager
     enrollments = (StudentEnrollment.query
                    .filter_by(class_arm_assignment_id=caa.id, is_active=True)
-                   .join(Student).filter(Student.is_active == True)  # noqa: E712
+                   .join(Student).filter(on_register())  # noqa: E712
                    .options(contains_eager(StudentEnrollment.student))
                    .order_by(*roster_order()).all())
     marks = {a.enrollment_id: a for a in Attendance.query.filter(

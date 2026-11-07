@@ -84,19 +84,21 @@ def _dependents(table):
 # --------------------------------------------------------------------------- #
 # Row moving with conflict handling
 # --------------------------------------------------------------------------- #
-def _repoint(table, col, old_id, new_id, depth=0):
-    """Point every row of ``table`` whose ``col`` == old_id at new_id. A row
-    that would then clash with an existing one (unique constraint) is a
-    conflict: resolved by ``_resolve`` (one survives, the other goes)."""
+def _repoint(table, col, old_id, new_id, depth=0, where=None):
+    """Point every row of ``table`` whose ``col`` == old_id at new_id (only
+    the rows matching ``where``, when given). A row that would then clash with
+    an existing one (unique constraint) is a conflict: resolved by
+    ``_resolve`` (one survives, the other goes)."""
     if old_id == new_id or depth > 6:
-        return
+        return 0
     uniq = _unique_sets(table, col)
     pk = table.c.id
-    rows = db.session.execute(select(table).where(col == old_id)).mappings().all()
+    cond = col == old_id if where is None else and_(col == old_id, where)
+    rows = db.session.execute(select(table).where(cond)).mappings().all()
     if not uniq:
         if rows:
-            db.session.execute(update(table).where(col == old_id).values({col.name: new_id}))
-        return
+            db.session.execute(update(table).where(cond).values({col.name: new_id}))
+        return len(rows)
     for row in rows:
         clash = None
         for names in uniq:
@@ -108,6 +110,7 @@ def _repoint(table, col, old_id, new_id, depth=0):
             db.session.execute(update(table).where(pk == row['id']).values({col.name: new_id}))
             continue
         _resolve(table, col, moving=row, existing=clash, new_id=new_id, depth=depth)
+    return len(rows)
 
 
 def _newer(a, b):
@@ -171,6 +174,65 @@ def merge_students(keeper_id, dup_ids):
         db.session.expunge(dup)
         db.session.execute(delete(st).where(st.c.id == dup_id))
         report['merged'].append({'name': name, 'student_id': code})
+    db.session.flush()
+    db.session.expire_all()
+    return report
+
+
+# --------------------------------------------------------------------------- #
+# Moving class records between two students (e.g. undoing a wrong merge)
+# --------------------------------------------------------------------------- #
+def move_class_records(src_id, dst_id, enrollment_ids):
+    """Move the chosen class enrolments of student ``src_id`` — with their
+    attendance, term summaries, scores, term results and attendance follow-ups
+    for that class and term — to student ``dst_id``.
+
+    Used when two different pupils were merged by mistake: the class records
+    that belonged to the other pupil go back to their (re-added) record. If
+    ``dst_id`` is already enrolled in the same class arm and term, the two
+    enrolments are combined (attendance for the same day keeps the most
+    recently updated mark). Returns {'classes': [...], 'attendance': n,
+    'scores': n}. Caller commits."""
+    from models import StudentEnrollment, ClassArmAssignment, Attendance, ClassSubject
+    if src_id == dst_id:
+        raise ValueError('Choose two different students.')
+    src, dst = db.session.get(Student, src_id), db.session.get(Student, dst_id)
+    if src is None or dst is None:
+        raise ValueError('Student not found.')
+    meta = db.metadata.tables
+    report = {'classes': [], 'attendance': 0, 'scores': 0}
+    enrs = (StudentEnrollment.query.filter(StudentEnrollment.id.in_(list(enrollment_ids) or [-1]),
+                                           StudentEnrollment.student_id == src_id).all())
+    for e in enrs:
+        caa = db.session.get(ClassArmAssignment, e.class_arm_assignment_id)
+        term_id = caa.term_id
+        report['attendance'] += Attendance.query.filter_by(enrollment_id=e.id).count()
+        # Term-keyed records for this class and term.
+        cs_ids = [c.id for c in ClassSubject.query.filter(
+            ClassSubject.class_id == caa.class_id, ClassSubject.term_id == term_id,
+            db.or_(ClassSubject.arm_id == caa.arm_id, ClassSubject.arm_id.is_(None))).all()]
+        if 'student_scores' in meta and cs_ids:
+            t = meta['student_scores']
+            report['scores'] += _repoint(t, t.c.student_id, src_id, dst_id,
+                                         where=t.c.class_subject_id.in_(cs_ids)) or 0
+        for name in ('term_results', 'term_summaries', 'attendance_interventions'):
+            t = meta.get(name)
+            if t is not None and 'term_id' in t.c:
+                _repoint(t, t.c.student_id, src_id, dst_id, where=t.c.term_id == term_id)
+        # The enrolment itself (attendance hangs off it).
+        target = StudentEnrollment.query.filter_by(student_id=dst_id,
+                                                   class_arm_assignment_id=caa.id).first()
+        et = StudentEnrollment.__table__
+        if target is None:
+            db.session.execute(update(et).where(et.c.id == e.id).values(student_id=dst_id))
+        else:
+            for dt, dc in _dependents(et):
+                _repoint(dt, dc, e.id, target.id)
+            if e.is_active and not target.is_active:
+                target.is_active = True
+            db.session.expunge(e)
+            db.session.execute(delete(et).where(et.c.id == e.id))
+        report['classes'].append(caa.display_name)
     db.session.flush()
     db.session.expire_all()
     return report
@@ -346,6 +408,9 @@ def find_groups(class_id=None, search=None, min_score=0.5):
             warn.append('These records are in different classes right now')
         if len(dobs) > 1:
             warn.append('These records have different dates of birth')
+        if len({bool(s.is_graduated) for s in g}) > 1:
+            warn.append('One of these records has graduated and the other has not — '
+                        'they may be two different pupils')
         ids_g = [s.id for s in g]
         scores = [v for (x, y), v in pair_score.items() if x in ids_g and y in ids_g]
         score = int(round(100 * (min(scores) if scores else 1)))

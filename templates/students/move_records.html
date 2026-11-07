@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% from "components/searchable_select.html" import searchable_select with context %}
+{% block title %}Move Class Records - {{ app_name }}{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('main.students_list') }}">Students</a> / <a href="{{ url_for('main.duplicate_merge') }}">Merge duplicates</a> / <span>Move class records</span>{% endblock %}
+{% block extra_css %}
+<style>
+.mv-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+@media (max-width:820px){.mv-grid{grid-template-columns:1fr}}
+.mv-card h3{font-size:1rem;margin:0 0 .25rem}
+.mv-who{font-size:.85rem;color:var(--text-muted);margin-bottom:.75rem}
+.mv-who .badge{margin-left:.35rem}
+.mv-row{display:flex;gap:.6rem;align-items:center;padding:.55rem .65rem;border:1px solid var(--border-light);border-radius:8px;margin-bottom:.4rem}
+.mv-row .cls{font-weight:600}
+.mv-row .meta{font-size:.78rem;color:var(--text-muted)}
+.mv-row .cnt{margin-left:auto;font-size:.78rem;color:var(--text-muted);white-space:nowrap}
+label.mv-row{cursor:pointer}
+label.mv-row:has(input:checked){border-color:var(--primary);background:var(--primary-alpha,rgba(13,110,253,.06))}
+</style>
+{% endblock %}
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Move Class Records</h1>
+    <p class="text-muted text-sm">Two different pupils merged by mistake? Pick the record that now holds the
+      other pupil's class (<strong>From</strong>) and the pupil it really belongs to (<strong>To</strong>, re-add
+      them first if they were deleted). The ticked classes move across with their <strong>attendance</strong>,
+      <strong>scores</strong>, <strong>term results</strong> and report-card summaries for that term.</p>
+  </div>
+</div>
+
+<form method="get" class="card mb-3"><div class="card-body d-flex gap-2" style="flex-wrap:wrap;align-items:flex-end">
+  <div><label class="form-label" for="mvFrom">From (has the records now)</label>
+    <select id="mvFrom" name="from" class="form-control">
+      <option value="">Choose a student…</option>
+      {% for st in students %}<option value="{{ st.id }}" {% if src and st.id == src.id %}selected{% endif %}>{{ st.full_name }} ({{ st.student_id }}){% if st.is_graduated %} — graduated{% endif %}</option>{% endfor %}
+    </select>{{ searchable_select('mvFrom', 'Search name or admission no.…') }}</div>
+  <div><label class="form-label" for="mvTo">To (should have them)</label>
+    <select id="mvTo" name="to" class="form-control">
+      <option value="">Choose a student…</option>
+      {% for st in students %}<option value="{{ st.id }}" {% if dst and st.id == dst.id %}selected{% endif %}>{{ st.full_name }} ({{ st.student_id }}){% if st.is_graduated %} — graduated{% endif %}</option>{% endfor %}
+    </select>{{ searchable_select('mvTo', 'Search name or admission no.…') }}</div>
+  <button class="btn btn-secondary" type="submit"><i class="fas fa-magnifying-glass"></i> Show classes</button>
+</div></form>
+
+{% if src %}
+<form method="post" data-confirm="Move the ticked classes, with their attendance and scores, to {{ dst.full_name if dst else 'the other student' }}?">
+  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+  <input type="hidden" name="from" value="{{ src.id }}"><input type="hidden" name="to" value="{{ dst.id if dst else '' }}">
+  <div class="mv-grid">
+    <div class="card mv-card"><div class="card-body">
+      <h3>From: {{ src.full_name }}</h3>
+      <div class="mv-who">{{ src.student_id }}{% if src.is_graduated %}<span class="badge badge-secondary">Graduated{% if src.graduation_date %} {{ src.graduation_date.strftime('%d %b %Y') }}{% endif %}</span>{% endif %}</div>
+      {% for r in src_rows %}
+      <label class="mv-row"><input type="checkbox" name="enrollment" value="{{ r.id }}">
+        <span><span class="cls">{{ r.class }}</span><br><span class="meta">{{ r.term }}{% if not r.active %} · inactive{% endif %}</span></span>
+        <span class="cnt">{{ r.attendance }} attendance day{{ '' if r.attendance == 1 else 's' }}</span></label>
+      {% else %}<p class="text-muted">No class enrolments.</p>{% endfor %}
+    </div></div>
+    <div class="card mv-card"><div class="card-body">
+      {% if dst %}
+      <h3>To: {{ dst.full_name }}</h3>
+      <div class="mv-who">{{ dst.student_id }}{% if dst.is_graduated %}<span class="badge badge-secondary">Graduated</span>{% endif %}</div>
+      {% for r in dst_rows %}
+      <div class="mv-row"><span><span class="cls">{{ r.class }}</span><br><span class="meta">{{ r.term }}</span></span>
+        <span class="cnt">{{ r.attendance }} attendance day{{ '' if r.attendance == 1 else 's' }}</span></div>
+      {% else %}<p class="text-muted">No class enrolments yet.</p>{% endfor %}
+      <p class="text-muted text-sm mb-0">If this student is already in the same class and term, the two are combined — a day marked on both keeps the most recent mark.</p>
+      {% else %}<p class="text-muted mb-0">Choose the student the records should go to.</p>{% endif %}
+    </div></div>
+  </div>
+  {% if dst and src_rows %}
+  <div class="mt-3"><button type="submit" class="btn btn-primary"><i class="fas fa-right-left"></i> Move ticked classes to {{ dst.full_name }}</button></div>
+  {% endif %}
+</form>
+{% endif %}
+{% endblock %}

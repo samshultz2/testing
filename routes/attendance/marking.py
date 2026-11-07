@@ -1,6 +1,7 @@
 """attendance blueprint — marking routes (split from the former routes/attendance.py)."""
 from routes.attendance import *  # noqa: F401,F403
 from utils import timeutil
+from utils.calculations import on_register
 
 
 @attendance_bp.route('/')
@@ -295,7 +296,7 @@ def week_grid():
     if selected_assignment and selected_week:
         enrollments = (StudentEnrollment.query
                        .filter_by(class_arm_assignment_id=assignment_id, is_active=True)
-                       .join(Student).order_by(*roster_order()).all())
+                       .join(Student).filter(on_register()).order_by(*roster_order()).all())
         school_days = _week_school_days(selected_week, holidays)
         if enrollments and school_days:
             recs = Attendance.query.filter(
@@ -331,8 +332,9 @@ def week_save():
 
     holidays = Holiday.query.filter_by(term_id=week.term_id).all()
     school_days = _week_school_days(week, holidays)
-    enrollments = StudentEnrollment.query.filter_by(
-        class_arm_assignment_id=assignment_id, is_active=True).all()
+    enrollments = (StudentEnrollment.query.filter_by(
+        class_arm_assignment_id=assignment_id, is_active=True)
+        .join(Student).filter(on_register()).all())
     day_isos = [d.isoformat() for d in school_days]
 
     # Existing records keyed by (enrollment_id, date) so we upsert.

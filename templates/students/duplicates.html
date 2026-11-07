@@ -29,6 +29,7 @@
   <div>
     <h1>Merge Duplicate Students</h1>
     <p class="text-muted text-sm">Students with the <strong>same surname</strong> whose other names are the closest match (capitals, spelling slips and a missing middle name are ignored — e.g. “ABDULWAHAB ILUEDO AKHTAR-OZOMOYA ISMAIL” and “Abdulwahab Ismail”). Brothers and sisters with different first names are not grouped. For each group choose the record to <strong>keep</strong> — everything saved for the others (WAEC, JAMB, BECE / Common Entrance, mock exams, scores, class enrolments, attendance, fees …) is moved onto it, any blank details (e.g. middle name) are copied across, and the other records are deleted.</p>
+    <p class="text-sm mb-0">Merged two different pupils by mistake? <a href="{{ url_for('main.move_class_records') }}"><i class="fas fa-right-left"></i> Move their class records back</a> (attendance, scores and enrolment).</p>
   </div>
 </div>
 
