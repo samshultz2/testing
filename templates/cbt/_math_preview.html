@@ -1,0 +1,86 @@
+{# Live "what the student sees" preview for the CBT question form.
+   Usage: {% with tid='qtext_exam' %}{% include 'cbt/_math_preview.html' %}{% endwith %}
+   Reads the question textarea (id=tid), every [data-math-target] field (the
+   options, named by that attribute), the figure upload and the correct-answer
+   radios/select in the same form, and renders them with MathJax. #}
+<div class="mxp" id="{{ tid }}_preview" aria-live="polite">
+  <div class="mxp-head"><span><i class="fas fa-eye" aria-hidden="true"></i> Student view</span><span class="mxp-note">Updates as you type</span></div>
+  <div class="mxp-body">
+    <div class="mxp-empty">Start typing the question to see how it will look.</div>
+    <div class="mxp-q" hidden></div>
+    <img class="mxp-img" alt="Figure preview" hidden>
+    <ol class="mxp-opts" hidden></ol>
+  </div>
+</div>
+<style>
+.mxp{border:1px solid var(--border-color,#dfe3ea);border-radius:10px;background:var(--bg-card,#fff);overflow:hidden}
+.mxp-head{display:flex;justify-content:space-between;align-items:center;padding:.5rem .8rem;background:var(--gray-50,#f7f9fb);border-bottom:1px solid var(--border-color,#e6e9ef);font-size:.8rem;font-weight:600;color:var(--text-primary,#1f2937)}
+.mxp-note{font-weight:400;color:var(--text-muted,#6b7280);font-size:.74rem}
+.mxp-body{padding:.9rem 1rem}
+.mxp-empty{color:var(--text-muted,#6b7280);font-size:.88rem}
+.mxp-q{font-size:1rem;line-height:1.7;white-space:pre-wrap;word-break:break-word;margin-bottom:.6rem}
+.mxp-img{display:block;max-width:100%;max-height:220px;border:1px solid var(--border-color,#e6e9ef);border-radius:8px;margin:.2rem 0 .7rem}
+.mxp-img[hidden]{display:none}
+.mxp-opts{list-style:none;margin:0;padding:0;display:grid;gap:.4rem}
+.mxp-opts li{display:flex;align-items:center;gap:.6rem;padding:.45rem .6rem;border:1px solid var(--border-color,#e6e9ef);border-radius:8px;font-size:.93rem;line-height:1.5}
+.mxp-opts li .l{flex:none;display:inline-flex;align-items:center;justify-content:center;width:1.6rem;height:1.6rem;border-radius:50%;background:var(--gray-100,#eef1f5);font-weight:700;font-size:.8rem}
+.mxp-opts li.ok{border-color:var(--success,#16a34a);background:rgba(22,163,74,.06)}
+.mxp-opts li.ok .l{background:var(--success,#16a34a);color:#fff}
+.mxp-opts li .ok-tag{margin-left:auto;font-size:.72rem;font-weight:600;color:var(--success,#16a34a)}
+</style>
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var ta = document.getElementById({{ tid|tojson }});
+  var box = document.getElementById({{ (tid ~ '_preview')|tojson }});
+  if (!ta || !box || box.dataset.ready) return;
+  box.dataset.ready = '1';
+  var form = ta.form || document;
+  var q = box.querySelector('.mxp-q'), opts = box.querySelector('.mxp-opts');
+  var empty = box.querySelector('.mxp-empty'), img = box.querySelector('.mxp-img');
+  var imgUrl = null, timer = null;
+
+  function correct() {
+    var r = form.querySelector('[name="correct_option"]:checked');
+    if (r) return r.value;
+    var s = form.querySelector('select[name="correct_option"]');
+    return s ? s.value : '';
+  }
+  function render() {
+    var text = ta.value.trim();
+    var fields = Array.prototype.slice.call(form.querySelectorAll('[data-math-target]'));
+    var any = text || fields.some(function (f) { return f.value.trim(); });
+    empty.hidden = !!(any || !img.hidden); q.hidden = !text; opts.hidden = !any;
+    q.textContent = text;
+    var ok = correct();
+    opts.innerHTML = '';
+    fields.forEach(function (f) {
+      var letter = f.getAttribute('data-letter') || '';
+      var li = document.createElement('li');
+      if (letter && letter === ok) li.className = 'ok';
+      var l = document.createElement('span'); l.className = 'l'; l.textContent = letter;
+      var t = document.createElement('span'); t.textContent = f.value.trim() || '—';
+      li.appendChild(l); li.appendChild(t);
+      if (letter && letter === ok) { var tag = document.createElement('span'); tag.className = 'ok-tag'; tag.textContent = 'Correct'; li.appendChild(tag); }
+      opts.appendChild(li);
+    });
+    if (window.MathJax && MathJax.typesetPromise) {
+      if (MathJax.typesetClear) MathJax.typesetClear([box]);
+      MathJax.typesetPromise([box]).catch(function () {});
+    }
+  }
+  function soon() { clearTimeout(timer); timer = setTimeout(render, 180); }
+  form.addEventListener('input', soon);
+  form.addEventListener('change', function (ev) {
+    var f = ev.target;
+    if (f && f.type === 'file' && f.name === 'image') {
+      if (imgUrl) { URL.revokeObjectURL(imgUrl); imgUrl = null; }
+      if (f.files && f.files[0] && /^image\//.test(f.files[0].type)) {
+        imgUrl = URL.createObjectURL(f.files[0]); img.src = imgUrl; img.hidden = false;
+      } else { img.hidden = true; img.removeAttribute('src'); }
+    }
+    soon();
+  });
+  form.addEventListener('reset', function () { setTimeout(function () { img.hidden = true; render(); }, 0); });
+  render();
+})();
+</script>

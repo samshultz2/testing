@@ -1,63 +1,193 @@
-{# Easy math input for a textarea.
-   Usage: give the textarea id="{{ tid }}", then
-   {% with tid='qtext_exam' %}{% include 'cbt/_math_toolbar.html' %}{% endwith %}
-   Symbol buttons drop a character; structure buttons drop a fill-in template
-   (auto-wrapped in \( \) so it renders). A live preview shows the result. #}
-<div class="math-tb" id="{{ tid }}_tb" role="toolbar" aria-label="Maths symbols">
-    <span class="math-tb-group">
-        <button type="button" data-tex="\frac{|}{}" title="Fraction">a&frasl;b</button>
-        <button type="button" data-tex="\sqrt{|}" title="Square root">&radic;&#9744;</button>
-        <button type="button" data-tex="\sqrt[|]{}" title="nth root"><sup>n</sup>&radic;</button>
-        <button type="button" data-tex="x^{|}" title="Power / exponent">x<sup>n</sup></button>
-        <button type="button" data-tex="x_{|}" title="Subscript">x<sub>n</sub></button>
-        <button type="button" data-tex="|" data-mathwrap="1" title="Insert a formula">ƒ</button>
-    </span>
-    <span class="math-tb-group">
-        {% for s in ['×','÷','±','≤','≥','≠','≈','π','θ','Δ','°','∞','√','→'] %}
-        <button type="button" data-sym="{{ s }}">{{ s }}</button>
-        {% endfor %}
-    </span>
+{# Subject-aware maths & science symbols for the CBT question editor.
+
+   Usage (place it directly ABOVE the question textarea, which gets the id):
+     {% with tid='qtext_exam', mx=math_editor %}{% include 'cbt/_math_toolbar.html' %}{% endwith %}
+   `mx` comes from utils.cbt_symbols.editor_config(subject_name).
+
+   * Buttons insert into whichever field the teacher last used in the same
+     form — the question or any input marked data-math-target (the options).
+   * Symbols go in as typed characters; structures (fractions, matrices,
+     equations, units…) go in as LaTeX wrapped in \( … \) so MathJax renders
+     them for the student. The cursor lands inside the first blank.
+   * The palette follows the exam's subject (Maths, Further Maths, Physics,
+     Chemistry) and can be switched; on the question bank a subject <select>
+     marked data-math-kind-source switches it automatically.
+   * A live preview (cbt/_math_preview.html) shows exactly what students see. #}
+<div class="mx" id="{{ tid }}_mx" data-mx-for="{{ tid }}" data-mx-kind="{{ mx.kind }}" data-mx-caret="{{ mx.caret }}">
+  <div class="mx-head">
+    <div class="mx-kinds" role="group" aria-label="Symbol set">
+      <span class="mx-kinds-label">Symbols for</span>
+      {% for k, label in mx.kinds %}
+      <button type="button" class="mx-kind" data-kind="{{ k }}" aria-pressed="{{ 'true' if k == mx.kind else 'false' }}">{{ label }}</button>
+      {% endfor %}
+    </div>
+    <div class="mx-target" aria-live="polite"><i class="fas fa-i-cursor" aria-hidden="true"></i> Inserting into <strong data-mx-target-name>Question</strong></div>
+  </div>
+  <div class="mx-tabs" role="tablist" aria-label="Symbol groups"></div>
+  <div class="mx-pal" role="tabpanel"></div>
 </div>
-<div class="math-prev-wrap"><span class="math-prev-label">Preview:</span> <span class="math-prev" id="{{ tid }}_pv"></span></div>
+<script type="application/json" id="{{ tid }}_mxdata">{{ mx.palettes|tojson }}</script>
 <style>
-.math-tb{display:flex;flex-wrap:wrap;gap:.5rem;margin:.4rem 0}
-.math-tb-group{display:flex;flex-wrap:wrap;gap:.25rem;padding:.2rem;border:1px solid var(--border-color,#e2e6ee);border-radius:8px;background:var(--gray-50,#f6f8fb)}
-.math-tb button{min-width:34px;height:30px;padding:0 .45rem;border:1px solid var(--border-color,#dde);border-radius:6px;background:#fff;cursor:pointer;font-size:.9rem;line-height:1}
-.math-tb button:hover{background:#eafaf2;border-color:#0d6a4e}
-.math-prev-wrap{font-size:.9rem;min-height:1.6rem;margin:.1rem 0 .3rem}
-.math-prev-label{color:var(--text-muted,#888);font-size:.78rem;text-transform:uppercase;letter-spacing:.03em}
-.math-prev{display:inline-block}
+.mx{border:1px solid var(--border-color,#dfe3ea);border-bottom:none;border-radius:10px 10px 0 0;background:var(--bg-card,#fff)}
+.mx + textarea.form-control,.mx + .form-control{border-top-left-radius:0;border-top-right-radius:0}
+.mx-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.5rem;padding:.55rem .7rem;border-bottom:1px solid var(--border-color,#e6e9ef);background:var(--gray-50,#f7f9fb);border-radius:10px 10px 0 0}
+.mx-kinds{display:flex;flex-wrap:wrap;align-items:center;gap:.3rem}
+.mx-kinds-label{font-size:.72rem;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text-muted,#6b7280);margin-right:.2rem}
+.mx-kind{border:1px solid var(--border-color,#d6dbe3);background:var(--bg-card,#fff);color:var(--text-primary,#1f2937);border-radius:999px;padding:.22rem .7rem;font-size:.8rem;font-weight:500;cursor:pointer;transition:background .15s,border-color .15s,color .15s}
+.mx-kind:hover{border-color:var(--primary,#0d6a4e)}
+.mx-kind[aria-pressed="true"]{background:var(--primary,#0d6a4e);border-color:var(--primary,#0d6a4e);color:#fff}
+.mx-target{font-size:.78rem;color:var(--text-muted,#6b7280)}
+.mx-target strong{color:var(--primary,#0d6a4e)}
+.mx-tabs{display:flex;gap:.15rem;overflow-x:auto;padding:0 .5rem;border-bottom:1px solid var(--border-color,#e6e9ef);scrollbar-width:thin}
+.mx-tab{flex:none;border:none;background:none;padding:.5rem .7rem;font-size:.82rem;font-weight:500;color:var(--text-muted,#6b7280);border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap}
+.mx-tab:hover{color:var(--text-primary,#1f2937)}
+.mx-tab[aria-selected="true"]{color:var(--primary,#0d6a4e);border-bottom-color:var(--primary,#0d6a4e)}
+.mx-pal{display:flex;flex-wrap:wrap;gap:.35rem;padding:.6rem .7rem;min-height:3.1rem;max-height:9.6rem;overflow-y:auto}
+.mx-btn{display:inline-flex;align-items:center;justify-content:center;min-width:2.35rem;height:2.35rem;padding:0 .55rem;border:1px solid var(--border-color,#dfe3ea);border-radius:8px;background:var(--bg-card,#fff);color:var(--text-primary,#111827);font-size:1rem;line-height:1;cursor:pointer;transition:background .12s,border-color .12s,transform .06s}
+.mx-btn.tex{min-width:2.9rem;font-size:.92rem}
+.mx-btn:hover{background:var(--primary-light,#eaf6f0);border-color:var(--primary,#0d6a4e)}
+.mx-btn:active{transform:translateY(1px)}
+.mx-btn:focus-visible,.mx-kind:focus-visible,.mx-tab:focus-visible{outline:2px solid var(--primary,#0d6a4e);outline-offset:2px}
+.mx-btn mjx-container{margin:0!important;pointer-events:none}
+.mx-btn mjx-container[display="true"]{display:inline-block!important}
+[data-mx-active]{box-shadow:0 0 0 3px rgba(13,106,78,.14);border-color:var(--primary,#0d6a4e)!important}
+.mx-help{display:block;margin-top:.35rem;font-size:.78rem;color:var(--text-muted,#6b7280)}
+.mx-help code{font-size:.75rem;background:var(--gray-100,#eef1f5);padding:0 .25rem;border-radius:4px}
+@media (max-width:560px){.mx-head{flex-direction:column;align-items:stretch}.mx-kinds{flex-wrap:nowrap;overflow-x:auto;padding-bottom:.15rem;scrollbar-width:none}.mx-kind{flex:none}.mx-btn{min-width:2.6rem;height:2.6rem}}
 </style>
 <script nonce="{{ csp_nonce }}">
-(function(){
-    var ta=document.getElementById('{{ tid }}');
-    var tb=document.getElementById('{{ tid }}_tb');
-    var pv=document.getElementById('{{ tid }}_pv');
-    if(!ta||!tb) return;
-    function insideMath(v,pos){ return v.lastIndexOf('\\(',pos-1) > v.lastIndexOf('\\)',pos-1); }
-    function preview(){
-        pv.textContent = ta.value || '';
-        if(window.MathJax && MathJax.typesetPromise){
-            if(MathJax.typesetClear) MathJax.typesetClear([pv]);
-            MathJax.typesetPromise([pv]).catch(function(){});
-        }
+(function () {
+// The toolbar sits above its textarea, so start once the rest of the page exists.
+function init() {
+  var box = document.getElementById({{ (tid ~ '_mx')|tojson }});
+  var dataEl = document.getElementById({{ (tid ~ '_mxdata')|tojson }});
+  var ta = document.getElementById({{ tid|tojson }});
+  if (!box || !dataEl || !ta || box.dataset.ready) return;
+  box.dataset.ready = '1';
+  var PAL = JSON.parse(dataEl.textContent);
+  var CARET = box.getAttribute('data-mx-caret');
+  var form = ta.form || document;
+  var tabs = box.querySelector('.mx-tabs'), pal = box.querySelector('.mx-pal');
+  var targetName = box.querySelector('[data-mx-target-name]');
+  var kind = box.getAttribute('data-mx-kind') || 'general', tabKey = null;
+  var target = ta;
+
+  // ---- Which field receives the symbols --------------------------------
+  function fields() { return [ta].concat(Array.prototype.slice.call(form.querySelectorAll('[data-math-target]'))); }
+  function nameOf(el) { return el === ta ? 'Question' : (el.getAttribute('data-math-target') || 'Answer'); }
+  function setTarget(el) {
+    fields().forEach(function (f) { f.removeAttribute('data-mx-active'); });
+    target = el; el.setAttribute('data-mx-active', '');
+    targetName.textContent = nameOf(el);
+  }
+  fields().forEach(function (f) { f.addEventListener('focus', function () { setTarget(f); }); });
+
+  // ---- Rendering the palette -------------------------------------------
+  function typeset(el) {
+    if (window.MathJax && MathJax.typesetPromise) {
+      if (MathJax.typesetClear) MathJax.typesetClear([el]);
+      MathJax.typesetPromise([el]).catch(function () {});
     }
-    function insert(snip, isTex){
-        var s=ta.selectionStart, e=ta.selectionEnd, v=ta.value;
-        var caretRel=snip.indexOf('|');
-        var text=snip.replace('|','');
-        if(isTex && !insideMath(v,s)){ text='\\('+text+'\\)'; if(caretRel>=0) caretRel+=2; }
-        ta.value=v.substring(0,s)+text+v.substring(e);
-        var caret = caretRel>=0 ? s+caretRel : s+text.length;
-        ta.focus(); ta.setSelectionRange(caret,caret);
-        preview();
-    }
-    tb.addEventListener('click', function(ev){
-        var b=ev.target.closest('button'); if(!b) return; ev.preventDefault();
-        if(b.hasAttribute('data-sym')) insert(b.getAttribute('data-sym'), false);
-        else if(b.hasAttribute('data-tex')) insert(b.getAttribute('data-tex'), true);
+  }
+  function renderTabs() {
+    var groups = PAL[kind] || PAL.general;
+    if (!groups.some(function (g) { return g.key === tabKey; })) tabKey = groups[0].key;
+    tabs.innerHTML = '';
+    groups.forEach(function (g) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'mx-tab'; b.setAttribute('role', 'tab');
+      b.textContent = g.label; b.dataset.key = g.key;
+      b.setAttribute('aria-selected', g.key === tabKey ? 'true' : 'false');
+      b.tabIndex = g.key === tabKey ? 0 : -1;
+      tabs.appendChild(b);
     });
-    ta.addEventListener('input', preview);
-    preview();
+    renderPalette();
+  }
+  function renderPalette() {
+    var g = (PAL[kind] || PAL.general).filter(function (x) { return x.key === tabKey; })[0];
+    pal.innerHTML = '';
+    (g ? g.items : []).forEach(function (it, i) {
+      var b = document.createElement('button');
+      b.type = 'button'; b.className = 'mx-btn' + (it.type === 'tex' ? ' tex' : '');
+      b.dataset.i = i;
+      b.title = it.title || it.label;
+      b.setAttribute('aria-label', it.title || it.label);
+      if (it.type === 'tex') b.textContent = '\\(' + it.label + '\\)'; else b.textContent = it.label;
+      pal.appendChild(b);
+    });
+    typeset(pal);
+  }
+  function setKind(k) {
+    if (!PAL[k]) k = 'general';
+    kind = k; box.setAttribute('data-mx-kind', k);
+    box.querySelectorAll('.mx-kind').forEach(function (b) {
+      b.setAttribute('aria-pressed', b.dataset.kind === k ? 'true' : 'false');
+    });
+    renderTabs();
+  }
+
+  // ---- Inserting --------------------------------------------------------
+  function insideMath(v, pos) {
+    var before = v.slice(0, pos);
+    return before.lastIndexOf('\\(') > before.lastIndexOf('\\)');
+  }
+  function insert(it) {
+    var el = target, v = el.value;
+    var s = el.selectionStart == null ? v.length : el.selectionStart;
+    var e = el.selectionEnd == null ? v.length : el.selectionEnd;
+    var snip = it.insert, at = snip.indexOf(CARET);
+    var text = snip.split(CARET).join('');
+    if (it.type === 'tex' && !insideMath(v, s)) {
+      text = '\\(' + text + '\\)';
+      at = at >= 0 ? at + 2 : -1;
+    }
+    // A highlighted selection drops into the first blank (e.g. select "x", tap √).
+    var sel = v.slice(s, e);
+    if (sel && at >= 0) { text = text.slice(0, at) + sel + text.slice(at); at += sel.length; }
+    el.value = v.slice(0, s) + text + v.slice(e);
+    var caret = s + (at >= 0 ? at : text.length);
+    el.focus(); el.setSelectionRange(caret, caret);
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
+  box.addEventListener('mousedown', function (ev) {
+    // Keep the caret in the text field while clicking palette buttons.
+    if (ev.target.closest('.mx-btn')) ev.preventDefault();
+  });
+  box.addEventListener('click', function (ev) {
+    var b = ev.target.closest('button'); if (!b) return;
+    if (b.classList.contains('mx-kind')) { setKind(b.dataset.kind); return; }
+    if (b.classList.contains('mx-tab')) { tabKey = b.dataset.key; renderTabs(); b = tabs.querySelector('[data-key="' + tabKey + '"]'); if (b) b.focus(); return; }
+    if (b.classList.contains('mx-btn')) {
+      var g = (PAL[kind] || PAL.general).filter(function (x) { return x.key === tabKey; })[0];
+      if (g) insert(g.items[+b.dataset.i]);
+    }
+  });
+  tabs.addEventListener('keydown', function (ev) {
+    if (ev.key !== 'ArrowRight' && ev.key !== 'ArrowLeft') return;
+    var all = Array.prototype.slice.call(tabs.children), i = all.indexOf(document.activeElement);
+    if (i < 0) return;
+    ev.preventDefault();
+    var n = all[(i + (ev.key === 'ArrowRight' ? 1 : all.length - 1)) % all.length];
+    tabKey = n.dataset.key; renderTabs();
+    var f = tabs.querySelector('[data-key="' + tabKey + '"]'); if (f) f.focus();
+  });
+
+  // Question bank: follow the chosen subject.
+  var src = form.querySelector && form.querySelector('[data-math-kind-source]');
+  if (src) src.addEventListener('change', function () {
+    var o = src.options[src.selectedIndex];
+    if (o && o.dataset.kind) setKind(o.dataset.kind);
+  });
+
+  setTarget(ta);
+  setKind(kind);
+  // MathJax may finish loading after us — typeset the palette once it's ready.
+  var tries = 0, wait = setInterval(function () {
+    if ((window.MathJax && MathJax.typesetPromise) || ++tries > 40) { clearInterval(wait); typeset(pal); }
+  }, 250);
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+else setTimeout(init, 0);
 })();
 </script>

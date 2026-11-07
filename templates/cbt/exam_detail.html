@@ -3,6 +3,44 @@
 {% block breadcrumb %}<a href="{{ url_for('cbt.dashboard') }}">CBT</a> / <span>{{ e.title|truncate(30) }}</span>{% endblock %}
 {% block extra_css %}
 <style>.opt-row{display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem}@media(max-width:560px){.opt-row{grid-template-columns:1fr}}
+.aq-card{overflow:visible}
+.aq-header{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:.75rem}
+.aq-header h3{margin:0}
+.aq-sub{margin:.2rem 0 0;font-size:.82rem;color:var(--text-muted)}
+.aq-sources{display:flex;flex-wrap:wrap;gap:.4rem}
+.aq-sources .btn{margin:0}
+.aq-sources .btn.is-active{background:var(--primary-light);border-color:var(--primary);color:var(--primary)}
+.aq-import{border-bottom:1px solid var(--border-color);background:var(--gray-50);padding:1rem 1.25rem}
+.aq-import[hidden]{display:none}
+.aq-import-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.1fr);gap:1.25rem;align-items:start}
+.aq-h4{margin:0 0 .5rem;font-size:.95rem}
+.aq-steps{margin:0;padding-left:1.1rem;font-size:.85rem;color:var(--text-secondary);line-height:1.55}
+.aq-steps li{margin-bottom:.3rem}
+.aq-steps code{font-size:.78rem;background:var(--bg-card);border:1px solid var(--border-color);padding:0 .25rem;border-radius:4px}
+.aq-import-actions{display:flex;justify-content:flex-end;gap:.5rem;margin-top:.75rem}
+.aq-import-actions .btn{margin:0}
+.aq-layout{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(280px,1fr);gap:1.5rem;align-items:start}
+.aq-side{position:sticky;top:1rem}
+.aq-qtext{font-size:1rem;line-height:1.6;resize:vertical;min-height:6.5rem}
+.aq-options{border:none;padding:0;margin:0 0 1rem;min-width:0}
+.aq-options legend{padding:0;margin-bottom:.45rem}
+.aq-legend-note{font-weight:400;color:var(--text-muted);font-size:.8rem}
+.aq-opt{display:flex;align-items:center;gap:.6rem;margin-bottom:.5rem}
+.aq-opt .form-control{flex:1;margin:0}
+.aq-correct{position:relative;flex:none;margin:0;cursor:pointer}
+.aq-correct input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
+.aq-letter{display:inline-flex;align-items:center;justify-content:center;width:2.4rem;height:2.4rem;border-radius:50%;border:2px solid var(--border-color);background:var(--bg-card);font-weight:700;color:var(--text-secondary);transition:all .15s}
+.aq-correct:hover .aq-letter{border-color:var(--success)}
+.aq-correct input:checked + .aq-letter{background:var(--success);border-color:var(--success);color:#fff;box-shadow:0 0 0 4px var(--success-light)}
+.aq-correct input:focus-visible + .aq-letter{outline:2px solid var(--primary);outline-offset:2px}
+.aq-meta{display:grid;grid-template-columns:110px repeat(2,minmax(0,1fr));gap:.75rem}
+.aq-footer{display:flex;align-items:center;justify-content:flex-end;gap:.5rem;margin-top:1rem;padding-top:1rem;border-top:1px solid var(--border-color)}
+.aq-footer .btn{margin:0}
+.aq-kbd{margin-right:auto;font-size:.76rem;color:var(--text-muted)}
+.aq-kbd kbd{font-family:inherit;font-size:.72rem;padding:.05rem .35rem;border:1px solid var(--border-color);border-bottom-width:2px;border-radius:4px;background:var(--bg-card)}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
+@media(max-width:960px){.aq-layout{grid-template-columns:minmax(0,1fr)}.aq-side{position:static}.aq-import-grid{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:560px){.aq-meta{grid-template-columns:1fr 1fr}.aq-meta .form-group:first-child{grid-column:1/-1}.aq-kbd{display:none}.aq-footer .btn{flex:1;justify-content:center}}
 .qcard{border:1px solid var(--border-color);border-radius:var(--radius-md);padding:.8rem 1rem;margin-bottom:.6rem}
 .qopt{font-size:.88rem;padding:.15rem 0}.qopt.correct{color:var(--success);font-weight:600}</style>
 {% endblock %}
@@ -32,76 +70,164 @@
     <div class="text-sm"><i class="fas fa-key text-muted"></i> Access password: <strong>{{ e.access_password }}</strong> · {{ e.question_count }} Q · {{ e.total_marks }} marks</div>
 </div></div>
 
-<div class="card mb-3">
-    <div class="card-header"><h3><i class="fas fa-plus"></i> Add Question</h3>
+{% from "components/file_drop.html" import file_drop, file_drop_assets with context %}
+<div class="card mb-3 aq-card">
+    <div class="card-header aq-header">
+        <div>
+            <h3><i class="fas fa-plus-circle"></i> Add question</h3>
+            <p class="aq-sub">Write it here, or bring questions in from the bank or a spreadsheet.</p>
+        </div>
         {% if can_write_sub('cbt', 'exams_questions_bulk') %}
-        <div class="d-flex gap-1">
+        <div class="aq-sources" role="group" aria-label="Other ways to add questions">
             <a href="{{ url_for('cbt.import_from_bank', exam_id=e.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-layer-group"></i> From bank</a>
             <a href="{{ url_for('cbt.fill_from_jamb_bank', exam_id=e.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-wand-magic-sparkles"></i> Fill from JAMB bank</a>
-            <form method="POST" action="{{ url_for('cbt.import_questions_file', exam_id=e.id) }}" enctype="multipart/form-data" style="display:inline-flex;gap:.3rem;align-items:center;">
-                <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                <input type="file" name="file" accept=".xlsx,.xlsm,.csv" required style="max-width:160px;font-size:.8rem;">
-                <button class="btn btn-secondary btn-sm" title="Import Excel/CSV"><i class="fas fa-file-import"></i></button>
-            </form>
+            <button type="button" class="btn btn-secondary btn-sm" id="importToggle" aria-expanded="false" aria-controls="importPanel"><i class="fas fa-file-import"></i> Import Excel / CSV</button>
         </div>
         {% endif %}
     </div>
+    {% if can_write_sub('cbt', 'exams_questions_bulk') %}
+    <div class="aq-import" id="importPanel" hidden>
+        <form method="POST" action="{{ url_for('cbt.import_questions_file', exam_id=e.id) }}" enctype="multipart/form-data" class="aq-import-form">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <div class="aq-import-grid">
+                <div>
+                    <h4 class="aq-h4">Import questions from a spreadsheet</h4>
+                    <ol class="aq-steps">
+                        <li><a href="{{ url_for('cbt.exam_import_template', exam_id=e.id) }}" data-native download><i class="fas fa-download"></i> Download the template</a> — it has {{ e.subject.name if e.subject else 'sample' }} examples.</li>
+                        <li>One question per row: <code>Question</code>, <code>A</code>–<code>D</code>, <code>Correct</code> (A–D), and optional <code>Marks</code>, <code>Topic</code>.</li>
+                        <li>Write formulas as LaTeX between <code>\(</code> and <code>\)</code> — the symbol buttons below show the exact text.</li>
+                    </ol>
+                </div>
+                <div>
+                    {{ file_drop('file', 'importFile', accept='.xlsx,.xlsm,.csv', kind='sheet', title='Choose your question file',
+                                 hint='Excel (.xlsx) or CSV · up to 10 MB', max_mb=10, required=True) }}
+                    <div class="aq-import-actions">
+                        <button type="button" class="btn btn-secondary btn-sm" id="importCancel">Cancel</button>
+                        <button type="submit" class="btn btn-primary btn-sm" id="importSubmit" disabled><i class="fas fa-file-import"></i> Import questions</button>
+                    </div>
+                </div>
+            </div>
+        </form>
+    </div>
+    {% endif %}
     {% if can_write_sub('cbt', 'exams_questions_edit') %}
     <div class="card-body">
-        <form method="POST" action="{{ url_for('cbt.add_question', exam_id=e.id) }}" enctype="multipart/form-data">
+        <form method="POST" action="{{ url_for('cbt.add_question', exam_id=e.id) }}" enctype="multipart/form-data" id="addQuestionForm">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-            <div class="form-group"><label class="form-label">Question <span class="required">*</span></label><textarea name="question_text" id="qtext_exam" class="form-control" rows="2" required></textarea>
-                {% with tid='qtext_exam' %}{% include 'cbt/_math_toolbar.html' %}{% endwith %}
-                <small class="text-muted">Tap a symbol or structure above to add maths — no typing needed.</small></div>
-            <div class="form-group"><label class="form-label">Figure / image (optional)</label><input type="file" name="image" accept="image/*" class="form-control"></div>
-            <div class="opt-row">
-                <div class="form-group"><label class="form-label">Option A</label><input type="text" name="option_a" class="form-control"></div>
-                <div class="form-group"><label class="form-label">Option B</label><input type="text" name="option_b" class="form-control"></div>
-                <div class="form-group"><label class="form-label">Option C</label><input type="text" name="option_c" class="form-control"></div>
-                <div class="form-group"><label class="form-label">Option D</label><input type="text" name="option_d" class="form-control"></div>
-            </div>
-            <div class="form-row">
-                <div class="form-group"><label class="form-label">Correct option <span class="required">*</span></label><select name="correct_option" class="form-control" required><option value="">—</option><option>A</option><option>B</option><option>C</option><option>D</option></select></div>
-                <div class="form-group"><label class="form-label">Marks</label><input type="number" name="marks" class="form-control" step="0.5" value="1"></div>
-                <div class="form-group"><label class="form-label">Topic</label>
-                    <select name="topic" id="qtopic" class="form-control">
-                        <option value="">— Select topic —</option>
-                        {% for t in topic_tree %}<option value="{{ t.title }}">{{ t.title }}{% if t.exam_body != 'Both' %} ({{ t.exam_body }}){% endif %}</option>{% endfor %}
-                    </select>
+            <div class="aq-layout">
+            <div class="aq-main">
+                <div class="form-group">
+                    <label class="form-label" for="qtext_exam">Question <span class="required">*</span></label>
+                    {% with tid='qtext_exam', mx=math_editor %}{% include 'cbt/_math_toolbar.html' %}{% endwith %}
+                    <textarea name="question_text" id="qtext_exam" class="form-control aq-qtext" rows="4" required placeholder="Type the question. Use the buttons above for fractions, powers, units, equations and symbols."></textarea>
+                    <small class="mx-help">Tap a button to insert it where your cursor is — in the question or whichever option you clicked last. Select text first to wrap it (e.g. select <code>x</code>, then tap √).</small>
                 </div>
-                <div class="form-group"><label class="form-label">Sub-topic</label>
-                    <select name="subtopic" id="qsubtopic" class="form-control" disabled>
-                        <option value="">— Select topic first —</option>
-                    </select>
+
+                <div class="form-group">
+                    <span class="form-label">Figure or diagram <span class="text-muted" style="font-weight:400">(optional)</span></span>
+                    {{ file_drop('image', 'qimage', accept='image/png,image/jpeg,image/gif,image/webp', kind='image',
+                                 title='Add a figure or diagram', hint='PNG, JPG, GIF or WebP · up to 10 MB · large images are compressed automatically',
+                                 max_mb=10, paste=True) }}
                 </div>
+
+                <fieldset class="aq-options">
+                    <legend class="form-label">Options <span class="aq-legend-note">— select the circle beside the correct answer <span class="required">*</span></span></legend>
+                    {% for L in ['A','B','C','D'] %}
+                    <div class="aq-opt">
+                        <label class="aq-correct" title="Mark {{ L }} as the correct answer">
+                            <input type="radio" name="correct_option" value="{{ L }}" required>
+                            <span class="aq-letter" aria-hidden="true">{{ L }}</span>
+                            <span class="sr-only">Option {{ L }} is correct</span>
+                        </label>
+                        <input type="text" name="option_{{ L|lower }}" class="form-control" placeholder="Option {{ L }}" aria-label="Option {{ L }}" data-math-target="Option {{ L }}" data-letter="{{ L }}">
+                    </div>
+                    {% endfor %}
+                </fieldset>
+
+                <div class="aq-meta">
+                    <div class="form-group"><label class="form-label" for="qmarks">Marks</label><input type="number" name="marks" id="qmarks" class="form-control" step="0.5" min="0.5" value="1"></div>
+                    <div class="form-group"><label class="form-label" for="qtopic">Topic</label>
+                        <select name="topic" id="qtopic" class="form-control">
+                            <option value="">— Select topic —</option>
+                            {% for t in topic_tree %}<option value="{{ t.title }}">{{ t.title }}{% if t.exam_body != 'Both' %} ({{ t.exam_body }}){% endif %}</option>{% endfor %}
+                        </select>
+                    </div>
+                    <div class="form-group"><label class="form-label" for="qsubtopic">Sub-topic</label>
+                        <select name="subtopic" id="qsubtopic" class="form-control" disabled>
+                            <option value="">— Select topic first —</option>
+                        </select>
+                    </div>
+                </div>
+                {% if not topic_tree %}
+                <p class="text-muted text-sm" style="margin-top:-.4rem;"><i class="fas fa-circle-info"></i> No syllabus topics for this subject yet. <a href="{{ syllabus_url }}">Add WAEC/JAMB topics</a> to tag questions by topic &amp; sub-topic.</p>
+                {% else %}
+                <p class="text-muted text-sm" style="margin-top:-.4rem;"><a href="{{ syllabus_url }}">Manage syllabus topics</a> for this subject.</p>
+                <script type="application/json" id="topic-tree-data">{{ topic_tree|tojson }}</script>
+                <script nonce="{{ csp_nonce }}">
+                (function(){
+                    var treeEl = document.getElementById('topic-tree-data');
+                    if(!treeEl) return;   // node absent after an SPA swap to another page
+                    var tree = JSON.parse(treeEl.textContent);
+                    var byTitle = {}; tree.forEach(function(t){ byTitle[t.title] = t.subtopics || []; });
+                    var topic = document.getElementById('qtopic'), sub = document.getElementById('qsubtopic');
+                    if(!topic || !sub) return;
+                    topic.addEventListener('change', function(){
+                        var subs = byTitle[topic.value] || [];
+                        sub.innerHTML = '<option value="">— None —</option>' +
+                            subs.map(function(s){ return '<option value="'+s.title.replace(/"/g,'&quot;')+'">'+s.title+'</option>'; }).join('');
+                        sub.disabled = subs.length === 0;
+                    });
+                })();
+                </script>
+                {% endif %}
             </div>
-            {% if not topic_tree %}
-            <p class="text-muted text-sm" style="margin-top:-.4rem;"><i class="fas fa-circle-info"></i> No syllabus topics for this subject yet. <a href="{{ syllabus_url }}">Add WAEC/JAMB topics</a> to tag questions by topic &amp; sub-topic.</p>
-            {% else %}
-            <p class="text-muted text-sm" style="margin-top:-.4rem;"><a href="{{ syllabus_url }}">Manage syllabus topics</a> for this subject.</p>
-            <script type="application/json" id="topic-tree-data">{{ topic_tree|tojson }}</script>
-            <script nonce="{{ csp_nonce }}">
-            (function(){
-                var treeEl = document.getElementById('topic-tree-data');
-                if(!treeEl) return;   // node absent after an SPA swap to another page
-                var tree = JSON.parse(treeEl.textContent);
-                var byTitle = {}; tree.forEach(function(t){ byTitle[t.title] = t.subtopics || []; });
-                var topic = document.getElementById('qtopic'), sub = document.getElementById('qsubtopic');
-                if(!topic || !sub) return;
-                topic.addEventListener('change', function(){
-                    var subs = byTitle[topic.value] || [];
-                    sub.innerHTML = '<option value="">— None —</option>' +
-                        subs.map(function(s){ return '<option value="'+s.title.replace(/"/g,'&quot;')+'">'+s.title+'</option>'; }).join('');
-                    sub.disabled = subs.length === 0;
-                });
-            })();
-            </script>
-            {% endif %}
-            <button class="btn btn-primary"><i class="fas fa-plus"></i> Add Question</button>
+            <aside class="aq-side">
+                {% with tid='qtext_exam' %}{% include 'cbt/_math_preview.html' %}{% endwith %}
+            </aside>
+            </div>
+            <div class="aq-footer">
+                <span class="aq-kbd"><kbd>Ctrl</kbd> + <kbd>Enter</kbd> to add</span>
+                <button type="reset" class="btn btn-secondary"><i class="fas fa-eraser"></i> Clear</button>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Add question</button>
+            </div>
         </form>
     </div>
     {% endif %}
 </div>
+{{ file_drop_assets() }}
+<script nonce="{{ csp_nonce }}">
+(function () {
+    var t = document.getElementById('importToggle'), panel = document.getElementById('importPanel');
+    if (t && panel && !t.dataset.ready) {
+        t.dataset.ready = '1';
+        var file = document.getElementById('importFile'), go = document.getElementById('importSubmit');
+        function setOpen(on) {
+            panel.hidden = !on; t.setAttribute('aria-expanded', on ? 'true' : 'false');
+            t.classList.toggle('is-active', on);
+            if (on) panel.querySelector('.fd-input').focus();
+        }
+        t.addEventListener('click', function () { setOpen(panel.hidden); });
+        document.getElementById('importCancel').addEventListener('click', function () {
+            file.value = ''; file.dispatchEvent(new Event('change', { bubbles: true })); setOpen(false); t.focus();
+        });
+        file.addEventListener('change', function () { go.disabled = !(file.files && file.files.length); });
+        panel.querySelector('form').addEventListener('submit', function () {
+            go.disabled = true; go.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Importing…';
+        });
+    }
+    var f = document.getElementById('addQuestionForm');
+    if (f && !f.dataset.ready) {
+        f.dataset.ready = '1';
+        f.addEventListener('keydown', function (e) {
+            if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); f.requestSubmit ? f.requestSubmit() : f.submit(); }
+        });
+        f.addEventListener('submit', function () {
+            var b = f.querySelector('button[type=submit]');
+            setTimeout(function () { b.disabled = true; b.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Adding…'; }, 0);
+        });
+    }
+})();
+</script>
 
 <div class="card">
     <div class="card-header"><h3>Questions ({{ questions|length }})</h3></div>

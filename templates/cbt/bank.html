@@ -32,25 +32,33 @@
     <div class="card-body">
         <form method="POST" action="{{ url_for('cbt.bank_add') }}" enctype="multipart/form-data">
             <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-            <div class="form-group"><label class="form-label">Question <span class="required">*</span></label><textarea name="question_text" id="qtext_bank" class="form-control" rows="2" required></textarea>
-                {% with tid='qtext_bank' %}{% include 'cbt/_math_toolbar.html' %}{% endwith %}
-                <small class="text-muted">Tap a symbol or structure above to add maths — no typing needed.</small></div>
-            <div class="form-group"><label class="form-label">Figure / image (optional)</label><input type="file" name="image" accept="image/*" class="form-control"></div>
+            {% from "components/file_drop.html" import file_drop, file_drop_assets with context %}
+            <div class="form-group"><label class="form-label" for="qtext_bank">Question <span class="required">*</span></label>
+                {% with tid='qtext_bank', mx=math_editor %}{% include 'cbt/_math_toolbar.html' %}{% endwith %}
+                <textarea name="question_text" id="qtext_bank" class="form-control" rows="3" required placeholder="Type the question. Use the buttons above for fractions, powers, units, equations and symbols."></textarea>
+                <small class="mx-help">Buttons insert into the question or whichever option you clicked last. The symbol set follows the Subject you choose below.</small></div>
+            <div class="form-group"><span class="form-label">Figure or diagram <span class="text-muted" style="font-weight:400">(optional)</span></span>
+                {{ file_drop('image', 'qimage_bank', accept='image/png,image/jpeg,image/gif,image/webp', kind='image',
+                             title='Add a figure or diagram', hint='PNG, JPG, GIF or WebP · up to 10 MB', max_mb=10, paste=True) }}</div>
             <div class="opt-row">
-                <div class="form-group"><label class="form-label">Option A</label><input type="text" name="option_a" class="form-control"></div>
-                <div class="form-group"><label class="form-label">Option B</label><input type="text" name="option_b" class="form-control"></div>
-                <div class="form-group"><label class="form-label">Option C</label><input type="text" name="option_c" class="form-control"></div>
-                <div class="form-group"><label class="form-label">Option D</label><input type="text" name="option_d" class="form-control"></div>
+                {% for L in ['A','B','C','D'] %}
+                <div class="form-group"><label class="form-label" for="bopt_{{ L }}">Option {{ L }}</label><input type="text" name="option_{{ L|lower }}" id="bopt_{{ L }}" class="form-control" data-math-target="Option {{ L }}" data-letter="{{ L }}"></div>
+                {% endfor %}
             </div>
+            <div class="form-group">{% with tid='qtext_bank' %}{% include 'cbt/_math_preview.html' %}{% endwith %}</div>
             <div class="form-row">
                 <div class="form-group"><label class="form-label">Correct <span class="required">*</span></label><select name="correct_option" class="form-control" required><option value="">—</option><option>A</option><option>B</option><option>C</option><option>D</option></select></div>
-                <div class="form-group"><label class="form-label">Subject</label><select name="subject_id" class="form-control"><option value="">—</option>{% for s in subjects %}<option value="{{ s.id }}" {% if subject_id==s.id %}selected{% endif %}>{{ s.name }}</option>{% endfor %}</select></div>
+                <div class="form-group"><label class="form-label">Subject</label><select name="subject_id" class="form-control" data-math-kind-source><option value="" data-kind="general">—</option>{% for s in subjects %}<option value="{{ s.id }}" data-kind="{{ subject_kinds[s.id] }}" {% if subject_id==s.id %}selected{% endif %}>{{ s.name }}</option>{% endfor %}</select></div>
                 <div class="form-group"><label class="form-label">Topic</label><input type="text" name="topic" class="form-control" value="{{ topic }}"></div>
                 <div class="form-group"><label class="form-label">Difficulty</label><select name="difficulty" class="form-control"><option>Easy</option><option selected>Medium</option><option>Hard</option></select></div>
                 <div class="form-group"><label class="form-label">Marks</label><input type="number" name="marks" class="form-control" step="0.5" value="1"></div>
             </div>
-            <button class="btn btn-primary"><i class="fas fa-plus"></i> Add to bank</button>
+            <div style="display:flex;justify-content:flex-end;gap:.5rem;border-top:1px solid var(--border-color);padding-top:1rem">
+                <button type="reset" class="btn btn-secondary"><i class="fas fa-eraser"></i> Clear</button>
+                <button type="submit" class="btn btn-primary"><i class="fas fa-plus"></i> Add to bank</button>
+            </div>
         </form>
+        {{ file_drop_assets() }}
     </div>
 </div>
 {% endif %}

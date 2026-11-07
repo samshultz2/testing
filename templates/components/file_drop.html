@@ -1,0 +1,163 @@
+{# Drag-and-drop file field — a designed replacement for a bare <input type=file>.
+
+   {% from "components/file_drop.html" import file_drop with context %}
+   {{ file_drop('image', 'qimg', accept='image/*', kind='image',
+                title='Add a figure', hint='PNG, JPG, GIF or WebP · up to 10 MB',
+                max_mb=10, paste=True) }}
+
+   * The real <input type=file> stays in the form (visually hidden, still
+     focusable and keyboard-operable), so posting works exactly as before and
+     without JavaScript it is still a working file field.
+   * Drop a file, click/press Enter to browse, or (paste=True) paste a copied
+     screenshot anywhere in the form.
+   * Shows a thumbnail (images) or a file chip (documents) with name and size,
+     with Replace / Remove; rejects the wrong type or an oversized file inline.
+   * kind='image' | 'sheet' sets the icon and preview style. #}
+{% macro file_drop(name, id, accept='', kind='image', title='Upload a file', hint='', max_mb=10, required=False, paste=False) -%}
+<div class="fd" id="{{ id }}_fd" data-fd data-kind="{{ kind }}" data-max="{{ max_mb }}" data-accept="{{ accept }}"{% if paste %} data-paste{% endif %}>
+  <input type="file" class="fd-input" id="{{ id }}" name="{{ name }}"{% if accept %} accept="{{ accept }}"{% endif %}{% if required %} required{% endif %}>
+  <label class="fd-zone" for="{{ id }}">
+    <span class="fd-icon" aria-hidden="true"><i class="fas {{ 'fa-image' if kind == 'image' else 'fa-file-excel' }}"></i></span>
+    <span class="fd-text">
+      <span class="fd-title">{{ title }}</span>
+      <span class="fd-sub">Drag &amp; drop here, or <span class="fd-link">browse your files</span>{% if paste %}<span class="fd-paste"> · or paste a screenshot (Ctrl/⌘ V)</span>{% endif %}</span>
+      {% if hint %}<span class="fd-hint">{{ hint }}</span>{% endif %}
+    </span>
+  </label>
+  <div class="fd-file" hidden>
+    <span class="fd-thumb" aria-hidden="true"></span>
+    <span class="fd-meta"><span class="fd-name"></span><span class="fd-size"></span></span>
+    <span class="fd-actions">
+      <label class="btn btn-secondary btn-sm" for="{{ id }}"><i class="fas fa-arrows-rotate" aria-hidden="true"></i> Replace</label>
+      <button type="button" class="btn btn-sm fd-remove" aria-label="Remove file"><i class="fas fa-xmark" aria-hidden="true"></i> Remove</button>
+    </span>
+  </div>
+  <div class="fd-error" role="alert" hidden></div>
+</div>
+{%- endmacro %}
+
+{# Styles + behaviour, once per page: {{ file_drop_assets() }} #}
+{% macro file_drop_assets() -%}
+<style>
+.fd{position:relative}
+.fd-input{position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;clip:rect(0 0 0 0)}
+.fd-zone{display:flex;align-items:center;gap:.9rem;padding:1rem 1.1rem;border:1.5px dashed var(--border-color,#cfd6e0);border-radius:12px;background:var(--gray-50,#f8fafc);cursor:pointer;transition:border-color .15s,background .15s,box-shadow .15s;margin:0}
+.fd-zone:hover,.fd.is-over .fd-zone{border-color:var(--primary,#0d6a4e);background:var(--primary-light,#eef8f3)}
+.fd.is-over .fd-zone{box-shadow:0 0 0 4px rgba(13,106,78,.12)}
+.fd-input:focus-visible + .fd-zone{outline:2px solid var(--primary,#0d6a4e);outline-offset:2px}
+.fd-icon{flex:none;display:inline-flex;align-items:center;justify-content:center;width:2.75rem;height:2.75rem;border-radius:10px;background:var(--bg-card,#fff);border:1px solid var(--border-color,#e2e8f0);color:var(--primary,#0d6a4e);font-size:1.15rem}
+.fd-text{display:flex;flex-direction:column;gap:.1rem;min-width:0}
+.fd-title{font-weight:600;font-size:.92rem;color:var(--text-primary,#111827)}
+.fd-sub{font-size:.82rem;color:var(--text-muted,#6b7280)}
+.fd-link{color:var(--primary,#0d6a4e);font-weight:600;text-decoration:underline;text-underline-offset:2px}
+.fd-hint{font-size:.74rem;color:var(--text-muted,#8a94a6)}
+.fd-file{display:flex;align-items:center;gap:.8rem;padding:.65rem .75rem;border:1px solid var(--border-color,#dfe3ea);border-radius:12px;background:var(--bg-card,#fff)}
+.fd-file[hidden],.fd-zone[hidden],.fd-error[hidden]{display:none}
+.fd-thumb{flex:none;width:3.6rem;height:3.6rem;border-radius:8px;background:var(--gray-100,#eef1f5) center/cover no-repeat;border:1px solid var(--border-color,#e2e8f0);display:inline-flex;align-items:center;justify-content:center;color:var(--success,#16a34a);font-size:1.4rem}
+.fd-meta{display:flex;flex-direction:column;min-width:0;flex:1}
+.fd-name{font-weight:600;font-size:.88rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.fd-size{font-size:.76rem;color:var(--text-muted,#6b7280)}
+.fd-actions{display:flex;gap:.35rem;flex:none}
+.fd-actions .btn{margin:0}
+.fd-remove{background:transparent;border:1px solid var(--border-color,#dfe3ea);color:var(--danger,#dc2626)}
+.fd-remove:hover{background:rgba(220,38,38,.07);border-color:var(--danger,#dc2626)}
+.fd-error{margin-top:.4rem;font-size:.8rem;color:var(--danger,#dc2626)}
+@media (max-width:560px){.fd-file{flex-wrap:wrap}.fd-actions{width:100%}.fd-actions .btn{flex:1;justify-content:center}.fd-paste{display:none}}
+</style>
+<script nonce="{{ csp_nonce }}">
+(function () {
+  function human(n) { return n < 1024 ? n + ' B' : n < 1048576 ? (n / 1024).toFixed(0) + ' KB' : (n / 1048576).toFixed(1) + ' MB'; }
+  function accepts(file, accept) {
+    if (!accept) return true;
+    var name = (file.name || '').toLowerCase(), type = file.type || '';
+    return accept.split(',').some(function (a) {
+      a = a.trim().toLowerCase();
+      if (!a) return false;
+      if (a.charAt(0) === '.') return name.slice(-a.length) === a;
+      if (a.slice(-2) === '/*') return type.indexOf(a.slice(0, -1)) === 0;
+      return type === a;
+    });
+  }
+  function setup(root) {
+    if (root.dataset.fdReady) return;
+    root.dataset.fdReady = '1';
+    var input = root.querySelector('.fd-input'), zone = root.querySelector('.fd-zone');
+    var card = root.querySelector('.fd-file'), err = root.querySelector('.fd-error');
+    var thumb = root.querySelector('.fd-thumb'), nameEl = root.querySelector('.fd-name');
+    var sizeEl = root.querySelector('.fd-size');
+    var max = parseFloat(root.dataset.max || '0') * 1048576, accept = root.dataset.accept || '';
+    var url = null;
+
+    function show() {
+      var f = input.files && input.files[0];
+      if (url) { URL.revokeObjectURL(url); url = null; }
+      if (!f) { card.hidden = true; zone.hidden = false; return; }
+      nameEl.textContent = f.name; sizeEl.textContent = human(f.size);
+      if (root.dataset.kind === 'image' && /^image\//.test(f.type)) {
+        url = URL.createObjectURL(f); thumb.style.backgroundImage = 'url("' + url + '")'; thumb.innerHTML = '';
+      } else {
+        thumb.style.backgroundImage = ''; thumb.innerHTML = '<i class="fas fa-file-excel" aria-hidden="true"></i>';
+      }
+      card.hidden = false; zone.hidden = true;
+    }
+    function fail(msg) { err.textContent = msg; err.hidden = false; }
+    function take(file) {
+      err.hidden = true;
+      if (!accepts(file, accept)) { fail('“' + file.name + '” isn’t a supported file type.'); return false; }
+      if (max && file.size > max) { fail('That file is ' + human(file.size) + ' — the limit is ' + root.dataset.max + ' MB.'); return false; }
+      try { var dt = new DataTransfer(); dt.items.add(file); input.files = dt.files; }
+      catch (e) { fail('Your browser can’t take a dropped file here — use “browse” instead.'); return false; }
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      return true;
+    }
+    input.addEventListener('change', function () {
+      var f = input.files && input.files[0];
+      if (f && (!accepts(f, accept) || (max && f.size > max))) {
+        var bad = f; input.value = ''; show();
+        fail(!accepts(bad, accept) ? '“' + bad.name + '” isn’t a supported file type.'
+                                   : 'That file is ' + human(bad.size) + ' — the limit is ' + root.dataset.max + ' MB.');
+        return;
+      }
+      err.hidden = true; show();
+    });
+    ['dragenter', 'dragover'].forEach(function (t) {
+      root.addEventListener(t, function (e) { e.preventDefault(); root.classList.add('is-over'); });
+    });
+    ['dragleave', 'dragend', 'drop'].forEach(function (t) {
+      root.addEventListener(t, function (e) {
+        if (t === 'dragleave' && root.contains(e.relatedTarget)) return;
+        root.classList.remove('is-over');
+      });
+    });
+    root.addEventListener('drop', function (e) {
+      e.preventDefault();
+      var f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+      if (f) take(f);
+    });
+    root.querySelector('.fd-remove').addEventListener('click', function () {
+      input.value = ''; err.hidden = true;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      input.focus();
+    });
+    if (input.form) input.form.addEventListener('reset', function () { setTimeout(show, 0); });
+    if (root.hasAttribute('data-paste') && input.form) {
+      input.form.addEventListener('paste', function (e) {
+        var items = (e.clipboardData && e.clipboardData.files) || [];
+        for (var i = 0; i < items.length; i++) {
+          if (/^image\//.test(items[i].type)) {
+            e.preventDefault();
+            var f = items[i];
+            if (!f.name || f.name === 'image.png') {
+              try { f = new File([f], 'pasted-figure.png', { type: f.type }); } catch (x) { /* keep */ }
+            }
+            take(f); return;
+          }
+        }
+      });
+    }
+    show();
+  }
+  document.querySelectorAll('[data-fd]').forEach(setup);
+})();
+</script>
+{%- endmacro %}

@@ -406,7 +406,9 @@ def add_exam():
 def exam_detail(exam_id):
     e = _exam_403(exam_id)
     questions = e.questions.order_by(CBTQuestion.order, CBTQuestion.id).all()
+    from utils.cbt_symbols import editor_config
     return render_template('cbt/exam_detail.html', e=e, questions=questions,
+                           math_editor=editor_config(e.subject.name if e.subject else ''),
                            topic_tree=_subject_topic_tree(e.subject_id),
                            syllabus_url=url_for('cbt.syllabus', subject_id=e.subject_id or ''))
 
@@ -640,8 +642,12 @@ def bank():
     questions = q.order_by(QuestionBank.id.desc()).limit(500).all()
     subjects = Subject.query.filter_by(is_active=True).order_by(Subject.name).all()
     total = QuestionBank.query.filter_by(is_active=True).count()
+    from utils.cbt_symbols import editor_config, kind_for_subject
+    sel = next((s for s in subjects if s.id == subject_id), None)
     return render_template('cbt/bank.html', questions=questions, subjects=subjects,
-        subject_id=subject_id, topic=topic, search=search, total=total)
+        subject_id=subject_id, topic=topic, search=search, total=total,
+        math_editor=editor_config(sel.name if sel else ''),
+        subject_kinds={s.id: kind_for_subject(s.name) for s in subjects})
 
 
 @cbt_bp.route('/bank/add', methods=['POST'])
@@ -711,11 +717,41 @@ def bank_import():
     return render_template('cbt/bank_import.html', subjects=subjects)
 
 
-@cbt_bp.route('/bank/template')
-@login_required
-def bank_template():
+# Sample rows for the import template, per subject palette — they double as a
+# how-to for writing formulas in a spreadsheet: LaTeX inside \( … \).
+_TEMPLATE_SAMPLES = {
+    'maths': [
+        ['Simplify \\(\\frac{3}{4} \\div \\frac{9}{16}\\)', '\\(\\frac{4}{3}\\)', '\\(\\frac{3}{4}\\)',
+         '\\(\\frac{27}{64}\\)', '\\(\\frac{16}{9}\\)', 'A', 1, 'Fractions', 'Easy'],
+        ['Solve \\(x^{2} - 5x + 6 = 0\\)', '2 or 3', '−2 or −3', '1 or 6', '−1 or 6', 'A', 1, 'Quadratic equations', 'Medium'],
+    ],
+    'further_maths': [
+        ['Find \\(\\frac{dy}{dx}\\) if \\(y = 3x^{2} + 2x\\)', '\\(6x + 2\\)', '\\(3x + 2\\)',
+         '\\(6x\\)', '\\(x^{3} + x^{2}\\)', 'A', 1, 'Differentiation', 'Easy'],
+        ['Evaluate \\(\\begin{vmatrix} 2 & 1 \\\\ 3 & 4 \\end{vmatrix}\\)', '5', '11', '8', '−5', 'A', 1, 'Matrices', 'Easy'],
+    ],
+    'physics': [
+        ['A car accelerates from rest at \\(2\\,\\mathrm{m\\,s^{-2}}\\) for 5 s. Its final velocity is',
+         '\\(10\\,\\mathrm{m\\,s^{-1}}\\)', '\\(2.5\\,\\mathrm{m\\,s^{-1}}\\)', '\\(7\\,\\mathrm{m\\,s^{-1}}\\)',
+         '\\(25\\,\\mathrm{m\\,s^{-1}}\\)', 'A', 1, 'Motion', 'Easy'],
+        ['Three 6 Ω resistors in parallel have an effective resistance of', '2 Ω', '18 Ω', '6 Ω', '3 Ω', 'A', 1, 'Electricity', 'Easy'],
+    ],
+    'chemistry': [
+        ['Balance: \\(\\mathrm{H_{2}(g)} + \\mathrm{O_{2}(g)} \\rightarrow \\mathrm{H_{2}O(l)}\\). The coefficient of water is',
+         '2', '1', '3', '4', 'A', 1, 'Chemical equations', 'Easy'],
+        ['Which ion is present in all acids?', '\\(\\mathrm{H^{+}}\\)', '\\(\\mathrm{OH^{-}}\\)',
+         '\\(\\mathrm{SO_{4}^{2-}}\\)', '\\(\\mathrm{Na^{+}}\\)', 'A', 1, 'Acids and bases', 'Easy'],
+    ],
+    'general': [
+        ['What is 5 + 7?', '10', '12', '13', '11', 'B', 1, 'Arithmetic', 'Easy'],
+        ['Water is made of hydrogen and ___?', 'Oxygen', 'Nitrogen', 'Carbon', 'Helium', 'A', 1, 'Science', 'Easy'],
+    ],
+}
+
+
+def _question_template(kind='general'):
     from openpyxl import Workbook
-    from openpyxl.styles import Font, PatternFill
+    from openpyxl.styles import Font, PatternFill, Alignment
     wb = Workbook()
     ws = wb.active
     ws.title = 'Questions'
@@ -725,9 +761,43 @@ def bank_template():
         c = ws.cell(row=1, column=col, value=h)
         c.fill = fill
         c.font = Font(bold=True, color='FFFFFF')
-    ws.append(['What is 5 + 7?', '10', '12', '13', '11', 'B', 1, 'Arithmetic', 'Easy'])
-    ws.append(['Water is made of hydrogen and ___?', 'Oxygen', 'Nitrogen', 'Carbon', 'Helium', 'A', 1, 'Science', 'Easy'])
-    return xlsx_response(wb, 'cbt_question_template.xlsx')
+    for row in _TEMPLATE_SAMPLES.get(kind) or _TEMPLATE_SAMPLES['general']:
+        ws.append(row)
+    for col, w in zip('ABCDEFGHI', (60, 22, 22, 22, 22, 9, 8, 22, 11)):
+        ws.column_dimensions[col].width = w
+    for r in ws.iter_rows(min_row=2):
+        for c in r:
+            c.alignment = Alignment(wrap_text=True, vertical='top')
+    if kind != 'general':
+        notes = wb.create_sheet('How to write formulas')
+        notes.append(['Write any formula, symbol or unit as LaTeX between \\( and \\) — it renders for students.'])
+        notes.append(['Fraction', '\\(\\frac{a}{b}\\)'])
+        notes.append(['Power / subscript', '\\(x^{2}\\)   \\(x_{1}\\)'])
+        notes.append(['Square root', '\\(\\sqrt{x}\\)'])
+        notes.append(['Units', '\\(\\mathrm{m\\,s^{-2}}\\)'])
+        notes.append(['Chemical formula / ion', '\\(\\mathrm{H_{2}SO_{4}}\\)   \\(\\mathrm{SO_{4}^{2-}}\\)'])
+        notes.append(['Reversible reaction', '\\(\\rightleftharpoons\\)'])
+        notes.append(['Tip', 'The symbol buttons on the Add Question form produce exactly this text — copy it from there.'])
+        notes.column_dimensions['A'].width = 28
+        notes.column_dimensions['B'].width = 60
+    return wb
+
+
+@cbt_bp.route('/bank/template')
+@login_required
+def bank_template():
+    return xlsx_response(_question_template(), 'cbt_question_template.xlsx')
+
+
+@cbt_bp.route('/exams/<int:exam_id>/import-template')
+@login_required
+def exam_import_template(exam_id):
+    """The Excel import template for this exam, with sample rows in the exam's
+    subject (formulas written the way the importer and the student screen read them)."""
+    from utils.cbt_symbols import kind_for_subject
+    e = _exam_403(exam_id)
+    kind = kind_for_subject(e.subject.name if e.subject else '')
+    return xlsx_response(_question_template(kind), 'cbt_question_template.xlsx')
 
 
 @cbt_bp.route('/exams/<int:exam_id>/results')

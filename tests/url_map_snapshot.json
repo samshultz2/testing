@@ -1081,6 +1081,13 @@
 ]
 ],
 [
+"cbt.exam_import_template",
+"/cbt/exams/<int:exam_id>/import-template",
+[
+"GET"
+]
+],
+[
 "cbt.fill_from_jamb_bank",
 "/cbt/exams/<int:exam_id>/fill-from-jamb",
 [
