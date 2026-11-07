@@ -18,11 +18,16 @@ or spot-check a single file: `sha256sum <file>`.
 | `fontawesome/css/all.min.css` | Font Awesome Free | 6.4.0 | `1edb1725a9ea8ca4dcf2f5508cee183218aa1685e47c1b23056717f754f58ebf` |
 | `pdfjs/pdf.min.mjs` | PDF.js (legacy build) | 4.10.38 | `44ec6f011027ee77791386b66c14876a5fc29e20bf0433c07c6726fff7212b72` |
 | `pdfjs/pdf.worker.min.mjs` | PDF.js worker (legacy build) | 4.10.38 | `bd88805178a26c729db8c0107a5b630cb900ec070f4d8c7529a3e45530afd41d` |
+| `mathlive/mathlive.min.js` | MathLive (MIT) | 0.111.1 | `51e9ab5c4739209a2951a550042dcecb99ad3047269c1d791d09d7d613226eae` |
+
+`mathlive/fonts/*.woff2` are the KaTeX fonts shipped in the same MathLive 0.111.1 npm
+package (`mathlive/LICENSE.txt`); its keypress sounds are not vendored (sounds are off).
 
 `fontawesome/webfonts/*` are the matching 6.4.0 font files shipped with the CSS
 above.
 
 ## Upstream sources
+- MathLive 0.111.1 — https://registry.npmjs.org/mathlive/-/mathlive-0.111.1.tgz (`mathlive.min.js`, `fonts/`)
 - Chart.js 4.4.1 — https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js
 - html2canvas 1.4.1 — https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js
 - jsPDF 2.5.1 — https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js

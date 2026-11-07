@@ -21,11 +21,18 @@
       <button type="button" class="mx-kind" data-kind="{{ k }}" aria-pressed="{{ 'true' if k == mx.kind else 'false' }}">{{ label }}</button>
       {% endfor %}
     </div>
-    <div class="mx-target" aria-live="polite"><i class="fas fa-i-cursor" aria-hidden="true"></i> Inserting into <strong data-mx-target-name>Question</strong></div>
+    <div class="mx-right">
+      <div class="mx-target" aria-live="polite"><i class="fas fa-i-cursor" aria-hidden="true"></i> Inserting into <strong data-mx-target-name>Question</strong></div>
+      <div class="mx-mode" role="group" aria-label="Editing view" hidden>
+        <button type="button" class="mx-mode-btn" data-mode="visual" aria-pressed="true" title="Type text and build formulas exactly as students will see them"><i class="fas fa-eye" aria-hidden="true"></i> Visual</button>
+        <button type="button" class="mx-mode-btn" data-mode="code" aria-pressed="false" title="Edit the underlying LaTeX code"><i class="fas fa-code" aria-hidden="true"></i> LaTeX</button>
+      </div>
+    </div>
   </div>
   <div class="mx-tabs" role="tablist" aria-label="Symbol groups"></div>
   <div class="mx-pal" role="tabpanel"></div>
 </div>
+<script src="{{ url_for('static', filename='js/cbt-math-editor.js') }}"></script>
 <script type="application/json" id="{{ tid }}_mxdata">{{ mx.palettes|tojson }}</script>
 <style>
 .mx{border:1px solid var(--border-color,#dfe3ea);border-bottom:none;border-radius:10px 10px 0 0;background:var(--bg-card,#fff)}
@@ -36,7 +43,30 @@
 .mx-kind{border:1px solid var(--border-color,#d6dbe3);background:var(--bg-card,#fff);color:var(--text-primary,#1f2937);border-radius:999px;padding:.22rem .7rem;font-size:.8rem;font-weight:500;cursor:pointer;transition:background .15s,border-color .15s,color .15s}
 .mx-kind:hover{border-color:var(--primary,#0d6a4e)}
 .mx-kind[aria-pressed="true"]{background:var(--primary,#0d6a4e);border-color:var(--primary,#0d6a4e);color:#fff}
+.mx-right{display:flex;align-items:center;gap:.75rem;flex-wrap:wrap}
 .mx-target{font-size:.78rem;color:var(--text-muted,#6b7280)}
+.mx-mode{display:inline-flex;border:1px solid var(--border-color,#d6dbe3);border-radius:8px;overflow:hidden;background:var(--bg-card,#fff)}
+.mx-mode[hidden]{display:none}
+.mx-mode-btn{border:none;background:none;padding:.25rem .6rem;font-size:.76rem;font-weight:600;color:var(--text-muted,#6b7280);cursor:pointer}
+.mx-mode-btn + .mx-mode-btn{border-left:1px solid var(--border-color,#d6dbe3)}
+.mx-mode-btn[aria-pressed="true"]{background:var(--primary-light,#e8f5f1);color:var(--primary,#0d6a4e)}
+.mx-mode-btn:focus-visible{outline:2px solid var(--primary,#0d6a4e);outline-offset:-2px}
+/* Visual editor (static/js/cbt-math-editor.js) */
+.mr-hidden{display:none!important}
+.mr-edit{display:block;width:100%;padding:.55rem .75rem;border:1px solid var(--border-color,#dfe3ea);border-radius:var(--radius-md,8px);background:var(--bg-card,#fff);color:var(--text-primary,#111827);font-size:1rem;line-height:1.75;white-space:pre-wrap;overflow-wrap:anywhere;outline:none;cursor:text;transition:border-color .15s,box-shadow .15s}
+.mr-edit:focus-within{border-color:var(--primary,#0d6a4e);box-shadow:0 0 0 3px var(--primary-alpha,rgba(13,106,78,.12))}
+.mr-edit.mr-multi{min-height:7rem}
+.mr-edit.mr-single{min-height:2.6rem;padding:.4rem .7rem;line-height:1.6}
+.mr-edit[hidden]{display:none}
+.mr-edit.is-empty::before{content:attr(data-placeholder);color:var(--text-muted,#9ca3af);pointer-events:none;position:absolute}
+.mr-edit.is-invalid{border-color:var(--danger,#dc2626);box-shadow:0 0 0 3px rgba(220,38,38,.12)}
+.mx + .mr-hidden + .mr-edit{border-top-left-radius:0;border-top-right-radius:0}
+.mr-chip{display:inline-block;vertical-align:middle;margin:0 .1rem;border-radius:6px;background:var(--gray-50,#f3f6f9);box-shadow:inset 0 0 0 1px var(--border-light,#e7ebf0);transition:background .12s,box-shadow .12s}
+.mr-chip:hover{box-shadow:inset 0 0 0 1px var(--primary,#0d6a4e)}
+.mr-chip:focus-within{background:var(--primary-light,#e8f5f1);box-shadow:inset 0 0 0 1.5px var(--primary,#0d6a4e)}
+.mr-chip math-field{display:inline-block;min-width:1.6em;padding:.05rem .3rem;border:none;background:transparent;font-size:1.08em;outline:none;--caret-color:var(--primary,#0d6a4e);--selection-background-color:var(--primary-alpha,rgba(13,106,78,.15));--placeholder-color:var(--primary,#0d6a4e);--smart-fence-color:var(--text-muted,#6b7280)}
+.mr-chip math-field::part(menu-toggle),.mr-chip math-field::part(virtual-keyboard-toggle){display:none}
+.mr-chip math-field::part(content){padding:0}
 .mx-target strong{color:var(--primary,#0d6a4e)}
 .mx-tabs{display:flex;gap:.15rem;overflow-x:auto;padding:0 .5rem;border-bottom:1px solid var(--border-color,#e6e9ef);scrollbar-width:thin}
 .mx-tab{flex:none;border:none;background:none;padding:.5rem .7rem;font-size:.82rem;font-weight:500;color:var(--text-muted,#6b7280);border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap}
@@ -53,6 +83,7 @@
 [data-mx-active]{box-shadow:0 0 0 3px rgba(13,106,78,.14);border-color:var(--primary,#0d6a4e)!important}
 .mx-help{display:block;margin-top:.35rem;font-size:.78rem;color:var(--text-muted,#6b7280)}
 .mx-help code{font-size:.75rem;background:var(--gray-100,#eef1f5);padding:0 .25rem;border-radius:4px}
+.mx-help kbd{font-family:inherit;font-size:.7rem;padding:0 .3rem;border:1px solid var(--border-color,#dfe3ea);border-bottom-width:2px;border-radius:4px;background:var(--bg-card,#fff)}
 @media (max-width:560px){.mx-head{flex-direction:column;align-items:stretch}.mx-kinds{flex-wrap:nowrap;overflow-x:auto;padding-bottom:.15rem;scrollbar-width:none}.mx-kind{flex:none}.mx-btn{min-width:2.6rem;height:2.6rem}}
 </style>
 <script nonce="{{ csp_nonce }}">
@@ -75,12 +106,46 @@ function init() {
   // ---- Which field receives the symbols --------------------------------
   function fields() { return [ta].concat(Array.prototype.slice.call(form.querySelectorAll('[data-math-target]'))); }
   function nameOf(el) { return el === ta ? 'Question' : (el.getAttribute('data-math-target') || 'Answer'); }
+  // The visible control for a field: its visual editor when on, else the field.
+  function shown(f) { return (f.mrEditor && !f.mrEditor.hidden) ? f.mrEditor : f; }
   function setTarget(el) {
-    fields().forEach(function (f) { f.removeAttribute('data-mx-active'); });
-    target = el; el.setAttribute('data-mx-active', '');
+    fields().forEach(function (f) { f.removeAttribute('data-mx-active'); if (f.mrEditor) f.mrEditor.removeAttribute('data-mx-active'); });
+    target = el; shown(el).setAttribute('data-mx-active', '');
     targetName.textContent = nameOf(el);
   }
-  fields().forEach(function (f) { f.addEventListener('focus', function () { setTarget(f); }); });
+  form.addEventListener('focusin', function (ev) {
+    var t = ev.target, ed = t && t.closest && t.closest('.mr-edit');
+    var f = ed ? ed.mrField : t;
+    if (f && fields().indexOf(f) > -1) setTarget(f);
+  });
+
+  // ---- Visual (formatted) vs LaTeX code editing ---------------------------
+  var modeBox = box.querySelector('.mx-mode'), visual = false;
+  function pref(v) {
+    try { if (v === undefined) return localStorage.getItem('cbt.mathMode'); localStorage.setItem('cbt.mathMode', v); }
+    catch (e) { return null; }
+  }
+  function setMode(on, remember) {
+    visual = on;
+    fields().forEach(function (f) { window.MathRich.setVisual(f, on); });
+    modeBox.querySelectorAll('.mx-mode-btn').forEach(function (b) {
+      b.setAttribute('aria-pressed', (b.dataset.mode === 'visual') === on ? 'true' : 'false');
+    });
+    box.classList.toggle('is-visual', on);
+    if (remember) pref(on ? 'visual' : 'code');
+    setTarget(target);
+  }
+  if (window.MathRich) {
+    window.MathRich.ready.then(function () {
+      fields().forEach(function (f) { window.MathRich.enhance(f); });
+      modeBox.hidden = false;
+      setMode(pref() !== 'code', false);
+    }, function () { /* MathLive unavailable — plain LaTeX fields keep working */ });
+    modeBox.addEventListener('click', function (ev) {
+      var b = ev.target.closest('.mx-mode-btn'); if (!b) return;
+      setMode(b.dataset.mode === 'visual', true);
+    });
+  }
 
   // ---- Rendering the palette -------------------------------------------
   function typeset(el) {
@@ -132,6 +197,10 @@ function init() {
     return before.lastIndexOf('\\(') > before.lastIndexOf('\\)');
   }
   function insert(it) {
+    if (visual && window.MathRich && window.MathRich.isVisual(target)) {
+      window.MathRich.insert(target, it, CARET);
+      return;
+    }
     var el = target, v = el.value;
     var s = el.selectionStart == null ? v.length : el.selectionStart;
     var e = el.selectionEnd == null ? v.length : el.selectionEnd;
@@ -151,8 +220,9 @@ function init() {
   }
 
   box.addEventListener('mousedown', function (ev) {
-    // Keep the caret in the text field while clicking palette buttons.
-    if (ev.target.closest('.mx-btn')) ev.preventDefault();
+    // Keep the caret (and an open formula) where it is while clicking
+    // palette buttons, tabs and symbol-set chips.
+    if (ev.target.closest('.mx-btn, .mx-tab, .mx-kind')) ev.preventDefault();
   });
   box.addEventListener('click', function (ev) {
     var b = ev.target.closest('button'); if (!b) return;

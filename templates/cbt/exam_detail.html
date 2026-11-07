@@ -120,7 +120,7 @@
                     <label class="form-label" for="qtext_exam">Question <span class="required">*</span></label>
                     {% with tid='qtext_exam', mx=math_editor %}{% include 'cbt/_math_toolbar.html' %}{% endwith %}
                     <textarea name="question_text" id="qtext_exam" class="form-control aq-qtext" rows="4" required placeholder="Type the question. Use the buttons above for fractions, powers, units, equations and symbols."></textarea>
-                    <small class="mx-help">Tap a button to insert it where your cursor is — in the question or whichever option you clicked last. Select text first to wrap it (e.g. select <code>x</code>, then tap √).</small>
+                    <small class="mx-help">Type words normally; tap a button to build a formula right where your cursor is (question or the option you clicked last). Inside a formula, <kbd>Tab</kbd> moves to the next blank and <kbd>→</kbd> / <kbd>Esc</kbd> steps back out to the text. <kbd>Ctrl</kbd>+<kbd>M</kbd> starts a blank formula; type <code>/</code> for a fraction, <code>^</code> for a power, <code>_</code> for a subscript.</small>
                 </div>
 
                 <div class="form-group">

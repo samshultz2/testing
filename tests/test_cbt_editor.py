@@ -123,3 +123,23 @@ def test_editor_config_shape():
     cfg = editor_config('Further Mathematics')
     assert cfg['kind'] == 'further_maths' and cfg['caret'] == CARET
     assert [k for k, _ in cfg['kinds']] == ['maths', 'further_maths', 'physics', 'chemistry', 'general']
+
+
+def test_visual_equation_editor_is_wired_and_vendored(app):
+    """The question form loads the visual editor (vendored MathLive, no CDN),
+    offers the Visual / LaTeX switch, and MathJax maps MathLive-only commands."""
+    import os
+    eid = _exam(app, 'Mathematics')
+    c = _admin(app)
+    html = c.get(f'/cbt/exams/{eid}').get_data(as_text=True)
+    assert '/static/js/cbt-math-editor.js' in html
+    assert 'data-mode="visual"' in html and 'data-mode="code"' in html
+    root = app.root_path
+    js = open(os.path.join(root, 'static/js/cbt-math-editor.js')).read()
+    assert "'/static/vendor/mathlive/'" in js and 'cdn' not in js.lower()
+    assert os.path.getsize(os.path.join(root, 'static/vendor/mathlive/mathlive.min.js')) > 500_000
+    assert os.path.exists(os.path.join(root, 'static/vendor/mathlive/fonts/KaTeX_Main-Regular.woff2'))
+    setup = open(os.path.join(root, 'static/js/mathjax-setup-cbt.js')).read()
+    assert 'exponentialE' in setup and 'placeholder' in setup
+    r = c.get('/static/vendor/mathlive/mathlive.min.js')
+    assert r.status_code == 200

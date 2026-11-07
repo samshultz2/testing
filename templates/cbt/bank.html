@@ -36,7 +36,7 @@
             <div class="form-group"><label class="form-label" for="qtext_bank">Question <span class="required">*</span></label>
                 {% with tid='qtext_bank', mx=math_editor %}{% include 'cbt/_math_toolbar.html' %}{% endwith %}
                 <textarea name="question_text" id="qtext_bank" class="form-control" rows="3" required placeholder="Type the question. Use the buttons above for fractions, powers, units, equations and symbols."></textarea>
-                <small class="mx-help">Buttons insert into the question or whichever option you clicked last. The symbol set follows the Subject you choose below.</small></div>
+                <small class="mx-help">Type words normally; tap a button to build a formula where your cursor is (question or the option you clicked last). <kbd>Ctrl</kbd>+<kbd>M</kbd> starts a blank formula. The symbol set follows the Subject you choose below.</small></div>
             <div class="form-group"><span class="form-label">Figure or diagram <span class="text-muted" style="font-weight:400">(optional)</span></span>
                 {{ file_drop('image', 'qimage_bank', accept='image/png,image/jpeg,image/gif,image/webp', kind='image',
                              title='Add a figure or diagram', hint='PNG, JPG, GIF or WebP · up to 10 MB', max_mb=10, paste=True) }}</div>

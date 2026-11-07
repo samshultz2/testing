@@ -17,7 +17,14 @@
     window.MathJax = {
       tex: {
         inlineMath: [['\\(', '\\)'], ['$', '$']],
-        displayMath: [['\\[', '\\]'], ['$$', '$$']]
+        displayMath: [['\\[', '\\]'], ['$$', '$$']],
+        // MathLive (the visual question editor) can emit a few of its own
+        // commands; map them to plain TeX so they always render for students.
+        macros: {
+          exponentialE: '{e}', imaginaryI: '{i}', imaginaryJ: '{j}',
+          differentialD: '{\\mathrm{d}}', capitalDifferentialD: '{\\mathrm{D}}',
+          placeholder: ['', 1]
+        }
       },
       options: { skipHtmlTags: ['script', 'noscript', 'style', 'textarea', 'pre', 'code'] },
       chtml: { fontURL: '/static/vendor/mathjax/output/chtml/fonts/woff-v2' }
