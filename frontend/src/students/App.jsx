@@ -30,6 +30,21 @@ function cameFromStudentPage() {
   } catch (e) { return false; }
 }
 
+// "Class: JSS3 · Gold · Female · “ada”" — the active filters, for the Export dialog.
+function exportFilterText(q, filters) {
+  const bits = [];
+  const find = (list, id) => (list || []).find((x) => String(x.id) === String(id));
+  const c = q.class_id && find(filters.classes, q.class_id);
+  const a = q.arm_id && find(filters.arms, q.arm_id);
+  if (c) bits.push('Class: ' + c.name + (a ? ' ' + a.name : ' · all arms'));
+  else if (a) bits.push('Arm: ' + a.name);
+  if (q.gender) bits.push(q.gender);
+  if (q.religion) bits.push(q.religion);
+  if (q.stream) bits.push(q.stream);
+  if (q.search) bits.push('“' + q.search + '”');
+  return bits.join(' · ');
+}
+
 function startState(applied, page) {
   const base = {
     gender: applied.gender || '', religion: applied.religion || '', stream: applied.stream || '',
@@ -225,7 +240,7 @@ export default function App({ initial }) {
     if (!d.export_url) return;
     const p = new URLSearchParams();
     p.set('format', format);
-    p.set('fields', JSON.stringify(['student_id', 'surname', 'first_name', 'gender', 'current_class']));
+    p.set('fields', JSON.stringify(['student_id', 'name', 'gender', 'current_class']));
     if (selectedIds.length) p.set('student_ids', JSON.stringify(selectedIds));
     else Object.entries({ ...query, page: undefined }).forEach(([k, v]) => { if (v) p.set(k, v); });
     window.location.href = `${d.export_url}?${p.toString()}`;
@@ -658,6 +673,7 @@ export default function App({ initial }) {
 
       {showExport && (
         <ExportModal total={d.total || 0} selectedIds={selectedIds} exportUrl={d.export_url}
+                     filterText={exportFilterText(query, filters)}
                      applied={{ ...query, page: undefined }} onClose={() => setShowExport(false)} />
       )}
 

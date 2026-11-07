@@ -444,7 +444,8 @@ export function SetupChecklist({ title = 'Welcome — let’s set up your school
 // Props: title, icon, onClose, footer, size ('sm'|'md'|'lg'|'xl'), labelledBy,
 // closeOnBackdrop (default true), initialFocusRef (element to focus first).
 export function Modal({ title, icon, onClose, children, footer, size = 'md',
-                       closeOnBackdrop = true, initialFocusRef, ariaLabel }) {
+                       closeOnBackdrop = true, initialFocusRef, ariaLabel,
+                       bare = false, className, backdropClassName }) {
   const panelRef = useRef(null);
   const titleId = useId();
   // Keep the latest onClose without re-running the mount effect (callers usually
@@ -480,23 +481,26 @@ export function Modal({ title, icon, onClose, children, footer, size = 'md',
     };
   }, []);   // eslint-disable-line react-hooks/exhaustive-deps -- mount/unmount only
 
-  const maxWidth = { sm: 420, md: 560, lg: 760, xl: 960 }[size] || 560;
+  const maxWidth = { sm: 420, md: 560, lg: 760, xl: 960, xxl: 1140 }[size] || 560;
   // mousedown target check: a click that *starts* on the backdrop closes; a drag
   // that starts inside the panel and releases on the backdrop does not.
   const onBackdrop = (e) => { if (closeOnBackdrop && e.target === e.currentTarget) closeRef.current && closeRef.current(); };
 
   return createPortal(
-    <div role="presentation" onMouseDown={onBackdrop}
+    <div role="presentation" onMouseDown={onBackdrop} className={backdropClassName}
          style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.45)', zIndex: 3000,
                   display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
                   padding: '5vh 1rem', overflowY: 'auto' }}>
-      <div ref={panelRef} role="dialog" aria-modal="true" tabIndex={-1}
+      <div ref={panelRef} role="dialog" aria-modal="true" tabIndex={-1} className={className}
            aria-labelledby={title ? titleId : undefined}
            aria-label={!title ? ariaLabel : undefined}
            style={{ background: 'var(--bg-card, #fff)', color: 'inherit', borderRadius: 12,
                     width: '100%', maxWidth, boxShadow: '0 20px 60px rgba(0,0,0,.3)',
                     overflow: 'hidden', display: 'flex', flexDirection: 'column', maxHeight: '90vh' }}>
-        {title && (
+        {/* bare: the caller lays out header, body and footer itself (focus
+            trap, Escape, scroll lock and backdrop still come from here). */}
+        {bare ? children : null}
+        {!bare && title && (
           <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                            gap: 12, padding: '1rem 1.25rem', borderBottom: '1px solid var(--border-color, var(--border-color))' }}>
             <h3 id={titleId} style={{ margin: 0, fontSize: 'var(--text-lg)' }}>
@@ -507,8 +511,8 @@ export function Modal({ title, icon, onClose, children, footer, size = 'md',
                              cursor: 'pointer', color: 'inherit', opacity: .6 }}>×</button>
           </header>
         )}
-        <div style={{ padding: '1.1rem 1.25rem', overflowY: 'auto' }}>{children}</div>
-        {footer && (
+        {!bare && <div style={{ padding: '1.1rem 1.25rem', overflowY: 'auto' }}>{children}</div>}
+        {!bare && footer && (
           <footer style={{ display: 'flex', gap: '.6rem', justifyContent: 'flex-end',
                            padding: '.85rem 1.25rem', borderTop: '1px solid var(--border-color, var(--border-color))' }}>
             {footer}

@@ -1401,154 +1401,286 @@ def api_search_students():
     } for s in students])
 
 
+# Export columns: key -> (label, kind). Order here is the default order.
+EXPORT_COLUMNS = {
+    'student_id': ('Student ID', 'id'), 'name': ('Name', 'name'), 'photo': ('Photo', 'photo'),
+    'surname': ('Surname', 'text'), 'first_name': ('First name', 'text'),
+    'middle_name': ('Middle name', 'text'), 'gender': ('Gender', 'gender'),
+    'date_of_birth': ('Date of birth', 'date'), 'age': ('Age', 'num'), 'religion': ('Religion', 'text'),
+    'hobbies': ('Hobbies', 'wrap'), 'current_class': ('Class', 'text'),
+    'parent_phone': ('Parent phone', 'phone'), 'home_address': ('Home address', 'wrap'),
+    'nin': ('NIN', 'exam'), 'jamb_profile_code': ('JAMB profile', 'exam'),
+    'jamb_reg_number': ('JAMB reg.', 'exam'), 'waec_reg_number': ('WAEC reg.', 'exam'),
+    'neco_reg_number': ('NECO reg.', 'exam'),
+}
+# Spreadsheets / CSV keep the full, import-friendly column names.
+EXPORT_DATA_LABELS = {
+    'first_name': 'First Name', 'middle_name': 'Middle Name', 'date_of_birth': 'Date of Birth',
+    'home_address': 'Home Address', 'parent_phone': 'Parent Phone', 'jamb_profile_code': 'JAMB Profile Code',
+    'jamb_reg_number': 'JAMB Reg Number', 'waec_reg_number': 'WAEC Reg Number', 'neco_reg_number': 'NECO Reg Number',
+}
+EXPORT_DOC_TAGS = {'class': 'Student list', 'contact': 'Contact list', 'exam': 'Exam numbers',
+                   'all': 'Student records'}
+
+
+def _natural_key(s):
+    import re as _re
+    return [int(t) if t.isdigit() else t.lower() for t in _re.split(r'(\d+)', s or '')]
+
+
+def _export_fields(raw):
+    """Ordered, de-duplicated export fields. Old clients send surname +
+    first_name (+ middle_name): fold those into one Name column."""
+    fields = []
+    for f in raw or []:
+        if f in EXPORT_COLUMNS and f not in fields:
+            fields.append(f)
+    if 'name' not in fields and 'surname' in fields and 'first_name' in fields:
+        i = fields.index('surname')
+        fields = [f for f in fields if f not in ('surname', 'first_name')]
+        fields.insert(i, 'name')
+    if 'name' in fields:
+        fields = [f for f in fields if f not in ('surname', 'first_name')]
+    return fields
+
+
+def _export_auto_heading(preset, n_classes):
+    """Default title/subtitle from the list's filters and the active session."""
+    from models import SchoolClass, ClassArm
+    cls = arm = None
+    cid = request.args.get('class_id', type=int)
+    aid = request.args.get('arm_id', type=int)
+    if cid:
+        c = db.session.get(SchoolClass, cid)
+        cls = c.name if c else None
+    if aid:
+        a = db.session.get(ClassArm, aid)
+        arm = a.name if a else None
+    who = ' '.join(x for x in (cls, arm) if x)
+    base = {'class': 'Class List', 'contact': 'Contact List', 'exam': 'Exam Registration',
+            'all': 'Student Records'}.get(preset, 'Class List' if who else 'Student List')
+    title = ('%s %s' % (who, base)).strip() if who else ('Student List' if base == 'Class List' else base)
+    bits = []
+    sess = get_active_session()
+    term = get_active_term()
+    if sess:
+        bits.append('%s Session' % sess.name)
+    if term:
+        bits.append(term.name)
+    if cls and not arm:
+        bits.append('All arms' if n_classes > 1 else '')
+    if request.args.get('search'):
+        bits.append('Search: “%s”' % request.args.get('search')[:40])
+    return title, ' · '.join(b for b in bits if b)
+
+
 @main_bp.route('/students/export')
 @login_required
 def export_students_data():
-    """Export selected students data to various formats with field selection"""
+    """Export students — branded PDF / image / Word (utils/student_list_export),
+    a branded Excel workbook, or CSV. Columns, order, grouping and layout come
+    from the Export dialog; with no student_ids it exports the list's current
+    filters exactly as shown."""
     import json
-    
+    from utils import student_list_export as SLE
+    from utils.school import school_profile, document_branding
+
     format_type = request.args.get('format', 'excel')
-    fields_json = request.args.get('fields', '[]')
-    student_ids_json = request.args.get('student_ids', '[]')
-    font_size = request.args.get('font_size', type=int)
-    title = strip_tags((request.args.get('title') or '').strip())[:150] or None
-    
     try:
-        fields = json.loads(fields_json)
-        student_ids = json.loads(student_ids_json)
+        raw_fields = json.loads(request.args.get('fields', '[]'))
+        student_ids = json.loads(request.args.get('student_ids', '[]'))
     except Exception:
-        fields = ['student_id', 'surname', 'first_name', 'gender', 'current_class']
-        student_ids = []
-    
+        raw_fields, student_ids = ['student_id', 'name', 'gender', 'current_class'], []
+    fields = _export_fields(raw_fields)
     if not fields:
         flash('No fields selected for export.', 'error')
         return redirect(url_for('main.students_list'))
-    
-    # Build query
+
     if student_ids:
-        # Export selected students (scoped: a teacher can't export other classes)
-        query = _viewer_student_scope(Student.query.filter(Student.id.in_(student_ids)))
-        students = query.order_by(Student.surname).all()
+        students = _viewer_student_scope(Student.query.filter(Student.id.in_(student_ids))) \
+            .order_by(Student.surname, Student.first_name).all()
     else:
-        # Export all students matching the list's current filters. Reuses the
-        # exact same query the list page itself builds (scope + every filter:
-        # search/gender/religion/stream/subject/house/boarding/incomplete/
-        # class/arm) instead of re-implementing a subset of it here, so an
-        # export with nothing selected can never include a student the
-        # on-screen filtered list doesn't show.
+        # Same query (scope + every filter + sort) as the on-screen list.
         students = _students_query().all()
-    
     if not students:
+        if request.args.get('preview') == '1':
+            return ('No students match these filters.', 422)
         flash('No students to export.', 'error')
         return redirect(url_for('main.students_list'))
-    
-    # Pre-load current class + parent phone for every student in two queries
-    # (instead of two per student) to avoid N+1 during export.
-    active_term = get_active_term()
-    student_ids = [s.id for s in students]
 
+    # Current class + first parent phone (+ photos) in bulk (no N+1).
+    active_term = get_active_term()
+    ids = [s.id for s in students]
     class_map = {}
     if active_term:
-        enr = (StudentEnrollment.query
-               .join(ClassArmAssignment)
-               .filter(StudentEnrollment.student_id.in_(student_ids),
-                       ClassArmAssignment.term_id == active_term.id)
-               .options(joinedload(StudentEnrollment.class_arm_assignment)
-                        .joinedload(ClassArmAssignment.school_class),
-                        joinedload(StudentEnrollment.class_arm_assignment)
-                        .joinedload(ClassArmAssignment.arm))
-               .all())
-        for e in enr:
+        for e in (StudentEnrollment.query.join(ClassArmAssignment)
+                  .filter(StudentEnrollment.student_id.in_(ids),
+                          ClassArmAssignment.term_id == active_term.id)
+                  .options(joinedload(StudentEnrollment.class_arm_assignment)
+                           .joinedload(ClassArmAssignment.school_class),
+                           joinedload(StudentEnrollment.class_arm_assignment)
+                           .joinedload(ClassArmAssignment.arm)).all()):
             class_map[e.student_id] = e.class_arm_assignment.display_name
-
     phone_map = {}
-    for pc in (ParentContact.query
-               .filter(ParentContact.student_id.in_(student_ids))
-               .order_by(ParentContact.is_primary.desc(), ParentContact.id).all()):
-        phone_map.setdefault(pc.student_id, pc.phone_number)
+    if 'parent_phone' in fields:
+        for pc in (ParentContact.query.filter(ParentContact.student_id.in_(ids))
+                   .order_by(ParentContact.is_primary.desc(), ParentContact.id).all()):
+            phone_map.setdefault(pc.student_id, pc.phone_number)
+    photo_map = {}
+    if 'photo' in fields and format_type != 'csv':
+        from models import StudentPhoto
+        for ph in StudentPhoto.query.filter(StudentPhoto.student_id.in_(ids)).all():
+            photo_map[ph.student_id] = ph.data
 
-    student_data = []
+    with_middle = 'middle_name' in fields and 'name' in fields
+    if with_middle:
+        fields = [f for f in fields if f != 'middle_name']
 
-    for student in students:
-        data = {}
-        
-        # Basic fields
-        if 'student_id' in fields:
-            data['Student ID'] = student.student_id
-        if 'surname' in fields:
-            data['Surname'] = student.surname
-        if 'first_name' in fields:
-            data['First Name'] = student.first_name
-        if 'middle_name' in fields:
-            data['Middle Name'] = student.middle_name or ''
-        if 'gender' in fields:
-            data['Gender'] = student.gender
-        if 'date_of_birth' in fields:
-            data['Date of Birth'] = student.date_of_birth.strftime('%Y-%m-%d') if student.date_of_birth else ''
-        if 'age' in fields:
-            data['Age'] = student.age or ''
-        if 'religion' in fields:
-            data['Religion'] = student.religion or ''
-        if 'home_address' in fields:
-            data['Home Address'] = student.home_address or ''
-        if 'hobbies' in fields:
-            data['Hobbies'] = student.hobbies or ''
-        
-        # Current class
-        if 'current_class' in fields:
-            data['Class'] = class_map.get(student.id, '')
+    def row_of(st):
+        r = {'_gender': st.gender or ''}
+        for f in fields:
+            if f == 'name':
+                rest = ' '.join(x for x in (st.first_name, st.middle_name if with_middle else None) if x)
+                r[f] = (st.surname or '', rest)
+            elif f == 'current_class':
+                r[f] = class_map.get(st.id, '')
+            elif f == 'parent_phone':
+                r[f] = phone_map.get(st.id, '')
+            elif f == 'photo':
+                r[f] = photo_map.get(st.id)
+            elif f == 'age':
+                r[f] = st.age if st.age is not None else ''
+            elif f == 'date_of_birth':
+                r[f] = st.date_of_birth
+            else:
+                r[f] = getattr(st, f, '') or ''
+        return r
 
-        # Parent phone
-        if 'parent_phone' in fields:
-            data['Parent Phone'] = phone_map.get(student.id, '')
+    preset = request.args.get('preset') or ''
+    if not preset and sum(1 for f in fields if EXPORT_COLUMNS[f][1] == 'exam') >= 2:
+        preset = 'exam'                     # a customised exam-numbers list keeps its heading
+    group = request.args.get('group', '1') != '0'
+    columns = []
+    for f in fields:
+        label, kind = EXPORT_COLUMNS[f]
+        if format_type in ('excel', 'csv'):
+            label = EXPORT_DATA_LABELS.get(f, label)
+        if f == 'current_class' and group and format_type not in ('excel', 'csv'):
+            continue                        # the group heading already says the class
+        columns.append({'key': f, 'label': label, 'kind': kind})
 
-        # External-exam identity records
-        if 'nin' in fields:
-            data['NIN'] = student.nin or ''
-        if 'jamb_profile_code' in fields:
-            data['JAMB Profile Code'] = student.jamb_profile_code or ''
-        if 'jamb_reg_number' in fields:
-            data['JAMB Reg Number'] = student.jamb_reg_number or ''
-        if 'waec_reg_number' in fields:
-            data['WAEC Reg Number'] = student.waec_reg_number or ''
-        if 'neco_reg_number' in fields:
-            data['NECO Reg Number'] = student.neco_reg_number or ''
+    rows = [(st, row_of(st)) for st in students]
+    class_names = {class_map.get(st.id, '') for st in students}
+    if group:
+        buckets = {}
+        for st, r in rows:
+            buckets.setdefault(class_map.get(st.id) or '', []).append(r)
+        order = sorted((k for k in buckets if k), key=_natural_key) + ([''] if '' in buckets else [])
+        groups = [{'name': k or 'No class assigned', 'rows': buckets[k]} for k in order]
+    else:
+        groups = [{'name': None, 'rows': [r for _, r in rows]}]
 
-        student_data.append(data)
+    title = strip_tags((request.args.get('title') or '').strip())[:150]
+    subtitle = strip_tags((request.args.get('subtitle') or '').strip())[:200]
+    n_classes = len([c for c in class_names if c])
+    auto_t, auto_s = _export_auto_heading(preset, n_classes)
+    title = title or auto_t
+    subtitle = subtitle or auto_s
 
-    # Get ordered field names for export
-    field_order = ['Student ID', 'Surname', 'First Name', 'Middle Name', 'Gender',
-                   'Class', 'Date of Birth', 'Age', 'Religion', 'Home Address',
-                   'Hobbies', 'Parent Phone',
-                   'NIN', 'JAMB Profile Code', 'JAMB Reg Number', 'WAEC Reg Number',
-                   'NECO Reg Number']
-    export_fields = [f for f in field_order if f in student_data[0]] if student_data else []
-    
+    stats = []
+    if request.args.get('summary', '1') != '0':
+        m = sum(1 for st in students if (st.gender or '').lower().startswith('m'))
+        fm = sum(1 for st in students if (st.gender or '').lower().startswith('f'))
+        noun = 'Candidates' if preset == 'exam' else 'Students'
+        stats = [(len(students), noun, None), (m, 'Male', 'male'), (fm, 'Female', 'female')]
+        exam_cols = [c['key'] for c in columns if c['kind'] == 'exam']
+        if exam_cols:
+            missing = sum(1 for _, r in rows if any(not (r.get(k) or '').strip() for k in exam_cols))
+            stats.append((missing, 'Missing a number', 'warn' if missing else None))
+        elif n_classes > 1:
+            stats.append((n_classes, 'Classes' if len({c.split(' ')[0] for c in class_names if c}) > 1 else 'Arms', None))
+
+    from utils.access_control import get_current_user
+    u = get_current_user()
+    size = request.args.get('size') or 'm'
+    if size not in SLE.SIZES:
+        size = 'm'
+    try:
+        blank = max(0, min(6, int(request.args.get('blank', 0))))
+    except (TypeError, ValueError):
+        blank = 0
+    spec = {
+        'title': title, 'subtitle': subtitle,
+        'doc_tag': EXPORT_DOC_TAGS.get(preset, 'Student list'),
+        'noun': 'candidates' if preset == 'exam' else 'students',
+        'columns': columns, 'groups': groups, 'stats': stats,
+        'orientation': request.args.get('orientation') if request.args.get('orientation') in ('portrait', 'landscape') else 'auto',
+        'size': size, 'signatures': request.args.get('signatures') == '1', 'blank_cols': blank,
+        'prepared_by': (getattr(u, 'full_name', None) or getattr(u, 'username', None) or '') if u else '',
+        'generated': timeutil.now(),
+        'school': school_profile(), 'colors': SLE.colors_for(document_branding()),
+    }
+    safe = ''.join(ch if ch.isalnum() else '_' for ch in title).strip('_')[:60] or 'students'
+
     if format_type == 'csv':
         import csv as _csv
         from io import StringIO
         from flask import Response
-        buf = StringIO()
-        writer = _csv.writer(buf)
-        if title:
-            writer.writerow([title]); writer.writerow([])
-        writer.writerow(export_fields)
-        for row in student_data:
-            writer.writerow([formula_guard(row.get(f, '')) for f in export_fields])
+        buf = StringIO(); w = _csv.writer(buf)
+        heads = []
+        for c in columns:
+            heads += ['Surname', 'Other names'] if c['kind'] == 'name' else [c['label']]
+        if group and not any(c['key'] == 'current_class' for c in columns):
+            heads.append('Class')
+        w.writerow(heads)
+        for g in groups:
+            for r in g['rows']:
+                line = []
+                for c in columns:
+                    v = r.get(c['key'])
+                    if c['kind'] == 'name':
+                        line += [formula_guard(v[0]), formula_guard(v[1])]
+                    elif c['kind'] == 'date':
+                        line.append(v.strftime('%Y-%m-%d') if v else '')
+                    else:
+                        line.append(formula_guard('' if v is None else str(v)))
+                if group and not any(c['key'] == 'current_class' for c in columns):
+                    line.append(g['name'] or '')
+                w.writerow(line)
         resp = Response(buf.getvalue(), mimetype='text/csv')
-        resp.headers['Content-Disposition'] = 'attachment; filename=students.csv'
+        resp.headers['Content-Disposition'] = 'attachment; filename=%s.csv' % safe
         return resp
-    elif format_type == 'excel':
-        return export_students_excel(student_data, export_fields, font_size=font_size, title=title)
-    elif format_type == 'word':
-        return export_students_word(student_data, export_fields, font_size=font_size, title=title)
-    elif format_type == 'pdf':
-        return export_students_pdf(student_data, export_fields, font_size=font_size, title=title)
-    elif format_type == 'image':
-        return export_students_image(student_data, export_fields, font_size=font_size, title=title)
-    else:
-        flash('Invalid export format.', 'error')
-        return redirect(url_for('main.students_list'))
+    if format_type == 'excel':
+        about = []
+        filt = ', '.join('%s: %s' % (k, v) for k, v in request.args.items()
+                         if k in ('search', 'gender', 'religion', 'stream', 'subject', 'class_id', 'arm_id',
+                                  'house', 'boarding', 'incomplete') and v)
+        about.append(('Filters', filt or ('Selected rows' if student_ids else 'None — all students')))
+        return xlsx_response(SLE.render_xlsx(spec, about), '%s.xlsx' % safe)
+    if format_type == 'word':
+        from flask import Response
+        return Response(SLE.render_docx(spec), headers={
+            'Content-Disposition': 'attachment; filename="%s.docx"' % safe},
+            mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document')
+    if format_type == 'pdf':
+        from io import BytesIO
+        return pdf_response(BytesIO(SLE.render_pdf(spec)), '%s.pdf' % safe, inline=False)
+    if format_type == 'image':
+        from flask import Response
+        from urllib.parse import quote
+        preview = request.args.get('preview') == '1'
+        page = max(1, request.args.get('page', type=int) or 1)
+        pages, total = SLE.render_images(spec, zoom=1.15 if preview else 2.0, only_page=page)
+        suffix = '' if total == 1 else '_p%d' % min(page, total)
+        return Response(pages[0], mimetype='image/png', headers={
+            'Content-Disposition': '%s; filename="%s%s.png"' % ('inline' if preview else 'attachment', safe, suffix),
+            'X-Total-Pages': str(total), 'Access-Control-Expose-Headers': 'X-Total-Pages',
+            # What the dialog shows as the automatic heading / page setup.
+            'X-Export-Title': quote(title), 'X-Export-Subtitle': quote(subtitle),
+            'X-Export-Orientation': spec.get('_orientation', 'portrait'),
+            'Cache-Control': 'no-store'})
+    flash('Invalid export format.', 'error')
+    return redirect(url_for('main.students_list'))
 
 
 # ============================================================================
