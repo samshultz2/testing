@@ -44,9 +44,10 @@ def graduates_on_registers(bid=None):
     return ['%s (%s) — %s' % (s.full_name, s.student_id, caa.display_name) for s, caa in q.all()]
 
 
-def results_without_enrolment(year, bid=None):
-    """WAEC candidates of ``year`` with no class enrolment in that session."""
+def results_without_enrolment(year, bid=None, model=None):
+    """WAEC / NECO candidates of ``year`` with no class enrolment in that session."""
     from models import WAECResult, StudentEnrollment, ClassArmAssignment, Term
+    WAECResult = model or WAECResult
     from utils.helpers import session_for_exam_year
     sess = session_for_exam_year(year)
     q = db.session.query(WAECResult.student_id).filter(WAECResult.exam_year == year).distinct()
@@ -83,10 +84,11 @@ def subject_spellings():
     return out
 
 
-def year_anomalies(bid=None):
-    """WAEC years whose number of candidates or average grade is far from the
-    others — usually a half-finished import or a duplicated one."""
+def year_anomalies(bid=None, model=None):
+    """WAEC / NECO years whose number of candidates or average grade is far from
+    the others — usually a half-finished import or a duplicated one."""
     from models import WAECResult
+    WAECResult = model or WAECResult
     q = db.session.query(WAECResult.exam_year, WAECResult.student_id, WAECResult.grade)
     if bid is not None:
         q = q.join(Student, Student.id == WAECResult.student_id).filter(Student.branch_id == bid)
@@ -114,7 +116,8 @@ def year_anomalies(bid=None):
     return out
 
 
-def run(year, bid=None):
+def run(year, bid=None, model=None):
+    exam = 'NECO' if model is not None and model.__tablename__ == 'neco_results' else 'WAEC'
     from flask import url_for
     checks = []
     for fn in (
@@ -124,12 +127,12 @@ def run(year, bid=None):
         lambda: _check('graduates', 'Graduates still on a current class register', graduates_on_registers(bid),
                        severity='bad', fix=url_for('main.move_class_records'), fix_label='Move class records',
                        help_text='Usually left behind by a merge of two different pupils.'),
-        lambda: _check('no_enrolment', 'WAEC %s candidates with no class enrolment that session' % year,
-                       results_without_enrolment(year, bid) if year else [],
+        lambda: _check('no_enrolment', '%s %s candidates with no class enrolment that session' % (exam, year),
+                       results_without_enrolment(year, bid, model) if year else [],
                        help_text='They are left out of class, teacher and attendance analysis.'),
         lambda: _check('spellings', 'Subjects saved under more than one spelling', subject_spellings(),
                        help_text='Analytics folds common variants together, but fixing them at source keeps exports tidy.'),
-        lambda: _check('years', 'Unusual exam years', year_anomalies(bid),
+        lambda: _check('years', 'Unusual %s years' % exam, year_anomalies(bid, model),
                        help_text='A year with far fewer (or more) candidates than usual, or very different grades.'),
     ):
         try:

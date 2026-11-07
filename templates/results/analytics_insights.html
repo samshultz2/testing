@@ -60,6 +60,9 @@
 .risk-col ul{list-style:none;margin:0;padding:0;font-size:.8rem;max-height:14rem;overflow:auto}
 .risk-col li{padding:.3rem 0;border-bottom:1px solid var(--border-light)}
 .risk-col li small{display:block;color:var(--text-muted)}
+.ix-board{display:inline-flex;border:1px solid var(--border-color);border-radius:10px;padding:3px;gap:2px;background:var(--gray-50)}
+.ix-board a{padding:.3rem .8rem;border-radius:7px;font-size:.8rem;font-weight:700;color:var(--text-muted);text-decoration:none}
+.ix-board a.on{background:var(--bg-card);color:var(--primary);box-shadow:0 1px 3px rgba(0,0,0,.12)}
 .note{font-size:.75rem;color:var(--text-muted);margin-top:.5rem}
 </style>
 {% endblock %}
@@ -67,17 +70,24 @@
 {% block content %}
 <div class="page-header">
   <div>
-    <h1>Deeper Insights{% if year %} — WAEC {{ year }}{% endif %}</h1>
+    <h1>Deeper Insights{% if year %} — {{ board_name }} {{ year }}{% endif %}</h1>
     <p class="text-muted text-sm">Every rate shows how many students it is based on and a likely range; groups under 10 are marked “small group”, and gaps say whether they are a real difference or could be chance.</p>
   </div>
   <div class="page-header-actions no-print">
     <form method="GET" class="d-flex gap-2 align-center">
+      {% if has_neco or board == 'neco' %}
+      <div class="ix-board" role="group" aria-label="Exam">
+        <a href="{{ url_for('results.analytics_insights') }}" class="{{ 'on' if board == 'waec' }}">WAEC</a>
+        <a href="{{ url_for('results.analytics_insights', board='neco') }}" class="{{ 'on' if board == 'neco' }}">NECO</a>
+      </div>
+      {% endif %}
+      {% if board == 'neco' %}<input type="hidden" name="board" value="neco">{% endif %}
       <label class="form-label mb-0" for="ixYear">Year</label>
       <select id="ixYear" name="year" class="form-control" style="max-width:130px" data-autosubmit>
         {% for y in years %}<option value="{{ y }}" {% if y == year %}selected{% endif %}>{{ y }}</option>{% endfor %}
       </select>
     </form>
-    {% if year and can_write_sub('external_exams', 'analytics_recompute') %}
+    {% if year and board == 'waec' and can_write_sub('external_exams', 'analytics_recompute') %}
     <form method="POST" action="{{ url_for('results.analytics_freeze_year') }}" class="d-inline"
           data-confirm="{% if frozen %}Unfreeze {{ year }}? Comparisons will use live results again.{% else %}Freeze {{ year }}'s headline numbers? Year comparisons will keep using them even if records are edited later.{% endif %}">
       <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
@@ -93,11 +103,11 @@
 {% if frozen %}<div class="alert alert-info"><i class="fas fa-lock"></i> {{ year }} headline numbers were frozen{% if frozen._frozen_at %} on {{ frozen._frozen_at.strftime('%d %b %Y') }}{% endif %}{% if frozen._frozen_by %} by {{ frozen._frozen_by }}{% endif %}. Year comparisons use those figures.</div>{% endif %}
 
 {% if not year %}
-<div class="card"><div class="card-body">{{ empty('No WAEC results yet — insights appear once a year of results is entered.') }}</div></div>
+<div class="card"><div class="card-body">{{ empty('No ' ~ board_name ~ ' results yet — insights appear once a year of results is entered.') }}</div></div>
 {% else %}
 <nav class="ix-nav no-print" aria-label="Sections">
   <a href="#health">Data health</a><a href="#risk">At-risk this week</a><a href="#va">Value added</a>
-  <a href="#near">Near credit</a><a href="#mock">Mock accuracy</a><a href="#bece">BECE → WAEC</a>
+  <a href="#near">Near credit</a><a href="#mock">Mock accuracy</a><a href="#bece">BECE → {{ board_name }}</a>
   <a href="#combo">Subject choices</a><a href="#teach">Teachers</a><a href="#fair">Fairness</a>
   <a href="#att">Attendance</a><a href="#cohort">Cohorts</a><a href="#ready">Readiness</a><a href="#topics">Weak topics</a>
 </nav>
@@ -149,11 +159,11 @@
 {% set v = d.value_added %}
 <section class="ix-sec" id="va">
   <h2><i class="fas fa-arrow-up-right-dots"></i> Value added — did teaching move students?</h2>
-  <p class="lede">Each student's WAEC grade compared with what their own SSS3 class scores predicted. Positive = better than expected. This is the fairest way to compare subjects and teachers, because it allows for the students each one started with.</p>
+  <p class="lede">Each student's {{ board_name }} grade compared with what their own SSS3 class scores predicted. Positive = better than expected. This is the fairest way to compare subjects and teachers, because it allows for the students each one started with.</p>
   {% if v and v.enough %}
   <div class="kpis">
     <div class="kp"><div class="v">{{ v.n }}</div><div class="l">Student-subject pairs</div></div>
-    <div class="kp"><div class="v">{{ v.r }}</div><div class="l">Class score ↔ WAEC (r)</div>{% if v.ci %}<div class="s">likely {{ v.ci[0] }} to {{ v.ci[1] }}</div>{% endif %}</div>
+    <div class="kp"><div class="v">{{ v.r }}</div><div class="l">Class score ↔ {{ board_name }} (r)</div>{% if v.ci %}<div class="s">likely {{ v.ci[0] }} to {{ v.ci[1] }}</div>{% endif %}</div>
   </div>
   <div class="two">
     <div class="card"><div class="card-header"><h3>By subject</h3></div><div class="tbl-wrap"><table class="tbl">
@@ -167,8 +177,8 @@
         <td><span class="tagv {{ 'good' if s.verdict == 'Above expectation' else 'bad' if s.verdict == 'Below expectation' else 'mid' }}">{{ s.verdict }}</span></td></tr>{% endfor %}
     </tbody></table></div></div>
   </div>
-  <p class="note">Value added is in WAEC grade points (A1 = 9 … F9 = 1): +1 means one grade better than predicted. Verdicts need 10+ students and a gap of half a grade.</p>
-  {% else %}{{ empty('Needs at least 15 student-subject pairs with both an SSS3 term result and a WAEC grade for %s (%s so far). Enter SSS3 scores for this session to unlock it.'|format(year, v.n if v else 0)) }}{% endif %}
+  <p class="note">Value added is in {{ board_name }} grade points (A1 = 9 … F9 = 1): +1 means one grade better than predicted. Verdicts need 10+ students and a gap of half a grade.</p>
+  {% else %}{{ empty(('Needs at least 15 student-subject pairs with both an SSS3 term result and a ' ~ board_name ~ ' grade for %s (%s so far). Enter SSS3 scores for this session to unlock it.')|format(year, v.n if v else 0)) }}{% endif %}
 </section>
 
 {# ---------------- Near credit ---------------- #}
@@ -200,30 +210,30 @@
 {% set m = d.mock_accuracy %}
 <section class="ix-sec" id="mock">
   <h2><i class="fas fa-scale-balanced"></i> Mock → real accuracy</h2>
-  <p class="lede">The last mock WAEC of the session against the real WAEC, subject by subject. A big gap means that mock paper (or its marking) was too hard or too easy — fix it so next year's predictions can be trusted.</p>
+  <p class="lede">The last mock WAEC of the session against the real {{ board_name }}, subject by subject. A big gap means that mock paper (or its marking) was too hard or too easy — fix it so next year's predictions can be trusted.</p>
   {% if m and m.subjects %}
-  <p class="text-sm"><strong>Compared:</strong> {{ m.exam }} vs WASSCE {{ year }} · {{ m.n }} student-subject pairs.</p>
+  <p class="text-sm"><strong>Compared:</strong> {{ m.exam }} vs {{ exam_name }} {{ year }} · {{ m.n }} student-subject pairs.</p>
   <div class="card"><div class="tbl-wrap"><table class="tbl">
-    <thead><tr><th>Subject</th><th class="num">Pairs</th><th class="num">WAEC vs mock</th><th class="num">Avg miss</th><th class="num">Same grade</th><th class="num">Credit call right</th><th>Verdict</th></tr></thead><tbody>
+    <thead><tr><th>Subject</th><th class="num">Pairs</th><th class="num">{{ board_name }} vs mock</th><th class="num">Avg miss</th><th class="num">Same grade</th><th class="num">Credit call right</th><th>Verdict</th></tr></thead><tbody>
     {% for s in m.subjects %}<tr><td>{{ s.subject }}{% if s.small %}<span class="small-n">small group</span>{% endif %}</td><td class="num">{{ s.n }}</td><td class="num">{{ va(s.bias) }}</td><td class="num">{{ s.mae }}</td><td class="num">{{ r(s.exact) }}</td><td class="num">{{ r(s.credit_agree) }}</td>
       <td><span class="tagv {{ 'mid' if s.verdict == 'Mock well matched' else 'bad' }}">{{ s.verdict }}</span></td></tr>{% endfor %}
   </tbody></table></div></div>
-  <p class="note">“WAEC vs mock” in grade points: +1 = students did one grade better in WAEC than in the mock (mock too hard).</p>
-  {% else %}{{ empty('Needs a mock WAEC in the %s session for students who also have WAEC results.'|format(year)) }}{% endif %}
+  <p class="note">“{{ board_name }} vs mock” in grade points: +1 = students did one grade better in {{ board_name }} than in the mock (mock too hard).</p>
+  {% else %}{{ empty(('Needs a mock WAEC in the %s session for students who also have ' ~ board_name ~ ' results.')|format(year)) }}{% endif %}
 </section>
 
-{# ---------------- BECE → WAEC ---------------- #}
+{# ---------------- BECE → {{ board_name }} ---------------- #}
 {% set b = d.bece_to_waec %}
 <section class="ix-sec" id="bece">
-  <h2><i class="fas fa-route"></i> BECE (JSS3) → WAEC</h2>
-  <p class="lede">Do strong JSS3 students stay strong? Students are grouped by their BECE results and compared with their WAEC outcome.</p>
+  <h2><i class="fas fa-route"></i> BECE (JSS3) → {{ board_name }}</h2>
+  <p class="lede">Do strong JSS3 students stay strong? Students are grouped by their BECE results and compared with their {{ board_name }} outcome.</p>
   {% if b and b.bands %}
   <div class="card"><div class="tbl-wrap"><table class="tbl">
-    <thead><tr><th>At BECE</th><th class="num">Students</th><th class="num">Avg WAEC points</th><th class="num">5 credits incl. Eng &amp; Maths</th></tr></thead><tbody>
+    <thead><tr><th>At BECE</th><th class="num">Students</th><th class="num">Avg {{ board_name }} points</th><th class="num">5 credits incl. Eng &amp; Maths</th></tr></thead><tbody>
     {% for x in b.bands %}<tr><td>{{ x.band }}</td><td class="num">{{ x.n }}</td><td class="num">{{ x.avg_points }}</td><td class="num">{{ r(x.five_credit) }}{{ rng(x.five_credit) }}</td></tr>{% endfor %}
   </tbody></table></div></div>
-  {% if b.r is not none %}<p class="note">Link between BECE and WAEC: r = {{ b.r }}{% if b.ci %} (likely {{ b.ci[0] }} to {{ b.ci[1] }}){% endif %}, {{ b.n }} students.</p>{% else %}<p class="note">{{ b.n }} students so far — the correlation appears from 15.</p>{% endif %}
-  {% else %}{{ empty('No WAEC %s candidates have JSS3 BECE results in the app yet.'|format(year)) }}{% endif %}
+  {% if b.r is not none %}<p class="note">Link between BECE and {{ board_name }}: r = {{ b.r }}{% if b.ci %} (likely {{ b.ci[0] }} to {{ b.ci[1] }}){% endif %}, {{ b.n }} students.</p>{% else %}<p class="note">{{ b.n }} students so far — the correlation appears from 15.</p>{% endif %}
+  {% else %}{{ empty(('No ' ~ board_name ~ ' %s candidates have JSS3 BECE results in the app yet.')|format(year)) }}{% endif %}
 </section>
 
 {# ---------------- Subject choices ---------------- #}
@@ -244,7 +254,7 @@
       {% else %}<tr><td colspan="3" class="text-muted">No combination is shared by 5 or more students.</td></tr>{% endfor %}
     </tbody></table></div></div>
   </div>
-  {% else %}{{ empty('Not enough WAEC candidates to compare subject choices.') }}{% endif %}
+  {% else %}{{ empty('Not enough ' ~ board_name ~ ' candidates to compare subject choices.') }}{% endif %}
 </section>
 
 {# ---------------- Teachers ---------------- #}
@@ -276,7 +286,7 @@
     </tbody></table></div></div>
   {% endfor %}
   </div>
-  {% else %}{{ empty('Not enough WAEC candidates in two or more groups to compare.') }}{% endif %}
+  {% else %}{{ empty('Not enough ' ~ board_name ~ ' candidates in two or more groups to compare.') }}{% endif %}
 </section>
 
 {# ---------------- Attendance ---------------- #}
@@ -290,16 +300,16 @@
     <thead><tr><th>Attendance</th><th class="num">Students</th><th class="num">5 credits incl. Eng &amp; Maths</th><th style="width:30%"></th></tr></thead><tbody>
     {% for x in a.bands %}<tr><td>{{ x.band }}</td><td class="num">{{ x.n }}</td><td class="num">{{ r(x.five_credit) }}{{ rng(x.five_credit) }}</td><td><div class="bar"><i style="width:{{ x.five_credit.pct }}%"></i></div></td></tr>{% endfor %}
   </tbody></table></div></div>
-  {% else %}{{ empty('No attendance marked for %s WAEC candidates in their SSS3 session.'|format(year)) }}{% endif %}
+  {% else %}{{ empty(('No attendance marked for %s ' ~ board_name ~ ' candidates in their SSS3 session.')|format(year)) }}{% endif %}
 </section>
 
 {# ---------------- Cohorts ---------------- #}
 <section class="ix-sec" id="cohort">
   <h2><i class="fas fa-users-line"></i> Intake cohorts</h2>
-  <p class="lede">Each JSS1 intake followed through to WAEC: how many stayed, left or joined later, and how the year group did. Separates “this year's class was different” from “teaching changed”.</p>
+  <p class="lede">Each JSS1 intake followed through to {{ board_name }}: how many stayed, left or joined later, and how the year group did. Separates “this year's class was different” from “teaching changed”.</p>
   {% if d.cohorts %}
   <div class="card"><div class="tbl-wrap"><table class="tbl">
-    <thead><tr><th>JSS1 intake</th><th class="num">Started</th><th class="num">Still here</th><th class="num">Graduated</th><th class="num">Left</th><th class="num">Joined later</th><th class="num">WAEC year</th><th class="num">Sat WAEC</th><th class="num">5 credits</th></tr></thead><tbody>
+    <thead><tr><th>JSS1 intake</th><th class="num">Started</th><th class="num">Still here</th><th class="num">Graduated</th><th class="num">Left</th><th class="num">Joined later</th><th class="num">{{ board_name }} year</th><th class="num">Sat {{ board_name }}</th><th class="num">5 credits</th></tr></thead><tbody>
     {% for x in d.cohorts %}<tr><td>{{ x.intake }}</td><td class="num">{{ x.started }}</td><td class="num">{{ x.still_here }}</td><td class="num">{{ x.graduated }}</td><td class="num">{{ x.left }}</td><td class="num">{{ x.joined }}</td><td class="num">{{ x.waec_year }}</td><td class="num">{{ x.sat_waec }}</td><td class="num">{{ r(x.five_credit) if x.five_credit else '—' }}</td></tr>{% endfor %}
   </tbody></table></div></div>
   {% else %}{{ empty('Needs JSS1 class enrolments in the app — cohorts appear once a JSS1 intake has been recorded.') }}{% endif %}

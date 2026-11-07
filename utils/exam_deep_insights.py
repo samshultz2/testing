@@ -53,6 +53,10 @@ def waec_by_student(year, bid=None, model=None):
     return dict(out)
 
 
+def _is_neco(model):
+    return model is not None and getattr(model, '__tablename__', '') == 'neco_results'
+
+
 def _session_terms(year):
     from utils.helpers import session_for_exam_year
     from models import Term
@@ -116,8 +120,8 @@ def internal_scores(year, student_ids):
     return out
 
 
-def value_added(year, bid=None):
-    waec = waec_by_student(year, bid)
+def value_added(year, bid=None, model=None):
+    waec = waec_by_student(year, bid, model)
     internal = internal_scores(year, set(waec))
     pairs = []
     for (sid, subj), (score, teacher) in internal.items():
@@ -167,10 +171,10 @@ def value_added(year, bid=None):
 # --------------------------------------------------------------------------- #
 # 2. Mock → real accuracy
 # --------------------------------------------------------------------------- #
-def mock_accuracy(year, bid=None):
+def mock_accuracy(year, bid=None, model=None):
     from models.mock_waec import MockWAECExam, MockWAECResult
     sess, _terms = _session_terms(year)
-    waec = waec_by_student(year, bid)
+    waec = waec_by_student(year, bid, model)
     out = {'exam': None, 'subjects': [], 'n': 0}
     if not sess or not waec:
         return out
@@ -213,9 +217,9 @@ def mock_accuracy(year, bid=None):
 # --------------------------------------------------------------------------- #
 # 3. BECE (JSS3) → WAEC
 # --------------------------------------------------------------------------- #
-def bece_to_waec(year, bid=None):
+def bece_to_waec(year, bid=None, model=None):
     from models.models_school_exams import SchoolExamResult, get_scheme
-    waec = waec_by_student(year, bid)
+    waec = waec_by_student(year, bid, model)
     out = {'n': 0, 'bands': [], 'r': None, 'ci': None}
     if not waec:
         return out
@@ -258,8 +262,8 @@ def bece_to_waec(year, bid=None):
 # --------------------------------------------------------------------------- #
 # 4. Near credit
 # --------------------------------------------------------------------------- #
-def near_credit(year, bid=None, limit=40):
-    waec = waec_by_student(year, bid)
+def near_credit(year, bid=None, limit=40, model=None):
+    waec = waec_by_student(year, bid, model)
     subj = defaultdict(lambda: {'entries': 0, 'd7': 0, 'e8': 0, 'credit': 0})
     for grades in waec.values():
         for s, g in grades.items():
@@ -293,8 +297,8 @@ def near_credit(year, bid=None, limit=40):
 # --------------------------------------------------------------------------- #
 # 5. Subject combinations / electives
 # --------------------------------------------------------------------------- #
-def combinations(year, bid=None, min_n=5):
-    waec = waec_by_student(year, bid)
+def combinations(year, bid=None, min_n=5, model=None):
+    waec = waec_by_student(year, bid, model)
     meets = _meets_map(waec)
     combos = defaultdict(list)
     taking = defaultdict(set)
@@ -327,7 +331,7 @@ def combinations(year, bid=None, min_n=5):
 # --------------------------------------------------------------------------- #
 # 6. Teachers across years
 # --------------------------------------------------------------------------- #
-def teachers(years, bid=None):
+def teachers(years, bid=None, model=None):
     """[{'teacher', 'subject', 'years': {year: rate}, 'trend'}] — credit rate of
     each teacher's SSS3 students in their subject, per WAEC year."""
     from models import (ClassSubject, Subject, SchoolClass, StudentEnrollment,
@@ -338,7 +342,7 @@ def teachers(years, bid=None):
         sess, terms = _session_terms(y)
         if not terms or not sss3:
             continue
-        waec = waec_by_student(y, bid)
+        waec = waec_by_student(y, bid, model)
         if not waec:
             continue
         tids = [t.id for t in terms]
@@ -382,10 +386,10 @@ def teachers(years, bid=None):
 # --------------------------------------------------------------------------- #
 # 7. Fairness gaps
 # --------------------------------------------------------------------------- #
-def fairness(year, bid=None):
+def fairness(year, bid=None, model=None):
     from models import StudentEnrollment, ClassArmAssignment, ClassArm
     from models.models_branch import Branch
-    waec = waec_by_student(year, bid)
+    waec = waec_by_student(year, bid, model)
     meets = _meets_map(waec)
     if not waec:
         return []
@@ -434,9 +438,9 @@ def fairness(year, bid=None):
 BANDS = [('Below 75%', 0, 75), ('75–85%', 75, 85), ('85–95%', 85, 95), ('95% and above', 95, 101)]
 
 
-def attendance_bands(year, bid=None):
+def attendance_bands(year, bid=None, model=None):
     from models import Attendance, StudentEnrollment, ClassArmAssignment
-    waec = waec_by_student(year, bid)
+    waec = waec_by_student(year, bid, model)
     meets = _meets_map(waec)
     sess, terms = _session_terms(year)
     out = {'bands': [], 'n': 0, 'threshold': None}
@@ -477,7 +481,7 @@ def _cls_norm(name):
     return re.sub(r'[^A-Z0-9]', '', (name or '').upper())
 
 
-def cohorts(bid=None):
+def cohorts(bid=None, model=None):
     """One row per JSS1 intake session: started, still here, graduated, left,
     joined later (entered the same year group after JSS1) and — once they have
     sat WAEC — the 5-credit rate."""
@@ -512,8 +516,9 @@ def cohorts(bid=None):
     all_ids = [s for g in groups.values() for s in g['start'] + g['joined']]
     studs = {s.id: s for s in Student.query.filter(Student.id.in_(all_ids)).all()}
     waec_years = defaultdict(set)
-    for sid, y in db.session.query(WAECResult.student_id, WAECResult.exam_year).filter(
-            WAECResult.student_id.in_(all_ids)).distinct():
+    M = model or WAECResult
+    for sid, y in db.session.query(M.student_id, M.exam_year).filter(
+            M.student_id.in_(all_ids)).distinct():
         waec_years[sid].add(y)
     out = []
     for intake, g in sorted(groups.items(), reverse=True):
@@ -526,7 +531,7 @@ def cohorts(bid=None):
         sat = [s for s in members if waec_year in waec_years.get(s.id, ())]
         meets = 0
         if sat:
-            w = waec_by_student(waec_year, bid)
+            w = waec_by_student(waec_year, bid, model)
             meets = sum(1 for s in sat if s.id in w and R.five_credit_status(w[s.id])['meets'])
         out.append({
             'intake': '%s/%s' % (intake - 1, intake), 'waec_year': waec_year,
@@ -544,7 +549,7 @@ def cohorts(bid=None):
 # --------------------------------------------------------------------------- #
 # 10. Readiness over the session (mock by mock)
 # --------------------------------------------------------------------------- #
-def readiness_over_time(year, bid=None):
+def readiness_over_time(year, bid=None, model=None):
     from models.mock_waec import MockWAECExam, MockWAECResult
     from models.mock_jamb import MockJAMBExam, MockJAMBResult
     from models import JAMBResult
@@ -570,10 +575,11 @@ def readiness_over_time(year, bid=None):
             if rs:
                 points.append({'label': ex.display_name, 'date': ex.exam_date, 'kind': 'Mock JAMB',
                                'measure': 'JAMB 200+', 'rate': rate(sum(1 for r in rs if (r.total_score or 0) >= 200), len(rs))})
-    waec = waec_by_student(year, bid)
+    waec = waec_by_student(year, bid, model)
     if waec:
         k = sum(1 for g in waec.values() if R.five_credit_status(g)['meets'])
-        points.append({'label': 'WASSCE %s' % year, 'date': None, 'kind': 'WAEC',
+        points.append({'label': ('NECO SSCE %s' if _is_neco(model) else 'WASSCE %s') % year, 'date': None,
+                       'kind': 'NECO' if _is_neco(model) else 'WAEC',
                        'measure': '5 credits incl. Eng & Maths', 'rate': rate(k, len(waec))})
     q = db.session.query(JAMBResult.total_score).filter(JAMBResult.exam_year == year)
     if bid is not None:
@@ -627,22 +633,22 @@ SECTIONS = ['value_added', 'near_credit', 'mock_accuracy', 'bece_to_waec', 'comb
             'teachers', 'fairness', 'attendance', 'cohorts', 'readiness', 'weak_topics']
 
 
-def build(year, bid=None, years=None):
+def build(year, bid=None, years=None, model=None):
     """All sections for ``year`` (each computed defensively: a failure in one
     section is reported, never breaks the page)."""
     import logging
     out, errors = {}, {}
     calls = {
-        'value_added': lambda: value_added(year, bid),
-        'near_credit': lambda: near_credit(year, bid),
-        'mock_accuracy': lambda: mock_accuracy(year, bid),
-        'bece_to_waec': lambda: bece_to_waec(year, bid),
-        'combinations': lambda: combinations(year, bid),
-        'teachers': lambda: teachers(sorted(years or [year])[-4:], bid),
-        'fairness': lambda: fairness(year, bid),
-        'attendance': lambda: attendance_bands(year, bid),
-        'cohorts': lambda: cohorts(bid),
-        'readiness': lambda: readiness_over_time(year, bid),
+        'value_added': lambda: value_added(year, bid, model=model),
+        'near_credit': lambda: near_credit(year, bid, model=model),
+        'mock_accuracy': lambda: mock_accuracy(year, bid, model=model),
+        'bece_to_waec': lambda: bece_to_waec(year, bid, model=model),
+        'combinations': lambda: combinations(year, bid, model=model),
+        'teachers': lambda: teachers(sorted(years or [year])[-4:], bid, model=model),
+        'fairness': lambda: fairness(year, bid, model=model),
+        'attendance': lambda: attendance_bands(year, bid, model=model),
+        'cohorts': lambda: cohorts(bid, model=model),
+        'readiness': lambda: readiness_over_time(year, bid, model=model),
         'weak_topics': lambda: weak_topics(year, bid),
     }
     for k, fn in calls.items():

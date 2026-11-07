@@ -392,7 +392,8 @@ a.exec:hover .go{opacity:1}
 {% if neco_stats %}
 <div id="sec-neco" class="section-title scroll-mt"><span class="tag neco">NECO</span> Performance Overview &mdash; {{ selected_year }}
     <a href="{{ url_for('results.neco_list', year=selected_year) }}" class="btn btn-secondary btn-sm" style="margin-left:auto">NECO dashboard</a>
-    <a href="{{ url_for('results.neco_broadsheet', year=selected_year) }}" class="btn btn-secondary btn-sm">Broadsheet</a></div>
+    <a href="{{ url_for('results.neco_broadsheet', year=selected_year) }}" class="btn btn-secondary btn-sm">Broadsheet</a>
+    <a href="{{ url_for('results.analytics_insights', board='neco', year=selected_year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-microscope"></i> NECO insights</a></div>
 <div class="kpi-grid mb-3">
     <div class="kpi lead"><div class="v">{{ neco_stats.overall_pass_rate }}%</div><div class="l">Pass Rate (credit+)</div></div>
     <div class="kpi"><div class="v">{{ neco_stats.unique_students }}</div><div class="l">Students</div></div>

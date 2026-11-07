@@ -711,10 +711,14 @@ def analytics_insights():
     if exam_student_scope() is not None:      # arm-only staff: no school-wide figures
         flash('Insights cover the whole school, so they need full analytics access.', 'warning')
         return redirect(url_for('results.analytics_hub'))
-    waec_years = sorted({y for (y,) in db.session.query(WAECResult.exam_year).distinct()}, reverse=True)
+    from models import NECOResult
+    board = 'neco' if request.args.get('board') == 'neco' else 'waec'
+    model = NECOResult if board == 'neco' else WAECResult
+    has_neco = db.session.query(NECOResult.id).first() is not None
+    waec_years = sorted({y for (y,) in db.session.query(model.exam_year).distinct()}, reverse=True)
     year = resolve_exam_year(request.args.get('year', type=int), waec_years)
     bid = viewing_branch_id()
-    data = DI.build(year, bid, waec_years) if year else {'errors': {}}
+    data = DI.build(year, bid, waec_years, model=model) if year else {'errors': {}}
     sess = session_for_exam_year(year) if year else None
     try:
         risk = weekly_changes(session_id=sess.id if sess else None, branch_id=bid)
@@ -723,8 +727,10 @@ def analytics_insights():
         current_app.logger.exception('weekly at-risk changes failed')
         risk = None
     return render_template('results/analytics_insights.html', d=data, year=year, years=waec_years,
-                           health=data_health.run(year, bid), risk=risk,
-                           frozen=frozen(year, bid) if year else None)
+                           health=data_health.run(year, bid, model=model), risk=risk,
+                           board=board, board_name='NECO' if board == 'neco' else 'WAEC',
+                           exam_name='NECO SSCE' if board == 'neco' else 'WAEC', has_neco=has_neco,
+                           frozen=frozen(year, bid) if (year and board == 'waec') else None)
 
 
 @results_bp.route('/analytics/insights/freeze', methods=['POST'])
@@ -747,7 +753,7 @@ def analytics_freeze_year():
             flash(f'{year} headline numbers frozen. Year comparisons will use these figures.', 'success')
     except ValueError as e:
         flash(str(e), 'warning')
-    return redirect(url_for('results.analytics_insights', year=year))
+    return redirect(url_for('results.analytics_insights', year=year))  # freezing is WAEC + JAMB headline
 
 
 @results_bp.route('/analytics/by-class')

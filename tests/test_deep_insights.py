@@ -238,3 +238,27 @@ def test_cache_is_dropped_when_results_change(app, seeded):
         db.session.commit()
         db.session.expire_all()
         assert AnalyticsCache.get('exam_hub:waec:%d:all' % YEAR) is None
+
+
+def test_neco_insights(app, seeded):
+    """The same analyses run on NECO results (board switch on the page)."""
+    from models import NECOResult
+    from utils import exam_deep_insights as DI
+    with app.app_context():
+        for sid in seeded['ids']:
+            for subj in ('Mathematics', 'English Language', 'Biology', 'Physics', 'Economics'):
+                db.session.add(NECOResult(student_id=sid, exam_year=YEAR, subject=subj,
+                                          grade='C4' if seeded['ids'].index(sid) < 12 else 'D7'))
+        db.session.commit()
+        nc = DI.near_credit(YEAR, model=NECOResult)
+        assert any(s['subject'] == 'Mathematics' and s['d7'] == 8 for s in nc['subjects'])
+        pts = DI.readiness_over_time(YEAR, model=NECOResult)
+        assert any(p['kind'] == 'NECO' and p['label'] == 'NECO SSCE %d' % YEAR for p in pts)
+        assert DI.value_added(YEAR, model=NECOResult)['enough']
+    c = _admin(app)
+    html = c.get('/results/analytics/insights?board=neco&year=%d' % YEAR).get_data(as_text=True)
+    assert 'Deeper Insights — NECO %d' % YEAR in html and 'BECE (JSS3) → NECO' in html
+    assert 'NECO SSCE %d' % YEAR in html and 'Freeze' not in html      # freezing is WAEC-only
+    assert 'class="on">NECO' in html.replace("class=\"on\"", 'class="on"') or '>NECO</a>' in html
+    hub = c.get('/results/analytics?year=%d' % YEAR).get_data(as_text=True)
+    assert 'NECO insights' in hub
