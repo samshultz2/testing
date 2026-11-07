@@ -341,9 +341,9 @@ def import_students():
         return jsonify({'ok': False, 'error': 'Paste a heading row and at least one student.'}), 400
 
     prev = preview_student_rows(rows)
-    if 'surname' not in prev['recognised'] and 'first_name' not in prev['recognised']:
+    if not {'surname', 'first_name', 'full_name'} & set(prev['recognised']):
         return jsonify({'ok': False, 'error': 'Could not find a name column. '
-                        'Include at least a "Surname" or "First Name" heading.'}), 400
+                        'Include at least a "Surname", "First Name" or "Full Name" heading.'}), 400
 
     commit = request.form.get('commit') in ('1', 'true', 'on', 'yes')
     if not commit:

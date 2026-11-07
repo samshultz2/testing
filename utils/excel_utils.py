@@ -134,7 +134,8 @@ def create_student_import_template():
     headers = [
         'Surname', 'First Name', 'Middle Name', 'Gender', 'Date of Birth',
         'Religion', 'Address', 'Hobbies', 'Name of Primary Contact',
-        'Phone Number', 'Relationship',
+        'Phone Number', 'Relationship', 'Stream', 'NIN',
+        'WAEC Reg Number', 'NECO Reg Number', 'JAMB Reg Number', 'JAMB Profile Code',
     ]
     for col, header in enumerate(headers, 1):
         ws.cell(row=1, column=col, value=header)
@@ -145,7 +146,8 @@ def create_student_import_template():
     example = [
         'EXAMPLE', 'John', 'Oluwaseun', 'Male', '2010-05-15',
         'Christianity', '25 Broad Street, Lagos', 'Football, Reading',
-        'Mrs. Jane Adeyemi', '08012345678', 'Mother',
+        'Mrs. Jane Adeyemi', '08012345678', 'Mother', 'Science', '',
+        '', '', '', '',
     ]
     for col, value in enumerate(example, 1):
         cell = ws.cell(row=2, column=col, value=value)
@@ -158,6 +160,7 @@ def create_student_import_template():
         "Required: Surname, First Name.\n"
         "Gender: Male/Female (optional — blank becomes 'Unknown').\n"
         "Date of Birth: e.g. 2010-05-15 or 15/05/2010.\n"
+        "Stream, NIN and the WAEC / NECO / JAMB numbers are optional.\n"
         "Delete the grey EXAMPLE row (or leave it — it is ignored).",
         "PosyHub")
 
@@ -215,7 +218,102 @@ _HEADER_ALIASES = {
     'father phone': 'father_phone', 'fathers phone': 'father_phone',
     'dad phone': 'father_phone', 'dads phone': 'father_phone',
     'father contact': 'father_phone', 'dad contact': 'father_phone',
+    # One "Full Name" column (Surname First Middle) when a register has no
+    # separate name columns.
+    'full name': 'full_name', 'fullname': 'full_name', 'name': 'full_name', 'student name': 'full_name',
+    # Stream, JAMB target and exam subjects (subjects separated by ; or ,).
+    'stream': 'stream', 'department': 'stream',
+    'jamb target': 'jamb_target', 'target score': 'jamb_target', 'jamb target score': 'jamb_target',
+    'waec subjects': 'waec_subjects', 'jamb subjects': 'jamb_subjects',
+    # External-exam identity numbers.
+    'nin': 'nin', 'nin number': 'nin', 'national identification number': 'nin',
+    'jamb reg number': 'jamb_reg_number', 'jamb reg no': 'jamb_reg_number', 'jamb reg': 'jamb_reg_number',
+    'jamb registration number': 'jamb_reg_number',
+    'jamb profile code': 'jamb_profile_code', 'jamb profile': 'jamb_profile_code', 'profile code': 'jamb_profile_code',
+    'waec reg number': 'waec_reg_number', 'waec reg no': 'waec_reg_number', 'waec reg': 'waec_reg_number',
+    'waec registration number': 'waec_reg_number', 'waec exam number': 'waec_reg_number',
+    'waec examination number': 'waec_reg_number',
+    'waec serial number': 'serial_number', 'waec serial': 'serial_number', 'serial number': 'serial_number',
+    'waec e pin': 'waec_epin', 'waec epin': 'waec_epin', 'waec pin': 'waec_epin',
+    'neco reg number': 'neco_reg_number', 'neco reg no': 'neco_reg_number', 'neco reg': 'neco_reg_number',
+    'neco registration number': 'neco_reg_number', 'neco exam number': 'neco_reg_number',
+    'neco examination number': 'neco_reg_number',
+    'neco token': 'neco_epin', 'neco token e pin': 'neco_epin', 'neco e pin': 'neco_epin',
+    'neco epin': 'neco_epin', 'neco pin': 'neco_epin',
 }
+
+# Exam-identity columns: field -> max length (all String(30) except NIN).
+_EXAM_ID_FIELDS = {'nin': 20, 'jamb_reg_number': 30, 'jamb_profile_code': 30, 'waec_reg_number': 30,
+                   'serial_number': 30, 'waec_epin': 30, 'neco_reg_number': 30, 'neco_epin': 30}
+_STREAMS = {'science': 'Science', 'arts': 'Arts', 'art': 'Arts', 'commercial': 'Commercial',
+            'commerce': 'Commercial'}
+_SUBJECT_CAPS = {'waec_subjects': ('WAEC', 9), 'jamb_subjects': ('JAMB', 4)}
+
+
+def _split_full_name(value):
+    """'OKAFOR Chidi Emeka' → ('OKAFOR', 'Chidi', 'Emeka'). A comma marks the
+    surname explicitly: 'Okafor, Chidi Emeka'."""
+    v = (_cell_str(value) or '').strip()
+    if not v:
+        return None, None, None
+    if ',' in v:
+        sn, rest = v.split(',', 1)
+        parts = [sn.strip()] + rest.split()
+    else:
+        parts = v.split()
+    if len(parts) == 1:
+        return parts[0], None, None
+    return parts[0], parts[1], ' '.join(parts[2:]) or None
+
+
+def _row_names(get):
+    """(surname, first_name, middle_name) from separate columns, falling back
+    to a Full Name column for whatever is missing."""
+    surname, first_name = _cell_str(get('surname')), _cell_str(get('first_name'))
+    middle = _cell_str(get('middle_name'))
+    if not (surname and first_name):
+        fs, ff, fm = _split_full_name(get('full_name'))
+        surname, first_name, middle = surname or fs, first_name or ff, middle or fm
+    return surname, first_name, middle
+
+
+def _extra_student_values(get, notes=None, row_num=0):
+    """Stream, JAMB target, exam subjects and exam numbers from one row, as
+    {Student attribute: value}. Unusable values are left out (with a note)."""
+    out = {}
+    for f, cap in _EXAM_ID_FIELDS.items():
+        v = _cell_str(get(f))
+        if v:
+            out[f] = _cap(v, cap)
+    st = (_cell_str(get('stream')) or '').strip().lower()
+    if st:
+        if st in _STREAMS:
+            out['stream'] = _STREAMS[st]
+        elif notes is not None:
+            notes.append(f"Row {row_num}: stream '{st}' not recognised (Science, Arts or Commercial) — left blank")
+    t = _cell_str(get('jamb_target'))
+    if t:
+        try:
+            n = int(float(t))
+            if 0 <= n <= 400:
+                out['jamb_target'] = n
+            else:
+                raise ValueError
+        except ValueError:
+            if notes is not None:
+                notes.append(f"Row {row_num}: JAMB target '{t}' is not a score from 0 to 400 — left blank")
+    for f, (label, mx) in _SUBJECT_CAPS.items():
+        raw = _cell_str(get(f))
+        if not raw:
+            continue
+        subs = [x.strip() for x in raw.replace(';', ',').replace('|', ',').split(',') if x.strip()]
+        if len(subs) > mx:
+            if notes is not None:
+                notes.append(f"Row {row_num}: more than {mx} {label} subjects — only the first {mx} kept")
+            subs = subs[:mx]
+        if subs:
+            out[f] = ', '.join(subs)
+    return out
 
 # First-column values that mark a non-data row (instruction/sample artefacts from
 # older templates) and should be skipped rather than imported.
@@ -488,8 +586,7 @@ def preview_student_rows(rows):
 
     out, valid = [], 0
     for row_num, row in enumerate(rows[1:], start=2):
-        surname = col(row, 'surname')
-        first_name = col(row, 'first_name')
+        surname, first_name, _middle = _row_names(lambda f: col(row, f))
         if not surname and not first_name:
             continue   # blank line — not shown, not counted
         if surname and surname.lower() in _SKIP_FIRST_CELL:
@@ -521,7 +618,8 @@ def preview_student_rows(rows):
                                 'phone_number': ', '.join(_split_phones(col(row, 'parent_phone'))) or None,
                                 'mother_phone': ', '.join(_split_phones(col(row, 'mother_phone'))) or None,
                                 'father_phone': ', '.join(_split_phones(col(row, 'father_phone'))) or None,
-                                'address': col(row, 'address')}})
+                                'address': col(row, 'address'),
+                                **_extra_student_values(lambda f: col(row, f))}})
     return {'recognised': sorted(colmap.keys()), 'ignored': ignored,
             'total': len(out), 'valid': valid, 'invalid': len(out) - valid,
             'rows': out}
@@ -633,7 +731,7 @@ def import_student_rows(rows, db, Student, ParentContact,
         if field and field not in colmap:
             colmap[field] = idx
 
-    if 'surname' not in colmap and 'first_name' not in colmap:
+    if 'surname' not in colmap and 'first_name' not in colmap and 'full_name' not in colmap:
         return 0, [
             "Couldn't find a name column. Row 1 must include at least a "
             "'Surname' or 'First Name' column. Found: "
@@ -667,8 +765,7 @@ def import_student_rows(rows, db, Student, ParentContact,
     invalid_phones = 0
 
     for row_num, row in enumerate(rows[1:], start=2):
-        surname = _cell_str(get(row, 'surname'))
-        first_name = _cell_str(get(row, 'first_name'))
+        surname, first_name, middle_name = _row_names(lambda f: get(row, f))
 
         # Skip blank rows and leftover instruction/sample rows.
         if not surname and not first_name:
@@ -712,7 +809,7 @@ def import_student_rows(rows, db, Student, ParentContact,
                     student_id=Student.generate_student_id(branch_id),
                     surname=_cap(surname, 50),
                     first_name=_cap(first_name, 50),
-                    middle_name=_cap(_cell_str(get(row, 'middle_name')), 50),
+                    middle_name=_cap(middle_name, 50),
                     gender=_cap(gender, 10),
                     date_of_birth=dob,
                     religion=_cap(_cell_str(get(row, 'religion')), 30),
@@ -720,6 +817,7 @@ def import_student_rows(rows, db, Student, ParentContact,
                     hobbies=_cell_str(get(row, 'hobbies')),         # TEXT — unbounded
                     branch_id=branch_id,
                     is_active=True,
+                    **_extra_student_values(lambda f: get(row, f), errors, row_num),
                 )
                 db.session.add(student)
                 db.session.flush()  # assign student.id
@@ -778,13 +876,18 @@ _UPDATE_FIELD_LABELS = {
     'surname': 'Surname', 'first_name': 'First name', 'middle_name': 'Middle name',
     'gender': 'Gender', 'dob': 'Date of birth', 'religion': 'Religion',
     'address': 'Home address', 'hobbies': 'Hobbies',
+    'nin': 'NIN', 'jamb_reg_number': 'JAMB reg number', 'jamb_profile_code': 'JAMB profile code',
+    'waec_reg_number': 'WAEC reg number', 'serial_number': 'WAEC serial number', 'waec_epin': 'WAEC e-PIN',
+    'neco_reg_number': 'NECO reg number', 'neco_epin': 'NECO token / e-PIN',
 }
 _UPDATE_STUDENT_ATTR = {
     'surname': 'surname', 'first_name': 'first_name', 'middle_name': 'middle_name',
     'gender': 'gender', 'dob': 'date_of_birth', 'religion': 'religion',
     'address': 'home_address', 'hobbies': 'hobbies',
+    **{f: f for f in _EXAM_ID_FIELDS},
 }
-_UPDATE_FIELD_CAP = {'surname': 50, 'first_name': 50, 'middle_name': 50, 'gender': 10, 'religion': 30}
+_UPDATE_FIELD_CAP = {'surname': 50, 'first_name': 50, 'middle_name': 50, 'gender': 10, 'religion': 30,
+                     **_EXAM_ID_FIELDS}
 
 
 def _index_roster(roster):

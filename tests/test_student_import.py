@@ -165,3 +165,54 @@ def test_empty_text_rejected(app):
     client = _admin(app)
     assert _post(client, text='   ').status_code == 400
     assert _post(client, text='Surname, First Name').status_code == 400  # header only
+
+
+def test_import_exam_numbers_stream_target_and_subjects(app):
+    client = _admin(app)
+    text = ('Surname, First Name, Stream, JAMB Target, WAEC Subjects, JAMB Subjects, NIN, '
+            'WAEC Reg Number, WAEC Serial Number, WAEC e-PIN, NECO Reg Number, NECO Token, '
+            'JAMB Reg Number, JAMB Profile Code\n'
+            'Zzexam, Necoimp, science, 260, English Language; Mathematics; Biology, '
+            'Use of English; Biology; Chemistry; Physics, 12345678901, '
+            'W111, S222, P333, N444, T555, J666, PC777\n'
+            'Zzexam, Badvals, Engineering, 999, , , , , , , , , ,')
+    pre = _post(client, text=text).get_json()
+    assert pre['ok'] and pre['ignored'] == []
+    for f in ('neco_reg_number', 'neco_epin', 'waec_reg_number', 'stream', 'jamb_target', 'waec_subjects'):
+        assert f in pre['recognised'], f
+    assert pre['rows'][0]['details']['neco_reg_number'] == 'N444'
+    res = _post(client, text=text, commit='1').get_json()
+    assert res['ok'] and res['created'] == 2
+    assert any('stream' in m and 'Engineering'.lower() in m for m in res['messages'])
+    assert any('JAMB target' in m for m in res['messages'])
+    with app.app_context():
+        s = Student.query.filter_by(surname='Zzexam', first_name='Necoimp').first()
+        assert (s.neco_reg_number, s.neco_epin) == ('N444', 'T555')
+        assert (s.waec_reg_number, s.serial_number, s.waec_epin) == ('W111', 'S222', 'P333')
+        assert (s.jamb_reg_number, s.jamb_profile_code, s.nin) == ('J666', 'PC777', '12345678901')
+        assert s.stream == 'Science' and s.jamb_target == 260
+        assert s.waec_subjects == 'English Language, Mathematics, Biology'
+        assert s.jamb_subjects == 'Use of English, Biology, Chemistry, Physics'
+        bad = Student.query.filter_by(surname='Zzexam', first_name='Badvals').first()
+        assert bad.stream is None and bad.jamb_target is None
+
+
+def test_import_full_name_column(app):
+    client = _admin(app)
+    text = 'Full Name, Gender\nZZFULL Ngozi Adaeze, Female\n"Zzcomma, Emeka", Male'
+    res = _post(client, text=text, commit='1').get_json()
+    assert res['ok'] and res['created'] == 2
+    with app.app_context():
+        a = Student.query.filter_by(surname='ZZFULL').first()
+        assert (a.first_name, a.middle_name) == ('Ngozi', 'Adaeze')
+        b = Student.query.filter_by(surname='Zzcomma').first()
+        assert b.first_name == 'Emeka'
+
+
+def test_excel_template_has_exam_number_columns():
+    from openpyxl import load_workbook
+    from utils.excel_utils import create_student_import_template
+    ws = load_workbook(create_student_import_template()).active
+    heads = [c.value for c in ws[1]]
+    for h in ('NECO Reg Number', 'WAEC Reg Number', 'JAMB Reg Number', 'NIN', 'Stream'):
+        assert h in heads

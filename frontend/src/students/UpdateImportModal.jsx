@@ -11,7 +11,7 @@ const AI_PROMPT = `Read this class list / register. Output the rows to UPDATE as
 - Only include a column for something that actually needs to change — leave a cell BLANK to leave that field as it already is. Never guess a value just to fill a cell.
 - To identify each student, include "Student ID" if the sheet shows one, and/or Surname + First Name (matched within the class/arm chosen in the app).
 - For parent contacts, use "Father Phone"/"Father Name" and "Mother Phone"/"Mother Name" as separate columns when both are known — each phone number must be exactly 11 digits (Nigerian mobile format, e.g. 08011112222).
-- Use ONLY these headings, and only for columns that actually appear/need changing: Student ID, Surname, First Name, Middle Name, Gender, Date of Birth, Religion, Home Address, Hobbies, Father Name, Father Phone, Mother Name, Mother Phone.
+- Use ONLY these headings, and only for columns that actually appear/need changing: Student ID, Surname, First Name, Middle Name, Gender, Date of Birth, Religion, Home Address, Hobbies, Father Name, Father Phone, Mother Name, Mother Phone, NIN, WAEC Reg Number, WAEC Serial Number, WAEC e-PIN, NECO Reg Number, NECO Token, JAMB Reg Number, JAMB Profile Code.
 - One student per line. No numbering, no totals, no extra text, no code block.
 
 Example:
@@ -131,7 +131,10 @@ export default function UpdateImportModal({ updateImportUrl, filters, onClose, o
             <p className="text-xs text-muted" style={{ marginTop: '0.4rem' }}>
               Student ID · Surname · First Name · Middle Name · Gender · Date of Birth (DOB) · Religion ·
               Home Address · Hobbies · Father Name · Father Phone · Mother Name · Mother Phone ·
-              Parent Name · Parent Phone · Relationship. Headings are matched loosely (case/spacing don't matter).
+              Parent Name · Parent Phone · Relationship.
+              <br /><strong>Exam numbers:</strong> NIN · WAEC Reg Number · WAEC Serial Number · WAEC e-PIN ·
+              NECO Reg Number · NECO Token · JAMB Reg Number · JAMB Profile Code.
+              Headings are matched loosely (case/spacing don't matter).
             </p>
           </details>
           <div className="d-flex gap-2 mt-3" style={{ justifyContent: 'flex-end' }}>

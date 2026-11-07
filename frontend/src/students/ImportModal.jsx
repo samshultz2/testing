@@ -10,6 +10,12 @@ const FIELD_LABELS = {
   stream: 'Stream', jamb_target: 'JAMB target', student_id: 'Student ID',
   waec_subjects: 'WAEC subjects', jamb_subjects: 'JAMB subjects',
   phone_number: 'Parent phone', contact_name: 'Parent name', relationship: 'Relationship',
+  dob: 'Date of birth', address: 'Home address', parent_phone: 'Parent phone', parent_name: 'Parent name',
+  parent_rel: 'Relationship', mother_name: 'Mother name', mother_phone: 'Mother phone',
+  father_name: 'Father name', father_phone: 'Father phone',
+  nin: 'NIN', jamb_reg_number: 'JAMB reg.', jamb_profile_code: 'JAMB profile code',
+  waec_reg_number: 'WAEC reg.', serial_number: 'WAEC serial', waec_epin: 'WAEC e-PIN',
+  neco_reg_number: 'NECO reg.', neco_epin: 'NECO token',
 };
 
 const SAMPLE = 'Surname, First Name, Gender\nOkafor, Chidi, Male\nBello, Aisha, Female';
@@ -19,8 +25,8 @@ const SAMPLE = 'Surname, First Name, Gender\nOkafor, Chidi, Male\nBello, Aisha, 
 // parses — then they paste the answer straight into the box below.
 const AI_PROMPT = `Read this class list / admission register. Output the students as comma-separated values (CSV):
 - First line = the column headings, then one line per student.
-- Use ONLY these headings, and only for columns that actually appear in the source: Surname, First Name, Middle Name, Gender, Date of Birth, Religion, Home Address, Hobbies, Stream, JAMB Target, Student ID, WAEC Subjects, JAMB Subjects, Parent Phone, Parent Name, Relationship.
-- Dates as YYYY-MM-DD. Gender as Male or Female. WAEC/JAMB subjects separated by semicolons.
+- Use ONLY these headings, and only for columns that actually appear in the source: Surname, First Name, Middle Name, Gender, Date of Birth, Religion, Home Address, Hobbies, Stream, JAMB Target, WAEC Subjects, JAMB Subjects, NIN, WAEC Reg Number, NECO Reg Number, JAMB Reg Number, JAMB Profile Code, Parent Phone, Parent Name, Relationship.
+- Dates as YYYY-MM-DD. Gender as Male or Female. Stream as Science, Arts or Commercial. WAEC/JAMB subjects separated by semicolons.
 - One student per line. No numbering, no totals, no extra text, no code block.
 
 Example:
@@ -126,8 +132,11 @@ export default function ImportModal({ importUrl, enrolment, onClose, onDone }) {
                 <summary className="text-sm text-muted" style={{ cursor: 'pointer' }}>Recognised headings</summary>
                 <p className="text-xs text-muted" style={{ marginTop: '0.4rem' }}>
                   Surname · First Name · Middle Name · Full Name · Gender · Date of Birth (DOB) · Religion ·
-                  Home Address · Hobbies · Stream · JAMB Target · Student ID · WAEC Subjects · JAMB Subjects ·
-                  Parent Phone · Parent Name · Relationship. Headings are matched loosely (case/spacing don't matter).
+                  Home Address · Hobbies · Stream · JAMB Target · WAEC Subjects · JAMB Subjects ·
+                  Parent Phone · Parent Name · Relationship · Father Name / Phone · Mother Name / Phone.
+                  <br /><strong>Exam numbers:</strong> NIN · WAEC Reg Number · WAEC Serial Number · WAEC e-PIN ·
+                  NECO Reg Number · NECO Token · JAMB Reg Number · JAMB Profile Code.
+                  Headings are matched loosely (case/spacing don't matter).
                 </p>
               </details>
               <div className="d-flex gap-2 mt-3" style={{ justifyContent: 'flex-end' }}>
@@ -205,5 +214,9 @@ function summarise(r) {
   if (a.date_of_birth) bits.push(`DOB ${a.date_of_birth}`);
   if (a.phone_number) bits.push(`☎ ${a.phone_number}`);
   if (a.address) bits.push(a.address);
+  if (a.stream) bits.push(a.stream);
+  if (a.jamb_target) bits.push(`JAMB target ${a.jamb_target}`);
+  [['nin', 'NIN'], ['waec_reg_number', 'WAEC'], ['neco_reg_number', 'NECO'], ['jamb_reg_number', 'JAMB']]
+    .forEach(([k, l]) => { if (a[k]) bits.push(`${l} ${a[k]}`); });
   return bits.join(' · ') || '—';
 }

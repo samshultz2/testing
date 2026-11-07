@@ -280,3 +280,17 @@ def test_arm_scoping_excludes_students_in_other_arms_of_same_class(app):
     with app.app_context():
         assert Student.query.get(s1_id).religion == 'Islam'
         assert Student.query.get(s2_id).religion is None
+
+
+def test_update_sets_neco_and_other_exam_numbers(app):
+    class_id, arm_id, codes = _setup_class_arm(app, 'NECO', [('ZzNeco', 'ZzUpd')])
+    client = _admin(app)
+    text = 'Surname, First Name, NECO Reg Number, NECO Token, WAEC Reg Number\nZzNeco, ZzUpd, N-1, T-2, W-3'
+    pre = _post(client, text=text, class_id=class_id, arm_id=arm_id).get_json()
+    labels = {c['label'] for c in pre['rows'][0]['changes']}
+    assert {'NECO reg number', 'NECO token / e-PIN', 'WAEC reg number'} <= labels
+    res = _post(client, text=text, class_id=class_id, arm_id=arm_id, commit='1').get_json()
+    assert res['ok'] and res['updated'] == 1
+    with app.app_context():
+        s = Student.query.get(codes[0][0])
+        assert (s.neco_reg_number, s.neco_epin, s.waec_reg_number) == ('N-1', 'T-2', 'W-3')
