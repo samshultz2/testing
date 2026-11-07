@@ -91,6 +91,11 @@
     overflow: hidden;
 }
 
+.wx-muted{color:var(--text-muted)}
+.wx-up{color:#16a34a;font-weight:600;white-space:nowrap}
+.wx-down{color:#dc2626;font-weight:600;white-space:nowrap}
+.subject-table tfoot .wx-total td{font-weight:700;background:var(--gray-50);border-top:2px solid var(--border-color)}
+.sort-btns{flex-wrap:wrap}
 .card-header {
     padding: 0.75rem;
     border-bottom: 1px solid #eee;
@@ -567,6 +572,35 @@
     </div>
 </div>
 
+<!-- Best overall -->
+{% if best_overall %}
+<div class="card">
+    <div class="card-header">
+        <h3 class="card-title">Best Overall</h3>
+        <span class="wx-muted" style="font-size:.8rem">Most distinctions (A1–B3), then credits, then average points</span>
+    </div>
+    <div class="card-body" style="padding: 0; overflow-x: auto;">
+        <table class="subject-table">
+            <thead><tr><th>#</th><th style="text-align:left">Student</th><th>A1</th><th>Dist.</th><th>Credits</th><th>Avg pts</th><th>Grades</th><th></th></tr></thead>
+            <tbody>
+            {% for s in best_overall %}
+                <tr>
+                    <td><span class="top-rank {% if loop.index == 1 %}gold{% elif loop.index == 2 %}silver{% elif loop.index == 3 %}bronze{% endif %}">{{ loop.index }}</span></td>
+                    <td style="text-align:left"><strong>{{ s.name }}</strong><br><small style="color:#666">{{ s.student_id }}</small></td>
+                    <td><span class="grade-badge grade-a1">{{ s.a1_count }}</span></td>
+                    <td><strong>{{ s.distinction_count }}</strong></td>
+                    <td>{{ s.credit_count }}</td>
+                    <td>{{ s.avg_points }}</td>
+                    <td style="text-align:left;white-space:nowrap">{% for r in s.results %}<span class="grade-badge grade-{{ r.grade|lower }}" title="{{ r.subject }}">{{ r.grade }}</span>{% endfor %}</td>
+                    <td><a href="{{ burl('results.view_waec_student', student_id=s.id) }}" class="btn btn-secondary btn-sm" aria-label="View {{ s.name }}"><i class="fas fa-eye"></i></a></td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
 <!-- Subjects by Grade -->
 <div class="card">
     <div class="card-header">
@@ -576,6 +610,8 @@
             <a href="{{ burl('results.waec_list', year=selected_year, view='top', sort='subject_b2', order='desc', search=search) }}" class="sort-btn {% if sort_by == 'subject_b2' %}active{% endif %}">B2</a>
             <a href="{{ burl('results.waec_list', year=selected_year, view='top', sort='subject_credits', order='desc', search=search) }}" class="sort-btn {% if sort_by == 'subject_credits' %}active{% endif %}">Credits</a>
             <a href="{{ burl('results.waec_list', year=selected_year, view='top', sort='subject_pass', order='desc', search=search) }}" class="sort-btn {% if sort_by == 'subject_pass' %}active{% endif %}">Pass%</a>
+            <a href="{{ burl('results.waec_list', year=selected_year, view='top', sort='subject_entries', order='desc', search=search) }}" class="sort-btn {% if sort_by == 'subject_entries' %}active{% endif %}">Entries</a>
+            <a href="{{ burl('results.waec_list', year=selected_year, view='top', sort='subject_name', order='asc', search=search) }}" class="sort-btn {% if sort_by == 'subject_name' %}active{% endif %}">Name</a>
         </div>
     </div>
     <div class="card-body" style="padding: 0; overflow-x: auto;">
@@ -608,6 +644,15 @@
                 </tr>
                 {% endfor %}
             </tbody>
+            {% if subject_totals %}{% set t = subject_totals.grades %}
+            <tfoot>
+                <tr class="wx-total">
+                    <td>All subjects</td><td>{{ t.A1 }}</td><td>{{ t.B2 }}</td><td>{{ t.B3 }}</td>
+                    <td>{{ t.C4 + t.C5 + t.C6 }}</td><td>{{ t.D7 + t.E8 + t.F9 }}</td>
+                    <td>{{ subject_totals.total }}</td><td>{{ subject_totals.pass_rate }}%</td>
+                </tr>
+            </tfoot>
+            {% endif %}
         </table>
     </div>
 </div>
@@ -633,8 +678,9 @@
     <div class="card-header">
         <h3 class="card-title">Subject Analysis</h3>
         <div class="sort-btns">
-            <a href="{{ burl('results.waec_list', year=selected_year, view='subjects', sort='subject_a1', order='desc', search=search) }}" class="sort-btn {% if sort_by == 'subject_a1' %}active{% endif %}">By A1</a>
-            <a href="{{ burl('results.waec_list', year=selected_year, view='subjects', sort='subject_pass', order='desc', search=search) }}" class="sort-btn {% if sort_by == 'subject_pass' %}active{% endif %}">By Pass%</a>
+            {% for key, lab, ord in [('subject_pass', 'Pass %', 'desc'), ('subject_a1', 'Most A1', 'desc'), ('subject_b2', 'Most B2', 'desc'), ('subject_points', 'Avg pts', 'desc'), ('subject_change', 'Change', 'desc'), ('subject_entries', 'Entries', 'desc'), ('subject_name', 'Name A–Z', 'asc')] %}
+            <a href="{{ burl('results.waec_list', year=selected_year, view='subjects', sort=key, order=ord, search=search) }}" class="sort-btn {% if sort_by == key or (key == 'subject_a1' and sort_by not in ['subject_pass','subject_b2','subject_points','subject_change','subject_entries','subject_name','subject_credits']) %}active{% endif %}">{{ lab }}</a>
+            {% endfor %}
         </div>
     </div>
     <div class="card-body" style="padding: 0; overflow-x: auto;">
@@ -651,7 +697,10 @@
                     <th>D7</th>
                     <th>E8</th>
                     <th>F9</th>
+                    <th>Entries</th>
                     <th>Pass%</th>
+                    <th title="Average grade points, A1 = 9 … F9 = 1">Avg pts</th>
+                    <th title="Change in pass % since {{ prev_year or 'last year' }}">vs {{ prev_year or 'last yr' }}</th>
                 </tr>
             </thead>
             <tbody>
@@ -662,12 +711,27 @@
                     {% for g in grades %}
                     <td><span class="grade-badge grade-{{ g|lower }}">{{ subj.grades[g] }}</span></td>
                     {% endfor %}
+                    <td><strong>{{ subj.total }}</strong></td>
                     <td style="color: {% if subj.pass_rate >= 70 %}#28a745{% elif subj.pass_rate >= 50 %}#ffc107{% else %}#dc3545{% endif %}">
                         <strong>{{ subj.pass_rate }}%</strong>
                     </td>
+                    <td>{{ subj.avg_points }}</td>
+                    <td>{% if subj.delta is none %}<span class="wx-muted">—</span>{% elif subj.delta > 0 %}<span class="wx-up"><i class="fas fa-arrow-up"></i> {{ subj.delta }}</span>{% elif subj.delta < 0 %}<span class="wx-down"><i class="fas fa-arrow-down"></i> {{ subj.delta|abs }}</span>{% else %}<span class="wx-muted">0</span>{% endif %}</td>
                 </tr>
                 {% endfor %}
             </tbody>
+            {% if subject_totals %}
+            <tfoot>
+                <tr class="wx-total">
+                    <td>All subjects</td>
+                    {% for g in grades %}<td>{{ subject_totals.grades[g] }}</td>{% endfor %}
+                    <td>{{ subject_totals.total }}</td>
+                    <td>{{ subject_totals.pass_rate }}%</td>
+                    <td>{{ subject_totals.avg_points }}</td>
+                    <td></td>
+                </tr>
+            </tfoot>
+            {% endif %}
         </table>
     </div>
 </div>

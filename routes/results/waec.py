@@ -30,6 +30,19 @@ def waec_sort_key(sort_by, order=None):
     return sort_by if sort_by in WAEC_SORTS else 'name'
 
 
+def _subject_totals(rows):
+    """The "All subjects" footer row of the subject tables."""
+    if not rows:
+        return None
+    grades = {g: sum(r['grades'].get(g, 0) for r in rows) for g in WAEC_GRADES}
+    total = sum(grades.values())
+    credit = sum(grades[g] for g in ('A1', 'B2', 'B3', 'C4', 'C5', 'C6'))
+    pts = sum(r['avg_points'] * r['total'] for r in rows)
+    return {'grades': grades, 'total': total,
+            'pass_rate': round(credit / total * 100, 1) if total else 0,
+            'avg_points': round(pts / total, 2) if total else 0}
+
+
 @results_bp.route('/waec')
 @login_required
 def waec_list():
@@ -58,6 +71,7 @@ def waec_list():
     grade_distribution = {g: 0 for g in WAEC_GRADES}
     top_by_grade = {g: [] for g in WAEC_GRADES}
     subjects_by_grade = []
+    prev_year = None
 
     # An SSS3 arm teacher with only derived access sees their own arm's students;
     # school-wide aggregates are suppressed so no cross-arm numbers leak.
@@ -83,11 +97,25 @@ def waec_list():
         for r in all_results:
             subject_grade_counts[r.subject][r.grade] += 1
         
+        # Last year's credit rate per subject (same scope), for "vs last year".
+        prev_year = next((y for y in years if y < exam_year), None)
+        prev_rate = {}
+        if prev_year and scope_ids is None:
+            pg = defaultdict(lambda: [0, 0])
+            for r in scope_by_student(WAECResult.query.filter_by(exam_year=prev_year), WAECResult).all():
+                pg[r.subject][0] += 1
+                pg[r.subject][1] += r.grade in ('A1', 'B2', 'B3', 'C4', 'C5', 'C6')
+            prev_rate = {k: round(v[1] / v[0] * 100, 1) for k, v in pg.items() if v[0]}
+
         # Convert to list for template
         subjects_by_grade = []
         for subject, grades in subject_grade_counts.items():
             total = sum(grades.values())
+            pts = sum(WAECResult.grade_to_average_points(g) * n for g, n in grades.items())
+            credit_rate = round(sum(grades.get(g, 0) for g in ['A1', 'B2', 'B3', 'C4', 'C5', 'C6']) / total * 100, 1) if total > 0 else 0
             subjects_by_grade.append({
+                'avg_points': round(pts / total, 2) if total else 0,
+                'delta': (round(credit_rate - prev_rate[subject], 1) if subject in prev_rate else None),
                 'subject': subject,
                 'grades': grades,
                 'total': total,
@@ -107,6 +135,14 @@ def waec_list():
             subjects_by_grade.sort(key=lambda x: x['credit_count'], reverse=(sort_order == 'desc'))
         elif sort_by == 'subject_pass':
             subjects_by_grade.sort(key=lambda x: x['pass_rate'], reverse=(sort_order == 'desc'))
+        elif sort_by == 'subject_points':
+            subjects_by_grade.sort(key=lambda x: (x['avg_points'], x['pass_rate']), reverse=(sort_order == 'desc'))
+        elif sort_by == 'subject_entries':
+            subjects_by_grade.sort(key=lambda x: (x['total'], x['subject']), reverse=(sort_order == 'desc'))
+        elif sort_by == 'subject_change':
+            subjects_by_grade.sort(key=lambda x: (x['delta'] is not None, x['delta'] or 0), reverse=(sort_order == 'desc'))
+        elif sort_by == 'subject_name':
+            subjects_by_grade.sort(key=lambda x: x['subject'].lower())
         else:
             subjects_by_grade.sort(key=lambda x: x['a1_count'], reverse=True)
         
@@ -245,6 +281,9 @@ def waec_list():
         grade_distribution=grade_distribution,
         top_by_grade=top_by_grade,
         subjects_by_grade=subjects_by_grade,
+        subject_totals=_subject_totals(subjects_by_grade),
+        best_overall=sorted(students_data, key=WAEC_SORTS['distinctions'][1])[:10],
+        prev_year=prev_year,
         yoy_data=yoy_data
     )
 

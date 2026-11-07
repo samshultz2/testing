@@ -218,3 +218,28 @@ def test_exam_analytics_overview_includes_neco_and_waec_vs_neco(app):
     _seed(app, other, WAECResult, 2037, {'Mathematics': 'A1'})
     html = c.get('/results/analytics?year=2037').get_data(as_text=True)
     assert 'id="sec-neco"' not in html and 'id="sec-waec-neco"' not in html
+
+
+def test_waec_and_neco_subject_extras_and_best_overall(app):
+    """Subjects view: entries, average points, change vs last year, totals row
+    and more sort options; Top performers: Best overall — on WAEC and NECO."""
+    star = _student(app, 'Extrastar', 'Ola')
+    weak = _student(app, 'Extraweak', 'Tobi')
+    for model in (WAECResult, NECOResult):
+        _seed(app, star, model, 2040, {'Mathematics': 'C6', 'Physics': 'A1'})
+        _seed(app, weak, model, 2040, {'Mathematics': 'F9', 'Physics': 'B3'})
+        _seed(app, star, model, 2041, {'Mathematics': 'A1', 'Physics': 'A1'})
+        _seed(app, weak, model, 2041, {'Mathematics': 'C5', 'Physics': 'F9'})
+    c = _admin(app)
+    for board in ('waec', 'neco'):
+        html = c.get(f'/results/{board}?year=2041&view=subjects&sort=subject_name&order=asc').get_data(as_text=True)
+        assert 'All subjects' in html and 'Avg pts' in html and 'vs 2040' in html
+        assert 'Entries' in html and 'Name A–Z' in html
+        table = html[html.index('<table class="subject-table">'):]
+        maths = table[table.index('Mathematics'):]
+        assert 'fa-arrow-up' in maths[:2500]            # Maths 50% → 100%: up 50
+        assert table.index('Mathematics') < table.index('Physics')   # sorted by name
+        html = c.get(f'/results/{board}?year=2041&view=top').get_data(as_text=True)
+        assert 'Best Overall' in html
+        best = html[html.index('Best Overall'):]
+        assert best.index('Extrastar Ola') < best.index('Extraweak Tobi')
