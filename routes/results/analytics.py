@@ -711,25 +711,28 @@ def analytics_insights():
     if exam_student_scope() is not None:      # arm-only staff: no school-wide figures
         flash('Insights cover the whole school, so they need full analytics access.', 'warning')
         return redirect(url_for('results.analytics_hub'))
-    from models import NECOResult
-    board = 'neco' if request.args.get('board') == 'neco' else 'waec'
-    model = NECOResult if board == 'neco' else WAECResult
-    has_neco = db.session.query(NECOResult.id).first() is not None
-    waec_years = sorted({y for (y,) in db.session.query(model.exam_year).distinct()}, reverse=True)
+    from utils import insight_exams as IE
+    choices = IE.choices()
+    board = request.args.get('board') or 'waec'
+    if board not in {k for k, _l in choices}:
+        board = 'waec'
+    model = IE.get(board)                       # the exam being analysed (its own grading)
+    waec_years = model.years()
     year = resolve_exam_year(request.args.get('year', type=int), waec_years)
     bid = viewing_branch_id()
     data = DI.build(year, bid, waec_years, model=model) if year else {'errors': {}}
     sess = session_for_exam_year(year) if year else None
-    try:
-        risk = weekly_changes(session_id=sess.id if sess else None, branch_id=bid)
-    except Exception:
-        db.session.rollback()
-        current_app.logger.exception('weekly at-risk changes failed')
-        risk = None
+    risk = None
+    if model.has_mocks:                          # the at-risk list is the SSS3 (mock-based) one
+        try:
+            risk = weekly_changes(session_id=sess.id if sess else None, branch_id=bid)
+        except Exception:
+            db.session.rollback()
+            current_app.logger.exception('weekly at-risk changes failed')
     return render_template('results/analytics_insights.html', d=data, year=year, years=waec_years,
                            health=data_health.run(year, bid, model=model), risk=risk,
-                           board=board, board_name='NECO' if board == 'neco' else 'WAEC',
-                           exam_name='NECO SSCE' if board == 'neco' else 'WAEC', has_neco=has_neco,
+                           board=board, board_name=model.name, exam_name=model.exam_name, exam=model,
+                           choices=choices, has_neco=len(choices) > 1,
                            frozen=frozen(year, bid) if (year and board == 'waec') else None)
 
 

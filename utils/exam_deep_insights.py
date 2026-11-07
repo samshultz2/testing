@@ -39,22 +39,20 @@ from utils.stats_guard import (rate, gap_verdict, correlation_ci, confidence,
 # --------------------------------------------------------------------------- #
 # Shared loaders
 # --------------------------------------------------------------------------- #
+def _X(model):
+    """The exam being analysed (utils.insight_exams.Exam). ``model`` may be an
+    Exam, a WAEC/NECO result model, or None (= WAEC)."""
+    from utils import insight_exams as IE
+    if isinstance(model, IE.Exam):
+        return model
+    if model is not None and getattr(model, '__tablename__', '') == 'neco_results':
+        return IE.neco()
+    return IE.waec()
+
+
 def waec_by_student(year, bid=None, model=None):
-    """{student_id: {canonical subject: grade}} for one WAEC (or NECO) year."""
-    from models import WAECResult
-    model = model or WAECResult
-    q = db.session.query(model.student_id, model.subject, model.grade).filter(model.exam_year == year)
-    if bid is not None:
-        q = q.join(Student, Student.id == model.student_id).filter(Student.branch_id == bid)
-    out = defaultdict(dict)
-    for sid, subj, grade in q.all():
-        if grade:
-            out[sid][R.canonical_subject(subj)] = R.norm_grade(grade)
-    return dict(out)
-
-
-def _is_neco(model):
-    return model is not None and getattr(model, '__tablename__', '') == 'neco_results'
+    """{student_id: {subject: grade}} for one year of the exam (WAEC by default)."""
+    return _X(model).by_student(year, bid)
 
 
 def _session_terms(year):
@@ -92,14 +90,15 @@ def _fit(xs, ys):
     return my - b * mx, b
 
 
-def _meets_map(waec):
-    return {sid: R.five_credit_status(g) for sid, g in waec.items()}
+def _meets_map(waec, X=None):
+    X = X or _X(None)
+    return {sid: X.status(g) for sid, g in waec.items()}
 
 
 # --------------------------------------------------------------------------- #
 # 1. Value added (internal SSS3 scores → expected WAEC grade)
 # --------------------------------------------------------------------------- #
-def internal_scores(year, student_ids):
+def internal_scores(year, student_ids, X=None):
     """{(student_id, canonical subject): (score %, teacher)} — each student's
     latest SSS3-session term result per subject."""
     from models import TermResult, ClassSubject, Subject
@@ -116,19 +115,20 @@ def internal_scores(year, student_ids):
             .order_by(TermResult.term_id).all())
     out = {}
     for sid, _tid, score, subj, teacher in rows:
-        out[(sid, R.canonical_subject(subj))] = (float(score), (teacher or '').strip())
+        out[(sid, (X or _X(None)).canon(subj))] = (float(score), (teacher or '').strip())
     return out
 
 
 def value_added(year, bid=None, model=None):
-    waec = waec_by_student(year, bid, model)
-    internal = internal_scores(year, set(waec))
+    X = _X(model)
+    waec = X.by_student(year, bid)
+    internal = internal_scores(year, set(waec), X)
     pairs = []
     for (sid, subj), (score, teacher) in internal.items():
         g = waec.get(sid, {}).get(subj)
         if g:
             pairs.append({'sid': sid, 'subject': subj, 'teacher': teacher or 'Unassigned',
-                          'internal': score, 'actual': R.points(g), 'credit': R.is_credit(g)})
+                          'internal': score, 'actual': X.points(g), 'credit': X.is_credit(g)})
     out = {'n': len(pairs), 'subjects': [], 'teachers': [], 'r': None, 'ci': None,
            'enough': len(pairs) >= MIN_CORRELATION_N}
     if not out['enough']:
@@ -142,7 +142,7 @@ def value_added(year, bid=None, model=None):
         return out
     a, b = fit
     for p in pairs:
-        p['expected'] = max(1.0, min(9.0, a + b * p['internal']))
+        p['expected'] = max(1.0, min(float(X.max_points), a + b * p['internal']))
         p['va'] = p['actual'] - p['expected']
 
     def roll(key):
@@ -173,9 +173,12 @@ def value_added(year, bid=None, model=None):
 # --------------------------------------------------------------------------- #
 def mock_accuracy(year, bid=None, model=None):
     from models.mock_waec import MockWAECExam, MockWAECResult
+    X = _X(model)
+    out = {'exam': None, 'subjects': [], 'n': 0, 'applies': X.has_mocks}
+    if not X.has_mocks:
+        return out
     sess, _terms = _session_terms(year)
-    waec = waec_by_student(year, bid, model)
-    out = {'exam': None, 'subjects': [], 'n': 0}
+    waec = X.by_student(year, bid)
     if not sess or not waec:
         return out
     exams = (MockWAECExam.query.filter_by(session_id=sess.id)
@@ -194,10 +197,10 @@ def mock_accuracy(year, bid=None, model=None):
                                          MockWAECResult.student_id.in_(list(waec))).all():
         if r.is_absent or not r.grade:
             continue
-        subj = R.canonical_subject(r.subject)
+        subj = X.canon(r.subject)
         real = waec.get(r.student_id, {}).get(subj)
         if real:
-            per[subj].append((R.points(r.grade), R.points(real), R.is_credit(r.grade), R.is_credit(real)))
+            per[subj].append((R.points(r.grade), X.points(real), R.is_credit(r.grade), X.is_credit(real)))
     rows = []
     for subj, ps in per.items():
         n = len(ps)
@@ -207,8 +210,8 @@ def mock_accuracy(year, bid=None, model=None):
                      'exact': rate(sum(1 for m, r_, _a, _b in ps if m == r_), n),
                      'credit_agree': rate(sum(1 for _m, _r, a, b in ps if a == b), n),
                      'small': n < MIN_GROUP_N,
-                     'verdict': ('Mock harder than WAEC' if diff >= .75 else
-                                 'Mock easier than WAEC' if diff <= -.75 else 'Mock well matched')})
+                     'verdict': ('Mock harder than %s' % X.name if diff >= .75 else
+                                 'Mock easier than %s' % X.name if diff <= -.75 else 'Mock well matched')})
     out['subjects'] = sorted(rows, key=lambda r: (r['small'], -abs(r['bias'])))
     out['n'] = sum(r['n'] for r in rows)
     return out
@@ -218,38 +221,38 @@ def mock_accuracy(year, bid=None, model=None):
 # 3. BECE (JSS3) → WAEC
 # --------------------------------------------------------------------------- #
 def bece_to_waec(year, bid=None, model=None):
-    from models.models_school_exams import SchoolExamResult, get_scheme
-    waec = waec_by_student(year, bid, model)
-    out = {'n': 0, 'bands': [], 'r': None, 'ci': None}
+    """Pupils' earlier exam (BECE for WAEC/NECO, Common Entrance for JSS3) vs
+    this one: thirds of the earlier exam against this exam's results."""
+    X = _X(model)
+    out = {'n': 0, 'bands': [], 'r': None, 'ci': None, 'label': None, 'applies': bool(X.earlier)}
+    if not X.earlier:
+        return out
+    label, factory = X.earlier
+    E = factory()
+    out['label'] = label
+    waec = X.by_student(year, bid)
     if not waec:
         return out
-    rows = (SchoolExamResult.query.filter(SchoolExamResult.level == 'jss3',
-                                          SchoolExamResult.student_id.in_(list(waec))).all())
-    by = defaultdict(lambda: defaultdict(list))        # sid -> year -> [norm points]
-    schemes = {}
-    for r in rows:
-        key = (r.level, r.body)
-        if key not in schemes:
-            schemes[key] = get_scheme(r.level, r.body)
-        sc = schemes[key]
-        n = len(sc.bands) or 1
-        by[r.student_id][r.exam_year].append(sc.grade_points(r.grade) / n)
-    meets = _meets_map(waec)
+    by = defaultdict(lambda: defaultdict(list))        # sid -> year -> [0..1 points]
+    for sid, y, _subj, g in E.rows(bid=bid):
+        if sid in waec and g:
+            by[sid][y].append(E.points(g) / (E.max_points or 1))
+    meets = _meets_map(waec, X)
     pairs = []
     for sid, years in by.items():
-        latest = max(years)
-        bece = mean(years[latest])
-        w = waec[sid]
-        pairs.append((bece, mean(R.points(g) for g in w.values()), meets[sid]['meets']))
+        if any(years.values()):
+            latest = max(y for y in years if years[y])
+            pairs.append((mean(years[latest]), mean(X.points(g) for g in waec[sid].values()), meets[sid]['meets']))
     out['n'] = len(pairs)
     if not pairs:
         return out
-    bands = [('Top third at BECE', lambda b: b >= 2 / 3), ('Middle third', lambda b: 1 / 3 <= b < 2 / 3),
-             ('Bottom third', lambda b: b < 1 / 3)]
-    for label, test in bands:
+    short = label.split(' (')[0]
+    bands = [('Top third at %s' % short, lambda v: v >= 2 / 3), ('Middle third', lambda v: 1 / 3 <= v < 2 / 3),
+             ('Bottom third', lambda v: v < 1 / 3)]
+    for blabel, test in bands:
         ps = [p for p in pairs if test(p[0])]
         if ps:
-            out['bands'].append({'band': label, 'n': len(ps),
+            out['bands'].append({'band': blabel, 'n': len(ps),
                                  'avg_points': round(mean(p[1] for p in ps), 2),
                                  'five_credit': rate(sum(1 for p in ps if p[2]), len(ps))})
     if len(pairs) >= MIN_CORRELATION_N:
@@ -263,15 +266,15 @@ def bece_to_waec(year, bid=None, model=None):
 # 4. Near credit
 # --------------------------------------------------------------------------- #
 def near_credit(year, bid=None, limit=40, model=None):
-    waec = waec_by_student(year, bid, model)
+    X = _X(model)
+    waec = X.by_student(year, bid)
     subj = defaultdict(lambda: {'entries': 0, 'd7': 0, 'e8': 0, 'credit': 0})
     for grades in waec.values():
         for s, g in grades.items():
             row = subj[s]
             row['entries'] += 1
-            row['d7'] += g == 'D7'
-            row['e8'] += g == 'E8'
-            row['credit'] += R.is_credit(g)
+            row['d7'] += X.is_near(g)
+            row['credit'] += X.is_credit(g)
     subjects = []
     for s, v in subj.items():
         if v['d7']:
@@ -283,14 +286,14 @@ def near_credit(year, bid=None, limit=40, model=None):
     if waec:
         names = {s.id: s for s in Student.query.filter(Student.id.in_(list(waec))).all()}
         for sid, grades in waec.items():
-            st = R.five_credit_status(grades)
+            st = X.status(grades)
             if st['near'] and sid in names:
                 students.append({'id': sid, 'name': names[sid].full_name, 'code': names[sid].student_id,
                                  'credits': st['credits'],
-                                 'd7': sorted(s for s, g in grades.items() if g == 'D7')})
+                                 'd7': sorted(s for s, g in grades.items() if X.is_near(g))})
     students.sort(key=lambda r: (-r['credits'], r['name']))
-    meets = sum(1 for g in waec.values() if R.five_credit_status(g)['meets'])
-    return {'subjects': subjects, 'students': students[:limit], 'students_total': len(students),
+    meets = sum(1 for g in waec.values() if X.status(g)['meets'])
+    return {'near_label': X.near_label, 'subjects': subjects, 'students': students[:limit], 'students_total': len(students),
             'meets': rate(meets, len(waec)), 'meets_if_one_more': rate(meets + len(students), len(waec))}
 
 
@@ -298,8 +301,9 @@ def near_credit(year, bid=None, limit=40, model=None):
 # 5. Subject combinations / electives
 # --------------------------------------------------------------------------- #
 def combinations(year, bid=None, min_n=5, model=None):
-    waec = waec_by_student(year, bid, model)
-    meets = _meets_map(waec)
+    X = _X(model)
+    waec = X.by_student(year, bid)
+    meets = _meets_map(waec, X)
     combos = defaultdict(list)
     taking = defaultdict(set)
     for sid, grades in waec.items():
@@ -336,13 +340,15 @@ def teachers(years, bid=None, model=None):
     each teacher's SSS3 students in their subject, per WAEC year."""
     from models import (ClassSubject, Subject, SchoolClass, StudentEnrollment,
                         ClassArmAssignment)
-    sss3 = [c.id for c in SchoolClass.query.all() if re.sub(r'\s+', '', (c.name or '').upper()) == 'SSS3']
+    X = _X(model)
+    keys = {_cls_norm(k) for k in X.class_keys}
+    sss3 = [c.id for c in SchoolClass.query.all() if _cls_norm(c.name) in keys]
     table = defaultdict(dict)
     for y in years:
         sess, terms = _session_terms(y)
         if not terms or not sss3:
             continue
-        waec = waec_by_student(y, bid, model)
+        waec = X.by_student(y, bid)
         if not waec:
             continue
         tids = [t.id for t in terms]
@@ -359,7 +365,7 @@ def teachers(years, bid=None, model=None):
                                       .filter(ClassSubject.class_id.in_(sss3), ClassSubject.term_id.in_(tids))
                                       .order_by(ClassSubject.term_id).all()):
             if (teacher or '').strip():
-                owners[(R.canonical_subject(subj), arm_id)] = teacher.strip()
+                owners[(X.canon(subj), arm_id)] = teacher.strip()
         acc = defaultdict(lambda: [0, 0])
         for sid, grades in waec.items():
             arm = arm_of.get(sid)
@@ -367,7 +373,7 @@ def teachers(years, bid=None, model=None):
                 t = owners.get((subj, arm)) or owners.get((subj, None))
                 if t:
                     a = acc[(t, subj)]
-                    a[0] += R.is_credit(g)
+                    a[0] += X.is_credit(g)
                     a[1] += 1
         for (t, subj), (k, n) in acc.items():
             table[(t, subj)][y] = rate(k, n)
@@ -389,8 +395,9 @@ def teachers(years, bid=None, model=None):
 def fairness(year, bid=None, model=None):
     from models import StudentEnrollment, ClassArmAssignment, ClassArm
     from models.models_branch import Branch
-    waec = waec_by_student(year, bid, model)
-    meets = _meets_map(waec)
+    X = _X(model)
+    waec = X.by_student(year, bid)
+    meets = _meets_map(waec, X)
     if not waec:
         return []
     studs = {s.id: s for s in Student.query.filter(Student.id.in_(list(waec))).all()}
@@ -440,8 +447,9 @@ BANDS = [('Below 75%', 0, 75), ('75–85%', 75, 85), ('85–95%', 85, 95), ('95%
 
 def attendance_bands(year, bid=None, model=None):
     from models import Attendance, StudentEnrollment, ClassArmAssignment
-    waec = waec_by_student(year, bid, model)
-    meets = _meets_map(waec)
+    X = _X(model)
+    waec = X.by_student(year, bid)
+    meets = _meets_map(waec, X)
     sess, terms = _session_terms(year)
     out = {'bands': [], 'n': 0, 'threshold': None}
     if not waec or not terms:
@@ -485,9 +493,11 @@ def cohorts(bid=None, model=None):
     """One row per JSS1 intake session: started, still here, graduated, left,
     joined later (entered the same year group after JSS1) and — once they have
     sat WAEC — the 5-credit rate."""
-    from models import (StudentEnrollment, ClassArmAssignment, SchoolClass, Term, AcademicSession,
-                        WAECResult)
+    from models import StudentEnrollment, ClassArmAssignment, SchoolClass, Term, AcademicSession
     from utils.helpers import session_exam_year
+    X = _X(model)
+    if X.years_from_jss1 is None:
+        return []
     classes = {c.id: _cls_norm(c.name) for c in SchoolClass.query.all()}
     order = {'JSS1': 1, 'JSS2': 2, 'JSS3': 3, 'SSS1': 4, 'SSS2': 5, 'SSS3': 6}
     sessions = {s.id: s for s in AcademicSession.query.all()}
@@ -516,23 +526,23 @@ def cohorts(bid=None, model=None):
     all_ids = [s for g in groups.values() for s in g['start'] + g['joined']]
     studs = {s.id: s for s in Student.query.filter(Student.id.in_(all_ids)).all()}
     waec_years = defaultdict(set)
-    M = model or WAECResult
-    for sid, y in db.session.query(M.student_id, M.exam_year).filter(
-            M.student_id.in_(all_ids)).distinct():
-        waec_years[sid].add(y)
+    wanted = set(all_ids)
+    for sid, y, _s, _g in X.rows(bid=bid):
+        if sid in wanted:
+            waec_years[sid].add(y)
     out = []
     for intake, g in sorted(groups.items(), reverse=True):
         if not g['start']:
             continue                    # no JSS1 records for this year group — nothing to follow
         start = [studs[s] for s in g['start'] if s in studs]
         joined = [studs[s] for s in g['joined'] if s in studs]
-        waec_year = intake + 5
+        waec_year = intake + X.years_from_jss1
         members = start + joined
         sat = [s for s in members if waec_year in waec_years.get(s.id, ())]
         meets = 0
         if sat:
-            w = waec_by_student(waec_year, bid, model)
-            meets = sum(1 for s in sat if s.id in w and R.five_credit_status(w[s.id])['meets'])
+            w = X.by_student(waec_year, bid)
+            meets = sum(1 for s in sat if s.id in w and X.status(w[s.id])['meets'])
         out.append({
             'intake': '%s/%s' % (intake - 1, intake), 'waec_year': waec_year,
             'started': len(start),
@@ -553,9 +563,10 @@ def readiness_over_time(year, bid=None, model=None):
     from models.mock_waec import MockWAECExam, MockWAECResult
     from models.mock_jamb import MockJAMBExam, MockJAMBResult
     from models import JAMBResult
+    X = _X(model)
     sess, _terms = _session_terms(year)
     points = []
-    if sess:
+    if sess and X.has_mocks:
         for ex in MockWAECExam.query.filter_by(session_id=sess.id).order_by(MockWAECExam.exam_date).all():
             per = defaultdict(dict)
             q = MockWAECResult.query.filter_by(mock_exam_id=ex.id)
@@ -575,12 +586,13 @@ def readiness_over_time(year, bid=None, model=None):
             if rs:
                 points.append({'label': ex.display_name, 'date': ex.exam_date, 'kind': 'Mock JAMB',
                                'measure': 'JAMB 200+', 'rate': rate(sum(1 for r in rs if (r.total_score or 0) >= 200), len(rs))})
-    waec = waec_by_student(year, bid, model)
+    waec = X.by_student(year, bid)
     if waec:
-        k = sum(1 for g in waec.values() if R.five_credit_status(g)['meets'])
-        points.append({'label': ('NECO SSCE %s' if _is_neco(model) else 'WASSCE %s') % year, 'date': None,
-                       'kind': 'NECO' if _is_neco(model) else 'WAEC',
-                       'measure': '5 credits incl. Eng & Maths', 'rate': rate(k, len(waec))})
+        k = sum(1 for g in waec.values() if X.status(g)['meets'])
+        points.append({'label': '%s %s' % (X.exam_name, year), 'date': None, 'kind': X.name,
+                       'measure': X.benchmark_label, 'rate': rate(k, len(waec))})
+    if not X.has_mocks:
+        return points
     q = db.session.query(JAMBResult.total_score).filter(JAMBResult.exam_year == year)
     if bid is not None:
         q = q.join(Student, Student.id == JAMBResult.student_id).filter(Student.branch_id == bid)
@@ -649,7 +661,7 @@ def build(year, bid=None, years=None, model=None):
         'attendance': lambda: attendance_bands(year, bid, model=model),
         'cohorts': lambda: cohorts(bid, model=model),
         'readiness': lambda: readiness_over_time(year, bid, model=model),
-        'weak_topics': lambda: weak_topics(year, bid),
+        'weak_topics': lambda: weak_topics(year, bid) if _X(model).has_mocks else [],
     }
     for k, fn in calls.items():
         try:

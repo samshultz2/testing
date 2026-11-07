@@ -262,3 +262,45 @@ def test_neco_insights(app, seeded):
     assert 'class="on">NECO' in html.replace("class=\"on\"", 'class="on"') or '>NECO</a>' in html
     hub = c.get('/results/analytics?year=%d' % YEAR).get_data(as_text=True)
     assert 'NECO insights' in hub
+
+
+def test_jss3_and_basic_insights(app, seeded):
+    """JSS3 BECE and Basic 5/6 Common Entrance run through the same page with
+    their own grading; WAEC-only sections (mocks, at-risk, topics) are hidden."""
+    from models.models_school_exams import SchoolExamResult
+    from utils import exam_deep_insights as DI, insight_exams as IE
+    with app.app_context():
+        for i, sid in enumerate(seeded['ids']):
+            for subj in ('Mathematics', 'English Studies', 'Basic Science', 'Business Studies',
+                         'Basic Technology', 'Social Studies', 'French'):
+                g = 'A' if i < 8 else 'C' if i < 14 else 'P'
+                if subj == 'English Studies' and i in (9, 10):
+                    g = 'P'                                  # one band short of the benchmark
+                db.session.add(SchoolExamResult(student_id=sid, level='jss3', body='federal', exam_year=YEAR,
+                                                subject=subj, grade=g))
+            db.session.add(SchoolExamResult(student_id=sid, level='basic6', body='state', exam_year=YEAR - 3,
+                                            subject='Mathematics', grade='A' if i < 8 else 'D' if i < 14 else 'F'))
+        db.session.commit()
+        X = IE.get('jss3')
+        assert not X.has_mocks and X.earlier and X.years_from_jss1 == 2
+        nc = DI.near_credit(YEAR, model=X)
+        assert nc['near_label'] == 'P' and nc['students_total'] == 2       # P in English, 6 other credits
+        assert DI.value_added(YEAR, model=X)['enough']
+        e = DI.bece_to_waec(YEAR, model=X)
+        top = next(b for b in e['bands'] if b['band'].startswith('Top'))
+        assert top['five_credit']['pct'] == 100.0
+        assert DI.mock_accuracy(YEAR, model=X)['applies'] is False
+        pts = DI.readiness_over_time(YEAR, model=X)
+        assert [p['kind'] for p in pts] == [X.name]
+        B = IE.get('basic6')
+        assert B.years() and B.years()[0] == YEAR - 3 and B.years_from_jss1 is None
+        assert ('jss3', 'JSS3 BECE') in IE.choices()
+    c = _admin(app)
+    html = c.get('/results/analytics/insights?board=jss3&year=%d' % YEAR).get_data(as_text=True)
+    assert 'Deeper Insights — BECE %d' % YEAR in html and 'Common Entrance (Basic 5/6) → BECE' in html
+    assert 'Mock → real accuracy' not in html and 'At-risk SSS3' not in html and 'Weakest topics' not in html
+    assert 'Ps by subject' in html and 'JSS3 BECE</a>' in html
+    html = c.get('/results/analytics/insights?board=basic6&year=%d' % (YEAR - 3)).get_data(as_text=True)
+    assert 'Common Entrance %d' % (YEAR - 3) in html and 'Intake cohorts' not in html
+    dash = c.get('/jss3-exams/?body=federal&year=%d' % YEAR).get_data(as_text=True)
+    assert 'board=jss3' in dash and 'Deeper insights' in dash

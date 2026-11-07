@@ -13,6 +13,7 @@
   <a href="{{ url_for(bp ~ '.import_results', body=body, year=year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-paste"></i> Paste / CSV</a>
   {% if k.candidates %}
   <a href="{{ url_for(bp ~ '.analytics', body=body, year=year) }}" class="btn btn-info btn-sm"><i class="fas fa-chart-pie"></i> Full analytics</a>
+  <a href="{{ url_for('results.analytics_insights', board=level, year=year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-microscope"></i> Deeper insights</a>
   <a href="{{ url_for(bp ~ '.broadsheet', body=body, year=year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-table-list"></i> Broadsheet &amp; downloads</a>
   <button type="button" class="btn btn-secondary btn-sm" data-call="sxOpenExport"><i class="fas fa-file-export"></i> Export</button>
   <a href="{{ url_for(bp ~ '.export', body=body, year=year) }}" class="btn btn-secondary btn-sm" data-native download><i class="fas fa-file-excel"></i> Excel</a>

@@ -46,14 +46,11 @@ def graduates_on_registers(bid=None):
 
 def results_without_enrolment(year, bid=None, model=None):
     """WAEC / NECO candidates of ``year`` with no class enrolment in that session."""
-    from models import WAECResult, StudentEnrollment, ClassArmAssignment, Term
-    WAECResult = model or WAECResult
+    from models import StudentEnrollment, ClassArmAssignment, Term
     from utils.helpers import session_for_exam_year
+    from utils.exam_deep_insights import _X
     sess = session_for_exam_year(year)
-    q = db.session.query(WAECResult.student_id).filter(WAECResult.exam_year == year).distinct()
-    if bid is not None:
-        q = q.join(Student, Student.id == WAECResult.student_id).filter(Student.branch_id == bid)
-    ids = {sid for (sid,) in q.all()}
+    ids = {sid for sid, _y, _s, _g in _X(model).rows(year, bid)}
     if not ids or not sess:
         return []
     enrolled = {sid for (sid,) in (db.session.query(StudentEnrollment.student_id)
@@ -87,15 +84,12 @@ def subject_spellings():
 def year_anomalies(bid=None, model=None):
     """WAEC / NECO years whose number of candidates or average grade is far from
     the others — usually a half-finished import or a duplicated one."""
-    from models import WAECResult
-    WAECResult = model or WAECResult
-    q = db.session.query(WAECResult.exam_year, WAECResult.student_id, WAECResult.grade)
-    if bid is not None:
-        q = q.join(Student, Student.id == WAECResult.student_id).filter(Student.branch_id == bid)
+    from utils.exam_deep_insights import _X
+    X = _X(model)
     per = defaultdict(lambda: {'students': set(), 'pts': []})
-    for y, sid, g in q.all():
+    for sid, y, _s, g in X.rows(bid=bid):
         per[y]['students'].add(sid)
-        per[y]['pts'].append(R.points(g))
+        per[y]['pts'].append(X.points(g))
     if len(per) < 3:
         return []
     counts = {y: len(v['students']) for y, v in per.items()}
@@ -117,7 +111,8 @@ def year_anomalies(bid=None, model=None):
 
 
 def run(year, bid=None, model=None):
-    exam = 'NECO' if model is not None and model.__tablename__ == 'neco_results' else 'WAEC'
+    from utils.exam_deep_insights import _X
+    exam = _X(model).name
     from flask import url_for
     checks = []
     for fn in (
