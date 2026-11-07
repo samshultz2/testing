@@ -898,10 +898,10 @@
 {% endif %}
 
 <!-- Export Options Modal -->
-<div id="exportModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 9999; padding: 0.5rem; overflow-y: auto;">
-    <div style="background: white; border-radius: 12px; max-width: 500px; margin: 1rem auto; max-height: calc(100vh - 2rem); overflow-y: auto;">
-        <div style="padding: 1rem; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; position: sticky; top: 0; background: white; z-index: 1;">
-            <h3 style="margin: 0; font-size: 1rem;"><i class="fas fa-file-export"></i> Export {{ board.name }} Results</h3>
+<div id="exportModal" class="wx-export" style="display: none;" role="dialog" aria-modal="true" aria-labelledby="wxExportTitle">
+    <div class="wx-export-box">
+        <div class="wx-export-head">
+            <h3 id="wxExportTitle" style="margin: 0; font-size: 1rem;"><i class="fas fa-file-export"></i> Export {{ board.name }} Results</h3>
             <button data-call="closeExportModal" style="background: none; border: none; font-size: 1.5rem; cursor: pointer; color: #666;">&times;</button>
         </div>
         <div style="padding: 1rem;">
@@ -909,15 +909,15 @@
             <div style="margin-bottom: 1rem;">
                 <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.5rem;">Format:</label>
                 <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.5rem;">
-                    <label style="display: flex; align-items: center; gap: 0.4rem; padding: 0.65rem; background: #f8f9fa; border: 2px solid #ddd; border-radius: 8px; cursor: pointer;">
+                    <label class="wx-opt" style="display: flex; align-items: center; gap: 0.4rem; padding: 0.65rem; border-radius: 8px; cursor: pointer;">
                         <input type="radio" name="exportFormat" value="pdf" checked>
                         <span style="font-size: 0.8rem; font-weight: 500;"><i class="fas fa-file-pdf"></i> PDF</span>
                     </label>
-                    <label style="display: flex; align-items: center; gap: 0.4rem; padding: 0.65rem; background: #f8f9fa; border: 2px solid #ddd; border-radius: 8px; cursor: pointer;">
+                    <label class="wx-opt" style="display: flex; align-items: center; gap: 0.4rem; padding: 0.65rem; border-radius: 8px; cursor: pointer;">
                         <input type="radio" name="exportFormat" value="image">
                         <span style="font-size: 0.8rem; font-weight: 500;"><i class="fas fa-image"></i> Image</span>
                     </label>
-                    <label style="display: flex; align-items: center; gap: 0.4rem; padding: 0.65rem; background: #f8f9fa; border: 2px solid #ddd; border-radius: 8px; cursor: pointer;">
+                    <label class="wx-opt" style="display: flex; align-items: center; gap: 0.4rem; padding: 0.65rem; border-radius: 8px; cursor: pointer;">
                         <input type="radio" name="exportFormat" value="word">
                         <span style="font-size: 0.8rem; font-weight: 500;"><i class="fas fa-file-word"></i> Word</span>
                     </label>
@@ -938,11 +938,11 @@
             <div style="margin-bottom: 1rem;">
                 <label style="font-size: 0.85rem; font-weight: 600; display: block; margin-bottom: 0.5rem;">Export Type:</label>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 0.5rem;">
-                    <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem; background: #e3f2fd; border: 2px solid #2196f3; border-radius: 8px; cursor: pointer;">
+                    <label class="wx-opt" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem; border-radius: 8px; cursor: pointer;">
                         <input type="radio" name="exportType" value="students" checked data-call="toggleExportOptions" data-on="change">
                         <span style="font-size: 0.85rem; font-weight: 500;">Students List</span>
                     </label>
-                    <label style="display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem; background: #f8f9fa; border: 2px solid #ddd; border-radius: 8px; cursor: pointer;">
+                    <label class="wx-opt" style="display: flex; align-items: center; gap: 0.5rem; padding: 0.75rem; border-radius: 8px; cursor: pointer;">
                         <input type="radio" name="exportType" value="subjects" data-call="toggleExportOptions" data-on="change">
                         <span style="font-size: 0.85rem; font-weight: 500;">Subjects Analysis</span>
                     </label>
@@ -990,7 +990,7 @@
             </div>
             
             <!-- Buttons -->
-            <div style="display: flex; gap: 0.5rem;">
+            <div class="wx-export-actions">
                 <button data-call="closeExportModal" class="btn btn-secondary" style="flex: 1;">Cancel</button>
                 <button data-call="generateWAECExport" class="btn btn-primary" style="flex: 1;"><i class="fas fa-download"></i> Export</button>
             </div>
@@ -1010,6 +1010,18 @@
     font-size: 0.8rem;
 }
 .exp-check:hover { background: var(--border-color); }
+.wx-export{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100000;padding:.5rem;overflow-y:auto}
+.wx-export-box{background:var(--bg-card,#fff);color:var(--text-primary,#0f172a);border-radius:12px;max-width:500px;margin:1rem auto;max-height:calc(100vh - 2rem);overflow-y:auto;box-shadow:0 20px 50px rgba(15,23,42,.3)}
+.wx-export-head{padding:1rem;border-bottom:1px solid var(--border-color,#eee);display:flex;justify-content:space-between;align-items:center;position:sticky;top:0;background:var(--bg-card,#fff);z-index:1}
+.wx-export-head h3 i{color:var(--primary)}
+.wx-export-actions{display:flex;gap:.5rem}
+.wx-opt{background:var(--gray-50,#f8f9fa);border:2px solid var(--border-color,#ddd)}
+.wx-opt:has(input:checked){border-color:var(--primary);background:var(--primary-alpha,rgba(13,110,253,.08))}
+@media (max-width:600px){
+  .wx-export{padding:0}
+  .wx-export-box{position:absolute;left:0;right:0;bottom:0;margin:0;max-width:none;border-radius:18px 18px 0 0;max-height:92vh}
+  .wx-export-actions{position:sticky;bottom:0;background:var(--bg-card,#fff);padding:.6rem 0 .25rem}
+}
 .exp-check input { margin: 0; }
 .exp-size { display: inline-flex; background: var(--gray-50); border: 1px solid var(--border-color); border-radius: 10px; padding: 3px; gap: 2px; }
 .exp-size label { cursor: pointer; }
@@ -1052,7 +1064,11 @@ try {
 
 // Modal functions
 function openExportModal() {
-    document.getElementById('exportModal').style.display = 'block';
+    var m = document.getElementById('exportModal');
+    // On <body> so it sits above the sticky top bar and phone menu, and
+    // position:fixed is relative to the screen, not a scrolled ancestor.
+    if (m.parentNode !== document.body) document.body.appendChild(m);
+    m.style.display = 'block';
 }
 
 function closeExportModal() {
