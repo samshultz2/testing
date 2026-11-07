@@ -11,20 +11,22 @@ const LABELS = {
   gender: 'Gender', date_of_birth: 'Date of birth', age: 'Age', religion: 'Religion', hobbies: 'Hobbies',
   current_class: 'Class', parent_phone: 'Parent phone', home_address: 'Home address',
   nin: 'NIN', jamb_reg_number: 'JAMB reg.', jamb_profile_code: 'JAMB profile',
-  waec_reg_number: 'WAEC reg.', neco_reg_number: 'NECO reg.',
+  waec_reg_number: 'WAEC reg.', serial_number: 'WAEC serial', waec_epin: 'WAEC e-PIN',
+  neco_reg_number: 'NECO reg.', neco_epin: 'NECO token',
 };
 const GROUPS = [
   ['Identity', ['student_id', 'name', 'middle_name', 'photo']],
   ['Personal', ['gender', 'date_of_birth', 'age', 'religion', 'hobbies']],
   ['Class & contact', ['current_class', 'parent_phone', 'home_address']],
-  ['Exam numbers', ['nin', 'jamb_reg_number', 'jamb_profile_code', 'waec_reg_number', 'neco_reg_number']],
+  ['Exam numbers', ['nin', 'jamb_reg_number', 'jamb_profile_code', 'waec_reg_number', 'serial_number', 'waec_epin',
+                    'neco_reg_number', 'neco_epin']],
 ];
 const ALL = GROUPS.flatMap(([, ks]) => ks);
 const PRESETS = [
   ['class', 'Class list', 'fa-list-ul', ['student_id', 'name', 'gender', 'current_class', 'parent_phone']],
   ['contact', 'Contact list', 'fa-phone', ['name', 'current_class', 'parent_phone', 'home_address']],
   ['exam', 'Exam numbers', 'fa-id-card', ['student_id', 'name', 'gender', 'date_of_birth', 'nin', 'jamb_reg_number', 'waec_reg_number', 'neco_reg_number']],
-  ['all', 'Everything', 'fa-table-cells', ALL.filter((k) => k !== 'middle_name' && k !== 'photo')],
+  ['all', 'Everything', 'fa-table-cells', ALL.filter((k) => !['middle_name', 'photo', 'waec_epin', 'neco_epin'].includes(k))],
 ];
 const FORMATS = [
   ['pdf', 'PDF', 'fa-file-pdf', 'Print-ready A4, with letterhead', 'sx-fi-pdf'],

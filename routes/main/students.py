@@ -1411,13 +1411,15 @@ EXPORT_COLUMNS = {
     'parent_phone': ('Parent phone', 'phone'), 'home_address': ('Home address', 'wrap'),
     'nin': ('NIN', 'exam'), 'jamb_profile_code': ('JAMB profile', 'exam'),
     'jamb_reg_number': ('JAMB reg.', 'exam'), 'waec_reg_number': ('WAEC reg.', 'exam'),
-    'neco_reg_number': ('NECO reg.', 'exam'),
+    'serial_number': ('WAEC serial', 'exam'), 'waec_epin': ('WAEC e-PIN', 'exam'),
+    'neco_reg_number': ('NECO reg.', 'exam'), 'neco_epin': ('NECO token', 'exam'),
 }
 # Spreadsheets / CSV keep the full, import-friendly column names.
 EXPORT_DATA_LABELS = {
     'first_name': 'First Name', 'middle_name': 'Middle Name', 'date_of_birth': 'Date of Birth',
     'home_address': 'Home Address', 'parent_phone': 'Parent Phone', 'jamb_profile_code': 'JAMB Profile Code',
     'jamb_reg_number': 'JAMB Reg Number', 'waec_reg_number': 'WAEC Reg Number', 'neco_reg_number': 'NECO Reg Number',
+    'serial_number': 'WAEC Serial Number', 'waec_epin': 'WAEC e-PIN', 'neco_epin': 'NECO Token / e-PIN',
 }
 EXPORT_DOC_TAGS = {'class': 'Student list', 'contact': 'Contact list', 'exam': 'Exam numbers',
                    'all': 'Student records'}
