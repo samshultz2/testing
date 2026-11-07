@@ -452,10 +452,10 @@ def test_dashboard_has_waec_style_views_and_filters(app):
     assert 'name="min_c"' in html and 'name="subject"' in html and 'sx-gradesrow' in html
 
     html = c.get(base + '&min_c=3').get_data(as_text=True)          # filter: ≥3 credits
-    t = html[html.index('Candidates ('):]
+    t = html[html.index('Candidates ('):]; t = t[:t.index('</table>')]
     assert 'Tester Acetop' in t and 'Tester Midtop' not in t
     html = c.get(base + '&subject=Mathematics&grade=A').get_data(as_text=True)
-    t = html[html.index('Candidates ('):]
+    t = html[html.index('Candidates ('):]; t = t[:t.index('</table>')]
     assert 'Tester Acetop' in t and 'Tester Midtop' not in t
 
     html = c.get(base + '&view=subjects&ssort=g:A').get_data(as_text=True)
@@ -466,3 +466,53 @@ def test_dashboard_has_waec_style_views_and_filters(app):
     assert 'Top performers by grade' in html and "Most A's" in html
     top = html[html.index("Most A's"):]
     assert 'Tester Acetop' in top[:2500]
+
+
+def test_dashboard_export_dialog_and_branded_exports_follow_scheme(app):
+    import fitz
+    from io import BytesIO
+    from docx import Document
+    from models.models import RateLimitHit
+    from models.models_school_exams import get_scheme
+    c = _admin(app)
+    a, _ = _student(app, 'Expoada')
+    b, _ = _student(app, 'Expoben', gender='Male')
+    for sid in (a, b):
+        _enroll(app, 'JSS3', 3, sid)
+    tok = auth_csrf(c)
+    for sid, scores in ((a, ['78', '70']), (b, ['45', '52'])):
+        c.post('/jss3-exams/state/add', data={'_csrf_token': tok, 'student_id': sid, 'exam_year': 2051,
+               'subject[]': ['Mathematics', 'English Studies'], 'score[]': scores, 'grade[]': ['', '']})
+    with app.app_context():
+        RateLimitHit.query.filter(RateLimitHit.rkey.like('%export%')).delete(synchronize_session=False)
+        db.session.commit()
+        top = db.session.query(db.func.max(RateLimitHit.id)).scalar() or 0
+        grades = get_scheme('jss3', 'state').grades
+    try:
+        html = c.get('/jss3-exams/?body=state&year=2051').get_data(as_text=True)
+        assert 'id="sxExportModal"' in html and 'Students List' in html and 'Subjects Analysis' in html
+        for g in grades:                                   # one count column per scheme grade
+            assert f'<span>{g} count</span>' in html
+        assert 'Expoada' in html and 'sxClientExport' in html
+        base = '/jss3-exams/state/export?year=2051'
+        pdf = c.get(base + '&format=pdf&type=students&cols=rank,student_id,g0,credits,avg,grades')
+        assert pdf.status_code == 200 and pdf.data[:4] == b'%PDF'
+        with fitz.open(stream=pdf.data, filetype='pdf') as d:
+            txt = ' '.join(p.get_text() for p in d)
+        txt = ' '.join(txt.split())
+        assert 'Tester Expoada' in txt and 'Avg' in txt and 'Results' in txt
+        assert txt.index('Tester Expoada') < txt.index('Tester Expoben')    # ranked best first
+        doc = c.get(base + '&format=word&type=subjects&cols=total,' + ','.join(f'g{i}' for i in range(len(grades))) + ',crate')
+        assert doc.status_code == 200
+        t = Document(BytesIO(doc.data)).tables[0]
+        head = [cell.text for cell in t.rows[0].cells]
+        assert head[:2] == ['Subject', 'Entries'] and head[2:2 + len(grades)] == grades and 'Credit %' in head
+        img = c.get(base + '&format=image&type=subjects')
+        assert img.data[:4] == b'\x89PNG' and img.headers.get('X-Total-Pages') == '1'
+        assert c.get(base).data[:2] == b'PK'                                # Excel unchanged
+        # Basic 6 uses its own scheme too.
+        assert 'id="sxExportModal"' not in c.get('/basic6-exams/?body=federal&year=1999').get_data(as_text=True)
+    finally:
+        with app.app_context():
+            RateLimitHit.query.filter(RateLimitHit.id > top).delete(synchronize_session=False)
+            db.session.commit()

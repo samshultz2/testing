@@ -14,6 +14,7 @@
   {% if k.candidates %}
   <a href="{{ url_for(bp ~ '.analytics', body=body, year=year) }}" class="btn btn-info btn-sm"><i class="fas fa-chart-pie"></i> Full analytics</a>
   <a href="{{ url_for(bp ~ '.broadsheet', body=body, year=year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-table-list"></i> Broadsheet &amp; downloads</a>
+  <button type="button" class="btn btn-secondary btn-sm" data-call="sxOpenExport"><i class="fas fa-file-export"></i> Export</button>
   <a href="{{ url_for(bp ~ '.export', body=body, year=year) }}" class="btn btn-secondary btn-sm" data-native download><i class="fas fa-file-excel"></i> Excel</a>
   {% endif %}
 </div>
@@ -208,4 +209,7 @@
 </div>
 {% endif %}
 {% endif %}
+{% if k.candidates %}{% include "school_exams/_export.html" %}{% endif %}
 {% endblock %}
+
+{% block page_js %}{% if stats.kpis.candidates %}{% include "school_exams/_export_js.html" %}{% endif %}{% endblock %}

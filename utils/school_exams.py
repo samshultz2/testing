@@ -1221,3 +1221,139 @@ def readiness_after(sitting):
             out['stream'] = best[0]
             out['stream_scores'] = {k: round(v * 100) for k, v in scored}
     return out
+
+
+# --------------------------------------------------------------------------- #
+# Export columns (WAEC / NECO-style picker, driven by this exam's grading)
+# --------------------------------------------------------------------------- #
+def _grade_span(scheme, kinds):
+    gs = [g for g in scheme.grades if scheme.kind_of(g) in kinds]
+    if not gs:
+        return ''
+    return gs[0] if len(gs) == 1 else '%s–%s' % (gs[0], gs[-1])
+
+
+def export_columns(scheme):
+    """The selectable columns for both export types, with their defaults:
+    {'students': [(key, label, default)], 'subjects': [...]}. Grade columns
+    are one per grade of the scheme (keys g0, g1, … in band order)."""
+    top = {g for g in scheme.grades if scheme.kind_of(g) == 'distinction'}
+    grades = [('g%d' % i, '%s count' % g, g in top) for i, g in enumerate(scheme.grades)]
+    cspan = _grade_span(scheme, ('distinction', 'credit'))
+    pspan = _grade_span(scheme, ('distinction', 'credit', 'pass'))
+    students = ([('rank', 'Position', True), ('student_id', 'Student ID', True),
+                 ('exam_no', 'Exam number', False), ('gender', 'Gender', False),
+                 ('arm', 'Class arm', False)] + grades +
+                [('distinctions', 'Distinctions', False),
+                 ('credits', 'Credits (%s)' % cspan if cspan else 'Credits', True),
+                 ('passes', 'Passes (%s)' % pspan if pspan else 'Passes', False),
+                 ('fails', 'Fails', False),
+                 ('avg', 'Avg points', True), ('avgpct', 'Avg %', False), ('total', 'Total score', False),
+                 ('allgrades', 'All grades (%s)' % _grade_span(scheme, KINDS), False),
+                 ('grades', 'Subject grades', True),
+                 ('core', 'English + Maths credit', False), ('benchmark', 'Meets benchmark', False),
+                 ('placement', 'Placement', False)])
+    subjects = ([('total', 'Total students', True)] + grades +
+                [('drate', 'Distinction %', False), ('crate', 'Credit %', True),
+                 ('prate', 'Pass %', False), ('frate', 'Fail %', False),
+                 ('mean', 'Mean score %', False), ('avgpts', 'Avg points', False)])
+    return {'students': students, 'subjects': subjects}
+
+
+def export_table(scheme, stats, etype, cols):
+    """(headers, rows) of strings for the branded PDF / image / Word export.
+    Empty ``cols`` means the defaults (mirrors the on-screen table)."""
+    from utils.broadsheet_export import _abbr_one
+    spec = export_columns(scheme)['subjects' if etype == 'subjects' else 'students']
+    if not cols:
+        cols = {k for k, _l, d in spec if d}
+    grades = scheme.grades
+
+    def gkey(i):
+        return 'g%d' % i
+
+    def short(label):
+        return {'Position': 'Pos', 'Student ID': 'Student ID', 'Exam number': 'Exam No',
+                'Class arm': 'Arm', 'Total students': 'Entries', 'Total score': 'Total',
+                'English + Maths credit': 'Eng+Maths', 'Meets benchmark': 'Benchmark',
+                'Mean score %': 'Mean %', 'Subject grades': 'Subject Grades',
+                'Avg points': 'Avg Pts'}.get(label, label.split(' (')[0])
+
+    if etype == 'subjects':
+        headers = ['Subject']
+        for k, label, _d in spec:
+            if k in cols:
+                headers.append(grades[int(k[1:])] if k.startswith('g') and k[1:].isdigit() else short(label))
+        rows = []
+        for r in sorted(stats['subjects'], key=lambda r: r['rank']):
+            cell = {'total': r['entries'], 'drate': '%s%%' % r['distinction_rate'],
+                    'crate': '%s%%' % r['credit_rate'], 'prate': '%s%%' % r['pass_rate'],
+                    'frate': '%s%%' % r['fail_rate'],
+                    'mean': '—' if r['mean_pct'] is None else '%s%%' % r['mean_pct'],
+                    'avgpts': r['avg_points']}
+            for i, g in enumerate(grades):
+                cell[gkey(i)] = r['grades'].get(g, 0)
+            rows.append([r['subject']] + [str(cell[k]) for k, _l, _d in spec if k in cols])
+        return headers, rows
+
+    headers = []
+    for k, label, _d in spec:
+        if k not in cols:
+            continue
+        if k == 'rank':
+            headers.append('Pos')
+            headers.append('Name')          # name always follows position
+        elif k == 'allgrades':
+            headers += list(grades)
+        elif k.startswith('g') and k[1:].isdigit():
+            headers.append(grades[int(k[1:])])
+        else:
+            headers.append(short(label))
+    if 'rank' not in cols:
+        headers.insert(0, 'Name')
+    yn = {True: 'Yes', False: 'No'}
+    rows = []
+    for s in stats['candidates']:
+        cell = {'rank': s['position'], 'student_id': s['student_code'] or '',
+                'exam_no': s['exam_number'] or '', 'gender': s['gender'],
+                'arm': s.get('arm') or '', 'distinctions': s['distinctions'],
+                'credits': s['credits'], 'passes': s['passes'], 'fails': s['fails'],
+                'avg': s['avg_points'], 'avgpct': '—' if s['avg_pct'] is None else s['avg_pct'],
+                'total': '—' if s['total'] is None else s['total'],
+                'grades': ' '.join('%s:%s' % (_abbr_one(r.subject), r.grade) for r in s['results']),
+                'core': yn[bool(s['core_credits'])], 'benchmark': yn[bool(s['meets_benchmark'])],
+                'placement': s['placement'] or ''}
+        for i, g in enumerate(grades):
+            cell[gkey(i)] = s['grades'].get(g, 0)
+        row = [] if 'rank' in cols else [s['name']]
+        for k, _l, _d in spec:
+            if k not in cols:
+                continue
+            if k == 'rank':
+                row += [str(cell['rank']), s['name']]
+            elif k == 'allgrades':
+                row += [str(s['grades'].get(g, 0)) for g in grades]
+            else:
+                row.append(str(cell[k]))
+        rows.append(row)
+    return headers, rows
+
+
+def export_client_data(stats):
+    """Compact candidate rows for the client-side (subject-grid) PDF / image."""
+    from utils.broadsheet_export import _abbr_one
+    scheme = stats['scheme']
+    out = []
+    for s in stats['candidates']:
+        out.append({
+            'position': s['position'], 'name': s['name'], 'student_id': s['student_code'] or '',
+            'exam_number': s['exam_number'] or '', 'gender': s['gender'], 'arm': s.get('arm') or '',
+            'grade_counts': {g: s['grades'].get(g, 0) for g in scheme.grades},
+            'distinctions': s['distinctions'], 'credits': s['credits'], 'passes': s['passes'],
+            'fails': s['fails'], 'avg_points': s['avg_points'], 'avg_pct': s['avg_pct'],
+            'total': s['total'], 'core': bool(s['core_credits']),
+            'benchmark': bool(s['meets_benchmark']), 'placement': s['placement'] or '',
+            'results': [{'subject': r.subject, 'code': _abbr_one(r.subject), 'grade': r.grade,
+                         'kind': scheme.kind_of(r.grade) or 'fail'} for r in s['results']],
+        })
+    return out

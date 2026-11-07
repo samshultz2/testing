@@ -102,6 +102,52 @@ def _student_or_404(level, student_id):
     return st
 
 
+def _branded_export(level, body, year, stats, fmt):
+    """Branded PDF / image / Word export of a school-exam year — the same
+    document design and column picker as the WAEC / NECO export, with the
+    grade columns taken from this exam's own grading scheme."""
+    from io import BytesIO
+    from flask import Response
+    from utils.web_exports import pdf_response
+    from utils.school import school_profile
+    from utils.student_export import students_pdf, students_image_pages, students_word
+
+    scheme = stats['scheme']
+    etype = request.args.get('type', 'students')
+    cols = set((request.args.get('cols') or '').split(',')) - {''}
+    headers, rows = svc.export_table(scheme, stats, etype, cols)
+    stem = '%s_%s_%s' % (level, body, year)
+    title = '%s %s Results' % (scheme.exam_name, year)
+    if etype == 'subjects':
+        title = '%s %s Subject Analysis' % (scheme.exam_name, year)
+    school = school_profile()
+    total = len(stats['candidates'])           # masthead counts candidates, not subjects
+    if fmt == 'pdf':
+        data = students_pdf(rows, headers, school, total=total, title=title)
+        return pdf_response(BytesIO(data), stem + '.pdf', inline=False)
+    if fmt == 'word':
+        return students_word(rows, headers, school, total=total, filename=stem + '.docx', title=title)
+    pages = students_image_pages(rows, headers, school, total=total, title=title)
+    page = request.args.get('page', type=int) or 1
+    page = max(1, min(page, len(pages)))
+    suffix = '' if len(pages) == 1 else ('_p%d' % page)
+    return Response(pages[page - 1], mimetype='image/png', headers={
+        'Content-Disposition': 'attachment; filename="%s%s.png"' % (stem, suffix),
+        'X-Total-Pages': str(len(pages)), 'Access-Control-Expose-Headers': 'X-Total-Pages'})
+
+
+def _export_branch_name():
+    """Branch name for the export masthead (same rule as the WAEC export)."""
+    from models.models_branch import Branch
+    from utils.branch_scope import viewing_branch_id
+    bid = viewing_branch_id()
+    if bid and bid not in (None, -1):
+        b = db.session.get(Branch, bid)
+        return b.name if b else ''
+    branches = Branch.query.all()
+    return branches[0].name if len(branches) == 1 else 'All Branches'
+
+
 def make_blueprint(level):
     bp_name = f'{level}_exams'
     bp = Blueprint(bp_name, __name__, url_prefix=f'/{level}-exams')
@@ -149,7 +195,10 @@ def make_blueprint(level):
             filtered=bool(f_subject or f_grade or min_d or min_c or search),
             subject_names=sorted(r['subject'] for r in stats['subjects']),
             subjects_sorted=subjects, ssort=ssort, subject_sorts=svc.subject_sorts(stats['scheme']),
-            top_grades=svc.top_by_grade(stats['scheme'], stats['candidates'])))
+            top_grades=svc.top_by_grade(stats['scheme'], stats['candidates']),
+            export_branch=_export_branch_name(),
+            export_data=svc.export_client_data(stats),
+            export_cols=svc.export_columns(stats['scheme'])))
 
     # ------------------------------------------------------------------ #
     # Analytics
@@ -478,6 +527,7 @@ def make_blueprint(level):
     # ------------------------------------------------------------------ #
     @bp.route('/<body>/export')
     @login_required
+    @rate_limited('export', max_requests=40, window_minutes=10)
     def export(body):
         from openpyxl import Workbook
         from openpyxl.styles import Font, PatternFill, Alignment
@@ -487,6 +537,10 @@ def make_blueprint(level):
         year = _default_year(years)
         stats = svc.year_stats(level, body, year)
         scheme = stats['scheme']
+        fmt = request.args.get('format', 'excel')
+        if fmt in ('pdf', 'image', 'word'):
+            log_action('data.export_results', detail=f'{scheme.exam_name} {year} ({fmt})')
+            return _branded_export(level, body, year, stats, fmt)
         subjects = [r['subject'] for r in sorted(stats['subjects'], key=lambda r: r['subject'])]
         wb = Workbook()
         ws = wb.active
