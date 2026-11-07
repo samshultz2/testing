@@ -15,6 +15,8 @@
   background:var(--bg-card);border:1px solid var(--border-color);border-radius:8px;box-shadow:0 8px 24px rgba(0,0,0,.12);
   margin:0;padding:.25rem 0;list-style:none}
 .ss-list[hidden]{display:none}
+/* An open list must never be clipped by the card / panel it sits in. */
+.card:has(.ss-list:not([hidden])),.card-body:has(.ss-list:not([hidden])){overflow:visible}
 .ss-list li{padding:.45rem .7rem;cursor:pointer;font-size:.9rem}
 .ss-list li[aria-selected="true"],.ss-list li:hover{background:var(--gray-100)}
 .ss-list li.ss-empty{color:var(--text-muted);cursor:default}
