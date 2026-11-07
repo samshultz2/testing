@@ -15,8 +15,32 @@ def _admin(app):
     return c
 
 
+def _enroll(app, class_name, student_id):
+    """Enrol in ``class_name`` (arm Gold) for the active term, creating only
+    what is missing — never a duplicate session name."""
+    from models import (AcademicSession, Term, SchoolClass, ClassArm,
+                        ClassArmAssignment, StudentEnrollment)
+    with app.app_context():
+        ssn = AcademicSession.query.filter_by(is_active=True).first()
+        if not ssn:
+            ssn = AcademicSession(name='EXP ' + uuid.uuid4().hex[:6], is_active=True)
+            db.session.add(ssn); db.session.flush()
+        term = Term.query.filter_by(is_active=True).first()
+        if not term:
+            term = Term(session_id=ssn.id, term_number=1, name='First Term', is_active=True)
+            db.session.add(term); db.session.flush()
+        cls = SchoolClass.query.filter_by(name=class_name).first() or SchoolClass(name=class_name, level=7)
+        db.session.add(cls); db.session.flush()
+        arm = ClassArm.query.filter_by(name='Gold').first() or ClassArm(name='Gold', is_active=True)
+        db.session.add(arm); db.session.flush()
+        caa = (ClassArmAssignment.query.filter_by(class_id=cls.id, arm_id=arm.id, term_id=term.id).first()
+               or ClassArmAssignment(class_id=cls.id, arm_id=arm.id, term_id=term.id))
+        db.session.add(caa); db.session.flush()
+        db.session.add(StudentEnrollment(student_id=student_id, class_arm_assignment_id=caa.id, is_active=True))
+        db.session.commit()
+
+
 def _students(app, n=4, **extra):
-    from tests.test_school_exams import _enroll
     ids = []
     with app.app_context():
         for i in range(n):
@@ -26,7 +50,7 @@ def _students(app, n=4, **extra):
             ids.append(s.id)
         db.session.commit()
     for sid in ids[:2]:
-        _enroll(app, 'EXP1', 7, sid)
+        _enroll(app, 'EXP1', sid)
     return ids
 
 

@@ -103,6 +103,15 @@ def initials(name):
     return ''.join(w[0] for w in words[:2]).upper() or 'S'
 
 
+def _now():
+    """School-local now (falls back to the server clock outside the app)."""
+    try:
+        from utils import timeutil
+        return timeutil.now()
+    except Exception:  # pragma: no cover
+        return datetime.today()
+
+
 def fmt_date(v):
     if isinstance(v, (date, datetime)):
         return v.strftime('%d %b %Y')
@@ -221,7 +230,7 @@ def render_pdf(spec):
     head2_h = 46      # later pages
     foot_h = 40
     title = spec.get('title') or 'Student List'
-    gen = spec.get('generated') or datetime.now()
+    gen = spec.get('generated') or _now()
 
     # ---- canvas: letterhead, later-page header, footer with "Page n of N" ----
     logo = None
@@ -673,7 +682,7 @@ def render_docx(spec):
     p = c2.paragraphs[0]; p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
     run(p, (spec.get('doc_tag') or 'STUDENT LIST').upper(), 7.5, True, C['primary'], spacing=24)
     p = c2.add_paragraph(); p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    run(p, (spec.get('generated') or datetime.now()).strftime('Generated %d %b %Y, %H:%M'), 7.5, False, MUTED)
+    run(p, (spec.get('generated') or _now()).strftime('Generated %d %b %Y, %H:%M'), 7.5, False, MUTED)
     for c in (c0, c1, c2):
         for pp in c.paragraphs:
             pp.paragraph_format.space_after = Pt(1)
@@ -821,7 +830,7 @@ def render_xlsx(spec, about=None):
     ws['A1'].font = Font(name='Calibri', size=15, bold=True, color=P)
     ws.row_dimensions[1].height = 24
     sub = ' · '.join(x for x in (spec.get('subtitle'), _stats_line(spec),
-                                 (spec.get('generated') or datetime.now()).strftime('generated %d %b %Y')) if x)
+                                 (spec.get('generated') or _now()).strftime('generated %d %b %Y')) if x)
     ws['A2'] = formula_guard(sub)
     ws['A2'].font = Font(name='Calibri', size=10, color='64748B')
     ws.merge_cells('A1:%s1' % last)
@@ -947,7 +956,7 @@ def render_xlsx(spec, about=None):
     ab = wb.create_sheet('About this export')
     info = [('School', school.get('name') or ''), ('List', spec.get('title') or ''),
             ('Details', spec.get('subtitle') or ''),
-            ('Generated', (spec.get('generated') or datetime.now()).strftime('%d %b %Y, %H:%M')),
+            ('Generated', (spec.get('generated') or _now()).strftime('%d %b %Y, %H:%M')),
             ('Prepared by', spec.get('prepared_by') or ''), ('Students', str(n)),
             ('Columns', ', '.join(h for _, h, _ in cols))]
     info += list(about or [])
