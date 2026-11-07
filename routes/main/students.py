@@ -1509,18 +1509,11 @@ def export_students_data():
         return redirect(url_for('main.students_list'))
 
     # Current class + first parent phone (+ photos) in bulk (no N+1).
-    active_term = get_active_term()
     ids = [s.id for s in students]
-    class_map = {}
-    if active_term:
-        for e in (StudentEnrollment.query.join(ClassArmAssignment)
-                  .filter(StudentEnrollment.student_id.in_(ids),
-                          ClassArmAssignment.term_id == active_term.id)
-                  .options(joinedload(StudentEnrollment.class_arm_assignment)
-                           .joinedload(ClassArmAssignment.school_class),
-                           joinedload(StudentEnrollment.class_arm_assignment)
-                           .joinedload(ClassArmAssignment.arm)).all()):
-            class_map[e.student_id] = e.class_arm_assignment.display_name
+    # Active enrollment wins over one left behind by an arm move (same rule
+    # as the list page and its class / arm filters).
+    from routes.main import current_class_map
+    class_map = current_class_map(ids)
     phone_map = {}
     if 'parent_phone' in fields:
         for pc in (ParentContact.query.filter(ParentContact.student_id.in_(ids))

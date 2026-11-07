@@ -1824,22 +1824,34 @@ def _students_query():
     return query.order_by(sort_column.desc() if order == 'desc' else sort_column.asc())
 
 
+def current_class_map(student_ids, term=None):
+    """{student_id: class-arm display name} for the term (default: active).
+
+    A student moved between arms during a term has more than one enrollment
+    for it, so pick deliberately: their ACTIVE enrollment (the same rule the
+    class / arm filters use), newest first; only a student with no active
+    enrollment falls back to their most recent one."""
+    term = term or get_active_term()
+    out = {}
+    ids = list(student_ids or [])
+    if not term or not ids:
+        return out
+    rows = (StudentEnrollment.query.join(ClassArmAssignment).filter(
+        StudentEnrollment.student_id.in_(ids),
+        ClassArmAssignment.term_id == term.id
+    ).options(
+        joinedload(StudentEnrollment.class_arm_assignment).joinedload(ClassArmAssignment.school_class),
+        joinedload(StudentEnrollment.class_arm_assignment).joinedload(ClassArmAssignment.arm),
+    ).order_by(StudentEnrollment.is_active.desc(), StudentEnrollment.enrolled_at.desc(),
+               StudentEnrollment.id.desc()).all())
+    for e in rows:
+        out.setdefault(e.student_id, e.class_arm_assignment.display_name)
+    return out
+
+
 def _page_class_map(items):
     """{student_id: current class display name} for one page of students."""
-    active_term = get_active_term()
-    class_map = {}
-    page_ids = [s.id for s in items]
-    if active_term and page_ids:
-        enrollments = (StudentEnrollment.query.join(ClassArmAssignment).filter(
-            StudentEnrollment.student_id.in_(page_ids),
-            ClassArmAssignment.term_id == active_term.id
-        ).options(
-            joinedload(StudentEnrollment.class_arm_assignment).joinedload(ClassArmAssignment.school_class),
-            joinedload(StudentEnrollment.class_arm_assignment).joinedload(ClassArmAssignment.arm),
-        ).all())
-        for e in enrollments:
-            class_map.setdefault(e.student_id, e.class_arm_assignment.display_name)
-    return class_map
+    return current_class_map([s.id for s in items])
 
 
 

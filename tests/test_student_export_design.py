@@ -9,6 +9,26 @@ from models import db, Student
 from tests.conftest import login_token
 
 
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def _restore_active_period(app):
+    """These tests may create / activate a session and term; put the active
+    flags back afterwards so other test files see the period they set up."""
+    from models import AcademicSession, Term
+    with app.app_context():
+        before_s = {x.id: x.is_active for x in AcademicSession.query.all()}
+        before_t = {x.id: x.is_active for x in Term.query.all()}
+    yield
+    with app.app_context():
+        for x in AcademicSession.query.all():
+            x.is_active = before_s.get(x.id, False)
+        for x in Term.query.all():
+            x.is_active = before_t.get(x.id, False)
+        db.session.commit()
+
+
 def _admin(app):
     c = app.test_client()
     c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': login_token(c)})
@@ -20,12 +40,13 @@ def _enroll(app, class_name, student_id):
     what is missing — never a duplicate session name."""
     from models import (AcademicSession, Term, SchoolClass, ClassArm,
                         ClassArmAssignment, StudentEnrollment)
+    from utils.helpers import get_active_term
     with app.app_context():
         ssn = AcademicSession.query.filter_by(is_active=True).first()
         if not ssn:
             ssn = AcademicSession(name='EXP ' + uuid.uuid4().hex[:6], is_active=True)
             db.session.add(ssn); db.session.flush()
-        term = Term.query.filter_by(is_active=True).first()
+        term = get_active_term()            # the term the app itself treats as current
         if not term:
             term = Term(session_id=ssn.id, term_number=1, name='First Term', is_active=True)
             db.session.add(term); db.session.flush()
@@ -139,3 +160,45 @@ def test_column_order_is_respected(app):
     c = _admin(app)
     r = _get(c, ids, 'csv', fields=['gender', 'student_id', 'name'], group=0)
     assert r.get_data(as_text=True).splitlines()[0] == 'Gender,Student ID,Surname,Other names'
+
+
+def test_moved_student_is_grouped_under_current_arm(app):
+    """A student moved Rose → Iris in the same term keeps the old (inactive)
+    Rose enrollment on record; the export (and the list) must show Iris."""
+    from models import (AcademicSession, Term, SchoolClass, ClassArm,
+                        ClassArmAssignment, StudentEnrollment)
+    from utils.helpers import get_active_term
+    ids = _students(app, n=4)               # enrols ids[0], ids[1] (and an active term)
+    with app.app_context():
+        term = get_active_term()
+        cls = SchoolClass.query.filter_by(name='SSX3').first() or SchoolClass(name='SSX3', level=12)
+        db.session.add(cls); db.session.flush()
+        arms = {}
+        for nm in ('Iris', 'Rose'):
+            a = ClassArm.query.filter_by(name=nm).first() or ClassArm(name=nm, is_active=True)
+            db.session.add(a); db.session.flush()
+            caa = (ClassArmAssignment.query.filter_by(class_id=cls.id, arm_id=a.id, term_id=term.id).first()
+                   or ClassArmAssignment(class_id=cls.id, arm_id=a.id, term_id=term.id))
+            db.session.add(caa); db.session.flush()
+            arms[nm] = caa
+        # One student with the stale Rose row written after the current Iris row
+        # ("last row wins" would pick Rose), one with it written before
+        # ("first row wins" would) — the active enrollment must win both ways.
+        sid, sid2 = ids[2], ids[3]
+        db.session.add(StudentEnrollment(student_id=sid, class_arm_assignment_id=arms['Iris'].id, is_active=True))
+        db.session.flush()
+        db.session.add(StudentEnrollment(student_id=sid, class_arm_assignment_id=arms['Rose'].id, is_active=False))
+        db.session.add(StudentEnrollment(student_id=sid2, class_arm_assignment_id=arms['Rose'].id, is_active=False))
+        db.session.flush()
+        db.session.add(StudentEnrollment(student_id=sid2, class_arm_assignment_id=arms['Iris'].id, is_active=True))
+        db.session.commit()
+        iris = arms['Iris'].display_name
+        rose = arms['Rose'].display_name
+    c = _admin(app)
+    t = _pdf_text(_get(c, [sid, sid2], 'pdf', fields=['student_id', 'name']).data)
+    assert iris in t and rose not in t
+    csv = _get(c, [sid, sid2], 'csv', fields=['name', 'current_class'], group=0).get_data(as_text=True)
+    assert csv.count(iris) == 2 and rose not in csv
+    with app.app_context():
+        from routes.main import current_class_map
+        assert current_class_map([sid, sid2]) == {sid: iris, sid2: iris}
