@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { chartPalette } from '../lib/hooks';
 import { submitJson } from '../lib/forms';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
@@ -620,7 +621,9 @@ function ExportModal({ onClose, onGenerate, hasSubjects, spec }) {
     <label className={'mjx-opt' + (cur === val ? ' on' : '')}>
       <input type="radio" checked={cur === val} onChange={() => set(val)} /><span>{children}</span></label>
   );
-  return (
+  // Portal to <body>: an ancestor in the section shell breaks position:fixed,
+  // which left the dialog far down the page on phones.
+  return createPortal((
     <div className="mjx-backdrop" role="dialog" aria-modal="true" aria-labelledby="mjxTitle"
          onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
       <div className="mjx-dialog">
@@ -664,7 +667,7 @@ function ExportModal({ onClose, onGenerate, hasSubjects, spec }) {
         </div>
       </div>
     </div>
-  );
+  ), document.body);
 }
 
 // ---- Student progress ------------------------------------------------------
