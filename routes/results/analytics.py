@@ -386,10 +386,13 @@ def readiness_funnel():
 @results_bp.route('/analytics')
 @login_required
 def analytics_hub():
-    """One-stop analytics hub: every WAEC/JAMB stat, correlation and projection."""
+    """One-stop analytics hub: every WAEC/NECO/JAMB stat, correlation and projection."""
+    from models import NECOResult
+    from utils import exam_board as _eb
     waec_years = [y[0] for y in db.session.query(WAECResult.exam_year).distinct().all()]
     jamb_years = [y[0] for y in db.session.query(JAMBResult.exam_year).distinct().all()]
-    years = sorted(set(waec_years + jamb_years), reverse=True)
+    neco_years = [y[0] for y in db.session.query(NECOResult.exam_year).distinct().all()]
+    years = sorted(set(waec_years + jamb_years + neco_years), reverse=True)
 
     year = resolve_exam_year(request.args.get('year', type=int), years)
     # The live session's exam year is always the resolved default (even with
@@ -406,6 +409,13 @@ def analytics_hub():
     jamb_stats = jamb_school_stats(year, bid) if year else None
     correlation = waec_jamb_correlation(year, bid) if year else None
     yoy = AcademicAnalytics.get_year_over_year_comparison(bid)
+    # NECO: the same WAEC computations on the NECO table (utils/exam_board).
+    with _eb.use(_eb.NECO):
+        neco_stats = waec_school_stats(year, bid) if year else None
+        neco_yoy = (AcademicAnalytics.get_year_over_year_comparison(bid) or {}).get('waec_trends', []) \
+            if neco_years else []
+    from utils import waec_neco
+    waec_vs_neco = waec_neco.compare(year, bid) if (year and waec_stats and neco_stats) else None
 
     # Gender breakdowns for the selected year.
     def gender_split(model):
@@ -419,33 +429,37 @@ def analytics_hub():
 
     waec_gender = gender_split(WAECResult) if (year and waec_stats) else {}
     jamb_gender = gender_split(JAMBResult) if (year and jamb_stats) else {}
+    neco_gender = gender_split(NECOResult) if (year and neco_stats) else {}
 
-    # Gender-comparison breakdown: pass/distinction rates (WAEC) and mean score
-    # / >=200 rate (JAMB) split by gender for the selected year.
-    waec_gender_stats = []
-    if year and waec_stats:
-        _q = db.session.query(Student.gender, WAECResult.grade).join(
-            WAECResult, Student.id == WAECResult.student_id
-        ).filter(WAECResult.exam_year == year)
+    # Gender-comparison breakdown: pass/distinction rates (WAEC / NECO) and mean
+    # score / >=200 rate (JAMB) split by gender for the selected year.
+    def grade_gender_stats(model):
+        out = []
+        _q = db.session.query(Student.gender, model.grade).join(
+            model, Student.id == model.student_id
+        ).filter(model.exam_year == year)
         if bid is not None:
             _q = _q.filter(Student.branch_id == bid)
-        rows = _q.all()
         by_gender = defaultdict(list)
-        for g, grade in rows:
+        for g, grade in _q.all():
             by_gender[g or 'Unknown'].append(grade)
         for g, grades in by_gender.items():
             total = len(grades)
             passes = sum(1 for x in grades if x in AcademicAnalytics.PASS_GRADES)
             dist = sum(1 for x in grades if x in AcademicAnalytics.DISTINCTION_GRADES)
             pts = [AcademicAnalytics.GRADE_POINTS.get(x, 9) for x in grades]
-            waec_gender_stats.append({
+            out.append({
                 'gender': g,
                 'entries': total,
                 'pass_rate': round(passes / total * 100, 1) if total else 0,
                 'distinction_rate': round(dist / total * 100, 1) if total else 0,
                 'mean_points': round(sum(pts) / len(pts), 2) if pts else 0,
             })
-        waec_gender_stats.sort(key=lambda x: x['gender'])
+        out.sort(key=lambda x: x['gender'])
+        return out
+
+    waec_gender_stats = grade_gender_stats(WAECResult) if (year and waec_stats) else []
+    neco_gender_stats = grade_gender_stats(NECOResult) if (year and neco_stats) else []
 
     jamb_gender_stats = []
     if year and jamb_stats:
@@ -537,22 +551,29 @@ def analytics_hub():
             arm = arm_map.get(r.student_id)
             if arm:
                 jamb_by_arm[arm].append(r.total_score)
-        waec_by_arm = defaultdict(lambda: {'pass': 0, 'total': 0})
-        for r in scope_by_student(WAECResult.query.filter_by(exam_year=year), WAECResult).all():
-            arm = arm_map.get(r.student_id)
-            if arm:
-                waec_by_arm[arm]['total'] += 1
-                if r.grade in AcademicAnalytics.PASS_GRADES:
-                    waec_by_arm[arm]['pass'] += 1
-        for arm in sorted(set(list(jamb_by_arm) + list(waec_by_arm))):
+        def pass_by_arm(model):
+            acc = defaultdict(lambda: {'pass': 0, 'total': 0})
+            for r in scope_by_student(model.query.filter_by(exam_year=year), model).all():
+                arm = arm_map.get(r.student_id)
+                if arm:
+                    acc[arm]['total'] += 1
+                    if r.grade in AcademicAnalytics.PASS_GRADES:
+                        acc[arm]['pass'] += 1
+            return acc
+        waec_by_arm = pass_by_arm(WAECResult)
+        neco_by_arm = pass_by_arm(NECOResult) if neco_stats else {}
+        for arm in sorted(set(list(jamb_by_arm) + list(waec_by_arm) + list(neco_by_arm))):
             js = jamb_by_arm.get(arm, [])
             w = waec_by_arm.get(arm, {'pass': 0, 'total': 0})
+            n = neco_by_arm.get(arm, {'pass': 0, 'total': 0})
             class_compare.append({
                 'arm': arm,
                 'jamb_count': len(js),
                 'jamb_mean': round(sum(js) / len(js), 1) if js else 0,
                 'waec_pass_rate': round(w['pass'] / w['total'] * 100, 1) if w['total'] else 0,
                 'waec_entries': w['total'],
+                'neco_pass_rate': round(n['pass'] / n['total'] * 100, 1) if n['total'] else None,
+                'neco_entries': n['total'],
             })
 
         pairs = []
@@ -651,6 +672,11 @@ def analytics_hub():
         class_compare=class_compare,
         internal_corr=internal_corr,
         waec_stats=waec_stats,
+        neco_stats=neco_stats,
+        neco_gender=neco_gender,
+        neco_gender_stats=neco_gender_stats,
+        neco_yoy=neco_yoy,
+        waec_vs_neco=waec_vs_neco,
         jamb_stats=jamb_stats,
         correlation=correlation,
         yoy=yoy,

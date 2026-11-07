@@ -40,6 +40,33 @@
 .aq-kbd kbd{font-family:inherit;font-size:.72rem;padding:.05rem .35rem;border:1px solid var(--border-color);border-bottom-width:2px;border-radius:4px;background:var(--bg-card)}
 .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);border:0}
 @media(max-width:960px){.aq-layout{grid-template-columns:minmax(0,1fr)}.aq-side{position:static}.aq-import-grid{grid-template-columns:minmax(0,1fr)}}
+/* Header, summary and question list */
+.ex-head-actions{display:flex;flex-wrap:wrap;gap:.4rem;align-items:center}
+.ex-head-actions form{margin:0}
+.ex-head-actions .btn{margin:0}
+.ex-info{display:flex;flex-wrap:wrap;justify-content:space-between;gap:.6rem 1rem;align-items:center}
+.ex-info-meta{display:flex;flex-wrap:wrap;align-items:center;gap:.35rem}
+.ex-facts{display:flex;flex-wrap:wrap;gap:.35rem .9rem;font-size:.85rem;color:var(--text-secondary)}
+.ex-facts strong{color:var(--text-primary)}
+.qhead{display:flex;justify-content:space-between;align-items:flex-start;gap:.75rem}
+.qtext{font-weight:600;line-height:1.6;min-width:0;overflow-wrap:anywhere}
+.qtext .qn{color:var(--text-muted);margin-right:.25rem}
+.qdel{flex:none;display:inline-flex;align-items:center;justify-content:center;width:2rem;height:2rem;padding:0;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-card);color:var(--danger);cursor:pointer}
+.qdel:hover{background:var(--danger-light,#fde8e8);border-color:var(--danger)}
+.qopt{overflow-wrap:anywhere}
+.qcard img{max-width:100%!important;height:auto}
+.qcard mjx-container{max-width:100%;overflow-x:auto;overflow-y:hidden}
+@media(max-width:560px){
+  .page-header{text-align:left}
+  .ex-head-actions{display:grid;grid-template-columns:1fr 1fr;width:100%}
+  .ex-head-actions .btn{width:100%;justify-content:center}
+  .ex-head-actions form .btn{width:100%}
+  .aq-sources{display:grid;grid-template-columns:1fr 1fr;width:100%}
+  .aq-sources .btn{width:100%;justify-content:center}
+  .aq-sources .btn:last-child:nth-child(odd){grid-column:1/-1}
+  .aq-import{padding:1rem}
+  .qcard{padding:.75rem}
+}
 @media(max-width:560px){.aq-meta{grid-template-columns:1fr 1fr}.aq-meta .form-group:first-child{grid-column:1/-1}.aq-kbd{display:none}.aq-footer .btn{flex:1;justify-content:center}}
 .qcard{border:1px solid var(--border-color);border-radius:var(--radius-md);padding:.8rem 1rem;margin-bottom:.6rem}
 .qopt{font-size:.88rem;padding:.15rem 0}.qopt.correct{color:var(--success);font-weight:600}</style>
@@ -47,7 +74,7 @@
 {% block content %}
 <div class="page-header">
     <h1>{{ e.title }}</h1>
-    <div class="page-header-actions">
+    <div class="page-header-actions ex-head-actions">
         <a href="{{ url_for('cbt.monitor', exam_id=e.id) }}" class="btn btn-secondary"><i class="fas fa-tower-broadcast"></i> Live Monitor</a>
         <a href="{{ url_for('cbt.results', exam_id=e.id) }}" class="btn btn-secondary"><i class="fas fa-chart-bar"></i> Results</a>
         {% if can_write_sub('cbt', 'exams_edit') %}<a href="{{ url_for('cbt.edit_exam', exam_id=e.id) }}" class="btn btn-secondary"><i class="fas fa-edit"></i> Edit</a>{% endif %}
@@ -60,14 +87,18 @@
     </div>
 </div>
 
-<div class="card mb-3"><div class="card-body d-flex justify-between flex-wrap gap-2">
-    <div>
+<div class="card mb-3"><div class="card-body ex-info">
+    <div class="ex-info-meta">
         <span class="badge {{ 'badge-success' if e.is_published else 'badge-secondary' }}">{{ 'Published' if e.is_published else 'Draft' }}</span>
         <span class="badge badge-info">{{ e.subject.name if e.subject else 'No subject' }}</span>
         <span class="badge badge-secondary">{{ e.school_class.name if e.school_class else 'No class' }}{% if e.arm and not e.arm.is_default %} {{ e.arm.name }}{% endif %}</span>
-        <span class="text-muted text-sm">· {{ e.exam_date.strftime('%d %b %Y') if e.exam_date }} · {{ e.window_label }} · {{ e.duration_minutes }} min</span>
     </div>
-    <div class="text-sm"><i class="fas fa-key text-muted"></i> Access password: <strong>{{ e.access_password }}</strong> · {{ e.question_count }} Q · {{ e.total_marks }} marks</div>
+    <div class="ex-facts">
+        {% if e.exam_date %}<span><i class="far fa-calendar text-muted"></i> {{ e.exam_date.strftime('%d %b %Y') }} · {{ e.window_label }}</span>{% endif %}
+        <span><i class="far fa-clock text-muted"></i> {{ e.duration_minutes }} min</span>
+        <span><i class="fas fa-list-ol text-muted"></i> <strong>{{ e.question_count }}</strong> Q · <strong>{{ e.total_marks }}</strong> marks</span>
+        <span><i class="fas fa-key text-muted"></i> Password: <strong>{{ e.access_password }}</strong></span>
+    </div>
 </div></div>
 
 {% from "components/file_drop.html" import file_drop, file_drop_assets with context %}
@@ -235,9 +266,9 @@
         {% if questions %}
             {% for q in questions %}
             <div class="qcard">
-                <div class="d-flex justify-between gap-2">
-                    <strong>{{ loop.index }}. {{ q.question_text }}</strong>
-                    {% if can_write_sub('cbt', 'exams_questions_edit') %}<form method="POST" action="{{ url_for('cbt.delete_question', question_id=q.id) }}" data-confirm="Delete this question?"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button></form>{% endif %}
+                <div class="qhead">
+                    <div class="qtext"><span class="qn">{{ loop.index }}.</span>{{ q.question_text }}</div>
+                    {% if can_write_sub('cbt', 'exams_questions_edit') %}<form method="POST" action="{{ url_for('cbt.delete_question', question_id=q.id) }}" data-confirm="Delete this question?"><input type="hidden" name="_csrf_token" value="{{ csrf_token() }}"><button class="qdel" title="Delete question {{ loop.index }}" aria-label="Delete question {{ loop.index }}"><i class="fas fa-trash"></i></button></form>{% endif %}
                 </div>
                 {% if q.image_url %}<div style="margin:.4rem 0"><img src="{{ q.image_url }}" alt="Question figure" style="max-width:260px;max-height:180px;border:1px solid var(--border-color);border-radius:6px"></div>{% endif %}
                 {% for letter, text in q.options %}{% if text %}<div class="qopt {% if q.correct_option==letter %}correct{% endif %}">{{ letter }}. {{ text }}{% if q.correct_option==letter %} <i class="fas fa-check"></i>{% endif %}</div>{% endif %}{% endfor %}

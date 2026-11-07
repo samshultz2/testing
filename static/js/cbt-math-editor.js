@@ -94,6 +94,10 @@
   }
 
   // ---- chips --------------------------------------------------------------
+  // Phones/tablets: a formula has no native keyboard, so MathLive's own maths
+  // keyboard (digits, letters, operators) opens when a formula is tapped.
+  var TOUCH = !!(window.matchMedia && window.matchMedia('(pointer: coarse)').matches);
+
   function makeChip(latex, display) {
     var wrap = document.createElement('span');
     wrap.className = 'mr-chip';
@@ -101,11 +105,54 @@
     wrap.dataset.latex = latex || '';
     if (display) wrap.dataset.display = '1';
     var mf = new window.MathfieldElement();
-    mf.mathVirtualKeyboardPolicy = 'manual';
+    mf.mathVirtualKeyboardPolicy = TOUCH ? 'auto' : 'manual';
     mf.smartMode = false;
-    mf.setAttribute('aria-label', 'Formula');
+    mf.setAttribute('aria-label', 'Formula — type to edit; Backspace on an empty formula removes it');
     wrap.appendChild(mf);
+    var x = document.createElement('button');
+    x.type = 'button'; x.className = 'mr-chip-x'; x.tabIndex = -1;
+    x.setAttribute('aria-label', 'Remove this formula'); x.title = 'Remove formula';
+    x.textContent = '×';
+    wrap.appendChild(x);
     return wrap;
+  }
+
+  function removeChip(ed, chip, focusAfter) {
+    var prev = chip.previousSibling;
+    chip.remove();
+    if (ed._mrChip === chip) ed._mrChip = null;
+    tidy(ed);
+    if (focusAfter) {
+      ed.focus();
+      var r = document.createRange();
+      if (prev && prev.isConnected && prev.nodeType === 3) r.setStart(prev, prev.nodeValue.length);
+      else { r.selectNodeContents(ed); r.collapse(true); }
+      r.collapse(true);
+      var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+      ed._mrRange = r.cloneRange();
+    }
+    ed.contentEditable = 'true';
+    sync(ed);
+  }
+
+  // The formula right before (dir -1) or after (dir 1) a collapsed caret in
+  // the text, skipping the invisible spacer characters around formulas.
+  function chipBeside(ed, dir) {
+    var sel = window.getSelection();
+    if (!sel.rangeCount || !sel.isCollapsed) return null;
+    var r = sel.getRangeAt(0), n = r.startContainer, o = r.startOffset, cand = null;
+    if (!ed.contains(n)) return null;
+    if (n.nodeType === 3) {
+      var part = dir < 0 ? n.nodeValue.slice(0, o) : n.nodeValue.slice(o);
+      if (part.replace(/\u200B/g, '')) return null;
+      cand = dir < 0 ? n.previousSibling : n.nextSibling;
+    } else {
+      cand = dir < 0 ? n.childNodes[o - 1] : n.childNodes[o];
+    }
+    while (cand && cand.nodeType === 3 && !cand.nodeValue.replace(/\u200B/g, '')) {
+      cand = dir < 0 ? cand.previousSibling : cand.nextSibling;
+    }
+    return cand && cand.classList && cand.classList.contains('mr-chip') ? cand : null;
   }
 
   function initChip(ed, chip) {
@@ -114,13 +161,24 @@
     mf.dataset.mrInit = '1';
     try { mf.value = chip.dataset.latex || ''; } catch (e) { /* keep empty */ }
     mf.addEventListener('input', function () { chip.dataset.latex = chipLatex(chip); sync(ed); });
-    mf.addEventListener('focus', function () { ed._mrChip = chip; });
+    mf.addEventListener('focus', function () { ed._mrChip = chip; chip.classList.add('is-editing'); });
     mf.addEventListener('focusout', function () {
-      // An emptied formula disappears instead of leaving a blank box.
       setTimeout(function () {
-        if (!chip.isConnected || mf.contains(document.activeElement) || document.activeElement === mf) return;
-        if (!chipLatex(chip)) { chip.remove(); tidy(ed); sync(ed); }
+        if (!chip.isConnected) { ed.contentEditable = 'true'; return; }
+        if (mf.contains(document.activeElement) || document.activeElement === mf) return;
+        chip.classList.remove('is-editing');
+        ed.contentEditable = 'true';             // text editable again (see pointerdown)
+        // Leaving formulas altogether: put the on-screen maths keyboard away.
+        var a = document.activeElement;
+        if (TOUCH && window.mathVirtualKeyboard && !(a && a.tagName === 'MATH-FIELD')) {
+          try { window.mathVirtualKeyboard.hide(); } catch (e) { /* ignore */ }
+        }
+        // An emptied formula disappears instead of leaving a blank box.
+        if (!chipLatex(chip)) removeChip(ed, chip, false);
       }, 0);
+    });
+    chip.querySelector('.mr-chip-x').addEventListener('click', function (ev) {
+      ev.preventDefault(); ev.stopPropagation(); removeChip(ed, chip, true);
     });
     mf.addEventListener('move-out', function (ev) {
       var d = ev.detail && ev.detail.direction;
@@ -129,6 +187,9 @@
     mf.addEventListener('keydown', function (ev) {
       if (ev.key === 'Escape' || (ev.key === 'Enter' && !ev.shiftKey)) {
         ev.preventDefault(); ev.stopPropagation(); caretBeside(ed, chip, true);
+      } else if ((ev.key === 'Backspace' || ev.key === 'Delete') && !chipLatex(chip)) {
+        // Backspace in an already-empty formula removes the formula itself.
+        ev.preventDefault(); ev.stopPropagation(); removeChip(ed, chip, true);
       }
     }, true);
     return mf;
@@ -144,6 +205,8 @@
   }
 
   function caretBeside(ed, chip, after) {
+    ed.contentEditable = 'true';
+    chip.classList.remove('is-editing');
     tidy(ed);
     ed._mrChip = null;
     var t = after ? chip.nextSibling : chip.previousSibling;
@@ -296,8 +359,51 @@
     ed.addEventListener('keyup', function (ev) { if (ev.target === ed) { ed._mrChip = null; saveRange(ed); } });
     ed.addEventListener('mouseup', function (ev) { if (ev.target === ed || !(ev.target.closest && ev.target.closest('.mr-chip'))) { ed._mrChip = null; saveRange(ed); } });
     ed.addEventListener('focus', function () { saveRange(ed); });
+    // Tapping/clicking a formula hands it the whole interaction: the outer
+    // text box stops being editable until the formula loses focus, so no
+    // browser can steal the tap or the caret from the formula.
+    ed.addEventListener('pointerdown', function (ev) {
+      var chip = ev.target.closest && ev.target.closest('.mr-chip');
+      if (!chip) {
+        // Back in the text: make it editable before the browser places the caret.
+        var act = document.activeElement;
+        var inFormula = act && act.tagName === 'MATH-FIELD' && ed.contains(act);
+        if (ed.contentEditable !== 'true' || inFormula) {
+          ed.contentEditable = 'true';
+          var mfOpen = inFormula ? act : ed.querySelector('.mr-chip.is-editing math-field');
+          if (mfOpen) { try { mfOpen.blur(); } catch (e) { /* ignore */ } }
+          if (window.mathVirtualKeyboard) { try { window.mathVirtualKeyboard.hide(); } catch (e) { /* ignore */ } }
+          // Touch browsers decide focus before we unlock the text: put the
+          // caret where the finger landed ourselves if they didn't.
+          var x = ev.clientX, y = ev.clientY;
+          setTimeout(function () {
+            if (document.activeElement === ed) return;
+            ed.focus();
+            var r = document.caretRangeFromPoint ? document.caretRangeFromPoint(x, y) : null;
+            if (!r && document.caretPositionFromPoint) {
+              var cp = document.caretPositionFromPoint(x, y);
+              if (cp) { r = document.createRange(); r.setStart(cp.offsetNode, cp.offset); }
+            }
+            if (!r || !ed.contains(r.startContainer)) { r = document.createRange(); r.selectNodeContents(ed); r.collapse(false); }
+            r.collapse(true);
+            var sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+            ed._mrRange = r.cloneRange();
+          }, 0);
+        }
+        return;
+      }
+      if (ev.target.closest && ev.target.closest('.mr-chip-x')) return;
+      ed.contentEditable = 'false';
+      var mf = chip.querySelector('math-field');
+      setTimeout(function () { if (document.activeElement !== mf) { try { mf.focus(); } catch (e) { /* ignore */ } } }, 0);
+    }, true);
+
     ed.addEventListener('keydown', function (ev) {
       if (ev.target !== ed) return;              // keys inside a formula belong to it
+      if (ev.key === 'Backspace' || ev.key === 'Delete') {
+        var c = chipBeside(ed, ev.key === 'Backspace' ? -1 : 1);
+        if (c) { ev.preventDefault(); removeChip(ed, c, true); return; }
+      }
       if (ev.key === 'Enter') {
         if ((ev.ctrlKey || ev.metaKey)) return;  // form shortcut (Ctrl+Enter = add)
         ev.preventDefault();

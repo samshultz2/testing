@@ -4296,3 +4296,7 @@ body .bill-line span:last-child, body .pl-row span:last-child { font-variant-num
 .stu-pick .g{font-size:.66rem;font-weight:700;padding:.1rem .5rem;border-radius:99px;white-space:nowrap;letter-spacing:.02em}
 .stu-pick .g.m{background:rgba(59,130,246,.15);color:#1d4ed8}
 .stu-pick .g.f{background:rgba(236,72,153,.15);color:#be185d}
+
+/* Keyboard "Skip to content" link: hidden until focused (was always visible). */
+.skip-link{position:absolute;left:-9999px;top:.5rem;z-index:2000;padding:.5rem .9rem;border-radius:8px;background:var(--primary);color:#fff;font-weight:600;text-decoration:none}
+.skip-link:focus{left:.75rem}

@@ -6,7 +6,11 @@
 <style>
 .section-title{display:flex;align-items:center;gap:.5rem;margin:1.5rem 0 .75rem;font-size:1.05rem;font-weight:700}
 .section-title .tag{font-size:.7rem;font-weight:600;padding:.15rem .55rem;border-radius:var(--radius-full);color:#fff}
-.tag.waec{background:#0891b2}.tag.jamb{background:#667eea}
+.tag.waec{background:#0891b2}.tag.neco{background:#d9480f}
+.wn-bar{display:flex;height:14px;border-radius:999px;overflow:hidden;background:var(--gray-100)}
+.wn-bar span{display:block;height:100%}
+.wn-legend{display:flex;flex-wrap:wrap;gap:.4rem 1rem;margin-top:.6rem;font-size:.82rem}
+.wn-legend i{display:inline-block;width:.7rem;height:.7rem;border-radius:3px;margin-right:.3rem;vertical-align:-1px}.tag.jamb{background:#667eea}
 .kpi-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.6rem}
 @media(min-width:768px){.kpi-grid{grid-template-columns:repeat(4,1fr)}}
 .kpi{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-md);padding:.85rem;text-align:center}
@@ -37,7 +41,7 @@
 .ins.good{border-left-color:#16a34a}.ins.good .ic{background:#16a34a}
 .ins.info{border-left-color:#6366f1}.ins.info .ic{background:#6366f1}
 .exec-band{display:grid;grid-template-columns:repeat(2,1fr);gap:.6rem;margin-bottom:1rem}
-@media(min-width:768px){.exec-band{grid-template-columns:repeat(5,1fr)}}
+@media(min-width:768px){.exec-band{grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}}
 .exec{position:relative;display:block;text-align:left;background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-md);padding:.8rem .9rem;color:inherit;text-decoration:none;transition:transform .12s,box-shadow .12s}
 a.exec:hover{transform:translateY(-2px);box-shadow:var(--shadow-md);border-color:var(--primary)}
 .exec .ev{font-size:1.5rem;font-weight:800;line-height:1.05}
@@ -136,6 +140,14 @@ a.exec:hover .go{opacity:1}
         <div class="el"><i class="fas fa-book"></i> WAEC pass rate</div>
         <span class="go"><i class="fas fa-arrow-down"></i></span>
     </a>
+    {% if neco_stats %}
+    <a class="exec scroll-mt tone-{{ 'green' if neco_stats.overall_pass_rate >= 75 else 'amber' if neco_stats.overall_pass_rate >= 60 else 'red' }}"
+       href="#sec-neco" title="Jump to NECO performance">
+        <div class="ev">{{ neco_stats.overall_pass_rate }}%</div>
+        <div class="el"><i class="fas fa-book-open"></i> NECO pass rate</div>
+        <span class="go"><i class="fas fa-arrow-down"></i></span>
+    </a>
+    {% endif %}
     <a class="exec scroll-mt tone-{{ 'red' if at_risk|length else 'green' }}"
        href="#sec-atrisk" title="Jump to the at-risk register">
         <div class="ev">{{ at_risk|length }}</div>
@@ -250,7 +262,7 @@ a.exec:hover .go{opacity:1}
 <div id="analyticsContent">
 
 {% if not years %}
-<div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-chart-pie"></i><h3>No exam data yet</h3><p>Enter WAEC or JAMB results to unlock analytics.</p></div></div></div>
+<div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-chart-pie"></i><h3>No exam data yet</h3><p>Enter WAEC, NECO or JAMB results to unlock analytics.</p></div></div></div>
 {% else %}
 
 <!-- ============ JAMB ============ -->
@@ -370,8 +382,110 @@ a.exec:hover .go{opacity:1}
 <div class="card"><div class="card-body text-muted">No WAEC results for {{ selected_year }}.</div></div>
 {% endif %}
 
+<!-- ============ NECO (same layout as WAEC) ============ -->
+{% if neco_stats %}
+<div id="sec-neco" class="section-title scroll-mt"><span class="tag neco">NECO</span> Performance Overview &mdash; {{ selected_year }}
+    <a href="{{ url_for('results.neco_list', year=selected_year) }}" class="btn btn-secondary btn-sm" style="margin-left:auto">NECO dashboard</a>
+    <a href="{{ url_for('results.neco_broadsheet', year=selected_year) }}" class="btn btn-secondary btn-sm">Broadsheet</a></div>
+<div class="kpi-grid mb-3">
+    <div class="kpi lead"><div class="v">{{ neco_stats.overall_pass_rate }}%</div><div class="l">Pass Rate (credit+)</div></div>
+    <div class="kpi"><div class="v">{{ neco_stats.unique_students }}</div><div class="l">Students</div></div>
+    <div class="kpi"><div class="v">{{ neco_stats.total_results }}</div><div class="l">Subject Entries</div></div>
+    <div class="kpi"><div class="v" style="color:#28a745">{{ neco_stats.overall_distinction_rate }}%</div><div class="l">Distinction Rate</div></div>
+</div>
+
+<div class="two-col mb-3">
+    <div class="card">
+        <div class="card-header"><h3><i class="fas fa-chart-pie"></i> Grade Distribution</h3></div>
+        <div class="chart-wrap"><canvas id="necoGrades"></canvas></div>
+    </div>
+    <div class="card">
+        <div class="card-header"><h3><i class="fas fa-venus-mars"></i> Students by Gender</h3></div>
+        <div class="chart-wrap"><canvas id="necoGender"></canvas></div>
+    </div>
+</div>
+
+<div class="two-col mb-3">
+    <div class="card">
+        <div class="card-header"><h3 class="text-success"><i class="fas fa-arrow-up"></i> Strongest Subjects (A1 rate)</h3></div>
+        <div class="card-body" style="padding:0;">
+            <table class="mini-table no-mobile-scroll">
+                <thead><tr><th>Subject</th><th class="num">A1 %</th><th class="num">Pass %</th></tr></thead>
+                <tbody>
+                {% for s in neco_stats.top_subjects_by_a1 %}
+                <tr><td>{{ s.subject }}</td><td class="num">{{ s.a1_rate }}%</td><td class="num">{{ s.pass_rate }}%</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header"><h3 class="text-danger"><i class="fas fa-arrow-down"></i> Most Failed Subjects</h3></div>
+        <div class="card-body" style="padding:0;">
+            <table class="mini-table no-mobile-scroll">
+                <thead><tr><th>Subject</th><th class="num">Below credit % (D7–F9)</th><th class="num">Fail % (F9)</th><th class="num">Entries</th></tr></thead>
+                <tbody>
+                {% for s in neco_stats.most_failed_subjects %}
+                <tr><td>{{ s.subject }}</td><td class="num" style="color:#dc3545">{{ s.below_credit_rate }}%</td><td class="num" style="color:#dc3545">{{ s.fail_rate }}%</td><td class="num">{{ s.total_entries }}</td></tr>
+                {% else %}
+                <tr><td colspan="4" class="text-muted" style="padding:16px;">No sub-credit grades (D7–F9) recorded for {{ selected_year }}.</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+
+<!-- ============ WAEC vs NECO ============ -->
+{% if waec_vs_neco %}{% set wn = waec_vs_neco %}
+<div id="sec-waec-neco" class="section-title scroll-mt"><span class="tag waec">WAEC</span> vs <span class="tag neco">NECO</span> &mdash; {{ selected_year }}</div>
+<div class="kpi-grid mb-2">
+    <div class="kpi"><div class="v">{{ wn.waec_ok_pct }}%</div><div class="l">5 credits incl. Eng &amp; Maths — WAEC ({{ wn.waec_ok }}/{{ wn.waec_candidates }})</div></div>
+    <div class="kpi"><div class="v">{{ wn.neco_ok_pct }}%</div><div class="l">5 credits incl. Eng &amp; Maths — NECO ({{ wn.neco_ok }}/{{ wn.neco_candidates }})</div></div>
+    <div class="kpi"><div class="v">{{ wn.either_ok_pct }}%</div><div class="l">In one sitting, either exam ({{ wn.either_ok }}/{{ wn.both }} who sat both)</div></div>
+    <div class="kpi lead"><div class="v">{{ wn.combined_ok_pct }}%</div><div class="l">Combining both sittings ({{ wn.combined_ok }}/{{ wn.both }})</div></div>
+</div>
+<p class="text-muted text-sm" style="margin:-.25rem 0 .75rem">Most universities accept up to two sittings, so the combined figure — best grade per subject across WAEC and NECO — is the admission-relevant one.
+{% if wn.gained_by_combining %}<strong>{{ wn.gained_by_combining|length }}</strong> candidate(s) only qualify by combining: {{ wn.gained_by_combining|join(', ') }}.{% endif %}</p>
+<div class="two-col mb-3">
+    <div class="card">
+        <div class="card-header"><h3><i class="fas fa-scale-balanced"></i> Credit rate by subject</h3></div>
+        <div class="card-body" style="padding:0;overflow-x:auto">
+            <table class="mini-table">
+                <thead><tr><th>Subject</th><th class="num">WAEC credit %</th><th class="num">NECO credit %</th><th class="num">NECO − WAEC</th></tr></thead>
+                <tbody>
+                {% for x in wn.subjects %}
+                <tr><td>{{ x.subject }}</td><td class="num">{{ x.waec.credit_rate }}%</td><td class="num">{{ x.neco.credit_rate }}%</td>
+                    <td class="num" style="color:{{ '#16a34a' if x.diff > 0 else '#dc2626' if x.diff < 0 else 'inherit' }}">{{ '+' if x.diff > 0 }}{{ x.diff }}</td></tr>
+                {% else %}<tr><td colspan="4" class="text-muted" style="padding:16px">No subject was sat in both exams.</td></tr>{% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="card">
+        <div class="card-header"><h3><i class="fas fa-people-arrows"></i> Same candidate, same subject</h3></div>
+        <div class="card-body">
+            {% set h = wn.head_to_head %}
+            {% if h.pairs %}
+            <p class="text-muted text-sm" style="margin-top:0">{{ h.pairs }} subject grades where a candidate sat the subject in both exams.</p>
+            <div class="wn-bar" role="img" aria-label="WAEC better {{ h.waec_better_pct }} percent, same {{ h.same_pct }} percent, NECO better {{ h.neco_better_pct }} percent">
+                <span style="width:{{ h.waec_better_pct }}%;background:#0891b2"></span><span style="width:{{ h.same_pct }}%;background:#cbd5e1"></span><span style="width:{{ h.neco_better_pct }}%;background:#d9480f"></span>
+            </div>
+            <div class="wn-legend">
+                <span><i style="background:#0891b2"></i> Better in WAEC <strong>{{ h.waec_better }}</strong> ({{ h.waec_better_pct }}%)</span>
+                <span><i style="background:#cbd5e1"></i> Same grade <strong>{{ h.same }}</strong> ({{ h.same_pct }}%)</span>
+                <span><i style="background:#d9480f"></i> Better in NECO <strong>{{ h.neco_better }}</strong> ({{ h.neco_better_pct }}%)</span>
+            </div>
+            {% else %}<p class="text-muted">No candidate sat the same subject in both exams.</p>{% endif %}
+        </div>
+    </div>
+</div>
+{% endif %}
+
 <!-- ============ GENDER COMPARISON ============ -->
-{% if jamb_gender_stats or waec_gender_stats %}
+{% if jamb_gender_stats or waec_gender_stats or neco_gender_stats %}
 <div class="section-title"><i class="fas fa-venus-mars"></i> Gender Comparison &mdash; {{ selected_year }}</div>
 <div class="two-col mb-3">
     {% if jamb_gender_stats %}
@@ -399,6 +513,22 @@ a.exec:hover .go{opacity:1}
                 <thead><tr><th>Gender</th><th class="num">Entries</th><th class="num">Pass %</th><th class="num">Distinction %</th><th class="num">Mean Pts</th></tr></thead>
                 <tbody>
                 {% for g in waec_gender_stats %}
+                <tr><td>{{ g.gender }}</td><td class="num">{{ g.entries }}</td><td class="num"><strong>{{ g.pass_rate }}%</strong></td><td class="num">{{ g.distinction_rate }}%</td><td class="num">{{ g.mean_points }}</td></tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    {% endif %}
+    {% if neco_gender_stats %}
+    <div class="card">
+        <div class="card-header"><h3><span class="tag neco">NECO</span> Pass &amp; Distinction by Gender</h3></div>
+        <div class="chart-wrap"><canvas id="necoGenderCmp"></canvas></div>
+        <div class="card-body" style="padding:0;">
+            <table class="mini-table no-mobile-scroll">
+                <thead><tr><th>Gender</th><th class="num">Entries</th><th class="num">Pass %</th><th class="num">Distinction %</th><th class="num">Mean Pts</th></tr></thead>
+                <tbody>
+                {% for g in neco_gender_stats %}
                 <tr><td>{{ g.gender }}</td><td class="num">{{ g.entries }}</td><td class="num"><strong>{{ g.pass_rate }}%</strong></td><td class="num">{{ g.distinction_rate }}%</td><td class="num">{{ g.mean_points }}</td></tr>
                 {% endfor %}
                 </tbody>
@@ -435,10 +565,10 @@ a.exec:hover .go{opacity:1}
             <a href="{{ url_for('results.analytics_by_class', year=selected_year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-up-right-from-square"></i> Full class league</a></div>
         <div class="card-body" style="padding:0;">
             <table class="mini-table no-mobile-scroll">
-                <thead><tr><th>Arm</th><th class="num">JAMB n</th><th class="num">JAMB mean</th><th class="num">WAEC pass %</th></tr></thead>
+                <thead><tr><th>Arm</th><th class="num">JAMB n</th><th class="num">JAMB mean</th><th class="num">WAEC pass %</th>{% if neco_stats %}<th class="num">NECO pass %</th>{% endif %}</tr></thead>
                 <tbody>
                 {% for c in class_compare %}
-                <tr><td>{{ c.arm }}</td><td class="num">{{ c.jamb_count }}</td><td class="num"><strong>{{ c.jamb_mean }}</strong></td><td class="num">{{ c.waec_pass_rate }}%</td></tr>
+                <tr><td>{{ c.arm }}</td><td class="num">{{ c.jamb_count }}</td><td class="num"><strong>{{ c.jamb_mean }}</strong></td><td class="num">{{ c.waec_pass_rate }}%</td>{% if neco_stats %}<td class="num">{{ (c.neco_pass_rate ~ '%') if c.neco_pass_rate is not none else '—' }}</td>{% endif %}</tr>
                 {% endfor %}
                 </tbody>
             </table>
@@ -469,7 +599,7 @@ a.exec:hover .go{opacity:1}
 <div class="two-col mb-3">
     <div class="card">
         <div class="card-header"><h3><i class="fas fa-wave-square"></i> Year-over-Year</h3></div>
-        {% if yoy and (yoy.jamb_trends or yoy.waec_trends) %}
+        {% if (yoy and (yoy.jamb_trends or yoy.waec_trends)) or neco_yoy %}
         <div class="chart-wrap"><canvas id="yoyChart"></canvas></div>
         {% else %}
         <div class="card-body text-muted"><i class="fas fa-info-circle"></i> Need at least two years of WAEC/JAMB data to chart a year-over-year trend.</div>
@@ -653,15 +783,33 @@ new Chart(document.getElementById('waecGender'), {
 });
 {% endif %}
 
+{% if neco_stats %}
+var ng = {{ neco_stats.grade_distribution | tojson }};
+new Chart(document.getElementById('necoGrades'), {
+    type:'bar',
+    data:{ labels:Object.keys(ng), datasets:[{ data:Object.values(ng),
+        backgroundColor:['#28a745','#20c997','#17a2b8','#007bff','#6f42c1','#ffc107','#fd7e14','#e83e8c','#dc3545'], borderRadius:5 }] },
+    options:{ ...baseOpts, scales:{ y:{ beginAtZero:true, ticks:{precision:0} } } }
+});
+var ngen = {{ neco_gender | tojson }};
+new Chart(document.getElementById('necoGender'), {
+    type:'doughnut',
+    data:{ labels:Object.keys(ngen), datasets:[{ data:Object.values(ngen), backgroundColor:['#d9480f','#f56991','#bdc3c7'] }] },
+    options:{ ...baseOpts, plugins:{legend:{position:'bottom'}} }
+});
+{% endif %}
+
 var yoyJamb = {{ (yoy.jamb_trends if yoy else []) | tojson }};
 var yoyWaec = {{ (yoy.waec_trends if yoy else []) | tojson }};
+var yoyNeco = {{ (neco_yoy or []) | tojson }};
 if (document.getElementById('yoyChart')) {
-    const yearsSet = [...new Set([...yoyJamb.map(t=>t.year), ...yoyWaec.map(t=>t.year)])].sort();
+    const yearsSet = [...new Set([...yoyJamb.map(t=>t.year), ...yoyWaec.map(t=>t.year), ...yoyNeco.map(t=>t.year)])].sort();
     new Chart(document.getElementById('yoyChart'), {
         type:'line',
         data:{ labels:yearsSet, datasets:[
             { label:'JAMB mean', data:yearsSet.map(y=>{const t=yoyJamb.find(x=>x.year===y);return t?t.mean_score:null;}), borderColor:'#667eea', backgroundColor:'rgba(102,126,234,.1)', tension:.3, spanGaps:true, yAxisID:'y' },
-            { label:'WAEC pass %', data:yearsSet.map(y=>{const t=yoyWaec.find(x=>x.year===y);return t?t.pass_rate:null;}), borderColor:'#0891b2', backgroundColor:'rgba(8,145,178,.1)', tension:.3, spanGaps:true, yAxisID:'y1' }
+            { label:'WAEC pass %', data:yearsSet.map(y=>{const t=yoyWaec.find(x=>x.year===y);return t?t.pass_rate:null;}), borderColor:'#0891b2', backgroundColor:'rgba(8,145,178,.1)', tension:.3, spanGaps:true, yAxisID:'y1' }{% if neco_yoy %},
+            { label:'NECO pass %', data:yearsSet.map(y=>{const t=yoyNeco.find(x=>x.year===y);return t?t.pass_rate:null;}), borderColor:'#d9480f', backgroundColor:'rgba(217,72,15,.1)', tension:.3, spanGaps:true, yAxisID:'y1' }{% endif %}
         ]},
         options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}},
             scales:{ y:{ position:'left', title:{display:true,text:'JAMB'} }, y1:{ position:'right', max:100, grid:{drawOnChartArea:false}, title:{display:true,text:'WAEC %'} } } }
@@ -716,6 +864,19 @@ new Chart(document.getElementById('waecGenderCmp'), {
     data:{ labels:wgc.map(g=>g.gender), datasets:[
         { label:'Pass %', data:wgc.map(g=>g.pass_rate), backgroundColor:'#0891b2', borderRadius:5 },
         { label:'Distinction %', data:wgc.map(g=>g.distinction_rate), backgroundColor:'#28a745', borderRadius:5 }
+    ]},
+    options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}},
+        scales:{ y:{ beginAtZero:true, max:100 } } }
+});
+{% endif %}
+
+{% if neco_gender_stats %}
+var ngc = {{ neco_gender_stats | tojson }};
+new Chart(document.getElementById('necoGenderCmp'), {
+    type:'bar',
+    data:{ labels:ngc.map(g=>g.gender), datasets:[
+        { label:'Pass %', data:ngc.map(g=>g.pass_rate), backgroundColor:'#d9480f', borderRadius:5 },
+        { label:'Distinction %', data:ngc.map(g=>g.distinction_rate), backgroundColor:'#28a745', borderRadius:5 }
     ]},
     options:{ responsive:true, maintainAspectRatio:false, plugins:{legend:{position:'bottom'}},
         scales:{ y:{ beginAtZero:true, max:100 } } }

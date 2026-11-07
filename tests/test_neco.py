@@ -184,3 +184,37 @@ def test_student_profile_payload_has_neco_card(app):
         with app.test_request_context():
             card = _student_neco_card(db.session.get(Student, sid))
     assert card and card['count'] == 0 and '/results/neco/add' in card['add_url']
+
+
+def test_exam_analytics_overview_includes_neco_and_waec_vs_neco(app):
+    from utils import waec_neco
+    year = 2036
+    combo = _student(app, 'Neconcombo', 'Kola')        # qualifies only by combining
+    single = _student(app, 'Necosingle', 'Lara')       # qualifies in WAEC alone
+    _seed(app, combo, WAECResult, year, {'English Language': 'C6', 'Mathematics': 'B3',
+                                         'Biology': 'C5', 'Chemistry': 'C4', 'Physics': 'F9'})
+    _seed(app, combo, NECOResult, year, {'English Language': 'D7', 'Mathematics': 'C6',
+                                         'Physics': 'C6', 'Biology': 'E8'})
+    _seed(app, single, WAECResult, year, {'English Language': 'B2', 'Mathematics': 'A1',
+                                          'Biology': 'B3', 'Chemistry': 'C4', 'Physics': 'C5'})
+    _seed(app, single, NECOResult, year, {'English Language': 'C4', 'Mathematics': 'F9'})
+    with app.app_context():
+        cmp = waec_neco.compare(year)
+    assert cmp['both'] == 2 and cmp['waec_ok'] == 1 and cmp['neco_ok'] == 0
+    assert cmp['either_ok'] == 1 and cmp['combined_ok'] == 2
+    assert cmp['gained_by_combining'] == ['Neconcombo Kola']
+    phys = next(x for x in cmp['subjects'] if x['subject'] == 'Physics')
+    assert phys['waec']['credit_rate'] == 50.0 and phys['neco']['credit_rate'] == 100.0
+    h = cmp['head_to_head']
+    assert h['pairs'] == 6 and h['waec_better'] + h['neco_better'] + h['same'] == 6
+
+    c = _admin(app)
+    html = c.get(f'/results/analytics?year={year}').get_data(as_text=True)
+    assert 'id="sec-neco"' in html and 'NECO pass rate' in html
+    assert 'id="sec-waec-neco"' in html and 'Combining both sittings' in html
+    assert 'Neconcombo Kola' in html and 'id="necoGenderCmp"' in html
+    # A year with WAEC only shows no NECO section (schools that don't sit NECO).
+    other = _student(app, 'Waeconly', 'Musa')
+    _seed(app, other, WAECResult, 2037, {'Mathematics': 'A1'})
+    html = c.get('/results/analytics?year=2037').get_data(as_text=True)
+    assert 'id="sec-neco"' not in html and 'id="sec-waec-neco"' not in html

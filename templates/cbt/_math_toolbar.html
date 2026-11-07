@@ -35,7 +35,7 @@
 <script src="{{ url_for('static', filename='js/cbt-math-editor.js') }}"></script>
 <script type="application/json" id="{{ tid }}_mxdata">{{ mx.palettes|tojson }}</script>
 <style>
-.mx{border:1px solid var(--border-color,#dfe3ea);border-bottom:none;border-radius:10px 10px 0 0;background:var(--bg-card,#fff)}
+.mx{min-width:0;max-width:100%;border:1px solid var(--border-color,#dfe3ea);border-bottom:none;border-radius:10px 10px 0 0;background:var(--bg-card,#fff)}
 .mx + textarea.form-control,.mx + .form-control{border-top-left-radius:0;border-top-right-radius:0}
 .mx-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:.5rem;padding:.55rem .7rem;border-bottom:1px solid var(--border-color,#e6e9ef);background:var(--gray-50,#f7f9fb);border-radius:10px 10px 0 0}
 .mx-kinds{display:flex;flex-wrap:wrap;align-items:center;gap:.3rem}
@@ -58,7 +58,9 @@
 .mr-edit.mr-multi{min-height:7rem}
 .mr-edit.mr-single{min-height:2.6rem;padding:.4rem .7rem;line-height:1.6}
 .mr-edit[hidden]{display:none}
-.mr-edit.is-empty::before{content:attr(data-placeholder);color:var(--text-muted,#9ca3af);pointer-events:none;position:absolute}
+.mr-edit{position:relative}
+.mr-edit.is-empty::before{content:attr(data-placeholder);color:var(--text-muted,#9ca3af);pointer-events:none;position:absolute;left:.75rem;right:.75rem;top:.55rem;white-space:normal}
+.mr-edit.mr-single.is-empty::before{top:.4rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mr-edit.is-invalid{border-color:var(--danger,#dc2626);box-shadow:0 0 0 3px rgba(220,38,38,.12)}
 .mx + .mr-hidden + .mr-edit{border-top-left-radius:0;border-top-right-radius:0}
 .mr-chip{display:inline-block;vertical-align:middle;margin:0 .1rem;border-radius:6px;background:var(--gray-50,#f3f6f9);box-shadow:inset 0 0 0 1px var(--border-light,#e7ebf0);transition:background .12s,box-shadow .12s}
@@ -67,6 +69,11 @@
 .mr-chip math-field{display:inline-block;min-width:1.6em;padding:.05rem .3rem;border:none;background:transparent;font-size:1.08em;outline:none;--caret-color:var(--primary,#0d6a4e);--selection-background-color:var(--primary-alpha,rgba(13,106,78,.15));--placeholder-color:var(--primary,#0d6a4e);--smart-fence-color:var(--text-muted,#6b7280)}
 .mr-chip math-field::part(menu-toggle),.mr-chip math-field::part(virtual-keyboard-toggle){display:none}
 .mr-chip math-field::part(content){padding:0}
+.mr-chip{position:relative}
+.mr-chip-x{position:absolute;top:-.55rem;right:-.55rem;z-index:2;display:none;align-items:center;justify-content:center;width:1.15rem;height:1.15rem;padding:0;border:none;border-radius:50%;background:var(--danger,#dc2626);color:#fff;font-size:.8rem;line-height:1;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+.mr-chip:hover .mr-chip-x,.mr-chip.is-editing .mr-chip-x{display:inline-flex}
+@media (pointer:coarse){.mr-chip-x{width:1.5rem;height:1.5rem;top:-.75rem;right:-.75rem;font-size:1rem}.mr-chip.is-editing .mr-chip-x{display:inline-flex}}
+.mr-edit[contenteditable="false"]{cursor:default}
 .mx-target strong{color:var(--primary,#0d6a4e)}
 .mx-tabs{display:flex;gap:.15rem;overflow-x:auto;padding:0 .5rem;border-bottom:1px solid var(--border-color,#e6e9ef);scrollbar-width:thin}
 .mx-tab{flex:none;border:none;background:none;padding:.5rem .7rem;font-size:.82rem;font-weight:500;color:var(--text-muted,#6b7280);border-bottom:2px solid transparent;cursor:pointer;white-space:nowrap}
@@ -84,7 +91,7 @@
 .mx-help{display:block;margin-top:.35rem;font-size:.78rem;color:var(--text-muted,#6b7280)}
 .mx-help code{font-size:.75rem;background:var(--gray-100,#eef1f5);padding:0 .25rem;border-radius:4px}
 .mx-help kbd{font-family:inherit;font-size:.7rem;padding:0 .3rem;border:1px solid var(--border-color,#dfe3ea);border-bottom-width:2px;border-radius:4px;background:var(--bg-card,#fff)}
-@media (max-width:560px){.mx-head{flex-direction:column;align-items:stretch}.mx-kinds{flex-wrap:nowrap;overflow-x:auto;padding-bottom:.15rem;scrollbar-width:none}.mx-kind{flex:none}.mx-btn{min-width:2.6rem;height:2.6rem}}
+@media (max-width:560px){.mx-head{flex-direction:column;align-items:stretch}.mx-head>*{min-width:0;max-width:100%}.mx-right{justify-content:space-between}.mx-kinds{flex-wrap:nowrap;overflow-x:auto;padding-bottom:.15rem;scrollbar-width:none}.mx-kind{flex:none}.mx-btn{min-width:2.6rem;height:2.6rem}}
 </style>
 <script nonce="{{ csp_nonce }}">
 (function () {
