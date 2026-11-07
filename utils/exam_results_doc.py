@@ -588,7 +588,9 @@ def render_pdf(doc):
     # ---- column widths -----------------------------------------------------
     rows = doc['rows']
     max_subj = max((len(r.get('grades') or []) for r in rows), default=0)
-    per_row = _per_row(max_subj) if max_subj else 0
+    # All subject grades on one line; wrapped onto two lines only below when
+    # one line would not fit the page width.
+    per_row = max_subj
     chip_w = 0
     if students and per_row:
         codes_w = max((stringWidth(g[0], F['BodyBold'], 5.4 * K) for r in rows for g in r['grades']), default=10)
@@ -634,6 +636,7 @@ def render_pdf(doc):
         need -= (per_row - nonlocal_rows) * chip_w
         fixed['grades'] -= (per_row - nonlocal_rows) * chip_w
         per_row = nonlocal_rows
+    doc['_per_row'] = per_row
     # A subject analysis that is only slightly too wide stays portrait (the
     # columns squeeze a little) so the table, chart and highlights share a page.
     if need > PW - 2 * margin and (students or need > (PW - 2 * margin) * 1.2):
@@ -1172,7 +1175,7 @@ def render_docx(doc):
             p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         elif c['kind'] in right:
             p.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    per_row = _per_row(max((len(r.get('grades') or []) for r in doc['rows']), default=0) or 1)
+    per_row = doc.get('_per_row') or max((len(r.get('grades') or []) for r in doc['rows']), default=0) or 1
     for i, row in enumerate(rows, 1):
         is_total = doc.get('total') is not None and i == len(rows)
         for cell, c in zip(t.rows[i].cells, cols):
