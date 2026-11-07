@@ -2669,6 +2669,18 @@ input:focus, select:focus, textarea:focus {
 /* Student add/edit form (React) — responsive rows + contact lines */
 .sf-row { display:grid; grid-template-columns:1fr; gap:0 1rem; }
 @media (min-width:560px){ .sf-row{ grid-template-columns:repeat(2,minmax(0,1fr)); } }
+/* Date of birth: Day / Month / Year pickers + "type it" box */
+.dob-pickers { display:grid; grid-template-columns:minmax(64px,.8fr) minmax(0,1.6fr) minmax(80px,1fr); gap:.4rem; }
+.dob-pickers .form-control { min-height:44px; padding-right:1.6rem; }
+.dob-typed { display:flex; gap:.4rem; align-items:center; margin-top:.4rem; }
+.dob-typed .form-control { min-height:40px; font-size:.9rem; }
+.dob-clear { flex:none; border:1px solid var(--border-color); background:var(--bg-card); color:var(--text-muted);
+  border-radius:8px; padding:.45rem .7rem; font-size:.8rem; font-weight:600; cursor:pointer; min-height:40px; }
+.dob-clear:hover { color:var(--danger); border-color:var(--danger); }
+.dob-status { min-height:1.2rem; margin-top:.35rem; font-size:.8rem; }
+.dob-ok { color:var(--success); font-weight:600; }
+.dob-warn { color:var(--warning, #b7791f); font-weight:600; }
+.dob-muted { color:var(--text-muted); }
 .sf-contact { display:grid; grid-template-columns:1fr; gap:0 .75rem; align-items:start;
     padding:.6rem; border:1px solid var(--border-color); border-radius:var(--radius-sm); margin-bottom:.6rem; }
 @media (min-width:640px){ .sf-contact{ grid-template-columns:1.2fr 1fr 1fr auto; } }

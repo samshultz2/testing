@@ -4,7 +4,7 @@ import { useDraft } from '../lib/draft';
 import { compressPhoto } from '../lib/image';
 import { isValidPhone, isValidEmail, relationshipFromName } from '../lib/validate';
 import { Banner } from '../components/ui';
-import { TextField, TextAreaField, SelectField, FormCard } from '../components/Form';
+import { TextField, TextAreaField, SelectField, FormCard, DateOfBirthField } from '../components/Form';
 
 const REL_SEQUENCE = ['Father', 'Mother', 'Guardian'];
 
@@ -458,7 +458,7 @@ export default function StudentForm({ data }) {
           <SelectField label="Gender" required value={f.gender} onChange={(v) => set('gender', v)}
                        onBlur={blurRequired('gender', 'Gender')}
                        placeholder="Select Gender" options={opt.genders || ['Male', 'Female']} error={errors.gender} />
-          <TextField label="Date of Birth" type="date" value={f.date_of_birth} onChange={(v) => set('date_of_birth', v)} />
+          <DateOfBirthField label="Date of Birth" value={f.date_of_birth} onChange={(v) => set('date_of_birth', v)} />
         </div>
         <div className="sf-row">
           <SelectField label="Religion" value={f.religion} onChange={(v) => set('religion', v)}
