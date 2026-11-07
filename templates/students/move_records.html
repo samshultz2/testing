@@ -32,12 +32,12 @@ label.mv-row:has(input:checked){border-color:var(--primary);background:var(--pri
   <div><label class="form-label" for="mvFrom">From (has the records now)</label>
     <select id="mvFrom" name="from" class="form-control">
       <option value="">Choose a student…</option>
-      {% for st in students %}<option value="{{ st.id }}" {% if src and st.id == src.id %}selected{% endif %}>{{ st.full_name }} ({{ st.student_id }}){% if st.is_graduated %} — graduated{% endif %}</option>{% endfor %}
+      {% for st in students %}<option value="{{ st.id }}" {% if src and st.id == src.id %}selected{% endif %}>{{ st.full_name }} ({{ st.student_id }}){% if st.is_graduated %} — graduated{% elif classes.get(st.id) %} — {{ classes[st.id] }}{% endif %}{% if not st.is_active %} — removed{% endif %}</option>{% endfor %}
     </select>{{ searchable_select('mvFrom', 'Search name or admission no.…') }}</div>
   <div><label class="form-label" for="mvTo">To (should have them)</label>
     <select id="mvTo" name="to" class="form-control">
       <option value="">Choose a student…</option>
-      {% for st in students %}<option value="{{ st.id }}" {% if dst and st.id == dst.id %}selected{% endif %}>{{ st.full_name }} ({{ st.student_id }}){% if st.is_graduated %} — graduated{% endif %}</option>{% endfor %}
+      {% for st in students %}<option value="{{ st.id }}" {% if dst and st.id == dst.id %}selected{% endif %}>{{ st.full_name }} ({{ st.student_id }}){% if st.is_graduated %} — graduated{% elif classes.get(st.id) %} — {{ classes[st.id] }}{% endif %}{% if not st.is_active %} — removed{% endif %}</option>{% endfor %}
     </select>{{ searchable_select('mvTo', 'Search name or admission no.…') }}</div>
   <button class="btn btn-secondary" type="submit"><i class="fas fa-magnifying-glass"></i> Show classes</button>
 </div></form>

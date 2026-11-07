@@ -41,16 +41,26 @@
   sel.parentNode.insertBefore(wrap, sel);
   sel.style.display = 'none';
 
+  // Matching ignores capitals, accents and punctuation, so "Emma Osagie",
+  // "emma-osagie" and "EMMA-OSAGIE" all find each other.
+  function norm(t) {
+    t = String(t || '').toLowerCase();
+    if (t.normalize) t = t.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    return ' ' + t.replace(/[^a-z0-9]+/g, ' ').trim() + ' ';
+  }
   var opts = Array.prototype.slice.call(sel.options).filter(function (o) { return o.value; })
-    .map(function (o) { return { value: o.value, text: o.text, key: o.text.toLowerCase() }; });
+    .map(function (o) { return { value: o.value, text: o.text, key: norm(o.text), squash: norm(o.text).replace(/ /g, '') }; });
   var shown = [], active = -1;
   function current() { var o = sel.options[sel.selectedIndex]; return o && o.value ? o.text : ''; }
   input.value = current();
 
   function esc(s) { return s.replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function render(q) {
-    var words = q.toLowerCase().split(/\s+/).filter(Boolean);
-    shown = opts.filter(function (o) { return words.every(function (w) { return o.key.indexOf(w) > -1; }); }).slice(0, 80);
+    var words = norm(q).split(' ').filter(Boolean);
+    shown = opts.filter(function (o) {
+      return words.every(function (w) { return o.key.indexOf(w) > -1; })
+        || (words.length > 1 && o.squash.indexOf(words.join('')) > -1);   // "emmaosagie" ≈ "emma osagie"
+    }).slice(0, 80);
     list.innerHTML = '';
     if (!shown.length) {
       var li = document.createElement('li'); li.className = 'ss-empty'; li.textContent = 'No match';

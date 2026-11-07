@@ -1737,7 +1737,13 @@ def move_class_records():
               f"{rep['scores']} score(s) — from {src.full_name} to {dst.full_name}.", 'success')
         return redirect(url_for('main.move_class_records', **{'from': src.id, 'to': dst.id}))
 
-    students = scope_query(Student.query, Student).order_by(Student.surname, Student.first_name).all()
+    # Every student this user may touch — all branches for central staff, not
+    # only the branch in view — so the re-added pupil is always listed.
+    from utils.branch_scope import is_central
+    from routes.main import current_class_map
+    q = Student.query if is_central() else scope_query(Student.query, Student)
+    students = q.order_by(Student.surname, Student.first_name).all()
+    classes = current_class_map([x.id for x in students])
     src = next((x for x in students if x.id == src_id), None)
     dst = next((x for x in students if x.id == dst_id), None)
     rows = []
@@ -1756,7 +1762,7 @@ def move_class_records():
                         'attendance': Attendance.query.filter_by(enrollment_id=e.id).count()})
         rows.append(lst)
     return render_template('students/move_records.html', students=students, src=src, dst=dst,
-                           src_rows=rows[0], dst_rows=rows[1])
+                           src_rows=rows[0], dst_rows=rows[1], classes=classes)
 
 
 @main_bp.route('/students/duplicates/merge', methods=['POST'])

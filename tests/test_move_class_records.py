@@ -82,6 +82,10 @@ def test_move_class_records_back_to_the_readded_pupil(app):
     c = _admin(app)
     page = c.get(f'/students/move-records?from={grad}&to={pupil}').get_data(as_text=True)
     assert 'Move Class Records' in page and '3 attendance days' in page
+    # Both namesakes are listed, told apart by graduation / class.
+    assert page.count('Emma-Osagie Osahenrhun Israel (') >= 2 and '— graduated' in page
+    # The search box ignores punctuation ("Emma Osagie" finds "Emma-Osagie").
+    assert "replace(/[^a-z0-9]+/g, ' ')" in page
     tok = page.split('name="_csrf_token" value="')[1].split('"')[0]
     r = c.post('/students/move-records', data={'_csrf_token': tok, 'from': grad, 'to': pupil,
                                                 'enrollment': [en]}, follow_redirects=True)
