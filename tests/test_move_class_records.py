@@ -7,7 +7,7 @@ import itertools
 import uuid
 
 from config import Config
-from models import (db, Student, Branch, ClassArm, SchoolClass, ClassArmAssignment,
+from models import (db, WAECResult, Student, Branch, ClassArm, SchoolClass, ClassArmAssignment,
                     StudentEnrollment, Attendance, Term, AcademicSession, Week, TermSummary)
 from tests.conftest import login_token
 
@@ -75,6 +75,10 @@ def test_past_graduate_is_not_on_the_current_register(app):
 
 def test_move_class_records_back_to_the_readded_pupil(app):
     caa, grad, pupil, en, d = _setup(app)
+    with app.app_context():                          # the graduate's own WAEC results
+        db.session.add_all([WAECResult(student_id=grad, exam_year=2030, subject=sub, grade='B2')
+                            for sub in ('Mathematics', 'English Language', 'Biology')])
+        db.session.commit()
     c = _admin(app)
     page = c.get(f'/students/move-records?from={grad}&to={pupil}').get_data(as_text=True)
     assert 'Move Class Records' in page and '3 attendance days' in page
@@ -90,6 +94,9 @@ def test_move_class_records_back_to_the_readded_pupil(app):
         ts = TermSummary.query.filter_by(student_id=pupil).one()
         assert ts.enrollment_id == e2.id and ts.average_score == 64
         assert db.session.get(Student, grad) is not None     # the graduate is kept
+        # …and so are all his WAEC results (only class records move).
+        assert WAECResult.query.filter_by(student_id=grad, exam_year=2030).count() == 3
+        assert WAECResult.query.filter_by(student_id=pupil).count() == 0
 
 
 def test_merge_suggestion_warns_when_one_record_has_graduated(app):
