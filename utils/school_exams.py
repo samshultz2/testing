@@ -629,6 +629,68 @@ def sort_candidates(cands, key):
     return sorted(cands, key=CANDIDATE_SORTS[key][1]), key
 
 
+def filter_candidates(cands, subject='', grade='', min_distinctions=None, min_credits=None):
+    """The dashboard's filters (as on the WAEC page): candidates who sat
+    ``subject`` (with ``grade`` in it when both are given), who got ``grade``
+    in any subject, and/or with at least N distinctions / credits."""
+    out = []
+    for c in cands:
+        res = c.get('results') or []
+        if subject and grade:
+            if not any(r.subject == subject and r.grade == grade for r in res):
+                continue
+        elif subject:
+            if not any(r.subject == subject for r in res):
+                continue
+        elif grade:
+            if not any(r.grade == grade for r in res):
+                continue
+        if min_distinctions and c['distinctions'] < min_distinctions:
+            continue
+        if min_credits and c['credits'] < min_credits:
+            continue
+        out.append(c)
+    return out
+
+
+def top_by_grade(scheme, summaries, limit=10):
+    """{grade: [candidate…]} — who got the most of each non-fail grade (ties
+    broken by better grades overall, then name), like WAEC's Top Performers."""
+    out = {}
+    for g in scheme.grades:
+        if (scheme.kind_of(g) or 'fail') == 'fail':
+            continue
+        have = [c for c in summaries if c['grades'].get(g)]
+        have.sort(key=lambda c: (-c['grades'].get(g, 0), -c['distinctions'], -c['credits'],
+                                 -(c['avg_pct'] or 0), c['name'].lower()))
+        out[g] = have[:limit]
+    return out
+
+
+# Subject-table orderings: key -> label. 'g:<grade>' sorts by that grade's count.
+def subject_sorts(scheme):
+    top = [g for g in scheme.grades if (scheme.kind_of(g) or 'fail') != 'fail'][:2]
+    return ([('credit', 'Credit %'), ('pass', 'Pass %')]
+            + [('g:' + g, 'Most ' + g + "'s") for g in top]
+            + [('entries', 'Entries'), ('name', 'Name A–Z')])
+
+
+def sort_subjects(rows, key):
+    if key == 'pass':
+        k = lambda r: (-r['pass_rate'], -r['credit_rate'], r['subject'])
+    elif key == 'entries':
+        k = lambda r: (-r['entries'], r['subject'])
+    elif key == 'name':
+        k = lambda r: r['subject'].lower()
+    elif key and key.startswith('g:'):
+        g = key[2:]
+        k = lambda r: (-r['grades'].get(g, 0), -r['credit_rate'], r['subject'])
+    else:
+        key = 'credit'
+        k = lambda r: (-r['credit_rate'], -r['pass_rate'], r['subject'])
+    return sorted(rows, key=k), key
+
+
 def trend(level, body, student_ids=None):
     """Year-over-year headline KPIs (oldest first) for the trend charts."""
     out = []
@@ -892,6 +954,22 @@ class charts:
                                        'backgroundColor': [KIND_COLOR[b['kind']] for b in sc.bands]}]},
                 'options': {'plugins': {'legend': {'display': False}},
                             'scales': {'y': {'beginAtZero': True, 'ticks': {'precision': 0}}}}}
+
+    @staticmethod
+    def subject_rates(stats):
+        """Horizontal bars: each subject's credit and pass rate (WAEC's
+        "Subject Pass Rates")."""
+        rows = sorted(stats['subjects'], key=lambda r: (-r['pass_rate'], r['subject']))
+        return {'type': 'bar',
+                'data': {'labels': [r['subject'] for r in rows],
+                         'datasets': [
+                             {'label': 'Credit %', 'data': [r['credit_rate'] for r in rows],
+                              'backgroundColor': KIND_COLOR['credit']},
+                             {'label': 'Pass %', 'data': [r['pass_rate'] for r in rows],
+                              'backgroundColor': KIND_COLOR['pass']}]},
+                'options': {'indexAxis': 'y',
+                            'scales': {'x': {'beginAtZero': True, 'max': 100}},
+                            'plugins': {'legend': {'position': 'bottom'}}}}
 
     @staticmethod
     def kind_mix(stats):

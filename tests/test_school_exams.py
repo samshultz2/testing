@@ -429,3 +429,40 @@ def test_waec_and_jamb_add_dropdowns_are_searchable(app):
     for path in ('/results/waec/add', '/results/jamb/add'):
         html = c.get(path).get_data(as_text=True)
         assert 'id="studentSelect"' in html and '.ss-wrap' in html and 'Search name or admission no.' in html, path
+
+
+def test_dashboard_has_waec_style_views_and_filters(app):
+    """Students / Subjects / Top performers views, as on the WAEC dashboard:
+    subject × grade matrix, top performers per grade, subject + grade and
+    minimum-credit filters, and each candidate's grades in the list."""
+    c = _admin(app)
+    ace, _ = _student(app, 'Acetop')
+    mid, _ = _student(app, 'Midtop', gender='Male')
+    for sid in (ace, mid):
+        _enroll(app, 'JSS3', 3, sid)
+    tok = auth_csrf(c)
+    for sid, scores in ((ace, ['85', '80', '78']), (mid, ['60', '45', '30'])):
+        c.post('/jss3-exams/state/add', data={'_csrf_token': tok, 'student_id': sid, 'exam_year': 2038,
+               'subject[]': ['Mathematics', 'English Studies', 'Basic Science'], 'score[]': scores,
+               'grade[]': ['', '', '']})
+    base = '/jss3-exams/?body=state&year=2038'
+
+    html = c.get(base).get_data(as_text=True)                       # Students (default)
+    assert 'class="sx-views"' in html and 'Subject credit &amp; pass rates' in html
+    assert 'name="min_c"' in html and 'name="subject"' in html and 'sx-gradesrow' in html
+
+    html = c.get(base + '&min_c=3').get_data(as_text=True)          # filter: ≥3 credits
+    t = html[html.index('Candidates ('):]
+    assert 'Tester Acetop' in t and 'Tester Midtop' not in t
+    html = c.get(base + '&subject=Mathematics&grade=A').get_data(as_text=True)
+    t = html[html.index('Candidates ('):]
+    assert 'Tester Acetop' in t and 'Tester Midtop' not in t
+
+    html = c.get(base + '&view=subjects&ssort=g:A').get_data(as_text=True)
+    assert 'Subject analysis — grades per subject' in html and 'sx-matrix' in html
+    assert 'Basic Science' in html and 'All subjects' in html
+
+    html = c.get(base + '&view=top').get_data(as_text=True)
+    assert 'Top performers by grade' in html and "Most A's" in html
+    top = html[html.index("Most A's"):]
+    assert 'Tester Acetop' in top[:2500]

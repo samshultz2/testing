@@ -127,14 +127,29 @@ def make_blueprint(level):
             cands = [c for c in cands if search in c['name'].lower()
                      or search in (c['student_code'] or '').lower()
                      or search in (c['exam_number'] or '').lower()]
+        # WAEC-style filters: subject / grade / minimum distinctions & credits.
+        f_subject = (request.args.get('subject') or '').strip()
+        f_grade = (request.args.get('grade') or '').strip()
+        min_d = request.args.get('min_d', type=int)
+        min_c = request.args.get('min_c', type=int)
+        cands = svc.filter_candidates(cands, f_subject, f_grade, min_d, min_c)
         cands, sort = svc.sort_candidates(cands, request.args.get('sort', 'position'))
+        view = request.args.get('view', 'students')
+        if view not in ('students', 'subjects', 'top'):
+            view = 'students'
+        subjects, ssort = svc.sort_subjects(stats['subjects'], request.args.get('ssort'))
         other = 'federal' if body == 'state' else 'state'
         return render_template('school_exams/dashboard.html', **_ctx(
             level, bp_name, body, years=years, year=year, stats=stats,
             candidates=cands, search=search, other=other, sort=sort,
             sorts=[(k, v[0]) for k, v in svc.CANDIDATE_SORTS.items()],
             other_years=svc.years_for(level, other),
-            trend=svc.trend(level, body)))
+            trend=svc.trend(level, body),
+            view=view, f_subject=f_subject, f_grade=f_grade, min_d=min_d, min_c=min_c,
+            filtered=bool(f_subject or f_grade or min_d or min_c or search),
+            subject_names=sorted(r['subject'] for r in stats['subjects']),
+            subjects_sorted=subjects, ssort=ssort, subject_sorts=svc.subject_sorts(stats['scheme']),
+            top_grades=svc.top_by_grade(stats['scheme'], stats['candidates'])))
 
     # ------------------------------------------------------------------ #
     # Analytics
