@@ -1,7 +1,10 @@
 {% extends "base.html" %}
+{% from "mock_jamb/_shell.html" import mj_nav, mj_exam_nav with context %}
 {% block title %}Bank Analytics - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ index_url }}">Mock JAMB</a> / <a href="{{ bank_url }}">Question Bank</a> / <span>Topic analytics</span>{% endblock %}
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+
 <style>
 .ba-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:.7rem;margin-bottom:1rem}
 .ba-kpi{border:1px solid var(--border-color);border-radius:var(--radius-md);padding:.7rem .9rem;background:var(--gray-50)}
@@ -25,6 +28,7 @@ details.ba > summary{cursor:pointer;font-weight:700;padding:.3rem 0}
 </style>
 {% endblock %}
 {% block content %}
+<div class="rs bx bx-legacy">
 <div class="page-header">
     <div>
         <h1>Topic analytics</h1>
@@ -34,6 +38,7 @@ details.ba > summary{cursor:pointer;font-weight:700;padding:.3rem 0}
         <a href="{{ bank_url }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back to bank</a>
     </div>
 </div>
+<div class="no-print">{{ mj_nav('topics') }}</div>
 
 <form method="get" class="card" style="margin-bottom:1rem;">
     <div class="card-body" style="display:flex;gap:.6rem;align-items:center;flex-wrap:wrap;">
@@ -267,4 +272,5 @@ details.ba > summary{cursor:pointer;font-weight:700;padding:.3rem 0}
 {% endif %}
 
 {% endif %}
+</div>
 {% endblock %}

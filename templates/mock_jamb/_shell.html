@@ -1,0 +1,39 @@
+{# Mock JAMB server-rendered pages: module tabs, question-bank tabs and exam tabs
+   (match the React screens' MjNav / ExamNav). #}
+{% from "results/_board_shell.html" import bx_menu_js with context %}
+{% macro mj_nav(active) %}
+{{ bx_menu_js() }}
+<nav class="sl-nav" aria-label="Mock JAMB sections">
+  <a href="{{ url_for('mock_jamb.index') }}" class="{{ 'on' if active == 'index' }}"><i class="fas fa-clipboard-list" aria-hidden="true"></i><span>Mock exams</span></a>
+  <a href="{{ url_for('mock_jamb.analytics') }}" class="{{ 'on' if active == 'analytics' }}"><i class="fas fa-chart-column" aria-hidden="true"></i><span>Analytics</span></a>
+  <a href="{{ url_for('mock_jamb.trends') }}" class="{{ 'on' if active == 'trends' }}"><i class="fas fa-chart-line" aria-hidden="true"></i><span>Progress trends</span></a>
+  <a href="{{ url_for('mock_jamb.validation') }}" class="{{ 'on' if active == 'validation' }}"><i class="fas fa-bullseye" aria-hidden="true"></i><span>Validation</span></a>
+  <a href="{{ url_for('mock_jamb.bank') }}" class="{{ 'on' if active in ('bank', 'syllabus', 'topics', 'images', 'mastery') }}"><i class="fas fa-database" aria-hidden="true"></i><span>Question bank</span></a>
+</nav>
+{% if active in ('bank', 'syllabus', 'topics', 'images', 'mastery') %}
+<nav class="sl-sub" aria-label="Question bank">
+  <a href="{{ url_for('mock_jamb.bank') }}" class="{{ 'on' if active == 'bank' }}"><i class="fas fa-database" aria-hidden="true"></i> Questions</a>
+  <a href="{{ url_for('mock_jamb.bank_syllabus') }}" class="{{ 'on' if active == 'syllabus' }}"><i class="fas fa-list-ol" aria-hidden="true"></i> Syllabus</a>
+  <a href="{{ url_for('mock_jamb.bank_analytics') }}" class="{{ 'on' if active == 'topics' }}"><i class="fas fa-chart-pie" aria-hidden="true"></i> Topic analytics</a>
+  <a href="{{ url_for('mock_jamb.mastery') }}" class="{{ 'on' if active == 'mastery' }}"><i class="fas fa-graduation-cap" aria-hidden="true"></i> Topic mastery</a>
+  <a href="{{ url_for('mock_jamb.bank_needs_images') }}" class="{{ 'on' if active == 'images' }}"><i class="fas fa-image" aria-hidden="true"></i> Needs images</a>
+</nav>
+{% endif %}
+{% endmacro %}
+
+{% macro mj_exam_nav(exam, active) %}
+{{ bx_menu_js() }}
+<nav class="sl-nav" aria-label="{{ exam.display_name }} sections">
+  <a href="{{ url_for('mock_jamb.view_exam', exam_id=exam.id) }}"><i class="fas fa-users" aria-hidden="true"></i><span>Results</span></a>
+  <a href="{{ url_for('mock_jamb.deep', exam_id=exam.id) }}"><i class="fas fa-brain" aria-hidden="true"></i><span>Deep analytics</span></a>
+  <a href="{{ url_for('mock_jamb.questions', exam_id=exam.id) }}" class="{{ 'on' if active in ('questions', 'blueprint', 'edit') }}"><i class="fas fa-pen-to-square" aria-hidden="true"></i><span>Questions</span></a>
+  <a href="{{ url_for('mock_jamb.items', exam_id=exam.id) }}" class="{{ 'on' if active == 'items' }}"><i class="fas fa-microscope" aria-hidden="true"></i><span>Item analysis</span></a>
+  {% if can_write_sub('external_exams', 'mock_jamb_results_create') %}<a href="{{ url_for('mock_jamb.bulk_entry', exam_id=exam.id) }}"><i class="fas fa-plus" aria-hidden="true"></i><span>Enter results</span></a>{% endif %}
+</nav>
+{% if active in ('questions', 'blueprint', 'edit') %}
+<nav class="sl-sub" aria-label="Exam paper">
+  <a href="{{ url_for('mock_jamb.questions', exam_id=exam.id) }}" class="{{ 'on' if active == 'questions' }}"><i class="fas fa-list" aria-hidden="true"></i> Questions</a>
+  <a href="{{ url_for('mock_jamb.exam_blueprint', exam_id=exam.id) }}" class="{{ 'on' if active == 'blueprint' }}"><i class="fas fa-sliders" aria-hidden="true"></i> Paper blueprint</a>
+</nav>
+{% endif %}
+{% endmacro %}

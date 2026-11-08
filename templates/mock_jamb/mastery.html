@@ -1,7 +1,10 @@
 {% extends "base.html" %}
+{% from "mock_jamb/_shell.html" import mj_nav, mj_exam_nav with context %}
 {% block title %}Topic Mastery — Mock JAMB - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ urls.index }}">Mock JAMB</a> / <span>Topic mastery</span>{% endblock %}
-{% block extra_css %}<style>
+{% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<style>
 .mgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:1rem}
 .mrow{display:flex;align-items:center;gap:.6rem;padding:.35rem 0;border-bottom:1px solid var(--border-color)}
 .mrow:last-child{border-bottom:0}
@@ -27,7 +30,9 @@
 </div>
 {%- endmacro %}
 {% block content %}
+<div class="rs bx bx-legacy">
 <div class="page-header"><h1>Topic mastery <span class="text-muted" style="font-weight:400;font-size:1rem;">— across all online mocks</span></h1></div>
+<div class="no-print">{{ mj_nav('mastery') }}</div>
 
 {% if data.has_data %}
 <div class="mstat">
@@ -86,4 +91,5 @@
     });
 })();
 </script>
+</div>
 {% endblock %}

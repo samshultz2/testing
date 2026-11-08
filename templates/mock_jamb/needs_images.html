@@ -1,7 +1,10 @@
 {% extends "base.html" %}
+{% from "mock_jamb/_shell.html" import mj_nav, mj_exam_nav with context %}
 {% block title %}Questions needing images — Mock JAMB - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ index_url }}">Mock JAMB</a> / <a href="{{ bank_url }}">Question bank</a> / <span>Needs images</span>{% endblock %}
-{% block extra_css %}<style>
+{% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<style>
 .ni-q{border:1px solid var(--border-color);border-left:4px solid #b45309;border-radius:var(--radius-md);padding:.8rem 1rem;margin-bottom:.8rem}
 .ni-meta{display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;font-size:.72rem;margin-bottom:.4rem}
 .ni-badge{background:var(--gray-100);border-radius:999px;padding:.12rem .5rem}
@@ -12,9 +15,11 @@
 .ni-check{width:17px;height:17px;accent-color:var(--primary,#0d6a4e)}
 </style>{% endblock %}
 {% block content %}
+<div class="rs bx bx-legacy">
 <div class="page-header"><h1>Questions needing images <span class="text-muted" style="font-weight:400;font-size:1rem;">— {{ total }} flagged</span></h1>
     <div class="page-header-actions"><a href="{{ bank_url }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back to bank</a></div>
 </div>
+<div class="no-print">{{ mj_nav('images') }}</div>
 
 <div class="card mb-3"><div class="card-body">
     <p class="text-sm text-muted" style="margin:0 0 .6rem;">These questions refer to a diagram/figure that couldn't be fetched automatically, so they're <strong>held out of exams</strong> until you add the image. Upload the figure (or mark “no image needed” if it was a false alarm) and the question re-enters the pool.</p>
@@ -96,6 +101,7 @@
     {% if pagination.has_next %}<a class="btn btn-secondary btn-sm" href="{{ url_for('mock_jamb.bank_needs_images', page=pagination.next_num, **args) }}">Next <i class="fas fa-chevron-right"></i></a>{% endif %}
 </div>
 {% endif %}
+</div>
 {% endblock %}
 
 {% block extra_js %}{% include "mock_jamb/_mathjax.html" %}

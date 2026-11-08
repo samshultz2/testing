@@ -1,7 +1,10 @@
 {% extends "base.html" %}
+{% from "mock_jamb/_shell.html" import mj_nav, mj_exam_nav with context %}
 {% block title %}Syllabus - Question Bank{% endblock %}
 {% block breadcrumb %}<a href="{{ bank_url }}">Question Bank</a> / <span>Syllabus</span>{% endblock %}
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+
 <style>
 .syl-sec{border:1px solid var(--border-color);border-radius:var(--radius-md);margin-bottom:.8rem;overflow:hidden}
 .syl-sec-head{display:flex;align-items:center;gap:.6rem;padding:.55rem .8rem;background:var(--gray-50);font-weight:700}
@@ -14,6 +17,7 @@
 </style>
 {% endblock %}
 {% block content %}
+<div class="rs bx bx-legacy">
 <div class="page-header">
   <div>
     <h1>JAMB Syllabus</h1>
@@ -24,6 +28,7 @@
     <a href="{{ bank_url }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back to bank</a>
   </div>
 </div>
+<div class="no-print">{{ mj_nav('syllabus') }}</div>
 
 <form method="GET" action="{{ url_for('mock_jamb.bank_syllabus') }}" class="mb-3">
   <label class="form-label">Subject</label>
@@ -264,4 +269,5 @@
   No syllabus imported for this subject yet. Import one above.
 </div></div>
 {% endif %}
+</div>
 {% endblock %}

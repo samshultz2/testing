@@ -1,8 +1,11 @@
 {% extends "base.html" %}
+{% from "mock_jamb/_shell.html" import mj_nav, mj_exam_nav with context %}
 {% block title %}Item Analysis — {{ exam.display_name }} - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('mock_jamb.index') }}">Mock JAMB</a> / <a href="{{ url_for('mock_jamb.view_exam', exam_id=exam.id) }}">{{ exam.display_name }}</a> / <span>Item Analysis</span>{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+
 <style>
 .ia-kpis{display:grid;grid-template-columns:repeat(2,1fr);gap:.75rem;margin-bottom:1.1rem}
 @media(min-width:900px){.ia-kpis{grid-template-columns:repeat(5,1fr)}}
@@ -58,6 +61,7 @@
 {% endblock %}
 
 {% block content %}
+<div class="rs bx bx-legacy">
 <div class="page-header">
     <div>
         <h1>Item &amp; Topic Analysis — {{ exam.display_name }}</h1>
@@ -77,6 +81,7 @@
         <a href="{{ urls.view }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>
     </div>
 </div>
+<div class="no-print">{{ mj_exam_nav(exam, 'items') }}</div>
 
 {% if not data or data.meta.empty %}
 <div class="card"><div class="card-body"><div class="empty-state">
@@ -249,6 +254,7 @@
     </div>
 </div>
 {% endif %}
+</div>
 {% endblock %}
 
 {% block extra_js %}

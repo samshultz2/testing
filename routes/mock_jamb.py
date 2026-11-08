@@ -80,8 +80,30 @@ def _read_subject_scores(form, suffix=''):
 # =============================================================================
 
 from utils.spa import section_responders
+def _mj_enrich(payload):
+    """Tab links present on every Mock JAMB screen (module tabs, plus the
+    current exam's tabs when the screen is about one exam)."""
+    if not isinstance(payload, dict) or payload.get('derived'):
+        return
+    nav = {'index': url_for('mock_jamb.index'), 'analytics': url_for('mock_jamb.analytics'),
+           'trends': url_for('mock_jamb.trends'), 'validation': url_for('mock_jamb.validation'),
+           'predictions': url_for('results.predictions_dashboard'), 'bank': url_for('mock_jamb.bank'),
+           'create': url_for('mock_jamb.create_exam')}
+    ex = payload.get('exam')
+    eid = ex.get('id') if isinstance(ex, dict) else None
+    if eid:
+        nav['exam'] = {'id': eid, 'name': ex.get('display_name') or ex.get('name') or 'Exam',
+                       'view': url_for('mock_jamb.view_exam', exam_id=eid),
+                       'deep': url_for('mock_jamb.deep', exam_id=eid),
+                       'add': url_for('mock_jamb.add_result', exam_id=eid),
+                       'bulk': url_for('mock_jamb.bulk_entry', exam_id=eid),
+                       'questions': url_for('mock_jamb.questions', exam_id=eid),
+                       'items': url_for('mock_jamb.items', exam_id=eid)}
+    payload.setdefault('mjnav', nav)
+
+
 _wants_json, _render, _ok, _err = section_responders(
-    'mock_jamb/app.html', 'mj_json', 'mock_jamb.index')
+    'mock_jamb/app.html', 'mj_json', 'mock_jamb.index', enrich=_mj_enrich)
 
 
 @mock_jamb_bp.route('/')
@@ -113,6 +135,7 @@ def index():
         above_200 = sum(1 for v in scored if v >= 200)
         return {
             'id': e.id, 'display_name': e.display_name, 'is_completed': bool(e.is_completed),
+            'exam_number': e.exam_number,
             'exam_date': e.exam_date.strftime('%d %B %Y') if e.exam_date else '',
             'student_count': len(rows),
             'average_score': round(sum(scored) / len(scored), 1) if scored else None,

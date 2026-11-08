@@ -1,7 +1,10 @@
 {% extends "base.html" %}
+{% from "mock_jamb/_shell.html" import mj_nav, mj_exam_nav with context %}
 {% block title %}{{ data.meta.student_name }} — Topic Mastery - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ urls.index }}">Mock JAMB</a> / <a href="{{ urls.mastery }}">Topic mastery</a> / <span>{{ data.meta.student_name }}</span>{% endblock %}
-{% block extra_css %}<style>
+{% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<style>
 .mrow{display:flex;align-items:center;gap:.6rem;padding:.35rem 0;border-bottom:1px solid var(--border-color)}
 .mrow:last-child{border-bottom:0}.mrow .n{flex:1;font-size:.86rem}
 .mrow .bar{width:110px;height:8px;border-radius:4px;background:var(--gray-100);overflow:hidden;flex-shrink:0}
@@ -25,9 +28,11 @@
 </div>
 {%- endmacro %}
 {% block content %}
+<div class="rs bx bx-legacy">
 <div class="page-header"><h1>{{ data.meta.student_name }} <span class="text-muted" style="font-weight:400;font-size:1rem;">— topic mastery</span></h1>
     <div class="page-header-actions"><a href="{{ urls.mastery }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> All students</a></div>
 </div>
+<div class="no-print">{{ mj_nav('mastery') }}</div>
 
 {% if data.has_data %}
 <div class="card mb-3"><div class="card-body" style="display:flex;gap:1.4rem;flex-wrap:wrap;align-items:center;">
@@ -87,4 +92,5 @@
 <div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-chart-simple"></i>
     <h3>No online mocks yet</h3><p>{{ data.meta.student_name }} hasn't submitted a Mock JAMB online. Their topic mastery appears here once they do.</p></div></div></div>
 {% endif %}
+</div>
 {% endblock %}

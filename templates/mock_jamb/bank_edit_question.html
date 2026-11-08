@@ -1,11 +1,16 @@
 {% extends "base.html" %}
+{% from "mock_jamb/_shell.html" import mj_nav, mj_exam_nav with context %}
 {% block title %}Edit bank question - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('mock_jamb.index') }}">Mock JAMB</a> / <a href="{{ back_url }}">Question Bank</a> / <span>Edit</span>{% endblock %}
-{% block extra_css %}<style>.opt-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem}@media(max-width:560px){.opt-grid{grid-template-columns:1fr}}</style>{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+<style>.opt-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem}@media(max-width:560px){.opt-grid{grid-template-columns:1fr}}</style>{% endblock %}
 {% block content %}
+<div class="rs bx bx-legacy">
 <div class="page-header"><h1>Edit bank question <span class="text-muted text-sm">— {{ subject.name }}</span></h1>
     <div class="page-header-actions"><a href="{{ back_url }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a></div>
 </div>
+<div class="no-print">{{ mj_nav('bank') }}</div>
 <div class="card"><div class="card-body">
 <form method="post" action="{{ url_for('mock_jamb.bank_edit_question', question_id=q.id) }}" enctype="multipart/form-data">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
@@ -70,4 +75,5 @@
     topic.addEventListener('change', function(){ current=''; fill(); });
 })();
 </script>
+</div>
 {% endblock %}

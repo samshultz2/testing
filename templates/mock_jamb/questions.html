@@ -1,7 +1,10 @@
 {% extends "base.html" %}
+{% from "mock_jamb/_shell.html" import mj_nav, mj_exam_nav with context %}
 {% block title %}Questions — {{ exam.display_name }} - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('mock_jamb.index') }}">Mock JAMB</a> / <a href="{{ url_for('mock_jamb.view_exam', exam_id=exam.id) }}">{{ exam.display_name }}</a> / <span>Questions</span>{% endblock %}
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+
 <style>
 .mjq-passage{border:1px solid var(--border-color);border-left:4px solid #7c3aed;border-radius:var(--radius-md);margin-bottom:1rem;overflow:hidden}
 .mjq-passage-head{display:flex;align-items:center;gap:.5rem;padding:.6rem .9rem;background:var(--gray-50)}
@@ -17,6 +20,7 @@
 </style>
 {% endblock %}
 {% block content %}
+<div class="rs bx bx-legacy">
 <div class="page-header">
     <div>
         <h1>Questions — {{ exam.display_name }}</h1>
@@ -31,6 +35,7 @@
         <a href="{{ url_for('mock_jamb.view_exam', exam_id=exam.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back to exam</a>
     </div>
 </div>
+<div class="no-print">{{ mj_exam_nav(exam, 'questions') }}</div>
 
 <div class="card" style="margin-bottom:1rem;border-left:4px solid #2563eb;background:rgba(37,99,235,.04);">
     <div class="card-body" style="display:flex;gap:.7rem;align-items:center;flex-wrap:wrap;">
@@ -215,6 +220,7 @@
 })();
 </script>
 {% endif %}
+</div>
 {% endblock %}
 
 {% block extra_js %}{% include "mock_jamb/_mathjax.html" %}{% endblock %}

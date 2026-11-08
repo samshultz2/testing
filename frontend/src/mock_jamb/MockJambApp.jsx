@@ -5,93 +5,127 @@ import { submitJson } from '../lib/forms';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, Banner, PageHeader, Empty, SectionShell } from '../components/ui';
 import { canWrite } from '../lib/perms';
+import { Head, Tiles, Menu, Blank } from '../subjects/results';
 
 const ORD = { 1: '1st', 2: '2nd', 3: '3rd', 4: '4th' };
+
+// ---- Shared tabs -------------------------------------------------------------
+// Module tabs (exams / analytics / trends / validation / question bank) and,
+// on a screen about one exam, that exam's tabs. URLs come from `d.mjnav`.
+function MjNav({ d, active }) {
+  const n = d.mjnav;
+  if (!n) return null;
+  const tabs = [['index', 'fa-clipboard-list', 'Mock exams', n.index], ['analytics', 'fa-chart-column', 'Analytics', n.analytics],
+    ['trends', 'fa-chart-line', 'Progress trends', n.trends], ['validation', 'fa-bullseye', 'Validation', n.validation],
+    ['bank', 'fa-database', 'Question bank', n.bank, true]];
+  return (
+    <nav className="sl-nav" aria-label="Mock JAMB sections">
+      {tabs.map(([k, ic, l, href, native]) => href && (
+        <a key={k} href={href} className={active === k ? 'on' : ''} data-native={native ? '' : undefined}>
+          <i className={'fas ' + ic} aria-hidden="true" /><span>{l}</span></a>))}
+    </nav>
+  );
+}
+
+function ExamNav({ d, active }) {
+  const x = d.mjnav && d.mjnav.exam;
+  if (!x) return null;
+  const enter = canWrite(d, 'mock_jamb_results_create');
+  return (
+    <>
+      <nav className="sl-nav" aria-label={x.name + ' sections'}>
+        <a href={x.view} className={active === 'view' ? 'on' : ''}><i className="fas fa-users" aria-hidden="true" /><span>Results</span></a>
+        <a href={x.deep} className={active === 'deep' ? 'on' : ''}><i className="fas fa-brain" aria-hidden="true" /><span>Deep analytics</span></a>
+        <a href={x.questions} data-native=""><i className="fas fa-pen-to-square" aria-hidden="true" /><span>Questions</span></a>
+        <a href={x.items} data-native=""><i className="fas fa-microscope" aria-hidden="true" /><span>Item analysis</span></a>
+        {enter && <a href={x.bulk} className={active === 'add' || active === 'bulk' ? 'on' : ''}><i className="fas fa-plus" aria-hidden="true" /><span>Enter results</span></a>}
+      </nav>
+      {enter && (active === 'add' || active === 'bulk') && (
+        <nav className="sl-sub" aria-label="Ways to enter results">
+          <a href={x.bulk} className={active === 'bulk' ? 'on' : ''}><i className="fas fa-table-cells" aria-hidden="true" /> Many students</a>
+          <a href={x.add} className={active === 'add' ? 'on' : ''}><i className="fas fa-keyboard" aria-hidden="true" /> One student</a>
+        </nav>)}
+    </>
+  );
+}
+
+const jt = (s) => (s >= 250 ? 'a1' : s >= 200 ? 'c4' : s >= 180 ? 'd7' : 'f9');
+const js = (s) => (s >= 70 ? 'a1' : s >= 50 ? 'c4' : s >= 40 ? 'd7' : 'f9');
+const LEVEL_TONE = { excellent: 'good', very_good: 'good', good: 'info', fair: 'mid', average: 'mid', below_average: 'bad', below: 'bad', needs_improvement: 'bad', poor: 'bad' };
+const abbr = (n) => (n || '').replace(/[^A-Za-z ]/g, '').split(/\s+/).filter(Boolean).map((w) => w[0]).join('').slice(0, 3).toUpperCase().padEnd(3, (n || '').slice(1, 3).toUpperCase());
 
 // ---- Index -----------------------------------------------------------------
 function Index({ d }) {
   const nav = useNav();
-  const ref = useRef();
-  useEffect(() => {
-    if (!ref.current || !window.Chart || d.comparison.length < 2) return;
-    const cs = getComputedStyle(document.body);
-    window.Chart.defaults.color = cs.getPropertyValue('--text-secondary') || '#666';
-    const chart = new window.Chart(ref.current, {
-      type: 'bar',
-      data: { labels: d.comparison.map((c) => c.label), datasets: [
-        { label: 'Average Score', data: d.comparison.map((c) => c.average), backgroundColor: chartPalette().indigo, borderRadius: 6 },
-        { label: 'Students ≥250', data: d.comparison.map((c) => c.above_250), backgroundColor: chartPalette().green, borderRadius: 6 }] },
-      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } },
-        scales: { y: { beginAtZero: true }, x: { grid: { display: false } } } },
-    });
-    return () => chart.destroy();
-  }, [d.comparison]);
-
   const st = d.stats;
-  const stats = [['primary', 'fa-clipboard-list', st.count, 'Mock Exams'],
-    ['success', 'fa-users', st.total_results, 'Total Results'],
-    ['info', 'fa-chart-bar', st.avg_score ?? '-', 'Avg Score'],
-    ['warning', 'fa-calendar-plus', st.remaining, 'Exams Remaining']];
-
+  const last = d.comparison.length ? d.comparison[d.comparison.length - 1] : null;
+  const first = d.comparison.length > 1 ? d.comparison[0] : null;
+  const maxAvg = Math.max(400, ...d.comparison.map((c) => c.average || 0));
   return (
     <>
-      <div className="mb-4"><div className="d-flex justify-between align-center flex-wrap gap-2">
-        <div><h1>Mock JAMB Examinations</h1><p className="text-muted text-sm mt-1">Track and analyze mock JAMB performance</p></div>
-        {!d.derived && (
-        <div className="d-flex gap-2">
-          {canWrite(d, 'mock_jamb_exam_create') && <a href={d.urls.create} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Create Exam</a>}
-          {d.urls.bank && <a href={d.urls.bank} className="btn btn-outline" data-native><i aria-hidden="true" className="fas fa-database" /> Question Bank</a>}
-          <a href={d.urls.analytics} className="btn btn-outline"><i aria-hidden="true" className="fas fa-chart-line" /> Analytics</a>
-          {d.urls.trends && <a href={d.urls.trends} className="btn btn-outline"><i aria-hidden="true" className="fas fa-chart-line" /> Progress Trends</a>}
-          {d.urls.validation && <a href={d.urls.validation} className="btn btn-outline"><i aria-hidden="true" className="fas fa-bullseye" /> Validation</a>}
-          <a href={d.urls.predictions} className="btn btn-info"><i aria-hidden="true" className="fas fa-crystal-ball" /> Predictions</a>
-        </div>)}
-      </div></div>
-
-      <div className="card mb-4"><div className="card-body">
-        <div className="d-flex gap-2 flex-wrap align-center">
-          <label className="form-label mb-0">Academic Session:</label>
-          <select className="form-control" style={{ maxWidth: 200 }} value={d.selected_session_id}
-                  onChange={(e) => navParams(nav.go, d.urls.self, { session_id: e.target.value })}>
-            {d.sessions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-        </div>
-      </div></div>
+      <Head icon="fa-clipboard-list" title="Mock JAMB" sub="UTME rehearsals — scored out of 400 across four subjects">
+        <select className="mj-sel" aria-label="Academic session" value={d.selected_session_id}
+                onChange={(e) => navParams(nav.go, d.urls.self, { session_id: e.target.value })}>
+          {d.sessions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+        </select>
+        {!d.derived && <a href={d.urls.predictions} className="rs-btn ghost"><i className="fas fa-wand-magic-sparkles" aria-hidden="true" /><span className="rs-hide-sm">Predictions</span></a>}
+        {!d.derived && canWrite(d, 'mock_jamb_exam_create') && <a href={d.urls.create} className="rs-btn primary"><i className="fas fa-plus" aria-hidden="true" /><span className="rs-hide-sm">New mock</span></a>}
+      </Head>
+      <MjNav d={d} active="index" />
 
       {d.exams.length > 0 && (
-        <div className="stats-grid mb-4">{stats.map(([t, ic, v, l]) => (
-          <div className="stat-card" key={l}><div className={'stat-icon ' + t}><i aria-hidden="true" className={'fas ' + ic} /></div>
-            <div className="stat-content"><h3>{v}</h3><p>{l}</p></div></div>))}</div>
+        <Tiles items={[
+          { label: 'Mocks this session', value: st.count, sub: st.remaining > 0 ? st.remaining + ' more planned' : 'all four held' },
+          { label: 'Results recorded', value: st.total_results, sub: 'across all mocks' },
+          { label: 'Average score', value: st.avg_score ?? '—', unit: st.avg_score != null ? '/400' : '', sub: 'all mocks this session',
+            tone: st.avg_score == null ? '' : st.avg_score >= 250 ? 'good' : st.avg_score >= 200 ? '' : 'mid' },
+          last && { label: 'Scored 250+ (latest)', value: last.above_250, sub: first ? (last.above_250 - first.above_250 >= 0 ? '+' : '') + (last.above_250 - first.above_250) + ' since ' + first.label : last.label, tone: 'good' },
+        ]} />
       )}
 
-      {d.comparison.length > 1 && (
-        <div className="card mb-4"><div className="card-header"><h3 className="card-title">Performance Comparison</h3></div>
-          <div className="card-body"><div style={{ height: 300 }}><canvas ref={ref} /></div></div></div>
+      {d.exams.length ? (
+        <div className={d.comparison.length > 1 ? 'bx-two' : ''}>
+          <section className="rs-card flush">
+            <div className="rs-card-h pad"><h3><i className="fas fa-list" aria-hidden="true" /> Mock exams</h3><small>{d.exams.length}</small></div>
+            <div className="mw-exams">
+              {d.exams.map((e) => (
+                <div className="mw-exam mj-exam" key={e.id}>
+                  <span className="mw-no">{e.exam_number || e.display_name.match(/\d/)?.[0] || '•'}</span>
+                  <a className="n" href={d.derived ? e.add_url : e.view_url}>
+                    <b>{e.display_name}</b>
+                    <small>{e.exam_date} · {e.student_count} students{e.average_score != null ? ' · avg ' + e.average_score : ''}{e.above_200 != null ? ' · ' + e.above_200 + ' scored 200+' : ''}</small>
+                  </a>
+                  <span className={'sl-pill ' + (e.is_completed ? 'good' : 'mid')}>{e.is_completed ? 'Completed' : 'In progress'}</span>
+                  <span className="a">
+                    {(d.derived || canWrite(d, 'mock_jamb_results_create')) && (
+                      <a href={d.derived ? e.add_url : e.bulk_url} className={d.derived ? 'rs-btn primary sm' : 'rs-icon-btn'} title="Enter results" aria-label={'Enter results for ' + e.display_name}>
+                        <i className="fas fa-pen-to-square" aria-hidden="true" />{d.derived && ' Enter results'}</a>)}
+                    {!d.derived && e.deep_url && <a href={e.deep_url} className="rs-icon-btn" title="Deep analytics" aria-label={'Deep analytics for ' + e.display_name}><i className="fas fa-brain" aria-hidden="true" /></a>}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </section>
+          {d.comparison.length > 1 && (
+            <section className="rs-card">
+              <div className="rs-card-h"><h3><i className="fas fa-chart-line" aria-hidden="true" /> Performance across mocks</h3><small>average /400</small></div>
+              <div className="bx-yoy">
+                {d.comparison.map((c) => (
+                  <div className="bx-yoy-r" key={c.label}>
+                    <span className="y">{c.label}</span>
+                    <span className="m"><span className="an-hbar"><span className="t"><i className={c.average >= 250 ? 'good' : c.average >= 200 ? '' : 'mid'} style={{ width: (c.average / maxAvg * 100) + '%' }} /></span></span>
+                      <small>average {c.average}</small></span>
+                    <span className="b"><b>{c.above_250}</b><small>scored 250+</small></span>
+                  </div>))}
+              </div>
+            </section>)}
+        </div>
+      ) : (
+        <Blank icon="fa-clipboard-list" title="No mock exams yet">
+          <p>Create the first mock for this session to start recording results.</p>
+          {canWrite(d, 'mock_jamb_exam_create') && <a href={d.urls.create} className="rs-btn primary"><i className="fas fa-plus" aria-hidden="true" /> New mock</a>}
+        </Blank>
       )}
-
-      <div className="card"><div className="card-header"><h3 className="card-title">Mock Examinations</h3></div>
-        <div className="card-body">
-          {d.exams.length ? (
-            <div className="grid grid-2 gap-3">{d.exams.map((e) => (
-              <div className="card" style={{ borderLeft: '4px solid var(--primary)' }} key={e.id}><div className="card-body">
-                <div className="d-flex justify-between align-center mb-2"><h4 className="mb-0">{e.display_name}</h4>
-                  <span className={'badge ' + (e.is_completed ? 'badge-success' : 'badge-warning')}>{e.is_completed ? 'Completed' : 'In Progress'}</span></div>
-                <p className="text-muted text-sm mb-3"><i aria-hidden="true" className="fas fa-calendar" /> {e.exam_date}</p>
-                <div className="grid grid-3 gap-2 mb-3">
-                  {[[e.student_count, 'Students'], [e.average_score ?? '-', 'Avg Score'], [e.above_200, '≥200']].map(([v, l], i) => (
-                    <div className="text-center p-2" style={{ background: 'var(--bg-hover)', borderRadius: 'var(--border-radius-sm)' }} key={i}>
-                      <div className="font-bold">{v}</div><div className="text-xs text-muted">{l}</div></div>))}
-                </div>
-                <div className="d-flex gap-2 flex-wrap">
-                  {!d.derived && <a href={e.view_url} className="btn btn-sm btn-primary"><i aria-hidden="true" className="fas fa-eye" /> View</a>}
-                  {(d.derived || canWrite(d, 'mock_jamb_results_create')) && <a href={e.add_url} className="btn btn-sm btn-primary"><i aria-hidden="true" className="fas fa-plus" /> {d.derived ? 'Enter results' : 'Add Results'}</a>}
-                  {!d.derived && canWrite(d, 'mock_jamb_results_create') && <a href={e.bulk_url} className="btn btn-sm btn-outline"><i aria-hidden="true" className="fas fa-list" /> Bulk Entry</a>}
-                  {!d.derived && e.deep_url && <a href={e.deep_url} className="btn btn-sm btn-info"><i aria-hidden="true" className="fas fa-brain" /> Deep</a>}
-                </div>
-              </div></div>
-            ))}</div>
-          ) : <Empty icon="fa-clipboard-list" title="No mock exams created yet">{canWrite(d, 'mock_jamb_exam_create') && <a href={d.urls.create} className="btn btn-primary mt-2">Create First Exam</a>}</Empty>}
-        </div></div>
     </>
   );
 }
@@ -113,7 +147,8 @@ function CreateExam({ d, notify }) {
   };
   return (
     <>
-      <div className="mb-4"><h1>Create Mock JAMB Exam</h1><p className="text-muted text-sm">Set up a new mock examination</p></div>
+      <Head icon="fa-plus" title="Create Mock JAMB Exam" sub="Set up a new mock examination" />
+      <MjNav d={d} active="create" />
       <div className="card" style={{ maxWidth: 600 }}><div className="card-body"><form onSubmit={submit}>
         <div className="form-group"><label className="form-label">Academic Session <span className="text-danger">*</span></label>
           <select className="form-control" required value={f.session_id} onChange={(e) => set('session_id', e.target.value)}>
@@ -157,7 +192,8 @@ function EditExam({ d, notify }) {
   };
   return (
     <>
-      <div className="mb-4"><h1>Edit Mock Exam</h1><p className="text-muted">{e0.display_name} - {e0.session_name}</p></div>
+      <Head icon="fa-pen" title="Edit Mock Exam" sub={e0.display_name + (e0.session_name ? ' · ' + e0.session_name : '')} />
+      <MjNav d={d} active="" />
       <div className="card" style={{ maxWidth: 600 }}><div className="card-body">
         <form onSubmit={submit}>
           <div className="form-group"><label className="form-label">Exam Name <span className="text-danger">*</span></label>
@@ -212,7 +248,8 @@ function EditResult({ d, notify }) {
   };
   return (
     <>
-      <div className="mb-4"><h1>Edit Result</h1><p className="text-muted">{r0.student_name} - {r0.exam_name}</p></div>
+      <Head icon="fa-pen" title="Edit Result" sub={r0.student_name + ' · ' + r0.exam_name} />
+      <MjNav d={d} active="" />
       <div className="card" style={{ maxWidth: 700 }}><div className="card-body">
         <form onSubmit={submit}>
           <div className="mb-3 p-3" style={{ background: 'var(--gray-100)', borderRadius: 'var(--radius-md)' }}>
@@ -260,10 +297,8 @@ function BulkEntry({ d, notify }) {
   };
   return (
     <>
-      <div className="mb-4"><div className="d-flex justify-between align-center flex-wrap gap-2">
-        <div><h1>Bulk Entry</h1><p className="text-muted">{d.exam.display_name} - Enter scores for multiple students</p></div>
-        <a href={d.urls.view} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</a>
-      </div></div>
+      <Head icon="fa-table-cells" title="Bulk Entry" sub={d.exam.display_name + ' · enter scores for many students'} />
+      <ExamNav d={d} active="bulk" />
       {d.students.length ? (
         <form onSubmit={submit}><div className="card">
           <div className="card-header"><h3 className="card-title">SSS3 Students ({d.students.length})</h3></div>
@@ -329,7 +364,8 @@ function AddResult({ d, notify }) {
 
   if (!d.students.length) {
     return (<>
-      <PageHeader title="Add Result" />
+      <Head icon="fa-keyboard" title="Add Result" />
+      <MjNav d={d} active="" />
       <div className="card" style={{ maxWidth: 760 }}><div className="card-body"><Empty icon="fa-user-slash" title="">
         <p>All students already have results for this exam</p>
         <a href={d.view_url} className="btn btn-primary">View Results</a></Empty></div></div>
@@ -337,7 +373,8 @@ function AddResult({ d, notify }) {
   }
   return (
     <>
-      <PageHeader title="Add Result" actions={<a href={d.view_url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</a>} />
+      <Head icon="fa-keyboard" title="Add Result" sub={d.exam ? d.exam.display_name : ''} />
+      <ExamNav d={d} active="add" />
       <div className="card" style={{ maxWidth: 760 }}><div className="card-body"><form onSubmit={submit}>
         <div className="form-group"><label className="form-label">Student <span className="text-danger">*</span></label>
           <select className="form-control" required value={studentId} onChange={(e) => onStudent(e.target.value)}>
@@ -378,8 +415,6 @@ const rankClass = (r) => (r === 1 ? ' gold' : r === 2 ? ' silver' : r === 3 ? ' 
 
 function ViewExam({ d, notify }) {
   const nav = useNav();
-  const distRef = useRef();
-  const subjRef = useRef();
   const st = d.statistics;
   const [filters, setFilters] = useState(d.filters);
   const [exporting, setExporting] = useState(false);
@@ -405,34 +440,6 @@ function ViewExam({ d, notify }) {
       { search: filters.search, min_score: filters.min_score, max_score: filters.max_score }), 700);
     return () => clearTimeout(t);
   }, [filters.min_score, filters.max_score]);
-
-  useEffect(() => {
-    if (!st || !distRef.current || !window.Chart) return;
-    const dist = st.distribution;
-    const chart = new window.Chart(distRef.current, {
-      type: 'doughnut',
-      data: { labels: ['300-400', '250-299', '200-249', '180-199', '0-179'],
-        datasets: [{ data: [dist['300-400'], dist['250-299'], dist['200-249'], dist['180-199'], dist['0-179']],
-          backgroundColor: ['var(--success)', 'var(--info)', 'var(--warning)', '#fd7e14', 'var(--danger)'] }] },
-      options: { responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { position: 'right', labels: { boxWidth: 12, font: { size: 10 } } } } },
-    });
-    return () => chart.destroy();
-  }, [st]);
-
-  useEffect(() => {
-    if (!st || !st.subject_analysis.length || !subjRef.current || !window.Chart) return;
-    const subjects = st.subject_analysis.slice(0, 8);
-    const chart = new window.Chart(subjRef.current, {
-      type: 'bar',
-      data: { labels: subjects.map((s) => s.subject.substring(0, 10)),
-        datasets: [{ label: 'Average', data: subjects.map((s) => s.average),
-          backgroundColor: subjects.map((s) => (s.average >= 70 ? 'var(--success)' : s.average >= 50 ? 'var(--warning)' : 'var(--danger)')) }] },
-      options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-        plugins: { legend: { display: false } }, scales: { x: { beginAtZero: true, max: 100 } } },
-    });
-    return () => chart.destroy();
-  }, [st]);
 
   const applyFilters = (e) => {
     e.preventDefault();
@@ -480,141 +487,107 @@ function ViewExam({ d, notify }) {
     }
   };
 
-  const actions = (
-    <>
-      {canWrite(d, 'mock_jamb_results_create') && <a href={d.urls.add} className="btn btn-primary btn-sm" title="Add"><i aria-hidden="true" className="fas fa-plus" /></a>}
-      {canWrite(d, 'mock_jamb_results_create') && <a href={d.urls.bulk} className="btn btn-info btn-sm" title="Bulk"><i aria-hidden="true" className="fas fa-list" /></a>}
-      {canWrite(d, 'mock_jamb_results_export') && <a href={d.urls.export} className="btn btn-success btn-sm" title="Excel" data-native download><i aria-hidden="true" className="fas fa-file-excel" /></a>}
-      {d.urls.questions && <a href={d.urls.questions} className="btn btn-primary btn-sm" title="Question bank (online sitting)" data-native><i aria-hidden="true" className="fas fa-pen-to-square" /></a>}
-      {d.urls.items && <a href={d.urls.items} className="btn btn-info btn-sm" title="Item &amp; topic analysis (online sitting)" data-native><i aria-hidden="true" className="fas fa-microscope" /></a>}
-      {d.urls.deep && <a href={d.urls.deep} className="btn btn-info btn-sm" title="Deep analytics"><i aria-hidden="true" className="fas fa-brain" /></a>}
-      {d.results.length > 0 && canWrite(d, 'mock_jamb_results_export') && <button onClick={() => setExporting(true)} className="btn btn-secondary btn-sm" title="Export PDF, image or Word"><i aria-hidden="true" className="fas fa-file-export" /></button>}
-      {canWrite(d, 'mock_jamb_exam_edit') && <a href={d.urls.edit} className="btn btn-warning btn-sm" title="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>}
-      <a href={d.urls.index} className="btn btn-secondary btn-sm" title="Back"><i aria-hidden="true" className="fas fa-arrow-left" /></a>
-    </>
-  );
+  const [showF, setShowF] = useState(false);
+  const s = st && st.statistics;
+  const dist = st && st.distribution;
+  const bands = dist ? [['0-179', 'f9', 'Below 180'], ['180-199', 'd7', '180–199'], ['200-249', 'c4', '200–249'], ['250-299', 'a1', '250–299'], ['300-400', 'a1', '300+']] : [];
+  const mx = dist ? Math.max(1, ...bands.map(([k]) => dist[k] || 0)) : 1;
+  const subj = st ? [...st.subject_analysis].sort((a, b) => a.average - b.average) : [];
+  const n = st ? st.student_count || 1 : 1;
+  const menu = [
+    canWrite(d, 'mock_jamb_results_export') && d.results.length > 0 && { icon: 'fa-file-pdf', label: 'PDF, image or Word…', onClick: () => setExporting(true) },
+    canWrite(d, 'mock_jamb_results_export') && { icon: 'fa-file-excel', label: 'Excel spreadsheet', href: d.urls.export, native: true, download: true },
+    canWrite(d, 'mock_jamb_exam_edit') && { icon: 'fa-pen', label: 'Edit exam', href: d.urls.edit },
+    { icon: 'fa-list', label: 'All mock exams', href: d.urls.index },
+    canWrite(d, 'mock_jamb_exam_delete') && { icon: 'fa-trash', label: 'Delete exam', danger: true, onClick: delExam },
+  ];
 
   return (
     <>
-      <div className="page-header">
-        <div><h1>{d.exam.display_name}</h1>
-          <p className="text-muted text-sm"><i aria-hidden="true" className="fas fa-calendar" /> {d.exam.exam_date}{d.exam.session_name ? ` | ${d.exam.session_name}` : ''}</p></div>
-        <div className="page-header-actions">{actions}</div>
-      </div>
+      <Head icon="fa-clipboard-list" title={d.exam.display_name} sub={[d.exam.exam_date, d.exam.session_name].filter(Boolean).join(' · ')}>
+        <Menu items={menu} label="Export & more" />
+        {canWrite(d, 'mock_jamb_results_create') && <a href={d.urls.bulk} className="rs-btn primary"><i className="fas fa-plus" aria-hidden="true" /><span className="rs-hide-sm">Enter results</span></a>}
+      </Head>
+      <ExamNav d={d} active="view" />
 
-      {st && (<>
-        <div className="stats-grid">
-          <div className="mj-stat-card highlight"><div className="stat-value">{r1(st.statistics.average)}</div><div className="stat-label">Average</div></div>
-          <div className="mj-stat-card"><div className="stat-value">{st.student_count}</div><div className="stat-label">Students</div></div>
-          <div className="mj-stat-card"><div className="stat-value" style={{ color: 'var(--success)' }}>{st.statistics.max}</div><div className="stat-label">Highest</div></div>
-          <div className="mj-stat-card"><div className="stat-value" style={{ color: 'var(--danger)' }}>{st.statistics.min}</div><div className="stat-label">Lowest</div></div>
-        </div>
-        <div className="stats-grid">
-          <div className="mj-stat-card"><div className="stat-value" style={{ color: '#6f42c1' }}>{st.statistics.above_300}</div><div className="stat-label">Above 300</div></div>
-          <div className="mj-stat-card"><div className="stat-value" style={{ color: '#007bff' }}>{st.statistics.above_250}</div><div className="stat-label">Above 250</div></div>
-          <div className="mj-stat-card"><div className="stat-value" style={{ color: 'var(--info)' }}>{st.statistics.above_200}</div><div className="stat-label">Above 200</div></div>
-          <div className="mj-stat-card"><div className="stat-value">{st.statistics.median}</div><div className="stat-label">Median</div></div>
-        </div>
-        <div className="charts-row">
-          <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-chart-pie" /> Distribution</h3></div><div className="chart-body"><canvas ref={distRef} /></div></div>
-          {st.subject_analysis.length > 0 && <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-chart-bar" /> Subjects</h3></div><div className="chart-body"><canvas ref={subjRef} /></div></div>}
-        </div>
-      </>)}
+      {s && (
+        <Tiles items={[
+          { label: 'Average score', value: r1(s.average), unit: '/400', sub: 'median ' + s.median },
+          { label: 'Scored 200+', value: Math.round(s.above_200 / n * 100), unit: '%', sub: s.above_200 + ' of ' + st.student_count + ' students', tone: s.above_200 / n >= 0.6 ? 'good' : s.above_200 / n >= 0.4 ? 'mid' : 'bad' },
+          { label: 'Scored 250+', value: s.above_250, sub: 'competitive courses' },
+          { label: 'Scored 300+', value: s.above_300, sub: 'top band', tone: 'good' },
+          { label: 'Range', value: s.min + '–' + s.max, sub: 'lowest – highest' },
+        ]} />
+      )}
 
-      <div className="card">
-        <div className="card-header">
-          <h3><i aria-hidden="true" className="fas fa-list-ol" /> Results ({shown.length}{narrowed ? ` of ${d.results.length}` : ''})</h3>
-          <form onSubmit={applyFilters} className="filter-form">
-            <input type="text" className="form-control" placeholder="Search name or ID..." style={{ width: 160 }}
-                   value={filters.search} onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))} />
-            <input type="number" className="form-control" placeholder="Min" style={{ width: 70 }}
-                   value={filters.min_score} onChange={(e) => setFilters((f) => ({ ...f, min_score: e.target.value }))} />
-            <input type="number" className="form-control" placeholder="Max" style={{ width: 70 }}
-                   value={filters.max_score} onChange={(e) => setFilters((f) => ({ ...f, max_score: e.target.value }))} />
-            {(d.has_filter || narrowed) && <button type="button" className="btn btn-sm btn-secondary"
+      {st && (
+        <div className="bx-two">
+          <section className="rs-card">
+            <div className="rs-card-h"><h3><i className="fas fa-chart-column" aria-hidden="true" /> Score distribution</h3><small>{st.student_count} students</small></div>
+            <div className="bx-dist bx-dist5">
+              {bands.map(([k, t, l]) => (
+                <div className="bx-dist-c" key={k} title={l + ': ' + (dist[k] || 0)}>
+                  <b>{dist[k] || 0}</b><span className="bar"><i className={t} style={{ height: ((dist[k] || 0) / mx * 100) + '%' }} /></span><small>{l}</small>
+                </div>))}
+            </div>
+          </section>
+          <section className="rs-card">
+            <div className="rs-card-h"><h3><i className="fas fa-book" aria-hidden="true" /> Subjects</h3><small>average /100 · weakest first</small></div>
+            {subj.length ? (
+              <div className="an-hbars">
+                {subj.map((x) => (
+                  <a key={x.subject} className="an-hbar bx-hbar" href={'/mock-jamb/exam/' + d.exam.id + '/subject/' + encodeURIComponent(x.subject)} title={'Full analysis for ' + x.subject}>
+                    <span className="l">{x.subject}<small>{x.count} sat · {x.above_50} scored 50+</small></span>
+                    <span className="t"><i className={x.average >= 70 ? 'good' : x.average >= 50 ? 'mid' : 'bad'} style={{ width: x.average + '%' }} /></span>
+                    <b>{r1(x.average)}</b>
+                  </a>))}
+              </div>) : <p className="rs-muted">No subject scores yet.</p>}
+          </section>
+        </div>
+      )}
+
+      <section className="rs-card flush">
+        <form className="bx-filters" onSubmit={applyFilters}>
+          <label className="rs-search"><i className="fas fa-magnifying-glass" aria-hidden="true" />
+            <input type="search" placeholder="Search name or ID" aria-label="Search by name or ID" value={filters.search}
+                   onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))} />
+            {narrowed && <span className="bx-count">{shown.length} of {d.results.length}</span>}</label>
+          <button type="button" className={'rs-btn ghost bx-ftoggle' + (showF ? ' on' : '')} onClick={() => setShowF((v) => !v)} aria-expanded={showF}>
+            <i className="fas fa-sliders" aria-hidden="true" /> Filters</button>
+          <div className={'bx-fset' + (showF ? ' open' : '')}>
+            <label className="bx-f xs"><span>Min score</span><input type="number" inputMode="numeric" placeholder="0" value={filters.min_score}
+              onChange={(e) => setFilters((f) => ({ ...f, min_score: e.target.value }))} /></label>
+            <label className="bx-f xs"><span>Max score</span><input type="number" inputMode="numeric" placeholder="400" value={filters.max_score}
+              onChange={(e) => setFilters((f) => ({ ...f, max_score: e.target.value }))} /></label>
+            {(d.has_filter || narrowed) && <button type="button" className="rs-btn ghost sm"
               onClick={() => (d.has_filter ? clearFilters() : setFilters((f) => ({ ...f, search: '', min_score: '', max_score: '' })))}>Clear</button>}
-          </form>
-        </div>
-
-        {shown.length ? (<>
-          <div className="students-list">
+          </div>
+        </form>
+        {shown.length ? (
+          <div className="jx-list">
             {shown.map((it) => (
-              <div className="student-card" key={it.rank}>
-                <div className="student-card-header">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                    <span className={'student-rank' + rankClass(it.rank)}>{it.rank}</span>
-                    <div>
-                      <div className="student-name">{it.student.full_name}</div>
-                      <div className="student-id">{it.student.student_id}</div>
-                      <a href={it.student.progress_url} className="progress-link"><i aria-hidden="true" className="fas fa-chart-line" /> View Progress</a>
-                    </div>
-                  </div>
-                  <span className={'score-badge score-' + it.perf_class}>{it.performance_level}</span>
-                </div>
-                <div className="student-score" style={{ color: scoreColor(it.total_score) }}>{it.total_score}</div>
-                <div className="student-subjects">
-                  {it.subjects.filter(Boolean).map((s, i) => (
-                    <div className="student-subject" key={i}><span>{s.name.substring(0, 10)}</span><strong>{s.score}</strong></div>))}
-                </div>
-                <div className="student-actions">
-                  <a href={it.student.progress_url} className="btn btn-info btn-sm" title="Progress"><i aria-hidden="true" className="fas fa-chart-line" /></a>
-                  {canWrite(d, 'mock_jamb_results_edit') && <a href={it.edit_url} className="btn btn-warning btn-sm" aria-label="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>}
-                  {canWrite(d, 'mock_jamb_results_delete') && <button type="button" className="btn btn-danger btn-sm" onClick={() => delResult(it.delete_url)}><i aria-hidden="true" className="fas fa-trash" /></button>}
-                </div>
-              </div>
-            ))}
+              <div className="jx-row" key={it.rank}>
+                <span className={'bx-pos sm' + rankClass(it.rank)}>{it.rank}</span>
+                <a className="n" href={it.student.progress_url}><b>{it.student.full_name}</b>
+                  <small>{it.student.student_id} <span className={'sl-pill ' + (LEVEL_TONE[it.perf_class] || '')}>{it.performance_level}</span></small></a>
+                <span className="jx-score"><span className={'jx-total ' + jt(it.total_score || 0)}>{it.total_score}</span>
+                  <span className={'rs-meter ' + ((it.total_score || 0) >= 250 ? 'good' : (it.total_score || 0) >= 200 ? 'n' : (it.total_score || 0) >= 180 ? 'mid' : 'bad')}><i style={{ width: ((it.total_score || 0) / 4) + '%' }} /></span></span>
+                <span className="bx-grades">{it.subjects.filter(Boolean).map((x, i) => (
+                  <span key={i} className={'bx-g ' + js(x.score)} title={x.name}>{abbr(x.name)} <b>{x.score}</b></span>))}</span>
+                <span className="a">
+                  <a href={it.student.progress_url} className="rs-icon-btn" title="Progress" aria-label={'Progress for ' + it.student.full_name}><i className="fas fa-chart-line" aria-hidden="true" /></a>
+                  {canWrite(d, 'mock_jamb_results_edit') && <a href={it.edit_url} className="rs-icon-btn" aria-label={'Edit ' + it.student.full_name} title="Edit"><i className="fas fa-pen" aria-hidden="true" /></a>}
+                  {canWrite(d, 'mock_jamb_results_delete') && <button type="button" className="rs-icon-btn danger" aria-label={'Delete ' + it.student.full_name} title="Delete" onClick={() => delResult(it.delete_url)}><i className="fas fa-trash" aria-hidden="true" /></button>}
+                </span>
+              </div>))}
           </div>
-
-          <div className="desktop-table">
-            <table>
-              <thead><tr><th>Rank</th><th>Student</th><th>Score</th><th>S1</th><th>S2</th><th>S3</th><th>S4</th><th>Level</th><th>Actions</th></tr></thead>
-              <tbody>{shown.map((it) => (
-                <tr key={it.rank}>
-                  <td><span className={'student-rank' + rankClass(it.rank)} style={{ width: 24, height: 24, fontSize: 'var(--text-xs)' }}>{it.rank}</span></td>
-                  <td><strong>{it.student.full_name}</strong><br /><small style={{ color: 'var(--text-muted)' }}>{it.student.student_id}</small><br />
-                    <a href={it.student.progress_url} className="progress-link"><i aria-hidden="true" className="fas fa-chart-line" /> Progress</a></td>
-                  <td><strong style={{ fontSize: 'var(--text-lg)', color: scoreColor(it.total_score) }}>{it.total_score}</strong></td>
-                  {it.subjects.map((s, i) => (
-                    <td key={i}>{s ? <><small>{s.name.substring(0, 8)}</small><br /><strong>{s.score}</strong></> : '-'}</td>))}
-                  <td><span className={'score-badge score-' + it.perf_class}>{it.performance_level}</span></td>
-                  <td><div style={{ display: 'flex', gap: '0.25rem' }}>
-                    <a href={it.student.progress_url} className="btn btn-info btn-sm" title="Progress"><i aria-hidden="true" className="fas fa-chart-line" /></a>
-                    {canWrite(d, 'mock_jamb_results_edit') && <a href={it.edit_url} className="btn btn-warning btn-sm" aria-label="Edit"><i aria-hidden="true" className="fas fa-edit" /></a>}
-                    {canWrite(d, 'mock_jamb_results_delete') && <button type="button" className="btn btn-danger btn-sm" onClick={() => delResult(it.delete_url)}><i aria-hidden="true" className="fas fa-trash" /></button>}
-                  </div></td>
-                </tr>))}
-              </tbody>
-            </table>
-          </div>
-        </>) : (
-          <div className="card-body"><Empty icon="fa-clipboard-list" title="No Results">
-            <p>{filters.search ? `No students found matching "${filters.search}"` : 'Add results for this exam'}</p>
-            {canWrite(d, 'mock_jamb_results_create') && <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add</a>}</Empty></div>
+        ) : (
+          <Blank icon="fa-clipboard-list" title="No results">
+            <p>{filters.search ? 'No students found matching "' + filters.search + '"' : 'Add results for this exam.'}</p>
+            {canWrite(d, 'mock_jamb_results_create') && <a href={d.urls.bulk} className="rs-btn primary"><i className="fas fa-plus" aria-hidden="true" /> Enter results</a>}
+          </Blank>
         )}
-      </div>
-
-      {/* Subject table below the list: charts, then the search right above the students. */}
-      {st && st.subject_analysis.length > 0 && (
-        <div className="card mt-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-book" /> Subject Analysis</h3></div>
-          <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
-            <table className="subject-table">
-              <thead><tr><th style={{ textAlign: 'left' }}>Subject</th><th>Count</th><th>Avg</th><th>Max</th><th>Min</th><th>≥70</th><th>≥50</th></tr></thead>
-              <tbody>{st.subject_analysis.map((s) => (
-                <tr key={s.subject}><td><a href={`/mock-jamb/exam/${d.exam.id}/subject/${encodeURIComponent(s.subject)}`} style={{ color: 'var(--primary)', fontWeight: 600 }} title={`Full analysis for ${s.subject}`}>{s.subject}</a></td><td>{s.count}</td>
-                  <td style={{ color: s.average >= 70 ? 'var(--success)' : s.average >= 50 ? 'var(--warning)' : 'var(--danger)' }}><strong>{r1(s.average)}</strong></td>
-                  <td style={{ color: 'var(--success)' }}>{s.max}</td><td style={{ color: 'var(--danger)' }}>{s.min}</td><td>{s.above_70}</td><td>{s.above_50}</td></tr>))}
-              </tbody>
-            </table>
-          </div></div>
-      )}
-
-      {canWrite(d, 'mock_jamb_exam_delete') && (
-      <div className="card mt-3" style={{ borderColor: 'var(--danger)' }}>
-        <div className="card-header" style={{ background: 'rgba(220,53,69,0.1)' }}><h3 className="text-danger"><i aria-hidden="true" className="fas fa-exclamation-triangle" /> Danger Zone</h3></div>
-        <div className="card-body"><p className="text-muted mb-3">Delete exam and all results permanently.</p>
-          <button type="button" className="btn btn-danger" onClick={delExam}><i aria-hidden="true" className="fas fa-trash" /> Delete Exam</button></div>
-      </div>
-      )}
+      </section>
 
       {exporting && <ExportModal onClose={() => setExporting(false)} onGenerate={doExport} spec={d.export_cols}
                                  hasSubjects={!!(st && st.subject_analysis && st.subject_analysis.length)} />}
@@ -726,6 +699,7 @@ function StudentProgress({ d }) {
           </select>
         </div>
       </div>
+      <MjNav d={d} active="" />
 
       {p ? (<>
         <div className="stats-row">
@@ -843,6 +817,7 @@ function Analytics({ d }) {
       <div className="page-header"><h1><i aria-hidden="true" className="fas fa-chart-bar" /> Mock JAMB Analytics</h1>
         {d.urls.validation && <div className="page-header-actions"><a href={d.urls.validation} className="btn btn-outline"><i aria-hidden="true" className="fas fa-bullseye" /> Mock Validation</a></div>}
       </div>
+      <MjNav d={d} active="analytics" />
       <div className="filter-bar">
         <div className="form-group mb-0">
           <label className="form-label">Academic Session</label>
@@ -971,6 +946,7 @@ function Validation({ d }) {
           <a href={d.urls.analytics} className="btn btn-outline"><i aria-hidden="true" className="fas fa-chart-line" /> Analytics</a>
         </div>
       </div>
+      <MjNav d={d} active="validation" />
       <div className="filter-bar">
         <div className="form-group mb-0"><label className="form-label">Academic Session</label>
           <select className="form-control" value={d.selected_session_id} onChange={(e) => navParams(nav.go, d.urls.self, { session_id: e.target.value })}>
@@ -1112,13 +1088,14 @@ function Deep({ d }) {
     </>
   );
 
-  const header = (
+  const header = (<>
     <div className="page-header">
       <div><h1>Deep Analytics — {d.exam.display_name}</h1>
         <p className="text-muted text-sm">{d.exam.exam_date}{d.exam.session_name ? ` | ${d.exam.session_name}` : ''} · per subject · per teacher · per class arm</p></div>
       <div className="page-header-actions">{actions}</div>
     </div>
-  );
+    <ExamNav d={d} active="deep" />
+  </>);
 
   if (empty) {
     return <>{header}<Empty icon="fa-brain" title="No results yet"><p className="text-muted">Enter scores to unlock per-subject, per-teacher and per-arm deep analytics.</p><a href={d.urls.view} className="btn btn-primary mt-2">Enter results</a></Empty></>;
@@ -1263,7 +1240,7 @@ function Trends({ d }) {
     navParams(nav.go, d.urls.self, params);
   };
 
-  const header = (
+  const header = (<>
     <div className="page-header">
       <div><h1>Progress Trends — Mock JAMB</h1>
         <p className="text-muted text-sm">Track mean score, subjects, teachers and arms across mocks{t && t.meta.multi_session ? ' and across sessions' : ''}.</p></div>
@@ -1276,7 +1253,8 @@ function Trends({ d }) {
         <a href={d.urls.index} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</a>
       </div>
     </div>
-  );
+    <MjNav d={d} active="trends" />
+  </>);
 
   const selector = (
     <div className="filter-form mb-3" style={{ display: 'flex', gap: '.5rem', alignItems: 'center', flexWrap: 'wrap' }}>
@@ -1387,7 +1365,7 @@ export default function MockJambApp({ data }) {
     <NavCtx.Provider value={{ go, refresh }}>
       <SectionShell go={go}>
         {msg && <Banner tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Banner>}
-        <Screen d={d} notify={notify} />
+        <div className={'rs bx bx-legacy mj mj-' + d.page}><Screen d={d} notify={notify} /></div>
       </SectionShell>
     </NavCtx.Provider>
   );

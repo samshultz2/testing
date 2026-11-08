@@ -1,7 +1,10 @@
 {% extends "base.html" %}
+{% from "mock_jamb/_shell.html" import mj_nav, mj_exam_nav with context %}
 {% block title %}Paper Blueprint — {{ exam.display_name }} - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('mock_jamb.index') }}">Mock JAMB</a> / <a href="{{ urls.view }}">{{ exam.display_name }}</a> / <span>Blueprint</span>{% endblock %}
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+
 <style>
 .bp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:1rem}
 .bp-card{border:1px solid var(--border-color);border-radius:var(--radius-lg);overflow:hidden}
@@ -16,6 +19,7 @@
 </style>
 {% endblock %}
 {% block content %}
+<div class="rs bx bx-legacy">
 <div class="page-header">
     <div>
         <h1>Paper Blueprint — {{ exam.display_name }}</h1>
@@ -26,6 +30,7 @@
         <a href="{{ urls.view }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back to exam</a>
     </div>
 </div>
+<div class="no-print">{{ mj_exam_nav(exam, 'blueprint') }}</div>
 
 <form method="post" action="{{ urls.self }}">
     <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
@@ -88,4 +93,5 @@
         <span class="text-muted text-sm" style="align-self:center;">Tip: set every count back to its default and save to fully restore the JAMB blueprint.</span>
     </div>
 </form>
+</div>
 {% endblock %}

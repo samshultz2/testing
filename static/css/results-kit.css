@@ -1438,3 +1438,10 @@
 .bx>*{min-width:0;max-width:100%}
 .bx-legacy .sa-wrap{width:100%;padding:0}
 @media (max-width:1100px){.mw-split{grid-template-columns:minmax(0,1fr)}}
+/* Mock JAMB (React) */
+.mj-sel{height:42px;border:1.5px solid var(--border-color);border-radius:12px;padding:0 .6rem;font:inherit;font-weight:700;background:var(--bg-card);color:var(--text-primary)}
+.mj .card{margin:0}
+.mj .page-header{margin:0}
+.mj .stats-grid{margin:0}
+.mj .charts-row{margin:0}
+.mj-exam .a{gap:.3rem}
