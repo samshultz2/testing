@@ -1,30 +1,148 @@
 {% extends "cbt/portal_base.html" %}
 {% block title %}Mock JAMB{% endblock %}
+{% block head_extra %}<style>
+.mj-hello{color:#fff;margin:-.2rem .1rem 1rem;display:flex;align-items:flex-end;gap:.8rem}
+.mj-hello>div{flex:1;min-width:0}
+.mj-hello h1{margin:0;color:#fff;font-size:1.5rem;font-family:'Space Grotesk',sans-serif}
+.mj-hello p{margin:.2rem 0 0;opacity:.85;font-size:.9rem}
+.mj-back{flex:none;display:inline-flex;align-items:center;gap:.4rem;color:#fff;text-decoration:none;font-weight:700;font-size:.85rem;background:rgba(255,255,255,.16);border-radius:999px;padding:.45rem .85rem}
+.mj-back:hover{background:rgba(255,255,255,.28)}
+.mj-list{display:flex;flex-direction:column;gap:.8rem}
+.mj-card{background:#fff;border-radius:18px;padding:1.1rem 1.15rem;box-shadow:0 6px 20px rgba(15,23,42,.08);display:flex;flex-direction:column;gap:.8rem;border:2px solid transparent}
+.mj-card.open,.mj-card.prog{border-color:#c7d2fe}
+.mj-top{display:flex;align-items:flex-start;gap:.8rem}
+.mj-ic{width:46px;height:46px;border-radius:14px;flex:none;display:flex;align-items:center;justify-content:center;font-size:1.15rem;background:#eef2ff;color:var(--px)}
+.mj-card.done .mj-ic{background:#dcfce7;color:#16a34a}
+.mj-t{flex:1;min-width:0}
+.mj-t strong{display:block;font-size:1.06rem;line-height:1.3}
+.mj-t small{color:#64748b;font-size:.84rem}
+.mj-pill{flex:none;font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;border-radius:999px;padding:.22rem .6rem;white-space:nowrap}
+.mj-pill.open{background:#dcfce7;color:#15803d}.mj-pill.prog{background:#fef3c7;color:#b45309}.mj-pill.done{background:#e0e7ff;color:#4338ca}
+.mj-facts{display:flex;flex-wrap:wrap;gap:.4rem}
+.mj-facts span{display:inline-flex;align-items:center;gap:.35rem;font-size:.8rem;background:#f8fafc;border:1px solid #eef2f7;border-radius:9px;padding:.28rem .6rem;color:#334155}
+.mj-facts i{color:#94a3b8;font-size:.75rem}
+.mj-act{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap}
+.mj-score{display:flex;align-items:center;gap:.6rem}
+.mj-score b{font-family:'Space Grotesk',sans-serif;font-weight:800;font-size:1.35rem}
+.mj-score small{font-size:.8rem;color:#64748b;font-weight:600}
+.mj-meter{width:90px;height:7px;border-radius:99px;background:#f1f5f9;overflow:hidden}
+.mj-meter i{display:block;height:100%;border-radius:99px}
+.mj-empty{text-align:center;padding:2rem 1rem}
+.mj-empty i{font-size:2.2rem;color:#94a3b8}
+.mj-empty h3{margin:.7rem 0 .3rem}
+.mj-how{margin-top:.9rem;background:#fff;border-radius:18px;padding:1rem 1.15rem;box-shadow:0 6px 20px rgba(15,23,42,.06)}
+.mj-how h4{margin:0 0 .6rem;font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;color:#64748b}
+.mj-how ul{list-style:none;margin:0;padding:0;display:grid;gap:.55rem}
+.mj-how li{display:flex;gap:.65rem;align-items:flex-start;font-size:.9rem;color:#334155}
+.mj-how li i{width:30px;height:30px;border-radius:9px;background:#f1f5f9;color:#475569;display:flex;align-items:center;justify-content:center;flex:none;font-size:.8rem}
+/* ready sheet */
+.mj-sheet{position:fixed;inset:0;z-index:200;background:rgba(15,23,42,.55);display:none;align-items:center;justify-content:center;padding:1rem}
+.mj-sheet.open{display:flex}
+.mj-sheet-card{background:#fff;border-radius:22px;max-width:440px;width:100%;padding:1.3rem;box-shadow:0 24px 60px rgba(0,0,0,.3)}
+.mj-sheet-card h3{margin:0 0 .25rem;font-size:1.2rem;font-family:'Space Grotesk',sans-serif}
+.mj-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.5rem;margin:.9rem 0}
+.mj-grid div{background:#f8fafc;border-radius:12px;padding:.7rem;text-align:center}
+.mj-grid b{display:block;font-size:1.35rem;font-family:'Space Grotesk',sans-serif}
+.mj-grid span{font-size:.72rem;font-weight:800;text-transform:uppercase;color:#64748b;letter-spacing:.04em}
+.mj-warn{display:flex;gap:.55rem;align-items:flex-start;background:#fffbeb;color:#92400e;border-radius:12px;padding:.7rem .8rem;font-size:.86rem;margin-bottom:1rem}
+.mj-sheet-a{display:flex;gap:.6rem}
+.mj-sheet-a .p-btn{flex:1}
+@media (min-width:700px){.mj-card{flex-direction:row;align-items:center;flex-wrap:wrap}.mj-top{flex:1 1 300px}.mj-facts{flex:0 1 auto}.mj-act{flex:none}}
+@media (max-width:600px){
+  .mj-sheet{align-items:flex-end;padding:0}
+  .mj-sheet-card{border-radius:22px 22px 0 0;max-width:none;padding-bottom:calc(1.2rem + env(safe-area-inset-bottom,0px))}
+}
+</style>{% endblock %}
 {% block content %}
-<div class="portal-card">
-    <h1><i class="fas fa-file-contract"></i> Mock JAMB</h1>
-    <p class="text-muted text-sm">Sit your registered subjects in one timed session, just like the real JAMB.</p>
-    <p style="margin:.4rem 0 1rem;"><a href="{{ url_for('cbt_portal.home') }}" class="text-sm"><i class="fas fa-arrow-left"></i> Back to my tests</a></p>
+<div class="mj-hello">
+    <div>
+        <h1>Mock JAMB</h1>
+        <p>Sit all your subjects in one timed session, just like the real UTME.</p>
+    </div>
+    <a href="{{ url_for('cbt_portal.home') }}" class="mj-back"><i class="fas fa-arrow-left"></i> My tests</a>
+</div>
 
-    {% if rows %}
-    {% for r in rows %}
-    <div style="border:1px solid var(--border-color);border-radius:12px;padding:1rem;margin-bottom:.7rem;display:flex;align-items:center;gap:.8rem;flex-wrap:wrap;">
-        <div style="flex:1;min-width:180px;">
-            <div style="font-weight:700;">{{ r.exam.display_name }}</div>
-            <div class="text-muted text-sm">{{ r.subjects }} subject{{ '' if r.subjects == 1 else 's' }} · {{ r.exam.duration_minutes }} min{% if r.exam.exam_date %} · {{ r.exam.exam_date.strftime('%d %b %Y') }}{% endif %}</div>
+{% if rows %}
+<div class="mj-list">
+    {% for r in rows %}{% set e = r.exam %}
+    {% set kind = 'done' if r.submitted else ('prog' if r.in_progress else 'open') %}
+    <div class="mj-card {{ kind }}">
+        <div class="mj-top">
+            <span class="mj-ic"><i class="fas {{ 'fa-circle-check' if kind == 'done' else 'fa-file-contract' }}"></i></span>
+            <div class="mj-t">
+                <strong>{{ e.display_name }}</strong>
+                {% if e.exam_date %}<small>{{ e.exam_date.strftime('%A, %d %b %Y') }}</small>{% endif %}
+            </div>
+            <span class="mj-pill {{ kind }}">{{ {'done':'Done','prog':'In progress','open':'Open now'}[kind] }}</span>
         </div>
-        {% if r.submitted %}
-        <span class="badge badge-success">Submitted · {{ r.score }}/400</span>
-        <a href="{{ url_for('mock_jamb_portal.portal_done', exam_id=r.exam.id) }}" class="btn btn-secondary btn-sm">View result</a>
-        {% elif r.in_progress %}
-        <a href="{{ url_for('mock_jamb_portal.portal_sit', exam_id=r.exam.id) }}" class="btn btn-warning btn-sm"><i class="fas fa-play"></i> Resume</a>
-        {% else %}
-        <a href="{{ url_for('mock_jamb_portal.portal_sit', exam_id=r.exam.id) }}" class="btn btn-primary btn-sm"><i class="fas fa-play"></i> Start</a>
-        {% endif %}
+        <div class="mj-facts">
+            <span><i class="fas fa-book"></i> {{ r.subjects }} subject{{ '' if r.subjects == 1 else 's' }}</span>
+            <span><i class="fas fa-stopwatch"></i> {{ e.duration_minutes or 120 }} min</span>
+            <span><i class="fas fa-star"></i> {{ r.subjects * 100 }} marks</span>
+        </div>
+        <div class="mj-act">
+            {% if kind == 'done' %}
+                {% set sc = r.score or 0 %}{% set pc = (sc / (r.subjects * 100) * 100) if r.subjects else 0 %}
+                <span class="mj-score"><b>{{ sc }}</b><small>/ {{ r.subjects * 100 }}</small>
+                    <span class="mj-meter"><i style="width:{{ pc|round|int }}%;background:{{ '#16a34a' if pc >= 50 else ('#d97706' if pc >= 45 else '#dc2626') }}"></i></span></span>
+                <a href="{{ url_for('mock_jamb_portal.portal_done', exam_id=e.id) }}" class="p-btn sm ghost">See result</a>
+            {% elif kind == 'prog' %}
+                <a href="{{ url_for('mock_jamb_portal.portal_sit', exam_id=e.id) }}" class="p-btn"><i class="fas fa-play"></i> Resume</a>
+            {% else %}
+                <a href="{{ url_for('mock_jamb_portal.portal_sit', exam_id=e.id) }}" class="p-btn" data-ready
+                   data-name="{{ e.display_name }}" data-subjects="{{ r.subjects }}" data-min="{{ e.duration_minutes or 120 }}">Start <i class="fas fa-arrow-right"></i></a>
+            {% endif %}
+        </div>
     </div>
     {% endfor %}
-    {% else %}
-    <div class="empty-state"><i class="fas fa-inbox"></i><p>No Mock JAMB is open for you right now. Check back when your school publishes one.</p></div>
-    {% endif %}
 </div>
+{% else %}
+<div class="portal-card mj-empty"><i class="fas fa-inbox"></i><h3>No Mock JAMB open</h3><p class="p-muted">There’s no Mock JAMB open for you right now. Check back when your school publishes one.</p></div>
+{% endif %}
+
+<div class="mj-how">
+    <h4>How it works</h4>
+    <ul>
+        <li><i class="fas fa-layer-group"></i><span>Your subjects appear as tabs. Move between them freely — you don’t have to finish one before the next.</span></li>
+        <li><i class="fas fa-cloud-arrow-up"></i><span>Every answer saves as you go. If you lose network or close the page, just come back and resume.</span></li>
+        <li><i class="fas fa-keyboard"></i><span>On a computer, use <b>A–D</b> to answer, <b>N</b>/<b>P</b> for next/previous and <b>S</b> to submit — like the real CBT.</span></li>
+        <li><i class="fas fa-hourglass-end"></i><span>When time runs out, your paper submits automatically.</span></li>
+    </ul>
+</div>
+
+<div class="mj-sheet" id="readySheet" role="dialog" aria-modal="true" aria-labelledby="readyTitle">
+    <div class="mj-sheet-card">
+        <h3 id="readyTitle">Ready to start?</h3>
+        <div class="p-muted" id="readyName" style="font-size:.9rem"></div>
+        <div class="mj-grid">
+            <div><b id="readySubj">4</b><span>Subjects</span></div>
+            <div><b id="readyMin">120</b><span>Minutes</span></div>
+        </div>
+        <div class="mj-warn"><i class="fas fa-triangle-exclamation" style="margin-top:.15rem"></i><span>The timer starts as soon as you begin and keeps running even if you leave the page.</span></div>
+        <div class="mj-sheet-a">
+            <button type="button" class="p-btn ghost" id="readyNo">Not yet</button>
+            <a href="#" class="p-btn" id="readyGo">Begin <i class="fas fa-arrow-right"></i></a>
+        </div>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script nonce="{{ csp_nonce }}">
+(function(){
+    var sh = document.getElementById('readySheet'); if(!sh) return;
+    document.addEventListener('click', function(e){
+        var a = e.target.closest && e.target.closest('[data-ready]'); if(!a) return;
+        e.preventDefault();
+        document.getElementById('readyName').textContent = a.dataset.name;
+        document.getElementById('readySubj').textContent = a.dataset.subjects;
+        document.getElementById('readyMin').textContent = a.dataset.min;
+        document.getElementById('readyGo').href = a.href;
+        sh.classList.add('open');
+    });
+    function close(){ sh.classList.remove('open'); }
+    document.getElementById('readyNo').addEventListener('click', close);
+    sh.addEventListener('click', function(e){ if(e.target === sh) close(); });
+    document.addEventListener('keydown', function(e){ if(e.key === 'Escape') close(); });
+})();
+</script>
 {% endblock %}

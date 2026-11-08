@@ -3080,9 +3080,45 @@ def portal_done(exam_id):
         if att.status != 'Submitted':
             return redirect(url_for('mock_jamb_portal.portal_sit', exam_id=exam_id))
         result = MockJAMBResult.query.filter_by(student_id=student.id, mock_exam_id=exam_id).first()
+        stats, prev = _portal_done_stats(exam, student, att)
         return render_template('mock_jamb/portal_done.html', exam=exam, student=student,
-                               attempt=att, result=result)
+                               attempt=att, result=result, stats=stats, prev=prev)
     return _inner()
+
+
+def _portal_done_stats(exam, student, att):
+    """Per-subject answered/correct counts over the served paper and the
+    candidate's previous Mock JAMB total (for a "vs last mock" cue).
+    Best-effort: any failure just hides the extra detail on the result page."""
+    from models import MockJAMBResult, Subject
+    stats, prev = {}, None
+    try:
+        from utils.mock_jamb_sitting import subject_ids_for_attempt, subject_items
+        ans = {a.question_id: a for a in att.answers}
+        for sid in subject_ids_for_attempt(exam, student, att):
+            _items, served = subject_items(exam, sid, att)
+            subj = db.session.get(Subject, sid)
+            if not subj:
+                continue
+            stats[subj.name] = {
+                'total': len(served),
+                'answered': sum(1 for q in served if ans.get(q) and ans[q].selected_option),
+                'correct': sum(1 for q in served if ans.get(q) and ans[q].is_correct),
+            }
+    except Exception:
+        stats = {}
+    try:
+        row = (MockJAMBResult.query.join(MockJAMBExam, MockJAMBResult.mock_exam_id == MockJAMBExam.id)
+               .filter(MockJAMBResult.student_id == student.id,
+                       MockJAMBResult.mock_exam_id != exam.id,
+                       MockJAMBExam.exam_date <= exam.exam_date)
+               .order_by(MockJAMBExam.exam_date.desc(), MockJAMBExam.id.desc()).first())
+        if row:
+            prev = {'name': row.exam.display_name if row.exam else 'last mock',
+                    'total': row.total_score}
+    except Exception:
+        prev = None
+    return stats, prev
 
 
 def _mockjamb_grade_job(app, payload):

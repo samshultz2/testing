@@ -1,29 +1,88 @@
 {% extends "cbt/portal_base.html" %}
 {% block title %}Result — {{ exam.display_name }}{% endblock %}
+{% block head_extra %}<style>
+.mr-wrap{display:grid;grid-template-columns:minmax(0,1fr);gap:.9rem}
+.mr-hero{text-align:center;padding:1.5rem 1.3rem 1.3rem}
+.mr-ring{--p:0;--c:#4f46e5;width:170px;height:170px;margin:.2rem auto .8rem;border-radius:50%;background:conic-gradient(var(--c) calc(var(--p)*1%),#eef2f7 0);display:flex;align-items:center;justify-content:center}
+.mr-ring>div{width:136px;height:136px;border-radius:50%;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.mr-ring b{font-family:'Space Grotesk',sans-serif;font-size:2.6rem;line-height:1;font-weight:800}
+.mr-ring small{color:#64748b;font-weight:700;font-size:.85rem;margin-top:.2rem}
+.mr-hero h1{font-size:1.25rem!important}
+.mr-band{display:inline-flex;align-items:center;gap:.4rem;border-radius:999px;padding:.3rem .8rem;font-weight:800;font-size:.8rem;margin-top:.5rem}
+.mr-facts{display:flex;flex-wrap:wrap;justify-content:center;gap:.4rem;margin-top:.9rem}
+.mr-facts span{display:inline-flex;align-items:center;gap:.35rem;font-size:.82rem;background:#f8fafc;border:1px solid #eef2f7;border-radius:9px;padding:.3rem .65rem;color:#334155}
+.mr-facts i{color:#94a3b8;font-size:.75rem}
+.mr-facts .up{color:#15803d}.mr-facts .down{color:#dc2626}
+.mr-card{padding:1.2rem 1.3rem}
+.mr-card h2{margin:0 0 .8rem;font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;color:#64748b}
+.mr-subj{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.35rem .8rem;align-items:center;padding:.75rem 0;border-bottom:1px solid #f1f5f9}
+.mr-subj:last-child{border-bottom:0;padding-bottom:0}
+.mr-subj:first-of-type{padding-top:0}
+.mr-subj .n{font-weight:700;font-size:.95rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mr-subj .s{font-family:'Space Grotesk',sans-serif;font-weight:800;font-size:1.1rem;font-variant-numeric:tabular-nums}
+.mr-subj .s small{color:#94a3b8;font-size:.78rem;font-weight:600}
+.mr-subj .m{grid-column:1/-1;height:8px;border-radius:99px;background:#f1f5f9;overflow:hidden}
+.mr-subj .m i{display:block;height:100%;border-radius:99px}
+.mr-subj .d{grid-column:1/-1;font-size:.78rem;color:#64748b;display:flex;gap:.8rem;flex-wrap:wrap}
+.mr-subj .d b{color:#334155}
+.mr-tip{display:flex;gap:.7rem;align-items:flex-start;background:#eef2ff;color:#3730a3;border-radius:14px;padding:.85rem 1rem;font-size:.9rem;margin-top:1rem}
+.mr-tip i{margin-top:.15rem}
+.mr-act{display:flex;gap:.6rem;flex-wrap:wrap}
+.mr-act .p-btn{flex:1;min-width:150px}
+@media (min-width:820px){
+  .mr-wrap{grid-template-columns:320px minmax(0,1fr);align-items:start}
+  .mr-side{position:sticky;top:1rem;display:grid;gap:.9rem}
+}
+</style>{% endblock %}
 {% block content %}
-<div class="portal-card" style="text-align:center;">
-    <div style="font-size:3rem;color:#334155;"><i class="fas fa-circle-check"></i></div>
-    <h1>{{ exam.display_name }} submitted</h1>
-    <p class="text-muted">Well done, {{ student.first_name or student.full_name }}. Here’s how you did.</p>
-
-    <div style="font-size:3rem;font-weight:800;font-family:'Space Grotesk',sans-serif;color:{{ '#047857' if attempt.total_score >= 200 else '#b45309' if attempt.total_score >= 180 else '#dc2626' }};">
-        {{ attempt.total_score }}<span style="font-size:1.2rem;color:var(--text-muted);">/400</span>
-    </div>
-
-    {% if result %}
-    <div style="max-width:420px;margin:1rem auto 0;">
-        {% for s in result.subjects_list %}
-        <div style="display:flex;justify-content:space-between;padding:.5rem .2rem;border-bottom:1px solid var(--border-color);">
-            <span>{{ s.name }}</span>
-            <strong style="color:{{ '#047857' if s.score >= 50 else '#dc2626' }};">{{ s.score }}/100</strong>
+{% set subs = result.subjects_list if result else [] %}
+{% set maxs = (subs|length * 100) if subs else 400 %}
+{% set total = attempt.total_score or 0 %}
+{% set pct = (total / maxs * 100) if maxs else 0 %}
+{% set col = '#16a34a' if pct >= 50 else ('#d97706' if pct >= 45 else '#dc2626') %}
+{% set band = result.performance_level if result else '' %}
+<div class="mr-wrap">
+    <div class="mr-side">
+        <div class="portal-card mr-hero">
+            <div class="mr-ring" style="--p:{{ pct|round|int }};--c:{{ col }}"><div><b style="color:{{ col }}">{{ total }}</b><small>of {{ maxs }}</small></div></div>
+            <h1>{{ exam.display_name }}</h1>
+            <div class="p-muted" style="font-size:.9rem">Well done for finishing, {{ student.first_name or student.full_name }}.</div>
+            {% if band %}<span class="mr-band" style="background:color-mix(in srgb,{{ col }} 14%,#fff);color:{{ col }}"><i class="fas fa-medal"></i> {{ band }}</span>{% endif %}
+            <div class="mr-facts">
+                {% if prev %}{% set diff = total - (prev.total or 0) %}
+                <span title="Compared with {{ prev.name }}"><i class="fas fa-chart-line"></i> vs last mock:
+                    <b class="{{ 'up' if diff > 0 else ('down' if diff < 0 else '') }}">{{ '+' if diff > 0 else '' }}{{ diff }}</b></span>
+                {% endif %}
+            </div>
         </div>
-        {% endfor %}
+        <div class="mr-act">
+            <a href="{{ url_for('mock_jamb_portal.portal_list') }}" class="p-btn ghost"><i class="fas fa-list"></i> More mocks</a>
+            <a href="{{ url_for('cbt_portal.home') }}" class="p-btn">My tests</a>
+        </div>
     </div>
-    {% endif %}
 
-    <p style="margin-top:1.2rem;">
-        <a href="{{ url_for('mock_jamb_portal.portal_list') }}" class="btn btn-secondary btn-sm"><i class="fas fa-list"></i> More mocks</a>
-        <a href="{{ url_for('cbt_portal.home') }}" class="btn btn-primary btn-sm">My tests</a>
-    </p>
+    <div class="portal-card mr-card">
+        <h2>Score by subject</h2>
+        {% if subs %}
+            {% set ns = namespace(lo=None) %}
+            {% for s in subs %}
+            {% set st = stats.get(s.name) if stats else None %}
+            {% set sc = s.score or 0 %}
+            {% set c = '#16a34a' if sc >= 50 else ('#d97706' if sc >= 45 else '#dc2626') %}
+            {% if ns.lo is none or sc < ns.lo.score %}{% set ns.lo = s %}{% endif %}
+            <div class="mr-subj">
+                <span class="n">{{ s.name }}</span>
+                <span class="s" style="color:{{ c }}">{{ sc }}<small> /100</small></span>
+                <span class="m"><i style="width:{{ sc }}%;background:{{ c }}"></i></span>
+                {% if st %}<span class="d"><span><b>{{ st.correct }}</b> of {{ st.total }} correct</span>{% if st.total - st.answered %}<span><b>{{ st.total - st.answered }}</b> left blank</span>{% endif %}</span>{% endif %}
+            </div>
+            {% endfor %}
+            {% if ns.lo and subs|length > 1 and ns.lo.score < 70 %}
+            <div class="mr-tip"><i class="fas fa-lightbulb"></i><span>Focus your next revision on <b>{{ ns.lo.name }}</b> — it’s your lowest subject this time.</span></div>
+            {% endif %}
+        {% else %}
+            <p class="p-muted" style="margin:0">Your subject scores will appear here once your school releases them.</p>
+        {% endif %}
+    </div>
 </div>
 {% endblock %}

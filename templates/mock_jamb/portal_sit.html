@@ -2,79 +2,276 @@
 {% block title %}{{ exam.display_name }}{% endblock %}
 {% block head_extra %}
 <style>
-.mjs-bar{position:sticky;top:0;z-index:20;background:#334155;color:#fff;border-radius:12px;padding:.7rem 1rem;display:flex;align-items:center;gap:.8rem;flex-wrap:wrap;margin-bottom:.8rem}
-.mjs-bar .timer{font-family:'Space Grotesk',monospace;font-weight:700;font-size:1.15rem;background:rgba(255,255,255,.16);padding:.2rem .6rem;border-radius:8px}
-.mjs-bar .timer.warn{background:#c0392b}
-.mjs-tabs{display:flex;gap:.4rem;overflow-x:auto;margin-bottom:.8rem;-webkit-overflow-scrolling:touch}
-.mjs-tab{white-space:nowrap;padding:.5rem .9rem;border-radius:999px;border:1px solid var(--border-color);background:var(--bg-card);cursor:pointer;font-weight:600;font-size:.85rem}
-.mjs-tab.active{background:#334155;color:#fff;border-color:#334155}
-.mjs-tab .cnt{opacity:.7;font-weight:400;font-size:.75rem}
+:root{--ex:#4f46e5;--ex-dark:#3730a3;--ok:#16a34a;--ink:#1e293b;--muted:#64748b;--line:#e2e8f0;--flag:#f59e0b;--barbg:#0f172a}
+/* full-screen sitting: hide the portal header band */
+body::before{display:none}
+.portal-top{display:none}
+.portal-wrap{max-width:none;padding:0}
+.portal-wrap>.flash-message{margin:76px 1rem -60px;position:relative;z-index:5}
+body{background:#eef2f7}
+/* top bar */
+.mj-bar{position:fixed;top:0;left:0;right:0;height:62px;background:var(--barbg);color:#fff;display:flex;align-items:center;gap:.7rem;padding:0 1rem;z-index:50;box-shadow:0 2px 10px rgba(0,0,0,.25)}
+.mj-bar .t{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.25}
+.mj-bar .t b{font-size:.95rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mj-bar .t small{color:#a5b4fc;font-size:.76rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mj-save{display:inline-flex;align-items:center;gap:.35rem;font-size:.76rem;font-weight:600;color:#86efac;white-space:nowrap}
+.mj-save.saving{color:#cbd5e1}.mj-save.offline{color:#fca5a5}
+.mj-bbtn{height:38px;padding:0 .8rem;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:transparent;color:#cbd5e1;font:inherit;font-size:.8rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:.4rem;flex:none}
+.mj-bbtn:hover,.mj-bbtn.on{background:rgba(255,255,255,.1);color:#fff}
+.mj-timer{display:flex;align-items:center;gap:.45rem;background:rgba(255,255,255,.12);padding:.45rem .9rem;border-radius:999px;font-weight:800;font-variant-numeric:tabular-nums;font-size:1rem;flex:none;font-family:'Space Grotesk',monospace}
+.mj-timer.low{background:#b45309}
+.mj-timer.warn{background:#dc2626;animation:mjpulse 1s infinite}
+@keyframes mjpulse{50%{opacity:.6}}
+@media (prefers-reduced-motion:reduce){.mj-timer.warn{animation:none}}
+.mj-prog{position:absolute;left:0;right:0;bottom:0;height:4px;background:rgba(255,255,255,.12)}
+.mj-prog i{display:block;height:100%;width:0;background:linear-gradient(90deg,#818cf8,#22c55e);transition:width .25s}
+/* layout */
+.mj-wrap{max-width:1180px;margin:0 auto;padding:76px 1rem 2rem;display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:1.2rem;align-items:start}
+/* subject tabs */
+.mjs-tabs{position:sticky;top:62px;z-index:20;background:#eef2f7;display:flex;gap:.45rem;overflow-x:auto;padding:.6rem 0 .7rem;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+.mjs-tabs::-webkit-scrollbar{display:none}
+.mjs-tab{flex:none;display:flex;flex-direction:column;align-items:flex-start;gap:.3rem;min-width:130px;padding:.55rem .85rem .6rem;border-radius:14px;border:1px solid var(--line);background:#fff;color:var(--ink);cursor:pointer;font:inherit;text-align:left}
+.mjs-tab b{font-size:.86rem;white-space:nowrap}
+.mjs-tab .cnt{font-size:.72rem;color:var(--muted);font-weight:600}
+.mjs-tab .bar{width:100%;height:4px;border-radius:9px;background:#f1f5f9;overflow:hidden}
+.mjs-tab .bar i{display:block;height:100%;width:0;background:var(--ok);transition:width .2s}
+.mjs-tab.active{background:var(--ex);border-color:var(--ex);color:#fff}
+.mjs-tab.active .cnt{color:#c7d2fe}
+.mjs-tab.active .bar{background:rgba(255,255,255,.25)}.mjs-tab.active .bar i{background:#fff}
 .mjs-subject{display:none}.mjs-subject.active{display:block}
-.mjs-passage{background:#f4f7f5;border-left:4px solid #7c3aed;border-radius:10px;padding:.8rem 1rem;margin:.7rem 0;white-space:pre-wrap;line-height:1.55;font-size:.92rem}
-.mjs-passage .ptitle{font-weight:700;color:#7c3aed;margin-bottom:.3rem}
-.mjs-q{border:1px solid var(--border-color);border-radius:12px;padding:.9rem 1rem;margin-bottom:.7rem}
-.mjs-q .qh{font-weight:600;margin-bottom:.5rem}
-.mjs-opt{display:flex;align-items:center;gap:.6rem;padding:.5rem .7rem;border:1px solid var(--border-color);border-radius:8px;margin-bottom:.4rem;cursor:pointer}
-.mjs-opt:hover{background:#f0fbf6}
-.mjs-opt input{accent-color:#334155;width:18px;height:18px}
-.mjs-opt.chosen{border-color:#334155;background:#f1f5f9}
-.mjs-q img{max-height:180px;border-radius:8px;margin:.3rem 0;pointer-events:none;-webkit-user-drag:none;user-drag:none}
-.mjs-answered{font-size:.85rem}
-/* Discourage copying exam content (best-effort; screenshots can't be blocked). */
-.mjs-subject,.mjs-passage,.mjs-q,.mjs-tabs,.mjs-bar{-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none}
-.mjs-opt input{user-select:auto}
-/* On-screen basic (JAMB-style) calculator: draggable, toggled, no sci functions. */
-.mjcalc{position:fixed;right:18px;bottom:18px;z-index:60;width:236px;background:var(--bg-card,#fff);border:1px solid var(--border-color,#cbd5e1);border-radius:14px;box-shadow:0 16px 40px rgba(0,0,0,.28);display:none;user-select:none}
+/* passage */
+.mjs-passage{background:#fff;border:1px solid var(--line);border-left:4px solid #7c3aed;border-radius:14px;padding:.9rem 1.1rem;margin:0 0 .8rem;line-height:1.6;font-size:.94rem}
+.mjs-passage .pbody{white-space:pre-wrap}
+.mjs-passage .ptitle{font-weight:800;color:#6d28d9;margin-bottom:.3rem;white-space:normal}
+.mjs-passage .ptitle small{font-weight:500;color:var(--muted)}
+.mjs-passage img{max-height:220px;border-radius:8px;display:block;margin-bottom:.4rem}
+body.one .mjs-passage{display:none;max-height:42vh;overflow-y:auto}
+body.one .mjs-passage.cur{display:block}
+/* question card */
+.mjs-q{background:#fff;border:1px solid var(--line);border-radius:18px;padding:1.2rem 1.3rem 1rem;margin-bottom:.9rem;scroll-margin-top:150px}
+body.one .mjs-q{display:none;margin-bottom:0}
+body.one .mjs-q.cur{display:block;animation:mjin .18s ease}
+@keyframes mjin{from{opacity:.4;transform:translateY(4px)}}
+.q-head{display:flex;align-items:center;justify-content:space-between;gap:.6rem;margin-bottom:.8rem}
+.q-num{display:inline-flex;align-items:center;gap:.35rem;background:#eef2ff;color:var(--ex-dark);border-radius:999px;padding:.25rem .7rem;font-size:.8rem;font-weight:800}
+.q-num small{font-weight:600;color:var(--muted)}
+.q-flag{border:1px solid var(--line);background:#fff;color:var(--muted);border-radius:999px;height:34px;padding:0 .8rem;font:inherit;font-size:.8rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:.4rem}
+.q-flag:hover{border-color:var(--flag);color:#b45309}
+.q-flag.on{background:#fef3c7;border-color:var(--flag);color:#b45309}
+.mjs-q .qh{font-weight:600;font-size:1.06rem;line-height:1.55;margin-bottom:.9rem}
+.mjs-q img{max-width:100%;max-height:300px;border:1px solid var(--line);border-radius:10px;margin:0 0 .9rem;pointer-events:none;-webkit-user-drag:none}
+.mjs-opt{display:flex;align-items:center;gap:.8rem;padding:.8rem 1rem;border:2px solid var(--line);border-radius:14px;margin-bottom:.55rem;cursor:pointer;transition:border-color .12s,background .12s;font-size:.98rem;line-height:1.4}
+.mjs-opt:hover{border-color:#c7d2fe;background:#f8f9ff}
+.mjs-opt input{position:absolute;opacity:0;width:1px;height:1px;pointer-events:none}
+.mjs-opt .mark{width:30px;height:30px;border-radius:50%;border:2px solid #cbd5e1;display:flex;align-items:center;justify-content:center;font-size:.8rem;font-weight:800;color:var(--muted);flex:none}
+.mjs-opt.chosen{border-color:var(--ex);background:#eef2ff}
+.mjs-opt.chosen .mark{background:var(--ex);border-color:var(--ex);color:#fff}
+.mjs-opt input:focus-visible + .mark{outline:2px solid var(--ex);outline-offset:2px}
+/* pager */
+.mj-pager{display:none;align-items:center;gap:.6rem;margin-top:1rem}
+body.one .mj-pager{display:flex}
+.mj-pager button{height:50px;border-radius:14px;border:1px solid var(--line);background:#fff;color:var(--ink);font:inherit;font-weight:700;font-size:.95rem;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:.5rem;padding:0 1.1rem}
+.mj-pager button:disabled{opacity:.4;cursor:default}
+.mj-pager .next{background:var(--ex);border-color:var(--ex);color:#fff;min-width:150px;margin-left:auto}
+.mj-pager .next.fin{background:var(--ok);border-color:var(--ok)}
+.mj-pos{flex:1;color:var(--muted)!important;font-weight:600!important;font-size:.88rem!important;border:0!important;background:none!important;justify-content:flex-start!important;padding:0 .3rem!important;min-width:0}
+.mj-pos b{color:var(--ink)}
+.mj-pos .ms{display:none}
+.mj-keys{display:none;margin-top:.8rem;font-size:.75rem;color:var(--muted);text-align:center}
+body.one .mj-keys{display:block}
+.mj-keys kbd{background:#fff;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:0 .35rem;font:inherit;font-size:.72rem}
+.mj-allsub{display:none;text-align:center;margin-top:1rem}
+body:not(.one) .mj-allsub{display:block}
+/* rail */
+.mj-rail{position:sticky;top:76px;background:#fff;border:1px solid var(--line);border-radius:18px;padding:1rem}
+.mj-rail h4{margin:0 0 .15rem;font-size:.74rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.mj-rail .sname{font-weight:800;font-size:1rem;margin-bottom:.15rem}
+.mj-rail .sprog{font-size:.84rem;color:var(--muted);margin-bottom:.6rem}
+.mj-rail .sprog b{color:var(--ink)}
+.mj-legend{display:flex;flex-wrap:wrap;gap:.3rem .8rem;font-size:.72rem;color:var(--muted);margin-bottom:.6rem}
+.mj-legend span{display:inline-flex;align-items:center;gap:.3rem}
+.mj-legend i{width:11px;height:11px;border-radius:3px;display:inline-block;background:#f1f5f9;border:1px solid var(--line)}
+.mj-legend i.d{background:var(--ok);border-color:var(--ok)}.mj-legend i.f{background:#fef3c7;border-color:var(--flag)}
+.mj-grid{display:none;grid-template-columns:repeat(6,1fr);gap:.38rem;max-height:38vh;overflow-y:auto;padding:2px}
+.mj-grid.active{display:grid}
+.mj-grid a{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:9px;background:#f1f5f9;color:var(--ink);text-decoration:none;font-weight:700;font-size:.8rem;border:1px solid var(--line)}
+.mj-grid a.done{background:var(--ok);color:#fff;border-color:var(--ok)}
+.mj-grid a.flag{background:#fef3c7;border-color:var(--flag);color:#b45309}
+.mj-grid a.done.flag{background:var(--ok);color:#fff;box-shadow:inset 0 -4px 0 var(--flag)}
+.mj-grid a.cur{outline:2px solid var(--ex);outline-offset:1px}
+.mj-subs{margin-top:.9rem;border-top:1px solid #f1f5f9;padding-top:.7rem;display:grid;gap:.45rem}
+.mj-subs button{display:grid;grid-template-columns:1fr auto;gap:.25rem .5rem;align-items:center;border:0;background:none;padding:.25rem .2rem;border-radius:8px;font:inherit;text-align:left;cursor:pointer;color:var(--ink)}
+.mj-subs button:hover{background:#f8fafc}
+.mj-subs button.active span{color:var(--ex-dark);font-weight:800}
+.mj-subs span{font-size:.84rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mj-subs small{font-size:.76rem;color:var(--muted);font-variant-numeric:tabular-nums}
+.mj-subs .m{grid-column:1/-1;height:5px;border-radius:9px;background:#f1f5f9;overflow:hidden}
+.mj-subs .m i{display:block;height:100%;width:0;background:var(--ok)}
+.mj-submit{width:100%;margin-top:1rem;background:var(--ex);color:#fff;border:none;border-radius:13px;padding:.9rem;font-weight:700;font-size:.95rem;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;gap:.5rem}
+.mj-submit:hover{background:var(--ex-dark)}
+.mj-close{display:none}
+/* review modal */
+.mj-modal{position:fixed;inset:0;z-index:120;background:rgba(15,23,42,.55);display:none;align-items:center;justify-content:center;padding:1rem}
+.mj-modal.open{display:flex}
+.mj-modal-card{background:#fff;border-radius:20px;max-width:500px;width:100%;padding:1.3rem 1.3rem 1.1rem;box-shadow:0 24px 60px rgba(0,0,0,.3);max-height:88vh;overflow-y:auto}
+.mj-modal-card h3{margin:0 0 .25rem;font-size:1.2rem;font-family:'Space Grotesk',sans-serif}
+.mj-sum{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin:.8rem 0}
+.mj-sum div{border-radius:12px;padding:.6rem;text-align:center;background:#f8fafc}
+.mj-sum b{display:block;font-size:1.4rem;font-family:'Space Grotesk',sans-serif}
+.mj-sum span{font-size:.7rem;color:var(--muted);font-weight:800;text-transform:uppercase}
+.mj-sum .a b{color:var(--ok)}.mj-sum .u b{color:#dc2626}.mj-sum .f b{color:#b45309}
+.mj-rsub{border:1px solid var(--line);border-radius:14px;padding:.7rem .8rem;margin-bottom:.5rem}
+.mj-rsub-h{display:flex;justify-content:space-between;align-items:center;gap:.5rem;font-weight:700;font-size:.9rem}
+.mj-rsub-h small{color:var(--muted);font-weight:600;font-variant-numeric:tabular-nums}
+.mj-rsub-h small.ok{color:var(--ok)}
+.mj-jump{display:flex;flex-wrap:wrap;gap:.3rem;margin-top:.5rem}
+.mj-jump button{min-width:34px;height:30px;border-radius:8px;border:1px solid #fecaca;color:#dc2626;background:#fff;font:inherit;font-size:.8rem;font-weight:700;cursor:pointer}
+.mj-jump button.f{border-color:#fde68a;color:#b45309}
+.mj-jump em{font-style:normal;font-size:.78rem;color:var(--muted);align-self:center}
+.mj-modal-a{display:flex;gap:.6rem;margin-top:.8rem}
+.mj-modal-a button{flex:1;height:48px;border-radius:13px;font:inherit;font-weight:700;cursor:pointer;border:1px solid var(--line);background:#fff}
+.mj-modal-a .go{background:var(--ex);border-color:var(--ex);color:#fff}
+/* discourage copying exam content (best-effort; screenshots can't be blocked) */
+.mj-wrap,.mj-bar{-webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none;-webkit-touch-callout:none}
+/* on-screen basic (JAMB-style) calculator: draggable, toggled, no sci functions */
+.mjcalc{position:fixed;right:18px;bottom:18px;z-index:60;width:236px;background:#fff;border:1px solid #cbd5e1;border-radius:14px;box-shadow:0 16px 40px rgba(0,0,0,.28);display:none;user-select:none}
 .mjcalc.open{display:block}
-.mjcalc-head{display:flex;justify-content:space-between;align-items:center;padding:.45rem .7rem;background:#334155;color:#fff;border-radius:14px 14px 0 0;cursor:move;font-size:.82rem;font-weight:600}
+.mjcalc-head{display:flex;justify-content:space-between;align-items:center;padding:.45rem .7rem;background:var(--barbg);color:#fff;border-radius:14px 14px 0 0;cursor:move;font-size:.82rem;font-weight:600}
 .mjcalc-head button{background:none;border:none;color:#fff;font-size:1.2rem;line-height:1;cursor:pointer;padding:0 .2rem}
-.mjcalc-scr{font-family:'Space Grotesk',monospace;text-align:right;font-size:1.5rem;padding:.55rem .7rem;background:var(--gray-50,#f4f7f5);border-bottom:1px solid var(--border-color,#e5e7eb);min-height:2.4rem;overflow:hidden;word-break:break-all}
+.mjcalc-scr{font-family:'Space Grotesk',monospace;text-align:right;font-size:1.5rem;padding:.55rem .7rem;background:#f8fafc;border-bottom:1px solid #e5e7eb;min-height:2.4rem;overflow:hidden;word-break:break-all}
 .mjcalc-keys{display:grid;grid-template-columns:repeat(4,1fr);gap:5px;padding:7px}
-.mjcalc-keys button{padding:.75rem 0;font-size:1.02rem;border:1px solid var(--border-color,#e5e7eb);border-radius:9px;background:#fff;cursor:pointer;font-weight:700;color:#14211c}
+.mjcalc-keys button{padding:.75rem 0;font-size:1.02rem;border:1px solid #e5e7eb;border-radius:9px;background:#fff;cursor:pointer;font-weight:700;color:#14211c}
 .mjcalc-keys button:active{transform:translateY(1px)}
-.mjcalc-keys .op{background:#f1f5f9;color:#334155}
+.mjcalc-keys .op{background:#eef2ff;color:var(--ex-dark)}
 .mjcalc-keys .fn{background:#fdecea;color:#b43a2e}
-.mjcalc-keys .eq{background:#334155;color:#fff}
+.mjcalc-keys .eq{background:var(--ex);color:#fff}
 .mjcalc-keys .zero{grid-column:span 2}
+@media(max-width:860px){
+  .mj-wrap{grid-template-columns:minmax(0,1fr);padding:58px .75rem 6.2rem}
+  .mj-bar{height:58px;padding:0 .75rem;gap:.45rem}
+  .mjs-tabs{top:58px;padding:.55rem 0 .6rem;margin:0 -.75rem;padding-left:.75rem;padding-right:.75rem}
+  .mjs-tab{min-width:112px;padding:.45rem .7rem .5rem}
+  .mj-save span,.mj-bbtn span{display:none}
+  .mj-bbtn{width:38px;padding:0;justify-content:center}
+  .mj-timer{padding:.4rem .7rem;font-size:.95rem}
+  .mjs-q{padding:1rem 1rem .85rem;border-radius:16px}
+  .q-flag span{display:none}
+  .q-flag{width:36px;padding:0;justify-content:center}
+  .mj-keys{display:none!important}
+  .mj-pager{position:fixed;left:0;right:0;bottom:0;z-index:40;margin:0;background:#fff;border-top:1px solid var(--line);padding:.6rem .75rem calc(.6rem + env(safe-area-inset-bottom,0px));box-shadow:0 -6px 20px rgba(15,23,42,.08);display:flex!important}
+  .mj-pager .next{min-width:0;flex:0 0 auto}
+  .mj-pager button{height:48px}
+  .mj-pos{border:1px solid var(--line)!important;justify-content:center!important;padding:0 .5rem!important}
+  .mj-pos .ms{display:inline}
+  #posS{display:none}
+  body:not(.one) .mj-pager .prev,body:not(.one) .mj-pager .next{display:none}
+  .mj-rail{position:fixed;left:0;right:0;bottom:0;top:auto;z-index:110;border-radius:22px 22px 0 0;transform:translateY(105%);transition:transform .22s ease;box-shadow:0 -10px 40px rgba(0,0,0,.25);max-height:82vh;overflow-y:auto;padding-bottom:calc(1rem + env(safe-area-inset-bottom,0px))}
+  .mj-rail.open{transform:none}
+  .mj-close{display:inline-flex;position:absolute;top:.7rem;right:.7rem;width:34px;height:34px;border-radius:50%;border:0;background:#f1f5f9;align-items:center;justify-content:center;cursor:pointer}
+  .mj-grid{grid-template-columns:repeat(7,1fr);max-height:none}
+  .mjcalc{bottom:84px}
+  .mj-modal{align-items:flex-end;padding:0}
+  .mj-modal-card{border-radius:22px 22px 0 0;max-width:none;padding-bottom:calc(1.1rem + env(safe-area-inset-bottom,0px))}
+}
+@media(max-width:400px){ .mj-bar .t small{display:none} }
 </style>
 {% endblock %}
 {% block content %}
-<div class="portal-card">
-    <div class="mjs-bar">
-        <div style="flex:1;min-width:130px;"><strong>{{ exam.display_name }}</strong><div class="mjs-answered"><span id="ansCount">0</span> answered</div></div>
-        <div class="timer" id="timer" data-remaining="{{ remaining }}">--:--</div>
-        {% if show_calc %}<button type="button" class="btn btn-secondary btn-sm" id="calcToggle"><i class="fas fa-calculator"></i> Calculator</button>{% endif %}
+{% macro qcard(qd, n, total, sid, g) %}
+<div class="mjs-q" data-qid="{{ qd.q.id }}" data-n="{{ n }}" data-s="s{{ sid }}"{% if g %} data-g="{{ g }}"{% endif %}>
+    <div class="q-head">
+        <span class="q-num">Question {{ n }} <small>of {{ total }}</small></span>
+        <button type="button" class="q-flag" data-flag aria-pressed="false"><i class="fas fa-flag"></i> <span>Flag</span></button>
     </div>
+    <div class="qh">{{ qd.q.question_text | question_html }}</div>
+    {% if qd.q.image_url %}<img src="{{ qd.q.image_url }}" alt="figure" loading="lazy">{% endif %}
+    {% for letter, text in qd.options %}
+    <label class="mjs-opt">
+        <input type="radio" name="q{{ qd.q.id }}" value="{{ letter }}" {{ 'checked' if saved.get(qd.q.id) == letter else '' }}>
+        <span class="mark">{{ 'ABCD'[loop.index0] }}</span>
+        <span>{{ text | question_html }}</span>
+    </label>
+    {% endfor %}
+</div>
+{% endmacro %}
 
-    <div class="mjs-tabs" id="tabs">
+<div class="mj-bar">
+    <div class="t"><b>{{ exam.display_name }}</b><small>{{ subjects|length }} subject{{ '' if subjects|length == 1 else 's' }} · <span id="ansCount">0</span> of <span id="ansTotal">0</span> answered</small></div>
+    <span class="mj-save" id="saveState" aria-live="polite"><i class="fas fa-cloud"></i> <span>Saved</span></span>
+    {% if show_calc %}<button type="button" class="mj-bbtn" id="calcToggle" title="Calculator"><i class="fas fa-calculator"></i> <span>Calculator</span></button>{% endif %}
+    <button type="button" class="mj-bbtn" id="modeBtn" title="Switch between one question at a time and all questions"><i class="fas fa-list"></i> <span>All questions</span></button>
+    <div class="mj-timer" id="timerBox" role="timer" aria-live="off"><i class="fas fa-clock"></i> <span id="timer" data-remaining="{{ remaining }}">--:--</span></div>
+    <div class="mj-prog" aria-hidden="true"><i id="progBar"></i></div>
+</div>
+
+<div class="mj-wrap">
+<main>
+    <div class="mjs-tabs" id="tabs" role="tablist">
         {% for s in subjects %}
-        <button type="button" class="mjs-tab {{ 'active' if loop.first else '' }}" data-subject="s{{ s.subject.id }}">{{ s.subject.name }} <span class="cnt" data-total="{{ s.count }}">(0/{{ s.count }})</span></button>
+        <button type="button" role="tab" class="mjs-tab {{ 'active' if loop.first else '' }}" data-subject="s{{ s.subject.id }}">
+            <b>{{ s.subject.name }}</b><span class="cnt" data-total="{{ s.count }}">0/{{ s.count }}</span><span class="bar"><i></i></span>
+        </button>
         {% endfor %}
     </div>
-    <p class="text-muted text-sm" style="margin:-.3rem 0 .7rem;"><i class="fas fa-arrows-left-right"></i> Switch subjects any time using the tabs — your answers are saved as you go.</p>
 
-    {% for s in subjects %}
-    <div class="mjs-subject {{ 'active' if loop.first else '' }}" id="s{{ s.subject.id }}" data-subject-tab="s{{ s.subject.id }}">
-        {% for g in s.groups %}
-        <div class="mjs-passage">
-            {% if g.passage.title %}<div class="ptitle">{{ g.passage.title }} <span style="font-weight:400;font-size:.75rem;">({{ g.passage.kind_label }})</span></div>{% endif %}
-            {% if g.passage.image_url %}<img src="{{ g.passage.image_url }}" alt="passage figure" loading="lazy" style="max-height:180px;border-radius:8px;display:block;margin-bottom:.4rem;">{% endif %}
-            {{ g.passage.body | question_html }}
+    {% for s in subjects %}{% set ns = namespace(n=0) %}{% set sid = s.subject.id %}
+    <section class="mjs-subject {{ 'active' if loop.first else '' }}" id="s{{ sid }}" data-name="{{ s.subject.name }}">
+        {% for g in s.groups %}{% set gid = 's' ~ sid ~ 'g' ~ loop.index %}
+        <div class="mjs-passage" data-g="{{ gid }}">
+            {% if g.passage.title %}<div class="ptitle">{{ g.passage.title }} <small>({{ g.passage.kind_label }})</small></div>{% endif %}
+            {% if g.passage.image_url %}<img src="{{ g.passage.image_url }}" alt="passage figure" loading="lazy">{% endif %}
+            <div class="pbody">{{ g.passage.body | question_html }}</div>
         </div>
-        {% for qd in g.questions %}{% include 'mock_jamb/_sit_question.html' %}{% endfor %}
+        {% for qd in g.questions %}{% set ns.n = ns.n + 1 %}{{ qcard(qd, ns.n, s.count, sid, gid) }}{% endfor %}
         {% endfor %}
-        {% for qd in s.standalone %}{% include 'mock_jamb/_sit_question.html' %}{% endfor %}
+        {% for qd in s.standalone %}{% set ns.n = ns.n + 1 %}{{ qcard(qd, ns.n, s.count, sid, '') }}{% endfor %}
+    </section>
+    {% endfor %}
 
-        {# JAMB flow: advance through subjects; Submit appears only on the last one #}
-        <div style="text-align:center;margin-top:1.2rem;">
-        {% if loop.last %}
-            <button type="button" class="btn btn-primary mjs-submit" id="submitBtn2"><i class="fas fa-paper-plane"></i> Submit my answers</button>
-        {% else %}
-            <button type="button" class="btn btn-primary mjs-next" data-next="s{{ subjects[loop.index].subject.id }}">Next: {{ subjects[loop.index].subject.name }} <i class="fas fa-arrow-right"></i></button>
-        {% endif %}
-        </div>
+    <div class="mj-pager" id="pager">
+        <button type="button" class="prev" id="prevBtn" aria-label="Previous question"><i class="fas fa-arrow-left"></i></button>
+        <button type="button" class="mj-pos" id="mapBtn" aria-label="Question map"><i class="fas fa-table-cells ms"></i>&nbsp;<span><b id="posN">1</b> of <span id="posT">1</span> <span id="posS"></span></span></button>
+        <button type="button" class="next" id="nextBtn"><span id="nextLbl">Next</span> <i class="fas fa-arrow-right"></i></button>
+    </div>
+    <div class="mj-keys"><kbd>A</kbd>–<kbd>D</kbd> answer · <kbd>N</kbd> next · <kbd>P</kbd> previous · <kbd>S</kbd> submit</div>
+    <div class="mj-allsub"><button type="button" class="mj-submit" style="max-width:320px" id="submitBtn2"><i class="fas fa-paper-plane"></i> Review &amp; submit</button></div>
+</main>
+
+<aside class="mj-rail" id="rail" aria-label="Question map">
+    <button type="button" class="mj-close" id="railClose" aria-label="Close"><i class="fas fa-xmark"></i></button>
+    <h4>Questions</h4>
+    <div class="sname" id="railName"></div>
+    <div class="sprog"><b id="railDone">0</b> of <span id="railTotal">0</span> answered</div>
+    <div class="mj-legend"><span><i class="d"></i>Answered</span><span><i></i>Not yet</span><span><i class="f"></i>Flagged</span></div>
+    {% for s in subjects %}
+    <div class="mj-grid {{ 'active' if loop.first else '' }}" data-for="s{{ s.subject.id }}">
+        {% for i in range(1, s.count + 1) %}<a href="#" data-n="{{ i }}">{{ i }}</a>{% endfor %}
     </div>
     {% endfor %}
+    <div class="mj-subs" id="railSubs">
+        {% for s in subjects %}
+        <button type="button" data-subject="s{{ s.subject.id }}" class="{{ 'active' if loop.first else '' }}"><span>{{ s.subject.name }}</span><small>0/{{ s.count }}</small><span class="m"><i></i></span></button>
+        {% endfor %}
+    </div>
+    <button type="button" class="mj-submit" id="submitBtn"><i class="fas fa-paper-plane"></i> Review &amp; submit</button>
+</aside>
+</div>
+
+<div class="mj-modal" id="reviewModal" role="dialog" aria-modal="true" aria-labelledby="revTitle">
+    <div class="mj-modal-card">
+        <h3 id="revTitle">Submit your paper?</h3>
+        <div class="p-muted" style="font-size:.88rem">Once you submit, you can’t change any answer.</div>
+        <div class="mj-sum">
+            <div class="a"><b id="revA">0</b><span>Answered</span></div>
+            <div class="u"><b id="revU">0</b><span>Unanswered</span></div>
+            <div class="f"><b id="revF">0</b><span>Flagged</span></div>
+        </div>
+        <div id="revSubs"></div>
+        <div class="mj-modal-a">
+            <button type="button" id="revBack">Keep working</button>
+            <button type="button" class="go" id="revGo"><i class="fas fa-paper-plane"></i> Submit</button>
+        </div>
+    </div>
 </div>
 
 <form method="post" id="submitForm" action="{{ url_for('mock_jamb_portal.portal_submit', exam_id=exam.id) }}" style="display:none;">
@@ -117,57 +314,164 @@
     var SAVE_URL = '{{ url_for("mock_jamb_portal.portal_save", exam_id=exam.id) }}';
     var BATCH_URL = '{{ url_for("mock_jamb_portal.portal_save_batch", exam_id=exam.id) }}';
     var CSRF = document.querySelector('meta[name=csrf-token]').content;
-    var answered = new Set();
+    var ATTEMPT = '{{ attempt.id }}';
+    var LSKEY = 'mjmock:' + ATTEMPT;
+    var FLAGKEY = 'mjflag:' + ATTEMPT;
+    function $(id){ return document.getElementById(id); }
+    function lsJSON(k, d){ try { return JSON.parse(localStorage.getItem(k) || d); } catch(_){ return JSON.parse(d); } }
+    function lsPut(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch(_){} }
 
-    // tabs
-    var tabs = document.getElementById('tabs');
-    tabs.addEventListener('click', function(e){
-        var b = e.target.closest('.mjs-tab'); if(!b) return;
-        tabs.querySelectorAll('.mjs-tab').forEach(function(x){ x.classList.remove('active'); });
-        document.querySelectorAll('.mjs-subject').forEach(function(x){ x.classList.remove('active'); });
-        b.classList.add('active');
-        var el = document.getElementById(b.dataset.subject); if(el) el.classList.add('active');
-        window.scrollTo(0,0);
-    });
+    // ---- structure ----
+    var secs = Array.prototype.slice.call(document.querySelectorAll('.mjs-subject'));
+    var qs = {};             // section id -> [question cards]
+    var TOTAL = 0;
+    secs.forEach(function(sec){ qs[sec.id] = Array.prototype.slice.call(sec.querySelectorAll('.mjs-q')); TOTAL += qs[sec.id].length; });
+    $('ansTotal').textContent = TOTAL;
+    var cur = { s: secs.length ? secs[0].id : null, i: 0 };
+    var flags = lsJSON(FLAGKEY, '{}');
 
-    // pre-mark saved answers + count
-    document.querySelectorAll('.mjs-q').forEach(function(q){
-        var checked = q.querySelector('input[type=radio]:checked');
-        if(checked){ answered.add(q.dataset.qid); markChosen(q); }
-    });
-    updateCount();
-
+    function isDone(q){ return !!q.querySelector('input[type=radio]:checked'); }
     function markChosen(q){
-        q.querySelectorAll('.mjs-opt').forEach(function(o){
-            o.classList.toggle('chosen', !!o.querySelector('input:checked')); });
+        q.querySelectorAll('.mjs-opt').forEach(function(o){ o.classList.toggle('chosen', !!o.querySelector('input:checked')); });
     }
-    function updateCount(){
-        document.getElementById('ansCount').textContent = answered.size;
-        // per-subject progress on each tab
-        document.querySelectorAll('.mjs-subject').forEach(function(sec){
-            var ansd = sec.querySelectorAll('.mjs-q input[type=radio]:checked').length;
-            var tab = document.querySelector('.mjs-tab[data-subject="' + sec.id + '"] .cnt');
-            if(tab){ tab.textContent = '(' + ansd + '/' + tab.dataset.total + ')'; }
+
+    // ---- one-at-a-time (default, like the real CBT) or all questions ----
+    var one = true;
+    try { one = localStorage.getItem('mj_mode') !== 'all'; } catch(_){}
+    function applyMode(){
+        document.body.classList.toggle('one', one);
+        var mb = $('modeBtn');
+        mb.innerHTML = one ? '<i class="fas fa-list"></i> <span>All questions</span>' : '<i class="fas fa-square"></i> <span>One at a time</span>';
+        mb.classList.toggle('on', !one);
+    }
+    $('modeBtn').addEventListener('click', function(){
+        one = !one; try { localStorage.setItem('mj_mode', one ? 'one' : 'all'); } catch(_){}
+        applyMode(); go(cur.s, cur.i, true);
+    });
+
+    function go(sid, i, scroll){
+        if(!qs[sid]) return;
+        var list = qs[sid];
+        i = Math.max(0, Math.min(list.length - 1, i || 0));
+        var changed = sid !== cur.s;
+        cur = { s: sid, i: i };
+        secs.forEach(function(sec){ sec.classList.toggle('active', sec.id === sid); });
+        document.querySelectorAll('.mjs-tab').forEach(function(t){
+            var on = t.dataset.subject === sid; t.classList.toggle('active', on); t.setAttribute('aria-selected', on ? 'true' : 'false');
+            if(on && changed && t.scrollIntoView) t.scrollIntoView({block:'nearest', inline:'nearest'});
         });
+        document.querySelectorAll('.mj-grid').forEach(function(g){ g.classList.toggle('active', g.dataset.for === sid); });
+        document.querySelectorAll('#railSubs button').forEach(function(b){ b.classList.toggle('active', b.dataset.subject === sid); });
+        var q = list[i];
+        var curTab = document.querySelector('.mjs-tab[data-subject="' + sid + '"]');
+        if(curTab) curTab._last = i;   // a tab switch returns to the last question visited
+        list.forEach(function(x){ x.classList.toggle('cur', x === q); });
+        var sec = $(sid);
+        sec.querySelectorAll('.mjs-passage').forEach(function(p){ p.classList.toggle('cur', !!q && p.dataset.g === q.dataset.g); });
+        $('railName').textContent = sec.dataset.name;
+        $('posN').textContent = i + 1; $('posT').textContent = list.length;
+        $('posS').textContent = '· ' + sec.dataset.name;
+        var si = secs.indexOf(sec);
+        var lastQ = i === list.length - 1, lastS = si === secs.length - 1;
+        $('prevBtn').disabled = (i === 0 && si === 0);
+        var nb = $('nextBtn');
+        nb.classList.toggle('fin', lastQ && lastS);
+        $('nextLbl').textContent = (lastQ && lastS) ? 'Finish' : (lastQ ? secs[si + 1].dataset.name : 'Next');
+        refresh();
+        if(scroll){
+            if(one) window.scrollTo(0, 0);
+            else if(q && q.scrollIntoView) q.scrollIntoView({block:'start'});
+        }
     }
+    function step(d){
+        var si = secs.findIndex(function(s){ return s.id === cur.s; });
+        var ni = cur.i + d;
+        if(ni >= qs[cur.s].length){
+            if(si < secs.length - 1) return go(secs[si + 1].id, 0, true);
+            return openReview();
+        }
+        if(ni < 0){
+            if(si > 0){ var p = secs[si - 1].id; return go(p, qs[p].length - 1, true); }
+            return;
+        }
+        go(cur.s, ni, true);
+    }
+    $('nextBtn').addEventListener('click', function(){ step(1); });
+    $('prevBtn').addEventListener('click', function(){ step(-1); });
+
+    // tabs + rail subject list + grid
+    $('tabs').addEventListener('click', function(e){
+        var b = e.target.closest('.mjs-tab'); if(!b) return;
+        go(b.dataset.subject, b.dataset.subject === cur.s ? cur.i : (b._last || 0), true);
+    });
+    $('railSubs').addEventListener('click', function(e){
+        var b = e.target.closest('button[data-subject]'); if(!b) return; go(b.dataset.subject, 0, true); closeRail();
+    });
+    document.querySelectorAll('.mj-grid').forEach(function(g){
+        g.addEventListener('click', function(e){
+            var a = e.target.closest('a[data-n]'); if(!a) return; e.preventDefault();
+            go(g.dataset.for, parseInt(a.dataset.n, 10) - 1, true); closeRail();
+        });
+    });
+
+    // phone: rail as a bottom sheet
+    var rail = $('rail');
+    function closeRail(){ rail.classList.remove('open'); }
+    $('mapBtn').addEventListener('click', function(){ rail.classList.add('open'); });
+    $('railClose').addEventListener('click', closeRail);
+
+    // flags
+    document.addEventListener('click', function(e){
+        var f = e.target.closest && e.target.closest('[data-flag]'); if(!f) return;
+        var q = f.closest('.mjs-q'); var id = q.dataset.qid;
+        if(flags[id]) delete flags[id]; else flags[id] = 1;
+        lsPut(FLAGKEY, flags); refresh();
+    });
+
+    function refresh(){
+        var done = 0;
+        secs.forEach(function(sec){
+            var list = qs[sec.id], d = 0;
+            var grid = document.querySelector('.mj-grid[data-for="' + sec.id + '"]');
+            var cells = grid ? grid.querySelectorAll('a') : [];
+            list.forEach(function(q, k){
+                var ok = isDone(q); if(ok) d++;
+                var fl = !!flags[q.dataset.qid];
+                var fb = q.querySelector('[data-flag]');
+                if(fb){ fb.classList.toggle('on', fl); fb.setAttribute('aria-pressed', fl ? 'true' : 'false'); }
+                var c = cells[k];
+                if(c){ c.classList.toggle('done', ok); c.classList.toggle('flag', fl); c.classList.toggle('cur', sec.id === cur.s && k === cur.i); }
+            });
+            done += d;
+            var pc = list.length ? Math.round(d / list.length * 100) : 0;
+            var tab = document.querySelector('.mjs-tab[data-subject="' + sec.id + '"]');
+            if(tab){ tab.querySelector('.cnt').textContent = d + '/' + list.length; tab.querySelector('.bar i').style.width = pc + '%'; }
+            var rs = document.querySelector('#railSubs button[data-subject="' + sec.id + '"]');
+            if(rs){ rs.querySelector('small').textContent = d + '/' + list.length; rs.querySelector('.m i').style.width = pc + '%'; }
+            if(sec.id === cur.s){ $('railDone').textContent = d; $('railTotal').textContent = list.length; }
+        });
+        $('ansCount').textContent = done;
+        $('progBar').style.width = (TOTAL ? Math.round(done / TOTAL * 100) : 0) + '%';
+    }
+
+    // pre-mark saved answers
+    document.querySelectorAll('.mjs-q').forEach(function(q){ if(isDone(q)) markChosen(q); });
 
     // ---- resilient autosave: a retry queue + a localStorage mirror, so a network
     // blip (or a refresh) never loses an answer. Each choice saves to the server;
     // if that fails it stays queued and is retried on a timer and on reconnect,
     // and it's also written to localStorage and re-synced on the next load. ----
-    var ATTEMPT = '{{ attempt.id }}';
-    var LSKEY = 'mjmock:' + ATTEMPT;
     var queue = {};                 // qid -> option awaiting a confirmed save
     var saving = false;
-    function lsGet(){ try { return JSON.parse(localStorage.getItem(LSKEY) || '{}'); } catch(_){ return {}; } }
-    function lsSet(m){ try { localStorage.setItem(LSKEY, JSON.stringify(m)); } catch(_){} }
-
-    var pill = document.createElement('span');
-    pill.style.cssText = 'font-size:.78rem;font-weight:600;color:#fff;opacity:.85;';
-    var bar = document.querySelector('.mjs-bar'); if(bar) bar.appendChild(pill);
+    function lsGet(){ return lsJSON(LSKEY, '{}'); }
+    function lsSet(m){ lsPut(LSKEY, m); }
+    var pill = $('saveState');
     function status(s){
-        var map = {saving:'Saving…', saved:'✓ All answers saved', offline:'Offline — will keep retrying'};
-        pill.textContent = map[s] || ''; pill.style.opacity = (s === 'saved') ? '.85' : '1';
+        var map = {saving:['fa-arrows-rotate fa-spin','Saving…'], saved:['fa-cloud','All saved'], offline:['fa-wifi','Offline — retrying']};
+        var v = map[s] || map.saved;
+        pill.className = 'mj-save ' + s;
+        pill.innerHTML = '<i class="fas ' + v[0] + '"></i> <span>' + v[1] + '</span>';
+        pill.title = v[1];
     }
     var flushTimer = null;
     function enqueue(qid, opt){
@@ -203,7 +507,7 @@
     document.addEventListener('change', function(e){
         var r = e.target; if(r.type !== 'radio' || !r.name.startsWith('q')) return;
         var q = r.closest('.mjs-q'); markChosen(q);
-        answered.add(q.dataset.qid); updateCount();
+        refresh();
         enqueue(q.dataset.qid, r.value);
     });
 
@@ -215,24 +519,67 @@
             var q = document.querySelector('.mjs-q[data-qid="' + qid + '"]');
             if(!q) return;
             var input = q.querySelector('input[type=radio][value="' + m[qid] + '"]');
-            if(input && !input.checked){
-                input.checked = true; markChosen(q); answered.add(qid); enqueue(qid, m[qid]);
-            }
+            if(input && !input.checked){ input.checked = true; markChosen(q); enqueue(qid, m[qid]); }
         });
-        updateCount();
     })();
+
+    // first unanswered question = where a resumed candidate lands
+    (function start(){
+        for(var k = 0; k < secs.length; k++){
+            var list = qs[secs[k].id];
+            for(var j = 0; j < list.length; j++){ if(!isDone(list[j])){ applyMode(); go(secs[k].id, j, false); return; } }
+        }
+        applyMode(); if(cur.s) go(cur.s, 0, false);
+    })();
+
+    // ---- review before submit ----
+    var modal = $('reviewModal');
+    function openReview(){
+        var a = 0, u = 0, f = 0, html = '';
+        secs.forEach(function(sec){
+            var list = qs[sec.id], d = 0, miss = [], fl = [];
+            list.forEach(function(q, k){
+                if(isDone(q)) d++; else miss.push(k + 1);
+                if(flags[q.dataset.qid]) fl.push(k + 1);
+            });
+            a += d; u += miss.length; f += fl.length;
+            var btns = '';
+            miss.slice(0, 24).forEach(function(n){ btns += '<button type="button" data-s="' + sec.id + '" data-n="' + n + '">' + n + '</button>'; });
+            if(miss.length > 24) btns += '<em>+' + (miss.length - 24) + ' more</em>';
+            fl.forEach(function(n){ if(miss.indexOf(n) === -1) btns += '<button type="button" class="f" data-s="' + sec.id + '" data-n="' + n + '"><i class="fas fa-flag" style="font-size:.65rem"></i> ' + n + '</button>'; });
+            html += '<div class="mj-rsub"><div class="mj-rsub-h"><span>' + sec.dataset.name.replace(/</g, '&lt;') + '</span><small class="' + (miss.length ? '' : 'ok') + '">' +
+                (miss.length ? d + '/' + list.length + ' answered' : '<i class="fas fa-check"></i> all ' + list.length + ' answered') + '</small></div>' +
+                (btns ? '<div class="mj-jump">' + btns + '</div>' : '') + '</div>';
+        });
+        $('revA').textContent = a; $('revU').textContent = u; $('revF').textContent = f;
+        $('revSubs').innerHTML = html;
+        $('revTitle').textContent = u ? (u + ' question' + (u === 1 ? '' : 's') + ' still unanswered') : 'Submit your paper?';
+        closeRail();
+        modal.classList.add('open');
+    }
+    function closeReview(){ modal.classList.remove('open'); }
+    $('revBack').addEventListener('click', closeReview);
+    modal.addEventListener('click', function(e){
+        if(e.target === modal) return closeReview();
+        var b = e.target.closest('.mj-jump button'); if(!b) return;
+        closeReview(); go(b.dataset.s, parseInt(b.dataset.n, 10) - 1, true);
+    });
+    $('submitBtn').addEventListener('click', openReview);
+    $('submitBtn2').addEventListener('click', openReview);
+    $('revGo').addEventListener('click', function(){ doSubmit(); });
 
     // timer — driven by a wall-clock deadline, not a decrementing counter, so it
     // stays accurate even if the tab is backgrounded (setInterval/Timeout throttles
     // while hidden). The moment real time elapses, the paper submits itself.
-    var timer = document.getElementById('timer');
+    var timer = $('timer'), tbox = $('timerBox');
     var deadline = Date.now() + (parseInt(timer.dataset.remaining, 10) || 0) * 1000;
     function tick(){
         var remaining = Math.round((deadline - Date.now()) / 1000);
-        if(remaining <= 0){ timer.textContent = '00:00'; doSubmit(true); return; }
-        var m = Math.floor(remaining/60), s = remaining%60;
-        timer.textContent = (m<10?'0':'')+m+':'+(s<10?'0':'')+s;
-        if(remaining <= 60) timer.classList.add('warn');
+        if(remaining <= 0){ timer.textContent = '00:00'; doSubmit(); return; }
+        var h = Math.floor(remaining / 3600), m = Math.floor(remaining % 3600 / 60), s = remaining % 60;
+        timer.textContent = (h ? h + ':' : '') + (m < 10 ? '0' : '') + m + ':' + (s < 10 ? '0' : '') + s;
+        tbox.classList.toggle('low', remaining <= 300 && remaining > 60);
+        tbox.classList.toggle('warn', remaining <= 60);
     }
     tick();
     var timerInt = setInterval(tick, 1000);
@@ -241,11 +588,11 @@
     document.addEventListener('visibilitychange', function(){ if(!document.hidden) tick(); });
 
     var submitted = false;
-    function doSubmit(auto){
+    function doSubmit(){
         if(submitted) return;
-        if(!auto && !window.confirm('Submit your answers? You will not be able to change them.')) return;
         submitted = true;
         try { clearInterval(timerInt); } catch(_){}
+        $('revGo').disabled = true;
         // Best-effort final flush of anything still queued, as ONE batch via
         // sendBeacon so it survives the navigation that submitting triggers.
         try {
@@ -255,24 +602,33 @@
                 navigator.sendBeacon(BATCH_URL, new URLSearchParams({_csrf_token: CSRF, answers: answers}));
             }
         } catch(_){}
-        try { localStorage.removeItem(LSKEY); } catch(_){}
-        document.getElementById('submitForm').submit();
+        try { localStorage.removeItem(LSKEY); localStorage.removeItem(FLAGKEY); } catch(_){}
+        $('submitForm').submit();
     }
-    var sb2 = document.getElementById('submitBtn2');
-    if(sb2) sb2.addEventListener('click', function(){ doSubmit(false); });
-    // "Next subject" buttons advance the active tab (Submit shows only on the last)
-    function activateTab(id){
-        var t = document.querySelector('.mjs-tab[data-subject="' + id + '"]');
-        if(t) t.click();
-    }
-    document.querySelectorAll('.mjs-next').forEach(function(b){
-        b.addEventListener('click', function(){ activateTab(b.dataset.next); });
+
+    // ---- keyboard, like the real CBT: A–D answer, N/P next/previous, S submit ----
+    document.addEventListener('keydown', function(e){
+        if(e.ctrlKey || e.metaKey || e.altKey) return;
+        var t = e.target; if(t && (t.tagName === 'INPUT' && t.type !== 'radio' || t.tagName === 'TEXTAREA')) return;
+        var k = (e.key || '').toLowerCase();
+        if(modal.classList.contains('open')){ if(k === 'escape') closeReview(); return; }
+        if(k === 'escape'){ closeRail(); return; }
+        if(k === 's'){ e.preventDefault(); openReview(); return; }
+        if(!one) return;
+        if(k === 'n' || k === 'arrowright'){ e.preventDefault(); step(1); return; }
+        if(k === 'p' || k === 'arrowleft'){ e.preventDefault(); step(-1); return; }
+        var idx = 'abcd'.indexOf(k);
+        if(idx >= 0 && k.length === 1){
+            var q = qs[cur.s] && qs[cur.s][cur.i]; if(!q) return;
+            var inp = q.querySelectorAll('.mjs-opt input')[idx];
+            if(inp && !inp.checked){ e.preventDefault(); inp.checked = true; inp.dispatchEvent(new Event('change', {bubbles:true})); }
+        }
     });
 
     // ---- discourage copying during the exam (best-effort — cannot stop a
     // screenshot, but blocks copy/cut/paste, right-click and text selection so a
     // candidate can't lift the question text). ----
-    var examRoot = document.querySelector('.portal-card') || document;
+    var examRoot = document.querySelector('.mj-wrap') || document;
     ['copy','cut','paste','contextmenu','selectstart','dragstart'].forEach(function(ev){
         examRoot.addEventListener(ev, function(e){ e.preventDefault(); return false; });
     });
@@ -351,22 +707,24 @@
                 open: el.classList.contains('open'), left: Math.round(r.left), top: Math.round(r.top) }));
         } catch(_){}
     }
+    function sync(){ if(toggle) toggle.classList.toggle('on', el.classList.contains('open')); }
     (function restore(){
         try {
             var p = JSON.parse(localStorage.getItem(PREF) || 'null');
             if(!p) return;
-            if(typeof p.left === 'number' && typeof p.top === 'number'){
+            if(typeof p.left === 'number' && typeof p.top === 'number' && p.open){
+                el.classList.add('open');
                 var w = el.offsetWidth || 236, h = el.offsetHeight || 330;
                 var L = Math.max(0, Math.min(window.innerWidth - w, p.left));
-                var T = Math.max(0, Math.min(window.innerHeight - h, p.top));
+                var T = Math.max(62, Math.min(window.innerHeight - h, p.top));
                 el.style.right='auto'; el.style.bottom='auto'; el.style.left=L+'px'; el.style.top=T+'px';
             }
-            if(p.open) el.classList.add('open');
         } catch(_){}
     })();
+    sync();
 
-    if(toggle) toggle.addEventListener('click', function(){ el.classList.toggle('open'); savePref(); });
-    document.getElementById('mjCalcClose').addEventListener('click', function(){ el.classList.remove('open'); savePref(); });
+    if(toggle) toggle.addEventListener('click', function(){ el.classList.toggle('open'); savePref(); sync(); });
+    document.getElementById('mjCalcClose').addEventListener('click', function(){ el.classList.remove('open'); savePref(); sync(); });
 
     // draggable by its header (mouse + touch)
     var head = document.getElementById('mjCalcHead'), drag=false, dx=0, dy=0;

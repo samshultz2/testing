@@ -1,13 +1,16 @@
 {% extends "cbt/portal_base.html" %}
 {% block title %}Submitting…{% endblock %}
 {% block content %}
-<div class="portal-card" style="max-width:480px;margin:10vh auto 0;text-align:center;">
-    <i class="fas fa-spinner fa-spin" style="font-size:2.6rem;color:var(--primary);"></i>
-    <h1 style="margin-top:.8rem;">Submitting your mock…</h1>
-    <p class="text-muted">{{ exam.display_name }}</p>
-    <p class="text-muted text-sm" style="margin-top:1rem;">
-        Your answers are saved. We're grading now — this page will update automatically.
-    </p>
+<div class="portal-card" style="max-width:460px;margin:8vh auto 0;text-align:center;padding:2rem 1.4rem">
+    <div style="width:72px;height:72px;border-radius:50%;background:#eef2ff;color:#4f46e5;display:flex;align-items:center;justify-content:center;margin:0 auto;font-size:1.7rem">
+        <i class="fas fa-spinner fa-spin"></i>
+    </div>
+    <h1 style="margin-top:1rem">Submitting your mock…</h1>
+    <p class="p-muted" style="margin:.2rem 0 0">{{ exam.display_name }}</p>
+    <div style="display:flex;gap:.55rem;align-items:flex-start;text-align:left;background:#f0fdf4;color:#166534;border-radius:12px;padding:.75rem .9rem;margin-top:1.2rem;font-size:.88rem">
+        <i class="fas fa-circle-check" style="margin-top:.15rem"></i>
+        <span>Your answers are saved. We’re marking your paper now — this page updates by itself.</span>
+    </div>
 </div>
 <script nonce="{{ csp_nonce }}">
   // Poll the done page until grading completes (server redirects/renders the
