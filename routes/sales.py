@@ -53,8 +53,22 @@ def _err(message, redirect_url=None):
     return redirect(redirect_url or url_for('sales.dashboard'))
 
 
+def _section_nav():
+    """Links for the sales section tab bar, present on every sales screen so
+    the client can move between Sell / Sales / Stock / Buying / Insights."""
+    return {'dashboard': url_for('sales.dashboard'), 'new_sale': url_for('sales.new_sale'),
+            'history': url_for('sales.history'), 'products': url_for('sales.products'),
+            'movements': url_for('sales.movements'), 'batches': url_for('sales.batches'),
+            'audits': url_for('sales.audits'), 'purchases': url_for('sales.purchases'),
+            'suppliers': url_for('sales.suppliers'), 'analytics': url_for('sales.analytics'),
+            'reports': url_for('sales.reports'), 'promos': url_for('sales.promos'),
+            'assets': url_for('sales.assets')}
+
+
 def _render(payload):
     """Render the shared sales React shell with an embedded payload."""
+    if isinstance(payload, dict):
+        payload.setdefault('section', _section_nav())
     from utils.spa import render_or_json
     return render_or_json('sales/app.html', 'sales_json', payload)
 
@@ -702,6 +716,7 @@ def new_sale():
         'submit_url': url_for('sales.new_sale'),
         # Tier prices ride along so the form can price the cart live per buyer type.
         'products': [{'id': p.id, 'name': p.name, 'category': p.category,
+                      'sku': p.sku or '', 'barcode': p.barcode or '',
                       'unit_price': p.unit_price or 0, 'stock_qty': p.stock_qty,
                       'student_price': p.student_price, 'staff_price': p.staff_price,
                       'parent_price': p.parent_price} for p in products],
