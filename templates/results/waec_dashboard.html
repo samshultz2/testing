@@ -738,21 +738,6 @@
 
 {% else %}
 <!-- STUDENTS VIEW (Default) -->
-<div class="charts-row">
-    <div class="card">
-        <div class="card-header">
-            <span class="card-title">Grade Distribution</span>
-        </div>
-        <div class="chart-body"><canvas id="gradeChart"></canvas></div>
-    </div>
-    <div class="card">
-        <div class="card-header">
-            <span class="card-title">Subject Pass Rates</span>
-        </div>
-        <div class="chart-body"><canvas id="subjectChart"></canvas></div>
-    </div>
-</div>
-
 {# Sort links keep every other filter (year, search, subject, grade, min_a1…). #}
 {% macro waec_sort_url(key) -%}
 {%- set a = request.args.to_dict() -%}{%- set _ = a.update({'sort': key, 'view': 'students'}) -%}{%- set _ = a.pop('order', none) -%}
@@ -894,6 +879,21 @@
         {% endif %}
     </div>
     {% endif %}
+</div>
+<!-- Charts sit below the list, so the search sits right above the students it filters -->
+<div class="charts-row">
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Grade Distribution</span>
+        </div>
+        <div class="chart-body"><canvas id="gradeChart"></canvas></div>
+    </div>
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Subject Pass Rates</span>
+        </div>
+        <div class="chart-body"><canvas id="subjectChart"></canvas></div>
+    </div>
 </div>
 {% endif %}
 
