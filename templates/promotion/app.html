@@ -686,6 +686,85 @@
   .gp2-doc-a{width:100%;justify-content:flex-end}
   .gp2-editgrid{grid-template-columns:minmax(0,1fr)}
 }
+
+/* ── Graduates vs SSS3 (vs-*) ── */
+.vs-hero{display:flex;align-items:center;gap:1rem;padding:1rem 1.2rem;flex-wrap:wrap}
+.vs-cohort{display:flex;flex-direction:column;align-items:flex-start;padding:.7rem 1rem;border-radius:14px;min-width:150px;position:relative}
+.vs-cohort.g{background:color-mix(in srgb,var(--primary) 10%,var(--bg-card))}
+.vs-cohort.s{background:color-mix(in srgb,#7c3aed 10%,var(--bg-card))}
+.vs-cohort b{font-size:1.8rem;font-weight:800;line-height:1.1}
+.vs-cohort span:last-child{font-size:.8rem;color:var(--text-secondary);font-weight:600}
+.vs-dot{position:absolute;top:.8rem;right:.8rem;width:10px;height:10px;border-radius:50%}
+.vs-cohort.g .vs-dot{background:var(--primary)}.vs-cohort.s .vs-dot{background:#7c3aed}
+.vs-vs{font-weight:800;color:var(--text-muted);font-size:.9rem;text-transform:uppercase}
+.vs-proj{margin-left:auto;display:flex;flex-direction:column;gap:.35rem;padding:.6rem .9rem;border-radius:14px;border:1px dashed color-mix(in srgb,#7c3aed 40%,var(--border-color))}
+.vs-proj-row{display:flex;gap:1.4rem}
+.vs-proj-row>div{display:flex;flex-direction:column}
+.vs-proj-row b{font-size:1.5rem;font-weight:800;color:#7c3aed;line-height:1.1}
+.vs-proj-row span{font-size:.78rem;font-weight:700}
+.vs-proj-row small{font-size:.7rem;color:var(--text-muted)}
+.vs-verdict{margin:0;padding:.7rem .95rem;border-radius:13px;font-size:.92rem;font-weight:600;display:flex;gap:.55rem;align-items:center;background:var(--gray-100)}
+.vs-verdict.good{background:color-mix(in srgb,var(--success) 11%,var(--bg-card));color:var(--success)}
+.vs-verdict.bad{background:color-mix(in srgb,var(--danger) 10%,var(--bg-card));color:var(--danger)}
+.vs-legend{display:flex;align-items:center;gap:1rem;flex-wrap:wrap;font-size:.82rem;font-weight:600;color:var(--text-secondary)}
+.vs-legend span{display:inline-flex;align-items:center;gap:.4rem}
+.vs-legend i.g,.vs-legend i.s{width:12px;height:12px;border-radius:3px;display:inline-block}
+.vs-legend i.g{background:var(--primary)}.vs-legend i.s{background:#7c3aed}
+.vs-legend small{color:var(--text-muted);font-weight:500}.vs-legend small i{color:var(--success)}
+.vs-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.9rem;align-items:start}
+.vs-grid>.pm-card:last-child:nth-child(odd){grid-column:1/-1}
+.vs-body{padding:.6rem 1rem .9rem;display:flex;flex-direction:column;gap:.75rem}
+.vs-metric{display:flex;flex-direction:column;gap:.25rem}
+.vs-l{font-size:.84rem;font-weight:700}
+.vs-bar{display:grid;grid-template-columns:78px minmax(0,1fr) 84px;align-items:center;gap:.55rem;font-size:.8rem}
+.vs-who{color:var(--text-muted);font-weight:600;display:flex;flex-direction:column}
+.vs-who small{font-size:.68rem;font-weight:500}
+.vs-track{height:10px;border-radius:6px;background:var(--gray-100);overflow:hidden;display:block}
+.vs-track i{display:block;height:100%;border-radius:6px;background:var(--gray-400)}
+.vs-bar.g .vs-track i{background:var(--primary)}.vs-bar.s .vs-track i{background:#7c3aed}
+.vs-bar b{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.vs-bar b small{font-weight:500;color:var(--text-muted)}
+.vs-bar b i{color:var(--success);margin-left:.3rem;font-size:.78rem}
+.vs-bar:not(.win) b{font-weight:600;color:var(--text-secondary)}
+.vs-stack{display:grid;grid-template-columns:120px minmax(0,1fr);gap:.6rem;align-items:center}
+.vs-stack-bar{display:flex;height:24px;border-radius:7px;overflow:hidden;gap:1px}
+.vs-stack-bar span{display:flex;align-items:center;justify-content:center;font-size:.64rem;font-weight:800;color:#fff;min-width:3px}
+.vs-gkey{display:flex;flex-wrap:wrap;gap:.3rem .8rem;font-size:.72rem;color:var(--text-muted)}
+.vs-gkey span{display:inline-flex;align-items:center;gap:.3rem}
+.vs-gkey i{width:9px;height:9px;border-radius:2px}
+.vs-subs{list-style:none;margin:0;padding:.3rem 1rem .7rem}
+.vs-subs li{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr) 58px;align-items:center;gap:.7rem;padding:.5rem 0;border-bottom:1px solid var(--border-light)}
+.vs-sub-n{font-weight:600;font-size:.88rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.vs-mini{position:relative;height:22px;border-radius:6px;background:var(--gray-100);overflow:hidden;display:block}
+.vs-mini i{position:absolute;inset:0 auto 0 0;border-radius:6px;opacity:.85}
+.vs-mini.g i{background:var(--primary)}.vs-mini.s i{background:#7c3aed}
+.vs-mini b{position:relative;z-index:1;font-size:.74rem;padding:0 .45rem;line-height:22px;color:var(--text-primary);mix-blend-mode:normal}
+.vs-gap{font-weight:800;font-size:.82rem;text-align:center;border-radius:999px;padding:.12rem 0;background:var(--gray-100);color:var(--text-muted)}
+.vs-gap.good{background:color-mix(in srgb,var(--success) 13%,var(--bg-card));color:var(--success)}
+.vs-gap.bad{background:color-mix(in srgb,var(--danger) 12%,var(--bg-card));color:var(--danger)}
+.vs-pat{display:grid;grid-template-columns:120px minmax(0,1fr) minmax(0,1fr);gap:.4rem 1rem;align-items:center;padding:.4rem 0;border-bottom:1px solid var(--border-light)}
+.vs-pat:last-child{border-bottom:0}
+.vs-pat .vs-track{grid-column:2/-1}
+.vs-pat-d{font-weight:700;text-transform:capitalize;font-size:.88rem}
+.vs-pat-d.good{color:var(--success)}.vs-pat-d.bad{color:var(--danger)}
+.vs-pat-n{font-size:.84rem;color:var(--text-secondary)}
+.vs-pat .vs-track i{background:var(--primary)}
+@media (max-width:1023px){.vs-grid{grid-template-columns:minmax(0,1fr)}.vs-proj{margin-left:0;width:100%}}
+@media (max-width:759px){
+  .vs-hero{padding:.9rem;gap:.6rem}
+  .vs-cohort{flex:1;min-width:0;padding:.6rem .8rem}
+  .vs-cohort b{font-size:1.5rem}
+  .vs-vs{font-size:.75rem}
+  .pm .pm-seg{display:flex;overflow-x:auto;scrollbar-width:none}
+  .pm .pm-seg button{flex:1 0 auto;justify-content:center}
+  .vs-bar{grid-template-columns:62px minmax(0,1fr) 70px}
+  .vs-stack{grid-template-columns:minmax(0,1fr)}
+  .vs-subs li{grid-template-columns:minmax(0,1fr) 54px;row-gap:.3rem}
+  .vs-subs .vs-sub-n{grid-column:1}.vs-subs .vs-gap{grid-column:2;grid-row:1}
+  .vs-subs .vs-mini{grid-column:1/-1}
+  .vs-pat{grid-template-columns:minmax(0,1fr)}
+  .vs-pat .vs-track{grid-column:1}
+}
 </style>
 {% endblock %}
 {% block content %}

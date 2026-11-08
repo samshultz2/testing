@@ -1348,62 +1348,65 @@ function History({ d }) {
 }
 
 // ---- Graduate vs SSS3 comparison -------------------------------------------
-// One metric row: a labelled value for each cohort, with the better side hinted.
-function CompareRow({ label, g, s, suffix = '', better = 'high', sNote }) {
-  const fmt = (v) => (v == null ? '—' : v + suffix);
-  let gHi = false, sHi = false;
-  if (g != null && s != null && g !== s) {
-    const gWins = better === 'high' ? g > s : g < s;
-    gHi = gWins; sHi = !gWins;
-  }
-  const cell = (v, hi) => <td style={{ textAlign: 'right', fontWeight: hi ? 700 : 400, color: hi ? 'var(--success, #2e7d32)' : 'inherit' }}>{fmt(v)}</td>;
+// One measure as two bars (graduates vs current SSS3), the better one ticked.
+function VsMetric({ label, g, s, suffix = '', better = 'high', max, sNote, gNote }) {
+  const top = max || Math.max(1, Number(g) || 0, Number(s) || 0);
+  const has = (v) => v != null && !Number.isNaN(Number(v));
+  let win = null;
+  if (has(g) && has(s) && Number(g) !== Number(s)) win = (better === 'high' ? Number(g) > Number(s) : Number(g) < Number(s)) ? 'g' : 's';
+  const bar = (v, who) => (
+    <div className={'vs-bar ' + who + (win === who ? ' win' : '')}>
+      <span className="vs-who">{who === 'g' ? 'Graduates' : 'SSS3'}</span>
+      <span className="vs-track">{has(v) && <i style={{ width: `${Math.max(2, (Number(v) / top) * 100)}%` }} />}</span>
+      <b>{has(v) ? v + suffix : ((who === 's' ? sNote : gNote) ? <small>{who === 's' ? sNote : gNote}</small> : '—')}{win === who && <i aria-hidden="true" className="fas fa-circle-check" />}</b>
+    </div>
+  );
+  return <div className="vs-metric"><span className="vs-l">{label}</span>{bar(g, 'g')}{bar(s, 's')}</div>;
+}
+
+function VsBlock({ title, icon, sub, children }) {
   return (
-    <tr>
-      <td>{label}</td>
-      {cell(g, gHi)}
-      {s == null && sNote ? <td style={{ textAlign: 'right' }} className="text-muted">{sNote}</td> : cell(s, sHi)}
-    </tr>
+    <section className="pm-card">
+      <header className="pm-card-h"><span className="pm-card-ic"><i aria-hidden="true" className={'fas ' + icon} /></span>
+        <div className="pm-card-t"><h3>{title}</h3>{sub && <small>{sub}</small>}</div></header>
+      <div className="vs-body">{children}</div>
+    </section>
   );
 }
 
-function WaecCompareTable({ g, s }) {
-  const sNull = s == null;
-  return (
-    <table className="data-table">
-      <thead><tr><th>Metric</th><th style={{ textAlign: 'right' }}>Graduates</th><th style={{ textAlign: 'right' }}>Current SSS3</th></tr></thead>
-      <tbody>
-        <CompareRow label="Students with results" g={g ? g.n : 0} s={sNull ? null : s.n} sNote={sNull ? 'no real WAEC yet' : ''} />
-        <CompareRow label="Avg credits (C6+)" g={g ? g.avg_credits : null} s={sNull ? null : s.avg_credits} sNote={sNull ? '—' : ''} />
-        <CompareRow label="Avg distinctions (B3+)" g={g ? g.avg_distinctions : null} s={sNull ? null : s.avg_distinctions} sNote={sNull ? '—' : ''} />
-        <CompareRow label="% with 5+ credits" g={g ? g.pct_5_credits : null} s={sNull ? null : s.pct_5_credits} suffix="%" sNote={sNull ? '—' : ''} />
-        <CompareRow label="% with 5 incl. Eng & Maths" g={g ? g.pct_5_incl_core : null} s={sNull ? null : s.pct_5_incl_core} suffix="%" sNote={sNull ? '—' : ''} />
-      </tbody>
-    </table>
-  );
+const WAEC_ROWS = (x) => (x ? [
+  ['Students with results', x.n, '', 'high', null], ['Average credits (C6 or better)', x.avg_credits, '', 'high', 9],
+  ['Average distinctions (B3 or better)', x.avg_distinctions, '', 'high', 9], ['5+ credits', x.pct_5_credits, '%', 'high', 100],
+  ['5 credits incl. English & Maths', x.pct_5_incl_core, '%', 'high', 100]] : []);
+const JAMB_ROWS = (x) => (x ? [
+  ['Students with results', x.n, '', 'high', null], ['Average score', x.avg_score, '', 'high', 400],
+  ['Highest score', x.max_score, '', 'high', 400], ['Scoring 180+', x.pct_above_floor, '%', 'high', 100]] : []);
+
+// A cohort with nobody sitting the exam has no figures — show "no results"
+// instead of comparing against a meaningless 0.
+function VsTable({ g, s, rows, sNote }) {
+  const gOk = g && g.n > 0, sOk = s && s.n > 0;
+  const gr = rows(g || {}), sr = rows(s || {});
+  return gr.map(([label, gv, suf, better, max], i) => (
+    <VsMetric key={label} label={label} g={gOk || i === 0 ? (g ? gv : 0) : null} s={sOk || (i === 0 && s) ? sr[i][1] : null}
+              suffix={suf} better={better} max={max}
+              sNote={!s ? sNote : 'no results'} gNote="no results" />));
 }
 
-function JambCompareTable({ g, s }) {
-  const sNull = s == null;
+// Stacked grade spread for one cohort (share of all grades at each level).
+const GRADE_TONE = { A1: '#15803d', B2: '#16a34a', B3: '#22c55e', C4: '#0ea5e9', C5: '#38bdf8', C6: '#7dd3fc', D7: '#f59e0b', E8: '#f97316', F9: '#ef4444' };
+function GradeStack({ label, dist, order }) {
+  const total = order.reduce((t, gr) => t + ((dist && dist[gr]) || 0), 0);
   return (
-    <table className="data-table">
-      <thead><tr><th>Metric</th><th style={{ textAlign: 'right' }}>Graduates</th><th style={{ textAlign: 'right' }}>Current SSS3</th></tr></thead>
-      <tbody>
-        <CompareRow label="Students with results" g={g ? g.n : 0} s={sNull ? null : s.n} sNote={sNull ? 'no real JAMB yet' : ''} />
-        <CompareRow label="Average score" g={g ? g.avg_score : null} s={sNull ? null : s.avg_score} sNote={sNull ? '—' : ''} />
-        <CompareRow label="Highest score" g={g ? g.max_score : null} s={sNull ? null : s.max_score} sNote={sNull ? '—' : ''} />
-        <CompareRow label="% scoring 180+" g={g ? g.pct_above_floor : null} s={sNull ? null : s.pct_above_floor} suffix="%" sNote={sNull ? '—' : ''} />
-      </tbody>
-    </table>
+    <div className="vs-stack">
+      <span className="vs-who">{label}<small>{total ? `${total} grades` : 'no grades'}</small></span>
+      <div className="vs-stack-bar" role="img" aria-label={`${label} grade spread`}>
+        {total ? order.filter((gr) => dist[gr]).map((gr) => (
+          <span key={gr} style={{ flexGrow: dist[gr], background: GRADE_TONE[gr] || 'var(--gray-400)' }} title={`${gr}: ${dist[gr]} (${Math.round(dist[gr] / total * 100)}%)`}>
+            {dist[gr] / total >= 0.07 ? gr : ''}</span>)) : <span style={{ flexGrow: 1, background: 'var(--gray-200)' }} />}
+      </div>
+    </div>
   );
-}
-
-function GradeDistRow({ name, g, s, order }) {
-  const cells = (dist) => order.map((gr) => <td key={gr} style={{ textAlign: 'center' }}>{dist && dist[gr] ? dist[gr] : '·'}</td>);
-  return (<>
-    <tr><td colSpan={order.length + 1} style={{ background: 'var(--bg-tertiary)', fontWeight: 600 }}>{name}</td></tr>
-    <tr><td className="text-muted">Graduates</td>{cells(g)}</tr>
-    {s && <tr><td className="text-muted">Current SSS3</td>{cells(s)}</tr>}
-  </>);
 }
 
 function GraduateCompare({ d }) {
@@ -1411,93 +1414,133 @@ function GraduateCompare({ d }) {
   const c = d.comparison;
   const cohorts = c.cohorts;
   const noData = cohorts.graduates.total === 0;
-  const dirBadge = (p) => {
-    if (!p) return null;
-    const cls = p.direction === 'improved' ? 'badge-success' : p.direction === 'declined' ? 'badge-danger' : 'badge-secondary';
-    const sign = p.avg_delta > 0 ? '+' : '';
-    return <span className={'badge ' + cls}>{p.direction} ({sign}{p.avg_delta})</span>;
-  };
-  return (
-    <>
-      <PageHeader title="Graduates vs Current SSS3"
-        actions={<a href={d.urls.graduates} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back to Graduates</a>} />
-      <div className="card mb-3"><div className="card-body"><div className="filter-form">
-        <div className="form-group"><label className="form-label">Graduate cohort (session)</label>
-          <select className="form-control" value={d.session_id} onChange={(e) => navParams(nav.go, d.urls.self, { session_id: e.target.value })}>
-            <option value="">All graduates</option>{d.sessions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
-      </div></div></div>
+  const [tab, setTab] = useState('waec');
+  const [sort, setSort] = useState('gap');
+  const mg = c.mock_waec.graduates || {}, ms = c.mock_waec.sss3;
+  const jg = c.mock_jamb.graduates || {}, js = c.mock_jamb.sss3;
+  // Headline: how the current class compares on the same (mock) exams.
+  const verdict = (() => {
+    if (!ms || !(mg.n > 0) || !(ms.n > 0) || mg.pct_5_incl_core == null || ms.pct_5_incl_core == null) return null;
+    const diff = Math.round((ms.pct_5_incl_core - mg.pct_5_incl_core) * 10) / 10;
+    if (Math.abs(diff) < 2) return { tone: 'flat', text: 'Current SSS3 is level with the graduates on mock WAEC (5 credits incl. English & Maths).' };
+    return diff > 0 ? { tone: 'good', text: `Current SSS3 is ahead of the graduates by ${diff} points on mock WAEC (5 credits incl. English & Maths).` }
+      : { tone: 'bad', text: `Current SSS3 is behind the graduates by ${Math.abs(diff)} points on mock WAEC (5 credits incl. English & Maths).` };
+  })();
+  const dir = (p) => (p ? { cls: p.direction === 'improved' ? 'good' : p.direction === 'declined' ? 'bad' : '', sign: p.avg_delta > 0 ? '+' : '' } : null);
 
-      <div className="stats-grid mb-3">
-        <div className="stat-card"><div className="stat-icon primary"><i aria-hidden="true" className="fas fa-graduation-cap" /></div>
-          <div className="stat-content"><h3>{cohorts.graduates.total}</h3><p>{cohorts.graduates.label}</p></div></div>
-        <div className="stat-card"><div className="stat-icon info"><i aria-hidden="true" className="fas fa-users" /></div>
-          <div className="stat-content"><h3>{cohorts.sss3.total}</h3><p>{cohorts.sss3.label}</p></div></div>
-      </div>
+  const gMap = {}; (mg.subject_pass_rates || []).forEach((r) => { gMap[r.subject] = r.pass_rate; });
+  const sMap = {}; ((ms && ms.subject_pass_rates) || []).forEach((r) => { sMap[r.subject] = r.pass_rate; });
+  let subjects = Array.from(new Set([...Object.keys(gMap), ...Object.keys(sMap)])).map((sub) => ({
+    sub, g: gMap[sub] != null ? gMap[sub] : null, s: sMap[sub] != null ? sMap[sub] : null,
+    gap: (sMap[sub] != null && gMap[sub] != null) ? Math.round((sMap[sub] - gMap[sub]) * 10) / 10 : null }));
+  if (sort === 'gap') subjects.sort((x, y) => (x.gap == null) - (y.gap == null) || (x.gap - y.gap));
+  else subjects.sort((x, y) => x.sub.localeCompare(y.sub));
+  const behind = subjects.filter((x) => x.gap != null && x.gap < 0).length;
+
+  return (
+    <div className="pm">
+      <PmHead back={d.urls.graduates} kicker="Graduates" title="Graduates vs current SSS3"
+              sub="See how this year’s SSS3 is tracking against a class that has already sat WAEC and JAMB." />
+
+      <section className="pm-pick">
+        <span className="pm-pick-l">Compare current SSS3 with</span>
+        <div className="pm-chips" role="radiogroup" aria-label="Graduate cohort">
+          <button type="button" role="radio" aria-checked={!d.session_id} className={!d.session_id ? 'on' : ''} onClick={() => navParams(nav.go, d.urls.self, {})}>All graduates</button>
+          {d.sessions.map((x) => (
+            <button key={x.id} type="button" role="radio" aria-checked={String(x.id) === String(d.session_id)}
+                    className={String(x.id) === String(d.session_id) ? 'on' : ''} onClick={() => navParams(nav.go, d.urls.self, { session_id: x.id })}>Class of {x.name}</button>))}
+        </div>
+      </section>
+
+      <section className="pm-card vs-hero">
+        <div className="vs-cohort g"><span className="vs-dot" /><b>{cohorts.graduates.total}</b><span>{cohorts.graduates.label}</span></div>
+        <span className="vs-vs">vs</span>
+        <div className="vs-cohort s"><span className="vs-dot" /><b>{cohorts.sss3.total}</b><span>{cohorts.sss3.label}</span></div>
+        {!noData && (c.projection.waec || c.projection.jamb) && (
+          <div className="vs-proj">
+            <span className="pm-kick"><i aria-hidden="true" className="fas fa-wand-magic-sparkles" /> Where current SSS3 may land</span>
+            <div className="vs-proj-row">
+              {c.projection.waec && <div><b>{c.projection.waec.projected_avg_credits}</b><span>WAEC credits (avg)</span><small>mock {c.projection.waec.mock_avg_credits} · shift {c.projection.waec.shift > 0 ? '+' : ''}{c.projection.waec.shift}</small></div>}
+              {c.projection.jamb && <div><b>{c.projection.jamb.projected_avg_score}</b><span>JAMB score (avg)</span><small>mock {c.projection.jamb.mock_avg_score} · shift {c.projection.jamb.shift > 0 ? '+' : ''}{c.projection.jamb.shift}</small></div>}
+            </div>
+          </div>
+        )}
+      </section>
 
       {noData ? (
-        <div className="card"><div className="card-body"><Empty icon="fa-chart-column" title="No graduates to compare">
-          <p>Once a cohort has been graduated (with mock/real results recorded), this page compares them against the current SSS3 class.</p></Empty></div></div>
+        <section className="pm-card"><div className="pm-card-b"><Empty icon="fa-chart-column" title="No graduates to compare">
+          <p>Once a class has graduated with mock and real results recorded, this page compares them with the current SSS3.</p></Empty></div></section>
       ) : (<>
-        <div className="card mb-3"><div className="card-body">
-          <p className="text-muted" style={{ margin: 0 }}><i aria-hidden="true" className="fas fa-circle-info" /> Real WAEC/JAMB exists only for graduates. The <strong>mock</strong> rows compare both cohorts on the same exams; the graduates' mock→real pattern below projects where the current class may land.</p>
-        </div></div>
+        {!(mg.n > 0) && !(c.real_waec.graduates && c.real_waec.graduates.n > 0) && !(jg.n > 0) && (
+          <p className="vs-verdict"><i aria-hidden="true" className="fas fa-circle-info" /> These graduates have no mock or real WAEC/JAMB results recorded, so there’s nothing to compare yet — pick another class above, or add their results.</p>)}
+        {verdict && <p className={'vs-verdict ' + verdict.tone}><i aria-hidden="true" className={'fas ' + (verdict.tone === 'good' ? 'fa-arrow-trend-up' : verdict.tone === 'bad' ? 'fa-arrow-trend-down' : 'fa-equals')} /> {verdict.text}</p>}
 
-        {/* WAEC */}
-        <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-file-alt" /> WAEC — Real</h3></div>
-          <div className="card-body" style={{ padding: 0 }}><div className="table-container"><WaecCompareTable g={c.real_waec.graduates} s={c.real_waec.sss3} /></div></div></div>
-        <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-file-alt" /> WAEC — Mock (latest sitting)</h3></div>
-          <div className="card-body" style={{ padding: 0 }}><div className="table-container"><WaecCompareTable g={c.mock_waec.graduates} s={c.mock_waec.sss3} /></div></div></div>
+        <div className="vs-legend"><span><i className="g" />Graduates</span><span><i className="s" />Current SSS3</span>
+          <small><i aria-hidden="true" className="fas fa-circle-check" /> marks the stronger cohort</small></div>
 
-        {/* Grade spread */}
-        <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-layer-group" /> WAEC grade spread</h3></div>
-          <div className="card-body" style={{ padding: 0 }}><div className="table-container"><table className="data-table">
-            <thead><tr><th>Cohort</th>{c.grade_order.map((g) => <th key={g} style={{ textAlign: 'center' }}>{g}</th>)}</tr></thead>
-            <tbody>
-              <GradeDistRow name="Real WAEC" order={c.grade_order} g={c.real_waec.graduates && c.real_waec.graduates.grade_distribution} s={null} />
-              <GradeDistRow name="Mock WAEC" order={c.grade_order} g={c.mock_waec.graduates && c.mock_waec.graduates.grade_distribution} s={c.mock_waec.sss3 && c.mock_waec.sss3.grade_distribution} />
-            </tbody>
-          </table></div></div></div>
+        <PmSeg label="Section" value={tab} onChange={setTab} options={[
+          { value: 'waec', label: 'WAEC', icon: 'fa-file-alt' }, { value: 'jamb', label: 'JAMB', icon: 'fa-file-contract' },
+          { value: 'subjects', label: 'Subjects', icon: 'fa-list-check' }, { value: 'pattern', label: 'Mock → real', icon: 'fa-arrow-trend-up' }]} />
 
-        {/* JAMB */}
-        <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-file-contract" /> JAMB — Real</h3></div>
-          <div className="card-body" style={{ padding: 0 }}><div className="table-container"><JambCompareTable g={c.real_jamb.graduates} s={c.real_jamb.sss3} /></div></div></div>
-        <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-file-contract" /> JAMB — Mock (best)</h3></div>
-          <div className="card-body" style={{ padding: 0 }}><div className="table-container"><JambCompareTable g={c.mock_jamb.graduates} s={c.mock_jamb.sss3} /></div></div></div>
+        {tab === 'waec' && (<div className="vs-grid">
+          <VsBlock title="Mock WAEC" icon="fa-clipboard-list" sub="Both classes on the same kind of exam (latest sitting)">
+            <VsTable g={c.mock_waec.graduates} s={c.mock_waec.sss3} rows={WAEC_ROWS} sNote="no mock yet" /></VsBlock>
+          <VsBlock title="Real WAEC" icon="fa-file-alt" sub="Only graduates have sat it so far">
+            <VsTable g={c.real_waec.graduates} s={c.real_waec.sss3} rows={WAEC_ROWS} sNote="not sat yet" /></VsBlock>
+          <VsBlock title="Grade spread" icon="fa-layer-group" sub="Share of all grades, best (A1) to worst (F9)">
+            <GradeStack label="Graduates · real" dist={c.real_waec.graduates && c.real_waec.graduates.grade_distribution} order={c.grade_order} />
+            <GradeStack label="Graduates · mock" dist={mg.grade_distribution} order={c.grade_order} />
+            <GradeStack label="SSS3 · mock" dist={ms && ms.grade_distribution} order={c.grade_order} />
+            <div className="vs-gkey">{c.grade_order.map((gr) => <span key={gr}><i style={{ background: GRADE_TONE[gr] }} />{gr}</span>)}</div>
+          </VsBlock>
+        </div>)}
 
-        {/* Pattern + projection */}
-        <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-arrow-trend-up" /> Mock → Real pattern (graduates) &amp; projection</h3></div>
-          <div className="card-body">
-            <div className="info-grid">
-              <div className="info-row"><span className="text-muted">WAEC credits: real vs mock</span><strong>{c.pattern.waec_credits ? dirBadge(c.pattern.waec_credits) : <span className="text-muted">not enough paired data</span>}</strong></div>
-              {c.pattern.waec_credits && <div className="info-row"><span className="text-muted">Graduates who beat their mock (WAEC)</span><strong>{c.pattern.waec_credits.pct_improved}% of {c.pattern.waec_credits.n}</strong></div>}
-              <div className="info-row"><span className="text-muted">JAMB score: real vs mock</span><strong>{c.pattern.jamb_score ? dirBadge(c.pattern.jamb_score) : <span className="text-muted">not enough paired data</span>}</strong></div>
-              {c.pattern.jamb_score && <div className="info-row"><span className="text-muted">Graduates who beat their mock (JAMB)</span><strong>{c.pattern.jamb_score.pct_improved}% of {c.pattern.jamb_score.n}</strong></div>}
-            </div>
-            {(c.projection.waec || c.projection.jamb) && (
-              <div className="card mt-3" style={{ background: 'var(--bg-tertiary)' }}><div className="card-body">
-                <h4 style={{ marginTop: 0 }}><i aria-hidden="true" className="fas fa-wand-magic-sparkles" /> Projection for current SSS3</h4>
-                <p className="text-muted text-sm">Applying the graduates' mock→real shift to the current class's mock averages.</p>
-                {c.projection.waec && <p>WAEC credits: mock avg <strong>{c.projection.waec.mock_avg_credits}</strong> → projected real <strong>{c.projection.waec.projected_avg_credits}</strong> <span className="text-muted">(shift {c.projection.waec.shift > 0 ? '+' : ''}{c.projection.waec.shift}, from {c.projection.waec.basis_n} graduates)</span></p>}
-                {c.projection.jamb && <p>JAMB score: mock avg <strong>{c.projection.jamb.mock_avg_score}</strong> → projected real <strong>{c.projection.jamb.projected_avg_score}</strong> <span className="text-muted">(shift {c.projection.jamb.shift > 0 ? '+' : ''}{c.projection.jamb.shift}, from {c.projection.jamb.basis_n} graduates)</span></p>}
-              </div></div>
-            )}
-          </div></div>
+        {tab === 'jamb' && (<div className="vs-grid">
+          <VsBlock title="Mock JAMB" icon="fa-clipboard-list" sub="Each student’s best mock">
+            <VsTable g={c.mock_jamb.graduates} s={c.mock_jamb.sss3} rows={JAMB_ROWS} sNote="no mock yet" /></VsBlock>
+          <VsBlock title="Real JAMB" icon="fa-file-contract" sub="Only graduates have sat it so far">
+            <VsTable g={c.real_jamb.graduates} s={c.real_jamb.sss3} rows={JAMB_ROWS} sNote="not sat yet" /></VsBlock>
+        </div>)}
 
-        {/* Subject pass rates side by side */}
-        {(c.mock_waec.graduates.subject_pass_rates.length > 0 || (c.mock_waec.sss3 && c.mock_waec.sss3.subject_pass_rates.length > 0)) && (
-          <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-list-check" /> Mock WAEC subject pass rates</h3></div>
-            <div className="card-body" style={{ padding: 0 }}><div className="table-container"><table className="data-table">
-              <thead><tr><th>Subject</th><th style={{ textAlign: 'right' }}>Graduates</th><th style={{ textAlign: 'right' }}>Current SSS3</th></tr></thead>
-              <tbody>{(() => {
-                const gMap = {}; c.mock_waec.graduates.subject_pass_rates.forEach((r) => { gMap[r.subject] = r.pass_rate; });
-                const sMap = {}; (c.mock_waec.sss3 ? c.mock_waec.sss3.subject_pass_rates : []).forEach((r) => { sMap[r.subject] = r.pass_rate; });
-                const subjects = Array.from(new Set([...Object.keys(gMap), ...Object.keys(sMap)])).sort();
-                return subjects.map((sub) => <CompareRow key={sub} label={sub} g={gMap[sub] != null ? gMap[sub] : null} s={sMap[sub] != null ? sMap[sub] : null} suffix="%" />);
-              })()}</tbody>
-            </table></div></div></div>
+        {tab === 'subjects' && (
+          <section className="pm-card">
+            <header className="pm-card-h wrap"><span className="pm-card-ic"><i aria-hidden="true" className="fas fa-list-check" /></span>
+              <div className="pm-card-t"><h3>Mock WAEC pass rate by subject</h3>
+                <small>{!(mg.n > 0) ? 'The graduates have no mock WAEC results to compare with yet' : behind ? `Current SSS3 trails in ${behind} subject${behind === 1 ? '' : 's'} — they’re listed first` : 'Current SSS3 is level or ahead everywhere'}</small></div>
+              <PmSeg small label="Order" value={sort} onChange={setSort} options={[{ value: 'gap', label: 'Biggest gap' }, { value: 'name', label: 'A–Z' }]} />
+            </header>
+            {subjects.length ? (
+              <ul className="vs-subs">
+                {subjects.map((x) => (
+                  <li key={x.sub}>
+                    <span className="vs-sub-n">{x.sub}</span>
+                    <span className="vs-mini g"><i style={{ width: `${x.g || 0}%` }} /><b>{x.g != null ? x.g + '%' : '—'}</b></span>
+                    <span className="vs-mini s"><i style={{ width: `${x.s || 0}%` }} /><b>{x.s != null ? x.s + '%' : '—'}</b></span>
+                    <span className={'vs-gap ' + (x.gap == null ? '' : x.gap < 0 ? 'bad' : x.gap > 0 ? 'good' : '')}>{x.gap == null ? '—' : `${x.gap > 0 ? '+' : ''}${x.gap}`}</span>
+                  </li>))}
+              </ul>
+            ) : <p className="pm-empty">No mock WAEC subject results yet.</p>}
+          </section>
+        )}
+
+        {tab === 'pattern' && (
+          <VsBlock title="How graduates did in the real exam vs their mocks" icon="fa-arrow-trend-up" sub="Used to project where the current SSS3 may land">
+            {[['WAEC credits', c.pattern.waec_credits], ['JAMB score', c.pattern.jamb_score]].map(([lab, p]) => {
+              const x = dir(p);
+              return (
+                <div key={lab} className="vs-pat">
+                  <span className="vs-l">{lab}</span>
+                  {p ? (<>
+                    <span className={'vs-pat-d ' + x.cls}><i aria-hidden="true" className={'fas ' + (p.direction === 'improved' ? 'fa-arrow-up' : p.direction === 'declined' ? 'fa-arrow-down' : 'fa-minus')} /> {p.direction} <b>{x.sign}{p.avg_delta}</b> on average</span>
+                    <span className="vs-pat-n"><b>{p.pct_improved}%</b> of {p.n} graduates beat their mock</span>
+                    <span className="vs-track"><i style={{ width: `${p.pct_improved}%` }} /></span>
+                  </>) : <span className="pm-dim">Not enough graduates with both a mock and a real result yet.</span>}
+                </div>);
+            })}
+          </VsBlock>
         )}
       </>)}
-    </>
+    </div>
   );
 }
 
