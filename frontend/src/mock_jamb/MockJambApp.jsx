@@ -504,19 +504,6 @@ function ViewExam({ d, notify }) {
           <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-chart-pie" /> Distribution</h3></div><div className="chart-body"><canvas ref={distRef} /></div></div>
           {st.subject_analysis.length > 0 && <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-chart-bar" /> Subjects</h3></div><div className="chart-body"><canvas ref={subjRef} /></div></div>}
         </div>
-        {st.subject_analysis.length > 0 && (
-          <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-book" /> Subject Analysis</h3></div>
-            <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
-              <table className="subject-table">
-                <thead><tr><th style={{ textAlign: 'left' }}>Subject</th><th>Count</th><th>Avg</th><th>Max</th><th>Min</th><th>≥70</th><th>≥50</th></tr></thead>
-                <tbody>{st.subject_analysis.map((s) => (
-                  <tr key={s.subject}><td><a href={`/mock-jamb/exam/${d.exam.id}/subject/${encodeURIComponent(s.subject)}`} style={{ color: 'var(--primary)', fontWeight: 600 }} title={`Full analysis for ${s.subject}`}>{s.subject}</a></td><td>{s.count}</td>
-                    <td style={{ color: s.average >= 70 ? 'var(--success)' : s.average >= 50 ? 'var(--warning)' : 'var(--danger)' }}><strong>{r1(s.average)}</strong></td>
-                    <td style={{ color: 'var(--success)' }}>{s.max}</td><td style={{ color: 'var(--danger)' }}>{s.min}</td><td>{s.above_70}</td><td>{s.above_50}</td></tr>))}
-                </tbody>
-              </table>
-            </div></div>
-        )}
       </>)}
 
       <div className="card">
@@ -590,6 +577,21 @@ function ViewExam({ d, notify }) {
             {canWrite(d, 'mock_jamb_results_create') && <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add</a>}</Empty></div>
         )}
       </div>
+
+      {/* Subject table below the list: charts, then the search right above the students. */}
+      {st && st.subject_analysis.length > 0 && (
+        <div className="card mt-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-book" /> Subject Analysis</h3></div>
+          <div className="card-body" style={{ padding: 0, overflowX: 'auto' }}>
+            <table className="subject-table">
+              <thead><tr><th style={{ textAlign: 'left' }}>Subject</th><th>Count</th><th>Avg</th><th>Max</th><th>Min</th><th>≥70</th><th>≥50</th></tr></thead>
+              <tbody>{st.subject_analysis.map((s) => (
+                <tr key={s.subject}><td><a href={`/mock-jamb/exam/${d.exam.id}/subject/${encodeURIComponent(s.subject)}`} style={{ color: 'var(--primary)', fontWeight: 600 }} title={`Full analysis for ${s.subject}`}>{s.subject}</a></td><td>{s.count}</td>
+                  <td style={{ color: s.average >= 70 ? 'var(--success)' : s.average >= 50 ? 'var(--warning)' : 'var(--danger)' }}><strong>{r1(s.average)}</strong></td>
+                  <td style={{ color: 'var(--success)' }}>{s.max}</td><td style={{ color: 'var(--danger)' }}>{s.min}</td><td>{s.above_70}</td><td>{s.above_50}</td></tr>))}
+              </tbody>
+            </table>
+          </div></div>
+      )}
 
       {canWrite(d, 'mock_jamb_exam_delete') && (
       <div className="card mt-3" style={{ borderColor: 'var(--danger)' }}>

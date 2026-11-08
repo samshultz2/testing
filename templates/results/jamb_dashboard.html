@@ -338,6 +338,7 @@
         display: grid;
         grid-template-columns: repeat(2, 1fr);
         gap: 1rem;
+        margin-bottom: 1rem;
     }
     
     .charts-row .card { margin-bottom: 0; }
@@ -453,6 +454,26 @@
         <div class="stat-value">{{ school_stats.median_score }}</div>
         <div class="stat-label">Median</div>
     </div>
+</div>
+{% endif %}
+
+{# Students view: charts first, then the search right above the list it filters. #}
+{% if view_mode not in ('subjects', 'rankings') %}
+<div class="charts-row">
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Score Distribution</span>
+        </div>
+        <div class="chart-body"><canvas id="scoreChart"></canvas></div>
+    </div>
+    {% if subject_performance %}
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Subject Averages</span>
+        </div>
+        <div class="chart-body"><canvas id="subjectAvgChart"></canvas></div>
+    </div>
+    {% endif %}
 </div>
 {% endif %}
 
@@ -746,23 +767,6 @@
         {% if can_write_sub('external_exams', 'jamb_create') %}
         <a href="{{ url_for('results.add_jamb') }}" class="btn btn-primary btn-sm">Add Results</a>
         {% endif %}
-    </div>
-    {% endif %}
-</div>
-<!-- Charts sit below the list, so the search sits right above the students it filters -->
-<div class="charts-row jamb-charts-below">
-    <div class="card">
-        <div class="card-header">
-            <span class="card-title">Score Distribution</span>
-        </div>
-        <div class="chart-body"><canvas id="scoreChart"></canvas></div>
-    </div>
-    {% if subject_performance %}
-    <div class="card">
-        <div class="card-header">
-            <span class="card-title">Subject Averages</span>
-        </div>
-        <div class="chart-body"><canvas id="subjectAvgChart"></canvas></div>
     </div>
     {% endif %}
 </div>

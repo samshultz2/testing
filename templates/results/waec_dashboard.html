@@ -373,6 +373,7 @@
         display: grid;
         grid-template-columns: repeat(2, 1fr);
         gap: 1rem;
+        margin-bottom: 1rem;
     }
     
     .charts-row .card { margin-bottom: 0; }
@@ -474,6 +475,24 @@
     <div class="stat-card">
         <div class="stat-value" style="color: #6f42c1;">{{ grade_distribution.get('A1', 0) }}</div>
         <div class="stat-label">Total A1s</div>
+    </div>
+</div>
+{% endif %}
+
+{# Students view: charts first, then the search right above the list it filters. #}
+{% if view_mode not in ('subjects', 'top') %}
+<div class="charts-row">
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Grade Distribution</span>
+        </div>
+        <div class="chart-body"><canvas id="gradeChart"></canvas></div>
+    </div>
+    <div class="card">
+        <div class="card-header">
+            <span class="card-title">Subject Pass Rates</span>
+        </div>
+        <div class="chart-body"><canvas id="subjectChart"></canvas></div>
     </div>
 </div>
 {% endif %}
@@ -879,21 +898,6 @@
         {% endif %}
     </div>
     {% endif %}
-</div>
-<!-- Charts sit below the list, so the search sits right above the students it filters -->
-<div class="charts-row">
-    <div class="card">
-        <div class="card-header">
-            <span class="card-title">Grade Distribution</span>
-        </div>
-        <div class="chart-body"><canvas id="gradeChart"></canvas></div>
-    </div>
-    <div class="card">
-        <div class="card-header">
-            <span class="card-title">Subject Pass Rates</span>
-        </div>
-        <div class="chart-body"><canvas id="subjectChart"></canvas></div>
-    </div>
 </div>
 {% endif %}
 
