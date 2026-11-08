@@ -2072,11 +2072,18 @@ def _student_form_options(with_enrolment=False):
             if teacher and not is_admin():
                 form_ids = teacher.form_class_ids or set()
                 default_id = next((c.id for c in class_options if c.id in form_ids), None)
+            from models import Branch
+            bnames = {b.id: b.name for b in Branch.query.all()}
             enrol = {
                 'term_label': active_term.full_name,
                 'has_classes': bool(class_options),
                 'default_id': default_id,
-                'classes': [{'id': c.id, 'label': c.display_name} for c in class_options],
+                'classes': [{'id': c.id, 'label': c.display_name,
+                             'class': c.school_class.name if c.school_class else '',
+                             'level': (c.school_class.level if c.school_class else 0) or 0,
+                             'arm': c.arm_label,
+                             'branch': bnames.get(c.branch_id, '')}
+                            for c in class_options],
             }
         opts['enrolment'] = enrol
     return opts

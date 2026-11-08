@@ -4429,3 +4429,22 @@ body .bill-line span:last-child, body .pl-row span:last-child { font-variant-num
   .sf2-save .sp-btn { height: 46px; }
   .sf2-save .sf2-go { flex: 1; height: 46px; }
 }
+/* Add student: class picker tiles + "save & add another" */
+.sf2-enrol { display: flex; flex-direction: column; gap: .55rem; }
+.sf2-enrol input { position: absolute; opacity: 0; width: 0; height: 0; }
+.sf2-none, .sf2-earms label { display: inline-flex; align-items: center; gap: .5rem; border: 1px solid var(--border-color); border-radius: 11px;
+  padding: .55rem .9rem; cursor: pointer; font-weight: 600; font-size: .9rem; margin: 0; background: var(--bg-card); }
+.sf2-none { align-self: flex-start; color: var(--text-secondary); }
+.sf2-none.on, .sf2-earms label.on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 11%, var(--bg-card)); color: var(--primary); }
+.sf2-enrol label:focus-within { outline: 2px solid var(--primary); outline-offset: 1px; }
+.sf2-egroup { display: flex; align-items: center; gap: .8rem; padding: .45rem 0; border-top: 1px solid var(--border-light); }
+.sf2-ename { flex: 0 0 76px; font-weight: 800; font-size: .9rem; }
+.sf2-earms { display: flex; flex-wrap: wrap; gap: .4rem; }
+.sf2-another { height: 42px; }
+@media (max-width: 759px) {
+  .sf2-egroup { flex-direction: column; align-items: flex-start; gap: .4rem; }
+  .sf2-ename { flex: none; }
+  .sf2-another { width: 46px; padding: 0; justify-content: center; }
+  .sf2-another span { display: none; }
+}
+.sf2-ebr { font-size: .72rem; font-weight: 600; color: var(--text-muted); }

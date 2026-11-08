@@ -211,7 +211,14 @@ export default function StudentForm({ data }) {
     (stu.scholarships || []).map((s) => ({ name: s.name || '', provider: s.provider || '',
       amount: s.amount != null ? String(s.amount) : '', status: s.status || '' })));
   const [recs, setRecs] = useState([]);
-  const [enrolId, setEnrolId] = useState(enrolment && enrolment.default_id ? String(enrolment.default_id) : '');
+  const [enrolId, setEnrolId] = useState(() => {
+    // "Save & add another" carries the class over (?class=ID) so a whole class
+    // can be entered in one sitting.
+    const q = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('class') : null;
+    if (q && enrolment && (enrolment.classes || []).some((c) => String(c.id) === q)) return q;
+    return enrolment && enrolment.default_id ? String(enrolment.default_id) : '';
+  });
+  const anotherRef = useRef(false);
   const [errors, setErrors] = useState({});
   const [contactErrors, setContactErrors] = useState({});
   const [banner, setBanner] = useState(null);
@@ -452,7 +459,14 @@ export default function StudentForm({ data }) {
       const res = await postForm(data.urls.submit, fields);
       let body = {};
       try { body = await res.json(); } catch (_) { /* non-JSON */ }
-      if (res.ok && body.ok) { clearFDraft(); window.location = body.redirect; return; }
+      if (res.ok && body.ok) {
+        clearFDraft();
+        if (!isEdit && anotherRef.current) {
+          window.location = window.location.pathname + (enrolId ? '?class=' + encodeURIComponent(enrolId) : '') + '#personal';
+          return;
+        }
+        window.location = body.redirect; return;
+      }
       setBanner({ tone: 'error', text: body.error || `Could not save (HTTP ${res.status}).` });
     } catch (err) {
       setBanner({ tone: 'error', text: err.message || 'Network error — please try again.' });
@@ -494,7 +508,7 @@ export default function StudentForm({ data }) {
     { key: 'contacts', label: 'Contacts', icon: 'fa-address-book', note: 'Parents and guardians the school can reach',
       count: contactCount, status: contactCount ? 'done' : 'opt', err: Object.keys(contactErrors).length > 0 },
     !isEdit && enrolment && { key: 'enrol', label: 'Class', icon: 'fa-chalkboard', note: enrolment.term_label,
-      status: enrolId ? 'done' : 'todo' },
+      status: enrolId ? 'done' : 'opt' },
     { key: 'aspiration', label: 'Aspiration', icon: 'fa-graduation-cap', note: 'University, course and career goal',
       status: (f.target_university_id || f.target_course_id || f.career_goal) ? 'done' : 'opt' },
     { key: 'admission', label: 'Admission', icon: 'fa-award', note: 'Admission offers and scholarships',
@@ -530,7 +544,8 @@ export default function StudentForm({ data }) {
   const prev = SECTIONS[idx - 1];
   const next = SECTIONS[idx + 1];
   const doneCount = SECTIONS.filter((x) => x.status === 'done').length;
-  const liveName = [f.surname, f.first_name, f.middle_name].map((x) => (x || '').trim()).filter(Boolean).join(' ');
+  const liveName = (f.surname.trim() || f.first_name.trim())
+    ? [f.surname, f.first_name, f.middle_name].map((x) => (x || '').trim()).filter(Boolean).join(' ') : '';
   const initials = liveName.split(' ').slice(0, 2).map((w) => w[0]).join('').toUpperCase();
 
   const onSubmit = (ev) => {
@@ -561,7 +576,14 @@ export default function StudentForm({ data }) {
       </span>
       <a href={urls.cancel} className={'sp-btn' + (saving ? ' disabled' : '')}
          onClick={(e) => saving && e.preventDefault()}>Cancel</a>
-      <button type="submit" form="sf2-form" className="btn btn-primary sf2-go" disabled={saving}>
+      {!isEdit && (
+        <button type="submit" form="sf2-form" className="sp-btn sf2-another" disabled={saving}
+                onClick={() => { anotherRef.current = true; }} title="Save, then start a fresh form (keeps the class)">
+          <i aria-hidden="true" className="fas fa-plus" /> <span>Save &amp; add another</span>
+        </button>
+      )}
+      <button type="submit" form="sf2-form" className="btn btn-primary sf2-go" disabled={saving}
+              onClick={() => { anotherRef.current = false; }}>
         <i aria-hidden="true" className={'fas ' + (saving ? 'fa-spinner fa-spin' : 'fa-check')} /> {saving ? 'Saving…' : (isEdit ? 'Save Changes' : 'Save Student')}
       </button>
     </div>
@@ -570,13 +592,11 @@ export default function StudentForm({ data }) {
   return (
     <form onSubmit={onSubmit} noValidate className="sf2" id="sf2-form">
       <header className="sf2-head">
-        {isEdit
-          ? (f.photo
-            ? <img className="sf2-av" src={f.photo} alt="" />
-            : <span className="sf2-av ph" aria-hidden="true">{initials || <i className="fas fa-user" />}</span>)
-          : <span className="sf2-av ph" aria-hidden="true"><i className="fas fa-user-plus" /></span>}
+        {f.photo
+          ? <img className="sf2-av" src={f.photo} alt="" />
+          : <span className="sf2-av ph" aria-hidden="true">{initials || <i className={'fas ' + (isEdit ? 'fa-user' : 'fa-user-plus')} />}</span>}
         <div className="sf2-title">
-          <span className="sf2-kicker">{isEdit ? 'Editing profile' : 'New student'}{isEdit && stu.student_id ? <> · <b>{stu.student_id}</b></> : null}</span>
+          <span className="sf2-kicker">{isEdit ? 'Editing profile' : (enrolId && enrolment ? `New student · ${((enrolment.classes || []).find((c) => String(c.id) === enrolId) || {}).label || ''}` : 'New student')}{isEdit && stu.student_id ? <> · <b>{stu.student_id}</b></> : null}</span>
           <h1>{liveName || (isEdit ? 'Edit Student' : 'Add New Student')}</h1>
           <div className="sf2-prog" aria-label={`${doneCount} of ${SECTIONS.length} sections filled`}>
             <span className="sf2-bar"><span style={{ width: Math.round(doneCount / SECTIONS.length * 100) + '%' }} /></span>
@@ -682,12 +702,34 @@ export default function StudentForm({ data }) {
               </section>
               {!isEdit && enrolment && <section className="sf2-panel" hidden={sec !== 'enrol'}>
           {enrolment.has_classes ? (
-            <SelectField label="Enrol into class & arm" value={enrolId} onChange={setEnrolId}
-                         placeholder="— Don't enrol yet —"
-                         options={enrolment.classes.map((c) => ({ value: String(c.id), label: c.label }))}
-                         hint={enrolment.default_id
-                           ? 'Your form class is selected — the student will be added there.'
-                           : 'Pick the class to place this student in now, or leave blank and enrol later.'} />
+            <div className="sf2-enrol" role="radiogroup" aria-label="Enrol into class and arm">
+              <p className="text-muted" style={{ marginTop: 0, fontSize: '.86rem' }}>
+                {enrolment.default_id ? 'Your form class is picked — the student will be added there.'
+                  : 'Pick the class to place this student in now, or leave it and enrol later.'}</p>
+              <label className={'sf2-none' + (!enrolId ? ' on' : '')}>
+                <input type="radio" name="enrol" checked={!enrolId} onChange={() => setEnrolId('')} />
+                <i aria-hidden="true" className="fas fa-clock" /> Don't enrol yet
+              </label>
+              {Object.entries((enrolment.classes || []).reduce((m, c) => {
+                const k = c.class || c.label; (m[k] = m[k] || { level: c.level || 0, rows: [] }).rows.push(c); return m;
+              }, {})).sort((x, y) => x[1].level - y[1].level || x[0].localeCompare(y[0])).map(([name, g]) => (
+                <div className="sf2-egroup" key={name}>
+                  <span className="sf2-ename">{name}</span>
+                  <div className="sf2-earms">
+                    {g.rows.map((c) => {
+                      // Same arm name twice (several branches in view) → name the branch.
+                      const dup = g.rows.filter((x) => (x.arm || x.label) === (c.arm || c.label)).length > 1;
+                      return (
+                        <label key={c.id} className={enrolId === String(c.id) ? 'on' : ''}>
+                          <input type="radio" name="enrol" checked={enrolId === String(c.id)} onChange={() => setEnrolId(String(c.id))} />
+                          {c.arm || c.label}{dup && c.branch ? <small className="sf2-ebr">{c.branch}</small> : null}
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : (
             <p className="text-muted"><i aria-hidden="true" className="fas fa-info-circle" /> No classes are set up for this term yet, or none are assigned to you. You can enrol the student into a class later.</p>
           )}
