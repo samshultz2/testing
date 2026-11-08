@@ -1451,14 +1451,29 @@ function _qsFromFilters(f) {
   return p;
 }
 
+const ALUMNI_TEXT_FILTERS = [['occupation', 'Occupation', 'fa-briefcase'], ['employer', 'Employer', 'fa-building'],
+  ['institution', 'University / institution', 'fa-building-columns'], ['city', 'City', 'fa-location-dot'], ['country', 'Country', 'fa-earth-africa']];
+
 function Alumni({ d, notify }) {
   const nav = useNav();
+  const phone = usePhone();
   const [f, setF] = useState(d.filters || {});
   const [mail, setMail] = useState({ open: false, subject: '', body: '', busy: false });
-  const setField = (k, v) => setF((s) => ({ ...s, [k]: v }));
-  const applyFilters = () => navParams(nav.go, window.location.pathname, _qsFromFilters(f));
-  const clearFilters = () => { setF({}); navParams(nav.go, window.location.pathname, {}); };
+  const [more, setMore] = useState(false);
+  const [q, setQ] = useState((d.filters || {}).q || '');
+  const apply = (next) => { setF(next); navParams(nav.go, window.location.pathname, _qsFromFilters(next)); };
+  const setAndApply = (k, v) => apply({ ...f, [k]: v });
+  const clearFilters = () => { setQ(''); apply({}); };
+  // Live search: re-query the server a moment after typing stops.
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) { first.current = false; return undefined; }
+    const t = setTimeout(() => { if ((f.q || '') !== q) apply({ ...f, q }); }, 450);
+    return () => clearTimeout(t);
+  }, [q]); // eslint-disable-line react-hooks/exhaustive-deps
   const exportUrl = d.export_url + '?' + new URLSearchParams(_qsFromFilters(f)).toString();
+  const requests = d.requests || [];
+  const alumni = d.alumni || [];
 
   const fulfilReq = (r) => { window.open(r.fulfil_url, '_blank'); setTimeout(() => nav.refresh && nav.refresh(), 1500); };
   const declineReq = async (r) => {
@@ -1469,95 +1484,155 @@ function Alumni({ d, notify }) {
   };
   const sendMail = async () => {
     if (!mail.subject.trim() || !mail.body.trim()) { notify && notify('error', 'Subject and message are required.'); return; }
-    if (!await confirm('Send this email to every alumnus in the current filter who has an email address?')) return;
+    if (!await confirm(`Send this email to the ${d.contactable} alumni in this list who have an email address?`)) return;
     setMail((m) => ({ ...m, busy: true }));
     const r = await submitJson(d.bulk_email_url, { subject: mail.subject, body: mail.body, ..._qsFromFilters(f) });
     setMail((m) => ({ ...m, busy: false }));
     if (r.ok) { notify && notify('success', r.message || 'Sending.'); setMail({ open: false, subject: '', body: '', busy: false }); }
     else notify && notify('error', r.error || 'Could not send.');
   };
+  // Active filters as removable chips.
+  const sessName = (id) => ((d.sessions || []).find((x) => String(x.id) === String(id)) || {}).name;
+  const active = [
+    f.session_id && { k: 'session_id', label: `Class of ${sessName(f.session_id) || ''}` },
+    ...ALUMNI_TEXT_FILTERS.filter(([k]) => f[k]).map(([k, lab]) => ({ k, label: `${lab}: ${f[k]}` })),
+    f.mentor && { k: 'mentor', label: 'Mentors' }, f.career && { k: 'career', label: 'Has career info' }, f.has_contact && { k: 'has_contact', label: 'Has contact' },
+  ].filter(Boolean);
+  const anyFilter = active.length > 0 || !!f.q;
+  const wa = (ph) => { const n = String(ph || '').replace(/\D/g, ''); return n ? 'https://wa.me/' + (n.startsWith('0') ? '234' + n.slice(1) : n) : null; };
 
   return (
-    <>
-      <PageHeader title="Alumni" actions={<>
-        <a href={d.graduates} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Graduates</a>
-        {d.analytics_url && <a href={d.analytics_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-chart-pie" /> Analytics</a>}
-        {canWrite(d, 'alumni_export') && <a href={exportUrl} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-csv" /> Export CSV</a>}
-        {canWrite(d, 'alumni_bulk_email') && <button type="button" className="btn btn-primary" onClick={() => setMail((m) => ({ ...m, open: !m.open }))}><i aria-hidden="true" className="fas fa-envelope" /> Bulk email</button>}
-      </>} />
-      <div className="stats-grid mb-3">
-        <div className="stat-card"><div className="stat-icon success"><i aria-hidden="true" className="fas fa-user-graduate" /></div><div className="stat-content"><h3>{d.total}</h3><p>Graduates</p></div></div>
-        <div className="stat-card"><div className="stat-icon primary"><i aria-hidden="true" className="fas fa-filter" /></div><div className="stat-content"><h3>{d.shown}</h3><p>Matching filter</p></div></div>
-        <div className="stat-card"><div className="stat-icon info"><i aria-hidden="true" className="fas fa-hands-helping" /></div><div className="stat-content"><h3>{d.mentors}</h3><p>Willing to mentor</p></div></div>
-        <div className="stat-card"><div className="stat-icon warning"><i aria-hidden="true" className="fas fa-inbox" /></div><div className="stat-content"><h3>{(d.requests || []).length}</h3><p>Pending requests</p></div></div>
-      </div>
+    <div className="pm">
+      <PmHead back={d.graduates} kicker="Graduates" title="Alumni directory"
+              sub="Find former students by where they work, study or live — and stay in touch."
+              actions={<>
+                {canWrite(d, 'alumni_bulk_email') && <button type="button" className="pm-btn primary" onClick={() => setMail((m) => ({ ...m, open: true }))}>
+                  <i aria-hidden="true" className="fas fa-envelope" /> <span>Email alumni</span></button>}
+                <PmMenu label="More" items={[
+                  d.analytics_url && { href: d.analytics_url, icon: 'fa-chart-pie', label: 'Alumni analytics' },
+                  canWrite(d, 'alumni_export') && { href: exportUrl, icon: 'fa-file-csv', label: 'Export this list (CSV)' },
+                ]} />
+              </>} />
 
-      {mail.open && <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-envelope" /> Bulk Email — {d.contactable} contactable in this filter</h3></div>
-        <div className="card-body">
-          {!d.email_configured && <p className="text-warning"><i aria-hidden="true" className="fas fa-triangle-exclamation" /> Email is not configured on this server; sending will fail until SMTP is set up.</p>}
-          <div className="form-group"><label className="form-label">Subject</label>
-            <input className="form-control" value={mail.subject} onChange={(e) => setMail((m) => ({ ...m, subject: e.target.value }))} /></div>
-          <div className="form-group"><label className="form-label">Message</label>
-            <textarea className="form-control" rows={5} value={mail.body} onChange={(e) => setMail((m) => ({ ...m, body: e.target.value }))} /></div>
-          <button type="button" className="btn btn-primary" disabled={mail.busy || !d.email_configured} onClick={sendMail}><i aria-hidden="true" className="fas fa-paper-plane" /> Send to filtered alumni</button>
-        </div></div>}
+      <PmTiles items={[
+        { label: 'Alumni', icon: 'fa-user-graduate', value: d.total, sub: anyFilter ? `${d.shown} match` : 'all graduates' },
+        { label: 'Mentors', icon: 'fa-hands-helping', value: d.mentors, tone: 'good', sub: f.mentor ? 'showing mentors' : 'willing to help',
+          onClick: () => setAndApply('mentor', !f.mentor), on: !!f.mentor },
+        { label: 'Reachable by email', icon: 'fa-at', value: d.contactable, sub: 'in this list' },
+        requests.length ? { label: 'Document requests', icon: 'fa-inbox', value: requests.length, tone: 'warn', sub: 'waiting for you',
+          onClick: () => { const el = document.getElementById('al-req'); if (el) el.scrollIntoView({ behavior: 'smooth' }); } } : null,
+      ]} />
 
-      {d.requests && d.requests.length > 0 && <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-inbox" /> Pending Document Requests</h3></div>
-        <div className="card-body" style={{ padding: 0 }}><div className="table-container" style={{ border: 'none' }}><table className="data-table">
-          <thead><tr><th>Graduate</th><th>Document</th><th>Note</th><th>Requested</th><th /></tr></thead>
-          <tbody>{d.requests.map((r) => (
-            <tr key={r.id}>
-              <td><a href={r.profile_url}>{r.student_name}</a><br /><span className="text-muted text-sm">{r.admission_no}</span></td>
-              <td>{r.label}</td><td>{r.note || '—'}</td><td>{r.requested_at}</td>
-              <td style={{ whiteSpace: 'nowrap' }}>
-                {canWrite(d, 'documents_requests') && <>
-                  <button type="button" className="btn btn-success btn-sm" onClick={() => fulfilReq(r)}><i aria-hidden="true" className="fas fa-file-arrow-down" /> Issue</button>{' '}
-                  <button type="button" className="btn btn-danger btn-sm" onClick={() => declineReq(r)}><i aria-hidden="true" className="fas fa-xmark" /> Decline</button>
-                </>}
-              </td>
-            </tr>))}</tbody>
-        </table></div></div></div>}
+      {requests.length > 0 && (
+        <section className="pm-card" id="al-req">
+          <header className="pm-card-h"><span className="pm-card-ic warn"><i aria-hidden="true" className="fas fa-inbox" /></span>
+            <div className="pm-card-t"><h3>Document requests</h3><small>Oldest first — issue or decline each one</small></div></header>
+          <ul className="pm-people">
+            {requests.map((r) => (
+              <li key={r.id} className="pm-person al-req">
+                <span className="pm-av" aria-hidden="true">{pmInitials(r.student_name)}</span>
+                <span className="pm-pn">
+                  {r.profile_url ? <a href={r.profile_url}><strong>{r.student_name}</strong></a> : <strong>{r.student_name}</strong>}
+                  <small><b>{r.label}</b> · {r.requested_at}{r.admission_no ? ` · ${r.admission_no}` : ''}</small>
+                  {r.note && <small className="al-note">“{r.note}”</small>}
+                </span>
+                {canWrite(d, 'documents_requests') && <span className="al-req-a">
+                  <button type="button" className="pm-btn primary" onClick={() => fulfilReq(r)}><i aria-hidden="true" className="fas fa-file-arrow-down" /> <span>Issue</span></button>
+                  <button type="button" className="pm-icon danger" onClick={() => declineReq(r)} aria-label="Decline request" title="Decline"><i aria-hidden="true" className="fas fa-xmark" /></button>
+                </span>}
+              </li>))}
+          </ul>
+        </section>
+      )}
 
-      <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-magnifying-glass" /> Search &amp; Filter</h3></div>
-        <div className="card-body">
-          <div className="form-row" style={{ flexWrap: 'wrap', gap: '.6rem' }}>
-            <div className="form-group" style={{ flex: '2 1 220px' }}><label className="form-label">Name or Admission No.</label>
-              <input className="form-control" value={f.q || ''} onChange={(e) => setField('q', e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') applyFilters(); }} /></div>
-            <div className="form-group" style={{ flex: '1 1 160px' }}><label className="form-label">Graduation Session</label>
-              <select className="form-control" value={f.session_id || ''} onChange={(e) => setField('session_id', e.target.value)}>
-                <option value="">All</option>{(d.sessions || []).map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
-            {[['occupation', 'Occupation'], ['employer', 'Employer'], ['institution', 'Institution'], ['city', 'City'], ['country', 'Country']].map(([k, lab]) => (
-              <div className="form-group" key={k} style={{ flex: '1 1 150px' }}><label className="form-label">{lab}</label>
-                <input className="form-control" value={f[k] || ''} onChange={(e) => setField(k, e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') applyFilters(); }} /></div>))}
+      <section className="pm-card">
+        <header className="pm-card-h wrap">
+          <div className="pm-search"><i aria-hidden="true" className="fas fa-search" />
+            <input type="search" placeholder="Search by name or admission number…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search alumni" /></div>
+          <label className="pm-mini"><span>Class of</span>
+            <select value={f.session_id || ''} onChange={(e) => setAndApply('session_id', e.target.value)}>
+              <option value="">All years</option>{(d.sessions || []).map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
+          <button type="button" className="pm-btn" onClick={() => setMore(true)}><i aria-hidden="true" className="fas fa-sliders" /> <span>More filters</span></button>
+        </header>
+        <div className="al-quick">
+          {[['mentor', 'Mentors', 'fa-hands-helping'], ['career', 'Has career / study info', 'fa-briefcase'], ['has_contact', 'Has phone or email', 'fa-phone']].map(([k, lab, ic]) => (
+            <button key={k} type="button" aria-pressed={!!f[k]} className={'al-qchip' + (f[k] ? ' on' : '')} onClick={() => setAndApply(k, !f[k])}>
+              <i aria-hidden="true" className={'fas ' + (f[k] ? 'fa-check' : ic)} /> {lab}</button>))}
+          {active.filter((x) => !['mentor', 'career', 'has_contact'].includes(x.k)).map((x) => (
+            <button key={x.k} type="button" className="al-qchip on" onClick={() => setAndApply(x.k, '')} aria-label={`Remove filter ${x.label}`}>
+              {x.label} <i aria-hidden="true" className="fas fa-xmark" /></button>))}
+          {anyFilter && <button type="button" className="pm-link" onClick={clearFilters}>Clear all</button>}
+        </div>
+
+        {alumni.length ? (
+          <ul className="al-grid">
+            {alumni.map((a) => {
+              const work = a.employer || a.higher_institution;
+              const role = a.job_title || a.occupation || (a.higher_institution && a.course ? a.course : null);
+              const place = [a.city, a.country].filter(Boolean).join(', ');
+              const waUrl = wa(a.phone);
+              return (
+                <li key={a.id} className="al-card">
+                  <a href={a.profile_url} className="al-top">
+                    <GradAvatar name={a.full_name} photo={a.photo_url} />
+                    <span className="pm-pn"><strong>{a.full_name}</strong>
+                      <small>{a.student_id}{a.graduation_session ? ` · Class of ${a.graduation_session}` : ''}</small></span>
+                    {a.willing_to_mentor && <span className="al-mentor" title="Willing to mentor current students"><i aria-hidden="true" className="fas fa-hands-helping" /> Mentor</span>}
+                  </a>
+                  <div className="al-info">
+                    {(role || work) ? (
+                      <span><i aria-hidden="true" className={'fas ' + (a.higher_institution && !a.employer ? 'fa-building-columns' : 'fa-briefcase')} />
+                        {role}{role && work ? ' · ' : ''}{work && <b>{work}</b>}</span>
+                    ) : <span className="pm-dim"><i aria-hidden="true" className="fas fa-briefcase" /> No career info yet</span>}
+                    {place && <span><i aria-hidden="true" className="fas fa-location-dot" /> {place}</span>}
+                  </div>
+                  <div className="al-acts">
+                    {a.phone && <a className="al-c call" href={'tel:' + a.phone} aria-label={`Call ${a.full_name}`} title={a.phone}><i aria-hidden="true" className="fas fa-phone" /></a>}
+                    {waUrl && <a className="al-c wa" href={waUrl} target="_blank" rel="noopener" data-native="1" aria-label={`WhatsApp ${a.full_name}`}><i aria-hidden="true" className="fab fa-whatsapp" /></a>}
+                    {a.email && <a className="al-c mail" href={'mailto:' + a.email} aria-label={`Email ${a.full_name}`} title={a.email}><i aria-hidden="true" className="fas fa-envelope" /></a>}
+                    {a.linkedin && <a className="al-c in" href={a.linkedin} target="_blank" rel="noopener" data-native="1" aria-label="LinkedIn profile"><i aria-hidden="true" className="fab fa-linkedin-in" /></a>}
+                    {!a.phone && !a.email && !a.linkedin && <span className="pm-dim al-none">No contact details</span>}
+                    <a href={a.profile_url} className="pm-btn al-view">Profile <i aria-hidden="true" className="fas fa-chevron-right" /></a>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <div className="pm-card-b"><Empty icon="fa-address-book" title={anyFilter ? 'No alumni match' : 'No alumni yet'}>
+            <p>{anyFilter ? 'Try removing a filter or searching another name.' : 'Graduates appear here once students are marked as graduated.'}</p>
+            {anyFilter && <div className="empty-state-actions"><button type="button" className="btn btn-secondary" onClick={clearFilters}><i aria-hidden="true" className="fas fa-rotate-left" /> Clear filters</button></div>}
+          </Empty></div>
+        )}
+        {alumni.length > 0 && <p className="pm-foot">{alumni.length} of {d.total} alumni</p>}
+      </section>
+
+      {more && (
+        <PmSheet title="More filters" onClose={() => setMore(false)}>
+          <div className="al-filters">
+            {ALUMNI_TEXT_FILTERS.map(([k, lab, ic]) => (
+              <label key={k} className="pm-field"><span><i aria-hidden="true" className={'fas ' + ic} /> {lab}</span>
+                <input className="pm-input" value={f[k] || ''} onChange={(e) => setF((x) => ({ ...x, [k]: e.target.value }))}
+                       onKeyDown={(e) => { if (e.key === 'Enter') { apply(f); setMore(false); } }} /></label>))}
           </div>
-          <div style={{ display: 'flex', gap: '1.2rem', flexWrap: 'wrap', margin: '.4rem 0 .8rem' }}>
-            <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '.4rem' }}>
-              <input type="checkbox" checked={!!f.mentor} onChange={(e) => setField('mentor', e.target.checked)} /> Mentors only</label>
-            <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '.4rem' }}>
-              <input type="checkbox" checked={!!f.career} onChange={(e) => setField('career', e.target.checked)} /> Has career/education info</label>
-            <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '.4rem' }}>
-              <input type="checkbox" checked={!!f.has_contact} onChange={(e) => setField('has_contact', e.target.checked)} /> Has phone/email</label>
-          </div>
-          <button type="button" className="btn btn-primary" onClick={applyFilters}><i aria-hidden="true" className="fas fa-magnifying-glass" /> Search</button>{' '}
-          <button type="button" className="btn btn-secondary" onClick={clearFilters}><i aria-hidden="true" className="fas fa-rotate-left" /> Clear</button>
-        </div></div>
+          <button type="button" className="pm-btn primary big wide" onClick={() => { apply({ ...f, q }); setMore(false); }}>Show results</button>
+          <button type="button" className="pm-btn wide" onClick={() => { clearFilters(); setMore(false); }}>Clear all filters</button>
+        </PmSheet>
+      )}
 
-      <div className="card"><div className="card-header"><h3>Alumni Directory ({(d.alumni || []).length})</h3></div>
-        <div className="card-body" style={{ padding: 0 }}>
-          {(d.alumni || []).length ? <div className="table-container" style={{ border: 'none' }}><table className="data-table">
-            <thead><tr><th>Name</th><th>Occupation</th><th>Employer / Institution</th><th>Contact</th><th>Mentor</th><th /></tr></thead>
-            <tbody>{d.alumni.map((a) => (
-              <tr key={a.id}>
-                <td><a href={a.profile_url}>{a.full_name}</a><br /><span className="text-muted text-sm">{a.student_id}</span></td>
-                <td>{a.occupation || '—'}</td>
-                <td>{a.employer || a.higher_institution || '—'}</td>
-                <td>{a.phone || a.email || '—'}</td>
-                <td>{a.willing_to_mentor ? <span className="badge badge-success">Yes</span> : '—'}</td>
-                <td><a href={a.profile_url} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-eye" /> View</a></td>
-              </tr>))}</tbody>
-          </table></div> : <div style={{ padding: '1rem' }}><Empty icon="fa-address-book" title="No alumni match"><p>No graduates match the current filters.</p></Empty></div>}
-        </div></div>
-    </>
+      {mail.open && (
+        <PmSheet title="Email alumni" onClose={() => setMail((m) => ({ ...m, open: false }))}>
+          <p className="al-to"><i aria-hidden="true" className="fas fa-users" /> Goes to <b>{d.contactable}</b> alumni with an email address{anyFilter ? ' in this filtered list' : ''}.</p>
+          {!d.email_configured && <p className="al-warn"><i aria-hidden="true" className="fas fa-triangle-exclamation" /> Email isn’t set up on this server yet, so sending will fail until SMTP is configured.</p>}
+          <label className="pm-field"><span>Subject</span>
+            <input className="pm-input" value={mail.subject} onChange={(e) => setMail((m) => ({ ...m, subject: e.target.value }))} placeholder="e.g. Homecoming 2026" /></label>
+          <label className="pm-field" style={{ marginTop: '.6rem' }}><span>Message</span>
+            <textarea className="pm-input al-ta" rows={6} value={mail.body} onChange={(e) => setMail((m) => ({ ...m, body: e.target.value }))} /></label>
+          <button type="button" className="pm-btn primary big wide" disabled={mail.busy || !d.email_configured || !d.contactable} onClick={sendMail}>
+            <i aria-hidden="true" className={'fas ' + (mail.busy ? 'fa-spinner fa-spin' : 'fa-paper-plane')} /> Send to {d.contactable} alumni</button>
+        </PmSheet>
+      )}
+    </div>
   );
 }
 

@@ -681,6 +681,16 @@ def alumni_directory():
     plus the pending document-request inbox."""
     from models import DocumentRequest
     f = _alumni_filters(request.args)
+    pairs = _alumni_rows(f)
+    photo_ids = set()
+    try:
+        from models import StudentPhoto
+        gids = [g.id for g, _p in pairs]
+        if gids:
+            photo_ids = {pid for (pid,) in db.session.query(StudentPhoto.student_id)
+                         .filter(StudentPhoto.student_id.in_(gids)).all()}
+    except Exception:
+        db.session.rollback()
     rows = [{
         'id': g.id, 'full_name': g.full_name, 'student_id': g.student_id,
         'profile_url': url_for('promotion.graduate_profile', student_id=g.id),
@@ -689,7 +699,14 @@ def alumni_directory():
         'higher_institution': p.higher_institution if p else None,
         'phone': p.phone if p else None, 'email': p.email if p else None,
         'willing_to_mentor': bool(p.willing_to_mentor) if p else False,
-    } for g, p in _alumni_rows(f)]
+        'job_title': p.job_title if p else None,
+        'course': p.course_of_study if p else None,
+        'city': p.city if p else None, 'country': p.country if p else None,
+        'linkedin': p.linkedin_url if p else None,
+        'gender': g.gender or '',
+        'graduation_session': g.graduation_session.name if g.graduation_session else None,
+        'photo_url': url_for('main.student_photo', student_id=g.id) if g.id in photo_ids else '',
+    } for g, p in pairs]
     from utils.branch_scope import scope_by_student
     pend = (scope_by_student(DocumentRequest.query.filter_by(status='pending'), DocumentRequest)
             .order_by(DocumentRequest.requested_at.asc()).all())

@@ -507,6 +507,44 @@
   .pm-rung-h{flex-wrap:wrap;gap:.2rem .7rem}
   .pm-rule{padding:.6rem}
 }
+
+/* ── Alumni directory ── */
+.pm-card-ic.warn{background:color-mix(in srgb,var(--warning) 16%,var(--bg-card));color:color-mix(in srgb,var(--warning) 80%,var(--text-primary))}
+.al-req .pm-pn a{color:inherit;text-decoration:none}.al-req .pm-pn a:hover strong{color:var(--primary)}
+.al-note{font-style:italic}
+.al-req-a{display:flex;gap:.4rem;flex:none}
+.al-quick{display:flex;flex-wrap:wrap;gap:.4rem;align-items:center;padding:.6rem 1rem;border-bottom:1px solid var(--border-light)}
+.al-qchip{display:inline-flex;align-items:center;gap:.4rem;border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-secondary);font:inherit;font-size:.82rem;font-weight:600;padding:.38rem .75rem;border-radius:999px;cursor:pointer}
+.al-qchip i{font-size:.72rem}
+.al-qchip.on{background:color-mix(in srgb,var(--primary) 11%,var(--bg-card));border-color:var(--primary);color:var(--primary)}
+.al-grid{list-style:none;margin:0;padding:1rem;display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:.8rem}
+.al-card{border:1px solid var(--border-color);border-radius:14px;padding:.85rem .9rem;display:flex;flex-direction:column;gap:.6rem;transition:border-color .15s,box-shadow .15s}
+.al-card:hover{border-color:color-mix(in srgb,var(--primary) 45%,var(--border-color));box-shadow:0 6px 20px rgba(15,23,42,.06)}
+.al-top{display:flex;align-items:center;gap:.65rem;color:inherit;text-decoration:none;min-width:0}
+.al-top:hover strong{color:var(--primary)}
+.al-mentor{flex:none;font-size:.7rem;font-weight:800;border-radius:999px;padding:.18rem .55rem;background:color-mix(in srgb,var(--success) 13%,var(--bg-card));color:var(--success);white-space:nowrap}
+.al-info{display:flex;flex-direction:column;gap:.25rem;font-size:.84rem;color:var(--text-secondary);min-height:2.6em}
+.al-info i{width:16px;color:var(--text-muted);font-size:.78rem;margin-right:.25rem}
+.al-acts{display:flex;align-items:center;gap:.4rem;margin-top:auto;padding-top:.55rem;border-top:1px solid var(--border-light)}
+.al-c{width:36px;height:36px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;font-size:.85rem;color:#fff}
+.al-c.call{background:var(--success)}.al-c.wa{background:#25D366;font-size:1rem}.al-c.mail{background:var(--primary)}.al-c.in{background:#0a66c2}
+.al-none{font-size:.8rem}
+.al-view{margin-left:auto;height:34px}
+.al-view i{font-size:.7rem}
+.al-filters{display:grid;grid-template-columns:1fr 1fr;gap:.6rem}
+.al-filters .pm-field span i{margin-right:.25rem}
+.al-ta{height:auto;padding:.6rem .8rem;resize:vertical}
+.al-to{margin:0 0 .7rem;font-size:.88rem;color:var(--text-secondary)}
+.al-warn{margin:0 0 .7rem;font-size:.84rem;padding:.55rem .7rem;border-radius:10px;background:color-mix(in srgb,var(--warning) 12%,var(--bg-card));color:var(--text-primary)}
+.al-warn i{color:var(--warning)}
+@media (max-width:759px){
+  .al-grid{grid-template-columns:minmax(0,1fr);padding:.6rem}
+  .al-quick{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+  .al-quick::-webkit-scrollbar{display:none}
+  .al-qchip{flex:none}
+  .al-filters{grid-template-columns:minmax(0,1fr)}
+  .al-req-a .pm-btn span{display:none}
+}
 </style>
 {% endblock %}
 {% block content %}
