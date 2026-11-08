@@ -47,14 +47,45 @@
 <span class="bx-g {{ r.grade|lower }}" title="{{ r.subject }}: {{ r.grade }}">{{ r.code or (r.subject[:3]|upper) }} <b>{{ r.grade }}</b></span>
 {%- endmacro %}
 
-{# Close an open bx-menu when the user taps anywhere else (or presses Esc). #}
+{# Menu behaviour: tap outside / Esc closes it. On a phone the menu becomes a
+   bottom action sheet, moved onto <body> so no card or animated ancestor can
+   clip it; on wider screens it's a dropdown that flips up when there's no room. #}
 {% macro bx_menu_js() -%}
 <script nonce="{{ csp_nonce }}">
 (function () {
   if (window.__bxMenu) return; window.__bxMenu = 1;
+  var phone = window.matchMedia('(max-width: 759px)'), backdrop = null;
+  function owns(d, t) { return d.contains(t) || (d._pop && d._pop.contains(t)); }
+  function toSheet(d, pop) {
+    d._pop = pop; pop._home = d;
+    backdrop = backdrop || Object.assign(document.createElement('div'), { className: 'bx-sheet-bg' });
+    document.body.appendChild(backdrop);
+    document.body.appendChild(pop);
+    pop.classList.add('bx-sheet-pop');
+    requestAnimationFrame(function () { backdrop.classList.add('on'); pop.classList.add('on'); });
+  }
+  function home(d) {
+    var pop = d._pop; if (!pop) return;
+    pop.classList.remove('bx-sheet-pop', 'on');
+    d.appendChild(pop); d._pop = null;
+    if (backdrop) { backdrop.classList.remove('on'); backdrop.remove(); }
+  }
   document.addEventListener('click', function (e) {
-    document.querySelectorAll('details.bx-menu[open]').forEach(function (d) { if (!d.contains(e.target)) d.open = false; });
+    document.querySelectorAll('details.bx-menu[open]').forEach(function (d) {
+      if (!owns(d, e.target)) d.open = false;
+      else if (d._pop && d._pop.contains(e.target) && e.target.closest('a,button') && !e.target.closest('form')) setTimeout(function () { d.open = false; }, 0);
+    });
   });
+  document.addEventListener('toggle', function (e) {
+    var d = e.target;
+    if (!d.matches || !d.matches('details.bx-menu')) return;
+    if (!d.open) { home(d); return; }
+    var pop = d.querySelector('.bx-menu-pop'); if (!pop) return;
+    if (phone.matches) { toSheet(d, pop); return; }
+    pop.classList.remove('up');
+    var r = pop.getBoundingClientRect();
+    if (r.bottom > window.innerHeight - 8 && d.getBoundingClientRect().top > r.height + 10) pop.classList.add('up');
+  }, true);
   document.addEventListener('keydown', function (e) {
     if (e.key === 'Escape') document.querySelectorAll('details.bx-menu[open]').forEach(function (d) { d.open = false; });
   });

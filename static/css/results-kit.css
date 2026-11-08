@@ -1602,3 +1602,16 @@
 .pd-how p{margin:.3rem 0 0;font-size:.84rem;color:var(--text-muted);line-height:1.45}
 .rd-scroll{max-height:340px;overflow:auto}
 .ax-top{margin-bottom:.9rem}
+/* dropdown menus inside cards must not be clipped by the card */
+.rs-card.flush:has(.bx-menu){overflow:visible}
+.rs-card.flush:has(.bx-menu)>.rs-card-h:first-child{border-radius:var(--rs-r) var(--rs-r) 0 0}
+.bx-menu[open]{z-index:70}
+.bx-menu-pop.up{top:auto;bottom:calc(100% + 6px)}
+.bx-menu-pop{max-width:calc(100vw - 24px)}
+/* phone: menus become bottom action sheets */
+.bx-sheet-bg{position:fixed;inset:0;z-index:1190;background:rgba(15,23,42,.45);opacity:0;transition:opacity .18s}
+.bx-sheet-bg.on{opacity:1}
+.bx-menu-pop.bx-sheet-pop{position:fixed;left:0;right:0;bottom:0;top:auto;z-index:1200;min-width:0;max-width:none;width:100%;border-radius:20px 20px 0 0;padding:.6rem .6rem calc(.8rem + env(safe-area-inset-bottom));box-shadow:0 -12px 40px rgba(15,23,42,.25);transform:translateY(100%);transition:transform .2s ease;max-height:80vh;overflow:auto}
+.bx-menu-pop.bx-sheet-pop.on{transform:none}
+.bx-menu-pop.bx-sheet-pop::before{content:"";display:block;width:40px;height:4px;border-radius:99px;background:var(--border-color);margin:.1rem auto .5rem}
+.bx-menu-pop.bx-sheet-pop a,.bx-menu-pop.bx-sheet-pop button{padding:.85rem .8rem;font-size:.95rem}
