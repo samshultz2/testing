@@ -2,62 +2,286 @@
 {% block title %}At-Risk Watchlist — {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('results.analytics_hub') }}">Analytics</a> / <span>Watchlist</span>{% endblock %}
 
-{% set badge = {'NOT_READY': 'badge-danger', 'AT_RISK': 'badge-warning', 'CONDITIONAL': 'badge-info'} %}
-{% set label = {'NOT_READY': 'Not ready', 'AT_RISK': 'At risk', 'CONDITIONAL': 'Conditional'} %}
-{% set elig_badge = {'ON_TRACK': 'badge-success', 'CLOSE': 'badge-warning', 'OFF_TRACK': 'badge-danger', 'NO_DATA': 'badge-secondary', 'NO_TARGET': 'badge-secondary'} %}
+{% set label = {'READY': 'Ready', 'NOT_READY': 'Not ready', 'AT_RISK': 'At risk', 'CONDITIONAL': 'Conditional', 'NO_DATA': 'No mock results'} %}
+{% set tone = {'READY': 'ok', 'CONDITIONAL': 'cond', 'AT_RISK': 'risk', 'NOT_READY': 'not', 'NO_DATA': 'nd'} %}
 {% set elig_label = {'ON_TRACK': 'On track', 'CLOSE': 'Close', 'OFF_TRACK': 'Off track', 'NO_DATA': 'No signal', 'NO_TARGET': 'No target'} %}
+{% set elig_tone = {'ON_TRACK': 'ok', 'CLOSE': 'cond', 'OFF_TRACK': 'not', 'NO_DATA': 'nd', 'NO_TARGET': 'nd'} %}
+{% set AC = data.all_counts or {} %}
+{% set RD, CO, AR, NR, ND = AC.get('READY', 0), AC.get('CONDITIONAL', 0), AC.get('AT_RISK', 0), AC.get('NOT_READY', 0), AC.get('NO_DATA', 0) %}
+
+{% macro pct(n, d) -%}{{ ((n / d * 100)|round|int) if d else 0 }}%{%- endmacro %}
+{% macro stack(c, cls='') -%}
+{%- set tot = c.get('READY', 0) + c.get('CONDITIONAL', 0) + c.get('AT_RISK', 0) + c.get('NOT_READY', 0) + c.get('NO_DATA', 0) -%}
+<div class="wl-stack {{ cls }}" role="img" aria-label="{% for k in ['READY', 'CONDITIONAL', 'AT_RISK', 'NOT_READY', 'NO_DATA'] %}{{ c.get(k, 0) }} {{ label[k]|lower }}{{ ', ' if not loop.last }}{% endfor %}">
+  {%- if tot -%}{%- for k in ['READY', 'CONDITIONAL', 'AT_RISK', 'NOT_READY', 'NO_DATA'] if c.get(k, 0) -%}<i class="wl-{{ tone[k] }}" style="width:{{ (c.get(k, 0) / tot * 100)|round(2) }}%" title="{{ label[k] }}: {{ c.get(k, 0) }}"></i>{%- endfor -%}{%- endif -%}
+</div>
+{%- endmacro %}
+
+{% block extra_css %}
+<style>
+.wl{--ok:#16a34a;--cond:#2563eb;--risk:#d97706;--not:#dc2626;--nd:#94a3b8;display:flex;flex-direction:column;gap:1rem;min-width:0}
+[data-theme="dark"] .wl,[data-theme="midnight"] .wl,[data-theme="carbon"] .wl{--ok:#22c55e;--cond:#60a5fa;--risk:#fbbf24;--not:#f87171;--nd:#64748b}
+.wl *{min-width:0}
+.wl-muted{color:var(--text-muted)}.wl-xs{font-size:.72rem}
+.wl-card{background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;box-shadow:var(--shadow-sm,0 1px 2px rgba(15,23,42,.05))}
+.wl-card > header{display:flex;align-items:center;justify-content:space-between;gap:.6rem;flex-wrap:wrap;padding:.9rem 1.1rem .7rem;border-bottom:1px solid var(--border-color)}
+.wl-card > header h2{margin:0;font-size:1rem;font-weight:700;display:flex;align-items:center;gap:.5rem}
+.wl-card > header h2 i{color:var(--primary);font-size:.9rem}
+.wl-card > header p{margin:.15rem 0 0;font-size:.78rem;color:var(--text-muted);flex-basis:100%}
+.wl-body{padding:1rem 1.1rem}
+.wl-top{display:flex;align-items:flex-end;justify-content:space-between;gap:1rem;flex-wrap:wrap}
+.wl-top h1{margin:0;font-size:1.55rem}
+.wl-top p{margin:.25rem 0 0;color:var(--text-muted);font-size:.88rem;max-width:66ch}
+.wl-hero{padding:1.1rem 1.2rem;display:flex;flex-direction:column;gap:.8rem}
+.wl-hero h2{margin:0;font-size:1.15rem}
+.wl-hero p{margin:0;font-size:.9rem;color:var(--text-secondary,var(--text-muted))}
+.wl-stack{display:flex;height:22px;border-radius:999px;overflow:hidden;background:var(--gray-100,#eef2f6)}
+.wl-stack.sm{height:9px}
+.wl-stack i{display:block;height:100%}
+.wl-ok{background:var(--ok)}.wl-cond{background:var(--cond)}.wl-risk{background:var(--risk)}.wl-not{background:var(--not)}.wl-nd{background:var(--nd)}
+.wl-legend{display:flex;flex-wrap:wrap;gap:.4rem 1.1rem;font-size:.8rem}
+.wl-legend span{display:inline-flex;align-items:center;gap:.4rem;white-space:nowrap}
+.wl-dot{width:.7rem;height:.7rem;border-radius:3px;display:inline-block;flex:0 0 auto}
+.wl-kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:.75rem}
+@media (max-width:1250px){.wl-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.wl-kpi{padding:.85rem .95rem;display:flex;flex-direction:column;gap:.3rem}
+.wl-kpi .l{font-size:.72rem;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--text-muted)}
+.wl-kpi .v{font-size:1.55rem;font-weight:800;line-height:1.05;font-variant-numeric:tabular-nums}
+.wl-kpi .s{font-size:.75rem;color:var(--text-muted);line-height:1.35}
+.wl-kpi .bar{height:6px;border-radius:4px;background:var(--gray-100,#eef2f6);overflow:hidden;margin-top:.15rem}
+.wl-kpi .bar i{display:block;height:100%;background:var(--primary)}
+.c-ok{color:var(--ok)}.c-not{color:var(--not)}.c-risk{color:var(--risk)}
+.wl-two{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:1rem}
+/* intervention groups */
+.wl-groups{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:.7rem}
+.wl-group{border:1px solid var(--border-color);border-radius:12px;padding:.8rem .85rem;display:flex;flex-direction:column;gap:.4rem;background:var(--bg-card)}
+.wl-group .h{display:flex;align-items:center;gap:.55rem}
+.wl-group .h i{width:2rem;height:2rem;border-radius:9px;display:grid;place-items:center;background:var(--primary-alpha,rgba(15,118,110,.1));color:var(--primary);flex:0 0 auto}
+.wl-group .h b{font-size:.92rem}
+.wl-group .n{margin-left:auto;font-size:1.3rem;font-weight:800}
+.wl-group p{margin:0;font-size:.76rem;color:var(--text-muted);line-height:1.4}
+.wl-group .names{font-size:.74rem;color:var(--text-secondary,var(--text-primary));line-height:1.45}
+.wl-group button{align-self:flex-start;font:inherit;font-size:.74rem;font-weight:700;color:var(--primary);background:none;border:1px solid var(--border-color);border-radius:8px;padding:.25rem .55rem;cursor:pointer}
+/* bars */
+.wl-bars{display:flex;flex-direction:column;gap:.55rem}
+.wl-bars .r{display:grid;grid-template-columns:minmax(0,11rem) 1fr 2.4rem;gap:.65rem;align-items:center;font-size:.82rem}
+.wl-bars .t{height:10px;border-radius:6px;background:var(--gray-100,#eef2f6);overflow:hidden}
+.wl-bars .t i{display:block;height:100%;border-radius:6px}
+.wl-bars .n{text-align:right;font-weight:800}
+/* list */
+.wl-tools{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;padding:.75rem 1.1rem;border-bottom:1px solid var(--border-color)}
+.wl-chips{display:flex;gap:.3rem;flex-wrap:wrap}
+.wl-chips button{font:inherit;font-size:.76rem;font-weight:600;padding:.3rem .65rem;border-radius:999px;border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-muted);cursor:pointer;display:inline-flex;align-items:center;gap:.35rem}
+.wl-chips button.on{border-color:var(--primary);color:var(--primary);background:var(--primary-alpha,rgba(15,118,110,.08))}
+.wl-tools input,.wl-tools select{padding:.4rem .6rem;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-card);color:var(--text-primary);font-size:.84rem}
+.wl-tools input{flex:1 1 200px}
+.wl-count{margin-left:auto;font-size:.76rem;color:var(--text-muted);white-space:nowrap}
+.wl-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.wl-table{width:100%;border-collapse:collapse;font-size:.85rem}
+.wl-table th{font-size:.7rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--text-muted);text-align:left;padding:.55rem .7rem;border-bottom:1px solid var(--border-color);white-space:nowrap;background:var(--gray-50,#f8fafc)}
+.wl-table td{padding:.6rem .7rem;border-bottom:1px solid var(--border-color);vertical-align:top}
+.wl-table tr:last-child td{border-bottom:0}
+.wl-table small{display:block;color:var(--text-muted);font-size:.74rem}
+.wl-table td.who{min-width:9.5rem}.wl-table td.why{min-width:14rem}
+.wl-pill{display:inline-flex;align-items:center;gap:.3rem;font-size:.72rem;font-weight:700;padding:.15rem .5rem;border-radius:999px;white-space:nowrap}
+.wl-pill.ok{color:var(--ok);background:color-mix(in srgb,var(--ok) 12%,transparent)}
+.wl-pill.cond{color:var(--cond);background:color-mix(in srgb,var(--cond) 12%,transparent)}
+.wl-pill.risk{color:var(--risk);background:color-mix(in srgb,var(--risk) 14%,transparent)}
+.wl-pill.not{color:var(--not);background:color-mix(in srgb,var(--not) 12%,transparent)}
+.wl-pill.nd{color:var(--text-muted);background:var(--gray-50,#f1f5f9)}
+.wl-meter{display:flex;gap:2px;margin-top:.25rem}
+.wl-meter i{width:12px;height:6px;border-radius:2px;background:var(--gray-100,#e2e8f0)}
+.wl-meter i.on{background:var(--ok)}
+.wl-why{display:flex;flex-wrap:wrap;gap:.25rem}
+.wl-why span{font-size:.7rem;padding:.12rem .45rem;border-radius:6px;background:var(--gray-50,#f1f5f9);color:var(--text-secondary,var(--text-muted));line-height:1.35}
+.wl-why span.b{background:color-mix(in srgb,var(--not) 10%,transparent);color:var(--not)}
+.wl-gap{font-weight:800}
+.wl-show-sm{display:none;margin-top:.35rem}
+.wl-empty{padding:2.4rem 1rem;text-align:center;color:var(--text-muted)}
+.wl-classes td{vertical-align:middle}
+.wl-note{font-size:.76rem;color:var(--text-muted);line-height:1.5}
+@media (max-width:980px){.wl-two{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:640px){
+  .wl-top h1{font-size:1.3rem}
+  .wl-kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:.6rem}
+  .wl-kpi .v{font-size:1.3rem}
+  .wl-body{padding:.85rem}
+  .wl-hide-sm{display:none}
+  .wl-show-sm{display:block}
+  .wl-count{margin-left:0}
+  .wl-bars .r{grid-template-columns:minmax(0,8rem) 1fr 2.2rem}
+}
+@media print{.wl-noprint,.wl-tools{display:none!important}.wl-card{box-shadow:none;break-inside:avoid}}
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="page-header">
+<div class="wl">
+  <div class="wl-top">
     <div>
-        <h1>At-Risk Watchlist</h1>
-        <p class="text-muted text-sm">SSS3 candidates projected off track for admission from their mock signals — before the real exam. Grouped by class arm.</p>
+      <h1>At-Risk Watchlist</h1>
+      <p>SSS3 candidates projected to miss admission — from their mock WAEC and mock JAMB results, before the real exams — with who needs what help, grouped for interventions.</p>
     </div>
-    <a href="{{ url_for('results.analytics_hub') }}" class="btn btn-secondary" style="margin-left:auto;">Back to Analytics</a>
-</div>
+    <div class="wl-noprint" style="display:flex;gap:.5rem">
+      <button type="button" class="btn btn-secondary btn-sm" data-print><i class="fas fa-print"></i> Print</button>
+      <a href="{{ url_for('results.analytics_hub') }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Analytics</a>
+    </div>
+  </div>
+
+{% if not data.total %}
+  <div class="wl-card wl-empty"><i class="fas fa-user-shield" style="font-size:2rem;opacity:.4"></i>
+    <p style="margin:.6rem 0 0">No SSS3 candidates found for this term.</p></div>
+{% else %}
+  {# --------------------------------------------------------------- hero #}
+  <section class="wl-card wl-hero" aria-label="Readiness at a glance">
+    <div>
+      <h2>{% if data.total_flagged %}{{ data.total_flagged }} of {{ data.total }} SSS3 candidates need attention{% else %}No SSS3 candidate is flagged{% endif %}</h2>
+      <p>{{ RD }} ready for admission · {{ CO }} conditional · {{ AR }} at risk · {{ NR }} not ready{% if ND %} · {{ ND }} with no mock results to judge from{% endif %}.</p>
+    </div>
+    {{ stack(AC) }}
+    <div class="wl-legend">
+      {% for k in ['READY', 'CONDITIONAL', 'AT_RISK', 'NOT_READY', 'NO_DATA'] %}<span><i class="wl-dot wl-{{ tone[k] }}"></i>{{ label[k] }} <b>{{ AC.get(k, 0) }}</b></span>{% endfor %}
+    </div>
+  </section>
+
+  {# --------------------------------------------------------------- KPIs #}
+  {% set P = data.projected %}
+  <section class="wl-kpis" aria-label="Key figures">
+    <div class="wl-card wl-kpi"><div class="l">Flagged</div><div class="v {{ 'c-not' if data.total_flagged else 'c-ok' }}">{{ data.total_flagged }}</div><div class="s">{{ pct(data.total_flagged, data.total) }} of SSS3</div></div>
+    <div class="wl-card wl-kpi"><div class="l">Not ready</div><div class="v c-not">{{ NR }}</div><div class="s">furthest from admission</div></div>
+    <div class="wl-card wl-kpi"><div class="l">5 credits incl. Eng & Maths</div><div class="v">{{ P.core_pct }}%</div><div class="bar"><i style="width:{{ P.core_pct }}%"></i></div><div class="s">{{ P.core }} projected</div></div>
+    <div class="wl-card wl-kpi"><div class="l">JAMB target met</div><div class="v">{{ P.jamb_pct }}%</div><div class="bar"><i style="width:{{ P.jamb_pct }}%"></i></div><div class="s">{{ P.jamb }} projected</div></div>
+    <div class="wl-card wl-kpi"><div class="l">Ready on both</div><div class="v c-ok">{{ P.both_pct }}%</div><div class="bar"><i style="width:{{ P.both_pct }}%;background:var(--ok)"></i></div><div class="s">{{ P.both }} candidates</div></div>
+    <div class="wl-card wl-kpi"><div class="l">No mock results</div><div class="v {{ 'c-risk' if ND }}">{{ ND }}</div><div class="s">can't be judged yet</div></div>
+  </section>
 
 {% if data.total_flagged %}
-<div class="card mb-3"><div class="card-body" style="display:flex;gap:1.5rem;flex-wrap:wrap;">
-    <div><strong style="font-size:1.5rem;">{{ data.total_flagged }}</strong><div class="text-muted text-sm">flagged</div></div>
-    {% for st, n in data.counts.items() %}
-    <div><strong style="font-size:1.5rem;">{{ n }}</strong><div class="text-muted text-sm">{{ label.get(st, st) }}</div></div>
-    {% endfor %}
-</div></div>
-
-{% for grp in data.by_class %}
-<div class="card mb-3">
-    <div class="card-header"><h3>{{ grp.class }} <span class="text-muted text-sm">({{ grp.count }})</span></h3></div>
-    <div class="card-body" style="overflow-x:auto;">
-        <table class="table" style="width:100%;">
-            <thead><tr><th>Student</th><th>Status</th><th>Chosen course</th><th>WAEC credits (proj.)</th><th>JAMB (proj.)</th><th>What's blocking</th><th></th></tr></thead>
-            <tbody>
-            {% for s in grp.students %}
-                <tr>
-                    <td>{{ s.name }}</td>
-                    <td><span class="badge {{ badge.get(s.status, '') }}">{{ label.get(s.status, s.status) }}</span></td>
-                    <td class="text-sm">
-                        {% if s.eligibility %}<span class="badge {{ elig_badge.get(s.eligibility.status, '') }}">{{ elig_label.get(s.eligibility.status, s.eligibility.status) }}</span>
-                            {% if s.eligibility.course %}<div class="text-muted">{{ s.eligibility.course }}</div>{% endif %}
-                        {% else %}—{% endif %}
-                    </td>
-                    <td>{{ s.waec_credits if s.waec_credits is not none else '—' }}</td>
-                    <td>{{ s.jamb_score if s.jamb_score is not none else '—' }}</td>
-                    <td class="text-sm">
-                        {% if s.blockers %}<ul style="margin:0;padding-left:1.1rem;">{% for b in s.blockers %}<li>{{ b }}</li>{% endfor %}</ul>
-                        {% else %}—{% endif %}
-                    </td>
-                    <td><a class="btn btn-secondary btn-sm" href="{{ url_for(action_plan_url, student_id=s.student_id) }}">Action plan</a></td>
-                </tr>
-            {% endfor %}
-            </tbody>
+  {# --------------------------------------------------------------- groups + why #}
+  <div class="wl-two">
+    <section class="wl-card">
+      <header><h2><i class="fas fa-people-group"></i> Intervention groups</h2><p>Flagged candidates grouped by what would move them — a ready-made list for each clinic. A candidate can be in several groups.</p></header>
+      <div class="wl-body"><div class="wl-groups">
+        {% for g in data.groups %}
+        <div class="wl-group">
+          <div class="h"><i class="fas {{ g.icon }}"></i><b>{{ g.title }}</b><span class="n">{{ g.members|length }}</span></div>
+          <p>{{ g.why }}</p>
+          <div class="names">{% for m in g.members[:6] %}{{ m.name }}{{ ', ' if not loop.last }}{% endfor %}{% if g.members|length > 6 %} and {{ g.members|length - 6 }} more{% endif %}</div>
+          <button type="button" class="wl-noprint" data-wl-go="{{ g.key }}">Show in list <i class="fas fa-arrow-down"></i></button>
+        </div>
+        {% endfor %}
+        {% if data.no_data %}
+        <div class="wl-group">
+          <div class="h"><i class="fas fa-circle-question" style="color:var(--nd)"></i><b>No mock results yet</b><span class="n">{{ data.no_data|length }}</span></div>
+          <p>Not flagged because there is nothing to project from — enter or schedule their mocks.</p>
+          <div class="names">{% for m in data.no_data[:12] %}<a href="{{ url_for('main.view_student', student_id=m.student_id) }}">{{ m.name }}</a>{{ ', ' if not loop.last }}{% endfor %}{% if data.no_data|length > 12 %} and {{ data.no_data|length - 12 }} more{% endif %}</div>
+        </div>
+        {% endif %}
+      </div></div>
+    </section>
+    <section class="wl-card">
+      <header><h2><i class="fas fa-magnifying-glass-chart"></i> What's holding them back</h2><p>How many of the {{ data.total_flagged }} flagged candidates each problem affects.</p></header>
+      <div class="wl-body">
+        {% set B = data.blockers %}{% set bm = [B.values()|max, 1]|max %}
+        <div class="wl-bars">
+          {% for k, lab, col in [('jamb', 'JAMB below their target', 'var(--not)'), ('credits', 'Fewer than 5 credits', 'var(--not)'),
+                                ('maths', 'No Maths credit', 'var(--risk)'), ('english', 'No English credit', 'var(--risk)'),
+                                ('no_jamb', 'No mock JAMB result', 'var(--nd)'), ('no_waec', 'No mock WAEC result', 'var(--nd)')] %}
+          {% if B[k] %}<div class="r"><span>{{ lab }}</span><div class="t"><i style="width:{{ (B[k] / bm * 100)|round(1) }}%;background:{{ col }}"></i></div><span class="n">{{ B[k] }}</span></div>{% endif %}
+          {% endfor %}
+        </div>
+        {% if data.classes|length > 1 %}
+        <div class="wl-xs wl-muted" style="font-weight:800;letter-spacing:.06em;text-transform:uppercase;margin:1.1rem 0 .5rem">By class</div>
+        <table class="wl-table wl-classes">
+          <thead><tr><th>Class</th><th style="text-align:right">SSS3</th><th style="width:45%">Readiness</th><th style="text-align:right">Flagged</th></tr></thead>
+          <tbody>{% for c in data.classes %}{% set fl = c.CONDITIONAL + c.AT_RISK + c.NOT_READY %}
+            <tr><td>{{ c.class }}</td><td style="text-align:right">{{ c.total }}</td><td>{{ stack(c, 'sm') }}</td>
+              <td style="text-align:right"><b class="{{ 'c-not' if fl }}">{{ fl }}</b> <span class="wl-muted wl-xs">{{ pct(fl, c.total) }}</span></td></tr>
+          {% endfor %}</tbody>
         </table>
-    </div>
-</div>
-{% endfor %}
+        {% endif %}
+      </div>
+    </section>
+  </div>
 
+  {# --------------------------------------------------------------- list #}
+  <section class="wl-card" id="wl-list">
+    <header><h2><i class="fas fa-user-shield"></i> Flagged candidates</h2>
+      <p>Most severe first. Projected credits and JAMB come from their latest mock results; the action plan gives each one a step-by-step plan.</p></header>
+    <div class="wl-tools wl-noprint">
+      <div class="wl-chips" role="group" aria-label="Show">
+        <button type="button" class="on" data-wl-f="all">All <b>{{ data.total_flagged }}</b></button>
+        {% for k in ['NOT_READY', 'AT_RISK', 'CONDITIONAL'] if data.counts.get(k) %}
+        <button type="button" data-wl-f="{{ k }}"><i class="wl-dot wl-{{ tone[k] }}"></i>{{ label[k] }} <b>{{ data.counts.get(k) }}</b></button>{% endfor %}
+        {% for g in data.groups %}<button type="button" data-wl-f="{{ g.key }}">{{ g.title }} <b>{{ g.members|length }}</b></button>{% endfor %}
+      </div>
+      <input type="search" id="wlSearch" placeholder="Search name or ID…" aria-label="Search" autocomplete="off">
+      {% set cls = data.rows|map(attribute='class')|unique|sort|list %}
+      {% if cls|length > 1 %}<select id="wlClass" aria-label="Class"><option value="">All classes</option>{% for c in cls %}<option>{{ c }}</option>{% endfor %}</select>{% endif %}
+      <span class="wl-count" id="wlCount" aria-live="polite"></span>
+    </div>
+    <div class="wl-scroll"><table class="wl-table" id="wlTable">
+      <thead><tr><th>Candidate</th><th class="wl-hide-sm">Status</th><th>WAEC credits</th><th>JAMB</th><th class="wl-hide-sm">Chosen course</th><th>What's blocking</th><th class="wl-noprint"></th></tr></thead>
+      <tbody>
+      {% for s in data.rows %}
+        <tr data-st="{{ s.status }}" data-class="{{ s.class }}" data-q="{{ (s.name ~ ' ' ~ s.code)|lower }}"
+            data-tags="{{ s.tags|join(' ') }}{{ ' no_signal' if 'no_waec' in s.tags or 'no_jamb' in s.tags }}">
+          <td class="who"><b>{{ s.name }}</b><small>{{ s.code }}{% if s.class and s.class != 'Unassigned' %} · {{ s.class }}{% endif %}</small>
+            <div class="wl-show-sm"><span class="wl-pill {{ tone[s.status] }}">{{ label[s.status] }}</span></div></td>
+          <td class="wl-hide-sm"><span class="wl-pill {{ tone[s.status] }}">{{ label[s.status] }}</span></td>
+          <td>{% if s.waec_credits is not none %}<b class="{{ 'c-ok' if s.waec_credits >= 5 else 'c-not' }}">{{ s.waec_credits }}</b><span class="wl-muted wl-xs"> / 5</span>
+                <div class="wl-meter" aria-hidden="true">{% for i in range(5) %}<i class="{{ 'on' if i < s.waec_credits }}"></i>{% endfor %}</div>
+              {% else %}<span class="wl-muted">—</span>{% endif %}</td>
+          <td>{% if s.jamb_score is not none %}<b>{{ s.jamb_score }}</b>{% if s.jamb_threshold %}<span class="wl-muted wl-xs"> / {{ s.jamb_threshold }}</span>{% endif %}
+                {% if s.jamb_gap is not none %}<small class="wl-gap {{ 'c-ok' if s.jamb_gap >= 0 else 'c-not' }}">{{ '%+d'|format(s.jamb_gap) }}</small>{% endif %}
+              {% else %}<span class="wl-muted">—</span>{% endif %}</td>
+          <td class="wl-hide-sm">{% if s.eligibility %}<span class="wl-pill {{ elig_tone.get(s.eligibility.status, 'nd') }}">{{ elig_label.get(s.eligibility.status, s.eligibility.status) }}</span>{% if s.eligibility.course %}<small>{{ s.eligibility.course }}</small>{% endif %}{% else %}<span class="wl-muted wl-xs">no target</span>{% endif %}</td>
+          <td class="why"><div class="wl-why">{% for b in s.blockers %}<span class="{{ 'b' if 'English' in b or 'Mathematics' in b or 'needs 5' in b or 'below' in b }}">{{ b|replace(' (no results or mocks)', '')|replace('Projected ', '') }}</span>{% else %}<span>—</span>{% endfor %}</div></td>
+          <td class="wl-noprint" style="white-space:nowrap"><a class="btn btn-secondary btn-sm" href="{{ url_for(action_plan_url, student_id=s.student_id) }}"><i class="fas fa-list-check"></i> Action plan</a></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    <div class="wl-empty" id="wlNone" hidden>No candidates match.</div>
+  </section>
 {% else %}
-<div class="card"><div class="card-body text-muted">
-    No SSS3 candidates are currently flagged — either everyone's on track, or there are no mock signals to project from yet.
-</div></div>
+  <div class="wl-card wl-empty"><i class="fas fa-circle-check" style="font-size:2rem;color:var(--ok)"></i>
+    <p style="margin:.6rem 0 0">{% if ND == data.total %}No mock results to project from yet — enter Mock WAEC / Mock JAMB results to see who is at risk.{% else %}Every assessed SSS3 candidate is projected ready for admission.{% endif %}</p></div>
 {% endif %}
+
+  <p class="wl-note"><b>How candidates are flagged.</b> <b>Ready</b>: projected 5 credits including English and Maths and JAMB at or above their target (their chosen course's cut-off, or 180 without one). <b>Conditional</b>: one step away. <b>At risk</b>: 4 credits or JAMB 150+. <b>Not ready</b>: further off. Projections come from mock results and move as new mocks are entered — a guide for early intervention, not a verdict.</p>
+{% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var rows = Array.prototype.slice.call(document.querySelectorAll('#wlTable tbody tr'));
+  if (!rows.length) return;
+  var chips = document.querySelectorAll('[data-wl-f]'), q = document.getElementById('wlSearch'),
+      cls = document.getElementById('wlClass'), cnt = document.getElementById('wlCount'), none = document.getElementById('wlNone');
+  var f = 'all';
+  function apply() {
+    var term = (q.value || '').trim().toLowerCase(), c = cls ? cls.value : '', shown = 0;
+    rows.forEach(function (tr) {
+      var tags = ' ' + tr.getAttribute('data-tags') + ' ';
+      var ok = (f === 'all' || tr.getAttribute('data-st') === f || tags.indexOf(' ' + f + ' ') !== -1)
+        && (!c || tr.getAttribute('data-class') === c)
+        && (!term || term.split(/\s+/).every(function (t) { return tr.getAttribute('data-q').indexOf(t) !== -1; }));
+      tr.style.display = ok ? '' : 'none';
+      if (ok) shown++;
+    });
+    cnt.textContent = shown === rows.length ? rows.length + ' candidates' : shown + ' of ' + rows.length;
+    none.hidden = shown !== 0;
+  }
+  function setF(v) { f = v; chips.forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-wl-f') === v); }); apply(); }
+  chips.forEach(function (b) { b.addEventListener('click', function () { setF(b.getAttribute('data-wl-f')); }); });
+  q.addEventListener('input', apply); if (cls) cls.addEventListener('change', apply);
+  document.querySelectorAll('[data-wl-go]').forEach(function (b) { b.addEventListener('click', function () {
+    setF(b.getAttribute('data-wl-go'));
+    document.getElementById('wl-list').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }); });
+  apply();
+})();
+</script>
 {% endblock %}
