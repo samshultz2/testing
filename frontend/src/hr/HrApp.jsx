@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { chartPalette } from '../lib/hooks';
 import { submitJson, postFile } from '../lib/forms';
 import { naira } from '../lib/format';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
-import { confirm, promptDialog, Banner, SectionShell, SectionTabs, Empty, Modal, Autocomplete } from '../components/ui';
+import { confirm, promptDialog, Banner, SectionShell, Empty, Modal } from '../components/ui';
 import { canWrite } from '../lib/perms';
+import { Head, Tiles, Seg, Menu, Sheet, Blank, Bar, usePhone } from '../subjects/results';
+import { DataList, Pill, Bars } from '../sales/kit';
 
 // Small localStorage helpers for recently-viewed staff + saved directory filters.
 const lsGet = (key, fallback) => {
@@ -28,16 +29,11 @@ const TABS = [
   ['dashboard', 'fa-chart-pie', 'Overview'], ['staff', 'fa-users', 'Staff'],
   ['attendance', 'fa-user-clock', 'Attendance'], ['leave', 'fa-plane-departure', 'Leave'],
   ['payroll', 'fa-money-check-dollar', 'Payroll'], ['departments', 'fa-sitemap', 'Departments'],
-  ['recruitment', 'fa-user-plus', 'Recruitment'],
+  ['recruitment', 'fa-user-plus', 'Recruitment'], ['loans', 'fa-hand-holding-dollar', 'Loans'],
   ['reports', 'fa-chart-line', 'Reports'], ['settings', 'fa-gear', 'Settings'],
 ];
 const TAB_FOR = { staff_form: 'staff', staff_detail: 'staff', payroll_detail: 'payroll',
   checkin: 'attendance', checkin_qr: 'attendance', vacancy: 'recruitment' };
-
-function Tabs({ d }) {
-  const nav = useNav();
-  return <SectionTabs tabs={TABS} urls={d.nav} active={TAB_FOR[d.page] || d.page} go={nav.go} />;
-}
 
 const nairaShort = (n) => {
   n = Number(n) || 0;
@@ -45,136 +41,123 @@ const nairaShort = (n) => {
   if (n >= 1e3) return '₦' + (n / 1e3).toFixed(1) + 'k';
   return naira(n);
 };
-const statusBadge = (s) => 'badge ' + (s === 'Active' ? 'badge-success' : s === 'On Leave' ? 'badge-warning' : 'badge-danger');
-const typeBadge = (t) => 'badge ' + (t === 'Teaching' ? 'badge-info' : 'badge-secondary');
 const leaveBadge = (s) => 'badge ' + (s === 'Approved' ? 'badge-success' : s === 'Rejected' ? 'badge-danger' : 'badge-warning');
-const runBadge = (s) => 'badge ' + (s === 'Paid' ? 'badge-success' : s === 'Finalized' ? 'badge-info' : 'badge-warning');
 
-// ---- Dashboard -------------------------------------------------------------
-function Dashboard({ d }) {
+// ---- Shared HR shell bits (redesign) ----------------------------------------
+function Tabs({ d }) {
+  const active = TAB_FOR[d.page] || d.page;
+  return (
+    <nav className="sl-nav" aria-label="HR sections">
+      {TABS.map(([k, ic, label]) => (d.nav && d.nav[k]) && (
+        <a key={k} href={d.nav[k]} className={active === k ? 'on' : ''} aria-current={active === k ? 'page' : undefined}>
+          <i className={'fas ' + ic} aria-hidden="true" /><span>{label}</span></a>
+      ))}
+    </nav>
+  );
+}
+const STATUS_TONE = { Active: 'good', 'On Leave': 'mid', Suspended: 'bad', Resigned: '', Retired: '', Terminated: 'bad', Inactive: '' };
+const LEAVE_TONE = { Approved: 'good', Rejected: 'bad', Pending: 'mid' };
+const RUN_TONE = { Paid: 'good', Finalized: 'info', Draft: 'mid' };
+function Face({ name, photo, size }) {
+  return photo ? <img className="hr-face" src={photo} alt="" loading="lazy" style={size ? { width: size, height: size } : undefined} />
+    : <span className="hr-face" aria-hidden="true" style={size ? { width: size, height: size } : undefined}>{initials(name)}</span>;
+}
+
+// ---- Overview -----------------------------------------------------------------
+function Dashboard({ d, notify }) {
+  const nav = useNav();
   const st = d.stats;
-  const deptRef = useRef();
-  const typeRef = useRef();
-  useEffect(() => {
-    if (!window.Chart) return;
-    const charts = [];
-    const cs = getComputedStyle(document.body);
-    window.Chart.defaults.color = cs.getPropertyValue('--text-secondary') || '#666';
-    const PALETTE = chartPalette().categorical;
-    if (deptRef.current && st.dept_chart.length) {
-      charts.push(new window.Chart(deptRef.current, {
-        type: 'bar', data: { labels: st.dept_chart.map((x) => x.name), datasets: [{ data: st.dept_chart.map((x) => x.count), backgroundColor: chartPalette().indigo, borderRadius: 5 }] },
-        options: { maintainAspectRatio: false, plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true, ticks: { precision: 0 } }, x: { grid: { display: false } } } },
-      }));
-    }
-    if (typeRef.current && st.total) {
-      charts.push(new window.Chart(typeRef.current, {
-        type: 'doughnut', data: { labels: st.type_chart.map((x) => x.name), datasets: [{ data: st.type_chart.map((x) => x.count), backgroundColor: PALETTE, borderWidth: 0 }] },
-        options: { maintainAspectRatio: false, cutout: '58%', plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 } } } } },
-      }));
-    }
-    return () => charts.forEach((c) => c.destroy());
-  }, [st]);
-
-  const kpis = [['blue', 'fa-users', st.total, 'Total staff', null, d.nav.staff],
-    ['green', 'fa-chalkboard-user', st.teaching, 'Teaching', null, d.nav.staff + '?staff_type=Teaching'],
-    ['purple', 'fa-user-gear', st.non_teaching, 'Non-teaching', null, d.nav.staff + '?staff_type=Non-teaching'],
-    ['green', 'fa-user-check', st.active != null ? st.active : st.total, 'Active', null, null],
-    ['amber', 'fa-plane-departure', st.on_leave, 'On leave', null, d.nav.staff + '?status=On Leave'],
-    ['blue', 'fa-user-plus', st.new_hires || 0, 'New this month', null, null],
-    ['red', 'fa-file-contract', st.contract_expiring || 0, 'Contracts expiring', null, d.urls.reports + '?type=contracts'],
-    ['amber', 'fa-money-check-dollar', nairaShort(st.monthly_payroll), 'Monthly payroll', naira(st.monthly_payroll), null]];
-  const quick = [
-    [d.urls.add_staff, 'fa-user-plus', 'Add staff', 'btn-primary'],
-    [d.urls.attendance, 'fa-user-clock', 'Attendance', 'btn-secondary'],
-    [d.urls.leave_pending, 'fa-plane-departure', 'Approve leave', 'btn-secondary'],
-    [d.urls.reports, 'fa-chart-line', 'Reports', 'btn-secondary'],
-  ];
+  const ta = d.today_att;
+  const decide = async (lv, status) => {
+    const r = await submitJson(lv.approve_url, { status });
+    if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Could not update.');
+  };
+  const alerts = [
+    st.pending_leave > 0 && { tone: 'mid', icon: 'fa-plane-departure', n: st.pending_leave, label: st.pending_leave === 1 ? 'leave request to review' : 'leave requests to review', href: d.urls.leave_pending },
+    (st.contract_expiring || 0) > 0 && { tone: 'bad', icon: 'fa-file-contract', n: st.contract_expiring, label: st.contract_expiring === 1 ? 'contract expiring soon' : 'contracts expiring soon', href: d.urls.reports + '?type=contracts' },
+    ta && ta.unmarked > 0 && { tone: 'info', icon: 'fa-user-clock', n: ta.unmarked, label: 'not marked for attendance today', href: d.urls.attendance },
+    ta && ta.absent > 0 && { tone: 'bad', icon: 'fa-user-xmark', n: ta.absent, label: 'absent today', href: d.urls.attendance },
+  ].filter(Boolean);
+  const maxDept = Math.max(1, ...st.dept_chart.map((x) => x.count));
   return (
     <>
-      <div className="page-header"><h1>Staff &amp; HR</h1>
-        <div className="page-header-actions">{canWrite(d, 'staff_create') && <a href={d.urls.add_staff} className="btn btn-primary"><i aria-hidden="true" className="fas fa-user-plus" /> Add Staff</a>}</div>
-      </div>
+      <Head icon="fa-users-gear" title="Staff & HR" sub={`${st.total} staff · ${nairaShort(st.monthly_payroll)} monthly payroll`}>
+        {canWrite(d, 'staff_create') && <a href={d.urls.add_staff} className="rs-btn primary"><i className="fas fa-user-plus" aria-hidden="true" /><span className="rs-hide-sm">Add staff</span></a>}
+      </Head>
       <Tabs d={d} />
-      <div className="d-flex gap-2 flex-wrap mb-3">
-        {quick.map(([href, ic, label, cls]) => <a key={label} href={href} className={'btn btn-sm ' + cls}><i aria-hidden="true" className={'fas ' + ic} /> {label}</a>)}
-      </div>
-      <div className="kpi-row">{kpis.map(([c, ic, v, l, title, href]) => {
-        const inner = <><div className={'ic ' + c}><i aria-hidden="true" className={'fas ' + ic} /></div>
-          <div><div className="v" title={title || ''}>{v}</div><div className="l">{l}</div></div></>;
-        return href ? <a className="kpi" key={l} href={href} style={{ textDecoration: 'none', color: 'inherit' }}>{inner}</a>
-          : <div className="kpi" key={l}>{inner}</div>;
-      })}
-      </div>
-      <div className="hr-grid c2">
-        <div className="widget"><div className="wh"><h3><i aria-hidden="true" className="fas fa-sitemap" /> Staff by department</h3></div>
-          <div className="wb"><div className="chart-box">{st.dept_chart.length ? <canvas ref={deptRef} /> : <Empty icon="fa-sitemap" title=""><p>No staff yet</p></Empty>}</div></div></div>
-        <div className="widget"><div className="wh"><h3><i aria-hidden="true" className="fas fa-chart-pie" /> Teaching vs non-teaching</h3></div>
-          <div className="wb"><div className="chart-box">{st.total ? <canvas ref={typeRef} /> : <Empty icon="fa-chart-pie" title=""><p>No staff yet</p></Empty>}</div></div></div>
-      </div>
-      <div className="hr-grid c2">
-        <div className="widget">
-          <div className="wh"><h3><i aria-hidden="true" className="fas fa-plane-departure" /> Pending leave ({st.pending_leave})</h3><a href={d.urls.leave_pending} className="text-sm">Review</a></div>
-          <div className="wb" style={{ padding: 0 }}>
-            {d.pending_leaves.length ? (
-              <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
-                <thead><tr><th>Staff</th><th>Type</th><th>Dates</th><th>Days</th></tr></thead>
-                <tbody>{d.pending_leaves.map((lv, i) => (
-                  <tr key={i}><td data-label="Staff">{lv.staff_name}</td><td data-label="Type">{lv.leave_type}</td><td data-label="Dates">{lv.dates}</td><td data-label="Days">{lv.days}</td></tr>))}</tbody>
-              </table></div>
-            ) : <Empty icon="fa-check" title="" style={{ padding: '1.4rem' }}><p>No pending leave requests</p></Empty>}
-          </div>
+      <Tiles items={[
+        { label: 'Staff', value: st.total, sub: `${st.teaching} teaching · ${st.non_teaching} non-teaching` },
+        ta ? { label: 'In today', value: `${ta.present + ta.late}/${ta.total}`, sub: ta.late ? `${ta.late} late` : ta.unmarked === ta.total ? 'not marked yet' : 'on time', tone: ta.absent ? 'mid' : 'good' }
+          : { label: 'Active', value: st.active != null ? st.active : st.total },
+        { label: 'On leave', value: st.on_leave, tone: st.on_leave ? 'mid' : '' },
+        { label: 'Monthly payroll', value: nairaShort(st.monthly_payroll), sub: st.new_hires ? `${st.new_hires} new this month` : '' },
+      ]} />
+      {alerts.length > 0 ? (
+        <div className="sl-alerts">{alerts.map((a, i) => (
+          <a key={i} href={a.href} className={'sl-alert ' + a.tone}><i className={'fas ' + a.icon} aria-hidden="true" /><span><b>{a.n}</b> {a.label}</span><i className="fas fa-chevron-right sl-go" aria-hidden="true" /></a>))}</div>
+      ) : <p className="rs-ok-line"><i className="fas fa-circle-check" aria-hidden="true" /> No leave to review, no contracts expiring and attendance is up to date.</p>}
+      <div className="rs-split">
+        <div className="rs-main">
+          {d.pending_leaves.length > 0 && (
+            <section className="rs-card flush">
+              <header className="rs-card-h pad"><h3><i className="fas fa-plane-departure" aria-hidden="true" /> Leave waiting for you</h3><a href={d.urls.leave_pending} className="rs-link">All requests</a></header>
+              <div className="hr-list">{d.pending_leaves.map((lv) => (
+                <div key={lv.id} className="hr-lv">
+                  <Face name={lv.staff_name} />
+                  <span className="n"><a href={lv.staff_url}><b>{lv.staff_name}</b></a><small>{lv.leave_type} · {lv.dates} · {lv.days} day{lv.days === 1 ? '' : 's'}</small></span>
+                  {canWrite(d, 'leave_approve') && lv.approve_url && <span className="hr-yn">
+                    <button type="button" className="rs-btn sm success" onClick={() => decide(lv, 'Approved')}><i className="fas fa-check" aria-hidden="true" /><span className="rs-hide-sm">Approve</span></button>
+                    <button type="button" className="rs-btn sm ghost" onClick={() => decide(lv, 'Rejected')} aria-label="Reject"><i className="fas fa-xmark" aria-hidden="true" /></button></span>}
+                </div>))}</div>
+            </section>
+          )}
+          <section className="rs-card">
+            <header className="rs-card-h"><h3><i className="fas fa-sitemap" aria-hidden="true" /> Staff by department</h3><a href={d.nav.departments} className="rs-link">Departments</a></header>
+            {st.dept_chart.length ? <Bars rows={st.dept_chart} label={(x) => x.name} value={(x) => x.count} fmt={(v) => v} max={maxDept} /> : <p className="rs-muted">No staff yet.</p>}
+          </section>
+          <section className="rs-card flush">
+            <header className="rs-card-h pad"><h3><i className="fas fa-user-plus" aria-hidden="true" /> Recently added</h3><a href={d.nav.staff} className="rs-link">All staff</a></header>
+            {d.recent.length ? <div className="hr-list">{d.recent.map((s) => (
+              <a key={s.id} href={s.url} className="hr-person"><Face name={s.full_name} /><span className="n"><b>{s.full_name}</b><small>{s.designation} · {s.department}</small></span><i className="fas fa-chevron-right" aria-hidden="true" /></a>))}</div>
+              : <Blank icon="fa-user-plus" title="No staff yet"><p>Add your first staff member.</p></Blank>}
+          </section>
         </div>
-        <div className="widget">
-          <div className="wh"><h3><i aria-hidden="true" className="fas fa-user-clock" /> Recently added</h3><a href={d.nav.staff} className="text-sm">All staff</a></div>
-          <div className="wb" style={{ padding: 0 }}>
-            {d.recent.length ? (
-              <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
-                <thead><tr><th>Name</th><th>Designation</th><th>Dept</th></tr></thead>
-                <tbody>{d.recent.map((s) => (
-                  <tr key={s.id}><td data-label="Name"><a href={s.url}>{s.full_name}</a></td><td data-label="Designation" className="text-muted text-sm">{s.designation}</td><td data-label="Dept">{s.department}</td></tr>))}</tbody>
-              </table></div>
-            ) : <Empty icon="fa-user-plus" title="" style={{ padding: '1.4rem' }}><p>No staff yet</p>{canWrite(d, 'staff_create') && <a href={d.urls.add_staff} className="btn btn-primary btn-sm mt-2">Add staff</a>}</Empty>}
-          </div>
-        </div>
-      </div>
-      <div className="hr-grid c2">
-        <div className="widget">
-          <div className="wh"><h3><i aria-hidden="true" className="fas fa-cake-candles" /> Upcoming birthdays</h3></div>
-          <div className="wb" style={{ padding: 0 }}>
-            {(d.birthdays || []).length ? (
-              <table className="data-table table-stack no-mobile-scroll"><tbody>
-                {d.birthdays.map((b) => (
-                  <tr key={b.id}><td data-label="Name"><a href={b.url}>{b.name}</a></td>
-                    <td data-label="Birthday">{b.date}</td>
-                    <td data-label="In" className="text-right"><span className="badge badge-secondary">{b.in_days === 0 ? 'Today' : `in ${b.in_days}d`}</span></td></tr>))}
-              </tbody></table>
-            ) : <Empty icon="fa-cake-candles" title="" style={{ padding: '1.4rem' }}><p>None in the next 30 days</p></Empty>}
-          </div>
-        </div>
-        <div className="widget">
-          <div className="wh"><h3><i aria-hidden="true" className="fas fa-file-contract" /> Contracts expiring</h3><a href={d.urls.reports + '?type=contracts'} className="text-sm">All</a></div>
-          <div className="wb" style={{ padding: 0 }}>
-            {(d.contracts || []).length ? (
-              <table className="data-table table-stack no-mobile-scroll"><tbody>
-                {d.contracts.map((c) => (
-                  <tr key={c.id}><td data-label="Name"><a href={c.url}>{c.name}</a></td>
-                    <td data-label="Ends">{c.ends}</td>
-                    <td data-label="Left" className="text-right"><span className={'badge ' + (c.days_left <= 14 ? 'badge-danger' : 'badge-warning')}>{c.days_left}d</span></td></tr>))}
-              </tbody></table>
-            ) : <Empty icon="fa-file-contract" title="" style={{ padding: '1.4rem' }}><p>None expiring soon</p></Empty>}
-          </div>
-        </div>
+        <aside className="rs-rail">
+          <section className="rs-card">
+            <header className="rs-card-h"><h3><i className="fas fa-bolt" aria-hidden="true" /> Quick actions</h3></header>
+            <div className="sl-quick">
+              {canWrite(d, 'staff_create') && <a href={d.urls.add_staff}><i className="fas fa-user-plus" aria-hidden="true" />Add staff</a>}
+              <a href={d.urls.attendance}><i className="fas fa-user-clock" aria-hidden="true" />Attendance</a>
+              <a href={d.urls.leave_pending}><i className="fas fa-plane-departure" aria-hidden="true" />Leave</a>
+              <a href={d.nav.payroll}><i className="fas fa-money-check-dollar" aria-hidden="true" />Payroll</a>
+              <a href={d.nav.recruitment}><i className="fas fa-bullhorn" aria-hidden="true" />Hiring</a>
+              <a href={d.urls.reports}><i className="fas fa-chart-line" aria-hidden="true" />Reports</a>
+            </div>
+          </section>
+          <section className="rs-card">
+            <header className="rs-card-h"><h3><i className="fas fa-file-contract" aria-hidden="true" /> Contracts ending</h3></header>
+            {(d.contracts || []).length ? <div className="hr-list">{d.contracts.map((c) => (
+              <a key={c.id} href={c.url} className="hr-person"><span className="n"><b>{c.name}</b><small>ends {c.ends}</small></span><Pill tone={c.days_left <= 14 ? 'bad' : 'mid'}>{c.days_left}d</Pill></a>))}</div>
+              : <p className="rs-muted">None in the next few weeks.</p>}
+          </section>
+          <section className="rs-card">
+            <header className="rs-card-h"><h3><i className="fas fa-cake-candles" aria-hidden="true" /> Birthdays</h3></header>
+            {(d.birthdays || []).length ? <div className="hr-list">{d.birthdays.map((b) => (
+              <a key={b.id} href={b.url} className="hr-person"><span className="n"><b>{b.name}</b><small>{b.date}</small></span><Pill tone={b.in_days === 0 ? 'good' : ''}>{b.in_days === 0 ? 'Today 🎉' : `in ${b.in_days}d`}</Pill></a>))}</div>
+              : <p className="rs-muted">None in the next 30 days.</p>}
+          </section>
+        </aside>
       </div>
     </>
   );
 }
 
-// ---- Staff list ------------------------------------------------------------
+// ---- Staff directory -------------------------------------------------------------
 function Staff({ d, notify }) {
   const nav = useNav();
+  const phone = usePhone();
   const a = d.applied;
-  const [q, setQ] = useState(a.q);
+  const [q, setQ] = useState(a.q || '');
   const [notifyOpen, setNotifyOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const fileRef = useRef();
@@ -182,103 +165,436 @@ function Staff({ d, notify }) {
   const [saved, setSaved] = useState(() => lsGet('hr_saved_filters', []));
   const go = (extra) => navParams(nav.go, d.self_url, { department_id: a.department_id, staff_type: a.staff_type, status: a.status, q, ...extra });
   const onImport = async (e) => {
-    const file = e.target.files && e.target.files[0];
-    e.target.value = '';
+    const file = e.target.files && e.target.files[0]; e.target.value = '';
     if (!file) return;
-    setBusy(true);
-    const r = await postFile(d.urls.import, file);
-    setBusy(false);
+    setBusy(true); const r = await postFile(d.urls.import, file); setBusy(false);
     if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Import failed.');
   };
   const saveFilter = async () => {
-    const name = await promptDialog({ title: 'Save filter', label: 'Name this filter' });
+    const name = await promptDialog({ title: 'Save this view', label: 'Name it' });
     if (!name) return;
-    const next = [...saved.filter((x) => x.name !== name),
-      { name, params: { department_id: a.department_id, staff_type: a.staff_type, status: a.status } }];
-    setSaved(next); lsSet('hr_saved_filters', next);
-    notify('success', `Saved filter “${name}”.`);
-  };
-  const applySaved = (name) => {
-    const found = saved.find((x) => x.name === name);
-    if (found) navParams(nav.go, d.self_url, { ...found.params, q: '' });
+    const next = [...saved.filter((x) => x.name !== name), { name, params: { department_id: a.department_id, staff_type: a.staff_type, status: a.status } }];
+    setSaved(next); lsSet('hr_saved_filters', next); notify('success', `Saved “${name}”.`);
   };
   const removeSaved = (name) => { const next = saved.filter((x) => x.name !== name); setSaved(next); lsSet('hr_saved_filters', next); };
+  const t = q.trim().toLowerCase();
+  const rows = d.staff.filter((s) => !t || `${s.full_name} ${s.staff_id} ${s.designation || ''} ${s.phone || ''}`.toLowerCase().includes(t));
+  const filtered = a.department_id || a.staff_type || a.status;
   return (
     <>
-      <div className="page-header"><h1>Staff Directory</h1>
-        <div className="page-header-actions">
-          <input type="file" ref={fileRef} accept=".csv,text/csv" style={{ display: 'none' }} onChange={onImport} />
-          {canWrite(d, 'staff_import') && <button type="button" className="sp-btn" disabled={busy} onClick={() => fileRef.current && fileRef.current.click()}><i aria-hidden="true" className="fas fa-file-import" /> Import</button>}
-          {canWrite(d, 'staff_notify') && <button type="button" className="sp-btn" onClick={() => setNotifyOpen(true)}><i aria-hidden="true" className="fas fa-bullhorn" /> Notify</button>}
-          {canWrite(d, 'staff_export') && <a href={d.urls.export} className="sp-btn" data-native download><i aria-hidden="true" className="fas fa-file-csv" /> Export</a>}
-          {canWrite(d, 'staff_create') && <a href={d.urls.add} className="sp-btn sp-btn-fill"><i aria-hidden="true" className="fas fa-user-plus" /> Add Staff</a>}
-        </div>
-      </div>
+      <input type="file" ref={fileRef} accept=".csv,text/csv" style={{ display: 'none' }} onChange={onImport} />
+      <Head icon="fa-users" title="Staff" sub={`${d.staff.length} staff${filtered ? ' in this view' : ''}`}>
+        {canWrite(d, 'staff_create') && <a href={d.urls.add} className="rs-btn primary"><i className="fas fa-user-plus" aria-hidden="true" /><span className="rs-hide-sm">Add staff</span></a>}
+        <Menu label="More" items={[
+          canWrite(d, 'staff_notify') && { icon: 'fa-bullhorn', label: 'Message staff', onClick: () => setNotifyOpen(true) },
+          canWrite(d, 'staff_import') && { icon: 'fa-file-import', label: busy ? 'Importing…' : 'Import from CSV', onClick: () => fileRef.current && fileRef.current.click() },
+          canWrite(d, 'staff_export') && { icon: 'fa-file-csv', label: 'Export to CSV', href: d.urls.export, native: true, download: true },
+          filtered && { icon: 'fa-bookmark', label: 'Save this view', onClick: saveFilter },
+        ]} />
+      </Head>
       <Tabs d={d} />
       {notifyOpen && <NotifyStaffModal d={d} onClose={() => setNotifyOpen(false)} notify={notify} />}
-      <div className="card mb-3"><div className="card-body">
-        <div style={{ maxWidth: 420 }}>
-          <Autocomplete label="Jump to a staff member" url={d.urls.search} placeholder="Search anyone by name / ID / role…"
-            onPick={(id, item) => { if (item && item.url) nav.go(item.url); }} />
+      <div className="rs-toolbar">
+        <label className="rs-search"><i className="fas fa-magnifying-glass" aria-hidden="true" />
+          <input type="search" placeholder="Name, staff ID, role or phone" value={q} onChange={(e) => setQ(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') go(); }} aria-label="Search staff" /></label>
+        <select className="sl-select" value={a.department_id} onChange={(e) => go({ department_id: e.target.value })} aria-label="Department">
+          <option value="">All departments</option>{d.departments.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select>
+      </div>
+      <div className="hr-filters">
+        <Seg label="Type" value={a.staff_type || ''} onChange={(v) => go({ staff_type: v })} options={[{ value: '', label: 'Everyone' }, ...d.staff_types.map((x) => ({ value: x, label: x }))]} />
+        <Seg label="Status" value={a.status || ''} onChange={(v) => go({ status: v })} options={[{ value: '', label: 'Any status' }, ...d.statuses.slice(0, phone ? 2 : 4).map((x) => ({ value: x, label: x }))]} />
+      </div>
+      {(saved.length > 0 || recent.length > 0) && (
+        <div className="as-quick">
+          {saved.map((sf) => <span key={sf.name} className="rs-chip"><button type="button" className="hr-chipbtn" onClick={() => navParams(nav.go, d.self_url, { ...sf.params, q: '' })}><i className="fas fa-bookmark" aria-hidden="true" /> {sf.name}</button><button type="button" className="hr-chipbtn" onClick={() => removeSaved(sf.name)} aria-label={`Remove ${sf.name}`}><i className="fas fa-xmark" aria-hidden="true" /></button></span>)}
+          {recent.length > 0 && <span>Recent:</span>}
+          {recent.slice(0, phone ? 3 : 6).map((r) => <a key={r.id} href={r.url} className="rs-chip">{r.name}</a>)}
         </div>
-        {recent.length > 0 && (
-          <div className="mt-1"><span className="text-muted text-sm">Recently viewed: </span>
-            {recent.map((r) => <a key={r.id} href={r.url} className="badge badge-secondary" style={{ marginRight: '.3rem', textDecoration: 'none' }}>{r.name}</a>)}</div>)}
-      </div></div>
-      <div className="card mb-3"><div className="card-body">
-        <form className="filter-form" onSubmit={(e) => { e.preventDefault(); go(); }}>
-          <div className="form-group"><label className="form-label">Department</label>
-            <select className="form-control" value={a.department_id} onChange={(e) => go({ department_id: e.target.value })}>
-              <option value="">All</option>{d.departments.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></div>
-          <div className="form-group"><label className="form-label">Type</label>
-            <select className="form-control" value={a.staff_type} onChange={(e) => go({ staff_type: e.target.value })}>
-              <option value="">All</option>{d.staff_types.map((t) => <option key={t} value={t}>{t}</option>)}</select></div>
-          <div className="form-group"><label className="form-label">Status</label>
-            <select className="form-control" value={a.status} onChange={(e) => go({ status: e.target.value })}>
-              <option value="">All</option>{d.statuses.map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
-          <div className="form-group"><label className="form-label">Search</label>
-            <input type="text" className="form-control" value={q} placeholder="Name, ID, role, phone" onChange={(e) => setQ(e.target.value)} /></div>
-          <div className="form-group" style={{ alignSelf: 'flex-end' }}>
-            <button type="button" className="btn btn-secondary" onClick={saveFilter}><i aria-hidden="true" className="fas fa-bookmark" /> Save filter</button></div>
-        </form>
-        {saved.length > 0 && (
-          <div className="mt-2 d-flex gap-1 flex-wrap align-center">
-            <span className="text-muted text-sm">Saved:</span>
-            {saved.map((sf) => (
-              <span key={sf.name} className="badge badge-secondary" style={{ cursor: 'pointer' }}>
-                <span onClick={() => applySaved(sf.name)}>{sf.name}</span>
-                <i aria-hidden="true" className="fas fa-xmark" style={{ marginLeft: '.4rem', cursor: 'pointer' }} onClick={() => removeSaved(sf.name)} />
-              </span>))}
-          </div>)}
-      </div></div>
-      <div className="card"><div className="card-header"><h3>{d.staff.length} staff</h3></div>
-        <div className="card-body" style={{ padding: 0 }}>
-          {d.staff.length ? (
-            <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
-              <thead><tr><th>Staff ID</th><th>Name</th><th>Designation</th><th>Department</th><th>Type</th><th>Status</th><th /></tr></thead>
-              <tbody>{d.staff.map((s) => (
-                <tr key={s.id}>
-                  <td data-label="Staff ID" className="text-muted">{s.staff_id}</td>
-                  <td data-label="Name">
-                    <a href={s.url} className="av-row">
-                      {s.photo_url ? <img className="av" src={s.photo_url} alt="" loading="lazy" />
-                        : <span className="av av-ph" aria-hidden="true">{initials(s.full_name)}</span>}
-                      <span style={{ minWidth: 0 }}><span className="av-row-name">{s.full_name}</span>{s.phone && <div className="text-muted text-sm">{s.phone}</div>}</span>
-                    </a>
-                  </td>
-                  <td data-label="Designation">{s.designation}</td>
-                  <td data-label="Department">{s.department}</td>
-                  <td data-label="Type"><span className={typeBadge(s.staff_type)}>{s.staff_type}</span></td>
-                  <td data-label="Status"><span className={statusBadge(s.status)}>{s.status}</span></td>
-                  <td className="actions"><a href={s.url} className="sp-btn sp-btn-sm"><i aria-hidden="true" className="fas fa-eye" /> View</a></td>
-                </tr>))}</tbody>
-            </table></div>
-          ) : <Empty icon="fa-users" title="No staff found"><p>Add your first staff member or adjust filters.</p>{canWrite(d, 'staff_create') && <a href={d.urls.add} className="btn btn-primary mt-2">Add Staff</a>}</Empty>}
-        </div></div>
+      )}
+      {rows.length ? (
+        <section className="rs-card flush"><div className="hr-staff">
+          {rows.map((s) => (
+            <div key={s.id} className="hr-srow">
+              <a href={s.url} className="hr-sname"><Face name={s.full_name} photo={s.photo_url} /><span className="n"><b>{s.full_name}</b><small>{s.designation || 'No role set'} · {s.staff_id}</small></span></a>
+              <span className="hr-sdept"><small>{s.department || 'No department'}</small></span>
+              <span className="hr-stags"><Pill tone={s.staff_type === 'Teaching' ? 'info' : ''}>{s.staff_type}</Pill><Pill tone={STATUS_TONE[s.status]}>{s.status}</Pill></span>
+              <span className="hr-sact">{s.phone && <a href={'tel:' + s.phone} className="rs-icon-btn hr-call" aria-label={`Call ${s.full_name}`}><i className="fas fa-phone" aria-hidden="true" /></a>}
+                <a href={s.url} className="rs-icon-btn hr-call" aria-label={`Open ${s.full_name}`}><i className="fas fa-chevron-right" aria-hidden="true" /></a></span>
+            </div>))}
+        </div></section>
+      ) : <Blank icon="fa-users" title="No staff found"><p>{d.staff.length ? 'Nothing matches your search.' : 'Add your first staff member or change the filters.'}</p>
+          {canWrite(d, 'staff_create') && !d.staff.length && <a href={d.urls.add} className="rs-btn primary">Add staff</a>}</Blank>}
     </>
   );
 }
 
+// ---- Staff profile -------------------------------------------------------------
+function StaffDetail({ d, notify }) {
+  const nav = useNav();
+  const s = d.s;
+  const [tab, setTab] = useState(() => { try { return sessionStorage.getItem('hr:ptab') || 'overview'; } catch (e) { return 'overview'; } });
+  const pick = (t) => { setTab(t); try { sessionStorage.setItem('hr:ptab', t); } catch (e) { /* ignore */ } };
+  useEffect(() => { pushRecent({ id: s.id, name: s.full_name, staff_id: s.staff_id, url: d.urls.self }); }, [s.id, s.full_name, s.staff_id, d.urls.self]);
+  const act = async (url, fields, confirmMsg, follow) => {
+    if (confirmMsg && !await confirm(confirmMsg)) return;
+    const r = await submitJson(url, fields || {});
+    if (r.ok) { notify('success', r.message); follow ? nav.go(r.redirect) : nav.refresh(); } else notify('error', r.error || 'Action failed.');
+  };
+  const Row = ({ k, v }) => <div className="info-row"><span className="k">{k}</span><span className="v">{v || '—'}</span></div>;
+  const lv = d.leave_summary || {};
+  const att = d.attendance_summary || {};
+  return (
+    <>
+      <section className="rs-card hr-hero">
+        <Face name={s.full_name} photo={s.photo_url} size={72} />
+        <div className="hr-hero-t">
+          <h1>{s.full_name}</h1>
+          <p>{s.designation || 'No role set'}{s.department && ` · ${s.department}`}</p>
+          <div className="hr-hero-p">
+            <Pill tone={STATUS_TONE[s.status]}>{s.status}</Pill><Pill tone={s.staff_type === 'Teaching' ? 'info' : ''}>{s.staff_type}</Pill>
+            <Pill>{s.employment_type}</Pill><Pill>{s.staff_id}</Pill>
+            {s.years_of_service > 0 && <Pill>{s.years_of_service} yr{s.years_of_service !== 1 ? 's' : ''} service</Pill>}
+          </div>
+        </div>
+        <div className="hr-hero-a">
+          {s.phone && <a href={'tel:' + s.phone} className="rs-btn ghost" aria-label="Call"><i className="fas fa-phone" aria-hidden="true" /><span className="rs-hide-sm">Call</span></a>}
+          {s.phone && <a href={'https://wa.me/' + s.wa_intl} target="_blank" rel="noopener" className="rs-btn ghost" aria-label="WhatsApp"><i className="fab fa-whatsapp" aria-hidden="true" /><span className="rs-hide-sm">WhatsApp</span></a>}
+          {canWrite(d, 'staff_edit') && <a href={d.urls.edit} className="rs-btn primary"><i className="fas fa-pen" aria-hidden="true" /><span className="rs-hide-sm">Edit</span></a>}
+          <Menu label="More" items={[
+            { icon: 'fa-arrow-left', label: 'Back to staff', href: d.nav.staff },
+            canWrite(d, 'staff_delete') && { icon: 'fa-trash', label: 'Delete or deactivate', danger: true, onClick: () => act(d.urls.delete, {}, `Delete ${s.full_name}? If they have payroll, attendance, leave history or a login, they'll be deactivated (hidden everywhere) instead.`, true) },
+          ]} />
+        </div>
+      </section>
+      {s.contract_expiring && (
+        <div className={'sc-alert' + (s.contract_days_left < 0 ? ' bad' : '')}><i className="fas fa-file-contract" aria-hidden="true" />
+          <span>{s.contract_days_left < 0 ? `Contract expired on ${s.contract_end} (${-s.contract_days_left} day(s) ago).` : `Contract ends on ${s.contract_end} — in ${s.contract_days_left} day(s).`}</span></div>
+      )}
+      <Tiles items={[
+        { label: 'Salary', value: s.salary ? nairaShort(s.salary) : '—', sub: 'per month' },
+        { label: 'This month', value: `${att.present || 0} in`, sub: `${att.late || 0} late · ${att.absent || 0} absent`, tone: (att.absent || 0) > 2 ? 'bad' : (att.late || 0) > 3 ? 'mid' : '' },
+        { label: 'Leave this year', value: `${lv.total_days || 0}d`, sub: lv.pending ? `${lv.pending} pending` : 'taken', tone: lv.pending ? 'mid' : '' },
+        { label: 'With the school', value: s.years_of_service ? `${s.years_of_service} yrs` : 'New', sub: s.date_employed ? `since ${s.date_employed}` : '' },
+      ]} />
+      <Seg label="Profile sections" value={tab} onChange={pick} options={[
+        { value: 'overview', label: 'Overview', icon: 'fa-id-card' }, { value: 'details', label: 'Details', icon: 'fa-address-book' },
+        { value: 'pay', label: 'Pay', icon: 'fa-money-check-dollar' }, { value: 'time', label: 'Leave & time', icon: 'fa-calendar-check' },
+        { value: 'growth', label: 'Files & growth', icon: 'fa-folder-open' }]} />
+      {tab === 'overview' && (<><ProfileHub d={d} /><LifecycleTimeline d={d} act={act} /></>)}
+      {tab === 'details' && (
+        <div className="hr-2col">
+          <div className="card"><div className="card-header"><h3><i className="fas fa-briefcase" aria-hidden="true" /> Personal & employment</h3></div><div className="card-body"><div className="info-grid">
+            <Row k="Phone" v={s.phone} /><Row k="Email" v={s.email} /><Row k="Gender" v={s.gender} />
+            <Row k="Date of birth" v={s.date_of_birth + (s.age != null ? ` (${s.age})` : '')} />
+            <Row k="Date employed" v={s.date_employed} /><Row k="Confirmed" v={s.confirmation_date} />
+            <Row k="Experience" v={s.total_experience_years ? `${s.total_experience_years} yr(s)` : ''} />
+            <Row k="Qualification" v={s.qualification} /><Row k="Certifications" v={s.certifications} /><Row k="Address" v={s.address} />
+            {(s.contract_start || s.contract_end) && <Row k="Contract" v={[s.contract_start, s.contract_end].filter(Boolean).join(' – ')} />}
+          </div></div></div>
+          <div className="card"><div className="card-header"><h3><i className="fas fa-shield-heart" aria-hidden="true" /> Kin, bank, statutory & medical</h3></div><div className="card-body"><div className="info-grid">
+            <Row k="Next of kin" v={s.nok_name} /><Row k="NOK phone" v={s.nok_phone} /><Row k="Relationship" v={s.nok_relationship} />
+            <Row k="Emergency" v={s.emergency_name} /><Row k="Emergency phone" v={s.emergency_phone} />
+            <Row k="Bank" v={s.bank_name} /><Row k="Account no." v={s.account_number} /><Row k="Account name" v={s.account_name} />
+            <Row k="Tax ID" v={s.tax_id} /><Row k="Pension PIN" v={s.pension_pin} /><Row k="PFA" v={s.pension_provider} />
+            <Row k="Blood group" v={s.blood_group} /><Row k="Medical" v={s.medical_notes} />
+          </div>{s.notes && <p className="text-muted text-sm mt-2">{s.notes}</p>}</div></div>
+        </div>
+      )}
+      {tab === 'pay' && (<>
+        <SalarySection d={d} act={act} />
+        {d.payslips.length > 0 && (
+          <section className="rs-card flush">
+            <header className="rs-card-h pad"><h3><i className="fas fa-money-check-dollar" aria-hidden="true" /> Payslips</h3></header>
+            <DataList rows={d.payslips} rowKey={(p, i) => i} cols={[
+              { key: 'period', label: 'Period', main: true, render: (p) => p.period },
+              { key: 'basic', label: 'Basic', align: 'right', render: (p) => naira(p.basic) },
+              { key: 'allow', label: 'Allowances', align: 'right', render: (p) => naira(p.allowances) },
+              { key: 'ded', label: 'Deductions', align: 'right', render: (p) => <span className="bad">{naira(p.total_deductions)}</span> },
+              { key: 'net', label: 'Net pay', align: 'right', value: true, render: (p) => <b>{naira(p.net)}</b> },
+              { key: 'print', label: '', hideSm: true, render: (p) => <a href={p.print_url} className="rs-icon-btn hr-call" data-native aria-label="Print payslip"><i className="fas fa-print" aria-hidden="true" /></a> },
+            ]} />
+          </section>
+        )}
+        <DeductionsSection d={d} notify={notify} />
+      </>)}
+      {tab === 'time' && (<><LeaveSection d={d} act={act} /><LatenessSection d={d} /></>)}
+      {tab === 'growth' && (<><DocumentsSection d={d} act={act} notify={notify} /><TrainingSection d={d} act={act} notify={notify} /><ReviewsSection d={d} act={act} notify={notify} /></>)}
+    </>
+  );
+}
+
+// ---- Leave ------------------------------------------------------------------------
+function Leave({ d, notify }) {
+  const nav = useNav();
+  const [f, setF] = useState({ staff_id: '', leave_type: d.leave_types[0], start_date: '', end_date: '' });
+  const [view, setView] = useState('list');
+  const [adding, setAdding] = useState(false);
+  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
+  const act = async (url, fields, confirmMsg) => {
+    if (confirmMsg && !await confirm(confirmMsg)) return;
+    const r = await submitJson(url, fields || {});
+    if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Action failed.');
+  };
+  const add = async (e) => {
+    e.preventDefault();
+    if (!f.staff_id) { notify('error', 'Choose a staff member.'); return; }
+    const r = await submitJson(d.add_url, f);
+    if (r.ok) { setF({ staff_id: '', leave_type: d.leave_types[0], start_date: '', end_date: '' }); setAdding(false); notify('success', r.message); nav.refresh(); }
+    else notify('error', r.error || 'Could not add.');
+  };
+  const today = d.today || new Date().toISOString().slice(0, 10);
+  const pending = d.leaves.filter((l) => l.status === 'Pending');
+  const offToday = d.leaves.filter((l) => l.status === 'Approved' && l.start && l.end && l.start <= today && l.end >= today);
+  const days = (a, b) => (a && b ? Math.round((new Date(b) - new Date(a)) / 864e5) + 1 : 0);
+  return (
+    <>
+      <Head icon="fa-plane-departure" title="Leave" sub="Requests, approvals and who's away">
+        {canWrite(d, 'leave_create') && <button type="button" className="rs-btn primary" onClick={() => setAdding(true)}><i className="fas fa-plus" aria-hidden="true" /><span className="rs-hide-sm">Record leave</span></button>}
+      </Head>
+      <Tabs d={d} />
+      <Tiles items={[
+        { label: 'Waiting for approval', value: pending.length, tone: pending.length ? 'mid' : 'good' },
+        { label: 'Away today', value: offToday.length, sub: offToday.slice(0, 2).map((l) => l.staff_name.split(' ')[0]).join(', ') },
+        { label: 'Days in this list', value: d.leaves.reduce((t, l) => t + (Number(l.days) || 0), 0) },
+      ]} />
+      <div className="hr-filters">
+        <Seg label="Status" value={d.status || ''} onChange={(v) => navParams(nav.go, d.self_url, { status: v })} options={[{ value: '', label: 'All' }, { value: 'Pending', label: 'Pending' }, { value: 'Approved', label: 'Approved' }, { value: 'Rejected', label: 'Rejected' }]} />
+        <Seg label="View" value={view} onChange={setView} options={[{ value: 'list', label: 'List', icon: 'fa-list' }, { value: 'calendar', label: 'Calendar', icon: 'fa-calendar-days' }]} />
+      </div>
+      {view === 'calendar' ? <LeaveCalendar leaves={d.leaves} today={d.today} /> : d.leaves.length ? (
+        <section className="rs-card flush"><div className="hr-list">
+          {d.leaves.map((lv) => (
+            <div key={lv.id} className="hr-lv">
+              <Face name={lv.staff_name} />
+              <span className="n"><a href={lv.staff_url}><b>{lv.staff_name}</b></a><small>{lv.leave_type} · {lv.dates} · {lv.days} day{lv.days === 1 ? '' : 's'}</small></span>
+              <Pill tone={LEAVE_TONE[lv.status]}>{lv.status}</Pill>
+              <span className="hr-yn">
+                {canWrite(d, 'leave_approve') && lv.status !== 'Approved' && <button type="button" className="rs-btn sm success" onClick={() => act(lv.approve_url, { status: 'Approved' })}><i className="fas fa-check" aria-hidden="true" /><span className="rs-hide-sm">Approve</span></button>}
+                {canWrite(d, 'leave_approve') && lv.status !== 'Rejected' && <button type="button" className="rs-btn sm ghost" onClick={() => act(lv.approve_url, { status: 'Rejected' })} aria-label="Reject"><i className="fas fa-xmark" aria-hidden="true" /></button>}
+                {canWrite(d, 'leave_delete') && <Menu label="" items={[{ icon: 'fa-trash', label: 'Delete record', danger: true, onClick: () => act(lv.delete_url, {}, 'Delete this leave record?') }]} />}
+              </span>
+            </div>))}
+        </div></section>
+      ) : <Blank icon="fa-plane-departure" title="No leave here"><p>{d.status ? `No ${d.status.toLowerCase()} leave.` : 'Record a leave request to get started.'}</p></Blank>}
+      {adding && (
+        <Sheet title="Record leave" onClose={() => setAdding(false)}>
+          <form onSubmit={add} className="sl-form">
+            <label className="sl-f"><span>Staff member</span><select value={f.staff_id} onChange={(e) => set('staff_id', e.target.value)} required><option value="">Choose…</option>{d.staff.map((s) => <option key={s.id} value={s.id}>{s.full_name}</option>)}</select></label>
+            <div className="sl-f"><span>Type</span><Seg label="Leave type" value={f.leave_type} onChange={(v) => set('leave_type', v)} options={d.leave_types.slice(0, 4).map((t) => ({ value: t, label: t }))} />
+              {d.leave_types.length > 4 && <select value={f.leave_type} onChange={(e) => set('leave_type', e.target.value)} aria-label="Other types">{d.leave_types.map((t) => <option key={t}>{t}</option>)}</select>}</div>
+            <div className="sl-two">
+              <label className="sl-f"><span>From</span><input type="date" required value={f.start_date} onChange={(e) => set('start_date', e.target.value)} /></label>
+              <label className="sl-f"><span>To</span><input type="date" required value={f.end_date} min={f.start_date} onChange={(e) => set('end_date', e.target.value)} /></label>
+            </div>
+            {f.start_date && f.end_date && <p className="rs-muted">{days(f.start_date, f.end_date)} calendar day(s).</p>}
+            <button className="rs-btn primary wide"><i className="fas fa-check" aria-hidden="true" /> Record leave</button>
+          </form>
+        </Sheet>
+      )}
+    </>
+  );
+}
+
+// ---- Payroll ----------------------------------------------------------------------
+function Payroll({ d, notify }) {
+  const nav = useNav();
+  const [f, setF] = useState({ month: d.cur_month, year: d.cur_year });
+  const [gen, setGen] = useState(false);
+  const create = async (e) => {
+    e.preventDefault();
+    const r = await submitJson(d.create_url, f);
+    if (r.ok) nav.go(r.redirect); else notify('error', r.error || 'Could not generate.');
+  };
+  const last = d.rows[0];
+  const drafts = d.rows.filter((r) => r.status === 'Draft').length;
+  const unpaid = d.rows.filter((r) => r.status === 'Finalized').length;
+  return (
+    <>
+      <Head icon="fa-money-check-dollar" title="Payroll" sub="Monthly payslips for every active staff member">
+        {canWrite(d, 'payroll_create') && <button type="button" className="rs-btn primary" onClick={() => setGen(true)}><i className="fas fa-gears" aria-hidden="true" /><span className="rs-hide-sm">Run payroll</span></button>}
+      </Head>
+      <Tabs d={d} />
+      <Tiles items={[
+        last && { label: 'Latest run', value: nairaShort(last.total), sub: `${last.period_label} · ${last.count} staff` },
+        { label: 'Drafts to finalise', value: drafts, tone: drafts ? 'mid' : '' },
+        { label: 'Finalised, not paid', value: unpaid, tone: unpaid ? 'bad' : '' },
+        { label: 'Runs', value: d.rows.length },
+      ]} />
+      <section className="rs-card flush">
+        <DataList rows={d.rows} onRow={(r) => nav.go(r.url)} empty={<Blank icon="fa-money-check-dollar" title="No payroll yet"><p>Run your first monthly payroll — it creates a payslip for each active staff member.</p></Blank>} cols={[
+          { key: 'period', label: 'Month', main: true, render: (r) => r.period_label },
+          { key: 'count', label: 'Staff', sub: true, render: (r) => `${r.count} staff` },
+          { key: 'status', label: 'Status', render: (r) => <Pill tone={RUN_TONE[r.status]}>{r.status}</Pill> },
+          { key: 'total', label: 'Net pay', align: 'right', value: true, render: (r) => <b>{naira(r.total)}</b> },
+        ]} />
+      </section>
+      {gen && (
+        <Sheet title="Run payroll" onClose={() => setGen(false)}>
+          <form onSubmit={create} className="sl-form">
+            <p className="rs-muted">Creates a draft payslip for every active staff member from their monthly salary, recurring deductions and this month's attendance. You can adjust before finalising.</p>
+            <div className="sl-two">
+              <label className="sl-f"><span>Month</span><select value={f.month} onChange={(e) => setF((s) => ({ ...s, month: e.target.value }))}>{d.months.map((m) => <option key={m.value} value={m.value}>{m.name}</option>)}</select></label>
+              <label className="sl-f"><span>Year</span><input type="number" min="2000" max="2100" value={f.year} onChange={(e) => setF((s) => ({ ...s, year: e.target.value }))} /></label>
+            </div>
+            <button className="rs-btn primary wide"><i className="fas fa-gears" aria-hidden="true" /> Create draft payroll</button>
+          </form>
+        </Sheet>
+      )}
+    </>
+  );
+}
+
+function PayrollDetail({ d, notify }) {
+  const nav = useNav();
+  const run = d.run;
+  const [editing, setEditing] = useState(null);
+  const [q, setQ] = useState('');
+  const act = async (url, fields, confirmMsg, follow) => {
+    if (confirmMsg && !await confirm(confirmMsg)) return;
+    const r = await submitJson(url, fields || {});
+    if (r.ok) { notify('success', r.message); follow ? nav.go(r.redirect) : nav.refresh(); } else notify('error', r.error || 'Action failed.');
+  };
+  const draft = run.status === 'Draft';
+  const sum = (k) => d.slips.reduce((t, p) => t + (Number(p[k]) || 0), 0);
+  const gross = sum('basic') + sum('allowances');
+  const ded = sum('total_deductions');
+  const att = sum('attendance_deduction');
+  const t = q.trim().toLowerCase();
+  const rows = d.slips.filter((p) => !t || p.staff_name.toLowerCase().includes(t));
+  const STEPS = ['Draft', 'Finalized', 'Paid'];
+  const idx = STEPS.indexOf(run.status);
+  return (
+    <>
+      <Head icon="fa-money-check-dollar" title={`Payroll · ${run.period_label}`} sub={`${d.slips.length} payslips · ${naira(d.total)} net`}>
+        {draft && canWrite(d, 'payroll_finalize') && <button type="button" className="rs-btn primary" onClick={() => act(d.urls.finalize, { post_expense: '1' }, 'Finalise this payroll? Payslips lock and the total is posted to Finance as an expense.')}><i className="fas fa-lock" aria-hidden="true" /><span className="rs-hide-sm">Finalise</span></button>}
+        {run.status === 'Finalized' && canWrite(d, 'payroll_finalize') && <button type="button" className="rs-btn success" onClick={() => act(d.urls.mark_paid, {})}><i className="fas fa-check-double" aria-hidden="true" /><span className="rs-hide-sm">Mark paid</span></button>}
+        <Menu label="More" items={[
+          { icon: 'fa-arrow-left', label: 'All payroll runs', href: d.nav.payroll },
+          draft && canWrite(d, 'payroll_edit') && { icon: 'fa-rotate', label: "Refresh deductions from attendance", onClick: () => act(d.urls.sync_deductions, {}, "Refresh every payslip's deductions from this month's attendance?") },
+          canWrite(d, 'payroll_delete') && { icon: 'fa-trash', label: 'Delete this run', danger: true, onClick: () => act(d.urls.delete, {}, 'Delete this payroll run and all its payslips?', true) },
+        ]} />
+      </Head>
+      <Tabs d={d} />
+      <div className="sl-steps">{STEPS.map((x, i) => <span key={x} className={i < idx ? 'done' : i === idx ? 'on' : ''}><b>{i < idx ? <i className="fas fa-check" aria-hidden="true" /> : i + 1}</b>{x === 'Finalized' ? 'Finalised' : x}</span>)}
+        {run.posted_expense_id && <Pill tone="good" icon="fa-building-columns">Posted to Finance</Pill>}</div>
+      <Tiles items={[
+        { label: 'Gross pay', value: nairaShort(gross), sub: `basic ${nairaShort(sum('basic'))} + allowances` },
+        { label: 'Deductions', value: nairaShort(ded), sub: att ? `${nairaShort(att)} from attendance` : 'recurring + manual', tone: ded ? 'bad' : '' },
+        { label: 'Net pay', value: nairaShort(d.total), tone: 'good', sub: `${d.slips.length} staff` },
+      ]} />
+      {d.slips.length > 6 && <div className="rs-toolbar"><label className="rs-search"><i className="fas fa-magnifying-glass" aria-hidden="true" /><input type="search" placeholder="Find a staff member" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find" /></label></div>}
+      {rows.length ? (
+        <section className="rs-card flush"><div className="hr-list">
+          {rows.map((ps) => (
+            <div key={ps.id} className={'hr-slip' + (editing === ps.id ? ' open' : '')}>
+              <div className="hr-slip-top">
+                <span className="n"><b>{ps.staff_name}</b><small>basic {naira(ps.basic)}{ps.allowances ? ` + ${naira(ps.allowances)} allowances` : ''}</small></span>
+                <span className="hr-slip-d">
+                  {ps.attendance_deduction > 0 && <Pill tone="bad" icon="fa-user-clock">{nairaShort(ps.attendance_deduction)}</Pill>}
+                  {ps.recurring_deductions > 0 && <Pill tone="mid" icon="fa-hand-holding-dollar">{nairaShort(ps.recurring_deductions)}</Pill>}
+                  {ps.deductions > 0 && <Pill icon="fa-pen">{nairaShort(ps.deductions)}</Pill>}
+                </span>
+                <b className="hr-net">{naira(ps.net)}</b>
+                <span className="hr-yn">
+                  <a href={ps.print_url} className="rs-icon-btn hr-call" data-native aria-label={`Payslip for ${ps.staff_name}`}><i className="fas fa-print" aria-hidden="true" /></a>
+                  {draft && canWrite(d, 'payroll_edit') && <button type="button" className="rs-icon-btn hr-call" onClick={() => setEditing(editing === ps.id ? null : ps.id)} aria-label={`Adjust ${ps.staff_name}`}><i className="fas fa-pen" aria-hidden="true" /></button>}
+                </span>
+              </div>
+              {editing === ps.id && (
+                <div className="hr-slip-edit">
+                  <PayslipEdit ps={ps} notify={notify} onDone={() => { setEditing(null); nav.refresh(); }} />
+                  <small className="rs-muted">Automatic: attendance {naira(ps.attendance_deduction)}{ps.items.map((i, k) => <span key={k}> · {i.name} {naira(i.amount)}</span>)} · total deductions {naira(ps.total_deductions)}</small>
+                </div>
+              )}
+            </div>
+          ))}
+        </div></section>
+      ) : <Blank icon="fa-money-check-dollar" title="No payslips"><p>{d.slips.length ? 'Nobody matches.' : 'This run has no payslips.'}</p></Blank>}
+    </>
+  );
+}
+
+// ---- Attendance -----------------------------------------------------------------
+function Attendance({ d, notify }) {
+  const nav = useNav();
+  const phone = usePhone();
+  const [rows, setRows] = useState(() => d.rows.map((r) => ({ ...r })));
+  const [busy, setBusy] = useState(false);
+  const [q, setQ] = useState('');
+  useEffect(() => { setRows(d.rows.map((r) => ({ ...r }))); }, [d.rows]);
+  const setRow = (id, k, v) => setRows((rs) => rs.map((r) => (r.id === id ? { ...r, [k]: v } : r)));
+  const can = canWrite(d, 'attendance_mark');
+  const s = d.settings;
+  const goDay = (iso) => navParams(nav.go, d.self_url, { date: iso, department_id: d.dept_id });
+  const shift = (n) => { const x = new Date(d.day + 'T00:00:00'); x.setDate(x.getDate() + n); goDay(`${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, '0')}-${String(x.getDate()).padStart(2, '0')}`); };
+  const changed = rows.filter((r, i) => { const o = d.rows[i]; return o && (o.status !== r.status || o.clock_in !== r.clock_in || !o.marked); }).length;
+  const unmarked = d.rows.filter((r) => !r.marked).length;
+  const save = async (e) => {
+    if (e) e.preventDefault();
+    setBusy(true);
+    const fields = { date: d.day, staff_id: rows.map((r) => r.id) };
+    rows.forEach((r) => { fields['status_' + r.id] = r.status; fields['clock_' + r.id] = r.clock_in; });
+    const r = await submitJson(d.save_url, fields);
+    setBusy(false);
+    if (r.ok) { notify('success', r.message); nav.go(r.redirect); } else notify('error', r.error || 'Could not save.');
+  };
+  const t = q.trim().toLowerCase();
+  const shown = rows.filter((r) => !t || r.full_name.toLowerCase().includes(t));
+  const ST = { Present: 'good', Late: 'mid', Absent: 'bad', Excused: 'info' };
+  const counts = rows.reduce((m, r) => ({ ...m, [r.status]: (m[r.status] || 0) + 1 }), {});
+  return (
+    <>
+      <Head icon="fa-user-clock" title="Staff attendance" sub={d.day_label}>
+        <Menu label="Check-in" items={[
+          { icon: 'fa-location-crosshairs', label: 'Self check-in page', href: d.checkin_url },
+          canWrite(d, 'attendance_qr') && { icon: 'fa-qrcode', label: "Show today's check-in QR", href: d.qr_url },
+          { icon: 'fa-gear', label: 'Resumption time & deductions', href: d.settings_url },
+        ]} />
+      </Head>
+      <Tabs d={d} />
+      <section className="rs-pick"><div className="rs-pick-row hr-dayrow">
+        <span className="hr-day"><button type="button" className="rs-icon-btn" onClick={() => shift(-1)} aria-label="Previous day"><i className="fas fa-chevron-left" aria-hidden="true" /></button>
+          <input type="date" value={d.day} onChange={(e) => e.target.value && goDay(e.target.value)} aria-label="Date" />
+          <button type="button" className="rs-icon-btn" onClick={() => shift(1)} aria-label="Next day"><i className="fas fa-chevron-right" aria-hidden="true" /></button></span>
+        <label className="rs-sel grow"><span>Department</span>
+          <select value={d.dept_id} onChange={(e) => navParams(nav.go, d.self_url, { date: d.day, department_id: e.target.value })}><option value="">All departments</option>{d.departments.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
+      </div></section>
+      <Tiles items={[
+        { label: 'Present', value: counts.Present || 0, tone: 'good' },
+        { label: 'Late', value: counts.Late || 0, tone: counts.Late ? 'mid' : '', sub: `after ${s.late_time}` },
+        { label: 'Absent', value: counts.Absent || 0, tone: counts.Absent ? 'bad' : '' },
+        { label: 'Deductions', value: nairaShort(d.summary.deduction), sub: `₦${s.late_rate}/min late` },
+      ]} />
+      {unmarked > 0 && can && <div className="sc-alert"><i className="fas fa-circle-info" aria-hidden="true" /><span><b>{unmarked}</b> staff not marked yet — they start as Present. Change anyone who isn't, then save.</span></div>}
+      {rows.length > 8 && <div className="rs-toolbar"><label className="rs-search"><i className="fas fa-magnifying-glass" aria-hidden="true" /><input type="search" placeholder="Find a staff member" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find" /></label></div>}
+      {rows.length ? (
+        <form onSubmit={save} className="rs-card flush">
+          <div className="hr-list">
+            {shown.map((r) => (
+              <div key={r.id} className={'hr-att ' + (ST[r.status] || '')}>
+                <span className="n"><b>{r.full_name}{!r.marked && <i className="rs-dirty" title="Not marked yet" />}</b><small>{r.designation || ''}{r.minutes_late ? ` · ${r.minutes_late} min late` : ''}{r.deduction ? ` · −${naira(r.deduction)}` : ''}</small></span>
+                <span className="hr-st" role="radiogroup" aria-label={`${r.full_name} status`}>
+                  {d.att_statuses.map((x) => <button type="button" key={x} role="radio" aria-checked={r.status === x} disabled={!can} className={r.status === x ? 'on ' + (ST[x] || '') : ''} onClick={() => setRow(r.id, 'status', x)}>{phone ? x[0] : x}</button>)}
+                </span>
+                <input type="time" className="hr-time" disabled={!can || r.status === 'Absent'} value={r.clock_in} onChange={(e) => setRow(r.id, 'clock_in', e.target.value)} aria-label={`${r.full_name} clock-in`} />
+              </div>
+            ))}
+          </div>
+          {can && (
+            <Bar>
+              <span className="rs-bar-t"><b>{changed ? `${changed} to save` : 'All saved'}</b><small>Late after {s.late_time} · deductions go to payroll</small></span>
+              <button type="submit" className="rs-btn primary" disabled={busy}><i className="fas fa-floppy-disk" aria-hidden="true" /> Save attendance</button>
+            </Bar>
+          )}
+        </form>
+      ) : <Blank icon="fa-user-clock" title="No active staff"><p>Add staff to mark attendance.</p></Blank>}
+    </>
+  );
+}
+
+
+// ---- Dashboard -------------------------------------------------------------
+// ---- Staff list ------------------------------------------------------------
 // ---- Staff form (add / edit) ----------------------------------------------
 function StaffForm({ d, notify }) {
   const nav = useNav();
@@ -302,7 +618,8 @@ function StaffForm({ d, notify }) {
   );
   return (
     <>
-      <div className="page-header"><h1>{d.mode === 'edit' ? 'Edit Staff' : 'Add Staff'}</h1></div>
+      <Head icon={d.mode === 'edit' ? 'fa-user-pen' : 'fa-user-plus'} title={d.mode === 'edit' ? `Edit ${[f.first_name, f.surname].filter(Boolean).join(' ') || 'staff'}` : 'Add staff'} sub="Only first name and surname are required — fill the rest any time" />
+      <Tabs d={d} />
       <form onSubmit={submit}>
         <div className="card mb-3"><div className="card-header"><h3>Personal</h3></div><div className="card-body">
           <div className="form-row">{T({ k: 'first_name', label: 'First name', req: true })}{T({ k: 'surname', label: 'Surname', req: true })}</div>
@@ -360,10 +677,11 @@ function StaffForm({ d, notify }) {
           </div></div>
         )}
 
-        <div className="page-header-actions">
-          <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> {d.mode === 'edit' ? 'Save Changes' : 'Add Staff'}</button>
-          <a href={d.cancel_url} className="btn btn-secondary">Cancel</a>
-        </div>
+        <Bar>
+          <span className="rs-bar-t"><b>{[f.first_name, f.surname].filter(Boolean).join(' ') || 'New staff member'}</b><small>{f.designation || 'No role yet'}</small></span>
+          <a href={d.cancel_url} className="rs-btn ghost">Cancel</a>
+          <button type="submit" className="rs-btn primary" disabled={busy}><i className="fas fa-floppy-disk" aria-hidden="true" /> {d.mode === 'edit' ? 'Save changes' : 'Add staff'}</button>
+        </Bar>
       </form>
     </>
   );
@@ -469,101 +787,6 @@ function LatenessSection({ d }) {
 }
 
 // ---- Staff detail ----------------------------------------------------------
-function StaffDetail({ d, notify }) {
-  const nav = useNav();
-  const s = d.s;
-  useEffect(() => { pushRecent({ id: s.id, name: s.full_name, staff_id: s.staff_id, url: d.urls.self }); },
-    [s.id, s.full_name, s.staff_id, d.urls.self]);
-  const act = async (url, fields, confirmMsg, follow) => {
-    if (confirmMsg && !await confirm(confirmMsg)) return;
-    const r = await submitJson(url, fields || {});
-    if (r.ok) { notify('success', r.message); follow ? nav.go(r.redirect) : nav.refresh(); }
-    else notify('error', r.error || 'Action failed.');
-  };
-  const Row = ({ k, v }) => <div className="info-row"><span className="k">{k}</span><span className="v">{v || '—'}</span></div>;
-  return (
-    <>
-      <div className="profile-hero">
-        <div className="ph-cover" />
-        <div className="ph-body">
-          {s.photo_url
-            ? <img className="ph-avatar" src={s.photo_url} alt="" />
-            : <div className="ph-avatar" style={{ background: 'linear-gradient(135deg,var(--primary),var(--primary-hover))' }} aria-hidden="true">{s.initials}</div>}
-          <div className="ph-id">
-            <h1 className="ph-name">{s.full_name}</h1>
-            <div className="text-muted" style={{ marginTop: 2 }}>{s.designation || '—'}{s.department && ` · ${s.department}`}</div>
-            <div className="ph-meta">
-              <span className={typeBadge(s.staff_type)}>{s.staff_type}</span>
-              <span className="badge badge-secondary">{s.employment_type}</span>
-              <span className={statusBadge(s.status)}>{s.status}</span>
-              <span className="badge badge-primary">{s.staff_id}</span>
-              {s.years_of_service > 0 && <span className="badge badge-info">{s.years_of_service} yr{s.years_of_service !== 1 ? 's' : ''} service</span>}
-            </div>
-          </div>
-        </div>
-        <div className="ph-actions">
-          {s.phone && <><a href={'tel:' + s.phone} className="sp-btn sp-btn-success" aria-label="Call"><i aria-hidden="true" className="fas fa-phone" /> Call</a>
-            <a href={'https://wa.me/' + s.wa_intl} target="_blank" rel="noopener" className="sp-btn sp-btn-success" aria-label="WhatsApp"><i aria-hidden="true" className="fab fa-whatsapp" /> WhatsApp</a></>}
-          {canWrite(d, 'staff_edit') && <a href={d.urls.edit} className="sp-btn sp-btn-primary"><i aria-hidden="true" className="fas fa-pen" /> Edit</a>}
-          {canWrite(d, 'staff_delete') && <button className="sp-btn sp-btn-danger" onClick={() => act(d.urls.delete, {}, `Delete ${s.full_name}? If they have payroll/attendance/leave history or a login, they'll be deactivated (hidden everywhere) instead of removed.`, true)}><i aria-hidden="true" className="fas fa-trash" /> Delete</button>}
-        </div>
-      </div>
-
-      {s.contract_expiring && (
-        <Banner tone={s.contract_days_left < 0 ? 'error' : 'warning'}>
-          <i aria-hidden="true" className="fas fa-file-contract" />{' '}
-          {s.contract_days_left < 0
-            ? `Contract expired on ${s.contract_end} (${-s.contract_days_left} day(s) ago).`
-            : `Contract expires on ${s.contract_end} — in ${s.contract_days_left} day(s).`}
-        </Banner>
-      )}
-
-      <ProfileHub d={d} />
-      <LatenessSection d={d} />
-
-      <div className="hr-2col">
-        <div className="card"><div className="card-header"><h3>Details</h3></div><div className="card-body"><div className="info-grid">
-          <Row k="Phone" v={s.phone} /><Row k="Email" v={s.email} /><Row k="Gender" v={s.gender} />
-          <Row k="Date of birth" v={s.date_of_birth + (s.age != null ? ` (${s.age})` : '')} />
-          <Row k="Date employed" v={s.date_employed} /><Row k="Confirmed" v={s.confirmation_date} />
-          <Row k="Experience" v={s.total_experience_years ? `${s.total_experience_years} yr(s)` : ''} />
-          <Row k="Salary" v={s.salary ? naira(s.salary) : ''} /><Row k="Qualification" v={s.qualification} />
-          <Row k="Certifications" v={s.certifications} /><Row k="Address" v={s.address} />
-          {(s.contract_start || s.contract_end) && <Row k="Contract" v={[s.contract_start, s.contract_end].filter(Boolean).join(' – ')} />}
-        </div></div></div>
-        <div className="card"><div className="card-header"><h3>Kin, statutory &amp; medical</h3></div><div className="card-body"><div className="info-grid">
-          <Row k="Next of kin" v={s.nok_name} /><Row k="NOK phone" v={s.nok_phone} /><Row k="Relationship" v={s.nok_relationship} />
-          <Row k="Emergency" v={s.emergency_name} /><Row k="Emergency phone" v={s.emergency_phone} />
-          <Row k="Bank" v={s.bank_name} /><Row k="Account no." v={s.account_number} /><Row k="Account name" v={s.account_name} />
-          <Row k="Tax ID" v={s.tax_id} /><Row k="Pension PIN" v={s.pension_pin} /><Row k="PFA" v={s.pension_provider} />
-          <Row k="Blood group" v={s.blood_group} /><Row k="Medical" v={s.medical_notes} />
-        </div>{s.notes && <p className="text-muted text-sm mt-2">{s.notes}</p>}</div></div>
-      </div>
-
-      <LifecycleTimeline d={d} act={act} />
-      <div className="hr-2col">
-        <DocumentsSection d={d} act={act} notify={notify} />
-        <TrainingSection d={d} act={act} notify={notify} />
-      </div>
-      <ReviewsSection d={d} act={act} notify={notify} />
-      <SalarySection d={d} act={act} />
-      <LeaveSection d={d} act={act} notify={notify} />
-      {d.payslips.length > 0 && (
-        <div className="card mt-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-money-check-dollar" /> Payslips</h3></div>
-          <div className="card-body" style={{ padding: 0 }}><div className="table-container"><table className="data-table table-stack no-mobile-scroll">
-            <thead><tr><th>Period</th><th className="text-right">Basic</th><th className="text-right">Allow.</th><th className="text-right">Deduct.</th><th className="text-right">Net</th><th /></tr></thead>
-            <tbody>{d.payslips.map((ps, i) => (
-              <tr key={i}><td data-label="Period">{ps.period}</td><td data-label="Basic" className="text-right">{naira(ps.basic)}</td>
-                <td data-label="Allow." className="text-right">{naira(ps.allowances)}</td><td data-label="Deduct." className="text-right">{naira(ps.total_deductions)}</td>
-                <td data-label="Net" className="text-right"><strong>{naira(ps.net)}</strong></td>
-                <td className="actions"><a href={ps.print_url} className="btn btn-secondary btn-sm" title="Payslip" data-native><i aria-hidden="true" className="fas fa-print" /></a></td></tr>))}</tbody>
-          </table></div></div></div>
-      )}
-      <DeductionsSection d={d} notify={notify} />
-    </>
-  );
-}
-
 // ---- Per-staff recurring deductions + contributions ------------------------
 // Welfare, cooperative, union dues — set this person's own monthly amount and
 // see how much they've contributed to each so far (from finalized payslips).
@@ -938,7 +1161,7 @@ function Departments({ d, notify }) {
   };
   return (
     <>
-      <div className="page-header"><h1>Departments</h1></div>
+      <Head icon="fa-sitemap" title="Departments" sub={`${d.departments.length} departments · ${d.departments.reduce((t, x) => t + (x.count || 0), 0)} staff`} />
       <Tabs d={d} />
       {canWrite(d, 'departments_create') && (
         <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-plus" /> Add Department</h3></div>
@@ -1049,185 +1272,8 @@ function LeaveCalendar({ leaves, today }) {
 }
 
 // ---- Leave -----------------------------------------------------------------
-function Leave({ d, notify }) {
-  const nav = useNav();
-  const [f, setF] = useState({ staff_id: '', leave_type: d.leave_types[0], start_date: '', end_date: '' });
-  const [view, setView] = useState('list');
-  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
-  const act = async (url, fields, confirmMsg) => {
-    if (confirmMsg && !await confirm(confirmMsg)) return;
-    const r = await submitJson(url, fields || {});
-    if (r.ok) { notify('success', r.message); nav.refresh(); } else notify('error', r.error || 'Action failed.');
-  };
-  const add = async (e) => {
-    e.preventDefault();
-    if (!f.staff_id) { notify('error', 'Select a staff member.'); return; }
-    const r = await submitJson(d.add_url, f);
-    if (r.ok) { setF({ staff_id: '', leave_type: d.leave_types[0], start_date: '', end_date: '' }); notify('success', r.message); nav.refresh(); }
-    else notify('error', r.error || 'Could not add.');
-  };
-  return (
-    <>
-      <div className="page-header"><h1>Leave Management</h1></div>
-      <Tabs d={d} />
-      {canWrite(d, 'leave_create') && (
-      <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-plus" /> Record Leave</h3></div>
-        <div className="card-body"><form onSubmit={add} className="d-flex gap-2 align-end flex-wrap">
-          <div className="form-group mb-0" style={{ flex: 1, minWidth: 200 }}><label className="form-label">Staff</label>
-            <select className="form-control" required value={f.staff_id} onChange={(e) => set('staff_id', e.target.value)}><option value="">Select…</option>{d.staff.map((s) => <option key={s.id} value={s.id}>{s.full_name}</option>)}</select></div>
-          <div className="form-group mb-0"><label className="form-label">Type</label><select className="form-control" value={f.leave_type} onChange={(e) => set('leave_type', e.target.value)}>{d.leave_types.map((t) => <option key={t}>{t}</option>)}</select></div>
-          <div className="form-group mb-0"><label className="form-label">From</label><input type="date" className="form-control" required value={f.start_date} onChange={(e) => set('start_date', e.target.value)} /></div>
-          <div className="form-group mb-0"><label className="form-label">To</label><input type="date" className="form-control" required value={f.end_date} onChange={(e) => set('end_date', e.target.value)} /></div>
-          <button className="btn btn-primary"><i aria-hidden="true" className="fas fa-save" /> Add</button>
-        </form></div></div>
-      )}
-
-      <div className="card mb-3"><div className="card-body">
-        <div className="d-flex justify-between align-end flex-wrap gap-2">
-          <form className="filter-form"><div className="form-group"><label className="form-label">Status</label>
-            <select className="form-control" value={d.status} onChange={(e) => navParams(nav.go, d.self_url, { status: e.target.value })}>
-              <option value="">All</option>{['Pending', 'Approved', 'Rejected'].map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
-          </form>
-          <div className="btn-group" role="tablist" aria-label="View">
-            <button type="button" className={'btn btn-sm ' + (view === 'list' ? 'btn-primary' : 'btn-secondary')} aria-selected={view === 'list'} onClick={() => setView('list')}><i aria-hidden="true" className="fas fa-list" /> List</button>
-            <button type="button" className={'btn btn-sm ' + (view === 'calendar' ? 'btn-primary' : 'btn-secondary')} aria-selected={view === 'calendar'} onClick={() => setView('calendar')}><i aria-hidden="true" className="fas fa-calendar-days" /> Calendar</button>
-          </div>
-        </div>
-      </div></div>
-
-      {view === 'calendar' && <LeaveCalendar leaves={d.leaves} today={d.today} />}
-
-      {view === 'list' && (
-      <div className="card"><div className="card-header"><h3>{d.leaves.length} record(s)</h3></div>
-        <div className="card-body" style={{ padding: 0 }}>
-          {d.leaves.length ? (
-            <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
-              <thead><tr><th>Staff</th><th>Type</th><th>Dates</th><th>Days</th><th>Status</th><th /></tr></thead>
-              <tbody>{d.leaves.map((lv) => (
-                <tr key={lv.id}><td data-label="Staff"><a href={lv.staff_url}>{lv.staff_name}</a></td><td data-label="Type">{lv.leave_type}</td>
-                  <td data-label="Dates">{lv.dates}</td><td data-label="Days">{lv.days}</td>
-                  <td data-label="Status"><span className={leaveBadge(lv.status)}>{lv.status}</span></td>
-                  <td className="actions"><div className="d-flex gap-1 justify-end">
-                    {canWrite(d, 'leave_approve') && lv.status !== 'Approved' && <button className="btn btn-success btn-sm" onClick={() => act(lv.approve_url, { status: 'Approved' })}><i aria-hidden="true" className="fas fa-check" /></button>}
-                    {canWrite(d, 'leave_approve') && lv.status !== 'Rejected' && <button className="btn btn-secondary btn-sm" onClick={() => act(lv.approve_url, { status: 'Rejected' })}><i aria-hidden="true" className="fas fa-xmark" /></button>}
-                    {canWrite(d, 'leave_delete') && <button className="btn btn-danger btn-sm" onClick={() => act(lv.delete_url, {}, 'Delete?')}><i aria-hidden="true" className="fas fa-trash" /></button>}
-                  </div></td></tr>))}</tbody>
-            </table></div>
-          ) : <Empty icon="fa-plane-departure" title="No leave records"><p>Record staff leave above.</p></Empty>}
-        </div></div>
-      )}
-    </>
-  );
-}
-
 // ---- Payroll list ----------------------------------------------------------
-function Payroll({ d, notify }) {
-  const nav = useNav();
-  const [f, setF] = useState({ month: d.cur_month, year: d.cur_year });
-  const create = async (e) => {
-    e.preventDefault();
-    const r = await submitJson(d.create_url, f);
-    if (r.ok) nav.go(r.redirect); else notify('error', r.error || 'Could not generate.');
-  };
-  return (
-    <>
-      <div className="page-header"><h1>Payroll</h1></div>
-      <Tabs d={d} />
-      {canWrite(d, 'payroll_create') && (
-        <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-plus" /> Generate Payroll</h3></div>
-          <div className="card-body">
-            <p className="text-muted text-sm">Creates a payslip for every active staff member using their monthly salary. You can adjust allowances/deductions afterwards.</p>
-            <form onSubmit={create} className="d-flex gap-2 align-end flex-wrap">
-              <div className="form-group mb-0"><label className="form-label">Month</label><select className="form-control" value={f.month} onChange={(e) => setF((s) => ({ ...s, month: e.target.value }))}>{d.months.map((m) => <option key={m.value} value={m.value}>{m.name}</option>)}</select></div>
-              <div className="form-group mb-0"><label className="form-label">Year</label><input type="number" className="form-control" min="2000" max="2100" style={{ width: 120 }} value={f.year} onChange={(e) => setF((s) => ({ ...s, year: e.target.value }))} /></div>
-              <button className="btn btn-primary"><i aria-hidden="true" className="fas fa-gears" /> Generate</button>
-            </form>
-          </div></div>
-      )}
-      <div className="card"><div className="card-header"><h3>Payroll Runs ({d.rows.length})</h3></div>
-        <div className="card-body" style={{ padding: 0 }}>
-          {d.rows.length ? (
-            <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
-              <thead><tr><th>Period</th><th className="text-right">Staff</th><th className="text-right">Total</th><th>Status</th><th /></tr></thead>
-              <tbody>{d.rows.map((r) => (
-                <tr key={r.id}><td data-label="Period"><a href={r.url}><strong>{r.period_label}</strong></a></td>
-                  <td data-label="Staff" className="text-right">{r.count}</td><td data-label="Total" className="text-right">{naira(r.total)}</td>
-                  <td data-label="Status"><span className={runBadge(r.status)}>{r.status}</span></td>
-                  <td className="actions"><a href={r.url} className="btn btn-secondary btn-sm" aria-label="Open"><i aria-hidden="true" className="fas fa-arrow-right" /></a></td></tr>))}</tbody>
-            </table></div>
-          ) : <Empty icon="fa-money-check-dollar" title="No payroll yet"><p>Generate your first monthly payroll above.</p></Empty>}
-        </div></div>
-    </>
-  );
-}
-
 // ---- Payroll detail --------------------------------------------------------
-function PayrollDetail({ d, notify }) {
-  const nav = useNav();
-  const run = d.run;
-  const [editing, setEditing] = useState(null);
-  const act = async (url, fields, confirmMsg, follow) => {
-    if (confirmMsg && !await confirm(confirmMsg)) return;
-    const r = await submitJson(url, fields || {});
-    if (r.ok) { notify('success', r.message); follow ? nav.go(r.redirect) : nav.refresh(); }
-    else notify('error', r.error || 'Action failed.');
-  };
-  return (
-    <>
-      <div className="page-header"><h1>Payroll · {run.period_label}</h1>
-        <div className="page-header-actions">
-          <span className={runBadge(run.status)} style={{ alignSelf: 'center' }}>{run.status}</span>
-          {canWrite(d, 'payroll_edit') && run.status === 'Draft' && (
-            <button className="btn btn-secondary" onClick={() => act(d.urls.sync_deductions, {}, "Refresh every payslip's deductions from this month's attendance?")}><i aria-hidden="true" className="fas fa-rotate" /> Refresh deductions from attendance</button>
-          )}
-          {canWrite(d, 'payroll_finalize') && run.status === 'Draft' && (
-            <button className="btn btn-primary" onClick={() => act(d.urls.finalize, { post_expense: '1' }, 'Finalize this payroll? You can optionally post the total to Finance.')}><i aria-hidden="true" className="fas fa-lock" /> Finalize &amp; post to Finance</button>
-          )}
-          {canWrite(d, 'payroll_finalize') && run.status === 'Finalized' && <button className="btn btn-success" onClick={() => act(d.urls.mark_paid, {})}><i aria-hidden="true" className="fas fa-check-double" /> Mark paid</button>}
-          {canWrite(d, 'payroll_delete') && <button className="btn btn-danger" onClick={() => act(d.urls.delete, {}, 'Delete this payroll run and all payslips?', true)}><i aria-hidden="true" className="fas fa-trash" /></button>}
-        </div>
-      </div>
-      <Tabs d={d} />
-      <div className="card mb-3"><div className="card-body d-flex justify-between flex-wrap gap-2">
-        <div><div className="text-muted text-sm">Staff</div><strong style={{ fontSize: 'var(--text-lg)' }}>{d.slips.length}</strong></div>
-        <div><div className="text-muted text-sm">Total net pay</div><strong style={{ fontSize: 'var(--text-lg)' }}>{naira(d.total)}</strong></div>
-        {run.posted_expense_id && <div><div className="text-muted text-sm">Finance</div><span className="badge badge-success">Posted to expenses</span></div>}
-      </div></div>
-      <div className="card"><div className="card-header"><h3>Payslips</h3></div>
-        <div className="card-body" style={{ padding: 0 }}>
-          {d.slips.length ? (
-            <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
-              <thead><tr><th>Staff</th><th className="text-right">Basic</th><th className="text-right">Allowances</th><th className="text-right">Manual</th><th className="text-right">Recurring</th><th className="text-right">Attendance</th><th className="text-right">Net</th><th /></tr></thead>
-              <tbody>{d.slips.map((ps) => (
-                <React.Fragment key={ps.id}>
-                  <tr>
-                    <td data-label="Staff">{ps.staff_name}</td>
-                    <td data-label="Basic" className="text-right">{naira(ps.basic)}</td>
-                    <td data-label="Allowances" className="text-right">{naira(ps.allowances)}</td>
-                    <td data-label="Manual" className="text-right">{naira(ps.deductions)}</td>
-                    <td data-label="Recurring" className="text-right">{ps.recurring_deductions ? <span style={{ color: 'var(--danger)' }} title={ps.items.map((i) => `${i.name}: ${naira(i.amount)}`).join(' · ')}>{naira(ps.recurring_deductions)}</span> : '—'}</td>
-                    <td data-label="Attendance" className="text-right">{ps.attendance_deduction ? <span style={{ color: 'var(--danger)' }}>{naira(ps.attendance_deduction)}</span> : '—'}</td>
-                    <td data-label="Net" className="text-right"><strong>{naira(ps.net)}</strong></td>
-                    <td className="actions"><div className="d-flex gap-1 justify-end">
-                      <a href={ps.print_url} className="btn btn-secondary btn-sm" title="Payslip" data-native><i aria-hidden="true" className="fas fa-print" /></a>
-                      {canWrite(d, 'payroll_edit') && run.status === 'Draft' && <button className="btn btn-secondary btn-sm" title="Edit" onClick={() => setEditing(editing === ps.id ? null : ps.id)}><i aria-hidden="true" className="fas fa-edit" /></button>}
-                    </div></td>
-                  </tr>
-                  {canWrite(d, 'payroll_edit') && run.status === 'Draft' && editing === ps.id && (
-                    <tr><td colSpan={8} className="stack-full" style={{ background: 'var(--gray-50)' }}>
-                      <PayslipEdit ps={ps} notify={notify} onDone={() => { setEditing(null); nav.refresh(); }} />
-                      <div className="text-muted text-sm" style={{ marginTop: '.5rem' }}>
-                        Auto: attendance {naira(ps.attendance_deduction)}{ps.items.map((i, k) => <span key={k}> · {i.name} {naira(i.amount)}</span>)} · <strong>Total deductions {naira(ps.total_deductions)}</strong>
-                      </div>
-                    </td></tr>)}
-                </React.Fragment>))}</tbody>
-            </table></div>
-          ) : <Empty icon="fa-money-check-dollar" title="No payslips" />}
-        </div></div>
-    </>
-  );
-}
-
 function PayslipEdit({ ps, notify, onDone }) {
   const [f, setF] = useState({ basic: ps.basic, allowances: ps.allowances, deductions: ps.deductions });
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
@@ -1247,71 +1293,6 @@ function PayslipEdit({ ps, notify, onDone }) {
 }
 
 // ---- Attendance ------------------------------------------------------------
-function Attendance({ d, notify }) {
-  const nav = useNav();
-  const [rows, setRows] = useState(() => d.rows.map((r) => ({ ...r })));
-  const [busy, setBusy] = useState(false);
-  useEffect(() => { setRows(d.rows.map((r) => ({ ...r }))); }, [d.rows]);
-  const setRow = (id, k, v) => setRows((rs) => rs.map((r) => (r.id === id ? { ...r, [k]: v } : r)));
-  const s = d.settings;
-  const save = async (e) => {
-    e.preventDefault(); setBusy(true);
-    const fields = { date: d.day, staff_id: rows.map((r) => r.id) };
-    rows.forEach((r) => { fields['status_' + r.id] = r.status; fields['clock_' + r.id] = r.clock_in; });
-    const r = await submitJson(d.save_url, fields);
-    setBusy(false);
-    if (r.ok) { notify('success', r.message); nav.go(r.redirect); } else notify('error', r.error || 'Could not save.');
-  };
-  return (
-    <>
-      <div className="page-header"><h1>Staff Attendance</h1>
-        <div className="page-header-actions">
-          <a href={d.checkin_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-location-crosshairs" /> Self check-in</a>
-          {canWrite(d, 'attendance_qr') && <a href={d.qr_url} className="btn btn-primary"><i aria-hidden="true" className="fas fa-qrcode" /> Show QR</a>}
-        </div>
-      </div>
-      <Tabs d={d} />
-      <div className="card mb-3"><div className="card-body">
-        <form className="filter-form">
-          <div className="form-group"><label className="form-label">Date</label><input type="date" className="form-control" value={d.day} onChange={(e) => navParams(nav.go, d.self_url, { date: e.target.value, department_id: d.dept_id })} /></div>
-          <div className="form-group"><label className="form-label">Department</label>
-            <select className="form-control" value={d.dept_id} onChange={(e) => navParams(nav.go, d.self_url, { date: d.day, department_id: e.target.value })}>
-              <option value="">All</option>{d.departments.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></div>
-        </form>
-        <div className="sum-chips mt-2">
-          <span className="chip" style={{ background: 'rgba(28,200,138,.15)' }}>Resumption {s.late_time} · ₦{s.late_rate}/min late{s.absence_deduction ? ` · ₦${Math.round(s.absence_deduction).toLocaleString()}/absence` : ''}</span>
-          <span className="chip">Present: {d.summary.present}</span>
-          <span className="chip" style={{ background: 'rgba(246,194,62,.18)' }}>Late: {d.summary.late}</span>
-          <span className="chip" style={{ background: 'rgba(231,74,59,.15)' }}>Absent: {d.summary.absent}</span>
-          <span className="chip" style={{ background: 'rgba(231,74,59,.15)' }}>Deductions: {naira(d.summary.deduction)}</span>
-        </div>
-      </div></div>
-
-      <form onSubmit={save}>
-        <div className="card"><div className="card-header"><h3>{rows.length} staff · {d.day_label}</h3>
-          {canWrite(d, 'attendance_mark') && <button type="submit" className="btn btn-primary btn-sm" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save</button>}</div>
-          <div className="card-body" style={{ padding: 0 }}>
-            {rows.length ? (
-              <div className="table-container"><table className="data-table table-stack no-mobile-scroll">
-                <thead><tr><th>Staff</th><th>Status</th><th>Clock-in</th><th>Late</th><th className="text-right">Deduction</th></tr></thead>
-                <tbody>{rows.map((r) => (
-                  <tr key={r.id}>
-                    <td data-label="Staff">{r.full_name}</td>
-                    <td data-label="Status" className="att-status"><select className="form-control" disabled={!canWrite(d, 'attendance_mark')} value={r.status} onChange={(e) => setRow(r.id, 'status', e.target.value)}>{d.att_statuses.map((st) => <option key={st} value={st}>{st}</option>)}</select></td>
-                    <td data-label="Clock-in"><input type="time" className="form-control" style={{ maxWidth: 130 }} disabled={!canWrite(d, 'attendance_mark')} value={r.clock_in} onChange={(e) => setRow(r.id, 'clock_in', e.target.value)} /></td>
-                    <td data-label="Late">{r.minutes_late ? <span className="badge badge-warning">{r.minutes_late} min</span> : '—'}</td>
-                    <td data-label="Deduction" className="text-right">{r.deduction ? <span style={{ color: 'var(--danger)' }}>{naira(r.deduction)}</span> : '—'}</td>
-                  </tr>))}</tbody>
-              </table></div>
-            ) : <Empty icon="fa-user-clock" title="No active staff"><p>Add staff to mark attendance.</p></Empty>}
-          </div></div>
-        {rows.length > 0 && canWrite(d, 'attendance_mark') && <div className="page-header-actions mt-3"><button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save Attendance</button></div>}
-      </form>
-      <p className="text-muted text-sm mt-2"><i aria-hidden="true" className="fas fa-circle-info" /> Lateness deductions are calculated from the clock-in time vs the resumption time set in <a href={d.settings_url}>Settings</a>, and flow into that month's payroll automatically.</p>
-    </>
-  );
-}
-
 // ---- Biometric / access-control device token -------------------------------
 function DeviceTokenCard({ d, notify }) {
   const nav = useNav();
@@ -1374,7 +1355,7 @@ function Settings({ d, notify }) {
   };
   return (
     <>
-      <div className="page-header"><h1>HR Settings</h1></div>
+      <Head icon="fa-gear" title="HR settings" sub="Resumption time, deductions, leave allowances and check-in" />
       <Tabs d={d} />
       <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-user-clock" /> Attendance &amp; Deductions</h3></div>
         <div className="card-body"><form onSubmit={saveSettings}>
@@ -1508,12 +1489,12 @@ function Reports({ d }) {
   };
   return (
     <>
-      <div className="page-header"><h1>HR Reports</h1>
-        <div className="page-header-actions">
-          <a href={`${d.urls.export}?format=csv&${qs()}`} data-native className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-csv" /> CSV</a>
-          <a href={`${d.urls.export}?format=xlsx&${qs()}`} data-native className="btn btn-secondary"><i aria-hidden="true" className="fas fa-file-excel" /> Excel</a>
-        </div>
-      </div>
+      <Head icon="fa-chart-line" title="HR reports" sub={rep.title}>
+        <Menu label="Export" items={[
+          { icon: 'fa-file-csv', label: 'Download CSV', href: `${d.urls.export}?format=csv&${qs()}`, native: true },
+          { icon: 'fa-file-excel', label: 'Download Excel', href: `${d.urls.export}?format=xlsx&${qs()}`, native: true },
+        ]} />
+      </Head>
       <Tabs d={d} />
       <div className="card mb-3"><div className="card-body">
         <div className="filter-form">
@@ -1584,7 +1565,7 @@ function CheckIn({ d, notify }) {
   const statusChip = (s) => 'badge ' + (s === 'Present' ? 'badge-success' : s === 'Late' ? 'badge-warning' : 'badge-secondary');
   return (
     <>
-      <div className="page-header"><h1>Check In</h1></div>
+      <Head icon="fa-fingerprint" title="Check in" sub={d.today_label} />
       <Tabs d={d} />
       {!d.staff ? (
         <div className="card"><div className="card-body">
@@ -1620,9 +1601,9 @@ function CheckIn({ d, notify }) {
 function CheckInQR({ d }) {
   return (
     <>
-      <div className="page-header"><h1>Attendance QR</h1>
-        <div className="page-header-actions"><a href={d.urls.attendance} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Attendance</a></div>
-      </div>
+      <Head icon="fa-qrcode" title="Check-in QR" sub="Show this on a screen at the gate or staff room">
+        <a href={d.urls.attendance} className="rs-btn ghost"><i className="fas fa-arrow-left" aria-hidden="true" /><span className="rs-hide-sm">Attendance</span></a>
+      </Head>
       <Tabs d={d} />
       <div className="card" style={{ maxWidth: 460 }}><div className="card-body text-center">
         <h3 style={{ marginTop: 0 }}>Staff check-in</h3>
@@ -1652,9 +1633,9 @@ function Recruitment({ d, notify }) {
   };
   return (
     <>
-      <div className="page-header"><h1>Recruitment</h1>
-        <div className="page-header-actions">{canWrite(d, 'recruitment_create') && <button className="btn btn-primary" onClick={() => setOpen(!open)}><i aria-hidden="true" className="fas fa-plus" /> Post Vacancy</button>}</div>
-      </div>
+      <Head icon="fa-user-plus" title="Recruitment" sub={`${d.vacancies.filter((v) => v.status === 'Open').length} open vacancies · ${d.vacancies.reduce((t, v) => t + (v.applicants || 0), 0)} applicants`}>
+        {canWrite(d, 'recruitment_create') && <button type="button" className="rs-btn primary" onClick={() => setOpen(!open)}><i className="fas fa-bullhorn" aria-hidden="true" /><span className="rs-hide-sm">Post vacancy</span></button>}
+      </Head>
       <Tabs d={d} />
       {open && canWrite(d, 'recruitment_create') && (
         <div className="card mb-3"><div className="card-header"><h3>New vacancy</h3></div><div className="card-body">
@@ -1722,10 +1703,12 @@ function Vacancy({ d, notify }) {
   };
   return (
     <>
-      <div className="page-header"><h1>{v.title}</h1>
-        <div className="page-header-actions"><a href={d.urls.back} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Vacancies</a>
-          {canWrite(d, 'recruitment_delete') && <button className="btn btn-danger" onClick={() => act(d.urls.delete, {}, 'Delete this vacancy and its applications?', true)}><i aria-hidden="true" className="fas fa-trash" /></button>}</div>
-      </div>
+      <Head icon="fa-briefcase" title={v.title} sub={[v.department, v.staff_type, v.employment_type].filter(Boolean).join(' · ')}>
+        <Menu label="More" items={[
+          { icon: 'fa-arrow-left', label: 'All vacancies', href: d.urls.back },
+          canWrite(d, 'recruitment_delete') && { icon: 'fa-trash', label: 'Delete vacancy', danger: true, onClick: () => act(d.urls.delete, {}, 'Delete this vacancy and its applications?', true) },
+        ]} />
+      </Head>
       <Tabs d={d} />
       <div className="card mb-3"><div className="card-body">
         <div className="d-flex gap-2 flex-wrap align-center mb-2">
@@ -1836,7 +1819,7 @@ export default function HrApp({ data }) {
     <NavCtx.Provider value={{ go, refresh }}>
       <SectionShell go={go}>
         {msg && <Banner tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Banner>}
-        <Screen d={d} notify={notify} />
+        <div className={'rs hr hr-' + d.page}><Screen d={d} notify={notify} /></div>
       </SectionShell>
     </NavCtx.Provider>
   );

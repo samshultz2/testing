@@ -1,58 +1,62 @@
 {% extends "base.html" %}
+{% from "hr/_shell.html" import hr_head, hr_nav %}
 {% block title %}Staff loans - {{ app_name }}{% endblock %}
-{% block breadcrumb %}<span>Staff Loans</span>{% endblock %}
+{% block breadcrumb %}<a href="{{ url_for('hr.dashboard') }}">HR</a> / <span>Staff Loans</span>{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">{% endblock %}
 {% block content %}
-<div class="page-header">
-  <div><h1><i class="fas fa-hand-holding-dollar"></i> Staff loans</h1>
-    <p class="text-muted text-sm">Loans repaid by monthly salary deduction, due by November of the year taken.
-      {{ cfg.rate }}% {{ cfg.method }} interest · {{ cfg.guarantors_required }} guarantors required.</p></div>
-  <div class="page-header-actions">
-    {% if cfg.enabled and can_write_sub('hr', 'loans_create') %}<a href="{{ url_for('hr.loan_new') }}" class="btn btn-primary"><i class="fas fa-plus"></i> New loan</a>{% endif %}
-  </div>
-</div>
+{% set tone = {'pending':'mid','active':'info','paid':'good','rejected':'bad','cancelled':''} %}
+{% set active = loans|selectattr('status','equalto','active')|list %}
+{% set pending = loans|selectattr('status','equalto','pending')|list %}
+<div class="rs hr">
+  {% call hr_head('fa-hand-holding-dollar', 'Staff loans', cfg.rate ~ '% ' ~ cfg.method ~ ' interest · repaid from salary by November · ' ~ cfg.guarantors_required ~ ' guarantors') %}
+    {% if cfg.enabled and can_write_sub('hr', 'loans_create') %}<a href="{{ url_for('hr.loan_new') }}" class="rs-btn primary"><i class="fas fa-plus" aria-hidden="true"></i><span class="rs-hide-sm">New loan</span></a>{% endif %}
+  {% endcall %}
+  {{ hr_nav('loans') }}
 
-{% if can_write_sub('hr', 'loans_settings') %}
-<div class="card mb-3"><div class="card-header"><h3><i class="fas fa-gear"></i> Loan settings</h3></div>
-  <div class="card-body">
-    <form method="POST" action="{{ url_for('hr.loans_settings') }}" class="form-row" style="flex-wrap:wrap;gap:1rem;align-items:flex-end">
-      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-      <label class="permission-item" style="display:inline-flex;gap:.4rem"><input type="checkbox" name="enabled" {% if cfg.enabled %}checked{% endif %}> <span>Loans enabled</span></label>
-      <div class="form-group"><label class="form-label">Interest method</label>
-        <select name="method" class="form-control">
-          <option value="flat" {% if cfg.method=='flat' %}selected{% endif %}>Flat % of principal</option>
-          <option value="reducing" {% if cfg.method=='reducing' %}selected{% endif %}>Reducing balance</option>
-        </select></div>
-      <div class="form-group"><label class="form-label">Interest rate (%)</label>
-        <input type="number" step="0.1" min="0" name="rate" class="form-control" value="{{ cfg.rate }}" style="max-width:110px"></div>
-      <div class="form-group"><label class="form-label">Guarantors required</label>
-        <input type="number" min="1" max="5" name="guarantors_required" class="form-control" value="{{ cfg.guarantors_required }}" style="max-width:110px"></div>
-      <div class="form-group"><button class="btn btn-secondary"><i class="fas fa-save"></i> Save</button></div>
-    </form>
-  </div>
-</div>
-{% endif %}
+  {% if not cfg.enabled %}
+  <div class="sc-alert"><i class="fas fa-circle-info" aria-hidden="true"></i><span>Loans are switched off. Turn them on in the settings below to start lending.</span></div>
+  {% endif %}
 
-<div class="card"><div class="card-body">
+  <div class="rs-tiles">
+    <div class="rs-tile"><span class="l">Owed to the school</span><span class="v">₦{{ '{:,.0f}'.format(active|sum(attribute='outstanding')) }}</span><span class="s">{{ active|length }} active loan{{ '' if active|length == 1 else 's' }}</span></div>
+    <div class="rs-tile"><span class="l">Monthly deductions</span><span class="v">₦{{ '{:,.0f}'.format(active|sum(attribute='monthly_amount')) }}</span><span class="s">taken from payroll</span></div>
+    <div class="rs-tile {{ 'mid' if pending else '' }}"><span class="l">Waiting for guarantors</span><span class="v">{{ pending|length }}</span><span class="s">₦{{ '{:,.0f}'.format(pending|sum(attribute='principal')) }} requested</span></div>
+    <div class="rs-tile good"><span class="l">Fully repaid</span><span class="v">{{ loans|selectattr('status','equalto','paid')|list|length }}</span></div>
+  </div>
+
   {% if loans %}
-  <table class="table">
-    <thead><tr><th>Staff</th><th>Principal</th><th>Repayable</th><th>Outstanding</th><th>Monthly</th><th>Status</th><th></th></tr></thead>
-    <tbody>
-      {% for l in loans %}
-      <tr>
-        <td><strong>{{ l.staff.full_name if l.staff else '—' }}</strong>{% if l.branch %}<div class="text-muted text-sm">{{ l.branch.name }}</div>{% endif %}</td>
-        <td>{{ '{:,.2f}'.format(l.principal) }}</td>
-        <td>{{ '{:,.2f}'.format(l.total_repayable) }}</td>
-        <td>{{ '{:,.2f}'.format(l.outstanding) }}</td>
-        <td>{{ '{:,.2f}'.format(l.monthly_amount) }}</td>
-        <td>
-          {% set badge = {'pending':'badge-warning','active':'badge-info','paid':'badge-success','rejected':'badge-danger','cancelled':'badge-secondary'} %}
-          <span class="badge {{ badge.get(l.status,'badge-secondary') }}">{{ l.status|title }}</span>
-        </td>
-        <td style="text-align:right"><a href="{{ url_for('hr.loan_detail', loan_id=l.id) }}" class="btn btn-sm btn-primary">Open</a></td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
-  {% else %}<div class="empty-state"><i class="fas fa-hand-holding-dollar"></i><p>No loans yet.</p></div>{% endif %}
-</div></div>
+  <section class="rs-card flush"><div class="hr-list">
+    {% for l in loans %}
+    {% set pct = ((l.amount_repaid or 0) / l.total_repayable * 100) if l.total_repayable else 0 %}
+    <a href="{{ url_for('hr.loan_detail', loan_id=l.id) }}" class="hr-loan">
+      <span class="hr-face" aria-hidden="true">{{ ((l.staff.full_name if l.staff else '?').split()|map('first')|list)[:2]|join|upper }}</span>
+      <span class="n"><b>{{ l.staff.full_name if l.staff else '—' }}</b>
+        <small>₦{{ '{:,.0f}'.format(l.principal) }} borrowed · ₦{{ '{:,.0f}'.format(l.monthly_amount) }}/month{% if l.branch %} · {{ l.branch.name }}{% endif %}</small></span>
+      <span class="m"><span class="rs-meter {{ 'good' if l.status == 'paid' else 'n' }}"><i style="width:{{ pct|round|int }}%"></i></span>
+        <small>{{ pct|round|int }}% repaid</small></span>
+      <span class="v"><b>₦{{ '{:,.0f}'.format(l.outstanding) }}</b><small>outstanding</small></span>
+      <span class="sl-pill {{ tone.get(l.status,'') }}">{{ l.status|title }}</span>
+    </a>
+    {% endfor %}
+  </div></section>
+  {% else %}
+  <div class="rs-blank"><span><i class="fas fa-hand-holding-dollar" aria-hidden="true"></i></span><h3>No loans yet</h3><p>Staff loans you record appear here with what's still owed.</p></div>
+  {% endif %}
+
+  {% if can_write_sub('hr', 'loans_settings') %}
+  <details class="rs-card hr-details">
+    <summary><i class="fas fa-gear" aria-hidden="true"></i> Loan settings <small>{{ 'On' if cfg.enabled else 'Off' }} · {{ cfg.rate }}% {{ cfg.method }} · {{ cfg.guarantors_required }} guarantors</small></summary>
+    <form method="POST" action="{{ url_for('hr.loans_settings') }}" class="hr-form-row">
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <label class="rs-check"><input type="checkbox" name="enabled" {% if cfg.enabled %}checked{% endif %}> Loans enabled</label>
+      <label class="sl-f"><span>Interest method</span>
+        <select name="method"><option value="flat" {% if cfg.method=='flat' %}selected{% endif %}>Flat % of principal</option>
+          <option value="reducing" {% if cfg.method=='reducing' %}selected{% endif %}>Reducing balance</option></select></label>
+      <label class="sl-f"><span>Interest rate (%)</span><input type="number" step="0.1" min="0" name="rate" value="{{ cfg.rate }}"></label>
+      <label class="sl-f"><span>Guarantors required</span><input type="number" min="1" max="5" name="guarantors_required" value="{{ cfg.guarantors_required }}"></label>
+      <button class="rs-btn primary"><i class="fas fa-floppy-disk" aria-hidden="true"></i> Save settings</button>
+    </form>
+  </details>
+  {% endif %}
+</div>
 {% endblock %}

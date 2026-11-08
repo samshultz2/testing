@@ -1,17 +1,25 @@
 {% extends "base.html" %}
+{% from "hr/_shell.html" import hr_head, hr_nav %}
 {% block title %}Loan · {{ loan.staff.full_name if loan.staff else '' }} - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('hr.loans_list') }}">Staff Loans</a> / <span>{{ loan.staff.full_name if loan.staff else 'Loan' }}</span>{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">{% endblock %}
 {% block content %}
+<div class="rs hr">
 {% set badge = {'pending':'badge-warning','active':'badge-info','paid':'badge-success','rejected':'badge-danger','cancelled':'badge-secondary'} %}
-<div class="page-header">
-  <div><h1><i class="fas fa-hand-holding-dollar"></i> {{ loan.staff.full_name if loan.staff else 'Loan' }}
-    <span class="badge {{ badge.get(loan.status,'badge-secondary') }}">{{ loan.status|title }}</span></h1>
-    <p class="text-muted text-sm">{{ loan.branch.name if loan.branch else 'All branches' }} · taken {{ loan.date_taken.strftime('%d %b %Y') if loan.date_taken }} · due by {{ loan.deadline.strftime('%d %b %Y') if loan.deadline }}</p></div>
-  <div class="page-header-actions"><a href="{{ url_for('hr.loans_list') }}" class="btn btn-secondary"><i class="fas fa-arrow-left"></i> Back</a></div>
+{% call hr_head('fa-hand-holding-dollar', loan.staff.full_name if loan.staff else 'Loan', (loan.branch.name if loan.branch else 'All branches') ~ ' · taken ' ~ (loan.date_taken.strftime('%d %b %Y') if loan.date_taken else '—') ~ ' · due by ' ~ (loan.deadline.strftime('%d %b %Y') if loan.deadline else '—')) %}
+  <span class="sl-pill {{ {'pending':'mid','active':'info','paid':'good','rejected':'bad','cancelled':''}.get(loan.status,'') }}">{{ loan.status|title }}</span>
+  <a href="{{ url_for('hr.loans_list') }}" class="rs-btn ghost"><i class="fas fa-arrow-left" aria-hidden="true"></i><span class="rs-hide-sm">All loans</span></a>
+{% endcall %}
+{% set pct = ((loan.amount_repaid or 0) / loan.total_repayable * 100) if loan.total_repayable else 0 %}
+<div class="rs-tiles">
+  <div class="rs-tile"><span class="l">Outstanding</span><span class="v">₦{{ '{:,.0f}'.format(loan.outstanding) }}</span><span class="s">of ₦{{ '{:,.0f}'.format(loan.total_repayable) }}</span></div>
+  <div class="rs-tile good"><span class="l">Repaid</span><span class="v">{{ pct|round|int }}%</span><span class="s">₦{{ '{:,.0f}'.format(loan.amount_repaid or 0) }}</span></div>
+  <div class="rs-tile"><span class="l">Monthly deduction</span><span class="v">₦{{ '{:,.0f}'.format(loan.monthly_amount) }}</span><span class="s">× {{ loan.months }} month(s)</span></div>
 </div>
+{{ hr_nav('loans') }}
 
-<div class="row">
-  <div class="col-md-7"><div class="card mb-3"><div class="card-header"><h3>Terms</h3></div><div class="card-body">
+<div class="rs-split hr-loan-split">
+  <div class="rs-main"><div class="card mb-3"><div class="card-header"><h3>Terms</h3></div><div class="card-body">
     <table class="table table-sm">
       <tr><td>Principal</td><td class="text-right">{{ '{:,.2f}'.format(loan.principal) }}</td></tr>
       <tr><td>Interest ({{ loan.interest_rate }}% {{ loan.interest_method }})</td><td class="text-right">{{ '{:,.2f}'.format(loan.total_interest) }}</td></tr>
@@ -43,7 +51,7 @@
   {% endif %}
   </div>
 
-  <div class="col-md-5">
+  <div class="rs-rail hr-static">
     <div class="card mb-3"><div class="card-header"><h3>Guarantors</h3></div><div class="card-body">
       {% for g in loan.guarantors %}
       <div class="d-flex" style="justify-content:space-between;align-items:center;padding:.5rem 0;border-bottom:1px solid var(--border-color)">
@@ -78,5 +86,6 @@
       {% else %}<p class="text-muted text-sm">No repayments yet.</p>{% endif %}
     </div></div>
   </div>
+</div>
 </div>
 {% endblock %}

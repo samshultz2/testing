@@ -1,8 +1,14 @@
 {% extends "base.html" %}
+{% from "hr/_shell.html" import hr_head, hr_nav %}
 {% block title %}New staff loan - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('hr.loans_list') }}">Staff Loans</a> / <span>New</span>{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">{% endblock %}
 {% block content %}
-<div class="page-header"><h1><i class="fas fa-plus"></i> New staff loan</h1></div>
+<div class="rs hr">
+{% call hr_head('fa-plus', 'New staff loan', 'Repaid from salary · ' ~ cfg.rate ~ '% ' ~ cfg.method ~ ' interest') %}
+  <a href="{{ url_for('hr.loans_list') }}" class="rs-btn ghost"><i class="fas fa-arrow-left" aria-hidden="true"></i><span class="rs-hide-sm">All loans</span></a>
+{% endcall %}
+{{ hr_nav('loans') }}
 
 <form method="POST" action="{{ url_for('hr.loan_new') }}">
   <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
@@ -101,4 +107,5 @@
   apply();
 })();
 </script>
+</div>
 {% endblock %}

@@ -126,13 +126,34 @@ def _nav_urls():
     return {'dashboard': url_for('hr.dashboard'), 'staff': url_for('hr.staff_list'),
             'attendance': url_for('hr.attendance'), 'leave': url_for('hr.leave_list'),
             'payroll': url_for('hr.payroll_list'), 'departments': url_for('hr.departments'),
-            'recruitment': url_for('hr.recruitment'),
+            'recruitment': url_for('hr.recruitment'), 'loans': url_for('hr.loans_list'),
             'reports': url_for('hr.reports'), 'settings': url_for('hr.settings')}
 
 
 # ============================================================================
 # DASHBOARD
 # ============================================================================
+
+def _today_attendance():
+    """Today's staff attendance at a glance for the HR overview: how many of
+    the active staff are marked present / late / absent, and how many are not
+    marked yet. Branch-scoped like the rest of the dashboard."""
+    from collections import Counter
+    from utils.branch_scope import scope_query
+    from utils import timeutil
+    from models.models_hr import StaffAttendance
+    try:
+        ids = [x.id for x in scope_query(StaffMember.query.filter_by(is_active=True), StaffMember)
+               .with_entities(StaffMember.id).all()]
+        if not ids:
+            return {'total': 0, 'present': 0, 'late': 0, 'absent': 0, 'excused': 0, 'unmarked': 0}
+        rows = StaffAttendance.query.filter(StaffAttendance.date == timeutil.today(),
+                                            StaffAttendance.staff_id.in_(ids)).all()
+        c = Counter((r.status or '').lower() for r in rows)
+        return {'total': len(ids), 'present': c['present'], 'late': c['late'], 'absent': c['absent'],
+                'excused': c['excused'], 'unmarked': max(0, len(ids) - len(rows))}
+    except Exception:
+        return None
 
 @hr_bp.route('/')
 @login_required
@@ -152,8 +173,9 @@ def dashboard():
                     'url': url_for('hr.staff_detail', staff_id=s.id)} for s in recent],
         'pending_leaves': [{'id': lv.id, 'staff_name': lv.staff.full_name, 'leave_type': lv.leave_type,
                             'dates': f"{lv.start_date.strftime('%d %b')}–{lv.end_date.strftime('%d %b')}",
-                            'days': lv.days,
+                            'days': lv.days, 'approve_url': url_for('hr.leave_status', leave_id=lv.id),
                             'staff_url': url_for('hr.staff_detail', staff_id=lv.staff_id)} for lv in pending_leaves],
+        'today_att': _today_attendance(),
         'birthdays': [{**b, 'url': url_for('hr.staff_detail', staff_id=b['id'])}
                       for b in hr.upcoming_birthdays(bid)],
         'contracts': [{**c, 'url': url_for('hr.staff_detail', staff_id=c['id'])}
@@ -1317,6 +1339,7 @@ def attendance():
         'att_statuses': hr.ATT_STATUSES,
         'departments': [{'id': d.id, 'name': d.name} for d in departments],
         'rows': [{'id': r['staff'].id, 'full_name': r['staff'].full_name,
+                  'designation': r['staff'].designation or '', 'marked': bool(r['att']),
                   'status': r['att'].status if r['att'] else 'Present',
                   'clock_in': (r['att'].clock_in if r['att'] and r['att'].clock_in else ''),
                   'minutes_late': (r['att'].minutes_late if r['att'] else 0) or 0,

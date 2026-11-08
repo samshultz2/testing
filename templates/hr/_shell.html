@@ -1,0 +1,19 @@
+{# Shared header + section tabs for the server-rendered HR pages (loans,
+   per-staff deduction amounts) so they match the React HR screens. #}
+{% macro hr_head(icon, title, sub='') %}
+<header class="rs-head">
+  <span class="rs-head-ic"><i class="fas {{ icon }}" aria-hidden="true"></i></span>
+  <div class="rs-head-t"><h1>{{ title }}</h1>{% if sub %}<p>{{ sub }}</p>{% endif %}</div>
+  {% if caller is defined %}<div class="rs-head-a">{{ caller() }}</div>{% endif %}
+</header>
+{% endmacro %}
+{% macro hr_nav(active) %}
+{% set tabs = [('hr.dashboard','fa-chart-pie','Overview','dashboard'), ('hr.staff_list','fa-users','Staff','staff'),
+  ('hr.attendance','fa-user-clock','Attendance','attendance'), ('hr.leave_list','fa-plane-departure','Leave','leave'),
+  ('hr.payroll_list','fa-money-check-dollar','Payroll','payroll'), ('hr.departments','fa-sitemap','Departments','departments'),
+  ('hr.recruitment','fa-user-plus','Recruitment','recruitment'), ('hr.loans_list','fa-hand-holding-dollar','Loans','loans'),
+  ('hr.reports','fa-chart-line','Reports','reports'), ('hr.settings','fa-gear','Settings','settings')] %}
+<nav class="sl-nav" aria-label="HR sections">
+  {% for ep, ic, label, key in tabs %}<a href="{{ url_for(ep) }}" class="{{ 'on' if key == active else '' }}"{% if key == active %} aria-current="page"{% endif %}><i class="fas {{ ic }}" aria-hidden="true"></i><span>{{ label }}</span></a>{% endfor %}
+</nav>
+{% endmacro %}

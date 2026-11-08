@@ -1,11 +1,12 @@
 {% extends "base.html" %}
-{% set _t = {'dashboard':'Staff & HR','staff':'Staff Directory','staff_form':'Staff','staff_detail':'Staff Profile','departments':'Departments','leave':'Leave Management','payroll':'Payroll','payroll_detail':'Payroll','attendance':'Staff Attendance','settings':'HR Settings'} %}
+{% set _t = {'dashboard':'Staff & HR','staff':'Staff Directory','staff_form':'Staff','staff_detail':'Staff Profile','departments':'Departments','leave':'Leave Management','payroll':'Payroll','payroll_detail':'Payroll','attendance':'Staff Attendance','settings':'HR Settings','reports':'HR Reports','recruitment':'Recruitment','vacancy':'Vacancy','checkin':'Check In','checkin_qr':'Check-in QR'} %}
 {% block title %}{{ _t.get(hr_json.page,'Staff / HR') }} - {{ app_name }}{% endblock %}
 {% block breadcrumb %}
 {% if hr_json.page == 'dashboard' %}<span>Staff / HR</span>
 {% else %}<a href="{{ url_for('hr.dashboard') }}">HR</a> / <span>{{ _t.get(hr_json.page,'') }}</span>{% endif %}
 {% endblock %}
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
 <style>
 .fin-tabs{display:flex;gap:.35rem;overflow-x:auto;margin-bottom:1rem;border-bottom:1px solid var(--border-color);padding-bottom:.1rem;-webkit-overflow-scrolling:touch}
 .fin-tab{display:inline-flex;align-items:center;gap:.45rem;padding:.6rem .9rem;white-space:nowrap;font-size:.85rem;font-weight:600;color:var(--text-secondary);border-bottom:2px solid transparent;text-decoration:none;border-radius:var(--radius-sm) var(--radius-sm) 0 0}

@@ -1,8 +1,14 @@
 {% extends "base.html" %}
+{% from "hr/_shell.html" import hr_head, hr_nav %}
 {% block title %}{{ t.name }} — per-staff amounts - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('hr.settings') }}">HR Settings</a> / <span>{{ t.name }} amounts</span>{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">{% endblock %}
 {% block content %}
-<div class="page-header"><h1><i class="fas fa-hand-holding-dollar"></i> {{ t.name }} — monthly amount per staff</h1></div>
+<div class="rs hr">
+{% call hr_head('fa-hand-holding-dollar', t.name ~ ' — amount per staff', 'Blank uses the default (' ~ default_label ~ ')') %}
+  <a href="{{ url_for('hr.settings') }}" class="rs-btn ghost"><i class="fas fa-arrow-left" aria-hidden="true"></i><span class="rs-hide-sm">HR settings</span></a>
+{% endcall %}
+{{ hr_nav('settings') }}
 
 <form method="POST" action="{{ url_for('hr.deduction_amounts', type_id=t.id) }}">
   <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
@@ -56,4 +62,5 @@
   });
 })();
 </script>
+</div>
 {% endblock %}
