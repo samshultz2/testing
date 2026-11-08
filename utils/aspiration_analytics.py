@@ -20,6 +20,23 @@ SCORE_BANDS = [('<180', 0, 179), ('180–199', 180, 199), ('200–219', 200, 219
                ('220–249', 220, 249), ('250–279', 250, 279), ('280+', 280, 10_000)]
 
 
+# Projected minus target, in JAMB points.
+GAP_BUCKETS = ('30+ below', '15–29 below', '1–14 below', '0–19 above', '20+ above')
+GAP_TONES = {'30+ below': 'off', '15–29 below': 'off', '1–14 below': 'close', '0–19 above': 'on', '20+ above': 'on'}
+
+
+def _gap_bucket(gap):
+    if gap <= -30:
+        return '30+ below'
+    if gap <= -15:
+        return '15–29 below'
+    if gap < 0:
+        return '1–14 below'
+    if gap < 20:
+        return '0–19 above'
+    return '20+ above'
+
+
 def _band(score):
     for label, lo, hi in SCORE_BANDS:
         if lo <= score <= hi:
@@ -52,8 +69,9 @@ def aspiration_overview(session_id=None, branch_id=None):
     _RESOLVED = ('Admitted', 'Declined')
     calib = {k: {'admitted': 0, 'not_admitted': 0} for k in ('ON_TRACK', 'CLOSE', 'OFF_TRACK', 'NO_DATA')}
 
-    def _acc(store, name, target, proj, on_track):
-        d = store.setdefault(name, {'count': 0, 't_sum': 0, 't_n': 0, 'p_sum': 0, 'p_n': 0, 'on_track': 0})
+    def _acc(store, name, target, proj, on_track, status=None):
+        d = store.setdefault(name, {'count': 0, 't_sum': 0, 't_n': 0, 'p_sum': 0, 'p_n': 0, 'on_track': 0,
+                                    'close': 0, 'off': 0, 'nodata': 0})
         d['count'] += 1
         if target:
             d['t_sum'] += target; d['t_n'] += 1
@@ -61,6 +79,14 @@ def aspiration_overview(session_id=None, branch_id=None):
             d['p_sum'] += proj; d['p_n'] += 1
         if on_track:
             d['on_track'] += 1
+        d['close'] += status == 'CLOSE'
+        d['off'] += status == 'OFF_TRACK'
+        d['nodata'] += status == 'NO_DATA'
+
+    rows = []                       # one row per candidate with a target (the action list)
+    blockers = {'score': 0, 'subjects': 0, 'credits': 0, 'olevel': 0, 'nodata': 0}
+    gap_buckets = {k: 0 for k in GAP_BUCKETS}
+    backup = {'with': 0, 'off_without': 0}
 
     for s in students:
         # One readiness pass per student, reused by the eligibility verdict (no
@@ -82,10 +108,37 @@ def aspiration_overview(session_id=None, branch_id=None):
 
         uni = s.target_university_name
         if uni:
-            _acc(uni_stats, uni, target, proj, on_track)
+            _acc(uni_stats, uni, target, proj, on_track, status)
         course = s.target_course_name
         if course:
-            _acc(course_stats, course, target, proj, on_track)
+            _acc(course_stats, course, target, proj, on_track, status)
+
+        # Why not on track (a candidate can have several reasons).
+        if status == 'NO_DATA':
+            blockers['nodata'] += 1
+        elif status in ('CLOSE', 'OFF_TRACK'):
+            if e.get('missing_jamb'):
+                blockers['subjects'] += 1
+            if any('5 credits' in r for r in (e.get('reasons') or [])):
+                blockers['credits'] += 1                 # not projected for 5 credits incl. Eng & Maths
+            elif e.get('missing_waec'):
+                blockers['olevel'] += 1                  # a course-specific O'level subject missing
+            if e.get('score_ok') is False and proj is not None and target:
+                blockers['score'] += 1
+        gap = (proj - target) if (proj is not None and target) else None
+        if gap is not None:
+            gap_buckets[_gap_bucket(gap)] += 1
+        has_backup = bool(getattr(s, 'target2_university_id', None) or getattr(s, 'target2_course_id', None))
+        backup['with'] += has_backup
+        backup['off_without'] += (status == 'OFF_TRACK' and not has_backup)
+        rows.append({
+            'id': s.id, 'name': getattr(s, 'full_name', ''), 'code': getattr(s, 'student_id', '') or '',
+            'university': uni or '', 'course': course or '', 'target': target, 'projected': proj, 'gap': gap,
+            'status': status, 'label': ELIGIBILITY_LABELS.get(status, status),
+            'reasons': e.get('reasons') or [], 'missing_jamb': e.get('missing_jamb') or [],
+            'missing_waec': e.get('missing_waec') or [], 'backup': has_backup,
+            'admission': getattr(s, 'admission_status', None) or '',
+        })
 
         # Score spread.
         if target:
@@ -136,7 +189,7 @@ def aspiration_overview(session_id=None, branch_id=None):
                 'name': name, 'count': d['count'],
                 'avg_target': round(d['t_sum'] / d['t_n']) if d['t_n'] else None,
                 'avg_projected': round(d['p_sum'] / d['p_n']) if d['p_n'] else None,
-                'on_track': d['on_track'],
+                'on_track': d['on_track'], 'close': d['close'], 'off': d['off'], 'nodata': d['nodata'],
             })
         rows.sort(key=lambda x: (-x['count'], x['name']))
         return rows[:n]
@@ -152,7 +205,53 @@ def aspiration_overview(session_id=None, branch_id=None):
                            'admitted': a, 'not_admitted': na, 'total': tot,
                            'admit_rate': _rate(a, tot)})
 
+    # Class of each candidate (current arm), for the list and the class breakdown.
+    try:
+        from routes.main import current_class_map
+        cls = current_class_map([s.id for s in all_sss3])
+    except Exception:
+        cls = {}
+    by_class = {}
+    for r in rows:
+        r['class'] = cls.get(r['id'], '')
+    target_ids = {r['id'] for r in rows}
+    for s in all_sss3:
+        c = cls.get(s.id) or 'No class'
+        d = by_class.setdefault(c, {'name': c, 'total': 0, 'with_target': 0, 'ON_TRACK': 0, 'CLOSE': 0,
+                                    'OFF_TRACK': 0, 'NO_DATA': 0})
+        d['total'] += 1
+    for r in rows:
+        d = by_class[r['class'] or 'No class']
+        d['with_target'] += 1
+        d[r['status']] = d.get(r['status'], 0) + 1
+    no_target = sorted(({'id': s.id, 'name': getattr(s, 'full_name', ''), 'class': cls.get(s.id, '')}
+                        for s in all_sss3 if s.id not in target_ids), key=lambda x: (x['class'], x['name']))
+    order = {'OFF_TRACK': 0, 'CLOSE': 1, 'NO_DATA': 2, 'ON_TRACK': 3}
+    rows.sort(key=lambda r: (order.get(r['status'], 4), r['gap'] if r['gap'] is not None else 0, r['name']))
+    targets = [r['target'] for r in rows if r['target']]
+    projs = [r['projected'] for r in rows if r['projected'] is not None]
+    gaps = sorted(r['gap'] for r in rows if r['gap'] is not None)
+    insight = {
+        'avg_target': round(sum(targets) / len(targets)) if targets else None,
+        'avg_projected': round(sum(projs) / len(projs)) if projs else None,
+        'median_gap': gaps[len(gaps) // 2] if gaps else None,
+        'with_projection': len(projs),
+        'blockers': blockers,
+        'gap_buckets': [{'label': k, 'count': gap_buckets[k], 'tone': GAP_TONES[k]} for k in GAP_BUCKETS],
+        'backup_with': backup['with'], 'backup_rate': _rate(backup['with'], with_target),
+        'off_without_backup': backup['off_without'],
+        'by_class': sorted(by_class.values(), key=lambda d: d['name']),
+        'no_target': no_target[:80], 'no_target_total': len(no_target),
+        'admitted_unrecorded': sum(1 for s in all_sss3 if getattr(s, 'admission_status', None) == 'Admitted'
+                                   and not getattr(s, 'admitted_university_id', None)),
+    }
+
+    insight['actions'] = _next_steps(rows, insight, len(all_sss3), with_target, mismatches,
+                                     status_counts, admitted)
+
     return {
+        'students': rows,
+        'insight': insight,
         'totals': {
             'sss3': len(all_sss3), 'with_target': with_target,
             'without_target': max(0, len(all_sss3) - with_target),
@@ -235,3 +334,58 @@ def _scholarship_summary(students):
         'by_status': _rank(status_c), 'by_course': _rank(course_c), 'by_university': _rank(uni_c),
         'awarded_amount': round(awarded_amount, 2), 'awarded_count': awarded_count,
     }
+
+
+def _next_steps(rows, ins, sss3, with_target, mismatches, status_counts, admitted):
+    """[{tone, icon, title, detail, link}] — the decisions this page supports,
+    most urgent first. ``link`` is an in-page anchor or a list filter."""
+    out = []
+    n = lambda k: sum(1 for r in rows if r['status'] == k)  # noqa: E731
+    if mismatches:
+        out.append({'tone': 'bad', 'icon': 'fa-file-circle-exclamation',
+                    'title': '%d candidate%s registered for the wrong JAMB subjects' % (
+                        len(mismatches), '' if len(mismatches) == 1 else 's'),
+                    'detail': 'Their subject combination does not meet their chosen course. Fix the registration '
+                              'before the UTME — nothing else can make up for it.',
+                    'link': '#as-fix'})
+    behind = sum(1 for r in rows if r['gap'] is not None and r['gap'] <= -30)
+    if behind:
+        out.append({'tone': 'bad', 'icon': 'fa-person-falling',
+                    'title': '%d projected 30+ points below their target' % behind,
+                    'detail': 'Plan intensive JAMB support, or talk through a realistic course / university now.',
+                    'link': 'filter:far'})
+    if ins['off_without_backup']:
+        out.append({'tone': 'warn', 'icon': 'fa-route',
+                    'title': '%d off-track candidate%s with no second choice' % (
+                        ins['off_without_backup'], '' if ins['off_without_backup'] == 1 else 's'),
+                    'detail': 'Help them pick a backup course or university they are on track for.',
+                    'link': 'filter:nobackup'})
+    close = n('CLOSE')
+    if close:
+        out.append({'tone': 'warn', 'icon': 'fa-bullseye',
+                    'title': '%d close to their target' % close,
+                    'detail': 'Within reach — the best return on extra lessons and mock practice.',
+                    'link': 'filter:CLOSE'})
+    if sss3 - with_target:
+        out.append({'tone': 'info', 'icon': 'fa-flag',
+                    'title': '%d SSS3 candidate%s have no target set' % (sss3 - with_target, '' if sss3 - with_target == 1 else 's'),
+                    'detail': 'Set a target university and course on their profile so they can be tracked here.',
+                    'link': '#as-notarget'})
+    nodata = n('NO_DATA')
+    if nodata:
+        out.append({'tone': 'info', 'icon': 'fa-circle-question',
+                    'title': '%d with a target but no exam signal yet' % nodata,
+                    'detail': 'Enter Mock JAMB / Mock WAEC results to project their readiness.',
+                    'link': 'filter:NO_DATA'})
+    if ins['admitted_unrecorded']:
+        out.append({'tone': 'info', 'icon': 'fa-building-columns',
+                    'title': '%d admitted without the university recorded' % ins['admitted_unrecorded'],
+                    'detail': 'Record where they were admitted to measure how many reached their target.',
+                    'link': None})
+    on = n('ON_TRACK')
+    if on:
+        out.append({'tone': 'good', 'icon': 'fa-circle-check',
+                    'title': '%d on track for their chosen course' % on,
+                    'detail': 'Keep them steady — confirm their UTME registration and O\'level combination.',
+                    'link': 'filter:ON_TRACK'})
+    return out

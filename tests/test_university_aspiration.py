@@ -301,7 +301,8 @@ def test_aspiration_overview(app):
         data = aspiration_overview()
         assert set(data) == {'totals', 'eligibility', 'top_universities', 'top_courses',
                              'score_distribution', 'mismatches', 'funnel', 'calibration',
-                             'scholarships'}
+                             'scholarships', 'students', 'insight'}
+        assert {'blockers', 'gap_buckets', 'by_class', 'no_target', 'backup_rate'} <= set(data['insight'])
         assert isinstance(data['eligibility'], list) and len(data['eligibility']) == 4
         assert 'conversion' in data['funnel'] and 'target_university_rate' in data['funnel']
         assert 'hit_rate' in data['calibration'] and len(data['calibration']['rows']) == 4
@@ -543,3 +544,39 @@ def test_bulk_import_cutoffs(app):
         weaving = Course.query.filter_by(name='Basket Weaving').first()
         assert weaving is not None                        # created on demand
         assert effective_cutoff(lag, weaving) == 210
+
+
+def test_aspiration_hub_candidate_list_and_next_steps(app):
+    """The redesigned hub: per-candidate rows (status, gap, reasons), the
+    reasons breakdown, backup-choice coverage, the no-target list and the
+    'what to do next' actions, all rendered."""
+    _seed(app)
+    import unittest.mock as mock
+    with app.app_context():
+        bid = Branch.get_default().id
+        u = University.query.filter_by(abbreviation='UNILAG').first()
+        med = Course.query.filter_by(name='Medicine and Surgery').first()
+        a = Student(student_id='HUB-A', first_name='Ada', surname='Target', gender='Female', is_active=True,
+                    branch_id=bid, target_university_id=u.id, target_course_id=med.id, jamb_target=300,
+                    jamb_subjects='English Language, Mathematics, Physics, Government')   # wrong combination
+        b = Student(student_id='HUB-B', first_name='Bayo', surname='NoTarget', gender='Male', is_active=True,
+                    branch_id=bid)
+        db.session.add_all([a, b]); db.session.commit()
+    pick = lambda: Student.query.filter(Student.student_id.in_(['HUB-A', 'HUB-B'])).all()  # noqa: E731
+    from utils.aspiration_analytics import aspiration_overview
+    with mock.patch('utils.helpers.get_sss3_students', side_effect=pick):
+        with app.test_request_context('/'):
+            d = aspiration_overview()
+        assert [r['name'] for r in d['students']] == ['Target Ada']
+        row = d['students'][0]
+        assert row['missing_jamb'] and row['status'] in ('NO_DATA', 'OFF_TRACK') and row['backup'] is False
+        ins = d['insight']
+        assert ins['no_target_total'] == 1 and ins['no_target'][0]['name'] == 'NoTarget Bayo'
+        titles = ' | '.join(x['title'] for x in ins['actions'])
+        assert 'wrong JAMB subjects' in titles and 'no target set' in titles
+        assert ins['actions'][0]['link'] == '#as-fix'                      # most urgent first
+        c = _admin(app)
+        body = c.get('/results/analytics/aspirations').get_data(as_text=True)
+    for want in ('What to do next', 'Candidates and their targets', 'Why candidates fall short', 'Target Ada',
+                 'Admission funnel', 'without a target', 'NoTarget Bayo', 'id="as-fix"'):
+        assert want in body, want

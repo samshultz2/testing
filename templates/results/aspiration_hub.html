@@ -2,216 +2,446 @@
 {% block title %}University Aspirations — {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('results.analytics_hub') }}">Analytics</a> / <span>Aspirations</span>{% endblock %}
 
-{% set elig_badge = {'ON_TRACK': 'badge-success', 'CLOSE': 'badge-warning', 'OFF_TRACK': 'badge-danger', 'NO_DATA': 'badge-secondary'} %}
+{% set T, I, F = data.totals, data.insight, data.funnel %}
+{% set elig = {} %}{% for e in data.eligibility %}{% set _ = elig.update({e.status: e.count}) %}{% endfor %}
+{% set ON, CL, OFF, ND = elig.get('ON_TRACK', 0), elig.get('CLOSE', 0), elig.get('OFF_TRACK', 0), elig.get('NO_DATA', 0) %}
+{% set NT = T.without_target %}
+{% set tone = {'ON_TRACK': 'on', 'CLOSE': 'close', 'OFF_TRACK': 'off', 'NO_DATA': 'nd'} %}
+
+{% macro pct(n, d) -%}{{ ((n / d * 100)|round|int) if d else 0 }}%{%- endmacro %}
+{% macro stackbar(on, cl, off, nd, extra=0, h='') -%}
+{%- set tot = on + cl + off + nd + extra -%}
+<div class="as-stack {{ h }}" role="img" aria-label="{{ on }} on track, {{ cl }} close, {{ off }} off track, {{ nd }} no exam signal{% if extra %}, {{ extra }} no target{% endif %}">
+  {%- if tot -%}
+  {%- for n, k in [(on, 'on'), (cl, 'close'), (off, 'off'), (nd, 'nd'), (extra, 'nt')] if n -%}<i class="as-{{ k }}" style="width:{{ (n / tot * 100)|round(2) }}%"></i>{%- endfor -%}
+  {%- endif -%}
+</div>
+{%- endmacro %}
+
+{% block extra_css %}
+<style>
+.as{--on:#16a34a;--close:#d97706;--off:#dc2626;--nd:#94a3b8;--nt:#e2e8f0;--info:#2563eb;display:flex;flex-direction:column;gap:1rem;min-width:0}
+[data-theme="dark"] .as,[data-theme="midnight"] .as,[data-theme="carbon"] .as{--on:#22c55e;--close:#fbbf24;--off:#f87171;--nd:#64748b;--nt:#334155}
+.as *{min-width:0}
+.as-muted{color:var(--text-muted)}.as-xs{font-size:.72rem}
+.as-card{background:var(--bg-card);border:1px solid var(--border-color);border-radius:14px;box-shadow:var(--shadow-sm,0 1px 2px rgba(15,23,42,.05))}
+.as-card > header{display:flex;align-items:center;justify-content:space-between;gap:.6rem;flex-wrap:wrap;padding:.9rem 1.1rem .7rem;border-bottom:1px solid var(--border-color)}
+.as-card > header h2{margin:0;font-size:1rem;font-weight:700;display:flex;align-items:center;gap:.5rem}
+.as-card > header h2 i{color:var(--primary);font-size:.9rem}
+.as-card > header p{margin:.15rem 0 0;font-size:.78rem;color:var(--text-muted);flex-basis:100%}
+.as-body{padding:1rem 1.1rem}
+.as-top{display:flex;align-items:flex-end;justify-content:space-between;gap:1rem;flex-wrap:wrap}
+.as-top h1{margin:0;font-size:1.55rem}
+.as-top p{margin:.25rem 0 0;color:var(--text-muted);font-size:.88rem;max-width:66ch}
+/* hero */
+.as-hero{padding:1.1rem 1.2rem;display:flex;flex-direction:column;gap:.8rem}
+.as-hero h2{margin:0;font-size:1.15rem}
+.as-hero p{margin:0;font-size:.9rem;color:var(--text-secondary,var(--text-muted))}
+.as-stack{display:flex;height:16px;border-radius:999px;overflow:hidden;background:var(--nt)}
+.as-stack.lg{height:22px}
+.as-stack.sm{height:8px}
+.as-stack i{display:block;height:100%}
+.as-on{background:var(--on)}.as-close{background:var(--close)}.as-off{background:var(--off)}.as-nd{background:var(--nd)}.as-nt{background:var(--nt)}
+.as-legend{display:flex;flex-wrap:wrap;gap:.4rem 1.1rem;font-size:.8rem}
+.as-legend span{display:inline-flex;align-items:center;gap:.4rem;white-space:nowrap}
+.as-legend b{font-variant-numeric:tabular-nums}
+.as-dot{width:.7rem;height:.7rem;border-radius:3px;display:inline-block;flex:0 0 auto}
+/* KPI */
+.as-kpis{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:.75rem}
+@media (max-width:1250px){.as-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}}
+.as-kpi{padding:.85rem .95rem;display:flex;flex-direction:column;gap:.3rem}
+.as-kpi .l{font-size:.72rem;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--text-muted)}
+.as-kpi .v{font-size:1.55rem;font-weight:800;line-height:1.05;font-variant-numeric:tabular-nums;white-space:nowrap}
+.as-kpi .v small{font-size:.8rem;font-weight:600;color:var(--text-muted)}
+.as-kpi .s{font-size:.75rem;color:var(--text-muted);line-height:1.35}
+.as-good{color:var(--on)}.as-bad{color:var(--off)}.as-warn{color:var(--close)}
+/* grids */
+.as-two{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:1rem}
+.as-half{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}
+/* actions */
+.as-acts{list-style:none;margin:0;padding:0}
+.as-acts li{display:grid;grid-template-columns:2.1rem 1fr auto;gap:.65rem;align-items:start;padding:.7rem 0;border-bottom:1px solid var(--border-color)}
+.as-acts li:last-child{border-bottom:0}
+.as-acts .i{width:2.1rem;height:2.1rem;border-radius:10px;display:grid;place-items:center;font-size:.88rem}
+.as-acts .bad .i{color:var(--off);background:color-mix(in srgb,var(--off) 11%,transparent)}
+.as-acts .warn .i{color:var(--close);background:color-mix(in srgb,var(--close) 13%,transparent)}
+.as-acts .good .i{color:var(--on);background:color-mix(in srgb,var(--on) 12%,transparent)}
+.as-acts .info .i{color:var(--info);background:color-mix(in srgb,var(--info) 11%,transparent)}
+.as-acts b{display:block;font-size:.9rem;line-height:1.3}
+.as-acts span{display:block;font-size:.78rem;color:var(--text-muted);margin-top:.15rem;line-height:1.4}
+.as-acts a.go{font-size:.76rem;font-weight:700;white-space:nowrap;color:var(--primary);text-decoration:none;padding:.3rem .55rem;border-radius:8px;border:1px solid var(--border-color)}
+/* bars */
+.as-bars{display:flex;flex-direction:column;gap:.55rem}
+.as-bars .r{display:grid;grid-template-columns:minmax(0,11rem) 1fr 2.6rem;gap:.65rem;align-items:center;font-size:.82rem}
+.as-bars .t{height:10px;border-radius:6px;background:var(--gray-100,#eef2f6);overflow:hidden}
+.as-bars .t i{display:block;height:100%;border-radius:6px}
+.as-bars .n{text-align:right;font-weight:800;font-variant-numeric:tabular-nums}
+.as-sub{font-size:.72rem;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--text-muted);margin:0 0 .55rem}
+/* list */
+.as-tools{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;padding:.75rem 1.1rem;border-bottom:1px solid var(--border-color)}
+.as-chips{display:flex;gap:.3rem;flex-wrap:wrap}
+.as-chips button{font:inherit;font-size:.76rem;font-weight:600;padding:.3rem .65rem;border-radius:999px;border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-muted);cursor:pointer;display:inline-flex;align-items:center;gap:.35rem}
+.as-chips button.on{border-color:var(--primary);color:var(--primary);background:var(--primary-alpha,rgba(15,118,110,.08))}
+.as-tools input,.as-tools select{padding:.4rem .6rem;border:1px solid var(--border-color);border-radius:8px;background:var(--bg-card);color:var(--text-primary);font-size:.84rem}
+.as-tools input{flex:1 1 200px}
+.as-count{margin-left:auto;font-size:.76rem;color:var(--text-muted);white-space:nowrap}
+.as-scroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+.as-table{width:100%;border-collapse:collapse;font-size:.85rem}
+.as-table th{font-size:.7rem;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--text-muted);text-align:left;padding:.55rem .7rem;border-bottom:1px solid var(--border-color);white-space:nowrap;background:var(--gray-50,#f8fafc)}
+.as-table td{padding:.6rem .7rem;border-bottom:1px solid var(--border-color);vertical-align:top}
+.as-table tr:last-child td{border-bottom:0}
+.as-table .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.as-table th.num{text-align:right}
+.as-table small{display:block;color:var(--text-muted);font-size:.74rem}
+.as-pill{display:inline-flex;align-items:center;gap:.3rem;font-size:.72rem;font-weight:700;padding:.15rem .5rem;border-radius:999px;white-space:nowrap}
+.as-pill.on{color:var(--on);background:color-mix(in srgb,var(--on) 12%,transparent)}
+.as-pill.close{color:var(--close);background:color-mix(in srgb,var(--close) 14%,transparent)}
+.as-pill.off{color:var(--off);background:color-mix(in srgb,var(--off) 12%,transparent)}
+.as-pill.nd{color:var(--text-muted);background:var(--gray-50,#f1f5f9)}
+.as-gap{font-weight:800}
+.as-why{display:flex;flex-wrap:wrap;gap:.25rem}
+.as-why span{font-size:.7rem;padding:.12rem .45rem;border-radius:6px;background:var(--gray-50,#f1f5f9);color:var(--text-secondary,var(--text-muted));white-space:normal;line-height:1.35}
+.as-why span.b{background:color-mix(in srgb,var(--off) 10%,transparent);color:var(--off)}
+.as-act{white-space:nowrap}.as-act a{font-size:.75rem;font-weight:600}
+.as-table td.who{min-width:9.5rem}.as-table td.tgt{min-width:10rem}.as-table td.why{min-width:13rem}
+.as-empty{padding:2.2rem 1rem;text-align:center;color:var(--text-muted)}
+.as-show-sm{display:none;margin-top:.35rem}
+/* funnel */
+.as-funnel{display:flex;flex-direction:column;gap:.45rem}
+.as-funnel .r{display:grid;grid-template-columns:7.5rem 1fr 3.4rem;gap:.6rem;align-items:center;font-size:.83rem}
+.as-funnel .b{height:26px;border-radius:7px;background:var(--gray-100,#eef2f6);overflow:hidden}
+.as-funnel .b i{display:flex;align-items:center;height:100%;border-radius:7px;background:var(--primary);opacity:.85;color:#fff;font-style:normal;font-weight:700;font-size:.74rem;padding-left:.5rem;white-space:nowrap}
+.as-funnel .n{text-align:right;font-weight:800}
+.as-mini{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.6rem;margin-top:.9rem}
+.as-mini div{padding:.6rem .7rem;border-radius:10px;background:var(--gray-50,#f8fafc)}
+.as-mini b{display:block;font-size:1.15rem}
+.as-mini span{font-size:.72rem;color:var(--text-muted)}
+.as-chart{position:relative;height:250px}
+.as-note{font-size:.76rem;color:var(--text-muted);line-height:1.5}
+details.as-more summary{cursor:pointer;font-weight:600;font-size:.86rem;padding:.9rem 1.1rem;list-style:none;display:flex;align-items:center;gap:.5rem}
+details.as-more summary::-webkit-details-marker{display:none}
+details.as-more summary i.fa-chevron-down{margin-left:auto;transition:transform .15s}
+details.as-more[open] summary i.fa-chevron-down{transform:rotate(180deg)}
+.as-names{display:flex;flex-wrap:wrap;gap:.35rem;padding:0 1.1rem 1rem}
+.as-names a{font-size:.78rem;padding:.25rem .55rem;border-radius:8px;border:1px solid var(--border-color);text-decoration:none;color:var(--text-primary)}
+.as-names a small{color:var(--text-muted)}
+@media (max-width:980px){.as-two,.as-half{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:640px){
+  .as-top h1{font-size:1.3rem}
+  .as-kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:.6rem}
+  .as-kpi .v{font-size:1.3rem}
+  .as-body{padding:.85rem}
+  .as-bars .r{grid-template-columns:minmax(0,8rem) 1fr 2.2rem}
+  .as-funnel .r{grid-template-columns:5.6rem 1fr 2.8rem}
+  .as-hide-sm{display:none}
+  .as-show-sm{display:block}
+  .as-mini{grid-template-columns:1fr 1fr 1fr}
+  .as-count{margin-left:0}
+}
+@media print{.as-noprint,.as-tools{display:none!important}.as-card{box-shadow:none;break-inside:avoid}details.as-more{display:block}}
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="page-header">
+<div class="as">
+  <div class="as-top">
     <div>
-        <h1>University Aspirations</h1>
-        <p class="text-muted text-sm">Where SSS3 candidates want to study, whether they're on track for their chosen course (projected from mock signals), and the admission funnel.</p>
+      <h1>University Aspirations</h1>
+      <p>Where your SSS3 candidates want to go, whether they are on track for it (projected from their Mock JAMB and Mock WAEC results), who needs help and with what — and how admissions turned out.</p>
     </div>
-    <a href="{{ url_for('results.analytics_hub') }}" class="btn btn-secondary" style="margin-left:auto;">Back to Analytics</a>
-</div>
+    <div class="as-noprint" style="display:flex;gap:.5rem">
+      <button type="button" class="btn btn-secondary btn-sm" data-print><i class="fas fa-print"></i> Print</button>
+      <a href="{{ url_for('results.analytics_hub') }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Analytics</a>
+    </div>
+  </div>
 
-<div class="card mb-3"><div class="card-body" style="display:flex;gap:1.5rem;flex-wrap:wrap;">
-    <div><strong style="font-size:1.5rem;">{{ data.totals.sss3 }}</strong><div class="text-muted text-sm">SSS3 candidates</div></div>
-    <div><strong style="font-size:1.5rem;">{{ data.totals.with_target }}</strong><div class="text-muted text-sm">with a target</div></div>
-    <div><strong style="font-size:1.5rem;">{{ data.totals.coverage }}%</strong><div class="text-muted text-sm">coverage</div></div>
-    {% for e in data.eligibility %}
-    <div><strong style="font-size:1.5rem;">{{ e.count }}</strong><div class="text-muted text-sm">{{ e.label }}</div></div>
-    {% endfor %}
-</div></div>
+  {# ------------------------------------------------------------- hero #}
+  <section class="as-card as-hero" aria-label="Readiness at a glance">
+    <div>
+      <h2>{% if T.with_target %}{{ ON }} of {{ T.with_target }} candidates with a target are on track for their chosen course{% else %}No SSS3 candidate has a target yet{% endif %}</h2>
+      <p>{{ T.sss3 }} SSS3 candidate{{ 's' if T.sss3 != 1 }} · {{ T.with_target }} ({{ T.coverage }}%) have chosen a university and course{% if CL %} · {{ CL }} more are close{% endif %}{% if OFF %} · {{ OFF }} off track{% endif %}.</p>
+    </div>
+    {{ stackbar(ON, CL, OFF, ND, NT, 'lg') }}
+    <div class="as-legend">
+      <span><i class="as-dot as-on"></i>On track <b>{{ ON }}</b></span>
+      <span><i class="as-dot as-close"></i>Close <b>{{ CL }}</b></span>
+      <span><i class="as-dot as-off"></i>Off track <b>{{ OFF }}</b></span>
+      <span><i class="as-dot as-nd"></i>No exam signal yet <b>{{ ND }}</b></span>
+      <span><i class="as-dot as-nt" style="outline:1px solid var(--border-color)"></i>No target set <b>{{ NT }}</b></span>
+    </div>
+  </section>
 
-{% if not data.totals.with_target %}
-<div class="card"><div class="card-body text-muted">
-    No SSS3 candidate has a target university or course set yet. Set targets on the student edit page to see aspiration analytics here.
-</div></div>
+{% if not T.with_target %}
+  <div class="as-card as-empty"><i class="fas fa-graduation-cap" style="font-size:2rem;opacity:.4"></i>
+    <p style="margin:.6rem 0 0">Set a target university and course on each SSS3 student's profile (Edit → Aspirations) to track their readiness here.</p></div>
 {% else %}
+  {# ------------------------------------------------------------- KPI tiles #}
+  <section class="as-kpis" aria-label="Key figures">
+    <div class="as-card as-kpi"><div class="l">Have a target</div><div class="v">{{ T.coverage }}%</div><div class="s">{{ T.with_target }} of {{ T.sss3 }} SSS3</div></div>
+    <div class="as-card as-kpi"><div class="l">On track</div><div class="v as-good">{{ pct(ON, T.with_target) }}</div><div class="s">{{ ON }} meet score, subjects and credits</div></div>
+    <div class="as-card as-kpi"><div class="l">Projected vs target</div>
+      <div class="v">{{ I.avg_projected if I.avg_projected is not none else '—' }} <small>/ {{ I.avg_target or '—' }}</small></div>
+      <div class="s">{% if I.median_gap is not none %}typical candidate <b class="{{ 'as-good' if I.median_gap >= 0 else 'as-bad' }}">{{ '%+d'|format(I.median_gap) }}</b> points{% else %}needs mock results{% endif %}</div></div>
+    <div class="as-card as-kpi"><div class="l">JAMB subject fix</div><div class="v {{ 'as-bad' if data.mismatches else 'as-good' }}">{{ data.mismatches|length }}</div><div class="s">{{ 'wrong subject combination' if data.mismatches else 'all combinations correct' }}</div></div>
+    <div class="as-card as-kpi"><div class="l">Have a backup choice</div><div class="v">{{ I.backup_rate if I.backup_rate is not none else 0 }}%</div><div class="s">{{ I.off_without_backup }} off-track without one</div></div>
+    <div class="as-card as-kpi"><div class="l">Admitted</div><div class="v">{{ F.admitted }}</div><div class="s">{% if F.target_university_rate is not none %}{{ F.target_university_rate }}% to their target university{% else %}{{ F.conversion }}% of candidates with a target{% endif %}</div></div>
+  </section>
 
-<div class="analytics-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem;">
-    <div class="card">
-        <div class="card-header"><h3>Course eligibility</h3></div>
-        <div class="card-body">
-            <table class="table" style="width:100%;">
-                <tbody>
-                {% for e in data.eligibility %}
-                    <tr><td><span class="badge {{ elig_badge.get(e.status, '') }}">{{ e.label }}</span></td>
-                        <td style="text-align:right;"><strong>{{ e.count }}</strong></td></tr>
-                {% endfor %}
-                </tbody>
-            </table>
+  {# ------------------------------------------------------------- next steps + why #}
+  <div class="as-two">
+    <section class="as-card">
+      <header><h2><i class="fas fa-list-check"></i> What to do next</h2><p>Most urgent first. Each item opens the candidates concerned.</p></header>
+      <div class="as-body">
+        {% if I.actions %}
+        <ul class="as-acts">{% for a in I.actions %}
+          <li class="{{ a.tone }}"><span class="i"><i class="fas {{ a.icon }}"></i></span><div><b>{{ a.title }}</b><span>{{ a.detail }}</span></div>
+            {% if a.link %}<a class="go as-noprint" href="{{ a.link if a.link.startswith('#') else '#as-list' }}" {% if a.link.startswith('filter:') %}data-as-go="{{ a.link[7:] }}"{% endif %}>View <i class="fas fa-arrow-right"></i></a>{% else %}<span></span>{% endif %}</li>
+        {% endfor %}</ul>
+        {% else %}<p class="as-muted" style="margin:0">Nothing needs attention right now.</p>{% endif %}
+      </div>
+    </section>
+    <section class="as-card">
+      <header><h2><i class="fas fa-magnifying-glass-chart"></i> Why candidates fall short</h2><p>Of the {{ CL + OFF }} close or off track (a candidate can have more than one reason), and how far projections sit from targets.</p></header>
+      <div class="as-body">
+        {% set B = I.blockers %}{% set bmax = [B.score, B.subjects, B.credits, B.olevel, 1]|max %}
+        <div class="as-bars">
+          {% for n, lab, col in [(B.score, 'Projected JAMB below target', 'var(--off)'), (B.subjects, 'Wrong JAMB subjects', 'var(--off)'),
+                                (B.credits, "Not on course for 5 credits (Eng & Maths)", 'var(--close)'), (B.olevel, "Missing a required O'level credit", 'var(--close)')] %}
+          <div class="r"><span>{{ lab }}</span><div class="t"><i style="width:{{ (n / bmax * 100)|round(1) }}%;background:{{ col }}"></i></div><span class="n">{{ n }}</span></div>
+          {% endfor %}
         </div>
-    </div>
-
-    <div class="card">
-        <div class="card-header"><h3>Admission funnel</h3></div>
-        <div class="card-body">
-            <table class="table" style="width:100%;">
-                <tbody>
-                    <tr><td>Applied</td><td style="text-align:right;"><strong>{{ data.funnel.applied }}</strong></td></tr>
-                    <tr><td>Offered</td><td style="text-align:right;"><strong>{{ data.funnel.offered }}</strong></td></tr>
-                    <tr><td>Admitted</td><td style="text-align:right;"><strong>{{ data.funnel.admitted }}</strong></td></tr>
-                    <tr><td>Declined</td><td style="text-align:right;"><strong>{{ data.funnel.declined }}</strong></td></tr>
-                    <tr><td>Deferred</td><td style="text-align:right;"><strong>{{ data.funnel.deferred }}</strong></td></tr>
-                    <tr><td class="text-muted">Conversion (admitted / with target)</td><td style="text-align:right;"><strong>{{ data.funnel.conversion }}%</strong></td></tr>
-                    {% if data.funnel.target_university_rate is not none %}
-                    <tr><td class="text-muted">Admitted to target university</td><td style="text-align:right;"><strong>{{ data.funnel.target_university_rate }}%</strong></td></tr>
-                    <tr><td class="text-muted">Admitted to an alternative university</td><td style="text-align:right;">{{ data.funnel.alternative_university_rate }}%</td></tr>
-                    {% endif %}
-                    {% if data.funnel.target_course_rate is not none %}
-                    <tr><td class="text-muted">Admitted to target course</td><td style="text-align:right;"><strong>{{ data.funnel.target_course_rate }}%</strong></td></tr>
-                    <tr><td class="text-muted">Admitted to an alternative course</td><td style="text-align:right;">{{ data.funnel.alternative_course_rate }}%</td></tr>
-                    {% endif %}
-                    {% if data.funnel.no_admission_rate is not none %}
-                    <tr><td class="text-muted">No admission (of resolved, {{ data.funnel.resolved_outcomes }})</td><td style="text-align:right;">{{ data.funnel.no_admission_rate }}%</td></tr>
-                    {% endif %}
-                </tbody>
-            </table>
-            {% if data.funnel.target_university_rate is none and data.funnel.admitted %}
-            <p class="text-muted text-sm" style="margin:.4rem 0 0;">Record admitted university/course on admitted students to see target-achievement rates.</p>
-            {% endif %}
+        {% if I.with_projection %}
+        <div class="as-sub" style="margin-top:1.1rem">How far from target (projected − target)</div>
+        {% set gmax = [I.gap_buckets|map(attribute='count')|max, 1]|max %}
+        <div class="as-bars">
+          {% for g in I.gap_buckets %}
+          <div class="r"><span>{{ g.label }}</span><div class="t"><i class="as-{{ g.tone }}" style="width:{{ (g.count / gmax * 100)|round(1) }}%"></i></div><span class="n">{{ g.count }}</span></div>
+          {% endfor %}
         </div>
-    </div>
-
-    <div class="card">
-        <div class="card-header"><h3>Most-wanted universities</h3></div>
-        <div class="card-body" style="overflow-x:auto;">
-            {% if data.top_universities %}
-            <table class="table" style="width:100%;">
-                <thead><tr><th>University</th><th style="text-align:right;">Students</th><th style="text-align:right;" title="Average competitive target">Avg target</th><th style="text-align:right;" title="Average projected JAMB">Avg proj.</th><th style="text-align:right;">On track</th></tr></thead>
-                <tbody>
-                {% for u in data.top_universities %}
-                    <tr><td>{{ u.name }}</td><td style="text-align:right;"><strong>{{ u.count }}</strong></td>
-                        <td style="text-align:right;">{{ u.avg_target if u.avg_target is not none else '—' }}</td>
-                        <td style="text-align:right;">{{ u.avg_projected if u.avg_projected is not none else '—' }}</td>
-                        <td style="text-align:right;">{{ u.on_track }}</td></tr>
-                {% endfor %}
-                </tbody>
-            </table>
-            {% else %}<p class="text-muted">No universities chosen yet.</p>{% endif %}
-        </div>
-    </div>
-
-    <div class="card">
-        <div class="card-header"><h3>Most-wanted courses</h3></div>
-        <div class="card-body" style="overflow-x:auto;">
-            {% if data.top_courses %}
-            <table class="table" style="width:100%;">
-                <thead><tr><th>Course</th><th style="text-align:right;">Students</th><th style="text-align:right;">Avg target</th><th style="text-align:right;">Avg proj.</th><th style="text-align:right;">On track</th></tr></thead>
-                <tbody>
-                {% for c in data.top_courses %}
-                    <tr><td>{{ c.name }}</td><td style="text-align:right;"><strong>{{ c.count }}</strong></td>
-                        <td style="text-align:right;">{{ c.avg_target if c.avg_target is not none else '—' }}</td>
-                        <td style="text-align:right;">{{ c.avg_projected if c.avg_projected is not none else '—' }}</td>
-                        <td style="text-align:right;">{{ c.on_track }}</td></tr>
-                {% endfor %}
-                </tbody>
-            </table>
-            {% else %}<p class="text-muted">No courses chosen yet.</p>{% endif %}
-        </div>
-    </div>
-</div>
-
-<div class="card mb-3" style="margin-top:1rem;">
-    <div class="card-header"><h3>Prediction calibration
-        {% if data.calibration.hit_rate is not none %}<span class="badge badge-info">{{ data.calibration.hit_rate }}% hit rate</span>{% endif %}
-    </h3></div>
-    <div class="card-body" style="overflow-x:auto;">
-        {% if data.calibration.resolved_total %}
-        <p class="text-muted text-sm">How our projected eligibility lined up with actual admission outcomes, over the {{ data.calibration.resolved_total }} candidate(s) whose admission has resolved (Admitted or Declined). A well-calibrated model admits most of its "On track" and few of its "Off track".</p>
-        <table class="table" style="width:100%;">
-            <thead><tr><th>Predicted</th><th style="text-align:right;">Admitted</th><th style="text-align:right;">Not admitted</th><th style="text-align:right;">Resolved</th><th style="text-align:right;">Admit rate</th></tr></thead>
-            <tbody>
-            {% for r in data.calibration.rows %}
-                {% if r.total %}
-                <tr>
-                    <td><span class="badge {{ elig_badge.get(r.status, '') }}">{{ r.label }}</span></td>
-                    <td style="text-align:right;"><strong>{{ r.admitted }}</strong></td>
-                    <td style="text-align:right;">{{ r.not_admitted }}</td>
-                    <td style="text-align:right;">{{ r.total }}</td>
-                    <td style="text-align:right;"><strong>{{ r.admit_rate }}%</strong></td>
-                </tr>
-                {% endif %}
-            {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <p class="text-muted">No admission outcomes have resolved yet. Once candidates are marked <strong>Admitted</strong> or <strong>Declined</strong> on their profiles, this table shows whether the projected eligibility actually predicted the outcome.</p>
         {% endif %}
-    </div>
-</div>
+      </div>
+    </section>
+  </div>
 
-{% set sd = data.score_distribution %}
-<div class="card mb-3" style="margin-top:1rem;">
-    <div class="card-header"><h3>Target vs projected JAMB spread
-        {% if sd.significantly_behind %}<span class="badge badge-danger">{{ sd.significantly_behind }} ≥{{ sd.behind_margin }} behind target</span>{% endif %}
-    </h3></div>
-    <div class="card-body" style="overflow-x:auto;">
-        <p class="text-muted text-sm">How many candidates sit in each JAMB band by their <strong>target</strong> and by their <strong>projected</strong> score (projection from mock signals). {% if not sd.has_projection %}<em>No mock projection available yet — only targets are shown.</em>{% endif %}</p>
-        <table class="table" style="width:100%;">
-            <thead><tr><th>Band</th>{% for b in sd.bands %}<th style="text-align:right;">{{ b }}</th>{% endfor %}</tr></thead>
-            <tbody>
-                <tr><td>By target</td>{% for n in sd.target %}<td style="text-align:right;">{{ n or '—' }}</td>{% endfor %}</tr>
-                {% if sd.has_projection %}<tr><td>By projected</td>{% for n in sd.projected %}<td style="text-align:right;">{{ n or '—' }}</td>{% endfor %}</tr>{% endif %}
-            </tbody>
-        </table>
+  {# ------------------------------------------------------------- candidate list #}
+  <section class="as-card" id="as-list">
+    <header><h2><i class="fas fa-users"></i> Candidates and their targets</h2>
+      <p>Everyone with a target, the most at-risk first. <b>Gap</b> = projected JAMB minus their target; reasons come from their course's requirements.</p></header>
+    <div class="as-tools as-noprint">
+      <div class="as-chips" role="group" aria-label="Show">
+        <button type="button" class="on" data-as-f="all">All <b>{{ data.students|length }}</b></button>
+        <button type="button" data-as-f="OFF_TRACK"><i class="as-dot as-off"></i>Off track <b>{{ OFF }}</b></button>
+        <button type="button" data-as-f="CLOSE"><i class="as-dot as-close"></i>Close <b>{{ CL }}</b></button>
+        <button type="button" data-as-f="ON_TRACK"><i class="as-dot as-on"></i>On track <b>{{ ON }}</b></button>
+        {% if ND %}<button type="button" data-as-f="NO_DATA"><i class="as-dot as-nd"></i>No signal <b>{{ ND }}</b></button>{% endif %}
+        {% if data.mismatches %}<button type="button" data-as-f="fix">Subject fix <b>{{ data.mismatches|length }}</b></button>{% endif %}
+        <button type="button" data-as-f="far">30+ below</button>
+        <button type="button" data-as-f="nobackup">Off track, no backup</button>
+      </div>
+      <input type="search" id="asSearch" placeholder="Search name, course or university…" aria-label="Search candidates" autocomplete="off">
+      {% set classes = data.students|map(attribute='class')|select|unique|sort|list %}
+      {% if classes|length > 1 %}<select id="asClass" aria-label="Class"><option value="">All classes</option>{% for c in classes %}<option>{{ c }}</option>{% endfor %}</select>{% endif %}
+      <span class="as-count" id="asCount" aria-live="polite"></span>
     </div>
-</div>
+    <div class="as-scroll"><table class="as-table" id="asTable">
+      <thead><tr><th>Candidate</th><th>Target</th><th class="num as-hide-sm">Target score</th><th class="num as-hide-sm">Projected</th><th class="num as-hide-sm">Gap</th><th class="as-hide-sm">Status</th><th>What's holding them back</th><th class="as-hide-sm">Backup</th><th class="as-noprint"></th></tr></thead>
+      <tbody>
+      {% for s in data.students %}
+        <tr data-st="{{ s.status }}" data-class="{{ s.class }}" data-q="{{ (s.name ~ ' ' ~ s.code ~ ' ' ~ s.course ~ ' ' ~ s.university)|lower }}"
+            data-tags="{{ 'fix' if s.missing_jamb }} {{ 'far' if s.gap is not none and s.gap <= -30 }} {{ 'nobackup' if s.status == 'OFF_TRACK' and not s.backup }}">
+          <td class="who"><b>{{ s.name }}</b><small>{{ s.code }}{% if s.class %} · {{ s.class }}{% endif %}</small>
+            <div class="as-show-sm"><span class="as-pill {{ tone[s.status] }}">{{ s.label }}</span>{% if s.gap is not none %} <span class="as-gap {{ 'as-good' if s.gap >= 0 else ('as-warn' if s.gap > -15 else 'as-bad') }}">{{ '%+d'|format(s.gap) }}</span> <span class="as-muted as-xs">{{ s.projected }}/{{ s.target }}</span>{% endif %}</div></td>
+          <td class="tgt">{{ s.course or '—' }}<small>{{ s.university }}</small></td>
+          <td class="num as-hide-sm">{{ s.target or '—' }}</td>
+          <td class="num as-hide-sm">{{ s.projected if s.projected is not none else '—' }}</td>
+          <td class="num as-hide-sm">{% if s.gap is not none %}<span class="as-gap {{ 'as-good' if s.gap >= 0 else ('as-warn' if s.gap > -15 else 'as-bad') }}">{{ '%+d'|format(s.gap) }}</span>{% else %}—{% endif %}</td>
+          <td class="as-hide-sm"><span class="as-pill {{ tone[s.status] }}">{{ s.label }}</span>{% if s.admission %}<small>{{ s.admission }}</small>{% endif %}</td>
+          <td class="why"><div class="as-why">
+            {% for m in s.missing_jamb %}<span class="b" title="Not registered for this JAMB subject">JAMB: {{ m }}</span>{% endfor %}
+            {% for r in s.reasons if not r.startswith('Not registered') %}<span>{{ r|replace('Projected JAMB', 'JAMB')|replace("Required O'level subject(s) not projected to credit:", "O'level credit:")|replace('Not projected for 5 credits including English & Maths', 'Not on course for 5 credits (Eng & Maths)') }}</span>{% endfor %}
+            {% if s.status == 'NO_DATA' %}<span>Needs mock results</span>{% elif not s.reasons %}<span>—</span>{% endif %}
+          </div></td>
+          <td class="as-hide-sm">{% if s.backup %}<i class="fas fa-check as-good" title="Has a second choice"></i>{% else %}<span class="as-muted as-xs">none</span>{% endif %}</td>
+          <td class="as-act as-noprint"><a href="{{ url_for('main.view_student', student_id=s.id) }}">Profile</a> · <a href="{{ url_for('main.edit_student', student_id=s.id) }}">Edit</a></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table></div>
+    <div class="as-empty" id="asNone" hidden>No candidates match.</div>
+  </section>
 
-{% set sch = data.scholarships %}
-<div class="card mb-3" style="margin-top:1rem;">
-    <div class="card-header"><h3>Scholarships <span class="text-muted text-sm">({{ sch.recipients }} recipient{{ '' if sch.recipients == 1 else 's' }})</span></h3></div>
-    <div class="card-body">
-        {% if sch.records %}
-        <div style="display:flex;gap:1.5rem;flex-wrap:wrap;margin-bottom:.75rem;">
-            <div><strong style="font-size:1.4rem;">{{ sch.recipients }}</strong><div class="text-muted text-sm">recipients</div></div>
-            <div><strong style="font-size:1.4rem;">{{ sch.records }}</strong><div class="text-muted text-sm">records</div></div>
-            {% if sch.awarded_count %}<div><strong style="font-size:1.4rem;">₦{{ '{:,.0f}'.format(sch.awarded_amount) }}</strong><div class="text-muted text-sm">awarded ({{ sch.awarded_count }})</div></div>{% endif %}
+  {# ------------------------------------------------------------- most wanted #}
+  <div class="as-half">
+    {% for title, icon, rows, what in [('Most-wanted universities', 'fa-building-columns', data.top_universities, 'university'), ('Most-wanted courses', 'fa-book-open', data.top_courses, 'course')] %}
+    <section class="as-card">
+      <header><h2><i class="fas {{ icon }}"></i> {{ title }}</h2><p>How many chose each {{ what }}, how ready they are, and the average target vs projected score.</p></header>
+      {% if rows %}
+      <div class="as-scroll"><table class="as-table">
+        <thead><tr><th>{{ what|capitalize }}</th><th class="num">Students</th><th style="min-width:7rem">Readiness</th><th class="num" title="Average target score">Avg target</th><th class="num" title="Average projected JAMB">Avg proj.</th></tr></thead>
+        <tbody>{% for u in rows %}
+          <tr><td>{{ u.name }}</td><td class="num"><b>{{ u.count }}</b></td>
+            <td>{{ stackbar(u.on_track, u.close, u.off, u.nodata, 0, 'sm') }}<small>{{ u.on_track }} on track{% if u.off %} · {{ u.off }} off{% endif %}</small></td>
+            <td class="num">{{ u.avg_target if u.avg_target is not none else '—' }}</td>
+            <td class="num">{% if u.avg_projected is not none %}<span class="{{ 'as-good' if u.avg_target and u.avg_projected >= u.avg_target else ('as-bad' if u.avg_target else '') }}">{{ u.avg_projected }}</span>{% else %}—{% endif %}</td></tr>
+        {% endfor %}</tbody>
+      </table></div>
+      {% else %}<div class="as-empty">None chosen yet.</div>{% endif %}
+    </section>
+    {% endfor %}
+  </div>
+
+  {# ------------------------------------------------------------- spread + classes #}
+  {% set sd = data.score_distribution %}
+  <div class="as-half">
+    <section class="as-card">
+      <header><h2><i class="fas fa-chart-column"></i> Target vs projected JAMB spread</h2>
+        <p>Candidates in each score band by their target and by their projection{% if sd.significantly_behind %} · <b class="as-bad">{{ sd.significantly_behind }} are {{ sd.behind_margin }}+ points behind their target</b>{% endif %}.</p></header>
+      <div class="as-body">{% if sd.has_projection or sd.target|sum %}<div class="as-chart"><canvas id="asSpread" role="img" aria-label="Target vs projected JAMB spread"></canvas></div>{% if not sd.has_projection %}<p class="as-note" style="margin:.5rem 0 0">No mock projection yet — only targets are shown.</p>{% endif %}{% else %}<p class="as-muted">No scores yet.</p>{% endif %}</div>
+    </section>
+    <section class="as-card">
+      <header><h2><i class="fas fa-people-roof"></i> By class</h2><p>Target coverage and readiness in each SSS3 arm.</p></header>
+      <div class="as-scroll"><table class="as-table">
+        <thead><tr><th>Class</th><th class="num">SSS3</th><th class="num">With target</th><th style="min-width:8rem">Readiness</th><th class="num">On track</th></tr></thead>
+        <tbody>{% for c in I.by_class %}
+          <tr><td>{{ c.name }}</td><td class="num">{{ c.total }}</td><td class="num">{{ c.with_target }} <small style="display:inline">({{ pct(c.with_target, c.total) }})</small></td>
+            <td>{{ stackbar(c.ON_TRACK, c.CLOSE, c.OFF_TRACK, c.NO_DATA, c.total - c.with_target, 'sm') }}</td>
+            <td class="num"><b>{{ c.ON_TRACK }}</b></td></tr>
+        {% endfor %}</tbody>
+      </table></div>
+    </section>
+  </div>
+
+  {# ------------------------------------------------------------- outcomes #}
+  <div class="as-half">
+    <section class="as-card">
+      <header><h2><i class="fas fa-filter"></i> Admission funnel</h2><p>From target to admission, across all {{ T.sss3 }} SSS3 candidates.</p></header>
+      <div class="as-body">
+        {% set fsteps = [('SSS3', T.sss3), ('With a target', T.with_target), ('Applied', F.applied + F.offered + F.admitted + F.declined + F.deferred), ('Offered', F.offered + F.admitted), ('Admitted', F.admitted)] %}
+        {% set fmax = [T.sss3, 1]|max %}
+        <div class="as-funnel">{% for lab, n in fsteps %}
+          <div class="r"><span>{{ lab }}</span><div class="b">{% set w = (n / fmax * 100)|round(1) %}<i style="width:{{ w }}%">{{ pct(n, T.sss3) if n and w >= 12 else '' }}</i></div><span class="n">{{ n }}</span></div>
+        {% endfor %}</div>
+        <div class="as-mini">
+          <div><b>{{ (F.target_university_rate ~ '%') if F.target_university_rate is not none else '—' }}</b><span>got their target university</span></div>
+          <div><b>{{ (F.target_course_rate ~ '%') if F.target_course_rate is not none else '—' }}</b><span>got their target course</span></div>
+          <div><b>{{ (F.no_admission_rate ~ '%') if F.no_admission_rate is not none else '—' }}</b><span>not admitted (of {{ F.resolved_outcomes }} decided)</span></div>
         </div>
-        <div class="analytics-grid" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;">
-            <div><strong class="text-sm">By status</strong>
-                <table class="table" style="width:100%;"><tbody>
-                {% for r in sch.by_status %}<tr><td>{{ r.name }}</td><td style="text-align:right;"><strong>{{ r.count }}</strong></td></tr>{% endfor %}
-                </tbody></table></div>
-            <div><strong class="text-sm">By course</strong>
-                <table class="table" style="width:100%;"><tbody>
-                {% for r in sch.by_course %}<tr><td>{{ r.name }}</td><td style="text-align:right;"><strong>{{ r.count }}</strong></td></tr>{% endfor %}
-                </tbody></table></div>
-            <div><strong class="text-sm">By university</strong>
-                <table class="table" style="width:100%;"><tbody>
-                {% for r in sch.by_university %}<tr><td>{{ r.name }}</td><td style="text-align:right;"><strong>{{ r.count }}</strong></td></tr>{% endfor %}
-                </tbody></table></div>
-        </div>
-        <p class="text-muted text-sm" style="margin:.6rem 0 0;"><i class="fas fa-circle-info"></i> Distribution only — recipients are often already strong candidates, so this does not attribute performance to scholarships.</p>
-        {% else %}
-        <p class="text-muted">No scholarships recorded for this cohort yet. Add them on a student's Admission &amp; Scholarships section.</p>
-        {% endif %}
-    </div>
-</div>
+        {% if F.declined or F.deferred %}<p class="as-note" style="margin:.6rem 0 0">Also: {{ F.declined }} declined · {{ F.deferred }} deferred.</p>{% endif %}
+        {% if F.target_university_rate is none and F.admitted %}<p class="as-note" style="margin:.6rem 0 0"><i class="fas fa-circle-info"></i> Record the university and course admitted students got, to measure how many reached their target.</p>{% endif %}
+      </div>
+    </section>
+    <section class="as-card">
+      <header><h2><i class="fas fa-crosshairs"></i> Prediction calibration
+        {% if data.calibration.hit_rate is not none %}{% if data.calibration.resolved_total >= 10 %}<span class="as-pill {{ 'on' if data.calibration.hit_rate >= 70 else 'close' }}">{{ data.calibration.hit_rate }}% hit rate</span>{% else %}<span class="as-pill nd">early — {{ data.calibration.resolved_total }} decided</span>{% endif %}{% endif %}</h2>
+        <p>Did "on track" candidates actually get admitted? Checks the projections against real outcomes.</p></header>
+      {% if data.calibration.resolved_total %}
+      <div class="as-scroll"><table class="as-table">
+        <thead><tr><th>We predicted</th><th class="num">Admitted</th><th class="num">Not admitted</th><th class="num">Admit rate</th></tr></thead>
+        <tbody>{% for r in data.calibration.rows if r.total %}
+          <tr><td><span class="as-pill {{ tone[r.status] }}">{{ r.label }}</span></td><td class="num"><b>{{ r.admitted }}</b></td><td class="num">{{ r.not_admitted }}</td><td class="num"><b>{{ r.admit_rate }}%</b></td></tr>
+        {% endfor %}</tbody>
+      </table></div>
+      <p class="as-note" style="padding:0 1.1rem .9rem;margin:.5rem 0 0">Over {{ data.calibration.resolved_total }} candidate{{ 's' if data.calibration.resolved_total != 1 }} whose admission is decided. A good projection admits most "On track" and few "Off track".</p>
+      {% else %}<div class="as-body"><p class="as-muted" style="margin:0">Appears once candidates are marked <b>Admitted</b> or <b>Declined</b> on their profiles.</p></div>{% endif %}
+    </section>
+  </div>
 
-<div class="card mb-3" style="margin-top:1rem;">
-    <div class="card-header"><h3>JAMB subject-mismatch fix list <span class="text-muted text-sm">({{ data.mismatches|length }})</span></h3></div>
-    <div class="card-body" style="overflow-x:auto;">
-        {% if data.mismatches %}
-        <p class="text-muted text-sm">Candidates whose registered JAMB subjects don't cover their target course's requirements — fix the registration before the exam.</p>
-        <table class="table" style="width:100%;">
-            <thead><tr><th>Student</th><th>Target course</th><th>University</th><th>Missing JAMB subject(s)</th><th></th></tr></thead>
-            <tbody>
-            {% for m in data.mismatches %}
-                <tr>
-                    <td>{{ m.name }}</td>
-                    <td>{{ m.course or '—' }}</td>
-                    <td>{{ m.university or '—' }}</td>
-                    <td>{% for s in m.missing_jamb %}<span class="badge badge-danger" style="margin:1px;">{{ s }}</span>{% endfor %}</td>
-                    <td><a class="btn btn-secondary btn-sm" href="{{ url_for('main.edit_student', student_id=m.student_id) }}">Edit</a></td>
-                </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-        {% else %}
-        <p class="text-muted">No subject mismatches — every candidate with a target is registered for the required JAMB subjects.</p>
-        {% endif %}
+  {# ------------------------------------------------------------- fix list #}
+  <section class="as-card" id="as-fix">
+    <header><h2><i class="fas fa-file-circle-exclamation"></i> JAMB subject-mismatch fix list <span class="as-muted as-xs">({{ data.mismatches|length }})</span></h2>
+      <p>Candidates whose registered JAMB subjects don't cover their target course's requirements — fix the registration before the exam.</p></header>
+    {% if data.mismatches %}
+    <div class="as-scroll"><table class="as-table">
+      <thead><tr><th>Student</th><th>Target course</th><th>Missing JAMB subject(s)</th><th class="as-noprint"></th></tr></thead>
+      <tbody>{% for m in data.mismatches %}
+        <tr><td><b>{{ m.name }}</b></td><td>{{ m.course or '—' }}<small>{{ m.university }}</small></td>
+          <td><div class="as-why">{% for s in m.missing_jamb %}<span class="b">{{ s }}</span>{% endfor %}</div></td>
+          <td class="as-act as-noprint"><a href="{{ url_for('main.edit_student', student_id=m.student_id) }}">Fix subjects</a></td></tr>
+      {% endfor %}</tbody>
+    </table></div>
+    {% else %}<div class="as-body"><p class="as-muted" style="margin:0"><i class="fas fa-circle-check as-good"></i> Every candidate with a target is registered for the required JAMB subjects.</p></div>{% endif %}
+  </section>
+
+  {# ------------------------------------------------------------- scholarships #}
+  {% set sch = data.scholarships %}
+  <section class="as-card">
+    <header><h2><i class="fas fa-award"></i> Scholarships <span class="as-muted as-xs">({{ sch.recipients }} recipient{{ '' if sch.recipients == 1 else 's' }})</span></h2></header>
+    <div class="as-body">
+      {% if sch.records %}
+      <div class="as-mini" style="margin-top:0;margin-bottom:.9rem">
+        <div><b>{{ sch.recipients }}</b><span>recipients</span></div>
+        <div><b>{{ sch.records }}</b><span>scholarships recorded</span></div>
+        <div><b>{% if sch.awarded_count %}₦{{ '{:,.0f}'.format(sch.awarded_amount) }}{% else %}—{% endif %}</b><span>awarded{% if sch.awarded_count %} ({{ sch.awarded_count }}){% endif %}</span></div>
+      </div>
+      <div class="as-half" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr))">
+        {% for lab, list in [('By status', sch.by_status), ('By course', sch.by_course), ('By university', sch.by_university)] %}
+        <div><div class="as-sub">{{ lab }}</div>{% set mx = [list|map(attribute='count')|max if list else 1, 1]|max %}
+          <div class="as-bars">{% for r in list %}<div class="r"><span>{{ r.name }}</span><div class="t"><i style="width:{{ (r.count / mx * 100)|round(1) }}%;background:var(--primary)"></i></div><span class="n">{{ r.count }}</span></div>{% endfor %}</div></div>
+        {% endfor %}
+      </div>
+      <p class="as-note" style="margin:.8rem 0 0"><i class="fas fa-circle-info"></i> Distribution only — recipients are often already strong candidates, so this does not attribute performance to scholarships.</p>
+      {% else %}<p class="as-muted" style="margin:0">No scholarships recorded for this cohort yet. Add them in a student's Admission &amp; Scholarships section.</p>{% endif %}
     </div>
+  </section>
+
+  {# ------------------------------------------------------------- no target #}
+  {% if I.no_target_total %}
+  <details class="as-card as-more" id="as-notarget">
+    <summary><i class="fas fa-flag" style="color:var(--info)"></i> {{ I.no_target_total }} SSS3 candidate{{ 's' if I.no_target_total != 1 }} without a target <i class="fas fa-chevron-down as-muted"></i></summary>
+    <div class="as-names">{% for s in I.no_target %}<a href="{{ url_for('main.edit_student', student_id=s.id) }}">{{ s.name }}{% if s.class %} <small>{{ s.class }}</small>{% endif %}</a>{% endfor %}
+      {% if I.no_target_total > I.no_target|length %}<span class="as-muted as-xs">and {{ I.no_target_total - I.no_target|length }} more</span>{% endif %}</div>
+  </details>
+  {% endif %}
+
+  <p class="as-note"><b>How this works.</b> A candidate is <b>On track</b> when their projected JAMB meets their course's target, they are registered for the required JAMB subjects and are projected for the required O'level credits; <b>Close</b> when subjects and credits are fine and the score is within reach; otherwise <b>Off track</b>. Projections come from their Mock JAMB and Mock WAEC results — a guide, not a guarantee.</p>
+{% endif %}
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{% if data.totals.with_target %}
+<script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
+<script nonce="{{ csp_nonce }}">
+(function () {
+  // Candidate list: status chips, search and class filter, all live.
+  var rows = Array.prototype.slice.call(document.querySelectorAll('#asTable tbody tr'));
+  var chips = document.querySelectorAll('[data-as-f]'), q = document.getElementById('asSearch'),
+      cls = document.getElementById('asClass'), cnt = document.getElementById('asCount'), none = document.getElementById('asNone');
+  var f = 'all';
+  function apply() {
+    var term = (q.value || '').trim().toLowerCase(), c = cls ? cls.value : '', shown = 0;
+    rows.forEach(function (tr) {
+      var tags = ' ' + tr.getAttribute('data-tags') + ' ';
+      var ok = (f === 'all' || tr.getAttribute('data-st') === f || tags.indexOf(' ' + f + ' ') !== -1)
+        && (!c || tr.getAttribute('data-class') === c)
+        && (!term || term.split(/\s+/).every(function (t) { return tr.getAttribute('data-q').indexOf(t) !== -1; }));
+      tr.style.display = ok ? '' : 'none';
+      if (ok) shown++;
+    });
+    cnt.textContent = shown === rows.length ? rows.length + ' candidates' : shown + ' of ' + rows.length;
+    none.hidden = shown !== 0;
+  }
+  function setF(v) { f = v; chips.forEach(function (b) { b.classList.toggle('on', b.getAttribute('data-as-f') === v); }); apply(); }
+  chips.forEach(function (b) { b.addEventListener('click', function () { setF(b.getAttribute('data-as-f')); }); });
+  q.addEventListener('input', apply); if (cls) cls.addEventListener('change', apply);
+  document.querySelectorAll('[data-as-go]').forEach(function (a) { a.addEventListener('click', function () { setF(a.getAttribute('data-as-go')); }); });
+  apply();
+
+  // Target vs projected spread
+  var el = document.getElementById('asSpread');
+  if (el && window.Chart) {
+    var css = getComputedStyle(document.querySelector('.as'));
+    var primary = (css.getPropertyValue('--primary') || '').trim() || '#0f766e';
+    Chart.defaults.font.family = getComputedStyle(document.body).fontFamily;
+    Chart.defaults.color = (css.getPropertyValue('--text-muted') || '').trim() || '#64748b';
+    var sd = {{ data.score_distribution|tojson }};
+    var ds = [{ label: 'By target', data: sd.target, backgroundColor: '#94a3b8', borderRadius: 5 }];
+    if (sd.has_projection) ds.push({ label: 'By projection', data: sd.projected, backgroundColor: primary, borderRadius: 5 });
+    new Chart(el, { type: 'bar', data: { labels: sd.bands, datasets: ds },
+      options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, usePointStyle: true } } },
+        scales: { y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: 'rgba(148,163,184,.22)' } }, x: { grid: { display: false } } } } });
+  }
+})();
+</script>
 {% endif %}
 {% endblock %}

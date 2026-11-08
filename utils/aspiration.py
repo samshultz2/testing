@@ -31,7 +31,14 @@ def course_eligibility(student, session_id=None, readiness=None):
             'university': getattr(student, 'target_university_name', None),
             'department': getattr(student, 'target_department', None) or (course.department or None)}
     if not jamb and not waec:
-        return {**base, 'status': 'NO_DATA'}
+        # No exam signal to project from — but a wrong JAMB subject combination
+        # can still be caught from the registration alone.
+        have = set(student.jamb_subject_list)
+        missing = [' or '.join(g) for g in course.jamb_requirement_groups if not any(x in have for x in g)]
+        out = {**base, 'status': 'NO_DATA', 'missing_jamb': missing}
+        if missing:
+            out['reasons'] = ['Not registered for required JAMB subject(s): ' + ', '.join(missing)]
+        return out
 
     proj = jamb['score'] if jamb else None
     gap = (target - proj) if (target and proj is not None) else None
