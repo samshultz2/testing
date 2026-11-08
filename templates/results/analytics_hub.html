@@ -1,8 +1,11 @@
 {% extends "base.html" %}
+{% from "results/_board_shell.html" import bx_head with context %}
+{% from "results/_ax_shell.html" import ax_nav with context %}
 {% block title %}Exam Analytics - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('results.index') }}">Results</a> / <span>Exam Analytics</span>{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
 <style>
 .section-title{display:flex;align-items:center;flex-wrap:wrap;gap:.5rem;margin:1.5rem 0 .75rem;font-size:1.05rem;font-weight:700;min-width:0}
 .section-title .sec-actions{margin-left:auto;display:flex;flex-wrap:wrap;gap:.4rem}
@@ -79,52 +82,61 @@ a.exec:hover .go{opacity:1}
 {% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <div>
-        <h1>Exam Analytics</h1>
-        <p class="text-muted text-sm">Every WAEC &amp; JAMB stat, correlation and projection in one place</p>
+<div class="rs bx bx-legacy ax">
+{% call bx_head('fa-chart-pie', 'Exam Analytics', 'Every WAEC, NECO & JAMB stat, correlation and projection in one place') %}
+  <form method="GET" class="bx-year no-print">
+    <select name="year" data-autosubmit aria-label="Year">
+      {% for y in years %}<option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>{% endfor %}
+    </select>
+    {% if years|length > 1 %}
+    <select name="compare" data-autosubmit title="Compare with another year" aria-label="Compare with">
+      <option value="">vs —</option>
+      {% for y in years %}{% if y != selected_year %}<option value="{{ y }}" {% if y == compare_year %}selected{% endif %}>vs {{ y }}</option>{% endif %}{% endfor %}
+    </select>
+    {% endif %}
+  </form>
+  {% if selected_year %}
+  <details class="bx-menu no-print">
+    <summary class="rs-btn ghost" aria-label="Reports and downloads"><i class="fas fa-download" aria-hidden="true"></i><span class="rs-hide-sm">Reports</span></summary>
+    <div class="bx-menu-pop" role="menu">
+      <a role="menuitem" href="{{ url_for('results.analytics_board_pack', year=selected_year) }}" target="_blank" rel="noopener"><i class="fas fa-file-invoice" aria-hidden="true"></i><span>Board pack (PDF)</span></a>
+      <a role="menuitem" href="{{ url_for('results.analytics_deck', year=selected_year) }}"><i class="fas fa-file-powerpoint" aria-hidden="true"></i><span>Slides for meetings</span></a>
+      <a role="menuitem" href="{{ url_for('results.analytics_export', year=selected_year) }}"><i class="fas fa-file-excel" aria-hidden="true"></i><span>Excel</span></a>
+      <a role="menuitem" href="{{ url_for('results.analytics_export_csv', year=selected_year) }}"><i class="fas fa-file-csv" aria-hidden="true"></i><span>CSV</span></a>
+      <button type="button" role="menuitem" data-call="exportAnalyticsImage"><i class="fas fa-image" aria-hidden="true"></i><span>Image</span></button>
+      <button type="button" role="menuitem" data-print><i class="fas fa-print" aria-hidden="true"></i><span>Print / save as PDF</span></button>
     </div>
-    <div class="page-header-actions no-print">
-        <form method="GET" class="d-flex gap-2 align-center">
-            <label class="form-label mb-0">Year</label>
-            <select name="year" class="form-control" style="max-width:130px;" data-autosubmit>
-                {% for y in years %}<option value="{{ y }}" {% if y == selected_year %}selected{% endif %}>{{ y }}</option>{% endfor %}
-            </select>
-            {% if years|length > 1 %}
-            <label class="form-label mb-0">vs</label>
-            <select name="compare" class="form-control" style="max-width:130px;" data-autosubmit title="Compare with another year">
-                <option value="">— compare —</option>
-                {% for y in years %}{% if y != selected_year %}<option value="{{ y }}" {% if y == compare_year %}selected{% endif %}>{{ y }}</option>{% endif %}{% endfor %}
-            </select>
-            {% endif %}
-        </form>
-        <a href="{{ url_for('results.waec_broadsheet', year=selected_year) }}" class="btn btn-secondary btn-sm" title="Full WAEC grade matrix — print / download"><i class="fas fa-table-cells"></i> WAEC broadsheet</a>
-        <a href="{{ url_for('results.analytics_insights', year=selected_year) }}" class="btn btn-primary btn-sm" title="Value added, mock accuracy, near-credit, teachers, fairness, cohorts, data health"><i class="fas fa-microscope"></i> Deeper insights</a>
-        <a href="{{ url_for('results.analytics_trends') }}" class="btn btn-secondary btn-sm" title="Cross-year WAEC & JAMB trends"><i class="fas fa-chart-line"></i> Trends</a>
-        <a href="{{ url_for('results.at_risk_watchlist') }}" class="btn btn-secondary btn-sm" title="Live at-risk SSS3 watchlist, by class"><i class="fas fa-triangle-exclamation"></i> Watchlist</a>
-        <a href="{{ url_for('results.aspiration_hub') }}" class="btn btn-secondary btn-sm" title="University aspirations, eligibility & admission funnel"><i class="fas fa-graduation-cap"></i> Aspirations</a>
-        <a href="{{ url_for('results.readiness_funnel') }}" class="btn btn-secondary btn-sm" title="Cohort admission-readiness funnel"><i class="fas fa-graduation-cap"></i> Readiness</a>
-        <a href="{{ url_for('results.cutoffs_list') }}" class="btn btn-secondary btn-sm" title="Manage admission cut-offs"><i class="fas fa-sliders"></i> Cut-offs</a>
-        {% if can_write_sub('external_exams', 'analytics_recompute') %}
-        <form method="POST" action="{{ recompute_url }}" class="d-inline" title="Recompute risk &amp; JAMB predictions for all students in view">
-            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-            <button type="submit" class="btn btn-secondary btn-sm"><i class="fas fa-sync"></i> Recompute</button>
-        </form>
-        {% endif %}
-        <a href="{{ url_for('results.tasks') }}" class="btn btn-secondary btn-sm" title="Background task status"><i class="fas fa-list-check"></i> Tasks</a>
-        {% if analytics_refreshed_at %}
-        <span class="text-muted text-sm" title="Analytics auto-refresh once a day in the background"><i class="fas fa-clock"></i> Refreshed {{ analytics_refreshed_at[:16]|replace('T', ' ') }}</span>
-        {% endif %}
-        {% if selected_year %}
-        <a href="{{ url_for('results.analytics_board_pack', year=selected_year) }}" target="_blank" rel="noopener" class="btn btn-primary btn-sm" title="Executive board pack (PDF)"><i class="fas fa-file-invoice"></i> Board pack</a>
-        <a href="{{ url_for('results.analytics_deck', year=selected_year) }}" class="btn btn-primary btn-sm" title="PowerPoint deck for meetings"><i class="fas fa-file-powerpoint"></i> Slides</a>
-        <a href="{{ url_for('results.analytics_export', year=selected_year) }}" class="btn btn-success btn-sm" title="Excel"><i class="fas fa-file-excel"></i></a>
-        <a href="{{ url_for('results.analytics_export_csv', year=selected_year) }}" class="btn btn-secondary btn-sm" title="CSV"><i class="fas fa-file-csv"></i></a>
-        <button type="button" data-call="exportAnalyticsImage" class="btn btn-secondary btn-sm" title="Image"><i class="fas fa-image"></i></button>
-        <button type="button" data-print class="btn btn-secondary btn-sm" title="Print / Save as PDF"><i class="fas fa-file-pdf"></i></button>
-        {% endif %}
+  </details>
+  {% endif %}
+  <details class="bx-menu no-print">
+    <summary class="rs-btn ghost" aria-label="More"><i class="fas fa-ellipsis" aria-hidden="true"></i><span class="rs-hide-sm">More</span></summary>
+    <div class="bx-menu-pop" role="menu">
+      <a role="menuitem" href="{{ url_for('results.waec_broadsheet', year=selected_year) }}"><i class="fas fa-table-cells" aria-hidden="true"></i><span>WAEC broadsheet</span></a>
+      <a role="menuitem" href="{{ url_for('results.at_risk_watchlist') }}"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i><span>At-risk watchlist</span></a>
+      <a role="menuitem" href="{{ url_for('results.aspiration_hub') }}"><i class="fas fa-graduation-cap" aria-hidden="true"></i><span>Aspirations</span></a>
+      <a role="menuitem" href="{{ url_for('results.cutoffs_list') }}"><i class="fas fa-sliders" aria-hidden="true"></i><span>Admission cut-offs</span></a>
+      <a role="menuitem" href="{{ url_for('results.tasks') }}"><i class="fas fa-list-check" aria-hidden="true"></i><span>Background tasks</span></a>
+      {% if can_write_sub('external_exams', 'analytics_recompute') %}
+      <form method="POST" action="{{ recompute_url }}" title="Recompute risk &amp; JAMB predictions for all students in view">
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+        <button type="submit" role="menuitem"><i class="fas fa-sync" aria-hidden="true"></i><span>Recompute predictions</span></button>
+      </form>
+      {% endif %}
+      {% if analytics_refreshed_at %}<div class="rs-menu-hd" title="Analytics auto-refresh once a day in the background"><i class="fas fa-clock" aria-hidden="true"></i> Refreshed {{ analytics_refreshed_at[:16]|replace('T', ' ') }}</div>{% endif %}
     </div>
-</div>
+  </details>
+  <a href="{{ url_for('results.analytics_insights', year=selected_year) }}" class="rs-btn primary no-print" title="Value added, mock accuracy, near-credit, teachers, fairness, cohorts, data health"><i class="fas fa-microscope" aria-hidden="true"></i><span class="rs-hide-sm">Deeper insights</span></a>
+{% endcall %}
+{{ ax_nav('hub') }}
+{% if years and selected_year %}
+<nav class="ax-jump no-print" aria-label="Jump to section">
+  <a href="#sec-atrisk"><i class="fas fa-user-clock" aria-hidden="true"></i> At-risk</a>
+  <a href="#sec-jamb">JAMB</a>
+  <a href="#sec-waec">WAEC</a>
+  {% if neco_stats %}<a href="#sec-neco">NECO</a>{% endif %}
+  <a href="#sec-corr"><i class="fas fa-link" aria-hidden="true"></i> Correlation</a>
+</nav>
+{% endif %}
 
 {% if years and selected_year %}
 {% set uni_pct = cutoff.eligible_200_pct if cutoff else None %}
@@ -907,4 +919,5 @@ function exportAnalyticsImage() {
     });
 }
 </script>
+</div>
 {% endblock %}

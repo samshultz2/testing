@@ -1,21 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { submitJson } from '../lib/forms';
-import { useChart, chartPalette } from '../lib/hooks';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, Banner, SectionShell, Empty } from '../components/ui';
 import { canWrite } from '../lib/perms';
-
-// Horizontal bar config for the subject-enrolment charts (shared by WAEC/JAMB).
-const enrolBarCfg = (rows, color) => ({
-  type: 'bar',
-  data: {
-    labels: rows.slice(0, 12).map((r) => (r.subject.length > 14 ? r.subject.slice(0, 14) + '…' : r.subject)),
-    datasets: [{ data: rows.slice(0, 12).map((r) => r.count), backgroundColor: color, borderRadius: 5 }],
-  },
-  options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-    plugins: { legend: { display: false } },
-    scales: { x: { beginAtZero: true, ticks: { precision: 0 } } } },
-});
+import { Head, Tiles, Seg, Blank, Ring } from '../subjects/results';
 
 // ---- Results index ---------------------------------------------------------
 function Index({ d }) {
@@ -65,146 +53,196 @@ function Index({ d }) {
   );
 }
 
+// ---- Shared exam-analytics tabs (same links as the server pages) ----------
+const AX_TABS = [['hub', 'fa-chart-pie', 'Overview'], ['insights', 'fa-microscope', 'Insights'], ['trends', 'fa-chart-line', 'Trends'],
+  ['readiness', 'fa-list-check', 'Readiness'], ['funnel', 'fa-filter', 'Admission funnel'], ['predictions', 'fa-wand-magic-sparkles', 'Predictions'],
+  ['focus', 'fa-bullseye', 'Focus areas'], ['enrolment', 'fa-book-open', 'Subject enrolment']];
+function AxNav({ d, active }) {
+  if (!d.axnav) return null;
+  return (
+    <nav className="sl-nav ax-nav" aria-label="Exam analytics">
+      {AX_TABS.map(([k, ic, l]) => d.axnav[k] && (
+        <a key={k} href={d.axnav[k]} className={active === k ? 'on' : ''} data-native={['readiness', 'enrolment'].includes(k) ? undefined : ''}>
+          <i className={'fas ' + ic} aria-hidden="true" /><span>{l}</span></a>))}
+    </nav>
+  );
+}
+
 // ---- Exam readiness --------------------------------------------------------
+const R_TONE = { no_jamb: 'bad', no_waec: 'bad', below_target: 'mid', no_stream: 'mid', no_jamb_subjects: 'mid', no_waec_subjects: 'mid' };
 function Readiness({ d }) {
+  const [open, setOpen] = useState(() => (d.groups.find((g) => g.students.length) || {}).key || null);
+  const [q, setQ] = useState('');
+  const pct = d.total ? Math.round(d.ready / d.total * 100) : 0;
+  // Students who appear in several gaps come first — they need the most help.
+  const gaps = {};
+  d.groups.forEach((g) => g.students.forEach((s) => { (gaps[s.id] = gaps[s.id] || { s, keys: [] }).keys.push(g.title); }));
+  const worst = Object.values(gaps).filter((x) => x.keys.length > 1).sort((a, b) => b.keys.length - a.keys.length).slice(0, 8);
+  const g = d.groups.find((x) => x.key === open);
+  const shown = g ? g.students.filter((s) => !q || (s.full_name + ' ' + s.student_id).toLowerCase().includes(q.toLowerCase())) : [];
   return (
     <>
-      <div className="page-header"><div><h1>Exam Readiness</h1><p className="text-muted text-sm">Who still needs attention before WAEC/JAMB — SSS3 cohort</p></div></div>
-      <div className="kpi-grid">
-        <div className="kpi good"><div className="v">{d.ready}</div><div className="l">Fully ready</div></div>
-        <div className="kpi"><div className="v">{d.total}</div><div className="l">SSS3 candidates</div></div>
-        {d.groups.slice(0, 2).map((g) => (
-          <div className="kpi" key={g.key}><div className="v" style={{ color: g.students.length ? 'var(--danger)' : 'var(--success)' }}>{g.students.length}</div><div className="l">{g.title}</div></div>))}
+      <Head icon="fa-list-check" title="Exam Readiness" sub="Who still needs attention before WAEC / JAMB — SSS3 cohort" />
+      <AxNav d={d} active="readiness" />
+      <div className="bx-two rd-top">
+        <section className="rs-card rd-hero">
+          <Ring value={pct} label="ready" />
+          <div>
+            <h3>{d.ready} of {d.total} candidates are fully ready</h3>
+            <p className="rs-muted">Ready means: a Mock JAMB and a Mock WAEC result, at or above their JAMB target, a stream set, and both subject lists on the profile.</p>
+            <div className="rd-chips">{d.groups.map((x) => (
+              <button key={x.key} type="button" className={'rs-chip' + (open === x.key ? ' on' : '')} onClick={() => setOpen(x.key)}>
+                {x.title.replace(/ yet$/, '')} <small>{x.students.length}</small></button>))}</div>
+          </div>
+        </section>
+        <section className="rs-card flush">
+          <div className="rs-card-h pad"><h3><i className="fas fa-user-clock" aria-hidden="true" /> Most gaps first</h3><small>students missing several items</small></div>
+          {worst.length ? (
+            <div className="bx-rank">{worst.map(({ s, keys }) => (
+              <div className="bx-rank-row jx-rank" key={s.id}>
+                <span className="bx-pos sm">{keys.length}</span>
+                <span className="n"><b>{s.full_name}</b><small>{keys.join(' · ')}</small></span>
+                <span />
+                <a href={s.action.url} className="rs-btn ghost sm">{s.action.label}</a>
+              </div>))}</div>
+          ) : <p className="rs-muted bx-pad">No student is missing more than one item.</p>}
+        </section>
       </div>
-      {d.groups.map((g) => (
-        <details className={'rgroup' + (g.students.length ? '' : ' clear')} open={g.students.length > 0} key={g.key}>
-          <summary><span><i aria-hidden="true" className={'fas ' + g.icon} /> {g.title}</span><span className="count">{g.students.length}</span></summary>
+
+      <div className="rd-grid">
+        {d.groups.map((x) => {
+          const n = x.students.length; const done = d.total ? Math.round((d.total - n) / d.total * 100) : 100;
+          return (
+            <button key={x.key} type="button" className={'rd-card' + (open === x.key ? ' on' : '') + (n ? ' ' + R_TONE[x.key] : ' good')} onClick={() => setOpen(x.key)}>
+              <span className="ic"><i className={'fas ' + (n ? x.icon : 'fa-circle-check')} aria-hidden="true" /></span>
+              <span className="t"><b>{x.title}</b><small>{n ? n + ' student' + (n === 1 ? '' : 's') : 'All clear'}</small></span>
+              <span className="rs-meter good"><i style={{ width: done + '%' }} /></span>
+            </button>);
+        })}
+      </div>
+
+      {g && (
+        <section className="rs-card flush">
+          <div className="bx-filters">
+            <h3 className="rd-h"><i className={'fas ' + g.icon} aria-hidden="true" /> {g.title} <span className="sl-pill">{g.students.length}</span></h3>
+            {g.students.length > 6 && <label className="rs-search"><i className="fas fa-magnifying-glass" aria-hidden="true" />
+              <input type="search" placeholder="Find a student" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find a student" /></label>}
+          </div>
           {g.students.length ? (
-            <div className="slist">{g.students.map((s) => (
-              <div className="srow" key={s.id}><span>{s.full_name} <span className="text-muted">{s.student_id}</span></span>
-                <span><a href={s.action.url}>{s.action.label}</a></span></div>))}</div>
-          ) : <div style={{ padding: '.75rem 1rem', color: 'var(--success)', fontSize: 'var(--text-sm)' }}><i aria-hidden="true" className="fas fa-check-circle" /> All good here.</div>}
-        </details>))}
+            <div className="rd-list">{shown.map((s) => (
+              <div className="rd-row" key={s.id}>
+                <span className="n"><b>{s.full_name}</b><small>{s.student_id}</small></span>
+                <a href={s.action.url} className="rs-btn ghost sm"><i className="fas fa-arrow-right" aria-hidden="true" /> {s.action.label}</a>
+              </div>))}</div>
+          ) : <Blank icon="fa-circle-check" title="All good here"><p>Every SSS3 candidate is clear on this item.</p></Blank>}
+        </section>
+      )}
     </>
   );
 }
 
 // ---- Subject enrolment -----------------------------------------------------
-function SubjectEnrolment({ d }) {
-  const waecRef = useChart(() => (d.waec_rows.length ? enrolBarCfg(d.waec_rows, chartPalette().green) : null), [d]);
-  const jambRef = useChart(() => (d.jamb_rows.length ? enrolBarCfg(d.jamb_rows, chartPalette().indigo) : null), [d]);
-
-  const Table = ({ rows, enrolled, jamb }) => (
-    rows.length ? (
-      <table className="enrol-table">
-        <thead><tr><th>Subject</th><th className="num">Students</th><th className="num">%</th></tr></thead>
-        <tbody>{rows.map((r) => (
-          <tr key={r.subject}>
-            <td><a href={r.url}>{r.subject}</a><div className={'bar' + (jamb ? ' jamb' : '')}><span style={{ width: (enrolled ? r.count / enrolled * 100 : 0) + '%' }} /></div></td>
-            <td className="num"><strong>{r.count}</strong></td><td className="num">{r.pct}%</td>
-          </tr>))}</tbody>
-      </table>
-    ) : <Empty icon="fa-inbox" title=""><p>No {jamb ? 'JAMB' : 'WAEC'} subjects recorded yet. Add them on student profiles.</p></Empty>
-  );
-
+function EnrolList({ rows, enrolled, label }) {
+  const [all, setAll] = useState(false);
+  if (!rows.length) return <Blank icon="fa-inbox" title={'No ' + label + ' subjects yet'}><p>Add them on student profiles.</p></Blank>;
+  const list = all ? rows : rows.slice(0, 12);
   return (
     <>
-      <div className="page-header"><div><h1>Subject Enrolment</h1><p className="text-muted text-sm">How many students are registered for each WAEC / JAMB subject</p></div></div>
-      <div className="scope-tabs">
-        <a href={d.urls.sss3} className={'scope-tab' + (d.only_sss3 ? ' active' : '')}>SSS3 / Exam candidates</a>
-        <a href={d.urls.all} className={'scope-tab' + (d.only_sss3 ? '' : ' active')}>All active students</a>
+      <div className="an-hbars">
+        {list.map((r) => (
+          <a key={r.subject} className="an-hbar bx-hbar" href={r.url}>
+            <span className="l">{r.subject}<small>{r.pct}% of {label} candidates</small></span>
+            <span className="t"><i className={label === 'JAMB' ? '' : 'good'} style={{ width: (enrolled ? r.count / enrolled * 100 : 0) + '%' }} /></span>
+            <b>{r.count}</b>
+          </a>))}
       </div>
-      <div className="kpi-grid mb-3">
-        <div className="kpi-card lead">
-          <div className="kpi-head"><span className="kpi-label">Students in scope</span><span className="kpi-icon"><i aria-hidden="true" className="fas fa-users" /></span></div>
-          <div className="kpi-value">{d.student_count}</div>
-        </div>
-        <div className="kpi-card">
-          <div className="kpi-head"><span className="kpi-label">With WAEC subjects</span><span className="kpi-icon"><i aria-hidden="true" className="fas fa-file-alt" /></span></div>
-          <div className="kpi-value">{d.waec_enrolled}</div>
-        </div>
-        <div className="kpi-card">
-          <div className="kpi-head"><span className="kpi-label">With JAMB subjects</span><span className="kpi-icon"><i aria-hidden="true" className="fas fa-file-contract" /></span></div>
-          <div className="kpi-value">{d.jamb_enrolled}</div>
-        </div>
-        <div className="kpi-card">
-          <div className="kpi-head"><span className="kpi-label">Distinct WAEC subjects</span><span className="kpi-icon"><i aria-hidden="true" className="fas fa-list" /></span></div>
-          <div className="kpi-value">{d.waec_rows.length}</div>
-        </div>
-      </div>
-      {d.waec_mismatches.length > 0 && (
-        <MismatchGroup icon="fa-file-alt" title="WAEC subject count issues"
-          hint={`SSS3 / exam candidates (${d.sss3_count}) who don't have exactly ${d.waec_expected} WAEC subjects`}
-          expected={d.waec_expected} rows={d.waec_mismatches} />
-      )}
-      {d.jamb_mismatches.length > 0 && (
-        <MismatchGroup icon="fa-file-contract" title="JAMB subject count issues"
-          hint={`SSS3 / exam candidates (${d.sss3_count}) who don't have exactly ${d.jamb_expected} JAMB subjects`}
-          expected={d.jamb_expected} rows={d.jamb_mismatches} />
-      )}
-      <div className="enrol-grid">
-        <div className="card">
-          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-file-alt" /> WAEC Subjects</h3></div>
-          <div className="chart-wrap"><canvas ref={waecRef} /></div>
-          <div className="card-body" style={{ padding: 0, maxHeight: 420, overflow: 'auto' }}><Table rows={d.waec_rows} enrolled={d.waec_enrolled} /></div>
-        </div>
-        <div className="card">
-          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-file-contract" /> JAMB Subjects</h3></div>
-          <div className="chart-wrap"><canvas ref={jambRef} /></div>
-          <div className="card-body" style={{ padding: 0, maxHeight: 420, overflow: 'auto' }}><Table rows={d.jamb_rows} enrolled={d.jamb_enrolled} jamb /></div>
-        </div>
+      {rows.length > 12 && <button type="button" className="rs-btn ghost sm bx-cap" onClick={() => setAll((v) => !v)}>
+        <i className={'fas fa-chevron-' + (all ? 'up' : 'down')} aria-hidden="true" /> {all ? 'Show fewer' : 'Show all ' + rows.length + ' subjects'}</button>}
+    </>
+  );
+}
+
+function SubjectEnrolment({ d }) {
+  const nav = useNav();
+  const issues = d.waec_mismatches.length + d.jamb_mismatches.length;
+  const pct = (n) => (d.student_count ? Math.round(n / d.student_count * 100) : 0);
+  return (
+    <>
+      <Head icon="fa-book-open" title="Subject Enrolment" sub="How many students are registered for each WAEC / JAMB subject — plan classes, papers and registration">
+        <Seg options={[{ value: 'sss3', label: 'SSS3 / candidates' }, { value: 'all', label: 'All students' }]} value={d.only_sss3 ? 'sss3' : 'all'}
+             onChange={(v) => nav.go(d.urls[v])} label="Scope" />
+      </Head>
+      <AxNav d={d} active="enrolment" />
+      <Tiles items={[
+        { label: 'Students in scope', value: d.student_count, sub: d.only_sss3 ? 'SSS3 / exam candidates' : 'all active students' },
+        { label: 'With WAEC subjects', value: d.waec_enrolled, sub: pct(d.waec_enrolled) + '% · ' + d.waec_rows.length + ' distinct subjects', tone: pct(d.waec_enrolled) >= 90 ? 'good' : 'mid' },
+        { label: 'With JAMB subjects', value: d.jamb_enrolled, sub: pct(d.jamb_enrolled) + '% · ' + d.jamb_rows.length + ' distinct subjects', tone: pct(d.jamb_enrolled) >= 90 ? 'good' : 'mid' },
+        { label: 'Subject-count issues', value: issues, sub: 'WAEC must be ' + d.waec_expected + ', JAMB ' + d.jamb_expected, tone: issues ? 'bad' : 'good' },
+      ]} />
+      {issues > 0 && (
+        <div className="bx-two">
+          {d.waec_mismatches.length > 0 && <MismatchGroup icon="fa-file-alt" title="WAEC subject count issues"
+            hint={`SSS3 / exam candidates (${d.sss3_count}) who don't have exactly ${d.waec_expected} WAEC subjects`} expected={d.waec_expected} rows={d.waec_mismatches} />}
+          {d.jamb_mismatches.length > 0 && <MismatchGroup icon="fa-file-contract" title="JAMB subject count issues"
+            hint={`SSS3 / exam candidates (${d.sss3_count}) who don't have exactly ${d.jamb_expected} JAMB subjects`} expected={d.jamb_expected} rows={d.jamb_mismatches} />}
+        </div>)}
+      <div className="bx-two">
+        <section className="rs-card">
+          <div className="rs-card-h"><h3><i className="fas fa-file-alt" aria-hidden="true" /> WAEC Subjects</h3><small>{d.waec_enrolled} candidates · tap a subject for the list</small></div>
+          <EnrolList rows={d.waec_rows} enrolled={d.waec_enrolled} label="WAEC" />
+        </section>
+        <section className="rs-card">
+          <div className="rs-card-h"><h3><i className="fas fa-file-contract" aria-hidden="true" /> JAMB Subjects</h3><small>{d.jamb_enrolled} candidates · tap a subject for the list</small></div>
+          <EnrolList rows={d.jamb_rows} enrolled={d.jamb_enrolled} label="JAMB" />
+        </section>
       </div>
     </>
   );
 }
 
-// A collapsible list of students whose subject count doesn't match the fixed
-// exam rule (WAEC = 9, JAMB = 4) — click through to fix it on their profile.
-// Only ever rendered when there's at least one mismatch (the caller checks
-// rows.length); mirrors the Readiness screen's .rgroup/.slist/.srow pattern.
+// A list of students whose subject count doesn't match the fixed exam rule
+// (WAEC = 9, JAMB = 4) — click through to fix it on their profile.
 function MismatchGroup({ icon, title, hint, expected, rows }) {
   return (
-    <details className="rgroup" open>
-      <summary><span><i aria-hidden="true" className={'fas ' + icon} /> {title}</span><span className="count">{rows.length}</span></summary>
-      <p className="text-muted text-sm" style={{ margin: '.5rem 1rem 0' }}>{hint}</p>
-      <div className="slist">{rows.map((r) => (
-        <div className="srow" key={r.id}>
-          <span>{r.name} <span className="text-muted">{r.student_id}</span></span>
-          <span>
-            <span className={r.count > expected ? 'text-danger' : 'text-warning'} style={{ marginRight: '.5rem' }}>
-              {r.count} of {expected}
-            </span>
-            <a href={r.edit_url}>Edit</a>
-          </span>
+    <section className="rs-card flush">
+      <div className="rs-card-h pad"><h3><i className={'fas ' + icon} aria-hidden="true" /> {title}</h3><span className="sl-pill bad">{rows.length}</span></div>
+      <p className="rs-muted bx-small bx-pad" style={{ paddingTop: 0, paddingBottom: '.4rem' }}>{hint}</p>
+      <div className="rd-list rd-scroll">{rows.map((r) => (
+        <div className="rd-row" key={r.id}>
+          <span className="n"><b>{r.name}</b><small>{r.student_id}</small></span>
+          <span className={'sl-pill ' + (r.count > expected ? 'bad' : 'mid')}>{r.count} of {expected}</span>
+          <a href={r.edit_url} className="rs-btn ghost sm"><i className="fas fa-pen" aria-hidden="true" /> Fix</a>
         </div>))}</div>
-    </details>
+    </section>
   );
 }
 
 // ---- Subject enrolment detail ----------------------------------------------
 function SubjectEnrolmentDetail({ d }) {
+  const [q, setQ] = useState('');
+  const shown = d.students.filter((s) => !q || (s.full_name + ' ' + s.student_id).toLowerCase().includes(q.toLowerCase()));
+  const m = d.students.filter((s) => s.gender === 'Male').length;
   return (
     <>
-      <div className="page-header">
-        <div><h1>{d.subject}</h1>
-          <p className="text-muted text-sm">
-            <span className={'badge ' + (d.exam === 'jamb' ? 'badge-primary' : 'badge-info')}>{d.exam_label}</span>{' '}
-            {d.students.length} student{d.students.length === 1 ? '' : 's'} enrolled · {d.only_sss3 ? 'SSS3 / exam candidates' : 'all active students'}
-          </p></div>
-        <div className="page-header-actions"><a href={d.back_url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-arrow-left" /> Back</a></div>
-      </div>
-      <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-users" /> Enrolled Students ({d.students.length})</h3></div>
-        <div className="card-body" style={{ padding: 0 }}>
-          {d.students.length ? (
-            <div className="data-cards" style={{ padding: '1rem' }}>{d.students.map((s) => (
-              <div className="data-card" key={s.id}>
-                <div className="data-card-header"><div className="data-card-title">{s.full_name}{s.is_graduated && <span className="badge badge-success" title="Graduate"><i aria-hidden="true" className="fas fa-user-graduate" /></span>}</div>
-                  <span className={'badge ' + (s.gender === 'Male' ? 'badge-male' : 'badge-female')}>{s.gender}</span></div>
-                <div className="data-card-row"><span className="data-card-label">ID</span><span>{s.student_id}</span></div>
-                <div className="data-card-actions"><a href={s.view_url} className="btn btn-secondary btn-sm w-100"><i aria-hidden="true" className="fas fa-eye" /> View Profile</a></div>
-              </div>))}</div>
-          ) : <Empty icon="fa-user-slash" title=""><p>No students enrolled for {d.subject} in this scope.</p></Empty>}
-        </div></div>
+      <Head icon="fa-book-open" title={d.subject} sub={`${d.exam_label} · ${d.students.length} student${d.students.length === 1 ? '' : 's'} enrolled · ${d.only_sss3 ? 'SSS3 / exam candidates' : 'all active students'}`}>
+        <a href={d.back_url} className="rs-btn ghost"><i className="fas fa-arrow-left" aria-hidden="true" /><span className="rs-hide-sm">All subjects</span></a>
+      </Head>
+      <AxNav d={d} active="enrolment" />
+      <Tiles items={[{ label: 'Enrolled', value: d.students.length, sub: d.exam_label },
+        { label: 'Boys', value: m }, { label: 'Girls', value: d.students.length - m },
+        { label: 'Graduates', value: d.students.filter((s) => s.is_graduated).length }]} />
+      <section className="rs-card flush">
+        <div className="bx-filters"><label className="rs-search"><i className="fas fa-magnifying-glass" aria-hidden="true" />
+          <input type="search" placeholder="Find a student" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find a student" /></label></div>
+        {d.students.length ? (
+          <div className="rd-list">{shown.map((s) => (
+            <a className="rd-row" key={s.id} href={s.view_url}>
+              <span className="n"><b>{s.full_name}{s.is_graduated && <span className="sl-pill good" title="Graduate"> Graduate</span>}</b><small>{s.student_id}</small></span>
+              <span className={'sl-pill ' + (s.gender === 'Male' ? 'info' : '')}>{s.gender}</span>
+              <i className="fas fa-chevron-right rs-muted" aria-hidden="true" />
+            </a>))}</div>
+        ) : <Blank icon="fa-user-slash" title="Nobody enrolled"><p>No students enrolled for {d.subject} in this scope.</p></Blank>}
+      </section>
     </>
   );
 }
@@ -321,7 +359,7 @@ export default function ResultsApp({ data }) {
     <NavCtx.Provider value={{ go, refresh }}>
       <SectionShell go={go}>
         {msg && <Banner tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Banner>}
-        <Screen d={d} notify={notify} />
+        <div className={'rs bx ' + (['readiness', 'subject_enrolment', 'subject_enrolment_detail', 'cutoffs'].includes(d.page) ? 'rx-' + d.page : 'bx-legacy')}><Screen d={d} notify={notify} /></div>
       </SectionShell>
     </NavCtx.Provider>
   );

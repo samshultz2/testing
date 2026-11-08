@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "results/_ax_shell.html" import ax_nav with context %}
 {% block title %}Deeper Insights {{ year or '' }} - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('results.analytics_hub', year=year) }}">Exam Analytics</a> / <span>Deeper insights</span>{% endblock %}
 
@@ -11,6 +12,8 @@
 {% macro empty(msg) -%}<p class="text-muted mb-0"><i class="fas fa-circle-info"></i> {{ msg }}</p>{%- endmacro %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+
 <style>
 .ix-nav{position:sticky;top:0;z-index:4;background:var(--bg-body,var(--bg-card));display:flex;gap:.35rem;flex-wrap:wrap;padding:.5rem 0;margin-bottom:.5rem;border-bottom:1px solid var(--border-color)}
 .ix-nav a{font-size:.78rem;font-weight:600;padding:.3rem .65rem;border-radius:999px;background:var(--gray-50);color:var(--text-primary);text-decoration:none;border:1px solid var(--border-light)}
@@ -68,6 +71,7 @@
 {% endblock %}
 
 {% block content %}
+<div class="rs bx bx-legacy ax">
 <div class="page-header">
   <div>
     <h1>Deeper Insights{% if year %} — {{ board_name }} {{ year }}{% endif %}</h1>
@@ -99,6 +103,7 @@
     <a href="{{ url_for('results.analytics_hub', year=year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Analytics</a>
   </div>
 </div>
+{{ ax_nav('insights') }}
 {% if frozen %}<div class="alert alert-info"><i class="fas fa-lock"></i> {{ year }} headline numbers were frozen{% if frozen._frozen_at %} on {{ frozen._frozen_at.strftime('%d %b %Y') }}{% endif %}{% if frozen._frozen_by %} by {{ frozen._frozen_by }}{% endif %}. Year comparisons use those figures.</div>{% endif %}
 
 {% if not year %}
@@ -351,4 +356,5 @@
 </section>
 {% endif %}
 {% endif %}
+</div>
 {% endblock %}

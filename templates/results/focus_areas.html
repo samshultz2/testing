@@ -1,7 +1,10 @@
 {% extends "base.html" %}
+{% from "results/_ax_shell.html" import ax_nav with context %}
 {% block title %}Teaching focus areas - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('results.predictions_dashboard') }}">Predictions</a> / <span>Focus areas</span>{% endblock %}
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+
 <style>
 .fa-meta{font-size:.8rem;color:var(--text-muted)}
 .focus-card{border:1px solid var(--border-color);border-radius:var(--radius-lg);margin-bottom:1rem;overflow:hidden}
@@ -28,6 +31,7 @@
 </style>
 {% endblock %}
 {% block content %}
+<div class="rs bx bx-legacy ax">
 <div class="page-header">
     <div>
         <h1><i class="fas fa-bullseye"></i> Teaching focus areas</h1>
@@ -38,6 +42,7 @@
         </p>
     </div>
 </div>
+{{ ax_nav('focus') }}
 
 {% if not report.session %}
 <div class="card"><div class="card-body"><div class="empty-state"><i class="fas fa-calendar-xmark"></i><h3>No active session</h3><p>{{ report.meta.reason or 'Set an active session to generate focus areas.' }}</p></div></div></div>
@@ -124,4 +129,5 @@
 {% endif %}
 
 {% endif %}
+</div>
 {% endblock %}

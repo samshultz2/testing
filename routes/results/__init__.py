@@ -42,8 +42,26 @@ def students_needing_result(students, result_model, exam_year):
 
 # --- SPA helpers (no-reload React shell + JSON-aware action responses) ---
 from utils.spa import section_responders
+def _ax_nav():
+    """Tab links shared by the exam-analytics family of pages (React and
+    server-rendered alike)."""
+    from flask import url_for
+    return {'hub': url_for('results.analytics_hub'), 'insights': url_for('results.analytics_insights'),
+            'trends': url_for('results.analytics_trends'), 'readiness': url_for('results.readiness'),
+            'funnel': url_for('results.readiness_funnel'), 'predictions': url_for('results.predictions_dashboard'),
+            'focus': url_for('results.focus_areas'), 'enrolment': url_for('results.subject_enrolment'),
+            'watchlist': url_for('results.at_risk_watchlist'), 'aspirations': url_for('results.aspiration_hub'),
+            'cutoffs': url_for('results.cutoffs_list')}
+
+
+def _results_enrich(payload):
+    if isinstance(payload, dict) and payload.get('page') in (
+            'readiness', 'subject_enrolment', 'subject_enrolment_detail', 'cutoffs'):
+        payload.setdefault('axnav', _ax_nav())
+
+
 _wants_json, _render, _ok, _err = section_responders(
-    'results/app.html', 'res_json', 'results.index')
+    'results/app.html', 'res_json', 'results.index', enrich=_results_enrich)
 
 
 def _is_admin_results():

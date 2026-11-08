@@ -1,0 +1,18 @@
+{# Exam-analytics family: one tab bar across the hub, insights, trends,
+   readiness, funnel, predictions, focus areas and subject enrolment. #}
+{% from "results/_board_shell.html" import bx_menu_js with context %}
+{% macro ax_nav(active) %}
+{{ bx_menu_js() }}
+<nav class="sl-nav ax-nav no-print" aria-label="Exam analytics">
+  {% for key, ep, ic, lab in [('hub', 'results.analytics_hub', 'fa-chart-pie', 'Overview'),
+                               ('insights', 'results.analytics_insights', 'fa-microscope', 'Insights'),
+                               ('trends', 'results.analytics_trends', 'fa-chart-line', 'Trends'),
+                               ('readiness', 'results.readiness', 'fa-list-check', 'Readiness'),
+                               ('funnel', 'results.readiness_funnel', 'fa-filter', 'Admission funnel'),
+                               ('predictions', 'results.predictions_dashboard', 'fa-wand-magic-sparkles', 'Predictions'),
+                               ('focus', 'results.focus_areas', 'fa-bullseye', 'Focus areas'),
+                               ('enrolment', 'results.subject_enrolment', 'fa-book-open', 'Subject enrolment')] %}
+  <a href="{{ url_for(ep) }}" class="{{ 'on' if active == key }}"><i class="fas {{ ic }}" aria-hidden="true"></i><span>{{ lab }}</span></a>
+  {% endfor %}
+</nav>
+{% endmacro %}

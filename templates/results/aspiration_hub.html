@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "results/_ax_shell.html" import ax_nav with context %}
 {% block title %}University Aspirations — {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('results.analytics_hub') }}">Analytics</a> / <span>Aspirations</span>{% endblock %}
 
@@ -19,6 +20,8 @@
 {%- endmacro %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+
 <style>
 .as{--on:#16a34a;--close:#d97706;--off:#dc2626;--nd:#94a3b8;--nt:#e2e8f0;--info:#2563eb;display:flex;flex-direction:column;gap:1rem;min-width:0}
 [data-theme="dark"] .as,[data-theme="midnight"] .as,[data-theme="carbon"] .as{--on:#22c55e;--close:#fbbf24;--off:#f87171;--nd:#64748b;--nt:#334155}
@@ -143,6 +146,7 @@ details.as-more[open] summary i.fa-chevron-down{transform:rotate(180deg)}
 {% endblock %}
 
 {% block content %}
+<div class="rs bx ax-top">{{ ax_nav('') }}</div>
 <div class="as">
   <div class="as-top">
     <div>

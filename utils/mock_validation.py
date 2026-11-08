@@ -354,7 +354,16 @@ def waec_validation(session_id=None, mock_exam_id=None, year=None):
         subjects.append(blk)
     subjects.sort(key=lambda x: (x['exact_pct'] if x['exact_pct'] is not None else 0))
 
+    # Mock grade (rows) × actual grade (columns) counts — shows where the mock
+    # misjudges (e.g. many mock C6s that came out D7).
+    order = ['A1', 'B2', 'B3', 'C4', 'C5', 'C6', 'D7', 'E8', 'F9']
+    matrix = {g: {h: 0 for h in order} for g in order}
+    for p in pairs:
+        if p['mock_grade'] in matrix and p['actual_grade'] in matrix:
+            matrix[p['mock_grade']][p['actual_grade']] += 1
+
     return {'meta': meta, 'summary': summary, 'subjects': subjects,
+            'matrix': matrix, 'grade_order': order,
             'recommendations': _waec_recommendations(summary, subjects)}
 
 

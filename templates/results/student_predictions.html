@@ -1,8 +1,11 @@
 {% extends "base.html" %}
+{% from "results/_ax_shell.html" import ax_nav with context %}
 {% block title %}Predictions - {{ student.full_name }} - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('results.index') }}">Results</a> / <a href="{{ url_for('results.predictions_dashboard') }}">Predictions</a> / <span>{{ student.first_name }}</span>{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+
 <style>
 .student-header{display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem;padding:1rem;background:var(--bg-card);border-radius:var(--radius-lg);border:1px solid var(--border-color)}
 .student-avatar{width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,var(--primary),var(--primary-hover));display:flex;align-items:center;justify-content:center;color:white;font-size:1.5rem;font-weight:700}
@@ -69,6 +72,7 @@
 {% endblock %}
 
 {% block content %}
+<div class="rs bx bx-legacy ax">
 <!-- Student Header -->
 <div class="student-header">
     <div class="student-avatar">{{ student.first_name[0] }}{{ student.surname[0] if student.surname else '' }}</div>
@@ -84,6 +88,7 @@
         {% endif %}
     </div>
 </div>
+{{ ax_nav('predictions') }}
 
 {% if not has_any_mock %}
 <div class="card">
@@ -369,5 +374,6 @@
 <div class="text-center mt-3">
     <a href="{{ url_for('mock_jamb.index') }}" class="btn btn-primary"><i class="fas fa-clipboard-list"></i> Mock JAMB</a>
     <a href="{{ url_for('results.waec_list') }}" class="btn btn-secondary"><i class="fas fa-file-alt"></i> WAEC Results</a>
+</div>
 </div>
 {% endblock %}

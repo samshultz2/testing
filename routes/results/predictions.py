@@ -36,7 +36,15 @@ def predictions_dashboard():
         students, session.id if session else None, calibration=bias,
         mae=(calibration.get('jamb') or {}).get('mae'))
 
+    # Worst-first so the students who need help most sit at the top; within a
+    # status, the lowest projected JAMB first.
+    order = {'NOT_READY': 0, 'AT_RISK': 1, 'CONDITIONAL': 2, 'READY': 3, 'NO_DATA': 4}
+    pred_rows = sorted((cohort or {}).get('rows') or [],
+                       key=lambda r: (order.get(r['readiness']['status'], 9),
+                                      ((r['readiness'].get('jamb') or {}).get('score') or 0)))
+
     return render_template('results/predictions_dashboard.html',
+        pred_rows=pred_rows,
         correlation_data=correlation_data,
         calibration=calibration,
         outlook=outlook,

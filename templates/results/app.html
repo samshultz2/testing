@@ -8,6 +8,7 @@
 {% else %}<a href="{{ url_for('results.index') }}">Results</a> / <span>{{ _t.get(res_json.page,'') }}</span>{% endif %}
 {% endblock %}
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
 <style>
 /* index */
 .results-overview{display:grid;grid-template-columns:1fr;gap:1rem;margin-bottom:1.5rem}

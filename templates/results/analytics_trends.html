@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "results/_ax_shell.html" import ax_nav with context %}
 {% block title %}Exam Trends — {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('results.analytics_hub') }}">Analytics</a> / <span>Trends</span>{% endblock %}
 
@@ -37,6 +38,8 @@
 {%- endmacro %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+
 <style>
 .tr{--tr-good:#16a34a;--tr-bad:#dc2626;--tr-warn:#d97706;--tr-info:#2563eb;--tr-d:#15803d;--tr-c:#3b82f6;--tr-p:#f59e0b;--tr-f:#ef4444;
     --tr-a:#94a3b8;--tr-b:var(--primary,#0f766e);display:flex;flex-direction:column;gap:1rem;min-width:0}
@@ -184,6 +187,7 @@
 {% endblock %}
 
 {% block content %}
+<div class="rs bx ax-top">{{ ax_nav('trends') }}</div>
 <div class="tr">
   <div class="tr-top">
     <div>

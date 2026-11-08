@@ -1,76 +1,112 @@
 {% extends "base.html" %}
+{% from "results/_board_shell.html" import bx_head with context %}
+{% from "results/_ax_shell.html" import ax_nav with context %}
 {% block title %}Admission Readiness - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('results.index') }}">Results</a> / <span>Admission Readiness</span>{% endblock %}
-
-{% block extra_css %}
-<style>
-.kpi-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:.6rem;margin:.5rem 0 1rem}
-@media(min-width:900px){.kpi-grid{grid-template-columns:repeat(5,1fr)}}
-.kpi{background:var(--bg-card);border:1px solid var(--border-color);border-radius:var(--radius-md);padding:.85rem;text-align:center}
-.kpi .n{font-size:1.6rem;font-weight:800;line-height:1}
-.kpi .l{font-size:.72rem;color:var(--text-muted);margin-top:.25rem}
-.funnel{display:flex;flex-wrap:wrap;gap:.6rem;margin-bottom:1rem}
-.funnel .step{flex:1;min-width:150px;background:var(--bg-card);border:1px solid var(--border-color);border-left:4px solid var(--primary);border-radius:var(--radius-md);padding:.7rem .85rem}
-.funnel .step .n{font-size:1.3rem;font-weight:800}
-.funnel .step .l{font-size:.75rem;color:var(--text-muted)}
-.st{font-weight:700;font-size:.78rem;padding:.12rem .5rem;border-radius:var(--radius-full);white-space:nowrap}
-.st.READY{color:#137333;background:#e6f4ea}.st.CONDITIONAL{color:#946200;background:#fef7e0}
-.st.AT_RISK{color:#b06000;background:#fde9d9}.st.NOT_READY{color:#b3261e;background:#fce8e6}
-.st.NO_DATA{color:#5f6368;background:#f1f3f4}
-.rwrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
-.rtable{width:100%;border-collapse:collapse;font-size:.85rem;min-width:620px}
-.rtable th,.rtable td{padding:.45rem .5rem;border-bottom:1px solid var(--border-color);text-align:left;vertical-align:top}
-.rtable td.num,.rtable th.num{white-space:nowrap}
-@media(max-width:560px){
-  .rtable{min-width:480px;font-size:.8rem}
-  .rtable .col-agg{display:none}      /* aggregate is secondary — it's on the student report */
-}
-</style>
-{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">{% endblock %}
 
 {% block content %}
-<div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:.5rem;">
-    <div>
-        <h1 style="margin:0;"><i class="fas fa-graduation-cap"></i> Admission Readiness</h1>
-        <p class="text-muted text-sm" style="margin:.2rem 0 0;">Projected from actual results where available, otherwise the Mock WAEC/JAMB trajectory{% if active_session %} · {{ active_session.name }}{% endif %}. Guidance only.
-        {% if bias and bias.n and bias.n >= 8 and bias.bias and (bias.bias >= 1 or bias.bias <= -1) %}<br><i class="fas fa-bullseye"></i> JAMB projections corrected by the historical mock bias ({{ '%+.0f'|format(-bias.bias) }} pts, from {{ bias.n }} past students).{% endif %}</p>
-    </div>
-    <a href="{{ url_for('results.analytics_hub') }}" class="btn btn-secondary btn-sm"><i class="fas fa-chart-line"></i> Analytics hub</a>
-</div>
-
 {% set c = funnel.counts %}
-<div class="kpi-grid">
-    <div class="kpi"><div class="n" style="color:#137333">{{ c.READY }}</div><div class="l">Admission-ready</div></div>
-    <div class="kpi"><div class="n" style="color:#946200">{{ c.CONDITIONAL }}</div><div class="l">Conditional</div></div>
-    <div class="kpi"><div class="n" style="color:#b06000">{{ c.AT_RISK }}</div><div class="l">At risk</div></div>
-    <div class="kpi"><div class="n" style="color:#b3261e">{{ c.NOT_READY }}</div><div class="l">Not ready</div></div>
-    <div class="kpi"><div class="n" style="color:#5f6368">{{ c.NO_DATA }}</div><div class="l">No data yet</div></div>
-</div>
+{% set ST = {'READY': ('good', 'Admission-ready'), 'CONDITIONAL': ('info', 'Conditional'), 'AT_RISK': ('mid', 'At risk'), 'NOT_READY': ('bad', 'Not ready'), 'NO_DATA': ('', 'No data yet')} %}
+<div class="rs bx">
+  {% call bx_head('fa-filter', 'Admission Readiness', 'Projected from actual results where available, otherwise the Mock WAEC/JAMB trajectory' ~ (' · ' ~ active_session.name if active_session else '') ~ '. Guidance only.') %}{% endcall %}
+  {{ ax_nav('funnel') }}
 
-<div class="funnel">
-    <div class="step"><div class="n">{{ funnel.total }}</div><div class="l">SSS3 students</div></div>
-    <div class="step"><div class="n">{{ funnel.projected_5_incl_core }} <small style="font-size:.7rem;color:var(--text-muted)">({{ funnel.projected_5_incl_core_pct }}%)</small></div><div class="l">Projected 5 credits incl. English &amp; Maths</div></div>
-    <div class="step"><div class="n">{{ funnel.projected_jamb_ok }} <small style="font-size:.7rem;color:var(--text-muted)">({{ funnel.projected_jamb_ok_pct }}%)</small></div><div class="l">Projected JAMB ≥ 180</div></div>
-    <div class="step" style="border-left-color:#137333"><div class="n" style="color:#137333">{{ funnel.projected_both }} <small style="font-size:.7rem;color:var(--text-muted)">({{ funnel.projected_both_pct }}%)</small></div><div class="l">Clear <strong>both</strong> — admission-ready</div></div>
-</div>
+  {% if bias and bias.n and bias.n >= 8 and bias.bias and (bias.bias >= 1 or bias.bias <= -1) %}
+  <div class="sc-alert"><i class="fas fa-bullseye" aria-hidden="true"></i><span>JAMB projections are corrected by the historical mock bias ({{ '%+.0f'|format(-bias.bias) }} pts, learned from {{ bias.n }} past students).</span></div>
+  {% endif %}
 
-<div class="card" style="padding:0;"><div class="rwrap">
-<table class="rtable">
-    <thead><tr><th>Student</th><th class="num">Status</th><th class="num">Proj. credits</th><th class="num">Proj. JAMB</th><th class="num col-agg">Aggregate</th><th>Blockers</th><th class="num"></th></tr></thead>
-    <tbody>
-    {% for r in rows %}
-    {% set rd = r.readiness %}
-    <tr>
-        <td>{{ r.student.full_name }}</td>
-        <td class="num"><span class="st {{ rd.status }}">{{ rd.status.replace('_',' ').title() }}</span></td>
-        <td class="num">{% if rd.waec %}{{ rd.waec.credits }}{% if rd.waec.missing_core %} <span class="text-muted" style="font-size:.72rem">(no {{ rd.waec.missing_core|join('/') }})</span>{% endif %}{% else %}<span class="text-muted">—</span>{% endif %}</td>
-        <td class="num">{% if rd.jamb %}{{ rd.jamb.score }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
-        <td class="num col-agg">{% if rd.aggregate %}{{ rd.aggregate.aggregate }}{% else %}<span class="text-muted">—</span>{% endif %}</td>
-        <td style="font-size:.78rem;color:var(--text-muted);min-width:160px">{{ rd.blockers|join('; ') if rd.blockers else '—' }}</td>
-        <td class="num"><a href="{{ url_for('results.student_report', student_id=r.student.id) }}" class="btn btn-sm btn-info" title="Report"><i class="fas fa-eye"></i></a></td>
-    </tr>
+  <div class="rs-tiles bx-tiles">
+    {% for k in ['READY', 'CONDITIONAL', 'AT_RISK', 'NOT_READY', 'NO_DATA'] %}
+    <div class="rs-tile {{ ST[k][0] if ST[k][0] != 'info' else '' }}"><span class="l">{{ ST[k][1] }}</span><span class="v">{{ c[k] }}</span>
+      <span class="s">{{ ((c[k] / funnel.total * 100)|round|int) if funnel.total else 0 }}% of SSS3</span></div>
     {% endfor %}
-    </tbody>
-</table>
-</div></div>
+  </div>
+
+  <div class="bx-two">
+    <section class="rs-card">
+      <div class="rs-card-h"><h3><i class="fas fa-filter" aria-hidden="true"></i> Admission funnel</h3><small>{{ funnel.total }} SSS3 students</small></div>
+      <div class="rf-funnel">
+        {% for n, pct, lab, tone in [(funnel.total, 100, 'SSS3 students', ''), (funnel.projected_5_incl_core, funnel.projected_5_incl_core_pct, 'Projected 5 credits incl. English & Maths', 'c4'), (funnel.projected_jamb_ok, funnel.projected_jamb_ok_pct, 'Projected JAMB ≥ 180', 'c4'), (funnel.projected_both, funnel.projected_both_pct, 'Clear both — admission-ready', 'a1')] %}
+        <div class="rf-step">
+          <div class="rf-bar {{ tone }}" style="width:{{ [pct, 6]|max }}%"><b>{{ n }}</b></div>
+          <span>{{ lab }} <small>{{ pct }}%</small></span>
+        </div>
+        {% endfor %}
+      </div>
+      {% set lost_w = funnel.total - funnel.projected_5_incl_core %}{% set lost_j = funnel.total - funnel.projected_jamb_ok %}
+      <p class="rs-muted bx-small">The bigger drop is at <b>{{ 'WAEC credits' if lost_w >= lost_j else 'the JAMB baseline' }}</b> ({{ [lost_w, lost_j]|max }} students) — that's where intervention moves the most students.</p>
+    </section>
+    <section class="rs-card">
+      <div class="rs-card-h"><h3><i class="fas fa-circle-info" aria-hidden="true"></i> What the statuses mean</h3></div>
+      <dl class="bx-dl">
+        <div><dt><span class="sl-pill good">Admission-ready</span></dt><dd>Clears both WAEC and JAMB</dd></div>
+        <div><dt><span class="sl-pill info">Conditional</span></dt><dd>Clears one, close on the other</dd></div>
+        <div><dt><span class="sl-pill mid">At risk</span></dt><dd>Short on one or both — act now</dd></div>
+        <div><dt><span class="sl-pill bad">Not ready</span></dt><dd>Well short on both</dd></div>
+        <div><dt><span class="sl-pill">No data yet</span></dt><dd>No mocks or results to project from</dd></div>
+      </dl>
+    </section>
+  </div>
+
+  <section class="rs-card flush">
+    <div class="bx-filters">
+      <label class="rs-search"><i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+        <input type="search" id="rfFind" placeholder="Find a student" autocomplete="off" aria-label="Find a student"><span id="rfCount" class="bx-count"></span></label>
+      <div class="rs-chips bx-mx-chips" role="group" aria-label="Status">
+        <button type="button" class="rs-chip on" data-st="">All <small>{{ rows|length }}</small></button>
+        {% for k in ['NOT_READY', 'AT_RISK', 'CONDITIONAL', 'READY', 'NO_DATA'] %}{% if c[k] %}<button type="button" class="rs-chip" data-st="{{ k }}">{{ ST[k][1] }} <small>{{ c[k] }}</small></button>{% endif %}{% endfor %}
+      </div>
+    </div>
+    <div class="rf-list" id="rfList">
+      {% for r in rows %}{% set rd = r.readiness %}
+      <div class="rf-row" data-st="{{ rd.status }}" data-name="{{ r.student.full_name|lower }}">
+        <a class="n" href="{{ url_for('results.student_report', student_id=r.student.id) }}"><b>{{ r.student.full_name }}</b>
+          <small><span class="sl-pill {{ ST[rd.status][0] }}">{{ ST[rd.status][1] }}</span>{% if rd.aggregate %} · aggregate {{ rd.aggregate.aggregate }}{% endif %}</small></a>
+        <span class="rf-m"><small>WAEC credits</small>
+          {% if rd.waec %}<span class="rf-mv"><span class="rs-meter {{ 'good' if rd.waec.credits >= 5 and not rd.waec.missing_core else ('mid' if rd.waec.credits >= 4 else 'bad') }}"><i style="width:{{ [rd.waec.credits / 9 * 100, 100]|min }}%"></i></span><b>{{ rd.waec.credits }}</b></span>
+            {% if rd.waec.missing_core %}<em>no {{ rd.waec.missing_core|join('/') }} credit</em>{% endif %}
+          {% else %}<span class="rs-muted">—</span>{% endif %}</span>
+        <span class="rf-m"><small>Projected JAMB</small>
+          {% if rd.jamb %}<span class="rf-mv"><span class="rs-meter {{ 'good' if rd.jamb.score >= 200 else ('mid' if rd.jamb.score >= 180 else 'bad') }}"><i style="width:{{ (rd.jamb.score / 4)|round(1) }}%"></i></span><b>{{ rd.jamb.score }}</b></span>
+          {% else %}<span class="rs-muted">—</span>{% endif %}</span>
+        <span class="rf-b">{{ rd.blockers|join('; ') if rd.blockers else ('No mock results yet — nothing to project from' if rd.status == 'NO_DATA' else 'No blockers') }}</span>
+        <span class="a">
+          <a href="{{ url_for('results.student_predictions', student_id=r.student.id) }}" class="rs-icon-btn" title="Predictions" aria-label="Predictions for {{ r.student.full_name }}"><i class="fas fa-wand-magic-sparkles" aria-hidden="true"></i></a>
+          <a href="{{ url_for('results.student_report', student_id=r.student.id) }}" class="rs-icon-btn" title="Exam report" aria-label="Report for {{ r.student.full_name }}"><i class="fas fa-eye" aria-hidden="true"></i></a>
+        </span>
+      </div>
+      {% else %}
+      <div class="rs-blank"><span><i class="fas fa-users" aria-hidden="true"></i></span><h3>No SSS3 students</h3><p>Set up SSS3 class enrolment to see the admission funnel.</p></div>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var rows = Array.prototype.slice.call(document.querySelectorAll('#rfList .rf-row'));
+  var find = document.getElementById('rfFind'), count = document.getElementById('rfCount'), st = '';
+  if (!find) return;
+  function apply() {
+    var q = (find.value || '').trim().toLowerCase(), n = 0;
+    rows.forEach(function (r) {
+      var ok = (!q || r.dataset.name.indexOf(q) !== -1) && (!st || r.dataset.st === st);
+      r.style.display = ok ? '' : 'none'; if (ok) n++;
+    });
+    count.textContent = (q || st) ? n + ' of ' + rows.length : '';
+  }
+  find.addEventListener('input', apply);
+  document.querySelectorAll('[data-st]').forEach(function (b) {
+    if (b.tagName !== 'BUTTON') return;
+    b.addEventListener('click', function () {
+      st = b.dataset.st;
+      document.querySelectorAll('button[data-st]').forEach(function (x) { x.classList.toggle('on', x === b); });
+      apply();
+    });
+  });
+})();
+</script>
 {% endblock %}
