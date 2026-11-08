@@ -545,6 +545,48 @@
   .al-filters{grid-template-columns:minmax(0,1fr)}
   .al-req-a .pm-btn span{display:none}
 }
+
+/* ── Alumni analytics ── */
+.aa-hero{display:flex;align-items:center;gap:1.4rem;padding:1.1rem 1.2rem;flex-wrap:wrap}
+.aa-ring{width:118px;height:118px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;
+  background:conic-gradient(var(--primary) calc(var(--p)*1%),var(--gray-200) 0)}
+.aa-ring>div{width:88px;height:88px;border-radius:50%;background:var(--bg-card);display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center}
+.aa-ring b{font-size:1.45rem;font-weight:800;line-height:1}
+.aa-ring small{font-size:.62rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-top:2px;max-width:70px}
+.aa-hero-t{flex:1;min-width:240px;display:flex;flex-direction:column;gap:.55rem}
+.aa-split{display:flex;height:16px;border-radius:9px;overflow:hidden;gap:2px;background:var(--gray-100)}
+.aa-split.thin{height:10px}
+.aa-split span{display:block;min-width:4px}
+.aa-legend{list-style:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:.35rem 1.1rem;font-size:.82rem;color:var(--text-secondary)}
+.aa-legend li{display:flex;align-items:center;gap:.4rem}
+.aa-legend i{width:10px;height:10px;border-radius:3px;display:inline-block}
+.aa-legend b{color:var(--text-primary)}
+.aa-legend small{color:var(--text-muted)}
+.aa-tips{list-style:none;margin:0;padding:.4rem 1rem .7rem;display:flex;flex-direction:column;gap:.45rem}
+.aa-tips li{display:flex;gap:.6rem;align-items:flex-start;font-size:.88rem;padding:.55rem .7rem;border-radius:11px;background:var(--gray-50)}
+.aa-tips li i{margin-top:.15rem;width:16px;text-align:center}
+.aa-tips li.warn i{color:var(--warning)}.aa-tips li.bad i{color:var(--danger)}.aa-tips li.good i{color:var(--success)}
+.aa-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.9rem;align-items:start}
+.aa-bars{list-style:none;margin:0;padding:.4rem .6rem .6rem}
+.aa-row{display:grid;grid-template-columns:22px minmax(0,1.2fr) minmax(0,1fr) auto 12px;align-items:center;gap:.6rem;padding:.45rem .4rem;border-radius:9px;color:inherit;text-decoration:none}
+.aa-row.link:hover{background:var(--gray-50)}
+.aa-row.link:hover .aa-lab{color:var(--primary)}
+.aa-rank{font-size:.72rem;font-weight:800;color:var(--text-muted);text-align:center}
+.aa-lab{font-size:.88rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.aa-track{height:8px;border-radius:5px;background:var(--gray-200);overflow:hidden}
+.aa-track i{display:block;height:100%;border-radius:5px;background:var(--primary)}
+.aa-n{font-variant-numeric:tabular-nums;font-size:.88rem;text-align:right;white-space:nowrap}
+.aa-n small{font-weight:600;color:var(--text-muted);font-size:.72rem}
+.aa-go{font-size:.65rem;color:var(--text-muted)}
+.aa-req{padding:.8rem 1rem .2rem;display:flex;flex-direction:column;gap:.5rem}
+@media (max-width:1023px){.aa-grid{grid-template-columns:minmax(0,1fr)}}
+@media (max-width:759px){
+  .aa-hero{padding:.9rem;gap:.9rem}
+  .aa-ring{width:96px;height:96px}.aa-ring>div{width:72px;height:72px}.aa-ring b{font-size:1.2rem}
+  .aa-hero-t{min-width:0;flex-basis:100%}
+  .aa-legend{gap:.3rem .8rem;font-size:.78rem}
+  .aa-row{grid-template-columns:18px minmax(0,1fr) 70px auto 10px;gap:.45rem}
+}
 </style>
 {% endblock %}
 {% block content %}

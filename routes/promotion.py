@@ -773,10 +773,25 @@ def alumni_analytics():
     by_status = [{'label': s, 'count': status_c.get(s, 0)}
                  for s in GRADUATE_STATUSES if status_c.get(s, 0)]
     # by graduation session
-    sess_c = Counter()
+    sess_c, sess_id = Counter(), {}
     for g in grads:
-        sess_c[g.graduation_session.name if g.graduation_session else 'Unspecified'] += 1
-    by_session = [{'label': k, 'count': v} for k, v in sorted(sess_c.items(), reverse=True)]
+        nm = g.graduation_session.name if g.graduation_session else 'Unspecified'
+        sess_c[nm] += 1
+        if g.graduation_session:
+            sess_id[nm] = g.graduation_session.id
+    by_session = [{'label': k, 'count': v, 'id': sess_id.get(k)} for k, v in sorted(sess_c.items(), reverse=True)]
+
+    # Where alumni are now — each graduate in exactly one bucket, so the split
+    # adds up to the total (working / studying / both / profile without career
+    # info / no profile yet).
+    dest = Counter()
+    for g in grads:
+        p = profiles.get(g.id)
+        if not p:
+            dest['no_profile'] += 1
+            continue
+        w, h = bool(p.occupation or p.employer), bool(p.higher_institution)
+        dest['both' if (w and h) else 'working' if w else 'studying' if h else 'no_info'] += 1
 
     with_profile = sum(1 for g in grads if profiles.get(g.id))
     mentors = sum(1 for p in profiles.values() if p.willing_to_mentor)
@@ -804,6 +819,8 @@ def alumni_analytics():
         'top_occupations': _top(lambda p: p.occupation),
         'top_locations': _top(lambda p: (p.city or '') + ((', ' + p.country) if p.country else '') if (p.city or p.country) else ''),
         'docs_by_type': docs_by_type, 'docs_total': len(docs),
+        'destinations': {k: dest.get(k, 0) for k in ('working', 'studying', 'both', 'no_info', 'no_profile')},
+        'with_email': sum(1 for p in profiles.values() if p.email),
         'requests': {'pending': req_c.get('pending', 0), 'fulfilled': req_c.get('fulfilled', 0),
                      'declined': req_c.get('declined', 0)},
     })

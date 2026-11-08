@@ -1637,48 +1637,137 @@ function Alumni({ d, notify }) {
 }
 
 // ---- Alumni analytics -----------------------------------------------------
-function BreakdownCard({ title, icon, rows }) {
+// Ranked horizontal bars; each row can open the directory filtered to it.
+function BreakdownCard({ title, icon, rows, sub, linkFor, total, empty }) {
   const max = Math.max(1, ...rows.map((r) => r.count));
-  if (!rows.length) return null;
   return (
-    <div className="card mb-3"><div className="card-header"><h3><i aria-hidden="true" className={'fas ' + icon} /> {title}</h3></div>
-      <div className="card-body">{rows.map((r, i) => (
-        <div key={i} style={{ marginBottom: '.5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '.9rem' }}><span>{r.label}</span><strong>{r.count}</strong></div>
-          <div style={{ height: 8, background: 'var(--border-color,#eee)', borderRadius: 6, overflow: 'hidden' }}>
-            <div style={{ width: `${(r.count / max) * 100}%`, height: '100%', background: 'var(--primary,#0d6a4e)' }} /></div>
-        </div>))}</div></div>
+    <section className="pm-card aa-card">
+      <header className="pm-card-h"><span className="pm-card-ic"><i aria-hidden="true" className={'fas ' + icon} /></span>
+        <div className="pm-card-t"><h3>{title}</h3>{sub && <small>{sub}</small>}</div></header>
+      {rows.length ? (
+        <ol className="aa-bars">
+          {rows.map((r, i) => {
+            const href = linkFor ? linkFor(r) : null;
+            const body = (<>
+              <span className="aa-rank">{i + 1}</span>
+              <span className="aa-lab" title={r.label}>{r.label}</span>
+              <span className="aa-track"><i style={{ width: `${(r.count / max) * 100}%` }} /></span>
+              <b className="aa-n">{r.count}{total ? <small> {Math.round(r.count / total * 100)}%</small> : null}</b>
+              {href && <i aria-hidden="true" className="fas fa-chevron-right aa-go" />}
+            </>);
+            return <li key={i}>{href ? <a href={href} className="aa-row link" title={`See these alumni`}>{body}</a> : <div className="aa-row">{body}</div>}</li>;
+          })}
+        </ol>
+      ) : <p className="pm-empty">{empty || 'No data yet.'}</p>}
+    </section>
   );
 }
 
 function AlumniAnalytics({ d }) {
   const req = d.requests || {};
+  const dest = d.destinations || {};
+  const total = d.total || 0;
+  const pct = (n, of = total) => (of ? Math.round((n / of) * 100) : 0);
+  const coverage = pct(d.with_profile);
+  const dir = d.alumni_dir;
+  const q = (k, v) => `${dir}?${k}=${encodeURIComponent(v)}`;
+  const reqTotal = (req.pending || 0) + (req.fulfilled || 0) + (req.declined || 0);
+  const segs = [
+    ['working', 'Working', 'var(--primary)', dest.working || 0],
+    ['both', 'Working & studying', '#7c3aed', dest.both || 0],
+    ['studying', 'In higher education', 'var(--info)', dest.studying || 0],
+    ['no_info', 'Profile, no career info', 'var(--warning)', dest.no_info || 0],
+    ['no_profile', 'No profile yet', 'var(--gray-300)', dest.no_profile || 0],
+  ];
+  // Plain-language next steps, worked out from the numbers.
+  const tips = [];
+  if (total && dest.no_profile) tips.push(['fa-id-card', 'warn', `${dest.no_profile} of ${total} graduates (${pct(dest.no_profile)}%) have no alumni profile yet — share the alumni portal link with them.`]);
+  if (dest.no_info) tips.push(['fa-briefcase', 'warn', `${dest.no_info} profile${dest.no_info === 1 ? '' : 's'} say nothing about work or study — a short email asking for an update would fill the gaps.`]);
+  if (req.pending) tips.push(['fa-inbox', 'bad', `${req.pending} document request${req.pending === 1 ? ' is' : 's are'} waiting — open the directory to issue or decline.`]);
+  if (d.mentors) tips.push(['fa-hands-helping', 'good', `${d.mentors} alumni offered to mentor — invite them to a careers day for current SSS students.`]);
+  if (d.with_profile && d.contactable < d.with_profile) tips.push(['fa-address-card', 'warn', `${d.with_profile - d.contactable} profile${d.with_profile - d.contactable === 1 ? ' has' : 's have'} no phone or email, so they can’t be reached.`]);
+
   return (
-    <>
-      <PageHeader title="Alumni Analytics" actions={
-        <a href={d.alumni_dir} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Directory</a>} />
-      <div className="stats-grid mb-3">
-        <div className="stat-card"><div className="stat-icon success"><i aria-hidden="true" className="fas fa-user-graduate" /></div><div className="stat-content"><h3>{d.total}</h3><p>Graduates</p></div></div>
-        <div className="stat-card"><div className="stat-icon primary"><i aria-hidden="true" className="fas fa-id-badge" /></div><div className="stat-content"><h3>{d.with_profile}</h3><p>With alumni profile</p></div></div>
-        <div className="stat-card"><div className="stat-icon info"><i aria-hidden="true" className="fas fa-briefcase" /></div><div className="stat-content"><h3>{d.employed}</h3><p>Employed</p></div></div>
-        <div className="stat-card"><div className="stat-icon secondary"><i aria-hidden="true" className="fas fa-graduation-cap" /></div><div className="stat-content"><h3>{d.higher_ed}</h3><p>In higher education</p></div></div>
-        <div className="stat-card"><div className="stat-icon info"><i aria-hidden="true" className="fas fa-hands-helping" /></div><div className="stat-content"><h3>{d.mentors}</h3><p>Willing to mentor</p></div></div>
-        <div className="stat-card"><div className="stat-icon warning"><i aria-hidden="true" className="fas fa-address-card" /></div><div className="stat-content"><h3>{d.contactable}</h3><p>Contactable</p></div></div>
+    <div className="pm">
+      <PmHead back={dir} kicker="Graduates" title="Alumni analytics"
+              sub="Where former students are now, how reachable they are, and what they’ve asked for."
+              actions={<a href={dir} className="pm-btn"><i aria-hidden="true" className="fas fa-address-book" /> <span>Directory</span></a>} />
+
+      <section className="pm-card aa-hero">
+        <div className="aa-ring" style={{ '--p': coverage }} role="img" aria-label={`${coverage}% of graduates have an alumni profile`}>
+          <div><b>{coverage}%</b><small>have a profile</small></div>
+        </div>
+        <div className="aa-hero-t">
+          <span className="pm-kick">Where our {total} alumni are now</span>
+          <div className="aa-split" role="img" aria-label="Destinations">
+            {segs.filter((x) => x[3]).map(([k, lab, col, n]) => (
+              <span key={k} style={{ flexGrow: n, background: col }} title={`${lab}: ${n}`} />))}
+            {!total && <span style={{ flexGrow: 1, background: 'var(--gray-200)' }} />}
+          </div>
+          <ul className="aa-legend">
+            {segs.map(([k, lab, col, n]) => (
+              <li key={k}><i style={{ background: col }} />{lab}<b>{n}</b><small>{pct(n)}%</small></li>))}
+          </ul>
+        </div>
+      </section>
+
+      <PmTiles items={[
+        { label: 'Graduates', icon: 'fa-user-graduate', value: total, href: dir, sub: 'open the directory' },
+        { label: 'Mentors', icon: 'fa-hands-helping', value: d.mentors, tone: 'good', sub: 'willing to help', href: `${dir}?mentor=1` },
+        { label: 'Contactable', icon: 'fa-address-card', value: d.contactable, sub: `${pct(d.contactable)}% · phone or email`, href: `${dir}?has_contact=1` },
+        { label: 'Documents issued', icon: 'fa-file-signature', value: d.docs_total, sub: 'certificates, transcripts…' },
+        { label: 'Requests waiting', icon: 'fa-hourglass-half', value: req.pending || 0, tone: req.pending ? 'warn' : 'good', sub: req.pending ? 'tap to handle' : 'all handled', href: req.pending ? dir : undefined },
+      ]} />
+
+      {tips.length > 0 && (
+        <section className="pm-card">
+          <header className="pm-card-h"><span className="pm-card-ic"><i aria-hidden="true" className="fas fa-lightbulb" /></span>
+            <div className="pm-card-t"><h3>What to do next</h3><small>Worked out from the numbers below</small></div></header>
+          <ul className="aa-tips">{tips.map(([ic, tone, text], i) => <li key={i} className={tone}><i aria-hidden="true" className={'fas ' + ic} />{text}</li>)}</ul>
+        </section>
+      )}
+
+      <div className="aa-grid">
+        <BreakdownCard title="Top employers" icon="fa-building" sub="Tap one to see those alumni" rows={d.top_employers || []}
+                       linkFor={(r) => q('employer', r.label)} empty="No employers recorded yet." />
+        <BreakdownCard title="Universities & institutions" icon="fa-building-columns" sub="Tap one to see those alumni" rows={d.top_institutions || []}
+                       linkFor={(r) => q('institution', r.label)} empty="No institutions recorded yet." />
+        <BreakdownCard title="Jobs" icon="fa-briefcase" rows={d.top_occupations || []}
+                       linkFor={(r) => q('occupation', r.label)} empty="No occupations recorded yet." />
+        <BreakdownCard title="Where they live" icon="fa-location-dot" rows={d.top_locations || []}
+                       linkFor={(r) => q('city', String(r.label).split(',')[0].trim())} empty="No locations recorded yet." />
+        <BreakdownCard title="Class of" icon="fa-calendar" sub="Graduates per session" rows={d.by_session || []} total={total}
+                       linkFor={(r) => (r.id ? q('session_id', r.id) : null)} />
+        <BreakdownCard title="Graduate status" icon="fa-flag" rows={d.by_status || []} total={total} />
+        <section className="pm-card aa-card">
+          <header className="pm-card-h"><span className="pm-card-ic"><i aria-hidden="true" className="fas fa-file-lines" /></span>
+            <div className="pm-card-t"><h3>Documents & requests</h3><small>{d.docs_total} issued · {reqTotal} requested by alumni</small></div></header>
+          {reqTotal > 0 && (
+            <div className="aa-req">
+              <div className="aa-split thin">
+                {req.fulfilled ? <span style={{ flexGrow: req.fulfilled, background: 'var(--success)' }} /> : null}
+                {req.pending ? <span style={{ flexGrow: req.pending, background: 'var(--warning)' }} /> : null}
+                {req.declined ? <span style={{ flexGrow: req.declined, background: 'var(--danger)' }} /> : null}
+              </div>
+              <ul className="aa-legend">
+                <li><i style={{ background: 'var(--success)' }} />Fulfilled<b>{req.fulfilled || 0}</b></li>
+                <li><i style={{ background: 'var(--warning)' }} />Waiting<b>{req.pending || 0}</b></li>
+                <li><i style={{ background: 'var(--danger)' }} />Declined<b>{req.declined || 0}</b></li>
+              </ul>
+            </div>
+          )}
+          {(d.docs_by_type || []).length ? (
+            <ol className="aa-bars">
+              {d.docs_by_type.map((r, i) => {
+                const mx = Math.max(1, ...d.docs_by_type.map((x) => x.count));
+                return <li key={i}><div className="aa-row"><span className="aa-rank">{i + 1}</span><span className="aa-lab">{r.label}</span>
+                  <span className="aa-track"><i style={{ width: `${(r.count / mx) * 100}%` }} /></span><b className="aa-n">{r.count}</b></div></li>;
+              })}
+            </ol>
+          ) : <p className="pm-empty">No documents issued yet.</p>}
+        </section>
       </div>
-      <div className="stats-grid mb-3">
-        <div className="stat-card"><div className="stat-icon primary"><i aria-hidden="true" className="fas fa-file-signature" /></div><div className="stat-content"><h3>{d.docs_total}</h3><p>Documents issued</p></div></div>
-        <div className="stat-card"><div className="stat-icon warning"><i aria-hidden="true" className="fas fa-hourglass-half" /></div><div className="stat-content"><h3>{req.pending || 0}</h3><p>Requests pending</p></div></div>
-        <div className="stat-card"><div className="stat-icon success"><i aria-hidden="true" className="fas fa-check" /></div><div className="stat-content"><h3>{req.fulfilled || 0}</h3><p>Requests fulfilled</p></div></div>
-        <div className="stat-card"><div className="stat-icon secondary"><i aria-hidden="true" className="fas fa-xmark" /></div><div className="stat-content"><h3>{req.declined || 0}</h3><p>Requests declined</p></div></div>
-      </div>
-      <BreakdownCard title="By graduation session" icon="fa-calendar" rows={d.by_session || []} />
-      <BreakdownCard title="By status" icon="fa-flag" rows={d.by_status || []} />
-      <BreakdownCard title="Top employers" icon="fa-building" rows={d.top_employers || []} />
-      <BreakdownCard title="Top institutions" icon="fa-university" rows={d.top_institutions || []} />
-      <BreakdownCard title="Top occupations" icon="fa-briefcase" rows={d.top_occupations || []} />
-      <BreakdownCard title="Top locations" icon="fa-location-dot" rows={d.top_locations || []} />
-      <BreakdownCard title="Documents by type" icon="fa-file-lines" rows={d.docs_by_type || []} />
-    </>
+    </div>
   );
 }
 
