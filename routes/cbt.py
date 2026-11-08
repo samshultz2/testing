@@ -286,6 +286,33 @@ def dashboard():
     exam_ids = [e.id for e in exams]
     attempts = (CBTAttempt.query.filter(CBTAttempt.status == 'Submitted',
                 CBTAttempt.exam_id.in_(exam_ids)).count() if exam_ids else 0)
+    # Per-exam activity in one grouped query: finished attempts (submitted or
+    # auto-submitted), students writing right now, and the average score %.
+    from sqlalchemy import func, case
+    stats = {}
+    if exam_ids:
+        done = CBTAttempt.status != 'In progress'
+        for eid, n_done, n_live, avg in (db.session.query(
+                CBTAttempt.exam_id,
+                func.sum(case((done, 1), else_=0)),
+                func.sum(case((CBTAttempt.status == 'In progress', 1), else_=0)),
+                func.avg(case((done & (CBTAttempt.total > 0), CBTAttempt.score * 100.0 / CBTAttempt.total), else_=None)))
+                .filter(CBTAttempt.exam_id.in_(exam_ids)).group_by(CBTAttempt.exam_id).all()):
+            stats[eid] = (int(n_done or 0), int(n_live or 0), round(float(avg), 1) if avg is not None else None)
+    now = timeutil.now()
+
+    def _state(e):
+        if not e.is_published:
+            return 'draft'
+        st, _msg = e.access_state(now)
+        return {'open': 'live', 'before': 'today', 'wrong_day': 'scheduled', 'closed': 'closed'}.get(st, st)
+
+    def _t(hhmm):
+        try:
+            h, m = [int(x) for x in (hhmm or '').split(':')]
+            return f"{(h % 12) or 12}:{m:02d} {'AM' if h < 12 else 'PM'}"
+        except (ValueError, AttributeError):
+            return ''
     return _render({
         'page': 'dashboard', 'nav': _nav_urls(),
         'total': total, 'published': published, 'today_count': today_count, 'attempts': attempts,
@@ -296,6 +323,13 @@ def dashboard():
                    'class_name': (e.school_class.name if e.school_class else '—') + (f' {e.arm.name}' if e.arm and not e.arm.is_default else ''),
                    'exam_date': e.exam_date.strftime('%d %b %Y') if e.exam_date else '',
                    'question_count': e.question_count, 'is_published': bool(e.is_published),
+                   'iso_date': e.exam_date.isoformat() if e.exam_date else '',
+                   'state': _state(e), 'opens': _t(e.start_time), 'closes': _t(e.end_time),
+                   'duration': e.duration_minutes, 'strict': bool(e.strict_mode),
+                   'has_password': bool(e.access_password),
+                   'done': stats.get(e.id, (0, 0, None))[0], 'live': stats.get(e.id, (0, 0, None))[1],
+                   'avg': stats.get(e.id, (0, 0, None))[2],
+                   'monitor_url': url_for('cbt.monitor', exam_id=e.id),
                    'detail_url': url_for('cbt.exam_detail', exam_id=e.id),
                    'results_url': url_for('cbt.results', exam_id=e.id)} for e in exams],
         'self_url': url_for('cbt.dashboard'),

@@ -30,48 +30,177 @@ function Tabs({ d }) {
 }
 
 // ---- Dashboard -------------------------------------------------------------
+const CB_STATE = {
+  live: { label: 'Live now', icon: 'fa-circle-dot', tone: 'live' },
+  today: { label: 'Later today', icon: 'fa-hourglass-half', tone: 'soon' },
+  scheduled: { label: 'Scheduled', icon: 'fa-calendar', tone: 'sched' },
+  closed: { label: 'Closed', icon: 'fa-lock', tone: 'closed' },
+  draft: { label: 'Draft', icon: 'fa-pen-ruler', tone: 'draft' },
+};
+
+function CbMenu({ items }) {
+  const [open, setOpen] = useState(false);
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    if (!open) return undefined;
+    const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', close); document.addEventListener('touchstart', close);
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('touchstart', close); };
+  }, [open]);
+  const list = items.filter(Boolean);
+  if (!list.length) return null;
+  return (
+    <div className="cb-menu" ref={ref}>
+      <button type="button" className="cb-btn" aria-haspopup="true" aria-expanded={open} aria-label="More" onClick={() => setOpen((v) => !v)}><i aria-hidden="true" className="fas fa-ellipsis" /></button>
+      {open && <div className="cb-menu-pop" role="menu">
+        {list.map((it, i) => <a key={i} role="menuitem" href={it.href} {...(it.native ? { 'data-native': '1' } : {})} {...(it.download ? { download: true } : {})}
+          target={it.blank ? '_blank' : undefined} rel={it.blank ? 'noopener' : undefined} onClick={() => setOpen(false)}>
+          <i aria-hidden="true" className={'fas ' + it.icon} /> {it.label}</a>)}
+      </div>}
+    </div>
+  );
+}
+
 function Dashboard({ d }) {
   const nav = useNav();
-  const kpis = [['blue', 'fa-file-pen', d.total, 'Exams'], ['green', 'fa-globe', d.published, 'Published'],
-    ['amber', 'fa-calendar-day', d.today_count, 'Active today'], ['teal', 'fa-user-check', d.attempts, 'Submissions']];
+  const [filter, setFilter] = useState('');
+  const [q, setQ] = useState('');
+  const exams = d.exams || [];
+  const count = (st) => exams.filter((e) => e.state === st).length;
+  const live = exams.filter((e) => e.state === 'live');
+  const t = q.trim().toLowerCase();
+  const order = { live: 0, today: 1, scheduled: 2, draft: 3, closed: 4 };
+  const shown = exams.filter((e) => (!filter || e.state === filter)
+    && (!t || `${e.title} ${e.subject} ${e.class_name}`.toLowerCase().includes(t)))
+    .slice().sort((x, y) => (order[x.state] - order[y.state]) || (x.state === 'closed' ? (y.iso_date || '').localeCompare(x.iso_date || '') : (x.iso_date || '').localeCompare(y.iso_date || '')));
+  const graded = exams.filter((e) => e.avg != null);
+  const avgAll = graded.length ? Math.round(graded.reduce((s2, e) => s2 + e.avg * e.done, 0) / Math.max(1, graded.reduce((s2, e) => s2 + e.done, 0))) : null;
+  const termName = d.show_all ? 'All terms' : ((d.terms.find((x) => String(x.id) === String(d.term_id)) || {}).full_name || 'Term');
+  const canCreate = canWrite(d, 'exams_create');
+  const scoreTone = (v) => (v == null ? '' : v >= 70 ? 'good' : v >= 50 ? 'warn' : 'bad');
+  const window_ = (e) => (e.opens || e.closes ? `${e.opens || 'start of day'} – ${e.closes || 'end of day'}` : 'All day');
+
   return (
-    <>
-      <div className="page-header"><h1>CBT / Online Tests</h1>
-        <div className="page-header-actions">
-          {d.urls.subject_topics && <a href={d.urls.subject_topics} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-diagram-project" /> Subject Topics</a>}
-          {canWrite(d, 'results_export') && <a href={d.urls.export_all} className="btn btn-secondary" data-native download><i aria-hidden="true" className="fas fa-file-excel" /> All Results</a>}
-          {canWrite(d, 'exams_create') && <a href={d.urls.add} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> New Exam</a>}
+    <div className="cb">
+      <header className="cb-head">
+        <span className="cb-logo" aria-hidden="true"><i className="fas fa-laptop-code" /></span>
+        <div className="cb-head-t">
+          <span className="cb-kick">CBT · {termName}</span>
+          <h1>Online tests</h1>
         </div>
-      </div>
+        <div className="cb-head-a">
+          <label className="cb-term"><i aria-hidden="true" className="fas fa-calendar" />
+            <select value={d.show_all ? 'all' : d.term_id} onChange={(e) => navParams(nav.go, d.self_url, { term_id: e.target.value })} aria-label="Term">
+              {d.terms.map((x) => <option key={x.id} value={x.id}>{x.full_name}</option>)}
+              <option value="all">All terms (history)</option></select></label>
+          {canCreate && <a href={d.urls.add} className="cb-btn primary"><i aria-hidden="true" className="fas fa-plus" /> <span>New exam</span></a>}
+          <CbMenu items={[
+            d.urls.subject_topics && { href: d.urls.subject_topics, icon: 'fa-diagram-project', label: 'Subject topics' },
+            canWrite(d, 'results_export') && { href: d.urls.export_all, icon: 'fa-file-excel', label: 'Export all results', native: true, download: true },
+            d.nav && d.nav.portal && { href: d.nav.portal, icon: 'fa-arrow-up-right-from-square', label: 'Open student portal', native: true, blank: true },
+          ]} />
+        </div>
+      </header>
+
       <Tabs d={d} />
-      <div className="card mb-3"><div className="card-body"><form className="filter-form">
-        <div className="form-group"><label className="form-label">Term</label>
-          <select className="form-control" value={d.show_all ? 'all' : d.term_id} onChange={(e) => navParams(nav.go, d.self_url, { term_id: e.target.value })}>
-            {d.terms.map((t) => <option key={t.id} value={t.id}>{t.full_name}</option>)}
-            <option value="all">All terms (history)</option></select></div>
-      </form></div></div>
-      <div className="kpi-row">{kpis.map(([c, ic, v, l]) => (
-        <div className="kpi" key={l}><div className={'ic ' + c}><i aria-hidden="true" className={'fas ' + ic} /></div><div><div className="v">{v}</div><div className="l">{l}</div></div></div>))}
+
+      {live.length > 0 && (
+        <section className="cb-live">
+          <div className="cb-live-h"><span className="cb-pulse" aria-hidden="true" /><b>{live.length} test{live.length === 1 ? '' : 's'} open right now</b></div>
+          <ul>
+            {live.map((e) => (
+              <li key={e.id}>
+                <span className="cb-pn"><strong>{e.title}</strong><small>{e.class_name} · {e.subject} · closes {e.closes || 'end of day'}</small></span>
+                <span className="cb-live-n"><b>{e.live}</b> writing · <b>{e.done}</b> done</span>
+                <a href={e.monitor_url} className="cb-btn primary" data-native="1"><i aria-hidden="true" className="fas fa-display" /> <span>Monitor</span></a>
+              </li>))}
+          </ul>
+        </section>
+      )}
+
+      {(() => {
+        const pend = exams.filter((e) => e.is_published && e.state !== 'closed');
+        const noQ = pend.filter((e) => !e.question_count);
+        const noPw = pend.filter((e) => !e.has_password);
+        if (!noQ.length && !noPw.length) return null;
+        return (
+          <div className="cb-warn">
+            <i aria-hidden="true" className="fas fa-triangle-exclamation" />
+            <div>
+              {noQ.length > 0 && <p><b>{noQ.length} published test{noQ.length === 1 ? ' has' : 's have'} no questions yet:</b> {noQ.map((e, i) => <React.Fragment key={e.id}>{i ? ', ' : ''}<a href={e.detail_url}>{e.title}</a></React.Fragment>)}</p>}
+              {noPw.length > 0 && <p><b>{noPw.length} published test{noPw.length === 1 ? ' has' : 's have'} no access password</b> — any student could open {noPw.length === 1 ? 'it' : 'them'}: {noPw.map((e, i) => <React.Fragment key={e.id}>{i ? ', ' : ''}<a href={e.detail_url}>{e.title}</a></React.Fragment>)}</p>}
+            </div>
+          </div>);
+      })()}
+
+      <div className="cb-tiles">
+        {[['', 'Exams', d.total, 'fa-file-pen', `${d.published} published`],
+          ['live', 'Live now', count('live'), 'fa-circle-dot', count('today') ? `${count('today')} later today` : 'open for students'],
+          ['scheduled', 'Upcoming', count('scheduled') + count('today'), 'fa-calendar', 'published, not yet open'],
+          ['draft', 'Drafts', count('draft'), 'fa-pen-ruler', 'not visible to students'],
+          ['closed', 'Submissions', d.attempts, 'fa-user-check', avgAll != null ? `average ${avgAll}%` : 'finished attempts'],
+        ].map(([k, l, v, ic, sub]) => (
+          <button key={l} type="button" className={'cb-tile ' + (k || 'all') + (filter === k ? ' on' : '')} onClick={() => setFilter(k === 'scheduled' ? (filter === 'scheduled' ? '' : 'scheduled') : (filter === k ? '' : k))}
+                  aria-pressed={filter === k}>
+            <span className="l"><i aria-hidden="true" className={'fas ' + ic} />{l}</span><span className="v">{v}</span><span className="s">{sub}</span>
+          </button>))}
       </div>
-      <div className="card"><div className="card-header"><h3>All Exams</h3></div>
-        <div className="card-body" style={{ padding: 0 }}>
-          <Table rowKey={(e) => e.id} rows={d.exams}
-            empty={<Empty icon="fa-file-pen" title="No exams yet"><p>Create an online test, add questions, set the access password and publish.</p>{canWrite(d, 'exams_create') && <a href={d.urls.add} className="btn btn-primary mt-2">New Exam</a>}</Empty>}
-            columns={[
-              { key: 'title', label: 'Title', render: (e) => <a href={e.detail_url}><strong>{e.title}</strong></a> },
-              { key: 'subject', label: 'Subject', render: (e) => e.subject },
-              { key: 'class', label: 'Class', render: (e) => e.class_name },
-              { key: 'date', label: 'Date', render: (e) => e.exam_date },
-              { key: 'qs', label: 'Qs', render: (e) => e.question_count },
-              { key: 'status', label: 'Status', render: (e) => <span className={'badge ' + (e.is_published ? 'badge-success' : 'badge-secondary')}>{e.is_published ? 'Published' : 'Draft'}</span> },
-              { key: 'act', label: '', render: (e) => (
-                <div className="d-flex gap-1 justify-end">
-                  <a href={e.detail_url} className="btn btn-secondary btn-sm" title="Manage"><i aria-hidden="true" className="fas fa-pen" /></a>
-                  <a href={e.results_url} className="btn btn-secondary btn-sm" title="Results"><i aria-hidden="true" className="fas fa-chart-bar" /></a>
-                </div>) },
-            ]} />
-        </div></div>
-    </>
+
+      <section className="cb-card">
+        <header className="cb-card-h">
+          <div className="cb-search"><i aria-hidden="true" className="fas fa-search" />
+            <input type="search" placeholder="Search title, subject or class…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search exams" /></div>
+          <div className="cb-seg" role="radiogroup" aria-label="Status">
+            {[['', 'All', exams.length], ['live', 'Live', count('live')], ['today', 'Today', count('today')], ['scheduled', 'Upcoming', count('scheduled')], ['draft', 'Drafts', count('draft')], ['closed', 'Closed', count('closed')]]
+              .filter(([k, , n]) => !k || n).map(([k, l, n]) => (
+                <button key={k || 'all'} type="button" role="radio" aria-checked={filter === k} className={filter === k ? 'on' : ''} onClick={() => setFilter(k)}>{l}<span>{n}</span></button>))}
+          </div>
+        </header>
+        {shown.length ? (
+          <ul className="cb-list">
+            {shown.map((e) => {
+              const st = CB_STATE[e.state] || CB_STATE.draft;
+              return (
+                <li key={e.id} className={'cb-exam ' + st.tone}>
+                  <a href={e.detail_url} className="cb-exam-main">
+                    <span className={'cb-state ' + st.tone}><i aria-hidden="true" className={'fas ' + st.icon} /> {st.label}</span>
+                    <strong>{e.title}</strong>
+                    <small>{e.subject} · {e.class_name}</small>
+                  </a>
+                  <div className="cb-exam-when">
+                    <span><i aria-hidden="true" className="fas fa-calendar-day" /> {e.exam_date || 'No date'}</span>
+                    <span><i aria-hidden="true" className="fas fa-clock" /> {window_(e)} · {e.duration} min</span>
+                  </div>
+                  <div className="cb-exam-facts">
+                    <span className={e.question_count ? '' : 'warn'} title="Questions"><i aria-hidden="true" className="fas fa-list-ol" /> {e.question_count} Q{e.question_count === 1 ? '' : 's'}</span>
+                    {e.strict && <span title="Fullscreen lockdown on"><i aria-hidden="true" className="fas fa-lock" /> Lockdown</span>}
+                    {!e.has_password && e.is_published && <span className="warn" title="No access password set"><i aria-hidden="true" className="fas fa-key" /> No password</span>}
+                  </div>
+                  <div className="cb-exam-res">
+                    {e.done || e.live ? (<>
+                      <b>{e.done}</b><small>done{e.live ? ` · ${e.live} writing` : ''}</small>
+                      {e.avg != null && <span className={'cb-avg ' + scoreTone(e.avg)}>{e.avg}%</span>}
+                    </>) : <small className="cb-dim">No attempts yet</small>}
+                  </div>
+                  <div className="cb-exam-a">
+                    {e.state === 'live' && <a href={e.monitor_url} className="cb-btn primary" data-native="1" title="Watch students live"><i aria-hidden="true" className="fas fa-display" /><span> Monitor</span></a>}
+                    <a href={e.results_url} className="cb-btn" title="Results"><i aria-hidden="true" className="fas fa-chart-column" /><span> Results</span></a>
+                    <a href={e.detail_url} className="cb-btn" title="Manage questions and settings"><i aria-hidden="true" className="fas fa-pen" /><span> Manage</span></a>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <div className="cb-empty-wrap">
+            <Empty icon="fa-file-pen" title={exams.length ? 'No exams match' : 'No exams yet'}>
+              <p>{exams.length ? 'Try another search or status.' : 'Create an online test, add questions, set the access password and publish.'}</p>
+              {!exams.length && canCreate && <a href={d.urls.add} className="btn btn-primary mt-2"><i aria-hidden="true" className="fas fa-plus" /> New exam</a>}
+            </Empty>
+          </div>
+        )}
+      </section>
+    </div>
   );
 }
 
