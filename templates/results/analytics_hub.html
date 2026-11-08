@@ -4,7 +4,9 @@
 
 {% block extra_css %}
 <style>
-.section-title{display:flex;align-items:center;gap:.5rem;margin:1.5rem 0 .75rem;font-size:1.05rem;font-weight:700}
+.section-title{display:flex;align-items:center;flex-wrap:wrap;gap:.5rem;margin:1.5rem 0 .75rem;font-size:1.05rem;font-weight:700;min-width:0}
+.section-title .sec-actions{margin-left:auto;display:flex;flex-wrap:wrap;gap:.4rem}
+@media (max-width:600px){.section-title .sec-actions{margin-left:0;width:100%}}
 .section-title .tag{font-size:.7rem;font-weight:600;padding:.15rem .55rem;border-radius:var(--radius-full);color:#fff}
 .tag.waec{background:#0891b2}.tag.neco{background:#d9480f}
 .wn-bar{display:flex;height:14px;border-radius:999px;overflow:hidden;background:var(--gray-100)}
@@ -391,9 +393,10 @@ a.exec:hover .go{opacity:1}
 <!-- ============ NECO (same layout as WAEC) ============ -->
 {% if neco_stats %}
 <div id="sec-neco" class="section-title scroll-mt"><span class="tag neco">NECO</span> Performance Overview &mdash; {{ selected_year }}
-    <a href="{{ url_for('results.neco_list', year=selected_year) }}" class="btn btn-secondary btn-sm" style="margin-left:auto">NECO dashboard</a>
+    <span class="sec-actions">
+    <a href="{{ url_for('results.neco_list', year=selected_year) }}" class="btn btn-secondary btn-sm">NECO dashboard</a>
     <a href="{{ url_for('results.neco_broadsheet', year=selected_year) }}" class="btn btn-secondary btn-sm">Broadsheet</a>
-    <a href="{{ url_for('results.analytics_insights', board='neco', year=selected_year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-microscope"></i> NECO insights</a></div>
+    <a href="{{ url_for('results.analytics_insights', board='neco', year=selected_year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-microscope"></i> NECO insights</a></span></div>
 <div class="kpi-grid mb-3">
     <div class="kpi lead"><div class="v">{{ neco_stats.overall_pass_rate }}%</div><div class="l">Pass Rate (credit+)</div></div>
     <div class="kpi"><div class="v">{{ neco_stats.unique_students }}</div><div class="l">Students</div></div>

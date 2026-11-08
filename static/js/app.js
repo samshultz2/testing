@@ -152,7 +152,14 @@ function bindLiveList(id) {
     var countEl = countId ? document.getElementById(countId) : null;
     var caps = container.querySelectorAll('.cap-list');
     var url = new URL(window.location.href);
-    var serverSide = filters.some(function (f) { return f.name && (url.searchParams.get(f.name) || '') !== ''; });
+    // data-lf-client: a filter only the browser applies (the server ignores
+    // it) — restore it from the URL after a refresh instead.
+    filters.forEach(function (f) {
+        if (f.hasAttribute('data-lf-client') && f.name && url.searchParams.get(f.name)) f.value = url.searchParams.get(f.name);
+    });
+    var serverSide = filters.some(function (f) {
+        return !f.hasAttribute('data-lf-client') && f.name && (url.searchParams.get(f.name) || '') !== '';
+    });
 
     function val(f) { return (f.value || '').trim(); }
 

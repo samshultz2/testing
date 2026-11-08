@@ -58,12 +58,25 @@
             <span id="mockWaecSearchCount" class="text-muted" style="font-size:.75rem;"></span>
         </div>
     </div>
+    {# Live filters (applied in the browser as they change). #}
+    {% set mw_subjects = students|map(attribute='results')|sum(start=[])|map(attribute='subject')|unique|sort %}
+    <div class="mw-filters">
+        <label><span>Subject</span><select name="subject" data-lf="mockWaecStudentList" data-lf-rule="subject" data-lf-client>
+            <option value="">All</option>{% for n in mw_subjects %}<option value="{{ n }}">{{ n }}</option>{% endfor %}</select></label>
+        <label><span>Grade</span><select name="grade" data-lf="mockWaecStudentList" data-lf-rule="grade" data-lf-client>
+            <option value="">All</option>{% for g in ['A1','B2','B3','C4','C5','C6','D7','E8','F9'] %}<option value="{{ g }}">{{ g }}</option>{% endfor %}</select></label>
+        <label><span>Min credits</span><input type="number" name="min_credits" min="0" max="12" placeholder="0" data-lf="mockWaecStudentList" data-lf-rule="min:credits" data-lf-client></label>
+        <label><span>Min distinctions</span><input type="number" name="min_dist" min="0" max="12" placeholder="0" data-lf="mockWaecStudentList" data-lf-rule="min:dist" data-lf-client></label>
+        <label><span>Min average</span><input type="number" name="min_avg" min="0" max="100" placeholder="0" data-lf="mockWaecStudentList" data-lf-rule="min:avg" data-lf-client></label>
+    </div>
     <div class="cap-list">
     <div class="table-responsive"><table class="data-table">
         <thead><tr><th>Student</th><th>Subjects</th><th>Credits</th><th>Distinctions</th><th>Avg</th><th>Grades</th><th></th></tr></thead>
         <tbody>
             {% for s in students %}
-            <tr data-search="{{ (s.student.full_name ~ ' ' ~ s.student.student_id)|lower }}">
+            <tr data-search="{{ (s.student.full_name ~ ' ' ~ s.student.student_id)|lower }}" data-credits="{{ s.credits }}"
+                data-dist="{{ s.distinctions }}" data-avg="{{ s.average_score if s.average_score is not none else 0 }}"
+                data-results="{% for r in s.results %}{{ r.subject }}::{{ r.grade }}{{ '|' if not loop.last }}{% endfor %}">
                 <td><strong>{{ s.student.full_name }}</strong><div class="text-muted text-sm">{{ s.student.student_id }}</div></td>
                 <td>{{ s.subjects }}</td>
                 <td><span class="badge badge-{{ 'success' if s.has_5_credits else 'warning' }}">{{ s.credits }}</span></td>
@@ -87,6 +100,14 @@
     </table></div>
     </div>{# /.cap-list #}
 </div>
+
+<style>
+.mw-filters{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:.6rem;padding:.75rem 1rem;border-bottom:1px solid var(--border-color)}
+.mw-filters label{display:flex;flex-direction:column;gap:.2rem;margin:0;font-size:.75rem;color:var(--text-muted);font-weight:600}
+.mw-filters select,.mw-filters input{width:100%;padding:.45rem .6rem;border:1px solid var(--border-color);border-radius:var(--radius-md,8px);
+  background:var(--bg-input,var(--bg-card));color:var(--text-primary);font-size:.85rem;font-weight:400}
+@media (max-width:760px){.mw-filters{grid-template-columns:repeat(2,minmax(0,1fr))}#mockWaecStudentList .filter-search{width:100%;min-width:0!important}}
+</style>
 
 {% if stats and stats.subject_analysis %}
 <div class="card mt-3">
