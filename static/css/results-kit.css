@@ -1197,3 +1197,21 @@
 @media (max-width:900px){.bx-steps{grid-template-columns:minmax(0,1fr)}}
 @media print{.bx .sl-nav,.bx .sl-sub,.bx-back{display:none!important}}
 .bx-legacy .dropzone{display:block}.bx-legacy .scan-card{max-width:none}
+
+/* subject analysis table keeps its legacy class name */
+.bx .subject-table-wrap{overflow-x:auto}
+.bx .subject-table{width:100%;border-collapse:collapse;font-size:.88rem}
+.bx .subject-table th{font-size:.72rem;text-transform:uppercase;letter-spacing:.04em;color:var(--text-muted);font-weight:800;text-align:left;padding:.6rem .8rem;background:var(--gray-50,var(--gray-100));border-bottom:1px solid var(--border-color);white-space:nowrap}
+.bx .subject-table td{padding:.65rem .8rem;border-bottom:1px solid var(--border-light,var(--border-color));vertical-align:middle}
+.bx .subject-table tr:last-child td{border-bottom:0}
+.bx .subject-table .r{text-align:right;font-variant-numeric:tabular-nums}.sl-tbl .c{text-align:center}
+.bx .subject-table td.main{font-weight:700}
+.bx .subject-table tr.click{cursor:pointer}
+.bx .subject-table tr.click:hover td,.bx .subject-table tbody tr:hover td{background:var(--gray-50,var(--gray-100))}
+.bx .subject-table tfoot td{border-top:2px solid var(--border-color);background:var(--gray-50,var(--gray-100))}
+.bx .subject-table tr.tot td{border-top:2px solid var(--border-color);font-weight:700}
+.bx .subject-table td.z{color:var(--text-muted);opacity:.45}
+.bx .subject-table .bx-subj{color:inherit;text-decoration:none;font-weight:700}
+.bx .subject-table .bx-subj:hover{color:var(--primary);text-decoration:underline}
+.bx .subject-table tfoot td{font-weight:700}
+.bx .subject-table .c{text-align:center}
