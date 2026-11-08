@@ -24,6 +24,41 @@ const BLOCK_META = {
   class_religion: { label: 'Class & religion', icon: 'fa-school' },
   people: { label: 'People', icon: 'fa-user-clock' },
 };
+// Layout zones. Laptop: a full-width KPI band on top, a main column, and a
+// sticky right rail for the things you act on today. Phone: one column with an
+// app-style tab bar, so each tab is a short screen instead of one long page.
+const RAIL = new Set(['insights', 'timetable', 'people']);
+const TAB_OF = {
+  exec_summary: 'overview', insights: 'overview', timetable: 'overview', kpi: 'overview', branches: 'overview',
+  academic: 'academics', exams: 'academics', attendance_trend: 'academics',
+  finance_health: 'finance', crossmodule: 'finance',
+  charts: 'people', class_religion: 'people', people: 'people',
+};
+const TABS = [
+  ['overview', 'Overview', 'fa-house'], ['academics', 'Academics', 'fa-graduation-cap'],
+  ['finance', 'Finance', 'fa-coins'], ['people', 'People', 'fa-users'],
+];
+// Phone / tablet order when the two columns collapse into one.
+const STACK_ORDER = { exec_summary: 0, insights: 1, timetable: 2, people: 90 };
+
+function useMedia(query) {
+  const get = () => (typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(query).matches : false);
+  const [m, setM] = useState(get);
+  useEffect(() => {
+    if (!window.matchMedia) return undefined;
+    const mq = window.matchMedia(query);
+    const on = () => setM(mq.matches);
+    if (mq.addEventListener) mq.addEventListener('change', on); else mq.addListener(on);
+    return () => { if (mq.removeEventListener) mq.removeEventListener('change', on); else mq.removeListener(on); };
+  }, [query]);
+  return m;
+}
+
+function greeting() {
+  const h = new Date().getHours();
+  return h < 12 ? 'Good morning' : h < 17 ? 'Good afternoon' : 'Good evening';
+}
+
 const FALLBACK_ORDER = ['exec_summary', 'insights', 'branches', 'kpi', 'academic',
   'timetable', 'finance_health', 'crossmodule', 'exams', 'charts', 'attendance_trend', 'class_religion', 'people'];
 
@@ -169,7 +204,19 @@ export default function App({ data: initialData }) {
     { label: 'Enter scores', hint: 'Capture assessment results for a subject', href: urls.scores_entry },
   ].filter((s) => s.href);
 
-  const crossModule = d.finance_stat || d.sales_stat || d.hr_stat || d.cbt_stat || d.library_stat;
+  // The headline band (exec_summary) already shows students, attendance, pass
+  // rate, fees, JAMB and staff — the other KPI blocks skip whatever it covers,
+  // so no number appears twice.
+  const execOn = has('exec_summary') && (d.exec_summary || []).length > 0 && !emptySchool;
+  const execKeys = new Set(execOn ? (d.exec_summary || []).map((x) => x.key) : []);
+  const kpiShow = {
+    students: !execKeys.has('students'), enrolled: true,
+    attendance: !execKeys.has('attendance'), graduates: true,
+  };
+  const financeDup = execKeys.has('collection') || (has('finance_health') && !!d.finance_health);
+  const showFinanceStat = !!d.finance_stat && !financeDup;
+  const showHrStat = !!d.hr_stat && !execKeys.has('staff');
+  const crossModule = showFinanceStat || d.sales_stat || showHrStat || d.cbt_stat || d.library_stat;
   const dateLabel = d.today ? new Date(d.today).toLocaleDateString(undefined,
     { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' }) : '';
 
@@ -201,20 +248,32 @@ export default function App({ data: initialData }) {
     branches: <BranchComparison rows={d.branch_comparison || []} />,
     kpi: (() => {
       const hk = d.headline_kpis || {};
+      if (execOn) {
+        // The band above already has the headline numbers: just add the two it
+        // doesn't, as compact tiles (no second set of big cards).
+        return (
+          <div className="kpi-row dx-kpis compact">
+            <Kpi tone="green" icon="fa-user-check" value={d.active_enrollments} label="Enrolled · active students"
+                 delta={(hk.enrolled || {}).delta ? { dir: hk.enrolled.delta.dir, text: hk.enrolled.delta.pct + '% ' + (hk.enrolled.delta_label || '') } : undefined} />
+            <Kpi tone="purple" icon="fa-user-graduate" value={d.graduates_count} label="Graduates · this session"
+                 delta={(hk.graduates || {}).delta ? { dir: hk.graduates.delta.dir, text: hk.graduates.delta.pct + '% ' + (hk.graduates.delta_label || '') } : undefined} />
+          </div>
+        );
+      }
       return (
-        <div className="kpi-row">
-          <KpiCard tone="blue" icon="fa-users" value={d.total_students} label="Students"
+        <div className="kpi-row dx-kpis">
+          {kpiShow.students && <KpiCard tone="blue" icon="fa-users" value={d.total_students} label="Students"
                    sub="Total registered students"
                    delta={(hk.students || {}).delta} deltaLabel={(hk.students || {}).delta_label}
-                   series={(hk.students || {}).series} />
+                   series={(hk.students || {}).series} />}
           <KpiCard tone="green" icon="fa-user-check" value={d.active_enrollments} label="Enrolled"
                    sub="Active students"
                    delta={(hk.enrolled || {}).delta} deltaLabel={(hk.enrolled || {}).delta_label}
                    series={(hk.enrolled || {}).series} />
-          <KpiCard tone="orange" icon="fa-percent" value={(d.attendance_stats || {}).today_percentage + '%'}
+          {kpiShow.attendance && <KpiCard tone="orange" icon="fa-percent" value={(d.attendance_stats || {}).today_percentage + '%'}
                    label="Attendance Today" sub="Average attendance"
                    delta={(hk.attendance || {}).delta} deltaLabel={(hk.attendance || {}).delta_label}
-                   series={(hk.attendance || {}).series} />
+                   series={(hk.attendance || {}).series} />}
           <KpiCard tone="purple" icon="fa-user-graduate" value={d.graduates_count} label="Graduates"
                    sub="This session"
                    delta={(hk.graduates || {}).delta} deltaLabel={(hk.graduates || {}).delta_label}
@@ -224,17 +283,17 @@ export default function App({ data: initialData }) {
     })(),
     academic: <AcademicPerformance a={d.academic} urls={urls} t={t} />,
     timetable: <TodaySchedule data={d.timetable_today} urls={urls} teacher={!!d.teacher_classes} />,
-    finance_health: <FinanceHealth f={d.finance_health} urls={urls} t={t} />,
+    finance_health: <FinanceHealth f={d.finance_health} urls={urls} t={t} hideCollected={execKeys.has('collection')} />,
     crossmodule: (
       <div className="kpi-row">
-        {d.finance_stat && <>
+        {showFinanceStat && <>
           <Kpi tone="green" icon="fa-coins" value={nairaShort(d.finance_stat.collected)} title={naira(d.finance_stat.collected)} label="Fees collected (term)"
                delta={d.finance_stat.collected_today > 0 ? { dir: 'up', text: `${nairaShort(d.finance_stat.collected_today)} today` } : undefined} />
           <Kpi tone="teal" icon="fa-scale-balanced" value={nairaShort(d.finance_stat.net)} title={naira(d.finance_stat.net)} label="Net (term)"
                delta={{ dir: d.finance_stat.net >= 0 ? 'up' : 'down', text: d.finance_stat.net >= 0 ? 'in surplus' : 'in deficit' }} />
         </>}
         {d.sales_stat && <Kpi tone="blue" icon="fa-cash-register" value={nairaShort(d.sales_stat.today)} title={naira(d.sales_stat.today)} label={`Sales today (${d.sales_stat.count_today})`} />}
-        {d.hr_stat && <Kpi tone="purple" icon="fa-id-badge" value={d.hr_stat.total} label={`Staff (${d.hr_stat.teaching} teaching)`}
+        {showHrStat && <Kpi tone="purple" icon="fa-id-badge" value={d.hr_stat.total} label={`Staff (${d.hr_stat.teaching} teaching)`}
              delta={hrAttendanceDelta(d.hr_stat)} />}
         {d.cbt_stat && <Kpi tone="blue" icon="fa-laptop-code" value={d.cbt_stat.published} label={`CBT exams · ${d.cbt_stat.attempts} attempts`} />}
         {d.library_stat && <Kpi tone="teal" icon="fa-book" value={d.library_stat.books} label={`Books · ${d.library_stat.on_loan} on loan`} />}
@@ -379,46 +438,119 @@ export default function App({ data: initialData }) {
   const orderedIds = [...visibleIds.filter((id) => favSet.has(id)),
                       ...visibleIds.filter((id) => !favSet.has(id))];
 
+  // ── Layout: phone tabs, laptop columns ──
+  const phone = useMedia('(max-width: 759px)');
+  const [tab, setTabState] = useState(() => {
+    try { return localStorage.getItem('dash.tab') || 'overview'; } catch (_e) { return 'overview'; }
+  });
+  const setTab = (t) => {
+    setTabState(t);
+    try { localStorage.setItem('dash.tab', t); } catch (_e) { /* private mode */ }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+  const tabs = TABS.filter(([k]) => k === 'overview' || orderedIds.some((id) => TAB_OF[id] === k));
+  const activeTab = tabs.some(([k]) => k === tab) ? tab : 'overview';
+  const useTabs = phone && !arranging && tabs.length > 1;
+  const shown = useTabs ? orderedIds.filter((id) => TAB_OF[id] === activeTab) : orderedIds;
+  const onOverview = !useTabs || activeTab === 'overview';
+  const topIds = shown.filter((id) => id === 'exec_summary');
+  const railIds = shown.filter((id) => RAIL.has(id));
+  const mainIds = shown.filter((id) => id !== 'exec_summary' && !RAIL.has(id));
+
+  // Touch-friendly reordering (HTML5 drag-and-drop doesn't fire on phones).
+  const moveBy = (id, step) => {
+    const i = orderedIds.indexOf(id);
+    const j = i + step;
+    if (i < 0 || j < 0 || j >= orderedIds.length) return;
+    const target = orderedIds[j];
+    setOrder((prev) => {
+      const next = prev.slice();
+      const a = next.indexOf(id), b = next.indexOf(target);
+      if (a < 0 || b < 0) return prev;
+      next[a] = target; next[b] = id;
+      persist({ order: next });
+      return next;
+    });
+  };
+
+  // Keep the tab bar just under the app's top bar.
+  useEffect(() => {
+    const hdr = document.querySelector('.top-header, .topbar, header.header');
+    const set = () => document.documentElement.style.setProperty('--dx-top', ((hdr && hdr.offsetHeight) || 56) + 'px');
+    set();
+    window.addEventListener('resize', set);
+    return () => window.removeEventListener('resize', set);
+  }, []);
+
+  const block = (id) => (
+    <DashBlock key={id} id={id} meta={BLOCK_META[id]} arranging={arranging}
+               favorite={favSet.has(id)} busy={!!blockBusy[id]}
+               hovered={hoveredBlock === id} onHover={setHoveredBlock}
+               onToggleFav={() => toggleFav(id)} onRefresh={() => refreshBlock(id)}
+               onMove={(step) => moveBy(id, step)} first={orderedIds[0] === id}
+               last={orderedIds[orderedIds.length - 1] === id}
+               order={id in STACK_ORDER ? STACK_ORDER[id] : 10} drag={drag}>
+      {blockNodes[id]}
+    </DashBlock>
+  );
+  const firstName = (d.user_name || 'there').split(' ')[0];
+  const qa = d.quick_actions || [];
+
   return (
-    <>
+    <div className="dx">
       {toast && <Toast tone={toast.tone} onClose={() => setToast(null)}>{toast.text}</Toast>}
-      {/* Hero */}
-      <div className="dash-hero">
-        <div className="dash-hero-main">
-          <div className="dash-hero-eyebrow">Good to see you again,</div>
-          <h1>{d.user_name || 'there'} <span className="dash-wave" aria-hidden="true">👋</span></h1>
-          <p>{dateLabel}{d.active_session ? ' · ' + d.active_session.name : ''}</p>
-          <div className="dash-hero-actions">
-            {d.active_term && <span className="term-pill"><i aria-hidden="true" className="fas fa-calendar-day" /> {d.active_term.name}</span>}
-            <button type="button" onClick={refresh} disabled={refreshing} className="hero-btn"
-                    title={'Refresh dashboard — last updated ' + updatedLabel} aria-label={'Refresh dashboard, last updated ' + updatedLabel}>
-              <i aria-hidden="true" className={'fas fa-rotate' + (refreshing ? ' fa-spin' : '')} /> {refreshing ? 'Refreshing…' : 'Refresh'}
-            </button>
-            {!emptySchool && <button type="button" onClick={() => setArranging((v) => !v)}
-                    className={'hero-btn' + (arranging ? ' active' : '')}
-                    aria-pressed={arranging} title="Drag to reorder & pin favourite widgets">
-              <i aria-hidden="true" className="fas fa-up-down-left-right" /> {arranging ? 'Done' : 'Arrange'}
-            </button>}
-            <button type="button" onClick={() => setCustomizing(true)} className="hero-btn" title="Choose widgets">
-              <i aria-hidden="true" className="fas fa-sliders" /> Customize
-            </button>
-          </div>
+
+      {/* Header — compact: greeting, date / session / term, and the page tools */}
+      <header className="dx-head">
+        <div className="dx-hello">
+          <span className="dx-eyebrow">{greeting()},</span>
+          <h1>{firstName} <span className="dash-wave" aria-hidden="true">👋</span></h1>
+          <p>
+            <span>{dateLabel}</span>
+            {d.active_session && <span className="dx-sep">{d.active_session.name}</span>}
+            {d.active_term && <span className="dx-term"><i aria-hidden="true" className="fas fa-calendar-day" /> {d.active_term.name}</span>}
+          </p>
         </div>
-        <SchoolArt />
-        <span className="dash-hero-dots" aria-hidden="true" />
-      </div>
+        <div className="dx-tools">
+          <span className="dx-updated" aria-hidden="true">Updated {updatedLabel}</span>
+          <button type="button" onClick={refresh} disabled={refreshing} className="dx-tool"
+                  title={'Refresh — last updated ' + updatedLabel} aria-label={'Refresh dashboard, last updated ' + updatedLabel}>
+            <i aria-hidden="true" className={'fas fa-rotate' + (refreshing ? ' fa-spin' : '')} /><span>Refresh</span>
+          </button>
+          {!emptySchool && <button type="button" onClick={() => setArranging((v) => !v)}
+                  className={'dx-tool' + (arranging ? ' on' : '')} aria-pressed={arranging}
+                  title="Reorder widgets and pin favourites">
+            <i aria-hidden="true" className={'fas ' + (arranging ? 'fa-check' : 'fa-up-down-left-right')} /><span>{arranging ? 'Done' : 'Arrange'}</span>
+          </button>}
+          <button type="button" onClick={() => setCustomizing(true)} className="dx-tool" title="Choose widgets">
+            <i aria-hidden="true" className="fas fa-sliders" /><span>Customize</span>
+          </button>
+        </div>
+      </header>
       <div aria-live="polite" style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap' }}>
         {refreshing ? 'Refreshing dashboard' : 'Dashboard updated ' + updatedLabel}
       </div>
 
       {customizing && <Customize catalog={d.widget_catalog} onSaved={refresh} onClose={() => setCustomizing(false)} />}
 
+      {/* Quick actions — permission-filtered server-side. Phone: a swipeable row
+          of app-style icons; laptop: one compact toolbar row, always in reach. */}
+      {qa.length > 0 && onOverview && (
+        <nav className="dx-qa" aria-label="Quick actions">
+          {qa.map((a, i) => (
+            <a key={i} href={a.url} className={'dx-qa-item keep-on-readonly' + (i === 0 ? ' primary' : '')}>
+              <span className="dx-qa-ic"><i aria-hidden="true" className={'fas ' + a.icon} /></span>
+              <span className="dx-qa-l">{a.label}</span>
+            </a>
+          ))}
+        </nav>
+      )}
+
       {/* First-run: fresh school gets a guided checklist, not a wall of zeros */}
       {emptySchool && <SetupChecklist steps={setupSteps} />}
 
-      {/* Role-aware landing: a finance-only staffer (bursar) gets a finance-first
-          home with a direct shortcut into their workspace. */}
-      {d.home_focus === 'finance' && (
+      {/* Role-aware landing: a finance-only staffer gets a finance-first home. */}
+      {d.home_focus === 'finance' && onOverview && (
         <a className="focus-hero keep-on-readonly" href={urls.finance_overview}>
           <span className="fh-ic" aria-hidden="true"><i className="fas fa-coins" /></span>
           <span className="fh-body">
@@ -429,97 +561,91 @@ export default function App({ data: initialData }) {
         </a>
       )}
 
-      {/* Teacher: My Classes */}
-      {tc !== null && tc !== undefined && (
-        <div className="card">
-          <div className="card-header">
-            <h3><i aria-hidden="true" className="fas fa-chalkboard-teacher" /> My Classes</h3>
-            <a href={urls.week_grid} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-calendar-week" /> Mark a week</a>
-          </div>
-          <div className="card-body">
-            {tc.length ? (
-              <div className="data-cards">
-                {tc.map((c) => (
-                  <div className="data-card" key={c.id}>
-                    <div className="data-card-header">
-                      <div className="data-card-title">{c.name}</div>
-                      <span className="badge badge-info">{c.count} student{c.count === 1 ? '' : 's'}</span>
-                    </div>
-                    <div className="data-card-actions" style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap' }}>
-                      <a href={c.mark_url} className="btn btn-primary btn-sm" style={{ flex: 1 }}><i aria-hidden="true" className="fas fa-clipboard-check" /> Attendance</a>
-                      <a href={c.week_url} className="btn btn-secondary btn-sm" style={{ flex: 1 }}><i aria-hidden="true" className="fas fa-calendar-week" /> Week</a>
-                      {d.can_results && <a href={urls.bulk_entry} className="btn btn-secondary btn-sm" style={{ flex: 1 }}><i aria-hidden="true" className="fas fa-pen" /> Scores</a>}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <Empty icon="fa-chalkboard">You have no classes assigned for {d.active_term ? d.active_term.name : 'this term'}. Ask an admin to set you as a form teacher.</Empty>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Announcements */}
-      {(d.announcements || []).length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '.5rem', marginBottom: '1.1rem' }}>
-          {d.announcements.map((a, i) => {
-            const color = a.category === 'Important' ? 'var(--danger)' : a.category === 'Event' ? 'var(--warning)' : 'var(--primary)';
-            const icon = a.category === 'Important' ? 'fa-triangle-exclamation' : a.category === 'Event' ? 'fa-calendar-day' : 'fa-bullhorn';
-            return (
-              <div key={i} style={{ display: 'flex', gap: '.6rem', alignItems: 'flex-start', background: 'var(--bg-card)', border: '1px solid var(--border-color)', borderLeft: '4px solid ' + color, borderRadius: 'var(--radius-md)', padding: '.7rem .9rem' }}>
-                <i aria-hidden="true" className={'fas ' + icon} style={{ color, marginTop: '.2rem' }} />
-                <div style={{ flex: 1 }}><strong>{a.title}</strong>{a.body && <div className="text-muted text-sm">{a.body}</div>}
-                  {a.attachment && <div style={{ marginTop: '.3rem' }}><a href={a.attachment.url} className="text-sm"><i aria-hidden="true" className="fas fa-paperclip" /> {a.attachment.name}</a></div>}
-                  {a.needs_ack && ((a.acked || ackedIds.has(a.id))
-                    ? <div className="text-sm" style={{ color: 'var(--success)', marginTop: '.35rem' }}><i aria-hidden="true" className="fas fa-circle-check" /> Acknowledged</div>
-                    : <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: '.4rem' }} onClick={() => ackAnn(a)}><i aria-hidden="true" className="fas fa-check" /> Acknowledge</button>)}
-                </div>
-                {a.is_pinned && <i aria-hidden="true" className="fas fa-thumbtack text-muted" title="Pinned" />}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Arrange hint bar */}
+      {/* Arrange hint */}
       {arranging && !emptySchool && (
-        <div className="alert alert-info" role="status" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-          <span><i aria-hidden="true" className="fas fa-circle-info" /> Drag widgets to reorder, and use the ★ to pin favourites to the top. Changes save automatically.</span>
+        <div className="dx-arrange" role="status">
+          <i aria-hidden="true" className="fas fa-circle-info" />
+          <span>{phone ? 'Use the arrows to move widgets and ★ to pin favourites to the top.' : 'Drag widgets to reorder (or use the arrows), and ★ to pin favourites to the top.'} Changes save automatically.</span>
           <button type="button" className="btn btn-primary btn-sm" onClick={() => setArranging(false)}>Done</button>
         </div>
       )}
 
-      {/* Reorderable / favouritable / individually-refreshable widget blocks.
-          Permission scoping is enforced server-side (via `enabled` and the
-          per-widget endpoint); the render just honours the user's order. */}
-      {orderedIds.map((id) => (
-        <DashBlock key={id} id={id} meta={BLOCK_META[id]} arranging={arranging}
-                   favorite={favSet.has(id)} busy={!!blockBusy[id]}
-                   hovered={hoveredBlock === id} onHover={setHoveredBlock}
-                   onToggleFav={() => toggleFav(id)} onRefresh={() => refreshBlock(id)}
-                   drag={drag}>
-          {blockNodes[id]}
-        </DashBlock>
-      ))}
-
-      {/* Quick actions — permission-aware (server filters to actions this role
-          can actually perform), so no role sees a button that 403s on click. */}
-      {(d.quick_actions || []).length > 0 && (
-        <Widget icon="fa-bolt" title="Quick actions">
-          <div className="quick-actions">
-            {d.quick_actions.map((a, i) => (
-              // keep-on-readonly: these are already permission-filtered server-side,
-              // so the blunt client read-only sweep must not strip them (the dashboard
-              // landing is itself a non-writable page, which marks it data-readonly).
-              <a key={i} href={a.url} className={'btn keep-on-readonly ' + (a.tone || 'btn-secondary')}>
-                <i aria-hidden="true" className={'fas ' + a.icon} /> {a.label}
-              </a>
-            ))}
-          </div>
-        </Widget>
+      {/* Phone: app-style section tabs (sticky under the top bar) */}
+      {useTabs && (
+        <div className="dx-tabs" role="tablist" aria-label="Dashboard sections">
+          {tabs.map(([k, lab, ic]) => (
+            <button key={k} type="button" role="tab" aria-selected={activeTab === k}
+                    className={'dx-tab' + (activeTab === k ? ' on' : '')} onClick={() => setTab(k)}>
+              <i aria-hidden="true" className={'fas ' + ic} /><span>{lab}</span>
+            </button>
+          ))}
+        </div>
       )}
-    </>
+
+      {topIds.map(block)}
+
+      <div className="dx-cols">
+        <div className="dx-main">
+          {/* Teacher: My Classes */}
+          {tc !== null && tc !== undefined && onOverview && (
+            <div className="widget dx-classes" style={{ order: 0 }}>
+              <div className="wh">
+                <h3><i aria-hidden="true" className="fas fa-chalkboard-teacher" /> My classes</h3>
+                <a href={urls.week_grid} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-calendar-week" /> Mark a week</a>
+              </div>
+              <div className="wb">
+                {tc.length ? (
+                  <div className="dx-class-list">
+                    {tc.map((c) => (
+                      <div className="dx-class" key={c.id}>
+                        <div className="dx-class-h"><strong>{c.name}</strong><span className="badge badge-info">{c.count} student{c.count === 1 ? '' : 's'}</span></div>
+                        <div className="dx-class-a">
+                          <a href={c.mark_url} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-clipboard-check" /> Attendance</a>
+                          <a href={c.week_url} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-calendar-week" /> Week</a>
+                          {d.can_results && <a href={urls.bulk_entry} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-pen" /> Scores</a>}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <Empty icon="fa-chalkboard">You have no classes assigned for {d.active_term ? d.active_term.name : 'this term'}. Ask an admin to set you as a form teacher.</Empty>
+                )}
+              </div>
+            </div>
+          )}
+          {mainIds.map(block)}
+        </div>
+        {(railIds.length > 0 || ((d.announcements || []).length > 0 && onOverview)) && (
+          <aside className="dx-rail" aria-label="Today">
+            {/* Announcements */}
+            {(d.announcements || []).length > 0 && onOverview && (
+              <div className="widget dx-ann" style={{ order: 0 }}>
+                <div className="wh"><h3><i aria-hidden="true" className="fas fa-bullhorn" /> Announcements</h3></div>
+                <div className="wb" style={{ padding: '.35rem .9rem' }}>
+                  {d.announcements.map((a, i) => {
+                    const color = a.category === 'Important' ? 'var(--danger)' : a.category === 'Event' ? 'var(--warning)' : 'var(--primary)';
+                    const icon = a.category === 'Important' ? 'fa-triangle-exclamation' : a.category === 'Event' ? 'fa-calendar-day' : 'fa-bullhorn';
+                    return (
+                      <div key={i} className="dx-ann-item" style={{ borderLeftColor: color }}>
+                        <i aria-hidden="true" className={'fas ' + icon} style={{ color }} />
+                        <div style={{ flex: 1, minWidth: 0 }}><strong>{a.title}</strong>{a.body && <div className="text-muted text-sm">{a.body}</div>}
+                          {a.attachment && <div style={{ marginTop: '.3rem' }}><a href={a.attachment.url} className="text-sm"><i aria-hidden="true" className="fas fa-paperclip" /> {a.attachment.name}</a></div>}
+                          {a.needs_ack && ((a.acked || ackedIds.has(a.id))
+                            ? <div className="text-sm" style={{ color: 'var(--success)', marginTop: '.35rem' }}><i aria-hidden="true" className="fas fa-circle-check" /> Acknowledged</div>
+                            : <button type="button" className="btn btn-secondary btn-sm" style={{ marginTop: '.4rem' }} onClick={() => ackAnn(a)}><i aria-hidden="true" className="fas fa-check" /> Acknowledge</button>)}
+                        </div>
+                        {a.is_pinned && <i aria-hidden="true" className="fas fa-thumbtack text-muted" title="Pinned" />}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+            {railIds.map(block)}
+          </aside>
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -529,12 +655,12 @@ const TOOL_BTN = { background: 'none', border: 'none', cursor: 'pointer', paddin
 // refresh, and — in Arrange mode — a drag handle) that straddles the block's
 // top border so it never overlaps in-content action buttons. Favourited blocks
 // keep their toolbar visible as a persistent marker.
-function DashBlock({ id, meta, arranging, favorite, busy, hovered, onHover, onToggleFav, onRefresh, drag, children }) {
+function DashBlock({ id, meta, arranging, favorite, busy, hovered, onHover, onToggleFav, onRefresh, onMove, first, last, order, drag, children }) {
   const show = hovered || arranging || favorite;
   const isDropTarget = arranging && drag.overId === id;
   return (
-    <div className="dash-block"
-         style={{ position: 'relative', marginBottom: '1.1rem', borderRadius: 'var(--radius-md)',
+    <div className="dash-block" data-block={id}
+         style={{ position: 'relative', borderRadius: 'var(--radius-md)', order,
                   outline: isDropTarget ? '2px dashed var(--primary)' : arranging ? '1px dashed var(--border-color)' : 'none',
                   outlineOffset: 4, cursor: arranging ? 'grab' : 'default' }}
          draggable={arranging}
@@ -549,6 +675,12 @@ function DashBlock({ id, meta, arranging, favorite, busy, hovered, onHover, onTo
                     boxShadow: 'var(--shadow-sm)', opacity: show ? 1 : 0,
                     pointerEvents: show ? 'auto' : 'none', transition: 'opacity .15s' }}>
         {arranging && <span aria-hidden="true" title="Drag to reorder" style={{ color: 'var(--text-muted)', padding: '0 2px', cursor: 'grab' }}><i className="fas fa-grip-vertical" /></span>}
+        {arranging && onMove && <>
+          <button type="button" style={TOOL_BTN} onClick={() => onMove(-1)} disabled={first} aria-label={'Move ' + (meta ? meta.label : 'widget') + ' up'} title="Move up">
+            <i className="fas fa-arrow-up" style={{ color: first ? 'var(--border-color)' : 'var(--text-muted)' }} aria-hidden="true" /></button>
+          <button type="button" style={TOOL_BTN} onClick={() => onMove(1)} disabled={last} aria-label={'Move ' + (meta ? meta.label : 'widget') + ' down'} title="Move down">
+            <i className="fas fa-arrow-down" style={{ color: last ? 'var(--border-color)' : 'var(--text-muted)' }} aria-hidden="true" /></button>
+        </>}
         <button type="button" style={TOOL_BTN} onClick={onToggleFav} aria-pressed={favorite}
                 title={favorite ? 'Unpin favourite' : 'Pin as favourite'}
                 aria-label={(favorite ? 'Unpin ' : 'Pin ') + (meta ? meta.label : 'widget') + ' as favourite'}>
@@ -961,15 +1093,15 @@ function AcademicPerformance({ a, urls, t }) {
 // Finance health: the bursar/MBA view of fee collection — expected vs collected,
 // collection rate, outstanding + defaulters and a collection trend. Only shown
 // to users permitted the finance module.
-function FinanceHealth({ f, urls, t }) {
+function FinanceHealth({ f, urls, t, hideCollected }) {
   if (!f) return null;
   const rate = f.collection_rate;
   const trend = f.trend || [];
   return (
     <>
       <div className="kpi-row">
-        <Kpi tone="green" icon="fa-hand-holding-dollar" value={nairaShort(f.collected)} title={naira(f.collected)} label="Collected (term)"
-             delta={f.collected_today > 0 ? { dir: 'up', text: nairaShort(f.collected_today) + ' today' } : undefined} />
+        {!hideCollected && <Kpi tone="green" icon="fa-hand-holding-dollar" value={nairaShort(f.collected)} title={naira(f.collected)} label="Collected (term)"
+             delta={f.collected_today > 0 ? { dir: 'up', text: nairaShort(f.collected_today) + ' today' } : undefined} />}
         <Kpi tone={rate == null ? 'blue' : rateTone(rate)} icon="fa-gauge-high" value={rate == null ? '—' : rate + '%'} label="Collection rate" />
         <Kpi tone="amber" icon="fa-file-invoice-dollar" value={nairaShort(f.outstanding)} title={naira(f.outstanding)} label={'Outstanding · ' + f.defaulter_count + ' owing'} />
         <Kpi tone={f.net >= 0 ? 'teal' : 'red'} icon="fa-scale-balanced" value={nairaShort(f.net)} title={naira(f.net)} label="Net (term)"
@@ -1109,48 +1241,6 @@ function ExamCard({ kind, snap, url }) {
           {stats.map((s) => <ExamStatPill key={s.k} k={s.k} v={s.v} />)}
         </div>
       )}
-    </div>
-  );
-}
-
-// Decorative school-building illustration for the hero. Purely ornamental, so
-// it's aria-hidden. Painted in white-opacity monochrome (no fixed hue) so it sits
-// correctly on ANY theme's hero gradient — green, blue, plum, slate, etc.
-function SchoolArt() {
-  return (
-    <div className="dash-hero-art" aria-hidden="true">
-      <svg viewBox="0 0 240 180" width="100%" height="100%" preserveAspectRatio="xMidYMax meet">
-        {/* soft ground + bushes */}
-        <ellipse cx="120" cy="168" rx="120" ry="16" fill="rgba(255,255,255,.06)" />
-        <circle cx="40" cy="150" r="26" fill="rgba(255,255,255,.10)" />
-        <circle cx="205" cy="150" r="30" fill="rgba(255,255,255,.09)" />
-        {/* main building */}
-        <rect x="58" y="86" width="124" height="72" rx="6" fill="rgba(255,255,255,.92)" />
-        <rect x="58" y="150" width="124" height="8" rx="2" fill="rgba(255,255,255,.5)" />
-        {/* roof */}
-        <polygon points="120,44 190,90 50,90" fill="rgba(255,255,255,.68)" />
-        <polygon points="120,44 190,90 120,90" fill="rgba(255,255,255,.82)" />
-        {/* flag */}
-        <rect x="118" y="26" width="3" height="20" rx="1.5" fill="rgba(255,255,255,.9)" />
-        <polygon points="121,27 137,32 121,37" fill="rgba(255,255,255,.7)" />
-        {/* clock on the gable */}
-        <circle cx="120" cy="74" r="9" fill="rgba(255,255,255,.95)" />
-        <circle cx="120" cy="74" r="9" fill="none" stroke="rgba(255,255,255,.55)" strokeWidth="1.5" />
-        <line x1="120" y1="74" x2="120" y2="69" stroke="rgba(15,23,42,.4)" strokeWidth="1.4" strokeLinecap="round" />
-        <line x1="120" y1="74" x2="124" y2="76" stroke="rgba(15,23,42,.4)" strokeWidth="1.4" strokeLinecap="round" />
-        {/* door */}
-        <rect x="106" y="120" width="28" height="38" rx="14" fill="rgba(255,255,255,.62)" />
-        <rect x="106" y="120" width="28" height="38" rx="14" fill="none" stroke="rgba(255,255,255,.5)" strokeWidth="1.2" />
-        <circle cx="128" cy="140" r="1.6" fill="rgba(15,23,42,.35)" />
-        {/* windows */}
-        {[72, 150].map((x) => (
-          <g key={x}>
-            <rect x={x} y="104" width="20" height="20" rx="3" fill="rgba(255,255,255,.55)" />
-            <line x1={x + 10} y1="104" x2={x + 10} y2="124" stroke="rgba(255,255,255,.85)" strokeWidth="1.4" />
-            <line x1={x} y1="114" x2={x + 20} y2="114" stroke="rgba(255,255,255,.85)" strokeWidth="1.4" />
-          </g>
-        ))}
-      </svg>
     </div>
   );
 }

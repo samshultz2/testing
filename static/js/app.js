@@ -696,8 +696,15 @@ function buildSidebarFilter(groups) {
 function buildBottomNav(items) {
     var bar = document.getElementById('bottomNav');
     if (!bar) return;
-    var html = '<a href="/" class="bn-item"><i class="fas fa-home"></i><span>Home</span></a>';
-    items.slice(0, 4).forEach(function (li) {
+    var home = window.location.pathname === '/';
+    var html = '<a href="/" class="bn-item' + (home ? ' active' : '') + '"' + (home ? ' aria-current="page"' : '')
+             + '><i class="fas fa-home"></i><span>Home</span></a>';
+    // The section's own "Dashboard" link is the same page as Home — skip it so
+    // the bar never shows two tabs for one screen.
+    items.filter(function (li) {
+        var a = li.querySelector('a.nav-link[href]');
+        return a && a.getAttribute('href') !== '/';
+    }).slice(0, 4).forEach(function (li) {
         var a = li.querySelector('a.nav-link[href]');
         if (!a) return;
         var icon = a.querySelector('i');

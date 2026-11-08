@@ -125,6 +125,141 @@
 .relig-bar .track{flex:1;height:8px;background:var(--gray-100);border-radius:var(--radius-full);overflow:hidden}
 .relig-bar .fill{height:100%;border-radius:var(--radius-full);background:var(--primary)}
 .relig-bar .num{width:28px;text-align:right;font-weight:700;font-size:.8rem}
+
+/* =====================================================================
+   Dashboard v2 — laptop: header + quick actions + KPI band, then a main
+   column and a sticky "today" rail (no long scroll). Phone: compact header,
+   swipeable quick actions, sticky app-style section tabs.
+   ===================================================================== */
+.dx{display:flex;flex-direction:column;gap:1rem;min-width:0;--dx-top:56px}
+.dx *{min-width:0}
+.dx .dash-block > .widget,.dx .dash-block > .card,.dx .dash-block > .kpi-row,.dx .dash-block > :last-child{margin-bottom:0 !important}
+.dx .dash-block > .kpi-row + .dash-grid,.dx .dash-block > .kpi-row + .dx-kpis{margin-top:1rem}
+.dx .dash-grid{margin-bottom:0}
+.dx .dash-block .dash-grid + .dash-grid{margin-top:1rem}
+.dx .widget{border-radius:16px;box-shadow:var(--shadow-xs)}
+.dx .widget .wh{padding:.8rem 1rem}
+.dx .widget .wh h3{font-size:.9rem;font-weight:700}
+/* empty widgets collapse to a slim line instead of a tall blank chart */
+.dx .chart-box:has(.empty-state){height:auto !important}
+.dx .empty-state{padding:1rem .5rem;display:flex;align-items:center;justify-content:center;gap:.6rem;text-align:left}
+.dx .empty-state i{width:34px;height:34px;font-size:.9rem;margin:0;flex:0 0 auto}
+.dx .empty-state p{margin:0;font-size:.82rem}
+
+/* header */
+.dx-head{display:flex;align-items:center;justify-content:space-between;gap:1rem;flex-wrap:wrap;
+  padding:1.1rem 1.3rem;border-radius:18px;color:#fff;position:relative;overflow:hidden;
+  background:var(--primary);
+  background:linear-gradient(120deg,var(--primary) 0%,color-mix(in srgb,var(--primary) 70%,#000) 100%);
+  box-shadow:0 12px 30px -22px color-mix(in srgb,var(--primary) 70%,#000)}
+.dx-head::after{content:"";position:absolute;right:-60px;top:-80px;width:240px;height:240px;border-radius:50%;
+  background:radial-gradient(circle,rgba(255,255,255,.14),transparent 70%);pointer-events:none}
+.dx-hello{position:relative;z-index:1}
+.dx-eyebrow{font-size:.85rem;opacity:.85;font-weight:500}
+.dx-hello h1{margin:.05rem 0 .3rem;font-size:1.6rem;line-height:1.1;font-weight:800;letter-spacing:-.02em;font-family:var(--font-display);color:#fff}
+.dx-hello p{margin:0;display:flex;flex-wrap:wrap;align-items:center;gap:.35rem .7rem;font-size:.85rem;opacity:.92}
+.dx-sep::before{content:"·";margin-right:.7rem;opacity:.6}
+.dx-term{display:inline-flex;align-items:center;gap:.35rem;background:rgba(255,255,255,.95);color:var(--primary);
+  font-weight:700;font-size:.78rem;padding:.25rem .6rem;border-radius:999px}
+.dx-tools{display:flex;align-items:center;gap:.45rem;position:relative;z-index:1}
+.dx-updated{font-size:.74rem;opacity:.75;margin-right:.3rem}
+.dx-tool{display:inline-flex;align-items:center;gap:.45rem;border:0;cursor:pointer;color:#fff;font:inherit;font-size:.84rem;font-weight:600;
+  background:rgba(255,255,255,.14);padding:.5rem .85rem;border-radius:12px;transition:background .15s}
+.dx-tool:hover{background:rgba(255,255,255,.24)}
+.dx-tool.on{background:#fff;color:var(--primary)}
+.dx-tool:disabled{opacity:.7;cursor:default}
+
+/* quick actions */
+.dx-qa{display:flex;gap:.5rem;flex-wrap:wrap;padding:.6rem;background:var(--bg-card);border:1px solid var(--border-color);
+  border-radius:16px;box-shadow:var(--shadow-xs)}
+.dx-qa-item{display:inline-flex;align-items:center;gap:.5rem;padding:.45rem .8rem .45rem .45rem;border-radius:12px;
+  text-decoration:none;color:var(--text-primary);font-size:.84rem;font-weight:600;transition:background .15s}
+.dx-qa-item:hover{background:var(--gray-50,#f1f5f9)}
+.dx-qa-ic{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;flex:0 0 auto;
+  color:var(--primary);background:color-mix(in srgb,var(--primary) 12%,var(--bg-card))}
+.dx-qa-item.primary .dx-qa-ic{background:var(--primary);color:#fff}
+
+.dx-arrange{display:flex;align-items:center;gap:.6rem;padding:.65rem .9rem;border-radius:12px;font-size:.85rem;
+  background:color-mix(in srgb,var(--info,#2563eb) 10%,var(--bg-card));border:1px solid color-mix(in srgb,var(--info,#2563eb) 25%,transparent)}
+.dx-arrange span{flex:1}
+
+/* columns */
+.dx-cols{display:flex;flex-direction:column;gap:1rem}
+.dx-main,.dx-rail{display:contents}
+.dx-class-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:.7rem}
+.dx-class{border:1px solid var(--border-color);border-radius:12px;padding:.75rem}
+.dx-class-h{display:flex;justify-content:space-between;align-items:center;gap:.5rem;margin-bottom:.55rem}
+.dx-class-a{display:flex;gap:.4rem;flex-wrap:wrap}
+.dx-class-a .btn{flex:1}
+.dx-ann-item{display:flex;gap:.6rem;align-items:flex-start;padding:.65rem .1rem .65rem .6rem;border-left:3px solid;margin:.35rem 0;border-radius:2px}
+@media (min-width:1200px){
+  .dx-cols{display:grid;grid-template-columns:minmax(0,1fr) 360px;align-items:start}
+  .dx-main,.dx-rail{display:flex;flex-direction:column;gap:1rem}
+  .dx-rail{position:sticky;top:calc(var(--dx-top) + 12px);max-height:calc(100vh - var(--dx-top) - 24px);overflow-y:auto;
+    scrollbar-width:thin;padding-right:2px;margin-right:-2px}
+  .dx-rail .dash-grid{grid-template-columns:1fr !important}
+  .dx-rail .dash-block{order:0 !important}
+  .dx-main .dash-block{order:0 !important}
+}
+@media (min-width:1500px){ .dx-cols{grid-template-columns:minmax(0,1fr) 400px} }
+/* exec band: six tiles in one row on wide screens */
+@media (min-width:760px){ .dx .dash-block[data-block="exec_summary"] .kpi-row,.dx .dash-block[data-block="finance_health"] > .kpi-row{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))} }
+.dx .dash-block[data-block="exec_summary"] .kpi{padding:.85rem .9rem;gap:.7rem}
+.dx .dash-block[data-block="exec_summary"] .kpi .ic{width:40px;height:40px;border-radius:11px;font-size:1rem}
+.dx .dash-block[data-block="exec_summary"] .kpi .v{font-size:1.35rem}
+.dx .dash-block[data-block="exec_summary"] .widget .wb{padding:.85rem}
+.dx-kpis.kpi-row{grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+
+/* tabs (phone) */
+.dx-tabs{position:sticky;top:var(--dx-top);z-index:40;display:flex;gap:.25rem;margin:0 calc(-1 * var(--sp-4,16px));
+  padding:.45rem var(--sp-4,16px);background:color-mix(in srgb,var(--bg-body) 88%,transparent);
+  -webkit-backdrop-filter:saturate(1.6) blur(10px);backdrop-filter:saturate(1.6) blur(10px);border-bottom:1px solid var(--border-color)}
+.dx-tab{flex:1;display:flex;flex-direction:column;align-items:center;gap:.15rem;border:0;background:none;cursor:pointer;font:inherit;
+  font-size:.7rem;font-weight:600;color:var(--text-muted);padding:.35rem .2rem;border-radius:10px;transition:background .15s,color .15s}
+.dx-tab i{font-size:1rem}
+.dx-tab.on{color:var(--primary);background:color-mix(in srgb,var(--primary) 11%,transparent)}
+
+@media (max-width:759px){
+  .dx{gap:.85rem}
+  .dx-head{padding:.95rem 1rem;border-radius:16px;gap:.6rem;align-items:flex-start}
+  .dx-hello h1{font-size:1.35rem}
+  .dx-hello p{font-size:.78rem}
+  .dx-updated,.dx-tool span{display:none}
+  .dx-tools{position:absolute;top:.8rem;right:.8rem;gap:.3rem}
+  .dx-tool{width:36px;height:36px;padding:0;justify-content:center;border-radius:11px}
+  .dx-hello{padding-right:7.2rem}
+  /* app-style swipeable shortcuts */
+  .dx-qa{flex-wrap:nowrap;overflow-x:auto;scroll-snap-type:x proximity;gap:.15rem;padding:.7rem .4rem;
+    margin:0 calc(-1 * var(--sp-4,16px));border-radius:0;border-left:0;border-right:0;scrollbar-width:none}
+  .dx-qa::-webkit-scrollbar{display:none}
+  .dx-qa-item{flex:0 0 74px;flex-direction:column;gap:.35rem;padding:.2rem .15rem;text-align:center;scroll-snap-align:start;
+    font-size:.68rem;font-weight:600;line-height:1.2;-webkit-tap-highlight-color:transparent}
+  .dx-qa-item:active .dx-qa-ic{transform:scale(.92)}
+  .dx-qa-ic{width:50px;height:50px;border-radius:16px;font-size:1.1rem;transition:transform .12s}
+  .dx-qa-l{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+  .dx .kpi-row{gap:.6rem}
+  .dx .kpi{padding:.75rem;gap:.6rem;border-radius:14px}
+  .dx .kpi .ic{width:38px;height:38px;font-size:.95rem;border-radius:11px}
+  .dx .kpi .v{font-size:1.2rem}
+  .dx .kpi .l{font-size:.64rem}
+  .dx .kpicard{padding:.9rem .9rem .3rem;border-radius:14px}
+  .dx .kc-value{font-size:1.6rem;margin-top:.6rem}
+  .dx .kc-label{font-size:.9rem}
+  .dx .kc-ic{width:40px;height:40px;font-size:1rem}
+  .dx .kc-spark{margin:.4rem -.9rem -.3rem;height:36px}
+  .dx .chart-box{height:190px}
+  .dx .widget{border-radius:14px}
+  .dx .dash-block[data-block="exec_summary"] > .widget{background:none;border:0;box-shadow:none}
+  .dx .dash-block[data-block="exec_summary"] > .widget > .wh{display:none}
+  .dx .dash-block[data-block="exec_summary"] > .widget > .wb{padding:0}
+  .dx-kpis.kpi-row{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .dx-sep::before{display:none}
+  .dx-hello p{gap:.3rem .5rem}
+  /* headline tiles: icon over number, so values get the full tile width */
+  .dx .dash-block[data-block="exec_summary"] .kpi,.dx .dx-kpis.compact .kpi{flex-direction:column;align-items:flex-start;gap:.45rem}
+  .dx .dash-block[data-block="exec_summary"] .kpi .ic,.dx .dx-kpis.compact .kpi .ic{width:34px;height:34px;font-size:.88rem}
+  .dx-class-list{grid-template-columns:1fr}
+}
 </style>
 {% endblock %}
 
