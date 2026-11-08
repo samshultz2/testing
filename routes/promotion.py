@@ -469,12 +469,27 @@ def document_verifications():
     def _row(v):
         return {
             'id': v.id, 'code': v.code, 'result': v.result, 'source': v.source or 'manual',
-            'doc_label': GRADUATE_DOC_TYPES.get(v.doc_type, v.doc_type or '—'),
+            'doc_label': _doc_label(v.doc_type),
             'student': (v.student.full_name if v.student else None),
             'student_url': (url_for('promotion.graduate_profile', student_id=v.student_id)
                             if v.student_id else None),
             'at': v.created_at.strftime('%d %b %Y %H:%M') if v.created_at else '',
+            'ts': v.created_at.isoformat() if v.created_at else '',
         }
+
+    def _doc_label(dt):
+        if not dt:
+            return '—'
+        if dt in GRADUATE_DOC_TYPES:
+            return GRADUATE_DOC_TYPES[dt]
+        try:
+            from utils import document_catalog as cat
+            lab = cat.label(dt)
+            if lab and lab != dt:
+                return lab
+        except Exception:
+            pass
+        return dt.replace('_', ' ').title()
     return _render({
         'page': 'doc_verifications',
         'days': days,

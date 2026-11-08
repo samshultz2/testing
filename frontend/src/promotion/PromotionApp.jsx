@@ -2029,57 +2029,156 @@ function DocTemplates({ d, notify }) {
 }
 
 // ---- Document verification activity (admin) -------------------------------
-const _VBADGE = { valid: 'badge-success', revoked: 'badge-danger', not_found: 'badge-warning' };
-const _VLABEL = { valid: 'Valid', revoked: 'Revoked', not_found: 'Unknown code' };
-
-function VerifyRow({ v }) {
-  return (
-    <tr>
-      <td>{v.at}</td>
-      <td><span className={'badge ' + (_VBADGE[v.result] || 'badge-secondary')}>{_VLABEL[v.result] || v.result}</span></td>
-      <td>{v.doc_label}</td>
-      <td>{v.student_url ? <a href={v.student_url}>{v.student}</a> : (v.student || '—')}</td>
-      <td><code>{v.code}</code></td>
-      <td>{v.source === 'qr' ? <span title="QR link scanned"><i aria-hidden="true" className="fas fa-qrcode" /> Scan</span> : 'Typed'}</td>
-    </tr>
-  );
-}
+const _VRES = {
+  valid: { label: 'Genuine', icon: 'fa-circle-check', tone: 'good' },
+  revoked: { label: 'Revoked document', icon: 'fa-ban', tone: 'bad' },
+  not_found: { label: 'Unknown code', icon: 'fa-triangle-exclamation', tone: 'warn' },
+};
 
 function DocVerifications({ d }) {
   const nav = useNav();
   const s = d.summary || {};
-  const table = (rows) => (
-    <div className="table-responsive"><table className="data-table"><thead><tr>
-      <th>When</th><th>Result</th><th>Document</th><th>Graduate</th><th>Code</th><th>Via</th>
-    </tr></thead><tbody>{rows.map((v) => <VerifyRow key={v.id} v={v} />)}</tbody></table></div>
-  );
+  const [filter, setFilter] = useState('');
+  const [q, setQ] = useState('');
+  // One feed: scoped checks plus unknown-code attempts (deduplicated).
+  const all = useMemo(() => {
+    const m = new Map();
+    [...(d.rows || []), ...(d.unknown || [])].forEach((v) => m.set(v.id, v));
+    return [...m.values()].sort((x, y) => (y.ts || '').localeCompare(x.ts || '') || y.id - x.id);
+  }, [d.rows, d.unknown]);
+  const t = q.trim().toLowerCase();
+  const shown = all.filter((v) => (!filter || v.result === filter)
+    && (!t || `${v.code} ${v.student || ''} ${v.doc_label}`.toLowerCase().includes(t)));
+  const total = s.total || 0;
+  const pct = (n) => (total ? Math.round((n / total) * 100) : 0);
+  const viaQr = all.filter((v) => v.source === 'qr').length;
+  // Day buckets for the activity strip and the feed headings.
+  const dayOf = (v) => (v.at || '').slice(0, 11).trim();
+  const perDay = {};
+  all.forEach((v) => { perDay[dayOf(v)] = (perDay[dayOf(v)] || 0) + 1; });
+  const days = Object.entries(perDay).reverse().slice(-30);
+  const maxDay = Math.max(1, ...days.map(([, n]) => n));
+  const tally = (key) => {
+    const c = {};
+    all.filter((v) => v.result !== 'not_found').forEach((v) => { const k = v[key]; if (k) c[k] = (c[k] || 0) + 1; });
+    return Object.entries(c).sort((x, y) => y[1] - x[1]).slice(0, 5);
+  };
+  const topDocs = tally('doc_label');
+  const topGrads = tally('student');
+  const gradUrl = Object.fromEntries(all.filter((v) => v.student_url).map((v) => [v.student, v.student_url]));
+  const groups = [];
+  shown.forEach((v) => { const k = dayOf(v); const g = groups[groups.length - 1]; if (g && g.k === k) g.rows.push(v); else groups.push({ k, rows: [v] }); });
+
   return (
-    <>
-      <PageHeader title="Verification Activity" actions={
-        <a href={d.urls.graduates} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back to Graduates</a>} />
-      <div className="card mb-3"><div className="card-body"><div className="filter-form">
-        <div className="form-group"><label className="form-label">Period</label>
-          <select className="form-control" value={d.days} onChange={(e) => navParams(nav.go, window.location.pathname, { days: e.target.value })}>
-            {[30, 90, 180, 365].map((n) => <option key={n} value={n}>Last {n} days</option>)}</select></div>
-      </div></div></div>
-      <div className="stats-grid mb-3">
-        <div className="stat-card"><div className="stat-icon info"><i aria-hidden="true" className="fas fa-magnifying-glass" /></div><div className="stat-content"><h3>{s.total || 0}</h3><p>Total checks</p></div></div>
-        <div className="stat-card"><div className="stat-icon success"><i aria-hidden="true" className="fas fa-circle-check" /></div><div className="stat-content"><h3>{s.valid || 0}</h3><p>Verified genuine</p></div></div>
-        <div className="stat-card"><div className="stat-icon secondary"><i aria-hidden="true" className="fas fa-ban" /></div><div className="stat-content"><h3>{s.revoked || 0}</h3><p>Revoked-doc checks</p></div></div>
-        <div className="stat-card"><div className="stat-icon warning"><i aria-hidden="true" className="fas fa-triangle-exclamation" /></div><div className="stat-content"><h3>{s.not_found || 0}</h3><p>Unknown codes</p></div></div>
-      </div>
-      <div className="card mb-3"><div className="card-body">
-        <p className="text-muted" style={{ margin: 0 }}>
-          <i aria-hidden="true" className="fas fa-shield-halved" /> Every public check of one of your documents is logged here — no personal data about the person checking is stored, only a privacy-safe daily fingerprint.
-        </p></div></div>
-      <div className="card mb-3"><div className="card-header"><h3>Recent checks</h3></div>
-        <div className="card-body" style={{ padding: 0 }}>
-          {(d.rows || []).length ? table(d.rows)
-            : <div style={{ padding: '1rem' }}><Empty icon="fa-magnifying-glass" title="No checks yet"><p>Nobody has verified one of your documents in this period.</p></Empty></div>}
-        </div></div>
-      {(d.unknown || []).length > 0 && <div className="card"><div className="card-header"><h3><i aria-hidden="true" className="fas fa-triangle-exclamation" /> Unknown-code attempts</h3></div>
-        <div className="card-body" style={{ padding: 0 }}>{table(d.unknown)}</div></div>}
-    </>
+    <div className="pm">
+      <PmHead back={d.urls.graduates} kicker="Graduates" title="Verification activity"
+              sub="Every time someone checks one of your documents on the public verification page." />
+
+      <section className="pm-pick">
+        <span className="pm-pick-l">Period</span>
+        <div className="pm-chips" role="radiogroup" aria-label="Period">
+          {[7, 30, 90, 180, 365].map((n) => (
+            <button key={n} type="button" role="radio" aria-checked={Number(d.days) === n} className={Number(d.days) === n ? 'on' : ''}
+                    onClick={() => navParams(nav.go, window.location.pathname, { days: n })}>{n === 365 ? 'Last year' : `Last ${n} days`}</button>))}
+        </div>
+      </section>
+
+      <section className="pm-card aa-hero">
+        <div className="aa-ring" style={{ '--p': pct(s.valid || 0) }} role="img" aria-label={`${pct(s.valid || 0)}% of checks were genuine`}>
+          <div><b>{total ? pct(s.valid || 0) + '%' : '—'}</b><small>genuine</small></div>
+        </div>
+        <div className="aa-hero-t">
+          <span className="pm-kick">{total} check{total === 1 ? '' : 's'} in the last {d.days} days</span>
+          <div className="aa-split" role="img" aria-label="Outcome split">
+            {s.valid ? <span style={{ flexGrow: s.valid, background: 'var(--success)' }} /> : null}
+            {s.revoked ? <span style={{ flexGrow: s.revoked, background: 'var(--danger)' }} /> : null}
+            {s.not_found ? <span style={{ flexGrow: s.not_found, background: 'var(--warning)' }} /> : null}
+            {!total && <span style={{ flexGrow: 1, background: 'var(--gray-200)' }} />}
+          </div>
+          <ul className="aa-legend">
+            <li><i style={{ background: 'var(--success)' }} />Genuine<b>{s.valid || 0}</b></li>
+            <li><i style={{ background: 'var(--danger)' }} />Revoked document<b>{s.revoked || 0}</b></li>
+            <li><i style={{ background: 'var(--warning)' }} />Unknown code<b>{s.not_found || 0}</b></li>
+          </ul>
+        </div>
+      </section>
+
+      {(s.not_found > 0 || s.revoked > 0) && (
+        <div className="vf-alerts">
+          {s.not_found > 0 && <p className="vs-verdict bad"><i aria-hidden="true" className="fas fa-triangle-exclamation" /> {s.not_found} check{s.not_found === 1 ? '' : 's'} used a code your school never issued — possibly a forged document. <button type="button" className="pm-link" onClick={() => setFilter('not_found')}>Show them</button></p>}
+          {s.revoked > 0 && <p className="vs-verdict"><i aria-hidden="true" className="fas fa-ban" /> {s.revoked} check{s.revoked === 1 ? '' : 's'} of a revoked document — the checker was told it is invalid. <button type="button" className="pm-link" onClick={() => setFilter('revoked')}>Show them</button></p>}
+        </div>
+      )}
+
+      <PmTiles items={[
+        { label: 'All checks', icon: 'fa-magnifying-glass', value: total, sub: `last ${d.days} days`, onClick: () => setFilter(''), on: !filter },
+        { label: 'Genuine', icon: 'fa-circle-check', value: s.valid || 0, tone: 'good', onClick: () => setFilter('valid'), on: filter === 'valid' },
+        { label: 'Revoked', icon: 'fa-ban', value: s.revoked || 0, tone: s.revoked ? 'bad' : '', onClick: () => setFilter('revoked'), on: filter === 'revoked' },
+        { label: 'Unknown codes', icon: 'fa-triangle-exclamation', value: s.not_found || 0, tone: s.not_found ? 'warn' : '', onClick: () => setFilter('not_found'), on: filter === 'not_found' },
+        all.length ? { label: 'By QR scan', icon: 'fa-qrcode', value: `${Math.round(viaQr / all.length * 100)}%`, sub: `${viaQr} of ${all.length} recent` } : null,
+      ]} />
+
+      {all.length > 0 && (
+        <div className="aa-grid">
+          <section className="pm-card">
+            <header className="pm-card-h"><span className="pm-card-ic"><i aria-hidden="true" className="fas fa-chart-column" /></span>
+              <div className="pm-card-t"><h3>Checks per day</h3><small>Most recent {days.length} active day{days.length === 1 ? '' : 's'}</small></div></header>
+            <div className="vf-days" role="img" aria-label="Checks per day">
+              {days.map(([k, n]) => <div key={k} title={`${k}: ${n}`}><b>{n}</b><i style={{ height: `${(n / maxDay) * 100}%` }} /><small>{k.slice(0, 6)}</small></div>)}
+            </div>
+          </section>
+          <section className="pm-card">
+            <header className="pm-card-h"><span className="pm-card-ic"><i aria-hidden="true" className="fas fa-ranking-star" /></span>
+              <div className="pm-card-t"><h3>Most checked</h3><small>Documents and graduates employers look up most</small></div></header>
+            <div className="vf-tops">
+              <ol className="aa-bars">{topDocs.map(([k, n], i) => (
+                <li key={k}><div className="aa-row"><span className="aa-rank">{i + 1}</span><span className="aa-lab">{k}</span>
+                  <span className="aa-track"><i style={{ width: `${(n / topDocs[0][1]) * 100}%` }} /></span><b className="aa-n">{n}</b></div></li>))}</ol>
+              <ol className="aa-bars">{topGrads.map(([k, n], i) => (
+                <li key={k}>{gradUrl[k]
+                  ? <a href={gradUrl[k]} className="aa-row link"><span className="aa-rank">{i + 1}</span><span className="aa-lab">{k}</span><span className="aa-track"><i style={{ width: `${(n / topGrads[0][1]) * 100}%` }} /></span><b className="aa-n">{n}</b><i aria-hidden="true" className="fas fa-chevron-right aa-go" /></a>
+                  : <div className="aa-row"><span className="aa-rank">{i + 1}</span><span className="aa-lab">{k}</span><span className="aa-track"><i style={{ width: `${(n / topGrads[0][1]) * 100}%` }} /></span><b className="aa-n">{n}</b></div>}</li>))}</ol>
+            </div>
+          </section>
+        </div>
+      )}
+
+      <section className="pm-card">
+        <header className="pm-card-h wrap">
+          <div className="pm-search"><i aria-hidden="true" className="fas fa-search" />
+            <input type="search" placeholder="Search code, graduate or document…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search checks" /></div>
+          {filter && <button type="button" className="al-qchip on" onClick={() => setFilter('')}>{_VRES[filter].label} <i aria-hidden="true" className="fas fa-xmark" /></button>}
+          <span className="pm-dim pm-count">{shown.length} shown</span>
+        </header>
+        {shown.length ? (
+          <ul className="vf-feed">
+            {groups.map((g) => (
+              <React.Fragment key={g.k}>
+                <li className="pm-ghead">{g.k}<span>{g.rows.length}</span></li>
+                {g.rows.map((v) => {
+                  const r = _VRES[v.result] || { label: v.result, icon: 'fa-circle', tone: '' };
+                  return (
+                    <li key={v.id} className={'vf-item ' + r.tone}>
+                      <span className="vf-ic"><i aria-hidden="true" className={'fas ' + r.icon} /></span>
+                      <span className="pm-pn">
+                        <strong>{v.result === 'not_found' ? 'Unknown code entered' : v.doc_label}</strong>
+                        <small>{v.student ? (v.student_url ? <a href={v.student_url}>{v.student}</a> : v.student) : 'No matching document'} · <code>{v.code}</code></small>
+                      </span>
+                      <span className="vf-meta">
+                        <span className={'vf-res ' + r.tone}>{r.label}</span>
+                        <small>{(v.at || '').slice(12)} · {v.source === 'qr' ? <><i aria-hidden="true" className="fas fa-qrcode" /> QR scan</> : 'Typed in'}</small>
+                      </span>
+                    </li>);
+                })}
+              </React.Fragment>))}
+          </ul>
+        ) : (
+          <div className="pm-card-b"><Empty icon="fa-magnifying-glass" title={all.length ? 'No checks match' : 'No checks yet'}>
+            <p>{all.length ? 'Try another search or clear the filter.' : `Nobody has verified one of your documents in the last ${d.days} days.`}</p></Empty></div>
+        )}
+        <p className="pm-foot"><i aria-hidden="true" className="fas fa-shield-halved" /> No personal data about the person checking is stored — only a privacy-safe daily fingerprint.</p>
+      </section>
+    </div>
   );
 }
 
