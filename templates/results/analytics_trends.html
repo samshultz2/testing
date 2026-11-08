@@ -127,6 +127,11 @@
 .tr-table .yb{font-weight:800}
 .tr-table .tr-spark{color:var(--primary);vertical-align:middle}
 .tr-rank{font-size:.72rem;color:var(--text-muted)}
+.tr-all td{vertical-align:top}
+.tr-all .tr-best{box-shadow:inset 0 -2px 0 var(--tr-good)}
+.tr-step{font-size:.68rem;font-weight:700;color:var(--text-muted);margin-top:.1rem}
+.tr-step.good{color:var(--tr-good)}.tr-step.bad{color:var(--tr-bad)}
+.tr-all th.yb{color:var(--primary)}
 .tr-rank.top{color:var(--tr-good);font-weight:700}
 /* grade shift */
 .tr-shift{display:flex;flex-direction:column;gap:.45rem}
@@ -205,19 +210,17 @@
     {% if t.years|length > 1 %}
     <form method="get" class="tr-cmp" aria-label="Years to compare">
       <input type="hidden" name="exam" value="{{ t.key }}">
-      {% if t.years|select('lt', t.year_b)|list %}<label for="trA">Compare</label>
-      <select id="trA" name="a" data-autosubmit>{% for y in t.years|reverse if y < t.year_b %}<option value="{{ y }}" {% if y == t.year_a %}selected{% endif %}>{{ y }} · {{ t.counts[y] }} cand.</option>{% endfor %}</select>
+      {% if t.earlier %}<label for="trA">Compare</label>
+      <select id="trA" name="a" data-autosubmit>{% for y in t.earlier|reverse %}<option value="{{ y }}" {% if y == t.year_a %}selected{% endif %}>{{ t.labels[y] }} · {{ t.counts[y] }} cand.</option>{% endfor %}</select>
       <span class="vs">with</span>{% else %}<label for="trB">Year</label>{% endif %}
-      <select id="trB" name="b" data-autosubmit aria-label="Year">{% for y in t.years|reverse %}<option value="{{ y }}" {% if y == t.year_b %}selected{% endif %}>{{ y }} · {{ t.counts[y] }} cand.</option>{% endfor %}</select>
+      <select id="trB" name="b" data-autosubmit aria-label="Year">{% for y in t.years|reverse %}<option value="{{ y }}" {% if y == t.year_b %}selected{% endif %}>{{ t.labels[y] }} · {{ t.counts[y] }} cand.</option>{% endfor %}</select>
     </form>
     {% if t.year_a %}
-    {% set prev = (t.years|select('lt', t.year_b)|list) %}
     {% set head = t.compare|selectattr('key', 'eq', t.head_key)|first %}
+    {% set qyears = t.quick|map(attribute=1)|list %}
     <div class="tr-quick tr-noprint">
-      {% if prev %}<a href="{{ url_for('results.analytics_trends', exam=t.key, b=t.year_b, a=prev[-1]) }}" class="{{ 'on' if t.year_a == prev[-1] }}">vs previous year</a>{% endif %}
-      {% if prev|length >= 3 %}<a href="{{ url_for('results.analytics_trends', exam=t.key, b=t.year_b, a=prev[-3]) }}" class="{{ 'on' if t.year_a == prev[-3] }}">vs 3 years ago</a>{% endif %}
-      {% if prev|length >= 2 %}<a href="{{ url_for('results.analytics_trends', exam=t.key, b=t.year_b, a=prev[0]) }}" class="{{ 'on' if t.year_a == prev[0] }}">vs first year</a>{% endif %}
-      {% if head and head.best and head.best[0] != t.year_b and head.best[0] in prev and head.best[0] not in (prev[-1], prev[0]) %}<a href="{{ url_for('results.analytics_trends', exam=t.key, b=t.year_b, a=head.best[0]) }}" class="{{ 'on' if t.year_a == head.best[0] }}">vs best year ({{ head.best[0] }})</a>{% endif %}
+      {% for lab, y in t.quick %}<a href="{{ url_for('results.analytics_trends', exam=t.key, b=t.year_b, a=y) }}" class="{{ 'on' if t.year_a == y }}">vs {{ lab }}</a>{% endfor %}
+      {% if head and head.best and head.best[0] in t.earlier and head.best[0] not in qyears %}<a href="{{ url_for('results.analytics_trends', exam=t.key, b=t.year_b, a=head.best[0]) }}" class="{{ 'on' if t.year_a == head.best[0] }}">vs best {{ t.period }} ({{ t.shorts[head.best[0]] }})</a>{% endif %}
     </div>
     {% endif %}
     {% endif %}
@@ -229,6 +232,9 @@
   {% set kpi_keys = ['benchmark_rate', 'core_rate', 'credit_rate', 'distinction_rate', 'fail_rate', 'candidates'] if t.kind == 'grade'
                     else ['avg_score', 'above_200', 'above_250', 'below_160', 'top_score', 'candidates'] %}
   {% set A, B = t.year_a, t.year_b %}
+  {% set LA, LB = (t.labels[A] if A else ''), t.labels[B] %}
+  {% set SA, SB = (t.shorts[A] if A else ''), t.shorts[B] %}
+  {% set PER = t.period %}{% set PERS = 'mocks' if t.mock else 'yrs' %}
   {% set short = {'benchmark_rate': 'Met benchmark', 'core_rate': 'Eng + Maths credit', 'credit_rate': 'Credit rate',
                   'distinction_rate': 'Distinctions', 'fail_rate': 'Fail rate', 'candidates': 'Candidates',
                   'avg_score': 'Average score', 'above_200': '200 and above', 'above_250': '250 and above',
@@ -239,31 +245,31 @@
   <section class="tr-card tr-verdict {{ v.tone }}" aria-label="Summary">
     <div class="ic"><i class="fas {{ 'fa-arrow-trend-up' if v.tone == 'good' else 'fa-arrow-trend-down' if v.tone == 'bad' else 'fa-scale-balanced' }}"></i></div>
     <div>
-      <h3>{{ v.title }} — {{ t.label }} {{ B }} vs {{ A }}</h3>
-      {% if v.small %}<p>Only {{ v.n_a }} candidate{{ 's' if v.n_a != 1 }} in {{ A }} and {{ v.n_b }} in {{ B }} — with so few, a single pupil moves the rates by many points. Treat the figures below as indicative.</p>{% endif %}
+      <h3>{{ v.title }} — {% if t.mock %}{{ LB }} vs {{ LA }}{% else %}{{ t.label }} {{ LB }} vs {{ LA }}{% endif %}</h3>
+      {% if v.small %}<p>Only {{ v.n_a }} candidate{{ 's' if v.n_a != 1 }} in {{ LA }} and {{ v.n_b }} in {{ LB }} — with so few, a single pupil moves the rates by many points. Treat the figures below as indicative.</p>{% endif %}
       {% if h %}<p><b>{{ h.label }}</b>{% if t.kind == 'grade' %} ({{ t.bench_label }}){% endif %}: {{ fmt(h.a, h.unit) }} → <b>{{ fmt(h.b, h.unit) }}</b>
         ({{ signed(h.delta, h.unit) }}){% if h.sig %}, {{ h.sig.label|lower }}{% endif %}.
-        {% if h.rank == 1 and h.of > 1 %}Best of the {{ h.of }} years on record.{% elif h.rank and h.of > 1 %}{{ h.rank }}{{ 'st' if h.rank == 1 else 'nd' if h.rank == 2 else 'rd' if h.rank == 3 else 'th' }} best of {{ h.of }} years.{% endif %}
-        {% if h.streak >= 2 %}Improved {{ h.streak }} years in a row.{% endif %}</p>{% endif %}
+        {% if h.rank == 1 and h.of > 1 %}Best of the {{ h.of }} {{ PER }}s on record.{% elif h.rank and h.of > 1 %}{{ h.rank }}{{ 'st' if h.rank == 1 else 'nd' if h.rank == 2 else 'rd' if h.rank == 3 else 'th' }} best of {{ h.of }} {{ PER }}s.{% endif %}
+        {% if h.streak >= 2 %}Improved {{ h.streak }} {{ PER }}s in a row.{% endif %}</p>{% endif %}
     </div>
     <div class="tr-tally"><span class="g"><i class="fas fa-arrow-up"></i> {{ v.better }} better</span><span class="b"><i class="fas fa-arrow-down"></i> {{ v.worse }} worse</span><span>{{ v.same }} steady</span></div>
   </section>
   {% elif not A %}
   <section class="tr-card tr-verdict" aria-label="Summary"><div class="ic"><i class="fas fa-circle-info"></i></div>
-    <div>{% if t.years|length > 1 %}<h3>{{ t.label }} {{ B }} — no earlier year to compare with</h3><p>{{ B }} is the earliest year on record. Pick a later year in <b>with</b> above to see what changed since.</p>
-      {% else %}<h3>{{ t.label }} {{ B }} — the first year on record</h3><p>Year-over-year comparisons appear once a second year of results is entered.</p>{% endif %}</div></section>
+    <div>{% if t.years|length > 1 %}<h3>{{ t.label }} {{ LB }} — nothing earlier to compare with</h3><p>{{ LB }} is the earliest {{ PER }} on record. Pick a later {{ PER }} in <b>with</b> above to see what changed since.</p>
+      {% else %}<h3>{{ t.label }} {{ LB }} — the first {{ PER }} on record</h3><p>Comparisons appear once a second {{ PER }} of results is entered.</p>{% endif %}</div></section>
   {% endif %}
 
   {# ---------------------------------------------------------- KPI tiles #}
-  <section class="tr-kpis" aria-label="Key measures, {{ B }}">
+  <section class="tr-kpis" aria-label="Key measures, {{ LB }}">
     {% for k in kpi_keys %}{% set r = t.compare|selectattr('key', 'eq', k)|first %}{% if r %}
     <div class="tr-card tr-kpi">
       <div class="l" title="{{ r.label }}">{{ short.get(r.key, r.label) }}</div>
       <div class="row"><div class="v">{{ fmt(r.b, r.unit) }}</div>{{ spark(r.series, B, 72, 28) }}</div>
       <div class="f">
         {% if r.delta is not none %}<span class="tr-delta {{ r.mood }}"><i class="fas fa-{{ 'arrow-up' if r.delta > 0 else 'arrow-down' if r.delta < 0 else 'minus' }}"></i>{{ signed(r.delta, r.unit)|replace('+', '')|replace('−', '') }}</span>
-        <span>vs {{ A }}</span>{% endif %}
-        {% if r.rank and r.of > 1 %}<span class="tr-rank {{ 'top' if r.rank == 1 }}">#{{ r.rank }} of {{ r.of }} yrs</span>{% endif %}
+        <span>vs {{ SA }}</span>{% endif %}
+        {% if r.rank and r.of > 1 %}<span class="tr-rank {{ 'top' if r.rank == 1 }}">#{{ r.rank }} of {{ r.of }} {{ PERS }}</span>{% endif %}
       </div>
     </div>{% endif %}{% endfor %}
   </section>
@@ -271,7 +277,7 @@
   {# ---------------------------------------------------------- trend + actions #}
   <div class="tr-two">
     <section class="tr-card">
-      <header><h2><i class="fas fa-chart-line"></i> Trend across {{ t.years|length }} year{{ 's' if t.years|length != 1 }}</h2>
+      <header><h2><i class="fas fa-chart-line"></i> Trend across {{ t.years|length }} {{ PER }}{{ 's' if t.years|length != 1 }}</h2>
         <div class="tr-metrics tr-noprint" role="tablist" aria-label="Measure">
           {% for k in kpi_keys if k != 'candidates' %}{% set r = t.compare|selectattr('key', 'eq', k)|first %}{% if r %}
           <button type="button" data-tr-metric="{{ k }}" class="{{ 'on' if loop.first }}" role="tab" aria-selected="{{ 'true' if loop.first else 'false' }}">{{ r.label|replace('Met the benchmark', 'Benchmark')|replace('Credit in English and Maths', 'Eng + Maths')|replace(' (all papers)', '')|replace('Scored ', '') }}</button>
@@ -287,23 +293,49 @@
       </div>
     </section>
     <section class="tr-card">
-      <header><h2><i class="fas fa-list-check"></i> What it means</h2><p>Generated from the {{ B }}{% if A %} vs {{ A }}{% endif %} comparison.</p></header>
+      <header><h2><i class="fas fa-list-check"></i> What it means</h2><p>Generated from the {{ LB }}{% if A %} vs {{ LA }}{% endif %} comparison.</p></header>
       <div class="tr-body">
         {% if t.actions %}<div class="tr-acth">Act on</div>
         <ul class="tr-acts">{% for tone, icon, title, detail in t.actions %}<li class="{{ tone }}"><span class="i"><i class="fas {{ icon }}"></i></span><div><b>{{ title }}</b><span>{{ detail }}</span></div></li>{% endfor %}</ul>{% endif %}
         {% if t.wins %}<div class="tr-acth" style="margin-top:.6rem">What's working</div>
         <ul class="tr-acts">{% for tone, icon, title, detail in t.wins %}<li class="{{ tone }}"><span class="i"><i class="fas {{ icon }}"></i></span><div><b>{{ title }}</b><span>{{ detail }}</span></div></li>{% endfor %}</ul>{% endif %}
-        {% if not t.actions and not t.wins %}<p class="tr-muted" style="margin:0">{% if A %}No significant movements between {{ A }} and {{ B }}.{% else %}Needs a second year of results.{% endif %}</p>{% endif %}
+        {% if not t.actions and not t.wins %}<p class="tr-muted" style="margin:0">{% if A %}No significant movements between {{ LA }} and {{ LB }}.{% else %}Needs a second {{ PER }} of results.{% endif %}</p>{% endif %}
       </div>
     </section>
   </div>
 
   {# ---------------------------------------------------------- year-over-year table #}
   <section class="tr-card">
-    <header><h2><i class="fas fa-table-columns"></i> Year-over-year comparison</h2>
-      <p>Every measure for {{ B }}{% if A %} against {{ A }}{% endif %}. <b>Real change</b> = unlikely to be chance (95% confidence); rank is among all {{ t.years|length }} year{{ 's' if t.years|length != 1 }}.</p></header>
-    <div class="tr-scroll"><table class="tr-table">
-      <thead><tr><th>Measure</th>{% if A %}<th>{{ A }}</th>{% endif %}<th>{{ B }}</th>{% if A %}<th>Change</th><th>Real?</th>{% endif %}<th class="tr-hide-sm" title="Average of up to 3 years before {{ B }}">Avg before {{ B }}</th><th class="tr-hide-sm">Best year</th><th>Rank</th><th>Trend</th></tr></thead>
+    <header><h2><i class="fas fa-table-columns"></i> {{ 'Mock-to-mock' if t.mock else 'Year-over-year' }} comparison</h2>
+      {% if t.years|length > 1 %}<div class="tr-filters tr-noprint" role="tablist" aria-label="Table view">
+        <button type="button" class="on" data-tr-view="two" role="tab" aria-selected="true">{{ SA ~ ' vs ' ~ SB if A else SB }}</button>
+        <button type="button" data-tr-view="all" role="tab" aria-selected="false">All {{ t.years|length }} {{ PER }}s</button></div>{% endif %}
+      <p data-tr-vp="two">Every measure for {{ LB }}{% if A %} against {{ LA }}{% endif %}. <b>Real change</b> = unlikely to be chance (95% confidence); rank is among all {{ t.years|length }} {{ PER }}{{ 's' if t.years|length != 1 }}.</p>
+      <p data-tr-vp="all" hidden>Every measure, every {{ PER }} on record — the small figure under each value is the change from the {{ PER }} before (green = better, red = worse).</p></header>
+    {% if t.years|length > 1 %}
+    <div class="tr-scroll" data-tr-vp="all" hidden><table class="tr-table tr-all">
+      <thead><tr><th>Measure</th>{% for y in t.years %}<th class="{{ 'yb' if y == B }}" title="{{ t.labels[y] }}">{{ t.shorts[y] }}</th>{% endfor %}<th>Best</th></tr></thead>
+      <tbody>
+      {% set groups2 = [] %}{% for r in t.compare %}{% if r.group not in groups2 %}{% set _ = groups2.append(r.group) %}{% endif %}{% endfor %}
+      {% for g in groups2 %}
+        <tr class="grp"><td colspan="{{ t.years|length + 2 }}">{{ g }}</td></tr>
+        {% for r in t.compare if r.group == g %}
+        <tr><td class="m">{{ r.label }}</td>
+          {% for yr, v in r.series %}{% set pv = r.series[loop.index0 - 1][1] if loop.index0 > 0 else none %}
+          <td class="{{ 'yb' if yr == B }}{{ ' tr-best' if r.best and r.best[0] == yr and r.of > 1 }}">{{ fmt(v, r.unit) }}
+            {% if pv is not none and v is not none %}{% set d = v - pv %}
+              {% set good = (r.good_up is not none) and ((d > 0) == r.good_up) %}
+              {% if r.key == 'gender_gap' %}{% set good = v|abs < pv|abs %}{% endif %}
+              <div class="tr-step {{ 'flat' if d|abs < 0.05 else ('neutral' if r.good_up is none and r.key != 'gender_gap' else ('good' if good else 'bad')) }}">{{ ('%+.1f'|format(d)) if d|abs >= 0.05 else '±0' }}</div>
+            {% endif %}</td>
+          {% endfor %}
+          <td>{% if r.best %}<span class="tr-muted tr-xs">{{ t.shorts[r.best[0]] }}</span>{% else %}—{% endif %}</td></tr>
+        {% endfor %}
+      {% endfor %}
+      </tbody></table></div>
+    {% endif %}
+    <div class="tr-scroll" data-tr-vp="two"><table class="tr-table">
+      <thead><tr><th>Measure</th>{% if A %}<th>{{ SA }}</th>{% endif %}<th>{{ SB }}</th>{% if A %}<th>Change</th><th>Real?</th>{% endif %}<th class="tr-hide-sm" title="Average of up to 3 {{ PER }}s before {{ LB }}">Avg before</th><th class="tr-hide-sm">Best {{ PER }}</th><th>Rank</th><th>Trend</th></tr></thead>
       <tbody>
       {% set groups = [] %}{% for r in t.compare %}{% if r.group not in groups %}{% set _ = groups.append(r.group) %}{% endif %}{% endfor %}
       {% for g in groups %}
@@ -316,7 +348,7 @@
           {% if A %}<td>{% if r.delta is not none %}<span class="tr-delta {{ r.mood }}">{{ signed(r.delta, r.unit) }}</span>{% if r.rel is not none and r.unit != '%' and r.rel != 0 %}<div class="tr-xs tr-muted">{{ '%+.1f'|format(r.rel) }}%</div>{% endif %}{% else %}—{% endif %}</td>
           <td>{{ sigbadge(r.sig) if r.sig else '' }}</td>{% endif %}
           <td class="tr-hide-sm">{{ fmt(r.avg3, r.unit) }}</td>
-          <td class="tr-hide-sm">{% if r.best %}{{ fmt(r.best[1], r.unit) }} <span class="tr-muted tr-xs">{{ r.best[0] }}</span>{% else %}—{% endif %}</td>
+          <td class="tr-hide-sm">{% if r.best %}{{ fmt(r.best[1], r.unit) }} <span class="tr-muted tr-xs">{{ t.shorts[r.best[0]] }}</span>{% else %}—{% endif %}</td>
           <td>{% if r.rank and r.of > 1 %}<span class="tr-rank {{ 'top' if r.rank == 1 }}">{{ r.rank }} / {{ r.of }}</span>{% else %}—{% endif %}</td>
           <td>{{ spark(r.series, B, 90, 24) }}</td>
         </tr>
@@ -330,8 +362,8 @@
   <div class="tr-half">
     {% if A and t.grade_shift %}
     <section class="tr-card">
-      <header><h2><i class="fas fa-layer-group"></i> {{ 'Grade' if t.kind == 'grade' else 'Score band' }} shift, {{ A }} → {{ B }}</h2>
-        <p>{{ 'Share of all papers at each grade.' if t.kind == 'grade' else 'Share of candidates in each score band.' }} Grey = {{ A }}, colour = {{ B }}.</p></header>
+      <header><h2><i class="fas fa-layer-group"></i> {{ 'Grade' if t.kind == 'grade' else 'Score band' }} shift, {{ SA }} → {{ SB }}</h2>
+        <p>{{ 'Share of all papers at each grade.' if t.kind == 'grade' else 'Share of candidates in each score band.' }} Grey = {{ LA }}, colour = {{ LB }}.</p></header>
       <div class="tr-body"><div class="tr-shift">
         {% set mx = [t.grade_shift|map(attribute='a')|map('default', 0)|max, t.grade_shift|map(attribute='b')|map('default', 0)|max, 1]|max %}
         {% for g in t.grade_shift %}{% set d = ((g.b or 0) - (g.a or 0))|round(1) %}
@@ -344,16 +376,16 @@
     </section>
     {% endif %}
     <section class="tr-card">
-      <header><h2><i class="fas fa-chart-simple"></i> {{ 'Credits per candidate' if t.kind == 'grade' else 'Score bands' }} by year</h2>
-        <p>{{ 'How many credits each candidate got — the 5–6 and 7+ groups meet the credit count for most admissions.' if t.kind == 'grade' else 'Where candidates landed each year.' }}</p></header>
+      <header><h2><i class="fas fa-chart-simple"></i> {{ 'Credits per candidate' if t.kind == 'grade' else 'Score bands' }} by {{ PER }}</h2>
+        <p>{{ 'How many credits each candidate got — the 5–6 and 7+ groups meet the credit count for most admissions.' if t.kind == 'grade' else 'Where candidates landed each ' ~ PER ~ '.' }}</p></header>
       <div class="tr-body">
         {% set bl = t.points[0].bands.keys()|list %}
         {% set bk = ['fail', 'pass', 'credit', 'distinction'] if t.kind == 'grade' else ['fail', 'pass', 'credit', 'credit', 'distinction'] %}
         <div class="tr-legend">{% for b in bl %}<span><i class="k-{{ bk[loop.index0] }}" style="{{ 'opacity:.6' if t.kind != 'grade' and loop.index0 == 2 }}"></i>{{ b }}</span>{% endfor %}</div>
         <div class="tr-stack">
           {% for p in t.points %}{% set tot = p.bands.values()|sum or 1 %}
-          <div class="r {{ 'on' if p.year == B }}"><span class="yr">{{ p.year }}</span>
-            <div class="s" title="{{ p.year }}: {% for b in bl %}{{ b }} {{ p.bands[b] }}{{ ', ' if not loop.last }}{% endfor %}">
+          <div class="r {{ 'on' if p.year == B }}"><span class="yr">{{ t.shorts[p.year] }}</span>
+            <div class="s" title="{{ t.labels[p.year] }}: {% for b in bl %}{{ b }} {{ p.bands[b] }}{{ ', ' if not loop.last }}{% endfor %}">
               {% for b in bl %}{% set w = p.bands[b] / tot * 100 %}<i class="k-{{ bk[loop.index0] }}" style="width:{{ w|round(1) }}%;{{ 'opacity:.6' if t.kind != 'grade' and loop.index0 == 2 }}">{{ (w|round|int ~ '%') if w >= 9 }}</i>{% endfor %}
             </div></div>
           {% endfor %}
@@ -366,7 +398,7 @@
   {# ---------------------------------------------------------- subjects #}
   {% if t.subjects %}
   <section class="tr-card" id="trSubjects">
-    <header><h2><i class="fas fa-book-open"></i> Subjects{% if A %}, {{ A }} → {{ B }}{% endif %}</h2>
+    <header><h2><i class="fas fa-book-open"></i> Subjects{% if A %}, {{ SA }} → {{ SB }}{% endif %}</h2>
       <div class="tr-filters tr-noprint" role="group" aria-label="Show">
         <button type="button" class="on" data-tr-sf="all">All ({{ t.subjects|length }})</button>
         {% if A %}<button type="button" data-tr-sf="up">Improved ({{ t.subjects|selectattr('delta')|selectattr('delta', 'gt', 0)|list|length }})</button>
@@ -374,10 +406,10 @@
         <button type="button" data-tr-sf="real">Real changes</button>{% endif %}
         <button type="button" data-tr-sf="core">Core</button>
       </div>
-      <p>{{ 'Credit rate (credit or better)' if t.kind == 'grade' else 'Share scoring 50+ in the paper' }} per subject; the coloured cells are every year on record ({{ t.years|join(', ') }}).</p></header>
+      <p>{{ 'Credit rate (credit or better)' if t.kind == 'grade' else 'Share scoring 50+ in the paper' }} per subject; the coloured cells are every {{ PER }} on record ({% for y in t.years %}{{ t.shorts[y] }}{{ ', ' if not loop.last }}{% endfor %}).</p></header>
     <div class="tr-scroll"><table class="tr-table">
-      <thead><tr><th>Subject</th>{% if A %}<th>{{ A }}</th>{% endif %}<th>{{ B }}</th>{% if A %}<th>Change</th><th>Real?</th>{% endif %}
-        {% if t.kind == 'grade' %}<th class="tr-hide-sm">Avg pts {{ B }}</th><th class="tr-hide-sm">Fail {{ B }}</th>{% else %}<th class="tr-hide-sm">Avg {{ B }}</th>{% endif %}
+      <thead><tr><th>Subject</th>{% if A %}<th>{{ SA }}</th>{% endif %}<th>{{ SB }}</th>{% if A %}<th>Change</th><th>Real?</th>{% endif %}
+        {% if t.kind == 'grade' %}<th class="tr-hide-sm">Avg pts {{ SB }}</th><th class="tr-hide-sm">Fail {{ SB }}</th>{% else %}<th class="tr-hide-sm">Avg {{ SB }}</th>{% endif %}
         <th class="tr-hide-sm">Papers</th><th>History</th><th>Trend</th></tr></thead>
       <tbody>
       {% for s in t.subjects %}
@@ -389,8 +421,8 @@
           <td>{% if s.sig %}<span class="tr-sig {{ 'real' if s.sig == 'Real change' else 'small' if 'Small' in s.sig else 'chance' }}">{{ s.sig }}</span>{% endif %}</td>{% endif %}
           {% if t.kind == 'grade' %}<td class="tr-hide-sm">{{ fmt(s.pts_b) }}</td><td class="tr-hide-sm">{{ fmt(s.fail_b, '%') }}</td>{% else %}<td class="tr-hide-sm">{{ fmt(s.avg_b) }}</td>{% endif %}
           <td class="tr-hide-sm">{{ s.n_b or '—' }}</td>
-          <td><span class="tr-hist">{% for yr, v in s.history %}<i style="{{ heat(v) }}" title="{{ yr }}: {{ fmt(v, '%') }}">{{ v|round|int if v is not none else '·' }}</i>{% endfor %}</span></td>
-          <td><span class="tr-trend {{ s.trend }}">{{ {'rising': '↑ 3 yrs', 'falling': '↓ 3 yrs', 'mixed': 'Mixed', 'new': '1 year'}[s.trend] }}</span></td>
+          <td><span class="tr-hist">{% for yr, v in s.history %}<i style="{{ heat(v) }}" title="{{ t.labels[yr] }}: {{ fmt(v, '%') }}">{{ v|round|int if v is not none else '·' }}</i>{% endfor %}</span></td>
+          <td><span class="tr-trend {{ s.trend }}">{{ {'rising': '↑ 3 ' ~ PERS, 'falling': '↓ 3 ' ~ PERS, 'mixed': 'Mixed', 'new': '1 ' ~ PER}[s.trend] }}</span></td>
         </tr>
       {% endfor %}
       </tbody>
@@ -402,11 +434,11 @@
   <div class="tr-half">
     <section class="tr-card">
       <header><h2><i class="fas fa-venus-mars"></i> Girls and boys</h2>
-        <p>{{ 'Share meeting the benchmark' if t.kind == 'grade' else 'Average score' }} each year.</p></header>
+        <p>{{ 'Share meeting the benchmark' if t.kind == 'grade' else 'Average score' }} each {{ PER }}.</p></header>
       <div class="tr-body"><div class="tr-chart" style="height:220px"><canvas id="trGender" role="img" aria-label="Girls and boys trend"></canvas></div></div>
     </section>
     <section class="tr-card">
-      <header><h2><i class="fas fa-users"></i> Cohort size</h2><p>Candidates each year — rates from small cohorts swing more.</p></header>
+      <header><h2><i class="fas fa-users"></i> Cohort size</h2><p>Candidates each {{ PER }} — rates from small cohorts swing more.</p></header>
       <div class="tr-body"><div class="tr-chart" style="height:220px"><canvas id="trCohort" role="img" aria-label="Candidates per year"></canvas></div></div>
     </section>
   </div>
@@ -425,6 +457,7 @@
 <script nonce="{{ csp_nonce }}">
 (function () {
   var years = {{ t.years|tojson }}, yb = {{ t.year_b|tojson }}, ya = {{ t.year_a|tojson }};
+  var xlab = years.map(function (y) { return {{ t.shorts|tojson }}[y] || String(y); });
   var rows = {{ t.compare|map(attribute='key')|list|tojson }};
   var series = {}, units = {}, labels = {};
   {% for r in t.compare %}series[{{ r.key|tojson }}] = {{ r.series|map(attribute=1)|list|tojson }}; units[{{ r.key|tojson }}] = {{ r.unit|tojson }}; labels[{{ r.key|tojson }}] = {{ r.label|tojson }};
@@ -445,9 +478,9 @@
     var unit = units[key], data = series[key];
     var ds = [{ label: labels[key], data: data, borderColor: primary, backgroundColor: primary + '22', fill: true, tension: .3,
                 pointBackgroundColor: pointColors(), pointBorderColor: '#fff', pointBorderWidth: 2, pointRadius: pointRadius(), spanGaps: true }];
-    var xl = years.slice();
+    var xl = xlab.slice();
     if (proj && key === headKey) {
-      xl = years.concat([proj.next_year]);
+      xl = xlab.concat([String(proj.next_year)]);
       var pd = data.map(function () { return null; }); pd[pd.length - 1] = data[data.length - 1]; pd.push(proj.projected);
       ds.push({ label: 'Projection', data: pd, borderColor: primary, borderDash: [5, 5], pointRadius: [0].concat(pd.slice(1).map(function (v, i) { return i === pd.length - 2 ? 5 : 0; })),
                 pointStyle: 'rectRot', fill: false, spanGaps: true });
@@ -472,16 +505,24 @@
   // Girls & boys
   var gKey = {{ ('girls_benchmark' if t.kind == 'grade' else 'girls_avg')|tojson }}, bKey = {{ ('boys_benchmark' if t.kind == 'grade' else 'boys_avg')|tojson }};
   var gel = document.getElementById('trGender');
-  if (gel && series[gKey]) new Chart(gel, { type: 'line', data: { labels: years, datasets: [
+  if (gel && series[gKey]) new Chart(gel, { type: 'line', data: { labels: xlab, datasets: [
       { label: 'Girls', data: series[gKey], borderColor: '#db2777', backgroundColor: '#db2777', tension: .3, spanGaps: true },
       { label: 'Boys', data: series[bKey], borderColor: '#2563eb', backgroundColor: '#2563eb', tension: .3, spanGaps: true }] },
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'bottom', labels: { boxWidth: 10, usePointStyle: true } } },
       scales: { y: { beginAtZero: {{ 'true' if t.kind == 'grade' else 'false' }}, suggestedMax: {{ 100 if t.kind == 'grade' else 'undefined' }}, grid: { color: grid } }, x: { grid: { display: false } } } } });
   var cel = document.getElementById('trCohort');
-  if (cel) new Chart(cel, { type: 'bar', data: { labels: years, datasets: [{ label: 'Candidates', data: series.candidates,
+  if (cel) new Chart(cel, { type: 'bar', data: { labels: xlab, datasets: [{ label: 'Candidates', data: series.candidates,
       backgroundColor: years.map(function (y) { return y === yb ? primary : (y === ya ? c('--tr-a', '#94a3b8') : primary + '55'); }), borderRadius: 6 }] },
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } },
       scales: { y: { beginAtZero: true, grid: { color: grid }, ticks: { precision: 0 } }, x: { grid: { display: false } } } } });
+
+  // Comparison table: two periods / all periods
+  var vb = document.querySelectorAll('[data-tr-view]');
+  vb.forEach(function (b) { b.addEventListener('click', function () {
+    var v = b.getAttribute('data-tr-view');
+    vb.forEach(function (o) { o.classList.toggle('on', o === b); o.setAttribute('aria-selected', o === b ? 'true' : 'false'); });
+    document.querySelectorAll('[data-tr-vp]').forEach(function (el) { el.hidden = el.getAttribute('data-tr-vp') !== v; });
+  }); });
 
   // Subject filter chips
   var sb = document.querySelectorAll('[data-tr-sf]');

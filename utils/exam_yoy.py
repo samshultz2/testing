@@ -66,11 +66,70 @@ def available(bid=None):
                     out.append(('%s_%s' % (level, body), _school_label(level, body), group))
     except Exception:
         db.session.rollback()
+    try:
+        from models.mock_waec import MockWAECResult
+        from models.mock_jamb import MockJAMBResult
+        if has(MockWAECResult):
+            out.append(('mock_waec', 'Mock WAEC', 'Mocks'))
+        if has(MockJAMBResult):
+            out.append(('mock_jamb', 'Mock JAMB', 'Mocks'))
+    except Exception:
+        db.session.rollback()
     return out
+
+
+# --------------------------------------------------------------------------- #
+# Mock exams: each sitting is one period ("2025/2026 · Mock 2"), in date order
+# --------------------------------------------------------------------------- #
+def _mock_periods(exam_model, result_model, bid):
+    """[{id, label, short, session_id, number}] for sittings with results."""
+    from models import AcademicSession
+    q = db.session.query(result_model.mock_exam_id).distinct()
+    if bid is not None:
+        q = q.join(Student, Student.id == result_model.student_id).filter(Student.branch_id == bid)
+    ids = {i for (i,) in q.all()}
+    if not ids:
+        return []
+    exams = exam_model.query.filter(exam_model.id.in_(list(ids))).all()
+    sess = {s.id: s.name for s in AcademicSession.query.filter(
+        AcademicSession.id.in_({e.session_id for e in exams})).all()}
+    exams.sort(key=lambda e: (e.exam_date, e.exam_number, e.id))
+    return [{'id': e.id, 'label': '%s · %s' % (sess.get(e.session_id, ''), e.name),
+             'short': '%s %s' % ((sess.get(e.session_id) or '')[-9:].replace('/20', '/'), 'M%d' % e.exam_number),
+             'session_id': e.session_id, 'number': e.exam_number} for e in exams]
+
+
+class _MockWAEC:
+    """Mock WAEC graded like WAEC (A1–F9, 5 credits incl. English & Maths);
+    a "year" is one mock sitting (its exam id)."""
+    key, name, exam_name = 'mock_waec', 'Mock WAEC', 'Mock WAEC'
+    benchmark_label = '5 credits incl. Eng & Maths'
+    max_points = 9
+
+    def rows(self, year=None, bid=None):
+        from models.mock_waec import MockWAECResult as M
+        q = db.session.query(M.student_id, M.mock_exam_id, M.subject, M.grade).filter(
+            db.or_(M.is_absent.is_(None), M.is_absent == False))  # noqa: E712
+        if year is not None:
+            q = q.filter(M.mock_exam_id == year)
+        if bid is not None:
+            q = q.join(Student, Student.id == M.student_id).filter(Student.branch_id == bid)
+        return [(sid, y, subj, R.norm_grade(g)) for sid, y, subj, g in q.all() if g]
+
+    def canon(self, subject):
+        return R.canonical_subject(subject)
+
+    def points(self, g):
+        return R.points(g)
+
+    def status(self, grades):
+        return R.five_credit_status(grades)
 
 
 def _exam(key):
     from utils import insight_exams as IX
+    if key == 'mock_waec':
+        return _MockWAEC()
     if key == 'waec':
         return IX.waec()
     if key == 'neco':
@@ -266,9 +325,13 @@ def _jamb_years(bid):
     return sorted({y for (y,) in q.all() if y})
 
 
-def _jamb_year(year, bid):
-    from models import JAMBResult as J
-    q = J.query.filter(J.exam_year == year)
+def _jamb_year(year, bid, mock=False):
+    if mock:
+        from models.mock_jamb import MockJAMBResult as J
+        q = J.query.filter(J.mock_exam_id == year)
+    else:
+        from models import JAMBResult as J
+        q = J.query.filter(J.exam_year == year)
     if bid is not None:
         q = q.join(Student, Student.id == J.student_id).filter(Student.branch_id == bid)
     rows = [r for r in q.all() if r.total_score is not None]
@@ -372,7 +435,9 @@ def _streak(series, good_up):
 def _compare(measures, years, ya, yb):
     """Rows for the year-over-year table."""
     out = []
-    ylist = [y for y in years if y['year'] <= yb['year']]
+    order = [y['year'] for y in years]            # periods in time order (years or mock sittings)
+    pos_b = order.index(yb['year'])
+    ylist = years[:pos_b + 1]
     for key, label, unit, good_up, spec, group, help_text in measures:
         a, b = ya['m'].get(key), yb['m'].get(key)
         if a is None and b is None:
@@ -396,7 +461,7 @@ def _compare(measures, years, ya, yb):
         best = None
         if good_up is not None and vals:
             best = (max if good_up else min)(vals, key=lambda t: t[1])
-        prior = [v for yr, v in upto if yr < yb['year']][-3:]
+        prior = [v for yr, v in upto if order.index(yr) < pos_b][-3:]
         out.append({
             'key': key, 'label': label, 'unit': unit, 'group': group, 'help': help_text, 'good_up': good_up,
             'a': a, 'b': b, 'delta': delta, 'rel': rel, 'mood': mood,
@@ -452,14 +517,15 @@ def _fmt(v, unit=''):
     return ('%g' % round(v, 2)) + (unit if unit != '' else '')
 
 
-def _actions(kind, cmp_rows, subjects, ya, yb, exam_label):
+def _actions(kind, cmp_rows, subjects, ya, yb, exam_label, period='year'):
     """[(tone, icon, title, detail)] — what to act on, then what is working."""
     act, win = [], []
     m = {r['key']: r for r in cmp_rows}
     head = m.get('benchmark_rate') or m.get('above_200')
     if head and head['delta'] is not None and head['mood'] == 'bad' and head['sig'] and head['sig']['real']:
         act.append(('bad', 'fa-triangle-exclamation', '%s fell %s points' % (head['label'], _fmt(abs(head['delta']))),
-                    'From %s to %s — a real drop, not chance. Review %s preparation for the next cohort.'
+                    ('From %s to %s — a real drop, not chance. Review %s preparation'
+                     + (' before the next sitting.' if period == 'sitting' else ' for the next cohort.'))
                     % (_fmt(head['a'], '%'), _fmt(head['b'], '%'), exam_label)))
     if kind == 'grade':
         near = yb['k']['near']
@@ -485,7 +551,7 @@ def _actions(kind, cmp_rows, subjects, ya, yb, exam_label):
                                                           'credit' if kind == 'grade' else '≥50')))
     streaky = [s for s in subjects if s['trend'] == 'falling' and s not in falling]
     for s in streaky[:3]:
-        act.append(('warn', 'fa-chart-line', '%s has fallen 3 years running' % s['subject'],
+        act.append(('warn', 'fa-chart-line', '%s has fallen 3 %ss running' % (s['subject'], period),
                     'Now %s. A sustained slide — check teaching, staffing and syllabus coverage.' % _fmt(s['b'], '%')))
     weak = sorted((s for s in subjects if s['b'] is not None and s['b'] < 50 and (s['n_b'] or 0) >= 5
                    and s not in falling and s not in streaky), key=lambda s: s['b'])
@@ -504,10 +570,10 @@ def _actions(kind, cmp_rows, subjects, ya, yb, exam_label):
     if head and head['mood'] == 'good' and head['delta']:
         win.append(('good', 'fa-arrow-trend-up', '%s up %s points' % (head['label'], _fmt(head['delta'])),
                     ('%s → %s%s.' % (_fmt(head['a'], '%'), _fmt(head['b'], '%'),
-                                     ' — best year on record' if head['rank'] == 1 and head['of'] > 1 else ''))
+                                     (' — best %s on record' % period) if head['rank'] == 1 and head['of'] > 1 else ''))
                     + (' A real improvement.' if head['sig'] and head['sig']['real'] else '')))
     if head and head['streak'] >= 2:
-        win.append(('good', 'fa-fire', '%d years of improvement in a row' % head['streak'], head['label'] + '.'))
+        win.append(('good', 'fa-fire', '%d %ss of improvement in a row' % (head['streak'], period), head['label'] + '.'))
     rising = [s for s in subjects if s['sig'] == 'Real change' and (s['delta'] or 0) > 0]
     for s in rising[:4]:
         win.append(('good', 'fa-circle-check', '%s up %s points' % (s['subject'], _fmt(s['delta'])),
@@ -527,33 +593,69 @@ def build(key, bid=None, year_a=None, year_b=None):
         key = keys[0]
     label = next(l for k, l, _g in exams if k == key)
     group = next(g for k, _l, g in exams if k == key)
-    if key == 'jamb':
+    mock = key.startswith('mock_')
+    periods = None
+    if key in ('jamb', 'mock_jamb'):
         kind = 'jamb'
-        years = [y for y in (_jamb_year(yr, bid) for yr in _jamb_years(bid)) if y]
+        if mock:
+            from models.mock_jamb import MockJAMBExam, MockJAMBResult
+            periods = _mock_periods(MockJAMBExam, MockJAMBResult, bid)
+            years = [y for y in (_jamb_year(p['id'], bid, mock=True) for p in periods) if y]
+        else:
+            years = [y for y in (_jamb_year(yr, bid) for yr in _jamb_years(bid)) if y]
         measures = JAMB_MEASURES
         grade_order, grade_kinds, bench = [], {}, 'Scored 200 or more'
     else:
         kind = 'grade'
         exam = _exam(key)
-        years = [y for y in (_grade_year(exam, yr, bid) for yr in sorted(exam.years())) if y]
+        if mock:
+            from models.mock_waec import MockWAECExam, MockWAECResult
+            periods = _mock_periods(MockWAECExam, MockWAECResult, bid)
+            order = [p['id'] for p in periods]
+        else:
+            order = sorted(exam.years())
+        years = [y for y in (_grade_year(exam, yr, bid) for yr in order) if y]
         measures = _grade_measures(exam)
         grade_order, grade_kinds, bench = _grade_order(exam), _grade_kinds(exam), exam.benchmark_label
     years = years[-10:]
     ylist = [y['year'] for y in years]
+    if periods:
+        pmap = {p['id']: p for p in periods}
+        labels = {y: pmap[y]['label'] for y in ylist}
+        shorts = {y: pmap[y]['short'] for y in ylist}
+    else:
+        pmap = {}
+        labels = shorts = {y: str(y) for y in ylist}
     res = {'exams': exams, 'key': key, 'label': label, 'group': group, 'kind': kind, 'years': ylist,
            'points': years, 'bench_label': bench, 'grade_order': grade_order, 'grade_kinds': grade_kinds,
-           'empty': not years}
+           'empty': not years, 'mock': mock, 'labels': labels, 'shorts': shorts,
+           'period': 'sitting' if mock else 'year'}
     if not years:
         return res
     yb = year_b if year_b in ylist else ylist[-1]
-    earlier = [y for y in ylist if y < yb]
-    ya = year_a if (year_a in ylist and year_a < yb) else (earlier[-1] if earlier else None)
-    res.update({'year_a': ya, 'year_b': yb})
+    earlier = ylist[:ylist.index(yb)]
+    ya = year_a if year_a in earlier else (earlier[-1] if earlier else None)
+    res.update({'year_a': ya, 'year_b': yb, 'earlier': earlier})
+    # Quick comparisons: previous, 3 back, first, and (mocks) the same mock last session.
+    quick = []
+    if earlier:
+        quick.append(('previous ' + res['period'], earlier[-1]))
+        if len(earlier) >= 3:
+            quick.append(('3 %ss back' % res['period'], earlier[-3]))
+        if len(earlier) >= 2:
+            quick.append(('first on record', earlier[0]))
+        if mock:
+            pb = pmap[yb]
+            same = [p for p in earlier if pmap[p]['number'] == pb['number'] and pmap[p]['session_id'] != pb['session_id']]
+            if same:
+                quick.append(('same mock last session', same[-1]))
+    res['quick'] = quick
     B = next(y for y in years if y['year'] == yb)
     A = next((y for y in years if y['year'] == ya), None)
     head_key = 'benchmark_rate' if kind == 'grade' else 'avg_score'
-    proj = SG.projection([(y['year'], y['m'][head_key]) for y in years if y['m'].get(head_key) is not None],
-                         lo=0, hi=100 if kind == 'grade' else 400, cap=15 if kind == 'grade' else 25)
+    proj = None if mock else SG.projection(
+        [(y['year'], y['m'][head_key]) for y in years if y['m'].get(head_key) is not None],
+        lo=0, hi=100 if kind == 'grade' else 400, cap=15 if kind == 'grade' else 25)
     # A straight line through two points says nothing; and tiny cohorts swing.
     if proj and (proj['years'] < 3 or B['n'] < SG.MIN_GROUP_N):
         proj = None
@@ -575,7 +677,7 @@ def build(key, bid=None, year_a=None, year_b=None):
     subjects = _subjects_yoy(years, A, B, grade=(kind == 'grade'))
     res['compare'] = cmp_rows
     res['subjects'] = subjects
-    res['actions'], res['wins'] = _actions(kind, cmp_rows, subjects, A, B, label)
+    res['actions'], res['wins'] = _actions(kind, cmp_rows, subjects, A, B, label, res['period'])
     scored = [r for r in cmp_rows if r['good_up'] is not None and r['group'] in ('Outcomes', 'Core subjects', 'Grades')]
     better = sum(r['mood'] == 'good' for r in scored)
     worse = sum(r['mood'] == 'bad' for r in scored)
@@ -587,15 +689,15 @@ def build(key, bid=None, year_a=None, year_b=None):
     elif head_real and head['mood'] in ('good', 'bad'):
         # A real move in the headline measure decides the year.
         tone = head['mood']
-        word = 'A stronger year' if tone == 'good' else 'A weaker year'
+        word = ('A stronger ' if tone == 'good' else 'A weaker ') + res['period']
         if (tone == 'good' and worse > better) or (tone == 'bad' and better > worse):
-            tone, word = 'mixed', 'A mixed year'
+            tone, word = 'mixed', 'A mixed ' + res['period']
     elif better > worse * 2 and better >= 3 and not (head and head['mood'] == 'bad'):
-        tone, word = 'good', 'A stronger year'
+        tone, word = 'good', 'A stronger ' + res['period']
     elif worse > better * 2 and worse >= 3 and not (head and head['mood'] == 'good'):
-        tone, word = 'bad', 'A weaker year'
+        tone, word = 'bad', 'A weaker ' + res['period']
     else:
-        tone, word = 'mixed', 'A mixed year'
+        tone, word = 'mixed', 'A mixed ' + res['period']
     res['verdict'] = {'tone': tone, 'title': word, 'better': better, 'worse': worse, 'small': small,
                       'n_a': A['n'], 'n_b': B['n'],
                       'same': len(scored) - better - worse, 'head': head}

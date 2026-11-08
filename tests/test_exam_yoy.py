@@ -130,3 +130,55 @@ def test_page_renders_every_exam_and_phone_safe_markup(app):
         body = r.get_data(as_text=True)
         assert 'Real change' in body or 'Could be chance' in body
     assert c.get('/results/analytics/trends?exam=nonsense&a=x').status_code == 200
+
+
+def test_mock_waec_and_mock_jamb_sittings(app):
+    import datetime as dt
+    from models import AcademicSession
+    from models.mock_waec import MockWAECExam, MockWAECResult
+    from models.mock_jamb import MockJAMBExam, MockJAMBResult
+    with app.app_context():
+        bid = _branch()
+        old = AcademicSession(name='YoY-OLD ' + uuid.uuid4().hex[:4], is_active=False)
+        new = AcademicSession(name='YoY-NEW ' + uuid.uuid4().hex[:4], is_active=False)
+        db.session.add_all([old, new]); db.session.flush()
+        sittings = [(old, 1, dt.date(2390, 3, 1), 8), (new, 1, dt.date(2391, 3, 1), 12), (new, 2, dt.date(2391, 5, 1), 24)]
+        pupils = [_pupil(bid, 'Female' if i % 2 else 'Male') for i in range(30)]
+        ids = []
+        for sess, num, day, n_good in sittings:
+            mw = MockWAECExam(name='Mock WAEC %d' % num, exam_number=num, session_id=sess.id, exam_date=day)
+            mj = MockJAMBExam(name='Mock %d' % num, exam_number=num, session_id=sess.id, exam_date=day)
+            db.session.add_all([mw, mj]); db.session.flush()
+            ids.append(mw.id)
+            for i, sid in enumerate(pupils):
+                for subj, g in (GOOD if i < n_good else WEAK).items():
+                    db.session.add(MockWAECResult(student_id=sid, mock_exam_id=mw.id, subject=subj, score=60, grade=g))
+                db.session.add(MockWAECResult(student_id=sid, mock_exam_id=mw.id, subject='Economics', score=None,
+                                              grade=None, is_absent=True))            # absent papers are ignored
+                db.session.add(MockJAMBResult(student_id=sid, mock_exam_id=mj.id, total_score=140 + n_good * 5 + i,
+                                              subject1='Use of English', subject1_score=55))
+        db.session.commit()
+        from utils import exam_yoy
+        keys = [k for k, _l, _g in exam_yoy.available(bid)]
+        assert 'mock_waec' in keys and 'mock_jamb' in keys
+        t = exam_yoy.build('mock_waec', bid)
+        assert t['mock'] and t['period'] == 'sitting' and t['years'] == ids          # date order
+        assert t['year_b'] == ids[2] and t['year_a'] == ids[1]
+        assert t['labels'][ids[2]].endswith('Mock WAEC 2') and t['projection'] is None
+        bm = next(r for r in t['compare'] if r['key'] == 'benchmark_rate')
+        assert (bm['a'], bm['b']) == (40.0, 80.0) and bm['sig']['real']
+        assert t['verdict']['title'] == 'A stronger sitting'
+        assert 'Economics' not in [s['subject'] for s in t['subjects']]
+        assert [lab for lab, _y in t['quick']][:2] == ['previous sitting', 'first on record']
+        # Mock 1 this session vs Mock 1 last session.
+        t1 = exam_yoy.build('mock_waec', bid, year_b=ids[1])
+        assert ('same mock last session', ids[0]) in t1['quick']
+        j = exam_yoy.build('mock_jamb', bid)
+        assert j['kind'] == 'jamb' and len(j['years']) == 3
+        avg = next(r for r in j['compare'] if r['key'] == 'avg_score')
+        assert avg['delta'] == 60.0 and avg['sig']['real']
+    c = app.test_client()
+    c.post('/login', data={'password': Config.ADMIN_PASSWORD, '_csrf_token': login_token(c)})
+    for k in ('mock_waec', 'mock_jamb'):
+        body = c.get('/results/analytics/trends?exam=' + k).get_data(as_text=True)
+        assert 'Mock-to-mock comparison' in body and 'All 3 sittings' in body, k
