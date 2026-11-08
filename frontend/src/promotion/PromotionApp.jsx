@@ -845,22 +845,55 @@ const WAEC_GRADE_BADGE = {
   C4: 'badge-warning', C5: 'badge-warning', C6: 'badge-warning',
   D7: 'badge-danger', E8: 'badge-danger', F9: 'badge-danger',
 };
+const GP_TABS = [
+  { key: 'overview', label: 'Overview', icon: 'fa-user' },
+  { key: 'results', label: 'Results', icon: 'fa-file-lines' },
+  { key: 'documents', label: 'Documents', icon: 'fa-file-signature' },
+  { key: 'records', label: 'School record', icon: 'fa-folder-open' },
+];
+const ALUMNI_FIELDS = [['occupation', 'Occupation'], ['job_title', 'Job title'], ['employer', 'Employer'],
+  ['higher_institution', 'University / institution'], ['course_of_study', 'Course of study'],
+  ['phone', 'Phone'], ['email', 'Email'], ['linkedin_url', 'LinkedIn URL'], ['city', 'City'], ['country', 'Country']];
+const CREDIT = new Set(['A1', 'B2', 'B3', 'C4', 'C5', 'C6']);
+
+// One WAEC/NECO sitting: grade chips in a two-column grid.
+function GpGrades({ data, label }) {
+  const credits = data.subjects.filter((r) => CREDIT.has(r.grade)).length;
+  return (
+    <div className="gp2-exam">
+      <div className="gp2-exam-h"><b>{data.exam_year}</b>
+        <span className="pm-dim">{data.subjects.length} subjects · {credits} credit{credits === 1 ? '' : 's'}{data.exam_number ? ` · ${label} ${data.exam_number}` : ''}</span></div>
+      <ul className="gp2-grades">
+        {data.subjects.map((r, j) => (
+          <li key={j}><span>{r.subject}</span><span className={'badge ' + (WAEC_GRADE_BADGE[r.grade] || 'badge-secondary')}>{r.grade}</span></li>))}
+      </ul>
+    </div>
+  );
+}
+
 function GraduateProfile({ d, notify }) {
   const s = d.student;
   const rec = d.record || {};
   const bio = rec.bio || {};
   const nav = useNav();
+  const phone = usePhone();
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState(d.status || 'Graduated');
   const [reason, setReason] = useState('');
   const [alu, setAlu] = useState(d.alumni || {});
   const [pw, setPw] = useState('');
+  const [editAlu, setEditAlu] = useState(false);
+  const [tab, setTabState] = useState(() => {
+    const h = (window.location.hash || '').slice(1);
+    return GP_TABS.some((t) => t.key === h) ? h : 'overview';
+  });
+  const setTab = (k) => { setTabState(k); try { window.history.replaceState(null, '', '#' + k); } catch (e) { /* ignore */ } };
   const setAluField = (k, v) => setAlu((a) => ({ ...a, [k]: v }));
   const saveAlumni = async () => {
     setBusy(true);
     const r = await submitJson(d.alumni_save_url, alu);
     setBusy(false);
-    if (r.ok) notify && notify('success', r.message || 'Alumni details saved.');
+    if (r.ok) { notify && notify('success', r.message || 'Alumni details saved.'); setEditAlu(false); }
     else notify && notify('error', r.error || 'Could not save.');
   };
   const savePassword = async () => {
@@ -903,305 +936,333 @@ function GraduateProfile({ d, notify }) {
     if (r.ok) { notify && notify('success', r.message || 'Done.'); nav.refresh && nav.refresh(); }
     else notify && notify('error', r.error || 'Could not update the document.');
   };
+
+  const saved = d.alumni || {};
+  const tone = GRAD_STATUS_TONE[d.status] || 'info';
+  const docs = d.documents || [];
+  const issued = docs.filter((x) => x.number && !x.revoked).length;
+  const reqs = d.doc_requests || [];
+  const pending = reqs.filter((r) => r.status === 'pending').length;
+  const latestWaec = (d.waec_by_year || [])[0];
+  const waecCredits = latestWaec ? latestWaec.subjects.filter((r) => CREDIT.has(r.grade)).length : null;
+  const jambBest = (d.jamb_results || []).length ? Math.max(...d.jamb_results.map((j) => Number(j.total_score) || 0)) : null;
+  const callNo = saved.phone || ((d.contacts || [])[0] || {}).phone;
+  const canStatus = d.urls.change_status && canWrite(d, 'promote_graduate_status');
+  const canPortal = d.set_password_url && d.is_admin;
+  const canAlu = d.alumni_save_url && canWrite(d, 'graduates_alumni_edit');
+  const moreItems = [
+    { href: d.urls.full_profile, icon: 'fa-user', label: 'Full student profile' },
+    { href: d.urls.graduates, icon: 'fa-arrow-left', label: 'Back to graduates' },
+    d.urls.ungraduate && canWrite(d, 'promote_graduate_status') && { onClick: undoGraduate, icon: 'fa-rotate-left', label: 'Un-graduate…' },
+  ];
+  const work = saved.employer || saved.higher_institution;
+  const role = saved.job_title || saved.occupation || saved.course_of_study;
+
+  // ---- Panels (laptop rail; on phones they sit at the end of Overview) ----
+  const railPanels = (<>
+    <section className="pm-card">
+      <header className="pm-card-h"><span className="pm-card-ic"><i aria-hidden="true" className="fas fa-graduation-cap" /></span>
+        <div className="pm-card-t"><h3>Graduation</h3></div></header>
+      <dl className="gp2-kv">
+        <div><dt>Status</dt><dd><span className={'grad-status tone-' + tone}><span className="dot" aria-hidden="true" />{d.status || 'Graduated'}</span></dd></div>
+        {d.graduation_date && <div><dt>Graduated</dt><dd>{d.graduation_date}</dd></div>}
+        {d.graduation_session && <div><dt>Class of</dt><dd>{d.graduation_session}</dd></div>}
+        {rec.admission_session && <div><dt>Admitted</dt><dd>{rec.admission_session}</dd></div>}
+      </dl>
+    </section>
+    {canStatus && (
+      <section className="pm-card">
+        <header className="pm-card-h"><span className="pm-card-ic"><i aria-hidden="true" className="fas fa-arrows-turn-right" /></span>
+          <div className="pm-card-t"><h3>Update status</h3><small>Recorded in the history with your reason</small></div></header>
+        <div className="pm-card-b gp2-form">
+          <label className="pm-field"><span>New status</span>
+            <select value={status} onChange={(e) => setStatus(e.target.value)}>
+              {(d.statuses || []).map((st) => <option key={st} value={st}>{st}</option>)}</select></label>
+          <label className="pm-field"><span>Reason</span>
+            <textarea className="pm-input gp2-ta" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Certificate collected on 12 Aug" /></label>
+          <button type="button" className="pm-btn primary wide" disabled={busy || status === (d.status || 'Graduated')} onClick={saveStatus}><i aria-hidden="true" className="fas fa-check" /> Update status</button>
+        </div>
+      </section>
+    )}
+    {canPortal && (
+      <section className="pm-card">
+        <header className="pm-card-h"><span className="pm-card-ic"><i aria-hidden="true" className="fas fa-key" /></span>
+          <div className="pm-card-t"><h3>Alumni portal access</h3><small>They can also sign in with any document’s verification code</small></div></header>
+        <div className="pm-card-b gp2-form">
+          <label className="pm-field"><span>New password</span>
+            <input className="pm-input" type="text" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="At least 6 characters" /></label>
+          <button type="button" className="pm-btn wide" disabled={busy || pw.length < 6} onClick={savePassword}><i aria-hidden="true" className="fas fa-key" /> Set password</button>
+          {d.alumni_login_url && <a className="gp2-link" href={d.alumni_login_url} target="_blank" rel="noopener noreferrer" data-native="1"><i aria-hidden="true" className="fas fa-link" /> {d.alumni_login_url}</a>}
+        </div>
+      </section>
+    )}
+  </>);
+
   return (
-    <>
-      <div className="profile-hero">
-        <div className="ph-cover" />
-        <div className="ph-body">
-          <div className="ph-avatar" style={bio.photo_url
-              ? { padding: 0, overflow: 'hidden' }
-              : { background: 'linear-gradient(135deg,var(--primary),var(--primary-hover))' }} aria-hidden="true">
-            {bio.photo_url
-              ? <img src={bio.photo_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-              : ((s.full_name || '?').split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?')}
+    <div className="pm gp2">
+      <header className="gp2-head">
+        <div className="gp2-band" aria-hidden="true" />
+        <div className="gp2-head-row">
+          {bio.photo_url ? <img className="gp2-av" src={bio.photo_url} alt="" />
+            : <span className="gp2-av ph" aria-hidden="true">{pmInitials(s.full_name)}</span>}
+          <div className="gp2-id">
+            <h1>{s.full_name}</h1>
+            <div className="gp2-chips">
+              <span className="gp2-chip id">{s.student_id}</span>
+              {s.gender && <span className="gp2-chip"><i aria-hidden="true" className={'fas ' + (s.gender === 'Male' ? 'fa-mars' : 'fa-venus')} /> {s.gender}</span>}
+              <span className={'gp2-chip grad-status tone-' + tone}><span className="dot" aria-hidden="true" />{d.status || 'Graduated'}</span>
+              {d.graduation_session && <span className="gp2-chip"><i aria-hidden="true" className="fas fa-user-graduate" /> Class of {d.graduation_session}</span>}
+            </div>
+            {(role || work) && <p className="gp2-now"><i aria-hidden="true" className="fas fa-briefcase" /> {role}{role && work ? ' · ' : ''}{work && <b>{work}</b>}{saved.city ? ` · ${saved.city}` : ''}</p>}
           </div>
-          <div className="ph-id">
-            <h1 className="ph-name">{s.full_name}</h1>
-            <div className="ph-meta">
-              <span className="badge badge-primary">{s.student_id}</span>
-              {s.gender && <span className={'badge ' + (s.gender === 'Male' ? 'badge-info' : 'badge-warning')}>{s.gender}</span>}
-              <span className="badge badge-success"><i aria-hidden="true" className="fas fa-user-graduate" /> {d.status || 'Graduated'}</span>
-              {d.graduation_session && <span className="badge badge-secondary">Class of {d.graduation_session}</span>}
-            </div>
-          </div>
-        </div>
-        <div className="ph-actions">
-          <a href={d.urls.graduates} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back to Graduates</a>
-          <a href={d.urls.full_profile} className="btn btn-primary"><i aria-hidden="true" className="fas fa-user" /> Full Profile</a>
-          {d.urls.ungraduate && canWrite(d, 'promote_graduate_status') && <button type="button" className="btn btn-danger" disabled={busy} onClick={undoGraduate}>
-            <i aria-hidden="true" className="fas fa-rotate-left" /> Un-graduate</button>}
-        </div>
-      </div>
-      <div className="gp-grid">
-        {/* ===================== RAIL ===================== */}
-        <div className="gp-rail">
-
-          <div className="gp-sec">
-            <div className="gp-sec-head"><div className="ttl"><span className="gp-sec-ic p"><i aria-hidden="true" className="fas fa-graduation-cap" /></span><h3>Graduation</h3></div></div>
-            <div className="gp-sec-body">
-              {((rec.attendance && rec.attendance.total > 0) || rec.finance || (typeof rec.clinic_visits === 'number' && rec.clinic_visits > 0)) &&
-                <div className="gp-qstats" style={{ gridTemplateColumns: 'repeat(auto-fit,minmax(90px,1fr))' }}>
-                  {rec.attendance && rec.attendance.total > 0 && <div className="gp-qstat"><b>{rec.attendance.percent}%</b><span>Attendance</span></div>}
-                  {rec.finance && <div className="gp-qstat"><b>{NGN(rec.finance.total_paid)}</b><span>Fees paid</span></div>}
-                  {typeof rec.clinic_visits === 'number' && rec.clinic_visits > 0 && <div className="gp-qstat"><b>{rec.clinic_visits}</b><span>Clinic visits</span></div>}
-                </div>}
-              <GpKV label="Status" value={d.status || 'Graduated'} />
-              <GpKV label="Graduated" value={d.graduation_date} />
-              <GpKV label="Session" value={d.graduation_session} />
-            </div>
-          </div>
-
-          {d.urls.change_status && canWrite(d, 'promote_graduate_status') && <div className="gp-sec">
-            <div className="gp-sec-head"><div className="ttl"><span className="gp-sec-ic a"><i aria-hidden="true" className="fas fa-arrows-turn-right" /></span><h3>Update Status</h3></div></div>
-            <div className="gp-sec-body">
-              <div className="gp-status-now"><span className="dot" aria-hidden="true" /><b>Currently: {d.status || 'Graduated'}</b></div>
-              <div className="gp-field"><label>New status</label>
-                <select className="form-control" value={status} onChange={(e) => setStatus(e.target.value)}>
-                  {(d.statuses || []).map((st) => <option key={st} value={st}>{st}</option>)}</select></div>
-              <div className="gp-field"><label>Reason <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>(audit trail)</span></label>
-                <textarea className="form-control" rows={2} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="e.g. Certificate collected on 12 Aug" /></div>
-              <button type="button" className="btn btn-primary" style={{ width: '100%' }} disabled={busy} onClick={saveStatus}><i aria-hidden="true" className="fas fa-save" /> Update status</button>
-            </div>
-          </div>}
-
-          {d.set_password_url && d.is_admin && <div className="gp-sec">
-            <div className="gp-sec-head"><div className="ttl"><span className="gp-sec-ic i"><i aria-hidden="true" className="fas fa-key" /></span><h3>Portal Access</h3></div></div>
-            <div className="gp-sec-body">
-              <p style={{ margin: '0 0 .8rem', fontSize: '.78rem', color: 'var(--text-muted)' }}>Set a password so this graduate can sign in to the alumni portal. They can also log in with a verification code from any document you issued them.</p>
-              <div className="gp-field"><label>New password</label>
-                <div className="gp-ctrl"><i aria-hidden="true" className="fas fa-lock gp-pre" />
-                  <input className="form-control" type="text" value={pw} onChange={(e) => setPw(e.target.value)} placeholder="At least 6 characters" /></div></div>
-              <button type="button" className="btn btn-secondary" style={{ width: '100%' }} disabled={busy} onClick={savePassword}><i aria-hidden="true" className="fas fa-key" /> Set password</button>
-              {d.alumni_login_url && <div style={{ marginTop: '.8rem', padding: '.6rem .7rem', background: 'var(--gray-50)', borderRadius: 'var(--radius-md)', fontSize: '.76rem', color: 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: '.4rem', overflow: 'hidden' }}>
-                <i aria-hidden="true" className="fas fa-link" style={{ flexShrink: 0 }} />
-                <a href={d.alumni_login_url} target="_blank" rel="noopener noreferrer" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{d.alumni_login_url}</a>
-              </div>}
-            </div>
-          </div>}
-
-        </div>
-
-        {/* ===================== MAIN ===================== */}
-        <div className="gp-main">
-
-          {(d.status_history && d.status_history.length > 0) && <div className="gp-sec">
-            <div className="gp-sec-head"><div className="ttl"><span className="gp-sec-ic g"><i aria-hidden="true" className="fas fa-clock-rotate-left" /></span><h3>Status History</h3></div><span className="meta">{d.status_history.length} change{d.status_history.length === 1 ? '' : 's'}</span></div>
-            <div className="gp-tl">
-              {d.status_history.map((h, i) => (
-                <div className="gp-tlrow" key={i}><span className={'gp-tldot' + (i === 0 ? '' : ' muted')} aria-hidden="true" />
-                  <div className="gp-tlbody">
-                    <div className="gp-tlchange">{h.old || '—'} <span className="arrow">→</span> <strong>{h.new}</strong></div>
-                    <div className="gp-tlmeta">{h.reason ? h.reason + ' · ' : ''}{h.at}{h.actor ? ` · by ${h.actor}` : ''}</div>
-                  </div></div>
-              ))}
-            </div>
-          </div>}
-
-          {/* ---- Documents ---- */}
-          {d.documents && d.documents.length > 0 && <div className="gp-sec">
-            <div className="gp-sec-head"><div className="ttl"><span className="gp-sec-ic s"><i aria-hidden="true" className="fas fa-file-signature" /></span><h3>Documents</h3></div><span className="meta">{d.documents.length} types</span></div>
-            <div className="gp-doctiles">
-              {d.documents.map((doc) => (
-                <div className="gp-doctile" key={doc.type}>
-                  <div className={'gp-dt-ribbon ' + (doc.revoked ? 'revoked' : doc.number ? 'issued' : 'none')} />
-                  <div className="gp-dt-body">
-                    <div className="gp-dt-top">
-                      <span className={'gp-dt-ic' + (doc.revoked ? ' danger' : doc.number ? '' : ' off')}>
-                        <i aria-hidden="true" className={'fas ' + (doc.revoked ? 'fa-file-circle-xmark' : doc.number ? 'fa-file-circle-check' : 'fa-file-signature')} /></span>
-                      {doc.revoked ? <span className="badge badge-danger">Revoked</span>
-                        : doc.number ? <span className="badge badge-success">Issued</span>
-                        : <span className="badge badge-secondary">Not issued</span>}
-                    </div>
-                    <div><div className="gp-dt-label">{doc.label}</div>{doc.number && <div className="gp-dt-num">No. {doc.number}{doc.reprint_count > 0 ? ` · ${doc.reprint_count} reprint${doc.reprint_count === 1 ? '' : 's'}` : ''}</div>}</div>
-                    {doc.number && <div className="gp-dt-verify">
-                      {doc.verify_count > 0 ? <><i aria-hidden="true" className="fas fa-circle-check" style={{ color: 'var(--success)' }} /> {doc.verify_count}× checked</> : <><i aria-hidden="true" className="fas fa-circle" /> not yet checked</>}
-                      {doc.verify_url && <>· <a href={doc.verify_url} target="_blank" rel="noopener noreferrer">verify link</a></>}
-                    </div>}
-                    <div className="gp-dt-actions">
-                      {canWrite(d, 'documents_generate') && <a href={doc.download_url} target="_blank" rel="noopener noreferrer" className="btn btn-primary btn-sm">
-                        <i aria-hidden="true" className={'fas ' + (doc.number ? 'fa-rotate' : 'fa-download')} /> {doc.number ? 'Re-issue' : 'Generate'}</a>}
-                      {doc.number && doc.revoke_url && canWrite(d, 'documents_generate') && <button type="button" className="btn btn-secondary btn-sm" onClick={() => revokeDoc(doc)}>
-                        <i aria-hidden="true" className={'fas ' + (doc.revoked ? 'fa-rotate-left' : 'fa-ban')} /> {doc.revoked ? 'Reinstate' : 'Revoke'}</button>}
-                    </div>
-                  </div>
-                </div>))}
-            </div>
-            <p className="text-muted text-sm" style={{ margin: '0 1.25rem 1.1rem' }}>
-              <i aria-hidden="true" className="fas fa-qrcode" /> Each PDF carries a QR code + unique number; anyone can confirm it at the public verification page.</p>
-          </div>}
-
-          {/* ---- Document requests (from the alumni portal) ---- */}
-          {d.doc_requests && d.doc_requests.length > 0 && <div className="gp-sec">
-            <div className="gp-sec-head"><div className="ttl"><span className="gp-sec-ic a"><i aria-hidden="true" className="fas fa-inbox" /></span><h3>Document Requests</h3></div><span className="meta">from the alumni portal</span></div>
-            <div className="gp-rowlist">
-              {d.doc_requests.map((r) => (
-                <div className="gp-rlrow" key={r.id}>
-                  <span className="ric"><i aria-hidden="true" className="fas fa-file" /></span>
-                  <div className="rbody"><div className="rtitle">{r.label}</div><div className="rsub">Requested {r.requested_at}{r.note ? ` · "${r.note}"` : ''}</div></div>
-                  {r.status === 'pending' ? <>
-                    <span className="badge badge-warning">pending</span>
-                    {canWrite(d, 'documents_requests') && <div className="ractions">
-                      <button type="button" className="btn btn-primary btn-sm" onClick={() => fulfilReq(r)}><i aria-hidden="true" className="fas fa-file-arrow-down" /></button>
-                      <button type="button" className="btn btn-secondary btn-sm" onClick={() => declineReq(r)}><i aria-hidden="true" className="fas fa-xmark" /></button>
-                    </div>}
-                  </> : <span className="rval">{r.response_note || (r.status === 'fulfilled' ? 'Issued' : r.status === 'declined' ? 'Declined' : r.status)}</span>}
-                </div>
-              ))}
-            </div>
-          </div>}
-
-          {/* ---- Alumni details ---- */}
-          {d.alumni_save_url && canWrite(d, 'graduates_alumni_edit') && <div className="gp-sec">
-            <div className="gp-sec-head"><div className="ttl"><span className="gp-sec-ic i"><i aria-hidden="true" className="fas fa-id-badge" /></span><h3>Alumni Details</h3></div>
-              {d.alumni && d.alumni.updated_at && <span className="meta">Updated {d.alumni.updated_at}{d.alumni.updated_by ? ` by ${d.alumni.updated_by}` : ''}</span>}</div>
-            <div className="gp-sec-body">
-              <div className="gp-formgrid">
-                {[['occupation', 'Occupation'], ['job_title', 'Job title'], ['employer', 'Employer'],
-                  ['higher_institution', 'Higher institution'], ['course_of_study', 'Course of study'],
-                  ['phone', 'Phone'], ['email', 'Email'], ['linkedin_url', 'LinkedIn URL'],
-                  ['city', 'City'], ['country', 'Country']].map(([k, lab]) => (
-                  <div className="gp-field" key={k}><label>{lab}</label>
-                    <div className="gp-ctrl"><i aria-hidden="true" className={'fas ' + ALUMNI_FIELD_ICONS[k] + ' gp-pre'} />
-                      <input className="form-control" value={alu[k] || ''} onChange={(e) => setAluField(k, e.target.value)} /></div></div>))}
-              </div>
-              <div className="gp-field"><label>Achievements</label>
-                <textarea className="form-control" rows={2} value={alu.achievements || ''} onChange={(e) => setAluField('achievements', e.target.value)} /></div>
-              <div className="gp-chk"><input type="checkbox" checked={!!alu.willing_to_mentor} onChange={(e) => setAluField('willing_to_mentor', e.target.checked)} /> Willing to mentor current students</div>
-              <button type="button" className="btn btn-primary" disabled={busy} onClick={saveAlumni}><i aria-hidden="true" className="fas fa-save" /> Save alumni details</button>
-            </div>
-          </div>}
-
-          {/* ---- Permanent record (read-only) ---- */}
-          <div className="gp-sec">
-            <div className="gp-sec-head"><div className="ttl"><span className="gp-sec-ic g"><i aria-hidden="true" className="fas fa-id-card" /></span><h3>Biodata</h3></div></div>
-            <div className="gp-sec-body" style={{ display: 'flex', gap: '1.2rem', flexWrap: 'wrap' }}>
-              {bio.photo_url ? <img src={bio.photo_url} alt="" style={{ width: 96, height: 96, objectFit: 'cover', borderRadius: 12, border: '1px solid var(--border-color)' }} /> : null}
-              <div style={{ flex: 1, minWidth: 240, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '.6rem 1.2rem' }}>
-                <GpKV label="Date of Birth" value={bio.date_of_birth} />
-                <GpKV label="Admission Session" value={rec.admission_session} />
-                <GpKV label="House" value={bio.house} />
-                <GpKV label="Boarding" value={bio.boarding_status} />
-                <GpKV label="Stream" value={bio.stream} />
-                <GpKV label="Blood Group" value={bio.blood_group} />
-                <GpKV label="Genotype" value={bio.genotype} />
-                <GpKV label="Allergies" value={bio.allergies} />
-                <GpKV label="Religion" value={bio.religion} />
-                <div style={{ gridColumn: '1/-1' }}><GpKV label="Address" value={bio.home_address} /></div>
-                <GpKV label="WAEC Subjects" value={bio.waec_subjects} />
-                <GpKV label="JAMB Subjects" value={bio.jamb_subjects} />
-                <GpKV label="JAMB Reg. No." value={bio.jamb_reg_number} />
-              </div>
-            </div>
-          </div>
-
-          {rec.class_history && rec.class_history.length > 0 && <div className="gp-sec">
-            <div className="gp-sec-head"><div className="ttl"><span className="gp-sec-ic g"><i aria-hidden="true" className="fas fa-timeline" /></span><h3>Class &amp; Arm History</h3></div></div>
-            <div className="gp-rowlist">
-              {rec.class_history.map((h, i) => (
-                <div className="gp-rlrow" key={i}><span className="ric"><i aria-hidden="true" className="fas fa-layer-group" /></span>
-                  <div className="rbody"><div className="rtitle">{h.klass} {h.arm}</div><div className="rsub">{h.session} · {h.term}</div></div></div>
-              ))}
-            </div>
-          </div>}
-
-          {rec.academic && (rec.academic.terms_count > 0) && <div className="gp-sec">
-            <div className="gp-sec-head"><div className="ttl"><span className="gp-sec-ic p"><i aria-hidden="true" className="fas fa-chart-line" /></span><h3>Academic History</h3></div>
-              {rec.academic.cumulative != null && <span className="badge badge-primary">Cumulative avg: {rec.academic.cumulative}%</span>}</div>
-            <div className="gp-sec-body">
-              {rec.academic.terms.map((t, i) => (
-                <div className="gp-examblock" key={i}>
-                  <div className="gp-examhead"><b>{t.session}</b><span className="muted">{t.term}</span>{t.average != null && <span className="muted">Term avg: {t.average}%</span>}</div>
-                  <div className="subjects-grid" style={{ padding: '.85rem .95rem' }}>
-                    {t.subjects.map((sub, j) => (
-                      <div className="subject-item" key={j}><span>{sub.subject}</span><strong>{sub.score}{sub.grade ? ` · ${sub.grade}` : ''}</strong></div>))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>}
-
-          {rec.finance && rec.finance.recent && rec.finance.recent.length > 0 && <div className="gp-sec">
-            <div className="gp-sec-head"><div className="ttl"><span className="gp-sec-ic s"><i aria-hidden="true" className="fas fa-receipt" /></span><h3>Recent Fee Payments</h3></div></div>
-            <div className="gp-rowlist">
-              {rec.finance.recent.map((p, i) => (
-                <div className="gp-rlrow" key={i}><span className="ric" style={{ background: 'var(--success-light)', color: 'var(--success)' }}><i aria-hidden="true" className="fas fa-naira-sign" /></span>
-                  <div className="rbody"><div className="rtitle">{NGN(p.amount)}</div><div className="rsub">{p.date} · {p.method || '—'}</div></div>
-                  <span className="rval">{p.receipt || '—'}</span></div>
-              ))}
-            </div>
-          </div>}
-
-          {rec.discipline && rec.discipline.length > 0 && <div className="gp-sec">
-            <div className="gp-sec-head"><div className="ttl"><span className="gp-sec-ic w"><i aria-hidden="true" className="fas fa-gavel" /></span><h3>Discipline Records</h3></div></div>
-            <div className="gp-rowlist">
-              {rec.discipline.map((r, i) => (
-                <div className="gp-rlrow" key={i}><span className="ric"><i aria-hidden="true" className="fas fa-gavel" /></span>
-                  <div className="rbody"><div className="rtitle">{r.category}{r.severity ? ` · ${r.severity}` : ''}</div><div className="rsub">{r.date}{r.description ? ` — ${r.description}` : ''}</div></div>
-                  <span className="rval">{r.action || '—'}</span></div>
-              ))}
-            </div>
-          </div>}
-
-          <div className="gp-sec">
-            <div className="gp-sec-head"><div className="ttl"><span className="gp-sec-ic p"><i aria-hidden="true" className="fas fa-file-alt" /></span><h3>WAEC Results</h3></div>
-              {canWrite(d) && <a href={d.urls.add_waec} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add</a>}</div>
-            <div className="gp-sec-body">{d.waec_by_year.length ? d.waec_by_year.map((data, i) => (
-              <div className="gp-examblock" key={i}>
-                <div className="gp-examhead"><b>{data.exam_year}</b>{data.exam_number && <span className="muted">Exam No: {data.exam_number}</span>}</div>
-                <div className="subjects-grid" style={{ padding: '.85rem .95rem' }}>
-                  {data.subjects.map((r, j) => (
-                    <div className="subject-item" key={j}><span>{r.subject}</span><span className={'badge ' + (WAEC_GRADE_BADGE[r.grade] || 'badge-secondary')}>{r.grade}</span></div>))}
-                </div>
-              </div>
-            )) : <Empty icon="fa-file-alt" title=""><p>No WAEC results recorded</p>{canWrite(d) && <a href={d.urls.add_waec} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add WAEC Result</a>}</Empty>}</div>
-          </div>
-
-          <div className="gp-sec">
-            <div className="gp-sec-head"><div className="ttl"><span className="gp-sec-ic p"><i aria-hidden="true" className="fas fa-file-lines" /></span><h3>NECO Results</h3></div>
-              {canWrite(d) && <a href={d.urls.add_neco} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add</a>}</div>
-            <div className="gp-sec-body">{(d.neco_by_year || []).length ? d.neco_by_year.map((data, i) => (
-              <div className="gp-examblock" key={i}>
-                <div className="gp-examhead"><b>{data.exam_year}</b>{data.exam_number && <span className="muted">Reg No: {data.exam_number}</span>}</div>
-                <div className="subjects-grid" style={{ padding: '.85rem .95rem' }}>
-                  {data.subjects.map((r, j) => (
-                    <div className="subject-item" key={j}><span>{r.subject}</span><span className={'badge ' + (WAEC_GRADE_BADGE[r.grade] || 'badge-secondary')}>{r.grade}</span></div>))}
-                </div>
-              </div>
-            )) : <Empty icon="fa-file-lines" title=""><p>No NECO results recorded</p>{canWrite(d) && <a href={d.urls.add_neco} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add NECO Result</a>}</Empty>}</div>
-          </div>
-
-          <div className="gp-sec">
-            <div className="gp-sec-head"><div className="ttl"><span className="gp-sec-ic a"><i aria-hidden="true" className="fas fa-file-contract" /></span><h3>JAMB Results</h3></div>
-              {canWrite(d) && <a href={d.urls.add_jamb} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add</a>}</div>
-            <div className="gp-sec-body">{d.jamb_results.length ? d.jamb_results.map((j, i) => (
-              <div className="gp-examblock" key={i}>
-                <div className="gp-examhead"><b>{j.exam_year}</b>{j.registration_number && <span className="muted">Reg No: {j.registration_number}</span>}<span className="badge badge-primary">{j.total_score}</span></div>
-                <div className="subjects-grid" style={{ padding: '.85rem .95rem' }}>
-                  {j.subjects.map((sub, k) => (
-                    <div className="subject-item" key={k}><span>{sub.name}</span><strong>{sub.score}</strong></div>))}
-                </div>
-              </div>
-            )) : <Empty icon="fa-file-contract" title=""><p>No JAMB results recorded</p>{canWrite(d) && <a href={d.urls.add_jamb} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-plus" /> Add JAMB Result</a>}</Empty>}</div>
-          </div>
-
-          {d.contacts.length > 0 && (
-            <div className="gp-sec">
-              <div className="gp-sec-head"><div className="ttl"><span className="gp-sec-ic g"><i aria-hidden="true" className="fas fa-phone" /></span><h3>Contact Information</h3></div></div>
-              <div className="gp-contacts">
-                {d.contacts.map((c, i) => (
-                  <div className="gp-contact" key={i}>
-                    <span className="cav">{(c.name || '?').split(' ').filter(Boolean).slice(0, 2).map((w) => w[0]).join('').toUpperCase()}</span>
-                    <div><div className="cname">{c.name}</div><div className="crel">{c.relationship}</div></div>
-                    <span className="cphone">{c.phone}</span>
-                  </div>
-                ))}
-              </div>
+          {!phone && (
+            <div className="gp2-acts">
+              <a href={d.urls.full_profile} className="pm-btn"><i aria-hidden="true" className="fas fa-user" /> Full profile</a>
+              <PmMenu items={moreItems} />
             </div>
           )}
-
         </div>
+        {phone && (
+          <div className="gp2-quick">
+            {callNo ? <a className="gp2-qa" href={'tel:' + callNo}><span className="gp2-round call"><i aria-hidden="true" className="fas fa-phone" /></span>Call</a> : null}
+            {saved.email ? <a className="gp2-qa" href={'mailto:' + saved.email}><span className="gp2-round"><i aria-hidden="true" className="fas fa-envelope" /></span>Email</a> : null}
+            <button type="button" className="gp2-qa" onClick={() => setTab('documents')}><span className="gp2-round"><i aria-hidden="true" className="fas fa-file-signature" /></span>Documents</button>
+            {canAlu && <button type="button" className="gp2-qa" onClick={() => setEditAlu(true)}><span className="gp2-round"><i aria-hidden="true" className="fas fa-pen" /></span>Edit</button>}
+            <div className="gp2-qa"><PmMenu items={moreItems} icon="fa-ellipsis" label="More" /><span>More</span></div>
+          </div>
+        )}
+      </header>
+
+      <PmTiles items={[
+        rec.academic && rec.academic.cumulative != null ? { label: 'Overall average', icon: 'fa-chart-line', value: `${rec.academic.cumulative}%`, sub: `${rec.academic.terms_count} terms`, onClick: () => setTab('records') } : null,
+        latestWaec ? { label: `WAEC ${latestWaec.exam_year}`, icon: 'fa-file-alt', value: waecCredits, sub: `credits of ${latestWaec.subjects.length}`, tone: waecCredits >= 5 ? 'good' : 'warn', onClick: () => setTab('results') }
+          : { label: 'WAEC', icon: 'fa-file-alt', value: '—', sub: 'no result yet', tone: 'warn', onClick: () => setTab('results') },
+        jambBest != null ? { label: 'JAMB', icon: 'fa-file-contract', value: jambBest, sub: 'best score / 400', tone: jambBest >= 200 ? 'good' : 'warn', onClick: () => setTab('results') } : null,
+        { label: 'Documents', icon: 'fa-file-signature', value: `${issued}/${docs.length}`, sub: pending ? `${pending} request${pending === 1 ? '' : 's'} waiting` : 'issued', tone: pending ? 'warn' : '', onClick: () => setTab('documents') },
+        rec.attendance && rec.attendance.total > 0 ? { label: 'Attendance', icon: 'fa-calendar-check', value: `${rec.attendance.percent}%`, sub: 'while at school' } : null,
+        rec.finance && Number(rec.finance.total_paid) > 0 ? { label: 'Fees paid', icon: 'fa-receipt', value: NGN(rec.finance.total_paid), onClick: () => setTab('records') } : null,
+      ]} />
+
+      <nav className="gp2-tabs" role="tablist" aria-label="Graduate sections">
+        {GP_TABS.map((t) => (
+          <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} className={tab === t.key ? 'on' : ''} onClick={() => setTab(t.key)}>
+            {!phone && <i aria-hidden="true" className={'fas ' + t.icon} />}{phone && t.key === 'records' ? 'Record' : t.label}
+            {t.key === 'documents' && pending > 0 && <span className="gp2-n">{pending}</span>}
+          </button>))}
+      </nav>
+
+      <div className="gp2-cols">
+        <main className="gp2-main">
+          {tab === 'overview' && (<>
+            <section className="pm-card">
+              <header className="pm-card-h"><span className="pm-card-ic"><i aria-hidden="true" className="fas fa-id-badge" /></span>
+                <div className="pm-card-t"><h3>Alumni details</h3>
+                  <small>{saved.updated_at ? `Updated ${saved.updated_at}${saved.updated_by ? ' by ' + saved.updated_by : ''}` : 'Not filled in yet'}</small></div>
+                {canAlu && <button type="button" className="pm-btn" onClick={() => setEditAlu(true)}><i aria-hidden="true" className="fas fa-pen" /> <span>Edit</span></button>}
+              </header>
+              <dl className="gp2-kv grid">
+                {ALUMNI_FIELDS.filter(([k]) => saved[k]).map(([k, lab]) => (
+                  <div key={k}><dt><i aria-hidden="true" className={'fas ' + ALUMNI_FIELD_ICONS[k]} /> {lab}</dt>
+                    <dd>{k === 'phone' ? <a href={'tel:' + saved[k]}>{saved[k]}</a> : k === 'email' ? <a href={'mailto:' + saved[k]}>{saved[k]}</a>
+                      : k === 'linkedin_url' ? <a href={saved[k]} target="_blank" rel="noopener noreferrer" data-native="1">LinkedIn profile</a> : saved[k]}</dd></div>))}
+                {saved.willing_to_mentor && <div><dt><i aria-hidden="true" className="fas fa-hands-helping" /> Mentoring</dt><dd>Willing to mentor current students</dd></div>}
+                {saved.achievements && <div className="wide"><dt><i aria-hidden="true" className="fas fa-trophy" /> Achievements</dt><dd>{saved.achievements}</dd></div>}
+              </dl>
+              {!ALUMNI_FIELDS.some(([k]) => saved[k]) && !saved.achievements && (
+                <p className="pm-empty">No career, study or contact details yet.{canAlu ? ' Tap Edit to add them.' : ''}</p>)}
+            </section>
+
+            {d.status_history && d.status_history.length > 0 && (
+              <section className="pm-card">
+                <header className="pm-card-h"><span className="pm-card-ic"><i aria-hidden="true" className="fas fa-clock-rotate-left" /></span>
+                  <div className="pm-card-t"><h3>Status history</h3><small>{d.status_history.length} change{d.status_history.length === 1 ? '' : 's'}</small></div></header>
+                <ol className="gp2-tl">
+                  {d.status_history.map((h, i) => (
+                    <li key={i} className={i === 0 ? 'now' : ''}>
+                      <div>{h.old || '—'} <i aria-hidden="true" className="fas fa-arrow-right" /> <b>{h.new}</b></div>
+                      <small>{h.reason ? h.reason + ' · ' : ''}{h.at}{h.actor ? ` · by ${h.actor}` : ''}</small>
+                    </li>))}
+                </ol>
+              </section>
+            )}
+
+            {d.contacts.length > 0 && (
+              <section className="pm-card">
+                <header className="pm-card-h"><span className="pm-card-ic"><i aria-hidden="true" className="fas fa-address-book" /></span>
+                  <div className="pm-card-t"><h3>Family contacts</h3><small>From the school record</small></div></header>
+                <ul className="pm-people">
+                  {d.contacts.map((c, i) => (
+                    <li key={i} className="pm-person">
+                      <span className="pm-av" aria-hidden="true">{pmInitials(c.name)}</span>
+                      <span className="pm-pn"><strong>{c.name}</strong><small>{c.relationship}{c.phone ? ` · ${c.phone}` : ''}</small></span>
+                      {c.phone && <a className="al-c call" href={'tel:' + c.phone} aria-label={`Call ${c.name}`}><i aria-hidden="true" className="fas fa-phone" /></a>}
+                    </li>))}
+                </ul>
+              </section>
+            )}
+            {phone && railPanels}
+          </>)}
+
+          {tab === 'results' && (<>
+            {[['WAEC', 'fa-file-alt', d.waec_by_year || [], d.urls.add_waec, 'Exam No.'], ['NECO', 'fa-file-lines', d.neco_by_year || [], d.urls.add_neco, 'Reg No.']].map(([nm, ic, list, add, lab]) => (
+              <section className="pm-card" key={nm}>
+                <header className="pm-card-h"><span className="pm-card-ic"><i aria-hidden="true" className={'fas ' + ic} /></span>
+                  <div className="pm-card-t"><h3>{nm}</h3><small>{list.length ? `${list.length} sitting${list.length === 1 ? '' : 's'}` : 'No results recorded'}</small></div>
+                  {canWrite(d) && add && <a href={add} className="pm-btn"><i aria-hidden="true" className="fas fa-plus" /> <span>Add</span></a>}</header>
+                {list.length ? <div className="pm-card-b gp2-exams">{list.map((data, i) => <GpGrades key={i} data={data} label={lab} />)}</div>
+                  : <p className="pm-empty">No {nm} results recorded yet.</p>}
+              </section>
+            ))}
+            <section className="pm-card">
+              <header className="pm-card-h"><span className="pm-card-ic"><i aria-hidden="true" className="fas fa-file-contract" /></span>
+                <div className="pm-card-t"><h3>JAMB</h3><small>{d.jamb_results.length ? `${d.jamb_results.length} sitting${d.jamb_results.length === 1 ? '' : 's'}` : 'No results recorded'}</small></div>
+                {canWrite(d) && <a href={d.urls.add_jamb} className="pm-btn"><i aria-hidden="true" className="fas fa-plus" /> <span>Add</span></a>}</header>
+              {d.jamb_results.length ? (
+                <div className="pm-card-b gp2-exams">
+                  {d.jamb_results.map((j, i) => (
+                    <div className="gp2-exam" key={i}>
+                      <div className="gp2-exam-h"><b>{j.exam_year}</b><span className="gp2-score">{j.total_score}<small>/400</small></span>
+                        {j.registration_number && <span className="pm-dim">Reg No. {j.registration_number}</span>}</div>
+                      <ul className="gp2-jamb">
+                        {j.subjects.map((sub, k) => (
+                          <li key={k}><span>{sub.name}</span><span className="aa-track"><i style={{ width: `${Math.min(100, Number(sub.score) || 0)}%` }} /></span><b>{sub.score}</b></li>))}
+                      </ul>
+                    </div>))}
+                </div>
+              ) : <p className="pm-empty">No JAMB results recorded yet.</p>}
+            </section>
+          </>)}
+
+          {tab === 'documents' && (<>
+            {reqs.length > 0 && (
+              <section className="pm-card">
+                <header className="pm-card-h"><span className="pm-card-ic warn"><i aria-hidden="true" className="fas fa-inbox" /></span>
+                  <div className="pm-card-t"><h3>Requests from the alumni portal</h3><small>{pending ? `${pending} waiting` : 'All handled'}</small></div></header>
+                <ul className="pm-people">
+                  {reqs.map((r) => (
+                    <li key={r.id} className="pm-person al-req">
+                      <span className="pm-card-ic"><i aria-hidden="true" className="fas fa-file" /></span>
+                      <span className="pm-pn"><strong>{r.label}</strong><small>Requested {r.requested_at}{r.note ? ` · “${r.note}”` : ''}</small></span>
+                      {r.status === 'pending' ? (canWrite(d, 'documents_requests') ? <span className="al-req-a">
+                        <button type="button" className="pm-btn primary" onClick={() => fulfilReq(r)}><i aria-hidden="true" className="fas fa-file-arrow-down" /> <span>Issue</span></button>
+                        <button type="button" className="pm-icon danger" onClick={() => declineReq(r)} aria-label="Decline" title="Decline"><i aria-hidden="true" className="fas fa-xmark" /></button>
+                      </span> : <span className="badge badge-warning">pending</span>)
+                        : <span className={'badge ' + (r.status === 'fulfilled' ? 'badge-success' : 'badge-secondary')}>{r.response_note || (r.status === 'fulfilled' ? 'Issued' : r.status === 'declined' ? 'Declined' : r.status)}</span>}
+                    </li>))}
+                </ul>
+              </section>
+            )}
+            <section className="pm-card">
+              <header className="pm-card-h"><span className="pm-card-ic"><i aria-hidden="true" className="fas fa-file-signature" /></span>
+                <div className="pm-card-t"><h3>Documents</h3><small>Each PDF carries a QR code and number anyone can verify</small></div></header>
+              {docs.length ? (
+                <ul className="gp2-docs">
+                  {docs.map((doc) => {
+                    const st = doc.revoked ? 'revoked' : doc.number ? 'issued' : 'none';
+                    return (
+                      <li key={doc.type} className={'gp2-doc ' + st}>
+                        <span className="gp2-doc-ic"><i aria-hidden="true" className={'fas ' + (doc.revoked ? 'fa-file-circle-xmark' : doc.number ? 'fa-file-circle-check' : 'fa-file')} /></span>
+                        <span className="pm-pn"><strong>{doc.label}</strong>
+                          <small>{doc.revoked ? 'Revoked — verifies as invalid' : doc.number ? `No. ${doc.number}${doc.reprint_count ? ` · ${doc.reprint_count} reprint${doc.reprint_count === 1 ? '' : 's'}` : ''} · ${doc.verify_count ? `checked ${doc.verify_count}×` : 'not checked yet'}` : 'Not issued yet'}</small></span>
+                        <span className="gp2-doc-a">
+                          {doc.number && doc.verify_url && <a href={doc.verify_url} target="_blank" rel="noopener noreferrer" data-native="1" className="pm-icon" aria-label="Open verification page" title="Verification page"><i aria-hidden="true" className="fas fa-qrcode" /></a>}
+                          {doc.number && doc.revoke_url && canWrite(d, 'documents_generate') && <button type="button" className="pm-icon danger" onClick={() => revokeDoc(doc)} aria-label={doc.revoked ? 'Reinstate' : 'Revoke'} title={doc.revoked ? 'Reinstate' : 'Revoke'}>
+                            <i aria-hidden="true" className={'fas ' + (doc.revoked ? 'fa-rotate-left' : 'fa-ban')} /></button>}
+                          {canWrite(d, 'documents_generate') && <a href={doc.download_url} target="_blank" rel="noopener noreferrer" data-native="1" className={'pm-btn' + (doc.number ? '' : ' primary')}>
+                            <i aria-hidden="true" className={'fas ' + (doc.number ? 'fa-rotate' : 'fa-download')} /> <span>{doc.number ? 'Re-issue' : 'Generate'}</span></a>}
+                        </span>
+                      </li>);
+                  })}
+                </ul>
+              ) : <p className="pm-empty">No document types are set up.</p>}
+            </section>
+          </>)}
+
+          {tab === 'records' && (<>
+            <section className="pm-card">
+              <header className="pm-card-h"><span className="pm-card-ic"><i aria-hidden="true" className="fas fa-id-card" /></span>
+                <div className="pm-card-t"><h3>Biodata</h3><small>Kept from their time at school</small></div></header>
+              <dl className="gp2-kv grid">
+                {[['Date of birth', bio.date_of_birth], ['Admission session', rec.admission_session], ['House', bio.house], ['Boarding', bio.boarding_status],
+                  ['Stream', bio.stream], ['Religion', bio.religion], ['Blood group', bio.blood_group], ['Genotype', bio.genotype], ['Allergies', bio.allergies],
+                  ['WAEC subjects', bio.waec_subjects], ['JAMB subjects', bio.jamb_subjects], ['JAMB reg. no.', bio.jamb_reg_number]]
+                  .filter(([, v]) => v || v === 0).map(([k, v]) => <div key={k}><dt>{k}</dt><dd>{v}</dd></div>)}
+                {bio.home_address && <div className="wide"><dt>Address</dt><dd>{bio.home_address}</dd></div>}
+              </dl>
+            </section>
+
+            {rec.academic && rec.academic.terms_count > 0 && (
+              <section className="pm-card">
+                <header className="pm-card-h"><span className="pm-card-ic"><i aria-hidden="true" className="fas fa-chart-line" /></span>
+                  <div className="pm-card-t"><h3>Term results</h3><small>{rec.academic.terms_count} terms{rec.academic.cumulative != null ? ` · overall ${rec.academic.cumulative}%` : ''}</small></div></header>
+                <div className="gp2-terms">
+                  {rec.academic.terms.map((t, i) => (
+                    <details key={i} className="gp2-term" open={i === 0}>
+                      <summary><b>{t.session}</b> <span className="pm-dim">{t.term}</span>
+                        {t.average != null && <span className={'pm-avg ' + (t.average >= 50 ? 'good' : 'bad')}>{t.average}%</span>}</summary>
+                      <ul className="gp2-grades">
+                        {t.subjects.map((sub, j) => <li key={j}><span>{sub.subject}</span><b>{sub.score}{sub.grade ? ` · ${sub.grade}` : ''}</b></li>)}
+                      </ul>
+                    </details>))}
+                </div>
+              </section>
+            )}
+
+            {rec.class_history && rec.class_history.length > 0 && (
+              <section className="pm-card">
+                <header className="pm-card-h"><span className="pm-card-ic"><i aria-hidden="true" className="fas fa-timeline" /></span>
+                  <div className="pm-card-t"><h3>Classes</h3></div></header>
+                <ol className="gp2-tl">
+                  {rec.class_history.map((h, i) => (
+                    <li key={i}><div><b>{h.klass} {h.arm}</b></div><small>{h.session} · {h.term}</small></li>))}
+                </ol>
+              </section>
+            )}
+
+            {rec.finance && rec.finance.recent && rec.finance.recent.length > 0 && (
+              <section className="pm-card">
+                <header className="pm-card-h"><span className="pm-card-ic"><i aria-hidden="true" className="fas fa-receipt" /></span>
+                  <div className="pm-card-t"><h3>Fee payments</h3><small>{NGN(rec.finance.total_paid)} paid in total</small></div></header>
+                <ul className="pm-people">
+                  {rec.finance.recent.map((pmt, i) => (
+                    <li key={i} className="pm-person"><span className="pm-pn"><strong>{NGN(pmt.amount)}</strong><small>{pmt.date} · {pmt.method || '—'}</small></span>
+                      <span className="pm-dim">{pmt.receipt || ''}</span></li>))}
+                </ul>
+              </section>
+            )}
+
+            {rec.discipline && rec.discipline.length > 0 && (
+              <section className="pm-card">
+                <header className="pm-card-h"><span className="pm-card-ic warn"><i aria-hidden="true" className="fas fa-gavel" /></span>
+                  <div className="pm-card-t"><h3>Discipline</h3><small>{rec.discipline.length} record{rec.discipline.length === 1 ? '' : 's'}</small></div></header>
+                <ul className="pm-people">
+                  {rec.discipline.map((r, i) => (
+                    <li key={i} className="pm-person"><span className="pm-pn"><strong>{r.category}{r.severity ? ` · ${r.severity}` : ''}</strong>
+                      <small>{r.date}{r.description ? ` — ${r.description}` : ''}</small></span><span className="pm-dim">{r.action || ''}</span></li>))}
+                </ul>
+              </section>
+            )}
+          </>)}
+        </main>
+
+        {!phone && <aside className="gp2-rail">{railPanels}</aside>}
       </div>
-    </>
+
+      {editAlu && (
+        <PmSheet title="Alumni details" onClose={() => setEditAlu(false)}>
+          <div className="gp2-editgrid">
+            {ALUMNI_FIELDS.map(([k, lab]) => (
+              <label key={k} className="pm-field"><span><i aria-hidden="true" className={'fas ' + ALUMNI_FIELD_ICONS[k]} /> {lab}</span>
+                <input className="pm-input" value={alu[k] || ''} onChange={(e) => setAluField(k, e.target.value)}
+                       type={k === 'email' ? 'email' : k === 'phone' ? 'tel' : 'text'} /></label>))}
+          </div>
+          <label className="pm-field" style={{ marginTop: '.6rem' }}><span><i aria-hidden="true" className="fas fa-trophy" /> Achievements</span>
+            <textarea className="pm-input gp2-ta" rows={3} value={alu.achievements || ''} onChange={(e) => setAluField('achievements', e.target.value)} /></label>
+          <label className="gp2-check"><input type="checkbox" checked={!!alu.willing_to_mentor} onChange={(e) => setAluField('willing_to_mentor', e.target.checked)} /> Willing to mentor current students</label>
+          <button type="button" className="pm-btn primary big wide" disabled={busy} onClick={saveAlumni}><i aria-hidden="true" className="fas fa-check" /> Save details</button>
+        </PmSheet>
+      )}
+    </div>
   );
 }
 
