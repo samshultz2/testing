@@ -1,89 +1,80 @@
 {% extends "base.html" %}
+{% from "results/_board_shell.html" import bx_head, bx_nav with context %}
 {% block title %}{{ subject }} — {{ board.name }} Analysis{% endblock %}
 {% block breadcrumb %}<a href="{{ burl('results.index') }}">Results</a>
   <a href="{{ burl('results.waec_list', year=selected_year, view='subjects') }}">{{ board.name }}</a>
   <span>{{ subject }}</span>{% endblock %}
-
-{% block extra_css %}{% include "results/_subject_style.html" %}{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">{% endblock %}
 
 {% block content %}
-<div class="sa-wrap">
-  <div class="sa-head">
-    <h1><span class="ic"><i class="fas fa-book"></i></span> {{ subject }}
-      <span class="sub">· {{ board.name }}{% if selected_year %} {{ selected_year }}{% endif %}</span></h1>
+<div class="rs bx">
+  {% call bx_head('fa-book', subject, board.name ~ (' ' ~ selected_year if selected_year else '') ~ ' · subject analysis') %}
     {% if years %}
-    <form method="get">
-      <select name="year" onchange="this.form.submit()" aria-label="Exam year">
+    <form method="get" class="bx-year">
+      <label class="rs-hide-sm" for="bxYear">Year</label>
+      <select id="bxYear" name="year" data-autosubmit aria-label="Exam year">
         {% for y in years %}<option value="{{ y }}" {{ 'selected' if y == selected_year }}>{{ y }}</option>{% endfor %}
       </select>
     </form>
     {% endif %}
-  </div>
+  {% endcall %}
+  {{ bx_nav('subjects', selected_year) }}
+
+  {% if subjects|length > 1 %}
+  <nav class="sl-sub" aria-label="Other subjects">
+    {% for s in subjects %}<a href="{{ burl('results.waec_subject', subject=s, year=selected_year) }}" class="{{ 'on' if s == subject }}">{{ s }}</a>{% endfor %}
+  </nav>
+  {% endif %}
 
   {% if data %}
-  <div class="sa-kpis">
-    <div class="sa-kpi"><div class="l">Candidates</div><div class="v">{{ data.total }}</div></div>
-    <div class="sa-kpi good"><div class="l">A1</div><div class="v">{{ data.a1_count }} <small>{{ (data.counts.A1 / data.total * 100)|round(1) }}%</small></div></div>
-    <div class="sa-kpi good"><div class="l">Distinctions</div><div class="v">{{ data.distinction_count }} <small>{{ data.distinction_rate }}%</small></div></div>
-    <div class="sa-kpi"><div class="l">Credits</div><div class="v">{{ data.credit_count }} <small>{{ data.credit_rate }}%</small></div></div>
-    <div class="sa-kpi {{ 'good' if data.pass_rate >= 50 else 'warn' }}"><div class="l">Pass rate</div><div class="v">{{ data.pass_rate }}<small>%</small></div></div>
-    <div class="sa-kpi bad"><div class="l">Fails (E8–F9)</div><div class="v">{{ data.fail_count }} <small>{{ data.fail_rate }}%</small></div></div>
-    <div class="sa-kpi"><div class="l">Avg. grade points</div><div class="v">{{ data.average_points }}<small>/{{ data.max_points }}</small></div></div>
+  <div class="rs-tiles bx-tiles">
+    <div class="rs-tile"><span class="l">Candidates</span><span class="v">{{ data.total }}</span><span class="s">sat {{ subject }}</span></div>
+    <div class="rs-tile {{ 'good' if data.credit_rate >= 70 else ('mid' if data.credit_rate >= 50 else 'bad') }}"><span class="l">Credit rate (A1–C6)</span><span class="v">{{ data.credit_rate }}<small>%</small></span><span class="s">{{ data.credit_count }} of {{ data.total }}</span></div>
+    <div class="rs-tile good"><span class="l">Distinctions</span><span class="v">{{ data.distinction_count }}</span><span class="s">{{ data.distinction_rate }}% · {{ data.a1_count }} A1</span></div>
+    <div class="rs-tile {{ 'bad' if data.fail_count else '' }}"><span class="l">Fails (E8–F9)</span><span class="v">{{ data.fail_count }}</span><span class="s">{{ data.fail_rate }}% of candidates</span></div>
+    <div class="rs-tile"><span class="l">Avg grade points</span><span class="v">{{ data.average_points }}<small>/{{ data.max_points }}</small></span><span class="s">A1 = 9 … F9 = 1</span></div>
   </div>
 
-  <div class="sa-grid">
-    <div class="sa-card">
-      <h3><i class="fas fa-chart-column"></i> Grade distribution</h3>
-      <div class="sa-chart"><canvas id="saGradeChart"></canvas></div>
-    </div>
-    <div class="sa-card">
-      <h3><i class="fas fa-list-ol"></i> Breakdown</h3>
-      <div class="sa-dist">
-        {% set mx = data.total or 1 %}
+  <div class="bx-two">
+    <section class="rs-card">
+      <div class="rs-card-h"><h3><i class="fas fa-chart-column" aria-hidden="true"></i> Grade distribution</h3><small>{{ data.total }} candidates</small></div>
+      {% set mx = data.distribution|map(attribute='count')|max %}
+      <div class="bx-dist">
         {% for d in data.distribution %}
-        <div class="sa-drow">
-          <span class="g gc gc-{{ d.grade|lower }}" style="color:var(--gc);background:color-mix(in srgb,var(--gc) 15%,transparent)">{{ d.grade }}</span>
-          <span class="bar"><span class="gc gc-{{ d.grade|lower }}" style="width:{{ (d.count / mx * 100)|round(1) }}%;background:var(--gc)"></span></span>
-          <span class="n"><b>{{ d.count }}</b> · {{ d.pct }}%</span>
+        <div class="bx-dist-c" title="{{ d.grade }}: {{ d.count }} ({{ d.pct }}%)">
+          <b>{{ d.count }}</b><span class="bar"><i class="{{ d.grade|lower }}" style="height:{{ ((d.count / mx * 100) if mx else 0)|round(1) }}%"></i></span><small>{{ d.grade }}</small>
         </div>
         {% endfor %}
       </div>
-    </div>
+    </section>
+    <section class="rs-card">
+      <div class="rs-card-h"><h3><i class="fas fa-bullseye" aria-hidden="true"></i> Where to focus</h3></div>
+      {% set near = (data.by_grade.D7|length) + (data.by_grade.E8|length) %}
+      {% set top = (data.by_grade.C4|length) + (data.by_grade.C5|length) + (data.by_grade.C6|length) %}
+      <ul class="bx-focus">
+        <li class="{{ 'bad' if near else 'good' }}"><b>{{ near }}</b><span>{{ 'student is' if near == 1 else 'students are' }} one or two grades short of a credit (D7–E8).{% if near %} Targeted revision here lifts the credit rate fastest.{% endif %}</span></li>
+        <li class="mid"><b>{{ top }}</b><span>{{ 'credit sits' if top == 1 else 'credits sit' }} at C4–C6 — a push could turn some into distinctions.</span></li>
+        <li class="{{ 'bad' if data.by_grade.F9 else 'good' }}"><b>{{ data.by_grade.F9|length }}</b><span>F9 {{ 'fail' if data.by_grade.F9|length == 1 else 'fails' }}{% if data.by_grade.F9 %} — check attendance and entry suitability{% endif %}.</span></li>
+      </ul>
+    </section>
   </div>
 
-  <div class="sa-card">
-    <h3><i class="fas fa-users"></i> Candidates by grade</h3>
-    <div class="sa-tablewrap">
-      <table class="sa-table">
-        <thead><tr><th>Grade</th><th>Count</th><th>Students</th></tr></thead>
-        <tbody>
-          {% for g in grades %}
-          {% if data.by_grade[g] %}
-          <tr>
-            <td><span class="badge-g gc gc-{{ g|lower }}">{{ g }}</span></td>
-            <td>{{ data.by_grade[g]|length }}</td>
-            <td class="names">
-              {% for s in data.by_grade[g] %}<a href="{{ burl('results.waec_list', year=selected_year, search=s.admission_no) }}">{{ s.name }}</a>{% if not loop.last %}, {% endif %}{% endfor %}
-            </td>
-          </tr>
-          {% endif %}
-          {% endfor %}
-        </tbody>
-      </table>
+  <section class="rs-card flush">
+    <div class="rs-card-h pad"><h3><i class="fas fa-users" aria-hidden="true"></i> Candidates by grade</h3><small>tap a name to open the student</small></div>
+    <div class="bx-bygrade">
+      {% for g in grades %}{% if data.by_grade[g] %}
+      <div class="bx-bg-row">
+        <span class="bx-g {{ g|lower }} big"><b>{{ g }}</b></span>
+        <span class="bx-bg-n">{{ data.by_grade[g]|length }}</span>
+        <div class="bx-names">
+          {% for s in data.by_grade[g] %}<a href="{{ burl('results.view_waec_student', student_id=s.student_id) }}" title="{{ s.admission_no }}">{{ s.name }}</a>{% endfor %}
+        </div>
+      </div>
+      {% endif %}{% endfor %}
     </div>
-  </div>
-
-  <script id="saData" type="application/json">{{ data.distribution|tojson }}</script>
+  </section>
   {% else %}
-  <div class="sa-card"><div class="sa-empty"><i class="fas fa-inbox"></i>No {{ board.name }} results recorded for {{ subject }} in {{ selected_year or 'this year' }}.</div></div>
+  <div class="rs-blank"><span><i class="fas fa-inbox" aria-hidden="true"></i></span><h3>Nothing recorded</h3><p>No {{ board.name }} results recorded for {{ subject }} in {{ selected_year or 'this year' }}.</p></div>
   {% endif %}
-
-  <a class="sa-back" href="{{ burl('results.waec_list', year=selected_year, view='subjects') }}"><i class="fas fa-arrow-left"></i> Back to {{ board.name }} subjects</a>
 </div>
-{% endblock %}
-
-{% block extra_js %}
-<script nonce="{{ csp_nonce }}">
-{% include "results/_grade_chart.js" %}
-</script>
 {% endblock %}

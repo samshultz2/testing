@@ -1,0 +1,47 @@
+{# Shared header + tabs for the WAEC / NECO result pages (board-aware via burl).
+   Used by the dashboard, subject, analytics, student and entry pages so the
+   whole module feels like one app. #}
+{% macro bx_head(icon, title, sub='') %}
+<header class="rs-head">
+  <span class="rs-head-ic"><i class="fas {{ icon }}" aria-hidden="true"></i></span>
+  <div class="rs-head-t"><h1>{{ title }}</h1>{% if sub %}<p>{{ sub }}</p>{% endif %}</div>
+  {% if caller is defined %}<div class="rs-head-a">{{ caller() }}</div>{% endif %}
+</header>
+{% endmacro %}
+
+{# A no-JS dropdown (details/summary) for secondary actions. items: list of
+   (href, icon, label) or (None, None, heading). #}
+{% macro bx_menu(label, items, icon='fa-ellipsis', primary=False) %}
+<details class="bx-menu">
+  <summary class="rs-btn {{ 'primary' if primary else 'ghost' }}"><i class="fas {{ icon }}" aria-hidden="true"></i><span class="rs-hide-sm">{{ label }}</span></summary>
+  <div class="bx-menu-pop" role="menu">
+    {% for href, ic, text in items %}{% if href %}<a role="menuitem" href="{{ href }}"><i class="fas {{ ic }}" aria-hidden="true"></i><span>{{ text }}</span></a>{% elif text %}<div class="rs-menu-hd">{{ text }}</div>{% endif %}{% endfor %}
+  </div>
+</details>
+{% endmacro %}
+
+{% macro bx_nav(active, year=None) %}
+{% set y = year or request.args.get('year') %}
+{% set can_add = can_write_sub('external_exams', board.key ~ '_create') %}
+<nav class="sl-nav" aria-label="{{ board.name }} sections">
+  <a href="{{ burl('results.waec_list', year=y, view='students') }}" class="{{ 'on' if active == 'students' }}"><i class="fas fa-users" aria-hidden="true"></i><span>Students</span></a>
+  <a href="{{ burl('results.waec_list', year=y, view='subjects') }}" class="{{ 'on' if active == 'subjects' }}"><i class="fas fa-book" aria-hidden="true"></i><span>Subjects</span></a>
+  <a href="{{ burl('results.waec_list', year=y, view='top') }}" class="{{ 'on' if active == 'top' }}"><i class="fas fa-trophy" aria-hidden="true"></i><span>Top performers</span></a>
+  <a href="{{ burl('results.waec_analytics') }}" class="{{ 'on' if active == 'analytics' }}"><i class="fas fa-chart-pie" aria-hidden="true"></i><span>Analytics</span></a>
+  <a href="{{ burl('results.waec_broadsheet', year=y) }}" class="{{ 'on' if active == 'broadsheet' }}"><i class="fas fa-table-cells" aria-hidden="true"></i><span>Broadsheet</span></a>
+  {% if can_add %}<a href="{{ burl('results.add_waec') }}" class="{{ 'on' if active in ('add', 'scan', 'paste', 'quick') }}"><i class="fas fa-plus" aria-hidden="true"></i><span>Add results</span></a>{% endif %}
+</nav>
+{% if active in ('add', 'scan', 'paste', 'quick') and can_add %}
+<nav class="sl-sub" aria-label="Ways to add results">
+  <a href="{{ burl('results.add_waec') }}" class="{{ 'on' if active == 'add' }}"><i class="fas fa-keyboard" aria-hidden="true"></i> One student</a>
+  <a href="{{ burl('results.waec_quick_entry', year=y) }}" class="{{ 'on' if active == 'quick' }}"><i class="fas fa-bolt" aria-hidden="true"></i> Quick entry (many)</a>
+  <a href="{{ burl('results.scan_waec') }}" class="{{ 'on' if active == 'scan' }}"><i class="fas fa-camera" aria-hidden="true"></i> Scan a photo</a>
+  <a href="{{ burl('results.paste_waec') }}" class="{{ 'on' if active == 'paste' }}"><i class="fas fa-clipboard" aria-hidden="true"></i> Paste text</a>
+</nav>
+{% endif %}
+{% endmacro %}
+
+{# One grade chip: subject code + grade, coloured by band. r = {subject, grade, code?} #}
+{% macro bx_grade(r) -%}
+<span class="bx-g {{ r.grade|lower }}" title="{{ r.subject }}: {{ r.grade }}">{{ r.code or (r.subject[:3]|upper) }} <b>{{ r.grade }}</b></span>
+{%- endmacro %}

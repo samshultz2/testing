@@ -1,8 +1,11 @@
 {% extends "base.html" %}
+{% from "results/_board_shell.html" import bx_head, bx_nav with context %}
 {% block title %}WAEC Analysis - {{ student.full_name }} - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('results.waec_list') }}">WAEC</a> / <span>{{ student.first_name }}</span>{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+
 <style>
 .student-header{display:flex;align-items:center;gap:1rem;margin-bottom:1.5rem;padding:1rem;background:var(--bg-card);border-radius:var(--radius-lg);border:1px solid var(--border-color)}
 .student-avatar{width:60px;height:60px;border-radius:50%;background:linear-gradient(135deg,#11998e,#38ef7d);display:flex;align-items:center;justify-content:center;color:white;font-size:1.5rem;font-weight:700}
@@ -28,6 +31,7 @@
 {% endblock %}
 
 {% block content %}
+<div class="rs bx bx-legacy">
 <div class="student-header">
     <div class="student-avatar">{{ student.first_name[0] }}{{ student.surname[0] }}</div>
     <div>
@@ -121,4 +125,5 @@
     </div>
 </div>
 {% endif %}
+</div>
 {% endblock %}

@@ -1,8 +1,11 @@
 {% extends "base.html" %}
+{% from "results/_board_shell.html" import bx_head, bx_nav with context %}
 {% block title %}Scan {{ board.name }} Result - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ burl('results.waec_list') }}">{{ board.name }}</a> / <span>Scan Image</span>{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+
 <style>
 .scan-card{max-width:640px}
 .dropzone{border:2px dashed var(--border-color);border-radius:var(--radius-lg);padding:2rem 1rem;text-align:center;cursor:pointer;transition:border-color var(--transition),background var(--transition)}
@@ -16,17 +19,10 @@
 {% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <div>
-        <h1>Scan {{ board.name }} Result</h1>
-        <p class="text-muted text-sm">Upload a photo/scan of a result slip — we read the name, subjects and grades for you to review.</p>
-    </div>
-    <div class="page-header-actions">
-        {% if board.is_waec %}<a href="{{ burl('results.scan_batch', exam='waec') }}" class="btn btn-info btn-sm"><i class="fas fa-layer-group"></i> Batch</a>{% endif %}
-        <a href="{{ burl('results.paste_waec') }}" class="btn btn-secondary btn-sm"><i class="fas fa-clipboard"></i> Paste text / AI</a>
-        <a href="{{ burl('results.add_waec') }}" class="btn btn-secondary btn-sm"><i class="fas fa-keyboard"></i> Enter manually</a>
-    </div>
-</div>
+<div class="rs bx bx-legacy">
+{% call bx_head('fa-camera', 'Scan ' ~ board.name ~ ' Result', 'Upload a photo or scan of a result slip — we read the name, subjects and grades for you to review') %}{% if board.is_waec %}<a href="{{ burl('results.scan_batch', exam='waec') }}" class="rs-btn ghost"><i class="fas fa-layer-group" aria-hidden="true"></i><span class="rs-hide-sm">Batch scan</span></a>{% endif %}{% endcall %}
+{{ bx_nav('scan') }}
+
 
 <div class="steps">
     <span>1 · Upload image</span>
@@ -98,4 +94,5 @@
     });
 })();
 </script>
+</div>
 {% endblock %}

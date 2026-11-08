@@ -2,6 +2,7 @@
 from routes.results import *  # noqa: F401,F403
 from utils.search import like_term
 from utils.broadsheet_export import _abbr_one
+from utils.exam_rules import five_credit_status
 from utils import exam_board as _board
 from utils.exam_board import url_for  # noqa: F811 — follows the board (WAEC / NECO)
 
@@ -216,6 +217,8 @@ def waec_list():
                 'credit_count': credit_count,
                 'total_points': total_points,
                 'avg_points': round(total_points / len(results), 2) if results else 0,
+                # 5 credits incl. English + Maths, and "one grade short" of it.
+                'bench': five_credit_status({r.subject: r.grade for r in results}),
                 # `code` is the short CAPITAL subject abbreviation for the export grid.
                 'results': [{'subject': r.subject, 'grade': r.grade, 'code': _abbr_one(r.subject)}
                             for r in results]
@@ -259,7 +262,19 @@ def waec_list():
         _branches = Branch.query.all()
         export_branch = _branches[0].name if len(_branches) == 1 else 'All Branches'
 
+    bench = {
+        'meets': sum(1 for s in students_data if s['bench']['meets']),
+        'near': sum(1 for s in students_data if s['bench']['near']),
+        'total': len(students_data),
+    }
+    # Weakest subjects first (lowest credit rate, at least 3 entries) — where
+    # extra lessons would move the most students.
+    weak_subjects = sorted([s for s in subjects_by_grade if s['total'] >= 3],
+                           key=lambda s: (s['pass_rate'], -s['total']))[:5]
+
     return render_template('results/waec_dashboard.html',
+        bench=bench,
+        weak_subjects=weak_subjects,
         students=students_data,
         years=years,
         selected_year=exam_year,
@@ -309,9 +324,11 @@ def waec_subject(subject):
             subject, exam_year,
             branch_id=(None if scope_ids is not None else viewing_branch_id()),
             student_ids=scope_ids)
+    subjects = [r[0] for r in db.session.query(WAECResult.subject).filter(
+        WAECResult.exam_year == exam_year).distinct().order_by(WAECResult.subject).all()] if exam_year else []
     return render_template('results/waec_subject.html', subject=subject,
                            data=data, years=years, selected_year=exam_year,
-                           grades=WAEC_GRADES)
+                           grades=WAEC_GRADES, subjects=subjects)
 
 
 @results_bp.route('/waec/add', methods=['GET', 'POST'])
@@ -689,9 +706,12 @@ def view_waec_student(student_id):
     risk_assessment = AcademicAnalytics.calculate_student_risk_score(student_id)
     jamb_prediction = AcademicAnalytics.predict_jamb_score(student_id)
     recommendations = AcademicAnalytics.get_subject_recommendations(student_id)
-    
+    bench = {y: five_credit_status({r['subject']: r['grade'] for r in v['results']})
+             for y, v in (waec_summary or {}).items()}
+
     return render_template('results/view_waec_student.html',
         student=student,
+        bench=bench,
         waec_summary=waec_summary,
         risk_assessment=risk_assessment,
         jamb_prediction=jamb_prediction,

@@ -1,8 +1,11 @@
 {% extends "base.html" %}
+{% from "results/_board_shell.html" import bx_head, bx_nav with context %}
 {% block title %}{{ board.name }} Broadsheet — {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ burl('results.index') }}">Results</a> / <a href="{{ burl('results.analytics_hub') }}">Exam Analytics</a> / <span>{{ board.name }} Broadsheet</span>{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+
 <style>
 .bs-wrap { overflow-x: auto; }
 .bs-table { border-collapse: collapse; width: 100%; font-size: .8rem; }
@@ -37,6 +40,7 @@
 {% endblock %}
 
 {% block content %}
+<div class="rs bx bx-legacy">
 <div class="page-header">
     <div>
         <h1>{{ board.name }} Broadsheet{% if selected_year %} — {{ selected_year }}{% endif %}</h1>
@@ -77,6 +81,7 @@
     </script>
     {% endif %}
 </div>
+<div class="no-print">{{ bx_nav('broadsheet', selected_year) }}</div>
 
 {% if years %}
 <form method="get" class="filter-bar mb-3">
@@ -291,4 +296,5 @@
 })();
 </script>
 {% endif %}
+</div>
 {% endblock %}

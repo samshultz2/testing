@@ -1,9 +1,11 @@
 {% extends "base.html" %}
+{% from "results/_board_shell.html" import bx_head, bx_nav with context %}
 {% from "components/searchable_select.html" import searchable_select with context %}
 {% block title %}Add {{ board.name }} - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ burl('results.waec_list') }}">{{ board.name }}</a> / <span>Add Results</span>{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
 <style>
 .waec-form{max-width:760px}
 .subject-grade-row{display:grid;grid-template-columns:1fr 110px;gap:.6rem;margin-bottom:.6rem}
@@ -13,17 +15,9 @@
 {% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <div>
-        <h1>Add {{ board.name }} Results</h1>
-        <p class="text-muted text-sm">SSS3 students &middot; current exam year</p>
-    </div>
-    <div class="page-header-actions">
-        <a href="{{ burl('results.scan_waec') }}" class="btn btn-info btn-sm"><i class="fas fa-camera"></i> Scan from Image</a>
-        <a href="{{ burl('results.waec_list') }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>
-    </div>
-</div>
-
+<div class="rs bx bx-legacy">
+{% call bx_head('fa-keyboard', 'Add ' ~ board.name ~ ' Results', 'One student at a time · SSS3 students · pick the session, then the grades') %}{% endcall %}
+{{ bx_nav('add') }}
 <div class="card waec-form" style="overflow:visible">
     <div class="card-body">
         {% if students %}
@@ -67,8 +61,7 @@
                 </div>
             </div>
 
-            <hr class="my-3">
-            <h3 class="mb-1">Subject Grades</h3>
+            <h3 class="bx-h3">Subject grades</h3>
             <div class="entry-hint">
                 <i class="fas fa-circle-info"></i>
                 <span>Common subjects are pre-selected. Pick a student who has saved {{ board.name }} subjects and the list fills from their profile &mdash; edit any row freely.</span>
@@ -91,9 +84,9 @@
             </div>
             {% endfor %}
 
-            <div class="page-header-actions mt-3">
-                <button type="submit" class="btn btn-primary btn-lg"><i class="fas fa-save"></i> Save</button>
-                <a href="{{ burl('results.waec_list') }}" class="btn btn-secondary btn-lg">Cancel</a>
+            <div class="rs-bar bx-static">
+                <a href="{{ burl('results.waec_list') }}" class="rs-btn ghost">Cancel</a>
+                <button type="submit" class="rs-btn primary"><i class="fas fa-floppy-disk" aria-hidden="true"></i> Save results</button>
             </div>
         </form>
         {% else %}
@@ -104,6 +97,7 @@
         </div>
         {% endif %}
     </div>
+</div>
 </div>
 
 <script nonce="{{ csp_nonce }}">
