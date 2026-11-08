@@ -1,92 +1,106 @@
 {% extends "base.html" %}
+{% from "results/_board_shell.html" import bx_head with context %}
+{% from "mock_waec/_shell.html" import mw_nav with context %}
 {% block title %}Mock WAEC - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<span>Mock WAEC Examinations</span>{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">{% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <div>
-        <h1>Mock WAEC</h1>
-        <p class="text-muted text-sm">Internal WASSCE rehearsals &mdash; scored /100, graded A1&ndash;F9, multiple per session</p>
-    </div>
-    <div class="page-header-actions">
-        <form method="GET" class="d-flex gap-2 align-center">
-            <label class="form-label mb-0">Session</label>
-            <select name="session_id" class="form-control" style="max-width:170px;" data-autosubmit>
-                {% for s in sessions %}<option value="{{ s.id }}" {% if s.id == selected_session_id %}selected{% endif %}>{{ s.name }}</option>{% endfor %}
-            </select>
-        </form>
-        {% if can_write_sub('external_exams', 'mock_waec_results_view') %}
-        <a href="{{ url_for('mock_waec.trends', session_id=selected_session_id) }}" class="btn btn-info btn-sm"><i class="fas fa-chart-line"></i> Progress trends</a>
-        {% endif %}
-        {% if can_write_sub('external_exams', 'mock_waec_exam_create') %}
-        <a href="{{ url_for('mock_waec.create_exam') }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> New Mock WAEC</a>
-        {% endif %}
-    </div>
-</div>
-
-{% if exams %}
-<div class="card mb-3">
-    <div class="table-responsive"><table class="data-table">
-        <thead><tr><th>Exam</th><th>Date</th><th>Students</th><th>Status</th><th></th></tr></thead>
-        <tbody>
-            {% for e in exams %}
-            <tr>
-                <td><strong>{{ e.display_name }}</strong><div class="text-muted text-sm">{{ e.name }}</div></td>
-                <td>{{ e.exam_date.strftime('%d %b %Y') if e.exam_date else '—' }}</td>
-                <td>{% if derived_exam %}{{ arm_counts.get(e.id, 0) }}{% else %}{{ e.student_count }}{% endif %}</td>
-                <td>{% if e.is_completed %}<span class="badge badge-success">Completed</span>{% else %}<span class="badge badge-warning">In progress</span>{% endif %}</td>
-                <td class="d-flex gap-1">
-                    {% if derived_exam %}
-                    <a href="{{ url_for('mock_waec.add_result', exam_id=e.id) }}" class="btn btn-sm btn-primary" title="Enter results for my class"><i class="fas fa-pen-to-square"></i> Enter results</a>
-                    {% else %}
-                    <a href="{{ url_for('mock_waec.view_exam', exam_id=e.id) }}" class="btn btn-sm btn-info" title="View"><i class="fas fa-eye"></i></a>
-                    {% if can_write_sub('external_exams', 'mock_waec_results_view') %}
-                    <a href="{{ url_for('mock_waec.broadsheet', exam_id=e.id) }}" class="btn btn-sm btn-secondary" title="Broadsheet"><i class="fas fa-table-list"></i></a>
-                    <a href="{{ url_for('mock_waec.analytics', exam_id=e.id) }}" class="btn btn-sm btn-secondary" title="Analytics"><i class="fas fa-chart-column"></i></a>
-                    {% endif %}
-                    {% if can_write_sub('external_exams', 'mock_waec_results_create') %}
-                    <a href="{{ url_for('mock_waec.grid_entry', exam_id=e.id) }}" class="btn btn-sm btn-secondary" title="Grid entry"><i class="fas fa-table-cells"></i></a>
-                    <a href="{{ url_for('mock_waec.paste_entry', exam_id=e.id) }}" class="btn btn-sm btn-secondary" title="Paste / CSV import"><i class="fas fa-paste"></i></a>
-                    {% endif %}
-                    {% if can_write_sub('external_exams', 'mock_waec_exam_edit') %}
-                    <a href="{{ url_for('mock_waec.edit_exam', exam_id=e.id) }}" class="btn btn-sm btn-warning" title="Edit exam"><i class="fas fa-pen"></i></a>
-                    {% endif %}
-                    {% endif %}
-                    {% if can_write_sub('external_exams', 'mock_waec_exam_delete') %}
-                    <form method="post" action="{{ url_for('mock_waec.delete_exam', exam_id=e.id) }}" style="display:inline;"
-                          data-confirm="Delete {{ e.display_name }} and ALL its results? This cannot be undone.">
-                        <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-                        <button type="submit" class="btn btn-sm btn-danger" title="Delete exam"><i class="fas fa-trash"></i></button>
-                    </form>
-                    {% endif %}
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table></div>
-</div>
-
-{% if comparison %}
-<div class="card">
-    <div class="card-header"><h3><i class="fas fa-chart-line"></i> Cohort progression this session</h3></div>
-    <div class="table-responsive"><table class="data-table">
-        <thead><tr><th>Mock</th><th>Students</th><th>Avg credits</th><th>% with 5+ credits</th></tr></thead>
-        <tbody>
-            {% for c in comparison %}
-            <tr><td>{{ c.exam.display_name }}</td><td>{{ c.student_count }}</td><td><strong>{{ c.avg_credits }}</strong></td><td>{{ c.with_5_credits_pct }}%</td></tr>
-            {% endfor %}
-        </tbody>
-    </table></div>
-</div>
-{% endif %}
-
-{% else %}
-<div class="card"><div class="card-body"><div class="empty-state">
-    <i class="fas fa-clipboard-check"></i><h3>No Mock WAEC exams yet</h3>
-    <p>Create the first mock for this session to start recording results.</p>
+{% set can_view = can_write_sub('external_exams', 'mock_waec_results_view') %}
+{% set can_enter = can_write_sub('external_exams', 'mock_waec_results_create') %}
+<div class="rs bx">
+  {% call bx_head('fa-clipboard-check', 'Mock WAEC', 'Internal WASSCE rehearsals — scored /100, graded A1–F9, several per session') %}
+    <form method="GET" class="bx-year">
+      <label class="rs-hide-sm" for="mwSession">Session</label>
+      <select id="mwSession" name="session_id" data-autosubmit aria-label="Session">
+        {% for s in sessions %}<option value="{{ s.id }}" {% if s.id == selected_session_id %}selected{% endif %}>{{ s.name }}</option>{% endfor %}
+      </select>
+    </form>
     {% if can_write_sub('external_exams', 'mock_waec_exam_create') %}
-    <a href="{{ url_for('mock_waec.create_exam') }}" class="btn btn-primary"><i class="fas fa-plus"></i> New Mock WAEC</a>
+    <a href="{{ url_for('mock_waec.create_exam') }}" class="rs-btn primary"><i class="fas fa-plus" aria-hidden="true"></i><span class="rs-hide-sm">New Mock WAEC</span></a>
     {% endif %}
-</div></div></div>
-{% endif %}
+  {% endcall %}
+  {{ mw_nav('exams', selected_session_id) }}
+
+  {% if exams %}
+  {% if comparison %}
+  {% set last = comparison[-1] %}{% set first = comparison[0] %}
+  <div class="rs-tiles bx-tiles">
+    <div class="rs-tile"><span class="l">Mocks this session</span><span class="v">{{ exams|length }}</span><span class="s">{{ exams|selectattr('is_completed')|list|length }} completed</span></div>
+    <div class="rs-tile"><span class="l">Students (latest)</span><span class="v">{{ last.student_count }}</span><span class="s">{{ last.exam.display_name }}</span></div>
+    <div class="rs-tile {{ 'good' if last.with_5_credits_pct >= 60 else ('mid' if last.with_5_credits_pct >= 40 else 'bad') }}"><span class="l">5+ credits (latest)</span><span class="v">{{ last.with_5_credits_pct }}<small>%</small></span>
+      <span class="s">{% if comparison|length > 1 %}{% set d = (last.with_5_credits_pct - first.with_5_credits_pct)|round(1) %}{{ '+' if d > 0 }}{{ d }} pts since {{ first.exam.display_name }}{% else %}first mock{% endif %}</span></div>
+    <div class="rs-tile"><span class="l">Avg credits (latest)</span><span class="v">{{ last.avg_credits }}</span><span class="s">per student</span></div>
+  </div>
+  {% endif %}
+
+  <div class="{{ 'bx-two' if comparison and comparison|length > 1 else '' }}">
+    <section class="rs-card flush">
+      <div class="rs-card-h pad"><h3><i class="fas fa-list" aria-hidden="true"></i> Mock exams</h3><small>{{ exams|length }}</small></div>
+      <div class="mw-exams">
+        {% for e in exams %}
+        <div class="mw-exam">
+          <span class="mw-no">{{ e.exam_number }}</span>
+          <a class="n" href="{{ url_for('mock_waec.add_result', exam_id=e.id) if derived_exam else url_for('mock_waec.view_exam', exam_id=e.id) }}">
+            <b>{{ e.display_name }}</b>
+            <small>{{ e.name }} · {{ e.exam_date.strftime('%d %b %Y') if e.exam_date else 'no date' }} · {% if derived_exam %}{{ arm_counts.get(e.id, 0) }}{% else %}{{ e.student_count }}{% endif %} students</small>
+          </a>
+          {% if e.is_completed %}<span class="sl-pill good">Completed</span>{% else %}<span class="sl-pill mid">In progress</span>{% endif %}
+          <span class="a">
+            {% if derived_exam %}
+            <a href="{{ url_for('mock_waec.add_result', exam_id=e.id) }}" class="rs-btn primary sm"><i class="fas fa-pen-to-square" aria-hidden="true"></i> Enter results</a>
+            {% else %}
+            {% if can_enter %}<a href="{{ url_for('mock_waec.grid_entry', exam_id=e.id) }}" class="rs-icon-btn" title="Enter results" aria-label="Enter results for {{ e.display_name }}"><i class="fas fa-pen-to-square" aria-hidden="true"></i></a>{% endif %}
+            <details class="bx-menu">
+              <summary class="rs-icon-btn" aria-label="More for {{ e.display_name }}"><i class="fas fa-ellipsis" aria-hidden="true"></i></summary>
+              <div class="bx-menu-pop" role="menu">
+                <a role="menuitem" href="{{ url_for('mock_waec.view_exam', exam_id=e.id) }}"><i class="fas fa-users" aria-hidden="true"></i><span>Results</span></a>
+                {% if can_view %}
+                <a role="menuitem" href="{{ url_for('mock_waec.broadsheet', exam_id=e.id) }}"><i class="fas fa-table-list" aria-hidden="true"></i><span>Broadsheet</span></a>
+                <a role="menuitem" href="{{ url_for('mock_waec.analytics', exam_id=e.id) }}"><i class="fas fa-chart-column" aria-hidden="true"></i><span>Analytics</span></a>
+                {% endif %}
+                {% if can_enter %}
+                <a role="menuitem" href="{{ url_for('mock_waec.grid_entry', exam_id=e.id) }}"><i class="fas fa-table-cells" aria-hidden="true"></i><span>Grid entry</span></a>
+                <a role="menuitem" href="{{ url_for('mock_waec.paste_entry', exam_id=e.id) }}"><i class="fas fa-paste" aria-hidden="true"></i><span>Paste / CSV import</span></a>
+                {% endif %}
+                {% if can_write_sub('external_exams', 'mock_waec_exam_edit') %}
+                <a role="menuitem" href="{{ url_for('mock_waec.edit_exam', exam_id=e.id) }}"><i class="fas fa-pen" aria-hidden="true"></i><span>Edit exam</span></a>
+                {% endif %}
+                {% if can_write_sub('external_exams', 'mock_waec_exam_delete') %}
+                <form method="post" action="{{ url_for('mock_waec.delete_exam', exam_id=e.id) }}" data-confirm="Delete {{ e.display_name }} and ALL its results? This cannot be undone.">
+                  <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+                  <button type="submit" role="menuitem" class="bx-danger"><i class="fas fa-trash" aria-hidden="true"></i><span>Delete exam</span></button>
+                </form>
+                {% endif %}
+              </div>
+            </details>
+            {% endif %}
+          </span>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+
+    {% if comparison and comparison|length > 1 %}
+    <section class="rs-card">
+      <div class="rs-card-h"><h3><i class="fas fa-chart-line" aria-hidden="true"></i> Cohort progression this session</h3><small>% with 5+ credits</small></div>
+      <div class="bx-yoy">
+        {% for c in comparison %}
+        <div class="bx-yoy-r">
+          <span class="y">{{ c.exam.display_name }}<small>{{ c.student_count }} students</small></span>
+          <span class="m"><span class="an-hbar"><span class="t"><i class="{{ 'good' if c.with_5_credits_pct >= 60 else ('mid' if c.with_5_credits_pct >= 40 else 'bad') }}" style="width:{{ c.with_5_credits_pct }}%"></i></span></span><small>{{ c.with_5_credits_pct }}% with 5+ credits</small></span>
+          <span class="b"><b>{{ c.avg_credits }}</b><small>avg credits</small></span>
+        </div>
+        {% endfor %}
+      </div>
+    </section>
+    {% endif %}
+  </div>
+
+  {% else %}
+  <div class="rs-blank"><span><i class="fas fa-clipboard-check" aria-hidden="true"></i></span><h3>No Mock WAEC exams yet</h3>
+    <p>Create the first mock for this session to start recording results.</p>
+    {% if can_write_sub('external_exams', 'mock_waec_exam_create') %}<a href="{{ url_for('mock_waec.create_exam') }}" class="rs-btn primary"><i class="fas fa-plus" aria-hidden="true"></i> New Mock WAEC</a>{% endif %}</div>
+  {% endif %}
+</div>
 {% endblock %}

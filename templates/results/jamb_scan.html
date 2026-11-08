@@ -1,8 +1,12 @@
 {% extends "base.html" %}
+{% from "results/_board_shell.html" import bx_head with context %}
+{% from "results/_jamb_shell.html" import jx_nav with context %}
 {% block title %}Scan JAMB Result - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('results.jamb_list') }}">JAMB</a> / <span>Scan</span>{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+
 <style>
 .scan-card{max-width:640px}
 .dropzone{border:2px dashed var(--border-color);border-radius:var(--radius-lg);padding:2rem 1rem;text-align:center;cursor:pointer;transition:border-color var(--transition),background var(--transition)}
@@ -16,17 +20,10 @@
 {% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <div>
-        <h1>Scan JAMB Result</h1>
-        <p class="text-muted text-sm">Upload a photo/scan/PDF of a JAMB result — we read the name, subjects, scores and total for you to review.</p>
-    </div>
-    <div class="page-header-actions">
-        <a href="{{ url_for('results.scan_batch', exam='jamb') }}" class="btn btn-info btn-sm"><i class="fas fa-layer-group"></i> Batch</a>
-        <a href="{{ url_for('results.paste_jamb') }}" class="btn btn-secondary btn-sm"><i class="fas fa-clipboard"></i> Paste text / AI</a>
-        <a href="{{ url_for('results.add_jamb') }}" class="btn btn-secondary btn-sm"><i class="fas fa-keyboard"></i> Enter manually</a>
-    </div>
-</div>
+<div class="rs bx bx-legacy">
+{% call bx_head('fa-camera', 'Scan JAMB Result', 'Upload a photo of a result slip — we read the name, subjects and scores for you to review') %}{% endcall %}
+{{ jx_nav('scan') }}
+
 
 <div class="steps">
     <span>1 · Upload</span><span>2 · Review &amp; correct</span><span>3 · Confirm student</span><span>4 · Save</span>
@@ -94,4 +91,5 @@
     });
 })();
 </script>
+</div>
 {% endblock %}

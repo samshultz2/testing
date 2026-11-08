@@ -1,8 +1,11 @@
 {% extends "base.html" %}
+{% from "mock_waec/_shell.html" import mw_nav, mw_exam_nav with context %}
 {% block title %}Mock Validation — {{ exam.display_name }} - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('mock_waec.index') }}">Mock WAEC</a> / <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}">{{ exam.display_name }}</a> / <span>Validation</span>{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+
 <style>
 .mv-kpis { display:flex; gap:.75rem; flex-wrap:wrap; margin-bottom:1rem; }
 .mv-kpis .kpi { flex:1 1 130px; }
@@ -13,6 +16,7 @@
 {% endblock %}
 
 {% block content %}
+<div class="rs bx bx-legacy">
 <div class="page-header">
     <div>
         <h1>Mock → Actual Validation</h1>
@@ -26,6 +30,7 @@
         <a href="{{ url_for('mock_waec.analytics', exam_id=exam.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-chart-column"></i> Analytics</a>
     </div>
 </div>
+<div class="no-print">{{ mw_exam_nav(exam, 'validation') }}</div>
 
 {% if years %}
 <form method="get" class="filter-bar mb-3">
@@ -92,4 +97,5 @@
     </div>
 </div>
 {% endif %}
+</div>
 {% endblock %}

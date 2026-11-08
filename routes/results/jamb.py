@@ -24,7 +24,8 @@ def jamb_subject(subject):
     return render_template('results/score_subject.html', subject=subject, data=data,
                            years=years, selected_year=exam_year, exam_label='JAMB',
                            back_url=url_for('results.jamb_list', year=exam_year, view='subjects'),
-                           search_endpoint='results.jamb_list')
+                           search_endpoint='results.jamb_list',
+                           student_endpoint='results.view_jamb_student')
 
 
 @results_bp.route('/jamb')
@@ -37,6 +38,8 @@ def jamb_list():
     search = request.args.get('search', '').strip()
     sort_by = request.args.get('sort', 'score')
     sort_order = request.args.get('order', 'desc')
+    if sort_by == 'score_asc':          # the list's "Lowest score first" option
+        sort_by, sort_order = 'score', 'asc'
     view_mode = request.args.get('view', 'students')
     
     years = db.session.query(JAMBResult.exam_year).distinct().order_by(JAMBResult.exam_year.desc()).all()

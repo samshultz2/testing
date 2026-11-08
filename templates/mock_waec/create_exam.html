@@ -1,9 +1,14 @@
 {% extends "base.html" %}
+{% from "mock_waec/_shell.html" import mw_nav, mw_exam_nav with context %}
 {% block title %}{{ 'Edit' if exam else 'Create' }} Mock WAEC - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('mock_waec.index') }}">Mock WAEC</a> / <span>{{ 'Edit' if exam else 'Create' }}</span>{% endblock %}
 
+{% block extra_css %}<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+{% endblock %}
 {% block content %}
+<div class="rs bx bx-legacy">
 <div class="page-header"><div><h1>{{ 'Edit Mock WAEC' if exam else 'Create Mock WAEC' }}</h1></div></div>
+<div class="no-print">{{ mw_nav('create') }}</div>
 
 <div class="card" style="max-width:680px;">
     <div class="card-body">
@@ -50,5 +55,6 @@
             </div>
         </form>
     </div>
+</div>
 </div>
 {% endblock %}

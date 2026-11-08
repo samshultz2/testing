@@ -1,8 +1,12 @@
 {% extends "base.html" %}
+{% from "mock_waec/_shell.html" import mw_nav, mw_exam_nav with context %}
 {% block title %}Edit results — {{ student.full_name }} - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('mock_waec.index') }}">Mock WAEC</a> / <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}">{{ exam.display_name }}</a> / <span>{{ student.full_name }}</span>{% endblock %}
 
+{% block extra_css %}<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+{% endblock %}
 {% block content %}
+<div class="rs bx bx-legacy">
 <div class="page-header">
     <div>
         <h1>{{ student.full_name }}</h1>
@@ -13,6 +17,7 @@
         <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>
     </div>
 </div>
+<div class="no-print">{{ mw_exam_nav(exam, 'results') }}</div>
 
 {% if summary %}
 <div class="kpi-row d-flex gap-2 mb-3" style="flex-wrap:wrap;">
@@ -78,5 +83,6 @@
         <p class="text-muted">Every WAEC subject is already recorded for this student.</p>
         {% endif %}
     </div>
+</div>
 </div>
 {% endblock %}

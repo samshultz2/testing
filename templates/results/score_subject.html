@@ -1,83 +1,75 @@
 {% extends "base.html" %}
+{% from "results/_board_shell.html" import bx_head, bx_menu_js with context %}
+{% from "results/_jamb_shell.html" import jx_nav with context %}
 {% block title %}{{ subject }} — {{ exam_label }} Analysis{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('results.index') }}">Results</a>
   <a href="{{ back_url }}">{{ exam_label }}</a> <span>{{ subject }}</span>{% endblock %}
-
-{% block extra_css %}{% include "results/_subject_style.html" %}{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">{% endblock %}
 
 {% block content %}
-<div class="sa-wrap">
-  <div class="sa-head">
-    <h1><span class="ic"><i class="fas fa-book"></i></span> {{ subject }}
-      <span class="sub">· {{ exam_label }}{% if selected_year %} {{ selected_year }}{% endif %}</span></h1>
+<div class="rs bx">
+  {% call bx_head('fa-book', subject, exam_label ~ (' ' ~ selected_year if selected_year else '') ~ ' · subject analysis · scores out of 100') %}
     {% if years %}
-    <form method="get">
-      <select name="year" onchange="this.form.submit()" aria-label="Exam year">
+    <form method="get" class="bx-year">
+      <label class="rs-hide-sm" for="bxYear">Year</label>
+      <select id="bxYear" name="year" data-autosubmit aria-label="Exam year">
         {% for y in years %}<option value="{{ y }}" {{ 'selected' if y == selected_year }}>{{ y }}</option>{% endfor %}
       </select>
     </form>
     {% endif %}
-  </div>
+  {% endcall %}
+  {% if exam_label == 'JAMB' %}{{ jx_nav('subjects', selected_year) }}{% else %}{{ bx_menu_js() }}
+  <a class="bx-back" href="{{ back_url }}"><i class="fas fa-arrow-left" aria-hidden="true"></i> Back to {{ exam_label }}</a>{% endif %}
 
   {% if data %}
-  <div class="sa-kpis">
-    <div class="sa-kpi"><div class="l">Candidates</div><div class="v">{{ data.total }}</div></div>
-    <div class="sa-kpi"><div class="l">Average score</div><div class="v">{{ data.avg_score }}<small>/100</small></div></div>
-    <div class="sa-kpi good"><div class="l">Highest</div><div class="v">{{ data.max_score }}</div></div>
-    <div class="sa-kpi bad"><div class="l">Lowest</div><div class="v">{{ data.min_score }}</div></div>
-    <div class="sa-kpi good"><div class="l">Scored ≥ 70</div><div class="v">{{ data.above_70 }} <small>{{ data.above_70_pct }}%</small></div></div>
-    <div class="sa-kpi {{ 'good' if data.above_50_pct >= 50 else 'warn' }}"><div class="l">Scored ≥ 50</div><div class="v">{{ data.above_50 }} <small>{{ data.above_50_pct }}%</small></div></div>
+  <div class="rs-tiles bx-tiles">
+    <div class="rs-tile"><span class="l">Candidates</span><span class="v">{{ data.total }}</span><span class="s">sat {{ subject }}</span></div>
+    <div class="rs-tile {{ 'good' if data.avg_score >= 70 else ('mid' if data.avg_score >= 50 else 'bad') }}"><span class="l">Average score</span><span class="v">{{ data.avg_score }}<small>/100</small></span><span class="s">range {{ data.min_score }}–{{ data.max_score }}</span></div>
+    <div class="rs-tile good"><span class="l">Scored 70+</span><span class="v">{{ data.above_70 }}</span><span class="s">{{ data.above_70_pct }}% of candidates</span></div>
+    <div class="rs-tile {{ 'good' if data.above_50_pct >= 50 else 'mid' }}"><span class="l">Scored 50+</span><span class="v">{{ data.above_50 }}</span><span class="s">{{ data.above_50_pct }}% of candidates</span></div>
   </div>
 
-  <div class="sa-grid">
-    <div class="sa-card">
-      <h3><i class="fas fa-chart-bar"></i> Score distribution</h3>
-      <div class="sa-chart"><canvas id="saScoreChart"></canvas></div>
-    </div>
-    <div class="sa-card">
-      <h3><i class="fas fa-list-ol"></i> Bands</h3>
-      <div class="sa-dist">
-        {% set mx = data.total or 1 %}
-        {% for d in data.distribution %}
-        <div class="sa-drow">
-          <span class="lbl">{{ d.label }}</span>
-          <span class="bar"><span style="width:{{ (d.count / mx * 100)|round(1) }}%;background:var(--primary)"></span></span>
-          <span class="n"><b>{{ d.count }}</b> · {{ d.pct }}%</span>
+  <div class="bx-two">
+    <section class="rs-card">
+      <div class="rs-card-h"><h3><i class="fas fa-chart-bar" aria-hidden="true"></i> Score distribution</h3><small>{{ data.total }} candidates</small></div>
+      {% set mx = data.distribution|map(attribute='count')|max %}
+      <div class="bx-dist bx-dist5">
+        {% for d in data.distribution|reverse %}
+        <div class="bx-dist-c" title="{{ d.label }}: {{ d.count }} ({{ d.pct }}%)">
+          <b>{{ d.count }}</b><span class="bar"><i class="{{ 'a1' if d.lo >= 70 else ('c4' if d.lo >= 50 else ('d7' if d.lo >= 40 else 'f9')) }}" style="height:{{ ((d.count / mx * 100) if mx else 0)|round(1) }}%"></i></span><small>{{ d.lo }}–{{ d.hi }}</small>
         </div>
         {% endfor %}
       </div>
-    </div>
+    </section>
+    <section class="rs-card">
+      <div class="rs-card-h"><h3><i class="fas fa-bullseye" aria-hidden="true"></i> Where to focus</h3></div>
+      {% set fair = data.candidates|selectattr('score', 'ge', 40)|selectattr('score', 'lt', 50)|list|length %}
+      {% set weak = data.candidates|selectattr('score', 'lt', 40)|list|length %}
+      {% set good = data.candidates|selectattr('score', 'ge', 60)|selectattr('score', 'lt', 70)|list|length %}
+      <ul class="bx-focus">
+        <li class="{{ 'mid' if fair else 'good' }}"><b>{{ fair }}</b><span>scored 40–49 — a few marks from 50. The quickest gains are here.</span></li>
+        <li class="{{ 'bad' if weak else 'good' }}"><b>{{ weak }}</b><span>scored below 40 and need sustained support in {{ subject }}.</span></li>
+        <li class="good"><b>{{ good }}</b><span>scored 60–69 — close to the 70+ band.</span></li>
+      </ul>
+    </section>
   </div>
 
-  <div class="sa-card">
-    <h3><i class="fas fa-ranking-star"></i> Candidates (ranked by score)</h3>
-    <div class="sa-tablewrap">
-      <table class="sa-table">
-        <thead><tr><th>#</th><th>Student</th><th>Score</th></tr></thead>
-        <tbody>
-          {% for s in data.candidates %}
-          <tr>
-            <td>{{ loop.index }}</td>
-            <td class="names">{% if search_endpoint %}<a href="{{ url_for(search_endpoint, year=selected_year, search=s.admission_no) }}">{{ s.name }}</a>{% else %}{{ s.name }}{% endif %}</td>
-            <td><span class="sc {{ 'hi' if s.score >= 70 else 'mid' if s.score >= 50 else 'lo' }}">{{ s.score }}</span></td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+  <section class="rs-card flush">
+    <div class="rs-card-h pad"><h3><i class="fas fa-ranking-star" aria-hidden="true"></i> Candidates (ranked by score)</h3></div>
+    <div class="bx-rank">
+      {% for s in data.candidates %}
+      {% set href = url_for(student_endpoint, student_id=s.student_id) if student_endpoint else (url_for(search_endpoint, year=selected_year, search=s.admission_no) if search_endpoint else None) %}
+      <{{ 'a' if href else 'div' }} {% if href %}href="{{ href }}"{% endif %} class="bx-rank-row jx-rank">
+        <span class="bx-pos {{ ['gold','silver','bronze'][loop.index0] if loop.index <= 3 else '' }}">{{ loop.index }}</span>
+        <span class="n"><b>{{ s.name }}</b><small>{{ s.admission_no }}</small></span>
+        <span class="rs-meter {{ 'good' if s.score >= 70 else ('n' if s.score >= 50 else ('mid' if s.score >= 40 else 'bad')) }} jx-sm"><i style="width:{{ s.score }}%"></i></span>
+        <span class="jx-total {{ 'a1' if s.score >= 70 else ('c4' if s.score >= 50 else ('d7' if s.score >= 40 else 'f9')) }}">{{ s.score }}</span>
+      </{{ 'a' if href else 'div' }}>
+      {% endfor %}
     </div>
-  </div>
-
-  <script id="saData" type="application/json">{{ data.distribution|tojson }}</script>
+  </section>
   {% else %}
-  <div class="sa-card"><div class="sa-empty"><i class="fas fa-inbox"></i>No {{ exam_label }} results recorded for {{ subject }}{% if selected_year %} in {{ selected_year }}{% endif %}.</div></div>
+  <div class="rs-blank"><span><i class="fas fa-inbox" aria-hidden="true"></i></span><h3>Score distribution</h3><p>No {{ exam_label }} results recorded for {{ subject }}{% if selected_year %} in {{ selected_year }}{% endif %}.</p></div>
   {% endif %}
-
-  <a class="sa-back" href="{{ back_url }}"><i class="fas fa-arrow-left"></i> Back to {{ exam_label }} subjects</a>
 </div>
-{% endblock %}
-
-{% block extra_js %}
-<script nonce="{{ csp_nonce }}">
-{% include "results/_score_chart.js" %}
-</script>
 {% endblock %}

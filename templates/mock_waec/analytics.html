@@ -1,8 +1,11 @@
 {% extends "base.html" %}
+{% from "mock_waec/_shell.html" import mw_nav, mw_exam_nav with context %}
 {% block title %}Analytics — {{ exam.display_name }} - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('mock_waec.index') }}">Mock WAEC</a> / <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}">{{ exam.display_name }}</a> / <span>Analytics</span>{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+
 <style>
 .an-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 1rem; }
 .an-bar-row { display: flex; align-items: center; gap: .6rem; margin: 6px 0; font-size: .82rem; }
@@ -24,6 +27,7 @@
 {% endblock %}
 
 {% block content %}
+<div class="rs bx bx-legacy">
 <div class="page-header">
     <div>
         <h1>Analytics — {{ exam.display_name }}</h1>
@@ -36,6 +40,7 @@
         <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>
     </div>
 </div>
+<div class="no-print">{{ mw_exam_nav(exam, 'analytics') }}</div>
 
 {% if not a or a.empty %}
 <div class="card"><div class="card-body"><div class="empty-state">
@@ -165,4 +170,5 @@
     </table></div>
 </div>
 {% endif %}
+</div>
 {% endblock %}

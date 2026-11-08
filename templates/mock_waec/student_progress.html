@@ -1,12 +1,17 @@
 {% extends "base.html" %}
+{% from "mock_waec/_shell.html" import mw_nav, mw_exam_nav with context %}
 {% block title %}{{ student.full_name }} — Mock WAEC Progress - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('mock_waec.index') }}">Mock WAEC</a> / <span>{{ student.full_name }}</span>{% endblock %}
 
+{% block extra_css %}<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+{% endblock %}
 {% block content %}
+<div class="rs bx bx-legacy">
 <div class="page-header"><div>
     <h1>{{ student.full_name }}</h1>
     <p class="text-muted text-sm">Mock WAEC progression &middot; {{ student.student_id }}</p>
 </div></div>
+<div class="no-print">{{ mw_nav('exams') }}</div>
 
 {% if not progress %}
 <div class="card"><div class="card-body"><div class="empty-state">
@@ -52,4 +57,5 @@
     </div>
 </div>
 {% endif %}
+</div>
 {% endblock %}

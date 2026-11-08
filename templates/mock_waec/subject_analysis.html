@@ -1,12 +1,17 @@
 {% extends "base.html" %}
+{% from "mock_waec/_shell.html" import mw_nav, mw_exam_nav with context %}
 {% block title %}{{ subject }} — Mock WAEC Analysis{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('mock_waec.index') }}">Mock WAEC</a>
   <a href="{{ url_for('mock_waec.analytics', exam_id=exam.id) }}">{{ exam.display_name }}</a>
   <span>{{ subject }}</span>{% endblock %}
 
-{% block extra_css %}{% include "results/_subject_style.html" %}{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+{% include "results/_subject_style.html" %}{% endblock %}
 
 {% block content %}
+<div class="rs bx bx-legacy">
+<div class="no-print">{{ mw_exam_nav(exam, 'subject') }}</div>
 <div class="sa-wrap">
   <div class="sa-head">
     <h1><span class="ic"><i class="fas fa-book"></i></span> {{ subject }}
@@ -73,6 +78,7 @@
   {% endif %}
 
   <a class="sa-back" href="{{ url_for('mock_waec.analytics', exam_id=exam.id) }}"><i class="fas fa-arrow-left"></i> Back to exam analytics</a>
+</div>
 </div>
 {% endblock %}
 

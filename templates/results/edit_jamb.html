@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{% from "results/_board_shell.html" import bx_head with context %}
+{% from "results/_jamb_shell.html" import jx_nav with context %}
 {% block title %}Edit JAMB Result - {{ student.full_name }}{% endblock %}
 {% block breadcrumb %}
 <a href="{{ url_for('results.index') }}">Results</a>
@@ -7,6 +9,8 @@
 {% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+
 <style>
 .form-card {
     background: var(--bg-card);
@@ -124,12 +128,8 @@
 {% endblock %}
 
 {% block content %}
-<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-    <h1 style="font-size: 1.25rem; margin: 0;">Edit JAMB Result</h1>
-    <a href="{{ url_for('results.view_jamb_student', student_id=student.id) }}" class="btn btn-secondary btn-sm">
-        <i class="fas fa-arrow-left"></i> Back
-    </a>
-</div>
+<div class="rs bx bx-legacy">
+{% call bx_head('fa-pen', 'Edit JAMB Result', student.full_name ~ ' · ' ~ year) %}<a href="{{ url_for('results.view_jamb_student', student_id=student.id) }}" class="rs-btn ghost"><i class="fas fa-arrow-left" aria-hidden="true"></i><span class="rs-hide-sm">Back</span></a>{% endcall %}
 
 <form method="POST" action="{{ url_for('results.edit_jamb', student_id=student.id, year=year) }}">
     <!-- Student Info -->
@@ -282,4 +282,5 @@
     scoreInputs.forEach(function (inp) { inp.addEventListener('input', recalcTotal); });
 })();
 </script>
+</div>
 {% endblock %}

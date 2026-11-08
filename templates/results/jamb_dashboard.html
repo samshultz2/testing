@@ -1,823 +1,203 @@
 {% extends "base.html" %}
+{% from "results/_board_shell.html" import bx_head with context %}
+{% from "results/_jamb_shell.html" import jx_nav, jt, js, jlevel with context %}
 {% from "components/bulk_delete.html" import bulk_bar, bulk_check with context %}
 {% block title %}JAMB Results - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('results.index') }}">Results</a> <span>JAMB</span>{% endblock %}
 
-{% block extra_css %}
-<style>
-/* ===== MOBILE FIRST ===== */
-.page-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-    margin-bottom: 1rem;
-}
-
-.page-header h1 {
-    font-size: 1.25rem;
-    margin: 0;
-}
-
-.page-actions {
-    display: flex;
-    gap: 0.25rem;
-    flex-wrap: wrap;
-}
-
-/* Stats Grid */
-.stats-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.5rem;
-    margin-bottom: 1rem;
-}
-
-.stat-card {
-    background: var(--bg-card);
-    border-radius: 8px;
-    padding: 0.75rem;
-    border: 1px solid #e0e0e0;
-    text-align: center;
-}
-
-.stat-card.highlight {
-    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-    color: white;
-    border: none;
-}
-
-.stat-card.highlight .stat-value,
-.stat-card.highlight .stat-label { color: white; }
-
-.stat-value {
-    font-size: 1.5rem;
-    font-weight: 700;
-    line-height: 1.2;
-}
-
-.stat-label {
-    font-size: 0.7rem;
-    color: var(--text-muted);
-    margin-top: 0.25rem;
-}
-
-/* Tabs */
-.tabs {
-    display: flex;
-    gap: 0.25rem;
-    margin-bottom: 1rem;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-}
-
-.tab {
-    padding: 0.5rem 0.75rem;
-    background: var(--bg-card);
-    border: 1px solid #e0e0e0;
-    border-radius: 6px;
-    font-size: 0.8rem;
-    font-weight: 500;
-    white-space: nowrap;
-    text-decoration: none;
-    color: var(--text-primary);
-}
-
-.tab.active {
-    background: #007bff;
-    color: white;
-    border-color: #007bff;
-}
-
-/* Cards */
-.card {
-    background: var(--bg-card);
-    border-radius: 8px;
-    border: 1px solid #e0e0e0;
-    margin-bottom: 1rem;
-    overflow: hidden;
-}
-
-.card-header {
-    padding: 0.75rem;
-    border-bottom: 1px solid #eee;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: 0.5rem;
-}
-
-.card-title {
-    font-size: 0.9rem;
-    font-weight: 600;
-    margin: 0;
-}
-
-.card-body {
-    padding: 0.75rem;
-}
-
-/* Filters */
-.filters-card {
-    background: var(--bg-card);
-    border-radius: 8px;
-    padding: 0.75rem;
-    border: 1px solid #e0e0e0;
-    margin-bottom: 1rem;
-}
-
-.filters-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 0.5rem;
-}
-
-.filter-search { margin-bottom: 0.6rem; }
-.filter-search input {
-    padding: 0.55rem 0.65rem;
-    font-size: 0.85rem;
-    border: 1px solid var(--border-color, #ddd);
-    border-radius: 6px;
-    width: 100%;
-}
-
-.filter-group label {
-    font-size: 0.7rem;
-    color: var(--text-muted);
-    display: block;
-    margin-bottom: 0.2rem;
-}
-
-.filter-group select,
-.filter-group input {
-    padding: 0.4rem;
-    font-size: 0.8rem;
-    border: 1px solid #ddd;
-    border-radius: 4px;
-    width: 100%;
-}
-
-.filter-btn {
-    grid-column: span 2;
-    margin-top: 0.5rem;
-}
-
-/* Chart */
-.chart-body {
-    padding: 0.5rem;
-    height: 200px;
-    position: relative;
-}
-
-/* Score Badge */
-.score-badge {
-    display: inline-block;
-    padding: 0.2rem 0.5rem;
-    border-radius: 4px;
-    font-size: 0.75rem;
-    font-weight: 600;
-}
-
-.score-excellent { background: #d4edda; color: #155724; }
-.score-very_good { background: #cce5ff; color: #004085; }
-.score-good { background: #fff3cd; color: #856404; }
-.score-average { background: #ffeeba; color: #856404; }
-.score-below_average { background: #f8d7da; color: #721c24; }
-.score-poor { background: #721c24; color: white; }
-
-/* Sort Buttons */
-.sort-btns {
-    display: flex;
-    gap: 0.25rem;
-    flex-wrap: wrap;
-}
-
-.sort-btn {
-    padding: 0.25rem 0.5rem;
-    font-size: 0.7rem;
-    border-radius: 4px;
-    text-decoration: none;
-    background: var(--gray-50);
-    color: var(--text-primary);
-    border: 1px solid #ddd;
-}
-
-.sort-btn.active {
-    background: #007bff;
-    color: white;
-    border-color: #007bff;
-}
-
-/* Student Cards (Mobile) */
-.students-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.5rem;
-    padding: 0.5rem;
-}
-
-.student-card {
-    background: var(--bg-card);
-    border: 1px solid #e0e0e0;
-    border-radius: 8px;
-    padding: 0.75rem;
-}
-
-.student-card-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-}
-
-.student-rank {
-    width: 28px;
-    height: 28px;
-    border-radius: 50%;
-    background: #007bff;
-    color: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 0.75rem;
-    font-weight: 700;
-    flex-shrink: 0;
-}
-
-.student-rank.gold { background: linear-gradient(135deg, #f5af19, #f12711); }
-.student-rank.silver { background: linear-gradient(135deg, #bdc3c7, #606060); }
-.student-rank.bronze { background: linear-gradient(135deg, #cd7f32, #8b4513); }
-
-.student-name {
-    font-weight: 600;
-    font-size: 0.9rem;
-}
-
-.student-id {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-}
-
-.student-score {
-    font-size: 2rem;
-    font-weight: 700;
-    text-align: center;
-    padding: 0.5rem;
-    margin: 0.5rem 0;
-    border-radius: 8px;
-    background: var(--gray-50);
-}
-
-.student-subjects {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.25rem;
-    font-size: 0.8rem;
-}
-
-.student-subject {
-    display: flex;
-    justify-content: space-between;
-    padding: 0.25rem 0.5rem;
-    background: var(--gray-50);
-    border-radius: 4px;
-}
-
-.student-actions {
-    display: flex;
-    gap: 0.25rem;
-    margin-top: 0.5rem;
-    padding-top: 0.5rem;
-    border-top: 1px solid #eee;
-}
-
-/* Subject Table */
-.subject-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.75rem;
-}
-
-.subject-table th,
-.subject-table td {
-    padding: 0.4rem;
-    text-align: center;
-    border-bottom: 1px solid #eee;
-}
-
-.subject-table th {
-    background: var(--gray-50);
-    font-weight: 600;
-}
-
-.subject-table td:first-child {
-    text-align: left;
-    font-weight: 500;
-}
-
-/* Desktop Table */
-.desktop-table { display: none; }
-
-/* ===== TABLET+ ===== */
-@media (min-width: 768px) {
-    .stats-grid {
-        grid-template-columns: repeat(4, 1fr);
-        gap: 1rem;
-    }
-    
-    .stat-value { font-size: 2rem; }
-    .stat-label { font-size: 0.8rem; }
-    
-    .filters-grid { grid-template-columns: repeat(4, 1fr); }
-    .filter-btn { grid-column: span 1; margin-top: 0; }
-    
-    .chart-body { height: 250px; }
-    
-    .charts-row {
-        display: grid;
-        grid-template-columns: repeat(2, 1fr);
-        gap: 1rem;
-        margin-bottom: 1rem;
-    }
-    
-    .charts-row .card { margin-bottom: 0; }
-    
-    .students-list { display: none; }
-    
-    .desktop-table {
-        display: block;
-        overflow-x: auto;
-    }
-    
-    .desktop-table table {
-        width: 100%;
-        border-collapse: collapse;
-        font-size: 0.8rem;
-    }
-    
-    .desktop-table th,
-    .desktop-table td {
-        padding: 0.5rem;
-        text-align: left;
-        border-bottom: 1px solid #eee;
-    }
-    
-    .desktop-table th {
-        background: var(--gray-50);
-        font-weight: 600;
-    }
-    
-    .desktop-table tbody tr:hover { background: var(--gray-50); }
-    
-    .subject-table { font-size: 0.8rem; }
-    .subject-table th, .subject-table td { padding: 0.5rem; }
-}
-
-@media (min-width: 1024px) {
-    .chart-body { height: 300px; }
-}
-
-/* Print/Export Styles */
-@media print {
-    .no-print { display: none !important; }
-    .card { break-inside: avoid; }
-}
-</style>
-{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">{% endblock %}
 
 {% block content %}
-<!-- Page Header -->
-<div class="page-header no-print">
-    <h1>JAMB Results</h1>
-    <div class="page-actions">
-        {% if can_write_sub('external_exams', 'jamb_create') %}
-        <a href="{{ url_for('results.add_jamb') }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add</a>
-        <a href="{{ url_for('results.scan_jamb') }}" class="btn btn-info btn-sm" title="Scan result image"><i class="fas fa-camera"></i> Scan</a>
-        <a href="{{ url_for('results.paste_jamb') }}" class="btn btn-secondary btn-sm" title="Paste result text (from an AI) — no OCR"><i class="fas fa-clipboard"></i> Paste</a>
-        {% endif %}
-        {% if selected_year and can_write_sub('external_exams', 'jamb_export') %}
-        <a href="{{ url_for('results.export_jamb', year=selected_year) }}" class="btn btn-secondary btn-sm" title="Export Excel"><i class="fas fa-file-excel"></i></a>
-        <button data-call="rxOpenExport" class="btn btn-secondary btn-sm" title="Export image or PDF"><i class="fas fa-file-export"></i></button>
-        {% endif %}
-    </div>
-</div>
-
-<!-- View Tabs -->
-<div class="tabs no-print">
-    <a href="{{ url_for('results.jamb_list', year=selected_year, view='students', search=search) }}" class="tab {% if view_mode == 'students' %}active{% endif %}">
-        <i class="fas fa-users"></i> Students
-    </a>
-    <a href="{{ url_for('results.jamb_list', year=selected_year, view='subjects', search=search) }}" class="tab {% if view_mode == 'subjects' %}active{% endif %}">
-        <i class="fas fa-book"></i> Subjects
-    </a>
-    <a href="{{ url_for('results.jamb_list', year=selected_year, view='rankings', search=search) }}" class="tab {% if view_mode == 'rankings' %}active{% endif %}">
-        <i class="fas fa-trophy"></i> Rankings
-    </a>
-</div>
-
-<!-- Stats Cards -->
-{% if school_stats %}
-<div class="stats-grid">
-    <div class="stat-card highlight">
-        <div class="stat-value">{{ school_stats.mean_score }}</div>
-        <div class="stat-label">Average Score</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-value">{{ school_stats.total_students }}</div>
-        <div class="stat-label">Students</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-value" style="color: #28a745;">{{ school_stats.max_score }}</div>
-        <div class="stat-label">Highest</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-value" style="color: #dc3545;">{{ school_stats.min_score }}</div>
-        <div class="stat-label">Lowest</div>
-    </div>
-</div>
-
-<div class="stats-grid">
-    <div class="stat-card">
-        <div class="stat-value" style="color: #6f42c1;">{{ school_stats.above_300 }}</div>
-        <div class="stat-label">Above 300</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-value" style="color: #007bff;">{{ school_stats.above_250 }}</div>
-        <div class="stat-label">Above 250</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-value" style="color: #17a2b8;">{{ school_stats.above_200 }}</div>
-        <div class="stat-label">Above 200</div>
-    </div>
-    <div class="stat-card">
-        <div class="stat-value">{{ school_stats.median_score }}</div>
-        <div class="stat-label">Median</div>
-    </div>
-</div>
-{% endif %}
-
-{# Students view: charts first, then the search right above the list it filters. #}
-{% if view_mode not in ('subjects', 'rankings') %}
-<div class="charts-row">
-    <div class="card">
-        <div class="card-header">
-            <span class="card-title">Score Distribution</span>
-        </div>
-        <div class="chart-body"><canvas id="scoreChart"></canvas></div>
-    </div>
-    {% if subject_performance %}
-    <div class="card">
-        <div class="card-header">
-            <span class="card-title">Subject Averages</span>
-        </div>
-        <div class="chart-body"><canvas id="subjectAvgChart"></canvas></div>
-    </div>
-    {% endif %}
-</div>
-{% endif %}
-
-<!-- Filters -->
-<div class="filters-card no-print">
-    {% set live_list = 'rankingsCard' if view_mode == 'rankings' else 'jambStudentList' %}
-    <form method="GET" action="{{ url_for('results.jamb_list', search=search) }}">
-        <input type="hidden" name="view" value="{{ view_mode }}">
-        <div class="filter-group filter-search">
-            <label>Search by name or ID</label>
-            <input type="text" name="search" id="jambLiveSearch" value="{{ search or '' }}"
-                   placeholder="Type a student name or ID..." autocomplete="off"
-                   data-live-search="{{ live_list }}" data-live-count="jambSearchCount">
-            <span id="jambSearchCount" class="text-muted" style="font-size:.75rem;"></span>
-        </div>
-        <div class="filters-grid">
-            <div class="filter-group">
-                <label>Year</label>
-                <select name="year" data-autosubmit>
-                    {% for year in years %}
-                    <option value="{{ year }}" {% if year == selected_year %}selected{% endif %}>{{ year }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="filter-group">
-                <label>Min Score</label>
-                <input type="number" name="min_score" min="0" max="400" value="{{ min_score or '' }}" placeholder="0" data-lf="{{ live_list }}" data-lf-rule="min:score">
-            </div>
-            <div class="filter-group">
-                <label>Max Score</label>
-                <input type="number" name="max_score" min="0" max="400" value="{{ max_score or '' }}" placeholder="400" data-lf="{{ live_list }}" data-lf-rule="max:score">
-            </div>
-            <div class="filter-group">
-                <label>Sort</label>
-                <select name="sort" data-autosubmit>
-                    <option value="score" {% if sort_by == 'score' %}selected{% endif %}>Score</option>
-                    <option value="name" {% if sort_by == 'name' %}selected{% endif %}>Name</option>
-                </select>
-            </div>
-        </div>
+{% set can_del = can_write_sub('external_exams', 'jamb_delete') %}
+{% set can_edit = can_write_sub('external_exams', 'jamb_edit') %}
+{% set can_add = can_write_sub('external_exams', 'jamb_create') %}
+{% set can_exp = selected_year and can_write_sub('external_exams', 'jamb_export') %}
+{% set st = school_stats %}
+<div class="rs bx">
+  {% call bx_head('fa-graduation-cap', 'JAMB results', ((selected_year ~ ' · ') if selected_year else '') ~ ((st.total_students ~ ' candidates · UTME scores out of 400') if st else 'UTME scores out of 400')) %}
+    {% if years %}
+    <form method="GET" class="bx-year">
+      <input type="hidden" name="view" value="{{ view_mode }}">
+      <label class="rs-hide-sm" for="bxYear">Year</label>
+      <select id="bxYear" name="year" data-autosubmit aria-label="Exam year">
+        {% for year in years %}<option value="{{ year }}" {% if year == selected_year %}selected{% endif %}>{{ year }}</option>{% endfor %}
+      </select>
     </form>
-</div>
-
-{% if view_mode == 'subjects' %}
-<!-- SUBJECTS VIEW -->
-<div class="charts-row">
-    <div class="card">
-        <div class="card-header">
-            <span class="card-title">Score Distribution</span>
-        </div>
-        <div class="chart-body"><canvas id="scoreChart"></canvas></div>
-    </div>
-    <div class="card">
-        <div class="card-header">
-            <span class="card-title">Subject Averages</span>
-        </div>
-        <div class="chart-body"><canvas id="subjectAvgChart"></canvas></div>
-    </div>
-</div>
-
-<div class="card">
-    <div class="card-header">
-        <h3 class="card-title">Subject Performance Analysis</h3>
-        <div class="sort-btns">
-            <a href="{{ url_for('results.jamb_list', year=selected_year, view='subjects', sort='subject_avg', order='desc', search=search) }}" class="sort-btn {% if sort_by == 'subject_avg' %}active{% endif %}">Avg Score</a>
-            <a href="{{ url_for('results.jamb_list', year=selected_year, view='subjects', sort='subject_above70', order='desc', search=search) }}" class="sort-btn {% if sort_by == 'subject_above70' %}active{% endif %}">Above 70</a>
-            <a href="{{ url_for('results.jamb_list', year=selected_year, view='subjects', sort='subject_above50', order='desc', search=search) }}" class="sort-btn {% if sort_by == 'subject_above50' %}active{% endif %}">Above 50</a>
-        </div>
-    </div>
-    <div class="card-body" style="padding: 0; overflow-x: auto;">
-        <table class="subject-table">
-            <thead>
-                <tr>
-                    <th style="text-align: left;">Subject</th>
-                    <th>Students</th>
-                    <th>Avg</th>
-                    <th>Max</th>
-                    <th>Min</th>
-                    <th>≥70</th>
-                    <th>≥50</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for subj in subject_performance %}
-                <tr>
-                    <td><a href="{{ url_for('results.jamb_subject', subject=subj.subject, year=selected_year) }}"
-                           style="color:#0d6a4e;font-weight:600" title="Full analysis for {{ subj.subject }}">{{ subj.subject[:18] }} <i class="fas fa-arrow-up-right-from-square" style="font-size:.7em;opacity:.6"></i></a></td>
-                    <td>{{ subj.count }}</td>
-                    <td style="color: {% if subj.avg_score >= 70 %}#28a745{% elif subj.avg_score >= 50 %}#ffc107{% else %}#dc3545{% endif %}">
-                        <strong>{{ subj.avg_score }}</strong>
-                    </td>
-                    <td style="color: #28a745;">{{ subj.max_score }}</td>
-                    <td style="color: #dc3545;">{{ subj.min_score }}</td>
-                    <td>{{ subj.above_70 }} <small>({{ subj.above_70_pct }}%)</small></td>
-                    <td>{{ subj.above_50 }} <small>({{ subj.above_50_pct }}%)</small></td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
-
-{% elif view_mode == 'rankings' %}
-<!-- RANKINGS VIEW -->
-<div class="card" id="rankingsCard">
-    <div class="card-header">
-        <h3 class="card-title">🏆 JAMB Rankings {{ selected_year }}</h3>
-        <div class="sort-btns">
-            <a href="{{ url_for('results.jamb_list', year=selected_year, view='rankings', sort='score', order='desc', search=search) }}" class="sort-btn {% if sort_order == 'desc' %}active{% endif %}">Highest First</a>
-            <a href="{{ url_for('results.jamb_list', year=selected_year, view='rankings', sort='score', order='asc', search=search) }}" class="sort-btn {% if sort_order == 'asc' %}active{% endif %}">Lowest First</a>
-        </div>
-    </div>
-    
-    {% if students %}
-    <!-- Mobile: Card View -->
-    <div class="students-list">
-        {% for s in students %}
-        <div class="student-card" data-search="{{ (s.name ~ ' ' ~ s.student_id)|lower }}" data-score="{{ s.total_score }}">
-            <div class="student-card-header">
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <span class="student-rank {% if s.rank == 1 %}gold{% elif s.rank == 2 %}silver{% elif s.rank == 3 %}bronze{% endif %}">{{ s.rank }}</span>
-                    <div>
-                        <div class="student-name">{{ s.name }}</div>
-                        <div class="student-id">{{ s.student_id }}</div>
-                    </div>
-                </div>
-                <span class="score-badge score-{{ s.performance_level|lower }}">{{ s.performance_level|replace('_', ' ') }}</span>
-            </div>
-            <div class="student-score" style="color: {% if s.total_score >= 300 %}#28a745{% elif s.total_score >= 250 %}#17a2b8{% elif s.total_score >= 200 %}#ffc107{% else %}#dc3545{% endif %}">
-                {{ s.total_score }}
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-    
-    <!-- Desktop: Table View -->
-    <div class="desktop-table">
-        <table>
-            <thead>
-                <tr>
-                    <th>Rank</th>
-                    <th>Student</th>
-                    <th>Score</th>
-                    <th>Level</th>
-                    <th>Subject 1</th>
-                    <th>Subject 2</th>
-                    <th>Subject 3</th>
-                    <th>Subject 4</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for s in students %}
-                <tr data-search="{{ (s.name ~ ' ' ~ s.student_id)|lower }}" data-score="{{ s.total_score }}">
-                    <td>
-                        <span class="student-rank {% if s.rank == 1 %}gold{% elif s.rank == 2 %}silver{% elif s.rank == 3 %}bronze{% endif %}" style="width: 24px; height: 24px; font-size: 0.7rem;">{{ s.rank }}</span>
-                    </td>
-                    <td><strong>{{ s.name }}</strong><br><small style="color:#666;">{{ s.student_id }}</small></td>
-                    <td><strong style="font-size: 1.1rem; color: {% if s.total_score >= 300 %}#28a745{% elif s.total_score >= 250 %}#17a2b8{% elif s.total_score >= 200 %}#ffc107{% else %}#dc3545{% endif %}">{{ s.total_score }}</strong></td>
-                    <td><span class="score-badge score-{{ s.performance_level|lower }}">{{ s.performance_level|replace('_', ' ') }}</span></td>
-                    {% for subj in s.subjects %}
-                    <td><small>{{ subj.name[:8] }}</small><br><strong>{{ subj.score }}</strong></td>
-                    {% endfor %}
-                    {% for _ in range(4 - s.subjects|length) %}<td>-</td>{% endfor %}
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
     {% endif %}
-</div>
+    {% if can_exp %}
+    <details class="bx-menu">
+      <summary class="rs-btn ghost" aria-label="Export"><i class="fas fa-download" aria-hidden="true"></i><span class="rs-hide-sm">Export</span></summary>
+      <div class="bx-menu-pop" role="menu">
+        <button type="button" role="menuitem" data-call="rxOpenExport"><i class="fas fa-file-pdf" aria-hidden="true"></i><span>PDF, image or Word…</span></button>
+        <a role="menuitem" href="{{ url_for('results.export_jamb', year=selected_year) }}"><i class="fas fa-file-excel" aria-hidden="true"></i><span>Excel spreadsheet</span></a>
+      </div>
+    </details>
+    {% endif %}
+    {% if can_add %}<a href="{{ url_for('results.add_jamb') }}" class="rs-btn primary"><i class="fas fa-plus" aria-hidden="true"></i><span class="rs-hide-sm">Add results</span></a>{% endif %}
+  {% endcall %}
+  {{ jx_nav(view_mode if view_mode in ('subjects', 'rankings') else 'students', selected_year) }}
 
-{% else %}
-<!-- STUDENTS VIEW (Default) -->
-<div class="card" id="jambStudentList">
-    <div class="card-header">
-        <span class="card-title">Students ({{ students|length }})</span>
-        <div class="sort-btns">
-            <a href="{{ url_for('results.jamb_list', year=selected_year, view='students', sort='score', order='desc', search=search) }}" class="sort-btn {% if sort_by == 'score' and sort_order == 'desc' %}active{% endif %}">High→Low</a>
-            <a href="{{ url_for('results.jamb_list', year=selected_year, view='students', sort='score', order='asc', search=search) }}" class="sort-btn {% if sort_by == 'score' and sort_order == 'asc' %}active{% endif %}">Low→High</a>
-            <a href="{{ url_for('results.jamb_list', year=selected_year, view='students', sort='name', order='asc', search=search) }}" class="sort-btn {% if sort_by == 'name' %}active{% endif %}">A-Z</a>
-        </div>
+  {% if not years %}
+  <div class="rs-blank"><span><i class="fas fa-graduation-cap" aria-hidden="true"></i></span><h3>No JAMB results yet</h3>
+    <p>Add results one student at a time, from a photo of the result slip, or by pasting text.</p>
+    {% if can_add %}<a href="{{ url_for('results.add_jamb') }}" class="rs-btn primary"><i class="fas fa-plus" aria-hidden="true"></i> Add results</a>{% endif %}</div>
+  {% else %}
+
+  {% if st %}
+  {% set n = st.total_students or 1 %}
+  <div class="rs-tiles bx-tiles">
+    <div class="rs-tile"><span class="l">Average score</span><span class="v">{{ st.mean_score }}<small>/400</small></span><span class="s">median {{ st.median_score }}</span></div>
+    <div class="rs-tile {{ 'good' if st.above_200 / n >= 0.6 else ('mid' if st.above_200 / n >= 0.4 else 'bad') }}"><span class="l" title="Most universities' minimum">Scored 200+</span><span class="v">{{ (st.above_200 / n * 100)|round|int }}<small>%</small></span><span class="s">{{ st.above_200 }} of {{ st.total_students }} candidates</span></div>
+    <div class="rs-tile"><span class="l">Scored 250+</span><span class="v">{{ st.above_250 }}</span><span class="s">competitive courses</span></div>
+    <div class="rs-tile good"><span class="l">Scored 300+</span><span class="v">{{ st.above_300 }}</span><span class="s">top band</span></div>
+    <div class="rs-tile"><span class="l">Range</span><span class="v">{{ st.min_score }}–{{ st.max_score }}</span><span class="s">lowest – highest</span></div>
+  </div>
+  {% endif %}
+
+  {% if view_mode == 'subjects' %}
+  {# ── SUBJECTS ── #}
+  <section class="rs-card flush">
+    <div class="rs-card-h pad"><h3><i class="fas fa-book" aria-hidden="true"></i> Subject performance</h3>
+      <div class="rs-chips bx-sorts">
+        {% for key, lab in [('subject_avg', 'Avg score'), ('subject_above70', 'Above 70'), ('subject_above50', 'Above 50')] %}
+        <a href="{{ url_for('results.jamb_list', year=selected_year, view='subjects', sort=key, order='desc', search=search) }}" class="rs-chip {{ 'on' if sort_by == key or (key == 'subject_avg' and sort_by not in ('subject_above70','subject_above50')) }}">{{ lab }}</a>
+        {% endfor %}
+      </div></div>
+    <div class="sl-tbl-wrap">
+      <table class="subject-table">
+        <thead><tr><th>Subject</th><th class="r">Candidates</th><th>Average (/100)</th><th class="r">Highest</th><th class="r">Lowest</th><th class="r">≥70</th><th class="r">≥50</th></tr></thead>
+        <tbody>
+          {% for subj in subject_performance %}
+          <tr>
+            <td class="main"><a class="bx-subj" href="{{ url_for('results.jamb_subject', subject=subj.subject, year=selected_year) }}" title="Full analysis for {{ subj.subject }}">{{ subj.subject }}</a></td>
+            <td class="r">{{ subj.count }}</td>
+            <td><span class="bx-rate"><span class="rs-meter {{ 'good' if subj.avg_score >= 70 else ('mid' if subj.avg_score >= 50 else 'bad') }}"><i style="width:{{ subj.avg_score }}%"></i></span><b>{{ subj.avg_score }}</b></span></td>
+            <td class="r bx-good">{{ subj.max_score }}</td>
+            <td class="r bx-bad">{{ subj.min_score }}</td>
+            <td class="r">{{ subj.above_70 }} <small class="rs-muted">{{ subj.above_70_pct }}%</small></td>
+            <td class="r">{{ subj.above_50 }} <small class="rs-muted">{{ subj.above_50_pct }}%</small></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
     </div>
-    
-    {% if students %}
-    {% if can_write_sub('external_exams', 'jamb_delete') %}{{ bulk_bar('bulkDel', url_for('results.delete_jamb_bulk'), {'year': selected_year}, 'student', 'JAMB result') }}{% endif %}
-    <div class="cap-list">
-    <!-- Mobile: Card View -->
-    <div class="students-list">
-        {% for s in students %}
-        <div class="student-card" data-search="{{ (s.name ~ ' ' ~ s.student_id)|lower }}" data-score="{{ s.total_score }}">
-            <div class="student-card-header">
-                {% if can_write_sub('external_exams', 'jamb_delete') %}{{ bulk_check('bulkDel', s.id, s.name) }}{% endif %}
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
-                    <span class="student-rank {% if s.rank == 1 %}gold{% elif s.rank == 2 %}silver{% elif s.rank == 3 %}bronze{% endif %}">{{ s.rank }}</span>
-                    <div>
-                        <div class="student-name">{{ s.name }}</div>
-                        <div class="student-id">{{ s.student_id }}</div>
-                    </div>
-                </div>
-                <span class="score-badge score-{{ s.performance_level|lower }}">{{ s.performance_level|replace('_', ' ') }}</span>
-            </div>
-            <div class="student-score" style="color: {% if s.total_score >= 300 %}#28a745{% elif s.total_score >= 250 %}#17a2b8{% elif s.total_score >= 200 %}#ffc107{% else %}#dc3545{% endif %}">
-                {{ s.total_score }}
-            </div>
-            <div class="student-subjects">
-                {% for subj in s.subjects %}
-                <div class="student-subject">
-                    <span>{{ subj.name[:10] }}</span>
-                    <strong>{{ subj.score }}</strong>
-                </div>
-                {% endfor %}
-            </div>
-            <div class="student-actions">
-                <a href="{{ url_for('results.view_jamb_student', student_id=s.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-eye"></i></a>
-                {% if can_write_sub('external_exams', 'jamb_edit') %}
-                <a href="{{ url_for('results.edit_jamb', student_id=s.id, year=selected_year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-edit"></i></a>
-                {% endif %}
-                {% if can_write_sub('external_exams', 'jamb_delete') %}
-                <form method="POST" action="{{ url_for('results.delete_jamb', student_id=s.id, year=selected_year) }}" style="display: inline;" data-confirm="Delete JAMB result for {{ s.name }}?">
-                    <button type="submit" class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button>
-                </form>
-                {% endif %}
-            </div>
+  </section>
+
+  {% else %}
+  {% if view_mode != 'rankings' and st %}
+  <div class="bx-two">
+    <section class="rs-card">
+      <div class="rs-card-h"><h3><i class="fas fa-chart-column" aria-hidden="true"></i> Score distribution</h3><small>{{ st.total_students }} candidates</small></div>
+      {% set dist = st.distribution %}{% set mx = dist.values()|max %}
+      <div class="bx-dist bx-dist7">
+        {% for band, c in dist.items() %}{% set lo = band.split('-')[0]|int %}
+        <div class="bx-dist-c" title="{{ band }}: {{ c }}">
+          <b>{{ c }}</b><span class="bar"><i class="{{ jt(lo + 1) }}" style="height:{{ ((c / mx * 100) if mx else 0)|round(1) }}%"></i></span><small>{{ band }}</small>
         </div>
         {% endfor %}
-    </div>
-    
-    <!-- Desktop: Table View -->
-    <div class="desktop-table">
-        <table>
-            <thead>
-                <tr>
-                    {% if can_write_sub('external_exams', 'jamb_delete') %}<th style="width:32px"></th>{% endif %}
-                    <th>Rank</th>
-                    <th>Student</th>
-                    <th>Score</th>
-                    <th>Sub 1</th>
-                    <th>Sub 2</th>
-                    <th>Sub 3</th>
-                    <th>Sub 4</th>
-                    <th>Level</th>
-                    <th>Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for s in students %}
-                <tr data-search="{{ (s.name ~ ' ' ~ s.student_id)|lower }}" data-score="{{ s.total_score }}">
-                    {% if can_write_sub('external_exams', 'jamb_delete') %}<td>{{ bulk_check('bulkDel', s.id, s.name) }}</td>{% endif %}
-                    <td>
-                        <span class="student-rank {% if s.rank == 1 %}gold{% elif s.rank == 2 %}silver{% elif s.rank == 3 %}bronze{% endif %}" style="width: 24px; height: 24px; font-size: 0.7rem;">{{ s.rank }}</span>
-                    </td>
-                    <td><strong>{{ s.name }}</strong><br><small style="color:#666;">{{ s.student_id }}</small></td>
-                    <td><strong style="font-size: 1.1rem; color: {% if s.total_score >= 300 %}#28a745{% elif s.total_score >= 250 %}#17a2b8{% elif s.total_score >= 200 %}#ffc107{% else %}#dc3545{% endif %}">{{ s.total_score }}</strong></td>
-                    {% for subj in s.subjects %}
-                    <td><small>{{ subj.name[:8] }}</small><br><strong>{{ subj.score }}</strong></td>
-                    {% endfor %}
-                    {% for _ in range(4 - s.subjects|length) %}<td>-</td>{% endfor %}
-                    <td><span class="score-badge score-{{ s.performance_level|lower }}">{{ s.performance_level|replace('_', ' ') }}</span></td>
-                    <td>
-                        <div style="display: flex; gap: 0.25rem;">
-                            <a href="{{ url_for('results.view_jamb_student', student_id=s.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-eye"></i></a>
-                            {% if can_write_sub('external_exams', 'jamb_edit') %}
-                            <a href="{{ url_for('results.edit_jamb', student_id=s.id, year=selected_year) }}" class="btn btn-secondary btn-sm"><i class="fas fa-edit"></i></a>
-                            {% endif %}
-                            {% if can_write_sub('external_exams', 'jamb_delete') %}
-                            <form method="POST" action="{{ url_for('results.delete_jamb', student_id=s.id, year=selected_year) }}" style="display: inline;" data-confirm="Delete?">
-                                <button type="submit" class="btn btn-danger btn-sm"><i class="fas fa-trash"></i></button>
-                            </form>
-                            {% endif %}
-                        </div>
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-    </div>{# /.cap-list #}
+      </div>
+    </section>
+    <section class="rs-card">
+      <div class="rs-card-h"><h3><i class="fas fa-book-open" aria-hidden="true"></i> Subject averages</h3><small>out of 100</small></div>
+      {% if subject_performance %}
+      <div class="an-hbars">
+        {% for s in subject_performance|sort(attribute='avg_score')|list %}{% if loop.index <= 6 %}
+        <a class="an-hbar bx-hbar" href="{{ url_for('results.jamb_subject', subject=s.subject, year=selected_year) }}">
+          <span class="l">{{ s.subject }}<small>{{ s.above_50_pct|round|int }}% scored 50+ · {{ s.count }} sat</small></span>
+          <span class="t"><i class="{{ 'good' if s.avg_score >= 70 else ('mid' if s.avg_score >= 50 else 'bad') }}" style="width:{{ s.avg_score }}%"></i></span>
+          <b>{{ s.avg_score }}</b>
+        </a>
+        {% endif %}{% endfor %}
+      </div>
+      {% else %}<p class="rs-muted">No subject scores yet.</p>{% endif %}
+    </section>
+  </div>
+  {% endif %}
+
+  {% set live_list = 'rankingsCard' if view_mode == 'rankings' else 'jambStudentList' %}
+  <section class="rs-card flush" id="{{ live_list }}">
+    <form method="GET" class="bx-filters" action="{{ url_for('results.jamb_list') }}">
+      <input type="hidden" name="view" value="{{ view_mode }}">
+      {% if selected_year %}<input type="hidden" name="year" value="{{ selected_year }}">{% endif %}
+      <label class="rs-search"><i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+        <input type="search" name="search" id="jambLiveSearch" value="{{ search or '' }}" placeholder="Search name or ID" autocomplete="off"
+               data-live-search="{{ live_list }}" data-live-count="jambSearchCount" aria-label="Search by name or ID">
+        <span id="jambSearchCount" class="bx-count"></span></label>
+      {% set nfilt = [min_score, max_score]|select|list|length %}
+      <button type="button" class="rs-btn ghost bx-ftoggle {{ 'on' if nfilt }}" data-bx-toggle aria-expanded="{{ 'true' if nfilt else 'false' }}"><i class="fas fa-sliders" aria-hidden="true"></i> Filters{% if nfilt %} <em>{{ nfilt }}</em>{% endif %}</button>
+      <div class="bx-fset {{ 'open' if nfilt }}">
+        <label class="bx-f xs"><span>Min score</span><input type="number" inputmode="numeric" name="min_score" min="0" max="400" value="{{ min_score or '' }}" placeholder="0" data-lf="{{ live_list }}" data-lf-rule="min:score"></label>
+        <label class="bx-f xs"><span>Max score</span><input type="number" inputmode="numeric" name="max_score" min="0" max="400" value="{{ max_score or '' }}" placeholder="400" data-lf="{{ live_list }}" data-lf-rule="max:score"></label>
+        <label class="bx-f" for="jambSort"><span>Sort by</span>
+          <select id="jambSort" name="sort" data-autosubmit>
+            <option value="score" {% if sort_by == 'score' and sort_order != 'asc' %}selected{% endif %}>Highest score first</option>
+            <option value="score_asc" {% if sort_by == 'score' and sort_order == 'asc' %}selected{% endif %}>Lowest score first</option>
+            <option value="name" {% if sort_by == 'name' %}selected{% endif %}>Name A–Z</option>
+          </select></label>
+      </div>
+    </form>
+
     {% if students %}
-    <button type="button" class="btn btn-secondary btn-sm cap-toggle" data-cap-toggle aria-label="Show all results"
+    {% if view_mode == 'rankings' %}
+    <div class="bx-rank">
+      {% for s in students %}
+      <a href="{{ url_for('results.view_jamb_student', student_id=s.id) }}" class="bx-rank-row jx-rank" data-search="{{ (s.name ~ ' ' ~ s.student_id)|lower }}" data-score="{{ s.total_score }}">
+        <span class="bx-pos {{ ['gold','silver','bronze'][s.rank - 1] if s.rank <= 3 else '' }}">{{ s.rank }}</span>
+        <span class="n"><b>{{ s.name }}</b><small>{{ s.student_id }} · {{ jlevel(s.performance_level) }}</small></span>
+        <span class="bx-grades rs-hide-sm">{% for subj in s.subjects %}<span class="bx-g {{ js(subj.score) }}" title="{{ subj.name }}">{{ subj.code }} <b>{{ subj.score }}</b></span>{% endfor %}</span>
+        <span class="jx-total {{ jt(s.total_score) }}">{{ s.total_score }}</span>
+      </a>
+      {% endfor %}
+    </div>
+    {% else %}
+    {% if can_del %}{{ bulk_bar('bulkDel', url_for('results.delete_jamb_bulk'), {'year': selected_year}, 'student', 'JAMB result') }}{% endif %}
+    <div class="cap-list jx-list">
+      {% for s in students %}
+      <div class="jx-row {{ 'del' if can_del }}" data-search="{{ (s.name ~ ' ' ~ s.student_id)|lower }}" data-score="{{ s.total_score }}">
+        {% if can_del %}<span class="ck">{{ bulk_check('bulkDel', s.id, s.name) }}</span>{% endif %}
+        <span class="bx-pos sm {{ ['gold','silver','bronze'][s.rank - 1] if s.rank <= 3 and sort_by == 'score' and sort_order != 'asc' else '' }}">{{ s.rank }}</span>
+        <a class="n" href="{{ url_for('results.view_jamb_student', student_id=s.id) }}"><b>{{ s.name }}</b><small>{{ s.student_id }} {{ jlevel(s.performance_level) }}</small></a>
+        <span class="jx-score"><span class="jx-total {{ jt(s.total_score) }}">{{ s.total_score }}</span><span class="rs-meter {{ 'good' if s.total_score >= 250 else ('n' if s.total_score >= 200 else ('mid' if s.total_score >= 180 else 'bad')) }}"><i style="width:{{ (s.total_score / 4)|round(1) }}%"></i></span></span>
+        <span class="bx-grades">{% for subj in s.subjects %}<span class="bx-g {{ js(subj.score) }}" title="{{ subj.name }}">{{ subj.code }} <b>{{ subj.score }}</b></span>{% endfor %}</span>
+        <span class="a">
+          {% if can_edit %}<a href="{{ url_for('results.edit_jamb', student_id=s.id, year=selected_year) }}" class="rs-icon-btn" aria-label="Edit {{ s.name }}" title="Edit"><i class="fas fa-pen" aria-hidden="true"></i></a>{% endif %}
+          {% if can_del %}
+          <form method="POST" action="{{ url_for('results.delete_jamb', student_id=s.id, year=selected_year) }}" data-confirm="Delete JAMB result for {{ s.name }}?">
+            <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+            <button type="submit" class="rs-icon-btn danger" aria-label="Delete {{ s.name }}" title="Delete"><i class="fas fa-trash" aria-hidden="true"></i></button>
+          </form>
+          {% endif %}
+        </span>
+      </div>
+      {% endfor %}
+    </div>
+    <button type="button" class="rs-btn ghost sm cap-toggle bx-cap" data-cap-toggle aria-label="Show all results"
             data-more="Show all {{ students|length }} students" data-less="Show fewer" style="display:none;">
-        <i class="fas fa-chevron-down" aria-hidden="true"></i> <span class="cap-label">Show all {{ students|length }} students</span>
+      <i class="fas fa-chevron-down" aria-hidden="true"></i> <span class="cap-label">Show all {{ students|length }} students</span>
     </button>
     {% endif %}
     {% else %}
-    <div style="text-align: center; padding: 2rem; color: #666;">
-        <i class="fas fa-file-alt" style="font-size: 2rem; margin-bottom: 0.5rem;"></i>
-        <p>No results found</p>
-        {% if can_write_sub('external_exams', 'jamb_create') %}
-        <a href="{{ url_for('results.add_jamb') }}" class="btn btn-primary btn-sm">Add Results</a>
-        {% endif %}
-    </div>
+    <div class="rs-blank"><span><i class="fas fa-user-graduate" aria-hidden="true"></i></span><h3>No results found</h3>
+      <p>{% if search or min_score or max_score %}No candidate matches these filters.{% else %}No JAMB results for {{ selected_year }} yet.{% endif %}</p>
+      {% if can_add %}<a href="{{ url_for('results.add_jamb') }}" class="rs-btn primary"><i class="fas fa-plus" aria-hidden="true"></i> Add results</a>{% endif %}</div>
     {% endif %}
+  </section>
+  {% endif %}
+  {% endif %}
 </div>
-{% endif %}
 
 {% if selected_year %}{% with rx_title='Export JAMB Results', rx_url=url_for('results.export_jamb', year=selected_year), rx_cols=jamb_export_cols, rx_stem='jamb_results_' ~ selected_year, rx_range=400, rx_note='Subject scores are out of 100 and totals out of 400. Score key: 70–100 strong, 50–69 good, 40–49 fair, below 40 weak.' %}{% include "components/results_export.html" %}{% endwith %}{% endif %}
 {% endblock %}
 
 {% block extra_js %}
-<script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
 <script nonce="{{ csp_nonce }}">
-document.addEventListener('DOMContentLoaded', function() {
-    const opts = { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } };
-    
-    // Score Distribution Chart
-    {% if school_stats and school_stats.distribution %}
-    const distribution = {{ school_stats.distribution|tojson }};
-    const scoreCtx = document.getElementById('scoreChart');
-    if (scoreCtx) {
-        new Chart(scoreCtx, {
-            type: 'bar',
-            data: { 
-                labels: Object.keys(distribution), 
-                datasets: [{ 
-                    data: Object.values(distribution), 
-                    backgroundColor: ['#dc3545','#fd7e14','#ffc107','#20c997','#17a2b8','#007bff','#28a745'],
-                    borderRadius: 4
-                }] 
-            },
-            options: { ...opts, scales: { y: { beginAtZero: true } } }
-        });
-    }
-    {% endif %}
-    
-    // Subject Averages Chart
-    {% if subject_performance %}
-    const subjectPerf = {{ subject_performance|tojson }};
-    const subjectCtx = document.getElementById('subjectAvgChart');
-    if (subjectCtx && subjectPerf.length > 0) {
-        const sorted = [...subjectPerf].sort((a, b) => b.avg_score - a.avg_score).slice(0, 10);
-        new Chart(subjectCtx, {
-            type: 'bar',
-            data: { 
-                labels: sorted.map(s => s.subject.substring(0, 10)), 
-                datasets: [{ 
-                    data: sorted.map(s => s.avg_score), 
-                    backgroundColor: sorted.map(s => s.avg_score >= 70 ? '#28a745' : s.avg_score >= 50 ? '#ffc107' : '#dc3545'),
-                    borderRadius: 4
-                }] 
-            },
-            options: { ...opts, indexAxis: 'y', scales: { x: { beginAtZero: true, max: 100 } } }
-        });
-    }
-    {% endif %}
+// Phone: the Filters button opens the filter row (always open on wide screens).
+document.querySelectorAll('[data-bx-toggle]').forEach(function (b) {
+  b.addEventListener('click', function () {
+    var set = b.parentNode.querySelector('.bx-fset');
+    var open = set.classList.toggle('open');
+    b.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
 });
 </script>
 {% endblock %}

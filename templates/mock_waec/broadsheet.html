@@ -1,8 +1,11 @@
 {% extends "base.html" %}
+{% from "mock_waec/_shell.html" import mw_nav, mw_exam_nav with context %}
 {% block title %}Broadsheet — {{ exam.display_name }} - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('mock_waec.index') }}">Mock WAEC</a> / <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}">{{ exam.display_name }}</a> / <span>Broadsheet</span>{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+
 <style>
 .bs-wrap { overflow-x: auto; }
 .bs-table { border-collapse: collapse; width: 100%; font-size: .8rem; }
@@ -37,6 +40,7 @@
 {% endblock %}
 
 {% block content %}
+<div class="rs bx bx-legacy">
 <div class="page-header">
     <div>
         <h1>Broadsheet — {{ exam.display_name }}</h1>
@@ -51,6 +55,7 @@
         <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>
     </div>
 </div>
+<div class="no-print">{{ mw_exam_nav(exam, 'broadsheet') }}</div>
 
 {% if not bs or not bs.rows %}
 <div class="card"><div class="card-body"><div class="empty-state">
@@ -129,4 +134,5 @@
     </div>
 </div>
 {% endif %}
+</div>
 {% endblock %}

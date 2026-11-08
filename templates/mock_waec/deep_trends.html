@@ -1,8 +1,11 @@
 {% extends "base.html" %}
+{% from "mock_waec/_shell.html" import mw_nav, mw_exam_nav with context %}
 {% block title %}Progress Trends — Mock WAEC - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('mock_waec.index') }}">Mock WAEC</a> / <span>Progress Trends</span>{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+
 <style>
 .tr-head{display:grid;grid-template-columns:1fr;gap:.75rem;margin-bottom:1.1rem}
 @media(min-width:700px){.tr-head{grid-template-columns:1fr 1fr}}
@@ -29,6 +32,7 @@
 {% endblock %}
 
 {% block content %}
+<div class="rs bx bx-legacy">
 <div class="page-header">
     <div>
         <h1>Progress Trends — Mock WAEC</h1>
@@ -43,6 +47,7 @@
         <a href="{{ url_for('mock_waec.index') }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>
     </div>
 </div>
+<div class="no-print">{{ mw_nav('trends', selected_session_id or None) }}</div>
 
 <form method="get" class="filter-bar mb-3" style="display:flex;gap:.5rem;align-items:center;flex-wrap:wrap;">
     <label class="text-sm text-muted">Scope</label>
@@ -154,6 +159,7 @@
     </div>
 </div>
 {% endif %}
+</div>
 {% endblock %}
 
 {% block extra_js %}

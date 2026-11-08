@@ -1,4 +1,6 @@
 {% extends "base.html" %}
+{% from "results/_board_shell.html" import bx_head with context %}
+{% from "results/_jamb_shell.html" import jx_nav, jt, js, jlevel with context %}
 {% block title %}{{ student.full_name }} - JAMB Results{% endblock %}
 {% block breadcrumb %}
 <a href="{{ url_for('results.index') }}">Results</a>
@@ -6,484 +8,95 @@
 <span>{{ student.full_name }}</span>
 {% endblock %}
 
-{% block extra_css %}
-<style>
-/* ===== MOBILE FIRST ===== */
-.profile-header {
-    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-    color: white;
-    padding: 1rem;
-    border-radius: 8px;
-    margin-bottom: 1rem;
-}
-
-.profile-top {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 0.5rem;
-}
-
-.profile-name {
-    font-size: 1.25rem;
-    font-weight: 700;
-    margin-bottom: 0.25rem;
-}
-
-.profile-id {
-    font-size: 0.85rem;
-    opacity: 0.9;
-}
-
-.profile-actions {
-    display: flex;
-    gap: 0.25rem;
-}
-
-.card {
-    background: var(--bg-card);
-    border-radius: 8px;
-    border: 1px solid var(--border-color);
-    margin-bottom: 1rem;
-    overflow: hidden;
-}
-
-.card-header {
-    padding: 0.75rem;
-    border-bottom: 1px solid #eee;
-    font-weight: 600;
-    font-size: 0.9rem;
-}
-
-.card-body {
-    padding: 0.75rem;
-}
-
-/* Score Display */
-.score-display {
-    text-align: center;
-    padding: 1.5rem 1rem;
-}
-
-.score-value {
-    font-size: 3.5rem;
-    font-weight: 700;
-    line-height: 1;
-}
-
-.score-label {
-    font-size: 0.85rem;
-    color: var(--text-muted);
-    margin-top: 0.5rem;
-}
-
-.performance-badge {
-    display: inline-block;
-    padding: 0.4rem 0.75rem;
-    border-radius: 50px;
-    font-weight: 600;
-    font-size: 0.8rem;
-    margin-top: 0.75rem;
-}
-
-.performance-excellent { background: #d4edda; color: #155724; }
-.performance-very_good { background: #cce5ff; color: #004085; }
-.performance-good { background: #fff3cd; color: #856404; }
-.performance-average { background: #ffeeba; color: #856404; }
-.performance-below_average { background: #f8d7da; color: #721c24; }
-.performance-poor { background: #721c24; color: white; }
-
-/* Subject Scores Grid */
-.subjects-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.5rem;
-    margin-bottom: 1rem;
-}
-
-.subject-card {
-    background: var(--gray-50);
-    border-radius: 8px;
-    padding: 0.75rem;
-    text-align: center;
-}
-
-.subject-score {
-    font-size: 1.75rem;
-    font-weight: 700;
-    line-height: 1.2;
-}
-
-.subject-name {
-    font-size: 0.75rem;
-    color: var(--text-muted);
-    margin-top: 0.25rem;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-/* Chart */
-.chart-container {
-    position: relative;
-    height: 200px;
-}
-
-/* Comparison */
-.comparison-item {
-    display: flex;
-    justify-content: space-between;
-    padding: 0.5rem 0;
-    border-bottom: 1px solid #eee;
-    font-size: 0.85rem;
-}
-
-.comparison-item:last-child {
-    border-bottom: none;
-}
-
-/* Analysis Box */
-.analysis-box {
-    padding: 0.75rem;
-    background: var(--gray-50);
-    border-radius: 6px;
-    font-size: 0.85rem;
-    margin-top: 0.5rem;
-}
-
-/* Results Table */
-.results-table {
-    width: 100%;
-    border-collapse: collapse;
-    font-size: 0.85rem;
-}
-
-.results-table th,
-.results-table td {
-    padding: 0.5rem;
-    text-align: left;
-    border-bottom: 1px solid #eee;
-}
-
-.results-table th {
-    background: var(--gray-50);
-    font-weight: 600;
-}
-
-/* Empty State */
-.empty-state {
-    text-align: center;
-    padding: 2rem;
-    color: var(--text-muted);
-}
-
-.empty-state i {
-    font-size: 2.5rem;
-    margin-bottom: 0.75rem;
-    color: #ccc;
-}
-
-/* Delete Section */
-.delete-section {
-    margin-top: 1.5rem;
-    padding: 1rem;
-    background: #fff5f5;
-    border: 1px solid #f8d7da;
-    border-radius: 8px;
-}
-
-.delete-section h4 {
-    color: #721c24;
-    font-size: 0.9rem;
-    margin-bottom: 0.5rem;
-}
-
-.delete-section p {
-    font-size: 0.8rem;
-    color: #856404;
-    margin-bottom: 0.75rem;
-}
-
-/* ===== TABLET+ ===== */
-@media (min-width: 768px) {
-    .profile-header {
-        padding: 1.5rem;
-    }
-    
-    .profile-name {
-        font-size: 1.5rem;
-    }
-    
-    .score-value {
-        font-size: 4.5rem;
-    }
-    
-    .subjects-grid {
-        grid-template-columns: repeat(4, 1fr);
-        gap: 1rem;
-    }
-    
-    .subject-card {
-        padding: 1rem;
-    }
-    
-    .subject-score {
-        font-size: 2rem;
-    }
-    
-    .subject-name {
-        font-size: 0.85rem;
-    }
-    
-    .content-grid {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 1rem;
-    }
-    
-    .content-grid .card {
-        margin-bottom: 0;
-    }
-    
-    .chart-container {
-        height: 250px;
-    }
-}
-
-@media (min-width: 1024px) {
-    .chart-container {
-        height: 280px;
-    }
-}
-</style>
-{% endblock %}
+{% block extra_css %}<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">{% endblock %}
 
 {% block content %}
-<!-- Profile Header -->
-<div class="profile-header">
-    <div class="profile-top">
-        <div>
-            <div class="profile-name">{{ student.full_name }}</div>
-            <div class="profile-id">{{ student.student_id }}</div>
-        </div>
-        {% if jamb_summary and can_write_sub('external_exams', 'jamb_edit') %}
-        <div class="profile-actions">
-            <a href="{{ url_for('results.edit_jamb', student_id=student.id, year=jamb_summary[0].exam_year) }}" class="btn btn-light btn-sm" title="Edit">
-                <i class="fas fa-edit"></i>
-            </a>
-        </div>
-        {% endif %}
-    </div>
-</div>
+{% set can_edit = can_write_sub('external_exams', 'jamb_edit') %}
+{% set latest = jamb_summary[0] if jamb_summary else None %}
+<div class="rs bx">
+  {% call bx_head('fa-user-graduate', student.full_name, student.student_id ~ ' · JAMB results') %}
+    {% if latest and can_edit %}<a href="{{ url_for('results.edit_jamb', student_id=student.id, year=latest.exam_year) }}" class="rs-btn primary" title="Edit"><i class="fas fa-pen" aria-hidden="true"></i><span class="rs-hide-sm">Edit {{ latest.exam_year }}</span></a>{% endif %}
+  {% endcall %}
+  <a class="bx-back" href="{{ url_for('results.jamb_list', year=latest.exam_year if latest else None) }}"><i class="fas fa-arrow-left" aria-hidden="true"></i> All JAMB results</a>
 
-{% if jamb_summary %}
-{% set latest = jamb_summary[0] %}
-
-<!-- Main Score Display -->
-<div class="card">
-    <div class="card-body">
-        <div class="score-display">
-            <div class="score-value" style="color: {% if latest.total_score >= 300 %}#28a745{% elif latest.total_score >= 250 %}#17a2b8{% elif latest.total_score >= 200 %}#ffc107{% else %}#dc3545{% endif %}">
-                {{ latest.total_score }}
-            </div>
-            <div class="score-label">Total JAMB Score ({{ latest.exam_year }})</div>
-            <span class="performance-badge performance-{{ latest.performance_level|lower }}">
-                {{ latest.performance_level|replace('_', ' ') }}
-            </span>
+  {% if latest %}
+  <div class="bx-two">
+    <section class="rs-card jx-hero">
+      <div class="jx-big {{ jt(latest.total_score) }}"><b>{{ latest.total_score }}</b><small>/400</small></div>
+      <div class="jx-hero-t">
+        <span>Total JAMB score · {{ latest.exam_year }}</span>
+        {{ jlevel(latest.performance_level) }}
+        <span class="rs-muted">{{ latest.average_per_subject }} average per subject ·
+          {% if latest.total_score >= 250 %}competitive for most courses{% elif latest.total_score >= 200 %}meets most universities' 200 minimum{% elif latest.total_score >= 180 %}meets some polytechnic and college cut-offs{% else %}below most admission cut-offs{% endif %}</span>
+      </div>
+    </section>
+    <section class="rs-card">
+      <div class="rs-card-h"><h3><i class="fas fa-book" aria-hidden="true"></i> Subject scores</h3><small>out of 100</small></div>
+      <div class="an-hbars">
+        {% for subj in latest.subjects|sort(attribute='score', reverse=True) %}
+        <div class="an-hbar">
+          <span class="l">{{ subj.subject }}</span>
+          <span class="t"><i class="{{ 'good' if subj.score >= 70 else ('mid' if subj.score >= 50 else 'bad') }}" style="width:{{ subj.score }}%"></i></span>
+          <b>{{ subj.score }}</b>
         </div>
-    </div>
-</div>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
 
-<!-- Subject Scores -->
-<div class="subjects-grid">
-    {% for subj in latest.subjects %}
-    <div class="subject-card">
-        <div class="subject-score" style="color: {% if subj.score >= 70 %}#28a745{% elif subj.score >= 50 %}#17a2b8{% else %}#dc3545{% endif %}">
-            {{ subj.score }}
+  <div class="bx-two">
+    <section class="rs-card">
+      <div class="rs-card-h"><h3><i class="fas fa-scale-balanced" aria-hidden="true"></i> WAEC comparison</h3></div>
+      {% if waec_summary %}
+      {% set waec_year = waec_summary.keys()|list|sort|last %}
+      {% set waec = waec_summary[waec_year] %}
+      <dl class="bx-dl">
+        <div><dt>WAEC {{ waec_year }} credits (A1–C6)</dt><dd>{{ waec.credit_count }} of {{ waec.total_subjects }}</dd></div>
+        <div><dt>WAEC A1s</dt><dd>{{ waec.a1_count }}</dd></div>
+        <div><dt>WAEC average points</dt><dd>{{ waec.average_points }}/9</dd></div>
+        <div><dt>JAMB average per subject</dt><dd>{{ latest.average_per_subject }}/100</dd></div>
+      </dl>
+      {% set strong_w = waec.credit_count >= 7 %}{% set weak_w = waec.credit_count < 5 %}
+      <div class="bx-verdict {{ 'good' if (strong_w and latest.total_score >= 250) or (weak_w and latest.total_score >= 250) else ('bad' if strong_w and latest.total_score < 200 else '') }} bx-mt">
+        <i class="fas fa-lightbulb" aria-hidden="true"></i>
+        <div><b>{% if strong_w and latest.total_score >= 250 %}Consistent: strong in both exams{% elif strong_w and latest.total_score < 200 %}JAMB is below what the WAEC result suggests{% elif weak_w and latest.total_score >= 250 %}JAMB beats the WAEC result — good improvement{% else %}Performance is consistent across both exams{% endif %}</b></div>
+      </div>
+      {% else %}
+      <p class="rs-muted">No WAEC results to compare with.</p>
+      <a href="{{ url_for('results.add_waec') }}?student_id={{ student.id }}" class="rs-btn ghost sm bx-mt"><i class="fas fa-plus" aria-hidden="true"></i> Add WAEC</a>
+      {% endif %}
+    </section>
+
+    <section class="rs-card flush">
+      <div class="rs-card-h pad"><h3><i class="fas fa-clock-rotate-left" aria-hidden="true"></i> All JAMB sittings</h3><small>{{ jamb_summary|length }}</small></div>
+      <div class="bx-rank">
+        {% for result in jamb_summary %}
+        <div class="bx-rank-row jx-rank">
+          <span class="bx-pos sm">{{ loop.index }}</span>
+          <span class="n"><b>{{ result.exam_year }}</b><small>{{ jlevel(result.performance_level) }}</small></span>
+          <span>{% if can_edit %}<a href="{{ url_for('results.edit_jamb', student_id=student.id, year=result.exam_year) }}" class="rs-icon-btn" aria-label="Edit {{ result.exam_year }}"><i class="fas fa-pen" aria-hidden="true"></i></a>{% endif %}</span>
+          <span class="jx-total {{ jt(result.total_score) }}">{{ result.total_score }}</span>
         </div>
-        <div class="subject-name" title="{{ subj.subject }}">{{ subj.subject[:12] }}</div>
-    </div>
-    {% endfor %}
-</div>
+        {% endfor %}
+      </div>
+    </section>
+  </div>
 
-<!-- Chart & WAEC Comparison -->
-<div class="content-grid">
-    <!-- Subject Chart -->
-    <div class="card">
-        <div class="card-header"><i class="fas fa-chart-bar"></i> Subject Breakdown</div>
-        <div class="card-body">
-            <div class="chart-container">
-                <canvas id="subjectChart"></canvas>
-            </div>
-        </div>
-    </div>
-    
-    <!-- WAEC Comparison -->
-    <div class="card">
-        <div class="card-header"><i class="fas fa-balance-scale"></i> WAEC Comparison</div>
-        <div class="card-body">
-            {% if waec_summary %}
-            {% set waec_year = waec_summary.keys()|list|sort|last %}
-            {% set waec = waec_summary[waec_year] %}
-            <div class="comparison-item">
-                <span>WAEC Avg Points</span>
-                <strong>{{ waec.average_points }}</strong>
-            </div>
-            <div class="comparison-item">
-                <span>WAEC Credits (A1-C6)</span>
-                <strong>{{ waec.credit_count }}</strong>
-            </div>
-            <div class="comparison-item">
-                <span>WAEC A1 Count</span>
-                <strong>{{ waec.a1_count }}</strong>
-            </div>
-            <div class="comparison-item">
-                <span>JAMB Score</span>
-                <strong style="color: #007bff;">{{ latest.total_score }}</strong>
-            </div>
-            <div class="comparison-item">
-                <span>JAMB Avg/Subject</span>
-                <strong>{{ latest.average_per_subject }}</strong>
-            </div>
-            
-            <div class="analysis-box">
-                <strong>Analysis:</strong><br>
-                {% if waec.average_points <= 3 and latest.total_score >= 250 %}
-                <span style="color: #28a745;">✓ Strong correlation between WAEC and JAMB performance</span>
-                {% elif waec.average_points <= 3 and latest.total_score < 200 %}
-                <span style="color: #dc3545;">⚠ JAMB score lower than WAEC performance suggests</span>
-                {% elif waec.average_points > 5 and latest.total_score >= 250 %}
-                <span style="color: #17a2b8;">★ JAMB exceeds WAEC expectations - great improvement!</span>
-                {% else %}
-                <span style="color: var(--text-muted);">Performance is consistent across both exams</span>
-                {% endif %}
-            </div>
-            {% else %}
-            <div class="empty-state" style="padding: 1rem;">
-                <i class="fas fa-file-alt" style="font-size: 1.5rem;"></i>
-                <p style="margin: 0.5rem 0;">No WAEC results for comparison</p>
-                <a href="{{ url_for('results.add_waec') }}?student_id={{ student.id }}" class="btn btn-secondary btn-sm">Add WAEC</a>
-            </div>
-            {% endif %}
-        </div>
-    </div>
-</div>
-
-<!-- Previous Results -->
-{% if jamb_summary|length > 1 %}
-<div class="card">
-    <div class="card-header"><i class="fas fa-history"></i> Previous JAMB Results</div>
-    <div class="card-body" style="padding: 0;">
-        <table class="results-table">
-            <thead>
-                <tr>
-                    <th>Year</th>
-                    <th>Score</th>
-                    <th>Level</th>
-                    <th></th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for result in jamb_summary[1:] %}
-                <tr>
-                    <td>{{ result.exam_year }}</td>
-                    <td><strong>{{ result.total_score }}</strong></td>
-                    <td>
-                        <span class="performance-badge performance-{{ result.performance_level|lower }}" style="padding: 0.2rem 0.5rem; font-size: 0.75rem;">
-                            {{ result.performance_level|replace('_', ' ') }}
-                        </span>
-                    </td>
-                    <td>
-                        {% if can_write_sub('external_exams', 'jamb_edit') %}
-                        <a href="{{ url_for('results.edit_jamb', student_id=student.id, year=result.exam_year) }}" class="btn btn-secondary btn-sm">
-                            <i class="fas fa-edit"></i>
-                        </a>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
-{% endif %}
-
-{% if can_write_sub('external_exams', 'jamb_delete') %}
-<!-- Delete Section -->
-<div class="delete-section">
-    <h4><i class="fas fa-trash-alt"></i> Delete Result</h4>
-    <p>Permanently delete JAMB result for {{ latest.exam_year }}. This cannot be undone.</p>
-    <form method="POST" action="{{ url_for('results.delete_jamb', student_id=student.id, year=latest.exam_year) }}"
+  {% if can_write_sub('external_exams', 'jamb_delete') %}
+  <details class="rs-card hr-details">
+    <summary><i class="fas fa-trash-can" aria-hidden="true"></i> Delete result <small>{{ latest.exam_year }}</small></summary>
+    <form method="POST" action="{{ url_for('results.delete_jamb', student_id=student.id, year=latest.exam_year) }}" class="hr-form-row"
           data-confirm="Delete JAMB result for {{ student.full_name }} ({{ latest.exam_year }})?">
-        <button type="submit" class="btn btn-danger btn-sm">
-            <i class="fas fa-trash"></i> Delete {{ latest.exam_year }} Result
-        </button>
+      <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
+      <p class="rs-muted">Permanently delete the {{ latest.exam_year }} JAMB result. This cannot be undone.</p>
+      <button type="submit" class="rs-btn danger"><i class="fas fa-trash" aria-hidden="true"></i> Delete {{ latest.exam_year }} result</button>
     </form>
-</div>
-{% endif %}
+  </details>
+  {% endif %}
 
-{% else %}
-<!-- No Results -->
-<div class="card">
-    <div class="card-body">
-        <div class="empty-state">
-            <i class="fas fa-file-alt"></i>
-            <h3 style="margin: 0.5rem 0;">No JAMB Results</h3>
-            <p>No JAMB results have been recorded for this student.</p>
-            {% if can_write_sub('external_exams', 'jamb_create') %}
-            <a href="{{ url_for('results.add_jamb') }}?student_id={{ student.id }}" class="btn btn-primary">
-                <i class="fas fa-plus"></i> Add JAMB Result
-            </a>
-            {% endif %}
-        </div>
-    </div>
+  {% else %}
+  <div class="rs-blank"><span><i class="fas fa-file-alt" aria-hidden="true"></i></span><h3>No JAMB results</h3><p>No JAMB results have been recorded for this student.</p>
+    {% if can_write_sub('external_exams', 'jamb_create') %}<a href="{{ url_for('results.add_jamb') }}?student_id={{ student.id }}" class="rs-btn primary"><i class="fas fa-plus" aria-hidden="true"></i> Add JAMB result</a>{% endif %}</div>
+  {% endif %}
 </div>
-{% endif %}
-{% endblock %}
-
-{% block extra_js %}
-<script src="{{ url_for('static', filename='vendor/chart.umd.min.js') }}"></script>
-<script nonce="{{ csp_nonce }}">
-{% if jamb_summary %}
-{% set latest = jamb_summary[0] %}
-document.addEventListener('DOMContentLoaded', function() {
-    const subjects = {{ latest.subjects|tojson }};
-    const ctx = document.getElementById('subjectChart');
-    
-    if (ctx && subjects.length > 0) {
-        new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: subjects.map(s => s.subject.substring(0, 10)),
-                datasets: [{
-                    label: 'Score',
-                    data: subjects.map(s => s.score),
-                    backgroundColor: subjects.map(s => 
-                        s.score >= 70 ? '#28a745' : s.score >= 50 ? '#17a2b8' : '#dc3545'
-                    ),
-                    borderRadius: 4
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { 
-                    legend: { display: false } 
-                },
-                scales: { 
-                    y: { 
-                        beginAtZero: true, 
-                        max: 100,
-                        grid: { color: '#eee' }
-                    },
-                    x: {
-                        grid: { display: false }
-                    }
-                }
-            }
-        });
-    }
-});
-{% endif %}
-</script>
 {% endblock %}

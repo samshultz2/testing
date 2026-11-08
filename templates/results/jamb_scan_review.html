@@ -1,8 +1,12 @@
 {% extends "base.html" %}
+{% from "results/_board_shell.html" import bx_head with context %}
+{% from "results/_jamb_shell.html" import jx_nav with context %}
 {% block title %}Review Scanned JAMB Result - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('results.jamb_list') }}">JAMB</a> / <a href="{{ url_for('results.scan_jamb') }}">Scan</a> / <span>Review</span>{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+
 <style>
 .review-grid{display:grid;grid-template-columns:1fr;gap:1rem}
 @media(min-width:992px){.review-grid{grid-template-columns:320px 1fr}}
@@ -18,15 +22,10 @@ details.raw pre{white-space:pre-wrap;background:var(--gray-50);padding:.75rem;bo
 {% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <div>
-        <h1>Review Scanned JAMB Result</h1>
-        <p class="text-muted text-sm">Check what we read against the image, fix anything, confirm the student, then save.</p>
-    </div>
-    <div class="page-header-actions">
-        <a href="{{ url_for('results.scan_jamb') }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Rescan</a>
-    </div>
-</div>
+<div class="rs bx bx-legacy">
+{% call bx_head('fa-magnifying-glass', 'Review JAMB Result', 'Check every subject and score, confirm the student, then save') %}{% endcall %}
+{{ jx_nav('scan') }}
+
 
 <div class="review-grid">
     <div class="scan-preview">
@@ -111,4 +110,5 @@ details.raw pre{white-space:pre-wrap;background:var(--gray-50);padding:.75rem;bo
     scoreInputs.forEach(i => i.addEventListener('input', recalc));
 })();
 </script>
+</div>
 {% endblock %}

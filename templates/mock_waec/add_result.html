@@ -1,8 +1,11 @@
 {% extends "base.html" %}
+{% from "mock_waec/_shell.html" import mw_nav, mw_exam_nav with context %}
 {% block title %}Add Mock WAEC Result - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('mock_waec.index') }}">Mock WAEC</a> / <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}">{{ exam.display_name }}</a> / <span>Add result</span>{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+
 <style>
 .mw-row{display:grid;grid-template-columns:1fr 110px 110px;gap:.6rem;margin-bottom:.5rem;align-items:center}
 .mw-row.is-empty{display:none}
@@ -12,7 +15,9 @@
 {% endblock %}
 
 {% block content %}
+<div class="rs bx bx-legacy">
 <div class="page-header"><div><h1>Add result &mdash; {{ exam.display_name }}</h1></div></div>
+<div class="no-print">{{ mw_exam_nav(exam, 'add') }}</div>
 
 <div class="card" style="max-width:680px;"><div class="card-body">
 {% if students %}
@@ -110,4 +115,5 @@
     });
 })();
 </script>
+</div>
 {% endblock %}

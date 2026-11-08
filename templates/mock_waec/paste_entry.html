@@ -1,9 +1,14 @@
 {% extends "base.html" %}
+{% from "mock_waec/_shell.html" import mw_nav, mw_exam_nav with context %}
 {% block title %}Paste Mock WAEC Results - {{ app_name }}{% endblock %}
 {% block breadcrumb %}<a href="{{ url_for('mock_waec.index') }}">Mock WAEC</a> / <a href="{{ url_for('mock_waec.view_exam', exam_id=exam.id) }}">{{ exam.display_name }}</a> / <span>Paste import</span>{% endblock %}
 
+{% block extra_css %}<link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
+{% endblock %}
 {% block content %}
+<div class="rs bx bx-legacy">
 <div class="page-header"><div><h1>Paste import &mdash; {{ exam.display_name }}</h1></div></div>
+<div class="no-print">{{ mw_exam_nav(exam, 'paste') }}</div>
 
 <div class="card mb-3">
     <div class="card-header"><h3>Step 1: Turn a score sheet into rows with an AI</h3></div>
@@ -87,4 +92,5 @@ STU001, English Language, 65</pre>
     </div>
 </div>
 {% endif %}
+</div>
 {% endblock %}

@@ -1,0 +1,29 @@
+{# JAMB results: section tabs + score chips (header/menus come from _board_shell). #}
+{% from "results/_board_shell.html" import bx_menu_js with context %}
+{% macro jx_nav(active, year=None) %}
+{{ bx_menu_js() }}
+{% set y = year or request.args.get('year') %}
+{% set can_add = can_write_sub('external_exams', 'jamb_create') %}
+<nav class="sl-nav" aria-label="JAMB sections">
+  <a href="{{ url_for('results.jamb_list', year=y, view='students') }}" class="{{ 'on' if active == 'students' }}"><i class="fas fa-users" aria-hidden="true"></i><span>Students</span></a>
+  <a href="{{ url_for('results.jamb_list', year=y, view='subjects') }}" class="{{ 'on' if active == 'subjects' }}"><i class="fas fa-book" aria-hidden="true"></i><span>Subjects</span></a>
+  <a href="{{ url_for('results.jamb_list', year=y, view='rankings') }}" class="{{ 'on' if active == 'rankings' }}"><i class="fas fa-ranking-star" aria-hidden="true"></i><span>Rankings</span></a>
+  {% if can_add %}<a href="{{ url_for('results.add_jamb') }}" class="{{ 'on' if active in ('add', 'scan', 'paste') }}"><i class="fas fa-plus" aria-hidden="true"></i><span>Add results</span></a>{% endif %}
+</nav>
+{% if active in ('add', 'scan', 'paste') and can_add %}
+<nav class="sl-sub" aria-label="Ways to add results">
+  <a href="{{ url_for('results.add_jamb') }}" class="{{ 'on' if active == 'add' }}"><i class="fas fa-keyboard" aria-hidden="true"></i> One student</a>
+  <a href="{{ url_for('results.scan_jamb') }}" class="{{ 'on' if active == 'scan' }}"><i class="fas fa-camera" aria-hidden="true"></i> Scan a photo</a>
+  <a href="{{ url_for('results.paste_jamb') }}" class="{{ 'on' if active == 'paste' }}"><i class="fas fa-clipboard" aria-hidden="true"></i> Paste text</a>
+  <a href="{{ url_for('results.scan_batch', exam='jamb') }}"><i class="fas fa-layer-group" aria-hidden="true"></i> Batch scan</a>
+</nav>
+{% endif %}
+{% endmacro %}
+
+{# tone class for a JAMB total (/400) and a subject score (/100) #}
+{% macro jt(score) -%}{{ 'a1' if score >= 250 else ('c4' if score >= 200 else ('d7' if score >= 180 else 'f9')) }}{%- endmacro %}
+{% macro js(score) -%}{{ 'a1' if score >= 70 else ('c4' if score >= 50 else ('d7' if score >= 40 else 'f9')) }}{%- endmacro %}
+{% macro jlevel(level) -%}
+{% set t = {'EXCELLENT':'good','VERY_GOOD':'good','GOOD':'info','AVERAGE':'mid','BELOW_AVERAGE':'bad','POOR':'bad'} %}
+<span class="sl-pill {{ t.get(level, '') }}">{{ level|replace('_', ' ')|title }}</span>
+{%- endmacro %}
