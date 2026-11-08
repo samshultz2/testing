@@ -120,7 +120,11 @@ def broadsheet():
         'assignments': [{'id': a.id, 'display_name': a.display_name} for a in assignments],
         'class_subjects': [{'id': cs.id, 'short': cs.subject.short_name or cs.subject.name[:3],
                             'name': cs.subject.name} for cs in class_subjects],
+        'pass_mark': SchoolSettings.get('pass_mark', 50),
+        'term_label': selected_term.full_name if selected_term else '',
         'rows': [{'position': r['position'], 'student': r['student'].full_name,
+                  'student_id': r['student'].id, 'gender': r['student'].gender or '',
+                  'card_url': url_for('subjects.student_report_card', student_id=r['student'].id, term_id=term_id or ''),
                   'subjects': {str(cs.id): (round(r['subjects'].get(cs.id, {}).get('total', 0), 1)
                                             if r['subjects'].get(cs.id, {}).get('total') else None)
                                for cs in class_subjects},
@@ -1163,6 +1167,7 @@ def affective():
     return _render({
         'page': 'affective', 'nav': _nav_urls(),
         'term_id': term_id or '', 'assignment_id': assignment_id or '',
+        'selected_label': selected_assignment.display_name if selected_assignment else '',
         'has_students': bool(selected_assignment and students),
         'selected': bool(selected_assignment),
         'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
@@ -1221,18 +1226,24 @@ def comments():
             ts = summ.get(e.student_id)
             students.append({'student': e.student,
                              'teacher_comment': ts.teacher_comment if ts else '',
-                             'principal_comment': ts.principal_comment if ts else ''})
+                             'principal_comment': ts.principal_comment if ts else '',
+                             'average': round(ts.average_score, 1) if ts and ts.average_score is not None else None,
+                             'position': ts.position_in_class if ts else None})
 
     return _render({
         'page': 'comments', 'nav': _nav_urls(),
         'term_id': term_id or '', 'assignment_id': assignment_id or '',
+        'selected_label': selected_assignment.display_name if selected_assignment else '',
         'has_students': bool(selected_assignment and students),
         'selected': bool(selected_assignment),
         'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
         'assignments': [{'id': a.id, 'display_name': a.display_name} for a in assignments],
         'students': [{'id': r['student'].id, 'full_name': r['student'].full_name,
                       'teacher_comment': r['teacher_comment'] or '',
-                      'principal_comment': r['principal_comment'] or ''} for r in students],
+                      'principal_comment': r['principal_comment'] or '',
+                      'average': r['average'], 'position': r['position'],
+                      'gender': r['student'].gender or ''} for r in students],
+        'pass_mark': SchoolSettings.get('pass_mark', 50),
         'self_url': url_for('subjects.comments'), 'submit_url': url_for('subjects.comments'),
         'broadsheet_url': url_for('subjects.broadsheet', term_id=term_id or '', assignment_id=assignment_id or ''),
     })

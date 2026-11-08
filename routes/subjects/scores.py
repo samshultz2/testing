@@ -123,6 +123,7 @@ def scores_entry():
     return _render({
         'page': 'scores', 'nav': _nav_urls(),
         'term_id': term_id or '', 'assignment_id': assignment_id or '',
+        'selected_label': selected_assignment.display_name if selected_assignment else '',
         'class_subject_id': class_subject_id or '', 'assessment_type_id': assessment_type_id or '',
         'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
         'assignments': [{'id': a.id, 'display_name': a.display_name} for a in assignments],
@@ -240,8 +241,10 @@ def workflow():
         enr = StudentEnrollment.query.filter_by(
             class_arm_assignment_id=assignment_id, is_active=True).all()
         sids = [e.student_id for e in enr]
-        css = ClassSubject.query.filter_by(
-            term_id=term_id, class_id=selected.class_id, is_active=True).all()
+        css = (ClassSubject.query.filter_by(
+            term_id=term_id, class_id=selected.class_id, is_active=True)
+            .filter((ClassSubject.arm_id == None) | (ClassSubject.arm_id == selected.arm_id))  # noqa: E711
+            .all())
         n_assess = AssessmentType.query.filter_by(is_active=True).count()
         entered = 0
         if sids and css:
@@ -252,7 +255,36 @@ def workflow():
         ts_rows = (TermSummary.query.filter(
             TermSummary.term_id == term_id,
             TermSummary.student_id.in_(sids or [-1])).all())
+        # Per-subject progress: which subjects (and whose) are holding the class's
+        # results up. One grouped count, plus one query for subject teachers.
+        from sqlalchemy import func
+        per_cs = {}
+        if sids and css:
+            per_cs = dict(db.session.query(StudentScore.class_subject_id, func.count(StudentScore.id))
+                          .filter(StudentScore.class_subject_id.in_([cs.id for cs in css]),
+                                  StudentScore.student_id.in_(sids))
+                          .group_by(StudentScore.class_subject_id).all())
+        teachers = {}
+        try:
+            from models import TeacherSubjectAssignment
+            for tsa in TeacherSubjectAssignment.query.filter_by(
+                    class_arm_assignment_id=assignment_id, is_active=True).all():
+                u = getattr(tsa.teacher, 'user', None) if tsa.teacher else None
+                nm = (getattr(u, 'full_name', None) or getattr(u, 'username', None)) if u else None
+                if nm:
+                    teachers.setdefault(tsa.subject_id, nm)
+        except Exception:
+            teachers = {}
+        per_expected = len(sids) * (n_assess or 1)
+        subjects_progress = sorted([
+            {'id': cs.id, 'name': cs.subject.name if cs.subject else '',
+             'entered': min(per_cs.get(cs.id, 0), per_expected), 'expected': per_expected,
+             'teacher': teachers.get(cs.subject_id, ''),
+             'url': url_for('subjects.scores_entry', term_id=term_id, assignment_id=assignment_id,
+                            class_subject_id=cs.id)}
+            for cs in css], key=lambda r: (r['entered'] / r['expected'] if r['expected'] else 1, r['name']))
         steps = {
+            'subjects_progress': subjects_progress,
             'students': len(sids),
             'subjects': len(css),
             'scores_entered': entered,
@@ -268,11 +300,14 @@ def workflow():
         'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
         'assignments': [{'id': a.id, 'display_name': a.display_name} for a in assignments],
         'steps': steps, 'published': bool(selected_term and selected_term.results_published),
+        'selected_label': selected.display_name if selected else '',
+        'term_label': selected_term.full_name if selected_term else '',
         'self_url': url_for('subjects.workflow'),
         'urls': {
             'class_subjects': url_for('subjects.class_subjects_list'),
             'enrol': url_for('academics.assignments_list'),
             'bulk_entry': url_for('subjects.bulk_entry', term_id=term_id or '', assignment_id=assignment_id or ''),
+            'scores': url_for('subjects.scores_entry', term_id=term_id or '', assignment_id=assignment_id or ''),
             'broadsheet': url_for('subjects.broadsheet', term_id=term_id or '', assignment_id=assignment_id or ''),
             'comments': url_for('subjects.comments', term_id=term_id or '', assignment_id=assignment_id or ''),
             'affective': url_for('subjects.affective', term_id=term_id or '', assignment_id=assignment_id or ''),
@@ -356,6 +391,7 @@ def bulk_entry():
     return _render({
         'page': 'bulk_entry', 'nav': _nav_urls(),
         'term_id': term_id or '', 'assignment_id': assignment_id or '',
+        'selected_label': selected.display_name if selected else '',
         'terms': [{'id': t.id, 'full_name': t.full_name} for t in terms],
         'assignments': [{'id': a.id, 'display_name': a.display_name} for a in assignments],
         'has_grid': bool(selected and class_subjects and enrollments),

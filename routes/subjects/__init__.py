@@ -37,8 +37,19 @@ _wants_json, _render, _ok, _err = section_responders(
 
 
 def _nav_urls():
+    """Section links, plus the results-flow links (workflow → scores → broadsheet
+    → comments → behaviour) carrying the current term + class, so every results
+    screen can show the same step bar and move along it without re-picking."""
+    t = request.values.get('term_id', type=int) or ''
+    a = request.values.get('assignment_id', type=int) or ''
     return {'subjects': url_for('subjects.subjects_list'),
-            'class_subjects': url_for('subjects.class_subjects_list')}
+            'class_subjects': url_for('subjects.class_subjects_list'),
+            'flow': {'workflow': url_for('subjects.workflow', term_id=t, assignment_id=a),
+                     'scores': url_for('subjects.scores_entry', term_id=t, assignment_id=a),
+                     'bulk_entry': url_for('subjects.bulk_entry', term_id=t, assignment_id=a),
+                     'broadsheet': url_for('subjects.broadsheet', term_id=t, assignment_id=a),
+                     'comments': url_for('subjects.comments', term_id=t, assignment_id=a),
+                     'affective': url_for('subjects.affective', term_id=t, assignment_id=a)}}
 
 
 # ---------------------------------------------------------------------------
