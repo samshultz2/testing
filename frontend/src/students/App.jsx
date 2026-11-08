@@ -78,12 +78,21 @@ function initials(name) {
 // Student avatar: passport photo when present, else initials on a tinted tile.
 // Falls back to initials if the photo URL fails to load (deleted/again-404),
 // so a broken image never shows the browser's broken-image glyph.
-function StudentAvatar({ name, photo, size = 40 }) {
+// A stable colour per name, so a long list isn't a wall of identical circles.
+const AV_HUES = [210, 262, 330, 20, 160, 190, 45, 290, 0, 140];
+function hueFor(name) {
+  let h = 0;
+  for (let i = 0; i < (name || '').length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+  return AV_HUES[h % AV_HUES.length];
+}
+function StudentAvatar({ name, photo, size = 40, tint = false }) {
   const [broken, setBroken] = useState(false);
-  const dim = { width: size, height: size, minWidth: size };
+  const dim = { width: size, height: size, minWidth: size, fontSize: Math.round(size * 0.36) };
+  const hue = hueFor(name);
+  const tinted = tint ? { ...dim, background: `hsl(${hue} 70% 92%)`, color: `hsl(${hue} 55% 36%)` } : dim;
   return (photo && !broken)
     ? <img className="stu-av" src={photo} alt="" loading="lazy" style={dim} onError={() => setBroken(true)} />
-    : <span className="stu-av stu-av-ph" aria-hidden="true" style={dim}>{initials(name)}</span>;
+    : <span className={'stu-av stu-av-ph' + (tint ? ' tinted' : '')} aria-hidden="true" style={tinted}>{initials(name)}</span>;
 }
 
 // Small dropdown menu (header actions, export, row ⋯). Closes on outside click / Esc.
@@ -630,20 +639,31 @@ export default function App({ initial }) {
           {selectMode && (
             <label className="sl-row sl-row-all"><input type="checkbox" checked={!!allOnPage} onChange={toggleAll} /> Select all on this page</label>
           )}
-          {students.map((s) => (
-            <div key={s.id} className={'sl-row' + (selected.has(s.id) ? ' is-sel' : '')}>
-              {showChecks && <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggleSel(s.id)} aria-label={'Select ' + s.name} />}
-              <a href={selectMode ? undefined : s.url} className="sl-row-main" onClick={selectMode ? (e) => { e.preventDefault(); toggleSel(s.id); } : undefined}>
-                <StudentAvatar name={s.name} photo={s.photo_url} size={44} />
-                <span className="sl-row-text">
-                  <b>{s.name}{s.is_graduated && <i aria-hidden="true" className="fas fa-user-graduate sl-grad" title="Graduate" />}</b>
-                  <small>{s.current_class || 'No class'} · {s.student_id}</small>
-                </span>
-                {s.gender && <i aria-hidden="true" className={'fas ' + (s.gender === 'Male' ? 'fa-mars sl-m' : 'fa-venus sl-f')} />}
-              </a>
-              {!selectMode && <Menu icon="fa-ellipsis-vertical" items={rowItems(s)} title={'More for ' + s.name} className="sl-rowbtn" />}
-            </div>
-          ))}
+          {students.map((s, i) => {
+            // A–Z section headers when the list is sorted by name (like a phone's contacts).
+            const byName = (query.sort === 'surname' || query.sort === 'first_name');
+            const letter = ((s.name || '').trim()[0] || '#').toUpperCase();
+            const prev = i > 0 ? (((students[i - 1].name || '').trim()[0] || '#').toUpperCase()) : null;
+            return (
+              <React.Fragment key={s.id}>
+                {byName && letter !== prev && <div className="sl-letter" aria-hidden="true">{letter}</div>}
+                <div className={'sl-row' + (selected.has(s.id) ? ' is-sel' : '')}>
+                  {showChecks && <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggleSel(s.id)} aria-label={'Select ' + s.name} />}
+                  <a href={selectMode ? undefined : s.url} className="sl-row-main" onClick={selectMode ? (e) => { e.preventDefault(); toggleSel(s.id); } : undefined}>
+                    <StudentAvatar name={s.name} photo={s.photo_url} size={42} tint />
+                    <span className="sl-row-text">
+                      <b>{s.name}{s.is_graduated && <i aria-hidden="true" className="fas fa-user-graduate sl-grad" title="Graduate" />}</b>
+                      <small>
+                        <span className={'sl-g ' + (s.gender === 'Male' ? 'm' : s.gender === 'Female' ? 'f' : '')} title={s.gender || ''} />
+                        {s.current_class || 'No class'}<span className="sl-sep">·</span>{s.student_id}
+                      </small>
+                    </span>
+                  </a>
+                  {!selectMode && <Menu icon="fa-ellipsis-vertical" items={rowItems(s)} title={'More for ' + s.name} className="sl-rowbtn" />}
+                </div>
+              </React.Fragment>
+            );
+          })}
         </div>
       ) : (
         /* Laptop: full-width dense table */
@@ -659,7 +679,7 @@ export default function App({ initial }) {
               {students.map((s) => (
                 <tr key={s.id} className={selected.has(s.id) ? 'is-sel' : ''}>
                   <td className="sl-check"><input type="checkbox" checked={selected.has(s.id)} onChange={() => toggleSel(s.id)} aria-label={'Select ' + s.name} /></td>
-                  <td><a href={s.url} className="sl-who"><StudentAvatar name={s.name} photo={s.photo_url} size={34} />
+                  <td><a href={s.url} className="sl-who"><StudentAvatar name={s.name} photo={s.photo_url} size={34} tint />
                     <span><b>{s.name}{s.is_graduated && <i aria-hidden="true" className="fas fa-user-graduate sl-grad" title="Graduate" />}</b><small>{s.student_id}</small></span></a></td>
                   <td>{s.current_class || <span className="text-muted">—</span>}</td>
                   <td>{s.stream ? <span className="sl-tag">{s.stream}</span> : <span className="text-muted">—</span>}</td>
