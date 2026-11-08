@@ -1139,8 +1139,11 @@ def index():
                     'from_class': p.from_class.name if p.from_class else '-',
                     'to_class': p.to_class.name if p.to_class else '-', 'stream': p.stream}
                    for p in recent_promotions],
+        'graduates_count': scope_query(Student.query.filter_by(is_graduated=True), Student).count(),
+        'promotions_count': scope_by_student(PromotionRecord.query, PromotionRecord).count(),
         'urls': {'rules': url_for('promotion.rules_list'), 'process': url_for('promotion.process_promotion'),
-                 'graduates': url_for('promotion.graduates_list'), 'history': url_for('promotion.promotion_history')},
+                 'graduates': url_for('promotion.graduates_list'), 'history': url_for('promotion.promotion_history'),
+                 'preview': url_for('promotion.graduate_sss3_preview')},
     })
 
 
@@ -1335,6 +1338,7 @@ def process_promotion():
         'urls': {'self': url_for('promotion.process_promotion')},
         'students': [{
             'id': it['student'].id, 'name': it['student'].full_name,
+            'student_no': it['student'].student_id, 'gender': it['student'].gender or '',
             'assignment': it['assignment'].display_name, 'average': it['average'],
             'over_threshold': bool(it['average'] and it['average'] >= promotion_threshold),
             'recommendation': {'message': it['recommendation'].get('message', ''),

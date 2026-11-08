@@ -1,50 +1,171 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { submitJson } from '../lib/forms';
 import { useSection, NavCtx, useNav, navParams } from '../lib/section';
 import { confirm, Banner, PageHeader, Empty, SectionShell, SuccessBanner } from '../components/ui';
 import { canWrite } from '../lib/perms';
 
 
-// ---- Index -----------------------------------------------------------------
+
+// ---- Shared bits for the promotion / graduation screens (pm-*) -------------
+function useMedia(query) {
+  const get = () => (typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(query).matches : false);
+  const [m, setM] = useState(get);
+  useEffect(() => {
+    if (!window.matchMedia) return undefined;
+    const mq = window.matchMedia(query);
+    const on = () => setM(mq.matches);
+    on();
+    if (mq.addEventListener) mq.addEventListener('change', on); else mq.addListener(on);
+    return () => { if (mq.removeEventListener) mq.removeEventListener('change', on); else mq.removeListener(on); };
+  }, [query]);
+  return m;
+}
+const usePhone = () => useMedia('(max-width: 759px)');
+const pmInitials = (name) => (name || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?';
+
+function PmHead({ icon, kicker, title, sub, back, actions }) {
+  return (
+    <header className="pm-head">
+      {back && <a href={back} className="pm-back" aria-label="Back"><i aria-hidden="true" className="fas fa-arrow-left" /></a>}
+      {icon && <span className="pm-logo" aria-hidden="true"><i className={'fas ' + icon} /></span>}
+      <div className="pm-head-t">
+        {kicker && <span className="pm-kick">{kicker}</span>}
+        <h1>{title}</h1>
+        {sub && <p>{sub}</p>}
+      </div>
+      {actions && <div className="pm-head-a">{actions}</div>}
+    </header>
+  );
+}
+function PmTiles({ items }) {
+  return (
+    <div className="pm-tiles">
+      {items.filter(Boolean).map((t, i) => {
+        const Tag = t.onClick ? 'button' : (t.href ? 'a' : 'div');
+        return (
+          <Tag key={i} href={t.href} type={t.onClick ? 'button' : undefined} onClick={t.onClick}
+               aria-pressed={t.onClick ? !!t.on : undefined}
+               className={'pm-tile' + (t.tone ? ' ' + t.tone : '') + (t.onClick || t.href ? ' click' : '') + (t.on ? ' on' : '')}>
+            <span className="l">{t.icon && <i aria-hidden="true" className={'fas ' + t.icon} />}{t.label}</span>
+            <span className="v">{t.value}</span>
+            {t.sub && <span className="s">{t.sub}</span>}
+          </Tag>
+        );
+      })}
+    </div>
+  );
+}
+function PmSeg({ options, value, onChange, label, small }) {
+  return (
+    <div className={'pm-seg' + (small ? ' sm' : '')} role="radiogroup" aria-label={label}>
+      {options.map((o) => (
+        <button key={o.value} type="button" role="radio" aria-checked={o.value === value}
+                className={(o.value === value ? 'on ' : '') + (o.tone || '')} onClick={() => onChange(o.value)}>
+          {o.icon && <i aria-hidden="true" className={'fas ' + o.icon} />}{o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+function PmMenu({ items, label = 'More', icon = 'fa-ellipsis', text, up }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', close); document.addEventListener('touchstart', close);
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('touchstart', close); };
+  }, [open]);
+  const list = items.filter(Boolean);
+  if (!list.length) return null;
+  return (
+    <div className="pm-menu" ref={ref}>
+      <button type="button" className="pm-btn" aria-haspopup="true" aria-expanded={open} aria-label={label} title={label} onClick={() => setOpen((v) => !v)}>
+        <i aria-hidden="true" className={'fas ' + icon} />{text && <span>{text}</span>}</button>
+      {open && (
+        <div className={'pm-menu-pop' + (up ? ' up' : '')} role="menu">
+          {list.map((it, i) => (it.href
+            ? <a key={i} role="menuitem" href={it.href} onClick={() => setOpen(false)}>
+                <i aria-hidden="true" className={'fas ' + it.icon} /> <span>{it.label}</span>{it.badge ? <b className="pm-menu-n">{it.badge}</b> : null}</a>
+            : <button key={i} type="button" role="menuitem" onClick={() => { setOpen(false); it.onClick(); }}>
+                <i aria-hidden="true" className={'fas ' + it.icon} /> <span>{it.label}</span></button>))}
+        </div>
+      )}
+    </div>
+  );
+}
+// Sticky bar at the bottom of the work area on laptops; fixed above the bottom
+// nav on phones (portalled so it isn't trapped under the nav's stacking layer).
+function PmBar({ phone, children }) {
+  const bar = <div className={'pm-bar' + (phone ? ' fixed' : '')}>{children}</div>;
+  return phone ? createPortal(bar, document.body) : bar;
+}
+function PmSheet({ title, onClose, children }) {
+  useEffect(() => {
+    const esc = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', esc);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => { document.removeEventListener('keydown', esc); document.body.style.overflow = prev; };
+  }, []);
+  return createPortal(
+    <div className="pm-sheet-bg" onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="pm-sheet" role="dialog" aria-modal="true" aria-label={title}>
+        <div className="pm-grip" aria-hidden="true" />
+        <div className="pm-sheet-h"><strong>{title}</strong>
+          <button type="button" className="pm-x" onClick={onClose} aria-label="Close"><i aria-hidden="true" className="fas fa-xmark" /></button></div>
+        {children}
+      </div>
+    </div>, document.body);
+}
+
+// ---- Index: the promotion & graduation hub --------------------------------
 function Index({ d }) {
-  const links = [
-    ['rules', 'fa-list-alt', 'Promotion Rules', 'Configure promotion criteria and streams'],
-    ['process', 'fa-user-graduate', 'Process Promotions', 'Review and promote students'],
-    ['graduates', 'fa-graduation-cap', 'Graduates', 'View graduated students with WAEC/NECO/JAMB results'],
-    ['history', 'fa-history', 'Promotion History', 'View past promotion records'],
+  const steps = [
+    { key: 'rules', icon: 'fa-sliders', title: 'Promotion rules', desc: 'Pass mark, next class and streams', stat: `${d.rules_count} active` },
+    { key: 'process', icon: 'fa-arrow-up-right-dots', title: 'Promote students', desc: 'Review each class and move them up', stat: 'Start here', primary: true },
+    { key: 'preview', icon: 'fa-user-graduate', title: 'Graduate SSS3', desc: 'Pick the leavers and the graduation date', stat: 'Batch' },
+    { key: 'graduates', icon: 'fa-graduation-cap', title: 'Graduates', desc: 'Records, documents and alumni', stat: d.graduates_count != null ? `${d.graduates_count} graduates` : '' },
   ];
   return (
-    <>
-      <PageHeader title="Student Promotion" />
-      <div className="stats-grid mb-3">
-        <div className="stat-card"><div className="stat-icon primary"><i aria-hidden="true" className="fas fa-cog" /></div>
-          <div className="stat-content"><h3>{d.rules_count}</h3><p>Promotion Rules</p></div></div>
-        <div className="stat-card"><div className="stat-icon success"><i aria-hidden="true" className="fas fa-calendar" /></div>
-          <div className="stat-content"><h3>{d.active_session || '-'}</h3><p>Active Session</p></div></div>
-      </div>
-      <div className="data-cards" style={{ padding: 0 }}>
-        {links.map(([key, icon, title, desc]) => (
-          <a key={key} href={d.urls[key]} className="data-card" style={{ textDecoration: 'none', color: 'inherit' }}>
-            <div className="data-card-header"><div className="data-card-title"><i aria-hidden="true" className={'fas ' + icon} /> {title}</div></div>
-            <div className="data-card-row">{desc}</div>
-          </a>
+    <div className="pm">
+      <PmHead icon="fa-stairs" kicker={d.active_session ? `Active session · ${d.active_session}` : 'No active session'}
+              title="Promotion & graduation" sub="Move every class up at the end of the session, then graduate the leavers." />
+      <ol className="pm-steps">
+        {steps.map((st, i) => d.urls[st.key] && (
+          <li key={st.key}>
+            <a href={d.urls[st.key]} className={'pm-step' + (st.primary ? ' primary' : '')}>
+              <span className="pm-step-n">{i + 1}</span>
+              <span className="pm-step-ic"><i aria-hidden="true" className={'fas ' + st.icon} /></span>
+              <span className="pm-step-t"><strong>{st.title}</strong><small>{st.desc}</small></span>
+              {st.stat && <span className="pm-step-s">{st.stat}</span>}
+              <i aria-hidden="true" className="fas fa-chevron-right pm-chev" />
+            </a>
+          </li>
         ))}
-      </div>
-      {d.recent.length > 0 && (
-        <div className="card mt-3"><div className="card-header"><h3>Recent Promotions</h3></div>
-          <div className="card-body" style={{ padding: 0 }}><div className="data-cards" style={{ padding: '1rem' }}>
+      </ol>
+
+      <section className="pm-card">
+        <header className="pm-card-h">
+          <span className="pm-card-ic"><i aria-hidden="true" className="fas fa-clock-rotate-left" /></span>
+          <div className="pm-card-t"><h3>Recent promotions</h3><small>{d.promotions_count ? `${d.promotions_count} recorded in total` : 'Nothing recorded yet'}</small></div>
+          {d.urls.history && <a href={d.urls.history} className="pm-btn"><span>Full history</span> <i aria-hidden="true" className="fas fa-arrow-right" /></a>}
+        </header>
+        {d.recent.length ? (
+          <ul className="pm-people">
             {d.recent.map((p, i) => (
-              <div className="data-card" key={i}>
-                <div className="data-card-header"><div className="data-card-title">{p.name}</div>
-                  <span className={'badge ' + p.status_badge}>{p.status}</span></div>
-                <div className="data-card-row"><span className="data-card-label">From</span><span>{p.from_class}</span></div>
-                <div className="data-card-row"><span className="data-card-label">To</span><span>{p.to_class}</span></div>
-                {p.stream && <div className="data-card-row"><span className="data-card-label">Stream</span><span>{p.stream}</span></div>}
-              </div>
+              <li key={i} className="pm-person">
+                <span className="pm-av" aria-hidden="true">{pmInitials(p.name)}</span>
+                <span className="pm-pn"><strong>{p.name}</strong>
+                  <small>{p.from_class} <i aria-hidden="true" className="fas fa-arrow-right" /> {p.to_class}{p.stream ? ` · ${p.stream}` : ''}</small></span>
+                <span className={'badge ' + p.status_badge}>{p.status}</span>
+              </li>
             ))}
-          </div></div></div>
-      )}
-    </>
+          </ul>
+        ) : <p className="pm-empty">Promotions you save will show up here.</p>}
+      </section>
+    </div>
   );
 }
 
@@ -183,6 +304,11 @@ function Process({ d, notify }) {
   const [done, setDone] = useState(null);               // milestone summary, shown briefly before the log
   const [sel, setSel] = useState(() => new Set());      // selected student ids
   const [bulk, setBulk] = useState({ action: 'promoted', to_class_id: defaultClass, stream: '' });
+  const phone = usePhone();
+  const [filter, setFilter] = useState('');
+  const [q, setQ] = useState('');
+  const [selMode, setSelMode] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
   const setRow = (i, k, v) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, [k]: v } : r)));
 
   const toggle = (id) => setSel((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -230,104 +356,160 @@ function Process({ d, notify }) {
   };
 
   const bulkStreams = streamsForClass(d, bulk.to_class_id);
+  const go = (patch) => navParams(nav.go, d.urls.self, { from_session_id: d.from_session_id, to_session_id: d.to_session_id,
+    class_id: d.class_id, arm_id: d.arm_id, ...patch });
+  const sum = rows.reduce((acc, r) => { acc[r.action] = (acc[r.action] || 0) + 1; return acc; }, {});
+  const canSave = canWrite(d, 'promote_execute');
+  const term = q.trim().toLowerCase();
+  const visible = d.students.map((st, i) => [st, i]).filter(([st, i]) =>
+    (!filter || rows[i].action === filter) && (!term || `${st.name} ${st.student_no || ''} ${st.assignment}`.toLowerCase().includes(term)));
+  const className = (id) => (d.classes.find((c) => String(c.id) === String(id)) || {}).name || '';
+  const ready = d.from_session_id && d.class_id;
 
   return (
-    <>
+    <div className={'pm' + (phone && d.students.length && canSave ? ' has-bar' : '')}>
       {done && <SuccessBanner title="Promotions saved" summary={`${done} — opening the promotion log…`} />}
-      <PageHeader title="Process Promotions" />
-      <div className="card mb-3"><div className="card-body"><div className="filter-form">
-        <div className="form-group"><label className="form-label">From Session</label>
-          <select className="form-control" value={d.from_session_id} onChange={(e) => navParams(nav.go, d.urls.self, { from_session_id: e.target.value, to_session_id: d.to_session_id, class_id: d.class_id })}>
-            <option value="">Select Session</option>{d.sessions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
-        <div className="form-group"><label className="form-label">To Session</label>
-          <select className="form-control" value={d.to_session_id} onChange={(e) => navParams(nav.go, d.urls.self, { from_session_id: d.from_session_id, to_session_id: e.target.value, class_id: d.class_id })}>
-            <option value="">Select Session</option>{d.sessions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
-        <div className="form-group"><label className="form-label">Class</label>
-          <select className="form-control" value={d.class_id} onChange={(e) => navParams(nav.go, d.urls.self, { from_session_id: d.from_session_id, to_session_id: d.to_session_id, class_id: e.target.value, arm_id: '' })}>
-            <option value="">Select Class</option>{d.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
-        {d.class_id && (d.arm_options || []).length > 0 && (
-          <div className="form-group"><label className="form-label">Arm <span className="text-muted">(optional)</span></label>
-            <select className="form-control" value={d.arm_id} onChange={(e) => navParams(nav.go, d.urls.self, { from_session_id: d.from_session_id, to_session_id: d.to_session_id, class_id: d.class_id, arm_id: e.target.value })}>
-              <option value="">All Arms</option>{d.arm_options.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}</select></div>
-        )}
-      </div></div></div>
+      <PmHead back="/promotion/" kicker={`Pass mark ${d.threshold}%`} title="Promote students"
+              sub={ready ? `${d.selected_class_name}${d.arm_id ? ' · ' + ((d.arm_options || []).find((x) => String(x.id) === String(d.arm_id)) || {}).name : ''} — rows are pre-filled with the recommended action.` : 'Choose the sessions and a class to begin.'} />
+
+      <section className="pm-pick">
+        <div className="pm-sessions">
+          <label className="pm-field"><span>From session</span>
+            <select value={d.from_session_id} onChange={(e) => go({ from_session_id: e.target.value })}>
+              <option value="">Choose…</option>{d.sessions.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
+          <i aria-hidden="true" className="fas fa-arrow-right pm-arrow" />
+          <label className="pm-field"><span>To session</span>
+            <select value={d.to_session_id} onChange={(e) => go({ to_session_id: e.target.value })}>
+              <option value="">Choose…</option>{d.sessions.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
+        </div>
+        <span className="pm-pick-l">Class</span>
+        <div className="pm-chips" role="radiogroup" aria-label="Class">
+          {d.classes.map((c) => (
+            <button key={c.id} type="button" role="radio" aria-checked={String(c.id) === String(d.class_id)}
+                    className={String(c.id) === String(d.class_id) ? 'on' : ''} onClick={() => go({ class_id: c.id, arm_id: '' })}>{c.name}</button>))}
+        </div>
+        {d.class_id && (d.arm_options || []).length > 1 && (<>
+          <span className="pm-pick-l">Arm</span>
+          <div className="pm-chips" role="radiogroup" aria-label="Arm">
+            <button type="button" role="radio" aria-checked={!d.arm_id} className={!d.arm_id ? 'on' : ''} onClick={() => go({ arm_id: '' })}>All arms</button>
+            {d.arm_options.map((x) => (
+              <button key={x.id} type="button" role="radio" aria-checked={String(x.id) === String(d.arm_id)}
+                      className={String(x.id) === String(d.arm_id) ? 'on' : ''} onClick={() => go({ arm_id: x.id })}>{x.name}</button>))}
+          </div>
+        </>)}
+      </section>
 
       {d.students.length ? (<>
-        <div className="card mb-3"><div className="card-body">
-          <p><strong>Promotion Threshold:</strong> {d.threshold}%</p>
-          <p className="text-muted">Rows are pre-filled with the recommended action — just review and <strong>Save Promotions</strong>, or adjust exceptions below. To promote only a specific student or a subset, tick their checkbox(es) and use <strong>Only process selected (skip the rest)</strong>.</p>
-          {(() => {
-            const sum = rows.reduce((a, r) => { a[r.action] = (a[r.action] || 0) + 1; return a; }, {});
-            const chip = (n, label, cls) => n ? <span className={'badge ' + cls} style={{ marginRight: '.4rem' }}>{n} {label}</span> : null;
-            return <div style={{ marginTop: '.5rem' }}>
-              {chip(sum.promoted, 'to promote', 'badge-success')}
-              {chip(sum.repeated, 'to repeat', 'badge-warning')}
-              {chip(sum.graduated, 'graduating', 'badge-info')}
-              {chip(sum.skip, 'skipped', 'badge-secondary')}
-            </div>;
-          })()}
-        </div></div>
+        <PmTiles items={[
+          { label: 'All', value: d.students.length, sub: 'students', onClick: () => setFilter(''), on: !filter },
+          { label: 'Promote', icon: 'fa-arrow-up', value: sum.promoted || 0, tone: 'good', onClick: () => setFilter('promoted'), on: filter === 'promoted' },
+          { label: 'Repeat', icon: 'fa-rotate-left', value: sum.repeated || 0, tone: 'warn', onClick: () => setFilter('repeated'), on: filter === 'repeated' },
+          sum.graduated ? { label: 'Graduate', icon: 'fa-user-graduate', value: sum.graduated, tone: 'info', onClick: () => setFilter('graduated'), on: filter === 'graduated' } : null,
+          { label: 'Skip', icon: 'fa-forward', value: sum.skip || 0, onClick: () => setFilter('skip'), on: filter === 'skip' },
+        ]} />
 
-        {/* Bulk action bar — apply one action/class/stream to all ticked students. */}
-        <div className="card mb-3"><div className="card-body"><div className="filter-form" style={{ alignItems: 'flex-end' }}>
-          <div className="form-group"><label className="form-label">With {sel.size} selected</label>
-            <select className="form-control" value={bulk.action} onChange={(e) => setBulk((b) => ({ ...b, action: e.target.value }))}>
-              <option value="promoted">Promote</option><option value="repeated">Repeat</option><option value="skip">Skip</option>
-            </select></div>
-          {bulk.action === 'promoted' && (<>
-            <div className="form-group"><label className="form-label">Promote to</label>
-              <select className="form-control" value={bulk.to_class_id} onChange={(e) => setBulk((b) => ({ ...b, to_class_id: e.target.value, stream: '' }))}>
-                {d.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
-            <div className="form-group"><label className="form-label">Stream</label>
-              <select className="form-control" value={bulk.stream} onChange={(e) => setBulk((b) => ({ ...b, stream: e.target.value }))}>
-                <option value="">— No change —</option>
-                {bulkStreams.map((nm) => <option key={nm} value={nm}>{nm}</option>)}</select></div>
-          </>)}
-          <div className="form-group"><button type="button" className="btn btn-secondary" onClick={applyBulk}><i aria-hidden="true" className="fas fa-wand-magic-sparkles" /> Apply to selected</button></div>
-          <div className="form-group"><button type="button" className="btn btn-secondary" onClick={skipUnselected} title="Tick the student(s) to promote, then use this to skip everyone else"><i aria-hidden="true" className="fas fa-user-check" /> Only process selected (skip the rest)</button></div>
-        </div></div></div>
-
-        <div className="card">
-          <div className="card-header"><h3>{d.selected_class_name} Students ({d.students.length})</h3></div>
-          <div className="card-body" style={{ padding: 0 }}><div className="table-container">
-            <table className="data-table"><thead><tr>
-              <th style={{ width: 32 }}><input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Select all" /></th>
-              <th>Student</th><th>Average</th><th>Recommendation</th><th>Action</th><th>Promote To</th><th>Stream</th></tr></thead>
-              <tbody>{d.students.map((s, i) => {
+        <section className="pm-card">
+          <header className="pm-card-h">
+            <div className="pm-search"><i aria-hidden="true" className="fas fa-search" />
+              <input type="search" placeholder="Search students…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search students" /></div>
+            {selMode
+              ? <button type="button" className="pm-btn" onClick={() => { setSelMode(false); setSel(new Set()); }}>Done</button>
+              : <button type="button" className="pm-btn" onClick={() => setSelMode(true)}><i aria-hidden="true" className="fas fa-check-square" /> <span>Select</span></button>}
+          </header>
+          {selMode && (
+            <div className="pm-selbar">
+              <label><input type="checkbox" checked={allSelected} onChange={toggleAll} /> {sel.size ? `${sel.size} selected` : 'Select all'}</label>
+              <button type="button" className="pm-btn primary" disabled={!sel.size} onClick={() => setBulkOpen(true)}>
+                <i aria-hidden="true" className="fas fa-wand-magic-sparkles" /> Change selected</button>
+            </div>
+          )}
+          {visible.length === 0 ? <p className="pm-empty">No students match.</p> : (
+            <ul className="pm-rows">
+              {visible.map(([st, i]) => {
                 const r = rows[i];
-                const isGrad = r.isGrad;
                 const rowStreams = streamsForClass(d, r.to_class_id);
-                // Keep the current value selectable even if not in the class's list.
                 const opts = r.stream && !rowStreams.includes(r.stream) ? [r.stream, ...rowStreams] : rowStreams;
                 return (
-                  <tr key={s.id}>
-                    <td>{isGrad ? null : <input type="checkbox" checked={sel.has(s.id)} onChange={() => toggle(s.id)} aria-label={'Select ' + s.name} />}</td>
-                    <td>{s.name}<br /><small className="text-muted">{s.assignment}</small></td>
-                    <td>{s.average != null ? <span className={'badge ' + (s.over_threshold ? 'badge-success' : 'badge-warning')}>{s.average}%</span> : <span className="text-muted">No scores</span>}</td>
-                    <td>{s.existing_status ? <span className="badge badge-info">{s.existing_status}</span> : s.recommendation.message}</td>
-                    <td><select className="form-control" style={{ width: 120 }} value={r.action} onChange={(e) => setRow(i, 'action', e.target.value)}>
-                      <option value="skip">Skip</option>
-                      {isGrad ? <option value="graduated">Graduate</option> : <><option value="promoted">Promote</option><option value="repeated">Repeat</option></>}
-                    </select></td>
-                    <td>{isGrad ? <span className="text-muted">N/A</span> : (
-                      <select className="form-control" style={{ width: 110 }} value={r.to_class_id} onChange={(e) => setRow(i, 'to_class_id', e.target.value)}>
-                        {d.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>)}</td>
-                    <td>{isGrad ? <span className="text-muted">N/A</span> : (
-                      <select className="form-control" style={{ width: 120 }} value={r.stream} onChange={(e) => setRow(i, 'stream', e.target.value)}>
-                        <option value="">— None —</option>
-                        {opts.map((nm) => <option key={nm} value={nm}>{nm}</option>)}</select>)}</td>
-                  </tr>
+                  <li key={st.id} className={'pm-row act-' + r.action + (sel.has(st.id) ? ' sel' : '')}>
+                    <div className="pm-row-who">
+                      {selMode && !r.isGrad
+                        ? <input type="checkbox" checked={sel.has(st.id)} onChange={() => toggle(st.id)} aria-label={'Select ' + st.name} />
+                        : <span className="pm-av" data-g={st.gender || ''} aria-hidden="true">{pmInitials(st.name)}</span>}
+                      <span className="pm-pn"><strong>{st.name}</strong>
+                        <small>{st.assignment}{st.existing_status ? ` · already ${st.existing_status}` : ''}</small></span>
+                      {st.average != null
+                        ? <span className={'pm-avg ' + (st.over_threshold ? 'good' : 'bad')} title="Third-term average">{st.average}%</span>
+                        : <span className="pm-avg none">No scores</span>}
+                    </div>
+                    {st.recommendation.message && !/^no scores?$/i.test(st.recommendation.message.trim()) && (
+                      <p className="pm-rec"><i aria-hidden="true" className="fas fa-lightbulb" /> {st.recommendation.message}</p>)}
+                    <div className="pm-row-do">
+                      <PmSeg small label={`Action for ${st.name}`} value={r.action} onChange={(v) => setRow(i, 'action', v)}
+                             options={r.isGrad
+                               ? [{ value: 'graduated', label: 'Graduate', icon: 'fa-user-graduate', tone: 'info' }, { value: 'skip', label: 'Skip' }]
+                               : [{ value: 'promoted', label: 'Promote', icon: 'fa-arrow-up', tone: 'good' },
+                                  { value: 'repeated', label: 'Repeat', icon: 'fa-rotate-left', tone: 'warn' },
+                                  { value: 'skip', label: 'Skip' }]} />
+                      {!r.isGrad && r.action === 'promoted' && (
+                        <span className="pm-to">
+                          <label className="pm-mini"><span>To</span>
+                            <select value={r.to_class_id} onChange={(e) => setRow(i, 'to_class_id', e.target.value)} aria-label={`Promote ${st.name} to`}>
+                              {d.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+                          <label className="pm-mini"><span>Stream</span>
+                            <select value={r.stream} onChange={(e) => setRow(i, 'stream', e.target.value)} aria-label={`Stream for ${st.name}`}>
+                              <option value="">None</option>{opts.map((nm) => <option key={nm} value={nm}>{nm}</option>)}</select></label>
+                        </span>
+                      )}
+                    </div>
+                  </li>
                 );
-              })}</tbody></table>
-          </div></div>
-          {canWrite(d, 'promote_execute') && <div className="card-body"><div className="page-header-actions">
-            <button type="button" className="btn btn-primary" disabled={busy} onClick={submit}><i aria-hidden="true" className="fas fa-save" /> Save Promotions</button>
-          </div></div>}
-        </div>
-      </>) : (d.from_session_id && d.class_id
-        ? <div className="card"><div className="card-body"><Empty icon="fa-users" title="No Students"><p>No students found for this class in the selected session's Third Term</p></Empty></div></div>
-        : <div className="card"><div className="card-body"><Empty icon="fa-hand-pointer" title="Select Options"><p>Choose session and class to process promotions</p></Empty></div></div>)}
-    </>
+              })}
+            </ul>
+          )}
+          {canSave && (
+            <PmBar phone={phone}>
+              <span className="pm-bar-sum">
+                {sum.promoted ? <b className="good">{sum.promoted} up</b> : null}
+                {sum.repeated ? <b className="warn">{sum.repeated} repeat</b> : null}
+                {sum.graduated ? <b className="info">{sum.graduated} graduate</b> : null}
+                {sum.skip ? <b>{sum.skip} skip</b> : null}
+              </span>
+              <button type="button" className="pm-btn primary big" disabled={busy} onClick={submit}>
+                <i aria-hidden="true" className={'fas ' + (busy ? 'fa-spinner fa-spin' : 'fa-check')} /> Save promotions</button>
+            </PmBar>
+          )}
+        </section>
+      </>) : (
+        <section className="pm-card"><div className="pm-card-b">
+          {ready
+            ? <Empty icon="fa-users" title="No students"><p>No students found for {d.selected_class_name} in the selected session’s Third Term.</p></Empty>
+            : <Empty icon="fa-hand-pointer" title="Pick a class"><p>Choose the session you’re promoting from and a class — every student loads with the recommended action.</p></Empty>}
+        </div></section>
+      )}
+
+      {bulkOpen && (
+        <PmSheet title={`Change ${sel.size} selected`} onClose={() => setBulkOpen(false)}>
+          <span className="form-label">Action</span>
+          <PmSeg label="Bulk action" value={bulk.action} onChange={(v) => setBulk((b) => ({ ...b, action: v }))}
+                 options={[{ value: 'promoted', label: 'Promote', icon: 'fa-arrow-up' }, { value: 'repeated', label: 'Repeat', icon: 'fa-rotate-left' }, { value: 'skip', label: 'Skip' }]} />
+          {bulk.action === 'promoted' && (
+            <div className="pm-two">
+              <label className="pm-field"><span>Promote to</span>
+                <select value={bulk.to_class_id} onChange={(e) => setBulk((b) => ({ ...b, to_class_id: e.target.value, stream: '' }))}>
+                  {d.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
+              <label className="pm-field"><span>Stream</span>
+                <select value={bulk.stream} onChange={(e) => setBulk((b) => ({ ...b, stream: e.target.value }))}>
+                  <option value="">No change</option>{bulkStreams.map((nm) => <option key={nm} value={nm}>{nm}</option>)}</select></label>
+            </div>
+          )}
+          <button type="button" className="pm-btn primary big wide" onClick={() => { applyBulk(); setBulkOpen(false); }}>
+            Apply to {sel.size} student{sel.size === 1 ? '' : 's'}{bulk.action === 'promoted' ? ` → ${className(bulk.to_class_id)}` : ''}</button>
+          <button type="button" className="pm-btn wide" onClick={() => { skipUnselected(); setBulkOpen(false); }}
+                  title="Keep the selected students and skip everyone else">
+            <i aria-hidden="true" className="fas fa-user-check" /> Only process these {sel.size} — skip everyone else</button>
+        </PmSheet>
+      )}
+    </div>
   );
 }
 
@@ -364,128 +546,117 @@ function GradAvatar({ name, photo }) {
 // ---- Graduates -------------------------------------------------------------
 function Graduates({ d }) {
   const nav = useNav();
+  const phone = usePhone();
   const docTypes = d.doc_types || [];
   const [bulkType, setBulkType] = useState(docTypes.length ? docTypes[0].type : '');
   const [q, setQ] = useState('');
   const [sortBy, setSortBy] = useState('name');
+  const [missingOnly, setMissingOnly] = useState(false);
   const males = d.graduates.filter((g) => g.gender === 'Male').length;
   const females = d.graduates.filter((g) => g.gender === 'Female').length;
-  const noResults = d.graduates.filter((g) => !g.has_waec && !g.has_neco && !g.has_jamb).length;
+  const isMissing = (g) => !g.has_waec && !g.has_neco && !g.has_jamb;
+  const noResults = d.graduates.filter(isMissing).length;
   const hasFilters = !!(d.session_id || d.status);
   // Live search + client-side sort over the loaded graduates — matches name,
   // student ID, session or status.
   const shown = useMemo(() => {
     const t = q.trim().toLowerCase();
-    const list = !t ? d.graduates.slice() : d.graduates.filter((s) => (
-      `${s.full_name} ${s.student_id} ${s.graduation_session || ''} ${s.status || ''}`
+    let list = !t ? d.graduates.slice() : d.graduates.filter((g) => (
+      `${g.full_name} ${g.student_id} ${g.graduation_session || ''} ${g.status || ''}`
     ).toLowerCase().includes(t));
-    if (sortBy === 'name_desc') list.sort((a, b) => b.full_name.localeCompare(a.full_name));
-    else if (sortBy === 'status') list.sort((a, b) => (a.status || '').localeCompare(b.status || ''));
-    else list.sort((a, b) => a.full_name.localeCompare(b.full_name));
+    if (missingOnly) list = list.filter(isMissing);
+    if (sortBy === 'name_desc') list.sort((x, y) => y.full_name.localeCompare(x.full_name));
+    else if (sortBy === 'status') list.sort((x, y) => (x.status || '').localeCompare(y.status || ''));
+    else list.sort((x, y) => x.full_name.localeCompare(y.full_name));
     return list;
-  }, [q, d.graduates, sortBy]);
+  }, [q, d.graduates, sortBy, missingOnly]);
   const bulkHref = d.bulk_url && bulkType
     ? `${d.bulk_url}?doc_type=${encodeURIComponent(bulkType)}${d.session_id ? `&session_id=${d.session_id}` : ''}${d.status ? `&status=${encodeURIComponent(d.status)}` : ''}`
     : null;
-  const clearFilters = () => navParams(nav.go, window.location.pathname, {});
+  const clearFilters = () => { setMissingOnly(false); navParams(nav.go, window.location.pathname, {}); };
+  const canBatch = canWrite(d, 'graduates_sss3');
+  const canBulk = canWrite(d, 'documents_bulk_generate') && docTypes.length > 0 && d.bulk_url;
+  const res = (on, label) => <span className={'grad-res' + (on ? ' on' : '')}><i aria-hidden="true" className={'fas fa-' + (on ? 'circle-check' : 'circle')} /> {label}</span>;
+
   return (
-    <>
-      <PageHeader title="Graduates" actions={<>
-        {d.alumni_url && <a href={d.alumni_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-address-book" /> Alumni{d.pending_requests > 0 ? <span className="badge badge-warning" style={{ marginLeft: '.4rem' }}>{d.pending_requests}</span> : null}</a>}
-        {d.doc_templates_url && <a href={d.doc_templates_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-swatchbook" /> Designs</a>}
-        {d.verifications_url && <a href={d.verifications_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-shield-halved" /> Verifications</a>}
-        {d.compare_url && <a href={d.compare_url} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-chart-column" /> Compare with SSS3</a>}
-        {canWrite(d, 'graduates_sss3') && <a href={d.preview_url} className="btn btn-success"><i aria-hidden="true" className="fas fa-user-graduate" /> Batch graduate</a>}
-      </>} />
+    <div className="pm">
+      <PmHead back="/promotion/" kicker="Promotion & graduation" title="Graduates"
+              sub="Every student who has left — their results, documents and alumni status."
+              actions={<>
+                {canBatch && !phone && <a href={d.preview_url} className="pm-btn primary"><i aria-hidden="true" className="fas fa-user-graduate" /> <span>Batch graduate</span></a>}
+                <PmMenu label="More" items={[
+                  d.alumni_url && { href: d.alumni_url, icon: 'fa-address-book', label: 'Alumni directory', badge: d.pending_requests || null },
+                  d.compare_url && { href: d.compare_url, icon: 'fa-chart-column', label: 'Compare with SSS3' },
+                  d.doc_templates_url && { href: d.doc_templates_url, icon: 'fa-swatchbook', label: 'Document designs' },
+                  d.verifications_url && { href: d.verifications_url, icon: 'fa-shield-halved', label: 'Verifications' },
+                ]} />
+              </>} />
 
-      <div className="stats-grid mb-3">
-        <div className="stat-card"><div className="stat-icon success"><i aria-hidden="true" className="fas fa-graduation-cap" /></div><div className="stat-content"><h3>{d.graduates.length}</h3><p>Total Graduates</p></div></div>
-        <div className="stat-card"><div className="stat-icon info"><i aria-hidden="true" className="fas fa-mars" /></div><div className="stat-content"><h3>{males}</h3><p>Male</p></div></div>
-        <div className="stat-card"><div className="stat-icon secondary"><i aria-hidden="true" className="fas fa-venus" /></div><div className="stat-content"><h3>{females}</h3><p>Female</p></div></div>
-        <div className="stat-card"><div className="stat-icon warning"><i aria-hidden="true" className="fas fa-file-circle-question" /></div><div className="stat-content"><h3>{noResults}</h3><p>No results uploaded</p></div></div>
-      </div>
+      <PmTiles items={[
+        { label: 'Graduates', icon: 'fa-graduation-cap', value: d.graduates.length, sub: d.session_id ? 'in this session' : 'all sessions' },
+        { label: 'Male', icon: 'fa-mars', value: males },
+        { label: 'Female', icon: 'fa-venus', value: females },
+        { label: 'No results yet', icon: 'fa-file-circle-question', value: noResults, tone: noResults ? 'warn' : 'good',
+          sub: noResults ? (missingOnly ? 'showing these only' : 'tap to show them') : 'all uploaded',
+          onClick: noResults ? () => setMissingOnly((v) => !v) : undefined, on: missingOnly },
+        d.pending_requests > 0 && d.alumni_url ? { label: 'Document requests', icon: 'fa-inbox', value: d.pending_requests, tone: 'warn', href: d.alumni_url, sub: 'waiting' } : null,
+      ]} />
 
-      {/* mobile-only: a swipeable chip row stands in for the 4 boxed stat
-          cards above (hidden <=759px) so the list starts sooner on a phone */}
-      <div className="grad-chips">
-        <span className="grad-chip"><i aria-hidden="true" className="fas fa-graduation-cap" /> <b>{d.graduates.length}</b>&nbsp;total</span>
-        <span className="grad-chip"><i aria-hidden="true" className="fas fa-mars" /> <b>{males}</b>&nbsp;male</span>
-        <span className="grad-chip"><i aria-hidden="true" className="fas fa-venus" /> <b>{females}</b>&nbsp;female</span>
-        {noResults > 0 && <span className="grad-chip warn"><i aria-hidden="true" className="fas fa-triangle-exclamation" /> <b>{noResults}</b>&nbsp;missing results</span>}
-      </div>
-
-      {d.graduates.length ? (<>
-        <div className="card mb-3"><div className="card-body"><div className="filter-form">
-          <div className="form-group" style={{ flex: '2 1 240px' }}><label className="form-label">Search graduates</label>
-            <div className="enroll-search"><i aria-hidden="true" className="fas fa-search" />
-              <input type="search" className="form-control" placeholder="Name, student ID, session or status…" autoComplete="off"
-                value={q} onChange={(e) => setQ(e.target.value)} /></div></div>
-          <div className="form-group" style={{ flex: '1 1 180px' }}><label className="form-label">Graduation Session</label>
-            <select className="form-control" value={d.session_id} onChange={(e) => navParams(nav.go, window.location.pathname, { session_id: e.target.value, status: d.status || '' })}>
-              <option value="">All Sessions</option>{d.sessions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
-          <div className="form-group" style={{ flex: '1 1 180px' }}><label className="form-label">Status</label>
-            <select className="form-control" value={d.status || ''} onChange={(e) => navParams(nav.go, window.location.pathname, { session_id: d.session_id || '', status: e.target.value })}>
-              <option value="">All Statuses</option>{(d.statuses || []).map((s) => <option key={s} value={s}>{s}</option>)}</select></div>
-          <div className="form-group" style={{ flex: '1 1 160px' }}><label className="form-label">Sort by</label>
-            <select className="form-control" value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
-              <option value="name">Name (A–Z)</option><option value="name_desc">Name (Z–A)</option><option value="status">Status</option></select></div>
-          {hasFilters && <div className="form-group" style={{ flex: '0 0 auto', alignSelf: 'flex-end' }}>
-            <button type="button" className="btn btn-secondary" onClick={clearFilters}><i aria-hidden="true" className="fas fa-rotate-left" /> Clear filters</button></div>}
-        </div></div></div>
-
-        <div className="card"><div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '.5rem' }}>
-          <h3>Graduates ({shown.length}{shown.length !== d.graduates.length ? ` of ${d.graduates.length}` : ''})</h3>
-          {canWrite(d, 'documents_bulk_generate') && docTypes.length > 0 && d.bulk_url && <div style={{ display: 'flex', gap: '.4rem', alignItems: 'center', flexWrap: 'wrap', maxWidth: '100%' }}>
-            <select className="form-control" style={{ width: 'auto', maxWidth: '220px' }} value={bulkType} onChange={(e) => setBulkType(e.target.value)}>
+      <section className="pm-card">
+        <header className="pm-card-h wrap">
+          <div className="pm-search"><i aria-hidden="true" className="fas fa-search" />
+            <input type="search" placeholder="Name, student ID, session or status…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search graduates" /></div>
+          <label className="pm-mini"><span>Session</span>
+            <select value={d.session_id} onChange={(e) => navParams(nav.go, window.location.pathname, { session_id: e.target.value, status: d.status || '' })}>
+              <option value="">All</option>{d.sessions.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
+          <label className="pm-mini"><span>Status</span>
+            <select value={d.status || ''} onChange={(e) => navParams(nav.go, window.location.pathname, { session_id: d.session_id || '', status: e.target.value })}>
+              <option value="">All</option>{(d.statuses || []).map((x) => <option key={x} value={x}>{x}</option>)}</select></label>
+          <label className="pm-mini"><span>Sort</span>
+            <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+              <option value="name">A–Z</option><option value="name_desc">Z–A</option><option value="status">Status</option></select></label>
+          {(hasFilters || missingOnly) && <button type="button" className="pm-btn" onClick={clearFilters}><i aria-hidden="true" className="fas fa-rotate-left" /> <span>Clear</span></button>}
+        </header>
+        {canBulk && d.graduates.length > 0 && (
+          <div className="pm-bulkdoc">
+            <i aria-hidden="true" className="fas fa-file-zipper" />
+            <span>Issue a document to everyone listed:</span>
+            <select value={bulkType} onChange={(e) => setBulkType(e.target.value)} aria-label="Document type">
               {docTypes.map((t) => <option key={t.type} value={t.type}>{t.label}</option>)}</select>
-            <a href={bulkHref} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-file-zipper" /> Bulk issue</a>
-          </div>}
-        </div>
-          <div className="card-body" style={{ padding: '1rem' }}>
-            {shown.length === 0 ? <Empty icon="fa-magnifying-glass" title="No matches">
-              <p>No graduates match “{q}”.</p></Empty> : <div className="grad-list">
-              {shown.map((s) => {
-                const tone = GRAD_STATUS_TONE[s.status] || 'info';
-                return (
-                  <div className="grad-row" key={s.id}>
-                    <div className="who">
-                      <GradAvatar name={s.full_name} photo={s.photo_url} />
-                      <div style={{ minWidth: 0 }}>
-                        <div className="nm">{s.full_name}</div>
-                        <div className="id">{s.student_id}</div>
-                      </div>
-                    </div>
-                    <div className="meta">
-                      <span><i aria-hidden="true" className={'fas ' + (s.gender === 'Male' ? 'fa-mars' : 'fa-venus')} /> {s.gender}</span>
-                      {s.graduation_session && <span>{s.graduation_session}</span>}
-                      {s.graduation_date && <span>Graduated {s.graduation_date}</span>}
-                    </div>
-                    <div className="f-status">
-                      <span className={'grad-status tone-' + tone}><span className="dot" aria-hidden="true" />{s.status || 'Graduated'}</span>
-                    </div>
-                    <div className="f-results">
-                      <span className={'grad-res' + (s.has_waec ? ' on' : '')}><i aria-hidden="true" className={'fas fa-' + (s.has_waec ? 'circle-check' : 'circle')} /> WAEC</span>
-                      <span className={'grad-res' + (s.has_neco ? ' on' : '')}><i aria-hidden="true" className={'fas fa-' + (s.has_neco ? 'circle-check' : 'circle')} /> NECO</span>
-                      <span className={'grad-res' + (s.has_jamb ? ' on' : '')}><i aria-hidden="true" className={'fas fa-' + (s.has_jamb ? 'circle-check' : 'circle')} /> JAMB</span>
-                    </div>
-                    <div className="f-actions">
-                      <a href={s.profile_url} className="btn btn-primary btn-sm"><i aria-hidden="true" className="fas fa-eye" /> View</a>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>}
-          </div></div>
-      </>) : <div className="card"><div className="card-body"><Empty icon="fa-graduation-cap" title="No Graduates">
-        <p>{hasFilters ? 'No graduates match the current filters.' : 'No students have been marked as graduated yet.'}</p>
-        {hasFilters && <div className="empty-state-actions"><button type="button" className="btn btn-secondary" onClick={clearFilters}><i aria-hidden="true" className="fas fa-rotate-left" /> Clear filters</button></div>}
-      </Empty></div></div>}
+            <a href={bulkHref} className="pm-btn" data-native="1">Bulk issue</a>
+          </div>
+        )}
+        {!d.graduates.length ? (
+          <div className="pm-card-b"><Empty icon="fa-graduation-cap" title="No graduates">
+            <p>{hasFilters ? 'No graduates match the current filters.' : 'No students have been marked as graduated yet.'}</p>
+            {hasFilters ? <div className="empty-state-actions"><button type="button" className="btn btn-secondary" onClick={clearFilters}><i aria-hidden="true" className="fas fa-rotate-left" /> Clear filters</button></div>
+              : canBatch && <div className="empty-state-actions"><a href={d.preview_url} className="btn btn-primary"><i aria-hidden="true" className="fas fa-user-graduate" /> Graduate this year’s SSS3</a></div>}
+          </Empty></div>
+        ) : shown.length === 0 ? <p className="pm-empty">No graduates match{q ? ` “${q}”` : ''}.</p> : (
+          <ul className="pm-grads">
+            {shown.map((g) => {
+              const tone = GRAD_STATUS_TONE[g.status] || 'info';
+              return (
+                <li key={g.id}>
+                  <a href={g.profile_url} className="pm-grad">
+                    <GradAvatar name={g.full_name} photo={g.photo_url} />
+                    <span className="pm-pn"><strong>{g.full_name}</strong>
+                      <small>{g.student_id}{g.graduation_session ? ` · ${g.graduation_session}` : ''}{g.graduation_date ? ` · ${g.graduation_date}` : ''}</small></span>
+                    <span className={'grad-status tone-' + tone}><span className="dot" aria-hidden="true" />{g.status || 'Graduated'}</span>
+                    <span className="pm-res">{res(g.has_waec, 'WAEC')}{res(g.has_neco, 'NECO')}{res(g.has_jamb, 'JAMB')}</span>
+                    <i aria-hidden="true" className="fas fa-chevron-right pm-chev" />
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+        {shown.length > 0 && <p className="pm-foot">{shown.length}{shown.length !== d.graduates.length ? ` of ${d.graduates.length}` : ''} graduate{shown.length === 1 ? '' : 's'}</p>}
+      </section>
 
-      {/* mobile-only: thumb-reachable FAB carries the primary action instead
-          of a header button that scrolls out of reach; mirrors the page
-          header's "Graduate current SSS3" action (same perm gate) */}
-      {canWrite(d, 'graduates_sss3') && <a href={d.preview_url} className="grad-fab"><i aria-hidden="true" className="fas fa-user-graduate" /> Graduate</a>}
-    </>
+      {canBatch && phone && createPortal(
+        <a href={d.preview_url} className="pm-fab"><i aria-hidden="true" className="fas fa-user-graduate" /> Graduate</a>, document.body)}
+    </div>
   );
 }
 
@@ -494,6 +665,7 @@ function Graduates({ d }) {
 // graduation date: the last day of that session, or the day it's processed.
 function GraduatePreview({ d, notify }) {
   const nav = useNav();
+  const phone = usePhone();
   const [busy, setBusy] = useState(false);
   const [picked, setPicked] = useState(() => new Set(d.students.map((s) => s.id)));
   const [mode, setMode] = useState(d.session_end ? 'session_end' : 'today');
@@ -520,53 +692,81 @@ function GraduatePreview({ d, notify }) {
     if (r.ok) nav.go(r.redirect); else notify('error', r.error || 'Could not graduate students.');
   };
   const pickSession = (e) => nav.go(d.preview_url + '?session_id=' + encodeURIComponent(e.target.value));
-  return (
-    <>
-      <PageHeader title={<><i aria-hidden="true" className="fas fa-user-graduate" /> Batch graduate SSS3</>}
-        actions={<a href={d.urls.graduates} className="btn btn-secondary btn-sm"><i aria-hidden="true" className="fas fa-arrow-left" /> Graduates</a>} />
-      <div className="card"><div className="card-body" style={{ display: 'grid', gap: '1rem', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))' }}>
-        <div className="form-group" style={{ margin: 0 }}>
-          <label className="form-label" htmlFor="gradSess">SSS3 class of session</label>
-          <select id="gradSess" className="form-control" value={d.session ? d.session.id : ''} onChange={pickSession}>
-            {d.sessions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-        </div>
-        <fieldset style={{ border: 0, margin: 0, padding: 0 }}>
-          <legend className="form-label" style={{ marginBottom: '.35rem' }}>Graduation date</legend>
-          <label style={{ display: 'flex', gap: '.5rem', alignItems: 'flex-start', marginBottom: '.4rem', opacity: d.session_end ? 1 : 0.55 }}>
-            <input type="radio" name="gradMode" value="session_end" checked={mode === 'session_end'} disabled={!d.session_end} onChange={() => setMode('session_end')} />
-            <span>Last day of {d.session ? d.session.name : 'the session'}{' '}
-              {d.session_end ? <strong>— {d.session_end_label}</strong>
-                : <span className="text-muted text-sm">(no end date set — <a href={d.urls.sessions}>set it under Sessions</a>)</span>}</span>
-          </label>
-          <label style={{ display: 'flex', gap: '.5rem', alignItems: 'flex-start' }}>
-            <input type="radio" name="gradMode" value="today" checked={mode === 'today'} onChange={() => setMode('today')} />
-            <span>The day the graduation is processed <strong>— {d.today_label}</strong></span>
-          </label>
-        </fieldset>
-      </div></div>
+  const canGrad = canWrite(d, 'graduates_sss3');
+  const boys = d.students.filter((s) => s.gender === 'Male' && picked.has(s.id)).length;
+  const girls = d.students.filter((s) => s.gender === 'Female' && picked.has(s.id)).length;
 
-      <div className="card"><div className="card-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '.5rem' }}>
-        <h3>SSS3 students not yet graduated ({d.students.length})</h3>
-        {d.students.length > 0 && <input type="search" className="form-control" style={{ maxWidth: 240 }} placeholder="Search name or ID" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search students" />}
+  return (
+    <div className={'pm' + (phone && d.students.length && canGrad ? ' has-bar' : '')}>
+      <PmHead back={d.urls.graduates} kicker="Graduates" title="Graduate SSS3"
+              sub="Choose the session, the graduation date, and who is leaving." />
+
+      <div className="pm-gp-top">
+        <section className="pm-pick">
+          <span className="pm-pick-l">1 · SSS3 class of</span>
+          <label className="pm-field big"><select value={d.session ? d.session.id : ''} onChange={pickSession} aria-label="Session">
+            {d.sessions.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></label>
+          <div className="pm-gp-facts">
+            <span><b>{d.students.length}</b> not yet graduated</span>
+            {d.already_count > 0 && <span><b>{d.already_count}</b> already graduated</span>}
+          </div>
+        </section>
+        <section className="pm-pick">
+          <span className="pm-pick-l">2 · Graduation date</span>
+          <div className="pm-dates" role="radiogroup" aria-label="Graduation date">
+            <button type="button" role="radio" aria-checked={mode === 'session_end'} disabled={!d.session_end}
+                    className={'pm-date' + (mode === 'session_end' ? ' on' : '')} onClick={() => setMode('session_end')}>
+              <i aria-hidden="true" className="fas fa-flag-checkered" />
+              <span><strong>End of {d.session ? d.session.name : 'session'}</strong>
+                <small>{d.session_end ? d.session_end_label : 'No end date set'}</small></span>
+            </button>
+            <button type="button" role="radio" aria-checked={mode === 'today'}
+                    className={'pm-date' + (mode === 'today' ? ' on' : '')} onClick={() => setMode('today')}>
+              <i aria-hidden="true" className="fas fa-calendar-day" />
+              <span><strong>Today</strong><small>{d.today_label}</small></span>
+            </button>
+          </div>
+          {!d.session_end && <p className="pm-hint">No end date for this session — <a href={d.urls.sessions}>set it under Sessions</a> to use it.</p>}
+        </section>
       </div>
-        <div className="card-body">
-          {d.students.length ? (<>
-            <div className="table-container" style={{ border: 'none' }}><table className="data-table">
-              <thead><tr>
-                <th style={{ width: 36 }}><input type="checkbox" checked={allShownPicked} onChange={toggleShown} aria-label="Select all shown students" /></th>
-                <th>#</th><th>Student ID</th><th>Name</th><th>Gender</th></tr></thead>
-              <tbody>{shown.map((s, i) => (
-                <tr key={s.id} onClick={() => toggle(s.id)} style={{ cursor: 'pointer' }}>
-                  <td><input type="checkbox" checked={picked.has(s.id)} onChange={() => toggle(s.id)} onClick={(e) => e.stopPropagation()} aria-label={'Graduate ' + s.full_name} /></td>
-                  <td>{i + 1}</td><td>{s.student_id}</td><td>{s.full_name}</td><td>{s.gender}</td></tr>))}</tbody>
-            </table></div>
-            {canWrite(d, 'graduates_sss3') && <button type="button" className="btn btn-primary" style={{ marginTop: '1rem' }} disabled={busy || picked.size === 0} onClick={doGraduate}>
-              <i aria-hidden="true" className="fas fa-user-graduate" /> Graduate {picked.size} student(s) — graduation date {dateLabel}</button>}
-          </>) : <Empty icon="fa-circle-check" title=""><p>No SSS3 students to graduate for {d.session ? d.session.name : 'this session'} — they're all already graduated, or no SSS3 class is set up for that session.</p></Empty>}
-          {d.already_count > 0 && <p className="text-muted text-sm" style={{ marginTop: '1rem' }}><i aria-hidden="true" className="fas fa-info-circle" /> {d.already_count} SSS3 student(s) of this session are already graduates and are not listed.</p>}
-        </div></div>
-    </>
+
+      <section className="pm-card">
+        <header className="pm-card-h wrap">
+          <div className="pm-card-t"><h3>3 · Who is graduating?</h3><small>Tap a student to leave them out</small></div>
+          {d.students.length > 0 && <>
+            <div className="pm-search"><i aria-hidden="true" className="fas fa-search" />
+              <input type="search" placeholder="Search name or ID" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search students" /></div>
+            <button type="button" className="pm-btn" onClick={toggleShown}>{allShownPicked ? 'Untick all' : 'Tick all'}</button>
+          </>}
+        </header>
+        {d.students.length ? (
+          <ul className="pm-pickl">
+            {shown.map((st) => (
+              <li key={st.id}>
+                <label className={'pm-pickrow' + (picked.has(st.id) ? ' on' : '')}>
+                  <input type="checkbox" checked={picked.has(st.id)} onChange={() => toggle(st.id)} aria-label={'Graduate ' + st.full_name} />
+                  <span className="pm-av" data-g={st.gender || ''} aria-hidden="true">{pmInitials(st.full_name)}</span>
+                  <span className="pm-pn"><strong>{st.full_name}</strong><small>{st.student_id}{st.gender ? ' · ' + st.gender : ''}</small></span>
+                  <span className="pm-tick" aria-hidden="true"><i className={'fas ' + (picked.has(st.id) ? 'fa-circle-check' : 'fa-circle')} /></span>
+                </label>
+              </li>))}
+            {shown.length === 0 && <p className="pm-empty">No student matches “{q}”.</p>}
+          </ul>
+        ) : (
+          <div className="pm-card-b"><Empty icon="fa-circle-check" title="Nobody left to graduate">
+            <p>No SSS3 students to graduate for {d.session ? d.session.name : 'this session'} — they’re all graduated already, or no SSS3 class is set up for it.</p>
+            <div className="empty-state-actions"><a href={d.urls.graduates} className="btn btn-secondary">See graduates</a></div>
+          </Empty></div>
+        )}
+        {canGrad && d.students.length > 0 && (
+          <PmBar phone={phone}>
+            <span className="pm-bar-sum"><b>{picked.size}</b> of {d.students.length}<small> · {boys} boys · {girls} girls · {dateLabel}</small></span>
+            <button type="button" className="pm-btn primary big" disabled={busy || picked.size === 0} onClick={doGraduate}>
+              <i aria-hidden="true" className={'fas ' + (busy ? 'fa-spinner fa-spin' : 'fa-user-graduate')} /> Graduate {picked.size}</button>
+          </PmBar>
+        )}
+      </section>
+    </div>
   );
 }
 
