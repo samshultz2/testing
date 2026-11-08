@@ -1,25 +1,48 @@
 {% extends "cbt/portal_base.html" %}
 {% block title %}Start Test{% endblock %}
+{% block head_extra %}<style>
+.ps{max-width:560px;margin:1vh auto 0}
+.ps-sub{color:#64748b;margin:0 0 1rem}
+.ps-facts{display:grid;grid-template-columns:repeat(3,1fr);gap:.6rem;margin-bottom:1rem}
+.ps-facts div{background:#f8fafc;border:1px solid #eef2f7;border-radius:14px;padding:.7rem;text-align:center}
+.ps-facts b{display:block;font-family:'Space Grotesk',sans-serif;font-size:1.5rem;line-height:1.1}
+.ps-facts span{font-size:.74rem;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.ps-instr{background:#eef2ff;border-radius:14px;padding:.85rem 1rem;margin-bottom:1rem;color:#3730a3;font-size:.92rem;white-space:pre-line}
+.ps-rules{list-style:none;margin:0 0 1.1rem;padding:0;display:flex;flex-direction:column;gap:.55rem}
+.ps-rules li{display:flex;gap:.75rem;align-items:flex-start;font-size:.9rem;line-height:1.45}
+.ps-rules li i{width:34px;height:34px;border-radius:10px;flex:none;display:inline-flex;align-items:center;justify-content:center;background:#f1f5f9;color:#475569}
+.ps-rules li.warn i{background:#fef3c7;color:#b45309}
+.ps-rules h3{font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;color:#64748b;margin:0}
+.ps-acts{display:flex;gap:.6rem}
+.ps-acts .p-btn:first-child{flex:1}
+</style>{% endblock %}
 {% block content %}
-<div class="portal-card" style="max-width:520px;margin:4vh auto 0;">
+<div class="portal-card ps">
     <h1>{{ exam.title }}</h1>
-    <div class="text-muted" style="margin-bottom:.8rem;">{{ exam.subject.name if exam.subject else '' }} · {{ exam.question_count }} questions · {{ exam.duration_minutes }} minutes · {{ exam.total_marks }} marks</div>
-    {% if exam.instructions %}<div class="card mb-3" style="background:var(--gray-50);"><div class="card-body">{{ exam.instructions }}</div></div>{% endif %}
-    <div class="card mb-3" style="border-color:var(--warning);"><div class="card-body text-sm">
-        <i class="fas fa-triangle-exclamation" style="color:var(--warning);"></i> <strong>Exam rules</strong>
-        <ul style="margin:.4rem 0 0;padding-left:1.1rem;line-height:1.7;">
-            <li>The timer runs for {{ exam.duration_minutes }} minutes and the test auto-submits when time is up.</li>
-            <li>The test opens in fullscreen. <strong>Leaving the exam page (switching tabs/apps or exiting fullscreen) is recorded.</strong></li>
-            <li>After 3 such attempts your test is submitted automatically.</li>
-            <li>Copying and right-click are disabled. Your answers save as you go, so a refresh resumes where you left off.</li>
-        </ul>
-    </div></div>
+    <p class="ps-sub">{{ exam.subject.name if exam.subject else '' }}{% if exam.window_label %} · {{ exam.window_label }}{% endif %}</p>
+    <div class="ps-facts">
+        <div><b>{{ exam.question_count }}</b><span>Questions</span></div>
+        <div><b>{{ exam.duration_minutes }}</b><span>Minutes</span></div>
+        <div><b>{{ exam.total_marks }}</b><span>Marks</span></div>
+    </div>
+    {% if exam.instructions %}<div class="ps-instr"><i class="fas fa-circle-info"></i> {{ exam.instructions }}</div>{% endif %}
+    <ul class="ps-rules">
+        <li><i class="fas fa-stopwatch"></i><span>The timer runs for <b>{{ exam.duration_minutes }} minutes</b>. Your test submits by itself when time is up.</span></li>
+        <li><i class="fas fa-floppy-disk"></i><span>Answers <b>save as you go</b> — even if the page refreshes or the network drops, you continue where you stopped.</span></li>
+        {% if exam.strict_mode %}
+        <li class="warn"><i class="fas fa-expand"></i><span>The test opens <b>full screen</b>. Switching tabs or apps, or leaving full screen, is recorded.</span></li>
+        {% if exam.violation_limit %}<li class="warn"><i class="fas fa-triangle-exclamation"></i><span>After <b>{{ exam.violation_limit }}</b> such warning{{ '' if exam.violation_limit == 1 else 's' }} your test is submitted automatically.</span></li>{% endif %}
+        {% endif %}
+        <li><i class="fas fa-ban"></i><span>Copying, pasting and right-click are switched off.</span></li>
+    </ul>
     <form method="POST" action="{{ url_for('cbt_portal.start', exam_id=exam.id) }}">
         <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
-        <div class="form-group"><label class="form-label">Test access password</label><input type="password" name="access_password" class="form-control" placeholder="From your teacher" required autofocus></div>
-        <div class="d-flex gap-2">
-            <button type="submit" class="btn btn-primary"><i class="fas fa-play"></i> Begin Test</button>
-            <a href="{{ url_for('cbt_portal.home') }}" class="btn btn-secondary">Back</a>
+        <div class="p-field"><label for="apw">Test password</label>
+            <div class="p-input"><i class="fas fa-key lead"></i><input id="apw" type="password" name="access_password" placeholder="Your teacher will give you this" autocomplete="off" required autofocus>
+                <button type="button" class="p-eye" data-eye aria-label="Show password"><i class="fas fa-eye"></i></button></div></div>
+        <div class="ps-acts">
+            <button type="submit" class="p-btn"><i class="fas fa-play"></i> Begin test</button>
+            <a href="{{ url_for('cbt_portal.home') }}" class="p-btn ghost">Back</a>
         </div>
     </form>
 </div>

@@ -1,60 +1,112 @@
 {% extends "cbt/portal_base.html" %}
 {% block title %}Result{% endblock %}
+{% block head_extra %}<style>
+.pr{max-width:560px;margin:1vh auto 0}
+.pr-top{text-align:center}
+.pr-ring{width:150px;height:150px;border-radius:50%;margin:.4rem auto .8rem;display:flex;align-items:center;justify-content:center;
+  background:conic-gradient(var(--c) calc(var(--p)*1%),#e2e8f0 0)}
+.pr-ring>div{width:118px;height:118px;border-radius:50%;background:#fff;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.pr-ring b{font-family:'Space Grotesk',sans-serif;font-size:2rem;line-height:1}
+.pr-ring small{font-size:.75rem;color:#64748b;font-weight:700;margin-top:.15rem}
+.pr-score{font-family:'Space Grotesk',sans-serif;font-size:1.15rem;font-weight:700}
+.pr-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin:1rem 0 .4rem}
+.pr-stats button{border:2px solid transparent;border-radius:14px;padding:.6rem;background:#f8fafc;cursor:pointer;font:inherit;color:inherit}
+.pr-stats button.on{border-color:#c7d2fe;background:#eef2ff}
+.pr-stats b{display:block;font-size:1.4rem;font-family:'Space Grotesk',sans-serif}
+.pr-stats span{font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:#64748b}
+.pr-stats .ok b{color:#16a34a}.pr-stats .bad b{color:#dc2626}.pr-stats .skip b{color:#64748b}
+.pr-acts{display:flex;gap:.6rem;margin-top:1rem}
+.pr-acts .p-btn{flex:1}
+.pr-q{border:1px solid #e2e8f0;border-radius:14px;padding:.9rem 1rem;margin-bottom:.7rem;border-left:4px solid #e2e8f0}
+.pr-q.ok{border-left-color:#16a34a}.pr-q.bad{border-left-color:#dc2626}.pr-q.skip{border-left-color:#94a3b8}
+.pr-q-h{display:flex;gap:.6rem;align-items:flex-start}
+.pr-q-h .n{font-weight:800;color:#64748b;min-width:1.6em}
+.pr-q-h strong{flex:1;line-height:1.45}
+.pr-tag{font-size:.7rem;font-weight:800;border-radius:999px;padding:.15rem .55rem;white-space:nowrap}
+.pr-q.ok .pr-tag{background:#dcfce7;color:#15803d}.pr-q.bad .pr-tag{background:#fee2e2;color:#b91c1c}.pr-q.skip .pr-tag{background:#f1f5f9;color:#64748b}
+.pr-opts{margin-top:.55rem;display:flex;flex-direction:column;gap:.3rem;padding-left:2.2rem}
+.pr-opt{padding:.5rem .75rem;border-radius:10px;font-size:.9rem;background:#f8fafc;display:flex;gap:.5rem;align-items:baseline}
+.pr-opt.ans{background:#dcfce7;color:#166534;font-weight:600}
+.pr-opt.pick{background:#fee2e2;color:#991b1b}
+.pr-opt em{font-style:normal;margin-left:auto;font-size:.76rem;white-space:nowrap}
+.pr-review h3{margin:0 0 .8rem;display:flex;align-items:center;justify-content:space-between;gap:.5rem}
+.pr-review h3 small{font-size:.8rem;color:#64748b;font-weight:600}
+@media (max-width:600px){.pr-opts{padding-left:0}}
+</style>{% endblock %}
 {% block content %}
-<div class="portal-card" style="max-width:480px;margin:6vh auto 0;text-align:center;">
-    <i class="fas fa-circle-check" style="font-size:3rem;color:var(--success);"></i>
-    <h1 style="margin-top:.6rem;">Test Submitted</h1>
-    <p class="text-muted">{{ exam.title }}{% if exam.subject %} · {{ exam.subject.name }}{% endif %}</p>
-    <div style="font-size:2.4rem;font-weight:800;font-family:'Space Grotesk',sans-serif;color:var(--primary);">{{ attempt.score }} / {{ attempt.total }}</div>
-    <div class="badge {{ 'badge-success' if attempt.percentage>=50 else 'badge-danger' }}" style="font-size:1rem;">{{ attempt.percentage }}%</div>
-    {% if attempt.raw_total and attempt.total != attempt.raw_total %}
-    <div class="text-muted text-sm" style="margin-top:.5rem;">Raw: {{ attempt.raw_score }} / {{ attempt.raw_total }} correct &nbsp;·&nbsp; scaled to {{ attempt.total }}</div>
+{% set n_ok = rows|selectattr('is_correct')|list|length %}
+{% set n_skip = rows|rejectattr('selected')|list|length %}
+{% set n_bad = rows|length - n_ok - n_skip %}
+{% set pct = attempt.percentage or 0 %}
+<div class="portal-card pr">
+    <div class="pr-top">
+        <span style="display:inline-flex;align-items:center;gap:.4rem;color:#16a34a;font-weight:700;font-size:.9rem"><i class="fas fa-circle-check"></i> Test submitted</span>
+        <h1 style="margin-top:.3rem">{{ exam.title }}</h1>
+        <p class="p-muted" style="margin:0">{% if exam.subject %}{{ exam.subject.name }} · {% endif %}{{ attempt.submitted_at.strftime('%d %b %Y, %I:%M %p') if attempt.submitted_at }}</p>
+        <div class="pr-ring" style="--p:{{ [pct,100]|min }};--c:{{ '#16a34a' if pct >= 70 else ('#f59e0b' if pct >= 50 else '#dc2626') }}" role="img" aria-label="{{ pct }} percent">
+            <div><b>{{ pct }}%</b><small>{{ 'Well done!' if pct >= 70 else ('Passed' if pct >= 50 else 'Keep practising') }}</small></div>
+        </div>
+        <div class="pr-score">{{ attempt.score }} / {{ attempt.total }} marks</div>
+        {% if attempt.raw_total and attempt.total != attempt.raw_total %}
+        <div class="p-muted" style="font-size:.84rem;margin-top:.2rem">{{ attempt.raw_score }} of {{ attempt.raw_total }} raw marks, scaled to {{ attempt.total }}</div>
+        {% endif %}
+    </div>
+    {% if rows %}
+    <div class="pr-stats" role="group" aria-label="Filter the answer review">
+        <button type="button" class="ok" data-f="ok"><b>{{ n_ok }}</b><span>Correct</span></button>
+        <button type="button" class="bad" data-f="bad"><b>{{ n_bad }}</b><span>Wrong</span></button>
+        <button type="button" class="skip" data-f="skip"><b>{{ n_skip }}</b><span>Skipped</span></button>
+    </div>
     {% endif %}
-    <p class="text-muted text-sm" style="margin-top:1rem;">Submitted {{ attempt.submitted_at.strftime('%d %b %Y, %I:%M %p') if attempt.submitted_at }}</p>
-    <a href="{{ url_for('cbt_portal.home') }}" class="btn btn-primary w-100" style="margin-top:.5rem;"><i class="fas fa-arrow-left"></i> Back to my tests</a>
-    <button type="button" id="reviewToggle" class="btn btn-secondary w-100" style="margin-top:.5rem;"><i class="fas fa-list-check"></i> <span>Review answers</span></button>
+    <div class="pr-acts">
+        <a href="{{ url_for('cbt_portal.home') }}" class="p-btn ghost"><i class="fas fa-arrow-left"></i> My tests</a>
+        {% if rows %}<button type="button" id="reviewToggle" class="p-btn"><i class="fas fa-list-check"></i> <span>Review answers</span></button>{% endif %}
+    </div>
 </div>
-<script nonce="{{ csp_nonce }}">
-(function () {
-  var btn = document.getElementById('reviewToggle');
-  var rev = document.getElementById('review');
-  if (!btn || !rev) return;
-  btn.addEventListener('click', function () {
-    rev.classList.toggle('hidden');
-    btn.querySelector('span').textContent =
-      rev.classList.contains('hidden') ? 'Review answers' : 'Hide review';
-  });
-})();
-</script>
 
-<div id="review" class="portal-card hidden" style="margin-top:1rem;text-align:left;">
-    <h3 style="margin-top:0;">Answer review</h3>
+{% if rows %}
+<div id="review" class="portal-card pr pr-review hidden" style="margin-top:1rem">
+    <h3>Answer review <small id="revCount">{{ rows|length }} questions</small></h3>
     {% for r in rows %}
-    <div style="border:1px solid var(--border-color);border-radius:12px;padding:.9rem 1rem;margin-bottom:.7rem;">
-        <div style="display:flex;gap:.5rem;align-items:flex-start;">
-            <span style="font-weight:700;">{{ loop.index }}.</span>
-            <div style="flex:1;">
-                <strong>{{ r.q.question_text }}</strong>
-                {% if r.q.image_url %}<div><img src="{{ r.q.image_url }}" alt="Question figure" style="max-width:240px;max-height:160px;border:1px solid var(--border-color);border-radius:6px;margin:.3rem 0"></div>{% endif %}
-                <div style="margin-top:.5rem;display:flex;flex-direction:column;gap:.3rem;">
-                    {% for letter, text in r.q.options %}{% if text %}
-                    {% set is_ans = (r.q.correct_option == letter) %}
-                    {% set is_pick = (r.selected == letter) %}
-                    <div style="padding:.45rem .7rem;border-radius:8px;font-size:.9rem;
-                        {% if is_ans %}background:#dcfce7;color:#166534;font-weight:600;
-                        {% elif is_pick %}background:#fee2e2;color:#991b1b;{% else %}background:var(--gray-50);{% endif %}">
-                        {{ letter }}. {{ text }}
-                        {% if is_ans %} <i class="fas fa-check"></i> correct answer{% endif %}
-                        {% if is_pick and not is_ans %} <i class="fas fa-xmark"></i> your answer{% endif %}
-                        {% if is_pick and is_ans %} <i class="fas fa-check-double"></i> your answer{% endif %}
-                    </div>
-                    {% endif %}{% endfor %}
-                    {% if not r.selected %}<div class="text-muted text-sm"><i class="fas fa-minus"></i> You did not answer this question.</div>{% endif %}
-                </div>
-            </div>
-            <span class="badge {{ 'badge-success' if r.is_correct else 'badge-danger' }}">{{ '✓' if r.is_correct else '✗' }}</span>
+    {% set kind = 'ok' if r.is_correct else ('skip' if not r.selected else 'bad') %}
+    <div class="pr-q {{ kind }}" data-k="{{ kind }}">
+        <div class="pr-q-h"><span class="n">{{ loop.index }}.</span><strong>{{ r.q.question_text }}</strong>
+            <span class="pr-tag">{{ {'ok':'Correct','bad':'Wrong','skip':'Skipped'}[kind] }}</span></div>
+        {% if r.q.image_url %}<div style="padding-left:2.2rem"><img src="{{ r.q.image_url }}" alt="Question figure" style="max-width:240px;max-height:160px;border:1px solid #e2e8f0;border-radius:8px;margin:.4rem 0"></div>{% endif %}
+        <div class="pr-opts">
+            {% for letter, text in r.q.options %}{% if text %}
+            {% set is_ans = (r.q.correct_option == letter) %}{% set is_pick = (r.selected == letter) %}
+            <div class="pr-opt{{ ' ans' if is_ans }}{{ ' pick' if is_pick and not is_ans }}"><b>{{ letter }}.</b> <span>{{ text }}</span>
+                {% if is_ans and is_pick %}<em><i class="fas fa-check-double"></i> your answer</em>
+                {% elif is_ans %}<em><i class="fas fa-check"></i> correct answer</em>
+                {% elif is_pick %}<em><i class="fas fa-xmark"></i> your answer</em>{% endif %}</div>
+            {% endif %}{% endfor %}
         </div>
     </div>
     {% endfor %}
+</div>
+{% endif %}
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var btn = document.getElementById('reviewToggle'), rev = document.getElementById('review');
+  if (!btn || !rev) return;
+  var stats = [].slice.call(document.querySelectorAll('.pr-stats button')), filter = '';
+  function apply() {
+    var n = 0;
+    [].forEach.call(rev.querySelectorAll('.pr-q'), function (q) {
+      var on = !filter || q.dataset.k === filter; q.style.display = on ? '' : 'none'; if (on) n++; });
+    document.getElementById('revCount').textContent = n + ' question' + (n === 1 ? '' : 's');
+    stats.forEach(function (b) { b.classList.toggle('on', b.dataset.f === filter); });
+  }
+  function open(show) {
+    rev.classList.toggle('hidden', !show);
+    btn.querySelector('span').textContent = show ? 'Hide review' : 'Review answers';
+    if (show) rev.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+  btn.addEventListener('click', function () { open(rev.classList.contains('hidden')); });
+  stats.forEach(function (b) { b.addEventListener('click', function () {
+    filter = filter === b.dataset.f ? '' : b.dataset.f; apply(); open(true); }); });
+})();
+</script>
 {% include 'cbt/_mathjax.html' %}
 {% endblock %}

@@ -9,79 +9,182 @@
 <link rel="stylesheet" href="{{ bundle_url('css/fonts.css') }}">
 <link rel="stylesheet" href="{{ url_for('static', filename='vendor/fontawesome/css/all.min.css') }}">
 <style>
-:root{--ex:#4f46e5;--ex-dark:#3730a3;--ok:#16a34a;--bg:#0f172a;--panel:#fff;--ink:#1e293b;--muted:#64748b;--line:#e2e8f0}
+:root{--ex:#4f46e5;--ex-dark:#3730a3;--ok:#16a34a;--bg:#0f172a;--panel:#fff;--ink:#1e293b;--muted:#64748b;--line:#e2e8f0;--flag:#f59e0b}
 *{box-sizing:border-box}
+html{scroll-behavior:smooth}
 body{margin:0;font-family:'Inter',system-ui,sans-serif;background:#eef2f7;color:var(--ink);-webkit-font-smoothing:antialiased;
     -webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none;-webkit-touch-callout:none}
-/* top exam bar — distinct dark slate, nothing like the green app */
-.ex-bar{position:fixed;top:0;left:0;right:0;height:60px;background:var(--bg);color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 1rem;z-index:50;box-shadow:0 2px 10px rgba(0,0,0,.25)}
-.ex-bar .t{font-weight:700;font-size:.95rem;display:flex;align-items:center;gap:.5rem;overflow:hidden}
-.ex-bar .t .sub{color:#a5b4fc;font-weight:500;font-size:.8rem}
-.ex-timer{display:flex;align-items:center;gap:.45rem;background:rgba(255,255,255,.1);padding:.4rem .8rem;border-radius:999px;font-weight:700;font-variant-numeric:tabular-nums}
+/* top exam bar */
+.ex-bar{position:fixed;top:0;left:0;right:0;height:62px;background:var(--bg);color:#fff;display:flex;align-items:center;justify-content:space-between;gap:.8rem;padding:0 1rem;z-index:50;box-shadow:0 2px 10px rgba(0,0,0,.25)}
+.ex-bar .t{font-weight:700;font-size:.95rem;display:flex;align-items:center;gap:.55rem;overflow:hidden;min-width:0}
+.ex-bar .t>span:first-of-type{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ex-bar .t .sub{color:#a5b4fc;font-weight:500;font-size:.8rem;white-space:nowrap}
+.ex-bar-r{display:flex;align-items:center;gap:.5rem;flex:none}
+.ex-mode{height:38px;padding:0 .8rem;border-radius:999px;border:1px solid rgba(255,255,255,.18);background:transparent;color:#cbd5e1;font:inherit;font-size:.8rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:.4rem}
+.ex-mode:hover{background:rgba(255,255,255,.08);color:#fff}
+.ex-timer{display:flex;align-items:center;gap:.45rem;background:rgba(255,255,255,.12);padding:.45rem .9rem;border-radius:999px;font-weight:800;font-variant-numeric:tabular-nums;font-size:1rem}
+.ex-timer.low{background:#b45309}
 .ex-timer.warn{background:#dc2626;animation:pulse 1s infinite}
 @keyframes pulse{50%{opacity:.6}}
-.ex-wrap{max-width:1100px;margin:0 auto;padding:78px 1rem 2rem;display:grid;grid-template-columns:1fr 230px;gap:1.2rem;align-items:start}
-@media(max-width:860px){.ex-wrap{grid-template-columns:1fr;padding-top:70px}}
-.q-card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:1.2rem 1.3rem;margin-bottom:1rem;scroll-margin-top:74px}
-.q-num{display:inline-flex;align-items:center;justify-content:center;min-width:26px;height:26px;background:var(--ex);color:#fff;border-radius:8px;font-size:.8rem;font-weight:700;margin-right:.5rem}
-.q-text{font-weight:600;font-size:1.02rem;margin:0 0 .9rem;line-height:1.5}
-.q-figure{margin:0 0 .9rem}.q-figure img{max-width:100%;max-height:340px;border:1px solid var(--border-color,#e2e6ee);border-radius:8px;background:#fff}
-.opt{display:flex;align-items:center;gap:.7rem;padding:.8rem 1rem;border:2px solid var(--line);border-radius:12px;margin-bottom:.55rem;cursor:pointer;transition:all .12s;font-size:.95rem}
-.opt:hover{border-color:#c7d2fe;background:#f5f7ff}
+@media (prefers-reduced-motion:reduce){.ex-timer.warn{animation:none}}
+.ex-prog{position:absolute;left:0;right:0;bottom:0;height:4px;background:rgba(255,255,255,.12)}
+.ex-prog i{display:block;height:100%;width:0;background:linear-gradient(90deg,#818cf8,#22c55e);transition:width .25s}
+.ex-wrap{max-width:1140px;margin:0 auto;padding:84px 1rem 2rem;display:grid;grid-template-columns:minmax(0,1fr) 270px;gap:1.2rem;align-items:start}
+/* question */
+.q-card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:1.3rem 1.4rem 1.1rem;margin-bottom:1rem;scroll-margin-top:80px}
+body.one .q-card{display:none;margin-bottom:0;min-height:calc(100vh - 230px)}
+body.one .q-card.cur{display:block;animation:qin .18s ease}
+@keyframes qin{from{opacity:.4;transform:translateY(4px)}}
+.q-head{display:flex;align-items:center;justify-content:space-between;gap:.6rem;margin-bottom:.8rem}
+.q-num{display:inline-flex;align-items:center;gap:.35rem;background:#eef2ff;color:var(--ex-dark);border-radius:999px;padding:.25rem .7rem;font-size:.8rem;font-weight:800}
+.q-num small{font-weight:600;color:var(--muted)}
+.q-flag{border:1px solid var(--line);background:#fff;color:var(--muted);border-radius:999px;height:34px;padding:0 .8rem;font:inherit;font-size:.8rem;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:.4rem}
+.q-flag:hover{border-color:var(--flag);color:#b45309}
+.q-flag.on{background:#fef3c7;border-color:var(--flag);color:#b45309}
+.q-text{font-weight:600;font-size:1.08rem;margin:0 0 1rem;line-height:1.55}
+.q-figure{margin:0 0 1rem}.q-figure img{max-width:100%;max-height:360px;border:1px solid var(--line);border-radius:10px;background:#fff}
+.opt{display:flex;align-items:center;gap:.8rem;padding:.85rem 1rem;border:2px solid var(--line);border-radius:14px;margin-bottom:.6rem;cursor:pointer;transition:border-color .12s,background .12s;font-size:.98rem;line-height:1.4}
+.opt:hover{border-color:#c7d2fe;background:#f8f9ff}
 .opt input{display:none}
-.opt .mark{width:24px;height:24px;border-radius:50%;border:2px solid #cbd5e1;display:flex;align-items:center;justify-content:center;font-size:.7rem;color:#fff;flex-shrink:0;font-weight:700}
+.opt .mark{width:26px;height:26px;border-radius:50%;border:2px solid #cbd5e1;display:flex;align-items:center;justify-content:center;font-size:.7rem;color:#fff;flex-shrink:0;font-weight:700}
 .opt.sel{border-color:var(--ex);background:#eef2ff}
 .opt.sel .mark{background:var(--ex);border-color:var(--ex)}
-.opt .letter{font-weight:700;color:var(--muted)}
+.opt .letter{font-weight:800;color:var(--muted);min-width:1.1em}
 .opt.sel .letter{color:var(--ex-dark)}
+/* pager (one-at-a-time) */
+.ex-pager{display:none;align-items:center;gap:.6rem;margin-top:1rem}
+body.one .ex-pager{display:flex}
+.ex-pager button{height:50px;border-radius:14px;border:1px solid var(--line);background:#fff;color:var(--ink);font:inherit;font-weight:700;font-size:.95rem;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:.5rem;padding:0 1.1rem}
+.ex-pager button:disabled{opacity:.4;cursor:default}
+.ex-pager .next{background:var(--ex);border-color:var(--ex);color:#fff;flex:1;max-width:220px;margin-left:auto}
+.ex-pos{flex:1;color:var(--muted)!important;font-weight:600!important;font-size:.88rem!important}
+.ex-pos b{color:var(--ink)}
+.ex-keys{display:none;margin-top:.7rem;font-size:.75rem;color:var(--muted);text-align:center}
+body.one .ex-keys{display:block}
+.ex-keys kbd{background:#fff;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:0 .35rem;font:inherit;font-size:.72rem}
 /* navigator */
-.nav-panel{position:sticky;top:78px;background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:1rem}
-.nav-panel h4{margin:0 0 .2rem;font-size:.8rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
-.nav-prog{font-size:.8rem;color:var(--muted);margin-bottom:.7rem}
-.nav-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:.4rem}
-.nav-grid a{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:8px;background:#f1f5f9;color:var(--ink);text-decoration:none;font-weight:600;font-size:.82rem;border:1px solid var(--line)}
+.nav-panel{position:sticky;top:84px;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:1rem}
+.nav-panel h4{margin:0 0 .2rem;font-size:.78rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+.nav-prog{font-size:.85rem;color:var(--muted);margin-bottom:.6rem}
+.nav-prog b{color:var(--ink)}
+.nav-legend{display:flex;flex-wrap:wrap;gap:.3rem .8rem;font-size:.72rem;color:var(--muted);margin-bottom:.7rem}
+.nav-legend span{display:inline-flex;align-items:center;gap:.3rem}
+.nav-legend i{width:11px;height:11px;border-radius:3px;display:inline-block;background:#f1f5f9;border:1px solid var(--line)}
+.nav-legend i.d{background:var(--ok);border-color:var(--ok)}.nav-legend i.f{background:#fef3c7;border-color:var(--flag)}.nav-legend i.c{background:#fff;border:2px solid var(--ex)}
+.nav-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:.4rem;max-height:46vh;overflow-y:auto;padding:2px}
+.nav-grid a{aspect-ratio:1;display:flex;align-items:center;justify-content:center;border-radius:9px;background:#f1f5f9;color:var(--ink);text-decoration:none;font-weight:700;font-size:.82rem;border:1px solid var(--line);position:relative}
 .nav-grid a.done{background:var(--ok);color:#fff;border-color:var(--ok)}
-.btn-submit{width:100%;margin-top:1rem;background:var(--ex);color:#fff;border:none;border-radius:12px;padding:.85rem;font-weight:700;font-size:.95rem;cursor:pointer;font-family:inherit}
+.nav-grid a.flag{background:#fef3c7;border-color:var(--flag);color:#b45309}
+.nav-grid a.done.flag{background:var(--ok);color:#fff;box-shadow:inset 0 -4px 0 var(--flag)}
+.nav-grid a.cur{outline:2px solid var(--ex);outline-offset:1px}
+.btn-submit{width:100%;margin-top:1rem;background:var(--ex);color:#fff;border:none;border-radius:13px;padding:.9rem;font-weight:700;font-size:.95rem;cursor:pointer;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;gap:.5rem}
 .btn-submit:hover{background:var(--ex-dark)}
 .mini-submit{display:none}
-@media(max-width:860px){.nav-panel{position:static;margin-bottom:1rem}.nav-grid{grid-template-columns:repeat(10,1fr)}}
+.nav-close{display:none}
+/* review before submit */
+.ex-modal{position:fixed;inset:0;z-index:120;background:rgba(15,23,42,.55);display:none;align-items:center;justify-content:center;padding:1rem}
+.ex-modal.open{display:flex}
+.ex-modal-card{background:#fff;border-radius:20px;max-width:460px;width:100%;padding:1.3rem 1.3rem 1.1rem;box-shadow:0 24px 60px rgba(0,0,0,.3);max-height:88vh;overflow-y:auto}
+.ex-modal-card h3{margin:0 0 .3rem;font-size:1.2rem}
+.ex-sum{display:grid;grid-template-columns:repeat(3,1fr);gap:.5rem;margin:.8rem 0}
+.ex-sum div{border-radius:12px;padding:.6rem;text-align:center;background:#f8fafc}
+.ex-sum b{display:block;font-size:1.4rem}
+.ex-sum span{font-size:.72rem;color:var(--muted);font-weight:700;text-transform:uppercase}
+.ex-sum .a b{color:var(--ok)}.ex-sum .u b{color:#dc2626}.ex-sum .f b{color:#b45309}
+.ex-jump{display:flex;flex-wrap:wrap;gap:.35rem;margin:.3rem 0 .8rem}
+.ex-jump button{min-width:38px;height:34px;border-radius:9px;border:1px solid var(--line);background:#fff;font:inherit;font-weight:700;cursor:pointer}
+.ex-jump.u button{border-color:#fecaca;color:#dc2626}.ex-jump.f button{border-color:#fde68a;color:#b45309}
+.ex-modal-a{display:flex;gap:.6rem;margin-top:.6rem}
+.ex-modal-a button{flex:1;height:48px;border-radius:13px;font:inherit;font-weight:700;cursor:pointer;border:1px solid var(--line);background:#fff}
+.ex-modal-a .go{background:var(--ex);border-color:var(--ex);color:#fff}
+.ex-modal-l{font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;color:var(--muted)}
+@media(max-width:860px){
+  .ex-wrap{grid-template-columns:minmax(0,1fr);padding:74px .75rem 6rem}
+  .ex-bar{height:58px;padding:0 .75rem}
+  .ex-bar .t .sub,.ex-mode span{display:none}
+  .ex-mode{width:38px;padding:0;justify-content:center}
+  .q-card{padding:1.05rem 1rem .9rem;border-radius:16px}
+  body.one .q-card{min-height:0}
+  .q-flag span{display:none}
+  .q-flag{width:36px;padding:0;justify-content:center}
+  .ex-keys{display:none!important}
+  body.one .ex-pager{position:fixed;left:0;right:0;bottom:0;z-index:40;margin:0;background:#fff;border-top:1px solid var(--line);padding:.6rem .75rem calc(.6rem + env(safe-area-inset-bottom,0px));box-shadow:0 -6px 20px rgba(15,23,42,.08)}
+  .ex-pager .next{max-width:none;flex:0 0 auto}
+  .ex-pager button{height:48px}
+  .nav-panel{position:fixed;left:0;right:0;bottom:0;top:auto;z-index:110;border-radius:22px 22px 0 0;transform:translateY(105%);transition:transform .22s ease;box-shadow:0 -10px 40px rgba(0,0,0,.25);max-height:80vh;overflow-y:auto;padding-bottom:calc(1rem + env(safe-area-inset-bottom,0px))}
+  .nav-panel.open{transform:none}
+  .nav-close{display:inline-flex;position:absolute;top:.7rem;right:.7rem;width:34px;height:34px;border-radius:50%;border:0;background:#f1f5f9;align-items:center;justify-content:center;cursor:pointer}
+  .nav-grid{grid-template-columns:repeat(7,1fr);max-height:none}
+  body:not(.one) .mini-submit{display:flex!important}
+  body.one .mini-submit{display:none!important}
+}
 </style>
 </head>
 <body>
 <div class="ex-bar">
     <div class="t"><i class="fas fa-pen-to-square" style="color:#a5b4fc"></i> <span>{{ exam.title }}</span> <span class="sub">· {{ exam.subject.name if exam.subject else '' }}</span></div>
-    <div class="ex-timer" id="timerBox"><i class="fas fa-clock"></i> <span id="timer">--:--</span></div>
+    <div class="ex-bar-r">
+        <button type="button" class="ex-mode" id="modeBtn" title="Switch between one question at a time and all questions"><i class="fas fa-list"></i> <span>All questions</span></button>
+        <div class="ex-timer" id="timerBox" role="timer" aria-live="off"><i class="fas fa-clock"></i> <span id="timer">--:--</span></div>
+    </div>
+    <div class="ex-prog" aria-hidden="true"><i id="progBar"></i></div>
 </div>
 
 <form method="POST" action="{{ url_for('cbt_portal.submit', exam_id=exam.id) }}" id="examForm">
 <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}">
 <div class="ex-wrap">
-    <div>
+    <div class="ex-main">
         {% for item in qview %}{% set q = item.q %}
-        <div class="q-card" id="q{{ loop.index }}">
-            <p class="q-text"><span class="q-num">{{ loop.index }}</span>{{ q.question_text }}</p>
+        <div class="q-card{{ ' cur' if loop.first }}" id="q{{ loop.index }}" data-n="{{ loop.index }}">
+            <div class="q-head">
+                <span class="q-num">Question {{ loop.index }} <small>of {{ qview|length }}</small></span>
+                <button type="button" class="q-flag" data-flag="{{ loop.index }}" aria-pressed="false" title="Mark this question to come back to"><i class="fas fa-flag"></i> <span>Mark for review</span></button>
+            </div>
+            <p class="q-text">{{ q.question_text }}</p>
             {% if q.image_url %}<div class="q-figure"><img src="{{ q.image_url }}" alt="Figure for question {{ loop.index }}" loading="lazy"></div>{% endif %}
             {% for opt in item.options %}
             <label class="opt" data-q="{{ loop.index }}">
                 <input type="radio" name="q_{{ q.id }}" data-qid="{{ q.id }}" value="{{ opt.value }}" {% if saved is defined and saved.get(q.id) == opt.value %}checked{% endif %}>
                 <span class="mark"><i class="fas fa-check"></i></span>
-                <span class="letter">{{ opt.label }}.</span> <span>{{ opt.text }}</span>
+                <span class="letter">{{ opt.label }}</span> <span>{{ opt.text }}</span>
             </label>
             {% endfor %}
         </div>
         {% endfor %}
-        <button type="submit" class="btn-submit mini-submit" id="submitBtn2"><i class="fas fa-paper-plane"></i> Submit Test</button>
+        <div class="ex-pager" id="pager">
+            <button type="button" id="prevBtn" aria-label="Previous question"><i class="fas fa-arrow-left"></i></button>
+            <button type="button" class="ex-pos" id="mapBtn" title="Show all question numbers">Question <b id="posN">1</b> of {{ qview|length }} · <span id="answered2">0</span> answered <i class="fas fa-table-cells"></i></button>
+            <button type="button" class="next" id="nextBtn">Next <i class="fas fa-arrow-right"></i></button>
+        </div>
+        <p class="ex-keys">Tip: press <kbd>A</kbd>–<kbd>E</kbd> to pick an answer and <kbd>←</kbd> <kbd>→</kbd> to move between questions.</p>
+        <button type="button" class="btn-submit mini-submit" id="submitBtn2"><i class="fas fa-paper-plane"></i> Submit test</button>
     </div>
-    <div class="nav-panel">
+    <aside class="nav-panel" id="navPanel" aria-label="Question map">
+        <button type="button" class="nav-close" id="navClose" aria-label="Close"><i class="fas fa-xmark"></i></button>
         <h4>Questions</h4>
-        <div class="nav-prog"><span id="answered">0</span> of {{ qview|length }} answered</div>
+        <div class="nav-prog"><b id="answered">0</b> of {{ qview|length }} answered</div>
+        <div class="nav-legend"><span><i class="d"></i>Answered</span><span><i class="f"></i>Marked</span><span><i class="c"></i>Current</span></div>
         <div class="nav-grid">
             {% for item in qview %}<a href="#q{{ loop.index }}" data-n="{{ loop.index }}">{{ loop.index }}</a>{% endfor %}
         </div>
-        <button type="submit" class="btn-submit" id="submitBtn"><i class="fas fa-paper-plane"></i> Submit Test</button>
-    </div>
+        <button type="button" class="btn-submit" id="submitBtn"><i class="fas fa-paper-plane"></i> Submit test</button>
+    </aside>
 </div>
 </form>
+
+<div class="ex-modal" id="reviewModal" role="dialog" aria-modal="true" aria-labelledby="revTitle">
+    <div class="ex-modal-card">
+        <h3 id="revTitle">Ready to submit?</h3>
+        <p style="margin:0;color:var(--muted);font-size:.9rem">You can’t change your answers after you submit.</p>
+        <div class="ex-sum"><div class="a"><b id="revA">0</b><span>Answered</span></div><div class="u"><b id="revU">0</b><span>Unanswered</span></div><div class="f"><b id="revF">0</b><span>Marked</span></div></div>
+        <div id="revUWrap"><span class="ex-modal-l">Not answered — tap to go back</span><div class="ex-jump u" id="revUList"></div></div>
+        <div id="revFWrap"><span class="ex-modal-l">Marked for review</span><div class="ex-jump f" id="revFList"></div></div>
+        <div class="ex-modal-a">
+            <button type="button" id="revBack">Keep working</button>
+            <button type="button" class="go" id="revGo"><i class="fas fa-paper-plane"></i> Submit now</button>
+        </div>
+    </div>
+</div>
 
 <div id="warnOverlay" style="display:none;position:fixed;inset:0;background:rgba(220,38,38,.97);color:#fff;z-index:200;align-items:center;justify-content:center;text-align:center;padding:2rem;flex-direction:column;">
     <i class="fas fa-triangle-exclamation" style="font-size:3rem;margin-bottom:1rem;"></i>
@@ -145,6 +248,7 @@ body{margin:0;font-family:'Inter',system-ui,sans-serif;background:#eef2f7;color:
         if(remaining<=0){el.textContent='00:00';doSubmit();return;}
         var m=Math.floor(remaining/60),s=remaining%60;
         el.textContent=(m<10?'0':'')+m+':'+(s<10?'0':'')+s;
+        if(remaining<=300)box.classList.add('low');
         if(remaining<=60)box.classList.add('warn');
         remaining--;
     }
@@ -159,6 +263,7 @@ body{margin:0;font-family:'Inter',system-ui,sans-serif;background:#eef2f7;color:
             if(checked){done++; if(navBtn)navBtn.classList.add('done');} else if(navBtn)navBtn.classList.remove('done');
         });
         document.getElementById('answered').textContent=done;
+        if(window.__cbtAfterRefresh) window.__cbtAfterRefresh(done, qs.length);
     }
     // Autosave answers in batches (one request per few seconds) so 800 students
     // don't hammer the DB with a write per click. The final submit posts every
@@ -332,15 +437,132 @@ body{margin:0;font-family:'Inter',system-ui,sans-serif;background:#eef2f7;color:
     }
 
     form.addEventListener('submit',function(e){
-        if(!submitted){
-            var total=document.querySelectorAll('.q-card').length;
-            var done=document.querySelectorAll('.q-card input:checked').length;
-            if(done<total && !confirm('You answered '+done+' of '+total+' questions. Submit now?')){ e.preventDefault(); return; }
+        // Manual submits go through the review sheet first (answered /
+        // unanswered / marked); it calls requestSubmit() once confirmed.
+        if(!submitted && !window.__cbtConfirmed){
+            e.preventDefault();
+            if(window.__cbtOpenReview) window.__cbtOpenReview();
+            else if(confirm('Submit your test now?')){ window.__cbtConfirmed=true; form.submit(); }
+            return;
         }
         if(navigator.onLine===false){ e.preventDefault(); submitted=true; queueSubmit(); return; }
         submitted=true;
     });
     if(window.innerWidth<=860){document.querySelector('.mini-submit').style.display='block';}
+})();
+</script>
+<script nonce="{{ csp_nonce }}">
+// Exam UI: one question at a time (or all), question map, mark-for-review and
+// the review-before-submit sheet. Purely presentational — answers, autosave,
+// lockdown and submit logic live in the script above.
+(function(){
+    var cards=[].slice.call(document.querySelectorAll('.q-card')), N=cards.length, cur=1;
+    var form=document.getElementById('examForm'), body=document.body;
+    var grid=[].slice.call(document.querySelectorAll('.nav-grid a'));
+    var navPanel=document.getElementById('navPanel'), modal=document.getElementById('reviewModal');
+    var phone=function(){ return window.matchMedia && window.matchMedia('(max-width:860px)').matches; };
+    var MODE_KEY='cbt_mode', FLAG_KEY='cbt_flag_{{ exam.id }}';
+    var flags={}; try{ flags=JSON.parse(localStorage.getItem(FLAG_KEY)||'{}'); }catch(e){}
+    var one=true; try{ one=(localStorage.getItem(MODE_KEY)||'one')==='one'; }catch(e){}
+    var modeBtn=document.getElementById('modeBtn');
+    function setMode(v){
+        one=v; body.classList.toggle('one', one);
+        modeBtn.innerHTML=one?'<i class="fas fa-list"></i> <span>All questions</span>':'<i class="fas fa-square"></i> <span>One at a time</span>';
+        try{ localStorage.setItem(MODE_KEY, one?'one':'all'); }catch(e){}
+        if(one) show(cur, true);
+    }
+    function show(n, quiet){
+        n=Math.max(1, Math.min(N, n)); cur=n;
+        cards.forEach(function(c,i){ c.classList.toggle('cur', i===n-1); });
+        grid.forEach(function(a){ a.classList.toggle('cur', +a.dataset.n===n); });
+        var pn=document.getElementById('posN'); if(pn) pn.textContent=n;
+        document.getElementById('prevBtn').disabled=(n===1);
+        var nb=document.getElementById('nextBtn');
+        nb.innerHTML = n===N ? '<i class="fas fa-flag-checkered"></i> Finish' : 'Next <i class="fas fa-arrow-right"></i>';
+        if(one){ if(!quiet) window.scrollTo({top:0, behavior:'smooth'}); }
+        else { var c=cards[n-1]; if(c && !quiet) c.scrollIntoView({behavior:'smooth', block:'start'}); }
+    }
+    function paintFlags(){
+        cards.forEach(function(c,i){
+            var on=!!flags[i+1], b=c.querySelector('.q-flag');
+            if(b){ b.classList.toggle('on', on); b.setAttribute('aria-pressed', on?'true':'false');
+                   var sp=b.querySelector('span'); if(sp) sp.textContent=on?'Marked':'Mark for review'; }
+        });
+        grid.forEach(function(a){ a.classList.toggle('flag', !!flags[+a.dataset.n]); });
+    }
+    document.querySelectorAll('.q-flag').forEach(function(b){
+        b.addEventListener('click', function(){
+            var n=+b.dataset.flag; if(flags[n]) delete flags[n]; else flags[n]=1;
+            try{ localStorage.setItem(FLAG_KEY, JSON.stringify(flags)); }catch(e){}
+            paintFlags();
+        });
+    });
+    grid.forEach(function(a){
+        a.addEventListener('click', function(e){
+            e.preventDefault(); show(+a.dataset.n); navPanel.classList.remove('open');
+        });
+    });
+    document.getElementById('prevBtn').addEventListener('click', function(){ show(cur-1); });
+    document.getElementById('nextBtn').addEventListener('click', function(){ if(cur===N) openReview(); else show(cur+1); });
+    document.getElementById('mapBtn').addEventListener('click', function(){ navPanel.classList.add('open'); });
+    document.getElementById('navClose').addEventListener('click', function(){ navPanel.classList.remove('open'); });
+    modeBtn.addEventListener('click', function(){ setMode(!one); });
+
+    window.__cbtAfterRefresh=function(done,total){
+        var a2=document.getElementById('answered2'); if(a2) a2.textContent=done;
+        var pb=document.getElementById('progBar'); if(pb) pb.style.width=(total?Math.round(done/total*100):0)+'%';
+    };
+
+    // ---- review before submit ----
+    function chip(n, list){ var b=document.createElement('button'); b.type='button'; b.textContent=n;
+        b.addEventListener('click', function(){ closeReview(); show(n); }); list.appendChild(b); }
+    function openReview(){
+        var un=[], fl=[];
+        cards.forEach(function(c,i){ if(!c.querySelector('input:checked')) un.push(i+1); if(flags[i+1]) fl.push(i+1); });
+        document.getElementById('revA').textContent=N-un.length;
+        document.getElementById('revU').textContent=un.length;
+        document.getElementById('revF').textContent=fl.length;
+        var ul=document.getElementById('revUList'), fll=document.getElementById('revFList');
+        ul.innerHTML=''; fll.innerHTML='';
+        un.forEach(function(n){ chip(n, ul); }); fl.forEach(function(n){ chip(n, fll); });
+        document.getElementById('revUWrap').style.display=un.length?'':'none';
+        document.getElementById('revFWrap').style.display=fl.length?'':'none';
+        document.getElementById('revTitle').textContent = un.length ? (un.length+' question'+(un.length===1?' is':'s are')+' unanswered') : 'All questions answered';
+        navPanel.classList.remove('open');
+        modal.classList.add('open');
+        document.getElementById('revBack').focus();
+    }
+    function closeReview(){ modal.classList.remove('open'); }
+    window.__cbtOpenReview=openReview;
+    document.getElementById('revBack').addEventListener('click', closeReview);
+    modal.addEventListener('click', function(e){ if(e.target===modal) closeReview(); });
+    document.getElementById('revGo').addEventListener('click', function(){
+        window.__cbtConfirmed=true; closeReview();
+        try{ localStorage.removeItem(FLAG_KEY); }catch(e){}
+        if(form.requestSubmit) form.requestSubmit(); else form.dispatchEvent(new Event('submit',{cancelable:true})) && form.submit();
+    });
+    ['submitBtn','submitBtn2'].forEach(function(id){ var b=document.getElementById(id); if(b) b.addEventListener('click', openReview); });
+
+    // ---- keyboard: A–E picks, arrows move (one-at-a-time only) ----
+    document.addEventListener('keydown', function(e){
+        if(e.ctrlKey||e.metaKey||e.altKey) return;
+        var tag=(e.target && e.target.tagName)||''; if(tag==='INPUT'&&e.target.type!=='radio' || tag==='TEXTAREA') return;
+        if(modal.classList.contains('open')){ if(e.key==='Escape') closeReview(); return; }
+        var ov=document.getElementById('warnOverlay'); if(ov && ov.style.display==='flex') return;
+        if(!one) return;
+        var k=(e.key||'').toLowerCase();
+        if(k==='arrowright'){ e.preventDefault(); if(cur<N) show(cur+1); return; }
+        if(k==='arrowleft'){ e.preventDefault(); show(cur-1); return; }
+        var idx='abcde'.indexOf(k);
+        if(idx>=0 && k.length===1){
+            var opts=cards[cur-1].querySelectorAll('.opt');
+            if(opts[idx]){ e.preventDefault(); opts[idx].click(); }
+        }
+    });
+
+    paintFlags();
+    setMode(one);
+    show(1, true);
 })();
 </script>
 {% if show_math %}{% include 'cbt/_mathjax.html' %}{% endif %}

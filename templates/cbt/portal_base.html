@@ -14,27 +14,51 @@
     <style>
         /* Neutral, school-agnostic portal palette (slate) — looks native to any
            school and never carries the EduSyncra brand colour. */
-        :root{--portal-primary:#334155;--portal-primary-dark:#1e293b;--portal-soft:#f1f5f9;--portal-ink:#334155}
-        body{background:linear-gradient(135deg,var(--portal-primary),var(--portal-primary-dark));min-height:100vh;margin:0;font-family:'DM Sans',sans-serif}
-        .portal-wrap{max-width:820px;margin:0 auto;padding:1rem}
-        .portal-top{display:flex;justify-content:space-between;align-items:center;color:#fff;padding:.8rem .2rem;gap:.5rem;flex-wrap:wrap}
-        .portal-top .brand{display:flex;align-items:center;gap:.5rem;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:1.1rem;min-width:0}
-        .portal-top .brand img{width:34px;height:34px;border-radius:8px;object-fit:contain;background:#fff}
-        .portal-top .brand .brand-mark{width:34px;height:34px;border-radius:8px;background:rgba(255,255,255,.16);display:flex;align-items:center;justify-content:center;font-size:1rem;flex:none}
+        :root{--portal-primary:#334155;--portal-primary-dark:#1e293b;--portal-soft:#f1f5f9;--portal-ink:#334155;--px:#4f46e5}
+        body{background:#eef2f7;min-height:100vh;margin:0;font-family:'DM Sans',sans-serif;color:#1e293b}
+        body::before{content:'';position:fixed;inset:0 0 auto 0;height:220px;background:linear-gradient(135deg,var(--portal-primary),var(--portal-primary-dark));z-index:-1;border-radius:0 0 28px 28px}
+        .portal-wrap{max-width:860px;margin:0 auto;padding:.8rem 1rem 2rem}
+        .portal-top{display:flex;justify-content:space-between;align-items:center;color:#fff;padding:.5rem .1rem 1rem;gap:.6rem}
+        .portal-top .brand{display:flex;align-items:center;gap:.6rem;font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:1.08rem;min-width:0}
+        .portal-top .brand img{width:38px;height:38px;border-radius:10px;object-fit:contain;background:#fff;flex:none}
+        .portal-top .brand .brand-mark{width:38px;height:38px;border-radius:10px;background:rgba(255,255,255,.16);display:flex;align-items:center;justify-content:center;font-size:1rem;flex:none}
         .portal-top .brand .brand-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-        .portal-top a{color:#fff;opacity:.9;text-decoration:none;font-size:.85rem}
-        .portal-card{background:var(--bg-card,#fff);border-radius:16px;padding:1.4rem;box-shadow:0 10px 30px rgba(0,0,0,.18)}
-        .portal-card h1{margin:0 0 .3rem;font-size:1.3rem;font-family:'Space Grotesk',sans-serif}
-        .flash-message{margin-bottom:.6rem}
+        .portal-top a{color:#fff;text-decoration:none}
+        .p-user{display:flex;align-items:center;gap:.55rem;min-width:0;flex:none;max-width:60%}
+        .p-user .av{width:36px;height:36px;border-radius:50%;background:rgba(255,255,255,.2);display:flex;align-items:center;justify-content:center;font-weight:800;font-size:.8rem;flex:none}
+        .p-user .nm{display:flex;flex-direction:column;line-height:1.2;min-width:0}
+        .p-user .nm b{font-size:.86rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+        .p-user .nm small{font-size:.72rem;opacity:.8}
+        .p-out{width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,.16);display:inline-flex;align-items:center;justify-content:center;flex:none}
+        .p-out:hover{background:rgba(255,255,255,.28)}
+        .portal-card{background:var(--bg-card,#fff);border-radius:18px;padding:1.4rem;box-shadow:0 10px 30px rgba(15,23,42,.12)}
+        .portal-card h1{margin:0 0 .3rem;font-size:1.35rem;font-family:'Space Grotesk',sans-serif}
+        .flash-message{margin-bottom:.7rem;border-radius:12px}
         .pmenu-wrap{position:relative}
-        .pmenu-btn{width:42px;height:42px;border-radius:10px;border:none;background:rgba(255,255,255,.16);color:#fff;font-size:1.05rem;cursor:pointer}
+        .pmenu-btn{width:42px;height:42px;border-radius:12px;border:none;background:rgba(255,255,255,.16);color:#fff;font-size:1.05rem;cursor:pointer}
         .pmenu-btn:hover{background:rgba(255,255,255,.28)}
-        .pmenu-panel{position:absolute;top:50px;right:0;z-index:30;background:#fff;border-radius:12px;box-shadow:0 16px 36px rgba(0,0,0,.3);min-width:220px;overflow:hidden;display:none}
+        .pmenu-panel{position:absolute;top:50px;right:0;z-index:30;background:#fff;border-radius:14px;box-shadow:0 16px 36px rgba(0,0,0,.3);min-width:230px;overflow:hidden;display:none}
         .pmenu-panel.open{display:block}
-        .pmenu-panel a{display:flex;align-items:center;gap:.7rem;padding:.85rem 1rem;color:#333;text-decoration:none;font-size:.9rem;border-bottom:1px solid #f0f0f0}
+        .pmenu-panel a{display:flex;align-items:center;gap:.7rem;padding:.85rem 1rem;color:#333;text-decoration:none;font-size:.92rem;border-bottom:1px solid #f0f0f0}
         .pmenu-panel a:last-child{border-bottom:none}
         .pmenu-panel a:hover{background:var(--portal-soft);color:var(--portal-ink)}
         .pmenu-panel a i{width:18px;text-align:center;color:var(--portal-ink)}
+        /* shared portal bits */
+        .p-btn{display:inline-flex;align-items:center;justify-content:center;gap:.5rem;height:46px;padding:0 1.2rem;border-radius:13px;border:0;background:var(--px);color:#fff;font:inherit;font-weight:700;font-size:.95rem;text-decoration:none;cursor:pointer}
+        .p-btn:hover{filter:brightness(1.08)}
+        .p-btn.ghost{background:#fff;color:#334155;border:1px solid #e2e8f0}
+        .p-btn.wide{width:100%}
+        .p-btn.sm{height:38px;padding:0 .9rem;font-size:.86rem;border-radius:11px}
+        .p-field{display:flex;flex-direction:column;gap:.35rem;margin-bottom:.9rem}
+        .p-field label{font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#64748b}
+        .p-input{position:relative}
+        .p-input i.lead{position:absolute;left:.9rem;top:50%;transform:translateY(-50%);color:#94a3b8}
+        .p-input input{width:100%;height:50px;border:1.5px solid #e2e8f0;border-radius:13px;padding:0 3rem 0 2.6rem;font:inherit;font-size:1rem;background:#fff;color:#1e293b;box-sizing:border-box}
+        .p-input input:focus{outline:none;border-color:var(--px);box-shadow:0 0 0 4px rgba(79,70,229,.12)}
+        .p-eye{position:absolute;right:.4rem;top:50%;transform:translateY(-50%);width:40px;height:40px;border:0;background:none;color:#94a3b8;cursor:pointer;border-radius:10px}
+        .p-eye:hover{color:#334155;background:#f1f5f9}
+        .p-muted{color:#64748b}
+        @media (max-width:600px){ .portal-wrap{padding:.6rem .8rem 1.5rem} .portal-card{padding:1.15rem;border-radius:18px} .p-user .nm small{display:none} }
     </style>
     {% block head_extra %}{% endblock %}
 </head>
@@ -47,7 +71,11 @@
                 <span class="brand-name">{{ school_brand.name or app_name }}</span>
             </div>
             {% if student is defined and student %}
-            <div>{{ student.full_name }} ({{ student.student_id }}) · <a href="{{ url_for('cbt_portal.logout') }}">Logout</a></div>
+            <div class="p-user">
+                <span class="av" aria-hidden="true">{{ ((student.surname or student.full_name or '?')[0] ~ (student.first_name or '')[:1])|upper }}</span>
+                <span class="nm"><b>{{ student.full_name }}</b><small>{{ student.student_id }}</small></span>
+                <a class="p-out" href="{{ url_for('cbt_portal.logout') }}" title="Log out" aria-label="Log out"><i class="fas fa-right-from-bracket"></i></a>
+            </div>
             {% else %}
             <div class="pmenu-wrap">
                 <button class="pmenu-btn" id="pmenuBtn" aria-label="Menu" aria-expanded="false"><i class="fas fa-bars"></i></button>
@@ -76,6 +104,15 @@
         document.addEventListener('click', function(e){
             if(!p.contains(e.target) && e.target!==b){ p.classList.remove('open'); b.setAttribute('aria-expanded','false'); } });
     })();
+    // Show/hide password buttons ([data-eye] next to a password input).
+    document.addEventListener('click', function(e){
+        var b = e.target.closest && e.target.closest('[data-eye]');
+        if(!b) return; e.preventDefault();
+        var inp = b.parentNode.querySelector('input'); if(!inp) return;
+        var show = inp.type === 'password'; inp.type = show ? 'text' : 'password';
+        b.innerHTML = '<i class="fas fa-eye' + (show ? '-slash' : '') + '"></i>';
+        b.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
+    });
     // Print buttons ([data-print]) — the portal doesn't load the main app JS, so
     // wire a small delegated handler here (this is why the Print button was dead).
     (function(){

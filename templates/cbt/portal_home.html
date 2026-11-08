@@ -1,44 +1,86 @@
 {% extends "cbt/portal_base.html" %}
 {% block title %}My Tests{% endblock %}
+{% block head_extra %}<style>
+.ph-hello{color:#fff;margin:-.2rem .1rem 1rem}
+.ph-hello h1{margin:0;font-size:1.5rem;font-family:'Space Grotesk',sans-serif}
+.ph-hello p{margin:.2rem 0 0;opacity:.85;font-size:.9rem}
+.ph-list{display:flex;flex-direction:column;gap:.8rem}
+.ph-test{background:#fff;border-radius:18px;padding:1.1rem 1.15rem;box-shadow:0 6px 20px rgba(15,23,42,.08);display:flex;flex-direction:column;gap:.75rem;border:2px solid transparent}
+.ph-test.open{border-color:#c7d2fe}
+.ph-test-top{display:flex;align-items:flex-start;gap:.8rem}
+.ph-ic{width:46px;height:46px;border-radius:14px;flex:none;display:flex;align-items:center;justify-content:center;font-size:1.15rem;background:#eef2ff;color:var(--px)}
+.ph-test.done .ph-ic{background:#dcfce7;color:#16a34a}
+.ph-test.wait .ph-ic,.ph-test.closed .ph-ic{background:#f1f5f9;color:#94a3b8}
+.ph-t{flex:1;min-width:0}
+.ph-t strong{display:block;font-size:1.06rem;line-height:1.3}
+.ph-t small{color:#64748b;font-size:.84rem}
+.ph-pill{flex:none;font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em;border-radius:999px;padding:.22rem .6rem;background:#f1f5f9;color:#64748b;white-space:nowrap}
+.ph-pill.open{background:#dcfce7;color:#15803d}.ph-pill.prog{background:#fef3c7;color:#b45309}.ph-pill.done{background:#e0e7ff;color:#4338ca}
+.ph-facts{display:flex;flex-wrap:wrap;gap:.4rem}
+.ph-facts span{display:inline-flex;align-items:center;gap:.35rem;font-size:.8rem;background:#f8fafc;border:1px solid #eef2f7;border-radius:9px;padding:.28rem .6rem;color:#334155}
+.ph-facts i{color:#94a3b8;font-size:.75rem}
+.ph-act{display:flex;align-items:center;gap:.6rem;flex-wrap:wrap}
+.ph-score{font-family:'Space Grotesk',sans-serif;font-weight:800;font-size:1.3rem}
+.ph-score small{font-size:.8rem;color:#64748b;font-weight:600;margin-left:.3rem}
+.ph-note{font-size:.84rem;color:#b45309;display:inline-flex;align-items:center;gap:.4rem}
+.ph-mock{display:flex;align-items:center;gap:.8rem;background:#fff;border-radius:18px;padding:.9rem 1.1rem;text-decoration:none;color:inherit;box-shadow:0 6px 20px rgba(15,23,42,.08);margin-top:.9rem}
+.ph-mock .ph-ic{background:#334155;color:#fff}
+.ph-mock:hover{box-shadow:0 10px 26px rgba(15,23,42,.14)}
+.ph-empty{text-align:center;padding:2rem 1rem}
+.ph-empty i{font-size:2.2rem;color:#94a3b8}
+.ph-empty h3{margin:.7rem 0 .3rem}
+@media (min-width:700px){.ph-test{flex-direction:row;align-items:center}.ph-test-top{flex:1}.ph-act{flex:none}}
+</style>{% endblock %}
 {% block content %}
-<a href="{{ url_for('mock_jamb_portal.portal_list') }}" class="portal-card" style="display:flex;align-items:center;gap:.8rem;text-decoration:none;color:inherit;margin-bottom:.8rem;">
-    <span style="width:44px;height:44px;border-radius:12px;background:#334155;color:#fff;display:flex;align-items:center;justify-content:center;font-size:1.2rem;"><i class="fas fa-file-contract"></i></span>
-    <span style="flex:1;"><strong>Mock JAMB</strong><div class="text-muted text-sm">Sit a full JAMB-style mock — 4 subjects, one timed session.</div></span>
-    <i class="fas fa-arrow-right text-muted"></i>
-</a>
-<div class="portal-card">
-    <h1>Today's Tests</h1>
-    <p class="text-muted">{{ "now"|default('') }}Tests available for your class today. Each test needs its access password (your teacher will provide it).</p>
-
-    {% if not has_class %}
-    <div class="empty-state"><i class="fas fa-circle-info"></i><h3>No class found</h3><p>You don't have an active class enrolment, so no tests are listed. Please see your teacher.</p></div>
-    {% elif rows %}
-    <div style="display:flex;flex-direction:column;gap:.6rem;margin-top:1rem;">
-        {% for row in rows %}
-        {% set e = row.exam %}{% set a = row.attempt %}
-        <div style="border:1px solid var(--border-color);border-radius:12px;padding:1rem;display:flex;justify-content:space-between;align-items:center;gap:.75rem;flex-wrap:wrap;">
-            <div>
-                <strong style="font-size:1.05rem;">{{ e.title }}</strong>
-                <div class="text-muted text-sm">{{ e.subject.name if e.subject else '' }} · {{ e.question_count }} questions · {{ e.duration_minutes }} min · {{ e.total_marks }} marks</div>
-                <div class="text-sm" style="margin-top:.2rem;"><i class="fas fa-clock"></i> {{ e.window_label }}{% if row.state != 'open' %} · <span style="color:#b8860b;">{{ row.msg }}</span>{% endif %}</div>
-            </div>
-            <div>
-                {% if a and a.status == 'Submitted' %}
-                    <span class="badge badge-success">Done · {{ a.score }}/{{ a.total }}</span>
-                    <a href="{{ url_for('cbt_portal.result', exam_id=e.id) }}" class="btn btn-secondary btn-sm">View</a>
-                {% elif a %}
-                    <a href="{{ url_for('cbt_portal.take', exam_id=e.id) }}" class="btn btn-primary btn-sm">Resume</a>
-                {% elif row.state == 'open' %}
-                    <a href="{{ url_for('cbt_portal.start', exam_id=e.id) }}" class="btn btn-primary btn-sm">Start <i class="fas fa-arrow-right"></i></a>
-                {% else %}
-                    <span class="badge badge-secondary">{{ 'Not open yet' if row.state=='before' else 'Closed' }}</span>
-                {% endif %}
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-    {% else %}
-    <div class="empty-state"><i class="fas fa-mug-hot"></i><h3>No tests today</h3><p>There are no published tests for your class today. Check back on your exam day.</p></div>
-    {% endif %}
+{% set hour = (now_hour if now_hour is defined else 12) %}
+<div class="ph-hello">
+    <h1>Hi {{ student.first_name or student.full_name }} 👋</h1>
+    <p>{{ rows|length }} test{{ '' if rows|length == 1 else 's' }} for your class today · you’ll need each test’s password from your teacher.</p>
 </div>
+
+{% if not has_class %}
+<div class="portal-card ph-empty"><i class="fas fa-circle-info"></i><h3>No class found</h3><p class="p-muted">You don’t have an active class, so no tests are listed. Please see your teacher.</p></div>
+{% elif rows %}
+<div class="ph-list">
+    {% for row in rows %}{% set e = row.exam %}{% set a = row.attempt %}
+    {% set kind = 'done' if (a and a.status != 'In progress') else ('prog' if a else ('open' if row.state == 'open' else ('wait' if row.state == 'before' else 'closed'))) %}
+    <div class="ph-test {{ 'open' if kind in ('open','prog') else kind }}">
+        <div class="ph-test-top">
+            <span class="ph-ic"><i class="fas {{ 'fa-circle-check' if kind == 'done' else ('fa-pen-to-square' if kind in ('open','prog') else ('fa-hourglass-half' if kind == 'wait' else 'fa-lock')) }}"></i></span>
+            <div class="ph-t">
+                <strong>{{ e.title }}</strong>
+                <small>{{ e.subject.name if e.subject else '' }}</small>
+                <div class="ph-facts" style="margin-top:.45rem">
+                    <span><i class="fas fa-list-ol"></i> {{ e.question_count }} questions</span>
+                    <span><i class="fas fa-stopwatch"></i> {{ e.duration_minutes }} min</span>
+                    <span><i class="fas fa-star"></i> {{ e.total_marks }} marks</span>
+                    <span><i class="fas fa-clock"></i> {{ e.window_label }}</span>
+                </div>
+            </div>
+            <span class="ph-pill {{ kind }}">{{ {'done':'Done','prog':'In progress','open':'Open now','wait':'Not open yet','closed':'Closed'}[kind] }}</span>
+        </div>
+        <div class="ph-act">
+            {% if kind == 'done' %}
+                <span class="ph-score">{{ a.score }}<small>/ {{ a.total }}</small></span>
+                <a href="{{ url_for('cbt_portal.result', exam_id=e.id) }}" class="p-btn sm ghost">See result</a>
+            {% elif kind == 'prog' %}
+                <a href="{{ url_for('cbt_portal.take', exam_id=e.id) }}" class="p-btn"><i class="fas fa-play"></i> Resume test</a>
+            {% elif kind == 'open' %}
+                <a href="{{ url_for('cbt_portal.start', exam_id=e.id) }}" class="p-btn">Start <i class="fas fa-arrow-right"></i></a>
+            {% else %}
+                <span class="ph-note"><i class="fas fa-circle-info"></i> {{ row.msg }}</span>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="portal-card ph-empty"><i class="fas fa-mug-hot"></i><h3>No tests today</h3><p class="p-muted">There are no published tests for your class today. Check back on your exam day.</p></div>
+{% endif %}
+
+<a href="{{ url_for('mock_jamb_portal.portal_list') }}" class="ph-mock">
+    <span class="ph-ic"><i class="fas fa-file-contract"></i></span>
+    <span style="flex:1"><strong>Mock JAMB</strong><div class="p-muted" style="font-size:.85rem">A full JAMB-style mock — 4 subjects, one timed session.</div></span>
+    <i class="fas fa-chevron-right p-muted"></i>
+</a>
 {% endblock %}
