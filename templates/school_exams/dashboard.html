@@ -159,13 +159,12 @@
     <input type="hidden" name="body" value="{{ body }}"><input type="hidden" name="year" value="{{ year }}"><input type="hidden" name="view" value="students">
     <label class="sx-f wide"><span>Search</span><input type="search" name="q" value="{{ search }}" class="form-control" placeholder="Name, student ID or exam no." autocomplete="off"
            data-live-search="sxCandidateList" data-live-count="sxSearchCount"></label>
-    <label class="sx-f"><span>Subject</span><select name="subject" class="form-control"><option value="">All</option>{% for n in subject_names %}<option value="{{ n }}" {% if n == f_subject %}selected{% endif %}>{{ n }}</option>{% endfor %}</select></label>
-    <label class="sx-f"><span>Grade</span><select name="grade" class="form-control"><option value="">All</option>{% for b in scheme.bands %}<option value="{{ b.grade }}" {% if b.grade == f_grade %}selected{% endif %}>{{ b.grade }} · {{ b.label }}</option>{% endfor %}</select></label>
-    <label class="sx-f sm"><span>Min distinctions</span><input type="number" name="min_d" min="0" max="20" value="{{ min_d or '' }}" class="form-control" placeholder="0"></label>
-    <label class="sx-f sm"><span>Min credits</span><input type="number" name="min_c" min="0" max="20" value="{{ min_c or '' }}" class="form-control" placeholder="0"></label>
+    <label class="sx-f"><span>Subject</span><select name="subject" class="form-control" data-lf="sxCandidateList" data-lf-rule="subject"><option value="">All</option>{% for n in subject_names %}<option value="{{ n }}" {% if n == f_subject %}selected{% endif %}>{{ n }}</option>{% endfor %}</select></label>
+    <label class="sx-f"><span>Grade</span><select name="grade" class="form-control" data-lf="sxCandidateList" data-lf-rule="grade"><option value="">All</option>{% for b in scheme.bands %}<option value="{{ b.grade }}" {% if b.grade == f_grade %}selected{% endif %}>{{ b.grade }} · {{ b.label }}</option>{% endfor %}</select></label>
+    <label class="sx-f sm"><span>Min distinctions</span><input type="number" name="min_d" min="0" max="20" value="{{ min_d or '' }}" class="form-control" placeholder="0" data-lf="sxCandidateList" data-lf-rule="min:d"></label>
+    <label class="sx-f sm"><span>Min credits</span><input type="number" name="min_c" min="0" max="20" value="{{ min_c or '' }}" class="form-control" placeholder="0" data-lf="sxCandidateList" data-lf-rule="min:c"></label>
     <label class="sx-f" for="sxSort"><span>Sort by</span><select id="sxSort" name="sort" class="form-control" data-autosubmit>{% for kk, lab in sorts %}<option value="{{ kk }}" {% if kk == sort %}selected{% endif %}>{{ lab }}</option>{% endfor %}</select></label>
-    <div class="sx-f-btns"><button class="btn btn-primary btn-sm"><i class="fas fa-filter"></i> Filter</button>
-      {% if filtered %}<a class="btn btn-secondary btn-sm" href="{{ url_for(bp ~ '.dashboard', **qbase) }}">Clear</a>{% endif %}</div>
+    {% if filtered %}<div class="sx-f-btns"><a class="btn btn-secondary btn-sm" href="{{ url_for(bp ~ '.dashboard', **qbase) }}">Clear</a></div>{% endif %}
   </form>
 </div>
 
@@ -186,7 +185,8 @@
     <thead><tr>{% if can_del %}<th style="width:32px"></th>{% endif %}{{ sort_th('position', 'Pos') }}{{ sort_th('name_desc' if sort == 'name' else 'name', 'Candidate', active=sort in ('name', 'name_desc')) }}<th>Exam no.</th><th class="num">Subj.</th>{{ sort_th('distinctions', 'D', 'num', title='Distinctions') }}{{ sort_th('credits', 'C', 'num', title='Credits') }}<th class="num">P</th><th class="num">F</th>{{ sort_th('avg', 'Avg %', 'num') }}{{ sort_th('total', 'Total', 'num') }}<th>Grades</th><th>Eng+Maths</th><th>Benchmark</th><th>{{ 'Placement' if level == 'jss3' else 'Admission' }}</th><th></th></tr></thead>
     <tbody>
     {% for c in candidates %}
-      <tr data-search="{{ (c.name ~ ' ' ~ (c.student_code or '') ~ ' ' ~ (c.exam_number or ''))|lower }}">
+      <tr data-search="{{ (c.name ~ ' ' ~ (c.student_code or '') ~ ' ' ~ (c.exam_number or ''))|lower }}" data-d="{{ c.distinctions }}" data-c="{{ c.credits }}"
+          data-results="{% for r in c.results %}{{ r.subject }}::{{ r.grade }}{{ '|' if not loop.last }}{% endfor %}">
         {% if can_del %}<td>{{ bulk_check('bulkDel', c.id, c.name) }}</td>{% endif %}
         <td>{{ c.position }}</td>
         <td><a href="{{ url_for(bp ~ '.student', body=body, student_id=c.id) }}"><strong>{{ c.name }}</strong></a><div class="sx-muted">{{ c.student_code }}{% if c.arm %} · {{ c.arm }}{% endif %}</div></td>

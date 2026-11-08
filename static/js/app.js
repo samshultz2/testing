@@ -111,42 +111,125 @@ function initSelectLabels() {
 }
 
 // Live client-side search over a rendered list. Binds every
-// input[data-live-search="containerId"]; filters that container's [data-search]
-// descendants (their data-search holds the lowercase haystack). Multi-word
-// queries match when every token is present (AND). Expands .cap-list while a
-// query is active so hidden matches surface, and restores it when cleared.
+// Live lists. input[data-live-search="containerId"] filters that container's
+// [data-search] rows by text (lowercase haystack; every word must match).
+// Filter controls [data-lf="containerId"] narrow the same rows instantly, by
+// their data-lf-rule:
+//   "min:<attr>" / "max:<attr>"  numeric row attribute data-<attr> >= / <= value
+//   "subject" / "grade"          row data-results = "subject::grade|…" — with
+//                                both set, one result must match both (as the
+//                                server filters do)
+// A filter that the server already applied (its name is in the URL) can only
+// be widened by the server, so changing it reloads the form instead; client
+// changes are mirrored into the URL so a refresh keeps them. Capped lists
+// expand while anything is active; data-live-count shows "n of N".
 function initLiveSearch() {
-    var inputs = document.querySelectorAll('input[data-live-search]');
-    for (var i = 0; i < inputs.length; i++) bindLiveSearch(inputs[i]);
+    var ids = {};
+    var els = document.querySelectorAll('input[data-live-search], [data-lf]');
+    for (var i = 0; i < els.length; i++) {
+        ids[els[i].getAttribute('data-live-search') || els[i].getAttribute('data-lf')] = true;
+    }
+    Object.keys(ids).forEach(bindLiveList);
 }
 
-function bindLiveSearch(input) {
-    var container = document.getElementById(input.getAttribute('data-live-search'));
-    if (!container) return;
-    var countEl = input.getAttribute('data-live-count')
-        ? document.getElementById(input.getAttribute('data-live-count')) : null;
+function bindLiveList(id) {
+    var container = document.getElementById(id);
+    var search = document.querySelector('input[data-live-search="' + id + '"]');
+    var filters = Array.prototype.slice.call(document.querySelectorAll('[data-lf="' + id + '"]'));
+    if (!container) {
+        // No list on this view (e.g. a summary tab): filters still apply, via the server.
+        filters.forEach(function (f) {
+            var t = null, isText = f.tagName === 'INPUT';
+            f.addEventListener(isText ? 'input' : 'change', function () {
+                if (!f.form) return;
+                clearTimeout(t);
+                t = setTimeout(function () { f.form.submit(); }, isText ? 700 : 0);
+            });
+        });
+        return;
+    }
+    var countId = (search && search.getAttribute('data-live-count')) || container.getAttribute('data-live-count');
+    var countEl = countId ? document.getElementById(countId) : null;
     var caps = container.querySelectorAll('.cap-list');
+    var url = new URL(window.location.href);
+    var serverSide = filters.some(function (f) { return f.name && (url.searchParams.get(f.name) || '') !== ''; });
+
+    function val(f) { return (f.value || '').trim(); }
 
     function apply() {
-        var q = (input.value || '').trim().toLowerCase();
+        var q = search ? (search.value || '').trim().toLowerCase() : '';
         var tokens = q ? q.split(/\s+/) : [];
-        var items = container.querySelectorAll('[data-search]');
-        var shown = 0, total = items.length;
-        for (var k = 0; k < items.length; k++) {
-            var hay = items[k].getAttribute('data-search') || '';
-            var ok = true;
-            for (var t = 0; t < tokens.length; t++) {
-                if (hay.indexOf(tokens[t]) === -1) { ok = false; break; }
-            }
-            items[k].style.display = ok ? '' : 'none';
-            if (ok) shown++;
+        var subj = '', grade = '', nums = [];
+        if (!serverSide) {
+            filters.forEach(function (f) {
+                var rule = f.getAttribute('data-lf-rule') || '', v = val(f);
+                if (!v) return;
+                if (rule === 'subject') subj = v.toLowerCase();
+                else if (rule === 'grade') grade = v.toLowerCase();
+                else if (/^(min|max):/.test(rule) && !isNaN(parseFloat(v))) {
+                    nums.push([rule.slice(0, 3), rule.slice(4), parseFloat(v)]);
+                }
+            });
         }
-        // Reveal capped lists while searching so matches past the fold appear.
-        for (var c = 0; c < caps.length; c++) caps[c].classList.toggle('expanded', !!q);
-        if (countEl) countEl.textContent = q ? (shown + ' of ' + total) : '';
+        var items = container.querySelectorAll('[data-search]');
+        // Some lists render each row twice (phone cards + desktop table); count
+        // only the layout that is on screen.
+        var counted = 0, shown = 0;
+        for (var k = 0; k < items.length; k++) {
+            var it = items[k], hay = it.getAttribute('data-search') || '', ok = true;
+            for (var t = 0; ok && t < tokens.length; t++) ok = hay.indexOf(tokens[t]) !== -1;
+            for (var n = 0; ok && n < nums.length; n++) {
+                var x = parseFloat(it.getAttribute('data-' + nums[n][1]));
+                if (isNaN(x)) x = 0;
+                ok = nums[n][0] === 'min' ? x >= nums[n][2] : x <= nums[n][2];
+            }
+            if (ok && (subj || grade)) {
+                var res = (it.getAttribute('data-results') || '').toLowerCase().split('|');
+                ok = res.some(function (r) {
+                    var p = r.split('::');
+                    return (!subj || p[0] === subj) && (!grade || p[1] === grade);
+                });
+            }
+            it.style.display = ok ? '' : 'none';
+            var onScreen = !it.parentElement || it.parentElement.getClientRects().length > 0;
+            if (onScreen) { counted++; if (ok) shown++; }
+        }
+        var active = !!q || (!serverSide && (subj || grade || nums.length));
+        for (var c = 0; c < caps.length; c++) caps[c].classList.toggle('expanded', !!active);
+        if (countEl) countEl.textContent = active ? (shown + ' of ' + counted) : '';
     }
-    input.addEventListener('input', apply);
-    if ((input.value || '').trim()) apply();   // honour a prefilled query
+
+    function remember() {
+        var u = new URL(window.location.href);
+        filters.forEach(function (f) { if (f.name) { if (val(f)) u.searchParams.set(f.name, val(f)); else u.searchParams.delete(f.name); } });
+        try { window.history.replaceState(window.history.state, '', u.toString()); } catch (e) { /* ignore */ }
+    }
+
+    var timer = null;
+    function reload(delay) {
+        var form = filters[0] && filters[0].form;
+        if (!form) return;
+        clearTimeout(timer);
+        timer = setTimeout(function () { form.submit(); }, delay);
+    }
+
+    if (search) search.addEventListener('input', apply);
+    filters.forEach(function (f) {
+        var isText = f.tagName === 'INPUT';
+        f.addEventListener(isText ? 'input' : 'change', function () {
+            if (serverSide) { reload(isText ? 700 : 0); return; }
+            apply(); remember();
+        });
+    });
+    // Enter in a filter box never needs a round-trip in client mode.
+    filters.concat(search ? [search] : []).forEach(function (f) {
+        if (!f.form) return;
+        f.addEventListener('keydown', function (e) {
+            if (e.key !== 'Enter') return;
+            if (serverSide) { e.preventDefault(); reload(0); } else e.preventDefault();
+        });
+    });
+    if ((search && (search.value || '').trim()) || filters.some(function (f) { return val(f); })) apply();
 }
 
 // Show/hide each cap-list's "Show all" toggle based on whether the list really

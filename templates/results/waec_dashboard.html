@@ -364,7 +364,7 @@
     .stat-value { font-size: 2rem; }
     .stat-label { font-size: 0.8rem; }
     
-    .filters-grid { grid-template-columns: repeat(6, 1fr); }
+    .filters-grid { grid-template-columns: repeat(5, 1fr); }
     .filter-btn { grid-column: span 1; margin-top: 0; }
     
     .chart-body { height: 250px; }
@@ -519,7 +519,7 @@
             </div>
             <div class="filter-group">
                 <label>Subject</label>
-                <select name="subject">
+                <select name="subject" data-lf="waecStudentList" data-lf-rule="subject">
                     <option value="">All</option>
                     {% for subj in subjects %}
                     <option value="{{ subj }}" {% if subj == subject_filter %}selected{% endif %}>{{ subj[:12] }}</option>
@@ -528,7 +528,7 @@
             </div>
             <div class="filter-group">
                 <label>Grade</label>
-                <select name="grade">
+                <select name="grade" data-lf="waecStudentList" data-lf-rule="grade">
                     <option value="">All</option>
                     {% for g in grades %}
                     <option value="{{ g }}" {% if g == grade_filter %}selected{% endif %}>{{ g }}</option>
@@ -537,15 +537,11 @@
             </div>
             <div class="filter-group">
                 <label>Min A1s</label>
-                <input type="number" name="min_a1" min="0" max="9" value="{{ min_a1 or '' }}" placeholder="0">
+                <input type="number" name="min_a1" min="0" max="9" value="{{ min_a1 or '' }}" placeholder="0" data-lf="waecStudentList" data-lf-rule="min:a1">
             </div>
             <div class="filter-group">
                 <label>Min Credits</label>
-                <input type="number" name="min_credits" min="0" max="9" value="{{ min_credits or '' }}" placeholder="0">
-            </div>
-            <div class="filter-group filter-btn">
-                <label style="visibility: hidden;">Filter</label>
-                <button type="submit" class="btn btn-primary btn-sm" style="width: 100%;"><i class="fas fa-filter"></i> Filter</button>
+                <input type="number" name="min_credits" min="0" max="9" value="{{ min_credits or '' }}" placeholder="0" data-lf="waecStudentList" data-lf-rule="min:credits">
             </div>
         </div>
     </form>
@@ -785,7 +781,7 @@
     <!-- Mobile: Card View -->
     <div class="students-list" style="padding: 0.5rem;">
         {% for s in students %}
-        <div class="student-card" data-search="{{ (s.name ~ ' ' ~ s.student_id)|lower }}">
+        <div class="student-card" data-search="{{ (s.name ~ ' ' ~ s.student_id)|lower }}" data-a1="{{ s.a1_count }}" data-credits="{{ s.credit_count }}" data-results="{% for r in s.results %}{{ r.subject }}::{{ r.grade }}{{ '|' if not loop.last }}{% endfor %}">
             <div class="student-card-header">
                 {% if can_write_sub('external_exams', board.key ~ '_delete') %}{{ bulk_check('bulkDel', s.id, s.name) }}{% endif %}
                 <div>
@@ -853,7 +849,7 @@
             </thead>
             <tbody>
                 {% for s in students %}
-                <tr data-search="{{ (s.name ~ ' ' ~ s.student_id)|lower }}">
+                <tr data-search="{{ (s.name ~ ' ' ~ s.student_id)|lower }}" data-a1="{{ s.a1_count }}" data-credits="{{ s.credit_count }}" data-results="{% for r in s.results %}{{ r.subject }}::{{ r.grade }}{{ '|' if not loop.last }}{% endfor %}">
                     {% if can_write_sub('external_exams', board.key ~ '_delete') %}<td>{{ bulk_check('bulkDel', s.id, s.name) }}</td>{% endif %}
                     <td>{{ loop.index }}</td>
                     <td><strong>{{ s.name }}</strong><br><small style="color:#666;">{{ s.student_id }}</small></td>

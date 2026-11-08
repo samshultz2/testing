@@ -384,12 +384,27 @@ function ViewExam({ d, notify }) {
   const [filters, setFilters] = useState(d.filters);
   const [exporting, setExporting] = useState(false);
 
-  // Live search: the name/ID box filters the already-loaded results instantly
-  // (no round-trip). Min/max score still submit to the server.
+  // Live filters: name/ID and min/max score narrow the already-loaded results
+  // instantly (no round-trip). A min/max the server already applied (it was in
+  // the URL) can only be widened by the server, so changing it reloads.
   const q = (filters.search || '').trim().toLowerCase();
-  const shown = q
-    ? d.results.filter((it) => (it.student.full_name + ' ' + it.student.student_id).toLowerCase().includes(q))
-    : d.results;
+  const serverRange = useRef((d.filters.min_score !== '' && d.filters.min_score != null)
+                             || (d.filters.max_score !== '' && d.filters.max_score != null)).current;
+  const num = (v) => (v === '' || v == null || isNaN(parseFloat(v)) ? null : parseFloat(v));
+  const lo = serverRange ? null : num(filters.min_score);
+  const hi = serverRange ? null : num(filters.max_score);
+  const shown = d.results.filter((it) => (
+    (!q || (it.student.full_name + ' ' + it.student.student_id).toLowerCase().includes(q))
+    && (lo == null || (it.total_score || 0) >= lo) && (hi == null || (it.total_score || 0) <= hi)));
+  const narrowed = shown.length !== d.results.length;
+  useEffect(() => {
+    if (!serverRange) return undefined;
+    if (String(filters.min_score ?? '') === String(d.filters.min_score ?? '')
+        && String(filters.max_score ?? '') === String(d.filters.max_score ?? '')) return undefined;
+    const t = setTimeout(() => navParams(nav.go, d.urls.self,
+      { search: filters.search, min_score: filters.min_score, max_score: filters.max_score }), 700);
+    return () => clearTimeout(t);
+  }, [filters.min_score, filters.max_score]);
 
   useEffect(() => {
     if (!st || !distRef.current || !window.Chart) return;
@@ -508,7 +523,7 @@ function ViewExam({ d, notify }) {
 
       <div className="card">
         <div className="card-header">
-          <h3><i aria-hidden="true" className="fas fa-list-ol" /> Results ({shown.length}{q && shown.length !== d.results.length ? ` of ${d.results.length}` : ''})</h3>
+          <h3><i aria-hidden="true" className="fas fa-list-ol" /> Results ({shown.length}{narrowed ? ` of ${d.results.length}` : ''})</h3>
           <form onSubmit={applyFilters} className="filter-form">
             <input type="text" className="form-control" placeholder="Search name or ID..." style={{ width: 160 }}
                    value={filters.search} onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))} />
@@ -516,8 +531,8 @@ function ViewExam({ d, notify }) {
                    value={filters.min_score} onChange={(e) => setFilters((f) => ({ ...f, min_score: e.target.value }))} />
             <input type="number" className="form-control" placeholder="Max" style={{ width: 70 }}
                    value={filters.max_score} onChange={(e) => setFilters((f) => ({ ...f, max_score: e.target.value }))} />
-            <button type="submit" className="btn btn-sm btn-primary" aria-label="Search"><i aria-hidden="true" className="fas fa-search" /></button>
-            {d.has_filter && <button type="button" className="btn btn-sm btn-secondary" onClick={clearFilters}>Clear</button>}
+            {(d.has_filter || narrowed) && <button type="button" className="btn btn-sm btn-secondary"
+              onClick={() => (d.has_filter ? clearFilters() : setFilters((f) => ({ ...f, search: '', min_score: '', max_score: '' })))}>Clear</button>}
           </form>
         </div>
 

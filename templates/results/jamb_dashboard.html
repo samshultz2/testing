@@ -329,7 +329,7 @@
     .stat-value { font-size: 2rem; }
     .stat-label { font-size: 0.8rem; }
     
-    .filters-grid { grid-template-columns: repeat(5, 1fr); }
+    .filters-grid { grid-template-columns: repeat(4, 1fr); }
     .filter-btn { grid-column: span 1; margin-top: 0; }
     
     .chart-body { height: 250px; }
@@ -479,13 +479,14 @@
 
 <!-- Filters -->
 <div class="filters-card no-print">
+    {% set live_list = 'rankingsCard' if view_mode == 'rankings' else 'jambStudentList' %}
     <form method="GET" action="{{ url_for('results.jamb_list', search=search) }}">
         <input type="hidden" name="view" value="{{ view_mode }}">
         <div class="filter-group filter-search">
             <label>Search by name or ID</label>
             <input type="text" name="search" id="jambLiveSearch" value="{{ search or '' }}"
                    placeholder="Type a student name or ID..." autocomplete="off"
-                   data-live-search="jambStudentList" data-live-count="jambSearchCount">
+                   data-live-search="{{ live_list }}" data-live-count="jambSearchCount">
             <span id="jambSearchCount" class="text-muted" style="font-size:.75rem;"></span>
         </div>
         <div class="filters-grid">
@@ -499,22 +500,18 @@
             </div>
             <div class="filter-group">
                 <label>Min Score</label>
-                <input type="number" name="min_score" min="0" max="400" value="{{ min_score or '' }}" placeholder="0">
+                <input type="number" name="min_score" min="0" max="400" value="{{ min_score or '' }}" placeholder="0" data-lf="{{ live_list }}" data-lf-rule="min:score">
             </div>
             <div class="filter-group">
                 <label>Max Score</label>
-                <input type="number" name="max_score" min="0" max="400" value="{{ max_score or '' }}" placeholder="400">
+                <input type="number" name="max_score" min="0" max="400" value="{{ max_score or '' }}" placeholder="400" data-lf="{{ live_list }}" data-lf-rule="max:score">
             </div>
             <div class="filter-group">
                 <label>Sort</label>
-                <select name="sort">
+                <select name="sort" data-autosubmit>
                     <option value="score" {% if sort_by == 'score' %}selected{% endif %}>Score</option>
                     <option value="name" {% if sort_by == 'name' %}selected{% endif %}>Name</option>
                 </select>
-            </div>
-            <div class="filter-group filter-btn">
-                <label style="visibility: hidden;">Filter</label>
-                <button type="submit" class="btn btn-primary btn-sm" style="width: 100%;"><i class="fas fa-filter"></i> Filter</button>
             </div>
         </div>
     </form>
@@ -594,7 +591,7 @@
     <!-- Mobile: Card View -->
     <div class="students-list">
         {% for s in students %}
-        <div class="student-card" data-search="{{ (s.name ~ ' ' ~ s.student_id)|lower }}">
+        <div class="student-card" data-search="{{ (s.name ~ ' ' ~ s.student_id)|lower }}" data-score="{{ s.total_score }}">
             <div class="student-card-header">
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
                     <span class="student-rank {% if s.rank == 1 %}gold{% elif s.rank == 2 %}silver{% elif s.rank == 3 %}bronze{% endif %}">{{ s.rank }}</span>
@@ -629,7 +626,7 @@
             </thead>
             <tbody>
                 {% for s in students %}
-                <tr data-search="{{ (s.name ~ ' ' ~ s.student_id)|lower }}">
+                <tr data-search="{{ (s.name ~ ' ' ~ s.student_id)|lower }}" data-score="{{ s.total_score }}">
                     <td>
                         <span class="student-rank {% if s.rank == 1 %}gold{% elif s.rank == 2 %}silver{% elif s.rank == 3 %}bronze{% endif %}" style="width: 24px; height: 24px; font-size: 0.7rem;">{{ s.rank }}</span>
                     </td>
@@ -666,7 +663,7 @@
     <!-- Mobile: Card View -->
     <div class="students-list">
         {% for s in students %}
-        <div class="student-card" data-search="{{ (s.name ~ ' ' ~ s.student_id)|lower }}">
+        <div class="student-card" data-search="{{ (s.name ~ ' ' ~ s.student_id)|lower }}" data-score="{{ s.total_score }}">
             <div class="student-card-header">
                 {% if can_write_sub('external_exams', 'jamb_delete') %}{{ bulk_check('bulkDel', s.id, s.name) }}{% endif %}
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
@@ -723,7 +720,7 @@
             </thead>
             <tbody>
                 {% for s in students %}
-                <tr data-search="{{ (s.name ~ ' ' ~ s.student_id)|lower }}">
+                <tr data-search="{{ (s.name ~ ' ' ~ s.student_id)|lower }}" data-score="{{ s.total_score }}">
                     {% if can_write_sub('external_exams', 'jamb_delete') %}<td>{{ bulk_check('bulkDel', s.id, s.name) }}</td>{% endif %}
                     <td>
                         <span class="student-rank {% if s.rank == 1 %}gold{% elif s.rank == 2 %}silver{% elif s.rank == 3 %}bronze{% endif %}" style="width: 24px; height: 24px; font-size: 0.7rem;">{{ s.rank }}</span>
