@@ -1875,8 +1875,8 @@ function AlumniAnalytics({ d }) {
   );
 }
 
-// ---- Document branding studio --------------------------------------------
-function BrandingStudio({ d, notify }) {
+// ---- Document branding (summary card + edit sheet) ------------------------
+function BrandingStudio({ d, notify, onClose }) {
   const nav = useNav();
   const b = d.branding || {};
   const [primary, setPrimary] = useState(b.primary_color || '');
@@ -1885,7 +1885,6 @@ function BrandingStudio({ d, notify }) {
   const [motto, setMotto] = useState(b.motto || '');
   const [verify, setVerify] = useState(b.verify_enabled !== false);
   const [busy, setBusy] = useState(false);
-  const [open, setOpen] = useState(false);
   const save = async () => {
     setBusy(true);
     const r = await submitJson(d.branding_save_url, {
@@ -1893,111 +1892,139 @@ function BrandingStudio({ d, notify }) {
       motto, verify_enabled: verify ? '1' : '0',
     });
     setBusy(false);
-    if (r.ok) { notify && notify('success', r.message || 'Branding saved.'); nav.refresh && nav.refresh(); }
+    if (r.ok) { notify && notify('success', r.message || 'Branding saved — previews updated.'); onClose(); nav.refresh && nav.refresh(); }
     else notify && notify('error', r.error || 'Could not save branding.');
   };
-  const swatch = (label, val, set) => (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: '.25rem', fontSize: '.85rem' }}>
-      <span className="text-muted">{label}</span>
-      <span style={{ display: 'flex', alignItems: 'center', gap: '.4rem' }}>
-        <input type="color" value={val || '#0e3a2f'} onChange={(e) => set(e.target.value)}
-          style={{ width: 40, height: 32, padding: 0, border: '1px solid var(--border,#cbd5e1)', borderRadius: 6 }} />
-        <input type="text" value={val} placeholder="default" onChange={(e) => set(e.target.value)}
-          className="form-control" style={{ width: 100 }} />
-        {val && <button type="button" className="btn btn-secondary btn-sm" onClick={() => set('')}>Reset</button>}
-      </span>
-    </label>
+  const DEF = { p: '#0e3a2f', a: '#0e8a64', s: '#c9a227' };
+  const swatch = (label, hint, val, set, def) => (
+    <div className="dd-sw">
+      <label className="dd-sw-pick" style={{ background: val || def }} title={`Pick ${label.toLowerCase()} colour`}>
+        <input type="color" value={val || def} onChange={(e) => set(e.target.value)} aria-label={`${label} colour`} /></label>
+      <div className="dd-sw-t"><strong>{label}</strong><small>{hint}</small>
+        <span className="dd-sw-v"><input type="text" value={val} placeholder="default" onChange={(e) => set(e.target.value)} aria-label={`${label} colour code`} />
+          {val && <button type="button" className="pm-link" onClick={() => set('')}>Reset</button>}</span></div>
+    </div>
   );
   return (
-    <div className="card mb-3"><div className="card-body">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', cursor: 'pointer' }}
-        onClick={() => setOpen((o) => !o)}>
-        <strong><i aria-hidden="true" className="fas fa-palette" /> Branding studio</strong>
-        <span className="text-muted text-sm">Colours &amp; motto override every design · <i className={'fas fa-chevron-' + (open ? 'up' : 'down')} aria-hidden="true" /></span>
+    <PmSheet title="Document branding" onClose={onClose}>
+      <div className="dd-sample" style={{ '--p': primary || DEF.p, '--a': accent || DEF.a, '--s': secondary || DEF.s }} aria-hidden="true">
+        <div className="dd-sample-band" />
+        <div className="dd-sample-body"><b>Your School</b><small>{motto || 'Your motto here'}</small><span className="dd-sample-line" /><span className="dd-sample-line short" />
+          <span className="dd-sample-seal" />{verify && <span className="dd-sample-qr"><i className="fas fa-qrcode" /></span>}</div>
       </div>
-      {open && <div style={{ marginTop: '.9rem' }}>
-        <div style={{ display: 'flex', gap: '1.2rem', flexWrap: 'wrap', alignItems: 'flex-end' }}>
-          {swatch('Primary', primary, setPrimary)}
-          {swatch('Accent', accent, setAccent)}
-          {swatch('Secondary / gold', secondary, setSecondary)}
-          <label style={{ display: 'flex', flexDirection: 'column', gap: '.25rem', fontSize: '.85rem', flex: '1 1 220px' }}>
-            <span className="text-muted">Motto</span>
-            <input type="text" value={motto} onChange={(e) => setMotto(e.target.value)}
-              className="form-control" placeholder="e.g. Knowledge, Integrity, Service" maxLength={160} />
-          </label>
-        </div>
-        <label style={{ display: 'flex', alignItems: 'center', gap: '.4rem', marginTop: '.8rem', fontSize: '.9rem' }}>
-          <input type="checkbox" checked={verify} onChange={(e) => setVerify(e.target.checked)} />
-          Show QR verification block on issued documents
-        </label>
-        {canWrite(d, 'documents_templates') && <div style={{ marginTop: '.9rem' }}>
-          <button type="button" className="btn btn-primary btn-sm" disabled={busy} onClick={save}>
-            <i aria-hidden="true" className="fas fa-save" /> {busy ? 'Saving…' : 'Save branding'}</button>
-          <span className="text-muted text-sm" style={{ marginLeft: '.6rem' }}>Previews update after saving.</span>
-        </div>}
-      </div>}
-    </div></div>
+      <p className="dd-note">These colours and the motto apply to <b>every</b> design and document type.</p>
+      {swatch('Primary', 'Headings and main bands', primary, setPrimary, DEF.p)}
+      {swatch('Accent', 'Lines, highlights and tables', accent, setAccent, DEF.a)}
+      {swatch('Secondary', 'Seals, borders and gold details', secondary, setSecondary, DEF.s)}
+      <label className="pm-field" style={{ marginTop: '.7rem' }}><span>Motto</span>
+        <input type="text" className="pm-input" value={motto} onChange={(e) => setMotto(e.target.value)} placeholder="e.g. Knowledge, Integrity, Service" maxLength={160} /></label>
+      <label className="gp2-check"><input type="checkbox" checked={verify} onChange={(e) => setVerify(e.target.checked)} /> Print a QR verification block on issued documents</label>
+      {canWrite(d, 'documents_templates')
+        ? <button type="button" className="pm-btn primary big wide" disabled={busy} onClick={save}><i aria-hidden="true" className={'fas ' + (busy ? 'fa-spinner fa-spin' : 'fa-check')} /> Save branding</button>
+        : <p className="dd-note">You can view the branding but not change it.</p>}
+    </PmSheet>
   );
 }
 
-// ---- Document design templates (admin) ------------------------------------
+// ---- Document design gallery (admin) ---------------------------------------
 function DocTemplates({ d, notify }) {
   const nav = useNav();
+  const phone = usePhone();
   const [busy, setBusy] = useState('');
+  const [brandOpen, setBrandOpen] = useState(false);
+  const [pickOpen, setPickOpen] = useState(false);
+  const [q, setQ] = useState('');
   const setDefault = async (t) => {
     setBusy(t.key);
     const r = await submitJson(t.set_url, { template_key: t.key });
     setBusy('');
-    if (r.ok) { notify && notify('success', r.message || 'Default set.'); nav.refresh && nav.refresh(); }
+    if (r.ok) { notify && notify('success', r.message || `${t.name} is now the design for ${d.doc_type_label}.`); nav.refresh && nav.refresh(); }
     else notify && notify('error', r.error || 'Could not set default.');
   };
-  const groups = d.doc_types_grouped || [];
+  const groups = (d.doc_types_grouped && d.doc_types_grouped.length) ? d.doc_types_grouped
+    : [{ category: 'Documents', items: (d.doc_types || []).map((x) => ({ key: x.key, label: x.label, url: x.url })) }];
+  const t = q.trim().toLowerCase();
+  const filtered = groups.map((g) => ({ ...g, items: g.items.filter((x) => !t || x.label.toLowerCase().includes(t)) })).filter((g) => g.items.length);
+  const templates = d.templates || [];
+  const current = templates.find((x) => x.is_default);
+  const canEdit = canWrite(d, 'documents_templates');
+  const b = d.branding || {};
+
+  const typeList = (onPick) => (<>
+    <div className="pm-search dd-search"><i aria-hidden="true" className="fas fa-search" />
+      <input type="search" placeholder="Find a document…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Find a document type" /></div>
+    <nav className="dd-types" aria-label="Document types">
+      {filtered.map((g) => (
+        <div key={g.category} className="dd-group">
+          <span className="dd-group-h">{g.category}</span>
+          {g.items.map((x) => (
+            <a key={x.key} href={x.url} className={x.key === d.doc_type ? 'on' : ''} aria-current={x.key === d.doc_type ? 'page' : undefined}
+               onClick={onPick}>{x.label}{x.key === d.doc_type && <i aria-hidden="true" className="fas fa-check" />}</a>))}
+        </div>))}
+      {!filtered.length && <p className="pm-empty">No document matches “{q}”.</p>}
+    </nav>
+  </>);
+
   return (
-    <>
-      <PageHeader title="Document Designs" actions={
-        <a href={d.graduates} className="btn btn-secondary"><i aria-hidden="true" className="fas fa-arrow-left" /> Back to Graduates</a>} />
-      {d.branding_save_url && <BrandingStudio d={d} notify={notify} />}
-      {groups.length > 0 ? (
-        <div className="mb-3">
-          {groups.map((g) => (
-            <div key={g.category} style={{ marginBottom: '.6rem' }}>
-              <div className="text-muted text-sm" style={{ marginBottom: '.3rem', textTransform: 'uppercase', letterSpacing: '.03em' }}>{g.category}</div>
-              <div style={{ display: 'flex', gap: '.4rem', flexWrap: 'wrap' }}>
-                {g.items.map((dt) => (
-                  <a key={dt.key} href={dt.url} className={'btn btn-sm ' + (dt.key === d.doc_type ? 'btn-primary' : 'btn-secondary')}>{dt.label}</a>
-                ))}
+    <div className="pm">
+      <PmHead back={d.graduates} kicker="Graduates" title="Document designs"
+              sub="Pick how each certificate, transcript and letter looks. Your school’s details fill in automatically." />
+
+      <div className="dd-cols">
+        {!phone && <aside className="pm-card dd-rail">{typeList()}</aside>}
+
+        <main className="dd-main">
+          {phone && (
+            <button type="button" className="dd-typebtn" onClick={() => setPickOpen(true)}>
+              <span className="pm-card-ic"><i aria-hidden="true" className="fas fa-file-lines" /></span>
+              <span className="pm-pn"><small>Document</small><strong>{d.doc_type_label}</strong></span>
+              <span className="pm-link">Change <i aria-hidden="true" className="fas fa-chevron-down" /></span>
+            </button>
+          )}
+
+          {d.branding_save_url && (
+            <section className="pm-card dd-brand">
+              <div className="dd-brand-sw" aria-hidden="true">
+                {[b.primary_color || '#0e3a2f', b.accent_color || '#0e8a64', b.secondary_color || '#c9a227'].map((c, i) => <span key={i} style={{ background: c }} />)}
               </div>
-            </div>
-          ))}
-        </div>
-      ) : (d.doc_types && d.doc_types.length > 1 && <div className="tabs mb-3" style={{ display: 'flex', gap: '.5rem', flexWrap: 'wrap' }}>
-        {d.doc_types.map((dt) => (
-          <a key={dt.key} href={dt.url} className={'btn btn-sm ' + (dt.key === d.doc_type ? 'btn-primary' : 'btn-secondary')}>{dt.label}</a>
-        ))}</div>)}
-      <div className="card mb-3"><div className="card-body">
-        <p className="text-muted" style={{ margin: 0 }}>
-          <i aria-hidden="true" className="fas fa-circle-info" /> Choose the design used when you issue a {d.doc_type_label.toLowerCase()}.
-          Every design shows your school's own details — only the layout changes. Previews use sample data.
-        </p></div></div>
-      <div className="data-cards">
-        {(d.templates || []).map((t) => (
-          <div className="data-card" key={t.key} style={t.is_default ? { borderColor: 'var(--primary,#0e8a64)', borderWidth: 2 } : null}>
-            <div className="data-card-header">
-              <div className="data-card-title">{t.name}</div>
-              {t.is_default ? <span className="badge badge-success"><i aria-hidden="true" className="fas fa-check" /> Default</span>
-                : <span className="badge badge-secondary">Available</span>}
-            </div>
-            <p className="text-sm text-muted" style={{ minHeight: '2.6em' }}>{t.description}</p>
-            <div className="data-card-actions">
-              <a href={t.preview_url} target="_blank" rel="noopener noreferrer" className="btn btn-secondary btn-sm w-100">
-                <i aria-hidden="true" className="fas fa-eye" /> Preview</a>
-              {canWrite(d, 'documents_templates') && <button type="button" className="btn btn-primary btn-sm w-100" style={{ marginTop: '.4rem' }}
-                disabled={t.is_default || busy === t.key} onClick={() => setDefault(t)}>
-                <i aria-hidden="true" className="fas fa-star" /> {t.is_default ? 'Current default' : 'Set as default'}</button>}
-            </div>
-          </div>))}
+              <div className="pm-pn"><strong>Branding</strong>
+                <small>{b.motto ? `“${b.motto}”` : 'No motto set'} · QR verification {b.verify_enabled !== false ? 'on' : 'off'}{!(b.primary_color || b.accent_color || b.secondary_color) ? ' · default colours' : ''}</small></div>
+              <button type="button" className="pm-btn" onClick={() => setBrandOpen(true)}><i aria-hidden="true" className="fas fa-palette" /> <span>{canEdit ? 'Edit' : 'View'}</span></button>
+            </section>
+          )}
+
+          <section className="pm-card">
+            <header className="pm-card-h">
+              <span className="pm-card-ic"><i aria-hidden="true" className="fas fa-swatchbook" /></span>
+              <div className="pm-card-t"><h3>{d.doc_type_label}</h3>
+                <small>{templates.length} design{templates.length === 1 ? '' : 's'}{current ? ` · in use: ${current.name}` : ''} · previews use sample data</small></div>
+            </header>
+            {templates.length ? (
+              <ul className="dd-gallery">
+                {templates.map((tp) => (
+                  <li key={tp.key} className={'dd-card' + (tp.is_default ? ' on' : '')}>
+                    <a href={tp.preview_url} target="_blank" rel="noopener noreferrer" data-native="1" className="dd-thumb" title="Open the full PDF preview">
+                      {tp.thumb_url ? <img src={tp.thumb_url} alt={`${tp.name} design preview`} loading="lazy" /> : <i aria-hidden="true" className="fas fa-file-pdf" />}
+                      {tp.is_default && <span className="dd-badge"><i aria-hidden="true" className="fas fa-check" /> In use</span>}
+                    </a>
+                    <div className="dd-info"><strong>{tp.name}</strong><small>{tp.description}</small></div>
+                    <div className="dd-acts">
+                      <a href={tp.preview_url} target="_blank" rel="noopener noreferrer" data-native="1" className="pm-btn"><i aria-hidden="true" className="fas fa-eye" /> PDF</a>
+                      {canEdit && (tp.is_default
+                        ? <span className="dd-inuse"><i aria-hidden="true" className="fas fa-circle-check" /> In use</span>
+                        : <button type="button" className="pm-btn primary" disabled={busy === tp.key} onClick={() => setDefault(tp)}>
+                            <i aria-hidden="true" className={'fas ' + (busy === tp.key ? 'fa-spinner fa-spin' : 'fa-check')} /> Use this</button>)}
+                    </div>
+                  </li>))}
+              </ul>
+            ) : <p className="pm-empty">No designs available for this document yet.</p>}
+          </section>
+        </main>
       </div>
-    </>
+
+      {brandOpen && <BrandingStudio d={d} notify={notify} onClose={() => setBrandOpen(false)} />}
+      {pickOpen && <PmSheet title="Choose a document" onClose={() => setPickOpen(false)}>{typeList(() => setPickOpen(false))}</PmSheet>}
+    </div>
   );
 }
 

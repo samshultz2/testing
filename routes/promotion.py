@@ -512,9 +512,15 @@ def doc_templates():
     if doc_type not in labels:
         doc_type = 'transcript'
     current = graduate_docs.design_key_for(doc_type)
+    from utils.school import document_branding
+    import hashlib, json as _json
+    _bv = hashlib.md5(_json.dumps(document_branding(), sort_keys=True, default=str)
+                      .encode()).hexdigest()[:10]
     templates = [{
         **t,
         'preview_url': url_for('promotion.doc_template_preview', doc_type=doc_type, key=t['key']),
+        'thumb_url': url_for('promotion.doc_template_preview', doc_type=doc_type, key=t['key'],
+                             format='png', v=_bv),
         'set_url': url_for('promotion.set_doc_template', doc_type=doc_type),
         'is_default': t['key'] == current,
     } for t in graduate_docs.list_designs(doc_type)]
@@ -609,6 +615,19 @@ def doc_template_preview(doc_type, key):
     if doc_type not in _DESIGN_DOC_LABELS or not graduate_docs.valid_design(doc_type, key):
         abort(404)
     buf = graduate_docs.preview_document(doc_type, key)
+    if request.args.get('format') == 'png':
+        # First page as an image — the design gallery's thumbnails. The URL
+        # carries a branding version (?v=) so a colour change shows at once.
+        import io
+        import fitz
+        pdf = buf.getvalue() if hasattr(buf, 'getvalue') else buf.read()
+        doc = fitz.open(stream=pdf, filetype='pdf')
+        page = doc[0]
+        zoom = 520.0 / max(1.0, page.rect.width)            # ~520px wide
+        pix = page.get_pixmap(matrix=fitz.Matrix(zoom, zoom), alpha=False)
+        resp = send_file(io.BytesIO(pix.tobytes('png')), mimetype='image/png')
+        resp.headers['Cache-Control'] = 'private, max-age=86400'
+        return resp
     return send_file(buf, mimetype='application/pdf', as_attachment=False,
                      download_name=f'{doc_type}_{key}_preview.pdf')
 

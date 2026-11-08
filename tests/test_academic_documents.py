@@ -222,6 +222,26 @@ def test_gallery_payload_groups_types_and_exposes_branding(app):
     assert len(payload2['templates']) == len(ce.TEMPLATES)
 
 
+def test_gallery_thumbnails_are_png_and_follow_branding(app):
+    """Each design in the gallery carries a PNG thumbnail of its first page;
+    the thumbnail URL changes when the branding changes (no stale colours)."""
+    c = _admin(app)
+    def payload():
+        b = c.get('/promotion/doc-templates?doc_type=transcript', headers={'X-Requested-With': 'fetch'}).get_json()
+        return b.get('data', b) if isinstance(b, dict) else b
+    t = payload()['templates'][0]
+    assert 'format=png' in t['thumb_url']
+    r = c.get(t['thumb_url'])
+    assert r.status_code == 200 and r.mimetype == 'image/png' and r.data[:8] == b'\x89PNG\r\n\x1a\n'
+    pdf = c.get(t['preview_url'])
+    assert pdf.mimetype == 'application/pdf'                 # the plain preview is still the PDF
+    from models import SchoolSettings, db
+    with app.app_context():
+        SchoolSettings.set('doc_primary_color', '#7a1f2b', 'str', 'test')
+        db.session.commit()
+    assert payload()['templates'][0]['thumb_url'] != t['thumb_url']
+
+
 # --- Phase 4: document verification audit trail -----------------------------
 def _grad_with_doc(app, sid='VER1'):
     from models import db, Student
