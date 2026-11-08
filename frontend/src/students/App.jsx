@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { apiGet } from '../lib/api';
 import { postForm } from '../lib/forms';
 import { canWrite } from '../lib/perms';
@@ -85,6 +86,55 @@ function StudentAvatar({ name, photo, size = 40 }) {
     : <span className="stu-av stu-av-ph" aria-hidden="true" style={dim}>{initials(name)}</span>;
 }
 
+// Small dropdown menu (header actions, export, row ⋯). Closes on outside click / Esc.
+function Menu({ label, icon, items, align = 'right', className = 'btn btn-outline', title }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const esc = (e) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('touchstart', close);
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('touchstart', close); document.removeEventListener('keydown', esc); };
+  }, [open]);
+  const list = items.filter(Boolean);
+  if (!list.length) return null;
+  return (
+    <div className="sl-menu" ref={ref}>
+      <button type="button" className={className} aria-haspopup="true" aria-expanded={open} title={title}
+              aria-label={label ? undefined : title} onClick={() => setOpen((v) => !v)}>
+        {icon && <i aria-hidden="true" className={'fas ' + icon} />}{label && <span>{label}</span>}
+        {label && <i aria-hidden="true" className="fas fa-chevron-down sl-caret" />}
+      </button>
+      {open && (
+        <div className={'sl-menu-pop ' + align} role="menu">
+          {list.map((it, i) => it.href
+            ? <a key={i} role="menuitem" href={it.href} className={it.danger ? 'danger' : ''} onClick={() => setOpen(false)}>
+                <i aria-hidden="true" className={'fas ' + it.icon} /> {it.label}</a>
+            : <button key={i} type="button" role="menuitem" className={it.danger ? 'danger' : ''}
+                      onClick={() => { setOpen(false); it.onClick(); }}>
+                <i aria-hidden="true" className={'fas ' + it.icon} /> {it.label}</button>)}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function useMedia(query) {
+  const get = () => (typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(query).matches : false);
+  const [m, setM] = useState(get);
+  useEffect(() => {
+    if (!window.matchMedia) return undefined;
+    const mq = window.matchMedia(query);
+    const on = () => setM(mq.matches);
+    if (mq.addEventListener) mq.addEventListener('change', on); else mq.addListener(on);
+    return () => { if (mq.removeEventListener) mq.removeEventListener('change', on); else mq.removeListener(on); };
+  }, [query]);
+  return m;
+}
+
 // Reusable labelled filter field (label above the control).
 function Field({ label, full, children }) {
   return (
@@ -116,19 +166,10 @@ export default function App({ initial }) {
   const [bulkUni, setBulkUni] = useState('');
   const [bulkCourse, setBulkCourse] = useState('');
   const [showMessage, setShowMessage] = useState(false);
-  const [menuFor, setMenuFor] = useState(null);   // which student card's ⋯ menu is open
   const [saved, setSaved] = useState(() => savedFilters());
   const [recentQ, setRecentQ] = useState(() => recentSearches());
   const viewed = useRef(recentViewed()).current;   // recently-viewed snapshot (page load)
   const [showSaved, setShowSaved] = useState(false);
-  // Close the open row menu on any outside click (deferred so the opening click
-  // doesn't immediately close it).
-  useEffect(() => {
-    if (menuFor == null) return undefined;
-    const close = () => setMenuFor(null);
-    const t = setTimeout(() => document.addEventListener('click', close, { once: true }), 0);
-    return () => { clearTimeout(t); document.removeEventListener('click', close); };
-  }, [menuFor]);
   // When filters were restored, the server-rendered page doesn't match them, so
   // let the first effect run fetch fresh (filtered) data instead of skipping it.
   const skip = useRef(!start.restored);
@@ -284,51 +325,148 @@ export default function App({ initial }) {
     } catch (e) { setMsg({ tone: 'error', text: e.message || 'Download failed.' }); }
   };
 
-  // Row-level ⋯ menu (graduate / delete) — shared by the table and the cards.
-  // Graduate-toggle rides on 'edit' (it changes the student's own record);
-  // Delete is its own, independently grantable permission.
-  const renderRowMenu = (s) => (canEditStudent || canDeleteStudent) && (
-    <div className="stu-menu-wrap" style={{ position: 'relative' }}>
-      <button type="button" className="stu-act stu-act-caret" aria-haspopup="true" aria-expanded={menuFor === s.id}
-              aria-label="More actions" onClick={(e) => { e.stopPropagation(); setMenuFor(menuFor === s.id ? null : s.id); }}>
-        <i aria-hidden="true" className="fas fa-chevron-down" /></button>
-      {menuFor === s.id && (
-        <div className="row-menu" role="menu">
-          {canEditStudent && <button type="button" role="menuitem" onClick={async () => { setMenuFor(null); if (await confirm(`${s.is_graduated ? 'Undo graduation for' : 'Mark as graduate:'} ${s.name}?`)) runAction(s.graduate_url, {}, 'Updated graduation status.'); }}>
-            <i aria-hidden="true" className={'fas ' + (s.is_graduated ? 'fa-rotate-left' : 'fa-user-graduate')} /> {s.is_graduated ? 'Undo graduate' : 'Mark as graduate'}</button>}
-          {canDeleteStudent && <button type="button" role="menuitem" className="danger" onClick={async () => { setMenuFor(null); if (await confirm({ title: 'Delete student', message: `Delete ${s.name}?`, confirmText: 'Delete', tone: 'danger' })) runAction(s.delete_url, {}, 'Student deleted.'); }}>
-            <i aria-hidden="true" className="fas fa-trash" /> Delete</button>}
-        </div>
-      )}
+  // ── Layout state ──
+  const phone = useMedia('(max-width: 759px)');
+  const [selectMode, setSelectMode] = useState(false);       // phone: checkboxes only in Select mode
+  const [showFilters, setShowFilters] = useState(false);     // laptop: panel · phone: bottom sheet
+  const [showBulk, setShowBulk] = useState(false);
+  const showChecks = !phone || selectMode;
+  useEffect(() => { if (!selectedIds.length) setShowBulk(false); }, [selectedIds.length]);
+
+  const find = (list, id) => (list || []).find((x) => String(x.id) === String(id));
+  // Active filters as removable chips.
+  const chips = [
+    query.class_id && { k: 'class_id', label: (find(filters.classes, query.class_id) || {}).name || 'Class' },
+    query.arm_id && { k: 'arm_id', label: 'Arm ' + ((find(filters.arms, query.arm_id) || {}).name || '') },
+    query.gender && { k: 'gender', label: query.gender },
+    query.religion && { k: 'religion', label: query.religion },
+    query.stream && { k: 'stream', label: query.stream },
+    query.house && { k: 'house', label: query.house },
+    query.boarding && { k: 'boarding', label: query.boarding },
+    query.incomplete && { k: 'incomplete', label: 'Incomplete profiles' },
+    query.subject && { k: 'subject', label: 'WAEC: ' + query.subject },
+  ].filter(Boolean);
+  // Filters not shown inline on the laptop bar (class / arm / gender are inline).
+  const moreCount = chips.filter((c) => !['class_id', 'arm_id', 'gender'].includes(c.k)).length
+    + (query.sort !== 'surname' || query.order !== 'asc' ? 1 : 0);
+
+  const sortSelect = (
+    <select className="form-control" value={query.sort + '|' + query.order} aria-label="Sort by"
+            onChange={(e) => { const [so, o] = e.target.value.split('|'); setQuery((q) => ({ ...q, sort: so, order: o, page: 1 })); }}>
+      {SORTS.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
+    </select>
+  );
+  const classSel = (
+    <select className="form-control" value={query.class_id} onChange={(e) => setFilter('class_id', e.target.value)} aria-label="Class">
+      <option value="">All classes</option>
+      {(filters.classes || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+    </select>
+  );
+  const armSel = (
+    <select className="form-control" value={query.arm_id} onChange={(e) => setFilter('arm_id', e.target.value)} aria-label="Arm">
+      <option value="">All arms</option>
+      {(filters.arms || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+    </select>
+  );
+  const genderSel = (
+    <select className="form-control" value={query.gender} onChange={(e) => setFilter('gender', e.target.value)} aria-label="Gender">
+      <option value="">Boys &amp; girls</option><option value="Male">Male</option><option value="Female">Female</option>
+    </select>
+  );
+  const moreFilters = (
+    <div className="sl-filter-grid">
+      {phone && <><Field label="Class">{classSel}</Field><Field label="Arm">{armSel}</Field><Field label="Gender">{genderSel}</Field></>}
+      <Field label="Religion">
+        <select className="form-control" value={query.religion} onChange={(e) => setFilter('religion', e.target.value)}>
+          <option value="">All</option>
+          {(filters.religions || []).map((r) => <option key={r} value={r}>{r}</option>)}
+        </select>
+      </Field>
+      <Field label="Stream">
+        <select className="form-control" value={query.stream} onChange={(e) => setFilter('stream', e.target.value)}>
+          <option value="">All</option>
+          {(filters.streams || []).map((r) => <option key={r} value={r}>{r}</option>)}
+        </select>
+      </Field>
+      {(filters.houses || []).length > 0 && <Field label="House">
+        <select className="form-control" value={query.house} onChange={(e) => setFilter('house', e.target.value)}>
+          <option value="">All</option>
+          {filters.houses.map((h) => <option key={h} value={h}>{h}</option>)}
+        </select>
+      </Field>}
+      <Field label="Boarding">
+        <select className="form-control" value={query.boarding} onChange={(e) => setFilter('boarding', e.target.value)}>
+          <option value="">All</option><option>Day</option><option>Boarding</option>
+        </select>
+      </Field>
+      <Field label="Profile">
+        <select className="form-control" value={query.incomplete} onChange={(e) => setFilter('incomplete', e.target.value)}>
+          <option value="">All</option><option value="1">Incomplete only</option>
+        </select>
+      </Field>
+      {canSss3 && <Field label="WAEC subject (SSS3)">
+        <select className="form-control" value={query.subject} onChange={(e) => setFilter('subject', e.target.value)}>
+          <option value="">All</option>
+          {(filters.subjects || []).map((r) => <option key={r} value={r}>{r}</option>)}
+        </select>
+      </Field>}
+      <Field label="Sort by">{sortSelect}</Field>
     </div>
   );
-  const renderActions = (s) => (
-    <>
-      <a href={s.url} className="stu-act stu-act-view"><i aria-hidden="true" className="fas fa-eye" /> View</a>
-      {canEditStudent && <a href={s.edit_url} className="stu-act"><i aria-hidden="true" className="fas fa-pen" /> Edit</a>}
-      {renderRowMenu(s)}
-    </>
-  );
+
+  const importItems = [
+    canAdd && { label: 'Import students (paste)', icon: 'fa-paste', onClick: () => setShowImport(true) },
+    d.update_import_url && { label: 'Update students (paste)', icon: 'fa-pen-to-square', onClick: () => setShowUpdateImport(true) },
+    d.import_photos_url && { label: 'Import photos', icon: 'fa-images', onClick: () => setShowImportPhotos(true) },
+  ];
+  const exportItems = [
+    { label: 'Excel (.xlsx)', icon: 'fa-file-excel', onClick: () => quickExport('excel') },
+    { label: 'CSV (.csv)', icon: 'fa-file-csv', onClick: () => quickExport('csv') },
+    { label: 'PDF (.pdf)', icon: 'fa-file-pdf', onClick: () => quickExport('pdf') },
+    { label: 'More formats & fields…', icon: 'fa-sliders', onClick: () => setShowExport(true) },
+  ];
+  const moreItems = [
+    canAdmin && { label: 'Fill WAEC subjects by stream', icon: 'fa-wand-magic-sparkles',
+      onClick: async () => { if (await confirm("Fill WAEC subjects from stream for students who don't have them set?"))
+        runAction(d.waec_by_stream_url, {}, 'WAEC subjects filled from stream.'); } },
+    d.trash_url && { label: 'Deleted students (trash)', icon: 'fa-trash', href: d.trash_url },
+  ];
+  const rowItems = (s) => [
+    phone && canEditStudent && { label: 'Edit', icon: 'fa-pen', href: s.edit_url },
+    canEditStudent && { label: s.is_graduated ? 'Undo graduate' : 'Mark as graduate', icon: s.is_graduated ? 'fa-rotate-left' : 'fa-user-graduate',
+      onClick: async () => { if (await confirm(`${s.is_graduated ? 'Undo graduation for' : 'Mark as graduate:'} ${s.name}?`)) runAction(s.graduate_url, {}, 'Updated graduation status.'); } },
+    canDeleteStudent && { label: 'Delete', icon: 'fa-trash', danger: true,
+      onClick: async () => { if (await confirm({ title: 'Delete student', message: `Delete ${s.name}?`, confirmText: 'Delete', tone: 'danger' })) runAction(s.delete_url, {}, 'Student deleted.'); } },
+  ];
 
   return (
-    <div>
-      <div className="page-header">
-        <div><h1><i aria-hidden="true" className="fas fa-user-graduate" /> Students</h1></div>
-        <div className="page-header-actions stu-toolbar">
-          {canAdd && <a href={d.add_url} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Student</a>}
-          {canAdd && <button type="button" className="btn btn-outline" onClick={() => setShowImport(true)}><i aria-hidden="true" className="fas fa-paste" /> Import (paste)</button>}
-          {d.update_import_url && <button type="button" className="btn btn-outline" onClick={() => setShowUpdateImport(true)}><i aria-hidden="true" className="fas fa-pen-to-square" /> Update (paste)</button>}
-          {d.import_photos_url && <button type="button" className="btn btn-outline" onClick={() => setShowImportPhotos(true)}><i aria-hidden="true" className="fas fa-images" /> Import photos</button>}
-          {canAdmin && <button type="button" className="btn btn-outline btn-sm" title="Fill WAEC subjects from each student's stream"
-                               onClick={async () => { if (await confirm("Fill WAEC subjects from stream for students who don't have them set?"))
-                                 runAction(d.waec_by_stream_url, {}, 'WAEC subjects filled from stream.'); }}><i aria-hidden="true" className="fas fa-wand-magic-sparkles" /> WAEC by stream</button>}
-          {d.trash_url && <a href={d.trash_url} className="btn btn-secondary btn-sm" title="View deleted students (restore / delete permanently)"><i aria-hidden="true" className="fas fa-trash" /> Trash</a>}
+    <div className={'sl' + (selectedIds.length ? ' has-sel' : '')}>
+      {/* Header: title + live summary + actions */}
+      <header className="sl-head">
+        <div className="sl-title">
+          <h1>Students</h1>
+          <p>
+            <b>{summary.total != null ? summary.total : (d.total || 0)}</b> students
+            <span className="sl-dot" /> <i aria-hidden="true" className="fas fa-mars sl-m" /> {summary.male || 0}
+            <span className="sl-dot" /> <i aria-hidden="true" className="fas fa-venus sl-f" /> {summary.female || 0}
+            {summary.streams ? <><span className="sl-dot" />{summary.streams} stream{summary.streams === 1 ? '' : 's'}</> : null}
+          </p>
         </div>
-      </div>
+        <div className="sl-actions">
+          {phone && students.length > 0 && (canBulk || d.bulk_message_url || d.bulk_id_cards_url || canAdmin) && (
+            <button type="button" className={'sl-iconbtn' + (selectMode ? ' on' : '')} onClick={() => { setSelectMode((v) => !v); setSelected(new Set()); }}
+                    aria-pressed={selectMode}>{selectMode ? 'Done' : 'Select'}</button>
+          )}
+          {!phone && canAdd && <a href={d.add_url} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add student</a>}
+          <Menu label={phone ? '' : 'Import'} icon="fa-file-import" items={importItems} title="Import" className={phone ? 'sl-iconbtn' : 'btn btn-outline'} />
+          <Menu label={phone ? '' : 'Export'} icon="fa-download" items={exportItems} title="Export" className={phone ? 'sl-iconbtn' : 'btn btn-outline'} />
+          <Menu icon="fa-ellipsis" items={moreItems} title="More" className={phone ? 'sl-iconbtn' : 'btn btn-outline sl-more'} />
+        </div>
+      </header>
 
       {msg && (
         <div className={'alert alert-' + ({ success: 'success', error: 'danger', warn: 'warning' }[msg.tone] || 'info')}
-             role="status" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+             role="status" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, margin: 0 }}>
           <span>{msg.text}</span>
           <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
             {msg.tone === 'error' && (
@@ -341,335 +479,214 @@ export default function App({ initial }) {
         </div>
       )}
 
-      <div className="stu-shell">
-      <div className="stu-main">
-      <div className="card"><div className="card-body">
-        <div className="stu-filters-head">
-          <span className="stu-filters-title"><i aria-hidden="true" className="fas fa-sliders" /> Search &amp; Filters</span>
-          {hasFilters && (
-            <button type="button" className="stu-clear-link" onClick={resetFilters}>
-              <i aria-hidden="true" className="fas fa-rotate-left" /> Clear filters
-            </button>
-          )}
-        </div>
-        <div className="stu-filters">
-          <Field label="Search" full>
-            <span className="stu-search">
-              <i className="fas fa-magnifying-glass stu-search-ic" aria-hidden="true" />
-              <input className="form-control stu-search-input" type="search" list="stu-recent-searches"
-                     placeholder="Search by name, ID, parent phone/name, NIN or JAMB reg…"
-                     value={search} onChange={(e) => setSearch(e.target.value)} />
-            </span>
-            <datalist id="stu-recent-searches">
-              {recentQ.map((t) => <option key={t} value={t} />)}
-            </datalist>
-          </Field>
-          <Field label="Class">
-            <select className="form-control" value={query.class_id} onChange={(e) => setFilter('class_id', e.target.value)}>
-              <option value="">All classes</option>
-              {(filters.classes || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </Field>
-          <Field label="Arm">
-            <select className="form-control" value={query.arm_id} onChange={(e) => setFilter('arm_id', e.target.value)}>
-              <option value="">All arms</option>
-              {(filters.arms || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </Field>
-          <Field label="Gender">
-            <select className="form-control" value={query.gender} onChange={(e) => setFilter('gender', e.target.value)}>
-              <option value="">All</option><option>Male</option><option>Female</option>
-            </select>
-          </Field>
-          <Field label="Religion">
-            <select className="form-control" value={query.religion} onChange={(e) => setFilter('religion', e.target.value)}>
-              <option value="">All</option>
-              {(filters.religions || []).map((r) => <option key={r} value={r}>{r}</option>)}
-            </select>
-          </Field>
-          <Field label="Stream">
-            <select className="form-control" value={query.stream} onChange={(e) => setFilter('stream', e.target.value)}>
-              <option value="">All</option>
-              {(filters.streams || []).map((r) => <option key={r} value={r}>{r}</option>)}
-            </select>
-          </Field>
-          {(filters.houses || []).length > 0 && <Field label="House">
-            <select className="form-control" value={query.house} onChange={(e) => setFilter('house', e.target.value)}>
-              <option value="">All</option>
-              {filters.houses.map((h) => <option key={h} value={h}>{h}</option>)}
-            </select>
-          </Field>}
-          <Field label="Boarding">
-            <select className="form-control" value={query.boarding} onChange={(e) => setFilter('boarding', e.target.value)}>
-              <option value="">All</option><option>Day</option><option>Boarding</option>
-            </select>
-          </Field>
-          <Field label="Profile">
-            <select className="form-control" value={query.incomplete} onChange={(e) => setFilter('incomplete', e.target.value)}>
-              <option value="">All</option><option value="1">Incomplete only</option>
-            </select>
-          </Field>
-          {canSss3 && <Field label="WAEC subject (SSS3)">
-            <select className="form-control" value={query.subject} onChange={(e) => setFilter('subject', e.target.value)}>
-              <option value="">All</option>
-              {(filters.subjects || []).map((r) => <option key={r} value={r}>{r}</option>)}
-            </select>
-          </Field>}
-          <Field label="Sort by">
-            <select className="form-control" value={query.sort + '|' + query.order}
-                    onChange={(e) => { const [s, o] = e.target.value.split('|'); setQuery((q) => ({ ...q, sort: s, order: o, page: 1 })); }}>
-              {SORTS.map(([v, label]) => <option key={v} value={v}>{label}</option>)}
-            </select>
-          </Field>
-        </div>
-        <div style={{ marginTop: '.5rem', display: 'flex', gap: '.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
-          {hasFilters && (
-            <button type="button" className="btn btn-light btn-sm" onClick={resetFilters}>
-              <i aria-hidden="true" className="fas fa-xmark" /> Clear filters
-            </button>
-          )}
-          {hasFilters && (
-            <button type="button" className="btn btn-light btn-sm" onClick={doSaveFilter} title="Save the current search + filters for one-click reuse">
-              <i aria-hidden="true" className="fas fa-bookmark" /> Save filter
-            </button>
-          )}
-          {saved.length > 0 && (
-            <button type="button" className="btn btn-light btn-sm" aria-expanded={showSaved} onClick={() => setShowSaved((v) => !v)}>
-              <i aria-hidden="true" className="fas fa-star" /> Saved ({saved.length})
-            </button>
-          )}
-        </div>
-        {showSaved && saved.length > 0 && (
-          <div className="stu-chips" style={{ marginTop: '.5rem', display: 'flex', gap: '.4rem', flexWrap: 'wrap' }}>
-            {saved.map((f) => (
-              <span key={f.name} className="badge badge-info" style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
-                <button type="button" style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: 0, font: 'inherit' }}
-                        onClick={() => applySaved(f)}>{f.name}</button>
-                <button type="button" aria-label={'Delete saved filter ' + f.name} title="Delete"
-                        style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', padding: 0 }}
-                        onClick={() => removeSaved(f.name)}>×</button>
-              </span>
-            ))}
-          </div>
-        )}
-      </div></div>
-
-      {viewed.length > 0 && (
-        <div className="stu-recent-mobile card"><div className="card-body">
-          <div className="stu-recent-head"><i aria-hidden="true" className="fas fa-clock-rotate-left" /> Recently viewed</div>
-          <div className="stu-recent-strip">
-            {viewed.slice(0, 10).map((v) => (
-              <a key={v.id} href={v.url} className="stu-recent-chip" title={v.name}>
-                <StudentAvatar name={v.name} photo={v.photo} size={48} />
-                <span className="stu-recent-name">{v.name}</span>
-                <span className="stu-recent-id">{v.student_id}</span>
-              </a>
-            ))}
-          </div>
-        </div></div>
-      )}
-
-      <div className="stu-bulkbar">
-        <label style={{ display: 'flex', gap: 6, alignItems: 'center', margin: 0 }}>
-          <input type="checkbox" checked={!!allOnPage} onChange={toggleAll} /> Select page
-        </label>
-        <span className="stu-count">{selectedIds.length ? `${selectedIds.length} selected · ` : ''}{d.total || 0} student(s){loading ? ' · loading…' : ''}</span>
-        <span style={{ marginLeft: 'auto', display: 'flex', gap: '.4rem', flexWrap: 'wrap', alignItems: 'center' }}>
-          <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowExport(true)}><i aria-hidden="true" className="fas fa-download" /> Export</button>
-          {canBulk && selectedIds.length > 0 && <>
-            <select className="form-control" style={{ width: 'auto' }} value={bulkGender} onChange={(e) => setBulkGender(e.target.value)} aria-label="Bulk gender">
-              <option value="">Set gender…</option>
-              <option value="Male">Male</option>
-              <option value="Female">Female</option>
-            </select>
-            <button type="button" className="btn btn-primary btn-sm" disabled={!bulkGender}
-                    onClick={() => needSel() && runAction(d.bulk_gender_url, { gender: bulkGender, student_ids: selectedIds }, 'Gender updated.')}>Apply</button>
-            <select className="form-control" style={{ width: 'auto' }} value={bulkStream} onChange={(e) => setBulkStream(e.target.value)} aria-label="Bulk stream">
-              <option value="">Set stream…</option>
-              {(filters.streams || []).map((r) => <option key={r} value={r}>{r}</option>)}
-            </select>
-            <button type="button" className="btn btn-primary btn-sm" disabled={!bulkStream} title="Also fills WAEC subjects from the stream where not already set"
-                    onClick={() => needSel() && runAction(d.bulk_stream_url, { stream: bulkStream, student_ids: selectedIds }, 'Stream updated.')}>Apply</button>
-            <input className="form-control" style={{ width: 130 }} value={bulkHouse} placeholder="Set house…"
-                   onChange={(e) => setBulkHouse(e.target.value)} aria-label="Bulk house" maxLength={40} />
-            <button type="button" className="btn btn-primary btn-sm" disabled={!bulkHouse.trim()}
-                    onClick={() => needSel() && runAction(d.bulk_house_url, { house: bulkHouse.trim(), student_ids: selectedIds }, 'House updated.')}>Apply</button>
-            <select className="form-control" style={{ width: 'auto' }} value={bulkBoarding} onChange={(e) => setBulkBoarding(e.target.value)} aria-label="Bulk boarding status">
-              <option value="">Set boarding…</option>
-              <option value="Day">Day</option>
-              <option value="Boarding">Boarding</option>
-            </select>
-            <button type="button" className="btn btn-primary btn-sm" disabled={!bulkBoarding}
-                    onClick={() => needSel() && runAction(d.bulk_boarding_url, { boarding: bulkBoarding, student_ids: selectedIds }, 'Boarding status updated.')}>Apply</button>
-            {d.bulk_aspiration_url && <>
-              <select className="form-control" style={{ width: 'auto', maxWidth: 170 }} value={bulkUni}
-                      onChange={(e) => setBulkUni(e.target.value)} aria-label="Bulk university" title="Assign target university"
-                      disabled={loadingAspiration}>
-                <option value="">{loadingAspiration ? 'Loading…' : 'University…'}</option>
-                {(aspirationLists && aspirationLists.universities || []).map((u) => <option key={u.id} value={u.id}>{u.label}</option>)}
-              </select>
-              <select className="form-control" style={{ width: 'auto', maxWidth: 170 }} value={bulkCourse}
-                      onChange={(e) => setBulkCourse(e.target.value)} aria-label="Bulk course" title="Assign target course (fills JAMB target + subjects)"
-                      disabled={loadingAspiration}>
-                <option value="">{loadingAspiration ? 'Loading…' : 'Course…'}</option>
-                {(aspirationLists && aspirationLists.courses || []).map((cc) => <option key={cc.id} value={cc.id}>{cc.label}</option>)}
-              </select>
-              <button type="button" className="btn btn-primary btn-sm" disabled={!bulkUni && !bulkCourse}
-                      title="Set the target university and/or course for the selected students (a course also fills their JAMB target + subject requirements)"
-                      onClick={() => needSel() && runAction(d.bulk_aspiration_url,
-                        { student_ids: selectedIds, target_university_id: bulkUni, target_course_id: bulkCourse },
-                        'Aspiration assigned.')}>Assign aspiration</button>
-            </>}
-            {d.bulk_message_url && <button type="button" className="btn btn-info btn-sm" title="Draft a message to the selected students' parents"
-                    onClick={() => needSel() && setShowMessage(true)}><i aria-hidden="true" className="fas fa-comment-dots" /> Message parents</button>}
-            {d.bulk_id_cards_url && <button type="button" className="btn btn-secondary btn-sm" title="Download printable ID cards for the selected students (6 per A4 sheet)"
-                    onClick={downloadIdCards}><i aria-hidden="true" className="fas fa-id-card" /> Print ID cards</button>}
-            {canSss3 && <>
-              <select className="form-control" style={{ width: 'auto' }} value={bulkSubject} onChange={(e) => setBulkSubject(e.target.value)} aria-label="Bulk WAEC subject">
-                <option value="">Add WAEC subject…</option>
-                {(filters.subjects || []).map((r) => <option key={r} value={r}>{r}</option>)}
-              </select>
-              <button type="button" className="btn btn-primary btn-sm" disabled={!bulkSubject} title="SSS3 students only"
-                      onClick={() => needSel() && runAction(d.bulk_subject_url, { subject: bulkSubject, student_ids: selectedIds }, 'Subject added.')}>Add (SSS3)</button>
-            </>}
-            {canAdmin && <button type="button" className="btn btn-danger btn-sm"
-                    onClick={async () => { if (needSel() && await confirm({ title: 'Delete students', message: `Delete ${selectedIds.length} selected student(s)?`, confirmText: 'Delete', tone: 'danger' }))
-                      runAction(d.bulk_delete_url, { student_ids: selectedIds }, 'Deleted selected students.'); }}><i aria-hidden="true" className="fas fa-trash" /> Delete selected</button>}
-          </>}
+      {/* Search + filters bar (sticky) */}
+      <div className="sl-bar">
+        <span className="sl-search">
+          <i className="fas fa-magnifying-glass" aria-hidden="true" />
+          <input type="search" list="stu-recent-searches" aria-label="Search students"
+                 placeholder={phone ? 'Search students' : 'Search name, ID, parent phone or name, NIN, JAMB reg…'}
+                 value={search} onChange={(e) => setSearch(e.target.value)} />
+          {loading && <i className="fas fa-circle-notch fa-spin sl-spin" aria-hidden="true" />}
         </span>
+        <datalist id="stu-recent-searches">{recentQ.map((t) => <option key={t} value={t} />)}</datalist>
+        {!phone && <>{classSel}{armSel}{genderSel}</>}
+        <button type="button" className={'sl-filter-btn' + (showFilters ? ' on' : '')} aria-expanded={showFilters}
+                onClick={() => setShowFilters((v) => !v)}>
+          <i aria-hidden="true" className="fas fa-sliders" />{!phone && <span>Filters</span>}
+          {(phone ? chips.length : moreCount) > 0 && <b className="sl-badge">{phone ? chips.length : moreCount}</b>}
+        </button>
       </div>
 
-      {loading && students.length === 0 ? (
-        <div className="card stu-tablecard"><div className="card-body">
-          <div className="stu-cards" aria-busy="true" aria-label="Loading students">
-            {Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="stu-card" style={{ display: 'block' }}>
-                <div className="skeleton skeleton-title" style={{ width: '65%' }} />
-                <div className="skeleton skeleton-text" />
-                <div className="skeleton skeleton-text short" />
-              </div>
-            ))}
+      {/* Laptop: the rest of the filters, in place */}
+      {showFilters && !phone && <div className="sl-panel">{moreFilters}</div>}
+
+      {/* Phone: filters in a bottom sheet */}
+      {showFilters && phone && createPortal((
+        <div className="sl-sheet-bg" onClick={() => setShowFilters(false)}>
+          <div className="sl-sheet" role="dialog" aria-modal="true" aria-label="Filters" onClick={(e) => e.stopPropagation()}>
+            <div className="sl-sheet-grip" aria-hidden="true" />
+            <div className="sl-sheet-head"><b>Filters</b>
+              {hasFilters && <button type="button" className="sl-link" onClick={resetFilters}>Reset</button>}</div>
+            {moreFilters}
+            <button type="button" className="btn btn-primary sl-sheet-done" onClick={() => setShowFilters(false)}>
+              Show {d.total || 0} student{d.total === 1 ? '' : 's'}</button>
           </div>
-        </div></div>
+        </div>
+      ), document.body)}
+
+      {/* Active filters + saved filter sets */}
+      {(chips.length > 0 || search || saved.length > 0) && (
+        <div className="sl-chips">
+          {search && <button type="button" className="sl-chip" onClick={() => setSearch('')}>“{search}” <i aria-hidden="true" className="fas fa-xmark" /></button>}
+          {chips.map((c) => (
+            <button key={c.k} type="button" className="sl-chip" onClick={() => setFilter(c.k, '')} aria-label={'Remove filter ' + c.label}>
+              {c.label} <i aria-hidden="true" className="fas fa-xmark" /></button>
+          ))}
+          {hasFilters && <button type="button" className="sl-link" onClick={resetFilters}>Clear all</button>}
+          {hasFilters && <button type="button" className="sl-link" onClick={doSaveFilter}><i aria-hidden="true" className="fas fa-bookmark" /> Save</button>}
+          {saved.length > 0 && <button type="button" className="sl-link" aria-expanded={showSaved} onClick={() => setShowSaved((v) => !v)}>
+            <i aria-hidden="true" className="fas fa-star" /> Saved ({saved.length})</button>}
+          {showSaved && saved.map((f) => (
+            <span key={f.name} className="sl-chip saved">
+              <button type="button" onClick={() => applySaved(f)}>{f.name}</button>
+              <button type="button" aria-label={'Delete saved filter ' + f.name} onClick={() => removeSaved(f.name)}>×</button>
+            </span>
+          ))}
+        </div>
+      )}
+
+      {/* Recently viewed — one tap back to a student */}
+      {viewed.length > 0 && !hasFilters && (
+        <div className="sl-recent" aria-label="Recently viewed">
+          <span className="sl-recent-l"><i aria-hidden="true" className="fas fa-clock-rotate-left" /> Recent</span>
+          {viewed.slice(0, 10).map((v) => (
+            <a key={v.id} href={v.url} className="sl-recent-chip" title={v.name}>
+              <StudentAvatar name={v.name} photo={v.photo} size={26} /><span>{v.name}</span>
+            </a>
+          ))}
+        </div>
+      )}
+
+      {/* Selection bar: appears when students are selected (phone: docked at the bottom) */}
+      {selectedIds.length > 0 && (
+        <div className="sl-selbar" role="region" aria-label="Selected students">
+          <div className="sl-selbar-top">
+            <b>{selectedIds.length} selected</b>
+            <button type="button" className="sl-link" onClick={() => setSelected(new Set())}>Clear</button>
+            <span className="sl-selbar-acts">
+              {d.bulk_message_url && <button type="button" className="btn btn-sm btn-info" aria-label="Message parents" title="Message parents" onClick={() => needSel() && setShowMessage(true)}>
+                <i aria-hidden="true" className="fas fa-comment-dots" /><span> Message parents</span></button>}
+              {d.bulk_id_cards_url && <button type="button" className="btn btn-sm btn-secondary" aria-label="Print ID cards" title="Print ID cards" onClick={downloadIdCards}>
+                <i aria-hidden="true" className="fas fa-id-card" /><span> ID cards</span></button>}
+              <button type="button" className="btn btn-sm btn-secondary" aria-label="Export selected" title="Export selected" onClick={() => setShowExport(true)}>
+                <i aria-hidden="true" className="fas fa-download" /><span> Export</span></button>
+              {(canBulk || canSss3) && <button type="button" className={'btn btn-sm ' + (showBulk ? 'btn-primary' : 'btn-outline')} aria-expanded={showBulk} aria-label="Bulk edit" title="Bulk edit"
+                      onClick={() => setShowBulk((v) => !v)}><i aria-hidden="true" className="fas fa-pen-to-square" /><span> Bulk edit</span></button>}
+              {canAdmin && <button type="button" className="btn btn-sm btn-danger" aria-label="Delete selected"
+                      onClick={async () => { if (needSel() && await confirm({ title: 'Delete students', message: `Delete ${selectedIds.length} selected student(s)?`, confirmText: 'Delete', tone: 'danger' }))
+                        runAction(d.bulk_delete_url, { student_ids: selectedIds }, 'Deleted selected students.'); }}><i aria-hidden="true" className="fas fa-trash" /></button>}
+            </span>
+          </div>
+          {showBulk && (
+            <div className="sl-bulk">
+              {canBulk && <>
+                <span className="sl-bulk-f"><select className="form-control" value={bulkGender} onChange={(e) => setBulkGender(e.target.value)} aria-label="Bulk gender">
+                  <option value="">Set gender…</option><option value="Male">Male</option><option value="Female">Female</option></select>
+                  <button type="button" className="btn btn-primary btn-sm" disabled={!bulkGender}
+                          onClick={() => needSel() && runAction(d.bulk_gender_url, { gender: bulkGender, student_ids: selectedIds }, 'Gender updated.')}>Apply</button></span>
+                <span className="sl-bulk-f"><select className="form-control" value={bulkStream} onChange={(e) => setBulkStream(e.target.value)} aria-label="Bulk stream">
+                  <option value="">Set stream…</option>{(filters.streams || []).map((r) => <option key={r} value={r}>{r}</option>)}</select>
+                  <button type="button" className="btn btn-primary btn-sm" disabled={!bulkStream} title="Also fills WAEC subjects from the stream where not already set"
+                          onClick={() => needSel() && runAction(d.bulk_stream_url, { stream: bulkStream, student_ids: selectedIds }, 'Stream updated.')}>Apply</button></span>
+                <span className="sl-bulk-f"><input className="form-control" value={bulkHouse} placeholder="Set house…" onChange={(e) => setBulkHouse(e.target.value)} aria-label="Bulk house" maxLength={40} />
+                  <button type="button" className="btn btn-primary btn-sm" disabled={!bulkHouse.trim()}
+                          onClick={() => needSel() && runAction(d.bulk_house_url, { house: bulkHouse.trim(), student_ids: selectedIds }, 'House updated.')}>Apply</button></span>
+                <span className="sl-bulk-f"><select className="form-control" value={bulkBoarding} onChange={(e) => setBulkBoarding(e.target.value)} aria-label="Bulk boarding status">
+                  <option value="">Set boarding…</option><option value="Day">Day</option><option value="Boarding">Boarding</option></select>
+                  <button type="button" className="btn btn-primary btn-sm" disabled={!bulkBoarding}
+                          onClick={() => needSel() && runAction(d.bulk_boarding_url, { boarding: bulkBoarding, student_ids: selectedIds }, 'Boarding status updated.')}>Apply</button></span>
+                {d.bulk_aspiration_url && <span className="sl-bulk-f wide">
+                  <select className="form-control" value={bulkUni} onChange={(e) => setBulkUni(e.target.value)} aria-label="Bulk university" disabled={loadingAspiration}>
+                    <option value="">{loadingAspiration ? 'Loading…' : 'Target university…'}</option>
+                    {(aspirationLists && aspirationLists.universities || []).map((u) => <option key={u.id} value={u.id}>{u.label}</option>)}</select>
+                  <select className="form-control" value={bulkCourse} onChange={(e) => setBulkCourse(e.target.value)} aria-label="Bulk course" disabled={loadingAspiration}>
+                    <option value="">{loadingAspiration ? 'Loading…' : 'Target course…'}</option>
+                    {(aspirationLists && aspirationLists.courses || []).map((cc) => <option key={cc.id} value={cc.id}>{cc.label}</option>)}</select>
+                  <button type="button" className="btn btn-primary btn-sm" disabled={!bulkUni && !bulkCourse}
+                          title="A course also fills their JAMB target + subject requirements"
+                          onClick={() => needSel() && runAction(d.bulk_aspiration_url,
+                            { student_ids: selectedIds, target_university_id: bulkUni, target_course_id: bulkCourse }, 'Aspiration assigned.')}>Assign</button></span>}
+              </>}
+              {canSss3 && <span className="sl-bulk-f"><select className="form-control" value={bulkSubject} onChange={(e) => setBulkSubject(e.target.value)} aria-label="Bulk WAEC subject">
+                <option value="">Add WAEC subject…</option>{(filters.subjects || []).map((r) => <option key={r} value={r}>{r}</option>)}</select>
+                <button type="button" className="btn btn-primary btn-sm" disabled={!bulkSubject} title="SSS3 students only"
+                        onClick={() => needSel() && runAction(d.bulk_subject_url, { subject: bulkSubject, student_ids: selectedIds }, 'Subject added.')}>Add (SSS3)</button></span>}
+            </div>
+          )}
+        </div>
+      )}
+
+      {loading && students.length === 0 ? (
+        <div className="sl-list" aria-busy="true" aria-label="Loading students">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="sl-row sl-skel"><span className="skeleton" style={{ width: 40, height: 40, borderRadius: '50%' }} />
+              <div style={{ flex: 1 }}><div className="skeleton skeleton-title" style={{ width: '55%' }} /><div className="skeleton skeleton-text short" /></div></div>
+          ))}
+        </div>
       ) : students.length === 0 ? (
         <Empty icon="fa-users" title="No students found">
           <p>No students match your filters yet.</p>
-          {canAdd && (
+          {hasFilters && <div className="empty-state-actions"><button type="button" className="btn btn-light" onClick={resetFilters}>Clear filters</button></div>}
+          {canAdd && !hasFilters && (
             <div className="empty-state-actions">
               <a href={d.add_url} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add student</a>
               {d.import_url && <button type="button" className="btn btn-light" onClick={() => setShowImport(true)}><i aria-hidden="true" className="fas fa-paste" /> Import</button>}
             </div>
           )}
         </Empty>
-      ) : (
-        <>
-          {/* Desktop: dense table */}
-          <div className="card stu-tablecard">
-            <div className="stu-table-wrap">
-              <table className="data-table stu-table">
-                <thead>
-                  <tr>
-                    <th className="stu-check-col"><input type="checkbox" checked={!!allOnPage} onChange={toggleAll} aria-label="Select page" /></th>
-                    <th>Student</th><th>ID</th><th>Class / Arm</th><th>Stream</th>
-                    <th>Gender</th><th>Age</th><th>Religion</th>
-                    <th className="stu-act-col">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {students.map((s) => (
-                    <tr key={s.id} className={selected.has(s.id) ? 'is-sel' : ''}>
-                      <td className="stu-check-col"><input type="checkbox" checked={selected.has(s.id)} onChange={() => toggleSel(s.id)} aria-label={'Select ' + s.name} /></td>
-                      <td>
-                        <a href={s.url} className="stu-row-student">
-                          <StudentAvatar name={s.name} photo={s.photo_url} />
-                          <span className="stu-row-name">{s.name}{s.is_graduated && <span className="badge badge-success stu-grad" title="Graduate"><i aria-hidden="true" className="fas fa-user-graduate" /></span>}</span>
-                        </a>
-                      </td>
-                      <td className="text-muted">{s.student_id}</td>
-                      <td>{s.current_class || '—'}</td>
-                      <td>{s.stream ? <span className="badge badge-info">{s.stream}</span> : <span className="text-muted">—</span>}</td>
-                      <td>{s.gender ? <span className={'stu-gender ' + (s.gender === 'Male' ? 'is-m' : 'is-f')}><i className={'fas ' + (s.gender === 'Male' ? 'fa-mars' : 'fa-venus')} aria-hidden="true" /> {s.gender}</span> : <span className="text-muted">—</span>}</td>
-                      <td>{s.age || '—'}</td>
-                      <td>{s.religion || <span className="text-muted">—</span>}</td>
-                      <td className="stu-act-col"><div className="stu-row-actions">{renderActions(s)}</div></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+      ) : phone ? (
+        /* Phone: native-style list rows — tap to open, ⋯ for more */
+        <div className={'sl-list' + (loading ? ' is-loading' : '')}>
+          {selectMode && (
+            <label className="sl-row sl-row-all"><input type="checkbox" checked={!!allOnPage} onChange={toggleAll} /> Select all on this page</label>
+          )}
+          {students.map((s) => (
+            <div key={s.id} className={'sl-row' + (selected.has(s.id) ? ' is-sel' : '')}>
+              {showChecks && <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggleSel(s.id)} aria-label={'Select ' + s.name} />}
+              <a href={selectMode ? undefined : s.url} className="sl-row-main" onClick={selectMode ? (e) => { e.preventDefault(); toggleSel(s.id); } : undefined}>
+                <StudentAvatar name={s.name} photo={s.photo_url} size={44} />
+                <span className="sl-row-text">
+                  <b>{s.name}{s.is_graduated && <i aria-hidden="true" className="fas fa-user-graduate sl-grad" title="Graduate" />}</b>
+                  <small>{s.current_class || 'No class'} · {s.student_id}</small>
+                </span>
+                {s.gender && <i aria-hidden="true" className={'fas ' + (s.gender === 'Male' ? 'fa-mars sl-m' : 'fa-venus sl-f')} />}
+              </a>
+              {!selectMode && <Menu icon="fa-ellipsis-vertical" items={rowItems(s)} title={'More for ' + s.name} className="sl-rowbtn" />}
             </div>
-          </div>
-          {/* Mobile: cards */}
-          <div className="stu-cards">
-            {students.map((s) => (
-              <div key={s.id} className={'stu-card' + (selected.has(s.id) ? ' is-sel' : '')}>
-                <input type="checkbox" checked={selected.has(s.id)} onChange={() => toggleSel(s.id)} aria-label={'Select ' + s.name} />
-                <StudentAvatar name={s.name} photo={s.photo_url} />
-                <div className="stu-card-main">
-                  <div className="stu-card-head">
-                    <a href={s.url} className="stu-name">{s.name}{s.is_graduated && <span className="badge badge-success stu-grad" title="Graduate"><i aria-hidden="true" className="fas fa-user-graduate" /></span>}</a>
-                    <span className="stu-sid">{s.student_id}</span>
-                  </div>
-                  <div className="stu-meta">
-                    <span className="badge badge-secondary">{s.current_class || '—'}</span>
-                    <span className={'badge ' + (s.gender === 'Male' ? 'badge-male' : 'badge-female')}>{s.gender}</span>
-                    {s.stream && <span className="badge badge-info">{s.stream}</span>}
-                    <span className="stu-meta-dim">Age {s.age || '—'}</span>
-                    {s.religion && <span className="stu-meta-dim">{s.religion}</span>}
-                  </div>
-                  <div className="stu-actions">{renderActions(s)}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </>
+          ))}
+        </div>
+      ) : (
+        /* Laptop: full-width dense table */
+        <div className={'sl-table-card' + (loading ? ' is-loading' : '')}>
+          <table className="sl-table">
+            <thead>
+              <tr>
+                <th className="sl-check"><input type="checkbox" checked={!!allOnPage} onChange={toggleAll} aria-label="Select page" /></th>
+                <th>Student</th><th>Class</th><th>Stream</th><th>Gender</th><th className="num">Age</th><th>Religion</th><th aria-label="Actions" />
+              </tr>
+            </thead>
+            <tbody>
+              {students.map((s) => (
+                <tr key={s.id} className={selected.has(s.id) ? 'is-sel' : ''}>
+                  <td className="sl-check"><input type="checkbox" checked={selected.has(s.id)} onChange={() => toggleSel(s.id)} aria-label={'Select ' + s.name} /></td>
+                  <td><a href={s.url} className="sl-who"><StudentAvatar name={s.name} photo={s.photo_url} size={34} />
+                    <span><b>{s.name}{s.is_graduated && <i aria-hidden="true" className="fas fa-user-graduate sl-grad" title="Graduate" />}</b><small>{s.student_id}</small></span></a></td>
+                  <td>{s.current_class || <span className="text-muted">—</span>}</td>
+                  <td>{s.stream ? <span className="sl-tag">{s.stream}</span> : <span className="text-muted">—</span>}</td>
+                  <td>{s.gender ? <span className={'sl-gender ' + (s.gender === 'Male' ? 'm' : 'f')}><i className={'fas ' + (s.gender === 'Male' ? 'fa-mars' : 'fa-venus')} aria-hidden="true" /> {s.gender}</span> : <span className="text-muted">—</span>}</td>
+                  <td className="num">{s.age || <span className="text-muted">—</span>}</td>
+                  <td>{s.religion || <span className="text-muted">—</span>}</td>
+                  <td className="sl-acts">
+                    <a href={s.url} className="sl-rowbtn" title="View" aria-label={'View ' + s.name}><i aria-hidden="true" className="fas fa-eye" /></a>
+                    {canEditStudent && <a href={s.edit_url} className="sl-rowbtn" title="Edit" aria-label={'Edit ' + s.name}><i aria-hidden="true" className="fas fa-pen" /></a>}
+                    <Menu icon="fa-ellipsis" items={rowItems(s)} title={'More for ' + s.name} className="sl-rowbtn" />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
-      <Pagination page={d.page || 1} pages={d.pages || 1} onPage={goPage} />
-      </div>{/* .stu-main */}
+      <div className="sl-foot">
+        <span className="sl-count">{selectedIds.length ? `${selectedIds.length} selected · ` : ''}{d.total || 0} student{d.total === 1 ? '' : 's'}{(d.pages || 1) > 1 ? ` · page ${d.page || 1} of ${d.pages}` : ''}</span>
+        <Pagination page={d.page || 1} pages={d.pages || 1} onPage={goPage} />
+      </div>
 
-      <aside className="stu-rail">
-        {viewed.length > 0 && (
-          <div className="card stu-rail-card">
-            <div className="card-header"><h3><i aria-hidden="true" className="fas fa-clock-rotate-left" /> Recently viewed</h3></div>
-            <div className="card-body stu-rail-recent">
-              {viewed.slice(0, 8).map((v) => (
-                <a key={v.id} href={v.url} className="stu-rr-item">
-                  <span className="stu-rr-name">{v.name}</span>
-                  <span className="stu-rr-id">{v.student_id}</span>
-                </a>
-              ))}
-            </div>
-          </div>
-        )}
-        <div className="card stu-rail-card">
-          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-chart-simple" /> Students summary</h3></div>
-          <div className="card-body">
-            <div className="stu-sum-grid">
-              <div className="stu-sum stu-sum-total"><span className="stu-sum-v">{summary.total != null ? summary.total : (d.total || 0)}</span><span className="stu-sum-l">Total students</span></div>
-              <div className="stu-sum"><span className="stu-sum-v">{summary.male || 0}</span><span className="stu-sum-l">Male</span></div>
-              <div className="stu-sum"><span className="stu-sum-v">{summary.female || 0}</span><span className="stu-sum-l">Female</span></div>
-              <div className="stu-sum"><span className="stu-sum-v">{summary.streams || 0}</span><span className="stu-sum-l">Streams</span></div>
-            </div>
-          </div>
-        </div>
-        <div className="card stu-rail-card">
-          <div className="card-header"><h3><i aria-hidden="true" className="fas fa-download" /> Quick export</h3></div>
-          <div className="card-body stu-quick-export">
-            <p className="text-muted text-sm" style={{ marginTop: 0 }}>Export {selectedIds.length ? `${selectedIds.length} selected` : 'the current list'}</p>
-            <button type="button" className="btn btn-outline" onClick={() => quickExport('excel')}><i aria-hidden="true" className="fas fa-file-excel stu-x-excel" /> Excel (.xlsx)</button>
-            <button type="button" className="btn btn-outline" onClick={() => quickExport('csv')}><i aria-hidden="true" className="fas fa-file-csv" /> CSV (.csv)</button>
-            <button type="button" className="btn btn-outline" onClick={() => quickExport('pdf')}><i aria-hidden="true" className="fas fa-file-pdf stu-x-pdf" /> PDF (.pdf)</button>
-            <button type="button" className="btn btn-light btn-sm" onClick={() => setShowExport(true)}><i aria-hidden="true" className="fas fa-sliders" /> More formats &amp; fields…</button>
-          </div>
-        </div>
-        <div className="card stu-rail-card stu-tips">
-          <div className="card-body">
-            <div className="stu-tips-head"><i aria-hidden="true" className="fas fa-lightbulb" /> Tips</div>
-            <p className="text-muted text-sm">Use the filters to find students fast, then export the list for offline use. Select rows to message parents or print ID cards.</p>
-          </div>
-        </div>
-      </aside>
-      </div>{/* .stu-shell */}
+      {/* Phone: floating add button */}
+      {phone && canAdd && !selectedIds.length && createPortal(
+        <a href={d.add_url} className="sl-fab" aria-label="Add student"><i aria-hidden="true" className="fas fa-plus" /></a>,
+        document.body)}
 
       {showExport && (
         <ExportModal total={d.total || 0} selectedIds={selectedIds} exportUrl={d.export_url}
