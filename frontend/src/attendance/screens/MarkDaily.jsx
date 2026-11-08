@@ -1,8 +1,9 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { apiGet, apiPost, isPermanent } from '../../lib/api';
 import { cachePut, cacheGet, enqueue, isSlowConnection } from '../../lib/offline';
 import { useCtx } from '../App';
-import { Toolbar, Field, Select, Button, Spinner, EmptyState, ErrorState, Banner, Pill, Toast } from '../../components/ui';
+import { Spinner, EmptyState, ErrorState, Banner, Pill, Toast } from '../../components/ui';
 import { withGroups, genderLabel, groupHeadStyle } from '../roster';
 import { rememberClass } from '../../lib/attprefs';
 
@@ -25,6 +26,60 @@ function weekdays(iso) {
 
 // Up to two initials from a name, for the row avatar.
 const initialsOf = (name) => (name || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?';
+
+
+// Step a YYYY-MM-DD date by ±1 school day (skips Saturday and Sunday).
+function stepDay(iso, dir) {
+  const d = new Date(iso + 'T00:00:00');
+  if (isNaN(d)) return iso;
+  do { d.setDate(d.getDate() + dir); } while (d.getDay() === 0 || d.getDay() === 6);
+  return ymd(d);
+}
+const prettyDate = (iso) => {
+  const d = new Date(iso + 'T00:00:00');
+  return isNaN(d) ? iso : d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+};
+
+function useMedia(query) {
+  const get = () => (typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(query).matches : false);
+  const [m, setM] = useState(get);
+  useEffect(() => {
+    if (!window.matchMedia) return undefined;
+    const mq = window.matchMedia(query);
+    const on = () => setM(mq.matches);
+    on();
+    if (mq.addEventListener) mq.addEventListener('change', on); else mq.addListener(on);
+    return () => { if (mq.removeEventListener) mq.removeEventListener('change', on); else mq.removeListener(on); };
+  }, [query]);
+  return m;
+}
+
+// Small upward "more actions" menu for the register bar.
+function MoreMenu({ items }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useEffect(() => {
+    if (!open) return undefined;
+    const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', close); document.addEventListener('touchstart', close);
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('touchstart', close); };
+  }, [open]);
+  return (
+    <div className="md-more" ref={ref}>
+      <button type="button" className="md-btn ghost" aria-haspopup="true" aria-expanded={open} aria-label="More actions" onClick={() => setOpen((v) => !v)}>
+        <i className="fas fa-ellipsis" aria-hidden="true" /></button>
+      {open && (
+        <div className="md-more-pop" role="menu">
+          {items.filter(Boolean).map((it, i) => (
+            <button key={i} type="button" role="menuitem" disabled={it.disabled} title={it.title}
+                    onClick={() => { setOpen(false); it.onClick(); }}>
+              <i className={'fas ' + it.icon} aria-hidden="true" /> {it.label}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function MarkDaily() {
   const { classes = [], today, online, sync, initial, default_class } = useCtx();
@@ -166,37 +221,100 @@ export default function MarkDaily() {
     : d.weekend ? `${d.date} is a weekend.` : `${d.date} is not a school day.`);
   const canSave = d && d.week_id && d.students.length && !notSchoolDay && !busy;
 
-  const boxStyle = { width: 24, height: 24, accentColor: 'var(--success)', cursor: 'pointer' };
-  const colStyle = { width: 52, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 };
+  const phone = useMedia('(max-width: 759px)');
+  const chipsRef = useRef(null);
+  useEffect(() => {
+    const el = chipsRef.current && chipsRef.current.querySelector('.on');
+    if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest', inline: 'center' });
+  }, [assignmentId]);
+  const total = d ? d.students.length : 0;
+  const absentAm = total - amCount;
+  const absentPm = total - pmCount;
+  const absentees = d ? d.students.filter((s) => { const v = present[s.enrollment_id]; return v && !v.am && !v.pm; }) : [];
+  const editable = d && d.students.length && !notSchoolDay;
+  // Tap the name: if they're in for any session, mark out for both; otherwise in for both.
+  const flipBoth = (id) => setPresent((p) => {
+    const v = p[id] || { am: true, pm: true };
+    const to = !(v.am || v.pm);
+    return { ...p, [id]: { am: to, pm: to } };
+  });
+
+  const bar = d && editable ? (
+    <div className={'md-bar' + (phone ? ' fixed' : '')}>
+      <div className="md-bar-count" aria-live="polite">
+        <b>{amCount}</b>/{total} AM · <b>{pmCount}</b>/{total} PM
+      </div>
+      <button type="button" className="md-btn ghost" onClick={() => setAll('all', true)} title="Mark everyone present">
+        <i className="fas fa-check-double" aria-hidden="true" /><span> All present</span></button>
+      <MoreMenu items={[
+        { icon: 'fa-user-xmark', label: 'Everyone absent', onClick: () => setAll('all', false) },
+        { icon: 'fa-sun', label: 'Clear morning (AM)', onClick: () => setAll('am', false) },
+        { icon: 'fa-moon', label: 'Clear afternoon (PM)', onClick: () => setAll('pm', false) },
+        { icon: 'fa-clone', label: 'Copy previous school day', onClick: copyPrevious,
+          disabled: !online || !d.week_id || busy, title: online ? 'Copy the previous school day’s marks' : 'Needs an internet connection' },
+      ]} />
+      <button type="button" className="md-btn save" onClick={save} disabled={!canSave}>
+        <i className={'fas ' + (busy ? 'fa-spinner fa-spin' : 'fa-check')} aria-hidden="true" /> Save</button>
+    </div>
+  ) : null;
 
   return (
-    <div>
-      <Toolbar>
-        <Field label="Class" htmlFor="md-class" grow>
-          <Select id="md-class" value={assignmentId} onChange={setAssignmentId}
-                  placeholder={classes.length ? '— Select class —' : 'No classes available'}
-                  options={classes.map((c) => ({ value: String(c.id), label: c.name }))} />
-        </Field>
-        <Field label="Date" htmlFor="md-date">
-          <input id="md-date" type="date" className="form-control" value={date} onChange={(e) => setDate(e.target.value)} />
-        </Field>
-      </Toolbar>
+    <div className={'md' + (phone && d && editable ? ' has-bar' : '')}>
+      <section className="md-pick">
+        <div className="md-pick-row">
+          <span className="md-pick-l">Class</span>
+          {classes.length > 8 && (
+            <select className="md-select" value={assignmentId} onChange={(e) => setAssignmentId(e.target.value)} aria-label="Class">
+              <option value="">Choose a class</option>
+              {classes.map((c) => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
+            </select>
+          )}
+        </div>
+        {classes.length === 0 ? <p className="md-none">No classes available for this term.</p> : (
+          <div className="md-classes" ref={chipsRef} role="radiogroup" aria-label="Class">
+            {classes.map((c) => (
+              <button key={c.id} type="button" role="radio" aria-checked={String(c.id) === String(assignmentId)}
+                      className={String(c.id) === String(assignmentId) ? 'on' : ''} onClick={() => setAssignmentId(String(c.id))}>
+                {c.name}</button>
+            ))}
+          </div>
+        )}
+        <div className="md-date">
+          <button type="button" className="md-step" onClick={() => setDate(stepDay(date, -1))} aria-label="Previous school day"><i className="fas fa-chevron-left" aria-hidden="true" /></button>
+          <label className="md-date-box">
+            <i className="fas fa-calendar-day" aria-hidden="true" />
+            <span>{prettyDate(date)}</span>
+            <input type="date" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} aria-label="Date" />
+          </label>
+          <button type="button" className="md-step" onClick={() => setDate(stepDay(date, 1))} aria-label="Next school day"><i className="fas fa-chevron-right" aria-hidden="true" /></button>
+          {today && date !== today && <button type="button" className="md-today" onClick={() => setDate(today)}>Today</button>}
+        </div>
+      </section>
 
       {msg && <Banner tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Banner>}
       {toast && <Toast tone={toast.tone} onClose={() => setToast(null)}>{toast.text}</Toast>}
 
-      {state.idle && <EmptyState icon="fa-hand-pointer" title="Pick a class" hint="Choose a class and date to load its register. Loaded classes are cached so you can re-open them offline." />}
-      {state.loading && <Spinner label="Loading register…" />}
-      {state.error && <ErrorState title="Couldn’t load this class" detail={state.error.message} onRetry={load} />}
+      {state.idle && <div className="md-card"><EmptyState icon="fa-hand-pointer" title="Pick a class" hint="Choose a class to load its register. Loaded classes are cached so you can re-open them offline." /></div>}
+      {state.loading && <div className="md-card"><Spinner label="Loading register…" /></div>}
+      {state.error && <div className="md-card"><ErrorState title="Couldn’t load this class" detail={state.error.message} onRetry={load} /></div>}
 
       {d && (
-        <>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
-            <strong>{d.class_name}</strong>
-            <span style={{ color: 'var(--text-muted)' }}>{d.date}</span>
-            {state.source === 'cache' && <Pill tone="amber">cached</Pill>}
-            {weekCached && online && <Pill tone="green"><i className="fas fa-download" aria-hidden="true" /> week saved offline</Pill>}
-            <span style={{ marginLeft: 'auto', fontSize: 'var(--text-sm)' }}>AM <b>{amCount}</b>/{d.students.length} · PM <b>{pmCount}</b>/{d.students.length}</span>
+        <div className="md-card">
+          <div className="md-sum">
+            <div className="md-sum-t">
+              <strong>{d.class_name}</strong>
+              <span>{prettyDate(d.date)} · {total} student{total === 1 ? '' : 's'}</span>
+              <span className="md-pills">
+                {state.source === 'cache' && <Pill tone="amber">cached</Pill>}
+                {weekCached && online && <Pill tone="green"><i className="fas fa-download" aria-hidden="true" /> week saved offline</Pill>}
+              </span>
+            </div>
+            {editable ? (
+              <div className="md-meters">
+                <div className="md-meter"><span>Morning</span><div className="md-track"><i style={{ width: (total ? amCount / total * 100 : 0) + '%' }} /></div><b>{amCount}/{total}</b></div>
+                <div className="md-meter"><span>Afternoon</span><div className="md-track"><i style={{ width: (total ? pmCount / total * 100 : 0) + '%' }} /></div><b>{pmCount}/{total}</b></div>
+              </div>
+            ) : null}
           </div>
 
           {!d.week_id && <Banner tone="warn">This date isn’t in a school week — you can review, but saving is disabled.</Banner>}
@@ -207,35 +325,33 @@ export default function MarkDaily() {
             <EmptyState icon="fa-users-slash" title="No students enrolled" hint="This class has no active enrolments for the term." />
           ) : (
             <>
-              <p style={{ fontSize: 'var(--text-sm)', color: 'var(--text-muted)', margin: '4px 0 8px' }}>
-                Everyone starts present. Untick a box to mark a student absent for just the morning or just the afternoon.
-              </p>
-              <ul className="att-list" aria-label={'Register for ' + d.class_name}>
-                <li style={{ display: 'flex', alignItems: 'center', fontWeight: 700, borderBottom: '2px solid var(--border-color, var(--border-color))', padding: '6px 8px' }}>
-                  <span style={{ flex: 1 }}>Student</span>
-                  <span style={colStyle}>AM</span>
-                  <span style={colStyle}>PM</span>
-                </li>
+              {(absentAm || absentPm) ? (
+                <p className="md-note abs"><i className="fas fa-user-xmark" aria-hidden="true" /> {absentees.length ? <>Absent all day: <b>{absentees.map((x) => x.name).join(', ')}</b>{(absentAm > absentees.length || absentPm > absentees.length) ? ' · some half-day' : ''}</> : 'Some students are out for half the day.'}</p>
+              ) : (
+                <p className="md-note"><i className="fas fa-circle-info" aria-hidden="true" /> Everyone starts present. Tap <b>AM</b> or <b>PM</b> to mark a session absent, or tap a name for the whole day.</p>
+              )}
+              <ul className="md-list" aria-label={'Register for ' + d.class_name}>
                 {withGroups(d.students,
-                  (gender, first, key) => (
-                    <li key={key} className="att-group-head"
-                        style={{ ...groupHeadStyle, listStyle: 'none', padding: '8px', marginTop: first ? 0 : 14 }}>
-                      {genderLabel(gender)}
-                    </li>
+                  (gender, first, gkey) => (
+                    <li key={gkey} className="md-ghead">{genderLabel(gender)}
+                      <span>{d.students.filter((x) => x.gender === gender).length}</span></li>
                   ),
                   (s) => {
                     const v = present[s.enrollment_id] || { am: true, pm: true };
+                    const st = v.am && v.pm ? 'in' : (v.am || v.pm) ? 'half' : 'out';
                     return (
-                      <li key={s.enrollment_id} className={(v.am || v.pm) ? 'is-present' : 'is-absent'}
-                          style={{ display: 'flex', alignItems: 'center', padding: '8px' }}>
-                        <span className="att-av" data-g={s.gender || ''} aria-hidden="true">{initialsOf(s.name)}</span>
-                        <span className="att-name" style={{ flex: 1 }}>{s.name}<span className="att-sub">{s.student_id}{s.gender ? ' · ' + s.gender : ''}</span></span>
-                        <label style={colStyle}>
-                          <input type="checkbox" style={boxStyle} checked={v.am} onChange={() => toggle(s.enrollment_id, 'am')} aria-label={`${s.name} present morning`} />
-                        </label>
-                        <label style={colStyle}>
-                          <input type="checkbox" style={boxStyle} checked={v.pm} onChange={() => toggle(s.enrollment_id, 'pm')} aria-label={`${s.name} present afternoon`} />
-                        </label>
+                      <li key={s.enrollment_id} className={'md-row ' + st}>
+                        <button type="button" className="md-who" onClick={() => flipBoth(s.enrollment_id)}
+                                aria-label={`${s.name}: ${st === 'out' ? 'absent' : st === 'half' ? 'half day' : 'present'}. Tap to toggle the whole day.`}>
+                          <span className="att-av" data-g={s.gender || ''} aria-hidden="true">{initialsOf(s.name)}</span>
+                          <span className="md-name">{s.name}<small>{s.student_id}{st === 'out' ? ' · absent' : st === 'half' ? ' · half day' : ''}</small></span>
+                        </button>
+                        <button type="button" className={'md-tg' + (v.am ? ' on' : '')} aria-pressed={v.am}
+                                onClick={() => toggle(s.enrollment_id, 'am')} aria-label={`${s.name} present morning`}>
+                          <i className={'fas ' + (v.am ? 'fa-check' : 'fa-xmark')} aria-hidden="true" />AM</button>
+                        <button type="button" className={'md-tg' + (v.pm ? ' on' : '')} aria-pressed={v.pm}
+                                onClick={() => toggle(s.enrollment_id, 'pm')} aria-label={`${s.name} present afternoon`}>
+                          <i className={'fas ' + (v.pm ? 'fa-check' : 'fa-xmark')} aria-hidden="true" />PM</button>
                       </li>
                     );
                   }
@@ -243,22 +359,10 @@ export default function MarkDaily() {
               </ul>
             </>
           )}
-
-          <div className="att-actions">
-            <Button variant="secondary" size="sm" onClick={() => setAll('all', true)} disabled={!d.students.length || notSchoolDay}>All present</Button>
-            <Button variant="light" size="sm" onClick={() => setAll('all', false)} disabled={!d.students.length || notSchoolDay}>All absent</Button>
-            <Button variant="light" size="sm" onClick={() => setAll('am', false)} disabled={!d.students.length || notSchoolDay}>Clear AM</Button>
-            <Button variant="light" size="sm" onClick={() => setAll('pm', false)} disabled={!d.students.length || notSchoolDay}>Clear PM</Button>
-            <Button onClick={save} disabled={!canSave}>Save register</Button>
-            <Button variant="light" size="sm" onClick={copyPrevious}
-                    disabled={!online || !d.week_id || notSchoolDay || busy}
-                    title={online ? 'Copy the previous school day’s marks' : 'Copy previous needs an internet connection'}>
-              Copy previous day
-            </Button>
-            {!online && <span style={{ fontSize: 'var(--text-xs)', color: 'var(--warning)' }}>“Copy previous” needs you to be online.</span>}
-          </div>
-        </>
+          {!phone && bar}
+        </div>
       )}
+      {phone && bar && createPortal(bar, document.body)}
     </div>
   );
 }

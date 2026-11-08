@@ -2,7 +2,7 @@ import React, { useEffect, useState, createContext, useContext, useCallback } fr
 import { apiGet } from '../lib/api';
 import { cachePut, cacheGet, requestPersistence, failedItems, retryFailed, discardFailed } from '../lib/offline';
 import { useOnline, useSync } from '../lib/hooks';
-import { Spinner, ErrorState, Banner, Pill, Field, Select, FailedMarks } from '../components/ui';
+import { Spinner, ErrorState, Banner, Pill, FailedMarks } from '../components/ui';
 import MarkDaily from './screens/MarkDaily';
 import WeekGrid from './screens/WeekGrid';
 import DailySummary from './screens/DailySummary';
@@ -29,17 +29,29 @@ const INIT = (() => {
   };
 })();
 
+// Grouped so the nav reads Mark → Reports → Insights (a side rail on laptops,
+// one swipeable chip row on phones — never five wrapped rows of tabs).
 const TABS = [
-  { path: 'mark', label: 'Mark daily', icon: 'fa-user-check', el: MarkDaily, mark: true },
-  { path: 'week', label: 'Weekly grid', icon: 'fa-table-cells-large', el: WeekGrid, mark: true },
-  { path: 'daily', label: 'Daily summary', icon: 'fa-list-check', el: DailySummary },
-  { path: 'weekly', label: 'Weekly report', icon: 'fa-calendar-week', el: WeeklyReport },
-  { path: 'termly', label: 'Termly report', icon: 'fa-calendar-days', el: TermlyReport },
-  { path: 'analytics', label: 'Analytics', icon: 'fa-chart-line', el: Analytics, insight: true },
-  { path: 'interventions', label: 'Interventions', icon: 'fa-hand-holding-heart', el: Interventions, insight: true },
-  { path: 'student', label: 'Student profile', icon: 'fa-user', el: StudentProfile, insight: true },
-  { path: 'alerts', label: 'Alerts', icon: 'fa-bell', el: Alerts },
+  { path: 'mark', label: 'Mark daily', short: 'Mark', icon: 'fa-user-check', el: MarkDaily, mark: true, group: 'Mark',
+    hint: 'Take today’s register' },
+  { path: 'week', label: 'Weekly grid', short: 'Week grid', icon: 'fa-table-cells-large', el: WeekGrid, mark: true, group: 'Mark',
+    hint: 'Mark or fix a whole week' },
+  { path: 'daily', label: 'Daily summary', short: 'Daily', icon: 'fa-list-check', el: DailySummary, group: 'Reports',
+    hint: 'Who was present on a day' },
+  { path: 'weekly', label: 'Weekly report', short: 'Weekly', icon: 'fa-calendar-week', el: WeeklyReport, group: 'Reports',
+    hint: 'A week at a glance' },
+  { path: 'termly', label: 'Termly report', short: 'Termly', icon: 'fa-calendar-days', el: TermlyReport, group: 'Reports',
+    hint: 'Term totals per student' },
+  { path: 'analytics', label: 'Analytics', short: 'Analytics', icon: 'fa-chart-line', el: Analytics, insight: true, group: 'Insights',
+    hint: 'Trends, days and classes' },
+  { path: 'interventions', label: 'Interventions', short: 'Interventions', icon: 'fa-hand-holding-heart', el: Interventions, insight: true, group: 'Insights',
+    hint: 'Follow up absentees' },
+  { path: 'student', label: 'Student profile', short: 'Student', icon: 'fa-user', el: StudentProfile, insight: true, group: 'Insights',
+    hint: 'One student’s record' },
+  { path: 'alerts', label: 'Alerts', short: 'Alerts', icon: 'fa-bell', el: Alerts, group: 'Insights',
+    hint: 'Below-threshold students' },
 ];
+const GROUPS = ['Mark', 'Reports', 'Insights'];
 
 function useHashRoute() {
   const get = () => location.hash.replace(/^#\/?/, '') || INIT.tab || 'mark';
@@ -94,42 +106,80 @@ export default function App() {
   const Screen = active.el;
   const selectedTerm = termId != null ? String(termId) : (data.term ? String(data.term.id) : '');
 
+  const navRef = React.useRef(null);
+  useEffect(() => {
+    const el = navRef.current && navRef.current.querySelector('.on');
+    if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest', inline: 'center' });
+  }, [active.path]);
+  const termObj = (data.terms || []).find((t) => String(t.id) === selectedTerm);
+
   return (
     <Ctx.Provider value={{ ...data, online, sync, initial: { assignmentId: INIT.assignmentId, date: INIT.date, studentId: INIT.studentId } }}>
-      <nav className="att-tabs" role="tablist" aria-label="Attendance sections">
+      <header className="ax-head">
+        <span className="ax-logo" aria-hidden="true"><i className="fas fa-clipboard-user" /></span>
+        <div className="ax-title">
+          <span className="ax-kicker">Attendance{termObj ? ` · ${termObj.name}` : ''}</span>
+          <h1>{active.label}</h1>
+        </div>
+        <div className="ax-head-acts">
+          {(data.terms && data.terms.length > 0) && (
+            <label className="ax-term" title="Academic term">
+              <i className="fas fa-calendar" aria-hidden="true" />
+              <select value={selectedTerm} onChange={(e) => setTermId(Number(e.target.value))} aria-label="Academic term">
+                {data.terms.map((t) => <option key={t.id} value={String(t.id)}>{t.name + (t.active ? ' (active)' : '')}</option>)}
+              </select>
+            </label>
+          )}
+          <span className={'ax-net ' + (online ? 'on' : 'off')} title={online ? 'Online' : 'Offline — marks are saved and sync later'}>
+            <i className={'fas ' + (online ? 'fa-wifi' : 'fa-plane')} aria-hidden="true" /><span>{online ? 'Online' : 'Offline'}</span>
+          </span>
+          {sync.pending > 0 && <Pill tone="amber">{sync.pending} pending</Pill>}
+        </div>
+      </header>
+
+      <nav className="ax-chips" ref={navRef} role="tablist" aria-label="Attendance sections">
         {tabs.map((t) => (
           <a key={t.path} href={'#/' + t.path} role="tab" aria-selected={t.path === active.path}
-             className={'att-tab' + (t.path === active.path ? ' is-active' : '')}>
-            <i className={'fas ' + t.icon} aria-hidden="true" /> <span>{t.label}</span>
+             className={t.path === active.path ? 'on' : ''}>
+            <i className={'fas ' + t.icon} aria-hidden="true" />{t.short}
           </a>
         ))}
-        <span className="att-tabs-status">
-          <Pill tone={online ? 'green' : 'red'}>{online ? 'Online' : 'Offline'}</Pill>
-          {sync.pending > 0 && <Pill tone="amber">{sync.pending} pending</Pill>}
-        </span>
       </nav>
 
-      {(data.terms && data.terms.length > 0) && (
-        <div style={{ margin: '12px 0', maxWidth: 320 }}>
-          <Field label="Academic term" htmlFor="att-term">
-            <Select id="att-term" value={selectedTerm} onChange={(v) => setTermId(Number(v))}
-                    options={data.terms.map((t) => ({ value: String(t.id), label: t.name + (t.active ? ' (active)' : '') }))} />
-          </Field>
-        </div>
-      )}
+      <div className="ax-cols">
+        <aside className="ax-rail" aria-label="Attendance sections">
+          {GROUPS.map((g) => {
+            const list = tabs.filter((t) => t.group === g);
+            if (!list.length) return null;
+            return (
+              <div key={g} className="ax-group">
+                <span className="ax-group-h">{g}</span>
+                {list.map((t) => (
+                  <a key={t.path} href={'#/' + t.path} className={t.path === active.path ? 'on' : ''}
+                     aria-current={t.path === active.path ? 'page' : undefined}>
+                    <span className="ax-ic"><i className={'fas ' + t.icon} aria-hidden="true" /></span>
+                    <span className="ax-lb"><strong>{t.label}</strong><small>{t.hint}</small></span>
+                  </a>
+                ))}
+              </div>
+            );
+          })}
+          <a className="ax-classic" href="/attendance/"><i className="fas fa-table-list" aria-hidden="true" /> Classic view</a>
+        </aside>
 
-      {ctx.stale && <Banner tone="warn">Showing your saved data (offline) — reconnect to refresh.</Banner>}
-
-      <FailedMarks
-        items={failed}
-        onRetry={async (f) => { await retryFailed(f); await sync.flush(); await refreshFailed(); }}
-        onDiscard={async (f) => { await discardFailed(f.id); await sync.refresh(); await refreshFailed(); }}
-      />
-
-      <div role="tabpanel" style={{ marginTop: 8 }}>
-        {ctx.loading ? <Spinner label="Loading attendance…" />
-          : ctx.error ? <ErrorState title="Couldn’t load attendance" detail={ctx.error.message} onRetry={() => location.reload()} />
-          : <Screen key={selectedTerm || 'none'} />}
+        <main className="ax-main" role="tabpanel">
+          {ctx.stale && <Banner tone="warn">Showing your saved data (offline) — reconnect to refresh.</Banner>}
+          <FailedMarks
+            items={failed}
+            onRetry={async (f) => { await retryFailed(f); await sync.flush(); await refreshFailed(); }}
+            onDiscard={async (f) => { await discardFailed(f.id); await sync.refresh(); await refreshFailed(); }}
+          />
+          <div className={'ax-panel' + (active.path === 'mark' ? ' bare' : '')}>
+            {ctx.loading ? <Spinner label="Loading attendance…" />
+              : ctx.error ? <ErrorState title="Couldn’t load attendance" detail={ctx.error.message} onRetry={() => location.reload()} />
+              : <Screen key={selectedTerm || 'none'} />}
+          </div>
+        </main>
       </div>
     </Ctx.Provider>
   );
