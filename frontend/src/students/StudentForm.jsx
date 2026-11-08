@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { postForm, submitJson } from '../lib/forms';
 import { useDraft } from '../lib/draft';
 import { compressPhoto } from '../lib/image';
 import { isValidPhone, isValidEmail, relationshipFromName } from '../lib/validate';
 import { Banner } from '../components/ui';
-import { TextField, TextAreaField, SelectField, FormCard, DateOfBirthField } from '../components/Form';
+import { TextField, TextAreaField, SelectField, DateOfBirthField } from '../components/Form';
 
 const REL_SEQUENCE = ['Father', 'Mother', 'Guardian'];
 
@@ -147,6 +148,20 @@ function IdTabs({ f, tab, setTab }) {
       })}
     </div>
   );
+}
+
+function useMedia(query) {
+  const get = () => (typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(query).matches : false);
+  const [m, setM] = useState(get);
+  useEffect(() => {
+    if (!window.matchMedia) return undefined;
+    const mq = window.matchMedia(query);
+    const on = () => setM(mq.matches);
+    on();
+    if (mq.addEventListener) mq.addEventListener('change', on); else mq.addListener(on);
+    return () => { if (mq.removeEventListener) mq.removeEventListener('change', on); else mq.removeListener(on); };
+  }, [query]);
+  return m;
 }
 
 export default function StudentForm({ data }) {
@@ -469,24 +484,153 @@ export default function StudentForm({ data }) {
     }
   };
 
+  // ── Section bookkeeping: what's filled and what has errors, per section ──
+  const filledOf = (keys) => keys.filter((k) => String(f[k] || '').trim()).length;
+  const contactCount = contacts.filter((c) => (c.phone_number || '').trim()).length;
+  const SECTIONS = [
+    { key: 'personal', label: 'Personal', icon: 'fa-user', note: 'Name, gender, birth date and stream',
+      status: (f.surname.trim() && f.first_name.trim() && f.gender) ? 'done' : 'todo',
+      err: !!(errors.surname || errors.first_name || errors.gender || errors.jamb_target) },
+    { key: 'contacts', label: 'Contacts', icon: 'fa-address-book', note: 'Parents and guardians the school can reach',
+      count: contactCount, status: contactCount ? 'done' : 'opt', err: Object.keys(contactErrors).length > 0 },
+    !isEdit && enrolment && { key: 'enrol', label: 'Class', icon: 'fa-chalkboard', note: enrolment.term_label,
+      status: enrolId ? 'done' : 'todo' },
+    { key: 'aspiration', label: 'Aspiration', icon: 'fa-graduation-cap', note: 'University, course and career goal',
+      status: (f.target_university_id || f.target_course_id || f.career_goal) ? 'done' : 'opt' },
+    { key: 'admission', label: 'Admission', icon: 'fa-award', note: 'Admission offers and scholarships',
+      count: scholarships.length || null, status: (f.admission_status || scholarships.length) ? 'done' : 'opt' },
+    { key: 'identity', label: 'Identity', icon: 'fa-id-card', note: 'Photo, NIN, house and exam numbers',
+      count: filledOf(ID_TABS.flatMap((t) => t.fields)) || null,
+      status: filledOf(ID_TABS.flatMap((t) => t.fields)) ? 'done' : 'opt' },
+    { key: 'medical', label: 'Medical', icon: 'fa-notes-medical', note: 'Confidential — encrypted at rest',
+      status: filledOf(['blood_group', 'genotype', 'allergies', 'medical_conditions', 'disabilities', 'medications', 'medical_notes', 'emergency_medical']) ? 'done' : 'opt' },
+    { key: 'subjects', label: 'Exam subjects', icon: 'fa-file-signature', note: 'WAEC and JAMB registration subjects',
+      frac: `${waec.size + jamb.size}/${WAEC_SUBJECTS_MAX + JAMB_SUBJECTS_MAX}`,
+      status: (waec.size || jamb.size) ? 'done' : 'opt' },
+  ].filter(Boolean);
+  const phone = useMedia('(max-width: 759px)');
+  const [sec, setSecState] = useState(() => {
+    const h = (typeof window !== 'undefined' ? window.location.hash : '').replace('#', '');
+    return SECTIONS.some((x) => x.key === h) ? h : 'personal';
+  });
+  const navRef = useRef(null);
+  const setSec = (k) => {
+    setSecState(k);
+    try { window.history.replaceState(null, '', '#' + k); } catch (e) { /* ignore */ }
+    const top = document.querySelector('.sf2-cols');
+    if (top && top.getBoundingClientRect().top < 0) window.scrollTo({ top: window.scrollY + top.getBoundingClientRect().top - 80, behavior: 'smooth' });
+  };
+  // Keep the active chip in view on phones.
+  useEffect(() => {
+    const el = navRef.current && navRef.current.querySelector('.on');
+    if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest', inline: 'center' });
+  }, [sec]);
+  const idx = SECTIONS.findIndex((x) => x.key === sec);
+  const cur = SECTIONS[idx] || SECTIONS[0];
+  const prev = SECTIONS[idx - 1];
+  const next = SECTIONS[idx + 1];
+  const doneCount = SECTIONS.filter((x) => x.status === 'done').length;
+  const liveName = [f.surname, f.first_name, f.middle_name].map((x) => (x || '').trim()).filter(Boolean).join(' ');
+  const initials = liveName.split(' ').slice(0, 2).map((w) => w[0]).join('').toUpperCase();
+
+  const onSubmit = (ev) => {
+    // Jump to the first section with a problem so nothing is hidden.
+    const e = {};
+    if (!f.surname.trim() || !f.first_name.trim() || !f.gender) e.personal = 1;
+    if (f.jamb_target !== '' && !(Number.isInteger(Number(f.jamb_target)) && +f.jamb_target >= 0 && +f.jamb_target <= 400)) e.personal = 1;
+    if (contacts.some((c) => { const r = validateContactRow(c); return r.phone || r.email; })) e.contacts = e.contacts || 1;
+    const first = SECTIONS.find((x) => e[x.key]);
+    if (first) setSecState(first.key);
+    return submit(ev);
+  };
+
+  const badge = (x) => {
+    if (x.err) return <span className="sf2-st err" aria-label="Has errors"><i aria-hidden="true" className="fas fa-exclamation" /></span>;
+    if (x.frac) return <span className={'sf2-st n' + (x.status === 'done' ? ' on' : '')}>{x.frac}</span>;
+    if (x.count) return <span className="sf2-st n on">{x.count}</span>;
+    if (x.status === 'done') return <span className="sf2-st ok" aria-label="Filled"><i aria-hidden="true" className="fas fa-check" /></span>;
+    if (x.status === 'todo') return <span className="sf2-st todo" aria-label="Required">Required</span>;
+    return null;
+  };
+  const saveBar = (
+      <div className="sf2-save">
+      <span className="sf2-save-note">
+        {draftSaved && !saving
+          ? <><i aria-hidden="true" className="fas fa-circle-check" /> Draft saved</>
+          : <>{doneCount}/{SECTIONS.length} sections filled</>}
+      </span>
+      <a href={urls.cancel} className={'sp-btn' + (saving ? ' disabled' : '')}
+         onClick={(e) => saving && e.preventDefault()}>Cancel</a>
+      <button type="submit" form="sf2-form" className="btn btn-primary sf2-go" disabled={saving}>
+        <i aria-hidden="true" className={'fas ' + (saving ? 'fa-spinner fa-spin' : 'fa-check')} /> {saving ? 'Saving…' : (isEdit ? 'Save Changes' : 'Save Student')}
+      </button>
+    </div>
+  );
+
   return (
-    <form onSubmit={submit} noValidate>
-      <div className="page-header">
-        <div>
-          <h1>{isEdit ? 'Edit Student' : 'Add New Student'}</h1>{' '}
-          {isEdit && stu.student_id && <span className="badge badge-primary">{stu.student_id}</span>}
+    <form onSubmit={onSubmit} noValidate className="sf2" id="sf2-form">
+      <header className="sf2-head">
+        {isEdit
+          ? (f.photo
+            ? <img className="sf2-av" src={f.photo} alt="" />
+            : <span className="sf2-av ph" aria-hidden="true">{initials || <i className="fas fa-user" />}</span>)
+          : <span className="sf2-av ph" aria-hidden="true"><i className="fas fa-user-plus" /></span>}
+        <div className="sf2-title">
+          <span className="sf2-kicker">{isEdit ? 'Editing profile' : 'New student'}{isEdit && stu.student_id ? <> · <b>{stu.student_id}</b></> : null}</span>
+          <h1>{liveName || (isEdit ? 'Edit Student' : 'Add New Student')}</h1>
+          <div className="sf2-prog" aria-label={`${doneCount} of ${SECTIONS.length} sections filled`}>
+            <span className="sf2-bar"><span style={{ width: Math.round(doneCount / SECTIONS.length * 100) + '%' }} /></span>
+            <small>{doneCount}/{SECTIONS.length} sections filled</small>
+          </div>
         </div>
         {isEdit && (
-          <div className="page-header-actions">
-            <a href={urls.back} className="sp-btn sp-btn-sm"><i aria-hidden="true" className="fas fa-arrow-left" /> Back to Profile</a>
-            <a href={urls.list} className="sp-btn sp-btn-sm"><i aria-hidden="true" className="fas fa-users" /> All Students</a>
+          <div className="sf2-head-acts">
+            <a href={urls.back} className="sp-btn"><i aria-hidden="true" className="fas fa-arrow-left" /> <span>Profile</span></a>
+            <a href={urls.list} className="sp-btn sf2-hide-phone"><i aria-hidden="true" className="fas fa-users" /> All Students</a>
           </div>
         )}
-      </div>
+      </header>
 
       {banner && <Banner tone={banner.tone} onClose={() => setBanner(null)}>{banner.text}</Banner>}
 
-      <FormCard icon="fa-user" title="Personal Information">
+      <nav className="sf2-chips" ref={navRef} aria-label="Form sections">
+        {SECTIONS.map((x) => (
+          <button key={x.key} type="button" className={(sec === x.key ? 'on' : '') + (x.err ? ' err' : '')}
+                  aria-current={sec === x.key ? 'step' : undefined} onClick={() => setSec(x.key)}>
+            <i aria-hidden="true" className={'fas ' + (x.err ? 'fa-circle-exclamation' : x.status === 'done' ? 'fa-circle-check' : x.icon)} />{x.label}
+          </button>
+        ))}
+      </nav>
+
+      <div className="sf2-cols">
+        <aside className="sf2-rail" aria-label="Form sections">
+          <ol>
+            {SECTIONS.map((x) => (
+              <li key={x.key}>
+                <button type="button" className={(sec === x.key ? 'on' : '') + (x.err ? ' err' : '')}
+                        aria-current={sec === x.key ? 'step' : undefined} onClick={() => setSec(x.key)}>
+                  <span className="sf2-ic"><i aria-hidden="true" className={'fas ' + x.icon} /></span>
+                  <span className="sf2-lb"><strong>{x.label}</strong><small>{x.note}</small></span>
+                  {badge(x)}
+                </button>
+              </li>
+            ))}
+          </ol>
+          {draftSaved && !saving && (
+            <p className="sf2-draft" role="status"><i aria-hidden="true" className="fas fa-cloud-arrow-up" /> Draft saved on this device</p>
+          )}
+        </aside>
+
+        <div className="sf2-main">
+          <div className="sf2-card">
+            <div className="sf2-card-head">
+              <span className="sf2-ic big"><i aria-hidden="true" className={'fas ' + cur.icon} /></span>
+              <div><h2 id={'sf2-h-' + cur.key}>{cur.label === 'Identity' ? 'Identity & exam numbers' : cur.label === 'Admission' ? 'Admission & scholarships' : cur.label === 'Aspiration' ? 'University aspiration' : cur.label === 'Class' ? 'Class enrolment' : cur.label}</h2>
+                <p>{cur.note}</p></div>
+              <span className="sf2-step">{idx + 1} / {SECTIONS.length}</span>
+            </div>
+            <div className="sf2-card-body">
+              <section className="sf2-panel" hidden={sec !== 'personal'}>
         <div className="sf-row">
           <TextField label="Surname" required value={f.surname} onChange={(v) => set('surname', v)}
                      onBlur={blurRequired('surname', 'Surname')}
@@ -516,9 +660,39 @@ export default function StudentForm({ data }) {
         <TextAreaField label="Home Address" value={f.home_address} onChange={(v) => set('home_address', v)} placeholder="Full address" />
         <TextField label="Hobbies" value={f.hobbies} onChange={(v) => set('hobbies', v)}
                    placeholder="e.g., Football, Reading" hint="Separate with commas" />
-      </FormCard>
-
-      <FormCard icon="fa-graduation-cap" title="University Aspiration" collapsible defaultOpen={isEdit}>
+              </section>
+              <section className="sf2-panel" hidden={sec !== 'contacts'}>
+        {contacts.map((c, i) => (
+          <div className="sf-contact" key={i}>
+            <TextField label="Name" value={c.name} onChange={(v) => setContact(i, 'name', v)} onBlur={() => contactBlur(i)} placeholder="e.g., Mr. John" autoComplete="off" />
+            <TextField label="Phone" required value={c.phone_number} onChange={(v) => setContact(i, 'phone_number', v)} onBlur={() => contactBlur(i)}
+                       type="tel" placeholder="08012345678" error={contactErrors[i] && contactErrors[i].phone} autoComplete="off" />
+            <TextField label="Email (optional)" value={c.email} onChange={(v) => setContact(i, 'email', v)} onBlur={() => contactBlur(i)}
+                       type="email" placeholder="parent@example.com" error={contactErrors[i] && contactErrors[i].email} autoComplete="off" />
+            <SelectField label="Relationship" value={c.relationship} onChange={(v) => setContact(i, 'relationship', v)} options={relationships} />
+            <button type="button" className="sp-btn sp-btn-sm sp-btn-danger sf-remove" aria-label={`Remove contact ${i + 1}`}
+                    disabled={contacts.length === 1} onClick={() => removeContact(i)}>
+              <i aria-hidden="true" className="fas fa-times" />
+            </button>
+          </div>
+        ))}
+        <button type="button" className="sp-btn sp-btn-sm" onClick={addContact}>
+          <i aria-hidden="true" className="fas fa-plus" /> Add Contact
+        </button>
+              </section>
+              {!isEdit && enrolment && <section className="sf2-panel" hidden={sec !== 'enrol'}>
+          {enrolment.has_classes ? (
+            <SelectField label="Enrol into class & arm" value={enrolId} onChange={setEnrolId}
+                         placeholder="— Don't enrol yet —"
+                         options={enrolment.classes.map((c) => ({ value: String(c.id), label: c.label }))}
+                         hint={enrolment.default_id
+                           ? 'Your form class is selected — the student will be added there.'
+                           : 'Pick the class to place this student in now, or leave blank and enrol later.'} />
+          ) : (
+            <p className="text-muted"><i aria-hidden="true" className="fas fa-info-circle" /> No classes are set up for this term yet, or none are assigned to you. You can enrol the student into a class later.</p>
+          )}
+                </section>}
+              <section className="sf2-panel" hidden={sec !== 'aspiration'}>
         <p className="text-muted" style={{ fontSize: '.85rem', marginTop: 0 }}>
           Where the student wants to study. Picking a course auto-fills the department, the JAMB
           target (the course's competitive cut-off for the chosen university) and the JAMB subject
@@ -576,10 +750,8 @@ export default function StudentForm({ data }) {
         <TextField label="Career goal" value={f.career_goal} onChange={(v) => set('career_goal', v)}
                    placeholder="e.g. Medical doctor, Software engineer"
                    hint="What the student ultimately wants to become — helps align course choice" />
-      </FormCard>
-
-      <FormCard icon="fa-award" title="Admission & Scholarships" note="(optional)" collapsible
-                defaultOpen={isEdit && !!(stu.admission_status || (stu.scholarships && stu.scholarships.length))}>
+              </section>
+              <section className="sf2-panel" hidden={sec !== 'admission'}>
         <div className="sf-row">
           <SelectField label="Admission status" value={f.admission_status} onChange={(v) => set('admission_status', v)}
                        placeholder="—" options={opt.admission_statuses || []}
@@ -617,45 +789,8 @@ export default function StudentForm({ data }) {
         <button type="button" className="sp-btn sp-btn-sm" onClick={addSch}>
           <i aria-hidden="true" className="fas fa-plus" /> Add Scholarship
         </button>
-      </FormCard>
-
-      <FormCard icon="fa-phone" title="Parent/Guardian Contacts" collapsible defaultOpen={isEdit}>
-        {contacts.map((c, i) => (
-          <div className="sf-contact" key={i}>
-            <TextField label="Name" value={c.name} onChange={(v) => setContact(i, 'name', v)} onBlur={() => contactBlur(i)} placeholder="e.g., Mr. John" autoComplete="off" />
-            <TextField label="Phone" required value={c.phone_number} onChange={(v) => setContact(i, 'phone_number', v)} onBlur={() => contactBlur(i)}
-                       type="tel" placeholder="08012345678" error={contactErrors[i] && contactErrors[i].phone} autoComplete="off" />
-            <TextField label="Email (optional)" value={c.email} onChange={(v) => setContact(i, 'email', v)} onBlur={() => contactBlur(i)}
-                       type="email" placeholder="parent@example.com" error={contactErrors[i] && contactErrors[i].email} autoComplete="off" />
-            <SelectField label="Relationship" value={c.relationship} onChange={(v) => setContact(i, 'relationship', v)} options={relationships} />
-            <button type="button" className="sp-btn sp-btn-sm sp-btn-danger sf-remove" aria-label={`Remove contact ${i + 1}`}
-                    disabled={contacts.length === 1} onClick={() => removeContact(i)}>
-              <i aria-hidden="true" className="fas fa-times" />
-            </button>
-          </div>
-        ))}
-        <button type="button" className="sp-btn sp-btn-sm" onClick={addContact}>
-          <i aria-hidden="true" className="fas fa-plus" /> Add Contact
-        </button>
-      </FormCard>
-
-      {!isEdit && enrolment && (
-        <FormCard icon="fa-chalkboard" title="Class Enrolment" note={`(${enrolment.term_label})`} collapsible defaultOpen={!!(enrolment && enrolment.default_id)}>
-          {enrolment.has_classes ? (
-            <SelectField label="Enrol into class & arm" value={enrolId} onChange={setEnrolId}
-                         placeholder="— Don't enrol yet —"
-                         options={enrolment.classes.map((c) => ({ value: String(c.id), label: c.label }))}
-                         hint={enrolment.default_id
-                           ? 'Your form class is selected — the student will be added there.'
-                           : 'Pick the class to place this student in now, or leave blank and enrol later.'} />
-          ) : (
-            <p className="text-muted"><i aria-hidden="true" className="fas fa-info-circle" /> No classes are set up for this term yet, or none are assigned to you. You can enrol the student into a class later.</p>
-          )}
-        </FormCard>
-      )}
-
-      <FormCard icon="fa-id-card" title="Identity &amp; Pastoral" note="(optional)" collapsible
-                defaultOpen={isEdit && !!(stu.nin || stu.jamb_reg_number || stu.waec_reg_number || stu.neco_reg_number || stu.house || stu.boarding_status || stu.photo_url)}>
+              </section>
+              <section className="sf2-panel" hidden={sec !== 'identity'}>
         <IdTabs f={f} tab={idTab} setTab={setIdTab} />
         {idTab === 'identity' && (
           <div role="tabpanel" id="idp-identity" aria-labelledby="idt-identity">
@@ -710,10 +845,8 @@ export default function StudentForm({ data }) {
             </div>
           </div>
         )}
-      </FormCard>
-
-      <FormCard icon="fa-notes-medical" title="Medical Information" note="(optional, confidential)" collapsible
-                defaultOpen={isEdit && !!(stu.blood_group || stu.allergies || stu.medical_conditions || stu.medical_notes)}>
+              </section>
+              <section className="sf2-panel" hidden={sec !== 'medical'}>
         <div className="sf-row">
           <SelectField label="Blood group" value={f.blood_group} onChange={(v) => set('blood_group', v)}
                        placeholder="—" options={['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-']} />
@@ -726,9 +859,8 @@ export default function StudentForm({ data }) {
         <TextField label="Current medications" value={f.medications} onChange={(v) => set('medications', v)} placeholder="Regular medications" />
         <TextAreaField label="Medical notes" value={f.medical_notes} onChange={(v) => set('medical_notes', v)} placeholder="Confidential notes (encrypted at rest)" />
         <TextAreaField label="Emergency medical instructions" value={f.emergency_medical} onChange={(v) => set('emergency_medical', v)} placeholder="What to do in an emergency" />
-      </FormCard>
-
-      <FormCard icon="fa-file-signature" title="External Exam Subjects" note="(optional)" collapsible defaultOpen={isEdit && (waec.size > 0 || jamb.size > 0)}>
+              </section>
+              <section className="sf2-panel" hidden={sec !== 'subjects'}>
         <p className="text-muted text-sm mb-3">
           Select the subjects this student is registered for. These pre-fill the WAEC and JAMB
           result-entry pages. Picking a <strong>Stream</strong> above fills the stream's compulsory
@@ -750,20 +882,17 @@ export default function StudentForm({ data }) {
         <SubjectChecks legendIcon="fa-file-contract" legend="JAMB Subjects" all={jambSubjects} name="jamb_subjects[]"
                        max={JAMB_SUBJECTS_MAX} selected={jamb} onToggle={toggle(setJamb, JAMB_SUBJECTS_MAX)}
                        onClear={() => setJamb(new Set())} />
-      </FormCard>
-
-      <div className="page-header-actions">
-        <button type="submit" className="sp-btn sp-btn-fill sp-btn-lg" disabled={saving}>
-          <i aria-hidden="true" className={'fas ' + (saving ? 'fa-spinner fa-spin' : 'fa-save')} /> {saving ? 'Saving…' : (isEdit ? 'Save Changes' : 'Save Student')}
-        </button>
-        <a href={urls.cancel} className={'sp-btn sp-btn-lg' + (saving ? ' disabled' : '')}
-           onClick={(e) => saving && e.preventDefault()}>Cancel</a>
-        {draftSaved && !saving && (
-          <span className="draft-saved" role="status">
-            <i aria-hidden="true" className="fas fa-circle-check" /> Draft saved — we’ll keep your progress
-          </span>
-        )}
+              </section>
+            </div>
+            <div className="sf2-card-foot">
+              {prev ? <button type="button" className="sp-btn" onClick={() => setSec(prev.key)}><i aria-hidden="true" className="fas fa-arrow-left" /> {prev.label}</button> : <span />}
+              {next && <button type="button" className="sp-btn sp-btn-primary" onClick={() => setSec(next.key)}>{next.label} <i aria-hidden="true" className="fas fa-arrow-right" /></button>}
+            </div>
+          </div>
+        </div>
       </div>
+
+      {phone ? createPortal(saveBar, document.body) : saveBar}
     </form>
   );
 }

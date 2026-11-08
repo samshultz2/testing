@@ -835,6 +835,18 @@ def assignments_list():
     # Real arms only — the hidden default 'General' arm is never a pickable choice.
     arms = ClassArm.query.filter_by(is_active=True, is_default=False).order_by(ClassArm.name).all()
 
+    # Active enrolments per class-arm by gender, in one query (the tabs show
+    # totals and a boys/girls split for every arm).
+    gcount = {}
+    if assignments:
+        rows = (db.session.query(StudentEnrollment.class_arm_assignment_id, Student.gender, db.func.count())
+                .join(Student, Student.id == StudentEnrollment.student_id)
+                .filter(StudentEnrollment.is_active == True,
+                        StudentEnrollment.class_arm_assignment_id.in_([a.id for a in assignments]))
+                .group_by(StudentEnrollment.class_arm_assignment_id, Student.gender).all())
+        for aid, g, n in rows:
+            gcount.setdefault(aid, {})[g if g in ('Male', 'Female') else 'Other'] = n
+
     return _render({
         'page': 'assignments',
         'term_id': term_id or '',
@@ -846,8 +858,14 @@ def assignments_list():
         'arms': [{'id': a.id, 'name': a.name} for a in arms],
         'assignments': [{'id': a.id,
                          'name': a.display_name,
+                         'class_id': a.class_id,
+                         'arm': a.arm_label,
+                         'arm_id': a.arm_id,
                          'form_teacher': a.form_teacher_name or '',
-                         'students': a.enrollments.filter_by(is_active=True).count(),
+                         'form_teacher_phone': a.form_teacher_phone or '',
+                         'students': sum(gcount.get(a.id, {}).values()),
+                         'boys': gcount.get(a.id, {}).get('Male', 0),
+                         'girls': gcount.get(a.id, {}).get('Female', 0),
                          'view_url': url_for('academics.view_assignment', assignment_id=a.id),
                          'edit_teacher_url': url_for('academics.edit_assignment_teacher', assignment_id=a.id)}
                         for a in assignments],
@@ -1035,9 +1053,17 @@ def view_assignment(assignment_id):
         'assignment': {'id': assignment.id, 'display_name': assignment.display_name,
                        'term': assignment.term.full_name if assignment.term else '',
                        'term_id': assignment.term_id,
+                       'class_name': assignment.school_class.name if assignment.school_class else '',
+                       'arm': assignment.arm_label,
+                       'form_teacher': assignment.form_teacher_name or '',
+                       'form_teacher_phone': assignment.form_teacher_phone or '',
+                       'edit_teacher_url': url_for('academics.edit_assignment_teacher', assignment_id=assignment.id),
                        'session_id': assignment.term.session_id if assignment.term else None},
         'enrollments': [{'id': e.id, 'student_id': e.student_id, 'full_name': e.student.full_name,
+                         'surname': e.student.surname or '', 'first_name': e.student.first_name or '',
+                         'middle_name': e.student.middle_name or '',
                          'student_no': e.student.student_id, 'gender': e.student.gender or '',
+                         'view_url': url_for('main.view_student', student_id=e.student_id),
                          'remove_url': url_for('academics.remove_enrollment', enrollment_id=e.id)}
                         for e in enrollments],
         'available_students': [{'id': s.id, 'full_name': s.full_name, 'student_id': s.student_id,
@@ -1046,7 +1072,14 @@ def view_assignment(assignment_id):
         'sessions': [{'id': s.id, 'name': s.name} for s in sessions],
         'classes': [{'id': c.id, 'name': c.name} for c in classes],
         'arms': [{'id': a.id, 'name': a.name} for a in arms],
-        'back_url': url_for('academics.assignments_list', term_id=assignment.term_id),
+        # The other arms of this class this term, for one-tap switching.
+        'siblings': [{'id': x.id, 'name': x.display_name, 'arm': x.arm_label,
+                      'url': url_for('academics.view_assignment', assignment_id=x.id)}
+                     for x in sorted(ClassArmAssignment.query.filter_by(
+                         term_id=assignment.term_id, class_id=assignment.class_id,
+                         branch_id=assignment.branch_id).all(),
+                         key=lambda x: x.arm_label)],
+        'back_url': url_for('academics.assignments_list', term_id=assignment.term_id) + f'#class-{assignment.class_id}',
         'enroll_url': url_for('academics.enroll_student', assignment_id=assignment.id),
         'reassign_url': url_for('academics.reassign_students', assignment_id=assignment.id)})
 
