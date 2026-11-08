@@ -1,237 +1,238 @@
 {% extends "base.html" %}
 {% from "results/_board_shell.html" import bx_head, bx_nav with context %}
 {% block title %}{{ board.name }} Broadsheet — {{ app_name }}{% endblock %}
-{% block breadcrumb %}<a href="{{ burl('results.index') }}">Results</a> / <a href="{{ burl('results.analytics_hub') }}">Exam Analytics</a> / <span>{{ board.name }} Broadsheet</span>{% endblock %}
+{% block breadcrumb %}<a href="{{ burl('results.index') }}">Results</a> / <a href="{{ burl('results.waec_list') }}">{{ board.name }}</a> / <span>{{ board.name }} Broadsheet</span>{% endblock %}
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ bundle_url('css/results-kit.css') }}">
-
 <style>
-.bs-wrap { overflow-x: auto; }
-.bs-table { border-collapse: collapse; width: 100%; font-size: .8rem; }
-.bs-table th, .bs-table td { border: 1px solid var(--border-color); padding: 3px 6px; text-align: center; white-space: nowrap; }
-.bs-table thead th { background: var(--bg-card); position: sticky; top: 0; z-index: 2; }
-.bs-table th.name, .bs-table td.name { text-align: left; min-width: 150px; position: sticky; left: 0; background: var(--bg-card); z-index: 1; }
-.bs-table th.subj { height: 130px; vertical-align: bottom; padding-bottom: 8px; }
-.bs-table th.subj span { writing-mode: vertical-rl; transform: rotate(180deg); white-space: nowrap; font-weight: 600; }
-.bs-table tbody tr:nth-child(even) td { background: rgba(135,135,135,.06); }
-.bs-table .g { font-weight: 700; padding: 0 3px; border-radius: 3px; font-size: .72rem; }
-.g-a1 { color: #047857; } .g-b { color: #0d9488; } .g-c { color: #2563eb; }
-.g-d { color: #b45309; } .g-e { color: #c2410c; } .g-f { color: #dc2626; }
-.bs-table tfoot td { font-weight: 600; background: var(--bg-card); }
-.bs-table tfoot td.lab { text-align: right; }
-.bs-num { font-weight: 600; }
-.bs-dist th, .bs-dist td { border: 1px solid var(--border-color); padding: 5px 12px; text-align: center; }
-.bs-note { font-size: .78rem; color: var(--text-muted); margin-top: .5rem; }
-
 @media print {
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .sidebar, .top-header, .bottom-nav, .page-header-actions, .breadcrumb, .btn, .no-print, .sidebar-overlay, .filter-bar { display: none !important; }
+  .sidebar, .top-header, .bottom-nav, .breadcrumb, .no-print, .sidebar-overlay, .rs-head-a { display: none !important; }
   .main-content, .page-content { margin: 0 !important; padding: 0 !important; background: #fff !important; }
-  .card { box-shadow: none !important; border: none !important; }
-  .bs-table { font-size: 8.5px; }
-  .bs-table th, .bs-table td { padding: 1px 3px; }
-  .bs-table th.subj { height: 100px; }
-  .bs-table thead th, .bs-table th.name, .bs-table td.name { position: static; }
+  .rs-card { border: none !important; }
+  .bx-mx { font-size: 8.5px; }
+  .bx-mx th, .bx-mx td { padding: 1px 3px !important; }
+  .bx-mx th.subj { height: 100px; }
+  .bx-mx thead th, .bx-mx .name { position: static !important; }
+  .bx-mx-wrap { overflow: visible !important; max-height: none !important; }
   @page { size: A4 landscape; margin: 8mm; }
-  .bs-wrap { overflow: visible; }
 }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="rs bx bx-legacy">
-<div class="page-header">
-    <div>
-        <h1>{{ board.name }} Broadsheet{% if selected_year %} — {{ selected_year }}{% endif %}</h1>
-        <p class="text-muted text-sm">Full {{ 'WASSCE' if board.is_waec else 'NECO SSCE' }} grade matrix for the cohort, with per-subject and school summaries</p>
-    </div>
-    {% if bs and bs.rows %}
-    <div class="page-header-actions">
-        <label class="no-print" style="display:flex;align-items:center;gap:.4rem;margin:0;font-size:.85rem;">Paper size:
-            <select id="bsSizeSel" class="form-control form-control-sm" style="width:auto;">
-                <option value="A4">A4</option>
-                <option value="A3">A3 — fits more columns per sheet</option>
-                <option value="A2">A2 — fits the most columns per sheet</option>
-            </select>
-        </label>
-        <a id="bsPrintLink" href="{{ burl('results.waec_broadsheet_pdf', year=selected_year) }}" target="_blank" rel="noopener" class="btn btn-primary btn-sm"><i class="fas fa-print"></i> Print / PDF</a>
-        <a id="bsDownloadLink" href="{{ burl('results.waec_broadsheet_pdf', year=selected_year, download=1) }}" class="btn btn-outline btn-sm"><i class="fas fa-file-pdf"></i> Download PDF</a>
-        <a href="{{ burl('results.waec_broadsheet_export', year=selected_year) }}" class="btn btn-success btn-sm"><i class="fas fa-file-excel"></i> Excel</a>
-        <button type="button" id="bsCustomBtn" class="btn btn-secondary btn-sm no-print"><i class="fas fa-sliders"></i> Custom download</button>
-        <a href="{{ burl('results.analytics_hub', year=selected_year) }}" class="btn btn-info btn-sm no-print"><i class="fas fa-chart-column"></i> Analytics</a>
-    </div>
-    <script nonce="{{ csp_nonce }}">
-    (function () {
-      var sizeSel = document.getElementById('bsSizeSel');
-      var printLink = document.getElementById('bsPrintLink');
-      var dlLink = document.getElementById('bsDownloadLink');
-      if (!sizeSel || !printLink || !dlLink) return;
-      var printBase = printLink.getAttribute('href');
-      var dlBase = dlLink.getAttribute('href');
-      function withSize(url, size) {
-        var sep = url.indexOf('?') > -1 ? '&' : '?';
-        return size === 'A4' ? url : url + sep + 'size=' + size;
-      }
-      sizeSel.addEventListener('change', function () {
-        printLink.setAttribute('href', withSize(printBase, sizeSel.value));
-        dlLink.setAttribute('href', withSize(dlBase, sizeSel.value));
-      });
-    })();
-    </script>
+{% set has = bs and bs.rows %}
+<div class="rs bx">
+  {% call bx_head('fa-table-cells', board.name ~ ' Broadsheet' ~ (' — ' ~ selected_year if selected_year else ''), 'Full ' ~ ('WASSCE' if board.is_waec else 'NECO SSCE') ~ ' grade matrix for the cohort, with per-subject and school summaries') %}
+    {% if years %}
+    <form method="get" class="bx-year">
+      <label class="rs-hide-sm" for="bxYear">Year</label>
+      <select id="bxYear" name="year" data-autosubmit aria-label="Exam year">
+        {% for y in years %}<option value="{{ y }}" {% if selected_year == y %}selected{% endif %}>{{ y }}</option>{% endfor %}
+      </select>
+    </form>
     {% endif %}
-</div>
-<div class="no-print">{{ bx_nav('broadsheet', selected_year) }}</div>
+    {% if has %}
+    <details class="bx-menu">
+      <summary class="rs-btn ghost" aria-label="Download"><i class="fas fa-download" aria-hidden="true"></i><span class="rs-hide-sm">Download</span></summary>
+      <div class="bx-menu-pop" role="menu">
+        <label class="bx-menu-f">Paper size
+          <select id="bsSizeSel" aria-label="Paper size">
+            <option value="A4">A4</option>
+            <option value="A3">A3 — more columns per sheet</option>
+            <option value="A2">A2 — the most columns per sheet</option>
+          </select>
+        </label>
+        <a id="bsDownloadLink" role="menuitem" href="{{ burl('results.waec_broadsheet_pdf', year=selected_year, download=1) }}"><i class="fas fa-file-pdf" aria-hidden="true"></i><span>Download PDF</span></a>
+        <a role="menuitem" href="{{ burl('results.waec_broadsheet_export', year=selected_year) }}"><i class="fas fa-file-excel" aria-hidden="true"></i><span>Excel spreadsheet</span></a>
+        <button type="button" role="menuitem" id="bsCustomBtn"><i class="fas fa-sliders" aria-hidden="true"></i><span>Custom download…</span></button>
+        <a role="menuitem" href="{{ burl('results.analytics_hub', year=selected_year) }}"><i class="fas fa-chart-column" aria-hidden="true"></i><span>Exam analytics</span></a>
+      </div>
+    </details>
+    <a id="bsPrintLink" href="{{ burl('results.waec_broadsheet_pdf', year=selected_year) }}" target="_blank" rel="noopener" class="rs-btn primary"><i class="fas fa-print" aria-hidden="true"></i><span class="rs-hide-sm">Print / PDF</span></a>
+    {% endif %}
+  {% endcall %}
+  <div class="no-print">{{ bx_nav('broadsheet', selected_year) }}</div>
 
-{% if years %}
-<form method="get" class="filter-bar mb-3">
-    <div class="form-group mb-0">
-        <label class="form-label">Exam year</label>
-        <select name="year" class="form-control" style="max-width:160px;" onchange="this.form.submit()">
-            {% for y in years %}<option value="{{ y }}" {% if selected_year == y %}selected{% endif %}>{{ y }}</option>{% endfor %}
-        </select>
-    </div>
-</form>
-{% endif %}
-
-{% if not bs or not bs.rows %}
-<div class="card"><div class="card-body"><div class="empty-state">
-    <i class="fas fa-table"></i><h3>No {{ board.name }} results recorded</h3>
+  {% if not has %}
+  <div class="rs-blank"><span><i class="fas fa-table" aria-hidden="true"></i></span><h3>No {{ board.name }} results recorded</h3>
     <p>Enter or import {{ board.name }} results for {{ selected_year or 'a year' }}, then the broadsheet builds itself.</p>
-    <div class="d-flex gap-2 justify-center">
-        <a href="{{ burl('results.add_waec') }}" class="btn btn-primary"><i class="fas fa-plus"></i> Add {{ board.name }} results</a>
-        <a href="{{ burl('results.waec_list') }}" class="btn btn-secondary"><i class="fas fa-list"></i> {{ board.name }} results</a>
+    <a href="{{ burl('results.add_waec') }}" class="rs-btn primary"><i class="fas fa-plus" aria-hidden="true"></i> Add {{ board.name }} results</a></div>
+  {% else %}
+  {% set sch = bs.school %}
+  <div class="rs-tiles bx-tiles">
+    <div class="rs-tile"><span class="l">Students</span><span class="v">{{ sch.students }}</span><span class="s">{{ sch.subject_entries }} entries · {{ bs.subjects|length }} subjects</span></div>
+    <div class="rs-tile {{ 'good' if sch.with_5_incl_core_pct >= 60 else ('mid' if sch.with_5_incl_core_pct >= 40 else 'bad') }}"><span class="l">5 credits + Eng &amp; Maths</span><span class="v">{{ sch.with_5_incl_core_pct }}<small>%</small></span><span class="s">{{ sch.with_5_incl_core }} students · admission grade</span></div>
+    <div class="rs-tile"><span class="l">5+ credits (any)</span><span class="v">{{ sch.with_5_credits }}</span><span class="s">students</span></div>
+    <div class="rs-tile"><span class="l">Avg credits</span><span class="v">{{ sch.avg_credits }}</span><span class="s">per student</span></div>
+  </div>
+
+  {% set streams = bs.rows|map(attribute='student')|map(attribute='stream')|select|unique|sort|list %}
+  <section class="rs-card flush">
+    <div class="bx-filters no-print">
+      <label class="rs-search"><i class="fas fa-magnifying-glass" aria-hidden="true"></i>
+        <input type="search" id="bsFind" placeholder="Find a student" autocomplete="off" aria-label="Find a student"><span id="bsCount" class="bx-count"></span></label>
+      <div class="rs-chips bx-mx-chips" role="group" aria-label="Show">
+        <button type="button" class="rs-chip on" data-show="all">All <small>{{ sch.students }}</small></button>
+        <button type="button" class="rs-chip" data-show="below">Below benchmark <small>{{ sch.students - sch.with_5_incl_core }}</small></button>
+        {% for st in streams %}<button type="button" class="rs-chip" data-show="stream:{{ st }}">{{ st }}</button>{% endfor %}
+      </div>
+      <div class="rs-legend bx-legend rs-hide-sm"><span><i class="d"></i>A1–B3</span><span><i class="c"></i>C4–C6</span><span><i class="p"></i>D7–E8</span><span><i class="f"></i>F9</span></div>
     </div>
-</div></div></div>
-{% else %}
-
-<div class="cl-kpis d-flex gap-2 mb-3" style="flex-wrap:wrap;">
-    <div class="kpi"><div class="kpi-value">{{ bs.school.students }}</div><div class="kpi-label">Students</div></div>
-    <div class="kpi"><div class="kpi-value">{{ bs.school.avg_credits }}</div><div class="kpi-label">Avg credits</div></div>
-    <div class="kpi"><div class="kpi-value">{{ bs.school.with_5_incl_core }}</div><div class="kpi-label">5 credits incl. Eng &amp; Maths</div></div>
-    <div class="kpi"><div class="kpi-value">{{ bs.school.with_5_incl_core_pct }}%</div><div class="kpi-label">Admission-grade rate</div></div>
-</div>
-
-<div class="card">
-    <div class="bs-wrap"><table class="bs-table">
+    <div class="bx-mx-wrap">
+      <table class="bx-mx" id="bsMatrix">
         <thead>
-            <tr>
-                <th>S/N</th><th class="name">Name of Student</th>
-                {% for subj in bs.subjects %}<th class="subj"><span>{{ subj }}</span></th>{% endfor %}
-                <th>Cr</th><th>Avg</th>
-            </tr>
+          <tr>
+            <th class="sn">S/N</th><th class="name">Name of Student</th>
+            {% for subj in bs.subjects %}<th class="subj" title="{{ subj }}"><span>{{ subj }}</span></th>{% endfor %}
+            <th class="sum" title="Credits (A1–C6)">Cr</th><th class="sum" title="Average grade">Avg</th><th class="sum" title="5 credits including English and Maths">5+E&amp;M</th>
+          </tr>
         </thead>
         <tbody>
-            {% for row in bs.rows %}
-            <tr>
-                <td>{{ loop.index }}</td>
-                <td class="name">{{ row.student.full_name }}</td>
-                {% for subj in bs.subjects %}
-                    {% set g = row.cells.get(subj) %}
-                    <td>{% if g %}<span class="g g-{{ grade_classes.get(g, '') }}">{{ g }}</span>{% endif %}</td>
-                {% endfor %}
-                <td><span class="bs-num">{{ row.credits }}</span></td>
-                <td><span class="g g-{{ grade_classes.get(row.avg_grade, '') }}">{{ row.avg_grade }}</span></td>
-            </tr>
+          {% for row in bs.rows %}
+          <tr data-name="{{ row.student.full_name|lower }}" data-stream="{{ row.student.stream }}" data-ok="{{ 1 if row.has_5_incl_core else 0 }}">
+            <td class="sn">{{ loop.index }}</td>
+            <td class="name"><a href="{{ burl('results.view_waec_student', student_id=row.student.id, year=selected_year) }}">{{ row.student.full_name }}</a></td>
+            {% for subj in bs.subjects %}{% set g = row.cells.get(subj) %}
+            <td class="g {{ g|lower if g }}">{{ g or '' }}</td>
             {% endfor %}
+            <td class="sum"><b>{{ row.credits }}</b></td>
+            <td class="sum g {{ row.avg_grade|lower }}">{{ row.avg_grade }}</td>
+            <td class="sum">{% if row.has_5_incl_core %}<i class="fas fa-check bx-good" aria-label="Yes"></i>{% else %}<i class="fas fa-xmark bx-bad" aria-label="No"></i>{% endif %}</td>
+          </tr>
+          {% endfor %}
         </tbody>
         <tfoot>
-            <tr><td class="lab" colspan="2">No. who offered</td>{% for subj in bs.subjects %}<td>{{ bs.subject_summary[subj].offered }}</td>{% endfor %}<td colspan="2"></td></tr>
-            <tr><td class="lab" colspan="2">No. passed (C6+)</td>{% for subj in bs.subjects %}<td>{{ bs.subject_summary[subj].passed }}</td>{% endfor %}<td colspan="2"></td></tr>
-            <tr><td class="lab" colspan="2">No. failed</td>{% for subj in bs.subjects %}<td>{{ bs.subject_summary[subj].failed }}</td>{% endfor %}<td colspan="2"></td></tr>
-            <tr><td class="lab" colspan="2">Average grade</td>{% for subj in bs.subjects %}<td><span class="g g-{{ grade_classes.get(bs.subject_summary[subj].avg_grade, '') }}">{{ bs.subject_summary[subj].avg_grade }}</span></td>{% endfor %}<td colspan="2"></td></tr>
+          <tr><td class="lab" colspan="2">No. who offered</td>{% for subj in bs.subjects %}<td>{{ bs.subject_summary[subj].offered }}</td>{% endfor %}<td colspan="3"></td></tr>
+          <tr><td class="lab" colspan="2">No. passed (C6+)</td>{% for subj in bs.subjects %}<td>{{ bs.subject_summary[subj].passed }}</td>{% endfor %}<td colspan="3"></td></tr>
+          <tr><td class="lab" colspan="2">No. failed</td>{% for subj in bs.subjects %}<td class="{{ 'bx-bad' if bs.subject_summary[subj].failed }}">{{ bs.subject_summary[subj].failed }}</td>{% endfor %}<td colspan="3"></td></tr>
+          <tr><td class="lab" colspan="2">Credit rate</td>{% for subj in bs.subjects %}{% set pr = bs.subject_summary[subj].pass_rate %}<td class="{{ 'bx-good' if pr >= 70 else ('bx-mid' if pr >= 50 else 'bx-bad') }}">{{ pr|round|int }}%</td>{% endfor %}<td colspan="3"></td></tr>
+          <tr><td class="lab" colspan="2">Average grade</td>{% for subj in bs.subjects %}{% set ag = bs.subject_summary[subj].avg_grade %}<td class="g {{ ag|lower }}">{{ ag }}</td>{% endfor %}<td colspan="3"></td></tr>
         </tfoot>
-    </table></div>
-</div>
-
-<div class="grid-2 mt-3" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:1rem;">
-    <div class="card">
-        <div class="card-header"><h3>Grade distribution ({{ selected_year }})</h3></div>
-        <div class="card-body" style="overflow-x:auto;">
-            <table class="bs-dist" style="margin:0 auto;">
-                <thead><tr><th>Grade</th>{% for g in bs.grade_order %}<th><span class="g g-{{ grade_classes.get(g, '') }}">{{ g }}</span></th>{% endfor %}</tr></thead>
-                <tbody>
-                    <tr><td><strong>Count</strong></td>{% for g in bs.grade_order %}<td>{{ bs.grade_distribution[g] }}</td>{% endfor %}</tr>
-                    <tr><td><strong>%</strong></td>{% for g in bs.grade_order %}<td>{{ bs.grade_distribution_pct[g] }}</td>{% endfor %}</tr>
-                </tbody>
-            </table>
-            <p class="bs-note">{{ bs.school.subject_entries }} subject entries across {{ bs.school.students }} students.</p>
-        </div>
+      </table>
     </div>
-    <div class="card">
-        <div class="card-header"><h3>School summary</h3></div>
-        <div class="card-body">
-            <div class="info-row"><span class="text-muted">Students</span><strong>{{ bs.school.students }}</strong></div>
-            <div class="info-row"><span class="text-muted">Average credits / student</span><strong>{{ bs.school.avg_credits }}</strong></div>
-            <div class="info-row"><span class="text-muted">5+ credits</span><strong>{{ bs.school.with_5_credits }}</strong></div>
-            <div class="info-row"><span class="text-muted">5+ credits incl. English &amp; Maths</span><strong>{{ bs.school.with_5_incl_core }} ({{ bs.school.with_5_incl_core_pct }}%)</strong></div>
-            <p class="bs-note">Credit = grade C6 or better. Average grade is the mean of the grade points recorded.</p>
-        </div>
-    </div>
-</div>
-{% endif %}{# /if not bs or not bs.rows → else #}
+  </section>
 
-{% if bs and bs.rows %}
-<div id="bsCustomModal" class="no-print" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center;">
-  <div class="card" id="bsCustomCard" style="max-width:520px;width:94%;max-height:88vh;overflow:auto;">
-    <div class="card-header"><h3><i class="fas fa-sliders"></i> Custom broadsheet download</h3></div>
-    <div class="card-body">
-      <p class="text-muted text-sm">Choose which students and subjects to include, then pick a format.</p>
-      <div style="font-weight:600;margin:.2rem 0 .3rem;">Heading <span class="text-muted" style="font-weight:400;">(optional)</span></div>
-      <input type="text" id="bsTitle" class="form-control" style="margin-bottom:.7rem;"
-             placeholder="e.g. SSS3 SCIENCE CLASS MERIT LIST" maxlength="120">
-      <div style="font-weight:600;margin:.4rem 0 .3rem;">Streams <span class="text-muted" style="font-weight:400;">(none ticked = all students)</span></div>
-      <div style="display:flex;flex-wrap:wrap;gap:.4rem 1.1rem;margin-bottom:.7rem;">
-        {% for st in ['Science', 'Arts', 'Commercial'] %}
-        <label style="display:flex;align-items:center;gap:.4rem;"><input type="checkbox" class="bs-stream" value="{{ st }}"> {{ st }}</label>
+  <div class="bx-two">
+    <section class="rs-card">
+      {% set mx = bs.grade_distribution.values()|max %}
+      <div class="rs-card-h"><h3><i class="fas fa-chart-column" aria-hidden="true"></i> Grade distribution ({{ selected_year }})</h3><small>{{ sch.subject_entries }} entries</small></div>
+      <div class="bx-dist">
+        {% for g in bs.grade_order %}{% set c = bs.grade_distribution[g] %}
+        <div class="bx-dist-c" title="{{ g }}: {{ c }} ({{ bs.grade_distribution_pct[g] }}%)">
+          <b>{{ c }}</b><span class="bar"><i class="{{ g|lower }}" style="height:{{ ((c / mx * 100) if mx else 0)|round(1) }}%"></i></span><small>{{ g }}</small>
+        </div>
         {% endfor %}
       </div>
-      <div style="font-weight:600;margin:.2rem 0 .3rem;">Names to show</div>
-      <div style="display:flex;flex-wrap:wrap;gap:.4rem 1.1rem;margin-bottom:.35rem;">
-        <label style="display:flex;align-items:center;gap:.4rem;"><input type="checkbox" class="bs-name" value="surname" checked> Surname</label>
-        <label style="display:flex;align-items:center;gap:.4rem;"><input type="checkbox" class="bs-name" value="first" checked> First name</label>
-        <label style="display:flex;align-items:center;gap:.4rem;"><input type="checkbox" class="bs-name" value="middle" checked> Middle name</label>
-      </div>
-      <label style="display:flex;align-items:center;gap:.4rem;margin-bottom:.7rem;"><input type="checkbox" id="bsMidInit"> Middle name as initial (e.g. Okafor C. John)</label>
-      <div style="font-weight:600;margin:.2rem 0 .3rem;display:flex;gap:.6rem;align-items:center;">
-        Subjects
-        <button type="button" id="bsSubjAll" class="btn btn-secondary btn-sm">All</button>
-        <button type="button" id="bsSubjNone" class="btn btn-secondary btn-sm">None</button>
-      </div>
-      <div style="display:flex;flex-wrap:wrap;gap:.35rem 1rem;margin-bottom:.9rem;max-height:34vh;overflow:auto;">
-        {% for subj in bs.subjects %}
-        <label style="display:flex;align-items:center;gap:.4rem;"><input type="checkbox" class="bs-subj" value="{{ subj }}" checked> {{ subj }}</label>
-        {% endfor %}
-      </div>
-      <div class="page-header-actions">
-        <button type="button" class="btn btn-danger btn-sm" data-fmt="pdf"><i class="fas fa-file-pdf"></i> PDF</button>
-        <button type="button" class="btn btn-primary btn-sm" data-fmt="image"><i class="fas fa-file-image"></i> Image</button>
-        <button type="button" class="btn btn-success btn-sm" data-fmt="excel"><i class="fas fa-file-excel"></i> Excel</button>
-        <button type="button" class="btn btn-secondary btn-sm" data-fmt="csv">CSV</button>
-        <button type="button" class="btn btn-link btn-sm" id="bsCustomCancel">Cancel</button>
-      </div>
+    </section>
+    <section class="rs-card">
+      <div class="rs-card-h"><h3><i class="fas fa-school" aria-hidden="true"></i> School summary</h3></div>
+      <dl class="bx-dl">
+        <div><dt>Students</dt><dd>{{ sch.students }}</dd></div>
+        <div><dt>Average credits / student</dt><dd>{{ sch.avg_credits }}</dd></div>
+        <div><dt>5+ credits</dt><dd>{{ sch.with_5_credits }}</dd></div>
+        <div><dt>5+ credits incl. English &amp; Maths</dt><dd>{{ sch.with_5_incl_core }} ({{ sch.with_5_incl_core_pct }}%)</dd></div>
+      </dl>
+      <p class="rs-muted bx-small">Credit = grade C6 or better. Average grade is the mean of the grade points recorded.</p>
+    </section>
+  </div>
+  {% endif %}
+</div>
+
+{% if has %}
+<div id="bsCustomModal" class="bx-sheet no-print" style="display:none" role="dialog" aria-modal="true" aria-labelledby="bsCustomTitle">
+  <div class="bx-sheet-box" id="bsCustomCard">
+    <div class="bx-sheet-h"><h3 id="bsCustomTitle"><i class="fas fa-sliders" aria-hidden="true"></i> Custom broadsheet download</h3>
+      <button type="button" class="rs-x" id="bsCustomX" aria-label="Close"><i class="fas fa-xmark" aria-hidden="true"></i></button></div>
+    <div class="bx-sheet-b">
+      <p class="rs-muted">Choose which students and subjects to include, then pick a format.</p>
+      <label class="bx-f"><span>Heading (optional)</span>
+        <input type="text" id="bsTitle" placeholder="e.g. SSS3 SCIENCE CLASS MERIT LIST" maxlength="120"></label>
+      <div class="bx-fs"><div class="bx-fs-l">Streams <small>none ticked = all students</small></div>
+        <div class="bx-checks">
+          {% for st in ['Science', 'Arts', 'Commercial'] %}<label class="bx-ck"><input type="checkbox" class="bs-stream" value="{{ st }}"><span>{{ st }}</span></label>{% endfor %}
+        </div></div>
+      <div class="bx-fs"><div class="bx-fs-l">Names to show</div>
+        <div class="bx-checks">
+          <label class="bx-ck"><input type="checkbox" class="bs-name" value="surname" checked><span>Surname</span></label>
+          <label class="bx-ck"><input type="checkbox" class="bs-name" value="first" checked><span>First name</span></label>
+          <label class="bx-ck"><input type="checkbox" class="bs-name" value="middle" checked><span>Middle name</span></label>
+        </div>
+        <label class="rs-check bx-mt"><input type="checkbox" id="bsMidInit"> Middle name as initial (e.g. Okafor C. John)</label></div>
+      <div class="bx-fs"><div class="bx-fs-l">Subjects
+          <button type="button" id="bsSubjAll" class="rs-btn ghost sm">All</button>
+          <button type="button" id="bsSubjNone" class="rs-btn ghost sm">None</button></div>
+        <div class="bx-checks bx-scroll">
+          {% for subj in bs.subjects %}<label class="bx-ck"><input type="checkbox" class="bs-subj" value="{{ subj }}" checked><span>{{ subj }}</span></label>{% endfor %}
+        </div></div>
+    </div>
+    <div class="bx-sheet-f">
+      <button type="button" class="rs-btn ghost" id="bsCustomCancel">Cancel</button>
+      <span class="bx-grow"></span>
+      <button type="button" class="rs-btn ghost" data-fmt="csv">CSV</button>
+      <button type="button" class="rs-btn ghost" data-fmt="excel"><i class="fas fa-file-excel" aria-hidden="true"></i> Excel</button>
+      <button type="button" class="rs-btn ghost" data-fmt="image"><i class="fas fa-file-image" aria-hidden="true"></i> Image</button>
+      <button type="button" class="rs-btn primary" data-fmt="pdf"><i class="fas fa-file-pdf" aria-hidden="true"></i> PDF</button>
     </div>
   </div>
 </div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+{% if bs and bs.rows %}
 <script nonce="{{ csp_nonce }}">
 (function () {
+  // Paper size follows into both PDF links.
+  var sizeSel = document.getElementById('bsSizeSel');
+  var printLink = document.getElementById('bsPrintLink');
+  var dlLink = document.getElementById('bsDownloadLink');
+  if (sizeSel && printLink && dlLink) {
+    var printBase = printLink.getAttribute('href'), dlBase = dlLink.getAttribute('href');
+    var withSize = function (url, size) { return size === 'A4' ? url : url + (url.indexOf('?') > -1 ? '&' : '?') + 'size=' + size; };
+    sizeSel.addEventListener('change', function () {
+      printLink.setAttribute('href', withSize(printBase, sizeSel.value));
+      dlLink.setAttribute('href', withSize(dlBase, sizeSel.value));
+    });
+  }
+
+  // Find a student + show all / below benchmark / one stream.
+  var rows = Array.prototype.slice.call(document.querySelectorAll('#bsMatrix tbody tr'));
+  var find = document.getElementById('bsFind'), count = document.getElementById('bsCount'), show = 'all';
+  function apply() {
+    var q = (find.value || '').trim().toLowerCase(), n = 0;
+    rows.forEach(function (r) {
+      var ok = (!q || r.dataset.name.indexOf(q) !== -1) &&
+        (show === 'all' || (show === 'below' && r.dataset.ok === '0') || (show === 'stream:' + r.dataset.stream));
+      r.style.display = ok ? '' : 'none'; if (ok) n++;
+    });
+    count.textContent = (q || show !== 'all') ? n + ' of ' + rows.length : '';
+  }
+  find.addEventListener('input', apply);
+  document.querySelectorAll('[data-show]').forEach(function (b) {
+    b.addEventListener('click', function () {
+      show = b.dataset.show;
+      document.querySelectorAll('[data-show]').forEach(function (x) { x.classList.toggle('on', x === b); });
+      apply();
+    });
+  });
+
+  // Custom download sheet.
   var modal = document.getElementById('bsCustomModal');
   var openBtn = document.getElementById('bsCustomBtn');
   if (!modal || !openBtn) return;
-  var card = document.getElementById('bsCustomCard');
-  // Portal the modal to <body> so position:fixed centres against the viewport,
-  // not a transformed ancestor (which would push it to the bottom of the page).
   if (modal.parentNode !== document.body) document.body.appendChild(modal);
   var base = "{{ burl('results.waec_broadsheet_download', year=selected_year) }}";
-  function show() { modal.style.display = 'flex'; }
   function hide() { modal.style.display = 'none'; }
-  openBtn.addEventListener('click', show);
-  // Close only when the backdrop itself is clicked — never when interacting with
-  // the card (ticking a checkbox, pressing a button). CSP blocks inline
-  // onclick handlers, so the old stopPropagation attribute never ran.
+  openBtn.addEventListener('click', function () {
+    var d = openBtn.closest('details'); if (d) d.open = false;
+    modal.style.display = 'flex';
+  });
   modal.addEventListener('click', function (e) { if (e.target === modal) hide(); });
-  if (card) card.addEventListener('click', function (e) { e.stopPropagation(); });
   document.getElementById('bsCustomCancel').addEventListener('click', hide);
+  document.getElementById('bsCustomX').addEventListener('click', hide);
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') hide(); });
   function picked(cls) {
     return Array.prototype.slice.call(document.querySelectorAll('.' + cls))
       .filter(function (b) { return b.checked; }).map(function (b) { return b.value; });
@@ -240,35 +241,30 @@
     document.querySelectorAll('.bs-subj').forEach(function (b) { b.checked = true; }); });
   document.getElementById('bsSubjNone').addEventListener('click', function () {
     document.querySelectorAll('.bs-subj').forEach(function (b) { b.checked = false; }); });
-
-  // Picking stream(s) auto-selects exactly the subjects students in those
-  // streams actually offer. With no stream ticked, leave the subject choices be.
+  // Picking stream(s) auto-selects exactly the subjects students in those streams offer.
   var STREAM_SUBJECTS = {{ stream_subjects|tojson }};
-  function syncSubjectsToStreams() {
-    var streams = picked('bs-stream');
-    if (!streams.length) return;
-    var want = {};
-    streams.forEach(function (s) {
-      (STREAM_SUBJECTS[s] || []).forEach(function (subj) { want[subj] = true; });
-    });
-    document.querySelectorAll('.bs-subj').forEach(function (b) { b.checked = !!want[b.value]; });
-  }
   document.querySelectorAll('.bs-stream').forEach(function (b) {
-    b.addEventListener('change', syncSubjectsToStreams); });
+    b.addEventListener('change', function () {
+      var streams = picked('bs-stream'); if (!streams.length) return;
+      var want = {};
+      streams.forEach(function (s) { (STREAM_SUBJECTS[s] || []).forEach(function (subj) { want[subj] = true; }); });
+      document.querySelectorAll('.bs-subj').forEach(function (x) { x.checked = !!want[x.value]; });
+    });
+  });
   function saveBlob(blob, name) {
     var u = URL.createObjectURL(blob);
     var a = document.createElement('a'); a.href = u; a.download = name;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function () { URL.revokeObjectURL(u); }, 4000);
   }
-  // Images can span several A4 pages — fetch and save each page as its own file.
+  // Images can span several pages — fetch and save each page as its own file.
   function downloadImages(url) {
     var page = 1;
     function next() {
       fetch(url + '&page=' + page, { credentials: 'same-origin' }).then(function (res) {
         var total = parseInt(res.headers.get('X-Total-Pages') || '1', 10) || 1;
         return res.blob().then(function (blob) {
-          saveBlob(blob, total > 1 ? 'waec_broadsheet_p' + page + '.png' : 'waec_broadsheet.png');
+          saveBlob(blob, total > 1 ? '{{ board.key }}_broadsheet_p' + page + '.png' : '{{ board.key }}_broadsheet.png');
           page += 1;
           if (page <= total) setTimeout(next, 400);
         });
@@ -278,8 +274,7 @@
   }
   modal.querySelectorAll('[data-fmt]').forEach(function (btn) {
     btn.addEventListener('click', function () {
-      var fmt = btn.getAttribute('data-fmt');
-      var p = new URLSearchParams();
+      var fmt = btn.getAttribute('data-fmt'), p = new URLSearchParams();
       p.set('format', fmt);
       var streams = picked('bs-stream'); if (streams.length) p.set('streams', streams.join(','));
       var subs = picked('bs-subj'); if (subs.length) p.set('subjects', subs.join(','));
@@ -296,5 +291,4 @@
 })();
 </script>
 {% endif %}
-</div>
 {% endblock %}

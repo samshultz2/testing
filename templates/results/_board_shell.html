@@ -21,6 +21,7 @@
 {% endmacro %}
 
 {% macro bx_nav(active, year=None) %}
+{{ bx_menu_js() }}
 {% set y = year or request.args.get('year') %}
 {% set can_add = can_write_sub('external_exams', board.key ~ '_create') %}
 <nav class="sl-nav" aria-label="{{ board.name }} sections">
@@ -44,4 +45,19 @@
 {# One grade chip: subject code + grade, coloured by band. r = {subject, grade, code?} #}
 {% macro bx_grade(r) -%}
 <span class="bx-g {{ r.grade|lower }}" title="{{ r.subject }}: {{ r.grade }}">{{ r.code or (r.subject[:3]|upper) }} <b>{{ r.grade }}</b></span>
+{%- endmacro %}
+
+{# Close an open bx-menu when the user taps anywhere else (or presses Esc). #}
+{% macro bx_menu_js() -%}
+<script nonce="{{ csp_nonce }}">
+(function () {
+  if (window.__bxMenu) return; window.__bxMenu = 1;
+  document.addEventListener('click', function (e) {
+    document.querySelectorAll('details.bx-menu[open]').forEach(function (d) { if (!d.contains(e.target)) d.open = false; });
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') document.querySelectorAll('details.bx-menu[open]').forEach(function (d) { d.open = false; });
+  });
+})();
+</script>
 {%- endmacro %}
