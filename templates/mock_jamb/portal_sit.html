@@ -45,12 +45,12 @@ body{background:#eef2f7}
 .mjs-passage .ptitle{font-weight:800;color:#6d28d9;margin-bottom:.3rem;white-space:normal}
 .mjs-passage .ptitle small{font-weight:500;color:var(--muted)}
 .mjs-passage img{max-height:220px;border-radius:8px;display:block;margin-bottom:.4rem}
-body.one .mjs-passage{display:none;max-height:42vh;overflow-y:auto}
-body.one .mjs-passage.cur{display:block}
+.mjs-passage{display:none;max-height:42vh;overflow-y:auto}
+.mjs-passage.cur{display:block}
 /* question card */
-.mjs-q{background:#fff;border:1px solid var(--line);border-radius:18px;padding:1.2rem 1.3rem 1rem;margin-bottom:.9rem;scroll-margin-top:150px}
-body.one .mjs-q{display:none;margin-bottom:0}
-body.one .mjs-q.cur{display:block;animation:mjin .18s ease}
+.mjs-q{background:#fff;border:1px solid var(--line);border-radius:18px;padding:1.2rem 1.3rem 1rem;}
+.mjs-q{display:none}
+.mjs-q.cur{display:block;animation:mjin .18s ease}
 @keyframes mjin{from{opacity:.4;transform:translateY(4px)}}
 .q-head{display:flex;align-items:center;justify-content:space-between;gap:.6rem;margin-bottom:.8rem}
 .q-num{display:inline-flex;align-items:center;gap:.35rem;background:#eef2ff;color:var(--ex-dark);border-radius:999px;padding:.25rem .7rem;font-size:.8rem;font-weight:800}
@@ -68,8 +68,7 @@ body.one .mjs-q.cur{display:block;animation:mjin .18s ease}
 .mjs-opt.chosen .mark{background:var(--ex);border-color:var(--ex);color:#fff}
 .mjs-opt input:focus-visible + .mark{outline:2px solid var(--ex);outline-offset:2px}
 /* pager */
-.mj-pager{display:none;align-items:center;gap:.6rem;margin-top:1rem}
-body.one .mj-pager{display:flex}
+.mj-pager{display:flex;align-items:center;gap:.6rem;margin-top:1rem}
 .mj-pager button{height:50px;border-radius:14px;border:1px solid var(--line);background:#fff;color:var(--ink);font:inherit;font-weight:700;font-size:.95rem;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:.5rem;padding:0 1.1rem}
 .mj-pager button:disabled{opacity:.4;cursor:default}
 .mj-pager .next{background:var(--ex);border-color:var(--ex);color:#fff;min-width:150px;margin-left:auto}
@@ -77,11 +76,8 @@ body.one .mj-pager{display:flex}
 .mj-pos{flex:1;color:var(--muted)!important;font-weight:600!important;font-size:.88rem!important;border:0!important;background:none!important;justify-content:flex-start!important;padding:0 .3rem!important;min-width:0}
 .mj-pos b{color:var(--ink)}
 .mj-pos .ms{display:none}
-.mj-keys{display:none;margin-top:.8rem;font-size:.75rem;color:var(--muted);text-align:center}
-body.one .mj-keys{display:block}
+.mj-keys{margin-top:.8rem;font-size:.75rem;color:var(--muted);text-align:center}
 .mj-keys kbd{background:#fff;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;padding:0 .35rem;font:inherit;font-size:.72rem}
-.mj-allsub{display:none;text-align:center;margin-top:1rem}
-body:not(.one) .mj-allsub{display:block}
 /* rail */
 .mj-rail{position:sticky;top:76px;background:#fff;border:1px solid var(--line);border-radius:18px;padding:1rem}
 .mj-rail h4{margin:0 0 .15rem;font-size:.74rem;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
@@ -164,7 +160,6 @@ body:not(.one) .mj-allsub{display:block}
   .mj-pos{border:1px solid var(--line)!important;justify-content:center!important;padding:0 .5rem!important}
   .mj-pos .ms{display:inline}
   #posS{display:none}
-  body:not(.one) .mj-pager .prev,body:not(.one) .mj-pager .next{display:none}
   .mj-rail{position:fixed;left:0;right:0;bottom:0;top:auto;z-index:110;border-radius:22px 22px 0 0;transform:translateY(105%);transition:transform .22s ease;box-shadow:0 -10px 40px rgba(0,0,0,.25);max-height:82vh;overflow-y:auto;padding-bottom:calc(1rem + env(safe-area-inset-bottom,0px))}
   .mj-rail.open{transform:none}
   .mj-close{display:inline-flex;position:absolute;top:.7rem;right:.7rem;width:34px;height:34px;border-radius:50%;border:0;background:#f1f5f9;align-items:center;justify-content:center;cursor:pointer}
@@ -199,7 +194,6 @@ body:not(.one) .mj-allsub{display:block}
     <div class="t"><b>{{ exam.display_name }}</b><small>{{ subjects|length }} subject{{ '' if subjects|length == 1 else 's' }} · <span id="ansCount">0</span> of <span id="ansTotal">0</span> answered</small></div>
     <span class="mj-save" id="saveState" aria-live="polite"><i class="fas fa-cloud"></i> <span>Saved</span></span>
     {% if show_calc %}<button type="button" class="mj-bbtn" id="calcToggle" title="Calculator"><i class="fas fa-calculator"></i> <span>Calculator</span></button>{% endif %}
-    <button type="button" class="mj-bbtn" id="modeBtn" title="Switch between one question at a time and all questions"><i class="fas fa-list"></i> <span>All questions</span></button>
     <div class="mj-timer" id="timerBox" role="timer" aria-live="off"><i class="fas fa-clock"></i> <span id="timer" data-remaining="{{ remaining }}">--:--</span></div>
     <div class="mj-prog" aria-hidden="true"><i id="progBar"></i></div>
 </div>
@@ -234,7 +228,6 @@ body:not(.one) .mj-allsub{display:block}
         <button type="button" class="next" id="nextBtn"><span id="nextLbl">Next</span> <i class="fas fa-arrow-right"></i></button>
     </div>
     <div class="mj-keys"><kbd>A</kbd>–<kbd>D</kbd> answer · <kbd>N</kbd> next · <kbd>P</kbd> previous · <kbd>S</kbd> submit</div>
-    <div class="mj-allsub"><button type="button" class="mj-submit" style="max-width:320px" id="submitBtn2"><i class="fas fa-paper-plane"></i> Review &amp; submit</button></div>
 </main>
 
 <aside class="mj-rail" id="rail" aria-label="Question map">
@@ -335,20 +328,7 @@ body:not(.one) .mj-allsub{display:block}
         q.querySelectorAll('.mjs-opt').forEach(function(o){ o.classList.toggle('chosen', !!o.querySelector('input:checked')); });
     }
 
-    // ---- one-at-a-time (default, like the real CBT) or all questions ----
-    var one = true;
-    try { one = localStorage.getItem('mj_mode') !== 'all'; } catch(_){}
-    function applyMode(){
-        document.body.classList.toggle('one', one);
-        var mb = $('modeBtn');
-        mb.innerHTML = one ? '<i class="fas fa-list"></i> <span>All questions</span>' : '<i class="fas fa-square"></i> <span>One at a time</span>';
-        mb.classList.toggle('on', !one);
-    }
-    $('modeBtn').addEventListener('click', function(){
-        one = !one; try { localStorage.setItem('mj_mode', one ? 'one' : 'all'); } catch(_){}
-        applyMode(); go(cur.s, cur.i, true);
-    });
-
+    // ---- one question per page, like the real CBT ----
     function go(sid, i, scroll){
         if(!qs[sid]) return;
         var list = qs[sid];
@@ -378,10 +358,7 @@ body:not(.one) .mj-allsub{display:block}
         nb.classList.toggle('fin', lastQ && lastS);
         $('nextLbl').textContent = (lastQ && lastS) ? 'Finish' : (lastQ ? secs[si + 1].dataset.name : 'Next');
         refresh();
-        if(scroll){
-            if(one) window.scrollTo(0, 0);
-            else if(q && q.scrollIntoView) q.scrollIntoView({block:'start'});
-        }
+        if(scroll) window.scrollTo(0, 0);
     }
     function step(d){
         var si = secs.findIndex(function(s){ return s.id === cur.s; });
@@ -527,9 +504,9 @@ body:not(.one) .mj-allsub{display:block}
     (function start(){
         for(var k = 0; k < secs.length; k++){
             var list = qs[secs[k].id];
-            for(var j = 0; j < list.length; j++){ if(!isDone(list[j])){ applyMode(); go(secs[k].id, j, false); return; } }
+            for(var j = 0; j < list.length; j++){ if(!isDone(list[j])){ go(secs[k].id, j, false); return; } }
         }
-        applyMode(); if(cur.s) go(cur.s, 0, false);
+        if(cur.s) go(cur.s, 0, false);
     })();
 
     // ---- review before submit ----
@@ -565,7 +542,6 @@ body:not(.one) .mj-allsub{display:block}
         closeReview(); go(b.dataset.s, parseInt(b.dataset.n, 10) - 1, true);
     });
     $('submitBtn').addEventListener('click', openReview);
-    $('submitBtn2').addEventListener('click', openReview);
     $('revGo').addEventListener('click', function(){ doSubmit(); });
 
     // timer — driven by a wall-clock deadline, not a decrementing counter, so it
@@ -614,7 +590,6 @@ body:not(.one) .mj-allsub{display:block}
         if(modal.classList.contains('open')){ if(k === 'escape') closeReview(); return; }
         if(k === 'escape'){ closeRail(); return; }
         if(k === 's'){ e.preventDefault(); openReview(); return; }
-        if(!one) return;
         if(k === 'n' || k === 'arrowright'){ e.preventDefault(); step(1); return; }
         if(k === 'p' || k === 'arrowleft'){ e.preventDefault(); step(-1); return; }
         var idx = 'abcd'.indexOf(k);
