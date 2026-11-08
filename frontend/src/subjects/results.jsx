@@ -11,7 +11,7 @@ import { confirm } from '../components/ui';
 import { canWrite } from '../lib/perms';
 
 // ── helpers ────────────────────────────────────────────────────────────────
-function useMedia(query) {
+export function useMedia(query) {
   const get = () => (typeof window !== 'undefined' && window.matchMedia ? window.matchMedia(query).matches : false);
   const [m, setM] = useState(get);
   useEffect(() => {
@@ -24,7 +24,7 @@ function useMedia(query) {
   }, [query]);
   return m;
 }
-const usePhone = () => useMedia('(max-width: 759px)');
+export const usePhone = () => useMedia('(max-width: 759px)');
 
 export function fmtNum(v) {
   if (v == null || v === '') return v;
@@ -32,11 +32,11 @@ export function fmtNum(v) {
   if (!Number.isFinite(n)) return v;
   return Number.isInteger(n) ? String(n) : n.toFixed(1);
 }
-const initials = (name) => (name || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?';
+export const initials = (name) => (name || '?').trim().split(/\s+/).slice(0, 2).map((w) => w[0]).join('').toUpperCase() || '?';
 const pct = (a, b) => (b ? Math.round((a / b) * 100) : 0);
 const ordinal = (n) => { const s = ['th', 'st', 'nd', 'rd']; const v = n % 100; return n + (s[(v - 20) % 10] || s[v] || s[0]); };
 // Score tone relative to the school's pass mark.
-const tone = (v, pm = 50) => (v == null ? '' : v < pm ? 'bad' : v >= 70 ? 'good' : 'mid');
+export const tone = (v, pm = 50) => (v == null ? '' : v < pm ? 'bad' : v >= 70 ? 'good' : 'mid');
 
 // Recently-used classes (shared with the other results screens).
 const RECENT_KEY = 'results:recentClasses';
@@ -63,7 +63,7 @@ function useUnsavedGuard(dirty) {
 }
 
 // ── kit ────────────────────────────────────────────────────────────────────
-function Sheet({ title, onClose, children }) {
+export function Sheet({ title, onClose, children }) {
   useEffect(() => {
     const esc = (e) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', esc);
@@ -84,7 +84,7 @@ function Sheet({ title, onClose, children }) {
 
 // Overflow actions: a dropdown on laptops, a bottom sheet on phones.
 // items: [{icon,label,href,native,target,download,onClick,danger}] (falsy skipped)
-function Menu({ items, label = 'More' }) {
+export function Menu({ items, label = 'More' }) {
   const phone = usePhone();
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
@@ -117,7 +117,7 @@ function Menu({ items, label = 'More' }) {
   );
 }
 
-function Head({ icon, title, sub, children }) {
+export function Head({ icon, title, sub, children }) {
   return (
     <header className="rs-head">
       <span className="rs-head-ic"><i className={'fas ' + icon} aria-hidden="true" /></span>
@@ -129,7 +129,7 @@ function Head({ icon, title, sub, children }) {
 
 // Term + class picker with one-tap recent classes. `extra` renders more
 // pickers (subject, assessment) inside the same card.
-function Picker({ d, go, extra, termBlank }) {
+export function Picker({ d, go, extra, termBlank }) {
   const label = d.selected_label || (d.assignments.find((a) => String(a.id) === String(d.assignment_id)) || {}).display_name;
   useEffect(() => { if (d.assignment_id && label) pushRecent(d.term_id, d.assignment_id, label); }, [d.assignment_id, label]); // eslint-disable-line
   const recent = readRecent().filter((r) => String(r.id) !== String(d.assignment_id || ''));
@@ -163,7 +163,7 @@ const FLOW = [
   { key: 'affective', label: 'Behaviour', icon: 'fa-star-half-stroke' },
 ];
 // The step bar shared by every results screen.
-function Flow({ d, current }) {
+export function Flow({ d, current }) {
   const f = (d.nav && d.nav.flow) || {};
   return (
     <nav className="rs-flow" aria-label="Results steps">
@@ -176,13 +176,13 @@ function Flow({ d, current }) {
 }
 
 // Save bar: sticky under the content on laptops, fixed at the bottom on phones.
-function Bar({ children }) {
+export function Bar({ children }) {
   const phone = usePhone();
   const bar = <div className={'rs-bar' + (phone ? ' fixed' : '')}>{children}</div>;
   return phone ? createPortal(bar, document.body) : bar;
 }
 
-function Tiles({ items }) {
+export function Tiles({ items }) {
   return (
     <div className="rs-tiles">
       {items.filter(Boolean).map((t, i) => (
@@ -196,7 +196,7 @@ function Tiles({ items }) {
   );
 }
 
-function Seg({ options, value, onChange, label }) {
+export function Seg({ options, value, onChange, label }) {
   return (
     <div className="rs-seg" role="radiogroup" aria-label={label}>
       {options.map((o) => (
@@ -209,7 +209,7 @@ function Seg({ options, value, onChange, label }) {
   );
 }
 
-function Chips({ items, value, onChange, label }) {
+export function Chips({ items, value, onChange, label }) {
   return (
     <div className="rs-chips" role="radiogroup" aria-label={label}>
       {items.map((it) => (
@@ -222,7 +222,7 @@ function Chips({ items, value, onChange, label }) {
   );
 }
 
-function Ring({ value, size = 104, label }) {
+export function Ring({ value, size = 104, label }) {
   const p = Math.max(0, Math.min(100, Math.round(value || 0)));
   const c = p >= 100 ? 'var(--success)' : p >= 50 ? 'var(--primary)' : 'var(--warning)';
   return (
@@ -232,23 +232,23 @@ function Ring({ value, size = 104, label }) {
   );
 }
 
-function Meter({ value, max, tone: t }) {
+export function Meter({ value, max, tone: t }) {
   const p = max ? Math.min(100, Math.round((value / max) * 100)) : 0;
   return <span className={'rs-meter ' + (t || (p >= 100 ? 'good' : p >= 50 ? 'mid' : 'bad'))}><i style={{ width: p + '%' }} /></span>;
 }
 
-function Blank({ icon, title, children }) {
+export function Blank({ icon, title, children }) {
   return (
     <div className="rs-blank"><span><i className={'fas ' + icon} aria-hidden="true" /></span>
       <h3>{title}</h3>{children}</div>
   );
 }
 
-function Avatar({ name, gender }) {
+export function Avatar({ name, gender }) {
   return <span className={'rs-av ' + (gender === 'Male' ? 'm' : gender === 'Female' ? 'f' : '')} aria-hidden="true">{initials(name)}</span>;
 }
 
-const subLine = (d) => {
+export const subLine = (d) => {
   const term = (d.terms.find((t) => String(t.id) === String(d.term_id)) || {}).full_name || d.term_label || '';
   const cls = d.selected_label || (d.assignments.find((a) => String(a.id) === String(d.assignment_id)) || {}).display_name;
   return cls ? `${cls} · ${term}` : term;

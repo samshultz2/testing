@@ -61,7 +61,7 @@ def index():
     per_page = min(max(request.args.get('per_page', 50, type=int) or 50, 10), 200)
 
     from sqlalchemy.orm import joinedload
-    q = ScratchCard.query.options(joinedload(ScratchCard.term))
+    q = ScratchCard.query.options(joinedload(ScratchCard.term), joinedload(ScratchCard.student))
     if batch:
         q = q.filter_by(batch_label=batch)
     q = _apply_card_status(q, status)
@@ -76,10 +76,43 @@ def index():
         'active': ScratchCard.query.filter_by(is_active=True).count(),
         'used': db.session.query(func.coalesce(func.sum(ScratchCard.used_count), 0)).scalar() or 0,
     }
+    # Decision numbers: stock left to sell, cards used up, and how the public
+    # checker is being used this week (a spike in failures = PIN guessing or
+    # confused parents).
+    used_col = func.coalesce(ScratchCard.used_count, 0)
+    stats['unused'] = ScratchCard.query.filter(ScratchCard.is_active.is_(True), used_col == 0).count()
+    stats['exhausted'] = ScratchCard.query.filter(used_col >= func.coalesce(ScratchCard.max_uses, 0)).count()
+    stats['capacity'] = int(db.session.query(func.coalesce(func.sum(ScratchCard.max_uses), 0)).scalar() or 0)
+    from datetime import timedelta
+    from models.models import local_now
+    from sqlalchemy import case
+    week = local_now() - timedelta(days=7)
+    wk = dict(db.session.query(ResultCheckLog.success, func.count(ResultCheckLog.id))
+              .filter(ResultCheckLog.checked_at >= week).group_by(ResultCheckLog.success).all())
+    stats['checks_7d'] = int(wk.get(True, 0) or 0)
+    stats['failed_7d'] = int(wk.get(False, 0) or 0)
+    batch_rows = (db.session.query(ScratchCard.batch_label, func.count(ScratchCard.id),
+                                   func.sum(case((used_col == 0, 1), else_=0)),
+                                   func.coalesce(func.sum(ScratchCard.used_count), 0),
+                                   func.coalesce(func.sum(ScratchCard.max_uses), 0),
+                                   func.max(ScratchCard.created_at))
+                  .group_by(ScratchCard.batch_label)
+                  .order_by(func.max(ScratchCard.created_at).desc()).limit(12).all())
+    batch_summary = [{'label': lbl or '', 'cards': int(n or 0), 'unused': int(un or 0),
+                      'checks': int(ch or 0), 'capacity': int(cap or 0),
+                      'created': ts.strftime('%d %b %Y') if ts else ''}
+                     for lbl, n, un, ch, cap, ts in batch_rows]
+    recent = (ResultCheckLog.query.options(joinedload(ResultCheckLog.student), joinedload(ResultCheckLog.card))
+              .order_by(ResultCheckLog.checked_at.desc()).limit(6).all())
     terms = session_terms()
     return _render({
         'page': 'index',
         'stats': stats,
+        'batch_summary': batch_summary,
+        'recent': [{'when': r.checked_at.strftime('%d %b, %H:%M') if r.checked_at else '',
+                    'student': r.student.full_name if r.student else '',
+                    'card': r.card.serial if r.card else '', 'success': bool(r.success),
+                    'detail': r.detail or ''} for r in recent],
         'batch': batch,
         'status': status or '',
         'batches': batches,
@@ -87,12 +120,14 @@ def index():
         'pg': {'page': pg.page, 'pages': pg.pages, 'total': pg.total,
                'per_page': per_page, 'has_prev': pg.has_prev, 'has_next': pg.has_next},
         'terms': [{'id': t.id, 'name': t.full_name or t.name,
-                   'results_published': bool(t.results_published),
+                   'results_published': bool(t.results_published), 'is_current': bool(t.is_active),
                    'publish_url': url_for('scratchcards.publish', term_id=t.id)} for t in terms],
         'cards': [{'id': c.id, 'serial': c.serial, 'pin': c.pin,
                    'used_count': c.used_count, 'max_uses': c.max_uses, 'uses_left': c.uses_left,
                    'term_name': c.term.name if c.term else 'Any', 'batch_label': c.batch_label or '—',
                    'is_active': bool(c.is_active),
+                   'student_name': c.student.full_name if c.student else '',
+                   'created': c.created_at.strftime('%d %b %Y') if c.created_at else '',
                    'toggle_url': url_for('scratchcards.toggle', card_id=c.id)} for c in pg.items],
         'generate_url': url_for('scratchcards.generate'),
         'logs_url': url_for('scratchcards.logs'),
