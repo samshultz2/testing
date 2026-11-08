@@ -173,42 +173,90 @@ function Index({ d }) {
 function Rules({ d, notify }) {
   const nav = useNav();
   const [busy, setBusy] = useState(false);
+  const canEdit = canWrite(d, 'promote_rules');
   const del = async (r) => {
-    if (!await confirm('Delete this rule?')) return;
+    if (!await confirm(`Delete the rule ${r.from_class} → ${r.to_class}${r.stream_name ? ' (' + r.stream_name + ')' : ''}?`)) return;
     setBusy(true);
     const res = await submitJson(r.delete_url, {});
     setBusy(false);
     if (res.ok) nav.refresh(); else notify('error', res.error || 'Could not delete.');
   };
+  // Group the rules by the class they promote FROM, in class order, so the page
+  // reads as the school's promotion ladder.
+  const classes = d.classes && d.classes.length ? d.classes
+    : [...new Map(d.rules.map((r) => [r.from_class_id, { id: r.from_class_id, name: r.from_class }])).values()];
+  const byClass = {};
+  d.rules.forEach((r) => { (byClass[r.from_class_id] = byClass[r.from_class_id] || []).push(r); });
+  Object.values(byClass).forEach((l) => l.sort((x, y) => y.priority - x.priority));
+  const covered = classes.filter((c) => byClass[c.id]).length;
+  const streamed = d.rules.filter((r) => r.stream_name).length;
+
   return (
-    <>
-      <PageHeader title="Promotion Rules" actions={canWrite(d, 'promote_rules') ? <a href={d.add_url} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Rule</a> : null} />
-      {d.rules.length ? (
-        <div className="card"><div className="card-body" style={{ padding: 0 }}><div className="data-cards" style={{ padding: '1rem' }}>
-          {d.rules.map((r) => (
-            <div className="data-card" key={r.id}>
-              <div className="data-card-header"><div className="data-card-title">{r.from_class} → {r.to_class}</div>
-                {r.stream_name && <span className="badge badge-info">{r.stream_name}</span>}</div>
-              <div className="data-card-row"><span className="data-card-label">Min Average</span><span>{r.min_average}%</span></div>
-              <div className="data-card-row"><span className="data-card-label">Priority</span><span>{r.priority}</span></div>
-              {r.required_count > 0 && <div className="data-card-row"><span className="data-card-label">Required Subjects</span><span>{r.required_count} subjects</span></div>}
-              {canWrite(d, 'promote_rules') && <div className="data-card-actions">
-                <button type="button" className="btn btn-danger btn-sm w-100" disabled={busy} onClick={() => del(r)}><i aria-hidden="true" className="fas fa-trash" /> Delete</button>
-              </div>}
-            </div>
-          ))}
-        </div></div></div>
-      ) : (
-        <div className="card"><div className="card-body"><Empty icon="fa-list-alt" title="No Rules">
-          <p>Add promotion rules to define how students are promoted</p>
-          {canWrite(d, 'promote_rules') && <a href={d.add_url} className="btn btn-primary"><i aria-hidden="true" className="fas fa-plus" /> Add Rule</a>}</Empty></div></div>
-      )}
-      <div className="card mt-3"><div className="card-header"><h3>How Rules Work</h3></div>
-        <div className="card-body">
-          <p><strong>Basic Promotion:</strong> Students meeting the promotion threshold are promoted to the next class.</p>
-          <p><strong>Stream-based (SSS1 → SSS2):</strong> Create rules with different streams (Science, Arts, etc.) and required subjects. Higher priority rules are checked first.</p>
-        </div></div>
-    </>
+    <div className="pm">
+      <PmHead back={(d.urls && d.urls.index) || '/promotion/'} kicker="Promotion & graduation" title="Promotion rules"
+              sub="Where each class goes next, and what a student needs to get there."
+              actions={canEdit ? <a href={d.add_url} className="pm-btn primary"><i aria-hidden="true" className="fas fa-plus" /> <span>Add rule</span></a> : null} />
+
+      <PmTiles items={[
+        { label: 'Rules', icon: 'fa-sliders', value: d.rules.length, sub: 'active' },
+        { label: 'Classes covered', icon: 'fa-school', value: `${covered}/${classes.length}`, sub: covered < classes.length ? 'others use the pass mark' : 'every class', tone: covered ? 'good' : '' },
+        { label: 'Stream rules', icon: 'fa-code-branch', value: streamed, sub: 'Science, Arts…' },
+        d.threshold != null ? { label: 'Default pass mark', icon: 'fa-percent', value: `${d.threshold}%`, sub: 'when no rule matches' } : null,
+      ]} />
+
+      <div className="pm-rules">
+        <ol className="pm-ladder">
+          {classes.map((c) => {
+            const list = byClass[c.id] || [];
+            return (
+              <li key={c.id} className={'pm-rung' + (list.length ? '' : ' none')}>
+                <div className="pm-rung-h">
+                  <span className="pm-rung-c">{c.name}</span>
+                  <span className="pm-rung-n">{list.length ? `${list.length} rule${list.length === 1 ? '' : 's'}` : `Pass mark ${d.threshold != null ? d.threshold + '%' : ''} · no rule`}</span>
+                </div>
+                {list.length > 0 && (
+                  <ul className="pm-rule-list">
+                    {list.map((r, i) => (
+                      <li key={r.id} className="pm-rule">
+                        <span className="pm-rule-p" title="Checked in this order — higher priority first">{i + 1}</span>
+                        <div className="pm-rule-b">
+                          <div className="pm-rule-t">
+                            <strong>{r.from_class} <i aria-hidden="true" className="fas fa-arrow-right" /> {r.to_class}</strong>
+                            {r.stream_name ? <span className="pm-tag">{r.stream_name}</span> : <span className="pm-tag plain">Basic</span>}
+                          </div>
+                          <div className="pm-rule-m">
+                            <span><i aria-hidden="true" className="fas fa-percent" /> Average ≥ <b>{r.min_average}%</b></span>
+                            <span><i aria-hidden="true" className="fas fa-sort-amount-up" /> Priority <b>{r.priority}</b></span>
+                          </div>
+                          {(r.required || []).length > 0 ? (
+                            <div className="pm-rule-s">{r.required.map((nm) => <span key={nm}>{nm}</span>)}</div>
+                          ) : r.required_count > 0 ? <small className="pm-dim">{r.required_count} required subjects</small> : null}
+                        </div>
+                        {canEdit && <button type="button" className="pm-icon danger" disabled={busy} onClick={() => del(r)} aria-label="Delete rule" title="Delete rule">
+                          <i aria-hidden="true" className="fas fa-trash-can" /></button>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </li>
+            );
+          })}
+          {classes.length === 0 && <p className="pm-empty">No classes set up yet.</p>}
+        </ol>
+
+        <aside className="pm-card pm-help">
+          <header className="pm-card-h"><span className="pm-card-ic"><i aria-hidden="true" className="fas fa-circle-info" /></span>
+            <div className="pm-card-t"><h3>How rules work</h3></div></header>
+          <ol className="pm-howto">
+            <li><b>No rule?</b> Students at or above the pass mark{d.threshold != null ? ` (${d.threshold}%)` : ''} go up to the next class.</li>
+            <li><b>Basic rule</b> — set where a class goes and the average it needs.</li>
+            <li><b>Stream rules</b> (e.g. SSS1 → SSS2 Science) — add the subjects whose average must meet the minimum.</li>
+            <li>Rules are checked <b>highest priority first</b>; the first one a student meets is recommended.</li>
+          </ol>
+          {d.urls && d.urls.process && <a href={d.urls.process} className="pm-btn wide"><i aria-hidden="true" className="fas fa-arrow-up-right-dots" /> Go to Promote students</a>}
+        </aside>
+      </div>
+    </div>
   );
 }
 
@@ -221,64 +269,72 @@ function AddRule({ d, notify }) {
   const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
   const submit = async (e) => {
     e.preventDefault();
-    if (!f.from_class_id || !f.to_class_id) { notify('error', 'Select both classes.'); return; }
+    if (!f.from_class_id || !f.to_class_id) { notify('error', 'Pick both classes.'); return; }
     setBusy(true);
     const r = await submitJson(d.submit_url, { ...f, 'required_subjects[]': subjects });
     setBusy(false);
     if (r.ok) nav.go(r.redirect); else notify('error', r.error || 'Could not save.');
   };
   const toggleSubj = (id) => setSubjects((s) => (s.includes(id) ? s.filter((x) => x !== id) : [...s, id]));
+  const phone = usePhone();
+  const cname = (id) => (d.classes.find((c) => String(c.id) === String(id)) || {}).name;
+  // When "from" is picked, suggest the next class up as "to".
+  const pickFrom = (id) => {
+    const i = d.classes.findIndex((c) => String(c.id) === String(id));
+    setF((s) => ({ ...s, from_class_id: id, to_class_id: s.to_class_id || (d.classes[i + 1] ? String(d.classes[i + 1].id) : '') }));
+  };
+  const chips = (value, onPick, label) => (
+    <div className="pm-chips" role="radiogroup" aria-label={label}>
+      {d.classes.map((c) => (
+        <button key={c.id} type="button" role="radio" aria-checked={String(c.id) === String(value)}
+                className={String(c.id) === String(value) ? 'on' : ''} onClick={() => onPick(String(c.id))}>{c.name}</button>))}
+    </div>
+  );
   return (
-    <>
-      <PageHeader title="Add Promotion Rule" />
-      <div className="card"><div className="card-body"><form onSubmit={submit}>
-        <div className="form-row">
-          <div className="form-group"><label className="form-label">From Class <span className="required">*</span></label>
-            <select className="form-control" required value={f.from_class_id} onChange={(e) => set('from_class_id', e.target.value)}>
-              <option value="">Select</option>{d.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
-          <div className="form-group"><label className="form-label">To Class <span className="required">*</span></label>
-            <select className="form-control" required value={f.to_class_id} onChange={(e) => set('to_class_id', e.target.value)}>
-              <option value="">Select</option>{d.classes.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></div>
+    <form onSubmit={submit} className="pm" id="pm-rule-form">
+      <PmHead back={d.urls.rules} kicker="Promotion rules" title="New rule"
+              sub={f.from_class_id && f.to_class_id ? `${cname(f.from_class_id)} → ${cname(f.to_class_id)}${f.stream_name ? ' · ' + f.stream_name : ''} · average ≥ ${f.min_average}%` : 'Pick where students move from and to.'} />
+
+      <section className="pm-pick">
+        <span className="pm-pick-l">1 · From class</span>{chips(f.from_class_id, pickFrom, 'From class')}
+        <span className="pm-pick-l">2 · Goes up to</span>{chips(f.to_class_id, (id) => set('to_class_id', id), 'To class')}
+      </section>
+
+      <section className="pm-pick">
+        <span className="pm-pick-l">3 · Requirements</span>
+        <div className="pm-req">
+          <label className="pm-field"><span>Stream (optional)</span>
+            <input type="text" className="pm-input" placeholder="e.g. Science, Arts — blank for basic" value={f.stream_name} onChange={(e) => set('stream_name', e.target.value)} /></label>
+          <label className="pm-field"><span>Minimum average</span>
+            <span className="pm-num"><input type="number" min="0" max="100" step="0.5" value={f.min_average} onChange={(e) => set('min_average', e.target.value)} />%</span></label>
+          <label className="pm-field"><span>Priority <small>(higher first)</small></span>
+            <span className="pm-num"><input type="number" min="0" max="10" value={f.priority} onChange={(e) => set('priority', e.target.value)} /></span></label>
         </div>
-        <div className="form-row">
-          <div className="form-group"><label className="form-label">Stream Name (optional)</label>
-            <input type="text" className="form-control" placeholder="e.g., Science, Arts, Social Science" value={f.stream_name} onChange={(e) => set('stream_name', e.target.value)} />
-            <small className="text-muted">Leave blank for basic promotion</small></div>
-          <div className="form-group"><label className="form-label">Minimum Average (%)</label>
-            <input type="number" className="form-control" min="0" max="100" step="0.5" value={f.min_average} onChange={(e) => set('min_average', e.target.value)} /></div>
-          <div className="form-group"><label className="form-label">Priority</label>
-            <input type="number" className="form-control" min="0" max="10" value={f.priority} onChange={(e) => set('priority', e.target.value)} />
-            <small className="text-muted">Higher = checked first</small></div>
-        </div>
-        <div className="form-group"><label className="form-label">Required Subjects (for stream)</label>
-          {d.subjects.length ? (
-            <div className="chip-picker">
-              {d.subjects.map((s) => {
-                const id = String(s.id);
-                return (
-                  <label className="chip-option" key={s.id}>
-                    <input type="checkbox" checked={subjects.includes(id)} onChange={() => toggleSubj(id)} />
-                    <span><i className="fas fa-check" aria-hidden="true" />{s.name}</span>
-                  </label>
-                );
-              })}
-            </div>
-          ) : <div className="chip-picker-empty">No subjects set up yet</div>}
-          <div className="d-flex align-center gap-3 mt-2 flex-wrap">
-            <button type="button" className="btn btn-link btn-sm" style={{ padding: 0 }}
-                    onClick={() => setSubjects(d.subjects.map((s) => String(s.id)))}>Select all</button>
-            <button type="button" className="btn btn-link btn-sm" style={{ padding: 0 }}
-                    onClick={() => setSubjects([])}>Clear</button>
-            <small className="text-muted">
-              {subjects.length ? `${subjects.length} selected — ` : ''}Average of these subjects must meet the minimum.
-            </small>
-          </div></div>
-        <div className="page-header-actions">
-          <button type="submit" className="btn btn-primary" disabled={busy}><i aria-hidden="true" className="fas fa-save" /> Save Rule</button>
-          <a href={d.urls.rules} className="btn btn-secondary">Cancel</a>
-        </div>
-      </form></div></div>
-    </>
+      </section>
+
+      <section className="pm-pick">
+        <div className="pm-pick-row"><span className="pm-pick-l">4 · Required subjects <small className="pm-dim">— their average must meet the minimum</small></span>
+          {d.subjects.length > 0 && <button type="button" className="pm-link" onClick={() => setSubjects(subjects.length ? [] : d.subjects.map((x) => String(x.id)))}>{subjects.length ? `Clear (${subjects.length})` : 'Select all'}</button>}</div>
+        {d.subjects.length ? (
+          <div className="pm-chips wrap" role="group" aria-label="Required subjects">
+            {d.subjects.map((x) => {
+              const id = String(x.id);
+              return <button key={x.id} type="button" aria-pressed={subjects.includes(id)} className={subjects.includes(id) ? 'on' : ''} onClick={() => toggleSubj(id)}>
+                {subjects.includes(id) && <i aria-hidden="true" className="fas fa-check" />} {x.name}</button>;
+            })}
+          </div>
+        ) : <p className="pm-dim">No subjects set up yet.</p>}
+      </section>
+
+      {(() => {
+        const bar = (
+          <div className={'pm-formbar' + (phone ? ' fixed' : '')}>
+            <a href={d.urls.rules} className="pm-btn">Cancel</a>
+            <button type="submit" form="pm-rule-form" className="pm-btn primary big" disabled={busy}><i aria-hidden="true" className={'fas ' + (busy ? 'fa-spinner fa-spin' : 'fa-check')} /> Save rule</button>
+          </div>);
+        return phone ? createPortal(bar, document.body) : bar;
+      })()}
+    </form>
   );
 }
 
@@ -1152,38 +1208,81 @@ function GraduateProfile({ d, notify }) {
 // ---- History ---------------------------------------------------------------
 function History({ d }) {
   const nav = useNav();
+  const [filter, setFilter] = useState('');
+  const [q, setQ] = useState('');
   const count = (st) => d.records.filter((r) => r.status === st).length;
+  const t = q.trim().toLowerCase();
+  const shown = d.records.filter((r) => (!filter || r.status === filter)
+    && (!t || `${r.name} ${r.student_no || ''} ${r.from_class} ${r.to_class} ${r.stream || ''}`.toLowerCase().includes(t)));
+  const groups = {};
+  shown.forEach((r) => { (groups[r.from_class] = groups[r.from_class] || []).push(r); });
+  const sess = d.sessions.find((x) => String(x.id) === String(d.session_id));
+  const ICON = { promoted: 'fa-arrow-up', repeated: 'fa-rotate-left', graduated: 'fa-user-graduate', withdrawn: 'fa-door-open' };
+  const avgs = d.records.filter((r) => r.average != null).map((r) => r.average);
+  const meanAvg = avgs.length ? Math.round(avgs.reduce((x, y) => x + y, 0) / avgs.length * 10) / 10 : null;
+
   return (
-    <>
-      <PageHeader title="Promotion History" />
-      <div className="card mb-3"><div className="card-body"><div className="filter-form">
-        <div className="form-group"><label className="form-label">Session</label>
-          <select className="form-control" value={d.session_id} onChange={(e) => navParams(nav.go, window.location.pathname, { session_id: e.target.value })}>
-            <option value="">Select Session</option>{d.sessions.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}</select></div>
-      </div></div></div>
-      {d.records.length ? (<>
-        <div className="stats-grid mb-3">
-          <div className="stat-card"><div className="stat-icon success"><i aria-hidden="true" className="fas fa-arrow-up" /></div><div className="stat-content"><h3>{count('promoted')}</h3><p>Promoted</p></div></div>
-          <div className="stat-card"><div className="stat-icon warning"><i aria-hidden="true" className="fas fa-redo" /></div><div className="stat-content"><h3>{count('repeated')}</h3><p>Repeated</p></div></div>
-          <div className="stat-card"><div className="stat-icon primary"><i aria-hidden="true" className="fas fa-graduation-cap" /></div><div className="stat-content"><h3>{count('graduated')}</h3><p>Graduated</p></div></div>
+    <div className="pm">
+      <PmHead back={(d.urls && d.urls.index) || '/promotion/'} kicker="Promotion & graduation" title="Promotion history"
+              sub={sess ? `What happened at the end of ${sess.name}.` : 'Pick a session to see who moved where.'}
+              actions={d.urls && d.urls.process ? <a href={d.urls.process} className="pm-btn"><i aria-hidden="true" className="fas fa-arrow-up-right-dots" /> <span>Promote students</span></a> : null} />
+
+      <section className="pm-pick">
+        <span className="pm-pick-l">Session promoted from</span>
+        <div className="pm-chips" role="radiogroup" aria-label="Session">
+          {d.sessions.map((x) => (
+            <button key={x.id} type="button" role="radio" aria-checked={String(x.id) === String(d.session_id)}
+                    className={String(x.id) === String(d.session_id) ? 'on' : ''}
+                    onClick={() => navParams(nav.go, window.location.pathname, { session_id: x.id })}>{x.name}</button>))}
         </div>
-        <div className="card"><div className="card-header"><h3>Records ({d.records.length})</h3></div>
-          <div className="card-body" style={{ padding: 0 }}><div className="data-cards" style={{ padding: '1rem' }}>
-            {d.records.map((r, i) => (
-              <div className="data-card" key={i}>
-                <div className="data-card-header"><div className="data-card-title">{r.name}</div><span className={'badge ' + r.status_badge}>{r.status}</span></div>
-                <div className="data-card-row"><span className="data-card-label">From</span><span>{r.from_class}</span></div>
-                <div className="data-card-row"><span className="data-card-label">To</span><span>{r.to_class}</span></div>
-                {r.stream && <div className="data-card-row"><span className="data-card-label">Stream</span><span>{r.stream}</span></div>}
-                {r.average != null && <div className="data-card-row"><span className="data-card-label">Average</span><span>{r.average}%</span></div>}
-                {r.is_manual && <div className="data-card-row"><span className="data-card-label">Type</span><span className="badge badge-info">Manual</span></div>}
-              </div>
-            ))}
-          </div></div></div>
-      </>) : (d.session_id
-        ? <div className="card"><div className="card-body"><Empty icon="fa-history" title="No Records"><p>No promotion records for this session</p></Empty></div></div>
-        : <div className="card"><div className="card-body"><Empty icon="fa-hand-pointer" title="Select a Session"><p>Choose a session to view promotion history</p></Empty></div></div>)}
-    </>
+      </section>
+
+      {d.records.length ? (<>
+        <PmTiles items={[
+          { label: 'All', value: d.records.length, sub: meanAvg != null ? `avg ${meanAvg}%` : 'records', onClick: () => setFilter(''), on: !filter },
+          { label: 'Promoted', icon: 'fa-arrow-up', value: count('promoted'), tone: 'good', onClick: () => setFilter('promoted'), on: filter === 'promoted' },
+          { label: 'Repeated', icon: 'fa-rotate-left', value: count('repeated'), tone: 'warn', onClick: () => setFilter('repeated'), on: filter === 'repeated' },
+          { label: 'Graduated', icon: 'fa-user-graduate', value: count('graduated'), tone: 'info', onClick: () => setFilter('graduated'), on: filter === 'graduated' },
+          count('withdrawn') ? { label: 'Withdrawn', icon: 'fa-door-open', value: count('withdrawn'), onClick: () => setFilter('withdrawn'), on: filter === 'withdrawn' } : null,
+        ]} />
+
+        <section className="pm-card">
+          <header className="pm-card-h">
+            <div className="pm-search"><i aria-hidden="true" className="fas fa-search" />
+              <input type="search" placeholder="Search name, ID, class or stream…" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search records" /></div>
+            <span className="pm-dim pm-count">{shown.length}{shown.length !== d.records.length ? ` of ${d.records.length}` : ''}</span>
+          </header>
+          {shown.length === 0 ? <p className="pm-empty">No records match.</p> : (
+            <ul className="pm-hist">
+              {Object.entries(groups).map(([cls, list]) => (
+                <React.Fragment key={cls}>
+                  <li className="pm-ghead">From {cls}<span>{list.length}</span></li>
+                  {list.map((r, i) => (
+                    <li key={cls + i} className={'pm-hrow st-' + r.status}>
+                      <span className="pm-av" data-g={r.gender || ''} aria-hidden="true">{pmInitials(r.name)}</span>
+                      <span className="pm-pn">
+                        {r.student_url ? <a href={r.student_url}><strong>{r.name}</strong></a> : <strong>{r.name}</strong>}
+                        <small>{r.student_no}{r.date ? ` · ${r.date}` : ''}{r.by ? ` · by ${r.by}` : ''}</small>
+                      </span>
+                      <span className="pm-move">{r.from_class} <i aria-hidden="true" className="fas fa-arrow-right" /> <b>{r.to_class}</b>{r.stream ? <span className="pm-tag">{r.stream}</span> : null}</span>
+                      {r.average != null ? <span className={'pm-avg ' + (r.status === 'repeated' ? 'bad' : 'good')}>{r.average}%</span> : <span className="pm-avg none">—</span>}
+                      <span className={'pm-st st-' + r.status}><i aria-hidden="true" className={'fas ' + (ICON[r.status] || 'fa-circle')} /> {r.status}{r.is_manual ? <small> · manual</small> : null}</span>
+                    </li>
+                  ))}
+                </React.Fragment>
+              ))}
+            </ul>
+          )}
+        </section>
+      </>) : (
+        <section className="pm-card"><div className="pm-card-b">
+          {d.session_id
+            ? <Empty icon="fa-clock-rotate-left" title="No records for this session"><p>Nobody was promoted from {sess ? sess.name : 'this session'} yet.</p>
+                {d.urls && d.urls.process && <div className="empty-state-actions"><a href={d.urls.process} className="btn btn-primary"><i aria-hidden="true" className="fas fa-arrow-up-right-dots" /> Promote students</a></div>}</Empty>
+            : <Empty icon="fa-hand-pointer" title="Pick a session"><p>Choose a session above to see its promotion records.</p></Empty>}
+        </div></section>
+      )}
+    </div>
   );
 }
 

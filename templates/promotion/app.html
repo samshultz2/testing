@@ -438,6 +438,75 @@
   .pm-sheet{max-width:none;border-radius:22px 22px 0 0;padding:.4rem 1rem calc(1rem + env(safe-area-inset-bottom,0px))}
   .pm-grip{display:block;width:38px;height:5px;border-radius:3px;background:var(--border-color);margin:.3rem auto .7rem}
 }
+
+/* ── Rules ladder / add rule / history ── */
+.pm-dim{color:var(--text-muted);font-weight:400}
+.pm-link{border:0;background:none;color:var(--primary);font:inherit;font-weight:700;font-size:.82rem;cursor:pointer;padding:0}
+.pm-pick-row{display:flex;align-items:center;justify-content:space-between;gap:.6rem;flex-wrap:wrap}
+.pm-chips.wrap{flex-wrap:wrap!important;overflow:visible!important;margin:0!important;padding:0!important}
+.pm-chips button i{font-size:.75rem}
+.pm-tag{font-size:.72rem;font-weight:700;border-radius:999px;padding:.1rem .55rem;background:color-mix(in srgb,var(--info) 14%,var(--bg-card));color:var(--info);margin-left:.35rem;white-space:nowrap}
+.pm-tag.plain{background:var(--gray-100);color:var(--text-muted)}
+.pm-icon{width:36px;height:36px;border-radius:10px;border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-muted);cursor:pointer;flex:none}
+.pm-icon.danger:hover{color:var(--danger);border-color:var(--danger);background:color-mix(in srgb,var(--danger) 8%,var(--bg-card))}
+.pm-rules{display:grid;grid-template-columns:minmax(0,1fr) 320px;gap:1rem;align-items:start}
+.pm-ladder{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:.6rem;position:relative}
+.pm-rung{background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;padding:.75rem .9rem}
+.pm-rung.none{background:transparent;border-style:dashed;padding:.55rem .9rem}
+.pm-rung-h{display:flex;align-items:center;gap:.7rem}
+.pm-rung-c{font-weight:800;font-size:1rem;min-width:70px}
+.pm-rung-n{font-size:.78rem;color:var(--text-muted)}
+.pm-rule-list{list-style:none;margin:.55rem 0 0;padding:0;display:flex;flex-direction:column;gap:.45rem}
+.pm-rule{display:flex;align-items:flex-start;gap:.7rem;padding:.65rem .7rem;border-radius:12px;background:var(--gray-50)}
+.pm-rule-p{width:24px;height:24px;border-radius:50%;flex:none;display:inline-flex;align-items:center;justify-content:center;font-size:.72rem;font-weight:800;background:var(--primary);color:#fff;margin-top:.1rem}
+.pm-rule-b{flex:1;min-width:0;display:flex;flex-direction:column;gap:.3rem}
+.pm-rule-t strong i{font-size:.7rem;color:var(--text-muted);margin:0 .2rem}
+.pm-rule-m{display:flex;gap:1rem;flex-wrap:wrap;font-size:.82rem;color:var(--text-secondary)}
+.pm-rule-m i{color:var(--text-muted);font-size:.72rem;margin-right:.2rem}
+.pm-rule-s{display:flex;flex-wrap:wrap;gap:.3rem}
+.pm-rule-s span{font-size:.74rem;background:var(--bg-card);border:1px solid var(--border-color);border-radius:999px;padding:.1rem .55rem}
+.pm-help{position:sticky;top:calc(var(--header-height,60px) + 12px)}
+.pm-howto{margin:0;padding:.8rem 1rem .4rem 2.2rem;display:flex;flex-direction:column;gap:.55rem;font-size:.86rem;color:var(--text-secondary)}
+.pm-help .pm-btn.wide{margin:.4rem 1rem 1rem;width:calc(100% - 2rem)}
+.pm-req{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr) minmax(0,1fr);gap:.7rem}
+.pm-input{height:42px;border:1px solid var(--border-color);border-radius:11px;background:var(--bg-card);color:var(--text-primary);font:inherit;padding:0 .8rem}
+.pm-num{display:inline-flex;align-items:center;gap:.3rem;height:42px;border:1px solid var(--border-color);border-radius:11px;padding:0 .8rem;font-weight:700;color:var(--text-muted)}
+.pm-num input{border:0;background:transparent;font:inherit;font-weight:800;font-size:1rem;color:var(--text-primary);width:100%;min-width:0}
+.pm-field small{font-weight:600;text-transform:none;letter-spacing:0}
+.pm-formbar{position:sticky;bottom:0;z-index:20;display:flex;justify-content:flex-end;gap:.6rem;padding:.75rem 1rem;background:color-mix(in srgb,var(--bg-card) 94%,transparent);
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);border:1px solid var(--border-color);border-radius:16px}
+.pm-count{font-size:.82rem;white-space:nowrap}
+.pm-hist{list-style:none;margin:0;padding:.2rem .6rem .5rem}
+.pm-ghead{display:flex;align-items:center;gap:.5rem;font-size:.72rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-secondary);padding:.75rem .3rem .35rem;border-bottom:2px solid var(--border-color)}
+.pm-ghead span{margin-left:auto;font-size:.72rem;background:var(--gray-100);border-radius:999px;padding:0 .5rem;letter-spacing:0}
+.pm-hrow{display:grid;grid-template-columns:auto minmax(0,1.4fr) minmax(0,1.2fr) auto 150px;align-items:center;gap:.8rem;padding:.55rem .3rem;border-bottom:1px solid var(--border-light)}
+.pm-hrow .pm-pn a{color:inherit;text-decoration:none}.pm-hrow .pm-pn a:hover strong{color:var(--primary)}
+.pm-move{font-size:.86rem;color:var(--text-secondary);display:flex;align-items:center;flex-wrap:wrap;gap:.2rem}
+.pm-move i{font-size:.65rem;color:var(--text-muted);margin:0 .2rem}
+.pm-st{display:inline-flex;align-items:center;gap:.35rem;font-size:.78rem;font-weight:800;text-transform:capitalize;border-radius:999px;padding:.22rem .65rem;background:var(--gray-100);color:var(--text-secondary);justify-self:start}
+.pm-st small{font-weight:600;text-transform:none}
+.pm-st.st-promoted{background:color-mix(in srgb,var(--success) 13%,var(--bg-card));color:var(--success)}
+.pm-st.st-repeated{background:color-mix(in srgb,var(--warning) 15%,var(--bg-card));color:color-mix(in srgb,var(--warning) 80%,var(--text-primary))}
+.pm-st.st-graduated{background:color-mix(in srgb,var(--info) 14%,var(--bg-card));color:var(--info)}
+@media (max-width:1099px){
+  .pm-rules{grid-template-columns:minmax(0,1fr)}
+  .pm-help{position:static}
+  .pm-hrow{grid-template-columns:auto minmax(0,1fr) auto}
+  .pm-hrow .pm-move{grid-column:2/-1;grid-row:2}
+  .pm-hrow .pm-avg{grid-row:1;grid-column:3}
+  .pm-hrow .pm-move{grid-column:2/3}
+  .pm-hrow .pm-st{grid-column:3;grid-row:2;justify-self:end}
+}
+@media (max-width:759px){
+  .pm-req{grid-template-columns:1fr 1fr}
+  .pm-req .pm-field:first-child{grid-column:1/-1}
+  .pm-formbar.fixed{position:fixed;left:0;right:0;bottom:0;z-index:1100;border-radius:18px 18px 0 0;border-width:1px 0 0;background:var(--bg-card);
+    padding:.65rem .8rem calc(.65rem + env(safe-area-inset-bottom,0px))}
+  .pm-formbar .pm-btn.primary{flex:1;justify-content:center}
+  form.pm{padding-bottom:80px}
+  .pm-rung-h{flex-wrap:wrap;gap:.2rem .7rem}
+  .pm-rule{padding:.6rem}
+}
 </style>
 {% endblock %}
 {% block content %}

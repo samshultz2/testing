@@ -1159,11 +1159,25 @@ def rules_list():
         PromotionRule.from_class_id, PromotionRule.priority.desc()
     ).all()
     
+    # Subject names for each rule's required list (one query for all rules).
+    req_ids = set()
+    for r in rules:
+        if r.required_subjects:
+            req_ids.update(int(x) for x in (r.get_required_subjects() or []))
+    names = ({s.id: s.name for s in Subject.query.filter(Subject.id.in_(req_ids)).all()}
+             if req_ids else {})
+    classes = SchoolClass.query.filter_by(is_active=True).order_by(SchoolClass.level).all()
     return _render({
         'page': 'rules', 'add_url': url_for('promotion.add_rule'),
+        'threshold': SchoolSettings.get('promotion_threshold', 50),
+        'urls': {'process': url_for('promotion.process_promotion'), 'index': url_for('promotion.index')},
+        'classes': [{'id': c.id, 'name': c.name} for c in classes],
         'rules': [{'id': r.id, 'from_class': r.from_class.name, 'to_class': r.to_class.name,
+                   'from_class_id': r.from_class_id,
                    'stream_name': r.stream_name, 'min_average': r.min_average, 'priority': r.priority,
                    'required_count': len(r.get_required_subjects()) if r.required_subjects else 0,
+                   'required': ([names[int(x)] for x in (r.get_required_subjects() or []) if int(x) in names]
+                                if r.required_subjects else []),
                    'delete_url': url_for('promotion.delete_rule', rule_id=r.id)} for r in rules],
     })
 
@@ -1620,6 +1634,12 @@ def promotion_history():
     
     sessions = AcademicSession.query.order_by(AcademicSession.id.desc()).all()
     
+    # Open on the most recent session that has promotion records, so the page
+    # shows something useful straight away instead of an empty picker.
+    if not session_id:
+        latest = (scope_by_student(PromotionRecord.query, PromotionRecord)
+                  .order_by(PromotionRecord.from_session_id.desc()).first())
+        session_id = latest.from_session_id if latest else None
     records = []
     if session_id:
         records = scope_by_student(PromotionRecord.query.filter_by(
@@ -1628,7 +1648,13 @@ def promotion_history():
     
     return _render({
         'page': 'history', 'session_id': session_id or '', 'sessions': _sessions_json(),
+        'urls': {'process': url_for('promotion.process_promotion'), 'index': url_for('promotion.index')},
         'records': [{'name': r.student.full_name, 'status': r.status,
+                     'student_no': r.student.student_id, 'gender': r.student.gender or '',
+                     'student_url': url_for('main.view_student', student_id=r.student_id),
+                     'to_session': r.to_session.name if getattr(r, 'to_session', None) else '',
+                     'date': r.created_at.strftime('%d %b %Y') if r.created_at else '',
+                     'by': r.promoted_by or '',
                      'status_badge': _STATUS_BADGE.get(r.status, 'badge-secondary'),
                      'from_class': r.from_class.name if r.from_class else '-',
                      'to_class': r.to_class.name if r.to_class else '-', 'stream': r.stream,
