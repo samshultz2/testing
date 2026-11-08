@@ -403,7 +403,7 @@ export function Institution({ d, notify }) {
           <Card icon="fa-book" title="Subjects, hardest first" sub="Tap a subject for its scorecard">
             <div className="an-league">
               {a.subjects.map((x, i) => (
-                <button type="button" key={i} className="an-league-row" onClick={() => openSubject(x)}>
+                <button type="button" key={i} className="an-league-row subj" onClick={() => openSubject(x)}>
                   <span className="n"><b>{x.name}</b><small>{x.assessed} assessed · {fmtNum(r1(x.pass_rate))}% pass</small></span>
                   <Meter value={x.average || 0} max={100} tone={toneOf(x.average, pm)} />
                   <b className={'v ' + toneOf(x.average, pm)}>{fmtNum(r1(x.average))}</b>
@@ -441,6 +441,170 @@ export function Institution({ d, notify }) {
           </div>
         )}
         {tab === 'trend' && hasTrend && <Trend trends={a.trends} pm={pm} showPass />}
+      </>)}
+    </div>
+  );
+}
+
+// ── Scorecards (subject + teacher) ─────────────────────────────────────────
+function ScoreHead({ d, icon, title, sub, children }) {
+  const exp = (fmt) => { const b = d.urls.report_base; return `${b}${b.includes('?') ? '&' : '?'}format=${fmt}`; };
+  return (
+    <Head icon={icon} title={title} sub={sub}>
+      {children}
+      <Menu label="More" items={[
+        d.back_url && { icon: 'fa-arrow-left', label: 'Back to institution analytics', href: d.back_url },
+        d.urls.report_base && { heading: 'Download' },
+        d.urls.report_base && { icon: 'fa-file-pdf', label: 'PDF', href: exp('pdf'), native: true, download: true },
+        d.urls.report_base && { icon: 'fa-file-excel', label: 'Excel', href: exp('excel'), native: true, download: true },
+        d.urls.report_base && { icon: 'fa-file-image', label: 'Image', href: exp('image'), native: true, download: true },
+      ]} />
+    </Head>
+  );
+}
+
+function TermPick({ d, onChange }) {
+  return (
+    <section className="rs-pick"><div className="rs-pick-row">
+      <label className="rs-sel"><span>Term</span>
+        <select value={d.term_id} onChange={(e) => onChange(e.target.value)}>
+          {d.terms.map((t) => <option key={t.id} value={t.id}>{t.full_name}</option>)}</select></label>
+      {d.back_url && <a href={d.back_url} className="rs-btn ghost an-back"><i className="fas fa-building-columns" aria-hidden="true" /><span className="rs-hide-sm">Institution analytics</span></a>}
+    </div></section>
+  );
+}
+
+function ClassRows({ rows, pm, title, sub }) {
+  return (
+    <div className="an-league">
+      {rows.map((r, i) => (
+        <div key={i} className="an-league-row subj static">
+          <span className="n"><b>{title(r)}</b><small>{sub(r)}</small></span>
+          <Meter value={r.average || 0} max={100} tone={toneOf(r.average, pm)} />
+          <b className={'v ' + toneOf(r.average, pm)}>{fmtNum(r1(r.average))}</b>
+          <span className={'an-pill ' + (r.pass_rate >= 50 ? 'good' : 'bad')}>{fmtNum(r1(r.pass_rate))}%</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+export function SubjectScorecard({ d }) {
+  const nav = useNav();
+  const sc = d.scorecard;
+  const s = (sc && sc.summary) || {};
+  const pm = s.pass_mark || 50;
+  const [tab, setTab] = useState('classes');
+  const goTerm = (tid) => navParams(nav.go, d.self_url, { term_id: tid, subject_id: d.subject_id });
+  const ready = sc && s.entries;
+  const ins = [];
+  if (ready) {
+    const rows = sc.rows || [];
+    if (rows.length > 1) {
+      const lo = rows[0]; const hi = rows[rows.length - 1]; const gap = (hi.average || 0) - (lo.average || 0);
+      ins.push({ tone: gap >= 10 ? 'watch' : 'positive', title: gap >= 10 ? `A ${fmtNum(r1(gap))}-point gap between arms` : 'Arms are performing evenly',
+        text: `${hi.class} averages ${fmtNum(r1(hi.average))}; ${lo.class} averages ${fmtNum(r1(lo.average))}${gap >= 10 ? ' — compare how they are taught.' : '.'}` });
+    }
+    const t = (sc.by_teacher || []).filter((x) => x.name && x.name !== 'Unassigned');
+    if (t.length > 1) { const best = t.slice().sort((a, b) => b.average - a.average)[0]; ins.push({ tone: 'insight', title: `${best.name} gets the best results`, text: `Average ${fmtNum(r1(best.average))} with ${fmtNum(r1(best.pass_rate))}% passing — worth sharing their approach.` }); }
+    ins.push(s.pass_rate < 50 ? { tone: 'negative', title: `Only ${fmtNum(r1(s.pass_rate))}% are passing`, text: 'Consider remedial lessons and a review of the scheme of work for this subject.' }
+      : { tone: 'positive', title: `${fmtNum(r1(s.pass_rate))}% are passing`, text: `${fmtNum(r1(s.distinction_rate))}% earned a distinction.` });
+    if (s.completion != null && s.completion < 90) ins.push({ tone: 'watch', title: `${fmtNum(r1(100 - s.completion))}% of scores missing`, text: 'Chase the outstanding entries before drawing conclusions.' });
+  }
+  const hasTrend = ready && sc.trend && sc.trend.term_names.length > 1 && sc.trend.averages.some((v) => v != null);
+  return (
+    <div className="rs">
+      <ScoreHead d={d} icon="fa-book" title={sc ? sc.subject : 'Subject scorecard'} sub="Subject scorecard" />
+      <TermPick d={d} onChange={goTerm} />
+      {!d.subject_id ? <Blank icon="fa-book" title="No subject chosen"><p>Open a subject from institution analytics.</p></Blank>
+        : !ready ? <Blank icon="fa-chart-column" title="No scores yet"><p>No scores for {sc ? sc.subject : 'this subject'} this term.</p></Blank> : (<>
+        <Tiles items={[
+          { label: 'Average', value: fmtNum(r1(s.average)), tone: toneOf(s.average, pm), sub: `pass mark ${pm}` },
+          { label: 'Pass rate', value: fmtNum(r1(s.pass_rate)), unit: '%', tone: s.pass_rate >= 50 ? 'good' : 'bad' },
+          { label: 'Distinctions', value: fmtNum(r1(s.distinction_rate)), unit: '%', tone: 'good' },
+          { label: 'Taught in', value: `${s.classes} arm${s.classes === 1 ? '' : 's'}`, sub: `by ${s.teachers} teacher${s.teachers === 1 ? '' : 's'}` },
+          { label: 'Scores entered', value: fmtNum(r1(s.completion)), unit: '%', tone: s.completion >= 85 ? '' : 'mid' },
+        ]} />
+        <Insights items={ins} />
+        <Seg label="Section" value={tab} onChange={setTab} options={[
+          { value: 'classes', label: 'Class arms', icon: 'fa-users', count: sc.rows.length },
+          { value: 'teachers', label: 'Teachers', icon: 'fa-chalkboard-user' },
+          { value: 'grades', label: 'Grades', icon: 'fa-award' },
+          hasTrend && { value: 'trend', label: 'Trend', icon: 'fa-chart-line' }].filter(Boolean)} />
+        {tab === 'classes' && (
+          <Card icon="fa-users" title="Class arms, weakest first">
+            <ClassRows rows={sc.rows} pm={pm} title={(r) => r.class} sub={(r) => `${r.teacher || 'No teacher'} · ${r.assessed}/${r.students} assessed · ${fmtNum(r1(r.lowest))}–${fmtNum(r1(r.highest))}`} />
+          </Card>
+        )}
+        {tab === 'teachers' && (
+          <Card icon="fa-chalkboard-user" title="Results by teacher">
+            <HBars pm={pm} rows={sc.by_teacher} label={(x) => x.name} sub={(x) => `${x.assessed} students · ${fmtNum(r1(x.pass_rate))}% pass`} value={(x) => x.average} />
+          </Card>
+        )}
+        {tab === 'grades' && (
+          <div className="an-grid two">
+            <Card icon="fa-award" title="Grade distribution"><HBars max="auto" rows={(sc.grade_distribution || []).map((g) => ({ label: `Grade ${g.grade}`, value: g.count }))} /></Card>
+            {sc.score_bands && sc.score_bands.length > 0 && <Card icon="fa-chart-simple" title="Score spread"><Cols pm={pm} bars={sc.score_bands.map((b) => ({ label: b.band, value: b.count }))} /></Card>}
+          </div>
+        )}
+        {tab === 'trend' && hasTrend && <Trend trends={sc.trend} pm={pm} />}
+      </>)}
+    </div>
+  );
+}
+
+export function Teacher({ d }) {
+  const nav = useNav();
+  const sc = d.scorecard;
+  const s = (sc && sc.summary) || {};
+  const pm = s.pass_mark || 50;
+  const [tab, setTab] = useState('classes');
+  const goTerm = (tid) => navParams(nav.go, d.self_url, { term_id: tid, name: d.teacher_name });
+  const ready = sc && s.entries;
+  const msgUrl = ready && d.is_admin && d.staff_id && d.urls.compose
+    ? `${d.urls.compose}?to=staff&staff_ids=${d.staff_id}&body=${encodeURIComponent(`Dear ${d.teacher_name}, I would like to discuss your class results for this term and how we can support stronger outcomes. Please see me at your earliest convenience. Thank you.`)}` : null;
+  const ins = [];
+  if (ready) {
+    const rows = sc.rows || [];
+    if (rows.length) { const lo = rows[0]; ins.push({ tone: lo.average < pm ? 'negative' : 'watch', title: `Weakest: ${lo.subject}, ${lo.class}`, text: `Average ${fmtNum(r1(lo.average))}, ${fmtNum(r1(lo.pass_rate))}% passing.` }); }
+    if (rows.length > 1) { const hi = rows[rows.length - 1]; ins.push({ tone: 'positive', title: `Strongest: ${hi.subject}, ${hi.class}`, text: `Average ${fmtNum(r1(hi.average))}, ${fmtNum(r1(hi.pass_rate))}% passing.` }); }
+    const missing = rows.filter((r) => r.completion < 90);
+    if (missing.length) ins.push({ tone: 'watch', title: `${missing.length} class subject${missing.length === 1 ? '' : 's'} with missing scores`, text: missing.slice(0, 3).map((r) => `${r.subject} (${r.class})`).join(', ') + (missing.length > 3 ? '…' : '') });
+  }
+  const FT = { strong: 'good', good: '', watch: 'mid', review: 'bad', compliance: 'bad', insufficient: 'muted' };
+  const hasTrend = ready && sc.trend && sc.trend.term_names.length > 1 && sc.trend.averages.some((v) => v != null);
+  return (
+    <div className="rs">
+      <ScoreHead d={d} icon="fa-chalkboard-user" title={d.teacher_name || 'Teacher scorecard'} sub={ready ? s.verdict : 'Teacher scorecard'}>
+        {msgUrl && <a href={msgUrl} data-native className="rs-btn primary"><i className="fas fa-paper-plane" aria-hidden="true" /><span className="rs-hide-sm">Message teacher</span></a>}
+      </ScoreHead>
+      <TermPick d={d} onChange={goTerm} />
+      {!d.teacher_name ? <Blank icon="fa-chalkboard-user" title="No teacher chosen"><p>Open a teacher from institution analytics.</p></Blank>
+        : !ready ? <Blank icon="fa-chart-column" title="No scores yet"><p>No scored subjects for {d.teacher_name} this term.</p></Blank> : (<>
+        {s.verdict && <div className={'an-verdict ' + (FT[s.flag] || '')}><i className="fas fa-clipboard-check" aria-hidden="true" /> <b>{s.verdict}</b></div>}
+        <Tiles items={[
+          { label: 'Average', value: fmtNum(r1(s.average)), tone: toneOf(s.average, pm), sub: `pass mark ${pm}` },
+          { label: 'Pass rate', value: fmtNum(r1(s.pass_rate)), unit: '%', tone: s.pass_rate >= 50 ? 'good' : 'bad' },
+          { label: 'Teaches', value: `${s.subjects} subj.`, sub: `${s.classes} class${s.classes === 1 ? '' : 'es'} · ${s.students} students` },
+          { label: 'Scores entered', value: fmtNum(r1(s.completion)), unit: '%', tone: s.completion >= 85 ? '' : 'mid' },
+        ]} />
+        <Insights items={ins} />
+        <Seg label="Section" value={tab} onChange={setTab} options={[
+          { value: 'classes', label: 'Classes', icon: 'fa-users', count: sc.rows.length },
+          { value: 'split', label: 'By subject & class', icon: 'fa-layer-group' },
+          hasTrend && { value: 'trend', label: 'Trend', icon: 'fa-chart-line' }].filter(Boolean)} />
+        {tab === 'classes' && (
+          <Card icon="fa-users" title="Class subjects, weakest first">
+            <ClassRows rows={sc.rows} pm={pm} title={(r) => `${r.subject} · ${r.class}`} sub={(r) => `${r.assessed}/${r.students} assessed · ${fmtNum(r1(r.completion))}% entered · ${fmtNum(r1(r.lowest))}–${fmtNum(r1(r.highest))}`} />
+          </Card>
+        )}
+        {tab === 'split' && (
+          <div className="an-grid two">
+            <Card icon="fa-book" title="By subject"><HBars pm={pm} rows={sc.by_subject} label={(x) => x.name} sub={(x) => `${x.assessed} · ${fmtNum(r1(x.pass_rate))}% pass`} value={(x) => x.average} /></Card>
+            <Card icon="fa-users" title="By class"><HBars pm={pm} rows={sc.by_class} label={(x) => x.name} sub={(x) => `${x.assessed} · ${fmtNum(r1(x.pass_rate))}% pass`} value={(x) => x.average} /></Card>
+          </div>
+        )}
+        {tab === 'trend' && hasTrend && <Trend trends={sc.trend} pm={pm} />}
       </>)}
     </div>
   );

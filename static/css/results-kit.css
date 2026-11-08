@@ -423,6 +423,7 @@
 .an-subj-more .an-cols{height:120px}
 .an-league-row{grid-template-columns:30px minmax(0,1.4fr) minmax(70px,1fr) 52px 14px}
 .an-league-row.teacher{grid-template-columns:34px minmax(0,1.6fr) auto 52px}
+.an-league-row.subj{grid-template-columns:minmax(0,1.4fr) minmax(70px,1fr) 52px 14px}
 .an-league-row>i{color:var(--text-muted);font-size:.75rem}
 .an-people{display:flex;flex-direction:column}
 .an-person{display:grid;grid-template-columns:22px 34px minmax(0,1fr) auto auto;gap:.6rem;align-items:center;padding:.5rem .2rem;border-bottom:1px solid var(--border-light,var(--border-color))}
@@ -449,6 +450,7 @@
   .an-league-row{grid-template-columns:30px minmax(0,1fr) 46px 10px}
   .an-league-row .rs-meter{display:none}
   .an-league-row.teacher{grid-template-columns:34px minmax(0,1fr) 46px}
+  .an-league-row.subj{grid-template-columns:minmax(0,1fr) 52px 10px}
   .an-league-row.teacher .an-pill{grid-column:2/4;justify-self:start;order:9;white-space:normal;text-align:left;max-width:100%}
   .an-subj-more{grid-template-columns:minmax(0,1fr)}
   .an-cols{height:140px}
@@ -770,3 +772,15 @@
 .sl-cart .btn-group .btn{flex:1;border:0;border-radius:9px;background:transparent;color:var(--text-muted);font-weight:600;box-shadow:none}
 .sl-cart .btn-group .btn.btn-primary{background:var(--bg-card);color:var(--primary);box-shadow:0 1px 3px rgba(15,23,42,.12)}
 .sl-cart .form-control{height:42px;border-radius:11px}
+.an-league-row.static{cursor:default}
+.an-league-row.subj.static{grid-template-columns:minmax(0,1.6fr) minmax(70px,1fr) 52px 60px}
+.an-back{margin-left:auto;align-self:flex-end}
+.an-verdict{display:flex;align-items:center;gap:.55rem;padding:.7rem .9rem;border-radius:14px;background:var(--gray-100);font-size:.92rem;border:1px solid var(--border-color)}
+.an-verdict.good{background:color-mix(in srgb,var(--success) 11%,var(--bg-card));color:#166534}
+.an-verdict.mid{background:color-mix(in srgb,var(--warning) 14%,var(--bg-card));color:#92400e}
+.an-verdict.bad{background:color-mix(in srgb,var(--danger) 10%,var(--bg-card));color:#991b1b}
+@media (max-width:759px){
+  .an-league-row.subj.static{grid-template-columns:minmax(0,1fr) 46px 52px}
+  .an-league-row.subj.static .rs-meter{display:none}
+  .an-back{align-self:flex-end;width:44px;padding:0}
+}
