@@ -101,11 +101,11 @@ function Section({ icon, title, badge, action, wide, children, className = '' })
 }
 
 // "⋯" overflow menu — closes on outside tap / Escape.
-function Menu({ items, label = 'More actions', className = 'sp-btn', icon = 'fa-ellipsis', text }) {
+function Menu({ items, label = 'More actions', className = 'sp-btn', icon = 'fa-ellipsis', text, sheet = false }) {
   const [open, setOpen] = useState(false);
   const ref = useRef(null);
   useEffect(() => {
-    if (!open) return undefined;
+    if (!open || sheet) return undefined;
     const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
     const esc = (e) => { if (e.key === 'Escape') setOpen(false); };
     document.addEventListener('mousedown', close);
@@ -121,7 +121,19 @@ function Menu({ items, label = 'More actions', className = 'sp-btn', icon = 'fa-
               aria-label={label} title={label} onClick={() => setOpen((v) => !v)}>
         <i aria-hidden="true" className={'fas ' + icon} />{text && <span>{text}</span>}
       </button>
-      {open && (
+      {open && sheet && (
+        <Sheet title="More actions" onClose={() => setOpen(false)}>
+          <div className="sv-actsheet" role="menu">
+            {list.map((it, i) => it.href
+              ? <a key={i} role="menuitem" href={it.href} onClick={() => setOpen(false)}>
+                  <span className="sv-round sm"><i aria-hidden="true" className={'fas ' + it.icon} /></span>{it.label}</a>
+              : <button key={i} type="button" role="menuitem" className={it.danger ? 'danger' : ''}
+                        onClick={() => { setOpen(false); it.onClick(); }}>
+                  <span className="sv-round sm"><i aria-hidden="true" className={'fas ' + it.icon} /></span>{it.label}</button>)}
+          </div>
+        </Sheet>
+      )}
+      {open && !sheet && (
         <div className="sv-menu-pop" role="menu">
           {list.map((it, i) => it.href
             ? <a key={i} role="menuitem" href={it.href} onClick={() => setOpen(false)}>
@@ -431,7 +443,7 @@ export default function ViewApp({ initial }) {
             <a href={urls.report_card} className="sv-qa"><span className="sv-round"><i aria-hidden="true" className="fas fa-file-invoice" /></span>Report</a>
             <a href={urls.exam_report} className="sv-qa"><span className="sv-round"><i aria-hidden="true" className="fas fa-chart-column" /></span>Exams</a>
             {canEditStudent && <a href={urls.edit} className="sv-qa"><span className="sv-round"><i aria-hidden="true" className="fas fa-pen" /></span>Edit</a>}
-            <div className="sv-qa"><Menu items={moreItems} className="sv-round" /><span>More</span></div>
+            <div className="sv-qa"><Menu items={moreItems} className="sv-round" sheet /><span>More</span></div>
           </div>
         )}
       </header>

@@ -64,8 +64,10 @@
 /* ══ Student profile — laptop workspace / phone app ══ */
 .sv { --sv-r: 16px; max-width: 1400px; margin: 0 auto; }
 .sv-head { position: relative; background: var(--bg-card); border: 1px solid var(--border-color); border-radius: var(--sv-r);
-  overflow: hidden; margin-bottom: .9rem; }
-.sv-band { height: 64px; background: linear-gradient(120deg, color-mix(in srgb, var(--primary) 85%, #000 0%), color-mix(in srgb, var(--primary) 45%, var(--bg-card))); }
+  margin-bottom: .9rem; }
+/* No overflow:hidden on the header (it clipped the More menu) — the band
+   rounds its own top corners instead. */
+.sv-band { border-radius: calc(var(--sv-r) - 1px) calc(var(--sv-r) - 1px) 0 0; height: 64px; background: linear-gradient(120deg, color-mix(in srgb, var(--primary) 85%, #000 0%), color-mix(in srgb, var(--primary) 45%, var(--bg-card))); }
 .sv-head-row { display: flex; gap: 1.1rem; align-items: flex-end; padding: 0 1.25rem 1.1rem; margin-top: -40px; }
 .sv-avatar { width: 96px; height: 96px; border-radius: 50%; object-fit: cover; flex: none; border: 4px solid var(--bg-card);
   background: var(--gray-100); box-shadow: 0 2px 10px rgba(0,0,0,.08); }
@@ -86,6 +88,11 @@
   background: none; border-radius: 8px; color: var(--text-primary); font: inherit; font-size: .9rem; text-align: left; cursor: pointer; text-decoration: none; }
 .sv-menu-pop a:hover, .sv-menu-pop button:hover { background: var(--gray-100); }
 .sv-menu-pop i { width: 18px; text-align: center; color: var(--text-muted); }
+.sv-actsheet { display: flex; flex-direction: column; }
+.sv-actsheet a, .sv-actsheet button { display: flex; align-items: center; gap: .85rem; padding: .55rem .2rem; border: 0; background: none;
+  font: inherit; font-size: .98rem; font-weight: 600; color: var(--text-primary); text-decoration: none; text-align: left; cursor: pointer;
+  border-bottom: 1px solid var(--border-light); }
+.sv-actsheet > :last-child { border-bottom: 0; }
 .sv-msg { display: flex; justify-content: space-between; gap: 8px; }
 .sv-msg button { background: none; border: none; cursor: pointer; font-size: 1.1rem; }
 
@@ -224,7 +231,7 @@
 @media (max-width: 759px) {
   .sv { margin: 0 -4px; }
   .sv-head { border-radius: 20px; text-align: center; }
-  .sv-band { height: 70px; }
+  .sv-band { height: 70px; border-radius: 19px 19px 0 0; }
   .sv-head-row { flex-direction: column; align-items: center; gap: .5rem; padding: 0 1rem .4rem; margin-top: -46px; }
   .sv-avatar { width: 92px; height: 92px; }
   .sv-id { padding-top: 0; }
