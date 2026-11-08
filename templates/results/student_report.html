@@ -21,8 +21,97 @@
 .pred{background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border-radius:var(--radius-md);padding:1rem;text-align:center}
 .pred .big{font-size:2rem;font-weight:700}
 .muted{color:var(--text-muted)}
+
+/* ══ Exam report — laptop workspace / phone app; print shows every section ══ */
+.er{max-width:1240px;margin:0 auto}
+.er-head{display:flex;align-items:center;gap:1rem;background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;padding:1rem 1.2rem;margin-bottom:.9rem}
+.er-back{width:38px;height:38px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:var(--gray-100);color:var(--text-secondary);flex:none;text-decoration:none}
+.er-av{width:56px;height:56px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1.2rem;color:var(--primary);background:color-mix(in srgb,var(--primary) 13%,var(--bg-card))}
+.er-t{flex:1;min-width:0}
+.er-kicker{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)}
+.er-t h1{font-size:1.45rem;font-weight:800;margin:.05rem 0 .15rem;letter-spacing:-.015em}
+.er-t .meta{font-size:.85rem;color:var(--text-muted)}
+.er-acts{display:flex;gap:.5rem;flex:none}
+.er-miss{display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin:0 0 .9rem;padding:.65rem .9rem;border-radius:14px;
+  background:color-mix(in srgb,var(--warning) 9%,var(--bg-card));border:1px solid color-mix(in srgb,var(--warning) 30%,var(--border-color));font-size:.86rem}
+.er-miss.ok{background:color-mix(in srgb,var(--success) 8%,var(--bg-card));border-color:color-mix(in srgb,var(--success) 28%,var(--border-color))}
+.er-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:.6rem;margin-bottom:.9rem}
+.er-tile{display:flex;flex-direction:column;align-items:flex-start;gap:.1rem;padding:.7rem .85rem;background:var(--bg-card);border:1px solid var(--border-color);
+  border-radius:14px;cursor:pointer;font:inherit;color:inherit;text-align:left;position:relative;min-width:0}
+.er-tile:hover{border-color:var(--primary)}
+.er-tile::before{content:'';position:absolute;left:0;top:12px;bottom:12px;width:3px;border-radius:0 3px 3px 0;background:var(--border-color)}
+.er-tile.good::before{background:var(--success)}.er-tile.warn::before{background:var(--warning)}.er-tile.bad::before{background:var(--danger)}
+.er-tile .l{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)}
+.er-tile .v{font-size:1.4rem;font-weight:800;letter-spacing:-.02em;line-height:1.15}
+.er-tile .v small{font-size:.8rem;color:var(--text-muted);font-weight:600;letter-spacing:0}
+.er-tile .v.sm{font-size:1rem;padding:.2rem 0}
+.er-tile.good .v.sm{color:var(--success)}.er-tile.warn .v.sm{color:color-mix(in srgb,var(--warning) 75%,var(--text-primary))}.er-tile.bad .v.sm{color:var(--danger)}
+.er-tile .s{font-size:.74rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.er-tabs{display:flex;gap:.25rem;padding:.3rem;background:var(--gray-100);border-radius:12px;margin-bottom:.9rem;overflow-x:auto;scrollbar-width:none}
+.er-tabs::-webkit-scrollbar{display:none}
+.er-tabs button{flex:none;display:inline-flex;align-items:center;gap:.45rem;border:0;background:none;font:inherit;font-size:.88rem;font-weight:600;
+  color:var(--text-secondary);padding:.5rem .95rem;border-radius:9px;cursor:pointer;white-space:nowrap}
+.er-tabs button.on{background:var(--bg-card);color:var(--primary);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.er-tabs .n{font-size:.7rem;font-weight:700;background:color-mix(in srgb,var(--primary) 13%,transparent);color:var(--primary);border-radius:999px;padding:0 .45rem}
+.er-pane{background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;padding:1.1rem 1.2rem}
+.er-pane[hidden]{display:none}
+.er-pane>h2{display:flex;align-items:center;gap:.6rem;font-size:1.1rem;font-weight:800;margin:0 0 .9rem;border:0;padding:0}
+.er-pane>h2 .ic{width:32px;height:32px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;background:var(--primary);color:#fff;font-size:.85rem}
+.er-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:1rem;align-items:start}
+.er-card{border:1px solid var(--border-color);border-radius:14px;padding:.85rem .95rem}
+.er-card-h{display:flex;align-items:baseline;gap:.5rem;flex-wrap:wrap;margin-bottom:.35rem}
+.er-card-h strong{font-size:1.05rem}
+.er-card-h .muted{font-size:.8rem}
+.er-rows{list-style:none;margin:.5rem 0 0;padding:0}
+.er-grid>.er-card:only-child{grid-column:1/-1}
+.er-grid>.er-card:only-child .er-rows{columns:2;column-gap:1.6rem}
+.er-rows li{break-inside:avoid}
+.er-rows li{display:flex;align-items:center;gap:.6rem;padding:.42rem 0;border-bottom:1px solid var(--border-light);font-size:.9rem}
+.er-rows li:last-child{border-bottom:0}
+.er-rows li>span:first-child{flex:1;min-width:0}
+.er-rows .sc{font-variant-numeric:tabular-nums;color:var(--text-secondary);font-size:.84rem;min-width:44px;text-align:right}
+.er-rows .rm{font-size:.76rem;color:var(--text-muted);min-width:78px}
+.er-bar{flex:0 0 80px;height:6px;border-radius:4px;background:var(--gray-200);overflow:hidden}
+.er-bar span{display:block;height:100%;background:var(--primary)}
+.er-mock{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:1rem;align-items:start}
+.er-spark{display:flex;align-items:flex-end;gap:.5rem;height:120px;padding:.4rem 0 0}
+.er-spark div{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:.2rem;height:100%;min-width:0}
+.er-spark i{display:block;width:100%;max-width:46px;border-radius:7px 7px 2px 2px;background:color-mix(in srgb,var(--primary) 70%,var(--bg-card))}
+.er-spark b{font-size:.78rem}
+.er-spark small{font-size:.66rem;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.pill{white-space:nowrap}
+[data-theme="dark"] .g-dist,[data-theme="midnight"] .g-dist,[data-theme="carbon"] .g-dist{background:#14532d;color:#bbf7d0}
+[data-theme="dark"] .g-credit,[data-theme="midnight"] .g-credit,[data-theme="carbon"] .g-credit{background:#1e3a8a;color:#bfdbfe}
+[data-theme="dark"] .g-fail,[data-theme="midnight"] .g-fail,[data-theme="carbon"] .g-fail{background:#7f1d1d;color:#fecaca}
+[data-theme="dark"] .g-pass,[data-theme="midnight"] .g-pass,[data-theme="carbon"] .g-pass{background:#713f12;color:#fde68a}
+.er-print-head{display:none}
+@media (max-width:759px){
+  .er-head{flex-wrap:wrap;padding:.9rem;gap:.75rem;border-radius:18px}
+  .er-av{width:48px;height:48px;font-size:1rem}
+  .er-t h1{font-size:1.2rem}
+  .er-acts{width:100%}.er-acts .btn{flex:1;justify-content:center}
+  .er-tiles{display:flex;overflow-x:auto;margin:0 -12px .8rem;padding:0 12px 2px;scrollbar-width:none}
+  .er-tiles::-webkit-scrollbar{display:none}
+  .er-tile{flex:0 0 auto;min-width:126px;max-width:170px}
+  .er-tabs{position:sticky;top:var(--header-height,60px);z-index:40;margin:0 -12px .8rem;border-radius:0;padding:.45rem 12px;
+    background:color-mix(in srgb,var(--bg-body) 94%,transparent);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+  .er-tabs button{background:var(--bg-card);border:1px solid var(--border-color);border-radius:999px;padding:.45rem .85rem}
+  .er-tabs button.on{background:var(--primary);border-color:var(--primary);color:#fff}
+  .er-tabs button.on .n{background:rgba(255,255,255,.25);color:#fff}
+  .er-pane{padding:.9rem;border-radius:18px}
+  .er-grid,.er-mock{grid-template-columns:minmax(0,1fr)}
+  .er-grid>.er-card:only-child .er-rows{columns:1}
+  .er-bar{display:none}
+  .er-rows .rm{display:none}
+}
 @media print{
     .no-print{display:none !important}
+    .er-pane{display:block !important;border:0 !important;padding:0 !important;margin:0 0 1rem}
+    .er-pane[hidden]{display:block !important}
+    .er-print-head{display:block}
+    .er-grid{display:block}.er-card{break-inside:avoid;margin-bottom:.6rem}
+    .er-tiles,.er-tabs,.er-head,.er-miss{display:none !important}
+    .er-bar{display:none}
     .app-container,.main-content,.page-content{display:block !important}
     .sidebar,.top-header{display:none !important}
     .report{max-width:100%}
@@ -32,158 +121,179 @@
 {% endblock %}
 
 {% block content %}
-<div class="page-header no-print">
-    <div><h1>Exam Report</h1><p class="text-muted text-sm">{% if sss3_view %}Consolidated WAEC, NECO, JAMB and Mock JAMB record{% elif exam_level == 'jss3' %}JSS3 — State BECE and NECO BECE record{% else %}Common Entrance record{% endif %}</p></div>
-    <div class="page-header-actions">
-        <button data-print class="btn btn-primary btn-sm"><i class="fas fa-file-pdf"></i> Print / Save PDF</button>
-        <a href="{{ url_for('main.view_student', student_id=student.id) }}" class="btn btn-secondary btn-sm"><i class="fas fa-arrow-left"></i> Back</a>
-    </div>
-</div>
+{% macro gpill(g) -%}
+<span class="pill {% if g in ['A1','B2','B3'] %}g-dist{% elif g in ['C4','C5','C6'] %}g-credit{% else %}g-fail{% endif %}">{{ g }}</span>
+{%- endmacro %}
+{% set _ini = ((student.surname or student.full_name or '?')[0] ~ ((student.first_name or '')[:1]))|upper %}
+{% if sss3_view %}
+  {% set _tabs = [('waec','WAEC','fa-file-alt', waec_years|length), ('neco','NECO','fa-file-lines', neco_years|length),
+                  ('jamb','JAMB','fa-file-contract', jamb_list|length), ('mock','Mock JAMB','fa-clipboard-list', mock_progress|length if mock_progress else 0),
+                  ('admission','Admission','fa-graduation-cap', 0)] %}
+  {% if aspiration and aspiration.status not in ('NO_TARGET', None) %}{% set _tabs = _tabs + [('aspiration','Aspiration','fa-bullseye',0)] %}{% endif %}
+  {% if junior_sittings %}{% set _tabs = _tabs + [('earlier','BECE / Entrance','fa-user-graduate', junior_sittings|length)] %}{% endif %}
+{% else %}
+  {% set _tabs = [('earlier', 'BECE' if exam_level == 'jss3' else 'Common Entrance', 'fa-user-graduate', junior_sittings|length if junior_sittings else 0)] %}
+  {% if junior_sittings %}{% set _tabs = _tabs + [('next', 'SSS1 readiness' if junior_sittings[0].level == 'jss3' else 'JSS1 placement', 'fa-stairs', 0)] %}{% endif %}
+{% endif %}
 
-<div class="report">
-    <div class="report-head">
-        <div>
-            <h1>{{ student.full_name }}</h1>
-            <div class="meta">
-                {% if student.gender %}{{ student.gender }}{% endif %}{% if student.stream %} · {{ student.stream }}{% endif %}
-                {% if student.is_graduated %} · Graduate{% endif %}
-                {% if exam_level == 'jss3' %} · JSS3{% elif exam_level == 'basic6' and junior_sittings %} · {{ junior_sittings[0].level_label }}{% elif exam_level == 'sss3' %} · SSS3{% endif %}
-            </div>
-        </div>
-        <div class="meta">Generated {{ generated.strftime('%d %b %Y') }}</div>
+<div class="er">
+  <header class="er-head no-print">
+    <a href="{{ url_for('main.view_student', student_id=student.id) }}" class="er-back" aria-label="Back to profile"><i class="fas fa-arrow-left" aria-hidden="true"></i></a>
+    <span class="er-av" aria-hidden="true">{{ _ini }}</span>
+    <div class="er-t">
+      <span class="er-kicker">{% if sss3_view %}Exam report · Consolidated WAEC, NECO, JAMB and Mock JAMB record{% elif exam_level == 'jss3' %}Exam report · JSS3 — State BECE and NECO BECE record{% else %}Exam report · Common Entrance record{% endif %}</span>
+      <h1>{{ student.full_name }}</h1>
+      <div class="meta">{{ student.student_id }}{% if student.gender %} · {{ student.gender }}{% endif %}{% if student.stream %} · {{ student.stream }}{% endif %}{% if student.is_graduated %} · Graduate{% endif %}{% if exam_level == 'jss3' %} · JSS3{% elif exam_level == 'basic6' and junior_sittings %} · {{ junior_sittings[0].level_label }}{% elif exam_level == 'sss3' %} · SSS3{% endif %}</div>
     </div>
+    <div class="er-acts">
+      <button data-print class="btn btn-primary"><i class="fas fa-print" aria-hidden="true"></i> Print / PDF</button>
+    </div>
+  </header>
 
-    {% if exam_year and missing is defined %}
-    <div class="no-print" style="display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin:-.25rem 0 1rem;padding:.6rem .8rem;border:1px dashed var(--border-color);border-radius:var(--radius-md)">
-      {% if missing %}
-        <span class="muted" style="font-size:.85rem"><i class="fas fa-circle-exclamation"></i> No {{ exam_year }} results yet for:</span>
-        {% for m in missing %}
-          {% if can_write_sub('external_exams', m.sub) %}
-          <a href="{{ m.url }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add {{ m.label }} result</a>
-          {% else %}<span class="chip">{{ m.label }}</span>{% endif %}
-        {% endfor %}
-      {% else %}
-        <span class="muted" style="font-size:.85rem"><i class="fas fa-circle-check" style="color:var(--success)"></i> All {{ exam_year }} exam results are recorded.</span>
-      {% endif %}
-    </div>
+  <div class="er-print-head report-head">
+    <div><h1>{{ student.full_name }}</h1>
+      <div class="meta">{{ student.student_id }}{% if student.gender %} · {{ student.gender }}{% endif %}{% if student.stream %} · {{ student.stream }}{% endif %}</div></div>
+    <div class="meta">Exam report · generated {{ generated.strftime('%d %b %Y') }}</div>
+  </div>
+
+  {% if exam_year and missing is defined %}
+  <div class="er-miss no-print{% if not missing %} ok{% endif %}">
+    {% if missing %}
+      <span><i class="fas fa-circle-exclamation" style="color:var(--warning)"></i> No {{ exam_year }} results yet for:</span>
+      {% for m in missing %}
+        {% if can_write_sub('external_exams', m.sub) %}<a href="{{ m.url }}" class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> Add {{ m.label }} result</a>
+        {% else %}<span class="chip">{{ m.label }}</span>{% endif %}
+      {% endfor %}
+    {% else %}
+      <span><i class="fas fa-circle-check" style="color:var(--success)"></i> All {{ exam_year }} exam results are recorded.</span>
     {% endif %}
+  </div>
+  {% endif %}
 
-    {% if sss3_view %}
-    <!-- WAEC -->
-    <div class="rsection">
-        <h2><i class="fas fa-file-alt"></i> WAEC</h2>
-        {% if waec_years %}
-        {% for year, data in waec_years %}
-        <div style="margin-bottom:.75rem;">
-            <strong>{{ year }}</strong>
-            <div class="summary-chips">
-                <span class="chip">{{ data.rows|length }} subjects</span>
-                <span class="chip">{{ data.credits }} credits</span>
-                <span class="chip">{{ data.distinctions }} distinctions</span>
-            </div>
-            <table class="rtable" style="margin-top:.4rem;">
-                <thead><tr><th>Subject</th><th style="width:90px;">Grade</th></tr></thead>
-                <tbody>
-                {% for r in data.rows %}
-                <tr>
-                    <td>{{ r.subject }}</td>
-                    <td><span class="pill {% if r.grade in ['A1','B2','B3'] %}g-dist{% elif r.grade in ['C4','C5','C6'] %}g-credit{% else %}g-fail{% endif %}">{{ r.grade }}</span></td>
-                </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% endfor %}
-        {% else %}<p class="muted">No WAEC results recorded.</p>{% endif %}
+  {# ── At a glance ── #}
+  <div class="er-tiles no-print">
+  {% if sss3_view %}
+    {% set _w = waec_years[0][1] if waec_years else none %}
+    <button type="button" class="er-tile {{ 'good' if _w and _w.credits >= 5 else ('warn' if _w else '') }}" data-go="waec">
+      <span class="l">WAEC{% if waec_years %} {{ waec_years[0][0] }}{% endif %}</span>
+      <span class="v">{% if _w %}{{ _w.credits }}<small> credits</small>{% else %}—{% endif %}</span>
+      <span class="s">{% if _w %}{{ _w.rows|length }} subjects · {{ _w.distinctions }} distinctions{% else %}No result{% endif %}</span></button>
+    {% set _n = neco_years[0][1] if neco_years else none %}
+    <button type="button" class="er-tile {{ 'good' if _n and _n.credits >= 5 else ('warn' if _n else '') }}" data-go="neco">
+      <span class="l">NECO{% if neco_years %} {{ neco_years[0][0] }}{% endif %}</span>
+      <span class="v">{% if _n %}{{ _n.credits }}<small> credits</small>{% else %}—{% endif %}</span>
+      <span class="s">{% if _n %}{{ _n.rows|length }} subjects · {{ _n.distinctions }} distinctions{% else %}No result{% endif %}</span></button>
+    {% set _jb = (jamb_list|map(attribute='total')|max) if jamb_list else none %}
+    <button type="button" class="er-tile {{ ('good' if _jb >= 200 else 'warn') if _jb else '' }}" data-go="jamb">
+      <span class="l">JAMB best</span>
+      <span class="v">{% if _jb %}{{ _jb }}<small> /400</small>{% else %}—{% endif %}</span>
+      <span class="s">{% if jamb_list %}{{ jamb_list|length }} sitting{{ 's' if jamb_list|length != 1 }}{% else %}No result{% endif %}</span></button>
+    <button type="button" class="er-tile" data-go="mock">
+      <span class="l">Predicted JAMB</span>
+      <span class="v">{% if prediction %}{{ prediction.predicted_score }}{% elif mock_progress %}{{ mock_progress[-1].score }}<small> last mock</small>{% else %}—{% endif %}</span>
+      <span class="s">{% if prediction %}range {{ prediction.predicted_range.low }}–{{ prediction.predicted_range.high }}{% elif mock_progress %}{{ mock_progress|length }} mock{{ 's' if mock_progress|length != 1 }}{% else %}No mocks yet{% endif %}</span></button>
+    {% set _rt = {'READY':('good','Ready'),'CONDITIONAL':('warn','Conditional'),'AT_RISK':('warn','At risk'),'NOT_READY':('bad','Not ready'),'NO_DATA':('','No data yet')}[readiness.status] %}
+    <button type="button" class="er-tile {{ _rt[0] }}" data-go="admission">
+      <span class="l">Admission</span><span class="v sm">{{ _rt[1] }}</span>
+      <span class="s">{{ admission.eligible_course_count if admission.courses else '' }}{% if admission.courses %} of {{ admission.courses|length }} courses{% else %}{{ admission.credit_count }} SSC credits{% endif %}</span></button>
+    {% if aspiration and aspiration.status not in ('NO_TARGET', None) %}
+    <button type="button" class="er-tile {{ {'ON_TRACK':'good','CLOSE':'warn','OFF_TRACK':'bad'}.get(aspiration.status,'') }}" data-go="aspiration">
+      <span class="l">Aspiration</span><span class="v sm">{{ aspiration.status_label or aspiration.status|replace('_',' ')|title }}</span>
+      <span class="s">{{ aspiration.course }}</span></button>
+    {% endif %}
+  {% else %}
+    {% for sit in junior_sittings[:4] %}{% set x = sit.s %}
+    <button type="button" class="er-tile {{ 'good' if x.core_credits else 'warn' }}" data-go="earlier">
+      <span class="l">{{ sit.name }} {{ sit.year }}</span>
+      <span class="v">{{ x.credits }}<small> credits</small></span>
+      <span class="s">Position {{ x.position }} of {{ x.cohort }}{% if x.avg_pct is not none %} · {{ x.avg_pct }}%{% endif %}</span></button>
+    {% else %}
+    <div class="er-tile"><span class="l">Results</span><span class="v">—</span><span class="s">None recorded yet</span></div>
+    {% endfor %}
+  {% endif %}
+  </div>
+
+  <nav class="er-tabs no-print" role="tablist" aria-label="Exam report sections">
+    {% for k, label, icon, n in _tabs %}
+    <button type="button" role="tab" data-tab="{{ k }}" class="{{ 'on' if loop.first }}" aria-selected="{{ 'true' if loop.first else 'false' }}">
+      <i class="fas {{ icon }}" aria-hidden="true"></i>{{ label }}{% if n and n > 1 %}<span class="n">{{ n }}</span>{% endif %}</button>
+    {% endfor %}
+  </nav>
+
+  {% if sss3_view %}
+  {# ── WAEC / NECO ── #}
+  {% for key, label, icon, years in [('waec','WAEC','fa-file-alt', waec_years), ('neco','NECO','fa-file-lines', neco_years)] %}
+  <!-- {{ label }} -->
+  <section class="er-pane" data-pane="{{ key }}" {% if not loop.first %}hidden{% endif %}>
+    <h2><span class="ic"><i class="fas {{ icon }}"></i></span> {{ label }}</h2>
+    {% if years %}
+    <div class="er-grid">
+      {% for year, data in years %}
+      <div class="er-card">
+        <div class="er-card-h"><strong>{{ year }}</strong><span class="muted">{{ data.rows|length }} subjects</span></div>
+        <div class="summary-chips"><span class="chip">{{ data.credits }} credits</span><span class="chip">{{ data.distinctions }} distinctions</span></div>
+        <ul class="er-rows">{% for r in data.rows %}<li><span>{{ r.subject }}</span>{{ gpill(r.grade) }}</li>{% endfor %}</ul>
+      </div>
+      {% endfor %}
     </div>
+    {% else %}<p class="muted">No {{ label }} results recorded.</p>{% endif %}
+  </section>
+  {% endfor %}
 
-    <!-- NECO -->
-    <div class="rsection">
-        <h2><i class="fas fa-file-lines"></i> NECO</h2>
-        {% if neco_years %}
-        {% for year, data in neco_years %}
-        <div style="margin-bottom:.75rem;">
-            <strong>{{ year }}</strong>
-            <div class="summary-chips">
-                <span class="chip">{{ data.rows|length }} subjects</span>
-                <span class="chip">{{ data.credits }} credits</span>
-                <span class="chip">{{ data.distinctions }} distinctions</span>
-            </div>
-            <table class="rtable" style="margin-top:.4rem;">
-                <thead><tr><th>Subject</th><th style="width:90px;">Grade</th></tr></thead>
-                <tbody>
-                {% for r in data.rows %}
-                <tr>
-                    <td>{{ r.subject }}</td>
-                    <td><span class="pill {% if r.grade in ['A1','B2','B3'] %}g-dist{% elif r.grade in ['C4','C5','C6'] %}g-credit{% else %}g-fail{% endif %}">{{ r.grade }}</span></td>
-                </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-        </div>
-        {% endfor %}
-        {% else %}<p class="muted">No NECO results recorded.</p>{% endif %}
-    </div>
-
-    <!-- JAMB -->
-    <div class="rsection">
-        <h2><i class="fas fa-file-contract"></i> JAMB</h2>
-        {% if jamb_list %}
-        {% for j in jamb_list %}
-        <div style="margin-bottom:.6rem;">
-            <strong>{{ j.year }}</strong> — Total <strong>{{ j.total }}</strong>/400 <span class="muted">({{ j.level|replace('_',' ') }})</span>
-            {% if j.subjects %}
-            <table class="rtable" style="margin-top:.3rem;">
-                <thead><tr><th>Subject</th><th style="width:90px;">Score</th></tr></thead>
-                <tbody>{% for s in j.subjects %}<tr><td>{{ s.subject }}</td><td>{{ s.score }}/100</td></tr>{% endfor %}</tbody>
-            </table>
-            {% endif %}
-        </div>
-        {% endfor %}
-        {% else %}<p class="muted">No JAMB results recorded.</p>{% endif %}
-    </div>
-
-    <!-- Mock JAMB + prediction -->
-    <div class="rsection">
-        <h2><i class="fas fa-clipboard-list"></i> Mock JAMB</h2>
-        {% if mock_progress %}
-        <table class="rtable">
-            <thead><tr><th>Exam</th><th>Date</th><th style="width:90px;">Score</th></tr></thead>
-            <tbody>
-            {% for m in mock_progress %}
-            <tr><td>{{ m.name }}</td><td>{{ m.date.strftime('%d %b %Y') if m.date else '' }}</td><td><strong>{{ m.score }}</strong>/400</td></tr>
-            {% endfor %}
-            </tbody>
-        </table>
-        {% else %}<p class="muted">No mock exams taken.</p>{% endif %}
-
-        {% if standing and standing.latest.z is not none %}
-        {% set L = standing.latest %}
-        <div class="summary-chips" style="margin-top:.5rem;">
-            <span class="chip" title="Standing relative to the cohort in {{ L.exam }} — adjusts for how hard or easy that sitting was">
-                Relative standing: <strong>{{ L.percentile }}th percentile</strong>
-                ({{ '%+.1f'|format(L.z) }} SD vs {{ L.cohort_size }} peers)
-            </span>
-            {% if standing.z_trend is not none %}
-            <span class="chip">Standing trend: <strong>{{ '%+.1f'|format(standing.z_trend) }} SD</strong></span>
-            {% endif %}
-        </div>
+  {# ── JAMB ── #}
+  <section class="er-pane" data-pane="jamb" hidden>
+    <h2><span class="ic"><i class="fas fa-file-contract"></i></span> JAMB</h2>
+    {% if jamb_list %}
+    <div class="er-grid">
+      {% for j in jamb_list %}
+      <div class="er-card">
+        <div class="er-card-h"><strong>{{ j.year }}</strong><span class="muted">{{ j.level|replace('_',' ') }}</span></div>
+        <div style="font-size:1.8rem;font-weight:800;letter-spacing:-.02em">{{ j.total }}<span class="muted" style="font-size:.85rem;font-weight:600"> / 400</span></div>
+        {% if j.subjects %}
+        <ul class="er-rows">{% for x in j.subjects %}<li><span>{{ x.subject }}</span><span class="er-bar"><span style="width:{{ [x.score or 0, 100]|min }}%"></span></span><span class="sc">{{ x.score }}/100</span></li>{% endfor %}</ul>
         {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}<p class="muted">No JAMB results recorded.</p>{% endif %}
+  </section>
 
+  {# ── Mock JAMB + prediction ── #}
+  <section class="er-pane" data-pane="mock" hidden>
+    <h2><span class="ic"><i class="fas fa-clipboard-list"></i></span> Mock JAMB</h2>
+    {% if mock_progress %}
+    <div class="er-mock">
+      <div class="er-card">
+        <div class="er-spark no-print" aria-hidden="true">
+          {% for m in mock_progress %}<div><b>{{ m.score }}</b><i style="height:{{ ((m.score or 0) / 400 * 100)|round }}%"></i><small>{{ m.name }}</small></div>{% endfor %}
+        </div>
+        <ul class="er-rows">
+          {% for m in mock_progress %}<li><span>{{ m.name }}<br><small class="muted">{{ m.date.strftime('%d %b %Y') if m.date else '' }}</small></span><span class="sc"><strong>{{ m.score }}</strong>/400</span></li>{% endfor %}
+        </ul>
+      </div>
+      <div>
         {% if prediction %}
-        <div class="pred" style="margin-top:.75rem;">
-            <div style="font-size:.85rem;opacity:.9;">Predicted real JAMB score</div>
-            <div class="big">{{ prediction.predicted_score }}</div>
-            <div style="font-size:.85rem;opacity:.9;">Expected range {{ prediction.predicted_range.low }}–{{ prediction.predicted_range.high }} · {{ prediction.confidence_level }}% confidence</div>
-            {% if prediction.calibrated_by is defined %}<div style="font-size:.78rem;opacity:.85;"><i class="fas fa-bullseye"></i> Calibrated {{ '%+.0f'|format(-prediction.calibrated_by) }} from the historical mock bias (raw {{ prediction.raw_score }})</div>{% endif %}
+        <div class="pred">
+          <div style="font-size:.85rem;opacity:.9;">Predicted real JAMB score</div>
+          <div class="big">{{ prediction.predicted_score }}</div>
+          <div style="font-size:.85rem;opacity:.9;">Expected range {{ prediction.predicted_range.low }}–{{ prediction.predicted_range.high }} · {{ prediction.confidence_level }}% confidence</div>
+          {% if prediction.calibrated_by is defined %}<div style="font-size:.78rem;opacity:.85;"><i class="fas fa-bullseye"></i> Calibrated {{ '%+.0f'|format(-prediction.calibrated_by) }} from the historical mock bias (raw {{ prediction.raw_score }})</div>{% endif %}
         </div>
         {% endif %}
+        {% if standing and standing.latest.z is not none %}{% set L = standing.latest %}
+        <div class="summary-chips" style="margin-top:.6rem;">
+          <span class="chip" title="Standing relative to the cohort in {{ L.exam }} — adjusts for how hard or easy that sitting was">Relative standing: <strong>{{ L.percentile }}th percentile</strong> ({{ '%+.1f'|format(L.z) }} SD vs {{ L.cohort_size }} peers)</span>
+          {% if standing.z_trend is not none %}<span class="chip">Standing trend: <strong>{{ '%+.1f'|format(standing.z_trend) }} SD</strong></span>{% endif %}
+        </div>
+        {% endif %}
+      </div>
     </div>
+    {% else %}<p class="muted">No mock exams taken.</p>{% endif %}
+  </section>
 
-    <!-- Admission readiness -->
-    <div class="rsection">
-        <h2><i class="fas fa-graduation-cap"></i> Admission Readiness <span class="muted" style="font-size:.75rem;font-weight:400;">(guidance only)</span></h2>
-
+  {# ── Admission readiness ── #}
+  <section class="er-pane" data-pane="admission" hidden>
+    <h2><span class="ic"><i class="fas fa-graduation-cap"></i></span> Admission Readiness <span class="muted" style="font-size:.75rem;font-weight:400;">(guidance only)</span></h2>
         {# Forward-looking verdict from the mock trajectory (or actual results). #}
         {% set _sty = {'READY':('#137333','#e6f4ea','Admission-ready (projected)'),
                        'CONDITIONAL':('#946200','#fef7e0','Conditional'),
@@ -278,13 +388,11 @@
             </tbody>
         </table>
         {% endif %}
-    </div>
+  </section>
 
-    {# The student's OWN university target: eligibility verdict, gap-to-target and
-       the courses they're projected competitive for (from the aspiration engine). #}
-    {% if aspiration and aspiration.status not in ('NO_TARGET', None) %}
-    <div class="rsection">
-        <h2><i class="fas fa-bullseye"></i> University Aspiration <span class="muted" style="font-size:.75rem;font-weight:400;">(their chosen course)</span></h2>
+  {% if aspiration and aspiration.status not in ('NO_TARGET', None) %}
+  <section class="er-pane" data-pane="aspiration" hidden>
+    <h2><span class="ic"><i class="fas fa-bullseye"></i></span> University Aspiration <span class="muted" style="font-size:.75rem;font-weight:400;">(their chosen course)</span></h2>
         {% set _es = {'ON_TRACK':('#137333','#e6f4ea','On track'),
                       'CLOSE':('#946200','#fef7e0','Close'),
                       'OFF_TRACK':('#b3261e','#fce8e6','Off track'),
@@ -341,51 +449,48 @@
             {% endfor %}
         </div>
         {% endif %}
-    </div>
+  </section>
+  {% endif %}
+  {% endif %}{# /sss3_view #}
+
+  {% if junior_sittings or not sss3_view %}
+  <section class="er-pane" data-pane="earlier" {% if sss3_view %}hidden{% endif %}>
+    <h2><span class="ic"><i class="fas fa-user-graduate"></i></span> {% if sss3_view %}Earlier exams — BECE / Common Entrance{% elif exam_level == 'jss3' %}BECE — State &amp; NECO{% else %}Common Entrance{% endif %}</h2>
+    {% if not junior_sittings %}
+    <p class="muted">No {% if exam_level == 'jss3' %}State BECE or NECO BECE{% else %}Common Entrance{% endif %} results recorded yet.</p>
     {% endif %}
-    {% endif %}{# /sss3_view #}
-
-    {% if junior_sittings or not sss3_view %}
-    <!-- BECE / Common Entrance -->
-    <div class="rsection">
-        <h2><i class="fas fa-user-graduate"></i> {% if sss3_view %}Earlier exams — BECE / Common Entrance{% elif exam_level == 'jss3' %}BECE — State &amp; NECO{% else %}Common Entrance{% endif %}</h2>
-        {% if not junior_sittings %}
-        <p class="muted">No {% if exam_level == 'jss3' %}State BECE or NECO BECE{% else %}Common Entrance{% endif %} results recorded yet.</p>
-        {% endif %}
-        {% for sit in junior_sittings %}{% set x = sit.s %}{% set sc = sit.scheme %}
-        <div style="margin-bottom:1rem;">
-            <strong>{{ sit.name }} {{ sit.year }}</strong> <span class="muted">({{ sit.level_label }} · {{ 'State' if sit.body == 'state' else 'Federal' }})</span>
-            <div class="summary-chips">
-                <span class="chip">Position <strong>{{ x.position }}</strong> of {{ x.cohort }}</span>
-                <span class="chip">{{ x.subjects }} subjects</span>
-                <span class="chip">{{ x.credits }} credits</span>
-                <span class="chip">{{ x.distinctions }} distinctions</span>
-                {% if x.avg_pct is not none %}<span class="chip">Average {{ x.avg_pct }}%</span>{% endif %}
-                {% if x.total is not none %}<span class="chip">Total {{ x.total }}</span>{% endif %}
-                <span class="chip">Eng &amp; Maths credit: <strong>{{ 'Yes' if x.core_credits else 'No' }}</strong></span>
-                {% if x.exam_number %}<span class="chip">Exam no. {{ x.exam_number }}</span>{% endif %}
-            </div>
-            <table class="rtable" style="margin-top:.4rem;">
-                <thead><tr><th>Subject</th><th style="width:80px;">Score</th><th style="width:80px;">Grade</th><th>Remark</th></tr></thead>
-                <tbody>
-                {% for r in x.results %}{% set k = sc.kind_of(r.grade) %}
-                <tr><td>{{ r.subject }}</td><td>{{ r.score|round(1) if r.score is not none else '—' }}</td>
-                    <td><span class="pill {% if k == 'distinction' %}g-dist{% elif k == 'credit' %}g-credit{% elif k == 'pass' %}g-pass{% else %}g-fail{% endif %}">{{ r.grade }}</span></td>
-                    <td>{{ (sc.band_for_grade(r.grade) or {}).get('label', '') }}</td></tr>
-                {% endfor %}
-                </tbody>
-            </table>
+    <div class="er-grid">
+    {% for sit in junior_sittings %}{% set x = sit.s %}{% set sc = sit.scheme %}
+      <div class="er-card">
+        <div class="er-card-h"><strong>{{ sit.name }} {{ sit.year }}</strong><span class="muted">{{ sit.level_label }} · {{ 'State' if sit.body == 'state' else 'Federal' }}</span></div>
+        <div class="summary-chips">
+          <span class="chip">Position <strong>{{ x.position }}</strong> of {{ x.cohort }}</span>
+          <span class="chip">{{ x.credits }} credits</span>
+          <span class="chip">{{ x.distinctions }} distinctions</span>
+          {% if x.avg_pct is not none %}<span class="chip">Average {{ x.avg_pct }}%</span>{% endif %}
+          {% if x.total is not none %}<span class="chip">Total {{ x.total }}</span>{% endif %}
+          <span class="chip">Eng &amp; Maths credit: <strong>{{ 'Yes' if x.core_credits else 'No' }}</strong></span>
+          {% if x.exam_number %}<span class="chip">Exam no. {{ x.exam_number }}</span>{% endif %}
         </div>
-        {% endfor %}
+        <ul class="er-rows">
+          {% for r in x.results %}{% set k = sc.kind_of(r.grade) %}
+          <li><span>{{ r.subject }}</span>
+            <span class="sc">{{ r.score|round(1) if r.score is not none else '—' }}</span>
+            <span class="pill {% if k == 'distinction' %}g-dist{% elif k == 'credit' %}g-credit{% elif k == 'pass' %}g-pass{% else %}g-fail{% endif %}">{{ r.grade }}</span>
+            <span class="rm">{{ (sc.band_for_grade(r.grade) or {}).get('label', '') }}</span></li>
+          {% endfor %}
+        </ul>
+      </div>
+    {% endfor %}
     </div>
+  </section>
 
-    {% if junior_sittings and not sss3_view %}{% set sit = junior_sittings[0] %}{% set n = sit.next %}
-    <!-- Next step -->
-    <div class="rsection">
+  {% if junior_sittings and not sss3_view %}{% set sit = junior_sittings[0] %}{% set n = sit.next %}
+  <section class="er-pane" data-pane="next" hidden>
         {% if sit.level == 'jss3' %}
-        <h2><i class="fas fa-stairs"></i> SSS1 Readiness <span class="muted" style="font-size:.75rem;font-weight:400;">(from {{ sit.name }} {{ sit.year }} · guidance only)</span></h2>
+        <h2><span class="ic"><i class="fas fa-stairs"></i></span> SSS1 Readiness <span class="muted" style="font-size:.75rem;font-weight:400;">(from {{ sit.name }} {{ sit.year }} · guidance only)</span></h2>
         {% else %}
-        <h2><i class="fas fa-school"></i> JSS1 Placement <span class="muted" style="font-size:.75rem;font-weight:400;">(from {{ sit.name }} {{ sit.year }})</span></h2>
+        <h2><span class="ic"><i class="fas fa-school"></i></span> JSS1 Placement <span class="muted" style="font-size:.75rem;font-weight:400;">(from {{ sit.name }} {{ sit.year }})</span></h2>
         {% endif %}
         {# Common Entrance: admission first, then the cut-off, then the benchmark. #}
         {% if sit.level != 'jss3' and n.admitted is not none %}{% set good = n.admitted %}
@@ -419,8 +524,32 @@
                 {% for r in n.weakest %}<span class="pill g-fail" style="margin:2px;display:inline-block;">{{ r.subject }} · {{ r.grade }}</span>{% else %}<span class="muted">No subject below credit</span>{% endfor %}</div>
         </div>
         {% endif %}
-    </div>
-    {% endif %}
-    {% endif %}
+  </section>
+  {% endif %}
+  {% endif %}
 </div>
+
+<script nonce="{{ csp_nonce }}">
+(function () {
+  var tabs = document.querySelectorAll('.er-tabs [data-tab]');
+  var panes = document.querySelectorAll('.er-pane[data-pane]');
+  function show(k) {
+    var found = false;
+    tabs.forEach(function (b) { var on = b.getAttribute('data-tab') === k; if (on) found = true;
+      b.classList.toggle('on', on); b.setAttribute('aria-selected', on ? 'true' : 'false');
+      if (on && b.scrollIntoView) b.scrollIntoView({ block: 'nearest', inline: 'center' }); });
+    if (!found) return false;
+    panes.forEach(function (p) { p.hidden = p.getAttribute('data-pane') !== k; });
+    try { history.replaceState(null, '', '#' + k); } catch (e) {}
+    return true;
+  }
+  tabs.forEach(function (b) { b.addEventListener('click', function () { show(b.getAttribute('data-tab')); }); });
+  document.querySelectorAll('.er-tile[data-go]').forEach(function (t) {
+    t.addEventListener('click', function () { if (show(t.getAttribute('data-go'))) {
+      var nav = document.querySelector('.er-tabs'); if (nav && nav.getBoundingClientRect().top < 0) nav.scrollIntoView({ behavior: 'smooth' }); } });
+  });
+  var h = (location.hash || '').slice(1); if (h) show(h);
+  window.addEventListener('hashchange', function () { var k = (location.hash || '').slice(1); if (k) show(k); });
+})();
+</script>
 {% endblock %}

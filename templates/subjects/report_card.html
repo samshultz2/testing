@@ -23,6 +23,75 @@
 .rc-signatures .sig .line { border-top: 1px solid var(--text-primary); margin-bottom: .3rem; }
 .rc-signatures .sig .role { font-size: .72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; }
 
+
+/* ══ Report card — laptop workspace / phone app (print keeps the formal card) ══ */
+.rc{max-width:1320px;margin:0 auto}
+.rc-head{display:flex;align-items:center;gap:1rem;background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;padding:1rem 1.2rem;margin-bottom:.9rem}
+.rc-back{width:38px;height:38px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:var(--gray-100);color:var(--text-secondary);flex:none;text-decoration:none}
+.rc-av{width:56px;height:56px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1.2rem;color:var(--primary);background:color-mix(in srgb,var(--primary) 13%,var(--bg-card))}
+.rc-t{flex:1;min-width:0}
+.rc-kicker{font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted)}
+.rc-t h1{font-size:1.45rem;font-weight:800;margin:.05rem 0 .1rem;letter-spacing:-.015em}
+.rc-t .meta{font-size:.85rem;color:var(--text-muted)}
+.rc-acts{display:flex;gap:.5rem;flex:none}
+.rc-terms{display:flex;gap:.4rem;overflow-x:auto;margin-bottom:.9rem;scrollbar-width:none}
+.rc-terms::-webkit-scrollbar{display:none}
+.rc-terms a{flex:none;padding:.45rem .9rem;border-radius:999px;border:1px solid var(--border-color);background:var(--bg-card);color:var(--text-secondary);
+  font-weight:600;font-size:.86rem;text-decoration:none;white-space:nowrap}
+.rc-terms a.on{background:var(--primary);border-color:var(--primary);color:#fff}
+.rc-cols{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:1rem;align-items:start}
+.rc-rail{position:sticky;top:calc(var(--header-height,60px) + 12px);display:flex;flex-direction:column;gap:1rem}
+.rc-box{background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;padding:1rem}
+.rc-box h3{font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted);margin:0 0 .7rem}
+.rc-score{display:flex;align-items:center;gap:1rem}
+.rc-ring{width:104px;height:104px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;
+  background:conic-gradient(var(--c) calc(var(--p) * 1%), var(--gray-200) 0)}
+.rc-ring>div{width:80px;height:80px;border-radius:50%;background:var(--bg-card);display:flex;flex-direction:column;align-items:center;justify-content:center}
+.rc-ring b{font-size:1.35rem;font-weight:800;line-height:1}
+.rc-ring small{font-size:.64rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-top:2px}
+.rc-facts{display:grid;grid-template-columns:1fr 1fr;gap:.5rem;flex:1}
+.rc-facts div{display:flex;flex-direction:column}
+.rc-facts span{font-size:.68rem;color:var(--text-muted);font-weight:700;text-transform:uppercase;letter-spacing:.04em}
+.rc-facts b{font-size:1.05rem}
+.rc-status{display:inline-flex;align-items:center;gap:.35rem;font-weight:800;font-size:.8rem;border-radius:999px;padding:.2rem .65rem;margin-top:.7rem}
+.rc-status.pass{background:color-mix(in srgb,var(--success) 14%,var(--bg-card));color:var(--success)}
+.rc-status.fail{background:color-mix(in srgb,var(--danger) 13%,var(--bg-card));color:var(--danger)}
+.rc-hl{list-style:none;margin:0;padding:0}
+.rc-hl li{display:flex;align-items:center;gap:.6rem;padding:.4rem 0;font-size:.88rem;border-bottom:1px solid var(--border-light)}
+.rc-hl li:last-child{border-bottom:0}
+.rc-hl li span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rc-hl b{font-variant-numeric:tabular-nums}
+.rc-hl-h{font-size:.74rem;font-weight:700;color:var(--text-muted);margin:.5rem 0 .1rem}
+.rc-subs{display:none}
+.rc .grade-key{gap:.35rem}
+.rc .card{border-radius:16px}
+@media (max-width:1099px){.rc-cols{grid-template-columns:minmax(0,1fr)}.rc-rail{position:static;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr))}}
+@media (max-width:759px){
+  .rc-head{flex-wrap:wrap;padding:.9rem;gap:.75rem;border-radius:18px}
+  .rc-av{width:48px;height:48px;font-size:1rem}
+  .rc-t h1{font-size:1.2rem}
+  .rc-acts{width:100%}.rc-acts>*{flex:1;justify-content:center}
+  .rc-terms{margin:0 -12px .8rem;padding:0 12px}
+  .rc-cols{display:flex;flex-direction:column;gap:.9rem}
+  .rc-rail{display:contents}
+  .rc-rail .rc-box:first-child{order:-1}
+  .rc-rail .rc-box{order:2}
+  .rc-perf{display:none}
+  .rc-subs{display:flex;flex-direction:column;gap:.55rem;margin-bottom:1rem}
+  .rc-sub{background:var(--bg-card);border:1px solid var(--border-color);border-radius:16px;padding:.8rem .9rem}
+  .rc-sub-top{display:flex;align-items:center;gap:.6rem}
+  .rc-sub-top strong{flex:1;min-width:0;font-size:.95rem}
+  .rc-sub-top .tot{font-size:1.25rem;font-weight:800;font-variant-numeric:tabular-nums}
+  .rc-sub-bar{height:6px;border-radius:4px;background:var(--gray-200);overflow:hidden;margin:.5rem 0 .45rem}
+  .rc-sub-bar span{display:block;height:100%;border-radius:4px}
+  .rc-sub-cells{display:flex;flex-wrap:wrap;gap:.35rem;font-size:.74rem;color:var(--text-muted)}
+  .rc-sub-cells span{background:var(--gray-100);border-radius:6px;padding:.1rem .45rem}
+  .rc-sub-cells b{color:var(--text-primary);margin-left:.2rem}
+  .rc .student-info-grid{grid-template-columns:1fr 1fr}
+  .rc .student-info-grid .student-info-item:first-child{grid-column:1/-1}
+  .rc .report-header{padding:.6rem .2rem .8rem}
+}
+
 /* Print: crisp, typeset, single document — no app chrome, no split rows. */
 @media print {
     .sidebar, .top-header, .bottom-nav, .page-header, .page-header-actions,
@@ -40,37 +109,44 @@
     .report-header { border-bottom: 2px solid #000; }
     .report-header h2 { color: #000; }
     .rc-signatures { break-inside: avoid; }
+    .rc-head, .rc-terms, .rc-rail, .rc-subs { display: none !important; }
+    .rc-cols { display: block !important; }
+    .rc-perf { display: block !important; }
+    .print-only { display: block !important; }
 }
+.print-only { display: none; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <h1>Report Card</h1>
-    <div class="page-header-actions no-print">
-        <button data-print class="btn btn-primary"><i class="fas fa-print"></i> Print</button>
-        {% if report_data %}<a href="{{ url_for('subjects.report_card_pdf', student_id=student.id, term_id=term_id) }}" class="btn btn-success"><i class="fas fa-file-pdf"></i> Download PDF</a>{% endif %}
-        <a href="{{ url_for('main.view_student', student_id=student.id) }}" class="btn btn-secondary">Back to Student</a>
-    </div>
-</div>
+{% set _ini = ((student.surname or student.full_name or '?')[0] ~ ((student.first_name or '')[:1]))|upper %}
+<div class="rc">
+<header class="rc-head no-print">
+  <a href="{{ url_for('main.view_student', student_id=student.id) }}" class="rc-back" aria-label="Back to profile"><i class="fas fa-arrow-left" aria-hidden="true"></i></a>
+  <span class="rc-av" aria-hidden="true">{{ _ini }}</span>
+  <div class="rc-t">
+    <span class="rc-kicker">Report card{% if selected_term %} · {{ selected_term.full_name }}{% endif %}</span>
+    <h1>{{ student.full_name }}</h1>
+    <div class="meta">{{ student.student_id }}{% if report_data %} · {{ report_data.assignment.display_name }}{% endif %}{% if student.gender %} · {{ student.gender }}{% endif %}</div>
+  </div>
+  <div class="rc-acts">
+    <button data-print class="btn btn-primary"><i class="fas fa-print"></i> Print</button>
+    {% if report_data %}<a href="{{ url_for('subjects.report_card_pdf', student_id=student.id, term_id=term_id) }}" class="sp-btn"><i class="fas fa-file-pdf"></i> PDF</a>{% endif %}
+  </div>
+</header>
 
-<div class="card mb-3 no-print">
-    <div class="card-body">
-        <form method="GET" class="filter-form">
-            <div class="form-group">
-                <label class="form-label">Term</label>
-                <select name="term_id" class="form-control" data-autosubmit>
-                    <option value="">Select Term</option>
-                    {% for term in terms %}
-                    <option value="{{ term.id }}" {% if term_id == term.id %}selected{% endif %}>{{ term.full_name }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-        </form>
-    </div>
-</div>
+{% if terms %}
+<nav class="rc-terms no-print" aria-label="Term">
+  {% for term in terms %}<a href="?term_id={{ term.id }}" class="{{ 'on' if term_id == term.id }}" {% if term_id == term.id %}aria-current="page"{% endif %}>{{ term.full_name }}</a>{% endfor %}
+</nav>
+{% endif %}
 
 {% if report_data %}
+{% set _subs = report_data.subjects|selectattr('total')|list %}
+{% set _sorted = _subs|sort(attribute='total', reverse=True) %}
+{% set _pos = (report_data.term_summary.position_in_arm or report_data.term_summary.position_in_class) if report_data.term_summary else none %}
+<div class="rc-cols">
+<div class="rc-main">
 <div class="card mb-3">
     <div class="card-body">
         <div class="report-header" style="text-align:center;">
@@ -100,7 +176,21 @@
     </div>
 </div>
 
-<div class="card mb-3">
+
+{# Phone: one card per subject (the table is for laptops and print). #}
+<div class="rc-subs no-print">
+  {% for subj in report_data.subjects %}{% set _t = subj.total or 0 %}
+  <div class="rc-sub">
+    <div class="rc-sub-top"><strong>{{ subj.subject.name }}</strong>
+      <span class="badge {% if subj.grade == 'F' %}badge-danger{% elif subj.grade in ['A+', 'A'] %}badge-success{% else %}badge-info{% endif %}">{{ subj.grade }}</span>
+      <span class="tot">{{ subj.total|num if subj.total else '–' }}</span></div>
+    <div class="rc-sub-bar"><span style="width:{{ ([_t, 100]|min)|round|int }}%;background:{{ 'var(--danger)' if subj.grade == 'F' else ('var(--success)' if subj.grade in ['A+','A'] else 'var(--primary)') }}"></span></div>
+    <div class="rc-sub-cells">{% for col in report_data.columns %}<span>{{ col.label }}<b>{{ subj.cells[loop.index0]|num if subj.cells[loop.index0] else '–' }}</b></span>{% endfor %}{% if subj.remark %}<span>{{ subj.remark }}</span>{% endif %}</div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="card mb-3 rc-perf">
     <div class="card-header"><h3>Academic Performance</h3></div>
     <div class="card-body" style="padding: 0; overflow-x: auto;">
         <table class="data-table">
@@ -140,7 +230,7 @@
     </div>
 </div>
 
-<div class="card mb-3">
+<div class="card mb-3 print-only">
     <div class="card-header"><h3>Summary</h3></div>
     <div class="card-body">
         <div class="student-info-grid">
@@ -154,21 +244,6 @@
             <div class="student-info-item"><span>Subjects Failed:</span><strong class="text-danger">{{ report_data.subjects_failed }}</strong></div>
             {% if report_data.next_term_fees %}<div class="student-info-item"><span>Next Term Fees:</span><strong>{{ report_data.next_term_fees }}</strong></div>{% endif %}
             {% if report_data.next_term_begins %}<div class="student-info-item"><span>Next Term Begins:</span><strong>{{ report_data.next_term_begins }}</strong></div>{% endif %}
-        </div>
-    </div>
-</div>
-
-<div class="card mb-3">
-    <div class="card-header"><h3>Grade Key</h3></div>
-    <div class="card-body">
-        <div class="grade-key">
-            {% if report_data.grade_scale %}
-            {% for b in report_data.grade_scale %}
-            <span><strong>{{ b.grade }}</strong> ({{ b.min_score }}-{{ b.max_score }}){% if b.remark %} {{ b.remark }}{% endif %}</span>
-            {% endfor %}
-            {% else %}
-            <span class="text-muted">No grade scale configured — set one in Settings ▸ Grade Scale.</span>
-            {% endif %}
         </div>
     </div>
 </div>
@@ -218,6 +293,68 @@
     </div>
 </div>
 
+</div>
+
+<aside class="rc-rail no-print">
+  <div class="rc-box">
+    <h3>This term</h3>
+    {% set _avg = report_data.average_pct or 0 %}
+    <div class="rc-score">
+      <div class="rc-ring" style="--p:{{ ([_avg, 100]|min)|round|int }};--c:{{ 'var(--success)' if report_data.result_status == 'PASS' else 'var(--danger)' }}" role="img" aria-label="Average {{ _avg|num }} percent">
+        <div><b>{{ _avg|num }}%</b><small>Average</small></div></div>
+      <div class="rc-facts">
+        <div><span>Position</span><b>{{ _pos or '—' }}{% if _pos %}<small class="text-muted"> / {{ report_data.no_in_class }}</small>{% endif %}</b></div>
+        <div><span>Grade</span><b>{{ report_data.overall_grade }}</b></div>
+        <div><span>Passed</span><b class="text-success">{{ report_data.subjects_passed }}</b></div>
+        <div><span>Failed</span><b class="{{ 'text-danger' if report_data.subjects_failed else '' }}">{{ report_data.subjects_failed }}</b></div>
+      </div>
+    </div>
+    <span class="rc-status {{ 'pass' if report_data.result_status == 'PASS' else 'fail' }}"><i class="fas {{ 'fa-circle-check' if report_data.result_status == 'PASS' else 'fa-circle-xmark' }}"></i> {{ report_data.result_status }}</span>
+    <span class="text-muted" style="font-size:.8rem;margin-left:.4rem">{{ report_data.scores_obtained|num }} of {{ report_data.scores_obtainable|num }} marks · {{ report_data.total_subjects }} subjects</span>
+    {% if report_data.attendance_pct is not none %}<div class="text-muted" style="font-size:.8rem;margin-top:.5rem"><i class="fas fa-calendar-check"></i> Attendance {{ report_data.attendance_pct|num }}%</div>{% endif %}
+    {% if report_data.next_term_begins or report_data.next_term_fees %}
+    <div class="text-muted" style="font-size:.8rem;margin-top:.35rem">{% if report_data.next_term_begins %}Next term begins {{ report_data.next_term_begins }}{% endif %}{% if report_data.next_term_fees %} · Fees {{ report_data.next_term_fees }}{% endif %}</div>{% endif %}
+  </div>
+
+  {% if _sorted|length > 1 %}
+  <div class="rc-box">
+    <h3>Strongest &amp; weakest</h3>
+    <div class="rc-hl-h">Best subjects</div>
+    <ul class="rc-hl">{% for x in _sorted[:3] %}<li><i class="fas fa-arrow-trend-up" style="color:var(--success)"></i><span>{{ x.subject.name }}</span><b>{{ x.total|num }}</b></li>{% endfor %}</ul>
+    <div class="rc-hl-h">Needs most work</div>
+    <ul class="rc-hl">{% for x in (_sorted[-3:]|reverse) %}<li><i class="fas fa-arrow-trend-down" style="color:var(--danger)"></i><span>{{ x.subject.name }}</span><b>{{ x.total|num }}</b></li>{% endfor %}</ul>
+  </div>
+  {% endif %}
+
+  <div class="rc-box">
+    <h3>Grade key</h3>
+    <div class="grade-key">
+      {% if report_data.grade_scale %}{% for b in report_data.grade_scale %}<span><strong>{{ b.grade }}</strong> {{ b.min_score }}–{{ b.max_score }}{% if b.remark %} · {{ b.remark }}{% endif %}</span>{% endfor %}
+      {% else %}<span class="text-muted">No grade scale configured — set one in Settings ▸ Grade Scale.</span>{% endif %}
+    </div>
+  </div>
+</aside>
+</div>
+
+<div class="print-only">
+<div class="card mb-3">
+    <div class="card-header"><h3>Grade Key</h3></div>
+    <div class="card-body">
+        <div class="grade-key">
+            {% if report_data.grade_scale %}
+            {% for b in report_data.grade_scale %}
+            <span><strong>{{ b.grade }}</strong> ({{ b.min_score }}-{{ b.max_score }}){% if b.remark %} {{ b.remark }}{% endif %}</span>
+            {% endfor %}
+            {% else %}
+            <span class="text-muted">No grade scale configured — set one in Settings ▸ Grade Scale.</span>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+</div>
+</div>
+
 {% elif enrollment is none and selected_term %}
 <div class="card">
     <div class="card-body">
@@ -239,4 +376,5 @@
     </div>
 </div>
 {% endif %}
+</div>
 {% endblock %}

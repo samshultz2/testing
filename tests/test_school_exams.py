@@ -360,7 +360,7 @@ def test_exam_report_shows_bece_for_a_jss3_pupil(app):
     assert 'SSS1 Readiness' in html and 'Below the benchmark' in html     # Maths only a pass
     assert 'No credit yet in Mathematics' in html
     assert 'Suggested SSS stream' in html
-    assert '<h2><i class="fas fa-file-alt"></i> WAEC</h2>' not in html     # no SSS3 sections
+    assert 'data-pane="waec"' not in html     # no SSS3 sections
     assert 'Admission Readiness' not in html
 
     # An SSS3 student keeps the WAEC report, with their BECE as history.
@@ -374,7 +374,7 @@ def test_exam_report_shows_bece_for_a_jss3_pupil(app):
         db.session.commit()
     enroll_sss3(app, s3)
     html = c.get(f'/results/student/{s3}/report').get_data(as_text=True)
-    assert '<h2><i class="fas fa-file-alt"></i> WAEC</h2>' in html
+    assert 'data-pane="waec"' in html
     assert 'Earlier exams — BECE / Common Entrance' in html and 'State BECE 2048' in html
 
 
@@ -394,7 +394,7 @@ def test_exam_report_shows_common_entrance_for_a_basic6_pupil(app):
     assert 'JSS1 Placement' in html and 'Admitted — FGC Ijanikin' in html
     assert 'Meets the benchmark' in html
     assert 'Suggested SSS stream' not in html                 # JSS3-only
-    assert '<h2><i class="fas fa-file-alt"></i> WAEC</h2>' not in html
+    assert 'data-pane="waec"' not in html
 
 
 def test_exam_report_offers_buttons_for_missing_results(app):
