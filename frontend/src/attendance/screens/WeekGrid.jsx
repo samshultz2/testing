@@ -2,16 +2,22 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { apiGet, apiPost, isPermanent } from '../../lib/api';
 import { cachePut, cacheGet, enqueue } from '../../lib/offline';
 import { useCtx } from '../App';
-import { Toolbar, Field, Select, Button, Spinner, EmptyState, ErrorState, Banner, Pill, Toast } from '../../components/ui';
-import { withGroups, GroupHeadRow } from '../roster';
+import { Spinner, EmptyState, ErrorState, Banner, Pill, Toast } from '../../components/ui';
+import { withGroups, genderLabel } from '../roster';
+import { lastClass, rememberClass } from '../../lib/attprefs';
+import { Picker, ClassChips, WeekStepper, Seg, ActionBar, MoreMenu, usePhone, initialsOf, pickInitialClass } from '../kit';
 
 const key = (aid, wid) => `week|${aid}|${wid}`;
 
 export default function WeekGrid() {
   const { classes = [], weeks = [], sync, initial, default_class, default_week } = useCtx();
-  const seeded = initial && classes.some((c) => String(c.id) === String(initial.assignmentId));
-  const [assignmentId, setAssignmentId] = useState(
-    seeded ? String(initial.assignmentId) : (default_class ? String(default_class) : ''));
+  const [assignmentId, setAssignmentIdRaw] = useState(() => pickInitialClass(classes, default_class, initial, lastClass));
+  const setAssignmentId = (id) => {
+    setAssignmentIdRaw(id);
+    const c = classes.find((x) => String(x.id) === String(id));
+    if (c) rememberClass(id, c.name);
+  };
+  const phone = usePhone();
   const [weekId, setWeekId] = useState(
     default_week ? String(default_week) : (weeks[0] ? String(weeks[0].id) : ''));
   const [split, setSplit] = useState(false);
@@ -97,105 +103,110 @@ export default function WeekGrid() {
 
   const d = state.data;
 
+  const nDays = d ? d.days.length : 0;
+  const totalMarks = d ? d.students.length * nDays * 2 : 0;
+  const presentMarks = d ? d.students.reduce((t, s) => t + d.days.reduce((u, day) => {
+    const c = cell(s.enrollment_id, day.date); return u + (c.am ? 1 : 0) + (c.pm ? 1 : 0); }, 0), 0) : 0;
+  const editable = d && d.students.length && nDays;
+  const dayPresent = (date) => (d ? d.students.filter((s) => { const c = cell(s.enrollment_id, date); return c.am && c.pm; }).length : 0);
+  const cols = { gridTemplateColumns: `minmax(0,1fr) repeat(${nDays}, ${phone ? 40 : 56}px)` };
+
   return (
-    <div>
-      <Toolbar>
-        <Field label="Class" htmlFor="wg-class" grow>
-          <Select id="wg-class" value={assignmentId} onChange={setAssignmentId}
-                  placeholder={classes.length ? '— Select class —' : 'No classes available'}
-                  options={classes.map((c) => ({ value: String(c.id), label: c.name }))} />
-        </Field>
-        <Field label="Week" htmlFor="wg-week">
-          <Select id="wg-week" value={weekId} onChange={setWeekId}
-                  placeholder={weeks.length ? '— Select week —' : 'No weeks'}
-                  options={weeks.map((w) => ({ value: String(w.id), label: `Week ${w.number}` }))} />
-        </Field>
-        <Field label="Sessions" htmlFor="wg-split">
-          <Select id="wg-split" value={split ? 'split' : 'whole'} onChange={(v) => setSplit(v === 'split')}
-                  options={[{ value: 'whole', label: 'Whole day' }, { value: 'split', label: 'AM / PM' }]} />
-        </Field>
-      </Toolbar>
+    <div className={'md' + (phone && editable ? ' has-bar' : '')}>
+      <Picker>
+        <ClassChips classes={classes} value={assignmentId} onChange={setAssignmentId} />
+        <div className="ak-pick-row2">
+          <WeekStepper weeks={weeks} value={weekId} onChange={setWeekId} current={default_week} />
+          <Seg label="Sessions" value={split ? 'split' : 'whole'} onChange={(v) => setSplit(v === 'split')}
+               options={[{ value: 'whole', label: 'Whole day' }, { value: 'split', label: 'AM / PM' }]} />
+        </div>
+      </Picker>
 
       {msg && <Banner tone={msg.tone} onClose={() => setMsg(null)}>{msg.text}</Banner>}
       {toast && <Toast tone={toast.tone} onClose={() => setToast(null)}>{toast.text}</Toast>}
 
-      {state.idle && <EmptyState icon="fa-table-cells-large" title="Pick a class and week" hint="Load a whole week as a grid — handy for catching up a backlog. Loaded grids cache for offline use." />}
-      {state.loading && <Spinner label="Loading week…" />}
-      {state.error && <ErrorState title="Couldn’t load this week" detail={state.error.message} onRetry={load} />}
+      {state.idle && <div className="md-card"><EmptyState icon="fa-table-cells-large" title="Pick a class and week" hint="Mark a whole week at once — handy for catching up a backlog. Loaded weeks are cached for offline use." /></div>}
+      {state.loading && <div className="md-card"><Spinner label="Loading week…" /></div>}
+      {state.error && <div className="md-card"><ErrorState title="Couldn’t load this week" detail={state.error.message} onRetry={load} /></div>}
 
       {d && (
-        <>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
-            <strong>{d.class_name}</strong>
-            <span style={{ color: 'var(--text-muted)' }}>Week {d.week_number}</span>
-            {state.source === 'cache' && <Pill tone="amber">cached</Pill>}
+        <div className="md-card">
+          <div className="md-sum">
+            <div className="md-sum-t">
+              <strong>{d.class_name}</strong>
+              <span>Week {d.week_number} · {d.students.length} students · {nDays} school day{nDays === 1 ? '' : 's'}</span>
+              {state.source === 'cache' && <span className="md-pills"><Pill tone="amber">cached</Pill></span>}
+            </div>
+            {editable ? (
+              <div className="md-meters">
+                <div className="md-meter"><span>Present</span><div className="md-track"><i style={{ width: (totalMarks ? presentMarks / totalMarks * 100 : 0) + '%' }} /></div><b>{totalMarks ? Math.round(presentMarks / totalMarks * 100) : 0}%</b></div>
+              </div>
+            ) : null}
           </div>
 
-          {!d.days.length ? (
+          {!nDays ? (
             <EmptyState icon="fa-calendar-xmark" title="No school days" hint="This week has no school days (weekend/holidays only)." />
           ) : d.students.length === 0 ? (
             <EmptyState icon="fa-users-slash" title="No students enrolled" />
           ) : (
-            <div className="att-grid-wrap" tabIndex="0" aria-label="Weekly attendance grid">
-              <table className="att-grid">
-                <thead>
-                  <tr>
-                    <th scope="col" className="att-grid-name">Student</th>
-                    {d.days.map((day) => (
-                      <th key={day.date} scope="col">
-                        <button type="button" className="att-linkbtn" onClick={() => toggleColumn(day.date)}
-                                title="Toggle this whole day">{day.label}</button>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {withGroups(d.students,
-                    (gender, first, key) => <GroupHeadRow key={key} gender={gender} first={first} colSpan={1 + d.days.length} />,
-                    (s) => (
-                    <tr key={s.enrollment_id}>
-                      <th scope="row" className="att-grid-name">
-                        <button type="button" className="att-linkbtn" onClick={() => toggleRow(s.enrollment_id)}
-                                title="Toggle this student's week">{s.name}</button>
-                      </th>
-                      {d.days.map((day) => {
-                        const c = cell(s.enrollment_id, day.date);
-                        return (
-                          <td key={day.date}>
-                            {split ? (
-                              <span className="att-ampm">
-                                <label title={`${s.name} ${day.label} AM`}>
-                                  <input type="checkbox" checked={!!c.am} onChange={(e) => setCell(s.enrollment_id, day.date, { am: e.target.checked })} />
-                                  <span aria-hidden="true">AM</span>
-                                </label>
-                                <label title={`${s.name} ${day.label} PM`}>
-                                  <input type="checkbox" checked={!!c.pm} onChange={(e) => setCell(s.enrollment_id, day.date, { pm: e.target.checked })} />
-                                  <span aria-hidden="true">PM</span>
-                                </label>
-                              </span>
-                            ) : (
-                              <input type="checkbox" aria-label={`${s.name} ${day.label} present`}
-                                     checked={!!(c.am && c.pm)} onChange={() => toggleWhole(s.enrollment_id, day.date)} />
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
+            <>
+              <p className="md-note"><i className="fas fa-hand-pointer" aria-hidden="true" /> Tap a box to switch present/absent. Tap a <b>day</b> to flip the whole class that day, or a <b>name</b> for that student’s whole week.{split ? ' Top half is morning, bottom half afternoon.' : ''}</p>
+              <div className="wg" role="grid" aria-label="Weekly attendance grid">
+                <div className="wg-row wg-headrow" style={cols} role="row">
+                  <span className="wg-corner" role="columnheader">Student</span>
+                  {d.days.map((day) => (
+                    <button key={day.date} type="button" className="wg-day" role="columnheader" onClick={() => toggleColumn(day.date)}
+                            title={`Toggle everyone on ${day.label}`}>
+                      <b>{String(day.label).split(' ')[0]} {parseInt(String(day.label).split(' ')[1] || '', 10) || ''}</b>
+                      <small>{dayPresent(day.date)}/{d.students.length}</small>
+                    </button>
                   ))}
-                </tbody>
-              </table>
-            </div>
+                </div>
+                {withGroups(d.students,
+                  (gender, first, gkey) => <div key={gkey} className="wg-ghead">{genderLabel(gender)}</div>,
+                  (s) => {
+                    const wk = d.days.filter((day) => { const c = cell(s.enrollment_id, day.date); return c.am && c.pm; }).length;
+                    return (
+                      <div key={s.enrollment_id} className="wg-row" style={cols} role="row">
+                        <button type="button" className="wg-who" onClick={() => toggleRow(s.enrollment_id)} title="Toggle this student’s whole week">
+                          <span className="att-av" data-g={s.gender || ''} aria-hidden="true">{initialsOf(s.name)}</span>
+                          <span className="wg-name">{s.name}<small>{wk}/{nDays} full days</small></span>
+                        </button>
+                        {d.days.map((day) => {
+                          const c = cell(s.enrollment_id, day.date);
+                          return split ? (
+                            <span key={day.date} className="wg-split" role="gridcell">
+                              <button type="button" className={'wg-half' + (c.am ? ' on' : '')} aria-pressed={!!c.am}
+                                      onClick={() => setCell(s.enrollment_id, day.date, { am: !c.am })} aria-label={`${s.name} ${day.label} morning`}>AM</button>
+                              <button type="button" className={'wg-half' + (c.pm ? ' on' : '')} aria-pressed={!!c.pm}
+                                      onClick={() => setCell(s.enrollment_id, day.date, { pm: !c.pm })} aria-label={`${s.name} ${day.label} afternoon`}>PM</button>
+                            </span>
+                          ) : (
+                            <button key={day.date} type="button" role="gridcell"
+                                    className={'wg-cell ' + (c.am && c.pm ? 'on' : (c.am || c.pm) ? 'half' : 'off')}
+                                    aria-pressed={!!(c.am && c.pm)} onClick={() => toggleWhole(s.enrollment_id, day.date)}
+                                    aria-label={`${s.name} ${day.label} present`}>
+                              <i className={'fas ' + (c.am && c.pm ? 'fa-check' : (c.am || c.pm) ? 'fa-circle-half-stroke' : 'fa-xmark')} aria-hidden="true" />
+                            </button>
+                          );
+                        })}
+                      </div>
+                    );
+                  })}
+              </div>
+            </>
           )}
-
-          <div className="att-actions">
-            <Button variant="secondary" size="sm" onClick={() => setAll(true)} disabled={!d.students.length}>Mark all present</Button>
-            <Button variant="light" size="sm" onClick={() => setAll(false)} disabled={!d.students.length}>Mark all absent</Button>
-            <Button onClick={save} disabled={!d.students.length || !d.days.length || busy}>Save week</Button>
-          </div>
-          {!!d.days.length && d.students.length > 0 && (
-            <p className="att-legend">Tip: tap a day heading to toggle that whole day, or a name to toggle that student’s week.</p>
+          {editable && (
+            <ActionBar phone={phone}>
+              <div className="md-bar-count"><b>{totalMarks ? Math.round(presentMarks / totalMarks * 100) : 0}%</b> present this week</div>
+              <button type="button" className="md-btn ghost" onClick={() => setAll(true)} title="Everyone present all week">
+                <i className="fas fa-check-double" aria-hidden="true" /><span> All present</span></button>
+              <MoreMenu items={[{ icon: 'fa-user-xmark', label: 'Everyone absent all week', onClick: () => setAll(false) }]} />
+              <button type="button" className="md-btn save" onClick={save} disabled={busy}>
+                <i className={'fas ' + (busy ? 'fa-spinner fa-spin' : 'fa-check')} aria-hidden="true" /> Save week</button>
+            </ActionBar>
           )}
-        </>
+        </div>
       )}
     </div>
   );

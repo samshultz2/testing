@@ -2,11 +2,12 @@ import React, { useState } from 'react';
 import { apiGet, apiPost } from '../../lib/api';
 import { useAsync } from '../../lib/hooks';
 import { useCtx } from '../App';
-import { Toolbar, Field, Select, Spinner, EmptyState, ErrorState, OfflineRequired, Pill, StatCards, Banner, SectionTitle } from '../../components/ui';
-import { withGroups, GroupHeadRow } from '../roster';
+import { Spinner, EmptyState, ErrorState, OfflineRequired, Banner } from '../../components/ui';
+import { withGroups, genderLabel } from '../roster';
+import { Picker, ClassChips, DateStepper, Seg, Tiles, Card, Person, Dot, prettyDate, pctColor } from '../kit';
 import { lastClass, recentClasses, rememberClass } from '../../lib/attprefs';
 
-function AbsenteesPanel({ assignmentId, date, className, ready }) {
+function AbsenteesPanel({ assignmentId, date, className, ready, onNotify, notifying, canNotify }) {
   const [state] = useAsync(
     () => (ready ? apiGet(`/attendance/api/absentees?assignment_id=${assignmentId}&date=${encodeURIComponent(date)}`)
                  : Promise.resolve(null)),
@@ -24,44 +25,24 @@ function AbsenteesPanel({ assignmentId, date, className, ready }) {
   const shareUrl = 'https://wa.me/?text=' + encodeURIComponent(a.share_text);
 
   return (
-    <div className="att-absentees no-print">
-      <SectionTitle icon="fa-user-clock">Absent Today ({a.absentees.length})</SectionTitle>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
-        <a className="btn btn-sm att-wa-btn" href={shareUrl} target="_blank" rel="noopener">
-          <i className="fab fa-whatsapp" aria-hidden="true" /> Share via WhatsApp
-        </a>
-        <button type="button" className="btn btn-secondary btn-sm" onClick={copyText}>
-          <i className={'fas ' + (copied ? 'fa-check' : 'fa-copy')} aria-hidden="true" /> {copied ? 'Copied!' : 'Copy list'}
-        </button>
-      </div>
-      <div className="att-grid-wrap">
-        <table className="att-grid" aria-label={'Absent today — ' + className}>
-          <thead>
-            <tr>
-              <th scope="col" className="att-grid-name">Student</th>
-              <th scope="col">Parent / Guardian</th>
-              <th scope="col">Phone</th>
-              <th scope="col"></th>
-            </tr>
-          </thead>
-          <tbody>
-            {a.absentees.map((s) => (
-              <tr key={s.student_id}>
-                <td className="att-grid-name">{s.student_name}</td>
-                <td>{s.parent_name || <span className="text-muted">—</span>}
-                  {s.parent_relationship ? <span className="att-sub"> ({s.parent_relationship})</span> : null}</td>
-                <td>{s.parent_phone ? <a href={'tel:' + s.parent_phone}>{s.parent_phone}</a> : <span className="text-muted">No contact</span>}</td>
-                <td>{s.wa_intl && (
-                  <a href={'https://wa.me/' + s.wa_intl} target="_blank" rel="noopener" title="Message this parent">
-                    <i className="fab fa-whatsapp att-wa-ic" aria-hidden="true" />
-                  </a>
-                )}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <Card icon="fa-user-clock" title={`Absent (${a.absentees.length})`} sub="Reach parents in one tap" className="ak-absent no-print"
+          action={<>
+            <a className="ak-btn wa" href={shareUrl} target="_blank" rel="noopener" title="Share the list on WhatsApp"><i className="fab fa-whatsapp" aria-hidden="true" /><span> Share</span></a>
+            <button type="button" className="ak-btn" onClick={copyText} title="Copy the list"><i className={'fas ' + (copied ? 'fa-check' : 'fa-copy')} aria-hidden="true" /><span> {copied ? 'Copied' : 'Copy'}</span></button>
+            {canNotify && <button type="button" className="ak-btn primary" disabled={notifying} onClick={onNotify} title="Draft an SMS to these parents">
+              <i className="fas fa-comment-sms" aria-hidden="true" /><span> Notify parents</span></button>}
+          </>}>
+      <ul className="ak-people">
+        {a.absentees.map((s) => (
+          <Person key={s.student_id} name={s.student_name}
+                  sub={s.parent_name ? `${s.parent_name}${s.parent_relationship ? ' (' + s.parent_relationship + ')' : ''}${s.parent_phone ? ' · ' + s.parent_phone : ''}` : 'No parent contact'}
+                  right={<>
+                    {s.parent_phone && <a className="ak-round call" href={'tel:' + s.parent_phone} aria-label={`Call ${s.parent_name || 'parent'}`}><i className="fas fa-phone" aria-hidden="true" /></a>}
+                    {s.wa_intl && <a className="ak-round wa" href={'https://wa.me/' + s.wa_intl} target="_blank" rel="noopener" aria-label="WhatsApp this parent"><i className="fab fa-whatsapp" aria-hidden="true" /></a>}
+                  </>} />
+        ))}
+      </ul>
+    </Card>
   );
 }
 
@@ -73,6 +54,7 @@ export default function DailySummary() {
   const classIds = new Set(classes.map((c) => String(c.id)));
   const initClass = default_class ? String(default_class)
     : (classIds.has(lastClass()) ? lastClass() : '');
+  const [show, setShow] = useState('all');
   const [assignmentId, setAssignmentId] = useState(initClass);
   const pickClass = (id) => {
     setAssignmentId(id);
@@ -116,72 +98,43 @@ export default function DailySummary() {
   const flag = (v) => v == null ? <Pill tone="gray">—</Pill>
     : v ? <Pill tone="green">Present</Pill> : <Pill tone="red">Absent</Pill>;
 
-  return (
-    <div>
-      <Toolbar>
-        <Field label="Class" htmlFor="ds-class" grow>
-          <Select id="ds-class" value={assignmentId} onChange={pickClass}
-                  placeholder={classes.length ? '— Select class —' : 'No classes available'}
-                  options={classes.map((c) => ({ value: String(c.id), label: c.name }))} />
-        </Field>
-        <Field label="Date" htmlFor="ds-date">
-          <input id="ds-date" type="date" className="form-control" value={date} onChange={(e) => setDate(e.target.value)} />
-        </Field>
-      </Toolbar>
-      {recents.length > 1 && (
-        <div className="att-recent" role="group" aria-label="Recent classes">
-          <span className="att-sub">Recent:</span>
-          {recents.map((r) => (
-            <button key={r.id} type="button" className={'att-chip' + (String(r.id) === String(assignmentId) ? ' is-active' : '')}
-                    onClick={() => pickClass(String(r.id))}>{r.label}</button>))}
-        </div>)}
+  const total = d ? d.total_students : 0;
+  const rateAm = d && total ? Math.round(d.morning_present / total * 100) : 0;
+  const isAbs = (s) => s.morning_present === false || s.afternoon_present === false;
+  const absentCount = d ? d.students.filter(isAbs).length : 0;
+  const shown = d ? d.students.filter((s) => (show === 'absent' ? isAbs(s) : show === 'present' ? !isAbs(s) : true)) : [];
+  const days = (week.data && week.data.days) || [];
 
-      {!online ? <OfflineRequired what="The daily summary" />
-        : syncing ? <Spinner label={`Syncing your saved marks… (${pending} left) — the summary will update once they reach the server.`} />
-        : !assignmentId ? <EmptyState icon="fa-hand-pointer" title="Pick a class" hint="Choose a class and date to see who was present." />
-        : state.loading ? <Spinner label="Loading summary…" />
-        : state.error ? <ErrorState detail={state.error.message} />
+  return (
+    <div className="md">
+      <Picker>
+        <ClassChips classes={classes} value={assignmentId} onChange={pickClass} />
+        <DateStepper date={date} setDate={setDate} today={today} />
+      </Picker>
+
+      {!online ? <div className="md-card"><OfflineRequired what="The daily summary" /></div>
+        : syncing ? <div className="md-card"><Spinner label={`Syncing your saved marks… (${pending} left) — the summary will update once they reach the server.`} /></div>
+        : !assignmentId ? <div className="md-card"><EmptyState icon="fa-hand-pointer" title="Pick a class" hint="Choose a class to see who was present." /></div>
+        : state.loading ? <div className="md-card"><Spinner label="Loading summary…" /></div>
+        : state.error ? <div className="md-card"><ErrorState detail={state.error.message} /></div>
         : d && (
           <>
-            {week.data && week.data.days && week.data.days.length > 0 && (
-              <div className="att-grid-wrap" style={{ marginBottom: 14 }}>
-                <table className="att-grid" aria-label="This week at a glance">
-                  <thead>
-                    <tr>
-                      <th scope="col" colSpan="6" style={{ textAlign: 'left' }}>
-                        <i className="fas fa-calendar-week" aria-hidden="true" /> This week at a glance{week.data.week_number ? ` — Week ${week.data.week_number}` : ''}
-                      </th>
-                    </tr>
-                    <tr>
-                      <th scope="col">Day</th><th scope="col">AM present</th><th scope="col">AM absent</th>
-                      <th scope="col">PM present</th><th scope="col">PM absent</th><th scope="col">AM %</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {week.data.days.map((wd) => (
-                      <tr key={wd.date} className={wd.date === date ? 'is-active' : ''}>
-                        <td><button type="button" onClick={() => setDate(wd.date)}
-                          style={{ background: 'none', border: 'none', padding: 0, color: 'var(--primary)', fontWeight: 600, cursor: 'pointer' }}>
-                          {new Date(wd.date).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}
-                        </button></td>
-                        <td>{wd.am_present}</td><td>{wd.am_absent}</td>
-                        <td>{wd.pm_present}</td><td>{wd.pm_absent}</td>
-                        <td><Pill tone={pct(wd.am_present, wd.total) >= 75 ? 'green' : pct(wd.am_present, wd.total) >= 50 ? 'amber' : 'red'}>{pct(wd.am_present, wd.total)}%</Pill></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+            {days.length > 0 && (
+              <div className="ak-week" role="tablist" aria-label={`Week ${week.data.week_number || ''} at a glance`}>
+                {days.map((wd) => {
+                  const p = pct(wd.am_present, wd.total);
+                  return (
+                    <button key={wd.date} type="button" role="tab" aria-selected={wd.date === date}
+                            className={'ak-wday' + (wd.date === date ? ' on' : '')} onClick={() => setDate(wd.date)}>
+                      <span className="d">{new Date(wd.date + 'T00:00:00').toLocaleDateString(undefined, { weekday: 'short' })}</span>
+                      <span className="n">{new Date(wd.date + 'T00:00:00').getDate()}</span>
+                      <span className="ak-mini"><i style={{ width: p + '%', background: pctColor(p) }} /></span>
+                      <span className="p">{wd.total ? p + '%' : '—'}</span>
+                    </button>
+                  );
+                })}
               </div>
             )}
-
-            <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', marginBottom: 4 }}>
-              <strong>{d.class_name}</strong>
-              <span style={{ color: 'var(--text-muted)' }}>{new Date(d.date).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</span>
-              {can_mark !== false && (d.morning_absent > 0 || d.afternoon_absent > 0) && (
-                <button className="btn btn-primary btn-sm no-print" style={{ marginLeft: 'auto' }}
-                        disabled={notifying} onClick={notifyAbsentees}>
-                  <i className="fas fa-comment-sms" aria-hidden="true" /> Notify absentees’ parents</button>)}
-            </div>
 
             {d.school_day === false && (
               <Banner tone="warn">
@@ -191,44 +144,39 @@ export default function DailySummary() {
               </Banner>
             )}
 
-            <StatCards items={[
-              { value: d.total_students, label: 'Total students' },
-              { value: d.morning_present, label: 'AM present' },
-              { value: d.morning_absent, label: 'AM absent' },
-              { value: d.afternoon_present, label: 'PM present' },
-              { value: d.afternoon_absent, label: 'PM absent' },
+            <Tiles items={[
+              { label: 'Attendance', value: rateAm + '%', sub: prettyDate(d.date), tone: total ? (rateAm >= 75 ? 'good' : rateAm >= 50 ? 'warn' : 'bad') : '' },
+              { label: 'Morning', value: d.morning_present, unit: `/${total}`, sub: `${d.morning_absent} absent`, tone: d.morning_absent ? 'warn' : 'good' },
+              { label: 'Afternoon', value: d.afternoon_present, unit: `/${total}`, sub: `${d.afternoon_absent} absent`, tone: d.afternoon_absent ? 'warn' : 'good' },
+              { label: 'Students', value: total, sub: d.class_name },
             ]} />
 
-            <AbsenteesPanel assignmentId={assignmentId} date={date} className={d.class_name} ready={ready} />
-
-            {d.students.length === 0 ? (
-              <EmptyState icon="fa-users-slash" title="No students enrolled" hint="This class has no active enrolments for the term." />
-            ) : (
-              <div className="att-grid-wrap">
-                <table className="att-grid" aria-label={'Daily summary for ' + d.class_name}>
-                  <thead>
-                    <tr>
-                      <th scope="col" className="att-grid-name">Student</th>
-                      <th scope="col">Gender</th>
-                      <th scope="col">Morning</th>
-                      <th scope="col">Afternoon</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {withGroups(d.students,
-                      (gender, first, key) => <GroupHeadRow key={key} gender={gender} first={first} colSpan={4} />,
+            <div className="ak-cols">
+              <Card icon="fa-users" title={d.class_name} sub={prettyDate(d.date, true)} flush
+                    action={<Seg label="Show" value={show} onChange={setShow} options={[
+                      { value: 'all', label: 'All', count: d.students.length },
+                      { value: 'absent', label: 'Absent', count: absentCount },
+                      { value: 'present', label: 'Present', count: d.students.length - absentCount }]} />}>
+                {d.students.length === 0 ? (
+                  <EmptyState icon="fa-users-slash" title="No students enrolled" hint="This class has no active enrolments for the term." />
+                ) : shown.length === 0 ? (
+                  <p className="ak-empty">{show === 'absent' ? 'Nobody was absent. 🎉' : 'No one here.'}</p>
+                ) : (
+                  <ul className="ak-people">
+                    {withGroups(shown,
+                      (gender, first, gkey) => <li key={gkey} className="md-ghead">{genderLabel(gender)}</li>,
                       (s) => (
-                      <tr key={s.student_id}>
-                        <td className="att-grid-name">{s.student_name}</td>
-                        <td>{s.gender}</td>
-                        <td>{flag(s.morning_present)}</td>
-                        <td>{flag(s.afternoon_present)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                        <Person key={s.student_id} name={s.student_name} gender={s.gender}
+                                tone={s.morning_present === false && s.afternoon_present === false ? 'out' : isAbs(s) ? 'half' : ''}
+                                sub={s.morning_present == null && s.afternoon_present == null ? 'Not marked' : isAbs(s) ? (s.morning_present === false && s.afternoon_present === false ? 'Absent all day' : 'Absent half day') : 'Present'}
+                                right={<><Dot v={s.morning_present} label="AM" /><Dot v={s.afternoon_present} label="PM" /></>} />
+                      ))}
+                  </ul>
+                )}
+              </Card>
+              <AbsenteesPanel assignmentId={assignmentId} date={date} className={d.class_name} ready={ready}
+                              canNotify={can_mark !== false} notifying={notifying} onNotify={notifyAbsentees} />
+            </div>
           </>
         )}
     </div>

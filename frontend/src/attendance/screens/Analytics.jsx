@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import { apiGet, apiPost } from '../../lib/api';
 import { useAsync } from '../../lib/hooks';
 import { useCtx } from '../App';
-import { Toolbar, Spinner, EmptyState, ErrorState, OfflineRequired,
-         StatCards, SectionTitle, Pill, PerfBands } from '../../components/ui';
+import { Spinner, EmptyState, ErrorState, OfflineRequired } from '../../components/ui';
+import { Tiles, Card, Ring, Person, MoreMenu, pctTone } from '../kit';
 
-const pctTone = (p) => (p >= 75 ? '#16a34a' : p >= 50 ? '#d97706' : '#dc2626');
+const pctHex = (p) => (p >= 75 ? 'var(--success)' : p >= 50 ? 'var(--warning)' : 'var(--danger)');
 
 // Horizontal % bars (class/branch ranking, trend as a column chart reused below).
 function Bars({ rows, labelKey, valueKey }) {
@@ -16,7 +16,7 @@ function Bars({ rows, labelKey, valueKey }) {
         <div className="att-bar-row" key={i}>
           <div className="att-bar-lbl" title={r[labelKey]}>{r[labelKey]}</div>
           <div className="att-bar-track"><div className="att-bar-fill"
-            style={{ width: Math.max(2, r[valueKey]) + '%', background: pctTone(r[valueKey]) }} /></div>
+            style={{ width: Math.max(2, r[valueKey]) + '%', background: pctHex(r[valueKey]) }} /></div>
           <div className="att-bar-val">{r[valueKey]}%</div>
         </div>))}
     </div>
@@ -29,7 +29,7 @@ function ColumnChart({ rows }) {
     <div className="att-trend" aria-label="Attendance percentage trend">
       {rows.map((t, i) => (
         <div key={i} className="att-trend-col" title={`${t.label}: ${t.percentage}%`}>
-          <div className="att-trend-bar" style={{ height: Math.max(4, t.percentage) + '%', background: pctTone(t.percentage) }} />
+          <span className="att-trend-v">{t.percentage}%</span><div className="att-trend-bar" style={{ height: Math.max(4, t.percentage) + '%', background: pctHex(t.percentage) }} />
           <div className="att-trend-lbl">{t.label}</div>
         </div>))}
     </div>
@@ -41,7 +41,7 @@ function HeatStrip({ rows }) {
     <div className="att-heat" role="img" aria-label="Attendance by weekday">
       {rows.map((r, i) => (
         <div key={i} className="att-heat-cell" title={`${r.label}: ${r.percentage}%`}
-             style={{ background: r.percentage ? pctTone(r.percentage) : 'var(--gray-100,#f1f5f9)',
+             style={{ background: r.percentage ? pctHex(r.percentage) : 'var(--gray-100,#f1f5f9)',
                       color: r.percentage ? '#fff' : 'inherit' }}>
           <div className="att-heat-day">{r.label}</div>
           <div className="att-heat-pct">{r.percentage}%</div>
@@ -77,96 +77,99 @@ export default function Analytics() {
     { tone: 'poor', title: 'Poor', count: d.distribution.poor, range: '<50%' },
   ];
 
-  return (
-    <div>
-      <Toolbar>
-        {terms.length > 0 && (
-          <label className="att-inline-field">Term{' '}
-            <select className="form-control" style={{ maxWidth: 240, display: 'inline-block' }}
-                    value={tid} onChange={(e) => setTermId(e.target.value)}>
-              {terms.map((t) => <option key={t.id} value={String(t.id)}>{t.name}{t.active ? ' (active)' : ''}</option>)}
-            </select>
-          </label>)}
-        {d && (
-          <span className="no-print" style={{ marginLeft: 'auto', display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            <a className="btn btn-secondary btn-sm" href={`/attendance/analytics/export?term_id=${tid}&format=csv`}><i className="fas fa-file-csv" aria-hidden="true" /> CSV</a>
-            <a className="btn btn-success btn-sm" href={`/attendance/analytics/export?term_id=${tid}&format=xlsx`}><i className="fas fa-file-excel" aria-hidden="true" /> Excel</a>
-            <button className="btn btn-secondary btn-sm" onClick={() => window.print()}><i className="fas fa-print" aria-hidden="true" /> Print</button>
-          </span>)}
-      </Toolbar>
+  const total = d ? (d.distribution.excellent + d.distribution.good + d.distribution.fair + d.distribution.poor) : 0;
+  const BAND_STYLE = { excellent: 'good', good: 'good2', fair: 'warn', poor: 'bad' };
 
-      {!online ? <OfflineRequired what="Attendance analytics" />
-        : state.loading ? <Spinner label="Crunching attendance analytics…" />
-        : state.error ? <ErrorState detail={state.error.message} />
-        : !d ? <EmptyState icon="fa-chart-line" title="No term selected" hint="Pick a term to see analytics." />
+  return (
+    <div className="md">
+      <div className="ak-toolbar">
+        {terms.length > 0 && (
+          <label className="ax-term"><i className="fas fa-calendar" aria-hidden="true" />
+            <select value={tid} onChange={(e) => setTermId(e.target.value)} aria-label="Term">
+              {terms.map((t) => <option key={t.id} value={String(t.id)}>{t.name}{t.active ? ' (active)' : ''}</option>)}
+            </select></label>)}
+        {d && (
+          <span className="ak-toolbar-r no-print">
+            <a className="ak-btn" href={`/attendance/analytics/export?term_id=${tid}&format=xlsx`}><i className="fas fa-file-excel" aria-hidden="true" /><span> Excel</span></a>
+            <MoreMenu up={false} label="More export options" items={[
+              { icon: 'fa-file-csv', label: 'Download CSV', href: `/attendance/analytics/export?term_id=${tid}&format=csv` },
+              { icon: 'fa-print', label: 'Print this page', onClick: () => window.print() },
+            ]} />
+          </span>)}
+      </div>
+
+      {!online ? <div className="md-card"><OfflineRequired what="Attendance analytics" /></div>
+        : state.loading ? <div className="md-card"><Spinner label="Crunching attendance analytics…" /></div>
+        : state.error ? <div className="md-card"><ErrorState detail={state.error.message} /></div>
+        : !d ? <div className="md-card"><EmptyState icon="fa-chart-line" title="No term selected" hint="Pick a term to see analytics." /></div>
         : (
           <>
-            <StatCards items={[
-              { value: d.kpis.overall + '%', label: 'Overall rate', primary: true },
-              { value: d.kpis.students, label: 'Students' },
-              { value: d.kpis.classes, label: 'Classes' },
-              { value: d.kpis.chronic, label: `Chronic (<${d.critical}%)` },
-              { value: d.kpis.school_days, label: 'School days' },
-            ]} />
-            <div className="att-sub" style={{ marginTop: -4 }}>
-              Best: <b>{d.kpis.best_class}</b> · Needs attention: <b>{d.kpis.worst_class}</b>
+            <div className="ak-hero">
+              <Ring pct={d.kpis.overall} label="Overall" />
+              <div className="ak-hero-t">
+                <span className="ak-kick">{d.kpis.school_days} school days · {d.kpis.classes} classes · {d.kpis.students} students</span>
+                <strong>School attendance</strong>
+                <div className="ak-hero-chips">
+                  <span className="ak-chip good"><i className="fas fa-trophy" aria-hidden="true" /> Best: <b>{d.kpis.best_class}</b></span>
+                  <span className="ak-chip bad"><i className="fas fa-flag" aria-hidden="true" /> Needs attention: <b>{d.kpis.worst_class}</b></span>
+                </div>
+              </div>
             </div>
 
-            <SectionTitle icon="fa-chart-column">Weekly trend</SectionTitle>
-            <ColumnChart rows={d.trend} />
+            <Tiles items={[
+              { label: 'Students', value: d.kpis.students },
+              { label: 'Classes', value: d.kpis.classes },
+              { label: 'School days', value: d.kpis.school_days },
+              { label: `Chronic (<${d.critical}%)`, value: d.kpis.chronic, tone: d.kpis.chronic ? 'bad' : 'good',
+                onClick: () => { const el = document.getElementById('an-chronic'); if (el) el.scrollIntoView({ behavior: 'smooth' }); } },
+            ]} />
 
-            <SectionTitle icon="fa-calendar-week">By weekday</SectionTitle>
-            <HeatStrip rows={d.heatmap} />
+            <div className="ak-bands">
+              {dist.map((b) => (
+                <div key={b.tone} className={'ak-band ' + BAND_STYLE[b.tone]}>
+                  <span className="n">{b.count}</span><span className="t">{b.title}</span>
+                  <span className="r">{b.range}{total ? ` · ${Math.round(b.count / total * 100)}%` : ''}</span>
+                </div>))}
+            </div>
 
-            <SectionTitle icon="fa-layer-group">Attendance distribution</SectionTitle>
-            <PerfBands bands={dist} />
+            <div className="ak-grid2">
+              <Card icon="fa-chart-column" title="Weekly trend" sub="Attendance rate by week"><ColumnChart rows={d.trend} /></Card>
+              <Card icon="fa-calendar-week" title="By weekday" sub="Which days pupils miss most"><HeatStrip rows={d.heatmap} /></Card>
+              <Card icon="fa-ranking-star" title="Class ranking" sub="Highest to lowest"><Bars rows={d.class_rank} labelKey="class" valueKey="percentage" /></Card>
+              {d.branch_rank.length > 0
+                ? <Card icon="fa-code-branch" title="Branch ranking"><Bars rows={d.branch_rank} labelKey="branch" valueKey="percentage" /></Card>
+                : d.most_improved.length > 0 ? null : <span />}
+              {d.most_improved.length > 0 && (
+                <Card icon="fa-arrow-trend-up" title="Most improved" sub={d.prev_term ? `vs ${d.prev_term}` : ''} flush>
+                  <ul className="ak-people">
+                    {d.most_improved.map((s) => (
+                      <Person key={s.id} name={s.name} sub={`${s.class} · ${s.from}% → ${s.to}%`} href={`/attendance/app?student_id=${s.id}#/student`}
+                              right={<span className="ak-pct good">+{s.delta}</span>} />))}
+                  </ul>
+                </Card>)}
+            </div>
 
-            <SectionTitle icon="fa-ranking-star">Class ranking</SectionTitle>
-            <Bars rows={d.class_rank} labelKey="class" valueKey="percentage" />
-
-            {d.branch_rank.length > 0 && (<>
-              <SectionTitle icon="fa-code-branch">Branch ranking</SectionTitle>
-              <Bars rows={d.branch_rank} labelKey="branch" valueKey="percentage" />
-            </>)}
-
-            {d.most_improved.length > 0 && (<>
-              <SectionTitle icon="fa-arrow-trend-up">Most improved{d.prev_term ? ` (vs ${d.prev_term})` : ''}</SectionTitle>
-              <div className="att-grid-wrap">
-                <table className="att-grid" aria-label="Most improved students">
-                  <thead><tr><th className="att-grid-name" scope="col">Student</th><th scope="col">Class</th>
-                    <th scope="col">Was</th><th scope="col">Now</th><th scope="col">Change</th></tr></thead>
-                  <tbody>{d.most_improved.map((s) => (
-                    <tr key={s.id}><td className="att-grid-name"><a href={`/attendance/app?student_id=${s.id}#/student`}>{s.name}</a></td>
-                      <td>{s.class}</td><td>{s.from}%</td><td>{s.to}%</td>
-                      <td><b style={{ color: '#16a34a' }}>+{s.delta}</b></td></tr>))}
-                  </tbody>
-                </table>
-              </div>
-            </>)}
-
-            <SectionTitle icon="fa-triangle-exclamation">Chronic absentees</SectionTitle>
-            {d.chronic_list.length > 0 && (
-              <div className="no-print" style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 8, flexWrap: 'wrap' }}>
-                <select className="form-control" style={{ maxWidth: 120 }} value={notifyChannel}
-                        onChange={(e) => setNotifyChannel(e.target.value)}>
-                  <option>SMS</option><option>Email</option></select>
-                <button className="btn btn-primary btn-sm" disabled={notifying} onClick={notifyLow}>
-                  <i className="fas fa-comment-sms" aria-hidden="true" /> Notify parents (below {d.threshold}%)</button>
-                <span className="att-sub">Drafts a message for review — nothing sends automatically.</span>
-              </div>)}
-            {d.chronic_list.length === 0
-              ? <EmptyState icon="fa-circle-check" title="None flagged" hint={`No student is below ${d.critical}% this term.`} />
-              : (
-                <div className="att-grid-wrap">
-                  <table className="att-grid" aria-label="Chronic absentees">
-                    <thead><tr><th className="att-grid-name" scope="col">Student</th><th scope="col">Class</th><th scope="col">%</th></tr></thead>
-                    <tbody>{d.chronic_list.map((s) => (
-                      <tr key={s.id + '|' + s.class}><td className="att-grid-name"><a href={`/attendance/app?student_id=${s.id}#/student`}>{s.name}</a>
-                        <div className="att-sub">{s.student_id}</div></td>
-                        <td>{s.class}</td><td><Pill tone="red">{s.percentage}%</Pill></td></tr>))}
-                    </tbody>
-                  </table>
-                </div>)}
+            <div id="an-chronic">
+              <Card icon="fa-triangle-exclamation" title="Chronic absentees" sub={`Below ${d.critical}% this term`} flush
+                    action={d.chronic_list.length > 0 && (
+                      <span className="ak-notify no-print">
+                        <select value={notifyChannel} onChange={(e) => setNotifyChannel(e.target.value)} aria-label="Channel">
+                          <option>SMS</option><option>Email</option></select>
+                        <button type="button" className="ak-btn primary" disabled={notifying} onClick={notifyLow} title="Drafts a message for review — nothing sends automatically">
+                          <i className="fas fa-comment-sms" aria-hidden="true" /><span> Notify parents</span></button>
+                      </span>)}>
+                {d.chronic_list.length === 0
+                  ? <EmptyState icon="fa-circle-check" title="None flagged" hint={`No student is below ${d.critical}% this term.`} />
+                  : (
+                    <ul className="ak-people">
+                      {d.chronic_list.map((s) => (
+                        <Person key={s.id + '|' + s.class} name={s.name} sub={`${s.class} · ${s.student_id}`} tone="out"
+                                href={`/attendance/app?student_id=${s.id}#/student`}
+                                right={<span className={'ak-pct ' + pctTone(s.percentage)}>{s.percentage}%</span>} />))}
+                    </ul>)}
+                {d.chronic_list.length > 0 && <p className="ak-foot">Notify parents drafts a message for you to review — nothing sends automatically.</p>}
+              </Card>
+            </div>
           </>
         )}
     </div>

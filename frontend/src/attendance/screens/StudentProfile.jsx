@@ -2,11 +2,11 @@ import React, { useState } from 'react';
 import { apiGet, apiPost } from '../../lib/api';
 import { useAsync } from '../../lib/hooks';
 import { useCtx } from '../App';
-import { Toolbar, Autocomplete, Spinner, EmptyState, ErrorState,
-         StatCards, SectionTitle, Pill } from '../../components/ui';
+import { Autocomplete, Spinner, EmptyState, ErrorState, Pill } from '../../components/ui';
+import { Tiles, Card, Ring, initialsOf, pctTone } from '../kit';
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const STATUS_TONE = { present: '#16a34a', late: '#d97706', absent: '#dc2626', unmarked: 'var(--border-color)' };
+const STATUS_TONE = { present: 'var(--success)', late: 'var(--warning)', absent: 'var(--danger)', unmarked: 'var(--gray-200)' };
 const STATUS_LABEL = { present: 'Present', late: 'Late / partial', absent: 'Absent', unmarked: 'Not marked' };
 
 // A compact month-grouped calendar of a term's school days, colour-coded.
@@ -52,8 +52,8 @@ function TrendBars({ trend }) {
     <div className="att-trend" aria-label="Attendance percentage by term">
       {trend.map((t, i) => (
         <div key={i} className="att-trend-col" title={`${t.label}: ${t.percentage}%`}>
-          <div className="att-trend-bar" style={{ height: Math.max(4, t.percentage) + '%',
-            background: t.percentage >= 75 ? '#16a34a' : t.percentage >= 50 ? '#d97706' : '#dc2626' }} />
+          <span className="att-trend-v">{t.percentage}%</span><div className="att-trend-bar" style={{ height: Math.max(4, t.percentage) + '%',
+            background: t.percentage >= 75 ? 'var(--success)' : t.percentage >= 50 ? 'var(--warning)' : 'var(--danger)' }} />
           <div className="att-trend-lbl">{t.label}</div>
         </div>))}
     </div>
@@ -76,119 +76,96 @@ export default function StudentProfile() {
   };
   const hasOpen = d && (d.interventions || []).some((i) => ['Open', 'In progress', 'Escalated'].includes(i.status));
   return (
-    <div>
-      <Toolbar>
-        <div style={{ flex: 1, minWidth: 220 }}>
-          <Autocomplete label="Find a student" url="/attendance/api/student-search"
-                        placeholder="Search name or student ID…"
-                        onPick={(id) => id && setStudentId(String(id))} />
-        </div>
-        {d && d.warning && !hasOpen && <button className="btn btn-primary btn-sm no-print" onClick={openIntervention}>
-          <i className="fas fa-hand-holding-heart" aria-hidden="true" /> Open intervention</button>}
-        {d && <button className="btn btn-secondary btn-sm no-print" onClick={() => window.print()}>
-          <i className="fas fa-print" aria-hidden="true" /> Print</button>}
-      </Toolbar>
+    <div className="md">
+      <section className="md-pick ak-search">
+        <Autocomplete label="Find a student" url="/attendance/api/student-search"
+                      placeholder="Search name or student ID…"
+                      onPick={(id) => id && setStudentId(String(id))} />
+      </section>
 
-      {!studentId ? <EmptyState icon="fa-user-magnifying-glass" title="Search for a student"
-                                hint="Find any student to see their complete attendance profile across every term." />
-        : state.loading ? <Spinner label="Loading profile…" />
-        : state.error ? <ErrorState detail={state.error.message} />
+      {!studentId ? <div className="md-card"><EmptyState icon="fa-user-magnifying-glass" title="Search for a student"
+                                hint="Find any student to see their full attendance record across every term." /></div>
+        : state.loading ? <div className="md-card"><Spinner label="Loading profile…" /></div>
+        : state.error ? <div className="md-card"><ErrorState detail={state.error.message} /></div>
         : d && (
-          <div className="att-profile">
-            <div className="att-profile-head">
-              {d.student.photo_url ? <img className="att-avatar" src={d.student.photo_url} alt="" />
-                : <div className="att-avatar">{(d.student.name || '').split(' ').map((x) => x[0]).slice(0, 2).join('').toUpperCase()}</div>}
-              <div>
-                <h2 style={{ margin: 0 }}>{d.student.name}</h2>
-                <div className="att-sub">{d.student.student_id}{d.student.gender ? ' · ' + d.student.gender : ''}</div>
-                <div style={{ marginTop: 6 }}>
-                  <Pill tone={d.warning ? 'red' : 'green'}>{d.overall.percentage}% overall</Pill>{' '}
-                  {d.warning && <Pill tone="amber">Below {d.threshold}% threshold</Pill>}
-                </div>
+          <>
+            <div className={'ak-hero sp2' + (d.warning ? ' warn' : '')}>
+              {d.student.photo_url ? <img className="sp2-av" src={d.student.photo_url} alt="" />
+                : <span className="sp2-av" aria-hidden="true">{initialsOf(d.student.name)}</span>}
+              <div className="ak-hero-t">
+                <span className="ak-kick">{d.student.student_id}{d.student.gender ? ' · ' + d.student.gender : ''} · {d.overall.terms} term{d.overall.terms === 1 ? '' : 's'} tracked</span>
+                <strong>{d.student.name}</strong>
+                {d.warning
+                  ? <span className="ak-chip bad"><i className="fas fa-triangle-exclamation" aria-hidden="true" /> Below the {d.threshold}% threshold — may need an intervention</span>
+                  : <span className="ak-chip good"><i className="fas fa-circle-check" aria-hidden="true" /> Attendance is on track</span>}
+              </div>
+              <Ring pct={d.overall.percentage} label="Overall" />
+              <div className="sp2-acts no-print">
+                {d.warning && !hasOpen && <button type="button" className="ak-btn primary" onClick={openIntervention}>
+                  <i className="fas fa-hand-holding-heart" aria-hidden="true" /><span> Open intervention</span></button>}
+                <button type="button" className="ak-btn" onClick={() => window.print()}><i className="fas fa-print" aria-hidden="true" /><span> Print</span></button>
               </div>
             </div>
 
-            {d.warning && (
-              <div className="att-warn" role="alert">
-                <i className="fas fa-triangle-exclamation" aria-hidden="true" /> This student's overall attendance
-                ({d.overall.percentage}%) is below the {d.threshold}% warning threshold and may need intervention.
-              </div>)}
-
-            <StatCards items={[
-              { value: d.overall.percentage + '%', label: 'Overall rate', primary: true },
-              { value: d.overall.full_days, label: 'Full-present days' },
-              { value: d.overall.late_days, label: 'Late / partial' },
-              { value: d.overall.absent_days, label: 'Absent days' },
-              { value: d.overall.terms, label: 'Terms tracked' },
+            <Tiles items={[
+              { label: 'Full days', value: d.overall.full_days, tone: 'good' },
+              { label: 'Late / partial', value: d.overall.late_days, tone: d.overall.late_days ? 'warn' : '' },
+              { label: 'Absent days', value: d.overall.absent_days, tone: d.overall.absent_days ? 'bad' : '' },
+              { label: 'Terms tracked', value: d.overall.terms },
             ]} />
 
-            {d.trend.length > 1 && (<><SectionTitle icon="fa-chart-line">Trend by term</SectionTitle><TrendBars trend={d.trend} /></>)}
-
-            <SectionTitle icon="fa-calendar-days">Term-by-term</SectionTitle>
-            <div className="att-grid-wrap">
-              <table className="att-grid" aria-label="Attendance by term">
-                <thead><tr><th className="att-grid-name" scope="col">Term</th><th scope="col">Class</th>
-                  <th scope="col">Present</th><th scope="col">Late</th><th scope="col">Absent</th><th scope="col">%</th></tr></thead>
-                <tbody>
-                  {d.terms.map((t) => (
-                    <tr key={t.enrollment_id}>
-                      <td className="att-grid-name">{t.term}<div className="att-sub">{t.session}</div></td>
-                      <td>{t.class}</td><td>{t.full_days}</td><td>{t.late_days}</td><td>{t.absent_days}</td>
-                      <td><b style={{ color: t.percentage >= 75 ? '#16a34a' : t.percentage >= 50 ? '#d97706' : '#dc2626' }}>{t.percentage}%</b></td>
-                    </tr>))}
-                  {d.terms.length === 0 && <tr><td colSpan={6} className="att-sub">No attendance recorded yet.</td></tr>}
-                </tbody>
-              </table>
+            <div className="ak-grid2">
+              {d.focus && (
+                <Card icon="fa-calendar-check" title={`${d.focus.term} calendar`} sub={d.focus.class} className="ak-span2">
+                  <div className="att-cal-legend">
+                    {['present', 'late', 'absent', 'unmarked'].map((st) => (
+                      <span key={st}><span className="att-cal-dot" style={{ background: STATUS_TONE[st] }} /> {STATUS_LABEL[st]}</span>))}
+                  </div>
+                  <TermCalendar calendar={d.focus.calendar} />
+                </Card>)}
+              <Card icon="fa-calendar-days" title="Term by term" flush>
+                {d.terms.length === 0 ? <p className="ak-empty">No attendance recorded yet.</p> : (
+                  <ul className="ak-people">
+                    {d.terms.map((t) => (
+                      <li key={t.enrollment_id} className="ak-person">
+                        <span className="ak-pmain"><span className="ak-pname">{t.term} <span className="ak-dim">· {t.session}</span>
+                          <small>{t.class} · {t.full_days} present · {t.late_days} late · {t.absent_days} absent</small></span></span>
+                        <span className={'ak-pct ' + pctTone(t.percentage)}>{t.percentage}%</span>
+                      </li>))}
+                  </ul>)}
+              </Card>
+              {d.trend.length > 1 && <Card icon="fa-chart-line" title="Trend by term"><TrendBars trend={d.trend} /></Card>}
+              {(d.interventions || []).length > 0 && (
+                <Card icon="fa-hand-holding-heart" title="Interventions" flush>
+                  <ul className="ak-people">
+                    {d.interventions.map((iv) => (
+                      <li key={iv.id} className="ak-person col">
+                        <div className="sp2-iv">
+                          <strong>{iv.reason || 'Intervention'}</strong>
+                          <Pill tone={iv.status === 'Resolved' ? 'green' : iv.status === 'Escalated' ? 'red' : 'amber'}>{iv.status}</Pill>
+                        </div>
+                        <small className="ak-dim">Opened {iv.opened}{iv.opened_by ? ' by ' + iv.opened_by : ''}{iv.baseline != null ? ` · was ${iv.baseline}%` : ''}{iv.current != null ? ` → now ${iv.current}%` : ''}</small>
+                        {iv.outcome && <small>Outcome: {iv.outcome}</small>}
+                        {iv.notes.length > 0 && (
+                          <ol className="iv2-tl">{iv.notes.map((n, i) => (
+                            <li key={i}><b>{n.kind}</b> <span className="ak-dim">· {n.date}</span>{n.body && <div>{n.body}</div>}
+                              {n.next_action && <div className="ak-dim">Next: {n.next_action}{n.next_date ? ` (by ${n.next_date})` : ''}</div>}</li>))}
+                          </ol>)}
+                      </li>))}
+                  </ul>
+                </Card>)}
+              {(d.notifications || []).length > 0 && (
+                <Card icon="fa-comment-sms" title="Messages to parents" flush>
+                  <ul className="ak-people">
+                    {d.notifications.map((n, i) => (
+                      <li key={i} className="ak-person">
+                        <span className="ak-pmain"><span className="ak-pname">{n.title.replace('Attendance: ', '')}<small>{n.channel} · {n.date}</small></span></span>
+                        <Pill tone={n.status === 'Sent' ? 'green' : 'amber'}>{n.status}</Pill>
+                      </li>))}
+                  </ul>
+                </Card>)}
             </div>
-
-            {d.focus && (
-              <>
-                <SectionTitle icon="fa-calendar-check">{d.focus.term} calendar · {d.focus.class}</SectionTitle>
-                <div className="att-cal-legend">
-                  {['present', 'late', 'absent', 'unmarked'].map((s) => (
-                    <span key={s}><span className="att-cal-dot" style={{ background: STATUS_TONE[s] }} /> {STATUS_LABEL[s]}</span>))}
-                </div>
-                <TermCalendar calendar={d.focus.calendar} />
-              </>)}
-
-            {(d.interventions || []).length > 0 && (
-              <>
-                <SectionTitle icon="fa-hand-holding-heart">Interventions</SectionTitle>
-                {d.interventions.map((iv) => (
-                  <div key={iv.id} className="iv-case">
-                    <div className="iv-case-head">
-                      <div><strong>{iv.reason || 'Intervention'}</strong>
-                        <span className="att-sub"> · opened {iv.opened}{iv.opened_by ? ' by ' + iv.opened_by : ''}</span></div>
-                      <div className="iv-case-metrics">
-                        {iv.baseline != null && <span className="att-sub">was {iv.baseline}%</span>}
-                        {iv.current != null && <Pill tone={iv.direction === 'up' ? 'green' : iv.direction === 'down' ? 'red' : 'gray'}>{iv.current}%{iv.delta != null ? ` (${iv.delta > 0 ? '+' : ''}${iv.delta})` : ''}</Pill>}
-                        <Pill tone={iv.status === 'Resolved' ? 'green' : iv.status === 'Escalated' ? 'red' : 'amber'}>{iv.status}</Pill>
-                      </div>
-                    </div>
-                    {iv.outcome && <div className="att-sub">Outcome: {iv.outcome}</div>}
-                    {iv.notes.length > 0 && (
-                      <ul className="iv-notes">{iv.notes.map((n, i) => (
-                        <li key={i}><b>{n.kind}</b> · {n.date}{n.body ? ` — ${n.body}` : ''}{n.next_action ? <span className="att-sub"> → {n.next_action}{n.next_date ? ` (${n.next_date})` : ''}</span> : null}</li>))}
-                      </ul>)}
-                  </div>))}
-              </>)}
-
-            {(d.notifications || []).length > 0 && (
-              <>
-                <SectionTitle icon="fa-comment-sms">Parent notifications</SectionTitle>
-                <div className="att-grid-wrap">
-                  <table className="att-grid" aria-label="Parent notification history">
-                    <thead><tr><th className="att-grid-name" scope="col">Notice</th><th scope="col">Channel</th>
-                      <th scope="col">Date</th><th scope="col">Status</th></tr></thead>
-                    <tbody>{d.notifications.map((n, i) => (
-                      <tr key={i}><td className="att-grid-name">{n.title.replace('Attendance: ', '')}</td>
-                        <td>{n.channel}</td><td>{n.date}</td>
-                        <td><Pill tone={n.status === 'Sent' ? 'green' : 'amber'}>{n.status}</Pill></td></tr>))}
-                    </tbody>
-                  </table>
-                </div>
-              </>)}
-          </div>
+          </>
         )}
     </div>
   );
