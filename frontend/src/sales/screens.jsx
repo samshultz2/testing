@@ -48,7 +48,7 @@ export function Dashboard({ d }) {
   const alerts = [
     d.out_of_stock_count > 0 && { tone: 'bad', icon: 'fa-box-open', n: d.out_of_stock_count, label: d.out_of_stock_count === 1 ? 'product out of stock' : 'products out of stock', href: u.products + '?stock=out' },
     d.low_stock.length > 0 && { tone: 'mid', icon: 'fa-arrow-trend-down', n: d.low_stock.length, label: d.low_stock.length === 1 ? 'product running low' : 'products running low', href: u.products + '?stock=low' },
-    d.expiring_soon > 0 && { tone: 'bad', icon: 'fa-hourglass-end', n: d.expiring_soon, label: d.expiring_soon === 1 ? 'item expiring or expired' : 'items expiring or expired', href: u.reports ? u.reports + '?kind=expiry' : (d.section || {}).batches },
+    d.expiring_soon > 0 && { tone: 'bad', icon: 'fa-hourglass-end', n: d.expiring_soon, label: d.expiring_soon === 1 ? 'item expiring or expired' : 'items expiring or expired', href: u.reports ? u.reports + '?kind=expiry' : (d.salesnav || {}).batches },
     d.awaiting_delivery > 0 && { tone: 'info', icon: 'fa-truck', n: d.awaiting_delivery, label: d.awaiting_delivery === 1 ? 'order awaiting delivery' : 'orders awaiting delivery', href: u.purchases },
     d.supplier_payables > 0 && { tone: 'mid', icon: 'fa-file-invoice-dollar', n: short(d.supplier_payables), label: 'owed to suppliers', href: u.suppliers },
   ].filter(Boolean);
@@ -421,7 +421,7 @@ export function Products({ d, notify }) {
   const [converting, setConverting] = useState(null);
   const [restocking, setRestocking] = useState(null);
   const stock = d.stock || '';
-  const goStock = (v) => navParams(nav.go, d.self_url || (d.section || {}).products, { stock: v });
+  const goStock = (v) => navParams(nav.go, d.self_url || (d.salesnav || {}).products, { stock: v });
   const openLabels = () => {
     const p = new URLSearchParams(); if (cat) p.set('category', cat); if (stock) p.set('stock', stock); p.set('copies', String(copies || 1));
     window.open(`${d.labels_url}?${p.toString()}`, '_blank', 'noopener'); setLabels(false);
@@ -450,8 +450,8 @@ export function Products({ d, notify }) {
         <Menu label="More" items={[
           d.labels_url && canWrite(d, 'catalogue_labels') && { icon: 'fa-tags', label: 'Print price labels', onClick: () => setLabels(true) },
           d.generate_barcodes_url && canWrite(d, 'catalogue_labels') && { icon: 'fa-barcode', label: 'Give missing barcodes', onClick: genBarcodes },
-          { icon: 'fa-right-left', label: 'Stock movements', href: (d.section || {}).movements },
-          { icon: 'fa-layer-group', label: 'Batches & expiry', href: (d.section || {}).batches },
+          { icon: 'fa-right-left', label: 'Stock movements', href: (d.salesnav || {}).movements },
+          { icon: 'fa-layer-group', label: 'Batches & expiry', href: (d.salesnav || {}).batches },
         ]} />
       </Head>
       <SalesNav d={d} />

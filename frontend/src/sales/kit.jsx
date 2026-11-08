@@ -19,7 +19,7 @@ const GROUPS = [
 const SUB_OF = { audit_detail: 'audits', purchase_detail: 'purchases', supplier_detail: 'suppliers' };
 
 export function SalesNav({ d }) {
-  const u = d.section || {};
+  const u = d.salesnav || {};
   const page = d.page;
   const g = GROUPS.find((x) => x.pages.includes(page));
   const sub = SUB_OF[page] || page;
@@ -30,7 +30,7 @@ export function SalesNav({ d }) {
           <a key={x.key} href={u[x.href]} className={g && g.key === x.key ? 'on' : ''} aria-current={g && g.key === x.key ? 'page' : undefined}>
             <i className={'fas ' + x.icon} aria-hidden="true" /><span>{x.label}</span></a>
         ))}
-        {u.assets && <a href={u.assets} className="sl-nav-x"><i className="fas fa-building-columns" aria-hidden="true" /><span>Assets</span></a>}
+        {u.assets && <a href={u.assets} className={'sl-nav-x' + (page === 'assets' ? ' on' : '')} aria-current={page === 'assets' ? 'page' : undefined}><i className="fas fa-building-columns" aria-hidden="true" /><span>Assets</span></a>}
       </nav>
       {g && g.subs && (
         <nav className="sl-sub" aria-label={`${g.label} pages`}>
